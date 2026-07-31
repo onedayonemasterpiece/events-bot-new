@@ -397,12 +397,17 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
 - Producer рассматривает видео только **после** получения хотя бы одного
   подтверждённого event candidate и только при фактическом размере строго
   `< 10 MiB`; non-event/oversize/non-vertical пост не открывает video model call.
+- До download source username должен быть явно разрешён в
+  `TG_MONITORING_VIDEO_REPUBLICATION_ALLOWED_SOURCES`; wildcard не используется.
 - Один unique raw SHA анализируется `gemini-3.1-flash-lite` не более одного раза.
-  Accepted и rejected решения немедленно сохраняются в permanent Yandex sidecar
-  `v/analysis/v1/<first2>/<sha256>.json`; cache hit не пересматривает байты.
+  Accepted и rejected решения немедленно сохраняются в permanent
+  **Fernet-encrypted** Yandex sidecar
+  `v/analysis/v1/<first2>/<sha256>.json`; публичный bucket отдаёт только
+  ciphertext, а cache hit не пересматривает байты.
 - Все запросы идут только через `GoogleAIClient` и общий atomic Supabase limiter.
   Dedicated normal pool не включает unrelated keys, fail-closed при отсутствии
-  registry/RPC и имеет общий cap `6` video calls на monitoring run.
+  registry/RPC, требует минимум два declared keys и имеет hard ceiling `6`
+  video calls на весь monitoring run.
 - Только `auto_accept` загружается **прямо из Kaggle** в Yandex Object Storage:
   `v/video/v1/<first2>/<sha256>.<ext>`. Rejected/review bytes в CDN не попадают,
   поэтому Fly не проксирует тяжёлый внутренний трафик.
@@ -412,9 +417,10 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
   дубликаты.
 - Static export отдаёт `video_assets[]`, отсортированные по link-level rank,
   для будущего click-to-play UI. Сам UI в этот rollout намеренно не входит.
-- После удаления последней event-связи cleanup ставит только video binary в
-  durable managed-storage delete queue. Analysis sidecar/global SHA result
-  остаётся, а повторная связь до flush отменяет stale delete.
+- После удаления последней event-связи начинается 24-часовой grace period;
+  затем cleanup ставит только video binary в durable managed-storage delete
+  queue. Analysis sidecar/global SHA result остаётся, а повторная связь до
+  flush отменяет stale delete.
 
 ## Seed источников (prod/test)
 
@@ -511,8 +517,12 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
   - `TG_MONITORING_VIDEO_MAX_MB` (default `10`; сравнение строго `<`)
   - `TG_MONITORING_VIDEO_MODEL` (default `gemini-3.1-flash-lite`)
   - `TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS` (default `GOOGLE_API_KEY3,GOOGLE_API_KEY5`)
-  - `TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN` (default `6`)
+  - `TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN` (default и hard maximum `6`)
+  - `TG_MONITORING_VIDEO_REPUBLICATION_ALLOWED_SOURCES` (обязательный явный
+    comma-separated allowlist без wildcard)
+  - `TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY` (обязательный постоянный Fernet key)
   - `TG_MONITORING_VIDEO_ANALYSIS_VERSION`
+  - `VIDEO_ASSET_ORPHAN_GRACE_HOURS` (default `24`, server cleanup)
   - portrait envelope: `TG_MONITORING_VIDEO_MIN_WIDTH_HEIGHT_RATIO`,
     `TG_MONITORING_VIDEO_MAX_WIDTH_HEIGHT_RATIO`, minimum width/height and
     duration envs documented in `.env.example`

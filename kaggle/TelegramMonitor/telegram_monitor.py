@@ -765,7 +765,7 @@ TG_MONITORING_VIDEO_MIN_DURATION_SEC = _env_float('TG_MONITORING_VIDEO_MIN_DURAT
 TG_MONITORING_VIDEO_MAX_DURATION_SEC = _env_float('TG_MONITORING_VIDEO_MAX_DURATION_SEC', 60.0)
 TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN = max(
     0,
-    _env_int('TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN', 6),
+    min(6, _env_int('TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN', 6)),
 )
 TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS = [
     item.strip()
@@ -775,6 +775,20 @@ TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS = [
     ).split(',')
     if item.strip()
 ]
+if len(set(TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS)) < 2:
+    raise RuntimeError(
+        'TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS must contain at least two distinct keys'
+    )
+TG_MONITORING_VIDEO_REPUBLICATION_ALLOWED_SOURCES = {
+    item.strip().lower().lstrip('@')
+    for item in (
+        os.getenv('TG_MONITORING_VIDEO_REPUBLICATION_ALLOWED_SOURCES') or ''
+    ).split(',')
+    if item.strip()
+}
+TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY = (
+    os.getenv('TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY') or ''
+).strip()
 TG_MONITORING_VIDEO_ANALYSIS_VERSION = (
     os.getenv('TG_MONITORING_VIDEO_ANALYSIS_VERSION') or 'video-showcase-v2'
 ).strip() or 'video-showcase-v2'
@@ -1256,6 +1270,49 @@ def _video_cdn_path(sha256_hex: str, ext: str) -> str:
 _VIDEO_ANALYSIS_CACHE: dict[str, dict] = {}
 
 
+def _video_source_republication_allowed(username: str) -> bool:
+    normalized = str(username or '').strip().lower().lstrip('@')
+    return bool(
+        normalized
+        and normalized in TG_MONITORING_VIDEO_REPUBLICATION_ALLOWED_SOURCES
+    )
+
+
+def _encrypt_video_analysis_cache(payload: dict) -> bytes | None:
+    if not TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY or not isinstance(payload, dict):
+        return None
+    try:
+        from cryptography.fernet import Fernet
+
+        plaintext = json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+        ).encode('utf-8')
+        return Fernet(
+            TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY.encode('ascii')
+        ).encrypt(plaintext)
+    except Exception as exc:
+        logger.warning('video analysis cache encryption failed: %s', exc)
+        return None
+
+
+def _decrypt_video_analysis_cache(raw: bytes) -> dict | None:
+    if not TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY or not raw:
+        return None
+    try:
+        from cryptography.fernet import Fernet
+
+        plaintext = Fernet(
+            TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY.encode('ascii')
+        ).decrypt(raw)
+        payload = json.loads(plaintext.decode('utf-8'))
+    except Exception as exc:
+        logger.warning('video analysis cache decryption failed: %s', exc)
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
 def _load_video_analysis_cache(sha256_hex: str) -> tuple[str, dict | None]:
     sha = str(sha256_hex or '').strip().lower()
     if sha in _VIDEO_ANALYSIS_CACHE:
@@ -1267,20 +1324,19 @@ def _load_video_analysis_cache(sha256_hex: str) -> tuple[str, dict | None]:
     try:
         response = client.get_object(Bucket=YC_STORAGE_BUCKET, Key=object_path)
         body = response.get('Body')
-        raw = body.read(512 * 1024 + 1) if body is not None else b''
+        raw = body.read(768 * 1024 + 1) if body is not None else b''
     except Exception as exc:
         code = str(getattr(exc, 'response', {}).get('Error', {}).get('Code') or '').strip()
         if code in {'404', 'NoSuchKey', 'NotFound'}:
             return 'miss', None
         logger.warning('video analysis cache read failed sha=%s: %s', sha[:12], exc)
         return 'error', None
-    if not raw or len(raw) > 512 * 1024:
+    if not raw or len(raw) > 768 * 1024:
         logger.warning('video analysis cache invalid size sha=%s bytes=%s', sha[:12], len(raw))
         return 'error', None
-    try:
-        payload = json.loads(raw.decode('utf-8'))
-    except Exception as exc:
-        logger.warning('video analysis cache invalid json sha=%s: %s', sha[:12], exc)
+    payload = _decrypt_video_analysis_cache(raw)
+    if payload is None:
+        logger.warning('video analysis cache invalid ciphertext sha=%s', sha[:12])
         return 'error', None
     if not isinstance(payload, dict) or str(payload.get('sha256') or '').lower() != sha:
         logger.warning('video analysis cache identity mismatch sha=%s', sha[:12])
@@ -1295,13 +1351,15 @@ def _store_video_analysis_cache(sha256_hex: str, payload: dict) -> bool:
     if client is None or not isinstance(payload, dict):
         return False
     try:
-        data = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode('utf-8')
+        data = _encrypt_video_analysis_cache(payload)
+        if not data:
+            return False
         client.put_object(
             Bucket=YC_STORAGE_BUCKET,
             Key=_video_analysis_cache_path(sha),
             Body=data,
-            ContentType='application/json; charset=utf-8',
-            CacheControl='public, max-age=31536000, immutable',
+            ContentType='application/octet-stream',
+            CacheControl='private, no-store',
         )
     except Exception as exc:
         logger.warning('video analysis cache write failed sha=%s: %s', sha[:12], exc)
@@ -2116,9 +2174,15 @@ def _cached_video_matches(cache_payload: dict, events: list[dict]) -> list[dict]
     return matches
 
 
-def _video_analysis_accepted(analysis: dict, matches: list[dict]) -> bool:
+def _video_analysis_accepted(
+    analysis: dict,
+    matches: list[dict],
+    *,
+    rights_allowed: bool = False,
+) -> bool:
     return bool(
-        matches
+        rights_allowed
+        and matches
         and not analysis.get('risk_flags')
         and float(analysis.get('showcase_score') or 0.0) >= 75.0
         and float(analysis.get('aesthetic_score') or 0.0) >= 70.0
@@ -2128,8 +2192,17 @@ def _video_analysis_accepted(analysis: dict, matches: list[dict]) -> bool:
     )
 
 
-def _video_analysis_decision(analysis: dict, matches: list[dict]) -> str:
-    if _video_analysis_accepted(analysis, matches):
+def _video_analysis_decision(
+    analysis: dict,
+    matches: list[dict],
+    *,
+    rights_allowed: bool = False,
+) -> str:
+    if _video_analysis_accepted(
+        analysis,
+        matches,
+        rights_allowed=rights_allowed,
+    ):
         return 'accepted'
     flags = set(analysis.get('risk_flags') or [])
     if flags & _VIDEO_HARD_RISK_FLAGS:
@@ -2318,6 +2391,11 @@ async def _process_video_for_events(
     # call or CDN write until extraction has confirmed at least one real event.
     if not cleaned_events:
         return [], 'skipped:no_event'
+    rights_allowed = _video_source_republication_allowed(username)
+    if not rights_allowed:
+        return [], 'skipped:republication_not_allowed'
+    if not TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY:
+        return [], 'skipped:cache_key_missing'
     if SUPABASE_VIDEOS_MODE != 'always':
         return [], 'skipped:mode_off'
     if not YC_STORAGE_ENABLED:
@@ -2380,7 +2458,11 @@ async def _process_video_for_events(
         matches = _cached_video_matches(cache_payload, cleaned_events)
         if not matches:
             return [], 'skipped:cache_event_mismatch'
-        if not _video_analysis_accepted(analysis, matches):
+        if not _video_analysis_accepted(
+            analysis,
+            matches,
+            rights_allowed=rights_allowed,
+        ):
             return [], 'skipped:cache_invalid'
         cdn_url, cdn_path = _ensure_video_cdn_object(
             video_bytes,
@@ -2432,7 +2514,11 @@ async def _process_video_for_events(
     if analysis is None:
         return [], 'skipped:analysis_invalid'
     matches = _matched_video_events(analysis, cleaned_events)
-    decision = _video_analysis_decision(analysis, matches)
+    decision = _video_analysis_decision(
+        analysis,
+        matches,
+        rights_allowed=rights_allowed,
+    )
     matched_fingerprints = sorted({str(item['fingerprint']) for item in matches})
     relation_by_fingerprint = {
         str(item['fingerprint']): {
@@ -2456,6 +2542,11 @@ async def _process_video_for_events(
         'matched_event_fingerprints': matched_fingerprints,
         'event_relations_by_fingerprint': relation_by_fingerprint,
         'source_url': f'https://t.me/{username}/{getattr(msg, "id", "")}',
+        'rights_policy': {
+            'status': 'allowed',
+            'basis': 'configured_source_allowlist',
+            'source_username': str(username or '').strip().lower().lstrip('@'),
+        },
         'source_video_meta': {
             'width': video_meta.get('width'),
             'height': video_meta.get('height'),

@@ -408,6 +408,8 @@ def test_video_processing_skips_exact_ten_mib_before_download() -> None:
             "_VIDEO_MODEL_CALLS_USED": 0,
             "SUPABASE_VIDEOS_MODE": "always",
             "YC_STORAGE_ENABLED": True,
+            "TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY": "configured",
+            "_video_source_republication_allowed": lambda _username: True,
             "_video_meta_from_message": lambda _msg: {
                 "size_bytes": 10 * 1024 * 1024,
                 "width": 540,
@@ -447,6 +449,8 @@ def test_video_rejected_cache_hit_does_not_call_model() -> None:
             "_VIDEO_MODEL_CALLS_USED": 0,
             "SUPABASE_VIDEOS_MODE": "always",
             "YC_STORAGE_ENABLED": True,
+            "TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY": "configured",
+            "_video_source_republication_allowed": lambda _username: True,
             "_video_meta_from_message": lambda _msg: {
                 "size_bytes": 100,
                 "width": 540,
@@ -542,6 +546,8 @@ def test_rejected_video_is_cached_but_never_uploaded() -> None:
             "TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN": 6,
             "SUPABASE_VIDEOS_MODE": "always",
             "YC_STORAGE_ENABLED": True,
+            "TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY": "configured",
+            "_video_source_republication_allowed": lambda _username: True,
             "_video_meta_from_message": lambda _msg: {
                 "size_bytes": 100,
                 "width": 540,
@@ -568,7 +574,7 @@ def test_rejected_video_is_cached_but_never_uploaded() -> None:
                 "risk_flags": [],
             },
             "_matched_video_events": lambda *_a: [],
-            "_video_analysis_decision": lambda *_a: "rejected",
+            "_video_analysis_decision": lambda *_a, **_k: "rejected",
             "_store_video_analysis_cache": lambda sha, payload: cache_writes.append((sha, payload)) or True,
             "_ensure_video_cdn_object": lambda *_a, **_k: uploads.append(True),
             "VIDEO_MODEL": "gemini-3.1-flash-lite",
@@ -590,6 +596,82 @@ def test_rejected_video_is_cached_but_never_uploaded() -> None:
     assert result == ([], "skipped:rejected")
     assert len(cache_writes) == 1
     assert uploads == []
+
+
+def test_video_processing_fails_closed_without_source_republication_permission() -> None:
+    touched = []
+    process = _load_tg_function(
+        "_process_video_for_events",
+        {
+            "_VIDEO_MODEL_CALLS_USED": 0,
+            "SUPABASE_VIDEOS_MODE": "always",
+            "TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY": "configured",
+            "_video_source_republication_allowed": lambda _username: False,
+        },
+    )
+    result = asyncio.run(
+        process(
+            client=SimpleNamespace(download_media=lambda *_a: touched.append("download")),
+            msg=SimpleNamespace(id=5),
+            username="unauthorized_source",
+            post_text="event",
+            cleaned_events=[{"title": "Event", "date": "2030-08-01"}],
+        )
+    )
+    assert result == ([], "skipped:republication_not_allowed")
+    assert touched == []
+
+
+def test_video_config_has_hard_six_call_ceiling_and_encrypted_sidecars() -> None:
+    source = _TG_MONITOR_SOURCE.read_text(encoding="utf-8")
+    assert "min(6, _env_int('TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN', 6))" in source
+    assert "must contain at least two distinct keys" in source
+    assert "Fernet(" in source
+    assert "ContentType='application/octet-stream'" in source
+    assert "CacheControl='private, no-store'" in source
+    assert "application/json; charset=utf-8" not in source[source.index("def _store_video_analysis_cache"):source.index("def _ensure_video_cdn_object")]
+
+
+def test_video_analysis_sidecar_roundtrip_is_ciphertext() -> None:
+    namespace = {
+        "TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY": (
+            "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="
+        ),
+        "json": json,
+        "logger": SimpleNamespace(warning=lambda *_a, **_k: None),
+    }
+    encrypt = _load_tg_function("_encrypt_video_analysis_cache", namespace)
+    decrypt = _load_tg_function("_decrypt_video_analysis_cache", namespace)
+    payload = {"sha256": "a" * 64, "description": "private visible text"}
+
+    ciphertext = encrypt(payload)
+
+    assert isinstance(ciphertext, bytes)
+    assert b"private visible text" not in ciphertext
+    assert decrypt(ciphertext) == payload
+
+
+def test_video_auto_accept_requires_explicit_rights_gate() -> None:
+    ns = _load_video_analysis_helpers()
+    analysis = ns["_validated_video_analysis"](
+        _valid_video_model_result(),
+        event_count=1,
+        duration_seconds=10,
+    )
+    matches = ns["_matched_video_events"](
+        analysis,
+        [{"title": "Event", "date": "2030-08-01"}],
+    )
+
+    assert ns["_video_analysis_accepted"](analysis, matches) is False
+    assert (
+        ns["_video_analysis_accepted"](
+            analysis,
+            matches,
+            rights_allowed=True,
+        )
+        is True
+    )
 
 
 def test_accepted_video_payload_persists_multiple_relation_scores_and_source() -> None:

@@ -17,6 +17,18 @@ from source_parsing.telegram.service import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _video_monitoring_security_config(monkeypatch):
+    monkeypatch.setenv(
+        "TG_MONITORING_VIDEO_REPUBLICATION_ALLOWED_SOURCES",
+        "meowafisha",
+    )
+    monkeypatch.setenv(
+        "TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY",
+        "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+    )
+
+
 @pytest.mark.asyncio
 async def test_build_config_payload_can_scope_to_single_source(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
@@ -81,6 +93,8 @@ def test_build_secrets_payload_ships_exact_declared_video_pool(monkeypatch):
     assert payload["GOOGLE_API_KEY4"] == "text-fallback"
     assert payload["GOOGLE_API_KEY5"] == "video-secondary"
     assert "GOOGLE_API_KEY2" not in payload
+    assert payload["TG_MONITORING_VIDEO_REPUBLICATION_ALLOWED_SOURCES"] == "meowafisha"
+    assert payload["TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY"]
 
 
 def test_build_secrets_payload_requires_every_declared_video_key(monkeypatch):
@@ -98,6 +112,17 @@ def test_build_secrets_payload_requires_every_declared_video_key(monkeypatch):
     )
 
     with pytest.raises(RuntimeError, match="GOOGLE_API_KEY5"):
+        _build_secrets_payload()
+
+
+def test_build_secrets_payload_requires_multiple_video_keys(monkeypatch):
+    monkeypatch.setenv("TG_API_ID", "123")
+    monkeypatch.setenv("TG_API_HASH", "hash")
+    monkeypatch.setenv("TG_SESSION", "session")
+    monkeypatch.setenv("GOOGLE_API_KEY3", "text-primary")
+    monkeypatch.setenv("TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS", "GOOGLE_API_KEY3")
+
+    with pytest.raises(RuntimeError, match="at least two distinct keys"):
         _build_secrets_payload()
 
 

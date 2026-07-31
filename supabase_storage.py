@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from collections.abc import Callable
 from typing import Any, Mapping
 from urllib.parse import urlparse
@@ -435,7 +436,11 @@ def check_bucket_usage_limit_from_env(
     )
 
 
-async def enqueue_orphan_video_assets(db: Any) -> int:
+async def enqueue_orphan_video_assets(
+    db: Any,
+    *,
+    grace_hours: float | None = None,
+) -> int:
     """Queue unreferenced video binaries while retaining exact-SHA analysis.
 
     Only the main CDN object is represented by ``video_asset.cdn_path``.  The
@@ -445,7 +450,45 @@ async def enqueue_orphan_video_assets(db: Any) -> int:
     fields and cancels the matching queue row.
     """
 
+    configured_grace = (
+        os.getenv("VIDEO_ASSET_ORPHAN_GRACE_HOURS") or "24"
+        if grace_hours is None
+        else str(grace_hours)
+    )
+    try:
+        grace = max(0.0, min(float(configured_grace), 24.0 * 30.0))
+    except (TypeError, ValueError):
+        grace = 24.0
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=grace)
+
     async with db.raw_conn() as conn:
+        # A relink during the grace period cancels orphan state before any
+        # delete intent is created.
+        await conn.execute(
+            """
+            UPDATE video_asset
+            SET orphaned_at = NULL
+            WHERE orphaned_at IS NOT NULL
+              AND EXISTS (
+                  SELECT 1 FROM event_video_link AS evl
+                  WHERE evl.video_asset_id = video_asset.id
+              )
+            """
+        )
+        await conn.execute(
+            """
+            UPDATE video_asset
+            SET orphaned_at = ?
+            WHERE orphaned_at IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM event_video_link AS evl
+                  WHERE evl.video_asset_id = video_asset.id
+              )
+              AND (cdn_path IS NOT NULL OR cdn_url IS NOT NULL)
+            """,
+            (now.isoformat(),),
+        )
         cur = await conn.execute(
             """
             SELECT va.id, va.cdn_bucket, va.cdn_path, va.cdn_url
@@ -455,7 +498,10 @@ async def enqueue_orphan_video_assets(db: Any) -> int:
                 WHERE evl.video_asset_id = va.id
             )
               AND (va.cdn_path IS NOT NULL OR va.cdn_url IS NOT NULL)
-            """
+              AND va.orphaned_at IS NOT NULL
+              AND va.orphaned_at <= ?
+            """,
+            (cutoff.isoformat(),),
         )
         assets = await cur.fetchall()
         targets: set[tuple[str, str]] = set()
@@ -474,6 +520,7 @@ async def enqueue_orphan_video_assets(db: Any) -> int:
             asset_ids.append(int(asset_id))
 
         if not targets:
+            await conn.commit()
             return 0
         await conn.executemany(
             "INSERT OR IGNORE INTO supabase_delete_queue(bucket, path) VALUES(?, ?)",

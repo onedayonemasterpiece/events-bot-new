@@ -506,8 +506,28 @@ def _build_secrets_payload() -> str:
                 f"{env_name}"
             )
         video_pool_envs.append(env_name)
-    if not video_pool_envs:
-        raise RuntimeError("TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS must declare at least one key")
+    if len(video_pool_envs) < 2:
+        raise RuntimeError(
+            "TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS must declare at least two distinct keys"
+        )
+    allowed_video_sources = (
+        _get_env_value("TG_MONITORING_VIDEO_REPUBLICATION_ALLOWED_SOURCES") or ""
+    ).strip()
+    normalized_video_sources: list[str] = []
+    for item in allowed_video_sources.split(","):
+        username = item.strip().lower().lstrip("@")
+        if not username or username in normalized_video_sources:
+            continue
+        if not re.fullmatch(r"[a-z0-9_]{5,32}", username):
+            raise RuntimeError(
+                "TG_MONITORING_VIDEO_REPUBLICATION_ALLOWED_SOURCES contains invalid username: "
+                f"{username}"
+            )
+        normalized_video_sources.append(username)
+    if not normalized_video_sources:
+        raise RuntimeError(
+            "TG_MONITORING_VIDEO_REPUBLICATION_ALLOWED_SOURCES must declare an authorized source"
+        )
     google_key_value = _require_env(google_key_env)
     payload = {
         "TG_API_ID": _require_env("TG_API_ID"),
@@ -520,6 +540,12 @@ def _build_secrets_payload() -> str:
         "TG_MONITORING_GOOGLE_KEY_ENV": google_key_env,
         "TG_MONITORING_GOOGLE_FALLBACK_KEY_ENV": google_fallback_env,
         "TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS": ",".join(video_pool_envs),
+        "TG_MONITORING_VIDEO_REPUBLICATION_ALLOWED_SOURCES": ",".join(
+            normalized_video_sources
+        ),
+        "TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY": _require_env(
+            "TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY"
+        ),
     }
     if google_fallback_env != google_key_env:
         payload[google_fallback_env] = _require_env(google_fallback_env)

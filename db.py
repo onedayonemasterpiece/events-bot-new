@@ -816,12 +816,14 @@ class Database:
                     analysis_version TEXT,
                     analysis_json JSON NOT NULL DEFAULT '{}',
                     analyzed_at TIMESTAMP,
+                    orphaned_at TIMESTAMP,
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     CHECK(analysis_status IN ('accepted', 'rejected', 'error', 'pending'))
                 )
                 """
             )
+            await _add_column(conn, "video_asset", "orphaned_at TIMESTAMP")
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_video_asset_status_showcase "
                 "ON video_asset(analysis_status, showcase_score)"

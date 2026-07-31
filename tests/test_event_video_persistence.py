@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
@@ -71,19 +72,20 @@ def test_video_payload_accepts_cache_hit_and_keeps_event_specific_relations():
                     "showcase_score": math.inf,
                     "event_indexes": [0, 1, 2],
                     "event_relevance_score": 99,
-                    "relation_confidence": 999,
+                    # Confidence is a probability, never a 0..100 percentage.
+                    "relation_confidence": 75,
                     "event_relevance_scores": [
                         {
                             "event_index": 0,
                             "relevance_score": 20,
                             "reason": "background venue",
-                            "confidence": 75,
+                            "confidence": 0.75,
                         },
                         {
                             "event_index": 1,
                             "relevance_score": 80,
                             "reason": "exact performance",
-                            "confidence": 90,
+                            "confidence": 0.90,
                         },
                         {
                             "event_index": 2,
@@ -106,13 +108,13 @@ def test_video_payload_accepts_cache_hit_and_keeps_event_specific_relations():
             "event_index": 0,
             "event_relevance_score": 20.0,
             "match_reason": "background venue",
-            "relation_confidence": 75.0,
+            "relation_confidence": 0.75,
         },
         {
             "event_index": 1,
             "event_relevance_score": 80.0,
             "match_reason": "exact performance",
-            "relation_confidence": 90.0,
+            "relation_confidence": 0.90,
         },
     ]
 
@@ -163,8 +165,29 @@ async def test_same_sha_links_many_events_with_distinct_rank_and_is_idempotent(t
         source_url="https://t.me/meowafisha/123",
     )
 
+    updated_videos = [dict(videos[0])]
+    updated_videos[0]["event_relevance_scores"] = [
+        {
+            "event_index": 0,
+            "event_relevance_score": 40,
+            "match_reason": "better evidence",
+        },
+        {
+            "event_index": 1,
+            "event_relevance_score": 90,
+            "match_reason": "exact updated",
+        },
+    ]
+    updated = await _persist_event_video_assets(
+        db,
+        event_ids_by_index={0: first_id, 1: second_id},
+        videos=updated_videos,
+        source_url="https://t.me/meowafisha/124",
+    )
+
     assert result == (2, 1, {first_id: 1, second_id: 1})
     assert repeat == (0, 1, {})
+    assert updated == (0, 1, {})
     async with db.get_session() as session:
         assets = (await session.execute(select(VideoAsset))).scalars().all()
         links = (
@@ -175,10 +198,10 @@ async def test_same_sha_links_many_events_with_distinct_rank_and_is_idempotent(t
     assert len(assets) == 1
     assert len(links) == 2
     assert [(link.event_relevance_score, link.ranking_score, link.match_reason) for link in links] == [
-        (20.0, 65.0, "weak"),
-        (80.0, 80.0, "exact"),
+        (40.0, 70.0, "better evidence"),
+        (90.0, 82.0, "exact updated"),
     ]
-    assert all(link.source_url == "https://t.me/meowafisha/123" for link in links)
+    assert all(link.source_url == "https://t.me/meowafisha/124" for link in links)
     await db.close()
 
 
@@ -215,7 +238,7 @@ async def test_orphan_cleanup_waits_for_last_link_and_retains_analysis(tmp_path)
         ).scalar_one()
         await session.delete(first_link)
         await session.commit()
-    assert await enqueue_orphan_video_assets(db) == 0
+    assert await enqueue_orphan_video_assets(db, grace_hours=0) == 0
 
     async with db.get_session() as session:
         second_link = (
@@ -225,6 +248,19 @@ async def test_orphan_cleanup_waits_for_last_link_and_retains_analysis(tmp_path)
         ).scalar_one()
         await session.delete(second_link)
         await session.commit()
+    # The last unlink starts, but does not bypass, the default 24-hour grace.
+    assert await enqueue_orphan_video_assets(db) == 0
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT orphaned_at FROM video_asset WHERE id = ?",
+            (asset_id,),
+        )
+        assert (await cur.fetchone())[0] is not None
+        await conn.execute(
+            "UPDATE video_asset SET orphaned_at = ? WHERE id = ?",
+            ((datetime.now(timezone.utc) - timedelta(hours=25)).isoformat(), asset_id),
+        )
+        await conn.commit()
     assert await enqueue_orphan_video_assets(db) == 1
     assert await enqueue_orphan_video_assets(db) == 0
 

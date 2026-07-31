@@ -59,10 +59,12 @@ technical, aesthetic и temporal defects. Поэтому схема ниже г�
 Порядок обязателен. Он предотвращает загрузку мусора в CDN и повторную оплату
 одного и того же файла.
 
-1. **Event-confirmed gate.** Рассматривать видео только после того, как текущий
+1. **Event-confirmed + rights gate.** Рассматривать видео только после того, как текущий
    LLM-first extraction подтвердил хотя бы одно пригодное будущее событие.
    Пустой, non-event, completed-report или невалидный post не открывает
-   video-call.
+   video-call. До download также требуется явное присутствие source username в
+   `TG_MONITORING_VIDEO_REPUBLICATION_ALLOWED_SOURCES`; monitoring source сам по
+   себе не считается разрешением на копирование.
 2. **Cheap file gate.** Скачать байты в Kaggle, проверить фактический размер
    строго `< TG_MONITORING_VIDEO_MAX_MB` (production default `10 MiB`), посчитать
    raw SHA-256 и прочитать доступные stream metadata (Telegram attributes;
@@ -71,7 +73,8 @@ technical, aesthetic и temporal defects. Поэтому схема ниже г�
    `skipped:too_large`, но не низкую оценку качества.
 3. **Permanent SHA cache gate.** До model reserve искать exact raw `sha256`.
    Первый валидный terminal result (`accept`, `review` или semantic `reject`)
-   хранится без TTL в sidecar; model/prompt/schema/policy versions остаются его
+   хранится без TTL в Fernet-encrypted sidecar; model/prompt/schema/policy
+   versions остаются его
    audit metadata, но их смена не запускает автоматический повторный просмотр.
    Cache hit не открывает model request. Transport/provider failure не является
    terminal result и не записывается как вечный semantic reject. Переоценка
@@ -96,8 +99,11 @@ technical, aesthetic и temporal defects. Поэтому схема ниже г�
    не расходует CDN storage. Один объект может иметь несколько event links.
 
 Production budget intentionally small: `TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN=6`.
+Код жёстко ограничивает effective значение сверху шестью, даже если env ошибочно
+задаёт большее число.
 Обычный rotating pool задаётся `TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS`
-(rollout default `GOOGLE_API_KEY3,GOOGLE_API_KEY5`). Каждый env обязан быть и
+(rollout default `GOOGLE_API_KEY3,GOOGLE_API_KEY5`) и обязан содержать минимум
+два разных key env. Каждый env обязан быть и
 runtime secret, и active registry member общего Supabase limiter; отсутствие
 любого участника или reserve RPC означает fail closed. Несколько ключей дают
 rotation/изоляцию отказов, но их лимиты нельзя складывать, пока не доказано, что
@@ -241,9 +247,12 @@ cinematic bars. Яркая motion-poster графика и честное кон
 hard block. `third_party_watermark`, `rapid_flashing`, `possible_minor_privacy`,
 `dominant_unrelated_brand`, `ocr_uncertain` требуют policy review.
 
-Gemini не устанавливает авторское право. `rights_status`, source allowlist,
+Gemini не устанавливает авторское право. Явный source allowlist,
 provenance URL, attribution и takedown/retention policy проверяются отдельно.
 Неизвестное право не превращается в `allowed` из-за пустого model risk list.
+В текущем rollout `rights_status=allowed` означает только операторскую запись
+username в `TG_MONITORING_VIDEO_REPUBLICATION_ALLOWED_SOURCES`; вне списка
+pipeline fail closed до скачивания.
 
 ## Derived scores и production thresholds
 
@@ -419,6 +428,10 @@ source mix, relation mismatch выше 5%, либо CDN upload появился 
 - **Copyright hallucination:** model silence не доказывает rights.
 - **Oversize bias:** `>10 MiB` — operational skip, не `reject:ugly`; метрики не
   должны смешивать эти cohorts.
+- **Cache confidentiality:** bucket может быть публичным, поэтому permanent
+  sidecar содержит только Fernet ciphertext (`application/octet-stream`,
+  `private,no-store`). Ключ `TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY` постоянный,
+  попадает в Kaggle только через encrypted secrets dataset и не логируется.
 - **Orphan cleanup:** CDN deletion разрешён только после отсутствия всех live
-  event relations и grace period; intrinsic analysis/provenance ledger при этом
+  event relations и 24-hour grace period; intrinsic analysis/provenance ledger при этом
   остаётся. Нельзя удалить shared object при устаревании одного события.

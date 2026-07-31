@@ -48,10 +48,12 @@
 
 - Telegram Monitoring now evaluates only confirmed-event portrait videos under
   10 MiB through a strict, quota-capped multi-key Gemini Flash-Lite gateway,
-  permanently caches accepted and rejected SHA decisions, uploads accepted
+  requires an explicit source republication allowlist, permanently caches
+  accepted and rejected SHA decisions as encrypted sidecars, uploads accepted
   bytes directly from Kaggle to content-addressed Yandex CDN paths, persists
-  ranked many-to-many event links, safely deletes last-reference binaries, and
-  exports ranked `video_assets` for a future static-site player.
+  updating ranked many-to-many event links, safely deletes last-reference
+  binaries after a grace period, and exports ranked `video_assets` for a future
+  static-site player.
 
 - Region Talk final verifier v7 now creates an accept-only, fact-grounded
   Telegram/VK draft with explicit source attribution, canonical original link

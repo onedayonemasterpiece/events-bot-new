@@ -890,6 +890,25 @@ def _video_score(value: Any, *, clamp: bool = True) -> float | None:
     return max(0.0, min(100.0, parsed))
 
 
+def _video_confidence(value: Any) -> float | None:
+    """Return a finite model confidence in the canonical ``0..1`` range.
+
+    Unlike visual/relevance scores, confidence is a probability rather than a
+    percentage.  Reject malformed values instead of clamping them so a payload
+    that accidentally sends ``80`` cannot be persisted as high confidence.
+    """
+
+    if isinstance(value, bool):
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(parsed) or not 0.0 <= parsed <= 1.0:
+        return None
+    return parsed
+
+
 def _video_positive_int(value: Any, *, maximum: int) -> int | None:
     parsed = _to_int(value)
     if parsed is None or parsed <= 0:
@@ -969,9 +988,8 @@ def _video_event_relevance_scores(value: Any) -> list[dict[str, Any]]:
             "match_reason": _video_text(
                 raw.get("reason", raw.get("match_reason")), limit=500
             ),
-            "relation_confidence": _video_score(
-                raw.get("confidence", raw.get("relation_confidence")),
-                clamp=False,
+            "relation_confidence": _video_confidence(
+                raw.get("confidence", raw.get("relation_confidence"))
             ),
         }
         by_index[indexes[0]] = relation
@@ -1059,8 +1077,8 @@ def _extract_message_videos_payload(message: dict[str, Any]) -> tuple[list[dict[
                     item.get("event_relevance_score"), clamp=False
                 ),
                 "match_reason": _video_text(item.get("match_reason"), limit=500),
-                "relation_confidence": _video_score(
-                    item.get("relation_confidence"), clamp=False
+                "relation_confidence": _video_confidence(
+                    item.get("relation_confidence")
                 ),
                 "event_relevance_scores": event_relevance_scores,
                 "description": _video_text(item.get("description"), limit=4000),
@@ -1169,6 +1187,7 @@ async def _persist_event_video_assets(
                         "analysis_version": item.get("analysis_version"),
                         "analysis_json": item.get("analysis_json") or {},
                         "analyzed_at": item.get("analyzed_at") or now,
+                        "orphaned_at": None,
                         "created_at": now,
                         "updated_at": now,
                     }
@@ -1197,6 +1216,7 @@ async def _persist_event_video_assets(
                             value = insert_values.get(key)
                             if value:
                                 setattr(asset, key, value)
+                        asset.orphaned_at = None
                         asset.updated_at = now
                         session.add(asset)
 
@@ -1245,16 +1265,16 @@ async def _persist_event_video_assets(
                             relation.get("event_relevance_score"), clamp=False
                         )
                         match_reason = relation.get("match_reason")
-                        relation_confidence = _video_score(
-                            relation.get("relation_confidence"), clamp=False
+                        relation_confidence = _video_confidence(
+                            relation.get("relation_confidence")
                         )
                         if not relation and allow_scalar_fallback:
                             relevance_score = _video_score(
                                 item.get("event_relevance_score"), clamp=False
                             )
                             match_reason = item.get("match_reason")
-                            relation_confidence = _video_score(
-                                item.get("relation_confidence"), clamp=False
+                            relation_confidence = _video_confidence(
+                                item.get("relation_confidence")
                             )
                         ranking_score = (
                             float(
@@ -1268,25 +1288,40 @@ async def _persist_event_video_assets(
                             else None
                         )
                         for event_id in target_event_ids:
-                            result = await session.execute(
-                                sqlite_insert(EventVideoLink)
-                                .values(
-                                    event_id=int(event_id),
-                                    video_asset_id=int(asset.id),
-                                    event_relevance_score=relevance_score,
-                                    ranking_score=ranking_score,
-                                    match_reason=match_reason,
-                                    relation_confidence=relation_confidence,
-                                    source_url=_clean_url(source_url),
-                                    created_at=now,
+                            existing_link = (
+                                await session.execute(
+                                    select(EventVideoLink).where(
+                                        EventVideoLink.event_id == int(event_id),
+                                        EventVideoLink.video_asset_id == int(asset.id),
+                                    )
                                 )
-                                .on_conflict_do_nothing(
-                                    index_elements=["event_id", "video_asset_id"]
+                            ).scalar_one_or_none()
+                            if existing_link is None:
+                                session.add(
+                                    EventVideoLink(
+                                        event_id=int(event_id),
+                                        video_asset_id=int(asset.id),
+                                        event_relevance_score=relevance_score,
+                                        ranking_score=ranking_score,
+                                        match_reason=match_reason,
+                                        relation_confidence=relation_confidence,
+                                        source_url=_clean_url(source_url),
+                                        created_at=now,
+                                    )
                                 )
-                            )
-                            if int(getattr(result, "rowcount", 0) or 0) > 0:
+                                await session.flush()
                                 inserted_links += 1
                                 inserted_by_event[int(event_id)] += 1
+                            else:
+                                # Idempotent upsert: the relation identity is
+                                # stable, while newer source-grounded ranking
+                                # evidence replaces stale metadata.
+                                existing_link.event_relevance_score = relevance_score
+                                existing_link.ranking_score = ranking_score
+                                existing_link.match_reason = match_reason
+                                existing_link.relation_confidence = relation_confidence
+                                existing_link.source_url = _clean_url(source_url)
+                                session.add(existing_link)
                 await session.commit()
             return inserted_links, total, dict(inserted_by_event)
         except OperationalError as exc:

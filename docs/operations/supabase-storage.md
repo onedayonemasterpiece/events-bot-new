@@ -250,11 +250,15 @@ legacy-имя, но хранятся в Yandex Object Storage:
 - global asset: `video_asset`, exact `sha256 UNIQUE`;
 - M:N references: `event_video_link(event_id, video_asset_id)`;
 - immutable binary: `v/video/v1/<first2>/<sha256>.<ext>`;
-- permanent analysis sidecar: `v/analysis/v1/<first2>/<sha256>.json`.
+- permanent Fernet-encrypted analysis sidecar:
+  `v/analysis/v1/<first2>/<sha256>.json` (`application/octet-stream`,
+  `Cache-Control: private, no-store`; публичный bucket не раскрывает plaintext).
 
 После cascade удаления события binary ставится в очередь только если у global
-asset больше нет ни одной event-связи. Строка `video_asset` и analysis sidecar
-не удаляются: они предотвращают повторный model scan. Перед физическим delete
+asset больше нет ни одной event-связи и прошёл grace period
+`VIDEO_ASSET_ORPHAN_GRACE_HOURS` (default `24`). `video_asset.orphaned_at`
+сбрасывается при relink. Строка `video_asset` и encrypted analysis sidecar не
+удаляются: они предотвращают повторный model scan. Перед физическим delete
 flush повторно проверяет ссылки; новый link отменяет stale queue row. Yandex
 flush должен работать и с `supabase_client=None`, поэтому отсутствие Supabase
 Storage не блокирует очистку Yandex objects.
