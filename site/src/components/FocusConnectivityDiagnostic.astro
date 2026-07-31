@@ -31,15 +31,12 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     <div class="connectivity__results" data-connectivity-results hidden>
       {
         [
-          ['supabase-auth', 'Вход по почте', 'Supabase'],
-          ['supabase-data', 'Данные сайта', 'Supabase'],
-          ['ydb-control', 'Резервный канал', 'Yandex'],
-        ].map(([id, label, service]) => (
+          ['supabase-auth', 'Вход по почте'],
+          ['supabase-data', 'Данные сайта'],
+          ['ydb-control', 'Резервный канал'],
+        ].map(([id, label]) => (
           <article class="connectivity__result" data-connectivity-result={id}>
-            <div>
-              <h2>{label}</h2>
-              <small>{service}</small>
-            </div>
+            <h2>{label}</h2>
             <strong data-connectivity-verdict>Проверяем…</strong>
             <span data-connectivity-timing></span>
           </article>
@@ -144,13 +141,13 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     const targets = [
       {
         id: 'supabase-auth',
-        label: 'Supabase · вход',
+        label: 'Вход по почте',
         url: supabaseUrl ? `${supabaseUrl}/auth/v1/health` : '',
         headers: authHeaders,
       },
       {
         id: 'supabase-data',
-        label: 'Supabase · данные',
+        label: 'Данные сайта',
         url: supabaseUrl
           ? `${supabaseUrl}/rest/v1/personalization_event_reaction_counter?select=event_id&limit=1`
           : '',
@@ -186,7 +183,7 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     }
     if (summary) {
       summary.textContent = supabaseOk && yandexOk
-        ? 'Сейчас оба сервиса доступны.'
+        ? 'Сейчас все соединения доступны.'
         : !supabaseOk && yandexOk
           ? 'Основной сервис не ответил, но резервный канал доступен.'
           : supabaseOk && !yandexOk
@@ -265,7 +262,6 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     background: #f5eee5;
   }
   .connectivity__result h2 { margin: 0; font-size: .95rem; }
-  .connectivity__result small { display: block; margin-top: .1rem; color: #817269; font-size: .72rem; }
   .connectivity__result strong { color: #66564b; }
   .connectivity__result span { grid-column: 2; color: #75675d; font-size: .75rem; text-align: right; }
   .connectivity__result[data-state="ok"] strong { color: #1f744e; }

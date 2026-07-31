@@ -558,4 +558,6 @@ The entire result fits one phone screenshot: understandable statuses, response
 times, one opaque correlation code, local time and browser/PWA plus effective
 network mode. The same code is sent as Supabase `X-Client-Info` and the Yandex
 gateway query marker so the screenshot time can be compared with both provider
-logs. No email, OTP, JWT or account identity appears in the result.
+logs. The public receipt uses only neutral labels (`Вход по почте`, `Данные
+сайта`, `Резервный канал`) and never exposes provider names. No email, OTP, JWT
+or account identity appears in the result.
