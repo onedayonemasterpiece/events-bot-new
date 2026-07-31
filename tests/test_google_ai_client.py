@@ -365,6 +365,88 @@ async def test_missing_scoped_env_key_cache_stays_local_not_unscoped(
 
 
 @pytest.mark.asyncio
+async def test_explicit_no_fallback_fails_closed_without_supabase() -> None:
+    client = GoogleAIClient(
+        supabase_client=None,
+        consumer="region_talk_candidate_report",
+        default_env_var_name="GOOGLE_API_KEY3",
+    )
+    client.allow_reserve_fallback = False
+    client.allow_local_limiter_fallback = False
+    ctx = RequestContext(
+        request_uid="region-talk-no-supabase",
+        consumer="region_talk_candidate_report",
+        account_name=None,
+        model="gemini-3.1-flash-lite",
+        requested_model="gemini-3.1-flash-lite",
+        reserved_tpm=123,
+    )
+
+    reserve = await client._reserve(ctx, attempt_no=1, candidate_key_ids=None)
+
+    assert reserve.ok is False
+    assert reserve.blocked_reason == "supabase_unavailable"
+    assert reserve.env_var_name is None
+
+
+@pytest.mark.asyncio
+async def test_explicit_no_fallback_fails_closed_without_scoped_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _DEFAULT_ENV_CANDIDATE_CACHE.clear()
+    supabase = _FakeSupabaseClient(data=[])
+    client = GoogleAIClient(
+        supabase_client=supabase,
+        consumer="region_talk_image_visual_adjudicator",
+        default_env_var_name="GOOGLE_API_KEY3",
+    )
+    client.allow_reserve_fallback = False
+    client.allow_local_limiter_fallback = False
+    ctx = RequestContext(
+        request_uid="region-talk-no-scoped-key",
+        consumer="region_talk_image_visual_adjudicator",
+        account_name=None,
+        model="gemini-3.1-flash-lite",
+        requested_model="gemini-3.1-flash-lite",
+        reserved_tpm=123,
+    )
+
+    reserve = await client._reserve(ctx, attempt_no=1, candidate_key_ids=None)
+
+    assert reserve.ok is False
+    assert reserve.blocked_reason == "default_env_candidates_missing"
+    assert reserve.env_var_name is None
+    assert supabase.rpc_calls == []
+
+
+@pytest.mark.asyncio
+async def test_explicit_no_fallback_fails_closed_for_cached_missing_rpc() -> None:
+    client = GoogleAIClient(
+        supabase_client=_FakeSupabaseClient(),
+        consumer="region_talk_external_research",
+        default_env_var_name="GOOGLE_API_KEY3",
+    )
+    client.allow_reserve_fallback = False
+    client.allow_local_limiter_fallback = False
+    client._reserve_rpc_missing = True
+    client._reserve_rpc_missing_since = float("inf")
+    ctx = RequestContext(
+        request_uid="region-talk-no-rpc",
+        consumer="region_talk_external_research",
+        account_name=None,
+        model="gemini-3.1-flash-lite",
+        requested_model="gemini-3.1-flash-lite",
+        reserved_tpm=123,
+    )
+
+    reserve = await client._reserve(ctx, attempt_no=1, candidate_key_ids=None)
+
+    assert reserve.ok is False
+    assert reserve.blocked_reason == "reserve_rpc_missing"
+    assert reserve.env_var_name is None
+
+
+@pytest.mark.asyncio
 async def test_provider_call_timeout_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
     class _SlowModel:
         async def generate_content_async(self, *_args, **_kwargs):

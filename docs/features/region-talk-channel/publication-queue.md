@@ -372,6 +372,15 @@ authority. The Region Talk ledger is an extra product-run ceiling. Internal
 provider retries are set to one attempt; retryable rows are retried by the
 durable finalizer state instead.
 
+All Region Talk Gemini consumers (final verifier/onboarding, visual
+adjudicator and optional grounded external research) disable direct reserve and
+process-local limiter fallbacks. If Supabase, `google_ai_reserve`, the
+`gemini-3.1-flash-lite` model row or the scoped `GOOGLE_API_KEY3` registration
+is unavailable, the request fails/defer-closes before the provider call. YDB's
+`DurableGeminiBudget` adds a cumulative 100-request ceiling and fingerprint
+replay for finalizer/onboarding and image-VLM work; it does not replace the
+shared RPM/TPM/RPD reservation.
+
 ## Operator Telegram notification
 
 Use `scripts/region_talk_goal_notify.py`, never on Kaggle. It has one functional

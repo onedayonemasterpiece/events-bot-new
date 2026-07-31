@@ -1285,6 +1285,11 @@ class GoogleAIClient:
                     key_alias="local-fallback-no-supabase",
                     blocked_reason="supabase_unavailable",
                 )
+            if not self.allow_reserve_fallback:
+                return ReserveResult(
+                    ok=False,
+                    blocked_reason="supabase_unavailable",
+                )
             return ReserveResult(
                 ok=True,
                 env_var_name=self.default_env_var_name,
@@ -1305,6 +1310,11 @@ class GoogleAIClient:
                         ctx,
                         attempt_no=attempt_no,
                         key_alias="local-fallback-no-rpc-cached",
+                        blocked_reason="reserve_rpc_missing",
+                    )
+                if not self.allow_reserve_fallback:
+                    return ReserveResult(
+                        ok=False,
                         blocked_reason="reserve_rpc_missing",
                     )
                 return ReserveResult(
@@ -1328,6 +1338,11 @@ class GoogleAIClient:
                     ctx,
                     attempt_no=attempt_no,
                     key_alias="local-fallback-no-rpc-cached",
+                    blocked_reason="reserve_rpc_missing",
+                )
+            if not self.allow_reserve_fallback:
+                return ReserveResult(
+                    ok=False,
                     blocked_reason="reserve_rpc_missing",
                 )
             return ReserveResult(
@@ -1363,6 +1378,11 @@ class GoogleAIClient:
                     ctx,
                     attempt_no=attempt_no,
                     key_alias="local-fallback-default-env-missing",
+                    blocked_reason="default_env_candidates_missing",
+                )
+            if not self.allow_reserve_fallback:
+                return ReserveResult(
+                    ok=False,
                     blocked_reason="default_env_candidates_missing",
                 )
             return ReserveResult(
