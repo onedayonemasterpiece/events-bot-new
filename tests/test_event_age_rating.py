@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import pytest
 
 from event_age_rating import (
+    AGE_DECISION_JSON_SCHEMA,
     AgeRatingDecision,
     apply_age_decision,
     decision_from_semantic_payload,
@@ -162,3 +163,13 @@ def test_smart_update_age_schema_is_piggyback_only():
     assert "age_decision" in CREATE_BUNDLE_SCHEMA["properties"]
     assert "age_decision" in MERGE_SCHEMA["properties"]
     assert SMART_UPDATE_EVENT_AGE_LLM_MODE in {"off", "piggyback_only"}
+
+
+def test_age_schema_uses_nullable_type_without_null_enum_members():
+    """google-genai Schema.enum accepts strings only; null comes from type."""
+
+    for name in ("value", "provenance", "evidence_kind"):
+        property_schema = AGE_DECISION_JSON_SCHEMA["properties"][name]
+        assert "null" in property_schema["type"]
+        assert None not in property_schema["enum"]
+        assert all(isinstance(value, str) for value in property_schema["enum"])

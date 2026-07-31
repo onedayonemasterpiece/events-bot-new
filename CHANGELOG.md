@@ -9,6 +9,14 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Smart Update now scopes multi-occurrence VK/TG roundups before reviewing
+  date/range/time roles, and treats only the visible label of VK
+  `[target|label]` markup as verbatim evidence; roundup headings can no longer
+  turn each child event into a false multi-day range while invented quotes
+  remain fail-closed.
+- Google GenAI native age-decision schemas now encode nullable fields with
+  `nullable=true` and keep enum members string-only, preventing pre-provider
+  SDK `ValidationError` retries and needless limiter reservations.
 - Region Talk operator delivery can now use the role-scoped `DISCOVERY2`
   Telethon identity instead of depending on bot membership in the review chat;
   planner and notifier both fail closed while ImageDiagnostic owns that auth

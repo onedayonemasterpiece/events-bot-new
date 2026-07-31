@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import inspect
+import json
+from pathlib import Path
 
 import pytest
 
@@ -9,6 +11,14 @@ import smart_event_update as su
 
 def _poster(text: str) -> su.PosterCandidate:
     return su.PosterCandidate(ocr_text=text)
+
+
+_VK_ROUNDUP_REPLAY = (
+    Path(__file__).resolve().parent
+    / "replays"
+    / "INC-2026-07-31-poster-candidate-url"
+    / "vk_wall_39437155_17212.json"
+)
 
 
 def test_dynamic_openai_schema_name_is_provider_safe() -> None:
@@ -26,6 +36,46 @@ def test_create_prompts_have_no_incident_specific_proper_nouns() -> None:
     source = inspect.getsource(su)
     assert "Плоский мир" not in source
     assert "Пратчет" not in source
+
+
+def test_vk_visible_link_label_is_verbatim_grounding_text() -> None:
+    source = json.loads(_VK_ROUNDUP_REPLAY.read_text(encoding="utf-8"))["text"]
+    visible_quote = "06 августа в 10:00 разберём на вебинаре"
+
+    assert su._norm_text_for_grounding(visible_quote) in su._norm_text_for_grounding(source)
+    assert "выдуманный спикер" not in su._norm_text_for_grounding(source)
+
+
+@pytest.mark.asyncio
+async def test_vk_roundup_is_scoped_before_anchor_role_routing(monkeypatch) -> None:
+    source = json.loads(_VK_ROUNDUP_REPLAY.read_text(encoding="utf-8"))["text"]
+    candidate = su.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-39437155_17212",
+        source_text=source,
+        title="Вебинар по оборудованию для маркировки",
+        date="2026-08-06",
+        time="10:00",
+        location_name="Онлайн",
+        city="Калининград",
+    )
+    assert su._candidate_needs_llm_occurrence_scope_review(candidate) is True
+    assert su._candidate_needs_llm_anchor_role_review(candidate) == (True, "explicit_range")
+
+    async def fake_ask(*_args, **_kwargs):
+        return {
+            "decision": "scoped",
+            "confidence": 0.99,
+            "selected_excerpts": [
+                "06 августа в 10:00 разберём на вебинаре, как подружиться с новым "
+                "оборудованием для маркировки, чтобы торговать без штрафов и сбоев."
+            ],
+            "reason_short": "target occurrence",
+        }
+
+    monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+    assert await su._llm_scope_candidate_occurrence(candidate) == (True, "llm_scoped")
+    assert su._candidate_needs_llm_anchor_role_review(candidate) == (False, "no_role_ambiguity")
 
 
 @pytest.mark.asyncio

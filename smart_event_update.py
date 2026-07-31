@@ -5008,6 +5008,11 @@ _COMPLETED_EVENT_REPORT_MARKERS = (
 
 def _norm_text_for_grounding(value: str | None) -> str:
     raw = str(value or "").casefold().replace("ё", "е")
+    # VK serializes a visible link label as ``[target|label]``.  LLM evidence
+    # normally quotes what a reader sees (``label``), not the transport target.
+    # Strip only this transport wrapper before the ordinary verbatim check;
+    # semantic paraphrases and invented text still fail closed.
+    raw = re.sub(r"\[[^|\]\r\n]{1,500}\|([^\]\r\n]+)\]", r"\1", raw)
     raw = re.sub(r"[«»\"'`.,;:!?()\[\]{}#№]+", " ", raw)
     raw = re.sub(r"\s+", " ", raw).strip()
     return raw
@@ -7420,6 +7425,8 @@ def _gemma_native_response_schema(schema: Any) -> Any:
             if key == "type" and isinstance(value, list):
                 non_null = [item for item in value if item != "null"]
                 out[key] = str(non_null[0] if non_null else "string").upper()
+                if "null" in value:
+                    out["nullable"] = True
                 continue
             out[key] = _gemma_native_response_schema(value)
         return out
@@ -14964,6 +14971,24 @@ async def _smart_event_update_impl(
                 status="invalid",
                 reason="mixed_occurrence_role_ungrounded_location",
             )
+    # A digest/roundup must be scoped to one occurrence before date/range/time
+    # role review.  Otherwise a roundup heading such as "01–07 August" can be
+    # mistaken for the duration of every individual child event.
+    if _candidate_needs_llm_occurrence_scope_review(candidate) and not SMART_UPDATE_LLM_DISABLED:
+        scope_ok, scope_result = await _llm_scope_candidate_occurrence(candidate)
+        logger.info(
+            "smart_update.occurrence_scope_review result=%s ok=%s source_type=%s source_url=%s title=%s",
+            scope_result,
+            int(scope_ok),
+            candidate.source_type,
+            candidate.source_url,
+            _clip_title(candidate.title),
+        )
+        if not scope_ok:
+            return SmartUpdateResult(
+                status="invalid",
+                reason=f"occurrence_scope_review:{scope_result}",
+            )
     anchor_review_needed, anchor_review_trigger = _candidate_needs_llm_anchor_role_review(candidate)
     if anchor_review_needed and not SMART_UPDATE_LLM_DISABLED:
         anchor_ok, anchor_result = await _llm_review_candidate_anchor_roles(
@@ -14994,21 +15019,6 @@ async def _smart_event_update_impl(
             if not isinstance(candidate.metrics, dict):
                 candidate.metrics = {}
             candidate.metrics[_EXPLICIT_UNKNOWN_START_LLM_CONFIRMED_METRIC] = True
-    if _candidate_needs_llm_occurrence_scope_review(candidate) and not SMART_UPDATE_LLM_DISABLED:
-        scope_ok, scope_result = await _llm_scope_candidate_occurrence(candidate)
-        logger.info(
-            "smart_update.occurrence_scope_review result=%s ok=%s source_type=%s source_url=%s title=%s",
-            scope_result,
-            int(scope_ok),
-            candidate.source_type,
-            candidate.source_url,
-            _clip_title(candidate.title),
-        )
-        if not scope_ok:
-            return SmartUpdateResult(
-                status="invalid",
-                reason=f"occurrence_scope_review:{scope_result}",
-            )
     (
         candidate.location_name,
         candidate.location_address,

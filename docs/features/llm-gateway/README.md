@@ -32,7 +32,11 @@
     наличие старой RPC с тем же именем не доказывает этот контракт. Успешный
     ответ обязательно содержит `limiter_contract`, `quota_scope` и
     `env_var_name`; клиент отвергает старый или неполный ответ до чтения ключа.
-    *   По умолчанию reserve теперь **scope-ится к `default_env_var_name` клиента**: если вызывающий consumer не передал явные `candidate_key_ids`, клиент сначала резолвит metadata только для своего ENV-ключа (`GOOGLE_API_KEY` для обычных bot-потоков, `GOOGLE_API_KEY2` для guide-only runtimes). Это защищает общие пайплайны от случайного “перетекания” на чужой ключ только потому, что в `google_ai_api_keys` появилась новая активная строка.
+    *   Обычный клиент без явного key override получает candidate set из
+        gateway-owned `GOOGLE_AI_NORMAL_KEY_ENVS`. Явный
+        `default_env_var_name`, `reserve_key_envs` или `candidate_key_ids`
+        остаётся узким consumer-scoped override (например, guide-only runtime).
+        Smart Update не владеет списком ключей и не реализует ротацию.
     *   Если metadata для scoped ENV-ключа отсутствует, клиент **не** снимает
         scope и не берёт общий key pool: remote runtime fail-closed завершает
         вызов без provider send.

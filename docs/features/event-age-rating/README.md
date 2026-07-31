@@ -81,6 +81,13 @@ semantic age, сохраняя структурированные источни
 в отчёте и сейчас всегда даёт `llm_calls_used=0`. Общие запросы Smart Update
 остаются под существующими persisted provider budgets/retry caps.
 
+Для native structured output nullable поля кодируются в Google GenAI subset
+как один `type` плюс `nullable=true`; `enum` содержит только строки. `null` в
+`enum` запрещён SDK-контрактом и раньше приводил к локальному `ValidationError`
+до provider send, лишнему fallback и шуму в limiter ledger. Prompt-schema
+fallback сохраняется для настоящих provider/schema incompatibility, но не
+должен срабатывать на собственную невалидную схему.
+
 Требование двух независимых LLM-pass + adjudicator намеренно не включено в
 массовый путь: при ограниченном ресурсе оно умножает запросы. Пока отдельный
 verification contract не профинансирован, single-pass LLM assessment считается

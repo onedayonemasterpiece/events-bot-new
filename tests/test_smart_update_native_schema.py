@@ -6,6 +6,7 @@ import types
 import pytest
 
 import smart_event_update as su
+from event_age_rating import AGE_DECISION_JSON_SCHEMA
 
 
 class _FakeGemmaClient:
@@ -19,6 +20,20 @@ class _FakeGemmaClient:
         if isinstance(item, Exception):
             raise item
         return item, {}
+
+
+def test_native_age_schema_is_google_sdk_compatible_and_nullable():
+    from google.genai import types
+
+    converted = su._gemma_native_response_schema(AGE_DECISION_JSON_SCHEMA)
+    validated = types.Schema.model_validate(converted)
+
+    assert validated.properties["value"].nullable is True
+    assert validated.properties["provenance"].nullable is True
+    assert validated.properties["confidence"].nullable is True
+    assert validated.properties["evidence_kind"].nullable is True
+    assert validated.properties["source_document_id"].nullable is True
+    assert None not in converted["properties"]["value"]["enum"]
 
 
 @pytest.mark.asyncio

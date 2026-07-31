@@ -35,6 +35,12 @@ gate; this surface must not assign `Event.photo_urls` directly. See
 - Gemma parse path теперь жёстче требует чистый JSON (`[]` или объект с `events`) и, если Gemma после repair всё равно отдаёт битый JSON, переключается на fallback `4o` вместо немедленного падения.
 - VK poster OCR остаётся source evidence даже при длинных caption'ах: если полный OCR не помещается в token budget, parse boundary обязан сохранить компактные logistics lines (дата/время/город/площадка/адрес/вход) вместо полного drop. Это предотвращает потерю времени/места, когда caption содержит длинный новостной текст, а точные `HH:MM` или venue находятся только на афише.
 - Для VK multi-poster / schedule posts intake дополнительно схлопывает exact duplicate child drafts внутри одного parsed batch только при совпадении `date + explicit time + venue + normalized title`; это узкий safety-net против двойного извлечения одной и той же карточки из карусели/афиш.
+- Для VK/TG дайджеста с несколькими датированными пунктами Smart Update сначала
+  просит LLM выделить дословный occurrence-scoped блок и только затем проверяет
+  роль date/range/time. Заголовок дайджеста вроде «с 01 по 07 августа» не может
+  становиться диапазоном каждого дочернего события. Grounding остаётся
+  fail-closed; при проверке дословности VK transport wrapper `[target|label]`
+  эквивалентен только видимому `label`, а не произвольной перефразировке.
 - Для слабых VK/TG кандидатов-рубрик (`Дайджест`, `Афиша`, `куда сходить`,
   `посмотри/приходи` вместо площадки) Smart Update теперь делает отдельную
   LLM-first eventness проверку до создания события. Если LLM не подтверждает

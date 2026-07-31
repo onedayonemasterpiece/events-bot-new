@@ -55,11 +55,12 @@ AGE_DECISION_JSON_SCHEMA: dict[str, Any] = {
                 "unknown",
             ],
         },
-        "value": {"type": ["string", "null"], "enum": [None, "0+", "6+", "12+", "16+", "18+"]},
+        # Gemini's native Schema contract accepts only strings in ``enum``.
+        # Nullability is expressed by the union type, not a null enum member.
+        "value": {"type": ["string", "null"], "enum": ["0+", "6+", "12+", "16+", "18+"]},
         "provenance": {
             "type": ["string", "null"],
             "enum": [
-                None,
                 "official_structured",
                 "organizer_text",
                 "ticketing_text",
@@ -72,7 +73,7 @@ AGE_DECISION_JSON_SCHEMA: dict[str, Any] = {
         "evidence_quote": {"type": "string"},
         "evidence_kind": {
             "type": ["string", "null"],
-            "enum": [None, "structured", "source_text", "raw_excerpt", "poster_ocr", "content_assessment"],
+            "enum": ["structured", "source_text", "raw_excerpt", "poster_ocr", "content_assessment"],
         },
         "source_document_id": {"type": ["string", "null"]},
         "rubric_codes": {"type": "array", "items": {"type": "string"}},
