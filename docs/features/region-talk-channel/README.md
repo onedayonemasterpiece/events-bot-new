@@ -197,9 +197,11 @@ Implementation entrypoints added for the first Candidate Report Only run:
 Telegram source monitoring is explicitly **Telethon-based** and uses only the
 role-scoped discovery sessions: `RegionTalkCandidateReport` defaults to
 `TELEGRAM_AUTH_BUNDLE_DISCOVERY1`, while `RegionTalkImageDiagnostic` defaults
-to `TELEGRAM_AUTH_BUNDLE_DISCOVERY2`. Region Talk functional notification is
-Bot API-only in every environment and requires the production bot to belong to
-the pinned operator chat. `TELEGRAM_AUTH_BUNDLE_E2E` belongs exclusively to
+to `TELEGRAM_AUTH_BUNDLE_DISCOVERY2`. Region Talk functional notification may
+use Bot API or a role-scoped Telethon discovery identity. Production defaults
+to `DISCOVERY2`; the notifier and orchestrator fail closed while
+ImageDiagnostic owns that bundle, so an auth key is never connected locally
+and on Kaggle at the same time. `TELEGRAM_AUTH_BUNDLE_E2E` belongs exclusively to
 Codex/manual live E2E and, like generic `TELEGRAM_SESSION`, is neither read nor
 passed to Region Talk scripts. `TELEGRAM_AUTH_BUNDLE_S22` remains reserved for
 its separate production monitoring role. Never run two Kaggle kernels against
@@ -340,14 +342,17 @@ state. См. [MVP candidate report](mvp-candidate-report.md).
   current `region_talk_visual_adjudicator_v2` / `region_talk_visual_decision_v2`
   attestation versions. A completed v2 verdict is terminal for that exact media
   manifest and must not be relaunched as an apparent stale v1 backlog.
-- Scheduled notification contract: Fly uses `TELEGRAM_BOT_TOKEN` and Bot API;
-  the functional notifier has no Telethon/human-session transport in local or
-  remote operation. The scheduled wrapper also removes
+- Scheduled notification contract: Fly defaults to the role-scoped
+  `TELEGRAM_AUTH_BUNDLE_DISCOVERY2` Telethon transport; Bot API remains an
+  explicit alternative. The orchestrator maps notification to the same
+  `telegram:DISCOVERY2` resource as ImageDiagnostic, and both the planner and
+  notifier recheck Kaggle status before connecting. The scheduled wrapper removes
   `TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION` from every child environment.
   A read-only
   `--dry-run` renders the queue without connecting any Telegram transport.
-  The bot must already belong to `REGION_TALK_NOTIFY_CHAT_ID`; `getChat` and
-  `sendMessage` fail closed otherwise. The E2E session remains outside the
+  The selected discovery account must already belong to
+  `REGION_TALK_NOTIFY_CHAT_ID`; Bot API `getChat`/`sendMessage` also fail closed
+  when that alternative is selected. The E2E session remains outside the
   application and is available only to Codex/manual live-E2E tooling.
 - Fast-check KO contract: a source-local keyword hit is both an exact-post task
   (`post_link_queue_item`) and a source-priority signal. CandidateReport must
@@ -363,9 +368,9 @@ state. См. [MVP candidate report](mvp-candidate-report.md).
   `origin/main`, scheduler health and a supervised scheduled-equivalent cycle
   are installed/verified. The cycle launched CandidateReport+BGE, reported
   `image_vlm_backlog_total=0` and did not relaunch ImageDiagnostic for completed
-  v2 verdicts. Operator delivery becomes fully green when the production bot
-  is added to the pinned operator chat; until then discovery remains autonomous
-  but Bot API `getChat` fails closed with `chat not found`.
+  v2 verdicts. Operator delivery uses the idle `DISCOVERY2` identity by default;
+  adding the bot to the pinned chat is needed only for the optional Bot API
+  transport.
 - Only after this autonomy gate is green does product work move to diversity
   ordering and generation of the actual target-channel post.
 - That next stage is now implemented for newly accepted rows: final verifier

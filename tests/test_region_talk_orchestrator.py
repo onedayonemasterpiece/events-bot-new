@@ -454,6 +454,8 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         )
         self.assertEqual([a["action"] for a in actions[:5]], ["notify_confirmed", "launch_candidate_report", "launch_bge_m3", "launch_image_diagnostic", "run_finalizer"])
         by_name = {action["action"]: action for action in actions}
+        self.assertEqual(by_name["notify_confirmed"]["resource"], "telegram:DISCOVERY2")
+        self.assertIn("telethon_discovery2", by_name["notify_confirmed"]["cmd"])
         main = by_name["launch_candidate_report"]
         bge = by_name["launch_bge_m3"]
         self.assertTrue(main["parallel_safe"])
@@ -2056,6 +2058,40 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertIn({"action": "launch_bge_m3", "kernel_slug": "region-talk-bge-m3-enrichment", "status": "RUNNING", "reason": "kernel_already_active"}, skipped)
         selected = mod.select_actions_for_execution(kept, execute_ready=True, max_actions=3)
         self.assertEqual([a["action"] for a in selected], ["launch_candidate_report", "launch_image_diagnostic", "run_finalizer"])
+
+    def test_active_image_kernel_blocks_discovery2_notifier(self) -> None:
+        mod = load_module()
+        actions = mod.build_decision_plan(
+            {
+                "publication_unsent_confirmed_total": 1,
+                "image_pending_total": 1,
+            },
+            target_confirmed=20,
+            bge_threshold=1,
+            image_threshold=1,
+        )
+        kept, skipped = mod.filter_actions_for_active_kernels(
+            actions,
+            {"region-talk-image-diagnostic": "RUNNING", "region-talk-candidate-report": "COMPLETE"},
+        )
+        self.assertNotIn("notify_confirmed", [action["action"] for action in kept])
+        self.assertIn(
+            {
+                "action": "notify_confirmed",
+                "resource": "telegram:DISCOVERY2",
+                "reason": "telegram_auth_bundle_in_use_by_active_kernel",
+            },
+            skipped,
+        )
+
+    def test_selector_never_runs_notifier_with_same_bundle_as_candidate(self) -> None:
+        mod = load_module()
+        actions = [
+            {"action": "launch_candidate_report", "resource": "telegram:DISCOVERY1", "parallel_safe": True},
+            {"action": "notify_confirmed", "resource": "telegram:DISCOVERY1", "parallel_safe": False},
+        ]
+        selected = mod.select_actions_for_execution(actions, execute_ready=True, max_actions=4)
+        self.assertEqual([action["action"] for action in selected], ["launch_candidate_report"])
 
     def test_prepare_action_command_injects_env_file_and_run_id(self) -> None:
         mod = load_module()

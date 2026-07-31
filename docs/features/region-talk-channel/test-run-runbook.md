@@ -23,7 +23,8 @@ Run one bounded offline discovery/scoring pass that reads [`seed-sources-v1.csv`
 Telegram reading is through Telethon, not through Bot API. Role-scoped Region
 Talk runs use `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` for CandidateReport and
 `TELEGRAM_AUTH_BUNDLE_DISCOVERY2` for ImageDiagnostic. Functional operator
-notification is Bot API-only everywhere. `TELEGRAM_AUTH_BUNDLE_E2E` is reserved
+notification defaults to the same `DISCOVERY2` identity only after its Kaggle
+kernel is confirmed idle; Bot API remains optional. `TELEGRAM_AUTH_BUNDLE_E2E` is reserved
 for Codex/manual live E2E and is never packaged, read, or passed to a Region
 Talk functional script; the same applies to generic `TELEGRAM_SESSION`.
 `TELEGRAM_AUTH_BUNDLE_S22` remains reserved for production Kaggle/remote
@@ -633,7 +634,7 @@ python scripts/region_talk_embedding_quality_compare.py \
   authoritative online state and the snapshot should not spend the tail of a
   20-minute run rewriting thousands of unchanged rows.
   Send periodic operator stats with `scripts/region_talk_goal_notify.py --stats`; it must read row-level YDB state, not heartbeat-only rows.
-- The 20-candidate product goal is tracked in YDB `publication_goal` with `target_confirmed=20` and `llm_budget_max=100`; Gemini Lite confirmations must go through the Supabase limiter. `scripts/region_talk_goal_notify.py` uses only `TELEGRAM_BOT_TOKEN` and a bot already added to `REGION_TALK_NOTIFY_CHAT_ID`, locally and on Fly. Human E2E/session variables are not inputs and are stripped from scheduled child environments.
+- The 20-candidate product goal is tracked in YDB `publication_goal` with `target_confirmed=20` and `llm_budget_max=100`; Gemini Lite confirmations must go through the Supabase limiter. `scripts/region_talk_goal_notify.py` defaults to role-scoped `telethon_discovery2`, refuses to connect while ImageDiagnostic is active/unverified, and retains Bot API as an explicit alternative. Human E2E/session variables are not inputs and are stripped from scheduled child environments.
 - CandidateReport live-canary acceptance requires exactly one
   `state_load_completed` event before acquisition, no second complete YDB state
   load after `posts_fetched`, and no `RESOURCE_EXHAUSTED` between a successful

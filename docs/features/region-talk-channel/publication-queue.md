@@ -389,18 +389,24 @@ shared RPM/TPM/RPD reservation.
 
 ## Operator Telegram notification
 
-Use `scripts/region_talk_goal_notify.py`, never on Kaggle. It has one functional
-transport in every environment: Bot API with `TELEGRAM_BOT_TOKEN`. Neither
-`TELEGRAM_AUTH_BUNDLE_E2E` nor generic `TELEGRAM_SESSION` is a notifier input;
-the scheduled wrapper removes both from child environments. The production bot
-must already be a member of the numeric `REGION_TALK_NOTIFY_CHAT_ID`. The
+Use `scripts/region_talk_goal_notify.py`, never on Kaggle. It supports Bot API
+and role-scoped `telethon_discovery1` / `telethon_discovery2` transports;
+production defaults to `telethon_discovery2`. Neither
+`TELEGRAM_AUTH_BUNDLE_E2E` nor generic `TELEGRAM_SESSION` is a notifier input,
+and the scheduled wrapper removes both from child environments. Before
+Telethon connects, the notifier rechecks the mapped Kaggle kernel and fails
+closed for active or unverified status. The selected account must already be a
+member of the numeric `REGION_TALK_NOTIFY_CHAT_ID`. The
 notifier sends unsent `llm_confirmed` links to the operator chat and deduplicates
 them by canonical post URL plus numeric chat id in
 `publication_delivery_item`. After Telegram acceptance it records chat and
 message ids and timestamps both in the delivery ledger and candidate row.
 Finalizer/CandidateReport writers preserve these sent markers.
 
-Bot API does not accept a caller-supplied idempotency key, so a pre-existing ambiguous
+Telethon delivery uses the durable ledger's stable `random_id`, allowing a
+crash-ambiguous `sending` row to be retried idempotently. This transport also
+keeps the MTProto entity surface available for future target-channel custom
+premium emoji. Bot API does not accept a caller-supplied idempotency key, so a pre-existing ambiguous
 `status=sending` is stopped for operator reconciliation instead of risking a
 duplicate. A successful Bot API response is persisted before the candidate is
 marked sent.
@@ -415,9 +421,10 @@ For an explicit, read-only ranked snapshot use:
 python3 scripts/region_talk_goal_notify.py --queue --limit 20 --dry-run
 ```
 
-`--dry-run` performs no Telegram connection. For a scheduled-equivalent Bot API
-transport check use `--transport bot_api`; it will first validate `getMe` and
-the pinned chat through `getChat`.
+`--dry-run` performs no Telegram connection. For the production-equivalent
+transport use `--transport telethon_discovery2`; it verifies ImageDiagnostic is
+idle before connecting. An explicit `--transport bot_api` check first validates
+`getMe` and the pinned chat through `getChat`.
 
 Removing `--dry-run` sends the snapshot to the same pinned operator chat. This
 mode does not set `sent_to_chat` and does not alter the candidate delivery

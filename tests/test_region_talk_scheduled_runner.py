@@ -48,9 +48,10 @@ def test_missing_autonomy_config_reports_names_only(tmp_path: Path) -> None:
     assert "secret" not in " ".join(missing)
 
 
-def test_scheduled_preflight_requires_bot_not_remote_human_session(tmp_path: Path) -> None:
+def test_scheduled_preflight_requires_bot_only_for_bot_api_transport(tmp_path: Path) -> None:
     env = complete_env(tmp_path)
     env.pop("TELEGRAM_BOT_TOKEN")
+    env["REGION_TALK_NOTIFY_TRANSPORT"] = "bot_api"
     env["TELEGRAM_AUTH_BUNDLE_E2E"] = "must-not-count-for-remote-delivery"
     env["TELEGRAM_SESSION"] = "must-not-count-either"
 
@@ -58,6 +59,21 @@ def test_scheduled_preflight_requires_bot_not_remote_human_session(tmp_path: Pat
 
     assert "TELEGRAM_BOT_TOKEN" in missing
     assert "TELEGRAM_AUTH_BUNDLE_E2E|TELEGRAM_SESSION" not in missing
+
+
+def test_scheduled_preflight_uses_discovery_bundle_for_telethon_transport(tmp_path: Path) -> None:
+    env = complete_env(tmp_path)
+    env.pop("TELEGRAM_BOT_TOKEN")
+    env["REGION_TALK_NOTIFY_TRANSPORT"] = "telethon_discovery2"
+
+    assert runner.missing_autonomy_config(env) == []
+
+
+def test_scheduled_preflight_rejects_unknown_notification_transport(tmp_path: Path) -> None:
+    env = complete_env(tmp_path)
+    env["REGION_TALK_NOTIFY_TRANSPORT"] = "generic_human_session"
+
+    assert "REGION_TALK_NOTIFY_TRANSPORT(valid)" in runner.missing_autonomy_config(env)
 
 
 def test_build_command_does_not_require_dotenv(monkeypatch, tmp_path: Path) -> None:
@@ -155,7 +171,7 @@ async def test_scheduled_run_writes_cycle_log_and_returns_metrics(monkeypatch, t
     async def fake_subprocess(*args, **kwargs):
         assert "--env-file" not in args
         assert kwargs["env"]["REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL"] == "1"
-        assert kwargs["env"]["REGION_TALK_NOTIFY_TRANSPORT"] == "bot_api"
+        assert kwargs["env"]["REGION_TALK_NOTIFY_TRANSPORT"] == "telethon_discovery2"
         assert "TELEGRAM_AUTH_BUNDLE_E2E" not in kwargs["env"]
         assert "TELEGRAM_SESSION" not in kwargs["env"]
         return FakeProcess()
