@@ -185,6 +185,15 @@ revision and submits that immutable file as a unique Kaggle input. Retries,
 missed-build reconciliation and the feature-specific 5400-second runtime are
 bounded in `static_site_release.py`/`main.py`.
 
+Immediately before the vector barrier, the worker refreshes revisions for the
+event ids already present in the coalesced request from current canonical
+SQLite and recomputes the request watermark. This is a mechanical consistency
+step, not a semantic rewrite: Smart Update remains the owner of event meaning.
+It prevents a deterministic follow-up such as media review from making the
+vector receipt newer than the historical intermediate revision originally
+queued by Smart Update. A receipt that still differs from the current canonical
+revision remains retryable and cannot cross the barrier.
+
 The Smart Update build now also owns the accepted desktop keyboard navigator:
 the exact deployed revision is written into `/app/.static-site-repo-sha` at
 Docker build time by `scripts/deploy_fly_main.sh`, then packed into the

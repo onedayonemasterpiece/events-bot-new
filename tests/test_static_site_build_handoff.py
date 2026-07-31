@@ -14,6 +14,55 @@ def _arg_after(cmd: list[str], name: str) -> str:
     return cmd[cmd.index(name) + 1]
 
 
+@pytest.mark.asyncio
+async def test_vector_barrier_refreshes_intermediate_smart_update_revision(tmp_path: Path) -> None:
+    import main
+
+    db = main.Database(str(tmp_path / "events.sqlite"))
+    await db.init()
+    try:
+        async with db.get_session() as session:
+            event = main.Event(
+                title="Current canonical title",
+                description="Current canonical description",
+                date="2026-08-08",
+                time="19:00",
+                city="Калининград",
+                location_name="Дом искусств",
+                source_text="source",
+                photo_urls=["https://static.kenigevents.ru/p/current.webp"],
+            )
+            session.add(event)
+            await session.commit()
+            await session.refresh(event)
+            event_id = int(event.id)
+            current_revision = main.event_public_revision(event)
+
+        payload = main.make_static_site_request_payload(
+            reason="smart_update",
+            event_ids=[event_id, 999999],
+            event_revisions={event_id: "historical-intermediate", 999999: "deleted"},
+            require_vector_barrier=True,
+        )
+        old_watermark = payload["target_watermark"]
+        refreshed, changed_ids = await main._refresh_static_site_vector_barrier_payload(
+            db, payload
+        )
+
+        assert changed_ids == [event_id, 999999]
+        assert refreshed["event_revisions"] == {str(event_id): current_revision}
+        assert refreshed["target_watermark"] != old_watermark
+        assert refreshed["target_watermark"] == main.static_site_request_watermark(refreshed)
+
+        unchanged, changed_ids = await main._refresh_static_site_vector_barrier_payload(
+            db, refreshed
+        )
+        assert changed_ids == []
+        assert unchanged == refreshed
+    finally:
+        await db.close()
+
+
 def test_snapshot_retention_context_fails_closed_for_malformed_active_handoff(tmp_path: Path) -> None:
     import main
 
