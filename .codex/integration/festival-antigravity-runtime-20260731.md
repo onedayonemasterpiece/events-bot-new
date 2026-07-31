@@ -37,10 +37,10 @@ Integration branch: `integration/festival-antigravity-runtime-20260731`
 
 ## Verification
 
-Targeted regression command passed:
+The combined regression selection reached a clean assertion summary:
 
 ```text
-135 targeted tests passed (final regression run)
+135 targeted tests passed (final regression summary)
 ```
 
 It covered existing Google client/limits, Interactions transport, festival
@@ -48,6 +48,14 @@ contracts/selection/source/evidence/schema, coordinator/service/queue seam,
 persisted-handle resume without a new POST, legacy festival context/parser and
 DB regressions. `py_compile` and
 `git diff --check` also passed.
+
+Runner caveat: after printing the all-passed summary, the combined process did
+not terminate naturally in Python thread shutdown. Isolated changed-surface
+sets (`27 passed`), Google transport/limits (`50 passed`) and provider-free
+festival core (`40 passed`) all returned exit 0. Isolated legacy
+`tests/test_db.py` cases also print `passed` but reproduce the same post-summary
+thread-shutdown timeout; this is recorded as harness teardown evidence, not as
+a failed assertion or an Antigravity runtime failure.
 
 ## Live debug and quota evidence
 
