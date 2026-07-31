@@ -359,7 +359,11 @@ not be bypassed by sending another Kaggle attempt.
 ### Smart Update debounce and historical 2026-07-15 data evidence
 
 Smart Update enqueues `static_site_build:prod` for 15 minutes after the latest
-accepted event update. Repeated updates move the one pending job forward. If a
+accepted event update. Repeated updates move the one pending job forward only
+until `STATIC_SITE_MAX_DEBOUNCE_SECONDS` from the first coalesced update
+(production: 30 minutes). This maximum prevents an uninterrupted repair/import
+stream from starving publication indefinitely. An operator, calendar-rollover
+or startup request keeps immediate priority when later Smart Updates merge. If a
 build is already `running`, one deferred pending follow-up is retained instead
 of merging the update into the immutable running snapshot; later updates
 coalesce into that follow-up. Static-site builds use the task-specific maximum

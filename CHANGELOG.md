@@ -9,6 +9,10 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Smart Update's trailing static-site debounce now has a production 30-minute
+  maximum from the first coalesced change, so a continuous repair/import stream
+  cannot postpone publication forever. Immediate operator, calendar-rollover
+  and startup requests also retain priority when later Smart Updates merge.
 - StaticSiteBuilder now reclaims only unreferenced immutable snapshots and
   lock-protected `static-site-kaggle-*` scratch trees before its capacity
   probe. A killed Fly process can no longer leave one staged database copy that

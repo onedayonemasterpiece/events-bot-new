@@ -426,6 +426,7 @@ def make_request_payload(
         if len(revisions) >= MAX_EVENT_REVISIONS:
             break
     correlation = _clean_token(correlation_id, max_len=200) or uuid.uuid4().hex
+    effect_timestamp = iso_utc(effect_at)
     payload: dict[str, Any] = {
         "schema_version": REQUEST_SCHEMA,
         "release_channel": RELEASE_CHANNEL_SECRET if release_channel != RELEASE_CHANNEL_SECRET else release_channel,
@@ -434,7 +435,8 @@ def make_request_payload(
         "event_ids": ids,
         "event_revisions": revisions,
         "correlation_ids": [correlation],
-        "latest_effect_at": iso_utc(effect_at),
+        "first_effect_at": effect_timestamp,
+        "latest_effect_at": effect_timestamp,
         "force_rebuild": bool(force_rebuild),
         "vector_barrier": {
             "required": bool(require_vector_barrier),
@@ -459,7 +461,17 @@ def merge_request_payload(current: Mapping[str, Any] | None, incoming: Mapping[s
         merged = dict(left)
         merged["schema_version"] = REQUEST_SCHEMA
         merged["release_channel"] = RELEASE_CHANNEL_SECRET
-        merged["trigger"] = right.get("trigger") or left.get("trigger") or "unknown"
+        left_trigger = _clean_token(left.get("trigger"), max_len=64) or ""
+        right_trigger = _clean_token(right.get("trigger"), max_len=64) or ""
+        immediate_triggers = {"operator_request", "calendar_rollover", "startup_catchup"}
+        if bool(left.get("force_rebuild") or right.get("force_rebuild")):
+            merged["trigger"] = "operator_request"
+        elif left_trigger in immediate_triggers:
+            merged["trigger"] = left_trigger
+        elif right_trigger in immediate_triggers:
+            merged["trigger"] = right_trigger
+        else:
+            merged["trigger"] = right_trigger or left_trigger or "unknown"
         merged["reasons"] = _bounded_unique(
             [*(left.get("reasons") or []), *(right.get("reasons") or [])], limit=MAX_REASONS
         )
@@ -484,6 +496,18 @@ def merge_request_payload(current: Mapping[str, Any] | None, incoming: Mapping[s
         )
         effect_values = [value for value in (left.get("latest_effect_at"), right.get("latest_effect_at")) if value]
         merged["latest_effect_at"] = max((iso_utc(value) for value in effect_values), default=iso_utc())
+        first_effect_values = [
+            value
+            for value in (
+                left.get("first_effect_at") or left.get("latest_effect_at"),
+                right.get("first_effect_at") or right.get("latest_effect_at"),
+            )
+            if value
+        ]
+        merged["first_effect_at"] = min(
+            (iso_utc(value) for value in first_effect_values),
+            default=merged["latest_effect_at"],
+        )
         left_barrier = left.get("vector_barrier") if isinstance(left.get("vector_barrier"), Mapping) else {}
         right_barrier = right.get("vector_barrier") if isinstance(right.get("vector_barrier"), Mapping) else {}
         merged["vector_barrier"] = {
@@ -518,6 +542,7 @@ def merge_request_payload(current: Mapping[str, Any] | None, incoming: Mapping[s
     merged.setdefault("event_revisions", {})
     merged.setdefault("correlation_ids", [])
     merged.setdefault("latest_effect_at", iso_utc())
+    merged.setdefault("first_effect_at", merged["latest_effect_at"])
     merged.setdefault("force_rebuild", False)
     merged.setdefault("daily_share_idempotent", False)
     merged["target_watermark"] = request_watermark(merged)
