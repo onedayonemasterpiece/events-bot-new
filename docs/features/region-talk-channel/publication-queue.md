@@ -278,6 +278,37 @@ This makes the next selected post meaningfully farther from what is already in
 the shortlist, while the full text/source/image/Gemini gates still decide
 whether it is eligible at all.
 
+### Daily article + social plan
+
+`scripts/region_talk_publication_plan.py` builds the durable public-content
+selection plan with policy `region_talk_daily_pair_antivector_v1`:
+
+- exactly one `article` slot and one `social` slot per Kaliningrad day;
+- articles are editorial/academic external publications; social rows are
+  Telegram/VK posts;
+- each lane is ranked against actual target-publication history plus all
+  earlier selections in that lane, so long-range diversity is recalculated
+  rather than frozen when new candidates arrive;
+- the social choice is also compared with that day's article. An alternative
+  below the pair-similarity threshold is preferred; unavoidable relaxation is
+  explicit in `pair_diversity_relaxed`;
+- future `planned`/`vacant` slots are overwritten on every run. Only
+  `locked`/`published` slots are immutable;
+- an elapsed planned slot is frozen, and a first-ever plan created after the
+  first daily slot starts on the next day instead of manufacturing a past due
+  publication;
+- a missing lane is persisted as `vacant`, never silently filled with a second
+  item from the other lane;
+- the same selected content is intended for cross-posting to Telegram and VK;
+  this is two content items per day, not four unrelated platform posts.
+
+The planner reads the actual target publication log/schedule, not operator-chat
+delivery, when reconstructing `publication_semantic_history_item`. Sending a
+candidate to the review chat therefore does not falsely mark it as publicly
+published. The scheduled runner executes the planner after each autonomous
+discovery/finalization session, so the next 14 days are recalculated three
+times per day as candidates arrive.
+
 The implemented on-demand operator view uses
 `scripts/region_talk_review_queue.py` policy
 `region_talk_mmr_adjacency_v1`. It is an iterative MMR order, not one static
@@ -344,7 +375,7 @@ durable finalizer state instead.
 ## Local Telegram notification
 
 Use `scripts/region_talk_goal_notify.py`, never on Kaggle. Local/manual mode
-uses `TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION`; the scheduled Fly runner
+uses only `TELEGRAM_AUTH_BUNDLE_E2E`; the scheduled Fly runner
 uses `--transport bot_api` with `TELEGRAM_BOT_TOKEN` and must never open the
 local human session remotely. The production bot must already be a member of
 the numeric `REGION_TALK_NOTIFY_CHAT_ID`. Both modes send unsent `llm_confirmed`
@@ -453,12 +484,13 @@ python scripts/region_talk_goal_notify.py --message 'Region Talk: CandidateRepor
 
 ## Queue rules for future public publishing
 
-- Max 4 posts per day total.
-- Publish to both Telegram and VK where possible and allowed.
+- Exactly 1 article and 1 social post per day.
+- Cross-post each selected item to both Telegram and VK where possible and allowed.
 - Do not publish the same source more than once per day.
 - Max 1–2 posts per source per 7 days.
-- Prefer diverse sources and topics.
-- Avoid same topic/location back-to-back.
+- Recalculate unlocked future slots whenever new candidates arrive.
+- Use semantic anti-vector history separately for articles and social posts.
+- Keep the article/social pair and adjacent days semantically different.
 - Candidates can expire.
 - Dry-run mode is required.
 - Auto-publish is disabled by default until explicitly configured.

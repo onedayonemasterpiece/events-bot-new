@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Region Talk local operator delivery now accepts only the role-scoped
+  `TELEGRAM_AUTH_BUNDLE_E2E`; the generic `TELEGRAM_SESSION` fallback was
+  removed so local diagnostics cannot borrow another process's session.
 - Region Talk production documentation now states the actual session boundary:
   scheduled discovery uses only the two role-scoped discovery bundles and Bot
   API delivery, never a local E2E or generic human session.
@@ -59,6 +62,12 @@
   updating ranked many-to-many event links, safely deletes last-reference
   binaries after a minimum 24-hour production grace period, and exports ranked `video_assets` for a future
   static-site player.
+- Added the durable Region Talk daily publication planner: every autonomous
+  session recalculates unlocked 14-day slots with exactly one external article
+  and one Telegram/VK social post per day, ranks each lane against actual
+  published-history BGE anti-vectors, enforces same-day pair diversity and
+  preserves locked/published slots while exposing honest vacancies.
+
 - Added a fail-closed autonomous Region Talk web-publication research adapter:
   it applies the saved broad external-source prompt with Search + URL Context,
   strict JSON validation, the live YDB duplicate guard, the existing importer,

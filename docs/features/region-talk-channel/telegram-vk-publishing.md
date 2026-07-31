@@ -1,6 +1,14 @@
 # Telegram and VK publishing contracts
 
-Status: future design only. No tokens, channel/community creation or publishing in MVP-0/MVP-1.
+Status: daily diversity-aware selection plan implemented; public Telegram/VK
+API publisher remains disabled. No channel/community creation or target-channel
+publishing is performed by the planner.
+
+The durable selection input is `publication_schedule_item`: exactly one
+external article and one Telegram/VK social post per day. Future unlocked slots
+are recalculated after every autonomous discovery session against actual
+published history. Telegram and VK are two delivery targets for the same daily
+content pair, not four independent selections.
 
 ## Rights and attribution policy
 

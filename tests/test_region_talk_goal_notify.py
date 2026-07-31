@@ -25,6 +25,18 @@ def load_module():
 
 
 class RegionTalkGoalNotifyTests(unittest.TestCase):
+    def test_local_region_talk_rejects_generic_telegram_session_fallback(self) -> None:
+        mod = load_module()
+        env = {
+            "TG_API_ID": "123",
+            "TG_API_HASH": "hash",
+            "TELEGRAM_AUTH_BUNDLE_E2E": "",
+            "TELEGRAM_SESSION": "generic-session-must-not-be-used",
+        }
+        with mock.patch.dict(os.environ, env, clear=False):
+            with self.assertRaisesRegex(RuntimeError, "TELEGRAM_AUTH_BUNDLE_E2E is required"):
+                mod.decode_e2e_bundle()
+
     def test_yc_fallback_is_bounded_when_interactive_auth_is_required(self) -> None:
         mod = load_module()
         env = {

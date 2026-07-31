@@ -69,10 +69,7 @@ def decode_e2e_bundle() -> dict[str, Any]:
             raise RuntimeError("TELEGRAM_AUTH_BUNDLE_E2E has no session")
         device = {k: bundle[k] for k in ["device_model", "system_version", "app_version", "lang_code", "system_lang_code"] if bundle.get(k)}
         return {"api_id": int(api_id), "api_hash": api_hash, "session": session, "device": device}
-    session = (os.getenv("TELEGRAM_SESSION") or "").strip()
-    if session:
-        return {"api_id": int(api_id), "api_hash": api_hash, "session": session, "device": {}}
-    raise RuntimeError("TELEGRAM_AUTH_BUNDLE_E2E or TELEGRAM_SESSION is required for local notification")
+    raise RuntimeError("TELEGRAM_AUTH_BUNDLE_E2E is required for local Region Talk E2E notification")
 
 
 def getenv_bool(name: str, default: bool = False) -> bool:
