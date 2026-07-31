@@ -29,7 +29,7 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     </p>
     <button class="connectivity__run" type="button" data-connectivity-run>Начать проверку</button>
     <p class="connectivity__status" data-connectivity-status role="status">
-      Проверка может занять до 15 секунд.
+      Обычно проверка занимает 1–3 секунды.
     </p>
     <div class="connectivity__results" data-connectivity-results hidden>
       {
@@ -37,6 +37,7 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
           ['direct-auth', 'Вход напрямую'],
           ['direct-data', 'Данные напрямую'],
           ['relay-auth', 'Второй маршрут'],
+          ['relay-data', 'Данные вторым путём'],
           ['framework-auth', 'Устойчивый вход'],
           ['framework-data', 'Устойчивые данные'],
           ['ydb-control', 'Контрольный канал'],
@@ -73,7 +74,6 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
 <script>
   import {
     runConnectivityProbe,
-    summarizeConnectivityAttempts,
     type ConnectivityProbeResult,
   } from '../lib/connectivityDiagnostic';
   import { createResilientSupabaseTransport } from '../lib/resilientSupabaseTransport';
@@ -197,45 +197,55 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
           directUrl: supabaseUrl,
           relayUrl,
           publishableKey,
-          probeTimeoutMs: 8_000,
-          safeRequestTimeoutMs: 12_000,
+          probeTimeoutMs: 3_500,
+          // Route selection races both paths and returns on the first healthy
+          // answer. The 3.5-second safe-read budget is only an emergency
+          // guard if that already-selected path degrades after its health ping.
+          safeRequestTimeoutMs: 3_500,
           cacheTtlMs: 30_000,
-          sessionStorage: null,
         })
       : null;
+    const directAuthPromise = runConnectivityProbe({
+      id: 'direct-auth',
+      label: 'Вход напрямую',
+      url: supabaseUrl ? `${supabaseUrl}/auth/v1/health` : '',
+      headers: authHeaders,
+    }, { attempts: 1, timeoutMs: 5_000 });
     const directDataPromise = runConnectivityProbe({
       id: 'direct-data',
       label: 'Данные напрямую',
       url: supabaseUrl ? `${supabaseUrl}${dataPath}` : '',
       headers: authHeaders,
-    }, { attempts: 1, timeoutMs: 12_000 });
+    }, { attempts: 1, timeoutMs: 5_000 });
+    const relayAuthPromise = runConnectivityProbe({
+      id: 'relay-auth',
+      label: 'Второй маршрут',
+      url: relayUrl ? `${relayUrl}/auth/v1/health` : '',
+      headers: authHeaders,
+    }, { attempts: 1, timeoutMs: 5_000 });
+    const relayDataPromise = runConnectivityProbe({
+      id: 'relay-data',
+      label: 'Данные вторым путём',
+      url: relayUrl ? `${relayUrl}${dataPath}` : '',
+      headers: authHeaders,
+    }, { attempts: 1, timeoutMs: 5_000 });
     const controlPromise = runConnectivityProbe({
       id: 'ydb-control',
       label: 'Контрольный канал',
       url: root.dataset.ydbControlUrl
         ? `${root.dataset.ydbControlUrl}?probe=${encodeURIComponent(probeId)}`
         : '',
-    }, { attempts: 1, timeoutMs: 12_000 });
-    const selection = transport ? await transport.diagnose() : null;
-    const routeResults = (selection?.probes || []).map((probe) => summarizeConnectivityAttempts(
-      probe.route === 'direct' ? 'direct-auth' : 'relay-auth',
-      probe.route === 'direct' ? 'Вход напрямую' : 'Второй маршрут',
-      [{
-        state: probe.ok
-          ? 'ok'
-          : probe.error === 'timeout'
-            ? 'timeout'
-            : probe.error === 'http_error'
-              ? 'http_error'
-              : probe.error === 'not_configured'
-                ? 'not_configured'
-                : 'network_error',
-        status: probe.status,
-        elapsedMs: probe.elapsedMs,
-        bytes: null,
-      }],
-    ));
-    for (const result of routeResults) renderResult(result);
+    }, { attempts: 1, timeoutMs: 5_000 });
+    for (const promise of [
+      directAuthPromise,
+      directDataPromise,
+      relayAuthPromise,
+      relayDataPromise,
+      controlPromise,
+    ]) promise.then(renderResult);
+    // Route selection starts alongside the independent measurements and races
+    // both paths. It never waits for a slow route after another one is healthy.
+    const selectionPromise = transport ? transport.selectRoute(true) : Promise.resolve(null);
     const frameworkTargets = [
       {
         id: 'framework-auth',
@@ -250,17 +260,28 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
         headers: authHeaders,
       },
     ];
-    const [directData, control, ...frameworkResults] = await Promise.all([
-      directDataPromise,
-      controlPromise,
-      ...frameworkTargets.map((target) => runConnectivityProbe(target, {
+    const frameworkPromise = selectionPromise.then(() => Promise.all(
+      frameworkTargets.map((target) => runConnectivityProbe(target, {
         attempts: 1,
-        timeoutMs: 12_000,
+        timeoutMs: 8_000,
         fetchImpl: transport?.fetch,
+      }).then((result) => {
+        renderResult(result);
+        return result;
       })),
+    ));
+    const [directAuth, directData, relayAuth, relayData, control, selection, frameworkResults] = await Promise.all([
+      directAuthPromise,
+      directDataPromise,
+      relayAuthPromise,
+      relayDataPromise,
+      controlPromise,
+      selectionPromise,
+      frameworkPromise,
     ]);
-    const measured = [...routeResults, directData, ...frameworkResults, control];
-    for (const result of [directData, ...frameworkResults, control]) renderResult(result);
+    const finalSelection = transport ? await transport.selectRoute() : selection;
+    const measured = [directAuth, directData, relayAuth, relayData, ...frameworkResults, control];
+    for (const result of measured) renderResult(result);
     const connection = (navigator as Navigator & {
       connection?: { effectiveType?: string };
     }).connection;
@@ -281,7 +302,10 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
         : `Не ответили: ${failed} из ${measured.length}.`;
     }
     if (summary) {
-      summary.textContent = directOk && frameworkOk && controlOk
+      const routeChoice = finalSelection?.route === 'relay'
+        ? ' Для следующих запросов выбран второй маршрут.'
+        : ' Для следующих запросов выбран прямой маршрут.';
+      const resultSummary = directOk && frameworkOk && controlOk
         ? 'Прямое и устойчивое соединения доступны.'
         : !directOk && frameworkOk
           ? 'Прямое соединение не ответило, устойчивое соединение сработало.'
@@ -290,6 +314,7 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
             : frameworkOk
               ? 'Устойчивое соединение доступно.'
               : 'Рабочее соединение не подтвердилось.';
+      summary.textContent = `${resultSummary}${routeChoice}`;
     }
     if (receiptId) receiptId.textContent = probeId;
     if (receiptWhen) {
@@ -315,16 +340,17 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
       const byId = new Map(measured.map((result) => [result.id, result]));
       const quality = String(connection?.effectiveType || 'unknown').toUpperCase();
       copyField.value = [
-        'KE3',
+        'KE4',
         probeId,
         checkedAt.toISOString(),
         `DA=${compactProbe(byId.get('direct-auth'))}`,
         `DD=${compactProbe(byId.get('direct-data'))}`,
         `RA=${compactProbe(byId.get('relay-auth'))}`,
+        `RD=${compactProbe(byId.get('relay-data'))}`,
         `FA=${compactProbe(byId.get('framework-auth'))}`,
         `FD=${compactProbe(byId.get('framework-data'))}`,
         `C=${compactProbe(byId.get('ydb-control'))}`,
-        `PATH=${selection?.route === 'relay' ? 2 : 1}`,
+        `PATH=${finalSelection?.route === 'relay' ? 2 : 1}`,
         `MODE=${standalone ? 'APP' : 'WEB'}`,
         `QUALITY=${quality}`,
         `OFFLINE=${serviceWorkerActive ? 1 : 0}`,

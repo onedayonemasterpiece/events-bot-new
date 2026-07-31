@@ -58,6 +58,63 @@ test('does not wait for a hanging direct probe after the relay is healthy', asyn
   releaseDirect?.();
 });
 
+test('reuses the selected route and rechecks both paths only after the cache window', async () => {
+  let now = 1_000;
+  const calls: string[] = [];
+  const transport = createResilientSupabaseTransport({
+    directUrl: direct,
+    relayUrl: relay,
+    publishableKey: key,
+    cacheTtlMs: 5_000,
+    sessionStorage: null,
+    now: () => now,
+    fetchImpl: (async (input) => {
+      calls.push(String(input));
+      return new Response('{}', { status: 200 });
+    }) as typeof fetch,
+  });
+  await transport.fetch(`${direct}/rest/v1/first?select=id`);
+  await transport.fetch(`${direct}/rest/v1/second?select=id`);
+  assert.equal(calls.filter((url) => url.endsWith('/auth/v1/health')).length, 2);
+  now += 5_001;
+  await transport.fetch(`${direct}/rest/v1/third?select=id`);
+  assert.equal(calls.filter((url) => url.endsWith('/auth/v1/health')).length, 4);
+});
+
+test('shares a recent diagnostic route choice with the next page in the same session', async () => {
+  const values = new Map<string, string>();
+  const storage = {
+    getItem: (name: string) => values.get(name) || null,
+    setItem: (name: string, value: string) => { values.set(name, value); },
+    removeItem: (name: string) => { values.delete(name); },
+  };
+  const diagnostic = createResilientSupabaseTransport({
+    directUrl: direct,
+    relayUrl: relay,
+    publishableKey: key,
+    sessionStorage: storage,
+    fetchImpl: (async (input) => {
+      if (String(input).startsWith(direct)) throw new TypeError('blocked');
+      return new Response('{}', { status: 200 });
+    }) as typeof fetch,
+  });
+  assert.equal((await diagnostic.selectRoute(true)).route, 'relay');
+
+  const calls: string[] = [];
+  const nextPage = createResilientSupabaseTransport({
+    directUrl: direct,
+    relayUrl: relay,
+    publishableKey: key,
+    sessionStorage: storage,
+    fetchImpl: (async (input) => {
+      calls.push(String(input));
+      return new Response('{}', { status: 200 });
+    }) as typeof fetch,
+  });
+  await nextPage.fetch(`${direct}/rest/v1/example?select=id`);
+  assert.deepEqual(calls, [`${relay}/rest/v1/example?select=id`]);
+});
+
 test('sends a non-idempotent OTP only once through the preselected route', async () => {
   const calls: Array<{ url: string; method: string }> = [];
   const transport = createResilientSupabaseTransport({
@@ -105,6 +162,52 @@ test('falls back once for a safe read and never duplicates it further', async ()
     `${direct}/rest/v1/example?select=id`,
     `${relay}/rest/v1/example?select=id`,
   ]);
+  const second = await transport.fetch(`${direct}/rest/v1/second?select=id`, { method: 'GET' });
+  assert.equal(second.status, 200);
+  assert.deepEqual(calls.filter((url) => url.includes('/rest/v1/second')), [
+    `${relay}/rest/v1/second?select=id`,
+  ]);
+});
+
+test('gives a safe fallback its own time budget before the caller deadline', async () => {
+  const calls: string[] = [];
+  const transport = createResilientSupabaseTransport({
+    directUrl: direct,
+    relayUrl: relay,
+    publishableKey: key,
+    sessionStorage: null,
+    safeRequestTimeoutMs: 1_000,
+    fetchImpl: (async (input, init) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.endsWith('/auth/v1/health')) {
+        if (url.startsWith(relay)) await new Promise((resolve) => setTimeout(resolve, 25));
+        return new Response('{}', { status: 200 });
+      }
+      if (url.startsWith(relay)) return new Response('recovered', { status: 200 });
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('primary timed out', 'AbortError'));
+        }, { once: true });
+      });
+    }) as typeof fetch,
+  });
+  const caller = new AbortController();
+  const callerTimer = setTimeout(() => caller.abort('caller_deadline'), 2_500);
+  try {
+    const response = await transport.fetch(`${direct}/rest/v1/flaky?select=id`, {
+      method: 'GET',
+      signal: caller.signal,
+    });
+    assert.equal(response.status, 200);
+    assert.equal(caller.signal.aborted, false);
+    assert.deepEqual(calls.filter((url) => url.includes('/rest/v1/flaky')), [
+      `${direct}/rest/v1/flaky?select=id`,
+      `${relay}/rest/v1/flaky?select=id`,
+    ]);
+  } finally {
+    clearTimeout(callerTimer);
+  }
 });
 
 test('does not rewrite unrelated requests', async () => {

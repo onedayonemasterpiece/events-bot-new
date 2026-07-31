@@ -611,6 +611,15 @@ means no browser request was created. Relay smoke must also assert that the
 publishable-key env is non-empty before sending a request; otherwise an expected
 upstream `401` can be misdiagnosed as failed header forwarding.
 
+The phone diagnostic measures both Auth and Data through both routes
+concurrently. It renders each answer as soon as it arrives, selects the first
+healthy route without waiting for a slower one and stores that short-lived
+choice for the next page in the same browser session. Independent measurements
+have a five-second ceiling; the framework's 3.5-second route budget is only an
+emergency guard if a route degrades after its successful health ping. Equal
+inner/outer deadlines and a serial twelve-second diagnostic fallback are
+forbidden.
+
 Personal actions remain local-first. Save/like/hide/calendar/feedback update the
 current-device profile immediately, enter a bounded idempotent outbox and are
 delivered to Supabase later through direct or relay transport. This preserves
