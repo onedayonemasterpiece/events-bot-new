@@ -15,6 +15,7 @@ import hashlib
 import html
 import json
 import os
+import random
 import re
 import sys
 import time
@@ -31,6 +32,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from google_ai import GoogleAIClient, SecretsProvider
+from google_ai.exceptions import RateLimitError
 
 DEFAULT_PREVIEW_JSON = ROOT / "site" / "src" / "data" / "preview-events.json"
 WEEKDAY_RU = {
@@ -850,17 +852,54 @@ def gemini_embed(
     model: str,
     dim: int,
     client: GoogleAIClient,
+    rate_limit_retries: int = 0,
+    rate_limit_max_wait_seconds: float = 65.0,
+    sleep_fn=time.sleep,
+    jitter_fn=lambda: random.uniform(0.05, 0.25),
 ) -> list[float]:
-    """Embed through the shared gateway; every retry owns its own DB reserve."""
+    """Embed through the shared gateway and smooth minute-bucket admission.
 
-    values, _usage = asyncio.run(
-        client.embed_content_async(
-            model=model,
-            text=text,
-            output_dimensionality=dim,
-        )
-    )
-    return list(values)
+    The shared client intentionally follows a NO_WAIT contract. A batch
+    projector may wait for a bounded RPM/TPM minute bucket and retry the same
+    idempotent embedding input. Day-level exhaustion and unknown admission
+    failures still fail closed immediately.
+    """
+
+    retries = max(0, int(rate_limit_retries))
+    max_wait = max(0.0, float(rate_limit_max_wait_seconds))
+    attempt = 0
+    while True:
+        try:
+            values, _usage = asyncio.run(
+                client.embed_content_async(
+                    model=model,
+                    text=text,
+                    output_dimensionality=dim,
+                )
+            )
+            return list(values)
+        except RateLimitError as exc:
+            if exc.blocked_reason not in {"rpm", "tpm"} or attempt >= retries:
+                raise
+            requested_wait = max(0.25, float(exc.retry_after_ms or 1000) / 1000.0)
+            if requested_wait > max_wait:
+                raise
+            attempt += 1
+            wait_seconds = requested_wait + max(0.0, float(jitter_fn()))
+            print(
+                json.dumps(
+                    {
+                        "stage": "embedding_rate_limit_wait",
+                        "blocked_reason": exc.blocked_reason,
+                        "retry": attempt,
+                        "wait_seconds": round(wait_seconds, 3),
+                    },
+                    ensure_ascii=False,
+                ),
+                file=sys.stderr,
+                flush=True,
+            )
+            sleep_fn(wait_seconds)
 
 
 def main() -> int:
@@ -882,6 +921,8 @@ def main() -> int:
     parser.add_argument("--event-ids", default="", help="Comma-separated event IDs to sync.")
     parser.add_argument("--max-provider-calls", type=int, default=1000)
     parser.add_argument("--sleep-seconds", type=float, default=0.0)
+    parser.add_argument("--rate-limit-retries", type=int, default=3)
+    parser.add_argument("--rate-limit-max-wait-seconds", type=float, default=65.0)
     parser.add_argument("--upsert-chunk-size", type=int, default=20)
     parser.add_argument("--force", action="store_true", help="Regenerate embeddings even when text_hash matches.")
     parser.add_argument(
@@ -998,6 +1039,8 @@ def main() -> int:
                 model=args.embedding_model,
                 dim=args.embedding_dim,
                 client=embedding_client,
+                rate_limit_retries=args.rate_limit_retries,
+                rate_limit_max_wait_seconds=args.rate_limit_max_wait_seconds,
             )
             provider_calls += 1
             rows.append({
