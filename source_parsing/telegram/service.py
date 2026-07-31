@@ -491,6 +491,23 @@ def _build_secrets_payload() -> str:
     google_fallback_env = (
         _get_env_value("TG_MONITORING_GOOGLE_FALLBACK_KEY_ENV") or google_key_env
     ).strip() or google_key_env
+    video_pool_raw = (
+        _get_env_value("TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS")
+        or "GOOGLE_API_KEY3,GOOGLE_API_KEY5"
+    )
+    video_pool_envs: list[str] = []
+    for item in video_pool_raw.split(","):
+        env_name = item.strip()
+        if not env_name or env_name in video_pool_envs:
+            continue
+        if not re.fullmatch(r"GOOGLE_API_KEY(?:_?\d+)?", env_name):
+            raise RuntimeError(
+                "TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS contains invalid env name: "
+                f"{env_name}"
+            )
+        video_pool_envs.append(env_name)
+    if not video_pool_envs:
+        raise RuntimeError("TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS must declare at least one key")
     google_key_value = _require_env(google_key_env)
     payload = {
         "TG_API_ID": _require_env("TG_API_ID"),
@@ -502,9 +519,12 @@ def _build_secrets_payload() -> str:
         google_key_env: google_key_value,
         "TG_MONITORING_GOOGLE_KEY_ENV": google_key_env,
         "TG_MONITORING_GOOGLE_FALLBACK_KEY_ENV": google_fallback_env,
+        "TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS": ",".join(video_pool_envs),
     }
     if google_fallback_env != google_key_env:
         payload[google_fallback_env] = _require_env(google_fallback_env)
+    for video_key_env in video_pool_envs:
+        payload[video_key_env] = _require_env(video_key_env)
     logger.info(
         "tg_monitor.secrets_payload bundle_env=%s bundle_len=%s bundle_ok=%s tg_session=%s days_back=%s limit=%s",
         bundle_env_key or "-",
@@ -525,7 +545,8 @@ def _build_secrets_payload() -> str:
         payload["TG_SESSION"] = _require_env("TG_SESSION")
         payload["TG_MONITORING_ALLOW_TG_SESSION"] = "1"
     # Do not ship unrelated GOOGLE_API_KEY* values into the Telegram monitoring
-    # Kaggle runtime. This surface is isolated to GOOGLE_API_KEY3.
+    # runtime: only the text primary/fallback and explicitly declared strict
+    # video pool are present.
     # Pass storage credentials to Kaggle runtime.
     for key in (
         "SUPABASE_URL",
