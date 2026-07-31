@@ -137,6 +137,17 @@ after any failed transport result and therefore communicated a false success.
   request. Independent raw hang classification finished at its five-second
   ceiling. These are deterministic local-origin failure-shape checks; a live
   production-origin run remains required after publication.
+- 2026-07-31 16:09–16:10 UTC — PR `#158` merged as `0d636991`; only the two
+  root diagnostic HTML files and their two content-hashed JS dependencies were
+  published. Live-origin Playwright at 390 px returned `KE4 6DF7-39FA` in
+  `2.25 s` with every route OK. With direct requests deliberately held open,
+  `KE4 DCC1-C0ED` selected relay and produced working framework answers in
+  `1.90 s`; the independent direct hang classification completed at `5.28 s`.
+  With the selected direct route broken after its health ping,
+  `KE4 D45E-2A0A` recovered through relay in `5.00 s` and retained `PATH=2`.
+  Desktop 1440 px returned `KE4 113D-7E39` in `2.21 s`. All live cases had no
+  console errors or horizontal overflow and were visually inspected. A new
+  affected-participant phone receipt remains the incident acceptance gate.
 
 ## Root Cause
 
