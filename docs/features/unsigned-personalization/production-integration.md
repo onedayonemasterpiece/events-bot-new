@@ -176,12 +176,14 @@ CTA/navigation must never wait for either write path. Telemetry is disposable; e
 
 ### P0.5 Thin transport resilience gate
 
-The 30 July focus onboarding incident proved a route where Supabase edge
+The 30 July focus onboarding incident proved one route where Supabase edge
 processed and answered a health request plus Auth/Data preflights in 31–59 ms,
 but the phone browser did not complete those responses in 20 seconds. The same
-browser completed the Yandex API Gateway control in 1.2 seconds. The product
-therefore needs transport diversity without introducing a second application
-backend.
+browser completed the Yandex API Gateway control in 1.2 seconds. A second run
+from a participant affected by missing email timed out on all three Supabase
+checks without any matching Supabase edge request, while its correlated Yandex
+request completed with HTTP 200 in about one second. The product therefore
+needs transport diversity without introducing a second application backend.
 
 Ownership stays fixed:
 

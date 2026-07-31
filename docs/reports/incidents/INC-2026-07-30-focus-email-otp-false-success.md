@@ -52,8 +52,8 @@ after any failed transport result and therefore communicated a false success.
   Auth requests produced 39 provider `Send` events.
 - 2026-07-31 09:35 UTC — dedicated read-only API Gateway → YDB control deployed
   and verified; source for an unlinked noindex connectivity page added.
-- 2026-07-31 11:32–12:50 UTC — nine returned `KE2` receipts collected from
-  phone browsers: eight completed all four checks and one timed out on all
+- 2026-07-31 11:32–13:37 UTC — ten returned `KE2` receipts collected from
+  phone browsers: eight completed all four checks and two timed out on all
   direct Supabase checks while the Yandex control completed.
 - 2026-07-31 12:17 UTC — for the failing `C6DB-202B` receipt, Supabase edge
   logs recorded the transport-only request and both Auth/Data preflights from
@@ -69,6 +69,15 @@ after any failed transport result and therefore communicated a false success.
   the transport probe plus successful Auth and Data requests; this raises the
   returned-phone total to eight healthy routes and one reproduced failing
   route without changing the localized failure boundary.
+- 2026-07-31 13:36 UTC — the participant who had experienced the missing-email
+  problem returned `C03E-CB61`: direct/Auth/Data timed out after
+  20018/20016/20015 ms while the Yandex control completed in 1552 ms. The
+  Gateway log independently records the same code with HTTP 200 and 1008 ms
+  processing. In the surrounding 13:30–13:45 UTC Supabase edge window, 39
+  other entries exist but there is no probe-code, Auth-health or diagnostic
+  Data API request from this run. This is a second reproduced failing route
+  and, unlike `C6DB-202B`, the checked requests did not reach Supabase edge at
+  all.
 - 2026-07-31 13:10 UTC — Auth transport design was corrected to preserve the
   static/thin-client contract. A live custom-Yandex authorize response and the
   current Supabase Auth source both show that the OAuth provider callback is
@@ -96,13 +105,14 @@ after any failed transport result and therefore communicated a false success.
    control/attempt ledger. Seven edge client signatures completed
    `/auth/v1/otp` preflight but produced no matching POST in the presentation
    window.
-   A live diagnostic now confirms this failure class on one MTS route: the
-   Supabase edge processed and answered the simple GET and both preflights,
-   but the phone browser did not complete those responses and therefore never
-   sent the checked Auth/Data requests. The same phone completed the Yandex
-   control request. The precise ISP/browser filtering mechanism is not yet
-   proven, but Supabase processing time and the mail provider are downstream
-   of the observed loss and cannot be its cause.
+   Live diagnostics now confirm two related failure shapes. On `C6DB-202B`,
+   Supabase edge processed and answered the simple GET and both preflights, but
+   the phone browser did not complete those responses and therefore never sent
+   the checked Auth/Data GETs. On affected-participant run `C03E-CB61`, none of
+   the three checked Supabase requests appears at edge at all. Both phones
+   completed the Yandex control request. The precise ISP/in-app-browser
+   filtering mechanism is not yet proven, but Supabase processing time and the
+   mail provider are downstream of the observed loss and cannot be its cause.
 3. Resends could generate several active-looking messages while the UI did not
    clearly bind code entry to the latest accepted issuance. This contributed
    to 59 `otp_expired` verification failures; the exact distribution still
@@ -222,13 +232,13 @@ after any failed transport result and therefore communicated a false success.
 
 ## Follow-up Actions
 
-- [x] P0 deploy the read-only diagnostic and collect phone evidence; one MTS
-      route reproduced the pre-Auth response loss while the Yandex control
-      stayed available.
+- [x] P0 deploy the read-only diagnostic and collect phone evidence; two phone
+      routes reproduced direct Supabase loss while the Yandex control stayed
+      available, including a participant affected by the missing-email issue.
 - [ ] P0 deploy the false-success fix to the focus onboarding itself.
 - [ ] P0 add the stateless API Gateway relay for email OTP/verify/refresh and
-      run phone acceptance on the failing route without moving Auth state out
-      of Supabase.
+      run phone acceptance on the reproduced failing routes without moving
+      Auth state out of Supabase.
 - [ ] P0 give Supabase clients one explicit stable auth storage key before any
       API base URL changes, so the existing PWA session survives transport
       migration without reinstall or repeated login.
