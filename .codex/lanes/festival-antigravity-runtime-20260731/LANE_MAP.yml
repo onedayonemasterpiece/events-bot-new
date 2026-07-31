@@ -1,0 +1,145 @@
+mode: worktree_worker
+repo: /home/dev/projects/events-bot-new
+base_ref: 35b63d96
+base_branch: integration/festival-antigravity-runtime-20260731
+integration_branch: integration/festival-antigravity-runtime-20260731
+global_constraints:
+  - Antigravity is primary for the new non-social contour; Kaggle+Gemma is not touched.
+  - Initial runtime remains collect-only and fail-closed; no provider writes Festival/Event/public pages.
+  - Every POST interaction uses the shared limiter and a distinct request_uid.
+  - Key values, source secrets, raw provider credentials, and local .env files are never committed or logged.
+  - LLM semantic decisions remain evidence-backed; deterministic code only validates structure, hashes, references, and safety.
+verification_owner: root integrator
+stop_conditions:
+  - shared limiter cannot prove a reservation for the selected key
+  - a key pool member is absent from the registry or secret store
+  - provider create succeeds but the interaction handle cannot be persisted
+  - live output lacks mandatory semantic checkpoints after bounded recovery
+requirements:
+  - id: R01
+    requirement: Multi-key Antigravity Interactions client with per-key quota accounting.
+    primary_lane: L01-provider
+  - id: R02
+    requirement: Current non-social URL selection, grouping, source safety, and input fingerprints.
+    primary_lane: L02-core
+  - id: R03
+    requirement: A+B(+C), checkpoints, incomplete recovery, and semantic/provider state separation.
+    primary_lane: L04-integrator
+  - id: R04
+    requirement: Seven-topology, evidence, inventory, and Event-gate validation.
+    primary_lane: L02-core
+  - id: R05
+    requirement: Persistent collect/review/approve/reject workflow and safe queue integration.
+    primary_lane: L04-integrator
+  - id: R06
+    requirement: Bounded live run and debugging with limiter evidence.
+    primary_lane: L04-integrator
+  - id: R07
+    requirement: Tests, documentation, changelog, independent review, and pushed integration state.
+    primary_lane: L05-review
+lanes:
+  - id: L01-provider
+    role: worker
+    effort: high
+    requirement_ids: [R01]
+    target: Strict multi-key Interactions transport and accounting seam.
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/festival-antigravity-runtime/provider
+    worktree: /home/dev/.codex/worktrees/events-bot-new/festival-antigravity-provider
+    writable_files:
+      - google_ai/client.py
+      - google_ai/interactions.py
+      - google_ai/__init__.py
+      - migrations/007_google_ai_interaction_accounting.sql
+      - tests/test_google_ai_client.py
+      - tests/test_google_ai_interactions.py
+      - .codex/lanes/L01-provider/RESULTS.md
+    forbidden_files: [festival_queue.py, models.py, db.py, main_part2.py, scheduling.py, CHANGELOG.md]
+    expected_output: Committed strict provider client with mocked transport/accounting tests.
+    verification_scope: targeted
+    status: planned
+  - id: L02-core
+    role: worker
+    effort: high
+    requirement_ids: [R02, R04]
+    target: Provider-free research contracts, selection, source safety, evidence and Event-gate validation.
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/festival-antigravity-runtime/core
+    worktree: /home/dev/.codex/worktrees/events-bot-new/festival-antigravity-core
+    writable_files:
+      - festival_web_research/__init__.py
+      - festival_web_research/contracts.py
+      - festival_web_research/selection.py
+      - festival_web_research/sources.py
+      - festival_web_research/evidence.py
+      - festival_web_research/validators.py
+      - festival_web_research/artifacts.py
+      - festival_web_research/schemas/festival-taxonomy-registry-v2.json
+      - tests/test_festival_web_research_contracts.py
+      - tests/test_festival_web_research_selection.py
+      - tests/test_festival_web_research_sources.py
+      - tests/test_festival_web_research_evidence.py
+      - .codex/lanes/L02-core/RESULTS.md
+    forbidden_files: [google_ai, festival_queue.py, models.py, db.py, main_part2.py, scheduling.py, CHANGELOG.md]
+    expected_output: Committed pure core with fail-closed golden and negative tests.
+    verification_scope: targeted
+    status: planned
+  - id: L03-db
+    role: worker
+    effort: high
+    requirement_ids: []
+    target: Additive operational run/lane/item/source persistence and bootstrap parity.
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/festival-antigravity-runtime/db
+    worktree: /home/dev/.codex/worktrees/events-bot-new/festival-antigravity-db
+    writable_files:
+      - models.py
+      - db.py
+      - alembic/versions/20260731_festival_web_research.py
+      - tests/test_festival_web_research_models.py
+      - .codex/lanes/L03-db/RESULTS.md
+    forbidden_files: [google_ai, festival_queue.py, main_part2.py, scheduling.py, CHANGELOG.md]
+    expected_output: Committed additive schema with SQLite bootstrap/migration tests.
+    verification_scope: targeted
+    status: planned
+  - id: L04-integrator
+    role: merge_reviewer
+    effort: high
+    requirement_ids: [R03, R05, R06]
+    target: Merge lanes; implement repository/coordinator/service/queue/CLI; run bounded live debugging.
+    depends_on: [L01-provider, L02-core, L03-db]
+    execution_mode: serial_after_dependency
+    branch: integration/festival-antigravity-runtime-20260731
+    worktree: /home/dev/projects/events-bot-new-antigravity-runtime
+    writable_files:
+      - festival_web_research/repository.py
+      - festival_web_research/prompts.py
+      - festival_web_research/coordinator.py
+      - festival_web_research/service.py
+      - festival_web_research/formatting.py
+      - festival_queue.py
+      - scripts/run_festival_web_research.py
+      - tests/test_festival_web_research_coordinator.py
+      - tests/test_festival_web_research_service.py
+      - tests/test_festival_queue_web_research.py
+    forbidden_files: []
+    expected_output: Integrated collect-only runtime plus live acceptance evidence.
+    verification_scope: full_local
+    status: planned
+  - id: L05-review
+    role: reviewer
+    effort: high
+    requirement_ids: [R07]
+    target: Requirement/diff/security/quota/acceptance closure audit.
+    depends_on: [L04-integrator]
+    execution_mode: serial_after_dependency
+    branch: none
+    worktree: read-only integration worktree
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: PASS or actionable findings with requirement evidence.
+    verification_scope: full_local
+    status: planned
