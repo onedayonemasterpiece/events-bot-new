@@ -43,6 +43,49 @@ test('runs sequential no-store probes and measures response bytes', async () => 
   assert.ok(calls.every((call) => call.credentials === 'omit'));
 });
 
+test('accepts a completed opaque response only for the transport-only probe', async () => {
+  const opaqueResponse = {
+    ok: false,
+    status: 0,
+    type: 'opaque',
+    arrayBuffer: async () => new ArrayBuffer(0),
+  } as Response;
+  const result = await runConnectivityProbe(
+    {
+      id: 'direct',
+      label: 'Direct',
+      url: 'https://example.test/health?probe=ABCD-1234',
+      mode: 'no-cors',
+      acceptOpaque: true,
+    },
+    {
+      fetchImpl: (async (_url, init) => {
+        assert.equal(init?.mode, 'no-cors');
+        return opaqueResponse;
+      }) as typeof fetch,
+    },
+  );
+  assert.equal(result.state, 'ok');
+  assert.equal(result.status, null);
+  assert.equal(result.attempts.length, 1);
+});
+
+test('uses one 20-second attempt by default instead of multiplying the wait', async () => {
+  const calls: RequestInit[] = [];
+  const result = await runConnectivityProbe(
+    { id: 'auth', label: 'Auth', url: 'https://example.test/health' },
+    {
+      fetchImpl: (async (_url, init) => {
+        calls.push(init || {});
+        return new Response('{}', { status: 200 });
+      }) as typeof fetch,
+    },
+  );
+  assert.equal(result.state, 'ok');
+  assert.equal(result.attempts.length, 1);
+  assert.equal(calls.length, 1);
+});
+
 test('receipt is compact and contains no address, token, key or user agent', () => {
   const receipt = makeConnectivityReceipt([
     summarizeConnectivityAttempts('auth', 'Auth', [

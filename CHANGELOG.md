@@ -39,6 +39,10 @@
   Supabase Auth/data with a dedicated Yandex API Gateway → YDB control and show
   one screenshot-sized result with an opaque correlation code; its public
   labels remain provider-neutral.
+- Split the phone diagnostic into transport-only, browser-checked, data and
+  reserve probes, using one shared 20-second budget instead of three serial
+  eight-second attempts; browser connection type is now described as speed
+  rather than incorrectly calling Wi-Fi `4G`.
 - Integrated the noindex 30-day focus-group product shell into the R15 candidate: fragment onboarding, separate participation state, optional identity intent, installable focus PWA, closed hub, feedback specimens, local interest prototype and the 12-item research Easter-egg collection remain isolated from the ordinary public home.
 - Added a focus-group PWA start controller that returns an active participant to the closed hub while keeping participation independent from personalization reset; the previous 72-hour preview marker is migration input only, never the access period.
 - Added a deterministic self-contained SVG QR and exact visible fragment link

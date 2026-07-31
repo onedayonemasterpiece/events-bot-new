@@ -19,18 +19,19 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
   data-ydb-control-url={ydbControlUrl}
 >
   <section class="connectivity__card">
-    <p class="connectivity__eyebrow">Быстрая диагностика</p>
+    <p class="connectivity__eyebrow">Расширенная диагностика</p>
     <h1>Проверим соединение</h1>
     <p class="connectivity__lead">
       Нажмите одну кнопку. Проверка ничего не меняет и не отправляет писем.
     </p>
     <button class="connectivity__run" type="button" data-connectivity-run>Начать проверку</button>
     <p class="connectivity__status" data-connectivity-status role="status">
-      Обычно это занимает несколько секунд.
+      Проверка может занять до 20 секунд.
     </p>
     <div class="connectivity__results" data-connectivity-results hidden>
       {
         [
+          ['supabase-direct', 'Прямой доступ'],
           ['supabase-auth', 'Вход по почте'],
           ['supabase-data', 'Данные сайта'],
           ['ydb-control', 'Резервный канал'],
@@ -48,7 +49,7 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
       <dl>
         <div><dt>Код проверки</dt><dd data-connectivity-id>—</dd></div>
         <div><dt>Когда</dt><dd data-connectivity-when>—</dd></div>
-        <div><dt>Устройство</dt><dd data-connectivity-network>—</dd></div>
+        <div><dt>Режим</dt><dd data-connectivity-network>—</dd></div>
       </dl>
       <p class="connectivity__send">
         Сделайте скриншот этого экрана и отправьте человеку, который прислал ссылку.
@@ -134,11 +135,20 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     runButton.disabled = true;
     runButton.setAttribute('aria-busy', 'true');
     runButton.textContent = 'Проверяем…';
-    if (status) status.textContent = 'Проверяем три независимых соединения…';
+    if (status) status.textContent = 'Проверяем четыре независимых соединения…';
     if (resultsRoot) resultsRoot.hidden = false;
     if (receiptRoot) receiptRoot.hidden = true;
 
     const targets = [
+      {
+        id: 'supabase-direct',
+        label: 'Прямой доступ',
+        url: supabaseUrl
+          ? `${supabaseUrl}/auth/v1/health?probe=${encodeURIComponent(probeId)}`
+          : '',
+        mode: 'no-cors' as RequestMode,
+        acceptOpaque: true,
+      },
       {
         id: 'supabase-auth',
         label: 'Вход по почте',
@@ -163,7 +173,7 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     ];
 
     const measured = await Promise.all(targets.map(async (target) => {
-      const result = await runConnectivityProbe(target, { attempts: 3, timeoutMs: 8_000 });
+      const result = await runConnectivityProbe(target, { attempts: 1, timeoutMs: 20_000 });
       renderResult(result);
       return result;
     }));
@@ -172,8 +182,9 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     }).connection;
     const checkedAt = new Date();
     const failed = measured.filter((result) => result.state !== 'ok').length;
-    const supabaseOk = measured
-      .filter((result) => result.id.startsWith('supabase-'))
+    const directOk = measured.find((result) => result.id === 'supabase-direct')?.state === 'ok';
+    const protectedOk = measured
+      .filter((result) => result.id === 'supabase-auth' || result.id === 'supabase-data')
       .every((result) => result.state === 'ok');
     const yandexOk = measured.find((result) => result.id === 'ydb-control')?.state === 'ok';
     if (status) {
@@ -182,13 +193,15 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
         : `Не ответили: ${failed} из ${measured.length}.`;
     }
     if (summary) {
-      summary.textContent = supabaseOk && yandexOk
+      summary.textContent = directOk && protectedOk && yandexOk
         ? 'Сейчас все соединения доступны.'
-        : !supabaseOk && yandexOk
-          ? 'Основной сервис не ответил, но резервный канал доступен.'
-          : supabaseOk && !yandexOk
-            ? 'Основной сервис доступен, резервный канал не ответил.'
-            : 'Соединение не пропустило обе проверки.';
+        : directOk && !protectedOk
+          ? 'Сервер доступен, но рабочие запросы блокируются в браузере.'
+          : !directOk && yandexOk
+            ? 'Основной маршрут не вернул ответ, резервный канал доступен.'
+            : directOk && protectedOk && !yandexOk
+              ? 'Рабочие запросы доступны, резервный канал не ответил.'
+              : 'Соединение не пропустило проверочные запросы.';
     }
     if (receiptId) receiptId.textContent = probeId;
     if (receiptWhen) {
@@ -201,8 +214,14 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     }
     if (receiptNetwork) {
       const mode = window.matchMedia('(display-mode: standalone)').matches ? 'приложение' : 'браузер';
-      const network = connection?.effectiveType ? connection.effectiveType.toUpperCase() : 'тип сети не определён';
-      receiptNetwork.textContent = `${network} · ${mode}`;
+      const network = {
+        'slow-2g': 'очень медленное соединение',
+        '2g': 'медленное соединение',
+        '3g': 'среднее соединение',
+        '4g': 'быстрое соединение',
+      }[String(connection?.effectiveType || '')] || 'скорость не определена';
+      const offlineSupport = navigator.serviceWorker?.controller ? ' · офлайн-режим активен' : '';
+      receiptNetwork.textContent = `${mode} · ${network}${offlineSupport}`;
     }
     if (receiptRoot) receiptRoot.hidden = false;
     runButton.removeAttribute('aria-busy');

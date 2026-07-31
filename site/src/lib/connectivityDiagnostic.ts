@@ -28,6 +28,8 @@ interface ProbeTarget {
   label: string;
   url: string;
   headers?: Record<string, string>;
+  mode?: RequestMode;
+  acceptOpaque?: boolean;
 }
 
 interface RunOptions {
@@ -84,14 +86,16 @@ const runAttempt = async (
     const response = await fetchImpl(target.url, {
       method: 'GET',
       headers: target.headers,
+      mode: target.mode,
       cache: 'no-store',
       credentials: 'omit',
       signal: controller.signal,
     });
     const bytes = (await response.arrayBuffer()).byteLength;
+    const acceptedOpaque = target.acceptOpaque === true && response.type === 'opaque';
     return {
-      state: response.ok ? 'ok' : 'http_error',
-      status: response.status,
+      state: response.ok || acceptedOpaque ? 'ok' : 'http_error',
+      status: acceptedOpaque ? null : response.status,
       elapsedMs: rounded(now() - startedAt),
       bytes,
     };
@@ -113,8 +117,8 @@ export const runConnectivityProbe = async (
   target: ProbeTarget,
   options: RunOptions = {},
 ): Promise<ConnectivityProbeResult> => {
-  const count = Math.min(5, Math.max(1, options.attempts ?? 3));
-  const timeoutMs = Math.min(15_000, Math.max(1_000, options.timeoutMs ?? 8_000));
+  const count = Math.min(5, Math.max(1, options.attempts ?? 1));
+  const timeoutMs = Math.min(25_000, Math.max(1_000, options.timeoutMs ?? 20_000));
   const fetchImpl = options.fetchImpl ?? fetch;
   const now = options.now ?? (() => performance.now());
   const attempts: ConnectivityAttempt[] = [];
@@ -155,4 +159,3 @@ export const makeConnectivityReceipt = (
     })),
   })),
 });
-

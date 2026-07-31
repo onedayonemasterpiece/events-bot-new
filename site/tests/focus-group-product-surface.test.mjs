@@ -42,12 +42,15 @@ test('phone connectivity diagnostic is unlinked, noindex and read-only', async (
   assert.doesNotMatch(root + hub, /fokus-gruppa\/diagnostika/u);
   assert.match(component, /Вход по почте/u);
   assert.match(component, /Данные сайта/u);
+  assert.match(component, /Прямой доступ/u);
   assert.match(component, /Резервный канал/u);
   assert.doesNotMatch(component, /<small>\{service\}<\/small>/u);
   assert.doesNotMatch(component, /label: 'Supabase/u);
   assert.match(component, /Сделайте скриншот этого экрана/u);
   assert.match(component, /X-Client-Info/u);
   assert.match(component, /Promise\.all/u);
+  assert.match(component, /mode: 'no-cors'/u);
+  assert.match(component, /attempts: 1, timeoutMs: 20_000/u);
   assert.match(helper, /cache: 'no-store'/u);
   assert.match(helper, /credentials: 'omit'/u);
   assert.match(infra, /action: GetItem/u);
