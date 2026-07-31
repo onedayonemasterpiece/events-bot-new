@@ -119,6 +119,24 @@ after any failed transport result and therefore communicated a false success.
   framework path; there were no failed requests, console errors or horizontal
   overflow. This is release evidence for the diagnostic/framework on the
   current network, not a substitute for the affected participant-phone run.
+- 2026-07-31 15:24–15:25 UTC — affected-phone receipts `809F-00BF` and
+  `6549-882C` proved both raw routes were reachable (`DA/DD/RA=OK`) but the
+  resilient Data request, then both framework requests, ended at the exact
+  12-second diagnostic deadline. Review found an algorithm defect rather than
+  a channel failure: the outer probe aborted when the primary route's own
+  12-second timer expired, so the alternate inherited an already-aborted
+  signal and had no chance to run.
+- 2026-07-31 15:57 UTC — the replacement `KE4` diagnostic was exercised with
+  Playwright before publication. It launches direct, relay and control
+  measurements concurrently, renders each completed result immediately and
+  races both framework health checks rather than serially waiting for a
+  fallback. Normal framework access completed in `0.9 s`; with every direct
+  request deliberately held open, relay-backed framework access completed in
+  `1.4 s`; when the already-selected direct route was broken after its health
+  ping, the one safe recovery completed in `4.9 s` and cached relay for the next
+  request. Independent raw hang classification finished at its five-second
+  ceiling. These are deterministic local-origin failure-shape checks; a live
+  production-origin run remains required after publication.
 
 ## Root Cause
 
@@ -144,6 +162,11 @@ after any failed transport result and therefore communicated a false success.
    `email_control.email_outbox`, while the Postbox event consumer requires an
    outbox correlation row. Provider events existed, but the normal delivery
    projection could not account for them.
+5. The first resilient diagnostic gave both the transport's primary attempt and
+   the caller-wide probe the same 12-second deadline. On a primary timeout the
+   caller abort fired first, and the alternate route received that aborted
+   signal. The UI therefore described a fallback framework that could not
+   actually fall back in this failure shape.
 
 ## Contributing Factors
 
@@ -260,8 +283,9 @@ after any failed transport result and therefore communicated a false success.
       available, including a participant affected by the missing-email issue.
 - [ ] P0 deploy the false-success fix to the focus onboarding itself.
 - [ ] P0 run affected-phone acceptance through the deployed stateless API
-      Gateway relay without moving Auth state out of Supabase. Gateway/browser
-      smoke is complete; real-phone `KE3` evidence remains.
+      Gateway relay without moving Auth state out of Supabase. The first real
+      phone `KE3` exposed the fallback-budget defect; rerun after the corrected
+      diagnostic is published.
 - [x] P0 give Supabase clients one explicit stable auth storage key before any
       API base URL changes, so the existing PWA session survives transport
       migration without reinstall or repeated login.

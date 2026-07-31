@@ -224,6 +224,21 @@ keeps it for the whole attempt. A write from the local action outbox may move
 between direct and relay transports after an ambiguous response only because
 the durable RPC deduplicates the same `action_id`.
 
+Route health is raced in parallel. The first healthy route is cached for two
+minutes and is reused without a new probe on every request. After the cache
+window, the next operation rechecks both routes and again keeps the first
+healthy answer; no periodic polling runs while the site is idle. The standalone
+phone diagnostic writes the same short-lived session choice, so navigating to
+another page can use the measured route immediately.
+
+Each safe route attempt has its own bounded timeout (four seconds by default), and any caller-wide
+deadline must exceed the sum of the primary and fallback budgets plus a small
+handoff margin. A caller must never abort at the exact instant the first route
+times out: that would pass an already-aborted signal to the alternate route and
+make a nominal fallback unreachable. When the alternate route succeeds, it is
+cached immediately so the next safe request does not repeat the known-bad
+primary route.
+
 The relay is a fixed upstream HTTP integration. It forwards the publishable key,
 user JWT and request body, while Supabase still performs token validation and
 RLS. It stores no user or business data and runs no application function. CORS

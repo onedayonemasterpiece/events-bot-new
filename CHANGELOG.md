@@ -8,6 +8,10 @@
   dry-runs make no Telegram connection, and Bot API delivery fails closed when
   the bot is not a member of the pinned operator chat or a prior send is
   ambiguous.
+- Changed connectivity diagnosis to race both routes, render results as they
+  arrive, reuse the selected route for two minutes and cache a successful
+  recovery. Safe reads now have separate four-second route budgets, so a caller
+  deadline cannot abort the alternate before it starts.
 - Region Talk orchestration now recognizes ImageDiagnostic's current v2 visual
   attestations, so completed Gemini image reviews leave the actionable backlog
   instead of causing repeated zero-yield Kaggle launches.
