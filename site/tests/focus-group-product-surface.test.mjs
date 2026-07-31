@@ -29,6 +29,37 @@ test('focus programme stays on dedicated noindex/noarchive routes without replac
   assert.match(invitation, /FocusGroupInviteIntake/u);
 });
 
+test('phone connectivity diagnostic is unlinked, noindex and read-only', async () => {
+  const [root, hub, page, component, helper, infra] = await Promise.all([
+    read('../src/pages/index.astro'),
+    read('../src/pages/fokus-gruppa/index.astro'),
+    read('../src/pages/fokus-gruppa/diagnostika/index.astro'),
+    read('../src/components/FocusConnectivityDiagnostic.astro'),
+    read('../src/lib/connectivityDiagnostic.ts'),
+    read('../../infra/yandex/focus-connectivity/openapi.yaml'),
+  ]);
+  assert.match(page, /noindex,nofollow,noarchive,nosnippet/u);
+  assert.doesNotMatch(root + hub, /fokus-gruppa\/diagnostika/u);
+  assert.match(component, /Вход по почте/u);
+  assert.match(component, /Данные сайта/u);
+  assert.match(component, /Прямой доступ/u);
+  assert.match(component, /Резервный канал/u);
+  assert.doesNotMatch(component, /<small>\{service\}<\/small>/u);
+  assert.doesNotMatch(component, /label: 'Supabase/u);
+  assert.match(component, /Отправьте скриншот или скопируйте строку результата/u);
+  assert.match(component, /X-Client-Info/u);
+  assert.match(component, /Promise\.all/u);
+  assert.match(component, /mode: 'no-cors'/u);
+  assert.match(component, /attempts: 1, timeoutMs: 20_000/u);
+  assert.match(component, /Скопировать результат/u);
+  assert.match(component, /navigator\.clipboard\?\.writeText/u);
+  assert.match(component, /'KE2'/u);
+  assert.match(helper, /cache: 'no-store'/u);
+  assert.match(helper, /credentials: 'omit'/u);
+  assert.match(infra, /action: GetItem/u);
+  assert.doesNotMatch(component, /type="email"|one-time-code|signInWithOtp|verifyOtp/u);
+});
+
 test('invite intake and secret hub state the local marker boundary', async () => {
   const [intake, secret, helper] = await Promise.all([
     read('../src/components/FocusGroupInviteIntake.astro'),
