@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Region Talk external-publication intake now has a dry-run-first, evidence-backed operator review command that can promote a fully resolved manual-review row into the normal CandidateReport gates while preserving an auditable YDB review record.
+
 ### Changed
 
 - Region Talk's saved external-research prompt now includes the exact result-schema URL literally, rather than relying on a URL discovered inside the fetched registry, so restricted research sandboxes can authorize both prerequisite reads before searching.

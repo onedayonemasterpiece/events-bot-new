@@ -120,6 +120,28 @@ research quality, source overview, diversity topics and rights fields. A direct
 article image may be sent to ImageDiagnostic only as
 `score_only_no_reuse`; an image score is not permission to republish it.
 
+### Evidence-backed operator review
+
+Rows held in `manual_review_required` are promoted only through an explicit,
+auditable review file and remain fail-closed by default:
+
+```bash
+python3 scripts/region_talk_external_publication_review.py review.json
+# inspect the dry-run report, then:
+python3 scripts/region_talk_external_publication_review.py review.json --execute
+```
+
+Contract `region_talk_external_publication_review.v1` requires the exact intake
+ID, reviewer and timezone-aware review time, every currently blocking
+`resolved_reason_codes` value, public evidence URLs with field-level support,
+and only narrow allowlisted field corrections. Approval rechecks the original
+product gates: exact in-window date, full text, external source, language and
+product-policy match, no hard exclusion, sufficient quality scores and, for
+scholarly work, peer review plus checked correction/funding/conflict status.
+The command updates the intake and seen ledger and writes a separate
+`external_publication_review_item`; it never writes a publication candidate or
+publishes. `--execute` is required for any YDB change.
+
 The E5 and BGE-M3 semantic bank contains separate
 `ko_editorial_publication` and `ko_academic_publication` positive classes. The
 final verifier uses the origin-aware `region_talk_final_verifier_v6` contract:
