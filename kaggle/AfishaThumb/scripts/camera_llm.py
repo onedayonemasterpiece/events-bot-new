@@ -16,9 +16,9 @@ Blender keyframes (Stage 3) and the per-slot trace overlay.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import math
-import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -51,18 +51,6 @@ class CameraPlan:
     narrative: str = ""
     model: str = ""
     source: str = "llm"
-
-
-def _load_env_key() -> str:
-    key = os.environ.get("GOOGLE_API_KEY", "")
-    if key:
-        return key
-    env_path = Path(__file__).resolve().parents[3] / ".env"
-    if env_path.exists():
-        for line in env_path.read_text(encoding="utf-8").splitlines():
-            if line.startswith("GOOGLE_API_KEY="):
-                return line.split("=", 1)[1].strip().strip("'").strip('"')
-    return ""
 
 
 def _build_prompt(scene_brief: dict, papers: list[dict]) -> str:
@@ -133,24 +121,44 @@ def _build_prompt(scene_brief: dict, papers: list[dict]) -> str:
 
 
 def _call_gemini(prompt: str, model: str) -> str:
-    from google import genai
-    from google.genai import types as gtypes
+    """One physical attempt through the mandatory shared gateway."""
 
-    key = _load_env_key()
-    if not key:
-        raise RuntimeError("GOOGLE_API_KEY not set")
-    os.environ["GOOGLE_API_KEY"] = key
-    client = genai.Client(api_key=key)
-    resp = client.models.generate_content(
-        model=model,
-        contents=[prompt],
-        config=gtypes.GenerateContentConfig(
-            response_mime_type="application/json",
-            temperature=0.35,
+    async def _generate() -> str:
+        from google_ai import GoogleAIClient, SecretsProvider
+        from google_ai.limiter_supabase import (
+            build_google_ai_limiter_supabase_client,
+        )
+
+        client = GoogleAIClient(
+            supabase_client=build_google_ai_limiter_supabase_client(
+                require_configured=True,
+            ),
+            secrets_provider=SecretsProvider(),
+            consumer="afishathumb.camera",
+            default_env_var_name="GOOGLE_API_KEY",
+        )
+        client.allow_reserve_fallback = False
+        client.allow_local_limiter_fallback = False
+        client.allow_local_limiter_on_reserve_error = False
+        client.max_retries = 1
+        client.fallback_models = []
+        response_text, _usage = await client.generate_content_async(
+            model=model,
+            prompt=prompt,
+            generation_config={
+                "response_mime_type": "application/json",
+                "temperature": 0.35,
+                "max_output_tokens": 2048,
+            },
             max_output_tokens=2048,
-        ),
-    )
-    return resp.text or ""
+        )
+        return response_text
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(_generate())
+    raise RuntimeError("camera_llm synchronous API cannot run inside an active event loop")
 
 
 def _parse_plan(raw: str, valid_anchor_names: set[str]) -> CameraPlan:

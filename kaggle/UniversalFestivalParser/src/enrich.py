@@ -111,20 +111,24 @@ async def extract_ticket_info_with_llm(
     Returns:
         TicketInfo or None
     """
-    import google.generativeai as genai
-    
-    genai.configure(api_key=api_key)
-    
     prompt = TICKET_EXTRACTION_PROMPT.format(page_text=page_text[:6000])
     
     try:
-        model_instance = genai.GenerativeModel(model_name=f"models/{model}")
-        response = await model_instance.generate_content_async(
-            prompt,
-            generation_config={"temperature": 0.1, "max_output_tokens": 500},
+        try:
+            from .rate_limit import build_festival_google_ai_client
+        except ImportError:  # Kaggle notebook imports ``src`` as a flat path.
+            from rate_limit import build_festival_google_ai_client
+
+        client = build_festival_google_ai_client(
+            api_key=api_key,
+            consumer="universal_festival_parser.enrich",
         )
-        
-        response_text = response.text or ""
+        response_text, _usage = await client.generate_content_async(
+            model=model,
+            prompt=prompt,
+            generation_config={"temperature": 0.1, "max_output_tokens": 500},
+            max_output_tokens=500,
+        )
         
         # Strip code fences
         if "```json" in response_text:

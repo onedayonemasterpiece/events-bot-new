@@ -33,10 +33,10 @@ Caching:
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import logging
-import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -111,30 +111,6 @@ class PosterRegions:
         return (b[2] - b[0]) * (b[3] - b[1]) >= min_area
 
 
-# --------------------------------------------------------------------------- #
-# .env loading + Gemini client
-# --------------------------------------------------------------------------- #
-
-
-def _load_env() -> dict[str, str]:
-    """Read `.env` if `GOOGLE_API_KEY` is not already in the environment."""
-    if os.environ.get("GOOGLE_API_KEY"):
-        return {"GOOGLE_API_KEY": os.environ["GOOGLE_API_KEY"]}
-    env_path = Path(__file__).resolve().parents[3] / ".env"
-    out: dict[str, str] = {}
-    if not env_path.exists():
-        return out
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        k, v = line.split("=", 1)
-        k = k.strip()
-        v = v.strip().strip("'").strip('"')
-        out[k] = v
-    return out
-
-
 _PROMPT = """You are looking at a printed event poster. Locate the following information regions on the poster and return their bounding boxes in normalised coordinates (origin top-left, both x and y in 0..1).
 
 Return ONLY a single JSON object with these exact keys and no other text:
@@ -155,29 +131,47 @@ Strict rules:
 
 
 def _call_gemini(image_bytes: bytes, model: str) -> str:
-    """Single attempt — raises on any error so the caller can retry."""
-    from google import genai
-    from google.genai import types as gtypes
+    """Single physical attempt through the mandatory shared gateway."""
 
-    api_key = os.environ.get("GOOGLE_API_KEY") or _load_env().get("GOOGLE_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("GOOGLE_API_KEY not set in env or .env")
-    os.environ["GOOGLE_API_KEY"] = api_key
+    async def _generate() -> str:
+        from google_ai import GoogleAIClient, SecretsProvider
+        from google_ai.limiter_supabase import (
+            build_google_ai_limiter_supabase_client,
+        )
 
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
-        model=model,
-        contents=[
-            gtypes.Part.from_bytes(data=image_bytes, mime_type="image/png"),
-            _PROMPT,
-        ],
-        config=gtypes.GenerateContentConfig(
-            response_mime_type="application/json",
-            temperature=0.1,
+        client = GoogleAIClient(
+            supabase_client=build_google_ai_limiter_supabase_client(
+                require_configured=True,
+            ),
+            secrets_provider=SecretsProvider(),
+            consumer="afishathumb.poster",
+            default_env_var_name="GOOGLE_API_KEY",
+        )
+        client.allow_reserve_fallback = False
+        client.allow_local_limiter_fallback = False
+        client.allow_local_limiter_on_reserve_error = False
+        client.max_retries = 1
+        client.fallback_models = []
+        response_text, _usage = await client.generate_content_async(
+            model=model,
+            prompt=[
+                {"inline_data": {"mime_type": "image/png", "data": image_bytes}},
+                {"text": _PROMPT},
+            ],
+            generation_config={
+                "response_mime_type": "application/json",
+                "temperature": 0.1,
+                "max_output_tokens": 512,
+            },
             max_output_tokens=512,
-        ),
-    )
-    return response.text or ""
+        )
+        return response_text
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(_generate())
+    raise RuntimeError("poster_llm synchronous API cannot run inside an active event loop")
 
 
 def _parse_regions(raw: str) -> PosterRegions:

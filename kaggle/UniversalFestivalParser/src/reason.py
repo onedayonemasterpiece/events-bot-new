@@ -166,10 +166,6 @@ async def reason_with_gemma(
     Returns:
         Tuple of (extracted_data dict or None, error message or None)
     """
-    import google.generativeai as genai
-    
-    genai.configure(api_key=api_key)
-    
     # For Gemma models, include system prompt in the main prompt
     # (system_instruction not supported for gemma-3-*)
     full_prompt = f"""{SYSTEM_PROMPT}
@@ -184,8 +180,14 @@ Extract all festival details, program/schedule, venues, and images.
 Output ONLY valid JSON matching the schema."""
 
     try:
-        model_instance = genai.GenerativeModel(
-            model_name=f"models/{model}",
+        try:
+            from .rate_limit import build_festival_google_ai_client
+        except ImportError:  # Kaggle notebook imports ``src`` as a flat path.
+            from rate_limit import build_festival_google_ai_client
+
+        client = build_festival_google_ai_client(
+            api_key=api_key,
+            consumer="universal_festival_parser.reason",
         )
         
         if llm_logger:
@@ -195,24 +197,26 @@ Output ONLY valid JSON matching the schema."""
                 prompt=full_prompt,
                 content_length=len(distilled_content),
             ) as tracker:
-                response = await model_instance.generate_content_async(
-                    full_prompt,
+                response_text, _usage = await client.generate_content_async(
+                    model=model,
+                    prompt=full_prompt,
                     generation_config={
                         "temperature": 0.1,
                         "max_output_tokens": 8192,
                     },
+                    max_output_tokens=8192,
                 )
-                response_text = response.text or ""
                 tracker.set_response(response_text)
         else:
-            response = await model_instance.generate_content_async(
-                full_prompt,
+            response_text, _usage = await client.generate_content_async(
+                model=model,
+                prompt=full_prompt,
                 generation_config={
                     "temperature": 0.1,
                     "max_output_tokens": 8192,
                 },
+                max_output_tokens=8192,
             )
-            response_text = response.text or ""
         
         response_text = _strip_code_fences(response_text)
         data = json.loads(response_text)
@@ -247,10 +251,6 @@ async def validate_and_enhance(
     Returns:
         Enhanced and validated data
     """
-    import google.generativeai as genai
-    
-    genai.configure(api_key=api_key)
-    
     # Check for missing critical fields
     festival = extracted_data.get("festival", {})
     missing = []
@@ -276,8 +276,14 @@ Original content:
 Output the complete corrected JSON."""
 
     try:
-        model = genai.GenerativeModel(
-            model_name="models/gemma-3-27b-it",
+        try:
+            from .rate_limit import build_festival_google_ai_client
+        except ImportError:  # Kaggle notebook imports ``src`` as a flat path.
+            from rate_limit import build_festival_google_ai_client
+
+        client = build_festival_google_ai_client(
+            api_key=api_key,
+            consumer="universal_festival_parser.validate",
         )
         
         if llm_logger:
@@ -286,18 +292,19 @@ Output the complete corrected JSON."""
                 model="gemma-3-27b",
                 prompt=validation_prompt,
             ) as tracker:
-                response = await model.generate_content_async(
-                    validation_prompt,
+                response_text, _usage = await client.generate_content_async(
+                    model="gemma-3-27b-it",
+                    prompt=validation_prompt,
                     generation_config={"temperature": 0.1},
                 )
-                tracker.set_response(response.text or "")
+                tracker.set_response(response_text)
         else:
-            response = await model.generate_content_async(
-                validation_prompt,
+            response_text, _usage = await client.generate_content_async(
+                model="gemma-3-27b-it",
+                prompt=validation_prompt,
                 generation_config={"temperature": 0.1},
             )
-        
-        response_text = response.text or ""
+
         response_text = _strip_code_fences(response_text)
         
         enhanced = json.loads(response_text)

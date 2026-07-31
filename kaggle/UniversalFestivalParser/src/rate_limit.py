@@ -14,13 +14,69 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class FestivalParserRateLimitError(RuntimeError):
     """Raised when the parser would exceed its configured LLM request budget."""
+
+
+class _FestivalSecretsProvider:
+    """Keep the legacy explicit key parameter behind ``GoogleAIClient``.
+
+    The shared reservation selects an env-var lane.  Only the parser's historic
+    ``GOOGLE_API_KEY`` lane may use the explicitly supplied value; a reservation
+    for any other lane must be resolved by the standard secrets provider.
+    """
+
+    def __init__(self, api_key: str | None, fallback: Any):
+        self._api_key = (api_key or "").strip()
+        self._fallback = fallback
+
+    def get_secret(self, name: str) -> Optional[str]:
+        if name == "GOOGLE_API_KEY" and self._api_key:
+            return self._api_key
+        return self._fallback.get_secret(name)
+
+
+def build_festival_google_ai_client(
+    *,
+    api_key: str | None,
+    consumer: str,
+) -> Any:
+    """Build a fail-closed shared Google AI gateway for parser LLM calls.
+
+    The dedicated Supabase helper deliberately requires its own limiter
+    credentials.  It must not fall back to a product-data client or to a raw
+    provider key.  ``max_retries=1`` and an empty model-fallback chain preserve
+    the parser's existing physical provider-attempt cap; feature-level retry
+    loops remain the sole owners of any additional attempts.
+    """
+
+    from google_ai import GoogleAIClient, SecretsProvider
+    from google_ai.limiter_supabase import (
+        build_google_ai_limiter_supabase_client,
+    )
+
+    supabase = build_google_ai_limiter_supabase_client(require_configured=True)
+    secrets = _FestivalSecretsProvider(api_key, SecretsProvider())
+    client = GoogleAIClient(
+        supabase_client=supabase,
+        secrets_provider=secrets,
+        consumer=consumer,
+        default_env_var_name="GOOGLE_API_KEY",
+    )
+
+    # These consumers must never inherit a process-local/direct-key escape
+    # hatch from ambient runtime settings.
+    client.allow_reserve_fallback = False
+    client.allow_local_limiter_fallback = False
+    client.allow_local_limiter_on_reserve_error = False
+    client.max_retries = 1
+    client.fallback_models = []
+    return client
 
 
 @dataclass
