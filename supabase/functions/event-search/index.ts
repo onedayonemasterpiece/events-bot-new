@@ -6,6 +6,16 @@ import {
   occurrenceFamilyKey,
   paginateOccurrenceFamilies,
 } from "./occurrence-families.ts";
+import {
+  GoogleProviderAttemptError,
+  GoogleQuotaBackend,
+  GoogleQuotaKey,
+  GoogleQuotaKeyCandidate,
+  GoogleTokenUsage,
+  resolveStrictGoogleQuotaPool,
+  SharedGoogleQuotaError,
+  withSharedGoogleQuotaAttempt,
+} from "./google-quota.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -36,6 +46,13 @@ function googleModelId(value: string, fallback: string): string {
   return String(value || fallback || "")
     .replace(/^models\//, "")
     .trim();
+}
+
+function googleLimiterModelId(value: string): string {
+  const model = googleModelId(value, "");
+  return model.startsWith("gemma-") && model.endsWith("-it")
+    ? model.slice(0, -3)
+    : model;
 }
 
 function normalizeQuery(value: unknown): string {
@@ -200,7 +217,6 @@ function envInt(
 
 type GoogleApiKeyCandidate = {
   env_name: string;
-  value: string;
 };
 
 type GoogleApiKeyGroups = {
@@ -248,7 +264,7 @@ function googleProviderKeyCandidates(names: string[]): GoogleApiKeyCandidate[] {
     const value = env(envName).trim();
     if (!value || seenValues.has(value)) continue;
     seenValues.add(value);
-    keys.push({ env_name: envName, value });
+    keys.push({ env_name: envName });
   }
   return keys;
 }
@@ -270,47 +286,35 @@ function googleProviderKeyGroups(
   );
   const reserveNameSet = new Set(reserveNames);
   const reserve = googleProviderKeyCandidates(reserveNames);
-  const reserveValueSet = new Set(reserve.map((key) => key.value));
+  const reserveValueSet = new Set(
+    reserve.map((key) => env(key.env_name).trim()).filter(Boolean),
+  );
   const active = googleProviderKeyCandidates(activeNames).filter(
     (key) =>
-      !reserveNameSet.has(key.env_name) && !reserveValueSet.has(key.value),
+      !reserveNameSet.has(key.env_name) &&
+      !reserveValueSet.has(env(key.env_name).trim()),
   );
   return { active, reserve };
 }
 
-function seedOffset(seed: string, size: number): number {
-  if (size <= 1) return 0;
-  let hash = 0;
-  for (let index = 0; index < seed.length; index += 1) {
-    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
-  }
-  return hash % size;
-}
-
-function rotateProviderKeys(
-  keys: GoogleApiKeyCandidate[],
-  seed: string,
-): GoogleApiKeyCandidate[] {
-  if (keys.length <= 1) return keys;
-  const offset = seedOffset(seed, keys.length);
-  return [...keys.slice(offset), ...keys.slice(0, offset)];
-}
-
-function providerKeyAttempts(
+function providerKeyPool(
   kind: "EMBEDDING" | "LLM",
-  seed: string,
 ): GoogleApiKeyCandidate[] {
   const groups = googleProviderKeyGroups(kind);
   return [
-    ...rotateProviderKeys(groups.active, `${kind}:active:${seed}`),
-    // Reserve lanes are priority-ordered because they belong to other
-    // production surfaces; do not hash-balance normal search onto them.
+    ...groups.active,
     ...groups.reserve,
   ];
 }
 
 function shouldTryNextGoogleKey(status: number): boolean {
   return status === 401 || status === 403 || status === 429 || status >= 500;
+}
+
+function shouldTryNextSharedQuotaKey(error: unknown): boolean {
+  return error instanceof SharedGoogleQuotaError &&
+    error.stage === "reserve" &&
+    ["rpm", "tpm", "rpd", "no_keys"].includes(error.blocked_reason || "");
 }
 
 async function fetchWithTimeout(
@@ -409,6 +413,71 @@ function personalizationServiceClient(supabaseUrl: string) {
     global: { headers: { Authorization: `Bearer ${serviceKey}` } },
     auth: { persistSession: false, autoRefreshToken: false },
   });
+}
+
+function sharedGoogleQuotaBackend(
+  supabaseUrl: string,
+): GoogleQuotaBackend | null {
+  const service = personalizationServiceClient(supabaseUrl);
+  if (!service) return null;
+  return {
+    async listActiveKeys(envNames: string[]) {
+      const { data, error } = await service
+        .from("google_ai_api_keys")
+        .select("id,env_var_name,priority")
+        .eq("is_active", true)
+        .in("env_var_name", envNames)
+        .order("priority", { ascending: true })
+        .order("id", { ascending: true });
+      if (error) {
+        throw new Error(
+          `google_key_metadata_rpc:${error.code || error.message || "unknown"}`,
+        );
+      }
+      return (Array.isArray(data) ? data : []) as Array<{
+        id: string;
+        env_var_name: string;
+        priority?: number | null;
+      }>;
+    },
+    async rpc(name: string, payload: Record<string, unknown>) {
+      const { data, error } = await service.rpc(name, payload);
+      if (error) {
+        throw new Error(
+          `${name}:${error.code || error.message || "unknown"}`,
+        );
+      }
+      return data;
+    },
+  };
+}
+
+function googleTokenUsage(payload: Record<string, unknown>): GoogleTokenUsage {
+  const usage =
+    payload?.usageMetadata && typeof payload.usageMetadata === "object"
+      ? (payload.usageMetadata as Record<string, unknown>)
+      : {};
+  const count = (value: unknown): number | null => {
+    if (value === null || value === undefined || value === "") return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : null;
+  };
+  return {
+    input_tokens: count(usage.promptTokenCount),
+    output_tokens: count(usage.candidatesTokenCount),
+    total_tokens: count(usage.totalTokenCount),
+  };
+}
+
+function sharedGoogleAccountName(): string {
+  return env("EVENT_SEARCH_GOOGLE_ACCOUNT_NAME", "event-search-edge");
+}
+
+function sharedGoogleConsumer(kind: "embedding" | "llm"): string {
+  return env(
+    `EVENT_SEARCH_${kind.toUpperCase()}_LIMITER_CONSUMER`,
+    `event-search-edge-${kind}`,
+  );
 }
 
 function parseEmbeddingValues(value: unknown): number[] | null {
@@ -547,7 +616,7 @@ async function storeCachedSearchResult(
 
 async function embedQuery(
   query: string,
-  keySeed: string,
+  quotaBackend: GoogleQuotaBackend | null,
   cache?: QueryEmbeddingCacheOptions,
 ): Promise<EmbeddingResult> {
   const model = googleModelId(
@@ -564,8 +633,10 @@ async function embedQuery(
     };
   }
 
-  const keys = providerKeyAttempts("EMBEDDING", `embedding:${keySeed}`);
-  if (keys.length === 0) throw new Error("embedding_api_key_missing");
+  const keys = await resolveStrictGoogleQuotaPool(
+    quotaBackend,
+    providerKeyPool("EMBEDDING") as GoogleQuotaKeyCandidate[],
+  );
 
   const text = `task: search result | query: ${query}`;
   const timeoutMs = envInt(
@@ -574,58 +645,108 @@ async function embedQuery(
     1000,
     20000,
   );
+  const reservedTpm = envInt(
+    "EVENT_SEARCH_EMBEDDING_RESERVED_TPM",
+    512,
+    1,
+    30000,
+  );
   const errors: string[] = [];
   for (const key of keys) {
     try {
-      const response = await fetchWithTimeout(
-        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:embedContent`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": key.value,
-          },
-          body: JSON.stringify({
-            model: `models/${model}`,
-            content: { parts: [{ text }] },
-            outputDimensionality: EMBEDDING_DIM,
-          }),
+      const numericValues = await withSharedGoogleQuotaAttempt({
+        backend: quotaBackend,
+        key,
+        model: googleLimiterModelId(model),
+        reservedTpm,
+        consumer: sharedGoogleConsumer("embedding"),
+        accountName: sharedGoogleAccountName(),
+        readEnv: (name) => env(name),
+        execute: async (apiKey, lease) => {
+          logEvent("event_search_google_provider_sent", {
+            provider_kind: "embedding",
+            model,
+            limiter_model: lease.model,
+            request_uid: lease.request_uid,
+            api_key_id: lease.api_key_id,
+            key_env: lease.limiter_env_name,
+            minute_bucket: lease.minute_bucket,
+            day_bucket: lease.day_bucket,
+          });
+          const response = await fetchWithTimeout(
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:embedContent`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-goog-api-key": apiKey,
+              },
+              body: JSON.stringify({
+                model: `models/${model}`,
+                content: { parts: [{ text }] },
+                outputDimensionality: EMBEDDING_DIM,
+              }),
+            },
+            timeoutMs,
+            "embedding_provider",
+          );
+          const payload = await response.json().catch(() => ({}));
+          const usage = googleTokenUsage(payload as Record<string, unknown>);
+          if (!response.ok) {
+            throw new GoogleProviderAttemptError(
+              `embedding_provider_${response.status}`,
+              {
+                provider_status: `http_${response.status}`,
+                error_type: "provider_http",
+                error_code: String(response.status),
+                usage,
+              },
+            );
+          }
+          const values = (payload as Record<string, unknown>)?.embedding &&
+              typeof (payload as Record<string, unknown>).embedding === "object"
+            ? ((payload as Record<string, unknown>).embedding as Record<string, unknown>)
+              .values
+            : null;
+          if (!Array.isArray(values) || values.length !== EMBEDDING_DIM) {
+            throw new GoogleProviderAttemptError(
+              `embedding_bad_dimension:${Array.isArray(values) ? values.length : "missing"}`,
+              {
+                provider_status: "succeeded_invalid_payload",
+                error_type: "provider_payload",
+                error_code: "bad_dimension",
+                usage,
+              },
+            );
+          }
+          return {
+            value: values.map((value: unknown) => Number(value)),
+            provider_status: "succeeded",
+            usage,
+          };
         },
-        timeoutMs,
-        "embedding_provider",
-      );
-      if (!response.ok) {
-        const detail = await response.text();
-        const status = `embedding_provider_${response.status}`;
-        errors.push(`${key.env_name}:${status}`);
-        if (!shouldTryNextGoogleKey(response.status)) {
-          throw new Error(`${status}:${detail.slice(0, 300)}`);
-        }
-        continue;
-      }
-      const payload = await response.json();
-      const values = payload?.embedding?.values;
-      if (!Array.isArray(values) || values.length !== EMBEDDING_DIM) {
-        throw new Error(
-          `embedding_bad_dimension:${Array.isArray(values) ? values.length : "missing"}`,
-        );
-      }
-      const numericValues = values.map((value: unknown) => Number(value));
+      });
       const stored = await storeCachedQueryEmbedding(
         cache,
         model,
         numericValues,
-        key.env_name,
+        key.limiter_env_name,
       );
       return {
         values: numericValues,
-        key_env: key.env_name,
+        key_env: key.limiter_env_name,
         model,
         cache_status: cache ? (stored ? "miss" : "store_failed") : "unavailable",
       };
     } catch (error) {
       const message = errorMessage(error).slice(0, 120);
-      errors.push(`${key.env_name}:${message}`);
+      errors.push(`${key.limiter_env_name}:${message}`);
+      if (shouldTryNextSharedQuotaKey(error)) continue;
+      if (error instanceof SharedGoogleQuotaError) throw error;
+      if (error instanceof GoogleProviderAttemptError) {
+        if (shouldTryNextGoogleKey(Number(error.error_code))) continue;
+        throw error;
+      }
       if (
         !message.includes("embedding_provider_timeout") &&
         !message.includes("embedding_provider_")
@@ -876,6 +997,7 @@ type LlmVerifyResult = {
 
 type LlmVerifyOptions = {
   gemma_overflow_allowed: boolean;
+  quota_backend: GoogleQuotaBackend | null;
 };
 
 type LlmAttempt = {
@@ -980,6 +1102,7 @@ function parseTimeoutProfile(
 function isRetryableLlmStatus(status: string): boolean {
   return (
     status.includes("timeout") ||
+    /^degraded:quota_(?:rpm|tpm|rpd|no_keys)$/u.test(status) ||
     status.startsWith("degraded:provider_5") ||
     status === "degraded:provider_429" ||
     status === "degraded:over_approval" ||
@@ -1086,7 +1209,10 @@ async function llmVerify(
   query: string,
   candidates: Candidate[],
   candidateDigests: Map<number, string> = new Map(),
-  options: LlmVerifyOptions = { gemma_overflow_allowed: true },
+  options: LlmVerifyOptions = {
+    gemma_overflow_allowed: true,
+    quota_backend: null,
+  },
 ): Promise<LlmVerifyResult> {
   const enabled = ["1", "true", "yes", "on"].includes(
     env("EVENT_SEARCH_LLM_ENABLED", "").toLowerCase(),
@@ -1117,15 +1243,21 @@ async function llmVerify(
       used: false,
     };
   }
-  const llmKeys = providerKeyAttempts("LLM", "availability");
-  if (llmKeys.length === 0)
+  let llmKeys: GoogleQuotaKey[];
+  try {
+    llmKeys = await resolveStrictGoogleQuotaPool(
+      options.quota_backend,
+      providerKeyPool("LLM") as GoogleQuotaKeyCandidate[],
+    );
+  } catch (error) {
     return {
       exact: [],
       possible: candidates,
       rejected_ids: [],
-      status: "api_key_missing",
+      status: `degraded:${errorMessage(error).slice(0, 100)}`,
       used: false,
     };
+  }
   const primaryModels = parseModelList(
     env("EVENT_SEARCH_LLM_LITE_MODELS") || env("EVENT_SEARCH_LLM_LITE_MODEL"),
     "gemini-3.1-flash-lite",
@@ -1249,6 +1381,7 @@ async function llmVerify(
   const thinkingLevel = env("EVENT_SEARCH_LLM_THINKING_LEVEL", "MINIMAL");
 
   const attempts: LlmAttempt[] = [];
+  let providerKeyCursor = 0;
   const runAttempt = async (
     model: string,
     role: "primary" | "fallback",
@@ -1256,59 +1389,90 @@ async function llmVerify(
     timeoutMs: number,
     profile: LlmPromptProfile,
   ): Promise<{ result: ParsedLlmClassification; profile: LlmPromptProfile } | null> => {
-    const keys = providerKeyAttempts(
-      "LLM",
-      `llm:${model}:${role}:${attemptNumber}:${profile.prompt_chars}`,
+    const reservedTpm = envInt(
+      "EVENT_SEARCH_LLM_RESERVED_TPM",
+      Math.ceil(profile.prompt_chars / 2) + maxOutputTokens,
+      1,
+      240000,
     );
-    for (const key of keys) {
+    for (let keyIndex = 0; keyIndex < llmKeys.length; keyIndex += 1) {
+      const key = llmKeys[(providerKeyCursor + keyIndex) % llmKeys.length];
       const startedAt = performance.now();
       try {
-        const response = await fetchWithTimeout(
-          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Server-Timeout": String(Math.max(1, Math.ceil(timeoutMs / 1000))),
-              "x-goog-api-key": key.value,
-            },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: profile.prompt }] }],
-              generationConfig: {
-                temperature: 0,
-                maxOutputTokens,
-                responseMimeType: "application/json",
-                responseJsonSchema: LLM_VERIFIER_RESPONSE_SCHEMA,
-                thinkingConfig: {
-                  includeThoughts: false,
-                  thinkingLevel,
+        const result = await withSharedGoogleQuotaAttempt({
+          backend: options.quota_backend,
+          key,
+          model: googleLimiterModelId(model),
+          reservedTpm,
+          consumer: sharedGoogleConsumer("llm"),
+          accountName: sharedGoogleAccountName(),
+          readEnv: (name) => env(name),
+          execute: async (apiKey, lease) => {
+            logEvent("event_search_google_provider_sent", {
+              provider_kind: "llm",
+              provider_role: role,
+              provider_attempt: attemptNumber,
+              model,
+              limiter_model: lease.model,
+              request_uid: lease.request_uid,
+              api_key_id: lease.api_key_id,
+              key_env: lease.limiter_env_name,
+              minute_bucket: lease.minute_bucket,
+              day_bucket: lease.day_bucket,
+            });
+            const response = await fetchWithTimeout(
+              `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-Server-Timeout": String(
+                    Math.max(1, Math.ceil(timeoutMs / 1000)),
+                  ),
+                  "x-goog-api-key": apiKey,
                 },
+                body: JSON.stringify({
+                  contents: [{ parts: [{ text: profile.prompt }] }],
+                  generationConfig: {
+                    temperature: 0,
+                    maxOutputTokens,
+                    responseMimeType: "application/json",
+                    responseJsonSchema: LLM_VERIFIER_RESPONSE_SCHEMA,
+                    thinkingConfig: {
+                      includeThoughts: false,
+                      thinkingLevel,
+                    },
+                  },
+                }),
               },
-            }),
+              timeoutMs,
+              "llm_provider",
+            );
+            const payload = await response.json().catch(() => ({})) as Record<
+              string,
+              unknown
+            >;
+            const usage = googleTokenUsage(payload);
+            if (!response.ok) {
+              throw new GoogleProviderAttemptError(
+                `llm_provider_${response.status}`,
+                {
+                  provider_status: `http_${response.status}`,
+                  error_type: "provider_http",
+                  error_code: String(response.status),
+                  usage,
+                },
+              );
+            }
+            const text = extractGeminiText(payload);
+            return {
+              value: classifyLlmPayload(text, profile.candidates),
+              provider_status: "succeeded",
+              usage,
+            };
           },
-          timeoutMs,
-          "llm_provider",
-        );
-        if (!response.ok) {
-          const status = `degraded:provider_${response.status}`;
-          attempts.push({
-            model,
-            role,
-            attempt: attemptNumber,
-            status,
-            elapsed_ms: nowMs() - Math.round(startedAt),
-            timeout_ms: timeoutMs,
-            prompt_chars: profile.prompt_chars,
-            prompt_fact_chars: profile.prompt_fact_chars,
-            compact_candidate_count: profile.compact_candidate_count,
-            key_env: key.env_name,
-          });
-          if (shouldTryNextGoogleKey(response.status)) continue;
-          return null;
-        }
-        const payload = await response.json();
-        const text = extractGeminiText(payload);
-        const result = classifyLlmPayload(text, profile.candidates);
+        });
+        providerKeyCursor = (providerKeyCursor + keyIndex + 1) % llmKeys.length;
         if (result.used && profile.candidates.length < candidates.length) {
           const alreadyClassified = new Set([
             ...result.exact.map(candidateId),
@@ -1340,13 +1504,19 @@ async function llmVerify(
           prompt_chars: profile.prompt_chars,
           prompt_fact_chars: profile.prompt_fact_chars,
           compact_candidate_count: profile.compact_candidate_count,
-          key_env: key.env_name,
+          key_env: key.limiter_env_name,
         });
         if (result.used) return { result, profile };
         return null;
       } catch (error) {
         const message = errorMessage(error).slice(0, 80);
-        const status = `degraded:${message}`;
+        const status = error instanceof GoogleProviderAttemptError
+          ? `degraded:provider_${error.error_code || "error"}`
+          : error instanceof SharedGoogleQuotaError && error.stage === "reserve"
+            ? `degraded:quota_${error.blocked_reason || "unavailable"}`
+            : error instanceof SharedGoogleQuotaError
+              ? `degraded:shared_limiter_${error.stage}`
+              : `degraded:${message}`;
         attempts.push({
           model,
           role,
@@ -1357,8 +1527,16 @@ async function llmVerify(
           prompt_chars: profile.prompt_chars,
           prompt_fact_chars: profile.prompt_fact_chars,
           compact_candidate_count: profile.compact_candidate_count,
-          key_env: key.env_name,
+          key_env: key.limiter_env_name,
         });
+        if (shouldTryNextSharedQuotaKey(error)) continue;
+        if (error instanceof SharedGoogleQuotaError) return null;
+        if (
+          error instanceof GoogleProviderAttemptError &&
+          shouldTryNextGoogleKey(Number(error.error_code))
+        ) {
+          continue;
+        }
         if (
           message.includes("llm_provider_timeout") ||
           message.includes("provider_network")
@@ -1711,6 +1889,7 @@ async function runEventSearch(
   );
   const llmGemmaOverflowAllowed =
     useLlmVerifier && llmQuotaReserved && allowLlmFallback;
+  const googleQuotaBackend = sharedGoogleQuotaBackend(supabaseUrl);
 
   try {
     await progress?.({
@@ -1719,7 +1898,7 @@ async function runEventSearch(
       label: "Понимаю смысл запроса",
     });
     const embeddingStartedAt = performance.now();
-    const embeddingResult = await embedQuery(query, queryEmbeddingHash, {
+    const embeddingResult = await embedQuery(query, googleQuotaBackend, {
       supabaseUrl,
       queryHash: queryEmbeddingHash,
     });
@@ -1830,6 +2009,7 @@ async function runEventSearch(
       const llmStartedAt = performance.now();
       llmResult = await llmVerify(query, items, candidateDigests, {
         gemma_overflow_allowed: llmGemmaOverflowAllowed,
+        quota_backend: googleQuotaBackend,
       });
       timings.llm_ms = nowMs() - Math.round(llmStartedAt);
     } else {
