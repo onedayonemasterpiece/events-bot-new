@@ -4,6 +4,12 @@ Status: daily diversity-aware selection plan implemented; public Telegram/VK
 API publisher remains disabled. No channel/community creation or target-channel
 publishing is performed by the planner.
 
+The plan is publication-readiness gated: a terminal candidate without complete
+Telegram/VK copy, attribution and grounded support cannot occupy a future
+public slot. Evidence-backed legacy external-article copy can be projected from
+the already validated research contract; social copy remains LLM-first and has
+no heuristic fallback.
+
 The durable selection input is `publication_schedule_item`: exactly one
 external article and one Telegram/VK social post per day. Future unlocked slots
 are recalculated after every autonomous discovery session against actual

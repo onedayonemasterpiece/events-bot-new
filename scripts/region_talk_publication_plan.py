@@ -41,6 +41,141 @@ from scripts.region_talk_review_queue import (  # noqa: E402
 DEFAULT_TIMEZONE = "Europe/Kaliningrad"
 DEFAULT_ARTICLE_TIME = "12:00"
 DEFAULT_SOCIAL_TIME = "18:00"
+EVIDENCE_PROJECTION_DRAFT_VERSION = "region_talk_external_evidence_projection_v1"
+
+
+def publication_draft_ready(row: dict[str, Any]) -> bool:
+    """Return true only for a complete operator-reviewable public draft."""
+
+    return bool(
+        str(row.get("publication_draft_status") or "") == "ready_for_operator_review"
+        and str(row.get("publication_draft_title") or "").strip()
+        and str(row.get("publication_draft_source_attribution") or "").strip()
+        and str(row.get("publication_draft_telegram_text") or "").strip()
+        and str(row.get("publication_draft_vk_text") or "").strip()
+        and str(row.get("publication_draft_fact_points_json") or "").strip()
+    )
+
+
+def evidence_projected_article_draft(
+    publication_row: dict[str, Any],
+    intake_row: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Project already evidence-backed research copy into a legacy article draft.
+
+    This is deliberately not a semantic writer.  The imported ``editorial_pack``
+    was produced under the strict external-research contract, every used copy
+    surface must cite public evidence, and the publication row must already
+    carry the terminal Gemini acceptance.  The projection only formats those
+    supported sentences for Telegram/VK; it never invents or paraphrases a
+    claim and it is not available to social posts.
+    """
+
+    if publication_draft_ready(publication_row) or not isinstance(intake_row, dict):
+        return None
+    if content_lane(publication_row) != "article":
+        return None
+    if str(publication_row.get("llm_gate_status") or "").lower() != "ok":
+        return None
+    if str(publication_row.get("llm_decision") or "").lower() != "accept":
+        return None
+
+    decision = intake_row.get("decision") if isinstance(intake_row.get("decision"), dict) else {}
+    policy = (
+        intake_row.get("policy_classification")
+        if isinstance(intake_row.get("policy_classification"), dict)
+        else {}
+    )
+    source = (
+        intake_row.get("source_assessment")
+        if isinstance(intake_row.get("source_assessment"), dict)
+        else {}
+    )
+    if (
+        decision.get("import_status") != "ready_for_region_talk_scoring"
+        or decision.get("downstream_readiness") != "candidate_report"
+        or policy.get("product_policy_match") is not True
+        or policy.get("hard_exclusion_codes")
+        or source.get("scope") != "external"
+    ):
+        return None
+
+    publication = intake_row.get("publication") if isinstance(intake_row.get("publication"), dict) else {}
+    editorial = intake_row.get("editorial_pack") if isinstance(intake_row.get("editorial_pack"), dict) else {}
+    evidence_rows = [
+        item for item in (intake_row.get("evidence") or [])
+        if isinstance(item, dict) and str(item.get("evidence_id") or "").strip()
+    ]
+    evidence_by_id = {str(item["evidence_id"]): item for item in evidence_rows}
+    support_rows = [
+        item for item in (editorial.get("copy_support") or [])
+        if isinstance(item, dict)
+    ]
+    support_by_surface: dict[str, list[str]] = {}
+    for item in support_rows:
+        surface = str(item.get("surface") or "").strip()
+        refs = [str(ref).strip() for ref in (item.get("evidence_refs") or []) if str(ref).strip()]
+        if surface and refs and set(refs).issubset(evidence_by_id):
+            support_by_surface[surface] = refs
+
+    title = str(editorial.get("title_short") or publication.get("title") or "").strip()
+    teaser = str(editorial.get("teaser") or "").strip()
+    takeaway = str(editorial.get("reader_takeaway") or "").strip()
+    caveat = str(editorial.get("caveat") or "").strip()
+    required_surfaces = {"teaser": teaser, "reader_takeaway": takeaway}
+    if not title or not all(required_surfaces.values()):
+        return None
+    if any(surface not in support_by_surface for surface in required_surfaces):
+        return None
+    if caveat and "caveat" not in support_by_surface:
+        return None
+
+    source_name = str(publication.get("source_name") or publication_row.get("source_title") or "").strip()
+    authors = [str(value).strip() for value in (publication.get("authors") or []) if str(value).strip()]
+    attribution = source_name + ((" · " + ", ".join(authors)) if authors else "")
+    url = canonical_url(publication_row) or canonical_url(intake_row)
+    if not source_name or not url:
+        return None
+
+    body_parts = [title, teaser, takeaway]
+    if caveat:
+        body_parts.append("Важно: " + caveat)
+    body_parts.extend(["Источник: " + attribution, "Оригинал: " + url])
+    telegram_text = "\n\n".join(body_parts)
+    vk_text = telegram_text
+
+    fact_points = []
+    for surface, claim in [("teaser", teaser), ("reader_takeaway", takeaway), ("caveat", caveat)]:
+        if not claim:
+            continue
+        refs = support_by_surface.get(surface) or []
+        excerpts = [
+            str(evidence_by_id[ref].get("paraphrase") or evidence_by_id[ref].get("quote_short") or "").strip()
+            for ref in refs
+        ]
+        excerpts = [value for value in excerpts if value]
+        if not excerpts:
+            return None
+        fact_points.append({
+            "claim": claim,
+            "support_excerpt": " ".join(excerpts)[:1200],
+            "evidence_ids": refs,
+        })
+    if not (1 <= len(fact_points) <= 3):
+        return None
+
+    return {
+        "publication_draft_status": "ready_for_operator_review",
+        "publication_draft_title": title,
+        "publication_draft_source_attribution": attribution,
+        "publication_draft_telegram_text": telegram_text,
+        "publication_draft_vk_text": vk_text,
+        "publication_draft_fact_points_json": json.dumps(
+            fact_points, ensure_ascii=False, separators=(",", ":")
+        ),
+        "publication_draft_prompt_version": EVIDENCE_PROJECTION_DRAFT_VERSION,
+        "publication_draft_generation_mode": "evidence_copy_projection",
+    }
 
 
 def _canonical_candidate_id(row: dict[str, Any]) -> str:
@@ -128,7 +263,9 @@ def _compact_plan_row(
         "candidate_url": url,
         "post_url": url,
         "source_title": row.get("source_title") or row.get("publication_source_name") or "",
-        "publication_title": row.get("publication_title") or row.get("title") or row.get("short_summary") or "",
+        "publication_title": row.get("publication_draft_title") or row.get("publication_title") or row.get("title") or row.get("short_summary") or "",
+        "publication_draft_status": row.get("publication_draft_status") or "",
+        "publication_draft_prompt_version": row.get("publication_draft_prompt_version") or "",
         "content_origin_type": row.get("content_origin_type") or "",
         "external_publication_id": row.get("external_publication_id") or "",
         "quality_score": row.get("quality_score"),
@@ -150,6 +287,7 @@ def _compact_plan_row(
     return {key: value for key, value in keep.items() if value not in (None, "", []) or key in {
         "candidate_url", "post_url", "publication_candidate_id", "external_publication_id",
         "vacancy_reason", "source_title", "publication_title", "content_origin_type",
+        "publication_draft_status", "publication_draft_prompt_version",
     }}
 
 
@@ -197,6 +335,9 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         vectors = read_kind_rows(pool, ydb, table, "text_vector_enrichment_item", args.vector_scan_limit)
         schedule = read_kind_rows(pool, ydb, table, "publication_schedule_item", args.history_limit)
         semantic_history = read_kind_rows(pool, ydb, table, "publication_semantic_history_item", args.history_limit)
+        external_intakes = read_kind_rows(
+            pool, ydb, table, "external_publication_intake_item", args.history_limit
+        )
         logs = read_kind_rows(pool, ydb, table, "publication_log_item", args.history_limit)
         logs += read_kind_rows(pool, ydb, table, "region_talk_publication_log", args.history_limit)
         attach_latest_bge_vectors(publications, vectors)
@@ -228,9 +369,31 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
                 history.append(row)
         attach_latest_bge_vectors(history, vectors)
 
+        intake_by_id = {
+            str(row.get("external_publication_id") or ""): row
+            for row in external_intakes
+            if str(row.get("external_publication_id") or "")
+        }
         eligible: list[dict[str, Any]] = []
+        confirmed_by_lane = {"article": 0, "social": 0}
+        missing_draft_by_lane = {"article": 0, "social": 0}
+        projected_draft_rows: list[dict[str, Any]] = []
         for row in publications:
             if not is_confirmed_publication(row):
+                continue
+            row = dict(row)
+            lane = content_lane(row)
+            confirmed_by_lane[lane] += 1
+            if not publication_draft_ready(row):
+                projection = evidence_projected_article_draft(
+                    row,
+                    intake_by_id.get(str(row.get("external_publication_id") or "")),
+                )
+                if projection:
+                    row.update(projection)
+                    projected_draft_rows.append(row)
+            if not publication_draft_ready(row):
+                missing_draft_by_lane[lane] += 1
                 continue
             url = canonical_url(row)
             candidate_id = _canonical_candidate_id(row)
@@ -301,6 +464,13 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         ]
 
         counts = {
+            "confirmed_article": confirmed_by_lane["article"],
+            "confirmed_social": confirmed_by_lane["social"],
+            "draft_ready_article": confirmed_by_lane["article"] - missing_draft_by_lane["article"],
+            "draft_ready_social": confirmed_by_lane["social"] - missing_draft_by_lane["social"],
+            "draft_missing_article": missing_draft_by_lane["article"],
+            "draft_missing_social": missing_draft_by_lane["social"],
+            "draft_projected_article": len(projected_draft_rows),
             "eligible_article": sum(content_lane(row) == "article" for row in eligible),
             "eligible_social": sum(content_lane(row) == "social" for row in eligible),
             "published_history_article": sum(content_lane(row) == "article" for row in history),
@@ -325,6 +495,13 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
             "updated_at": generated_at,
         }
         writes: list[tuple[str, str, dict[str, Any]]] = []
+        for row in projected_draft_rows:
+            pk = str(row.get("_ydb_pk") or "").strip()
+            if not pk:
+                pk = "publication_candidate_item:" + canonical_url(row)
+            payload = {key: value for key, value in row.items() if not key.startswith("_")}
+            payload["updated_at"] = generated_at
+            writes.append((pk, "publication_candidate_item", payload))
         for row in compact_rows:
             if row.get("slot_locked"):
                 continue

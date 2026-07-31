@@ -1210,7 +1210,13 @@ CREATE_BUNDLE_GROUNDING_REVIEW_SCHEMA = {
     "properties": {
         "decision": {"type": "string", "enum": ["grounded", "ungrounded", "uncertain"]},
         "confidence": {"type": "number"},
-        "unsupported_fields": {"type": "array", "items": {"type": "string"}},
+        "unsupported_fields": {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "enum": ["title", "description", "facts", "search_digest", "short_description"],
+            },
+        },
         "evidence_quotes": {"type": "array", "items": {"type": "string"}},
         "reason_short": {"type": "string"},
     },
@@ -5184,7 +5190,7 @@ def _candidate_needs_llm_anchor_role_review(candidate: "EventCandidate") -> tupl
         return False, "non_social_source"
     corpus = _candidate_location_grounding_corpus(candidate)
     if not corpus:
-        return False, "empty_source"
+        return False, "empty_source", []
     if _candidate_explicitly_leaves_start_time_unknown(candidate, corpus):
         return True, "explicit_unknown_start_time"
     times = {
@@ -5296,7 +5302,7 @@ async def _llm_review_candidate_anchor_roles(
 async def _llm_review_create_bundle_grounding(
     bundle: Mapping[str, Any],
     candidate: "EventCandidate",
-) -> tuple[bool, str]:
+) -> tuple[bool, str, list[str]]:
     """LLM-first, source-only entailment gate for every generated public field."""
 
     corpus = _candidate_location_grounding_corpus(candidate)
@@ -5322,7 +5328,7 @@ async def _llm_review_create_bundle_grounding(
         label="create_bundle_grounding",
     )
     if not isinstance(data, dict):
-        return False, "llm_unavailable"
+        return False, "llm_unavailable", []
     decision = str(data.get("decision") or "uncertain").strip().lower()
     unsupported = [str(item or "").strip() for item in (data.get("unsupported_fields") or []) if str(item or "").strip()]
     try:
@@ -5332,10 +5338,34 @@ async def _llm_review_create_bundle_grounding(
     quotes = [str(item or "").strip() for item in (data.get("evidence_quotes") or []) if str(item or "").strip()]
     corpus_norm = _norm_text_for_grounding(corpus)
     if not quotes or any(_norm_text_for_grounding(item) not in corpus_norm for item in quotes):
-        return False, "llm_evidence_not_verbatim"
+        return False, "llm_evidence_not_verbatim", []
     if decision != "grounded" or confidence < 0.9 or unsupported:
-        return False, f"llm_{decision or 'uncertain'}"
-    return True, "llm_grounded"
+        safe_unsupported = [
+            field
+            for field in dict.fromkeys(unsupported)
+            if field in {"title", "description", "facts", "search_digest", "short_description"}
+        ]
+        if decision == "ungrounded" and confidence >= 0.9 and safe_unsupported:
+            return False, "llm_ungrounded", safe_unsupported
+        return False, f"llm_{decision or 'uncertain'}", []
+    return True, "llm_grounded", []
+
+
+def _remove_llm_rejected_bundle_fields(
+    bundle: Mapping[str, Any], unsupported_fields: Sequence[str]
+) -> dict[str, Any]:
+    """Drop only fields the grounded LLM review explicitly rejected.
+
+    The semantic decision belongs to the reviewer.  This mechanical repair
+    never invents replacement prose: downstream create logic falls back to the
+    candidate's grounded title/raw excerpt for omitted public fields.
+    """
+
+    repaired = dict(bundle)
+    for field in unsupported_fields:
+        if field in {"title", "description", "facts", "search_digest", "short_description"}:
+            repaired.pop(field, None)
+    return repaired
 
 
 def _candidate_needs_llm_location_grounding_review(
@@ -16700,7 +16730,11 @@ async def _smart_event_update_impl(
             isinstance(bundled, dict)
             and str(candidate.source_type or "").strip().lower() in {"vk", "tg", "telegram"}
         ):
-            bundle_ok, bundle_grounding_result = await _llm_review_create_bundle_grounding(
+            (
+                bundle_ok,
+                bundle_grounding_result,
+                unsupported_bundle_fields,
+            ) = await _llm_review_create_bundle_grounding(
                 bundled,
                 candidate,
             )
@@ -16712,10 +16746,25 @@ async def _smart_event_update_impl(
                 candidate.source_url,
             )
             if not bundle_ok:
-                return SmartUpdateResult(
-                    status="invalid",
-                    reason=f"create_bundle_grounding:{bundle_grounding_result}",
-                )
+                if (
+                    bundle_grounding_result == "llm_ungrounded"
+                    and unsupported_bundle_fields
+                ):
+                    bundled = _remove_llm_rejected_bundle_fields(
+                        bundled,
+                        unsupported_bundle_fields,
+                    )
+                    logger.warning(
+                        "smart_update.create_bundle_grounding stripped_unsupported=%s source_type=%s source_url=%s",
+                        ",".join(unsupported_bundle_fields),
+                        candidate.source_type,
+                        candidate.source_url,
+                    )
+                else:
+                    return SmartUpdateResult(
+                        status="invalid",
+                        reason=f"create_bundle_grounding:{bundle_grounding_result}",
+                    )
         if isinstance(bundled, dict):
             bundled_age_payload = bundled.get("age_decision")
             bundled_title_raw = bundled.get("title")

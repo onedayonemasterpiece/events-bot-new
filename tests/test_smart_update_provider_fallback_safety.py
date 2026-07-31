@@ -299,7 +299,39 @@ async def test_bundle_grounding_rejects_unrelated_fallback_fields(monkeypatch) -
     assert await su._llm_review_create_bundle_grounding(bundle, candidate) == (
         False,
         "llm_ungrounded",
+        ["title", "description", "facts", "search_digest", "short_description"],
     )
+    assert su._remove_llm_rejected_bundle_fields(
+        bundle,
+        ["title", "description", "facts", "search_digest", "short_description"],
+    ) == {}
+
+
+@pytest.mark.asyncio
+async def test_uncertain_bundle_grounding_cannot_trigger_field_stripping(monkeypatch) -> None:
+    candidate = su.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-1_4",
+        source_text="7 августа в 11:00 — семинар о продвижении в соцсетях.",
+        title="Семинар о продвижении",
+        date="2026-08-07",
+        time="11:00",
+        location_name="Онлайн",
+    )
+
+    async def fake_ask(*_args, **_kwargs):
+        return {
+            "decision": "uncertain",
+            "confidence": 0.70,
+            "unsupported_fields": ["description"],
+            "evidence_quotes": ["семинар о продвижении в соцсетях"],
+            "reason_short": "insufficient confidence",
+        }
+
+    monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+    assert await su._llm_review_create_bundle_grounding(
+        {"description": "Текст"}, candidate
+    ) == (False, "llm_uncertain", [])
 
 
 @pytest.mark.asyncio

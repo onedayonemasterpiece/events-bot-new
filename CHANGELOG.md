@@ -12,11 +12,20 @@
 - Smart Update event-vector catch-up now honors bounded shared-ledger RPM/TPM
   retry windows inside one projection instead of restarting the whole job every
   ten minutes; day-level exhaustion remains fail-closed.
+- Region Talk daily planning now excludes confirmed candidates that still lack
+  complete grounded Telegram/VK copy, and safely backfills legacy accepted
+  external articles only by verbatim projection of their evidence-supported
+  research copy; social posts keep a fail-closed LLM-first draft requirement.
 - Smart Update now scopes multi-occurrence VK/TG roundups before reviewing
   date/range/time roles, and treats only the visible label of VK
   `[target|label]` markup as verbatim evidence; roundup headings can no longer
   turn each child event into a false multi-day range while invented quotes
   remain fail-closed.
+- High-confidence bundle-grounding reviews now remove only the public fields
+  explicitly marked unsupported and fall back to the already grounded
+  candidate title/excerpt, instead of losing an otherwise valid child event
+  from a multi-event roundup; uncertain or ungrounded evidence still fails
+  closed.
 - Google GenAI native age-decision schemas now encode nullable fields with
   `nullable=true` and keep enum members string-only, preventing pre-provider
   SDK `ValidationError` retries and needless limiter reservations.
