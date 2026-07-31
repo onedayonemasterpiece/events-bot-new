@@ -472,9 +472,19 @@ def is_unsent_confirmed_publication(row: dict[str, Any]) -> bool:
         return False
     if not is_publication_draft_ready(row):
         return False
-    if str(row.get("publication_candidate_status") or "") == "sent_to_chat":
-        return False
-    return str(row.get("sent_to_chat") or "").lower() != "true"
+    was_sent = (
+        str(row.get("publication_candidate_status") or "") == "sent_to_chat"
+        or str(row.get("sent_to_chat") or "").lower() == "true"
+    )
+    if not was_sent:
+        return True
+    # Before the publication-readiness gate, legacy candidates were marked as
+    # delivered even though their operator-ready copy did not exist yet. A bare
+    # sent_to_chat flag therefore cannot suppress the first completed draft.
+    delivered_fingerprint = str(
+        row.get("sent_publication_draft_fingerprint") or ""
+    ).strip()
+    return delivered_fingerprint != publication_draft_fingerprint(row)
 
 
 def is_publication_draft_ready(row: dict[str, Any]) -> bool:
@@ -494,6 +504,28 @@ def is_publication_draft_ready(row: dict[str, Any]) -> bool:
     except (TypeError, ValueError, json.JSONDecodeError):
         return False
     return bool(isinstance(points, list) and points)
+
+
+def publication_draft_fingerprint(row: dict[str, Any]) -> str:
+    """Stable identity of the exact operator-ready copy being delivered."""
+
+    payload = {
+        "status": str(row.get("publication_draft_status") or "").strip(),
+        "title": str(row.get("publication_draft_title") or "").strip(),
+        "source_attribution": str(
+            row.get("publication_draft_source_attribution") or ""
+        ).strip(),
+        "telegram_text": str(row.get("publication_draft_telegram_text") or "").strip(),
+        "vk_text": str(row.get("publication_draft_vk_text") or "").strip(),
+        "fact_points_json": str(
+            row.get("publication_draft_fact_points_json") or ""
+        ).strip(),
+        "prompt_version": str(
+            row.get("publication_draft_prompt_version") or ""
+        ).strip(),
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def build_stats_message(limit: int = 20000) -> str:
@@ -577,7 +609,12 @@ def delivery_random_id(delivery_key: str) -> int:
 
 
 def publication_delivery_key(row: dict[str, Any], chat_id: str) -> str:
-    return hashlib.sha256(f"{chat_id}|{canonical_post_url(row)}".encode("utf-8")).hexdigest()
+    identity = "|".join((
+        str(chat_id),
+        canonical_post_url(row),
+        publication_draft_fingerprint(row),
+    ))
+    return hashlib.sha256(identity.encode("utf-8")).hexdigest()
 
 
 def read_delivery(pool: Any, ydb: Any, table: str, delivery_key: str) -> dict[str, Any]:
@@ -632,6 +669,10 @@ def upsert_sent(
         "sent_chat_id": chat_id,
         "delivery_key": delivery_key,
         "delivery_random_id": str(random_id or ""),
+        "sent_publication_draft_fingerprint": publication_draft_fingerprint(item),
+        "sent_publication_draft_prompt_version": str(
+            item.get("publication_draft_prompt_version") or ""
+        ),
         "publication_candidate_status": "sent_to_chat",
     })
     query_text = f"""

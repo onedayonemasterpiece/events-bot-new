@@ -9,6 +9,10 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Region Talk operator-chat recovery now acknowledges delivery against the
+  exact ready-draft fingerprint, so legacy `sent_to_chat` flags cannot hide the
+  first complete Telegram/VK copy produced by draft backfill; retries of the
+  same draft remain idempotent while materially revised copy gets a new key.
 - Region Talk now restores missing grounded Telegram and VK copy for legacy
   confirmed social candidates in bounded autonomous batches: Telegram uses an
   idle role-scoped `DISCOVERY1/2` Telethon identity with both remote-kernel and
