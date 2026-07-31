@@ -11,6 +11,10 @@
 
 ### Added
 
+- Added a compact unlinked `noindex` phone diagnostic at
+  `/fokus-gruppa/diagnostika/`: three parallel, bounded, read-only checks compare
+  Supabase Auth/data with a dedicated Yandex API Gateway → YDB control and show
+  one screenshot-sized result with an opaque correlation code.
 - Integrated the noindex 30-day focus-group product shell into the R15 candidate: fragment onboarding, separate participation state, optional identity intent, installable focus PWA, closed hub, feedback specimens, local interest prototype and the 12-item research Easter-egg collection remain isolated from the ordinary public home.
 - Added a focus-group PWA start controller that returns an active participant to the closed hub while keeping participation independent from personalization reset; the previous 72-hour preview marker is migration input only, never the access period.
 - Added a deterministic self-contained SVG QR and exact visible fragment link
