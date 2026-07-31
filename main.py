@@ -14631,13 +14631,14 @@ def _static_site_coalesced_next_run(
     *,
     old_next: datetime,
     requested: datetime,
-    merged_payload: Mapping[str, Any],
+    merged_payload: Mapping[str, Any] | None,
     now: datetime,
     incoming_immediate: bool,
 ) -> datetime:
     """Apply trailing debounce without allowing continuous updates to starve a build."""
 
-    merged_trigger = str(merged_payload.get("trigger") or "").strip()
+    payload = merged_payload if isinstance(merged_payload, Mapping) else {}
+    merged_trigger = str(payload.get("trigger") or "").strip()
     if incoming_immediate or merged_trigger in {
         "operator_request",
         "calendar_rollover",
@@ -14648,8 +14649,8 @@ def _static_site_coalesced_next_run(
         return now
     target = max(old_next, requested)
     first_effect = (
-        merged_payload.get("first_effect_at")
-        or merged_payload.get("latest_effect_at")
+        payload.get("first_effect_at")
+        or payload.get("latest_effect_at")
     )
     try:
         started = _sqlite_parse_datetime(first_effect)
