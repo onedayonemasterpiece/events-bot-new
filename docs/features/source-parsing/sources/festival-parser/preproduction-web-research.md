@@ -142,6 +142,21 @@ Shared daily counters после прогона: `RPD=1` на каждом кл�
 параллельный limiter incident ведётся отдельно в
 `INC-2026-07-31-google-ai-parallel-limiter-bypass`.
 
+После явного operator approval и добавления `GOOGLE_API_KEY6` выполнен
+ограниченный live-прогон «Балтийской Уханы» на normal gateway pool: ровно A+B и
+один foreground control, без C и без public apply. Background A на KEY6 и B на
+другом зарегистрированном проекте успешно получили разные interaction/environment
+handles, но документированный `GET /v1beta/interactions/{id}` в обоих случаях
+вернул одинаковый `403 permission_denied`. Третий control использовал
+документированный foreground POST, исключающий polling, и получил тот же 403
+уже на create. Все три physical attempts имеют atomic reservation/finalization,
+consumer `festival_antigravity` и redacted key lane в shared ledger; limiter
+bypass и quota exhaustion не наблюдались. Текущая официальная документация
+Google заявляет preview-доступ для free и paid tier, поэтому наблюдаемое
+поведение классифицировано как project/provider permission blocker, а не как
+основание менять prompt или расходовать ещё RPD. Evidence остаётся на Fly volume
+в `/data/festival-web-research*`; публичный festival JSON не создан.
+
 ### Kaggle+Gemma
 
 RDR/UDS code построен, но production-run отсутствует. Его потенциальный URL
@@ -633,8 +648,10 @@ result → operator review, а не автоматический выбор. О�
 - Interactions wrapper/checkpoint/quota boundaries accepted;
 - collect-only and operator approval mandatory;
 - apply migrations 007 and 008 to the limiter project with a database-write credential;
-- obtain at least one API key whose Antigravity background execution reaches a
-  terminal provider state instead of project-level `permission_denied`;
+- obtain at least one API project whose Antigravity background execution
+  reaches a terminal provider state instead of project-level
+  `permission_denied`; KEY6 separately confirmed that merely rotating to a
+  fresh key does not satisfy this gate;
 - rerun «Балтийская Ухана» with normal A+B (third C only on a real conflict),
   review exact evidence and then continue the five-festival Phase 1 cohort.
 

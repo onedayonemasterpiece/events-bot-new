@@ -87,6 +87,21 @@ no Antigravity limiter bypass was found.
 - 2026-07-31 20:14 UTC — normal key rotation was moved from Smart Update
   configuration ownership to the shared gateway. Ordinary clients inherit
   `GOOGLE_AI_NORMAL_KEY_ENVS`; explicit default/scoped lanes remain overrides.
+- 2026-07-31 20:19–20:54 UTC — bounded KEY6 attribution window contained 73
+  provider attempts and 73 matching consumer/reservation/terminal records.
+  The first unexpected burst was 20 queued `tg_event_publish` jobs released by
+  deploy; no unidentified direct call was found in this window.
+- 2026-07-31 21:27 UTC — Fly release 1823 (`6775815d`, reachable from
+  `origin/main`) activated the gateway pool with `GOOGLE_API_KEY6` first.
+  Production replay logs show atomic contract, quota scope, consumer and
+  reservation metadata on every observed Google call.
+- 2026-07-31 22:59–23:03 UTC — operator-approved «Балтийская Ухана» validation
+  consumed exactly three Antigravity attempts: background A on KEY6,
+  background B on another registered project and foreground control on KEY6.
+  Every attempt was reserved/finalized centrally. Both background creates
+  returned interaction/environment handles but polling returned 403; the
+  foreground create returned the same 403. No limiter bypass or quota error
+  was observed; further Antigravity retries were stopped.
 
 ## Root Cause
 
@@ -232,8 +247,10 @@ no Antigravity limiter bypass was found.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending application/Edge cutover
-- deploy path: canonical Supabase schema applied; Fly/Edge release pending
+- limiter deployed SHA: `6775815d` (introduced in Fly release 1823; included in
+  active release 1828 through current `origin/main` ancestry)
+- deploy path: canonical Supabase schema applied; clean manual Fly deploy from
+  a main-reconciled branch; Edge/provider-path cutover included in main
 - regression checks: targeted Python/Edge suites and offline static audit
   (`122` targeted Python tests plus the Region Talk secret-contract test,
   `13` Edge tests, TypeScript check; audit of `808` files with
@@ -244,6 +261,14 @@ no Antigravity limiter bypass was found.
   `0`; targeted gateway/Smart Update/festival tests `119 + 73 passed`, limiter
   and bypass-audit tests `24 passed`, static audit `808` files,
   `allowlisted_debt=0`, `unapproved=0`
+- post-deploy bounded attribution: KEY6 window `73/73` attempts fully attributed
+  to `tg_event_publish`, `smart_update`, `event_parse` and `event_topics`, with
+  reservation and terminal ledger state; final audit scans `822` files with
+  `allowlisted_debt=0`, `unapproved=0`
+- Antigravity validation: A/B/foreground `3/3` physical attempts accounted as
+  `festival_antigravity`; repeated provider result `403 permission_denied`
+  across two registered projects/modes is an external eligibility blocker, not
+  an internal quota denial
 
 ## Prevention
 

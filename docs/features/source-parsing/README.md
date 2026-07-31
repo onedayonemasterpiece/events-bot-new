@@ -144,12 +144,15 @@ Bitrix AJAX pagination до terminal page. Нулевой результат и�
 `ON CONFLICT DO NOTHING`: параллельный media worker не должен срывать
 сохранение parser occurrence из-за гонки unique `pair_input_hash`.
 
-Cheap refresh существующего parser event разрешён только после собственной
-проверки точных `date + explicit time + normalized title`. Одного совпадения
-`parser:<source>`/host недостаточно: общий performance URL может содержать
-несколько сеансов, а legacy festival aggregate — ссылки отдельных концертов.
-Fuzzy time/title matches всегда возвращаются в Smart Update identity gate для
-создания или разделения occurrence.
+Cheap refresh существующего parser event разрешён после собственной проверки
+точных `date + explicit time + normalized title`. Если Smart Update ранее
+стилизовал официальный заголовок, повтор всё равно может использовать cheap
+refresh, но только при дополнительном точном совпадении canonical official
+ticket URL, той же даты и того же явного времени. Одного совпадения
+`parser:<source>`/host, URL без явного времени или fuzzy time недостаточно:
+общий performance URL может содержать несколько сеансов, а legacy festival
+aggregate — ссылки отдельных концертов. Такие случаи всегда возвращаются в
+Smart Update identity gate для создания или разделения occurrence.
 После исключения same-parser explicit-time conflict последующие
 city-noise/copy-post rescue-проходы не имеют права вернуть исключённый event в
 shortlist: один performance/ticket URL не является доказательством одного

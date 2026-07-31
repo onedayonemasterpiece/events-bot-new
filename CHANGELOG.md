@@ -13,6 +13,11 @@
   maximum from the first coalesced change, so a continuous repair/import stream
   cannot postpone publication forever. Immediate operator, calendar-rollover
   and startup requests also retain priority when later Smart Updates merge.
+- Source-parsing replay now treats an exact official URL, date and explicit
+  time as an idempotent occurrence even when Smart Update previously expanded
+  the presentation title; shared URLs without an exact slot still reach the
+  LLM identity gate, while deploy-interrupted catch-ups no longer repay the
+  full semantic merge for already restored rows.
 - StaticSiteBuilder now reclaims only unreferenced immutable snapshots and
   lock-protected `static-site-kaggle-*` scratch trees before its capacity
   probe. A killed Fly process can no longer leave one staged database copy that

@@ -60,6 +60,27 @@ VK auto-import и live-проверку Telegram Monitoring с `@meowafisha`.
 - 2026-07-31 19:44 UTC — release 1815 (`6fa882ab`, включая poster provenance,
   Gemma 4 minimal-thinking и poster-OCR eventness fixes) активирован на Fly;
   `/healthz` ready, SHA достижим из последующего `origin/main`.
+- 2026-07-31 20:23–20:33 UTC — точечные VK catch-up runs восстановили inbox
+  `11019`, `11022` и `11028`; были созданы события `7350`, `7353`, `7354` и
+  обновлены связанные существующие события.
+- 2026-07-31 21:26–21:27 UTC — main-reachable release 1823 (`6775815d`)
+  добавил conservative bundle repair и bounded partial-roundup retry. Во время
+  короткого окна снятого deploy lease параллельный release 1822 успел
+  завершиться, но через 39 секунд был заменён release 1823; после этого machine
+  lease был установлен снова.
+- 2026-07-31 21:31–21:32 UTC — оптимизированный production replay inbox
+  `11033` переиспользовал по точному source/date/start-time события `7355` и
+  `7356`, создал недостающие `7357` и `7358`, связал все четыре строки через
+  `vk_inbox_import_event` и завершил `ops_run.id=4993` без ошибок.
+- 2026-07-31 21:41–23:00 UTC — три compensating source-parsing попытки
+  (`ops_run.id=4997`, `5005`, `5007`) были последовательно прерваны внешними
+  Fly releases 1825, 1827 и 1828. Completed Kaggle outputs были сохранены на
+  volume, чтобы больше не перезапускать remote kernels.
+- 2026-07-31 23:09 UTC — source-level replay `ops_run.id=5009` остановлен после
+  обнаружения, что уже восстановленная строка снова платно проходит полный
+  Smart Update из-за presentation-title mismatch при точном official ticket
+  URL/date/time. Подготовлен узкий idempotency fast path и opposite controls;
+  общий/безвременной URL по-прежнему направляется в LLM identity gate.
 
 ## Root Cause
 
@@ -70,6 +91,20 @@ VK auto-import и live-проверку Telegram Monitoring с `@meowafisha`.
    реальным `PosterCandidate`.
 3. Исключение возникало в общей Smart Update boundary до create/merge, поэтому
    одинаково блокировало все import surfaces с poster evidence.
+
+Follow-up replay также обнаружил отдельный mechanical partial-commit gap:
+multi-event VK row ранее мог успешно записать первые дочерние события, затем
+получить semantic rejection следующего child и пометить весь inbox `rejected`,
+не сохранив M:N links. Теперь committed children связываются, а row получает
+bounded deferred retry; semantic решение по каждому child остаётся в Smart
+Update и не заменяется regex/keyword логикой.
+
+Deploy-interrupted source catch-up обнаружил второй mechanical idempotency gap:
+Smart Update мог стилизовать terse parser title, после чего следующий exact
+official ticket/date/time replay не проходил strict normalized-title fast path
+и заново оплачивал весь semantic merge. Fast path теперь принимает такой
+presentation mismatch только при точном canonical ticket URL и explicit slot;
+aggregate source URLs, другое время и `00:00` остаются за LLM gate.
 
 Root cause механический (API/transport compatibility), а не semantic: fix не
 принимает смысловых решений и не заменяет LLM broad regex/keyword логикой.
@@ -159,14 +194,22 @@ Root cause механический (API/transport compatibility), а не seman
 
 ## Release And Closure Evidence
 
-- deployed SHA: `6fa882ab` (Fly release 1815; ancestor of `origin/main`)
+- deployed SHA: `6775815d` (Fly release 1823; exact SHA в `origin/main`)
 - deploy path: clean integration release after main reconciliation; active
   machine `48e419df93e078`, `/healthz` ready
 - regression checks: canonical incident tests `3 passed` (включая exact
-  Telegram replay); релевантный Smart Update, KGD80, Telegram, source-status и
-  video persistence/export набор `111 passed`; release CI pending
-- post-deploy verification: code/health ready; four-row VK compensating catch-up
-  (`11019`, `11022`, `11028`, `11033`) remains the closure gate
+  Telegram replay); финальный Smart Update/VK/native-schema набор `107 passed`;
+  provider-path audit `822 files`, `allowlisted_debt=0`, `unapproved=0`
+- post-deploy VK verification: `11019`, `11022`, `11028`, `11033` восстановлены;
+  финальный `ops_run.id=4993`, `inbox_imported=1`, `events_created=2`,
+  `events_updated=2`, `errors=[]`; mapping `11033 -> 7355,7356,7357,7358`
+- runtime mirror after release 1823: новых `PosterCandidate.url` и native
+  GenAI schema `ValidationError` нет; exact roundup scope/bundle reviews прошли
+- remaining closure gate: source-by-source compensating replay из persistent
+  cached outputs для семи lanes, потерявших 122 строки в run 4932. Runs 4997,
+  5005 и 5007 были прерваны releases 1825/1827/1828; новый exact-ticket-slot
+  idempotency guard должен быть доставлен перед следующим replay, чтобы уже
+  восстановленные checkpoints не расходовали LLM quota повторно
 
 ## Prevention
 
