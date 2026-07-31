@@ -1845,6 +1845,177 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_festival_queue_source_url ON festival_queue(source_url)"
             )
 
+            # Provider-neutral operational ledger for the collect-only
+            # festival web research contour.  Provider execution and semantic
+            # acceptance are deliberately represented by separate lane states.
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS festival_web_research_run(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_uid TEXT NOT NULL,
+                    target_key TEXT NOT NULL,
+                    series_candidate TEXT,
+                    edition_candidate TEXT,
+                    state TEXT NOT NULL DEFAULT 'pending',
+                    mode TEXT NOT NULL DEFAULT 'collect_only',
+                    review_status TEXT NOT NULL DEFAULT 'pending',
+                    input_fingerprint TEXT NOT NULL,
+                    orchestration_version TEXT NOT NULL,
+                    contract_version TEXT NOT NULL,
+                    taxonomy_version TEXT NOT NULL,
+                    taxonomy_sha256 TEXT NOT NULL,
+                    primary_queue_item_id INTEGER,
+                    candidate_sha256 TEXT,
+                    candidate_json JSON NOT NULL DEFAULT '{}',
+                    quality_json JSON NOT NULL DEFAULT '{}',
+                    artifact_manifest_json JSON NOT NULL DEFAULT '{}',
+                    lease_owner TEXT,
+                    lease_expires_at TIMESTAMP,
+                    reviewed_by TEXT,
+                    reviewed_at TIMESTAMP,
+                    review_reason TEXT,
+                    started_at TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT ux_festival_web_research_run_uid UNIQUE(run_uid),
+                    CONSTRAINT ux_festival_web_research_run_input_fingerprint UNIQUE(input_fingerprint),
+                    FOREIGN KEY(primary_queue_item_id) REFERENCES festival_queue(id)
+                        ON DELETE SET NULL
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_festival_web_research_run_state_updated "
+                "ON festival_web_research_run(state,updated_at)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_festival_web_research_run_target_created "
+                "ON festival_web_research_run(target_key,created_at)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_festival_web_research_run_review_updated "
+                "ON festival_web_research_run(review_status,updated_at)"
+            )
+
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS festival_web_research_lane_run(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id INTEGER NOT NULL,
+                    lane TEXT NOT NULL DEFAULT 'antigravity',
+                    attempt_no INTEGER NOT NULL DEFAULT 1,
+                    request_uid TEXT NOT NULL,
+                    provider_state TEXT NOT NULL DEFAULT 'pending',
+                    semantic_state TEXT NOT NULL DEFAULT 'pending',
+                    interaction_ids_json JSON NOT NULL DEFAULT '[]',
+                    model_id TEXT,
+                    prompt_version TEXT NOT NULL,
+                    contract_version TEXT NOT NULL,
+                    taxonomy_version TEXT NOT NULL,
+                    taxonomy_sha256 TEXT NOT NULL,
+                    input_fingerprint TEXT NOT NULL,
+                    artifact_manifest_json JSON NOT NULL DEFAULT '{}',
+                    usage_json JSON NOT NULL DEFAULT '{}',
+                    validation_json JSON NOT NULL DEFAULT '{}',
+                    candidate_sha256 TEXT,
+                    candidate_json JSON NOT NULL DEFAULT '{}',
+                    provider_error_code TEXT,
+                    semantic_error_code TEXT,
+                    last_error TEXT,
+                    started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT ux_festival_web_research_lane_attempt UNIQUE(run_id,lane,attempt_no),
+                    CONSTRAINT ux_festival_web_research_lane_request_uid UNIQUE(request_uid),
+                    FOREIGN KEY(run_id) REFERENCES festival_web_research_run(id)
+                        ON DELETE CASCADE
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_festival_web_research_lane_provider_updated "
+                "ON festival_web_research_lane_run(provider_state,updated_at)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_festival_web_research_lane_semantic_updated "
+                "ON festival_web_research_lane_run(semantic_state,updated_at)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_festival_web_research_lane_input_fingerprint "
+                "ON festival_web_research_lane_run(input_fingerprint)"
+            )
+
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS festival_web_research_item(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id INTEGER NOT NULL,
+                    queue_item_id INTEGER NOT NULL,
+                    original_status TEXT NOT NULL,
+                    source_role TEXT NOT NULL,
+                    decision TEXT NOT NULL DEFAULT 'pending',
+                    decision_reason TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT ux_festival_web_research_item_run_queue UNIQUE(run_id,queue_item_id),
+                    FOREIGN KEY(run_id) REFERENCES festival_web_research_run(id)
+                        ON DELETE CASCADE,
+                    FOREIGN KEY(queue_item_id) REFERENCES festival_queue(id)
+                        ON DELETE RESTRICT
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_festival_web_research_item_queue "
+                "ON festival_web_research_item(queue_item_id,created_at)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_festival_web_research_item_decision "
+                "ON festival_web_research_item(decision,updated_at)"
+            )
+
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS festival_web_research_source(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    lane_run_id INTEGER NOT NULL,
+                    source_id TEXT NOT NULL,
+                    requested_url TEXT NOT NULL,
+                    resolved_url TEXT,
+                    canonical_url TEXT,
+                    source_role TEXT NOT NULL,
+                    edition_status TEXT NOT NULL DEFAULT 'unknown',
+                    content_sha256 TEXT,
+                    snapshot_ref TEXT,
+                    normalizer_version TEXT,
+                    quote_index_ref TEXT,
+                    fetched_at TIMESTAMP,
+                    decision TEXT NOT NULL DEFAULT 'pending',
+                    exclusion_reason TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT ux_festival_web_research_source_lane_source UNIQUE(lane_run_id,source_id),
+                    FOREIGN KEY(lane_run_id)
+                        REFERENCES festival_web_research_lane_run(id)
+                        ON DELETE CASCADE
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_festival_web_research_source_canonical_url "
+                "ON festival_web_research_source(canonical_url)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_festival_web_research_source_content_hash "
+                "ON festival_web_research_source(content_sha256)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_festival_web_research_source_lane_decision "
+                "ON festival_web_research_source(lane_run_id,decision)"
+            )
+
             await conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS ticket_site_queue(

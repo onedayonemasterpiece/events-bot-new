@@ -7,6 +7,7 @@ from sqlmodel import Field, SQLModel
 from sqlalchemy import (
     Column,
     DateTime,
+    ForeignKey,
     Index,
     JSON,
     Boolean,
@@ -1585,6 +1586,366 @@ class FestivalQueueItem(SQLModel, table=True):
     )
     next_run_at: datetime = Field(
         default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+
+
+class FestivalWebResearchRun(SQLModel, table=True):
+    """Provider-neutral collect/review envelope for one festival edition target."""
+
+    __tablename__ = "festival_web_research_run"
+    __table_args__ = (
+        UniqueConstraint("run_uid", name="ux_festival_web_research_run_uid"),
+        UniqueConstraint(
+            "input_fingerprint",
+            name="ux_festival_web_research_run_input_fingerprint",
+        ),
+        Index(
+            "ix_festival_web_research_run_state_updated",
+            "state",
+            "updated_at",
+        ),
+        Index(
+            "ix_festival_web_research_run_target_created",
+            "target_key",
+            "created_at",
+        ),
+        Index(
+            "ix_festival_web_research_run_review_updated",
+            "review_status",
+            "updated_at",
+        ),
+        {"extend_existing": True},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    run_uid: str
+    target_key: str
+    series_candidate: Optional[str] = None
+    edition_candidate: Optional[str] = None
+    state: str = Field(
+        default="pending",
+        sa_column=Column(String, nullable=False, server_default=text("'pending'")),
+    )
+    mode: str = Field(
+        default="collect_only",
+        sa_column=Column(
+            String, nullable=False, server_default=text("'collect_only'")
+        ),
+    )
+    review_status: str = Field(
+        default="pending",
+        sa_column=Column(String, nullable=False, server_default=text("'pending'")),
+    )
+    input_fingerprint: str
+    orchestration_version: str
+    contract_version: str
+    taxonomy_version: str
+    taxonomy_sha256: str
+    primary_queue_item_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(
+            Integer,
+            ForeignKey("festival_queue.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+    candidate_sha256: Optional[str] = None
+    candidate_json: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False, server_default=text("'{}'")),
+    )
+    quality_json: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False, server_default=text("'{}'")),
+    )
+    artifact_manifest_json: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False, server_default=text("'{}'")),
+    )
+    lease_owner: Optional[str] = None
+    lease_expires_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    review_reason: Optional[str] = None
+    started_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    completed_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            server_default=text("CURRENT_TIMESTAMP"),
+        ),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            server_default=text("CURRENT_TIMESTAMP"),
+        ),
+    )
+
+
+class FestivalWebResearchLaneRun(SQLModel, table=True):
+    """One bounded collector attempt with distinct provider and semantic states."""
+
+    __tablename__ = "festival_web_research_lane_run"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "lane",
+            "attempt_no",
+            name="ux_festival_web_research_lane_attempt",
+        ),
+        UniqueConstraint(
+            "request_uid",
+            name="ux_festival_web_research_lane_request_uid",
+        ),
+        Index(
+            "ix_festival_web_research_lane_provider_updated",
+            "provider_state",
+            "updated_at",
+        ),
+        Index(
+            "ix_festival_web_research_lane_semantic_updated",
+            "semantic_state",
+            "updated_at",
+        ),
+        Index(
+            "ix_festival_web_research_lane_input_fingerprint",
+            "input_fingerprint",
+        ),
+        {"extend_existing": True},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    run_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("festival_web_research_run.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    lane: str = Field(
+        default="antigravity",
+        sa_column=Column(
+            String, nullable=False, server_default=text("'antigravity'")
+        ),
+    )
+    attempt_no: int = Field(
+        default=1,
+        sa_column=Column(Integer, nullable=False, server_default=text("1")),
+    )
+    request_uid: str
+    provider_state: str = Field(
+        default="pending",
+        sa_column=Column(String, nullable=False, server_default=text("'pending'")),
+    )
+    semantic_state: str = Field(
+        default="pending",
+        sa_column=Column(String, nullable=False, server_default=text("'pending'")),
+    )
+    interaction_ids_json: list[dict] = Field(
+        default_factory=list,
+        sa_column=Column(JSON, nullable=False, server_default=text("'[]'")),
+    )
+    model_id: Optional[str] = None
+    prompt_version: str
+    contract_version: str
+    taxonomy_version: str
+    taxonomy_sha256: str
+    input_fingerprint: str
+    artifact_manifest_json: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False, server_default=text("'{}'")),
+    )
+    usage_json: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False, server_default=text("'{}'")),
+    )
+    validation_json: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False, server_default=text("'{}'")),
+    )
+    candidate_sha256: Optional[str] = None
+    candidate_json: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False, server_default=text("'{}'")),
+    )
+    provider_error_code: Optional[str] = None
+    semantic_error_code: Optional[str] = None
+    last_error: Optional[str] = None
+    started_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            server_default=text("CURRENT_TIMESTAMP"),
+        ),
+    )
+    completed_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            server_default=text("CURRENT_TIMESTAMP"),
+        ),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            server_default=text("CURRENT_TIMESTAMP"),
+        ),
+    )
+
+
+class FestivalWebResearchItem(SQLModel, table=True):
+    """Immutable membership and eventual disposition of a grouped queue item."""
+
+    __tablename__ = "festival_web_research_item"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "queue_item_id",
+            name="ux_festival_web_research_item_run_queue",
+        ),
+        Index(
+            "ix_festival_web_research_item_queue",
+            "queue_item_id",
+            "created_at",
+        ),
+        Index(
+            "ix_festival_web_research_item_decision",
+            "decision",
+            "updated_at",
+        ),
+        {"extend_existing": True},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    run_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("festival_web_research_run.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    queue_item_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("festival_queue.id", ondelete="RESTRICT"),
+            nullable=False,
+        )
+    )
+    original_status: str
+    source_role: str
+    decision: str = Field(
+        default="pending",
+        sa_column=Column(String, nullable=False, server_default=text("'pending'")),
+    )
+    decision_reason: Optional[str] = None
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            server_default=text("CURRENT_TIMESTAMP"),
+        ),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            server_default=text("CURRENT_TIMESTAMP"),
+        ),
+    )
+
+
+class FestivalWebResearchSource(SQLModel, table=True):
+    """Source snapshot ledger for evidence and exclusion auditability."""
+
+    __tablename__ = "festival_web_research_source"
+    __table_args__ = (
+        UniqueConstraint(
+            "lane_run_id",
+            "source_id",
+            name="ux_festival_web_research_source_lane_source",
+        ),
+        Index(
+            "ix_festival_web_research_source_canonical_url",
+            "canonical_url",
+        ),
+        Index(
+            "ix_festival_web_research_source_content_hash",
+            "content_sha256",
+        ),
+        Index(
+            "ix_festival_web_research_source_lane_decision",
+            "lane_run_id",
+            "decision",
+        ),
+        {"extend_existing": True},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    lane_run_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("festival_web_research_lane_run.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    source_id: str
+    requested_url: str
+    resolved_url: Optional[str] = None
+    canonical_url: Optional[str] = None
+    source_role: str
+    edition_status: str = Field(
+        default="unknown",
+        sa_column=Column(String, nullable=False, server_default=text("'unknown'")),
+    )
+    content_sha256: Optional[str] = None
+    snapshot_ref: Optional[str] = None
+    normalizer_version: Optional[str] = None
+    quote_index_ref: Optional[str] = None
+    fetched_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    decision: str = Field(
+        default="pending",
+        sa_column=Column(String, nullable=False, server_default=text("'pending'")),
+    )
+    exclusion_reason: Optional[str] = None
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            server_default=text("CURRENT_TIMESTAMP"),
+        ),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            server_default=text("CURRENT_TIMESTAMP"),
+        ),
     )
 
 
