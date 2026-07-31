@@ -169,3 +169,11 @@ at the 1 GiB critical threshold. The Fly owner now removes unreferenced
 terminal snapshots before its capacity probe; the runner removes only
 lock-protected `static-site-kaggle-*` scratch trees before its own probe.
 Active handoff paths, symlinks and unknown directories remain fail-closed.
+
+The live recovery also showed a queue-starvation path independent of Kaggle:
+each event in a continuous Smart Update/backfill stream moved the 15-minute
+trailing debounce forward again. The singleton request stayed healthy but
+could remain pending indefinitely. Requests now retain their first coalesced
+effect timestamp and production caps trailing debounce at 30 minutes.
+Immediate operator/calendar/startup requests cannot be demoted by a later
+Smart Update merge.

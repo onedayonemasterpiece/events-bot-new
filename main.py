@@ -14627,6 +14627,42 @@ def _static_site_row_has_daily_share_date(row: Any, local_date: str | None) -> b
     return _static_site_daily_share_date(payload) == local_date
 
 
+def _static_site_coalesced_next_run(
+    *,
+    old_next: datetime,
+    requested: datetime,
+    merged_payload: Mapping[str, Any] | None,
+    now: datetime,
+    incoming_immediate: bool,
+) -> datetime:
+    """Apply trailing debounce without allowing continuous updates to starve a build."""
+
+    payload = merged_payload if isinstance(merged_payload, Mapping) else {}
+    merged_trigger = str(payload.get("trigger") or "").strip()
+    if incoming_immediate or merged_trigger in {
+        "operator_request",
+        "calendar_rollover",
+        "startup_catchup",
+    }:
+        return min(old_next, requested)
+    if old_next < now:
+        return now
+    target = max(old_next, requested)
+    first_effect = (
+        payload.get("first_effect_at")
+        or payload.get("latest_effect_at")
+    )
+    try:
+        started = _sqlite_parse_datetime(first_effect)
+    except (TypeError, ValueError):
+        started = now
+    maximum = max(
+        15 * 60,
+        min(6 * 60 * 60, _env_int("STATIC_SITE_MAX_DEBOUNCE_SECONDS", 60 * 60)),
+    )
+    return min(target, started + timedelta(seconds=maximum))
+
+
 async def _enqueue_static_site_build_atomic(
     db: Database,
     event_id: int,
@@ -14709,7 +14745,13 @@ async def _enqueue_static_site_build_atomic(
                 old_payload = json.loads(pending["payload"] or "null")
                 merged = merge_static_site_request_payload(old_payload, payload) if payload is not None else old_payload
                 old_next = _sqlite_parse_datetime(pending["next_run_at"])
-                target = min(old_next, requested) if immediate else max(old_next, requested)
+                target = _static_site_coalesced_next_run(
+                    old_next=old_next,
+                    requested=requested,
+                    merged_payload=merged,
+                    now=now,
+                    incoming_immediate=immediate,
+                )
                 await connection.execute(
                     "UPDATE joboutbox SET payload=?, next_run_at=?, updated_at=?, attempts=0, last_error=NULL WHERE id=? AND status='pending'",
                     (
@@ -14738,9 +14780,13 @@ async def _enqueue_static_site_build_atomic(
             old_payload = json.loads(pending["payload"] or "null")
             merged = merge_static_site_request_payload(old_payload, payload) if payload is not None else old_payload
             old_next = _sqlite_parse_datetime(pending["next_run_at"])
-            target = min(old_next, requested) if immediate else max(old_next, requested)
-            if old_next < now and not immediate:
-                target = now
+            target = _static_site_coalesced_next_run(
+                old_next=old_next,
+                requested=requested,
+                merged_payload=merged,
+                now=now,
+                incoming_immediate=immediate,
+            )
             await connection.execute(
                 "UPDATE joboutbox SET payload=?, next_run_at=?, updated_at=?, attempts=0, last_error=NULL WHERE id=? AND status='pending'",
                 (
