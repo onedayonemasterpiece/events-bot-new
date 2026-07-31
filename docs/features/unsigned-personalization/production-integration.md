@@ -288,6 +288,27 @@ smoke returned the same existing Supabase callback through both direct and
 relay paths. This is transport feasibility evidence only, not production
 rollout or completed email E2E.
 
+Implementation state on 31 July:
+
+- the permanent `kenigevents-supabase-relay` Gateway is active with exact
+  production-origin CORS, fixed `/auth/v1`, `/rest/v1` and `/functions/v1`
+  upstream prefixes, no service account and logging disabled;
+- the shared browser client preserves the original Supabase URL for project
+  identity/OAuth and the exact historical `sb-<project-ref>-auth-token` storage
+  key, while a custom `global.fetch` selects direct or relay transport;
+- route selection races only safe Auth-health reads and caches the first
+  successful route for a short session window;
+- GET/HEAD may fall back once after network/timeout/5xx; POST and every other
+  non-safe method are sent exactly once by the framework;
+- `PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL` is carried through local preview
+  and Kaggle static-build configuration but is never used by bulk exports;
+- the `KE3` diagnostic compares raw direct checks with the actual framework
+  path and reports the selected route without exposing provider names or PII.
+
+This is not incident closure: separate live OTP code and magic-link E2E, an
+affected-phone `KE3` receipt, verified membership activation and delivery
+correlation remain mandatory.
+
 ## P1 gates before canary
 
 ### P1.1 Fly runtime budget

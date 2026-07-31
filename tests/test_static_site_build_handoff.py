@@ -306,6 +306,7 @@ def test_kaggle_runner_and_builder_forward_related_corpus_revision(
         ics_base_url="",
         public_personalization_supabase_url="",
         public_personalization_supabase_publishable_key="",
+        public_personalization_supabase_relay_url="https://relay.example.test",
         public_yandex_auth_provider="custom:yandex",
         secret_candidate_artifact_research=True,
         secret_candidate_require_authorized_search=True,
@@ -331,6 +332,7 @@ def test_kaggle_runner_and_builder_forward_related_corpus_revision(
     assert config["related_corpus_revision"] == revision
     assert config["secret_candidate_artifact_research"] is True
     assert config["secret_candidate_require_authorized_search"] is True
+    assert config["public_personalization_supabase_relay_url"] == "https://relay.example.test"
 
     builder_path = (
         Path(__file__).resolve().parents[1]

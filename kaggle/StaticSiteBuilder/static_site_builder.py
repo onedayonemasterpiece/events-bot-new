@@ -562,6 +562,11 @@ def apply_public_authorized_search_env(env: dict[str, str], config: dict) -> Non
         or os.environ.get('PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY', '').strip()
         or os.environ.get('PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY', '').strip()
     )
+    relay_url = (
+        str(config.get('public_personalization_supabase_relay_url') or '').strip()
+        or os.environ.get('PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL', '').strip()
+        or os.environ.get('PERSONALIZATION_SUPABASE_RELAY_URL', '').strip()
+    )
     yandex_provider = (
         str(config.get('public_yandex_auth_provider') or '').strip()
         or os.environ.get('PUBLIC_YANDEX_AUTH_PROVIDER', '').strip()
@@ -578,6 +583,8 @@ def apply_public_authorized_search_env(env: dict[str, str], config: dict) -> Non
         env['PUBLIC_PERSONALIZATION_SUPABASE_URL'] = public_url
     if public_key:
         env['PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY'] = public_key
+    if relay_url:
+        env['PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL'] = relay_url
     if yandex_provider:
         env['PUBLIC_YANDEX_AUTH_PROVIDER'] = yandex_provider
     env['PUBLIC_AUTHORIZED_SEARCH_TRANSPORT'] = search_transport

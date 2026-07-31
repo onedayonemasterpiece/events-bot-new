@@ -96,6 +96,15 @@ after any failed transport result and therefore communicated a false success.
   does not silently solve the OAuth callback-host dependency. The canary is
   not connected to onboarding or production personalization and was deleted
   after the evidence was captured, so it creates no persistent public route.
+- 2026-07-31 14:29 UTC — permanent stateless gateway
+  `kenigevents-supabase-relay` was deployed with request logging disabled and
+  no service account. Production-origin browser smoke returned 200 for Auth
+  health and the tiny RLS Data read; invalid verify/refresh reached Supabase
+  once and returned expected 403/400 responses. The shared client now selects
+  the first healthy route with safe probes, preserves the exact historical Auth
+  storage key and forbids cross-route retry for non-safe methods. A new `KE3`
+  diagnostic compares raw direct reads with framework reads; affected-phone
+  acceptance and live email issuances are still pending.
 
 ## Root Cause
 
@@ -236,10 +245,10 @@ after any failed transport result and therefore communicated a false success.
       routes reproduced direct Supabase loss while the Yandex control stayed
       available, including a participant affected by the missing-email issue.
 - [ ] P0 deploy the false-success fix to the focus onboarding itself.
-- [ ] P0 add the stateless API Gateway relay for email OTP/verify/refresh and
-      run phone acceptance on the reproduced failing routes without moving
-      Auth state out of Supabase.
-- [ ] P0 give Supabase clients one explicit stable auth storage key before any
+- [ ] P0 run affected-phone acceptance through the deployed stateless API
+      Gateway relay without moving Auth state out of Supabase. Gateway/browser
+      smoke is complete; real-phone `KE3` evidence remains.
+- [x] P0 give Supabase clients one explicit stable auth storage key before any
       API base URL changes, so the existing PWA session survives transport
       migration without reinstall or repeated login.
 - [ ] P0 complete separate live code and magic-link E2E issuances.
@@ -258,8 +267,9 @@ after any failed transport result and therefore communicated a false success.
 ## Release And Closure Evidence
 
 - deployed SHA: pending
-- deploy path: pending
-- regression checks: local focus suite and Astro build in progress
+- relay deploy path: Yandex API Gateway `kenigevents-supabase-relay`
+- regression checks: local focus suite, relay infra tests and Astro build pass;
+  live production-origin CORS/Auth/Data/invalid-verify/invalid-refresh smoke pass
 - post-deploy verification: pending
 
 ## Prevention

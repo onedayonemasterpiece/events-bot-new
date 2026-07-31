@@ -549,13 +549,14 @@ schedule.
 
 ## Phone connectivity diagnostic
 
-The unlinked `noindex` route `/fokus-gruppa/diagnostika/` is a narrow incident
-tool, not a focus-group replacement. One tap runs four parallel bounded
-`no-store` reads: a transport-only opaque health read without CORS/preflight,
-the normal Supabase Auth health request, one tiny RLS-safe Supabase Data API
-read and a dedicated Yandex API Gateway → YDB `GetItem`. Each read gets one
-20-second total budget instead of multiplying an eight-second wait by retries.
-It never sends an OTP or changes account data.
+The unlinked `noindex` routes `/fokus-gruppa/diagnostika/` and
+`/fokus-gruppa/diagnostika-ustoychivost/` are narrow incident tools, not a
+focus-group replacement. The current page compares direct Auth/Data reads, the
+second stateless route, the same Auth/Data reads through the resilience
+framework and a dedicated control read. Direct checks are not silently
+substituted with framework checks, so one copied result shows whether the
+framework actually recovered a blocked route. Every operation is read-only,
+bounded and `no-store`; the page never sends an OTP or changes account data.
 
 The entire result fits one phone screenshot: understandable statuses, response
 times, one opaque correlation code, local time and browser/PWA plus effective
@@ -567,11 +568,13 @@ The connection API's `effectiveType` is presented only as qualitative speed,
 not as a claim that Wi-Fi is cellular 4G. No email, OTP, JWT or account identity
 appears in the result.
 
-The same receipt is also exposed as one copyable `KE2` line. It contains only
-the opaque correlation code, UTC timestamp, four compact probe states/timings,
-browser/app mode, qualitative connection class and whether offline support
-controls the page. It contains no email, IP, token or raw user agent, so a
-participant may paste it into the review thread instead of sending a screenshot.
+The current receipt is exposed as one copyable `KE3` line. It contains only the
+opaque correlation code, UTC timestamp, six compact probe states/timings, the
+selected route number, browser/app mode, qualitative connection class and
+whether offline support controls the page. It contains no email, IP, token,
+provider name or raw user agent, so a participant may paste it into the review
+thread instead of sending a screenshot. Older `KE2` receipts remain valid
+incident evidence and are not reinterpreted as framework results.
 
 Ten returned phone receipts produced eight fully healthy runs and two
 reproduced route failures. For `C6DB-202B`, Supabase edge answered the transport
@@ -591,12 +594,16 @@ same Supabase endpoints. A small serverless function is allowed only for the
 Send Email Hook/provider fallback and opaque delivery receipt; it must not
 become an Auth service.
 
-An isolated fixed-upstream gateway canary confirmed this thin relay from a real
-browser at the production origin: Auth and Data reads completed, and verify and
-refresh POST bodies reached Supabase. No onboarding route was changed. The same
-canary also confirmed that the Yandex provider callback still points to the
-existing Supabase Auth host, so a full OAuth hostname change requires the
-supported Supabase custom-domain activation rather than extra proxy logic.
+The permanent fixed-upstream gateway `kenigevents-supabase-relay` now provides
+this thin route without a service account, secret key, application state or
+request logging. A real browser at the production origin received Auth and Data
+reads with HTTP 200; deliberately invalid verify and refresh POST bodies reached
+Supabase once and returned the expected 403/400 Auth responses. The shared
+client keeps the original `sb-<project-ref>-auth-token` storage key, selects a
+route with safe parallel health reads and never retries OTP/verify/refresh over
+the alternate route after an ambiguous response. The Yandex provider callback
+still points to the existing Supabase Auth host, so complete OAuth hostname
+independence remains a separate supported-custom-domain decision.
 
 Personal actions remain local-first. Save/like/hide/calendar/feedback update the
 current-device profile immediately, enter a bounded idempotent outbox and are

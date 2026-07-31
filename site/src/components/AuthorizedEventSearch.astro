@@ -6,13 +6,14 @@ interface Props {
 }
 const { compact = false, standalone = false, headingLevel = 'h2' } = Astro.props;
 const supabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
+const supabaseRelayUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || '').replace(/\/+$/u, '');
 const supabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
 const yandexProvider = import.meta.env.PUBLIC_YANDEX_AUTH_PROVIDER || 'custom:yandex';
 const searchTransport = import.meta.env.PUBLIC_AUTHORIZED_SEARCH_TRANSPORT === 'ndjson' ? 'ndjson' : 'json';
 const enabled = Boolean(supabaseUrl && supabaseKey);
 const HeadingTag = headingLevel;
 ---
-<section id="poisk" class:list={["authorized-search", compact && "authorized-search--compact", standalone && "authorized-search--standalone"]} data-authorized-search data-search-enabled={enabled ? 'true' : 'false'} data-search-transport={searchTransport} data-supabase-url={supabaseUrl || undefined} data-supabase-key={supabaseKey || undefined} data-yandex-provider={yandexProvider} data-nosnippet>
+<section id="poisk" class:list={["authorized-search", compact && "authorized-search--compact", standalone && "authorized-search--standalone"]} data-authorized-search data-search-enabled={enabled ? 'true' : 'false'} data-search-transport={searchTransport} data-supabase-url={supabaseUrl || undefined} data-supabase-relay-url={supabaseRelayUrl || undefined} data-supabase-key={supabaseKey || undefined} data-yandex-provider={yandexProvider} data-nosnippet>
   <div class="authorized-search__head">
     <div class="authorized-search__copy">
       <p class="eyebrow">Умный поиск</p>
@@ -881,8 +882,9 @@ const HeadingTag = headingLevel;
         }, timeoutMs);
       });
       try {
+        const transportFetch = authController?.transport?.fetch || fetch;
         return await Promise.race([
-          fetch(endpoint, { ...init, signal: requestController.signal }),
+          transportFetch(endpoint, { ...init, signal: requestController.signal }),
           headersTimeout,
           parentAbort,
         ]);
@@ -1249,6 +1251,7 @@ const HeadingTag = headingLevel;
     if (enabled) {
       authController = getStaticSiteAuth({
         supabaseUrl: root.dataset.supabaseUrl,
+        relayUrl: root.dataset.supabaseRelayUrl || '',
         publishableKey: root.dataset.supabaseKey,
         provider: root.dataset.yandexProvider || 'custom:yandex',
       });

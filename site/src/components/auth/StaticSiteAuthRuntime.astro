@@ -1,5 +1,6 @@
 ---
 const supabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
+const relayUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || '').replace(/\/+$/u, '');
 const publishableKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
 const provider = import.meta.env.PUBLIC_YANDEX_AUTH_PROVIDER || 'custom:yandex';
 const enabled = Boolean(supabaseUrl && publishableKey);
@@ -9,6 +10,7 @@ const enabled = Boolean(supabaseUrl && publishableKey);
   data-static-site-auth-runtime
   data-auth-enabled={enabled ? 'true' : 'false'}
   data-supabase-url={supabaseUrl || undefined}
+  data-supabase-relay-url={relayUrl || undefined}
   data-supabase-key={publishableKey || undefined}
   data-yandex-provider={provider}
   hidden
@@ -22,6 +24,7 @@ const enabled = Boolean(supabaseUrl && publishableKey);
   if (runtime?.dataset.authEnabled === 'true' && runtime.dataset.supabaseUrl && runtime.dataset.supabaseKey) {
     const auth = getStaticSiteAuth({
       supabaseUrl: runtime.dataset.supabaseUrl,
+      relayUrl: runtime.dataset.supabaseRelayUrl || '',
       publishableKey: runtime.dataset.supabaseKey,
       provider: runtime.dataset.yandexProvider || 'custom:yandex',
     });

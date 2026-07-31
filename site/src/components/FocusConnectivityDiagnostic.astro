@@ -1,11 +1,13 @@
 ---
 interface Props {
   supabaseUrl: string;
+  relayUrl?: string;
   publishableKey: string;
 }
 
 const {
   supabaseUrl,
+  relayUrl = '',
   publishableKey,
 } = Astro.props;
 const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.net/v1/ydb-control';
@@ -15,6 +17,7 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
   class="connectivity"
   data-focus-connectivity
   data-supabase-url={supabaseUrl}
+  data-supabase-relay-url={relayUrl}
   data-supabase-key={publishableKey}
   data-ydb-control-url={ydbControlUrl}
 >
@@ -26,15 +29,17 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     </p>
     <button class="connectivity__run" type="button" data-connectivity-run>Начать проверку</button>
     <p class="connectivity__status" data-connectivity-status role="status">
-      Проверка может занять до 20 секунд.
+      Проверка может занять до 15 секунд.
     </p>
     <div class="connectivity__results" data-connectivity-results hidden>
       {
         [
-          ['supabase-direct', 'Прямой доступ'],
-          ['supabase-auth', 'Вход по почте'],
-          ['supabase-data', 'Данные сайта'],
-          ['ydb-control', 'Резервный канал'],
+          ['direct-auth', 'Вход напрямую'],
+          ['direct-data', 'Данные напрямую'],
+          ['relay-auth', 'Второй маршрут'],
+          ['framework-auth', 'Устойчивый вход'],
+          ['framework-data', 'Устойчивые данные'],
+          ['ydb-control', 'Контрольный канал'],
         ].map(([id, label]) => (
           <article class="connectivity__result" data-connectivity-result={id}>
             <h2>{label}</h2>
@@ -68,8 +73,10 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
 <script>
   import {
     runConnectivityProbe,
+    summarizeConnectivityAttempts,
     type ConnectivityProbeResult,
   } from '../lib/connectivityDiagnostic';
+  import { createResilientSupabaseTransport } from '../lib/resilientSupabaseTransport';
 
   const root = document.querySelector<HTMLElement>('[data-focus-connectivity]');
   const runButton = root?.querySelector<HTMLButtonElement>('[data-connectivity-run]');
@@ -167,6 +174,7 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     if (!root || !runButton || coolingDown) return;
     const authRuntime = document.querySelector<HTMLElement>('[data-static-site-auth-runtime]');
     const supabaseUrl = String(root.dataset.supabaseUrl || authRuntime?.dataset.supabaseUrl || '').replace(/\/+$/u, '');
+    const relayUrl = String(root.dataset.supabaseRelayUrl || authRuntime?.dataset.supabaseRelayUrl || '').replace(/\/+$/u, '');
     const publishableKey = String(root.dataset.supabaseKey || authRuntime?.dataset.supabaseKey || '');
     const probeId = diagnosticId();
     const authHeaders = publishableKey
@@ -179,48 +187,80 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     runButton.disabled = true;
     runButton.setAttribute('aria-busy', 'true');
     runButton.textContent = 'Проверяем…';
-    if (status) status.textContent = 'Проверяем четыре независимых соединения…';
+    if (status) status.textContent = 'Сравниваем прямое и устойчивое соединение…';
     if (resultsRoot) resultsRoot.hidden = false;
     if (receiptRoot) receiptRoot.hidden = true;
 
-    const targets = [
+    const dataPath = '/rest/v1/personalization_event_reaction_counter?select=event_id&limit=1';
+    const transport = supabaseUrl && publishableKey
+      ? createResilientSupabaseTransport({
+          directUrl: supabaseUrl,
+          relayUrl,
+          publishableKey,
+          probeTimeoutMs: 8_000,
+          safeRequestTimeoutMs: 12_000,
+          cacheTtlMs: 30_000,
+          sessionStorage: null,
+        })
+      : null;
+    const directDataPromise = runConnectivityProbe({
+      id: 'direct-data',
+      label: 'Данные напрямую',
+      url: supabaseUrl ? `${supabaseUrl}${dataPath}` : '',
+      headers: authHeaders,
+    }, { attempts: 1, timeoutMs: 12_000 });
+    const controlPromise = runConnectivityProbe({
+      id: 'ydb-control',
+      label: 'Контрольный канал',
+      url: root.dataset.ydbControlUrl
+        ? `${root.dataset.ydbControlUrl}?probe=${encodeURIComponent(probeId)}`
+        : '',
+    }, { attempts: 1, timeoutMs: 12_000 });
+    const selection = transport ? await transport.diagnose() : null;
+    const routeResults = (selection?.probes || []).map((probe) => summarizeConnectivityAttempts(
+      probe.route === 'direct' ? 'direct-auth' : 'relay-auth',
+      probe.route === 'direct' ? 'Вход напрямую' : 'Второй маршрут',
+      [{
+        state: probe.ok
+          ? 'ok'
+          : probe.error === 'timeout'
+            ? 'timeout'
+            : probe.error === 'http_error'
+              ? 'http_error'
+              : probe.error === 'not_configured'
+                ? 'not_configured'
+                : 'network_error',
+        status: probe.status,
+        elapsedMs: probe.elapsedMs,
+        bytes: null,
+      }],
+    ));
+    for (const result of routeResults) renderResult(result);
+    const frameworkTargets = [
       {
-        id: 'supabase-direct',
-        label: 'Прямой доступ',
-        url: supabaseUrl
-          ? `${supabaseUrl}/auth/v1/health?probe=${encodeURIComponent(probeId)}`
-          : '',
-        mode: 'no-cors' as RequestMode,
-        acceptOpaque: true,
-      },
-      {
-        id: 'supabase-auth',
-        label: 'Вход по почте',
+        id: 'framework-auth',
+        label: 'Устойчивый вход',
         url: supabaseUrl ? `${supabaseUrl}/auth/v1/health` : '',
         headers: authHeaders,
       },
       {
-        id: 'supabase-data',
-        label: 'Данные сайта',
-        url: supabaseUrl
-          ? `${supabaseUrl}/rest/v1/personalization_event_reaction_counter?select=event_id&limit=1`
-          : '',
+        id: 'framework-data',
+        label: 'Устойчивые данные',
+        url: supabaseUrl ? `${supabaseUrl}${dataPath}` : '',
         headers: authHeaders,
       },
-      {
-        id: 'ydb-control',
-        label: 'Резервный канал',
-        url: root.dataset.ydbControlUrl
-          ? `${root.dataset.ydbControlUrl}?probe=${encodeURIComponent(probeId)}`
-          : '',
-      },
     ];
-
-    const measured = await Promise.all(targets.map(async (target) => {
-      const result = await runConnectivityProbe(target, { attempts: 1, timeoutMs: 20_000 });
-      renderResult(result);
-      return result;
-    }));
+    const [directData, control, ...frameworkResults] = await Promise.all([
+      directDataPromise,
+      controlPromise,
+      ...frameworkTargets.map((target) => runConnectivityProbe(target, {
+        attempts: 1,
+        timeoutMs: 12_000,
+        fetchImpl: transport?.fetch,
+      })),
+    ]);
+    const measured = [...routeResults, directData, ...frameworkResults, control];
+    for (const result of [directData, ...frameworkResults, control]) renderResult(result);
     const connection = (navigator as Navigator & {
       connection?: { effectiveType?: string };
     }).connection;
@@ -228,26 +268,28 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     const standalone = window.matchMedia('(display-mode: standalone)').matches;
     const serviceWorkerActive = Boolean(navigator.serviceWorker?.controller);
     const failed = measured.filter((result) => result.state !== 'ok').length;
-    const directOk = measured.find((result) => result.id === 'supabase-direct')?.state === 'ok';
-    const protectedOk = measured
-      .filter((result) => result.id === 'supabase-auth' || result.id === 'supabase-data')
+    const directOk = measured
+      .filter((result) => result.id === 'direct-auth' || result.id === 'direct-data')
       .every((result) => result.state === 'ok');
-    const yandexOk = measured.find((result) => result.id === 'ydb-control')?.state === 'ok';
+    const frameworkOk = measured
+      .filter((result) => result.id === 'framework-auth' || result.id === 'framework-data')
+      .every((result) => result.state === 'ok');
+    const controlOk = measured.find((result) => result.id === 'ydb-control')?.state === 'ok';
     if (status) {
       status.textContent = failed === 0
         ? 'Проверка завершена.'
         : `Не ответили: ${failed} из ${measured.length}.`;
     }
     if (summary) {
-      summary.textContent = directOk && protectedOk && yandexOk
-        ? 'Сейчас все соединения доступны.'
-        : directOk && !protectedOk
-          ? 'Сервер доступен, но рабочие запросы блокируются в браузере.'
-          : !directOk && yandexOk
-            ? 'Основной маршрут не вернул ответ, резервный канал доступен.'
-            : directOk && protectedOk && !yandexOk
-              ? 'Рабочие запросы доступны, резервный канал не ответил.'
-              : 'Соединение не пропустило проверочные запросы.';
+      summary.textContent = directOk && frameworkOk && controlOk
+        ? 'Прямое и устойчивое соединения доступны.'
+        : !directOk && frameworkOk
+          ? 'Прямое соединение не ответило, устойчивое соединение сработало.'
+          : directOk && !frameworkOk
+            ? 'Прямое соединение доступно, устойчивое соединение требует проверки.'
+            : frameworkOk
+              ? 'Устойчивое соединение доступно.'
+              : 'Рабочее соединение не подтвердилось.';
     }
     if (receiptId) receiptId.textContent = probeId;
     if (receiptWhen) {
@@ -273,13 +315,16 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
       const byId = new Map(measured.map((result) => [result.id, result]));
       const quality = String(connection?.effectiveType || 'unknown').toUpperCase();
       copyField.value = [
-        'KE2',
+        'KE3',
         probeId,
         checkedAt.toISOString(),
-        `D=${compactProbe(byId.get('supabase-direct'))}`,
-        `A=${compactProbe(byId.get('supabase-auth'))}`,
-        `S=${compactProbe(byId.get('supabase-data'))}`,
-        `R=${compactProbe(byId.get('ydb-control'))}`,
+        `DA=${compactProbe(byId.get('direct-auth'))}`,
+        `DD=${compactProbe(byId.get('direct-data'))}`,
+        `RA=${compactProbe(byId.get('relay-auth'))}`,
+        `FA=${compactProbe(byId.get('framework-auth'))}`,
+        `FD=${compactProbe(byId.get('framework-data'))}`,
+        `C=${compactProbe(byId.get('ydb-control'))}`,
+        `PATH=${selection?.route === 'relay' ? 2 : 1}`,
         `MODE=${standalone ? 'APP' : 'WEB'}`,
         `QUALITY=${quality}`,
         `OFFLINE=${serviceWorkerActive ? 1 : 0}`,

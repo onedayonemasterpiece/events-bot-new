@@ -10,6 +10,10 @@
 - Region Talk Kaggle script kernels now opt out of the shared sibling-file
   status wrapper: Kaggle uploads only the configured `code_file` body, while
   these self-contained workers already emit their own durable YDB heartbeats.
+- Static-site Auth now preserves existing PWA sessions while selecting between
+  direct and stateless relay transport with safe health probes; OTP, verify,
+  refresh and other non-safe requests are never blindly repeated across routes,
+  and an ambiguous email-send timeout no longer claims that a letter was sent.
 - Region Talk orchestration no longer forwards a nonexistent default `.env` to
   child launchers in deployed environments that receive secrets directly.
 - Region Talk's production wrapper now exposes one canonical CLI for supervised
@@ -26,6 +30,10 @@
 - Focus-group private routes now add `nosnippet` in immutable secret-candidate builds, satisfying the candidate-wide robots contract without changing production root indexing.
 
 ### Added
+
+- Added the permanent no-logging Yandex API Gateway transport relay and a
+  provider-neutral `KE3` phone diagnostic that compares direct Auth/Data reads
+  with the actual resilient framework path in one run.
 
 - Added the Region Talk autonomous production runner and three configurable
   daily APScheduler slots. The runner chains discovery, E5/BGE fusion, image
