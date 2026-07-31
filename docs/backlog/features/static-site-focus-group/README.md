@@ -402,8 +402,9 @@ Canary не входит в 30.07 GO. Если ролики/posters/rights не 
 
 Fly SQLite продолжает владеть событиями, publication и operational jobs.
 Supabase/Postgres владеет tester identity, consent, access, feedback и compact
-personal state. Object Storage хранит большие private daily reports. YDB/Kaggle
-для 200 человек и одного месяца не нужны.
+personal state. Object Storage хранит большие private daily reports. YDB не
+становится второй product/auth БД: допустимы только узкие диагностические и
+mail-attempt receipts; Kaggle не участвует в online-path.
 
 Минимальные новые сущности в private `focus_group` schema:
 
@@ -571,3 +572,33 @@ the opaque correlation code, UTC timestamp, four compact probe states/timings,
 browser/app mode, qualitative connection class and whether offline support
 controls the page. It contains no email, IP, token or raw user agent, so a
 participant may paste it into the review thread instead of sending a screenshot.
+
+Nine returned phone receipts produced eight fully healthy runs and one
+reproduced route failure. For `C6DB-202B`, Supabase edge answered the transport
+probe and both preflights in 31–59 ms, but the MTS phone browser did not receive
+them in 20 seconds; the Yandex control completed in 1.2 seconds. The additional
+`3D6A-BCDD` run completed all four paths in 300/572/590/1177 ms and was also
+confirmed in both provider logs. This is sufficient to reject a universal
+client/network outage and to require a second thin transport path.
+
+The architectural decision is intentionally not “move Auth to YDB”. Supabase
+remains the only identity, OTP, OAuth, JWT, refresh-session and RLS owner. A
+Yandex API Gateway HTTP integration may serve as a stateless relay to those
+same Supabase endpoints. A small serverless function is allowed only for the
+Send Email Hook/provider fallback and opaque delivery receipt; it must not
+become an Auth service.
+
+An isolated fixed-upstream gateway canary confirmed this thin relay from a real
+browser at the production origin: Auth and Data reads completed, and verify and
+refresh POST bodies reached Supabase. No onboarding route was changed. The same
+canary also confirmed that the Yandex provider callback still points to the
+existing Supabase Auth host, so a full OAuth hostname change requires the
+supported Supabase custom-domain activation rather than extra proxy logic.
+
+Personal actions remain local-first. Save/like/hide/calendar/feedback update the
+current-device profile immediately, enter a bounded idempotent outbox and are
+delivered to Supabase later through direct or relay transport. This preserves
+useful personalization during a slow route without making Fly a general
+backend. The complete routing/outbox acceptance contract is canonical in
+`docs/features/unsigned-personalization/production-integration.md`, section
+`P0.5 Thin transport resilience gate`.

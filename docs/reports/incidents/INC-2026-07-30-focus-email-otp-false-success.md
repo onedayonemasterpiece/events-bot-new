@@ -52,8 +52,8 @@ after any failed transport result and therefore communicated a false success.
   Auth requests produced 39 provider `Send` events.
 - 2026-07-31 09:35 UTC — dedicated read-only API Gateway → YDB control deployed
   and verified; source for an unlinked noindex connectivity page added.
-- 2026-07-31 11:32–12:30 UTC — eight returned `KE2` receipts collected from
-  phone browsers: seven completed all four checks and one timed out on all
+- 2026-07-31 11:32–12:50 UTC — nine returned `KE2` receipts collected from
+  phone browsers: eight completed all four checks and one timed out on all
   direct Supabase checks while the Yandex control completed.
 - 2026-07-31 12:17 UTC — for the failing `C6DB-202B` receipt, Supabase edge
   logs recorded the transport-only request and both Auth/Data preflights from
@@ -64,6 +64,28 @@ after any failed transport result and therefore communicated a false success.
   code that was not pasted into Telegram; its Supabase Auth/Data and control
   requests all completed. This proves that a copied receipt is useful for
   product communication but is not the only available diagnostic evidence.
+- 2026-07-31 12:49 UTC — `3D6A-BCDD` completed the direct, Auth, Data and
+  Yandex paths in 300/572/590/1177 ms. Supabase edge logs independently show
+  the transport probe plus successful Auth and Data requests; this raises the
+  returned-phone total to eight healthy routes and one reproduced failing
+  route without changing the localized failure boundary.
+- 2026-07-31 13:10 UTC — Auth transport design was corrected to preserve the
+  static/thin-client contract. A live custom-Yandex authorize response and the
+  current Supabase Auth source both show that the OAuth provider callback is
+  derived from Auth's configured external URL, not an arbitrary proxy `Host`.
+  A transparent relay can protect email OTP/verify/Data traffic, but cannot be
+  represented as a replacement for an activated Supabase custom domain for
+  the complete OAuth callback flow.
+- 2026-07-31 13:11–13:40 UTC — an isolated, non-production Yandex API Gateway
+  canary was deployed as a fixed-upstream relay with no service key or state.
+  A real Chromium page loaded from `https://kenigevents.ru` received Auth
+  health and an RLS Data API read through that relay with HTTP 200; invalid
+  verify/refresh probes also reached Auth and returned the expected 403/400 in
+  747 ms total. A direct and relayed custom-Yandex authorize smoke both
+  redirected to Yandex and advertised the same existing Supabase callback.
+  This proves browser CORS/header/body forwarding, and also proves the relay
+  does not silently solve the OAuth callback-host dependency. The canary is
+  not connected to onboarding or production personalization.
 
 ## Root Cause
 
@@ -163,11 +185,33 @@ after any failed transport result and therefore communicated a false success.
 - Add independent, PII-minimal request-stage telemetry with an opaque attempt
   id so “browser did not send”, “Auth rejected”, “SMTP not handed off” and
   “provider did not deliver” are distinct.
-- Remove direct browser dependence on the Supabase hostname for onboarding:
-  send OTP initiation and verification through the already reachable
-  KenigEvents/Yandex control boundary, then call Auth and the selected mail
-  provider server-to-server. Keep an explicit provider result and fallback
-  decision in the attempt ledger rather than changing only the SMTP provider.
+- Preserve Supabase Auth as the only issuer/verifier of email OTP, OAuth
+  identities, access tokens and refresh sessions. Do **not** build a second
+  Auth service in YDB, Yandex Functions or Fly.
+- Remove the browser's mandatory direct dependency on the Supabase hostname
+  for email onboarding with a stateless Yandex API Gateway HTTP relay. The
+  relay forwards only public client headers/body to the existing Supabase
+  `/auth/v1/otp`, `/verify` and `/token` endpoints; it owns no users, OTPs,
+  sessions, service-role key or authorization decision.
+- Keep one selected transport for a non-idempotent OTP issuance. Never fire a
+  direct request and then blindly repeat the same issuance through the relay
+  after an ambiguous timeout. Verification and resend remain bound to the
+  latest accepted issuance.
+- Treat complete custom-Yandex OAuth hostname independence separately. A plain
+  reverse proxy does not change the provider callback generated from Supabase
+  Auth's configured external URL. Before broad release either activate the
+  supported Supabase custom domain and register its callback in Yandex, or
+  retain the current Supabase callback as an explicitly tested dependency.
+- Use the Supabase Send Email Hook only as a thin delivery adapter: provider
+  selection/fallback and a PII-minimal provider receipt may run in a serverless
+  function, but Supabase still creates and verifies the token. Changing the
+  mail provider alone is not a fix for the pre-Auth browser loss.
+- Give each email attempt an opaque client-generated id in `redirect_to`. The
+  Send Email Hook can read that id, write a PII-minimal `provider_accepted` or
+  definitive-failure receipt and expose a bounded status lookup. The browser
+  may use that receipt to distinguish an ambiguous lost HTTP response from a
+  request that never reached the mail boundary; the receipt never contains
+  email, OTP, JWT or provider credentials.
 - Bind every OTP verification to the latest accepted issuance in the UI and
   suppress duplicate automatic submissions.
 - Replace the client-only participant projection with an idempotent
@@ -181,10 +225,21 @@ after any failed transport result and therefore communicated a false success.
       route reproduced the pre-Auth response loss while the Yandex control
       stayed available.
 - [ ] P0 deploy the false-success fix to the focus onboarding itself.
-- [ ] P0 move OTP initiation and verification behind the reachable
-      KenigEvents/Yandex boundary and run phone acceptance on the failing route.
+- [ ] P0 add the stateless API Gateway relay for email OTP/verify/refresh and
+      run phone acceptance on the failing route without moving Auth state out
+      of Supabase.
+- [ ] P0 give Supabase clients one explicit stable auth storage key before any
+      API base URL changes, so the existing PWA session survives transport
+      migration without reinstall or repeated login.
 - [ ] P0 complete separate live code and magic-link E2E issuances.
+- [ ] P0 add an opaque mail-attempt receipt so an ambiguous response cannot
+      cause either a false “sent” message or a blind duplicate issuance.
 - [ ] P0 reconcile all confirmed Auth users into the focus participant table.
+- [ ] P1 add a bounded local outbox plus idempotent RPC contract for saved,
+      feedback and personalization actions; use direct/relay delivery without
+      making navigation wait for synchronization.
+- [ ] P1 decide and activate the supported Supabase custom domain before the
+      OAuth callback hostname becomes a broad-release requirement.
 - [ ] P1 add PII-minimal stage telemetry and delivery correlation for hosted Auth.
 - [ ] P1 investigate the 59 expired verifies by issuance/order, not only aggregate count.
 - [ ] P1 make verified identity + focus activation one server-side idempotent operation.
