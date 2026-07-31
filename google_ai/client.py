@@ -1669,6 +1669,40 @@ class GoogleAIClient:
             
             duration_ms = int((_monotonic() - start_time) * 1000)
             
+        except asyncio.CancelledError:
+            duration_ms = int((_monotonic() - start_time) * 1000)
+            cancelled_error = ProviderError(
+                error_type="cancelled",
+                error_message="Provider call cancelled after shared reservation was sent",
+                retryable=False,
+            )
+            # asyncio cancellation derives from BaseException, so the ordinary
+            # provider-error branch below does not run. Finalize explicitly and
+            # shield the accounting RPC: sent attempts must not remain
+            # indefinitely ambiguous when an outer stage wall clock expires.
+            try:
+                await asyncio.shield(
+                    self._finalize(
+                        ctx=ctx,
+                        attempt_no=attempt_no,
+                        usage=None,
+                        duration_ms=duration_ms,
+                        error=cancelled_error,
+                    )
+                )
+            except Exception as finalize_error:
+                logger.warning(
+                    "Failed to finalize cancelled Google AI attempt: %s",
+                    finalize_error,
+                )
+            self._log_event(
+                "google_ai.call_cancelled",
+                ctx,
+                attempt_no=attempt_no,
+                duration_ms=duration_ms,
+                error=cancelled_error,
+            )
+            raise
         except Exception as e:
             duration_ms = int((_monotonic() - start_time) * 1000)
             

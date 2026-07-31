@@ -9796,12 +9796,18 @@ def _get_event_parse_gemma_client():
     supabase = build_google_ai_limiter_supabase_client(
         fallback_factory=get_supabase_client
     )
-    return GoogleAIClient(
+    client = GoogleAIClient(
         supabase_client=supabase,
         secrets_provider=SecretsProvider(),
         consumer="event_parse",
         incident_notifier=notify_llm_incident,
     )
+    # Event parsing is already bounded by its row/wall-clock orchestration.
+    # Keep provider sends explicit: no hidden application or SDK retries inside
+    # one parse attempt. A failed row can be retried deliberately by the queue.
+    client.max_retries = 1
+    client.hard_single_provider_attempt = True
+    return client
 
 
 def _event_parse_strip_code_fences(text: str) -> str:
@@ -10133,7 +10139,7 @@ async def _parse_event_via_gemma(
     # before emitting JSON. With 2200 the digest-detection / multi-rule cases
     # truncate before the final JSON. Keep headroom for Gemma 4 reasoning while
     # capping the upper bound so a runaway response can't blow the context.
-    max_tokens = int(os.getenv("EVENT_PARSE_GEMMA_MAX_TOKENS", "4000") or "4000")
+    max_tokens = int(os.getenv("EVENT_PARSE_GEMMA_MAX_TOKENS", "6000") or "6000")
     max_tokens = max(400, min(max_tokens, 8000))
 
     plan = _event_parse_gemma_tpm_plan(
@@ -10144,7 +10150,7 @@ async def _parse_event_via_gemma(
     )
     if plan is not None:
         input_estimate, reserve_extra, target, min_output = plan
-        if input_estimate + reserve_extra + min_output > target:
+        if input_estimate + reserve_extra + max_tokens > target:
             compact_prompt = _compose_full_prompt(omit_venue_catalog=True)
             compact_plan = _event_parse_gemma_tpm_plan(
                 client,

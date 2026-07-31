@@ -16,6 +16,7 @@ from google_ai.client import (
     GoogleAIClient,
     ExternalCallLease,
     RequestContext,
+    ReserveResult,
 )
 from google_ai.exceptions import ProviderError, ReservationError
 
@@ -1512,6 +1513,26 @@ def test_personalization_limiter_bootstrap_is_self_contained_and_secret_free() -
     assert "2147483647" not in migration
 
 
+def test_google_ai_retry_attempt_accounting_uses_attempt_bucket_and_terminality() -> None:
+    migration = (
+        Path(__file__).resolve().parents[1]
+        / "supabase"
+        / "migrations"
+        / "20260731183500_google_ai_retry_attempt_accounting.sql"
+    ).read_text(encoding="utf-8")
+
+    assert "ADD COLUMN IF NOT EXISTS minute_bucket" in migration
+    assert "ADD COLUMN IF NOT EXISTS day_bucket" in migration
+    assert "trg_google_ai_sync_attempt_context" in migration
+    assert "attempts = GREATEST(attempts, NEW.attempt_no)" in migration
+    assert "v_attempt.completed_at IS NOT NULL" in migration
+    assert "v_delta := p_usage_total_tokens - v_attempt.reserved_tpm" in migration
+    assert "api_key_id = v_attempt.api_key_id" in migration
+    assert "minute_bucket = v_attempt.minute_bucket" in migration
+    assert "AND attempts <= p_attempt_no" in migration
+    assert "IF v_request.finalized_at IS NOT NULL" not in migration
+
+
 @pytest.mark.asyncio
 async def test_direct_reserve_retry_never_uses_general_supabase_env(monkeypatch) -> None:
     monkeypatch.setenv("SUPABASE_URL", "https://general.example")
@@ -1534,3 +1555,58 @@ async def test_direct_reserve_retry_never_uses_general_supabase_env(monkeypatch)
     )
 
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_cancelled_sent_attempt_is_finalized_before_cancellation_propagates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = GoogleAIClient(supabase_client=_FakeSupabaseClient())
+    ctx = RequestContext(
+        request_uid="00000000-0000-4000-8000-000000000004",
+        consumer="event_parse",
+        account_name=None,
+        model="gemma-4-31b",
+        requested_model="models/gemma-4-31b-it",
+        reserved_tpm=14000,
+    )
+    finalized: list[dict] = []
+
+    async def fake_reserve(*_args, **_kwargs):
+        return ReserveResult(
+            ok=True,
+            api_key_id="key-id",
+            env_var_name="GOOGLE_API_KEY",
+            quota_scope="google:test-project",
+        )
+
+    async def fake_mark_sent(*_args, **_kwargs):
+        return None
+
+    async def fake_provider(**_kwargs):
+        raise asyncio.CancelledError
+
+    async def fake_finalize(**kwargs):
+        finalized.append(kwargs)
+
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setattr(client, "_reserve", fake_reserve)
+    monkeypatch.setattr(client, "_mark_sent", fake_mark_sent)
+    monkeypatch.setattr(client, "_call_provider", fake_provider)
+    monkeypatch.setattr(client, "_finalize", fake_finalize)
+
+    with pytest.raises(asyncio.CancelledError):
+        await client._attempt_generate(
+            ctx=ctx,
+            attempt_no=2,
+            prompt="bounded",
+            generation_config={"temperature": 0},
+            safety_settings=None,
+            max_output_tokens=6000,
+            candidate_key_ids=None,
+        )
+
+    assert len(finalized) == 1
+    assert finalized[0]["attempt_no"] == 2
+    assert finalized[0]["error"].error_type == "cancelled"
+    assert finalized[0]["error"].retryable is False

@@ -7,7 +7,14 @@
   14.5K reservation target before the shared 15K TPM gate. When the full
   semantic prompt cannot fit, it omits only the global venue catalogue and
   keeps post-decode venue canonicalisation; a still-oversized compact prompt
-  fails before provider traffic instead of retrying at minute boundaries.
+  fails before provider traffic instead of retrying at minute boundaries. The
+  output ceiling is now 6000 to avoid thought-only truncation, and one queue
+  execution performs exactly one physical provider attempt.
+- Google AI attempts cancelled by an outer stage timeout now finalize their
+  sent shared-ledger row as cancelled instead of leaving an ambiguous `sent`
+  attempt for the stale sweeper. Retry attempts now retain their own minute/day
+  bucket and terminal state, so attempt 1 cannot block or mis-reconcile later
+  physical sends.
 - Replaced the per-key/partly local Google AI limiter with a dedicated
   project-scoped atomic Supabase contract, corrected Gemma 4 to conservative
   `15 RPM / 15000 TPM / 14000 RPD`, made all runtime construction prefer the

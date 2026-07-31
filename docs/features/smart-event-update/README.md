@@ -132,6 +132,12 @@ must re-render the calendar line even when the event body itself is unchanged.
   JSON decoding against the same catalogue. If that compact reservation also
   cannot fit, parsing fails before any provider call instead of waiting across
   minute boundaries or sending unaccounted traffic.
+  The default output ceiling is `6000`, because the production replay showed
+  Gemma 4 consuming the former 4000-token ceiling entirely in its thought
+  channel. The same TPM planner still reduces that ceiling when necessary.
+  Event-parse permits exactly one application/provider-SDK attempt per queue
+  execution; retries are explicit queue executions and therefore separately
+  visible and controllable in the shared ledger.
 - `SMART_UPDATE_GOOGLE_KEY_ENVS` — normal, shared-limiter-backed key pool for
   Smart Update itself. Production declares `GOOGLE_API_KEY` through
   `GOOGLE_API_KEY5`; round-robin starts on the first request, ledger-blocked

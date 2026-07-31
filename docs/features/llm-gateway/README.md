@@ -33,6 +33,11 @@
         вызов без provider send.
 *   **Supabase RPC (`google_ai_mark_sent`)**: Помечает, что запрос реально отправлен провайдеру (для диагностики/восстановления).
 *   **Supabase RPC (`google_ai_finalize`)**: Фиксирует фактическое потребление токенов и статус провайдера.
+    Каждая physical retry хранит собственные `minute_bucket`/`day_bucket` в
+    `google_ai_request_attempts` и финализируется независимо; request-level row
+    отражает только последнюю попытку. Это не позволяет первому terminal
+    attempt блокировать учёт последующих retries или корректировать TPM не в
+    той минуте.
 *   **Reserve fallback (только изолированная локальная разработка)**:
     * production/agent/Kaggle/Fly default — fail closed. При недоступном
       `google_ai_reserve`, Supabase или key metadata provider-вызов запрещён;
@@ -60,6 +65,8 @@
 *   **Provider timeout guard:**
     * `GOOGLE_AI_PROVIDER_TIMEOUT_SEC` (default `0`, disabled unless set by a caller) wraps the underlying Google AI provider call with `asyncio.wait_for`;
     * timed-out calls are finalized as failed attempts and surfaced as `TimeoutError`, so feature-level code can fail-open or opt into its own retry policy without waiting for provider-side 10-minute deadlines.
+    * cancellation from an outer feature wall clock is also finalized under a
+      shielded accounting RPC as `cancelled`; sent RPD is never refunded.
     * для уже накопившихся записей доступен RPC `google_ai_sweep_stale(p_older_than_minutes, p_limit)`, который компенсирует counters только для безопасного окна `status='reserved' AND sent_at IS NULL`, затем помечает записи как `stale`;
     * ручной запуск из репозитория: `python scripts/inspect/sweep_google_ai_stale.py --use-service --older-than-minutes 30 --limit 500`.
 
@@ -98,6 +105,7 @@ python scripts/inspect/probe_supabase_rpc.py google_ai_reserve --schema public -
 ```text
 supabase/migrations/20260731170000_google_ai_canonical_limiter_bootstrap.sql
 supabase/migrations/20260731170100_google_ai_limiter_registry_seed.sql
+supabase/migrations/20260731183500_google_ai_retry_attempt_accounting.sql
 ```
 
 После применения обязательны:

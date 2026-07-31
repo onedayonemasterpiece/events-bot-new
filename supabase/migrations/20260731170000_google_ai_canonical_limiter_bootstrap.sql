@@ -128,6 +128,8 @@ CREATE TABLE IF NOT EXISTS google_ai_request_attempts (
     retry_after_ms INT NULL,
     api_key_id UUID NULL REFERENCES google_ai_api_keys(id),
     quota_scope TEXT NULL,
+    minute_bucket TIMESTAMPTZ NULL,
+    day_bucket DATE NULL,
     reserved_tpm INT NOT NULL,
     usage_input_tokens INT NULL,
     usage_output_tokens INT NULL,
@@ -148,6 +150,47 @@ CREATE TABLE IF NOT EXISTS google_ai_request_attempts (
 );
 CREATE INDEX IF NOT EXISTS idx_google_ai_request_attempts_started
     ON google_ai_request_attempts (started_at);
+
+CREATE OR REPLACE FUNCTION google_ai_sync_attempt_context()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    NEW.minute_bucket := COALESCE(
+        NEW.minute_bucket,
+        date_trunc('minute', NEW.started_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+    );
+    NEW.day_bucket := COALESCE(NEW.day_bucket, (NEW.started_at AT TIME ZONE 'UTC')::DATE);
+
+    UPDATE google_ai_requests
+    SET
+        api_key_id = NEW.api_key_id,
+        quota_scope = NEW.quota_scope,
+        minute_bucket = NEW.minute_bucket,
+        day_bucket = NEW.day_bucket,
+        reserved_tpm = NEW.reserved_tpm,
+        status = NEW.status,
+        attempts = GREATEST(attempts, NEW.attempt_no),
+        sent_at = NULL,
+        finalized_at = NULL,
+        usage_input_tokens = NULL,
+        usage_output_tokens = NULL,
+        usage_total_tokens = NULL,
+        last_error_kind = NULL,
+        last_error_code = NULL,
+        last_error_message = NULL,
+        updated_at = NOW()
+    WHERE request_uid = NEW.request_uid;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_google_ai_sync_attempt_context
+    ON google_ai_request_attempts;
+CREATE TRIGGER trg_google_ai_sync_attempt_context
+BEFORE INSERT ON google_ai_request_attempts
+FOR EACH ROW EXECUTE FUNCTION google_ai_sync_attempt_context();
 
 -- Conservative current model limits. The default quota_scope intentionally
 -- aggregates all registry keys until the redacted Cloud-project inventory is
@@ -466,7 +509,7 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
     v_request RECORD;
-    v_reserved_tpm INT;
+    v_attempt RECORD;
     v_delta INT;
 BEGIN
     SELECT * INTO v_request FROM google_ai_requests WHERE request_uid = p_request_uid;
@@ -474,37 +517,23 @@ BEGIN
         RETURN;
     END IF;
 
-    IF v_request.finalized_at IS NOT NULL THEN
+    SELECT * INTO v_attempt
+    FROM google_ai_request_attempts
+    WHERE request_uid = p_request_uid AND attempt_no = p_attempt_no;
+    IF v_attempt IS NULL OR v_attempt.completed_at IS NOT NULL THEN
         RETURN;
     END IF;
 
-    SELECT reserved_tpm INTO v_reserved_tpm
-    FROM google_ai_request_attempts
-    WHERE request_uid = p_request_uid AND attempt_no = p_attempt_no;
-
-    IF p_usage_total_tokens IS NOT NULL AND v_reserved_tpm IS NOT NULL THEN
-        v_delta := p_usage_total_tokens - v_reserved_tpm;
-        IF v_delta != 0 AND v_request.minute_bucket IS NOT NULL THEN
+    IF p_usage_total_tokens IS NOT NULL AND v_attempt.reserved_tpm IS NOT NULL THEN
+        v_delta := p_usage_total_tokens - v_attempt.reserved_tpm;
+        IF v_delta != 0 AND v_attempt.minute_bucket IS NOT NULL THEN
             UPDATE google_ai_usage_counters
             SET tpm_used = tpm_used + v_delta, updated_at = NOW()
-            WHERE api_key_id = v_request.api_key_id
+            WHERE api_key_id = v_attempt.api_key_id
               AND model = v_request.model
-              AND minute_bucket = v_request.minute_bucket;
+              AND minute_bucket = v_attempt.minute_bucket;
         END IF;
     END IF;
-
-    UPDATE google_ai_requests
-    SET
-        status = CASE WHEN p_error_type IS NULL THEN 'succeeded' ELSE 'failed_provider' END,
-        finalized_at = NOW(),
-        usage_input_tokens = p_usage_input_tokens,
-        usage_output_tokens = p_usage_output_tokens,
-        usage_total_tokens = p_usage_total_tokens,
-        last_error_kind = CASE WHEN p_error_type IS NOT NULL THEN 'provider' ELSE NULL END,
-        last_error_code = p_error_code,
-        last_error_message = p_error_message,
-        updated_at = NOW()
-    WHERE request_uid = p_request_uid;
 
     UPDATE google_ai_request_attempts
     SET
@@ -519,6 +548,23 @@ BEGIN
         provider_error_message = p_error_message,
         completed_at = NOW()
     WHERE request_uid = p_request_uid AND attempt_no = p_attempt_no;
+
+    -- Only the newest physical attempt owns the request-level summary. A late
+    -- response from an older attempt must not overwrite a newer in-flight or
+    -- terminal attempt; the complete history remains in the attempts table.
+    UPDATE google_ai_requests
+    SET
+        status = CASE WHEN p_error_type IS NULL THEN 'succeeded' ELSE 'failed_provider' END,
+        finalized_at = NOW(),
+        usage_input_tokens = p_usage_input_tokens,
+        usage_output_tokens = p_usage_output_tokens,
+        usage_total_tokens = p_usage_total_tokens,
+        last_error_kind = CASE WHEN p_error_type IS NOT NULL THEN 'provider' ELSE NULL END,
+        last_error_code = p_error_code,
+        last_error_message = p_error_message,
+        updated_at = NOW()
+    WHERE request_uid = p_request_uid
+      AND attempts <= p_attempt_no;
 END;
 $$;
 
