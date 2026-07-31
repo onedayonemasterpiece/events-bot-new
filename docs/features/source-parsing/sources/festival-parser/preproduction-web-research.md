@@ -95,11 +95,27 @@ Tracked runtime теперь включает:
   а не попадает в legacy direct writer. Успешный candidate получает queue
   status `review`, не `done`.
 
+Manual handler и scheduler создают strict service через
+`festival_web_research.runtime` только при включённом flag. Перед provider calls
+URL rows проходят explicit ISO period, public-DNS preflight и grouping полного
+выпуска; safety limit применяется к группам, а не разрезает multi-URL edition.
+Missing/ambiguous dates переходят в operator review без provider call.
+
+Candidate принимается только с hash-chain checkpoint manifest. Все непустые
+festival facts и topology/programme decisions связаны с accepted claims;
+Event disposition дополнительно требует identity/logistics claims и семь pass
+gates. A/B inventory получает явную судьбу каждого item. C ограничен 12k,
+не получает search/URL tools и может переключить host candidate на целую
+валидную lane только если все конфликты однозначно выбрали одну lane; иначе
+результат остаётся review.
+
 Миграция `007_google_ai_interaction_accounting.sql` разносит provider terminal
 и semantic status в shared ledger. До её применения production runtime обязан
 fail closed. Ручной canary может явно использовать
 `--allow-legacy-accounting`: reservation/RPD/TPM остаются в shared limiter, но
 semantic verdict хранится только в operational DB. Это не production mode.
+Миграция `008_google_ai_atomic_reserve.sql` добавляет transaction advisory lock
+на key/model, чтобы concurrent check+increment не превышал internal caps.
 
 Проба `2026-07-29` доказала Interactions API, agent tools, сохранение/download
 environment и actual usage. Но A/B/C дали `150950` tokens суммарно и `0/3`
@@ -111,8 +127,9 @@ Live debug `2026-07-31` затем выполнил ровно по одному
 каждом из пяти зарегистрированных ключей. На всех ключах create вернул
 `in_progress` и remote environment, но первый poll завершился одинаковым
 provider `403 permission_denied: The caller does not have permission`. Поэтому
-полноценный A/B результат «Балтийской Уханы» не получен: причина находится в
-provider project/key eligibility, а не в quota exhaustion или prompt/schema.
+полноценный A/B результат «Балтийской Уханы» не получен: одинаковый ответ
+совместим с provider project/key eligibility problem; quota exhaustion и
+prompt/schema rejection данными ответа не подтверждаются.
 Shared daily counters после прогона: `RPD=1` на каждом ключе; код дополнительно
 финализирует non-retryable poll rejection, чтобы не оставлять TPM reservation
 зависшей. Повторять запросы этими же ключами до исправления eligibility нельзя.
@@ -607,7 +624,7 @@ result → operator review, а не автоматический выбор. О�
 - fresh evaluation cohort and «Балтийская Ухана» expected decisions reviewed;
 - Interactions wrapper/checkpoint/quota boundaries accepted;
 - collect-only and operator approval mandatory;
-- apply migration 007 to the limiter project with a database-write credential;
+- apply migrations 007 and 008 to the limiter project with a database-write credential;
 - obtain at least one API key whose Antigravity background execution reaches a
   terminal provider state instead of project-level `permission_denied`;
 - rerun «Балтийская Ухана» with normal A+B (third C only on a real conflict),

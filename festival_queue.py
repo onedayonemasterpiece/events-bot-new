@@ -1313,9 +1313,123 @@ async def process_festival_queue(
             )
             if source_kind:
                 stmt = stmt.where(FestivalQueueItem.source_kind == source_kind.strip().lower())
+            elif is_festival_web_research_enabled():
+                # Fetch full URL groups separately below; applying the raw-row
+                # cap before grouping can split one festival edition.
+                stmt = stmt.where(FestivalQueueItem.source_kind != "url")
             stmt = stmt.order_by(FestivalQueueItem.created_at)
-            stmt = stmt.limit(effective_limit)
+            if not (is_festival_web_research_enabled() and source_kind == "url"):
+                stmt = stmt.limit(effective_limit)
             items = list((await session.execute(stmt)).scalars().all())
+            if is_festival_web_research_enabled() and source_kind is None:
+                url_stmt = (
+                    select(FestivalQueueItem)
+                    .where(
+                        FestivalQueueItem.status == "pending",
+                        FestivalQueueItem.next_run_at <= now,
+                        FestivalQueueItem.source_kind == "url",
+                    )
+                    .order_by(FestivalQueueItem.created_at)
+                )
+                items.extend((await session.execute(url_stmt)).scalars().all())
+                items.sort(key=lambda item: (item.created_at, int(item.id or 0)))
+
+        web_target_key_by_id: dict[int, str] = {}
+        web_fingerprint_by_id: dict[int, str] = {}
+        if is_festival_web_research_enabled():
+            from zoneinfo import ZoneInfo
+
+            from festival_web_research.prompts import (
+                CONTRACT_VERSION,
+                NORMALIZER_VERSION,
+                prompt_sha256,
+            )
+            from festival_web_research.selection import (
+                group_current_url_rows,
+                select_current_url_rows,
+            )
+            from festival_web_research.validators import (
+                load_taxonomy_registry,
+                taxonomy_registry_hash,
+            )
+
+            url_items = [it for it in items if str(it.source_kind).strip().lower() == "url"]
+            raw_rows: list[dict[str, Any]] = []
+            for it in url_items:
+                signals = it.signals_json if isinstance(it.signals_json, dict) else {}
+                period = signals.get("period")
+                explicit_signals = period if isinstance(period, list) else [period] if isinstance(period, dict) else None
+                row: dict[str, Any] = {
+                    "id": int(it.id),
+                    "status": it.status,
+                    "source_kind": "url",
+                    "source_url": it.source_url,
+                    "series_identity_hint": it.festival_name or it.festival_series,
+                    "edition_identity_hint": it.festival_full,
+                    "seed_subject_hint": signals.get("seed_subject_hint"),
+                    "snapshot_sha256": signals.get("snapshot_sha256"),
+                }
+                if explicit_signals:
+                    row["explicit_date_signals"] = explicit_signals
+                else:
+                    for key in ("event_start_date", "event_end_date", "start_date", "end_date", "event_date"):
+                        if signals.get(key):
+                            row[key] = signals[key]
+                raw_rows.append(row)
+            current_rows, rejected = select_current_url_rows(
+                raw_rows,
+                cutoff=datetime.now(ZoneInfo("Europe/Kaliningrad")).date(),
+            )
+            from festival_web_research.sources import canonicalize_public_url, system_resolver
+            dns_safe_rows = []
+            for row in current_rows:
+                try:
+                    canonicalize_public_url(
+                        row.canonical_url,
+                        resolver=system_resolver,
+                        require_dns=True,
+                    )
+                    dns_safe_rows.append(row)
+                except Exception as exc:
+                    rejected[row.queue_item_id] = f"unsafe_or_unresolvable:{type(exc).__name__}"
+            current_rows = dns_safe_rows
+            if rejected:
+                async with db.get_session() as session:
+                    for queue_id, reason in rejected.items():
+                        await session.execute(
+                            update(FestivalQueueItem)
+                            .where(FestivalQueueItem.id == queue_id)
+                            .values(
+                                status="review",
+                                result_json={
+                                    "research_preflight": "rejected",
+                                    "reason": reason,
+                                    "public_apply": False,
+                                },
+                                updated_at=datetime.now(timezone.utc),
+                            )
+                        )
+                    await session.commit()
+                report.skipped += len(rejected)
+                items = [it for it in items if int(it.id) not in rejected]
+            if current_rows:
+                registry_path = os.path.join(
+                    os.path.dirname(__file__),
+                    "festival_web_research/schemas/festival-taxonomy-registry-v2.json",
+                )
+                with open(registry_path, "rb") as stream:
+                    taxonomy_hash = taxonomy_registry_hash(load_taxonomy_registry(stream.read()))
+                web_groups = group_current_url_rows(
+                    current_rows,
+                    contract_version=CONTRACT_VERSION,
+                    taxonomy_sha256=taxonomy_hash,
+                    prompt_sha256=prompt_sha256(),
+                    normalizer_version=NORMALIZER_VERSION,
+                )
+                for group in web_groups:
+                    for queue_id in group.queue_item_ids:
+                        web_target_key_by_id[queue_id] = group.target_key
+                        web_fingerprint_by_id[queue_id] = group.input_fingerprint
 
         def _clean_fest_name(raw: str | None) -> str:
             return str(raw or "").strip()
@@ -1326,6 +1440,9 @@ async def process_festival_queue(
                 return None
             if kind == "url" and not is_festival_web_research_enabled():
                 return None
+            if kind == "url":
+                target = web_target_key_by_id.get(int(it.id))
+                return ("url", target) if target else None
             name = _clean_fest_name(getattr(it, "festival_name", None)) or _clean_fest_name(
                 getattr(it, "festival_series", None)
             )
@@ -1363,6 +1480,10 @@ async def process_festival_queue(
             g["items"].append(it)
         for g in groups:
             g["primary"] = _select_primary(list(g["items"]))
+
+        # The safety cap is a group cap. This occurs after URL edition grouping
+        # so a multi-URL festival can never be split by the raw SQL LIMIT.
+        groups = groups[:effective_limit]
 
         total = len(groups)
         if total <= 0:
@@ -1424,7 +1545,9 @@ async def process_festival_queue(
                         name_hint=fest_hint,
                         edition_hint=_clean_fest_name(getattr(primary, "festival_full", None)) or None,
                         urls=[str(it.source_url).strip() for it in group_items],
-                        target_key=f"queue:{','.join(str(value) for value in sorted(item_ids))}",
+                        target_key=web_target_key_by_id[int(primary.id)],
+                        input_fingerprint=web_fingerprint_by_id[int(primary.id)],
+                        queue_item_ids=sorted(item_ids),
                     )
                     if research_result.state != "review":
                         raise RuntimeError(

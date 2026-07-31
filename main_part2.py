@@ -15374,6 +15374,13 @@ async def handle_fest_queue(message: types.Message, db: Database, bot: Bot) -> N
         disable_web_page_preview=True,
     )
 
+    web_research_service = None
+    if source_kind in {None, "url"}:
+        from festival_queue import is_festival_web_research_enabled
+        if is_festival_web_research_enabled():
+            from festival_web_research.runtime import build_festival_web_research_service
+            web_research_service = build_festival_web_research_service(db)
+
     report = await process_festival_queue(
         db,
         bot=bot,
@@ -15383,6 +15390,7 @@ async def handle_fest_queue(message: types.Message, db: Database, bot: Bot) -> N
         limit=limit,
         trigger="manual",
         operator_id=message.from_user.id,
+        web_research_service=web_research_service,
     )
 
     finish_lines = [

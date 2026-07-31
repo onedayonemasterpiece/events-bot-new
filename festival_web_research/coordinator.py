@@ -12,9 +12,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from google_ai.interactions import ANTIGRAVITY_AGENT, AntigravityInteractionsClient, ProviderInteraction
+from google_ai.exceptions import ProviderError
 
 from .artifacts import build_artifact_manifest
 from .contracts import (
+    CheckpointRecord,
     Claim,
     Decision,
     FestivalClassification,
@@ -34,6 +36,7 @@ from .prompts import (
 )
 from .repository import FestivalResearchRepository
 from .validators import assert_no_agent_apply_authority, validate_reference_graph
+from .validators import validate_checkpoint_chain, validate_inventory_conservation
 
 
 class _Closed(BaseModel):
@@ -49,6 +52,7 @@ class FestivalFacts(_Closed):
     official_url: str | None = Field(default=None, max_length=4096)
     venue_names: list[str] = Field(default_factory=list, max_length=128)
     organizer_names: list[str] = Field(default_factory=list, max_length=128)
+    claim_ids_by_field: dict[str, list[str]] = Field(default_factory=dict, max_length=16)
 
 
 class LaneCandidate(_Closed):
@@ -129,7 +133,12 @@ def _safe_snapshot_path(candidate_path: Path, snapshot_ref: str) -> Path:
     return result
 
 
-def load_and_validate_candidate(extracted_root: Path, *, expected_lane: str) -> LaneCandidate:
+def load_and_validate_candidate(
+    extracted_root: Path,
+    *,
+    expected_lane: str,
+    require_terminal_checkpoints: bool = True,
+) -> LaneCandidate:
     path = _candidate_path(extracted_root)
     if path.stat().st_size > 16 * 1024 * 1024:
         raise ValueError("candidate.json is too large")
@@ -153,6 +162,73 @@ def load_and_validate_candidate(extracted_root: Path, *, expected_lane: str) -> 
         decisions=candidate.decisions,
         programme_items=candidate.programme_items,
         subjects=candidate.subjects,
+    )
+    accepted_claims = {claim.claim_id: claim for claim in candidate.claims if claim.status.value == "accepted"}
+    claim_ids = set(accepted_claims)
+    decision_by_id = {decision.decision_id: decision for decision in candidate.decisions}
+    material_fields = {
+        "name": candidate.festival.name,
+        "edition_label": candidate.festival.edition_label,
+        "description_facts": candidate.festival.description_facts,
+        "start_date": candidate.festival.start_date,
+        "end_date": candidate.festival.end_date,
+        "official_url": candidate.festival.official_url,
+        "venue_names": candidate.festival.venue_names,
+        "organizer_names": candidate.festival.organizer_names,
+    }
+    for field, value in material_fields.items():
+        if value not in (None, "", []):
+            refs = candidate.festival.claim_ids_by_field.get(field, [])
+            if not refs or not set(refs).issubset(claim_ids):
+                raise ValueError(f"festival fact is not evidence-bound: {field}")
+            allowed_claim_fields = {
+                "name": {"title"},
+                "edition_label": {"edition_label"},
+                "description_facts": {"description_fact"},
+                "start_date": {"start_date", "date"},
+                "end_date": {"end_date", "date"},
+                "official_url": {"canonical_url"},
+                "venue_names": {"venue_name"},
+                "organizer_names": {"organizer_name"},
+            }[field]
+            if any(accepted_claims[ref].field.value not in allowed_claim_fields for ref in refs):
+                raise ValueError(f"festival fact cites wrong claim field: {field}")
+    if not set(candidate.classification.claim_ids).issubset(claim_ids):
+        raise ValueError("classification cites unknown/non-accepted claims")
+    classification_decisions = [decision_by_id.get(value) for value in candidate.classification.decision_ids]
+    if any(value is None for value in classification_decisions):
+        raise ValueError("classification cites unknown decisions")
+    topology_value = (
+        candidate.classification.primary_topology.value
+        if candidate.classification.primary_topology
+        else None
+    )
+    if not any(
+        decision.decision_kind.value == "discovery_topology"
+        and decision.selected_value == topology_value
+        for decision in classification_decisions
+    ):
+        raise ValueError("classification lacks a matching topology decision")
+    if not any(
+        decision.decision_kind.value == "programme_structure"
+        and decision.selected_value == candidate.classification.programme_structure.value
+        for decision in classification_decisions
+    ):
+        raise ValueError("classification lacks a matching programme-structure decision")
+
+    manifest_path = path.parent / "checkpoint_manifest.json"
+    manifest_raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+    checkpoints = [CheckpointRecord.model_validate(item) for item in manifest_raw]
+    checkpoint_bytes: dict[str, bytes] = {}
+    for item in checkpoints:
+        relative = PurePosixPath(item.relative_path)
+        if relative.is_absolute() or ".." in relative.parts or "\\" in item.relative_path:
+            raise ValueError(f"unsafe checkpoint path: {item.relative_path}")
+        checkpoint_bytes[item.relative_path] = path.parent.joinpath(*relative.parts).read_bytes()
+    validate_checkpoint_chain(
+        checkpoints,
+        artifact_bytes_by_path=checkpoint_bytes,
+        require_terminal=require_terminal_checkpoints,
     )
     return candidate
 
@@ -244,6 +320,62 @@ class FestivalResearchCoordinator:
         self.max_total_tokens = max(1, min(int(max_total_tokens), 100_000))
         self.deadline_seconds = max(30.0, float(deadline_seconds))
 
+    async def resume_lane(self, lane_id: int) -> LaneResult:
+        """Resume a persisted A/B provider handle without creating a new POST."""
+
+        row = await self.repository.get_lane(lane_id)
+        if row is None:
+            raise LookupError(f"festival research lane {lane_id} not found")
+        if row.lane not in {"A", "B"}:
+            raise ValueError("C adjudication resume requires its persisted conflict context")
+        if not row.interaction_ids_json:
+            raise ValueError("lane has no persisted interaction handle")
+        interaction = ProviderInteraction.from_checkpoint(row.interaction_ids_json[-1])
+        interaction = await self.provider.wait(interaction, deadline_seconds=self.deadline_seconds)
+        lane_dir = self.artifact_root / f"run-{row.run_id}" / f"lane-{row.lane.lower()}-{row.attempt_no}"
+        extract_path = lane_dir / "environment"
+        if extract_path.exists():
+            shutil.rmtree(extract_path)
+        await self.provider.download_environment(
+            interaction,
+            lane_dir / "environment.tar",
+            extract_to=extract_path,
+        )
+        candidate = load_and_validate_candidate(
+            extract_path,
+            expected_lane=row.lane,
+            require_terminal_checkpoints=interaction.provider_status == "completed",
+        )
+        candidate_json = candidate.model_dump(mode="json")
+        candidate_hash = canonical_json_sha256(candidate_json)
+        semantic_state = "passed" if interaction.provider_status == "completed" else "recovered_incomplete"
+        if interaction.provider_status == "completed":
+            await self.provider.rate_limiter.record_external_call_semantic_result(
+                interaction.lease,
+                semantic_status="passed",
+            )
+        await self.repository.add_sources(row.id, candidate.sources)
+        await self.repository.update_lane(
+            row.id,
+            provider_state=interaction.provider_status,
+            semantic_state=semantic_state,
+            interaction_ids_json=[*row.interaction_ids_json, interaction.to_checkpoint()],
+            candidate_json=candidate_json,
+            candidate_sha256=candidate_hash,
+            completed_at=_utc_now(),
+        )
+        return LaneResult(
+            lane=row.lane,
+            provider_status=interaction.provider_status,
+            semantic_status="passed",
+            interaction_id=interaction.id,
+            environment_id=interaction.environment_id,
+            candidate=candidate_json,
+            candidate_sha256=candidate_hash,
+            artifact_dir=str(lane_dir),
+            key_env=interaction.lease.env_var_name,
+        )
+
     async def _run_lane(self, run_id: int, target: ResearchTarget, lane: Literal["A", "B", "C"], conflicts: list[dict[str, Any]] | None = None) -> LaneResult:
         attempt = await self.repository.next_attempt(run_id, lane)
         row = await self.repository.create_lane(
@@ -268,9 +400,10 @@ class FestivalResearchCoordinator:
         errors: list[str] = []
         candidate: LaneCandidate | None = None
         try:
+            lane_budget = min(self.max_total_tokens, 12_000) if lane == "C" else self.max_total_tokens
             interaction = await self.provider.create(
                 prompt,
-                max_total_tokens=self.max_total_tokens,
+                max_total_tokens=lane_budget,
                 tools=[{"type": "code_execution"}] if lane == "C" else None,
             )
             # Persist the handle immediately after the successful create response.
@@ -300,7 +433,11 @@ class FestivalResearchCoordinator:
                 candidate = (
                     load_and_validate_adjudication(extract_path, context=conflicts or [])
                     if lane == "C"
-                    else load_and_validate_candidate(extract_path, expected_lane=lane)
+                    else load_and_validate_candidate(
+                        extract_path,
+                        expected_lane=lane,
+                        require_terminal_checkpoints=interaction.provider_status == "completed",
+                    )
                 )
             else:
                 raise ValueError("provider returned no environment_id")
@@ -313,7 +450,11 @@ class FestivalResearchCoordinator:
             semantic_state = "passed" if interaction.provider_status == "completed" else "recovered_incomplete"
             candidate_json = candidate.model_dump(mode="json")
             candidate_hash = canonical_json_sha256(candidate_json)
-            manifest = build_artifact_manifest(lane_dir).model_dump(mode="json")
+            if isinstance(candidate, LaneCandidate):
+                await self.repository.add_sources(row.id, candidate.sources)
+            manifest = build_artifact_manifest(
+                lane_dir / "environment" if (lane_dir / "environment").exists() else lane_dir
+            ).model_dump(mode="json")
             await self.repository.update_lane(
                 row.id,
                 semantic_state=semantic_state,
@@ -345,10 +486,16 @@ class FestivalResearchCoordinator:
                     )
                 except Exception as accounting_exc:
                     errors.append(f"semantic accounting: {type(accounting_exc).__name__}: {str(accounting_exc)[:400]}")
+            provider_state = interaction.provider_status if interaction else "failed_before_handle"
+            provider_error_code = None
+            if isinstance(exc, ProviderError) and not exc.retryable:
+                provider_state = "failed"
+                provider_error_code = str(exc.status_code or exc.error_code or exc.error_type)
             await self.repository.update_lane(
                 row.id,
-                provider_state=interaction.provider_status if interaction else "failed_before_handle",
+                provider_state=provider_state,
                 semantic_state="failed",
+                provider_error_code=provider_error_code,
                 semantic_error_code=type(exc).__name__,
                 last_error=error,
                 validation_json={"valid": False, "errors": errors},
@@ -356,7 +503,7 @@ class FestivalResearchCoordinator:
             )
             return LaneResult(
                 lane=lane,
-                provider_status=interaction.provider_status if interaction else "failed_before_handle",
+                provider_status=provider_state,
                 semantic_status="failed",
                 interaction_id=interaction.id if interaction else None,
                 environment_id=interaction.environment_id if interaction else None,
@@ -404,6 +551,21 @@ class FestivalResearchCoordinator:
                 candidate=candidate, quality=quality, lanes=lanes,
             )
         candidate, quality, conflicts = reconcile_candidates(valid)
+        a_ids = [item.item_id for item in valid[0].programme_items]
+        b_ids = [item.item_id for item in valid[1].programme_items] if len(valid) > 1 else []
+        resolutions = {f"A:{item_id}": f"canonical:A:{item_id}" for item_id in a_ids}
+        a_id_set = set(a_ids)
+        for item_id in b_ids:
+            resolutions[f"B:{item_id}"] = (
+                f"canonical:A:{item_id}" if item_id in a_id_set else "unresolved"
+            )
+        validate_inventory_conservation(
+            a_item_ids=a_ids,
+            b_item_ids=b_ids,
+            resolutions=resolutions,
+        )
+        quality["inventory_resolutions"] = resolutions
+        quality["unresolved_inventory_count"] = sum(value == "unresolved" for value in resolutions.values())
         if allow_c and len(valid) >= 2 and conflicts:
             c_context = [{
                 "conflicts": conflicts,
@@ -413,8 +575,17 @@ class FestivalResearchCoordinator:
             lanes.append(c_result)
             if c_result.semantic_status == "passed" and c_result.candidate:
                 adjudication = ConflictAdjudication.model_validate(c_result.candidate)
+                selected_lanes = {item.selected_lane for item in adjudication.resolutions}
+                c_applied = not adjudication.unresolved_fields and len(selected_lanes) == 1
+                if c_applied:
+                    selected_lane = next(iter(selected_lanes))
+                    selected_candidate = next(item for item in valid if item.lane == selected_lane)
+                    candidate, selected_quality, _ = reconcile_candidates([selected_candidate])
+                    quality.update(selected_quality)
                 quality.update({
                     "c_was_used": True,
+                    "c_applied": c_applied,
+                    "ab_conflicts": conflicts,
                     "c_resolutions": adjudication.model_dump(mode="json"),
                     "requires_operator_review": True,
                 })

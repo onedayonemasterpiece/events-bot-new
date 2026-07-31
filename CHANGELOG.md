@@ -4,7 +4,11 @@
 
 ### Fixed
 - Antigravity non-retryable polling failures now finalize their shared limiter
-  reservation instead of leaving an in-progress TPM lease stranded.
+  reservation and persist provider failure instead of leaving an in-progress
+  TPM lease/state stranded.
+- Google AI shared reservations now serialize check-and-increment per key/model,
+  preventing concurrent workers from oversubscribing the configured RPM/TPM/RPD
+  cap.
 - Region Talk Kaggle workers now install the pinned core YDB SDK rather than
   the unnecessary `yc` extra and exchange their authorized-key JWT through the
   official IAM REST endpoint, preventing runtime replacement of Kaggle's
@@ -37,6 +41,10 @@
   one request per key but found a provider-wide `403 permission_denied`
   eligibility blocker, so public apply remains absent and the feature stays
   disabled.
+- Wired the Antigravity contour into manual and scheduled festival queue runs
+  behind its disabled-by-default flag; URL rows now pass explicit-date/DNS
+  preflight and complete-edition grouping before quota is spent, while
+  checkpoints, inventory and fact/Event evidence references fail closed.
 
 - Corrected the festival web-research target: Antigravity is the sole planned
   primary collector from the first implementation, initially collect-only and

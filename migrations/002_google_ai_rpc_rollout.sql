@@ -180,6 +180,35 @@ BEGIN
           AND (p_candidate_key_ids IS NULL OR id = ANY(p_candidate_key_ids))
         ORDER BY priority, id
     LOOP
+        -- Serialize check+increment for one key/model across concurrent
+        -- workers. Without this lock two transactions can both observe the
+        -- same counters below the cap and oversubscribe RPM/TPM/RPD.
+        PERFORM pg_advisory_xact_lock(
+            hashtextextended(v_key.id::text || ':' || p_model, 0)
+        );
+
+        -- A concurrent replay of the same request may have committed while we
+        -- waited for the key lock. Re-check idempotency before incrementing.
+        IF EXISTS (
+            SELECT 1 FROM google_ai_request_attempts
+            WHERE request_uid = p_request_uid AND attempt_no = p_attempt_no
+        ) THEN
+            RETURN (
+                SELECT jsonb_build_object(
+                    'ok', true,
+                    'api_key_id', r.api_key_id,
+                    'env_var_name', k.env_var_name,
+                    'key_alias', k.key_alias,
+                    'minute_bucket', r.minute_bucket,
+                    'day_bucket', r.day_bucket,
+                    'idempotent', true
+                )
+                FROM google_ai_requests r
+                LEFT JOIN google_ai_api_keys k ON r.api_key_id = k.id
+                WHERE r.request_uid = p_request_uid
+            );
+        END IF;
+
         SELECT rpm_used, tpm_used INTO v_minute_used
         FROM google_ai_usage_counters
         WHERE api_key_id = v_key.id

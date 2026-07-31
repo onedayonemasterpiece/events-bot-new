@@ -58,7 +58,7 @@ lanes:
     forbidden_files: [festival_queue.py, models.py, db.py, main_part2.py, scheduling.py, CHANGELOG.md]
     expected_output: Committed strict provider client with mocked transport/accounting tests.
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: L02-core
     role: worker
     effort: high
@@ -85,7 +85,7 @@ lanes:
     forbidden_files: [google_ai, festival_queue.py, models.py, db.py, main_part2.py, scheduling.py, CHANGELOG.md]
     expected_output: Committed pure core with fail-closed golden and negative tests.
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: L03-db
     role: worker
     effort: high
@@ -104,7 +104,7 @@ lanes:
     forbidden_files: [google_ai, festival_queue.py, main_part2.py, scheduling.py, CHANGELOG.md]
     expected_output: Committed additive schema with SQLite bootstrap/migration tests.
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: L04-integrator
     role: merge_reviewer
     effort: high
@@ -128,7 +128,7 @@ lanes:
     forbidden_files: []
     expected_output: Integrated collect-only runtime plus live acceptance evidence.
     verification_scope: full_local
-    status: planned
+    status: completed_with_provider_blocker
   - id: L05-review
     role: reviewer
     effort: high
@@ -142,4 +142,4 @@ lanes:
     forbidden_files: ['*']
     expected_output: PASS or actionable findings with requirement evidence.
     verification_scope: full_local
-    status: planned
+    status: in_progress

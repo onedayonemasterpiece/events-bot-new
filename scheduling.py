@@ -4217,6 +4217,11 @@ def startup(
                 except ValueError:
                     logging.warning("invalid FESTIVAL_QUEUE_LIMIT=%r; using no limit", limit_raw)
             admin_chat_id = await resolve_superadmin_chat_id(db_obj)
+            web_research_service = None
+            from festival_queue import is_festival_web_research_enabled
+            if is_festival_web_research_enabled():
+                from festival_web_research.runtime import build_festival_web_research_service
+                web_research_service = build_festival_web_research_service(db_obj)
             report = await process_festival_queue(
                 db_obj,
                 bot=bot_obj,
@@ -4225,6 +4230,7 @@ def startup(
                 trigger="scheduled",
                 operator_id=0,
                 run_id=run_id,
+                web_research_service=web_research_service,
             )
             logging.info(
                 "festival_queue_scheduler processed=%s success=%s failed=%s skipped=%s",

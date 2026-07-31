@@ -7,7 +7,14 @@ from typing import Sequence
 
 from .coordinator import FestivalResearchCoordinator, ResearchResult
 from .evidence import canonical_json_sha256
-from .prompts import CONTRACT_VERSION, PROMPT_VERSION, TAXONOMY_VERSION, ResearchTarget
+from .prompts import (
+    CONTRACT_VERSION,
+    NORMALIZER_VERSION,
+    PROMPT_VERSION,
+    TAXONOMY_VERSION,
+    ResearchTarget,
+    prompt_sha256,
+)
 from .repository import FestivalResearchRepository
 
 
@@ -23,6 +30,8 @@ class FestivalWebResearchService:
         edition_hint: str | None,
         urls: Sequence[str],
         target_key: str | None = None,
+        input_fingerprint: str | None = None,
+        queue_item_ids: Sequence[int] = (),
         allow_c: bool = True,
         force_retry: bool = False,
     ) -> ResearchResult:
@@ -30,7 +39,7 @@ class FestivalWebResearchService:
         if not name_hint.strip() or not normalized_urls:
             raise ValueError("name_hint and at least one URL are required")
         key = target_key or f"manual:{name_hint.strip().casefold()}:{(edition_hint or '').strip().casefold()}"
-        fingerprint = canonical_json_sha256(
+        fingerprint = input_fingerprint or canonical_json_sha256(
             {
                 "target_key": key,
                 "name_hint": name_hint.strip(),
@@ -38,6 +47,8 @@ class FestivalWebResearchService:
                 "urls": sorted(normalized_urls),
                 "contract_version": CONTRACT_VERSION,
                 "prompt_version": PROMPT_VERSION,
+                "prompt_sha256": prompt_sha256(),
+                "normalizer_version": NORMALIZER_VERSION,
                 "taxonomy_sha256": self.coordinator.taxonomy_sha256,
             }
         )
@@ -72,6 +83,12 @@ class FestivalWebResearchService:
                 contract_version=CONTRACT_VERSION,
                 taxonomy_version=TAXONOMY_VERSION,
                 taxonomy_sha256=self.coordinator.taxonomy_sha256,
+            )
+        if queue_item_ids:
+            await self.repository.attach_queue_items(
+                run.id,
+                queue_item_ids=queue_item_ids,
+                original_status="pending",
             )
         target = ResearchTarget(
             name_hint=name_hint.strip(),

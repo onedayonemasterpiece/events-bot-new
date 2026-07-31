@@ -7,7 +7,13 @@ from typing import Any
 from sqlalchemy import select
 
 from db import Database
-from models import FestivalWebResearchLaneRun, FestivalWebResearchRun
+from models import (
+    FestivalQueueItem,
+    FestivalWebResearchItem,
+    FestivalWebResearchLaneRun,
+    FestivalWebResearchRun,
+    FestivalWebResearchSource,
+)
 
 
 def _now() -> datetime:
@@ -61,6 +67,62 @@ class FestivalResearchRepository:
             await session.refresh(row)
         return row
 
+    async def get_lane(self, lane_id: int) -> FestivalWebResearchLaneRun | None:
+        async with self.db.get_session() as session:
+            return await session.get(FestivalWebResearchLaneRun, lane_id)
+
+    async def attach_queue_items(
+        self,
+        run_id: int,
+        *,
+        queue_item_ids: Any,
+        original_status: str,
+    ) -> None:
+        async with self.db.get_session() as session:
+            for queue_id in queue_item_ids:
+                result = await session.execute(
+                    select(FestivalWebResearchItem).where(
+                        FestivalWebResearchItem.run_id == run_id,
+                        FestivalWebResearchItem.queue_item_id == int(queue_id),
+                    )
+                )
+                if result.scalar_one_or_none() is None:
+                    session.add(FestivalWebResearchItem(
+                        run_id=run_id,
+                        queue_item_id=int(queue_id),
+                        original_status=original_status,
+                        source_role="other",
+                    ))
+            await session.commit()
+
+    async def add_sources(self, lane_id: int, sources: list[Any]) -> None:
+        async with self.db.get_session() as session:
+            for source in sources:
+                existing = await session.execute(
+                    select(FestivalWebResearchSource).where(
+                        FestivalWebResearchSource.lane_run_id == lane_id,
+                        FestivalWebResearchSource.source_id == source.source_id,
+                    )
+                )
+                if existing.scalar_one_or_none() is not None:
+                    continue
+                session.add(FestivalWebResearchSource(
+                    lane_run_id=lane_id,
+                    source_id=source.source_id,
+                    requested_url=source.requested_url,
+                    resolved_url=source.resolved_url,
+                    canonical_url=source.canonical_url,
+                    source_role=source.source_role.value,
+                    edition_status=source.edition_status.value,
+                    content_sha256=source.content_sha256,
+                    snapshot_ref=source.snapshot_ref,
+                    normalizer_version=source.normalizer_version,
+                    fetched_at=source.retrieved_at_utc,
+                    decision="accepted" if source.edition_status.value == "accepted" else "excluded",
+                    exclusion_reason=None if source.edition_status.value == "accepted" else source.edition_status.value,
+                ))
+            await session.commit()
+
     async def update_lane(self, lane_id: int, **values: Any) -> FestivalWebResearchLaneRun:
         async with self.db.get_session() as session:
             row = await session.get(FestivalWebResearchLaneRun, lane_id)
@@ -90,10 +152,28 @@ class FestivalResearchRepository:
     async def review(self, run_id: int, *, decision: str, operator: str, reason: str | None) -> FestivalWebResearchRun:
         if decision not in {"approved", "rejected", "pending"}:
             raise ValueError("unsupported review decision")
-        return await self.update_run(
+        run = await self.update_run(
             run_id,
             review_status=decision,
             reviewed_by=operator,
             reviewed_at=_now(),
             review_reason=reason,
         )
+        queue_status = {"approved": "approved", "rejected": "rejected", "pending": "review"}[decision]
+        async with self.db.get_session() as session:
+            result = await session.execute(
+                select(FestivalWebResearchItem).where(FestivalWebResearchItem.run_id == run_id)
+            )
+            items = list(result.scalars())
+            for item in items:
+                item.decision = decision
+                item.decision_reason = reason
+                item.updated_at = _now()
+                queue = await session.get(FestivalQueueItem, item.queue_item_id)
+                if queue is not None:
+                    queue.status = queue_status
+                    queue.updated_at = _now()
+                    session.add(queue)
+                session.add(item)
+            await session.commit()
+        return run

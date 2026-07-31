@@ -22,3 +22,10 @@ def test_antigravity_docs_distinguish_tpm_from_per_request_budget() -> None:
     assert "`100000 TPM` — минутная квота" in docs
     assert "`agent_config.max_total_tokens`" in docs
     assert "Structured output у Antigravity preview не поддерживается" in docs
+
+
+def test_shared_reservation_is_serialized_per_key_and_model() -> None:
+    migration = (ROOT / "migrations" / "008_google_ai_atomic_reserve.sql").read_text()
+    assert "pg_advisory_xact_lock" in migration
+    assert "v_key.id::text || ':' || p_model" in migration
+    assert migration.count("WHERE request_uid = p_request_uid AND attempt_no = p_attempt_no") >= 2

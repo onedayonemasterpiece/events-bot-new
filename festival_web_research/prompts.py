@@ -61,23 +61,23 @@ Required source/evidence discipline:
 - Every lane-model Decision must cite claim IDs.
 - Never merge conflicting facts silently. Record uncertainty/conflict.
 
-Create these checkpoints as you work: state.json, source_ledger.json, for each source a source_review/claims/subjects file, topology.json, programme_inventory.json, candidate.json, run_summary.json. If time/budget is short, prioritise a valid candidate.json and run_summary.json using already saved evidence.
+Create these checkpoints as you work: state.json, source_ledger.json, for each source a source_review/claims/subjects file, topology.json, programme_inventory.json, candidate.json, run_summary.json. Also create checkpoint_manifest.json as an array ordered from sequence 0 with records {{checkpoint_id,kind,sequence,relative_path,content_sha256,byte_count,created_at_utc,parent_sha256}}. Hash the exact checkpoint bytes; parent_sha256 is null for state and then the preceding checkpoint hash. Kinds/order are state, source_ledger, repeated source_review→claims→subjects triplets, topology, programme_inventory, candidate, run_summary. If incomplete, the tail may stop after programme_inventory or candidate.
 
 candidate.json MUST be one JSON object with exactly this shape (arrays may be empty where truthful):
 {{
   "schema_version":"festival-web-research-v2",
   "lane":"{lane}",
-  "festival":{{"name":"...","edition_label":null,"description_facts":[],"start_date":null,"end_date":null,"official_url":null,"venue_names":[],"organizer_names":[]}},
-  "classification":{{"primary_topology":null,"secondary_topologies":[],"programme_structure":"unknown","claim_ids":[],"decision_ids":["..."]}},
+  "festival":{{"name":"...","edition_label":null,"description_facts":[],"start_date":null,"end_date":null,"official_url":null,"venue_names":[],"organizer_names":[],"claim_ids_by_field":{{"name":["C1"]}}}},
+  "classification":{{"primary_topology":null,"secondary_topologies":[],"programme_structure":"unknown","claim_ids":["C1"],"decision_ids":["D1","D2"]}},
   "sources":[{{"source_id":"S1","requested_url":"https://...","resolved_url":"https://...","canonical_url":"https://...","source_role":"official_home","edition_status":"accepted","content_sha256":"64hex","normalizer_version":"festival-text-normalizer-v1","snapshot_ref":"sources/S1.txt","retrieved_at_utc":"ISO UTC","content_type":"text/plain"}}],
   "subjects":[{{"source_id":"S1","local_subject_id":"festival","subject_kind":"festival"}}],
   "claims":[{{"claim_id":"C1","source_id":"S1","local_subject_id":"festival","subject_kind":"festival","field":"title","raw_value":"...","normalized_value":"...","normalization":"trim","evidence":{{"quote":"...","quote_start":0,"quote_end":3}},"content_sha256":"same 64hex","normalizer_version":"festival-text-normalizer-v1","status":"accepted"}}],
-  "decisions":[{{"decision_id":"D1","decision_kind":"discovery_topology","subject_ref":"festival","selected_value":"lineup","alternatives_rejected":[],"evidence_claim_ids":["C1"],"reason_codes":[],"status":"supported","actor_kind":"lane_model"}}],
+  "decisions":[{{"decision_id":"D1","decision_kind":"discovery_topology","subject_ref":"festival","selected_value":"lineup","alternatives_rejected":[],"evidence_claim_ids":["C1"],"reason_codes":[],"status":"supported","actor_kind":"lane_model"}},{{"decision_id":"D2","decision_kind":"programme_structure","subject_ref":"festival","selected_value":"unknown","alternatives_rejected":[],"evidence_claim_ids":["C1"],"reason_codes":[],"status":"supported","actor_kind":"lane_model"}}],
   "programme_items":[{{"item_id":"item:1","entity_role":"child_event","disposition":"create_event_candidate","identity_claim_ids":["..."],"logistics_claim_ids":["..."],"decision_ids":["..."],"event_gate":{{"current_edition":"pass","independent_choice":"pass","event_grade_occurrence":"pass","meaningful_identity":"pass","access_compatibility":"pass","topology_guardrail":"pass","evidence_validation":"pass"}}}}],
   "uncertainties":[],
   "source_exclusions":[]
 }}
-Use only enum values demonstrated/defined above and in the shape. Classification needs at least one evidence-backed decision. Each programme item needs exactly one programme_item_disposition decision whose selected_value equals disposition. Be conservative: programme_only/schedule_slot/continuous_activity/service_information/reject may have unknown/not_applicable gate values.
+Use only enum values demonstrated/defined above and in the shape. Every non-empty festival fact field needs accepted Claim IDs in claim_ids_by_field. Classification needs matching evidence-backed discovery_topology and programme_structure decisions. Each programme item needs exactly one programme_item_disposition decision whose selected_value equals disposition. Event dispositions require non-empty identity_claim_ids and logistics_claim_ids in addition to all seven pass gates. Be conservative: programme_only/schedule_slot/continuous_activity/service_information/reject may have unknown/not_applicable gate values.
 
 At completion, respond briefly with the candidate path and counts. The JSON files, not prose response, are authoritative.
 """.strip()

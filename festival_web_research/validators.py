@@ -97,6 +97,8 @@ def validate_programme_item(item: ProgrammeItem) -> None:
             raise ContractViolation("event_disposition_for_non_event_role", item.item_id)
         if not item.event_gate.all_pass():
             raise ContractViolation("event_disposition_without_all_gates", item.item_id)
+        if not item.identity_claim_ids or not item.logistics_claim_ids:
+            raise ContractViolation("event_disposition_without_identity_or_logistics_evidence", item.item_id)
     if item.entity_role in {
         EntityRole.PARTICIPANT, EntityRole.WORK, EntityRole.ROUTE_POINT,
         EntityRole.PRODUCT_OR_OFFER, EntityRole.ACTIVITY_OR_ZONE,
