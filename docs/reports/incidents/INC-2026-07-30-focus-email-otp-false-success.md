@@ -166,6 +166,18 @@ after any failed transport result and therefore communicated a false success.
   to the originally affected participant is not established by the PII-free
   result format, so that narrower gate and the separate live OTP journeys
   remain open.
+- 2026-07-31 19:26–19:49 UTC — the production Supabase migration sequence was
+  reconciled and the resilient-client schema changes were applied; the
+  authenticated `event-search` function and narrowed permanent relay were
+  deployed. Integration smoke then found that the upstream reflected an
+  arbitrary browser `Origin` despite the correct preflight rule. The relay now
+  replaces `Origin` in all 29 fixed integrations. Live Chromium accepted the
+  production origin and blocked `https://example.com`; unknown RPC/Auth admin/
+  Function/Storage routes failed at Gateway. Regression evidence is 20/20
+  resilient-client, 71/71 focus product, 88/88 Python, 18/18 Edge Function and
+  a successful 466-page Astro build. This delivers the data plane but does not
+  close the incident: separate live code/link issuances and the root/current
+  static release are still required.
 
 ## Root Cause
 
