@@ -28,7 +28,7 @@ export interface ResilientSupabaseTransportConfig {
 
 const DEFAULT_PROBE_TIMEOUT_MS = 4_500;
 const DEFAULT_CACHE_TTL_MS = 120_000;
-const DEFAULT_SAFE_REQUEST_TIMEOUT_MS = 8_000;
+const DEFAULT_SAFE_REQUEST_TIMEOUT_MS = 4_000;
 const ROUTE_CACHE_KEY = 'ke_supabase_transport_route_v1';
 
 const trimOrigin = (value: string): string => String(value || '').replace(/\/+$/u, '');
@@ -298,12 +298,20 @@ export class ResilientSupabaseTransport {
       const alternate = this.alternate(selection.route);
       if (!alternate) return response;
       this.invalidate();
-      return this.rawRequest(alternate, input, init, this.safeRequestTimeoutMs);
+      const recovered = await this.rawRequest(alternate, input, init, this.safeRequestTimeoutMs);
+      if (recovered.status < 500) {
+        this.cacheSelection({ route: alternate, selectedAt: this.now(), probes: [] });
+      }
+      return recovered;
     } catch (error) {
       this.invalidate();
       const alternate = safe ? this.alternate(selection.route) : null;
       if (!alternate) throw error;
-      return this.rawRequest(alternate, input, init, this.safeRequestTimeoutMs);
+      const recovered = await this.rawRequest(alternate, input, init, this.safeRequestTimeoutMs);
+      if (recovered.status < 500) {
+        this.cacheSelection({ route: alternate, selectedAt: this.now(), probes: [] });
+      }
+      return recovered;
     }
   }
 }
