@@ -5,12 +5,13 @@ import test from 'node:test';
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('focus programme stays on dedicated noindex/noarchive routes without replacing the public home', async () => {
-  const [root, hub, invitation, collection, ending, secretHub, productionCheck] = await Promise.all([
+  const [root, hub, invitation, collection, ending, diagnostic, secretHub, productionCheck] = await Promise.all([
     read('../src/pages/index.astro'),
     read('../src/pages/fokus-gruppa/index.astro'),
     read('../src/pages/fokus-gruppa/priglashenie/index.astro'),
     read('../src/pages/fokus-gruppa/kollektsiya/index.astro'),
     read('../src/pages/fokus-gruppa/zavershenie/index.astro'),
+    read('../src/pages/fokus-gruppa/diagnostika/index.astro'),
     read('../src/pages/zakrytaya-afisha/index.astro'),
     read('../scripts/check-production.mjs'),
   ]);
@@ -19,7 +20,7 @@ test('focus programme stays on dedicated noindex/noarchive routes without replac
   assert.match(root, /HomeColdStartFeed/u);
   assert.doesNotMatch(root, /Фокус-группа/u);
   assert.match(hub, /Фокус-группа/u);
-  for (const source of [hub, invitation, collection, ending, secretHub]) {
+  for (const source of [hub, invitation, collection, ending, diagnostic, secretHub]) {
     assert.match(source, /noindex,nofollow,noarchive/u);
     assert.match(source, /<meta name="referrer" content="no-referrer"/u);
     assert.match(source, /<link rel="canonical" href=\{absoluteUrl\('/u);
@@ -27,6 +28,27 @@ test('focus programme stays on dedicated noindex/noarchive routes without replac
   assert.match(productionCheck, /const focusPrivateRoute = file\.key === 'zakrytaya-afisha\/index\.html'/u);
   assert.match(productionCheck, /!focusPrivateRoute/u);
   assert.match(invitation, /FocusGroupInviteIntake/u);
+  assert.doesNotMatch(root + hub + invitation, /fokus-gruppa\/diagnostika/u);
+});
+
+test('connectivity diagnostic is read-only, bounded and contains no OTP or user identity input', async () => {
+  const [page, component, helper, infra] = await Promise.all([
+    read('../src/pages/fokus-gruppa/diagnostika/index.astro'),
+    read('../src/components/FocusConnectivityDiagnostic.astro'),
+    read('../src/lib/connectivityDiagnostic.ts'),
+    read('../../infra/yandex/focus-connectivity/openapi.yaml'),
+  ]);
+  assert.match(page, /noindex,nofollow,noarchive,nosnippet/u);
+  assert.match(component, /Supabase · вход/u);
+  assert.match(component, /Supabase · данные/u);
+  assert.match(component, /Yandex Cloud · контроль/u);
+  assert.match(component, /Письма не отправляются/u);
+  assert.match(helper, /cache: 'no-store'/u);
+  assert.match(helper, /credentials: 'omit'/u);
+  assert.match(helper, /Math\.min\(5/u);
+  assert.match(infra, /action: GetItem/u);
+  assert.match(infra, /table_name: focus_connectivity_probe/u);
+  assert.doesNotMatch(component, /type="email"|one-time-code|signInWithOtp|verifyOtp/u);
 });
 
 test('invite intake keeps the 30-day boundary internal while user copy stays plain and sequential', async () => {
@@ -73,7 +95,9 @@ test('email identity offers one message with link plus six-digit mobile OTP', as
   assert.match(intake, /aria-busy/u);
   assert.match(intake, /Отправить ещё раз/u);
   assert.match(intake, /window\.setInterval\(tick, 1000\)/u);
-  assert.match(intake, /Письмо могло уже прийти\. Проверьте почту/u);
+  assert.doesNotMatch(intake, /Письмо могло уже прийти/u);
+  assert.match(intake, /if \(result\.ok\) \{\s*showEmailCode\(\)/u);
+  assert.match(intake, /Письмо не отправлено\. Проверьте соединение/u);
   assert.match(intake, /Предыдущая ссылка не сработала.*пришлём новую ссылку и код/u);
   assert.match(intake, /showIdentityView\('email_address'\)/u);
   assert.match(intake, /showIdentityView\('email_code'\)/u);

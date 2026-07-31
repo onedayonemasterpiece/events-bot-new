@@ -18,6 +18,15 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-30-focus-email-otp-false-success.md`
+  - Scope: focus onboarding email send/verify UX, direct browser Supabase Auth
+    transport, hosted-Auth Postbox correlation, durable participant activation
+    and the Supabase/YDB connectivity control.
+  - Must not regress: only an accepted OTP request opens code entry; timeout,
+    network failure and `429` stay honest and retryable; separate live code/link
+    issuances and server-side participant registration are required; a visible
+    code form or successful preflight is never delivery evidence.
+
 - `INC-2026-07-27-pwa-presentation-install-missing.md`
   - Scope: production root, web app manifest/icons, Android
     `beforeinstallprompt`, `?install=presentation`, Object Storage root publish.

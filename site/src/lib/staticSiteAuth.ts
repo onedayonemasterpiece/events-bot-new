@@ -13,6 +13,11 @@ export interface StaticSiteAuthSnapshot {
   callbackAttempted: boolean;
 }
 
+export interface EmailOtpSendResult {
+  ok: boolean;
+  reason: 'accepted' | 'rate_limited' | 'timeout' | 'request_failed';
+}
+
 type AuthSubscriber = (snapshot: StaticSiteAuthSnapshot) => void;
 
 const CONTROLLER_KEY = '__KENIGEVENTS_STATIC_SITE_AUTH_V1__';
@@ -439,10 +444,13 @@ class StaticSiteAuthController {
     return false;
   }
 
-  async signInWithEmailOtp(email: string, redirectTo = cleanStaticAuthUrl()): Promise<boolean> {
+  async signInWithEmailOtp(
+    email: string,
+    redirectTo = cleanStaticAuthUrl(),
+  ): Promise<EmailOtpSendResult> {
     await this.initialize();
     const normalizedEmail = String(email || '').trim().toLocaleLowerCase('en-US');
-    if (!normalizedEmail) return false;
+    if (!normalizedEmail) return { ok: false, reason: 'request_failed' };
     writeAuthIntent('email_login_started', { redirect_to: redirectTo });
     this.publish({
       status: 'checking',
@@ -450,30 +458,66 @@ class StaticSiteAuthController {
       message: 'Отправляю одноразовый код и ссылку на email…',
       callbackAttempted: false,
     });
-    const { error } = await this.client.auth.signInWithOtp({
-      email: normalizedEmail,
-      options: {
-        emailRedirectTo: redirectTo,
-        shouldCreateUser: true,
-      },
-    });
-    if (!error) {
+    try {
+      const { error } = await withTimeout(
+        this.client.auth.signInWithOtp({
+          email: normalizedEmail,
+          options: {
+            emailRedirectTo: redirectTo,
+            shouldCreateUser: true,
+          },
+        }),
+        CALLBACK_TIMEOUT_MS,
+        'email_otp_send_timeout',
+      );
+      if (!error) {
+        this.publish({
+          status: 'signed_out',
+          user: null,
+          message: 'Письмо отправлено. Введите шестизначный код или откройте одноразовую ссылку.',
+          callbackAttempted: false,
+        });
+        return { ok: true, reason: 'accepted' };
+      }
+      const authError = error as typeof error & { code?: string; status?: number };
+      const rateLimited = authError.status === 429
+        || authError.code === 'over_email_send_rate_limit';
+      writeAuthIntent('email_login_failed', {
+        reason: String(error.message || error).slice(0, 120),
+        error_class: rateLimited ? 'rate_limited' : 'request_failed',
+      });
       this.publish({
-        status: 'signed_out',
+        status: 'error',
         user: null,
-        message: 'Письмо отправлено. Введите шестизначный код или откройте одноразовую ссылку.',
+        message: rateLimited
+          ? 'Новое письмо можно запросить через минуту.'
+          : 'Не удалось отправить письмо. Проверьте адрес и соединение.',
         callbackAttempted: false,
       });
-      return true;
+      return {
+        ok: false,
+        reason: rateLimited ? 'rate_limited' : 'request_failed',
+      };
+    } catch (error) {
+      const rawMessage = String((error as Error)?.message || error);
+      const timeout = rawMessage === 'email_otp_send_timeout';
+      writeAuthIntent('email_login_failed', {
+        reason: rawMessage.slice(0, 120),
+        error_class: timeout ? 'timeout' : 'request_failed',
+      });
+      this.publish({
+        status: 'error',
+        user: null,
+        message: timeout
+          ? 'Сервис не ответил вовремя. Проверьте соединение и попробуйте ещё раз.'
+          : 'Не удалось связаться с сервисом входа. Проверьте соединение и попробуйте ещё раз.',
+        callbackAttempted: false,
+      });
+      return {
+        ok: false,
+        reason: timeout ? 'timeout' : 'request_failed',
+      };
     }
-    writeAuthIntent('email_login_failed', { reason: String(error.message || error).slice(0, 120) });
-    this.publish({
-      status: 'error',
-      user: null,
-      message: 'Не удалось отправить письмо. Проверьте адрес и попробуйте ещё раз.',
-      callbackAttempted: false,
-    });
-    return false;
   }
 
   async verifyEmailOtp(email: string, token: string): Promise<boolean> {

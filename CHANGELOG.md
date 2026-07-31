@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Focus-group email onboarding no longer opens the OTP form after a failed,
+  timed-out or rate-limited request. Only a Supabase-accepted send advances;
+  other outcomes stay on the address form with honest retry copy and a bounded
+  20-second timeout.
 - Focus-group email and Yandex confirmation now fail closed until a verified
   email is available, then durably register the participant in a private
   Supabase operator table before onboarding completes. The address is derived
@@ -52,8 +56,8 @@
   choices, and falls back from an unavailable install prompt to
   `Открыть «Анонсы»` plus `Продолжить на сайте`. The lightweight-install copy
   is user-facing, the compact brand icon has fixed mobile geometry, and an
-  ambiguous email transport response still reveals the OTP form instead of
-  falsely claiming that a delivered message was not sent.
+  accepted email transport response reveals the OTP form; an ambiguous or
+  failed response remains on the address step and never claims delivery.
 - Focus-group joining is now a single-step-at-a-time flow: install or continue
   on the site, confirm by email/Yandex or skip, then return to the ordinary
   home. A fresh PWA launch resumes an unfinished invitation instead of losing
@@ -77,6 +81,12 @@
   remain outside participation and personalization storage.
 
 ### Added
+- Added an unlinked noindex connectivity diagnostic for the focus-group email
+  incident. It measures three bounded reads each to Supabase Auth, a tiny
+  RLS-safe Supabase Data API resource and a dedicated read-only Yandex API
+  Gateway → YDB control, then copies a PII-free timing receipt. Added the
+  dedicated YDB row/service account/gateway infrastructure contract and incident
+  record `INC-2026-07-30-focus-email-otp-false-success`.
 - Restored the production-shaped automatic Hero Talk on the focus-candidate
   home: a deterministic current-event deck alternates text and strict
   photo-safe mosaics, pauses offscreen/hidden and becomes a static linked scene

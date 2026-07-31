@@ -1,0 +1,36 @@
+{
+  "schema": "kenigevents.focus_connectivity.yc_desired_state.v1",
+  "folder_id": "b1g0v4ur96gis5kot6ku",
+  "labels": {
+    "environment": "prod",
+    "project": "kenigevents",
+    "purpose": "focus-connectivity"
+  },
+  "ydb": {
+    "database_id": "etn97gnogglv3fgntadv",
+    "database_path": "/ru-central1/b1ghfk15fpug7mn5439l/etn97gnogglv3fgntadv",
+    "table_name": "focus_connectivity_probe",
+    "key": {
+      "probe_id": "primary"
+    },
+    "expected": {
+      "status": "ready",
+      "schema_version": 1
+    }
+  },
+  "service_account": {
+    "id": "aje61gp66elnsv46i6nj",
+    "name": "focus-connectivity-probe",
+    "role": "ydb.viewer",
+    "static_keys": 0
+  },
+  "api_gateway": {
+    "id": "d5da9drpe2ndhlf7c1d5",
+    "name": "kenigevents-focus-connectivity",
+    "domain": "d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.net",
+    "spec": "openapi.yaml",
+    "cors_origin": "https://kenigevents.ru",
+    "public_path": "/v1/ydb-control",
+    "method": "GET"
+  }
+}

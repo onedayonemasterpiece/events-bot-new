@@ -1,0 +1,30 @@
+---
+import FocusConnectivityDiagnostic from '../../../components/FocusConnectivityDiagnostic.astro';
+import StaticSiteAuthRuntime from '../../../components/auth/StaticSiteAuthRuntime.astro';
+import { absoluteUrl, withBase } from '../../../lib/events';
+import '../../../styles/design-system.css';
+---
+
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow,noarchive,nosnippet" />
+    <meta name="referrer" content="no-referrer" />
+    <link rel="canonical" href={absoluteUrl('/fokus-gruppa/diagnostika/')} />
+    <title>Проверка соединения · Анонсы</title>
+    <meta name="description" content="Проверка доступности сервисов с устройства участника фокус-группы." />
+    <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" sizes="any" />
+  </head>
+  <body>
+    <FocusConnectivityDiagnostic />
+    <StaticSiteAuthRuntime />
+  </body>
+</html>
+
+<style>
+  * { box-sizing: border-box; }
+  html { background: #fff7e7; }
+  body { min-width: 320px; min-height: 100dvh; margin: 0; background: radial-gradient(circle at 80% 0, rgb(255 193 13 / 14%), transparent 30rem), #fff7e7; }
+</style>

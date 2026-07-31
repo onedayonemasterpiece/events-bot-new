@@ -188,20 +188,42 @@ promotion, rollback, freshness, OAuth/Search и product-acceptance gates.
 Egress за текущий billing cycle при `55 MB` database size и `12` MAU. Суточный
 график 24–28 июля уже показывает примерно `0.48–0.90 GB/day` и резкий пик
 26 июля; при таком темпе free-limit может быть исчерпан ещё до роста аудитории.
-Это не обычный «когда-нибудь оптимизировать», а **P0 investigation / P1
-remediation** перед расширением фокус-группы. По одному billing-графику нельзя
-утверждать причину; гипотеза о static-site generation/export обязана быть
-проверена отдельно, а не записана как факт.
+Это не обычный «когда-нибудь оптимизировать», а P0 capacity issue перед
+расширением фокус-группы.
 
-P0: снять почасовой/суточный разрез egress по Postgres/Data API/Auth/Storage/
-Realtime/Edge Function, сопоставить пики с `StaticSiteBuilder`, DB-export,
-build/E2E/backfill и cron run IDs, измерить количество запросов, строки и байты,
-а также временно остановить очевидный runaway/repeated full export, если он
-подтвердится. P1: перейти на bounded/incremental export, убрать N+1 и повторные
-полные выборки, уменьшить payload, добавить caching/coalescing и alerts на
-60/75/90% месячного лимита. Расширение аудитории блокируется, если расследование
-не объяснило текущие `~0.5–0.9 GB/day`. Решение о Pro-плане принимается после
-аудита, а не вместо устранения лишнего трафика.
+Расследование 31.07 восстановило исторические edge-логи и точно локализовало
+источник: `event_related_candidates_by_event_id_v1` вызывается по одному разу
+на anchor события и возвращает 12 полей, включая полный `card_snapshot`, хотя
+экспортёр читает только `event_id` и `vector_similarity`. За 24–28 июля было
+`21 238` таких вызовов. Текущий размер ответа для 409 anchors — `59 657 432 B`
+на сборку; узкие два поля дают `1 518 709 B`. Историческая оценка — `3.098 GB`,
+что совпадает с billing-графиком по дням; узкий контракт сократил бы этот объём
+на `97.45%`, примерно до `79 MB` за тот же период.
+
+P0 remediation:
+
+1. заменить N+1 на один batch/slim RPC или минимум убрать все неиспользуемые
+   поля;
+2. считать response bytes/calls/anchors на каждом build и не разрешать
+   cache-miss related payload больше `3 MB` для каталога порядка 409 событий;
+3. запускать дешёвые preflight/gates до related retrieval и ставить circuit
+   breaker на повторяющиеся failed builds;
+4. запретить overlapping full builds.
+
+P1:
+
+- кешировать related manifest по corpus/date/model hash и пересчитывать только
+  изменившиеся anchors;
+- не выполнять vector sync и по расписанию, и повторно внутри каждой статической
+  сборки;
+- upsert-ить search documents только после hash diff;
+- отделить data/related computation от Astro rendering, чтобы UI-only RC не
+  делал новый Supabase export;
+- alerts на 60/75/90% лимита и budget gate по каждой сборке.
+
+Решение о Pro-плане принимается после устранения этого подтверждённого waste, а
+не вместо него. Непрерывный Smart Update → root publish включается только после
+P0 egress fix и проверенного budget receipt.
 
 ### Волны
 
@@ -333,6 +355,33 @@ Live E2E обязан выпускать два разных письма: сн�
 Trigger/Object Storage контуром; в артефакты попадают только хеши, статусы и
 sanitized-разметка, но не live code, URL или адрес receiver. Это технический
 E2E inbox и не замена human support mailbox.
+
+### Incident 30.07: честная отправка и независимая диагностика
+
+Канонический regression contract:
+[`INC-2026-07-30-focus-email-otp-false-success`](../../../reports/incidents/INC-2026-07-30-focus-email-otp-false-success.md).
+Из `46` дошедших до Auth OTP-запросов `39` были приняты, `7` получили `429`;
+все `39` принятых имеют соответствующий Postbox `Send`. Три сообщённых адреса
+вообще отсутствуют в Auth/Postbox. Кроме того, семь browser signatures сделали
+успешный preflight, но не отправили POST. Значит, для этих потерь смена SMTP
+провайдера сама по себе ничего не исправляет: сбой находится до Postbox.
+
+Правило UI жёсткое: код показывается только после принятого `/otp`. Timeout,
+network error и `429` оставляют адресную форму и честно предлагают повтор.
+Фраза «письмо могло прийти» после ошибки запрещена.
+
+Служебная noindex-страница `/fokus-gruppa/diagnostika/` по явному нажатию делает
+по три bounded/no-store GET:
+
+- Supabase `/auth/v1/health`;
+- один tiny RLS-safe Data API read;
+- Yandex API Gateway → dedicated YDB `GetItem`.
+
+Она не отправляет OTP и ничего не пишет. Скопированный receipt не содержит
+email, UID, JWT, ключи, OTP, raw user agent или IP. Если YDB доступен, а
+Supabase Auth нет, гипотеза сетевой недоступности подтверждается для конкретного
+телефона/сети. Если доступны оба Supabase read, а `/otp` падает — исследуется
+уже endpoint/config/rate-limit, не общий маршрут.
 
 ### Тестер делится режимом
 

@@ -1,0 +1,39 @@
+openapi: 3.0.0
+info:
+  title: KenigEvents focus connectivity probe
+  version: 1.0.0
+
+x-yc-apigateway:
+  service_account_id: aje61gp66elnsv46i6nj
+  cors:
+    origin: https://kenigevents.ru
+    methods:
+      - GET
+      - OPTIONS
+    headers:
+      - Content-Type
+    exposedHeaders:
+      - Content-Length
+      - X-Request-Id
+    maxAge: 600
+
+paths:
+  /v1/ydb-control:
+    get:
+      operationId: getYdbControl
+      summary: Read one dedicated YDB control record
+      x-yc-apigateway-integration:
+        type: cloud_ydb
+        action: GetItem
+        database: /ru-central1/b1ghfk15fpug7mn5439l/etn97gnogglv3fgntadv
+        table_name: focus_connectivity_probe
+        key: '{"probe_id":"primary"}'
+      responses:
+        "200":
+          description: YDB control record
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+

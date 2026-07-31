@@ -134,6 +134,15 @@ snapshot/content cohort создаёт secret noindex и root-form production ar
 у них независимые publication state/pointers. Content, artifact и publication
 fingerprints разделены; failure одного publish lane не сдвигает другой.
 
+Root automation остаётся заблокирована подтверждённым P0 egress regression:
+до slim/batch related RPC, per-build byte receipt и запрета overlapping full
+builds один прогон переносит около `59.66 MB` только для related candidates.
+Критерий допуска для каталога порядка 409 anchors: cache miss `<= 3 MB`,
+cache hit — `0` related API calls. Только после этого одобренный UI SHA может
+автоматически проходить Smart Update → immutable build → gates → atomic
+`root_current` promotion; несовпадение SHA или budget receipt останавливает
+promotion, а не выкладывает непроверенный результат.
+
 Past-event policy по Google Search Central, Schema.org и RFC 9110:
 
 - полезное завершившееся событие сохраняет тот же URL/HTTP 200, truthful dates,

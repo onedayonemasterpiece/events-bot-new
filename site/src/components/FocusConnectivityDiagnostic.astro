@@ -1,0 +1,224 @@
+---
+const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.net/v1/ydb-control';
+---
+
+<main class="connectivity" data-focus-connectivity data-ydb-control-url={ydbControlUrl}>
+  <section class="connectivity__card">
+    <p class="connectivity__eyebrow">Проверка соединения</p>
+    <h1>Что доступно с этого телефона</h1>
+    <p class="connectivity__lead">
+      Проверим связь с двумя сервисами. Письма не отправляются, вход и данные аккаунта не меняются.
+    </p>
+    <button class="connectivity__run" type="button" data-connectivity-run>Проверить соединение</button>
+    <p class="connectivity__status" data-connectivity-status role="status"></p>
+    <div class="connectivity__results" data-connectivity-results hidden>
+      {
+        [
+          ['supabase-auth', 'Supabase · вход'],
+          ['supabase-data', 'Supabase · данные'],
+          ['ydb-control', 'Yandex Cloud · контроль'],
+        ].map(([id, label]) => (
+          <article class="connectivity__result" data-connectivity-result={id}>
+            <h2>{label}</h2>
+            <strong data-connectivity-verdict>Ожидает проверки</strong>
+            <span data-connectivity-timing></span>
+          </article>
+        ))
+      }
+    </div>
+    <button class="connectivity__copy" type="button" data-connectivity-copy hidden>
+      Скопировать результат
+    </button>
+    <p class="connectivity__privacy">
+      В результате нет адреса почты, кодов входа или данных аккаунта.
+    </p>
+  </section>
+</main>
+
+<script>
+  import {
+    makeConnectivityReceipt,
+    runConnectivityProbe,
+    type ConnectivityProbeResult,
+  } from '../lib/connectivityDiagnostic';
+
+  const root = document.querySelector<HTMLElement>('[data-focus-connectivity]');
+  const runButton = root?.querySelector<HTMLButtonElement>('[data-connectivity-run]');
+  const copyButton = root?.querySelector<HTMLButtonElement>('[data-connectivity-copy]');
+  const status = root?.querySelector<HTMLElement>('[data-connectivity-status]');
+  const resultsRoot = root?.querySelector<HTMLElement>('[data-connectivity-results]');
+  let receipt = '';
+  let coolingDown = false;
+
+  const renderResult = (result: ConnectivityProbeResult) => {
+    const card = root?.querySelector<HTMLElement>(`[data-connectivity-result="${result.id}"]`);
+    const verdict = card?.querySelector<HTMLElement>('[data-connectivity-verdict]');
+    const timing = card?.querySelector<HTMLElement>('[data-connectivity-timing]');
+    if (!card || !verdict || !timing) return;
+    card.dataset.state = result.state;
+    const copy = {
+      ok: 'Доступно',
+      http_error: `Ответ с ошибкой${result.status ? ` · ${result.status}` : ''}`,
+      timeout: 'Не ответило вовремя',
+      network_error: 'Нет соединения',
+      not_configured: 'Не настроено',
+    }[result.state];
+    verdict.textContent = copy;
+    timing.textContent = result.medianMs === null
+      ? ''
+      : `обычно ${Math.round(result.medianMs)} мс · ${result.attempts.length} проверки`;
+  };
+
+  const setCooldown = () => {
+    coolingDown = true;
+    if (runButton) {
+      runButton.disabled = true;
+      runButton.textContent = 'Повторить можно через 30 секунд';
+    }
+    window.setTimeout(() => {
+      coolingDown = false;
+      if (runButton) {
+        runButton.disabled = false;
+        runButton.textContent = 'Проверить ещё раз';
+      }
+    }, 30_000);
+  };
+
+  runButton?.addEventListener('click', async () => {
+    if (!root || !runButton || coolingDown) return;
+    const authRuntime = document.querySelector<HTMLElement>('[data-static-site-auth-runtime]');
+    const supabaseUrl = String(authRuntime?.dataset.supabaseUrl || '').replace(/\/+$/u, '');
+    const publishableKey = String(authRuntime?.dataset.supabaseKey || '');
+    const authHeaders = publishableKey
+      ? { apikey: publishableKey, Authorization: `Bearer ${publishableKey}` }
+      : undefined;
+    runButton.disabled = true;
+    runButton.setAttribute('aria-busy', 'true');
+    runButton.textContent = 'Проверяем…';
+    if (status) status.textContent = 'Три короткие проверки каждого соединения.';
+    if (resultsRoot) resultsRoot.hidden = false;
+    if (copyButton) copyButton.hidden = true;
+
+    const targets = [
+      {
+        id: 'supabase-auth',
+        label: 'Supabase · вход',
+        url: supabaseUrl ? `${supabaseUrl}/auth/v1/health` : '',
+        headers: authHeaders,
+      },
+      {
+        id: 'supabase-data',
+        label: 'Supabase · данные',
+        url: supabaseUrl
+          ? `${supabaseUrl}/rest/v1/personalization_event_reaction_counter?select=event_id&limit=1`
+          : '',
+        headers: authHeaders,
+      },
+      {
+        id: 'ydb-control',
+        label: 'Yandex Cloud · контроль',
+        url: root.dataset.ydbControlUrl || '',
+      },
+    ];
+
+    const measured: ConnectivityProbeResult[] = [];
+    for (const target of targets) {
+      const result = await runConnectivityProbe(target, { attempts: 3, timeoutMs: 8_000 });
+      measured.push(result);
+      renderResult(result);
+    }
+    const connection = (navigator as Navigator & {
+      connection?: { effectiveType?: string };
+    }).connection;
+    receipt = JSON.stringify(makeConnectivityReceipt(measured, {
+      origin: window.location.origin,
+      online: navigator.onLine,
+      effectiveType: connection?.effectiveType,
+      standalone: window.matchMedia('(display-mode: standalone)').matches,
+    }), null, 2);
+    const failed = measured.filter((result) => result.state !== 'ok').length;
+    if (status) {
+      status.textContent = failed === 0
+        ? 'Все соединения доступны.'
+        : `Не ответили: ${failed} из ${measured.length}. Скопируйте результат и отправьте нам.`;
+    }
+    if (copyButton) copyButton.hidden = false;
+    runButton.removeAttribute('aria-busy');
+    setCooldown();
+  });
+
+  copyButton?.addEventListener('click', async () => {
+    if (!receipt || !copyButton) return;
+    try {
+      await navigator.clipboard.writeText(receipt);
+      copyButton.textContent = 'Результат скопирован';
+    } catch {
+      copyButton.textContent = 'Не получилось скопировать';
+    }
+  });
+</script>
+
+<style>
+  .connectivity {
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    padding: max(1rem, env(safe-area-inset-top)) 1rem max(2rem, env(safe-area-inset-bottom));
+    color: #33261e;
+    font-family: var(--ke-font-sans, system-ui, sans-serif);
+  }
+  .connectivity__card {
+    width: min(620px, 100%);
+    display: grid;
+    gap: 1rem;
+    padding: clamp(1.3rem, 5vw, 2.4rem);
+    border: 1px solid #e3d2bd;
+    border-radius: 1.6rem;
+    background: #fffdf8;
+    box-shadow: 0 20px 56px rgb(69 42 25 / 13%);
+  }
+  .connectivity__eyebrow {
+    margin: 0;
+    color: #9e3f20;
+    font-size: .78rem;
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+  h1 { margin: 0; font-size: clamp(2rem, 8vw, 3.5rem); line-height: .98; letter-spacing: -.045em; }
+  .connectivity__lead, .connectivity__status, .connectivity__privacy { margin: 0; line-height: 1.5; }
+  .connectivity__run, .connectivity__copy {
+    min-height: 3.25rem;
+    border: 0;
+    border-radius: 999px;
+    padding: .8rem 1.25rem;
+    font: inherit;
+    font-weight: 850;
+    cursor: pointer;
+  }
+  .connectivity__run { color: #fff; background: #a74523; box-shadow: 0 10px 26px rgb(167 69 35 / 24%); }
+  .connectivity__copy { color: #442a1c; background: #f4e6d6; }
+  .connectivity__run:disabled { cursor: wait; opacity: .72; }
+  .connectivity__results { display: grid; gap: .65rem; }
+  .connectivity__result {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: .2rem 1rem;
+    align-items: center;
+    padding: .9rem 1rem;
+    border-radius: 1rem;
+    background: #f5eee5;
+  }
+  .connectivity__result h2 { margin: 0; font-size: 1rem; }
+  .connectivity__result strong { color: #66564b; }
+  .connectivity__result span { grid-column: 1 / -1; color: #75675d; font-size: .84rem; }
+  .connectivity__result[data-state="ok"] strong { color: #1f744e; }
+  .connectivity__result:is([data-state="network_error"], [data-state="timeout"], [data-state="http_error"]) strong { color: #b02c2c; }
+  .connectivity__privacy { color: #7a6a5e; font-size: .8rem; text-align: center; }
+  [hidden] { display: none !important; }
+  @media (max-width: 460px) {
+    .connectivity { align-items: start; }
+    .connectivity__card { border-radius: 1.35rem; }
+    .connectivity__result { grid-template-columns: 1fr; }
+  }
+</style>

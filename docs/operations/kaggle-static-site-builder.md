@@ -362,6 +362,24 @@ Static related publication policy:
 - same-day events that already started, past events and cancelled/deleted/duplicate rows are excluded at export/generation time;
 - static related generation retries Gemma 4 26B with backoff and does not fall back to Gemini/Flash-Lite, preserving Lite quota for runtime flows.
 
+### P0 related-export egress regression gate
+
+The 2026-07-31 Management API/DB audit identified
+`event_related_candidates_by_event_id_v1` as the source of the 24–28 July
+Supabase egress spike. `21,238` per-anchor calls transferred an estimated
+`3.098 GB`; the current 409-anchor full response is `59.66 MB/build`, while the
+two fields actually consumed by the exporter are `1.52 MB/build`.
+
+Before continuous root publication is enabled:
+
+- replace the 12-field per-anchor response with one slim/batch contract;
+- cache by corpus/date/model fingerprint;
+- report calls, response bytes, anchors and cache hit ratio in every build;
+- fail the release budget gate above `3 MB` related payload for a comparable
+  cache-miss catalog and require zero related API calls on a cache hit;
+- prohibit overlapping full builds and do cheap failure checks before retrieval;
+- do not duplicate the scheduled vector sync inside each static build.
+
 This still does **not** mean Smart Update publishes the production root. With all
 three flags enabled it can build and publish only a checked unlisted candidate.
 Root activation remains a separate NO-GO until a reader-atomic resolver/origin

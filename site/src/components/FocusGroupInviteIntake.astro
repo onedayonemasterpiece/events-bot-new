@@ -492,22 +492,34 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       if (storage) updateFocusParticipationIdentityChoice(storage, selectedChoice);
       setSending(true);
       if (identityStatus) identityStatus.textContent = 'Отправляем письмо…';
-      let sent = false;
+      let result: Awaited<ReturnType<typeof auth.signInWithEmailOtp>> = {
+        ok: false,
+        reason: 'request_failed',
+      };
       try {
         const emailRedirect = new URL(cleanStaticAuthUrl(window.location.href));
         emailRedirect.searchParams.set('email_callback', '1');
-        sent = await auth.signInWithEmailOtp(email, emailRedirect.href);
+        result = await auth.signInWithEmailOtp(email, emailRedirect.href);
       } catch {
-        sent = false;
+        result = { ok: false, reason: 'request_failed' };
       }
       setSending(false);
-      showEmailCode();
-      if (identityStatus) {
-        identityStatus.textContent = sent
-          ? 'Письмо отправлено. Введите код или нажмите кнопку в письме.'
-          : 'Письмо могло уже прийти. Проверьте почту; если письма нет, отправьте ещё раз через минуту.';
+      if (result.ok) {
+        showEmailCode();
+        if (identityStatus) {
+          identityStatus.textContent = 'Письмо отправлено. Введите код или нажмите кнопку в письме.';
+        }
+        startResendTimer();
+        return;
       }
-      startResendTimer();
+      showEmailAddress(false);
+      if (identityStatus) {
+        identityStatus.textContent = result.reason === 'rate_limited'
+          ? 'Новое письмо можно запросить через минуту. Если первое уже пришло, откройте его.'
+          : result.reason === 'timeout'
+            ? 'Сервис не ответил вовремя. Проверьте соединение и попробуйте ещё раз.'
+            : 'Письмо не отправлено. Проверьте соединение и попробуйте ещё раз.';
+      }
     };
 
     emailOpen?.addEventListener('click', () => showEmailAddress(false));
