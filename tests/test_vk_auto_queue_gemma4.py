@@ -444,6 +444,78 @@ async def test_event_parse_gemma4_output_budget_fits_shared_15k_tpm(monkeypatch)
     assert 10134 + 1000 + int(captured["max_output_tokens"]) == 14500
 
 
+@pytest.mark.asyncio
+async def test_event_parse_gemma4_omits_venue_catalog_when_full_prompt_cannot_fit(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeClient:
+        DEFAULT_TPM_RESERVE_EXTRA = 1000
+
+        @staticmethod
+        def _estimate_prompt_tokens(prompt):
+            return 21743 if "\nKnown venues:\n" in prompt else 9000
+
+        async def generate_content_async(
+            self, *, model, prompt, generation_config, max_output_tokens
+        ):
+            captured["prompt"] = prompt
+            captured["max_output_tokens"] = max_output_tokens
+            return "[]", SimpleNamespace(
+                input_tokens=1, output_tokens=1, total_tokens=2
+            )
+
+    async def noop_log(*_args, **_kwargs):
+        return None
+
+    monkeypatch.delenv("EVENT_PARSE_GEMMA_TPM_RESERVATION_TARGET", raising=False)
+    monkeypatch.delenv("EVENT_PARSE_GEMMA_MIN_OUTPUT_TOKENS", raising=False)
+    monkeypatch.setenv("EVENT_PARSE_GEMMA_MAX_TOKENS", "4000")
+    monkeypatch.setattr(main, "_get_event_parse_gemma_client", lambda: FakeClient())
+    monkeypatch.setattr(main, "log_token_usage", noop_log)
+
+    parsed = await main._parse_event_via_gemma(
+        "Завтра состоится встреча в библиотеке.",
+        poster_texts=["1 августа, 11:00"],
+        gemma_model="models/gemma-4-31b-it",
+    )
+
+    assert list(parsed) == []
+    prompt = str(captured["prompt"])
+    assert "\nKnown venues:\n" not in prompt
+    assert "venue / city grounding rule" in prompt
+    assert "Poster OCR:" in prompt
+    assert captured["max_output_tokens"] == 4000
+
+
+@pytest.mark.asyncio
+async def test_event_parse_gemma4_fails_before_provider_when_compact_prompt_too_large(monkeypatch):
+    called = False
+
+    class FakeClient:
+        DEFAULT_TPM_RESERVE_EXTRA = 1000
+
+        @staticmethod
+        def _estimate_prompt_tokens(_prompt):
+            return 12000
+
+        async def generate_content_async(self, **_kwargs):
+            nonlocal called
+            called = True
+            return "[]", SimpleNamespace()
+
+    monkeypatch.delenv("EVENT_PARSE_GEMMA_TPM_RESERVATION_TARGET", raising=False)
+    monkeypatch.delenv("EVENT_PARSE_GEMMA_MIN_OUTPUT_TOKENS", raising=False)
+    monkeypatch.setattr(main, "_get_event_parse_gemma_client", lambda: FakeClient())
+
+    with pytest.raises(RuntimeError, match="exceeds TPM cap"):
+        await main._parse_event_via_gemma(
+            "Очень большой вход.",
+            gemma_model="models/gemma-4-31b-it",
+        )
+
+    assert called is False
+
+
 def test_event_parse_output_budget_does_not_rewrite_non_gemma_models():
     class FakeClient:
         DEFAULT_TPM_RESERVE_EXTRA = 1000

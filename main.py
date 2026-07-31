@@ -9266,6 +9266,32 @@ def _read_base_prompt() -> str:
 
 
 @lru_cache(maxsize=1)
+def _read_event_parse_prompt_without_venue_catalog() -> str:
+    """Return all semantic rules without the global venue reference rows.
+
+    The venue rows are reference data rather than extraction policy. Gemma 4
+    may omit them when a conservative TPM reservation cannot fit in one
+    minute; decoded venues are still normalised with the same catalogue.
+    """
+
+    prompt_path = os.path.join("docs", "llm", "prompts.md")
+    with open(prompt_path, "r", encoding="utf-8") as f:
+        prompt = _extract_event_parse_prompt(f.read())
+    holidays, _, _ = _read_holidays()
+    if holidays:
+        entries = []
+        for holiday in holidays:
+            alias_hint = (
+                f" (aliases: {', '.join(holiday.aliases)})" if holiday.aliases else ""
+            )
+            entries.append(
+                f"- {holiday.canonical_name}{alias_hint} — {holiday.description}"
+            )
+        prompt += "\nKnown holidays:\n" + "\n".join(entries)
+    return prompt
+
+
+@lru_cache(maxsize=1)
 def _read_known_venues_lines() -> tuple[str, ...]:
     loc_path = os.path.join("docs", "reference", "locations.md")
     if not os.path.exists(loc_path):
@@ -9704,8 +9730,13 @@ def _normalise_event_location_from_reference(event_obj: dict[str, Any]) -> None:
 @lru_cache(maxsize=8)
 def _prompt_cache(
     festival_key: tuple[str, ...] | None,
+    omit_venue_catalog: bool = False,
 ) -> str:
-    txt = _read_base_prompt()
+    txt = (
+        _read_event_parse_prompt_without_venue_catalog()
+        if omit_venue_catalog
+        else _read_base_prompt()
+    )
     if festival_key:
         txt += "\nUse the JSON below to normalise festival names and map aliases.\n"
     return txt
@@ -9714,9 +9745,11 @@ def _prompt_cache(
 def _build_prompt(
     festival_names: Sequence[str] | None,
     festival_alias_pairs: Sequence[tuple[str, int]] | None,
+    *,
+    omit_venue_catalog: bool = False,
 ) -> str:
     festival_key = tuple(sorted(festival_names)) if festival_names else None
-    prompt = _prompt_cache(festival_key)
+    prompt = _prompt_cache(festival_key, omit_venue_catalog)
     if festival_key:
         payload: dict[str, Any] = {"festival_names": list(festival_key)}
         alias_pairs = (
@@ -9900,24 +9933,14 @@ def _event_parse_normalize_parsed_events(data: Any) -> ParsedEvents:
     raise RuntimeError("bad parse response")
 
 
-def _fit_event_parse_gemma_output_budget(
+def _event_parse_gemma_tpm_plan(
     client: Any,
     *,
     model: str,
     prompt: str,
     configured_max_tokens: int,
-) -> int:
-    """Keep Gemma event-parse reservations below the real per-minute cap.
-
-    The shared limiter reserves estimated input + output + safety overhead.
-    Gemma 4 free-tier TPM is 15K, while the event extraction system prompt is
-    itself about 9-10K estimated tokens. A fixed 4K output allowance can make
-    one request permanently larger than the whole minute and cause pointless
-    minute-boundary retries without ever contacting the provider.
-
-    Only Gemma 4 is adjusted here. Other models retain their configured output
-    budget and are governed by their own registry limits.
-    """
+) -> tuple[int, int, int, int] | None:
+    """Return ``input, extra, target, min_output`` for Gemma 4 reservations."""
 
     normalized_model = str(model or "").strip().lower()
     if normalized_model.startswith("models/"):
@@ -9925,13 +9948,11 @@ def _fit_event_parse_gemma_output_budget(
     if normalized_model.endswith("-it"):
         normalized_model = normalized_model[:-3]
     if normalized_model not in {"gemma-4-31b", "gemma-4-26b-a4b"}:
-        return int(configured_max_tokens)
+        return None
 
     estimate = getattr(client, "_estimate_prompt_tokens", None)
     if not callable(estimate):
-        # Lightweight test doubles and non-standard gateways cannot expose the
-        # estimator; preserve the caller's explicit budget rather than guess.
-        return int(configured_max_tokens)
+        return None
 
     try:
         input_estimate = max(1, int(estimate(prompt)))
@@ -9950,7 +9971,33 @@ def _fit_event_parse_gemma_output_budget(
         min_output = max(400, min(min_output, int(configured_max_tokens)))
     except Exception:
         logging.warning("event_parse: invalid Gemma TPM budget config", exc_info=True)
+        return None
+    return input_estimate, reserve_extra, target, min_output
+
+
+def _fit_event_parse_gemma_output_budget(
+    client: Any,
+    *,
+    model: str,
+    prompt: str,
+    configured_max_tokens: int,
+) -> int:
+    """Keep Gemma event-parse reservations below the real per-minute cap.
+
+    The shared limiter reserves estimated input + output + safety overhead.
+    Only Gemma 4 is adjusted here. Other models retain their configured output
+    budget and are governed by their own registry limits.
+    """
+
+    plan = _event_parse_gemma_tpm_plan(
+        client,
+        model=model,
+        prompt=prompt,
+        configured_max_tokens=configured_max_tokens,
+    )
+    if plan is None:
         return int(configured_max_tokens)
+    input_estimate, reserve_extra, target, min_output = plan
 
     fitted = min(
         int(configured_max_tokens),
@@ -10039,10 +10086,6 @@ async def _parse_event_via_gemma(
                     continue
                 raise
 
-    prompt = _build_prompt(festival_names, festival_alias_pairs)
-    if poster_summary:
-        prompt = f"{prompt}\nPoster summary:\n{poster_summary.strip()}"
-
     if not source_channel:
         source_channel = extra.get("channel_title")
     today = datetime.now(LOCAL_TZ).date().isoformat()
@@ -10064,14 +10107,23 @@ async def _parse_event_via_gemma(
         user_msg += "\n" + "\n".join(poster_lines)
     user_msg += text
 
-    full_prompt = (
-        prompt
-        + "\n\n"
-        + "Return ONLY JSON: either a JSON array of events or a JSON object with an `events` array.\n"
-        + "If the text is only an intro for attached posters/cards and the concrete event details are not present in the text itself, return [] as a valid empty JSON array.\n"
-        + "CRITICAL: No comments. No markdown. No trailing commas. No text outside JSON.\n\n"
-        + user_msg
+    output_contract = (
+        "Return ONLY JSON: either a JSON array of events or a JSON object with an `events` array.\n"
+        "If the text is only an intro for attached posters/cards and the concrete event details are not present in the text itself, return [] as a valid empty JSON array.\n"
+        "CRITICAL: No comments. No markdown. No trailing commas. No text outside JSON."
     )
+
+    def _compose_full_prompt(*, omit_venue_catalog: bool) -> str:
+        base_prompt = _build_prompt(
+            festival_names,
+            festival_alias_pairs,
+            omit_venue_catalog=omit_venue_catalog,
+        )
+        if poster_summary:
+            base_prompt = f"{base_prompt}\nPoster summary:\n{poster_summary.strip()}"
+        return f"{base_prompt}\n\n{output_contract}\n\n{user_msg}"
+
+    full_prompt = _compose_full_prompt(omit_venue_catalog=False)
     model = (
         str(extra.get("gemma_model") or "").strip()
         or (os.getenv("EVENT_PARSE_GEMMA_MODEL", "gemma-4-31b-it") or "").strip()
@@ -10083,6 +10135,39 @@ async def _parse_event_via_gemma(
     # capping the upper bound so a runaway response can't blow the context.
     max_tokens = int(os.getenv("EVENT_PARSE_GEMMA_MAX_TOKENS", "4000") or "4000")
     max_tokens = max(400, min(max_tokens, 8000))
+
+    plan = _event_parse_gemma_tpm_plan(
+        client,
+        model=model,
+        prompt=full_prompt,
+        configured_max_tokens=max_tokens,
+    )
+    if plan is not None:
+        input_estimate, reserve_extra, target, min_output = plan
+        if input_estimate + reserve_extra + min_output > target:
+            compact_prompt = _compose_full_prompt(omit_venue_catalog=True)
+            compact_plan = _event_parse_gemma_tpm_plan(
+                client,
+                model=model,
+                prompt=compact_prompt,
+                configured_max_tokens=max_tokens,
+            )
+            if compact_plan is not None:
+                compact_input, compact_extra, compact_target, compact_min_output = compact_plan
+                logging.info(
+                    "event_parse: omitted global venue catalog to fit Gemma TPM "
+                    "model=%s full_input_estimate=%s compact_input_estimate=%s target_tpm=%s",
+                    model,
+                    input_estimate,
+                    compact_input,
+                    compact_target,
+                )
+                full_prompt = compact_prompt
+                if compact_input + compact_extra + compact_min_output > compact_target:
+                    raise RuntimeError(
+                        "event_parse Gemma prompt exceeds TPM cap even without venue catalog "
+                        f"(input_estimate={compact_input}, target={compact_target})"
+                    )
     max_tokens = _fit_event_parse_gemma_output_budget(
         client,
         model=model,

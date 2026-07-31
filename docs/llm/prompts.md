@@ -160,6 +160,14 @@ The bot adds these markers automatically on the opening and closing dates.
 Lines from `../reference/locations.md` are appended to the system prompt so the model
 can normalise venue names. Please keep that file up to date.
 
+For Gemma 4 only, the runtime may omit this global venue catalogue when the
+conservative shared-limiter estimate shows that the complete request plus the
+minimum output budget cannot fit under the 15K TPM cap. This does not shorten
+the fenced `MASTER-PROMPT`, source text, poster OCR, holiday hints, or dynamic
+festival hints. The decoded result is still canonicalised against
+`locations.md` in code. If the request remains too large without the catalogue,
+it fails before a provider call.
+
 When `../reference/holidays.md` is present, the prompt gains a "Known holidays" section
 listing canonical seasonal festivals together with their alias hints and short
 descriptions. Treat these names as the preferred targets for the `festival`

@@ -4,8 +4,10 @@
 
 ### Fixed
 - Gemma 4 event extraction now fits its output allowance to a conservative
-  14.5K reservation target before the shared 15K TPM gate, preventing a
-  slightly oversized request from retrying at every minute boundary forever.
+  14.5K reservation target before the shared 15K TPM gate. When the full
+  semantic prompt cannot fit, it omits only the global venue catalogue and
+  keeps post-decode venue canonicalisation; a still-oversized compact prompt
+  fails before provider traffic instead of retrying at minute boundaries.
 - Replaced the per-key/partly local Google AI limiter with a dedicated
   project-scoped atomic Supabase contract, corrected Gemma 4 to conservative
   `15 RPM / 15000 TPM / 14000 RPD`, made all runtime construction prefer the

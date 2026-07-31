@@ -125,8 +125,13 @@ must re-render the calendar line even when the event body itself is unchanged.
   `EVENT_PARSE_GEMMA_MAX_TOKENS` remains the upper bound, while the per-request
   output allowance is reduced only when the estimated prompt would otherwise
   make the reservation larger than one whole minute. The quality floor is
-  `EVENT_PARSE_GEMMA_MIN_OUTPUT_TOKENS=2400`; if even that cannot fit, the
-  shared limiter still denies the request instead of sending it unaccounted.
+  `EVENT_PARSE_GEMMA_MIN_OUTPUT_TOKENS=2400`. If the full prompt still cannot
+  fit, event-parse retries once locally with the global 100+ row venue catalogue
+  omitted, while retaining every semantic extraction rule, holiday/festival
+  hints, source text and poster OCR. Venue canonicalisation still runs after
+  JSON decoding against the same catalogue. If that compact reservation also
+  cannot fit, parsing fails before any provider call instead of waiting across
+  minute boundaries or sending unaccounted traffic.
 - `SMART_UPDATE_GOOGLE_KEY_ENVS` — normal, shared-limiter-backed key pool for
   Smart Update itself. Production declares `GOOGLE_API_KEY` through
   `GOOGLE_API_KEY5`; round-robin starts on the first request, ledger-blocked
