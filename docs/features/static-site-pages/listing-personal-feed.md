@@ -40,12 +40,11 @@ grid is forbidden because it reintroduces a second crop implementation.
 ## Runtime behavior
 
 1. Page renders static listing sections only.
-2. JS looks for a base-scoped `ke_listing_personal_feed_cache_v1:<base-path>` manifest in `localStorage`.
-3. Cache is shared across listing/event pages only inside the same production or immutable-preview base and has a short TTL of 30 minutes. A manifest whose stored `base_path` differs from the current page is rejected.
-4. If cache is valid for the current compatible profile hash, the personal section renders immediately without another network call.
-5. If there is no cache, the browser first loads the bounded same-origin `/data/personal-feed.json` catalog and ranks it locally. A public Supabase RPC, when explicitly configured, is only a fallback if that static request fails.
-6. While browsing across listing pages, the same localStorage list is reused; “Обновить ленту” can force a refresh when backend config exists.
-7. If both sources fail, the section remains hidden; static listing UX is not degraded.
+2. JS keeps the card manifest in memory. `localStorage` stores only a path-independent `ke_listing_personal_feed_hint_v2` containing a bounded ordered id list, profile hash, current event id and a 30-minute expiry; old per-preview full-manifest caches are removed.
+3. A compatible hint can restore order only against data already available on the page/current catalog. It is not a durable event-card copy.
+4. The browser first loads the bounded same-origin `/data/personal-feed.json` catalog and ranks it locally. A public Supabase RPC, when configured, is a safe read fallback through the shared resilient data client.
+5. The direct and relay health probes run in parallel and one selected route is briefly reused. Safe read fallback may try the alternate route once; failure leaves the section hidden and never degrades static listing UX.
+6. “Обновить ленту” may force a safe refresh when backend config exists. No infinite feed is introduced.
 
 Every dynamic event-card boundary rebases same-site `/sobytiya/<slug>/...`
 links to the base of the page that is currently open. This applies to cached
@@ -86,9 +85,9 @@ authenticated-search dead end. Future measurement must distinguish
 `personal`/`popular_fallback`, rank, impressions, clicks and terminal
 `Все анонсы` use before changing the six-card limit.
 
-## Why localStorage cache
+## Why the local hint is compact
 
-The goal is to avoid repeated Supabase reads on every static-page navigation without allowing a build-specific URL to outlive its preview. The feed is a **starter list** for the browsing session, not an exact real-time ranking. Local strong actions (`like`, `not_interested`, `share`) still update the local profile and can filter/reorder cached cards client-side.
+The goal is to avoid repeated reads without retaining full card manifests for every immutable preview. The feed remains a **starter list** for the browsing session, not an exact real-time ranking. Only bounded ids and compatibility metadata survive navigation; card data comes from the current catalog. Local strong actions (`like`, `not_interested`, `share`) still update the capped local profile and can filter/reorder cards client-side.
 
 ## Supabase RPC option
 

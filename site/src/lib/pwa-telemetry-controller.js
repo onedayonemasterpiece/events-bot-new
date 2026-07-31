@@ -1,4 +1,6 @@
 import { isStandaloneDisplay } from './pwa-install-controller.js';
+import { getIdempotentOutbox } from './idempotentOutbox.ts';
+import { getResilientDataClient } from './resilientDataClient.ts';
 
 const INSTALLATION_STORAGE_KEY = 'kenigevents:pwa-installation-id:v1';
 const SESSION_STORAGE_KEY = 'kenigevents:pwa-session-id:v1';
@@ -25,34 +27,38 @@ export function createPwaTelemetryController({
   windowRef,
   navigatorRef,
   endpoint,
+  relayEndpoint = '',
   publishableKey,
-  fetchRef = windowRef?.fetch?.bind(windowRef),
+  fetchRef,
+  dataClientRef = null,
+  outboxRef = null,
   cryptoRef = windowRef?.crypto,
   localStorageRef = windowRef?.localStorage,
   sessionStorageRef = windowRef?.sessionStorage,
 }) {
   const url = String(endpoint || '').replace(/\/+$/u, '');
   const key = String(publishableKey || '');
-  if (!windowRef || !navigatorRef || !url || !key || !fetchRef || navigatorRef.webdriver === true) return null;
+  if (!windowRef || !navigatorRef || !url || !key || navigatorRef.webdriver === true) return null;
 
   const installationId = safeUuid(localStorageRef, INSTALLATION_STORAGE_KEY, cryptoRef);
   const sessionId = safeUuid(sessionStorageRef, SESSION_STORAGE_KEY, cryptoRef);
   if (!installationId || !sessionId) return null;
 
-  const record = async (eventKind) => {
+  const dataClient = dataClientRef || (fetchRef
+    ? { idempotentReplay: fetchRef }
+    : getResilientDataClient({ directUrl:url, relayUrl:relayEndpoint, publishableKey:key }));
+  const outbox = outboxRef || getIdempotentOutbox();
+
+  const send = async (payload) => {
     try {
-      const response = await fetchRef(`${url}/rest/v1/rpc/record_pwa_lifecycle_v1`, {
+      const response = await dataClient.idempotentReplay(`${url}/rest/v1/rpc/record_pwa_lifecycle_v1`, {
         method:'POST',
         headers:{
           apikey:key,
           Authorization:`Bearer ${key}`,
           'Content-Type':'application/json',
         },
-        body:JSON.stringify({
-          p_installation_id:installationId,
-          p_session_id:sessionId,
-          p_event_kind:eventKind,
-        }),
+        body:JSON.stringify(payload),
         keepalive:true,
         credentials:'omit',
         referrerPolicy:'no-referrer',
@@ -63,11 +69,35 @@ export function createPwaTelemetryController({
     }
   };
 
+  const flush = () => outbox.flush(async (entry) => {
+    if (entry.channel !== 'pwa-lifecycle-v1') return 'skip';
+    const ok = await send(entry.payload);
+    return ok ? 'sent' : 'retry';
+  });
+
+  const record = async (eventKind) => {
+    const payload = {
+      p_installation_id:installationId,
+      p_session_id:sessionId,
+      p_event_kind:eventKind,
+    };
+    if (await send(payload)) return true;
+    await outbox.enqueue({
+      id:`pwa:${installationId}:${sessionId}:${eventKind}`,
+      channel:'pwa-lifecycle-v1',
+      payload,
+    });
+    return false;
+  };
+
   const onAppInstalled = () => {
     void record('install');
   };
 
   windowRef.addEventListener('appinstalled', onAppInstalled);
+  const onOnline = () => { void flush(); };
+  windowRef.addEventListener('online', onOnline);
+  void flush();
 
   if (isStandaloneDisplay(windowRef, navigatorRef)) {
     let alreadyRecorded = false;
@@ -83,6 +113,7 @@ export function createPwaTelemetryController({
   return {
     destroy() {
       windowRef.removeEventListener('appinstalled', onAppInstalled);
+      windowRef.removeEventListener('online', onOnline);
     },
     record,
     installationId,
@@ -102,6 +133,7 @@ export function hydratePwaTelemetry({
     windowRef,
     navigatorRef,
     endpoint:config.dataset.pwaTelemetryEndpoint,
+    relayEndpoint:config.dataset.pwaTelemetryRelayEndpoint || '',
     publishableKey:config.dataset.pwaTelemetryKey,
   });
 }

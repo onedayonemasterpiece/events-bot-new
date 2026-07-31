@@ -63,6 +63,7 @@ const resolvedMobileTopMode: MobileTopMode = mobileTopMode || (heroChrome === 'i
 const resolvedMobileBottomMode: MobileBottomMode = mobileBottomMode || (resolvedMobileTopMode === 'immersive' ? 'cta' : mobileSection === null ? 'none' : 'nav');
 const bodyClass = ['mobile-shell-reference4', resolvedMobileTopMode === 'immersive' ? 'hero-chrome-immersive' : null].filter(Boolean).join(' ');
 const personalizationSupabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
+const personalizationSupabaseRelayUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || '').replace(/\/+$/u, '');
 const personalizationSupabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
 const personalFeedRpcName = import.meta.env.PUBLIC_PERSONAL_FEED_RPC_NAME || 'get_listing_personal_feed_v1';
 const mobileDiscoveryBases = {
@@ -2477,7 +2478,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       }
     </style>
   </head>
-  <body class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather-r5.webp')}')`} data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-current-year={getCurrentDate().slice(0, 4)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
+  <body class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather-r5.webp')}')`} data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-current-year={getCurrentDate().slice(0, 4)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-relay-url={personalizationSupabaseRelayUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
     <PwaTelemetry />
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">
@@ -2519,6 +2520,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       import { packRelatedCardRows, relatedCardMediaGeometry, relatedCardPrimaryImageAsset, resolveMobileEventCardMedia } from '../lib/relatedCardLayout.mjs';
       import { selectEventContinuation } from '../lib/eventContinuation.mjs';
       import { composeEventShareImage } from '../lib/eventShareImage.mjs';
+      import { getResilientDataClient } from '../lib/resilientDataClient';
       Object.assign(window, {
         KenigEventsPackRelatedCardRows: packRelatedCardRows,
         KenigEventsRelatedCardMediaGeometry: relatedCardMediaGeometry,
@@ -2526,12 +2528,13 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         KenigEventsRelatedCardPrimaryImageAsset: relatedCardPrimaryImageAsset,
         KenigEventsSelectEventContinuation: selectEventContinuation,
         KenigEventsComposeEventShareImage: composeEventShareImage,
+        KenigEventsGetResilientDataClient: getResilientDataClient,
       });
     </script>
     <script is:inline>
       (() => {
         const PROFILE_KEY = 'ke_personalization_profile';
-        const LOG_KEY = 'ke_event_feedback_log_v1';
+        const LOG_KEY = 'ke_event_feedback_log_v2';
         const SHARE_PROMPT_KEY = 'ke_like_share_prompt_count_v1';
         const RESET_AT_KEY = 'ke_personalization_last_reset_at_v1';
         const PROFILE_VERSION = 'anon-profile-v1';
@@ -2541,7 +2544,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         const STATIC_ALGORITHM_ID = 'static_related_v1';
         const LOCAL_ALGORITHM_ID = 'local_related_rerank_v1';
         const LOCAL_FALLBACK_ALGORITHM_ID = 'local_related_rerank_v1_fallback';
-        const MAX_LOG = 240;
+        const MAX_LOG = 48;
         const MAX_SHARE_PROMPTS_PER_SESSION = 2;
         const DEFAULT_PRELOAD_TARGET = 10;
         const CURRENT_BASE_PATH = String(document.body?.dataset.siteBasePath || '/').replace(/\/+$/u, '') || '';
@@ -2549,7 +2552,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           try { return new URL(document.body?.dataset.siteOrigin || location.origin).origin; }
           catch (_) { return location.origin; }
         })();
-        const PERSONAL_FEED_CACHE_KEY = `ke_listing_personal_feed_cache_v1:${CURRENT_BASE_PATH || '/'}`;
+        const PERSONAL_FEED_CACHE_KEY = 'ke_listing_personal_feed_hint_v2';
         const PERSONAL_FEED_SURFACE = 'listing_personal_feed';
         const PERSONAL_FEED_SCHEMA_VERSION = 'listing-personal-feed-v1';
         const PERSONAL_FEED_LIMIT = 30;
@@ -2583,6 +2586,24 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         let shareCalloutTimer = 0;
         let pendingConsentAction = null;
         let personalFeedRequest = null;
+        const personalFeedMemoryCache = new Map();
+
+        function cleanupLegacyRuntimeStorage() {
+          try {
+            const keys = Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index)).filter(Boolean);
+            keys.forEach((key) => {
+              if (key === 'ke_event_feedback_log_v1'
+                || key === 'ke_search_feedback_queue_v1'
+                || key === 'ke_saved_event_reconciliation_v1'
+                || key.startsWith('ke_listing_personal_feed_cache_v1:')
+                || key.startsWith('ke_event_continuation_recent_v1:/preview-')
+                || key === 'ke_supabase_transport_route_v1') {
+                localStorage.removeItem(key);
+              }
+            });
+          } catch (_) {}
+        }
+        cleanupLegacyRuntimeStorage();
 
         function readJson(key, fallback) {
           try {
@@ -2908,6 +2929,44 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           };
         }
 
+        function boundedProfileIds(value, limit) {
+          return unique(toArray(value).map(asId).filter((id) => Number.isSafeInteger(id) && id > 0)).slice(-limit);
+        }
+
+        function boundedProfileMap(value, limit) {
+          if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+          return Object.fromEntries(Object.entries(value)
+            .map(([key, score]) => [String(key).slice(0, 80), Math.max(-20, Math.min(20, Number(score || 0)))])
+            .filter(([key, score]) => key && Number.isFinite(score) && score !== 0)
+            .sort((left, right) => Math.abs(right[1]) - Math.abs(left[1]))
+            .slice(0, limit));
+        }
+
+        function compactPersonalizationProfile(profile) {
+          if (!profile || typeof profile !== 'object' || Array.isArray(profile)) return profile;
+          const compact = {
+            ...profile,
+            liked_event_ids: boundedProfileIds(profile.liked_event_ids, 80),
+            not_interested_event_ids: boundedProfileIds(profile.not_interested_event_ids, 100),
+            hidden_event_ids: boundedProfileIds(profile.hidden_event_ids, 100),
+            seen_event_ids: boundedProfileIds(profile.seen_event_ids, 100),
+            seen_venue_ids: boundedProfileIds(profile.seen_venue_ids, 64),
+            positive_tags: boundedProfileMap(profile.positive_tags, 48),
+            negative_interest_tags: boundedProfileMap(profile.negative_interest_tags, 48),
+            share_counts: boundedProfileMap(profile.share_counts, 64),
+          };
+          for (const horizon of ['session', 'short', 'mid', 'long']) {
+            const source = profile[horizon];
+            if (!source || typeof source !== 'object' || Array.isArray(source)) continue;
+            compact[horizon] = {
+              ...source,
+              positive_tags: boundedProfileMap(source.positive_tags, 32),
+              negative_interest_tags: boundedProfileMap(source.negative_interest_tags, 32),
+            };
+          }
+          return compact;
+        }
+
         function profileHasConsent(profile) {
           return Boolean(profile && profile.consent_ok === true);
         }
@@ -2923,7 +2982,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         }
 
         function readProfile() {
-          return readJson(PROFILE_KEY, null);
+          return compactPersonalizationProfile(readJson(PROFILE_KEY, null));
         }
 
         function activeProfile(manifest) {
@@ -2932,7 +2991,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         }
 
         function saveProfile(profile) {
-          return writeJson(PROFILE_KEY, profile);
+          return writeJson(PROFILE_KEY, compactPersonalizationProfile(profile));
         }
 
         function ensureProfileAfterConsent(seed) {
@@ -3439,35 +3498,39 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         }
 
         function readPersonalFeedCache(profile, section) {
-          const cache = readJson(PERSONAL_FEED_CACHE_KEY, null);
-          if (!cache || cache.schema_version !== PERSONAL_FEED_SCHEMA_VERSION) return null;
-          if (cache.base_path !== CURRENT_BASE_PATH) return null;
-          if (Number(cache.expires_at || 0) <= Date.now()) return null;
-          if (cache.profile_hash !== personalFeedProfileHash(profile)) return null;
-          if (asId(cache.current_event_id) !== personalFeedCurrentEventId(section)) return null;
-          if (!cache.manifest || !Array.isArray(cache.manifest.related_static)) return null;
-          return cache.manifest;
+          const key = `${personalFeedProfileHash(profile)}:${personalFeedCurrentEventId(section)}`;
+          const cache = personalFeedMemoryCache.get(key);
+          if (!cache || Number(cache.expires_at || 0) <= Date.now()) {
+            personalFeedMemoryCache.delete(key);
+            return null;
+          }
+          return cache.manifest || null;
         }
 
         function writePersonalFeedCache(manifest, profile, section) {
           if (!manifest || !Array.isArray(manifest.related_static) || !manifest.related_static.length) return;
+          const profileHash = personalFeedProfileHash(profile);
+          const currentEventId = personalFeedCurrentEventId(section);
+          const expiresAt = Date.now() + PERSONAL_FEED_TTL_MS;
+          personalFeedMemoryCache.set(`${profileHash}:${currentEventId}`, { manifest, expires_at: expiresAt });
+          // Persist only a compact identity hint. Full card manifests are
+          // response/memory cache data and must not multiply by preview prefix.
           writeJson(PERSONAL_FEED_CACHE_KEY, {
-            schema_version: PERSONAL_FEED_SCHEMA_VERSION,
-            base_path: CURRENT_BASE_PATH,
-            profile_hash: personalFeedProfileHash(profile),
-            current_event_id: personalFeedCurrentEventId(section),
-            saved_at: Date.now(),
-            expires_at: Date.now() + PERSONAL_FEED_TTL_MS,
-            manifest,
+            v: 2,
+            profile_hash: profileHash,
+            current_event_id: currentEventId,
+            ids: manifest.related_static.map((item) => asId(item?.event_id)).filter(Boolean).slice(0, PERSONAL_FEED_LIMIT),
+            expires_at: expiresAt,
           });
         }
 
         function personalFeedConfig() {
           const url = String(document.body.dataset.personalFeedSupabaseUrl || '').replace(/\/+$/u, '');
+          const relayUrl = String(document.body.dataset.personalFeedSupabaseRelayUrl || '').replace(/\/+$/u, '');
           const key = String(document.body.dataset.personalFeedSupabaseKey || '');
           const rpc = String(document.body.dataset.personalFeedRpcName || 'get_listing_personal_feed_v1');
           if (!url || !key || !rpc) return null;
-          return { url, key, rpc };
+          return { url, relayUrl, key, rpc };
         }
 
         function compactProfileForRpc(profile) {
@@ -3500,7 +3563,13 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           if (!payload && personalFeedProfileIsReady(profile)) {
             const config = personalFeedConfig();
             if (config) {
-              const response = await fetch(`${config.url}/rest/v1/rpc/${encodeURIComponent(config.rpc)}`, {
+              const dataClient = window.KenigEventsGetResilientDataClient?.({
+                directUrl: config.url,
+                relayUrl: config.relayUrl,
+                publishableKey: config.key,
+              });
+              if (!dataClient) throw new Error('personal_feed_transport_unavailable');
+              const response = await dataClient.request(`${config.url}/rest/v1/rpc/${encodeURIComponent(config.rpc)}`, {
                 method: 'POST',
                 headers: {
                   Accept: 'application/json',
@@ -3513,7 +3582,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
                   p_limit: PERSONAL_FEED_LIMIT,
                   p_profile: compactProfileForRpc(profile),
                 }),
-              });
+              }, { policy: 'safe-read' });
               if (response.ok) payload = await response.json();
             }
           }
@@ -4027,13 +4096,12 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           if (!isCompatibleProfile(profile)) return;
           const log = readJson(LOG_KEY, []);
           log.push({
-            profile_id: profile.anon_id,
-            anon_id: profile.anon_id,
-            session_id: profile.session_id,
-            page: location.pathname,
-            ts: new Date().toISOString(),
-            ...entry,
-            ...(context || {}),
+            t: Date.now(),
+            a: String(entry?.action || entry?.event_kind || '').slice(0, 40),
+            e: asId(entry?.event_id),
+            r: Number.isFinite(Number(entry?.rank)) ? Number(entry.rank) : null,
+            s: String(context?.surface || entry?.surface || '').slice(0, 40),
+            p: location.pathname.slice(-96),
           });
           writeJson(LOG_KEY, log.slice(-MAX_LOG));
         }
@@ -5049,7 +5117,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           const button = event.target.closest('[data-reset-personalization]');
           if (!button) return;
           event.preventDefault();
-          const keys = [PROFILE_KEY, LOG_KEY, SHARE_PROMPT_KEY, PERSONAL_FEED_CACHE_KEY, EVENT_CONTINUATION_RECENT_KEY, LISTING_MODE_KEY, CALENDAR_STATE_KEY, CALENDAR_USAGE_KEY];
+          const keys = [PROFILE_KEY, LOG_KEY, 'ke_event_feedback_log_v1', 'ke_search_feedback_queue_v1', 'ke_search_feedback_queue_v2', SHARE_PROMPT_KEY, PERSONAL_FEED_CACHE_KEY, EVENT_CONTINUATION_RECENT_KEY, LISTING_MODE_KEY, CALENDAR_STATE_KEY, CALENDAR_USAGE_KEY];
           keys.forEach((key) => {
             try { localStorage.removeItem(key); } catch (_) {}
           });
@@ -5186,7 +5254,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
             list.innerHTML = '';
             log.slice().reverse().slice(0, 30).forEach((item) => {
               const li = document.createElement('li');
-              li.textContent = `${item.ts} · ${item.action || item.event_kind} · #${item.event_id} ${item.event_title || ''}`;
+              li.textContent = `${item.t ? new Date(item.t).toISOString() : ''} · ${item.a || ''} · #${item.e || ''}`;
               list.appendChild(li);
             });
             if (!log.length) {

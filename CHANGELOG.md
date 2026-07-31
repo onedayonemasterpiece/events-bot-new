@@ -86,6 +86,7 @@
   desired-state RPC; event search authenticates the user before service-only
   vector/quota/audit RPCs, adds idempotent quota operation IDs, caps request
   bodies and makes search feedback idempotent, rate- and retention-bounded.
+- Unified static-site browser database access behind a configuration-keyed resilient client: safe reads can use one bounded alternate route, cost-bearing Search/OTP writes are never duplicated after ambiguous timeouts, idempotent telemetry uses a channel-safe bounded outbox, and application storage is capped below 64 KiB without touching Supabase Auth sessions.
 - Fixed a production Smart Update crash introduced by KGD80 provenance
   grounding: poster evidence now reads the real managed/source URL fields
   instead of nonexistent `PosterCandidate.url`; poster-bearing VK and exact

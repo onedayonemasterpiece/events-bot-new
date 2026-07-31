@@ -1,5 +1,6 @@
 ---
 const endpoint = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
+const relayEndpoint = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || '').replace(/\/+$/u, '');
 const publishableKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
 const enabled = Boolean(endpoint && publishableKey);
 ---
@@ -8,6 +9,7 @@ const enabled = Boolean(endpoint && publishableKey);
   <span
     data-pwa-telemetry-config
     data-pwa-telemetry-endpoint={endpoint}
+    data-pwa-telemetry-relay-endpoint={relayEndpoint || undefined}
     data-pwa-telemetry-key={publishableKey}
     hidden
     aria-hidden="true"

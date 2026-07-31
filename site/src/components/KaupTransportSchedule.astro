@@ -12,6 +12,7 @@ const headingId = suggestion ? `kaup-transport-${event.id}` : undefined;
 const experimentMode = normalizeTransportExperimentMode(import.meta.env.PUBLIC_TRANSPORT_TIMETABLE_EXPERIMENT_MODE);
 const experimentReleaseId = import.meta.env.PUBLIC_STATIC_RELEASE_ID || import.meta.env.PUBLIC_PREVIEW_BUILD_ID || 'unversioned';
 const personalizationSupabaseUrl = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '';
+const personalizationSupabaseRelayUrl = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || '';
 const personalizationSupabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
 ---
 {suggestion && (
@@ -41,6 +42,7 @@ const personalizationSupabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABA
         mode={experimentMode}
         releaseId={experimentReleaseId}
         supabaseUrl={personalizationSupabaseUrl}
+        supabaseRelayUrl={personalizationSupabaseRelayUrl}
         supabaseKey={personalizationSupabaseKey}
       /> : <p>Подходящих рейсов к началу события не найдено.</p>}
 

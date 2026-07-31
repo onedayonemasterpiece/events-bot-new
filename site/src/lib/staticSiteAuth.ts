@@ -1,9 +1,9 @@
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
 import {
-  createResilientSupabaseTransport,
   supabaseAuthStorageKey,
   type ResilientSupabaseTransport,
 } from './resilientSupabaseTransport';
+import { getResilientDataClient, type ResilientDataClient } from './resilientDataClient';
 
 export interface StaticSiteAuthConfig {
   supabaseUrl: string;
@@ -19,6 +19,20 @@ export interface StaticSiteAuthSnapshot {
   callbackAttempted: boolean;
 }
 
+export type StaticSiteEmailOtpStatus = 'accepted' | 'rate_limited' | 'ambiguous' | 'request_failed';
+
+export interface StaticSiteEmailOtpResult {
+  status: StaticSiteEmailOtpStatus;
+  accepted: boolean;
+  message: string;
+}
+
+export interface StaticSiteEmailVerifyResult {
+  ok: boolean;
+  status: 'verified' | 'invalid' | 'ambiguous' | 'request_failed';
+  message: string;
+}
+
 type AuthSubscriber = (snapshot: StaticSiteAuthSnapshot) => void;
 
 const CONTROLLER_KEY = '__KENIGEVENTS_STATIC_SITE_AUTH_V1__';
@@ -26,8 +40,7 @@ const PKCE_COOKIE_PREFIX = 'ke_pkce_';
 const AUTH_INTENT_KEY = 'ke_yandex_auth_intent_v1';
 const CALLBACK_TIMEOUT_MS = 20_000;
 const SESSION_TIMEOUT_MS = 8_000;
-const EMAIL_OTP_TIMEOUT_MS = 12_000;
-const CALLBACK_KEYS = ['code', 'error', 'error_code', 'error_description', 'state', 'sb'];
+const CALLBACK_KEYS = ['code', 'error', 'error_code', 'error_description', 'state', 'sb', 'email_callback', 'token_hash', 'type'];
 
 function isPkceCodeVerifierKey(key: string): boolean {
   return key.endsWith('-code-verifier');
@@ -177,6 +190,7 @@ class StaticSiteAuthController {
   readonly config: Required<StaticSiteAuthConfig>;
   readonly client: SupabaseClient;
   readonly transport: ResilientSupabaseTransport;
+  readonly dataClient: ResilientDataClient;
   private subscribers = new Set<AuthSubscriber>();
   private initialization: Promise<StaticSiteAuthSnapshot> | null = null;
   private snapshot: StaticSiteAuthSnapshot = {
@@ -193,14 +207,15 @@ class StaticSiteAuthController {
       publishableKey: config.publishableKey,
       provider: config.provider || 'custom:yandex',
     };
-    this.transport = createResilientSupabaseTransport({
+    this.dataClient = getResilientDataClient({
       directUrl: this.config.supabaseUrl,
       relayUrl: this.config.relayUrl,
       publishableKey: this.config.publishableKey,
     });
+    this.transport = this.dataClient.transport;
     this.client = createClient(this.config.supabaseUrl, this.config.publishableKey, {
       global: {
-        fetch: this.transport.fetch,
+        fetch: this.dataClient.fetch,
       },
       auth: {
         persistSession: true,
@@ -265,6 +280,44 @@ class StaticSiteAuthController {
     }
 
     const code = params.get('code');
+    const tokenHash = params.get('token_hash');
+    const callbackType = params.get('type');
+    if (tokenHash && callbackType) {
+      this.publish({
+        status: 'checking',
+        user: null,
+        message: 'Завершаю вход по ссылке из письма…',
+        callbackAttempted: true,
+      });
+      try {
+        const { data, error } = await this.client.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: callbackType as any,
+        });
+        if (error) throw error;
+        cleanCallbackHistory();
+        if (data.session?.user) {
+          writeAuthIntent('signed_in');
+          return this.publish({
+            status: 'signed_in',
+            user: data.session.user,
+            message: `Вошли как ${staticAuthDisplayName(data.session.user)}`,
+            callbackAttempted: true,
+          });
+        }
+        throw new Error('email_callback_no_session');
+      } catch {
+        cleanCallbackHistory();
+        writeAuthIntent('email_callback_failed');
+        return this.publish({
+          status: 'error',
+          user: null,
+          message: 'Ссылка устарела или уже использована. Запросите новое письмо.',
+          callbackAttempted: true,
+        });
+      }
+    }
+
     if (code) {
       this.publish({
         status: 'checking',
@@ -401,10 +454,10 @@ class StaticSiteAuthController {
     return false;
   }
 
-  async signInWithEmailOtp(email: string, redirectTo = cleanStaticAuthUrl()): Promise<boolean> {
+  async signInWithEmailOtp(email: string, redirectTo = cleanStaticAuthUrl()): Promise<StaticSiteEmailOtpResult> {
     await this.initialize();
     const normalizedEmail = String(email || '').trim().toLocaleLowerCase('en-US');
-    if (!normalizedEmail) return false;
+    if (!normalizedEmail) return { status: 'request_failed', accepted: false, message: 'Введите адрес электронной почты.' };
     writeAuthIntent('email_login_started', { redirect_to: redirectTo });
     this.publish({
       status: 'checking',
@@ -413,18 +466,18 @@ class StaticSiteAuthController {
       callbackAttempted: false,
     });
     let error: unknown = null;
+    const requestStartedAt = Date.now();
     try {
-      const result = await withTimeout(
-        this.client.auth.signInWithOtp({
-          email: normalizedEmail,
-          options: {
-            emailRedirectTo: redirectTo,
-            shouldCreateUser: true,
-          },
-        }),
-        EMAIL_OTP_TIMEOUT_MS,
-        'email_otp_timeout',
-      );
+      // The transport owns the only request timeout. A caller-side Promise.race
+      // cannot cancel or disambiguate the underlying OTP POST and previously
+      // allowed a late request to finish after the UI had offered a resend.
+      const result = await this.client.auth.signInWithOtp({
+        email: normalizedEmail,
+        options: {
+          emailRedirectTo: redirectTo,
+          shouldCreateUser: true,
+        },
+      });
       error = result.error;
     } catch (caught) {
       error = caught;
@@ -436,21 +489,86 @@ class StaticSiteAuthController {
         message: 'Письмо отправлено. Откройте одноразовую ссылку в этом браузере.',
         callbackAttempted: false,
       });
-      return true;
+      return { status: 'accepted', accepted: true, message: 'Письмо отправлено. Откройте одноразовую ссылку в этом браузере.' };
     }
     const rawMessage = String((error as Error)?.message || error);
-    writeAuthIntent('email_login_failed', { reason: rawMessage.slice(0, 120) });
+    const ambiguous = this.transport.wasAmbiguousSince(requestStartedAt);
+    const noHealthyRoute = this.transport.hadNoHealthyRouteSince(requestStartedAt);
+    writeAuthIntent(ambiguous ? 'email_login_ambiguous' : 'email_login_failed', { reason: rawMessage.slice(0, 120) });
+    const status: StaticSiteEmailOtpStatus = ambiguous
+      ? 'ambiguous'
+      : /rate|too many|429/iu.test(rawMessage)
+        ? 'rate_limited'
+        : 'request_failed';
+    const message = ambiguous
+      ? 'Не получили подтверждение отправки. Запрос мог быть принят — не отправляйте его повторно сразу, сначала проверьте почту.'
+      : noHealthyRoute
+        ? 'Сейчас нет устойчивого соединения для отправки письма. Подождите немного и попробуйте ещё раз.'
+        : status === 'rate_limited'
+          ? 'Слишком много попыток подряд. Подождите немного и повторите отправку.'
+          : 'Не удалось отправить письмо. Проверьте адрес и попробуйте ещё раз.';
     this.publish({
       status: 'error',
       user: null,
-      message: rawMessage === 'email_otp_timeout'
-        ? 'Не получили подтверждение отправки. Письмо могло не уйти — подождите и попробуйте ещё раз.'
-        : /rate|too many|429/iu.test(rawMessage)
-          ? 'Слишком много попыток подряд. Подождите немного и повторите отправку.'
-          : 'Не удалось отправить письмо. Проверьте адрес и попробуйте ещё раз.',
+      message,
       callbackAttempted: false,
     });
-    return false;
+    return { status, accepted: false, message };
+  }
+
+  async verifyEmailOtp(email: string, token: string): Promise<StaticSiteEmailVerifyResult> {
+    await this.initialize();
+    const normalizedEmail = String(email || '').trim().toLocaleLowerCase('en-US');
+    const normalizedToken = String(token || '').replace(/\D/gu, '').slice(0, 6);
+    if (!normalizedEmail || !/^\d{6}$/u.test(normalizedToken)) {
+      return { ok: false, status: 'invalid', message: 'Проверьте адрес и код из письма.' };
+    }
+    const startedAt = Date.now();
+    try {
+      const { data, error } = await this.client.auth.verifyOtp({
+        email: normalizedEmail,
+        token: normalizedToken,
+        type: 'email',
+      });
+      if (error) throw error;
+      if (!data.session?.user) throw new Error('email_otp_no_session');
+      writeAuthIntent('signed_in');
+      this.publish({
+        status: 'signed_in',
+        user: data.session.user,
+        message: `Вошли как ${staticAuthDisplayName(data.session.user)}`,
+        callbackAttempted: true,
+      });
+      return { ok: true, status: 'verified', message: 'Код подтверждён.' };
+    } catch (error) {
+      const ambiguous = this.transport.wasAmbiguousSince(startedAt);
+      return ambiguous
+        ? { ok: false, status: 'ambiguous', message: 'Ответ не получен. Не вводите код повторно сразу — сначала обновите страницу.' }
+        : { ok: false, status: 'invalid', message: 'Код неверный, устарел или уже использован.' };
+    }
+  }
+
+  async registerFocusGroupParticipant(input: { focusUpdatesConsent: boolean; sourceRoute: string }): Promise<boolean> {
+    const session = await this.getSession();
+    if (!session?.user) return false;
+    const { error } = await this.client.rpc('register_focus_group_participant_v1', {
+      p_communication_opt_in: input.focusUpdatesConsent === true,
+      p_source_route: String(input.sourceRoute || window.location.pathname).slice(0, 160),
+    });
+    return !error;
+  }
+
+  async resetForOnboardingTest(): Promise<void> {
+    try { await this.client.auth.signOut({ scope: 'local' }); } catch { /* best effort test reset */ }
+    clearAuthIntent();
+    this.initialization = null;
+    this.publish({
+      status: 'signed_out',
+      user: null,
+      message: 'Можно пройти вход заново.',
+      callbackAttempted: false,
+    });
+    cleanCallbackHistory();
   }
 
   async linkYandexIdentity(): Promise<boolean> {

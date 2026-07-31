@@ -3,7 +3,7 @@
 > Status, 2026-07-27: backend P0 infrastructure is deployed; the static client
 > now has one origin-scoped Supabase/Yandex PKCE controller shared by Search,
 > Personal and the mobile menu. Enter/search-key submission and bounded
-> response-header/stream rescue are implemented. Production UX is still
+> bounded response-header/stream failure states are implemented without duplicate POST rescue. Production UX is still
 > conditional on a fresh immutable-candidate real Yandex round-trip and real
 > Edge-result browser acceptance; historical preview evidence is not that gate.
 
@@ -94,8 +94,9 @@ fake Yandex/email states и маленькие bespoke result rows не пере
 revision `2ef8dd834d…`. Текущий Astro `AuthorizedEventSearch` сохраняет отдельный
 full-width submit под input; `::before` отображает `--search-progress`, а
 результаты строятся только общим runtime `EventCard`. Yandex/Supabase PKCE,
-session restore, NDJSON/vector-first и stalled-stream JSON rescue не
-переписываются. Email не является частью этого donor и не показывается.
+session restore и NDJSON/vector-first не переписываются. Автоматический
+stalled-stream JSON rescue superseded: cost-bearing Search POST отправляется
+ровно один раз по заранее выбранному доступному маршруту. Email не является частью этого donor и не показывается.
 
 Ниже поиска располагается тихая секция `Готовые подборки` с полными живыми
 фразами, которые одновременно учат формулировать запрос. Централизованно
@@ -586,7 +587,7 @@ Incident `INC-2026-07-02-static-search-92-percent-no-cards` showed that the prev
 
 The accepted public contract is therefore not “disable LLM”, but “stream vector first and cap the verifier”. The frontend uses NDJSON streaming and requests `limit=8`, `candidate_window=10`, `use_llm_verifier=true`, `allow_llm_fallback=false`. The Edge Function emits `vector_results` immediately after the pgvector RPC, then tries Gemini Lite with compact facts and no-recursion shrink `10→5→3` inside the 4.3s Lite budget. If the verifier succeeds, final cards are the LLM-confirmed `exact_event_ids`; if it fails or times out, final cards remain the bounded vector candidates rather than an empty answer.
 
-The client-side SLA is a product promise, not a hard “drop the answer” timer: after `6.5s` the UI may show a soft slow-notice (“results are already available / still searching”), but it must keep already streamed vector cards visible and continue waiting for the terminal result. It must not replace available results with “search took too long”. If no NDJSON event reaches the browser at all by `7.2s` (observed on a real mobile Chrome capture stuck at `92%` with no cards), the UI cancels the stream and reissues a JSON `stream_rescue` request with the LLM verifier disabled; this can spend one extra vector quota unit in the broken-stream path, but it preserves the product contract that the user sees event cards. “Показать ещё” stays visible as a disabled `Загружаю ещё…` control during the next batch instead of disappearing silently. Search feedback is optimistic: the click immediately records a local queue item and shows a visible “saving” state; the Supabase RPC then confirms it as saved or leaves a clear local-only state if the server is slow.
+The client-side SLA is bounded and honest. Already delivered vector cards remain visible, but a header or stream stall must not issue a second cost-bearing request: the first request may already be executing and consuming quota. The shared transport selects one healthy direct/relay route before submit, sends the Search POST once, cancels a stalled response and returns the form to an explicit retryable error state. A retry is always a new user action. “Показать ещё” stays visible as a disabled `Загружаю ещё…` control during the next batch instead of disappearing silently. Search feedback remains optimistic but its local fallback queue is compact, capped and expiring.
 
 
 ### Query embedding cache
@@ -781,8 +782,9 @@ accidental logout tap while typing/searching on mobile.
 The production browser calls `event-search` with `Accept: application/json`.
 NDJSON remains an explicit diagnostics opt-in; the normal mobile path must not
 wait for streamed response headers/chunks that Android Chrome or an in-app
-WebView may buffer. One bounded fast JSON retry is allowed only for a genuine
-transport failure (not for backend/business errors). Earlier v57 temporarily
+WebView may buffer. Search is cost-bearing and therefore uses the shared
+`selected-once` policy: no automatic second POST is allowed after a timeout or
+transport failure. Earlier v57 temporarily
 used `use_llm_verifier=false` as a production-safety rollback after live mobile
 evidence showed two different failure modes:
 
@@ -1094,7 +1096,7 @@ Search progress contract:
 - the Edge Function streams compact NDJSON events with real backend stages: `accepted`, `auth`, `validate`, `quota`, `embedding`, `vector_search`, `llm_verify`, `fallback`, `finalize`, then either `result` or `error`;
 - the UI updates the button progress/status only from those streamed backend events, then renders the final result payload through the same split-action event cards;
 - if streaming is unavailable, the UI falls back to a normal JSON response, so older/non-stream responses fail gracefully instead of leaving a dead button;
-- if a mobile browser/proxy accepts the NDJSON response but does not deliver the first chunk to JavaScript, the Edge Function sends an ignored first-frame `flush_pad` and the browser rescues after `7.2s` with a normal JSON request (`stream_rescue`, verifier disabled) so the user gets fast vector cards instead of staying at the synthetic `92%` state.
+- if a mobile browser/proxy accepts NDJSON but stalls, the browser cancels that response, clears loading state and offers an explicit retry; it never duplicates the cost-bearing request automatically.
 
 Validation and error handling:
 
@@ -1194,14 +1196,11 @@ Telegram evidence `669–671` showed a real authenticated mobile request stuck a
 build succeeded, so the failure was a client liveness hole rather than a claim
 that the deployed search backend was unavailable.
 
-Every search attempt has three bounded phases: response headers, every NDJSON
-`reader.read()` (including reads after the first progress frame), and the whole
-attempt. A header/idle stall cancels only that streaming attempt and runs the
-existing bounded JSON `stream_rescue` once with the verifier disabled. The
-rescue itself cannot wait forever. If it also fails, skeleton and progress
-vanish, the input becomes editable, the button returns to `Искать`, and
-retryable product copy replaces the dead state. Request epochs prevent a late
-timed-out response from repainting a newer query; logout and page exit still
+Every search attempt has bounded response-header, NDJSON read and overall phases.
+A stall cancels only the current epoch, clears skeleton/progress and restores an
+editable form with honest retry copy. It does **not** run an automatic rescue:
+the server may already have accepted the cost-bearing POST. Request epochs still
+prevent a late response from repainting a newer query; logout and page exit
 invalidate pending session and network continuations.
 
 The account control is identity, not decoration. It exposes
@@ -1211,6 +1210,23 @@ is shown and its local part supplies the deterministic initial. A one-letter
 provider username cannot mask a known email. Opaque provider imagery is not the
 only explanation of the session, and an image failure falls back to the same
 initial.
+
+
+## R15 shared resilient-client contract, 2026-07-31
+
+`AuthorizedEventSearch` no longer owns route fallback. It uses the same
+configuration-keyed data-client singleton as Auth, personal-feed reads and
+idempotent telemetry, while the singleton itself remains independent of Auth.
+Safe reads may try the alternate healthy route once. Search and email OTP are
+non-idempotent or cost-bearing operations and use `selected-once`: they are sent
+on exactly one preselected route and an ambiguous timeout is reported honestly.
+Only an explicit new user action may retry them.
+
+The local feedback fallback is versioned, capped at 12 compact entries / 5 KiB
+and expires after seven days. It contains no session token. Browser-side
+cooldowns and caps are UX/egress controls, never the abuse boundary: Edge rate
+limits, authorization, validation and database policies remain authoritative.
+
 
 ## R14 global auth and header-stall recovery, 2026-07-27
 
@@ -1228,16 +1244,11 @@ search action: it calls native `form.requestSubmit()` and exposes
 `enterkeyhint="search"`. `Shift+Enter`, active IME composition and key code
 `229` do not submit.
 
-The existing bounded JSON rescue covers two distinct liveness failures:
-
-1. the NDJSON response is accepted but no chunk arrives within the stream-idle
-   deadline;
-2. the initial request never delivers response headers.
-
-Each failure cancels only its owning request epoch and may invoke one bounded
-JSON `stream_rescue` with `use_llm_verifier=false`. This is not an unbounded
-retry and cannot repaint a newer query. If rescue also fails, skeleton and
-progress clear and the form becomes editable again.
+Search uses the Auth-independent, configuration-keyed resilient data client.
+Safe health probes run in parallel and their selected route is briefly reused.
+The Search POST itself is `selected-once`: if neither route is healthy, nothing
+is sent; after dispatch, timeout is ambiguous and cannot trigger a second POST.
+The form always returns to an editable, explicitly retryable state.
 
 Required release evidence remains: real mobile Yandex login → return to the
 same immutable candidate → menu, Personal and Search all show the same identity

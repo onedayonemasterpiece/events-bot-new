@@ -126,6 +126,39 @@ The comment pipeline reads canonical event/source snapshots from Fly SQLite, kee
 - Postbox used as a hidden recommendation fallback, or NotiSend used for critical transactional mail.
 - Mail-trigger processing that removes the retained SpaceWeb mailbox copy, exposes attachments publicly or can create reply/Bcc loops.
 
+## Static browser transport and storage boundary
+
+All browser access to the personalization Supabase uses one configuration-keyed
+`ResilientDataClient` singleton. The singleton owns route health/selection but
+is independent of Auth; `StaticSiteAuth` consumes it rather than defining the
+data route for the rest of the site. Direct and stateless-relay probes run in
+parallel, a healthy choice is cached briefly in `sessionStorage`, and no route
+is selected when both probes fail.
+
+Every request declares one of three policies:
+
+- `safe-read`: side-effect-free reads, including explicitly read-only RPC POSTs,
+  may try the alternate healthy route once;
+- `selected-once`: OTP, Search and other non-idempotent/cost-bearing writes are
+  sent at most once; timeout after dispatch is ambiguous and never causes an
+  automatic resend;
+- `idempotent-replay`: retry/outbox is permitted only when the server contract
+  has a stable idempotency key or state-upsert uniqueness guarantee.
+
+The shared outbox is bounded (16 records, 12 KiB, 24-hour TTL, five attempts),
+uses IndexedDB with a compact localStorage fallback, deduplicates by explicit
+record id and preserves foreign channels without burning attempts. This is an
+egress/reliability mechanism, not a security boundary. RLS, server-side rate
+limits, schema validation, authentication and idempotency enforcement remain
+authoritative; client probes/cooldowns must never be represented as DDoS
+protection.
+
+KenigEvents-owned browser state has a registered worst-case budget below 64 KiB,
+excluding the Supabase-owned auth token. Profiles, feedback/search queues,
+reconciliation markers and personal-feed hints are capped and/or expiring.
+Full per-preview feed manifests and obsolete continuation caches are removed.
+Cleanup never reads, compacts or rewrites Supabase Auth storage.
+
 ## Security gates
 
 - RLS on every exposed Supabase table; ownership predicates use `auth.uid()`.

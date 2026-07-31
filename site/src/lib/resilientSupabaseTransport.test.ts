@@ -4,6 +4,10 @@ import {
   createResilientSupabaseTransport,
   supabaseAuthStorageKey,
 } from './resilientSupabaseTransport.ts';
+import {
+  getResilientDataClient,
+  resetResilientDataClientRegistryForTests,
+} from './resilientDataClient.ts';
 
 const direct = 'https://project.supabase.co';
 const relay = 'https://relay.example.test';
@@ -246,4 +250,68 @@ test('browser-native fetch keeps the global receiver', async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('exposes no healthy route and never emits a selected-once write after failed probes', async () => {
+  const calls: string[] = [];
+  const transport = createResilientSupabaseTransport({
+    directUrl: direct,
+    relayUrl: relay,
+    publishableKey: key,
+    sessionStorage: null,
+    fetchImpl: (async (input) => {
+      calls.push(String(input));
+      throw new TypeError('offline');
+    }) as typeof fetch,
+  });
+  const selection = await transport.selectRoute();
+  assert.equal(selection.route, null);
+  await assert.rejects(
+    () => transport.request(`${direct}/auth/v1/otp`, { method:'POST', body:'{}' }, { policy:'selected-once' }),
+    /supabase_transport_no_healthy_route/u,
+  );
+  assert.equal(calls.filter((url) => url.endsWith('/auth/v1/otp')).length, 0);
+});
+
+test('config-keyed data client singleton is shared without coupling it to Auth', () => {
+  resetResilientDataClientRegistryForTests();
+  const config = {
+    directUrl: direct,
+    relayUrl: relay,
+    publishableKey: key,
+    sessionStorage: null,
+    fetchImpl: (async () => new Response('{}', { status:200 })) as typeof fetch,
+  };
+  assert.equal(getResilientDataClient(config), getResilientDataClient(config));
+  assert.notEqual(getResilientDataClient(config), getResilientDataClient({ ...config, relayUrl:'https://other-relay.test' }));
+});
+
+test('selected-once does not retry while explicitly idempotent POST may recover once', async () => {
+  const calls: string[] = [];
+  const transport = createResilientSupabaseTransport({
+    directUrl: direct,
+    relayUrl: relay,
+    publishableKey: key,
+    sessionStorage: null,
+    fetchImpl: (async (input) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.endsWith('/auth/v1/health')) return new Response('{}', { status:url.startsWith(direct) ? 200 : 204 });
+      if (url.startsWith(direct)) throw new TypeError('degraded');
+      return new Response('{}', { status:200 });
+    }) as typeof fetch,
+  });
+  await assert.rejects(
+    () => transport.request(`${direct}/functions/v1/search`, { method:'POST', body:'{}' }, { policy:'selected-once' }),
+    /supabase_transport_ambiguous_result/u,
+  );
+  assert.equal(calls.filter((url) => url.includes('/functions/v1/search')).length, 1);
+
+  const response = await transport.request(
+    `${direct}/rest/v1/rpc/idempotent_metric`,
+    { method:'POST', body:'{}' },
+    { policy:'idempotent-replay' },
+  );
+  assert.equal(response.ok, true);
+  assert.equal(calls.filter((url) => url.includes('/rest/v1/rpc/idempotent_metric')).length, 2);
 });
