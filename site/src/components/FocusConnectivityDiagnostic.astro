@@ -52,8 +52,15 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
         <div><dt>Режим</dt><dd data-connectivity-network>—</dd></div>
       </dl>
       <p class="connectivity__send">
-        Сделайте скриншот этого экрана и отправьте человеку, который прислал ссылку.
+        Отправьте скриншот или скопируйте строку результата.
       </p>
+      <label class="connectivity__copy">
+        <span>Строка результата</span>
+        <input type="text" readonly data-connectivity-copy value="" />
+      </label>
+      <button class="connectivity__copy-button" type="button" data-connectivity-copy-button>
+        Скопировать результат
+      </button>
     </div>
   </section>
 </main>
@@ -73,6 +80,8 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
   const receiptId = root?.querySelector<HTMLElement>('[data-connectivity-id]');
   const receiptWhen = root?.querySelector<HTMLElement>('[data-connectivity-when]');
   const receiptNetwork = root?.querySelector<HTMLElement>('[data-connectivity-network]');
+  const copyField = root?.querySelector<HTMLInputElement>('[data-connectivity-copy]');
+  const copyButton = root?.querySelector<HTMLButtonElement>('[data-connectivity-copy-button]');
   let coolingDown = false;
 
   const diagnosticId = () => {
@@ -118,6 +127,41 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
       }
     }, 30_000);
   };
+
+  const compactProbe = (result: ConnectivityProbeResult | undefined) => {
+    if (!result) return 'NC';
+    const state = {
+      ok: 'OK',
+      http_error: `HTTP${result.status || 0}`,
+      timeout: 'TO',
+      network_error: 'NET',
+      not_configured: 'NC',
+    }[result.state];
+    const timing = result.medianMs === null ? '' : `/${Math.round(result.medianMs)}`;
+    return `${state}${timing}`;
+  };
+
+  copyButton?.addEventListener('click', async () => {
+    const value = copyField?.value || '';
+    if (!value || !copyButton) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else if (copyField) {
+        copyField.focus();
+        copyField.select();
+        if (!document.execCommand('copy')) throw new Error('copy_not_supported');
+      }
+      copyButton.textContent = 'Скопировано';
+      window.setTimeout(() => {
+        copyButton.textContent = 'Скопировать результат';
+      }, 2_500);
+    } catch {
+      copyField?.focus();
+      copyField?.select();
+      copyButton.textContent = 'Строка выделена';
+    }
+  });
 
   runButton?.addEventListener('click', async () => {
     if (!root || !runButton || coolingDown) return;
@@ -181,6 +225,8 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
       connection?: { effectiveType?: string };
     }).connection;
     const checkedAt = new Date();
+    const standalone = window.matchMedia('(display-mode: standalone)').matches;
+    const serviceWorkerActive = Boolean(navigator.serviceWorker?.controller);
     const failed = measured.filter((result) => result.state !== 'ok').length;
     const directOk = measured.find((result) => result.id === 'supabase-direct')?.state === 'ok';
     const protectedOk = measured
@@ -213,7 +259,7 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
       });
     }
     if (receiptNetwork) {
-      const mode = window.matchMedia('(display-mode: standalone)').matches ? 'приложение' : 'браузер';
+      const mode = standalone ? 'приложение' : 'браузер';
       const network = {
         'slow-2g': 'очень медленное соединение',
         '2g': 'медленное соединение',
@@ -222,6 +268,22 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
       }[String(connection?.effectiveType || '')] || 'скорость не определена';
       const offlineSupport = navigator.serviceWorker?.controller ? ' · офлайн-режим активен' : '';
       receiptNetwork.textContent = `${mode} · ${network}${offlineSupport}`;
+    }
+    if (copyField) {
+      const byId = new Map(measured.map((result) => [result.id, result]));
+      const quality = String(connection?.effectiveType || 'unknown').toUpperCase();
+      copyField.value = [
+        'KE2',
+        probeId,
+        checkedAt.toISOString(),
+        `D=${compactProbe(byId.get('supabase-direct'))}`,
+        `A=${compactProbe(byId.get('supabase-auth'))}`,
+        `S=${compactProbe(byId.get('supabase-data'))}`,
+        `R=${compactProbe(byId.get('ydb-control'))}`,
+        `MODE=${standalone ? 'APP' : 'WEB'}`,
+        `QUALITY=${quality}`,
+        `OFFLINE=${serviceWorkerActive ? 1 : 0}`,
+      ].join(' ');
     }
     if (receiptRoot) receiptRoot.hidden = false;
     runButton.removeAttribute('aria-busy');
@@ -312,6 +374,32 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     background: #fbe4d6;
     font-size: .86rem;
     font-weight: 750;
+  }
+  .connectivity__copy {
+    display: grid;
+    gap: .25rem;
+    color: #7a6a5e;
+    font-size: .75rem;
+  }
+  .connectivity__copy input {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid #d9c5b4;
+    border-radius: .7rem;
+    padding: .62rem .7rem;
+    color: #493329;
+    background: #fff;
+    font: 700 .72rem/1.2 ui-monospace, monospace;
+  }
+  .connectivity__copy-button {
+    min-height: 2.75rem;
+    border: 1px solid #a74523;
+    border-radius: 999px;
+    padding: .65rem 1rem;
+    color: #8d371b;
+    background: #fff9f3;
+    font: 800 .9rem/1 system-ui, sans-serif;
+    cursor: pointer;
   }
   [hidden] { display: none !important; }
   @media (max-width: 460px) {
