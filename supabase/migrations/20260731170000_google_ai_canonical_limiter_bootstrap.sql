@@ -183,6 +183,7 @@ CREATE OR REPLACE FUNCTION google_ai_limiter_capabilities()
 RETURNS JSONB
 LANGUAGE sql
 STABLE
+SET search_path = public, pg_temp
 AS $$
     SELECT jsonb_build_object(
         'limiter_contract', 'google_ai_project_model_atomic_v1',
@@ -203,6 +204,7 @@ CREATE OR REPLACE FUNCTION google_ai_reserve(
 )
 RETURNS JSONB
 LANGUAGE plpgsql
+SET search_path = public, pg_temp
 AS $$
 DECLARE
     v_contract CONSTANT TEXT := 'google_ai_project_model_atomic_v1';
@@ -433,6 +435,7 @@ CREATE OR REPLACE FUNCTION google_ai_mark_sent(
 )
 RETURNS VOID
 LANGUAGE plpgsql
+SET search_path = public, pg_temp
 AS $$
 BEGIN
     UPDATE google_ai_requests
@@ -459,6 +462,7 @@ CREATE OR REPLACE FUNCTION google_ai_finalize(
 )
 RETURNS VOID
 LANGUAGE plpgsql
+SET search_path = public, pg_temp
 AS $$
 DECLARE
     v_request RECORD;
@@ -524,6 +528,7 @@ CREATE OR REPLACE FUNCTION google_ai_sweep_stale(
 )
 RETURNS JSONB
 LANGUAGE plpgsql
+SET search_path = public, pg_temp
 AS $$
 DECLARE
     v_now TIMESTAMPTZ := timezone('utc', now());
@@ -623,6 +628,7 @@ CREATE OR REPLACE FUNCTION google_ai_finalize_interaction(
 )
 RETURNS VOID
 LANGUAGE plpgsql
+SET search_path = public, pg_temp
 AS $$
 DECLARE
     v_request RECORD;
@@ -730,6 +736,7 @@ CREATE OR REPLACE FUNCTION google_ai_record_interaction_semantic(
 )
 RETURNS VOID
 LANGUAGE plpgsql
+SET search_path = public, pg_temp
 AS $$
 DECLARE
     v_terminal_status TEXT;
