@@ -228,7 +228,14 @@ The relay is a fixed upstream HTTP integration. It forwards the publishable key,
 user JWT and request body, while Supabase still performs token validation and
 RLS. It stores no user or business data and runs no application function. CORS
 must allow only the production origin(s); request bodies and authorization
-headers must not be logged.
+headers must not be logged. API Gateway does not forward browser headers by
+default, so the fixed integration explicitly enables original header and query
+forwarding while removing cookies and forwarded-host metadata.
+The browser transport binds the native `fetch` to `globalThis`; otherwise some
+Chromium builds reject the detached Web IDL method before a network request is
+created. Relay smoke commands must fail closed when the publishable-key env is
+absent; an empty local env lane creates a misleading upstream `401` and is not
+evidence that API Gateway dropped a header.
 
 The browser outbox is bounded and local-first:
 
@@ -304,6 +311,9 @@ Implementation state on 31 July:
   and Kaggle static-build configuration but is never used by bulk exports;
 - the `KE3` diagnostic compares raw direct checks with the actual framework
   path and reports the selected route without exposing provider names or PII.
+- production-browser acceptance must prove that the actual framework rows made
+  network requests and returned HTTP results; an immediate `NET/0` is a client
+  invocation failure and cannot be counted as relay evidence.
 
 This is not incident closure: separate live OTP code and magic-link E2E, an
 affected-phone `KE3` receipt, verified membership activation and delivery

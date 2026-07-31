@@ -105,6 +105,20 @@ after any failed transport result and therefore communicated a false success.
   storage key and forbids cross-route retry for non-safe methods. A new `KE3`
   diagnostic compares raw direct reads with framework reads; affected-phone
   acceptance and live email issuances are still pending.
+- 2026-07-31 14:49 UTC — first post-publication `KE3` browser run exposed a
+  client release defect before phone acceptance: native `fetch` had been stored
+  unbound and failed immediately (`NET/0`) in Chromium. The client now binds
+  browser `fetch`, with a regression test for the native receiver. A parallel
+  relay-header probe initially reported `401`, but that probe had read the wrong
+  env lane and sent an empty public key; rerunning with the configured key
+  returned Auth/Data 200 through the unchanged stateless Gateway. Smoke scripts
+  must therefore fail before network I/O when the key is empty.
+- 2026-07-31 15:08 UTC — the corrected root diagnostic passed real Chromium at
+  390×844 and 1440×900. Receipts `325F-E907` and `FEF9-B695` reported all six
+  checks `OK`, including the raw second route and the actual resilient Auth/Data
+  framework path; there were no failed requests, console errors or horizontal
+  overflow. This is release evidence for the diagnostic/framework on the
+  current network, not a substitute for the affected participant-phone run.
 
 ## Root Cause
 
@@ -266,11 +280,13 @@ after any failed transport result and therefore communicated a false success.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
+- deployed SHAs: framework/main `d1628867c0d8b3485e7ae9a8b622239f932682a8`;
+  browser-fetch hotfix `625bfc3b` (root diagnostic assets verified live)
 - relay deploy path: Yandex API Gateway `kenigevents-supabase-relay`
 - regression checks: local focus suite, relay infra tests and Astro build pass;
   live production-origin CORS/Auth/Data/invalid-verify/invalid-refresh smoke pass
-- post-deploy verification: pending
+- post-deploy verification: corrected root `KE3` passes all six checks in real
+  Chromium at mobile and desktop widths; affected-phone acceptance remains open
 
 ## Prevention
 
