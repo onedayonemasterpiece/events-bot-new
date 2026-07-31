@@ -435,6 +435,69 @@ def check_bucket_usage_limit_from_env(
     )
 
 
+async def enqueue_orphan_video_assets(db: Any) -> int:
+    """Queue unreferenced video binaries while retaining exact-SHA analysis.
+
+    Only the main CDN object is represented by ``video_asset.cdn_path``.  The
+    producer's analysis sidecars are deliberately outside this cleanup path.
+    Once queued, CDN fields are cleared in the same transaction so subsequent
+    sweeps cannot enqueue the object forever.  An accepted relink restores the
+    fields and cancels the matching queue row.
+    """
+
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT va.id, va.cdn_bucket, va.cdn_path, va.cdn_url
+            FROM video_asset AS va
+            WHERE NOT EXISTS (
+                SELECT 1 FROM event_video_link AS evl
+                WHERE evl.video_asset_id = va.id
+            )
+              AND (va.cdn_path IS NOT NULL OR va.cdn_url IS NOT NULL)
+            """
+        )
+        assets = await cur.fetchall()
+        targets: set[tuple[str, str]] = set()
+        asset_ids: list[int] = []
+        for asset_id, cdn_bucket, cdn_path, cdn_url in assets:
+            bucket = str(cdn_bucket or "").strip()
+            path = str(cdn_path or "").strip().lstrip("/")
+            parsed = parse_storage_object_url(str(cdn_url or "").strip())
+            if parsed:
+                parsed_bucket, parsed_path = parsed
+                bucket = bucket or parsed_bucket
+                path = path or parsed_path
+            if not (bucket and path):
+                continue
+            targets.add((bucket, path))
+            asset_ids.append(int(asset_id))
+
+        if not targets:
+            return 0
+        await conn.executemany(
+            "INSERT OR IGNORE INTO supabase_delete_queue(bucket, path) VALUES(?, ?)",
+            sorted(targets),
+        )
+        await conn.executemany(
+            """
+            UPDATE video_asset
+            SET cdn_url = NULL,
+                cdn_path = NULL,
+                cdn_bucket = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+              AND NOT EXISTS (
+                  SELECT 1 FROM event_video_link
+                  WHERE event_video_link.video_asset_id = video_asset.id
+              )
+            """,
+            [(asset_id,) for asset_id in asset_ids],
+        )
+        await conn.commit()
+    return len(targets)
+
+
 async def flush_supabase_delete_queue(
     db: Any,
     *,
@@ -519,12 +582,75 @@ async def flush_supabase_delete_queue(
         yandex_buckets = set()
         yandex_client = None
 
-    for bucket, items in by_bucket.items():
+    bucket_items = list(by_bucket.items())
+    if supabase_client is None and yandex_buckets:
+        # A missing Supabase client must not let an older Supabase queue row
+        # block later Yandex CDN cleanup rows.
+        bucket_items.sort(key=lambda pair: 0 if pair[0] in yandex_buckets else 1)
+
+    async def _is_referenced(bucket: str, path: str) -> bool:
+        """Fail closed when a stale queue row has become live again."""
+
+        try:
+            async with db.raw_conn() as conn:
+                cur = await conn.execute(
+                    """
+                    SELECT 1
+                    FROM video_asset AS va
+                    JOIN event_video_link AS evl ON evl.video_asset_id = va.id
+                    WHERE va.cdn_path = ?
+                      AND (va.cdn_bucket = ? OR va.cdn_bucket IS NULL)
+                    LIMIT 1
+                    """,
+                    (path, bucket),
+                )
+                if await cur.fetchone():
+                    return True
+                # Protect legacy managed-media rows while the normalized video
+                # schema and older poster/media writers coexist.
+                cur = await conn.execute(
+                    "SELECT 1 FROM event_media_asset WHERE supabase_path = ? LIMIT 1",
+                    (path,),
+                )
+                if await cur.fetchone():
+                    return True
+                cur = await conn.execute(
+                    "SELECT 1 FROM eventposter WHERE supabase_path = ? LIMIT 1",
+                    (path,),
+                )
+                return bool(await cur.fetchone())
+        except Exception:
+            # Reference verification is a deletion safety gate.  Schema or DB
+            # errors must retain the object for a future attempt.
+            return True
+
+    removed_targets: list[tuple[str, str]] = []
+    for bucket, items in bucket_items:
         paths = [p for _, p in items]
         ids = [i for i, _ in items]
         for start in range(0, len(paths), chunk_size):
             chunk_paths = paths[start : start + chunk_size]
             chunk_ids = ids[start : start + chunk_size]
+            deletable_paths: list[str] = []
+            deletable_ids: list[int] = []
+            protected_ids: list[int] = []
+            for qid, object_path in zip(chunk_ids, chunk_paths):
+                if await _is_referenced(bucket, object_path):
+                    protected_ids.append(int(qid))
+                else:
+                    deletable_ids.append(int(qid))
+                    deletable_paths.append(object_path)
+            if protected_ids:
+                # Relinking wins over an old delete intent.  Removing the
+                # intent here also makes repeated queue flushes idempotent.
+                async with db.raw_conn() as conn:
+                    await conn.executemany(
+                        "DELETE FROM supabase_delete_queue WHERE id = ?",
+                        [(qid,) for qid in protected_ids],
+                    )
+                    await conn.commit()
+            if not deletable_paths:
+                continue
             try:
                 if (yandex_bucket and bucket == yandex_bucket) or bucket in yandex_buckets:
                     if yandex_client is None:
@@ -534,7 +660,7 @@ async def flush_supabase_delete_queue(
                     await asyncio.to_thread(
                         delete_yandex_objects,
                         bucket=bucket,
-                        object_paths=chunk_paths,
+                        object_paths=deletable_paths,
                         client=yandex_client,
                     )
                 else:
@@ -542,11 +668,12 @@ async def flush_supabase_delete_queue(
                         raise RuntimeError("supabase client unavailable")
                     await asyncio.to_thread(
                         supabase_client.storage.from_(bucket).remove,
-                        chunk_paths,
+                        deletable_paths,
                     )
-                removed_ids.extend(chunk_ids)
+                removed_ids.extend(deletable_ids)
+                removed_targets.extend((bucket, path) for path in deletable_paths)
             except Exception as exc:
-                failed_ids.extend(chunk_ids)
+                failed_ids.extend(deletable_ids)
                 # Don't keep hammering Supabase; leave the rest for the next run.
                 remaining = ids[start + chunk_size :]
                 failed_ids.extend(remaining)
@@ -576,6 +703,25 @@ async def flush_supabase_delete_queue(
 
     if removed_ids:
         async with db.raw_conn() as conn:
+            # Keep the content-addressed analysis cache, but never advertise a
+            # binary that has just been deleted.  Normally the orphan sweep has
+            # already cleared these fields; this also repairs older queue rows.
+            await conn.executemany(
+                """
+                UPDATE video_asset
+                SET cdn_url = NULL,
+                    cdn_path = NULL,
+                    cdn_bucket = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE cdn_path = ?
+                  AND (cdn_bucket = ? OR cdn_bucket IS NULL)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM event_video_link
+                      WHERE event_video_link.video_asset_id = video_asset.id
+                  )
+                """,
+                [(path, bucket) for bucket, path in set(removed_targets)],
+            )
             await conn.executemany(
                 "DELETE FROM supabase_delete_queue WHERE id = ?",
                 [(int(i),) for i in set(removed_ids)],
