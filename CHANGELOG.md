@@ -124,6 +124,13 @@
 
 ### Added
 
+- Added a default-off, fail-closed static-site canonical-root publisher for two
+  complete page-only Yandex Object Storage buckets behind ALB: inactive-only
+  reconciliation, manifest/hash/size/MIME and route/PWA gates, old/new-complete
+  weight convergence, durable current/previous operation receipt, idempotent
+  retry, stable-hash smoke and automatic rollback. Live buckets, ALB/SWS and
+  DNS remain unprovisioned; plan mode is non-mutating.
+
 - Implemented the approval-gated Antigravity festival web-research runtime:
   strict five-key Interactions accounting, A+B with optional conflict-only C,
   seven-topology/evidence/Event-gate validation, immutable artifacts,

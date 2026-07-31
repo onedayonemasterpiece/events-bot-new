@@ -23,6 +23,8 @@
 - Read-only duplicate-image audit: `docs/operations/event-image-duplicate-audit.md`
 - Email delivery/deliverability: `docs/operations/email-delivery.md`
 - Kaggle static-site builder / publisher protocol: `docs/operations/kaggle-static-site-builder.md`
+- Default-off two-bucket/ALB atomic root publisher and setup/rollback runbook:
+  `docs/operations/static-site-atomic-root.md`
 - Расписание / cron / scheduler routing: `docs/operations/cron.md`
   - дефолты APScheduler: `scheduling.py`
   - production overrides: `fly.toml` (`[env]`)

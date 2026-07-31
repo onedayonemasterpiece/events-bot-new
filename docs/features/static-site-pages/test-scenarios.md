@@ -458,11 +458,14 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 - **ADD-BUILD-09 — Manifest/tree/catalog parity.** Checked manifest доказывает
   равенство eligible catalog, event pages, sitemap/ICS и фактического дерева,
   отсутствие ineligible leaks, orphan references и dangling occurrence links.
-- **ADD-BUILD-10 — Immutable candidate и rollback boundary.** Failed build/check
-  не пишет ни одного объекта; accepted candidate загружается create-only только
-  в новый secret prefix. Изменение `root`, `current` и stable `/ics/` запрещено.
-  Reader-atomic root promotion/rollback остаётся отдельным blocked gate и не
-  подменяется последовательным копированием файлов.
+- **ADD-BUILD-10 — Immutable candidate и atomic root boundary.** Failed
+  build/check не пишет ни одного объекта; accepted candidate загружается
+  create-only только в новый secret prefix. Default-off root publisher пишет и
+  удаляет только в ALB-inactive page-only bucket, проверяет полное дерево и
+  включает новый complete backend до выключения старого; stable smoke failure
+  возвращает прежние веса. Active bucket, browser `current.json`, shared
+  `/p/*`, stable `/ics/*`, current/previous receipt identities не являются GC
+  targets. Live ALB/SWS/DNS apply остаётся blocked gate.
 - **ADD-BUILD-11 — CDN/MIME/assets.** Все objects candidate имеют manifest hash,
   корректный MIME/cache policy, допустимый CDN asset URL и после публикации
   проверяются authenticated HEAD/GET; root/current не меняются.

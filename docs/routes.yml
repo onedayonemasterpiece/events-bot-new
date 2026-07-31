@@ -24,6 +24,7 @@ sections:
     release_governance: docs/operations/release-governance.md
     runtime_logs: docs/operations/runtime-logs.md
     kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
+    static_site_atomic_root: docs/operations/static-site-atomic-root.md
     event_quality_release_monitoring: docs/operations/event-quality-release-monitoring.md
     event_image_duplicate_audit: docs/operations/event-image-duplicate-audit.md
     email_delivery: docs/operations/email-delivery.md

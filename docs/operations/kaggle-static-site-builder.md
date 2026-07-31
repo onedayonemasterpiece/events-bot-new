@@ -1,7 +1,9 @@
 # Kaggle static-site builder
 
-Status: immutable secret-candidate pipeline implemented; production-root
-promotion is blocked pending a reader-atomic origin switch and remains disabled.
+Status: immutable secret-candidate pipeline implemented. A reader-atomic
+two-root-bucket/Yandex-ALB publisher is implemented default-off; its live
+inventory, protected ALB and DNS cutover are not provisioned or approved.
+Canonical setup/rollback: [static-site atomic root](static-site-atomic-root.md).
 
 Current event-page release sequencing, top-five platform backlog and the planned
 10-day Telegraph coexistence/cutover are canonical in
@@ -58,11 +60,12 @@ The production rail is a durable state machine, not a local process lock:
    generic coalesce supersession rule must not discard the older exact active
    job: its recovery/adoption runs first, then the follow-up consumes the newly
    accumulated effects.
-6. Publication remains create-only under a fresh secret prefix. After full
+6. Review publication remains create-only under a fresh secret prefix. After full
    result/manifest/object verification, the durable internal current-review
    receipt advances atomically. Failed, no-op and artifact-only runs preserve
-   its previous value. Root/current and stable ICS are outside this state
-   machine.
+   its previous value. The optional root publisher runs only after these same
+   result/root/candidate checks and successful review publication, and only
+   under `ENABLE_STATIC_SITE_ROOT_PROMOTION`; it never mutates stable ICS.
 
 The local `fcntl` lock remains a same-process convenience only. Correctness is
 owned by SQLite claim/CAS, Kaggle dataset identity, result receipt and
@@ -72,8 +75,8 @@ conditional Object Storage writes.
 immutable Fly SQLite snapshot
   -> one Kaggle CPU build with status ledger
   -> checked production-form artifact + release manifest
-  -> create-only unlisted secret prefix (current phase)
-  -X-> production current/root (separate reader-atomic redesign and GO)
+  -> create-only unlisted secret prefix (current production phase)
+  -> default-off checked inactive root bucket -> ALB weight switch (code only)
 ```
 
 Rules:
@@ -159,9 +162,11 @@ reports plus settled related-section and `1536×864` viewport screenshots; the
 trusted runner rejects an absent, extra or mismatched artifact kind. Only the
 secret-candidate tree can be published. CDN host `static.kenigevents.ru` is configured for
 the static-site bucket and also serves mirrored event media `/p/...` plus stable
-calendar files `/ics/<event_id>.ics`. Production root/current promotion is not
-implemented: the existing website origin cannot resolve an object pointer
-atomically, while sequential root copies expose a mixed tree. For
+calendar files `/ics/<event_id>.ics`. Production root activation must never use
+an Object Storage pointer or sequential copy. The implemented default-off path
+reconciles the inactive one of two complete page-only buckets, verifies it, and
+converges Yandex ALB weights. Live buckets/ALB/DNS are still absent, so root
+apply remains `NO-GO`. For
 preview/focus-group builds pass:
 
 - `PUBLIC_ASTRO_ASSET_BASE_URL=https://static.kenigevents.ru/{buildId}` or runner `--astro-asset-base-url`;
@@ -227,6 +232,8 @@ flags are documented in `.env.example`; defaults stay off:
 ```text
 ENABLE_STATIC_SITE_KAGGLE_BUILDER=0
 ENABLE_STATIC_SITE_SECRET_PUBLISH=0
+ENABLE_STATIC_SITE_ROOT_PROMOTION=0
+STATIC_SITE_ROOT_PROMOTION_MODE=plan
 STATIC_SITE_REPO_SHA=<exact clean pushed SHA>
 STATIC_SITE_SECRET_CANDIDATE_ARTIFACT_RESEARCH=0
 STATIC_SITE_SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH=0
@@ -382,10 +389,11 @@ This is independent from browser Auth transport. The Auth/Data relay, if
 enabled, is for small user requests only and must never proxy the bulk static
 related rebuild.
 
-This still does **not** mean Smart Update publishes the production root. With all
-three flags enabled it can build and publish only a checked unlisted candidate.
-Root activation remains a separate NO-GO until a reader-atomic resolver/origin
-design, retained last-good pointer and rollback acceptance are implemented.
+This still does **not** mean Smart Update publishes the production root. The
+ordinary enabled flags build and publish only a checked unlisted candidate.
+The separate two-bucket/ALB state machine is default-off and remains `NO-GO`
+until its live inventory, SWS, retained previous tree and rollback drill pass
+the [atomic-root runbook](static-site-atomic-root.md).
 
 ## Static-site Gemma/related secrets
 

@@ -30,8 +30,10 @@ Use `Done / Partial / Blocked` and attach a public URL, SHA, build manifest or r
 - [ ] **Blocked** — real Yandex OAuth return plus real Edge Search result on
   that candidate, product/design owner sign-off, presentation-day schedule
   freshness and rollback drill.
-- [ ] **Blocked** — canonical root promotion. A successful `_review/<token>/`
-  handoff does not satisfy this item.
+- [ ] **Blocked live** — canonical root promotion. The default-off two-bucket
+  state machine does not satisfy this item until provisioned ALB/SWS/DNS,
+  stable smoke and rollback drill pass; a successful `_review/<token>/`
+  handoff alone also does not satisfy it.
 
 The older checked rows below retain their dates and exact candidate names as
 historical regression evidence. They must not be read as acceptance of the
