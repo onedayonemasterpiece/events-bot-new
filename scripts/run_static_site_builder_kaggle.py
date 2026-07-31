@@ -44,6 +44,7 @@ LOCK_PATH = ARTIFACT_ROOT / 'static-site-kaggle.lock'
 ADOPT_REMOTE_LIVE_EXIT = 75
 ADOPT_REMOTE_UNAVAILABLE_EXIT = 76
 BUILD_ID_RE = re.compile(r'(?:preview|production)-[A-Za-z0-9][A-Za-z0-9._-]{0,191}')
+SCRATCH_DIR_RE = re.compile(r'static-site-kaggle-[A-Za-z0-9_-]+')
 
 
 def _env_nonnegative_int(name: str, default: int) -> int:
@@ -80,6 +81,49 @@ def require_static_site_storage_ready() -> None:
             f"status={work.get('status')} "
             f"error={work.get('tempfile_error') or work.get('error') or 'none'}"
         )
+
+
+def prune_abandoned_static_site_scratch(scratch_root: Path = SCRATCH_ROOT) -> dict[str, object]:
+    """Remove only runner-owned scratch trees while the process lock is held.
+
+    ``TemporaryDirectory`` handles normal exits.  A killed Fly process can
+    leave the staged SQLite dataset behind, however, and that residue can make
+    the next capacity probe fail before it gets a chance to recover.  The
+    caller must hold ``LOCK_PATH``; therefore no conforming local runner can be
+    using one of these directories at the same time.
+    """
+
+    root = Path(scratch_root).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    removed: list[str] = []
+    removed_bytes = 0
+    for candidate in root.iterdir():
+        if (
+            candidate.is_symlink()
+            or not candidate.is_dir()
+            or not SCRATCH_DIR_RE.fullmatch(candidate.name)
+        ):
+            continue
+        size = 0
+        for parent, directories, files in os.walk(candidate, followlinks=False):
+            directories[:] = [
+                name for name in directories if not (Path(parent) / name).is_symlink()
+            ]
+            for name in files:
+                path = Path(parent) / name
+                if path.is_symlink():
+                    continue
+                try:
+                    size += path.stat().st_size
+                except FileNotFoundError:
+                    continue
+        shutil.rmtree(candidate)
+        removed.append(candidate.name)
+        removed_bytes += size
+    return {
+        'removed_directories': sorted(removed),
+        'removed_bytes': removed_bytes,
+    }
 
 
 def prepare_output_directory(artifact_root: Path, build_id: str) -> Path:
@@ -969,6 +1013,14 @@ def main() -> int:
             fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise SystemExit('static-site Kaggle builder is already running locally')
+        scratch_prune = prune_abandoned_static_site_scratch(SCRATCH_ROOT)
+        if scratch_prune['removed_directories']:
+            print(
+                '[static-site-kaggle] abandoned scratch cleanup '
+                f"directories={scratch_prune['removed_directories']} "
+                f"bytes={scratch_prune['removed_bytes']}",
+                flush=True,
+            )
         require_static_site_storage_ready()
         # Import after --help parsing so optional Kaggle deps are not required for docs.
         from video_announce.kaggle_client import KaggleClient

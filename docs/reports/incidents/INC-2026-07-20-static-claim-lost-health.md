@@ -160,3 +160,12 @@ SQLite. The worker now refreshes only the request's covered event revisions
 from current canonical SQLite and recomputes its watermark immediately before
 the barrier. Deleted rows are removed from that current barrier set. A matching
 current vector receipt proceeds; a genuinely stale receipt still retries.
+
+The next compensating attempt exposed a capacity recovery ordering defect. A
+killed runner had left a 337 MiB staged dataset and a terminal failed handoff
+had left a 294 MiB immutable snapshot. Both were reproducible and inactive, but
+the next run checked free space before either cleanup path and therefore failed
+at the 1 GiB critical threshold. The Fly owner now removes unreferenced
+terminal snapshots before its capacity probe; the runner removes only
+lock-protected `static-site-kaggle-*` scratch trees before its own probe.
+Active handoff paths, symlinks and unknown directories remain fail-closed.

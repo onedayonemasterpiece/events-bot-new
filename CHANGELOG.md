@@ -9,6 +9,10 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- StaticSiteBuilder now reclaims only unreferenced immutable snapshots and
+  lock-protected `static-site-kaggle-*` scratch trees before its capacity
+  probe. A killed Fly process can no longer leave one staged database copy that
+  permanently prevents every later Smart Update rebuild from starting.
 - StaticSiteBuilder now refreshes queued Smart Update event revisions from the
   current canonical database immediately before its vector barrier. A later
   deterministic media/publication update can therefore advance both the vector

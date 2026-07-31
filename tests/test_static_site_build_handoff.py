@@ -674,6 +674,62 @@ def test_runner_storage_preflight_checks_root_and_durable_scratch(
     assert probes == [scratch]
 
 
+def test_runner_prunes_only_abandoned_owned_scratch(tmp_path: Path) -> None:
+    from scripts.run_static_site_builder_kaggle import prune_abandoned_static_site_scratch
+
+    abandoned = tmp_path / "static-site-kaggle-dead123"
+    abandoned.mkdir()
+    (abandoned / "snapshot.sqlite").write_bytes(b"stale")
+    unrelated = tmp_path / "operator-notes"
+    unrelated.mkdir()
+    (unrelated / "keep.txt").write_text("keep", encoding="utf-8")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    link = tmp_path / "static-site-kaggle-linked"
+    link.symlink_to(outside, target_is_directory=True)
+
+    report = prune_abandoned_static_site_scratch(tmp_path)
+
+    assert report == {
+        "removed_directories": ["static-site-kaggle-dead123"],
+        "removed_bytes": 5,
+    }
+    assert not abandoned.exists()
+    assert unrelated.is_dir()
+    assert link.is_symlink()
+    assert outside.is_dir()
+
+
+def test_capacity_cleanup_removes_unreferenced_terminal_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import asyncio
+    import sqlite3
+    import main
+
+    database = tmp_path / "db.sqlite"
+    sqlite3.connect(database).close()
+    snapshots = tmp_path / "snapshots"
+    snapshots.mkdir()
+    snapshot = snapshots / "snapshot-20260731T010203-deadbeef00.sqlite"
+    manifest = snapshots / "snapshot-20260731T010203-deadbeef00.manifest.json"
+    snapshot.write_bytes(b"snapshot")
+    manifest.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("STATIC_SITE_SNAPSHOT_DIR", str(snapshots))
+
+    report = asyncio.run(
+        main._prune_static_site_terminal_snapshots_for_capacity(
+            SimpleNamespace(path=str(database))
+        )
+    )
+
+    assert report["removed_snapshot_ids"] == [snapshot.stem]
+    assert report["retained_terminal_count"] == 0
+    assert not snapshot.exists()
+    assert not manifest.exists()
+
+
 def test_static_site_storage_capacity_defers_without_consuming_attempt_budget() -> None:
     import main
 
