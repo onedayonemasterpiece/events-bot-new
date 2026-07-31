@@ -5,7 +5,7 @@
 - Lane: `W4`
 - Requirements: `R04`, `R06`
 - Base SHA: `45be3557583aad05898e1767c5526b56efbcf847`
-- Implementation SHA: `d1fed032671bfdd89f654a01a557d1720fcc8a2b`
+- Implementation/head SHA under review: `d1fed03280678cc40351b266a808276a261ebd44`
 - Branch: `agent/static-site-resilient-egress/W4`
 - Live infrastructure/DNS/deploy: **not changed**
 
