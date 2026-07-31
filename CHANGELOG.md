@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Region Talk Kaggle script kernels now opt out of the shared sibling-file
+  status wrapper: Kaggle uploads only the configured `code_file` body, while
+  these self-contained workers already emit their own durable YDB heartbeats.
 - Region Talk orchestration no longer forwards a nonexistent default `.env` to
   child launchers in deployed environments that receive secrets directly.
 - Region Talk's production wrapper now exposes one canonical CLI for supervised

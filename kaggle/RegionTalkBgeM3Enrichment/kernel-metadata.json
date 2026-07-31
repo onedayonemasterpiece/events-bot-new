@@ -4,6 +4,7 @@
   "code_file": "region_talk_bge_m3_enrichment.py",
   "language": "python",
   "kernel_type": "script",
+  "events_bot_disable_status_instrumentation": true,
   "is_private": true,
   "enable_gpu": false,
   "enable_internet": true,

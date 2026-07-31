@@ -313,6 +313,12 @@ state. См. [MVP candidate report](mvp-candidate-report.md).
   A deployed runtime may intentionally have no `.env`: in that case credentials
   are inherited from process secrets and the orchestrator must not forward a
   nonexistent `/app/.env` to child launchers.
+- Kaggle script-upload contract: all Region Talk script kernels explicitly set
+  `events_bot_disable_status_instrumentation=true`. The official Kaggle client
+  sends the metadata `code_file` contents as the executable request body, so
+  the shared wrapper mode that renames the worker and imports it as a sibling
+  file is not valid for these uploads. Region Talk workers already persist
+  stage-specific YDB heartbeats and must run as one self-contained script.
 - Fast-check KO contract: a source-local keyword hit is both an exact-post task
   (`post_link_queue_item`) and a source-priority signal. CandidateReport must
   persist `fast_check_status=ko_hit` on the corresponding `source_queue_item`,
