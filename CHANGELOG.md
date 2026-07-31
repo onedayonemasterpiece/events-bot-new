@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Smart Update eventness review now includes bounded poster OCR as first-class
+  source evidence, so concrete events described on an attached poster are not
+  rejected merely because the social caption is generic.
 - The shared Google AI client now defaults hosted Gemma 4 to
   `thinking_level=minimal`, preventing bounded extraction/rewrite stages from
   returning `MAX_TOKENS` responses containing only private thought tokens;

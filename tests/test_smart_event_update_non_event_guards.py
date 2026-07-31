@@ -4,7 +4,7 @@ from sqlalchemy import select
 
 from db import Database
 from models import Event
-from smart_event_update import EventCandidate, smart_event_update
+from smart_event_update import EventCandidate, PosterCandidate, smart_event_update
 
 
 async def _no_topics(*_args, **_kwargs):  # noqa: ANN001 - test helper
@@ -775,6 +775,54 @@ async def test_digest_stub_is_routed_to_llm_eventness_and_skipped(tmp_path, monk
         assert calls and calls[0][0] == "eventness_review"
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+async def test_eventness_review_includes_poster_ocr_as_source_evidence(monkeypatch):
+    captured: dict[str, str] = {}
+
+    async def fake_ask(prompt, schema, *, max_tokens, label):
+        captured["prompt"] = prompt
+        return {
+            "decision": "event",
+            "confidence": 0.93,
+            "reason_short": "poster names a dated exhibition and venue",
+            "grounded_title": "Выставка к Дню памяти",
+            "has_single_concrete_event": True,
+            "missing_anchors": [],
+        }
+
+    monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+    candidate = EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-1_1",
+        source_text="Завтра пройдут памятные мероприятия. Подробности на афише.",
+        title="Выставка к Дню памяти",
+        date="2026-08-03",
+        end_date="2026-08-14",
+        location_name="Центральная библиотека",
+        city="Гусев",
+        event_type="выставка",
+        posters=[
+            PosterCandidate(
+                ocr_title="Мероприятия ко Дню памяти",
+                ocr_text="03-14 августа — выставка, Центральная библиотека, Гусев",
+            )
+        ],
+    )
+
+    decision, confidence, _reason = await su._llm_review_candidate_eventness(
+        candidate,
+        clean_title=candidate.title or "",
+        clean_source_text=candidate.source_text,
+        clean_raw_excerpt=None,
+    )
+
+    assert decision == "event"
+    assert confidence == 0.93
+    assert '"poster_ocr"' in captured["prompt"]
+    assert "03-14 августа" in captured["prompt"]
+    assert "полноценным source evidence" in captured["prompt"]
 
 
 @pytest.mark.asyncio

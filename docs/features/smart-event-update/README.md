@@ -69,14 +69,20 @@ reviews can add one bounded call, while core merge/derived contracts remain on G
 deterministic semantic fallback: vectors/reference matching only retrieve
 candidates, while the LLM still decides meaning from exact source/OCR evidence.
 
-The hosted Gemma 4 API rejected `thinking_budget` and, under the old small token
-caps, could spend the response on thought-only output. Therefore Smart Update
-does not send an unsupported thinking config; only the quality-critical bounded
-stages are moved off that endpoint, rather than force-routing every semantic
-call to a lower-RPD model. Create uses native-schema split stages; the
-legacy generated bundle cannot fall through to an unreviewed 4o response.
+The hosted Gemma 4 API rejected the older numeric `thinking_budget`, but now
+documents `thinking_level=minimal` as the supported off switch. The shared
+Google AI client applies that default to bounded Smart Update calls so their
+small output caps cannot be consumed entirely by private thought tokens;
+explicit consumer thinking configuration remains possible. Create uses
+native-schema split stages; the legacy generated bundle cannot fall through to
+an unreviewed 4o response.
 
 Before merge/create, social candidates now receive targeted LLM-first checks:
+
+- the eventness reviewer receives bounded poster OCR together with source text
+  and raw excerpt. If a caption merely refers readers to an attached poster,
+  concrete date/program/venue evidence from that poster is valid source
+  evidence and must not be rejected as an LLM hallucination;
 
 - occurrence scope must support the target date and target city/venue together;
 - doors/guest gathering/opening times are distinguished from the public start;

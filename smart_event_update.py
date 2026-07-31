@@ -12549,6 +12549,16 @@ async def _llm_review_candidate_eventness(
 
     if SMART_UPDATE_LLM_DISABLED:
         return "uncertain", 0.0, "llm_disabled"
+    poster_ocr: list[dict[str, str]] = []
+    for poster in candidate.posters or []:
+        item = {
+            "title": _clip(getattr(poster, "ocr_title", None), 240),
+            "text": _clip(getattr(poster, "ocr_text", None), 1200),
+        }
+        if item["title"] or item["text"]:
+            poster_ocr.append(item)
+        if len(poster_ocr) >= 4:
+            break
     payload = {
         "candidate": {
             "title": clean_title or candidate.title,
@@ -12563,12 +12573,14 @@ async def _llm_review_candidate_eventness(
         },
         "source_text": _clip(clean_source_text or candidate.source_text, 1800),
         "raw_excerpt": _clip(clean_raw_excerpt or candidate.raw_excerpt, 900),
+        "poster_ocr": poster_ocr,
     }
     prompt = (
         "Ты проверяешь кандидат события перед публикацией в афише Калининграда.\n"
         "Нужно решить, содержит ли источник ОДНО конкретное событие, на которое читатель может прийти.\n\n"
         "Важно:\n"
-        "- Решение должно быть grounded только в source_text/raw_excerpt и полях кандидата.\n"
+        "- Решение должно быть grounded только в source_text/raw_excerpt/poster_ocr и полях кандидата.\n"
+        "- Данные конкретного события могут находиться только на приложенной афише: подтверждённые title/date/time/place из poster_ocr являются полноценным source evidence, а не выдумкой.\n"
         "- Рубрики, дайджесты, подборки, посты вида 'посмотри, приходи', навигационные/промо-заглушки — non_event, если в них нет одного конкретного названия/программы события.\n"
         "- Акции/скидки/льготы/инструкции участия (например по Пушкинской карте) — non_event, если это не один конкретный сеанс/программа/выставка с собственным событием. Длинный период действия акции сам по себе не делает её событием.\n"
         "- Режим работы площадки, часы посетителей/касс, сообщение 'открыто и работает в обычном режиме', правила покупки билетов и срок действия входного билета — non_event, если источник не называет отдельную attendee-facing программу. Дата 'билет действителен до ...' — срок действия, не дата события; часы площадки/кассы — не время события.\n"
