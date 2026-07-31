@@ -1,0 +1,55 @@
+{
+  "schema_version": "festival-taxonomy-registry-v2",
+  "taxonomy_id": "kenigevents-festivals",
+  "taxonomy_version": "2.0.0",
+  "primary_topologies": [
+    "series_season",
+    "lineup",
+    "grid_showcase",
+    "territory",
+    "market",
+    "route_promenade",
+    "network_pass"
+  ],
+  "unknown_topology_state": null,
+  "programme_structures": [
+    "identity_only",
+    "single_compound_event",
+    "standalone_events",
+    "schedule_only",
+    "hybrid",
+    "continuous_experience",
+    "distributed_cycle",
+    "unknown"
+  ],
+  "entity_roles": [
+    "child_event",
+    "programme_block",
+    "temporal_anchor",
+    "activity_or_zone",
+    "participant",
+    "work",
+    "route_point",
+    "product_or_offer",
+    "service_information"
+  ],
+  "item_dispositions": [
+    "link_existing_event",
+    "create_event_candidate",
+    "schedule_slot",
+    "programme_only",
+    "continuous_activity",
+    "service_information",
+    "reject"
+  ],
+  "event_gate_fields": [
+    "current_edition",
+    "independent_choice",
+    "event_grade_occurrence",
+    "meaningful_identity",
+    "access_compatibility",
+    "topology_guardrail",
+    "evidence_validation"
+  ],
+  "host_only_apply_fields": ["operator_approval", "smart_update"]
+}
