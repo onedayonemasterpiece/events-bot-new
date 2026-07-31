@@ -9,6 +9,11 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Region Talk operator delivery can now use the role-scoped `DISCOVERY2`
+  Telethon identity instead of depending on bot membership in the review chat;
+  planner and notifier both fail closed while ImageDiagnostic owns that auth
+  bundle, stable MTProto `random_id` preserves retry idempotency, and local
+  E2E/generic human sessions remain excluded.
 - Smart Update eventness review now includes bounded poster OCR as first-class
   source evidence, so concrete events described on an attached poster are not
   rejected merely because the social caption is generic.

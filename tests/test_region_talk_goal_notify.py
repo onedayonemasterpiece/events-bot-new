@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import base64
+import json
 import os
 import subprocess
 import sys
@@ -25,13 +27,33 @@ def load_module():
 
 
 class RegionTalkGoalNotifyTests(unittest.TestCase):
-    def test_functional_notifier_has_no_human_session_decoder(self) -> None:
+    def test_functional_notifier_uses_only_role_scoped_discovery_sessions(self) -> None:
         mod = load_module()
         self.assertFalse(hasattr(mod, "decode_e2e_bundle"))
         source = MODULE_PATH.read_text(encoding="utf-8")
         self.assertNotIn("TELEGRAM_AUTH_BUNDLE_E2E", source)
         self.assertNotIn("TELEGRAM_SESSION", source)
-        self.assertNotIn("telethon", source.lower())
+        self.assertIn("TELEGRAM_AUTH_BUNDLE_DISCOVERY1", source)
+        self.assertIn("TELEGRAM_AUTH_BUNDLE_DISCOVERY2", source)
+
+    def test_discovery_bundle_decoder_accepts_only_base64_json_with_session(self) -> None:
+        mod = load_module()
+        encoded = base64.urlsafe_b64encode(json.dumps({"session": "abc"}).encode()).decode().rstrip("=")
+        self.assertEqual(mod.decode_discovery_bundle(encoded)["session"], "abc")
+        with self.assertRaisesRegex(RuntimeError, "no StringSession"):
+            mod.decode_discovery_bundle(base64.urlsafe_b64encode(b"{}").decode())
+
+    def test_telethon_guard_rejects_bundle_while_its_notebook_is_active(self) -> None:
+        mod = load_module()
+        with (
+            mock.patch.dict(os.environ, {"KAGGLE_USERNAME": "operator"}, clear=False),
+            mock.patch(
+                "scripts.region_talk_orchestrator.read_kaggle_kernel_statuses",
+                return_value={"region-talk-image-diagnostic": "RUNNING"},
+            ),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "refusing concurrent use"):
+                mod.assert_telethon_transport_idle("telethon_discovery2")
 
     def test_yc_fallback_is_bounded_when_interactive_auth_is_required(self) -> None:
         mod = load_module()
@@ -426,6 +448,51 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertEqual(result["transport"], "bot_api")
         self.assertEqual([method for method, _payload in calls], ["getMe", "getChat", "sendMessage"])
         self.assertEqual(calls[-1][1], {"chat_id": "-100123", "text": "candidate"})
+        self.assertEqual([item[1]["status"] for item in persisted if item[0] == "delivery"], ["sending", "delivered"])
+
+    def test_telethon_delivery_reuses_stable_random_id_and_persists_candidate(self) -> None:
+        mod = load_module()
+        args = argparse.Namespace(expected_chat_id="-100123", chat="", transport="telethon_discovery2")
+        persisted = []
+        requests = []
+
+        class Update:
+            random_id = 4242
+            id = 777
+
+        class Result:
+            updates = [Update()]
+
+        class Client:
+            async def __call__(self, request):
+                requests.append(request)
+                return Result()
+
+            async def disconnect(self):
+                return None
+
+        async def fake_client_and_chat(_args):
+            return Client(), object(), "-100123", "55"
+
+        mod._telethon_client_and_chat = fake_client_and_chat
+        mod.read_delivery = lambda *_args: {"status": "sending", "random_id": "4242"}
+        mod.upsert_delivery = lambda *_args: persisted.append(("delivery", _args[-1]))
+        mod.upsert_sent = lambda *_args, **_kwargs: persisted.append(("sent", _kwargs))
+        row = {"post_url": "https://t.me/example/1"}
+        result = asyncio.run(mod.send_rows_telethon(
+            args,
+            messages=["candidate"],
+            rows=[row],
+            ydb=object(),
+            driver=object(),
+            pool=object(),
+            table="table",
+        ))
+
+        self.assertEqual(result["sent_count"], 1)
+        self.assertEqual(result["transport"], "telethon_discovery2")
+        self.assertEqual(requests[0].random_id, 4242)
+        self.assertFalse(requests[0].no_webpage)
         self.assertEqual([item[1]["status"] for item in persisted if item[0] == "delivery"], ["sending", "delivered"])
 
 

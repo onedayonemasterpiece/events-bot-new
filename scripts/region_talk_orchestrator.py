@@ -50,6 +50,15 @@ ACTION_KERNEL_SLUGS = {
     "launch_bge_m3": "region-talk-bge-m3-enrichment",
     "launch_image_diagnostic": "region-talk-image-diagnostic",
 }
+KERNEL_TELEGRAM_RESOURCES = {
+    "region-talk-candidate-report": "telegram:DISCOVERY1",
+    "region-talk-image-diagnostic": "telegram:DISCOVERY2",
+}
+NOTIFY_TRANSPORT_RESOURCES = {
+    "bot_api": "telegram:bot_api",
+    "telethon_discovery1": "telegram:DISCOVERY1",
+    "telethon_discovery2": "telegram:DISCOVERY2",
+}
 
 CURRENT_E5_ENCODER_CONTRACT = "e5_semantic_bank_scores_v1"
 CURRENT_BGE_M3_ENCODER_CONTRACT = "bge_m3_flagembedding_dense_v1"
@@ -791,6 +800,16 @@ def filter_actions_for_active_kernels(
         return actions, []
     kept: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
+    active_resources = {
+        resource
+        for kernel, resource in KERNEL_TELEGRAM_RESOURCES.items()
+        if str(kaggle_statuses.get(kernel) or "").upper() in ACTIVE_KERNEL_STATUSES
+    }
+    unverified_resources = {
+        resource
+        for kernel, resource in KERNEL_TELEGRAM_RESOURCES.items()
+        if str(kaggle_statuses.get(kernel) or "").upper().startswith(UNVERIFIED_KERNEL_STATUS_PREFIXES)
+    }
     for action in actions:
         slug = ACTION_KERNEL_SLUGS.get(str(action.get("action") or ""))
         status = str(kaggle_statuses.get(slug or "") or "").upper()
@@ -799,6 +818,21 @@ def filter_actions_for_active_kernels(
             continue
         if slug and block_unverified and status.startswith(UNVERIFIED_KERNEL_STATUS_PREFIXES):
             skipped.append({"action": action.get("action"), "kernel_slug": slug, "status": status, "reason": "kernel_status_unverified"})
+            continue
+        resource = str(action.get("resource") or "")
+        if resource and resource in active_resources:
+            skipped.append({
+                "action": action.get("action"),
+                "resource": resource,
+                "reason": "telegram_auth_bundle_in_use_by_active_kernel",
+            })
+            continue
+        if resource and block_unverified and resource in unverified_resources:
+            skipped.append({
+                "action": action.get("action"),
+                "resource": resource,
+                "reason": "telegram_auth_bundle_kernel_status_unverified",
+            })
             continue
         kept.append(action)
     return kept, skipped
@@ -3268,8 +3302,10 @@ def select_actions_for_execution(actions: list[dict[str, Any]], *, execute_ready
             continue
         if str(action.get("action") or "") != "notify_confirmed":
             continue
-        selected.append(action)
         resource = str(action.get("resource") or "")
+        if resource and resource in used_resources:
+            continue
+        selected.append(action)
         if resource:
             used_resources.add(resource)
         if len(selected) >= max_count:
@@ -4142,11 +4178,16 @@ def build_decision_plan(
 ) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
     if int(metrics.get("publication_unsent_confirmed_total") or 0) > 0:
+        notify_transport = str(os.getenv("REGION_TALK_NOTIFY_TRANSPORT") or "telethon_discovery2").strip()
+        notify_resource = NOTIFY_TRANSPORT_RESOURCES.get(notify_transport)
+        if not notify_resource:
+            notify_transport = "telethon_discovery2"
+            notify_resource = NOTIFY_TRANSPORT_RESOURCES[notify_transport]
         actions.append(_action(
             "notify_confirmed",
-            ["python3", "scripts/region_talk_goal_notify.py", "--limit", "20", "--transport", "bot_api"],
+            ["python3", "scripts/region_talk_goal_notify.py", "--limit", "20", "--transport", notify_transport],
             "confirmed rows not sent to operator chat",
-            resource="telegram:bot_api",
+            resource=notify_resource,
             timeout_seconds=180,
         ))
 

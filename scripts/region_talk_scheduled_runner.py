@@ -61,7 +61,6 @@ def missing_autonomy_config(env: Mapping[str, str] | None = None) -> list[str]:
         ("KAGGLE_KEY",),
         ("TELEGRAM_AUTH_BUNDLE_DISCOVERY1",),
         ("TELEGRAM_AUTH_BUNDLE_DISCOVERY2",),
-        ("TELEGRAM_BOT_TOKEN",),
         ("TG_API_ID", "TELEGRAM_API_ID"),
         ("TG_API_HASH", "TELEGRAM_API_HASH"),
         ("SUPABASE_URL",),
@@ -77,6 +76,11 @@ def missing_autonomy_config(env: Mapping[str, str] | None = None) -> list[str]:
         key_aliases.add("GOOGLE_API_KEY_3")
     if not any(present(name) for name in key_aliases):
         missing.append("|".join(sorted(key_aliases)))
+    notify_transport = str(values.get("REGION_TALK_NOTIFY_TRANSPORT") or "telethon_discovery2").strip()
+    if notify_transport not in {"bot_api", "telethon_discovery1", "telethon_discovery2"}:
+        missing.append("REGION_TALK_NOTIFY_TRANSPORT(valid)")
+    elif notify_transport == "bot_api" and not present("TELEGRAM_BOT_TOKEN"):
+        missing.append("TELEGRAM_BOT_TOKEN")
     return missing
 
 
@@ -237,11 +241,13 @@ async def run_region_talk_scheduled(
         child_env["REGION_TALK_ALLOW_LOCAL_YC_FALLBACK"] = "0"
         # Human sessions are outside the Region Talk functional pipeline.
         # Strip them even when an operator shell inherited either variable:
-        # delivery uses Bot API, while remote discovery receives only its
-        # explicitly role-scoped DISCOVERY1/DISCOVERY2 bundles.
+        # delivery/discovery may use only their explicitly role-scoped
+        # DISCOVERY1/DISCOVERY2 bundles (or the independently scoped bot).
         child_env.pop("TELEGRAM_AUTH_BUNDLE_E2E", None)
         child_env.pop("TELEGRAM_SESSION", None)
-        child_env["REGION_TALK_NOTIFY_TRANSPORT"] = "bot_api"
+        child_env["REGION_TALK_NOTIFY_TRANSPORT"] = str(
+            child_env.get("REGION_TALK_NOTIFY_TRANSPORT") or "telethon_discovery2"
+        ).strip()
         child_env["PYTHONUNBUFFERED"] = "1"
         max_runtime_minutes = _env_int(
             "REGION_TALK_SCHEDULED_MAX_RUNTIME_MINUTES", 90, minimum=15, maximum=240

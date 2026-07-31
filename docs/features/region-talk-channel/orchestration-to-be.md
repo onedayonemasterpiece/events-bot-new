@@ -384,10 +384,13 @@ APScheduler (06:20, 13:20, 21:20 Europe/Kaliningrad)
 
 The schedule is gated by `ENABLE_REGION_TALK_SCHEDULED=1`. The wrapper requires
 explicit endpoint/database plus `REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON`,
-Kaggle credentials, separate `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` and
-`TELEGRAM_AUTH_BUNDLE_DISCOVERY2`, and the production bot token for operator
-delivery. It never uses `TELEGRAM_AUTH_BUNDLE_E2E`, `TELEGRAM_SESSION`, another
-generic human session, or interactive `yc` fallback. One run is bounded to 90 minutes by default,
+Kaggle credentials and separate `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` and
+`TELEGRAM_AUTH_BUNDLE_DISCOVERY2`. Operator delivery defaults to the idle
+`DISCOVERY2` Telethon identity; Bot API and its production token remain an
+explicit alternative. The same bundle is never used while its mapped Kaggle
+kernel is active. The wrapper never uses `TELEGRAM_AUTH_BUNDLE_E2E`,
+`TELEGRAM_SESSION`, another generic human session, or interactive `yc`
+fallback. One run is bounded to 90 minutes by default,
 uses `/data/region_talk_orchestrator.lock`, retains redacted operational output
 under `/data/runtime_logs/region_talk/`, and records success/failure/skip in
 SQLite `ops_run`. Confirmed candidates continue to go only to the operator chat;

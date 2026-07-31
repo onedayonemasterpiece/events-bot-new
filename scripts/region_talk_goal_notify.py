@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """Region Talk operator-chat notifier.
 
-Reads Gemini-confirmed `publication_candidate_item` rows from YDB and sends
-unsent links to the operator Telegram chat through Bot API only. Human MTProto
-sessions are not inputs to the functional Region Talk pipeline.
+Reads Gemini-confirmed ``publication_candidate_item`` rows from YDB and sends
+unsent links to the operator Telegram chat.  Delivery may use the bot or one
+explicit Region Talk discovery identity.  Generic local E2E/human sessions are
+never inputs; the discovery identity is fail-closed while its Kaggle notebook
+is active so the same Telegram auth key is not used concurrently.
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import hashlib
 import json
 import os
@@ -39,6 +42,14 @@ from scripts.region_talk_review_queue import (  # noqa: E402
 DEFAULT_NOTIFY_CHAT = "https://t.me/+kfaIRh98oHVkYWFi"
 DEFAULT_NOTIFY_CHAT_ID = "-5563945596"
 DEFAULT_PUBLICATION_SCAN_LIMIT = 5000
+TELETHON_TRANSPORT_AUTH_ENVS = {
+    "telethon_discovery1": "TELEGRAM_AUTH_BUNDLE_DISCOVERY1",
+    "telethon_discovery2": "TELEGRAM_AUTH_BUNDLE_DISCOVERY2",
+}
+TELETHON_TRANSPORT_KERNELS = {
+    "telethon_discovery1": "region-talk-candidate-report",
+    "telethon_discovery2": "region-talk-image-diagnostic",
+}
 
 
 def load_env(path: Path) -> None:
@@ -692,8 +703,7 @@ async def send_rows(args: argparse.Namespace) -> dict[str, Any]:
         rows = list(deduped.values())[: args.limit]
         messages = [candidate_message(r) for r in rows]
 
-    # Rendering is read-only.  This functional notifier is Bot API-only and
-    # therefore never reads or connects a human MTProto authorization.
+    # Rendering is read-only and never connects Telegram.
     if args.dry_run:
         if driver is not None:
             driver.stop()
@@ -715,6 +725,16 @@ async def send_rows(args: argparse.Namespace) -> dict[str, Any]:
         }
 
     try:
+        if args.transport in TELETHON_TRANSPORT_AUTH_ENVS:
+            return await send_rows_telethon(
+                args,
+                messages=messages,
+                rows=rows,
+                ydb=ydb,
+                driver=driver,
+                pool=pool,
+                table=table,
+            )
         return await send_rows_bot_api(
             args,
             messages=messages,
@@ -755,6 +775,219 @@ def _bot_api_call(token: str, method: str, payload: dict[str, Any]) -> dict[str,
         )
     result = data.get("result")
     return result if isinstance(result, dict) else {"value": result}
+
+
+def decode_discovery_bundle(value: str) -> dict[str, Any]:
+    """Decode only a role-scoped Region Talk discovery auth bundle."""
+
+    raw = str(value or "").strip()
+    if not raw:
+        raise RuntimeError("selected Region Talk discovery auth bundle is empty")
+    try:
+        padded = raw + "=" * ((4 - len(raw) % 4) % 4)
+        bundle = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8"))
+    except Exception as exc:
+        raise RuntimeError("selected Region Talk discovery auth bundle is not valid base64 JSON") from exc
+    if not isinstance(bundle, dict) or not str(bundle.get("session") or "").strip():
+        raise RuntimeError("selected Region Talk discovery auth bundle has no StringSession")
+    return bundle
+
+
+def assert_telethon_transport_idle(transport: str) -> dict[str, str]:
+    """Fail closed unless the selected auth bundle's remote kernel is idle."""
+
+    kernel = TELETHON_TRANSPORT_KERNELS.get(str(transport or ""))
+    if not kernel:
+        raise RuntimeError(f"unsupported Region Talk Telethon transport: {transport}")
+    username = str(os.getenv("KAGGLE_USERNAME") or "").strip()
+    if not username:
+        raise RuntimeError("KAGGLE_USERNAME is required for Telegram auth single-flight verification")
+    from scripts.region_talk_orchestrator import (  # imported lazily for CLI startup
+        ACTIVE_KERNEL_STATUSES,
+        read_kaggle_kernel_statuses,
+    )
+
+    statuses = read_kaggle_kernel_statuses(username)
+    status = str(statuses.get(kernel) or "").upper()
+    if not status or status.startswith("UNVERIFIED"):
+        raise RuntimeError(f"cannot verify that {kernel} is idle; refusing shared auth bundle")
+    if status in ACTIVE_KERNEL_STATUSES:
+        raise RuntimeError(f"{kernel} is {status}; refusing concurrent use of its Telegram auth bundle")
+    return statuses
+
+
+def _telethon_result_message_id(result: Any, random_id: int) -> int:
+    """Extract the server message id from Telethon's Updates response."""
+
+    for update in list(getattr(result, "updates", None) or []):
+        if int(getattr(update, "random_id", 0) or 0) == int(random_id):
+            value = int(getattr(update, "id", 0) or 0)
+            if value:
+                return value
+        message = getattr(update, "message", None)
+        value = int(getattr(message, "id", 0) or 0)
+        if value:
+            return value
+    return int(getattr(result, "id", 0) or 0)
+
+
+async def _telethon_client_and_chat(args: argparse.Namespace) -> tuple[Any, Any, str, str]:
+    transport = str(args.transport or "")
+    auth_env = TELETHON_TRANSPORT_AUTH_ENVS.get(transport)
+    if not auth_env:
+        raise RuntimeError(f"unsupported Region Talk Telethon transport: {transport}")
+    assert_telethon_transport_idle(transport)
+    bundle = decode_discovery_bundle(str(os.getenv(auth_env) or ""))
+    api_id = str(os.getenv("TELEGRAM_API_ID") or os.getenv("TG_API_ID") or "").strip()
+    api_hash = str(os.getenv("TELEGRAM_API_HASH") or os.getenv("TG_API_HASH") or "").strip()
+    if not api_id or not api_hash:
+        raise RuntimeError("TELEGRAM_API_ID/API_HASH (or TG_ aliases) are required")
+    try:
+        from telethon import TelegramClient, functions, utils  # type: ignore
+        from telethon.sessions import StringSession  # type: ignore
+    except Exception as exc:
+        raise RuntimeError("Telethon is required for Region Talk discovery-session delivery") from exc
+
+    client = TelegramClient(
+        StringSession(str(bundle["session"])),
+        int(api_id),
+        api_hash,
+        request_retries=0,
+        connection_retries=0,
+        retry_delay=0,
+        auto_reconnect=False,
+        flood_sleep_threshold=0,
+        raise_last_call_error=True,
+        receive_updates=False,
+        sequential_updates=True,
+        device_model=str(bundle.get("device_model") or "Region Talk delivery"),
+        system_version=str(bundle.get("system_version") or "Linux"),
+        app_version=str(bundle.get("app_version") or "1.0"),
+        lang_code=str(bundle.get("lang_code") or "ru"),
+        system_lang_code=str(bundle.get("system_lang_code") or "ru"),
+    )
+    try:
+        await client.connect()
+        if not await client.is_user_authorized():
+            raise RuntimeError(f"{auth_env} is not authorized")
+        me = await client.get_me()
+        expected_chat_id = str(args.expected_chat_id or "").strip()
+        if not re.fullmatch(r"-\d+", expected_chat_id):
+            raise RuntimeError("numeric REGION_TALK_NOTIFY_CHAT_ID is required for Telethon delivery")
+        try:
+            peer = await client.get_input_entity(int(expected_chat_id))
+        except Exception as direct_exc:
+            match = re.search(r"t\.me/(?:joinchat/|\+)([A-Za-z0-9_-]+)", str(args.chat or ""))
+            if not match:
+                raise RuntimeError("discovery session cannot resolve the configured operator chat id") from direct_exc
+            invite = await client(functions.messages.CheckChatInviteRequest(hash=match.group(1)))
+            chat = getattr(invite, "chat", None)
+            if chat is None:
+                raise RuntimeError("discovery session is not a member of the configured operator chat") from direct_exc
+            peer = await client.get_input_entity(chat)
+        resolved_chat_id = str(utils.get_peer_id(peer))
+        if resolved_chat_id != expected_chat_id:
+            raise RuntimeError(
+                f"resolved Region Talk Telethon chat id {resolved_chat_id} does not match expected {expected_chat_id}"
+            )
+        return client, peer, resolved_chat_id, str(getattr(me, "id", "") or "")
+    except Exception:
+        await client.disconnect()
+        raise
+
+
+async def send_rows_telethon(
+    args: argparse.Namespace,
+    *,
+    messages: list[str],
+    rows: list[dict[str, Any]],
+    ydb: Any,
+    driver: Any,
+    pool: Any,
+    table: str | None,
+) -> dict[str, Any]:
+    """Deliver with a role-scoped discovery identity and stable random ids."""
+
+    del driver  # The caller owns the driver lifecycle.
+    from telethon import functions  # type: ignore
+
+    client, peer, chat_id, account_id = await _telethon_client_and_chat(args)
+    sent: list[dict[str, Any]] = []
+    try:
+        for idx, text in enumerate(messages):
+            row = rows[idx] if idx < len(rows) else None
+            delivery_key = ""
+            existing: dict[str, Any] = {}
+            if row is not None and ydb is not None and pool is not None and table is not None:
+                delivery_key = publication_delivery_key(row, chat_id)
+                existing = read_delivery(pool, ydb, table, delivery_key)
+                random_id = int(existing.get("random_id") or delivery_random_id(delivery_key))
+                if str(existing.get("status") or "") == "delivered":
+                    mid = int(existing.get("message_id") or 0)
+                    upsert_sent(
+                        pool, ydb, table, row, mid,
+                        chat_id=chat_id, delivery_key=delivery_key, random_id=random_id,
+                    )
+                    sent.append({
+                        "message_id": mid,
+                        "post_url": row.get("post_url"),
+                        "delivery_key": delivery_key,
+                        "replayed": True,
+                    })
+                    continue
+                upsert_delivery(pool, ydb, table, delivery_key, {
+                    **existing,
+                    "status": "sending",
+                    "transport": str(args.transport),
+                    "post_url": canonical_post_url(row),
+                    "chat_id": chat_id,
+                    "random_id": str(random_id),
+                    "sending_started_at": datetime.now(timezone.utc).isoformat(),
+                })
+            else:
+                random_id = delivery_random_id(hashlib.sha256(f"{chat_id}|{text}".encode("utf-8")).hexdigest())
+
+            result = await client(functions.messages.SendMessageRequest(
+                peer=peer,
+                message=text,
+                random_id=random_id,
+                no_webpage=getenv_bool("REGION_TALK_NOTIFY_DISABLE_WEB_PREVIEW", False),
+            ))
+            mid = _telethon_result_message_id(result, random_id)
+            if not mid:
+                raise RuntimeError("Telethon delivery returned no verifiable message id")
+            if row is not None and ydb is not None and pool is not None and table is not None:
+                upsert_delivery(pool, ydb, table, delivery_key, {
+                    **existing,
+                    "status": "delivered",
+                    "transport": str(args.transport),
+                    "post_url": canonical_post_url(row),
+                    "chat_id": chat_id,
+                    "random_id": str(random_id),
+                    "message_id": str(mid),
+                    "delivered_at": datetime.now(timezone.utc).isoformat(),
+                })
+                upsert_sent(
+                    pool, ydb, table, row, mid,
+                    chat_id=chat_id, delivery_key=delivery_key, random_id=random_id,
+                )
+            sent.append({"message_id": mid, "post_url": row.get("post_url") if row else ""})
+            if idx + 1 < len(messages):
+                await asyncio.sleep(random.uniform(
+                    float(os.getenv("REGION_TALK_NOTIFY_DELAY_MIN_SECONDS") or "2"),
+                    float(os.getenv("REGION_TALK_NOTIFY_DELAY_MAX_SECONDS") or "5"),
+                ))
+    finally:
+        await client.disconnect()
+    return {
+        "ok": True,
+        "sent": sent,
+        "sent_count": len(sent),
+        "dry_run": False,
+        "resolved_chat_id": chat_id,
+        "delivery_account_id": account_id,
+        "transport": str(args.transport),
+    }
 
 
 async def send_rows_bot_api(
@@ -880,12 +1113,15 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument(
         "--transport",
-        choices=("bot_api",),
-        default="bot_api",
-        help="Region Talk functional delivery is Bot API-only",
+        choices=("bot_api", *TELETHON_TRANSPORT_AUTH_ENVS),
+        default=None,
+        help="Bot API or a role-scoped, single-flight Region Talk discovery identity",
     )
     args = ap.parse_args()
     load_env(args.env_file)
+    args.transport = args.transport or os.getenv("REGION_TALK_NOTIFY_TRANSPORT") or "telethon_discovery2"
+    if args.transport not in {"bot_api", *TELETHON_TRANSPORT_AUTH_ENVS}:
+        raise RuntimeError(f"unsupported REGION_TALK_NOTIFY_TRANSPORT: {args.transport}")
     args.chat = args.chat or os.getenv("REGION_TALK_NOTIFY_CHAT") or DEFAULT_NOTIFY_CHAT
     args.expected_chat_id = args.expected_chat_id or os.getenv("REGION_TALK_NOTIFY_CHAT_ID") or DEFAULT_NOTIFY_CHAT_ID
     lock_path = Path(os.getenv("REGION_TALK_NOTIFY_LOCK_FILE") or "/tmp/events-bot-region-talk-notify.lock")
