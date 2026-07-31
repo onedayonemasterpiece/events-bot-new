@@ -7,7 +7,7 @@ Render–Distill–Reason path for Playwright + Gemma 3-27B URL parsing. It has
 never been run on production and must not be described as an active parser or
 healthy reserve.
 
-Preproduction design for grouped, evidence-first processing of
+Preproduction runtime and rollout contract for grouped, evidence-first processing of
 `festival_queue.source_kind=url` and all non-social linked sources:
 [`preproduction-web-research.md`](preproduction-web-research.md). Antigravity is
 the only planned primary collector for that new contour. Debugging this
@@ -15,7 +15,7 @@ Kaggle+Gemma parser is explicitly outside the current project. It is designated
 as the future fallback, but that route can be enabled only after a separate
 strict collect-only adapter, evidence contract and live acceptance.
 
-The dated future acceptance cohort (31 current URL rows / about 22 groups plus
+The dated acceptance cohort (31 current URL rows / about 22 groups plus
 «Балтийская Ухана») is documented in
 [`antigravity-primary-evaluation.md`](antigravity-primary-evaluation.md).
 

@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Fixed
+- Antigravity non-retryable polling failures now finalize their shared limiter
+  reservation instead of leaving an in-progress TPM lease stranded.
 - Region Talk Kaggle workers now install the pinned core YDB SDK rather than
   the unnecessary `yc` extra and exchange their authorized-key JWT through the
   official IAM REST endpoint, preventing runtime replacement of Kaggle's
@@ -26,6 +28,15 @@
 - Focus-group private routes now add `nosnippet` in immutable secret-candidate builds, satisfying the candidate-wide robots contract without changing production root indexing.
 
 ### Added
+
+- Implemented the approval-gated Antigravity festival web-research runtime:
+  strict five-key Interactions accounting, A+B with optional conflict-only C,
+  seven-topology/evidence/Event-gate validation, immutable artifacts,
+  operational collect/review persistence, a manual runner and a fail-closed
+  opt-in URL-queue seam. The 2026-07-31 five-key live debug accounted exactly
+  one request per key but found a provider-wide `403 permission_denied`
+  eligibility blocker, so public apply remains absent and the feature stays
+  disabled.
 
 - Corrected the festival web-research target: Antigravity is the sole planned
   primary collector from the first implementation, initially collect-only and

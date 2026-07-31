@@ -364,11 +364,30 @@ class AntigravityInteractionsClient:
 
         interaction_id = self._resource_id(interaction.id, "interaction_id")
         api_key = self.rate_limiter.get_external_call_api_key(interaction.lease)
-        payload = await self._request_json(
-            "GET",
-            f"{self.base_url}/interactions/{interaction_id}",
-            api_key=api_key,
-        )
+        try:
+            payload = await self._request_json(
+                "GET",
+                f"{self.base_url}/interactions/{interaction_id}",
+                api_key=api_key,
+            )
+        except ProviderError as exc:
+            # A non-retryable poll rejection (notably an account/project 403)
+            # is terminal for this handle. Reconcile the original reservation
+            # rather than leaving it indefinitely in sent/in_progress state.
+            if not exc.retryable:
+                await self.rate_limiter.finalize_external_call(
+                    interaction.lease,
+                    provider_interaction_id=interaction.id,
+                    provider_terminal_status="failed",
+                    usage=None,
+                    duration_ms=max(
+                        0,
+                        int((time.time() - interaction.lease.started_at.timestamp()) * 1000),
+                    ),
+                    semantic_status="not_evaluated",
+                    error=exc,
+                )
+            raise
         result = self._parse_interaction(payload, interaction.lease)
         await self._finalize_if_terminal(result)
         return result

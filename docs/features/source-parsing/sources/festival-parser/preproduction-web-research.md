@@ -1,7 +1,9 @@
 # Antigravity-primary Festival Web Research — preproduction project
 
-Статус: `design only`; код, provider calls, queue mutation и production apply в
-этой работе не выполняются.
+Статус: `implemented preproduction / provider eligibility blocked` (2026-07-31).
+Collect-only runtime, shared quota accounting, A+B(+C), host validation,
+operational persistence, manual CLI и безопасный queue seam реализованы.
+Production apply отсутствует и feature flag по умолчанию выключен.
 
 Контур относится только к `festival_queue.source_kind=url` и другим
 несоциальным web/document-источникам. Telegram/VK intake остаётся отдельной
@@ -77,16 +79,43 @@ status=pending AND source_kind=url
 
 ### Antigravity
 
-Tracked runtime implementation отсутствует. В репозитории есть только quota
-registration/test для `antigravity-preview-05-2026`; generic Interactions
-wrapper, grouping, state tables, validators, scheduler и apply coordinator ещё
-не реализованы.
+Tracked runtime теперь включает:
+
+- `google_ai/interactions.py`: strict explicit-key-pool Interactions transport,
+  background polling, continuation, cancellation, environment snapshot и
+  request lease на каждый создающий POST;
+- `festival_web_research/`: seven-topology contracts, source/evidence safety,
+  exact-quote validation, programme→Event gates, A+B(+C) coordinator,
+  reconciliation, artifacts и collect/review service;
+- четыре additive operational tables для parent run, lane attempt, queue item
+  membership и source ledger;
+- `scripts/run_festival_web_research.py` для ручного collect-only запуска;
+- opt-in `ENABLE_FESTIVAL_WEB_RESEARCH=1` queue seam. При включённом flag и
+  отсутствующем strict-limiter service URL row fail-closed завершается ошибкой,
+  а не попадает в legacy direct writer. Успешный candidate получает queue
+  status `review`, не `done`.
+
+Миграция `007_google_ai_interaction_accounting.sql` разносит provider terminal
+и semantic status в shared ledger. До её применения production runtime обязан
+fail closed. Ручной canary может явно использовать
+`--allow-legacy-accounting`: reservation/RPD/TPM остаются в shared limiter, но
+semantic verdict хранится только в operational DB. Это не production mode.
 
 Проба `2026-07-29` доказала Interactions API, agent tools, сохранение/download
 environment и actual usage. Но A/B/C дали `150950` tokens суммарно и `0/3`
 terminal semantic results; обязательные checkpoints отсутствовали. Три
 известные factual ошибки были исправлены manual/local review сырого evidence,
 а не автономным готовым результатом. Это baseline, не acceptance.
+
+Live debug `2026-07-31` затем выполнил ровно по одному quota-accounted probe на
+каждом из пяти зарегистрированных ключей. На всех ключах create вернул
+`in_progress` и remote environment, но первый poll завершился одинаковым
+provider `403 permission_denied: The caller does not have permission`. Поэтому
+полноценный A/B результат «Балтийской Уханы» не получен: причина находится в
+provider project/key eligibility, а не в quota exhaustion или prompt/schema.
+Shared daily counters после прогона: `RPD=1` на каждом ключе; код дополнительно
+финализирует non-retryable poll rejection, чтобы не оставлять TPM reservation
+зависшей. Повторять запросы этими же ключами до исправления eligibility нельзя.
 
 ### Kaggle+Gemma
 
@@ -539,24 +568,24 @@ Required gates:
 - five manual diverse live successes, then seven scheduled collect-only days;
 - no public mutation during acceptance.
 
-## 13. Planned phases — no implementation in this change
+## 13. Implementation and rollout phases
 
-### Phase 0 — wrapper/contracts/offline fixtures
+### Phase 0 — wrapper/contracts/offline fixtures — implemented
 
 Interactions wrapper, limiter lease, taxonomy/schema, checkpoint validators,
 grouping and reviewed fixture pack.
 
-### Phase 1 — manual Antigravity-primary collect-only
+### Phase 1 — manual Antigravity-primary collect-only — blocked at provider eligibility
 
 One group/run; A+B(+C); five diverse live groups including «Балтийская Ухана»;
 operator review of every topology and disposition.
 
-### Phase 2 — scheduled approval-gated canary
+### Phase 2 — scheduled approval-gated canary — not started
 
 At most two changed groups/run, concurrency one, seven days, no auto apply,
 quota/checkpoint/quality reports.
 
-### Phase 3 — approved unified apply
+### Phase 3 — approved unified apply — intentionally not implemented
 
 Immutable revision, Smart Update only for approved Event candidates, atomic
 index/detail/manifest projections. Auto-apply remains a later gate.
@@ -570,7 +599,7 @@ quality gates → Kaggle collect-only fallback; disagreement/повторный 
 result → operator review, а не автоматический выбор. Оба collectors используют
 единый v2 contract и не пишут public data напрямую.
 
-## Definition of Ready for implementation
+## Current operational gate
 
 - Antigravity-primary and no-current-fallback policy accepted;
 - correct seven discovery topologies and route subtype pinned;
@@ -578,5 +607,22 @@ result → operator review, а не автоматический выбор. О�
 - fresh evaluation cohort and «Балтийская Ухана» expected decisions reviewed;
 - Interactions wrapper/checkpoint/quota boundaries accepted;
 - collect-only and operator approval mandatory;
-- code, DB migration, provider calls and queue mutation remain for a separate
-  implementation command.
+- apply migration 007 to the limiter project with a database-write credential;
+- obtain at least one API key whose Antigravity background execution reaches a
+  terminal provider state instead of project-level `permission_denied`;
+- rerun «Балтийская Ухана» with normal A+B (third C only on a real conflict),
+  review exact evidence and then continue the five-festival Phase 1 cohort.
+
+Manual command:
+
+```bash
+python scripts/run_festival_web_research.py \
+  --name 'Балтийская Ухана' --edition 2026 \
+  --url https://uhana.ru/ --url https://uhana.ru/contest/
+
+python scripts/review_festival_web_research.py 1 approve \
+  --operator operator-name --db artifacts/codex/festival-web-research.sqlite
+```
+
+Without migration 007 the command fails closed. `--allow-legacy-accounting` is
+only for a bounded diagnostic and is never set by the queue/scheduler.

@@ -214,6 +214,7 @@ class GoogleAIClient:
     # per-minute spike (rpm/tpm), where waiting on the same key is correct.
     _RESERVE_OVERFLOW_TRIGGER_REASONS = frozenset({"rpd", "no_keys"})
     PROVIDER_TIMEOUT_ENV = "GOOGLE_AI_PROVIDER_TIMEOUT_SEC"
+    EXTERNAL_ACCOUNTING_COMPAT_ENV = "GOOGLE_AI_EXTERNAL_ACCOUNTING_COMPAT"
     _EXTERNAL_TERMINAL_STATUSES = frozenset(
         {
             "requires_action",
@@ -351,6 +352,10 @@ class GoogleAIClient:
         self.retry_delays_ms = self._read_retry_delays()
         self.fallback_models = self._read_fallback_models()
         self.provider_timeout_seconds = self._read_float_env(self.PROVIDER_TIMEOUT_ENV, 0.0)
+        self.external_accounting_compat = (
+            os.getenv(self.EXTERNAL_ACCOUNTING_COMPAT_ENV, "0").strip().lower()
+            in {"1", "true", "yes", "on"}
+        )
         self._incident_last_sent: dict[str, float] = {}
         self.scope_reserve_to_default_env = (
             os.getenv(self.RESERVE_SCOPE_TO_DEFAULT_ENV_ENV, "1").strip().lower()
@@ -1141,9 +1146,33 @@ class GoogleAIClient:
                 log_label="external_finalize",
             )
         except Exception as exc:
-            # Deliberately no legacy google_ai_finalize fallback: that RPC maps a
-            # provider-completed response to `succeeded`, collapsing the semantic
-            # gate this facade promises to preserve.
+            if self.external_accounting_compat and self._is_missing_rpc_error(
+                exc, "google_ai_finalize_interaction"
+            ):
+                # Temporary canary/debug bridge for an older shared ledger. It
+                # still reconciles token usage and request terminality, while
+                # semantic truth remains in FestivalWebResearchLaneRun. The
+                # strict production default is fail-closed until migration 007.
+                await self._call_supabase_rpc_with_retries(
+                    "google_ai_finalize",
+                    {
+                        "p_request_uid": lease.request_uid,
+                        "p_attempt_no": lease.attempt_no,
+                        "p_usage_input_tokens": usage.input_tokens if usage else None,
+                        "p_usage_output_tokens": usage.output_tokens if usage else None,
+                        "p_usage_total_tokens": usage.total_tokens if usage else None,
+                        "p_duration_ms": max(0, int(duration_ms)),
+                        "p_provider_status": "succeeded" if terminal == "completed" else "failed",
+                        "p_error_type": error.error_type if error else None,
+                        "p_error_code": error.error_code if error else None,
+                        "p_error_message": error.error_message if error else None,
+                    },
+                    log_label="external_finalize_compat",
+                )
+                logger.warning(
+                    "External interaction used compatibility accounting; apply migration 007 before production"
+                )
+                return
             raise ReservationError(
                 f"external interaction finalize failed: {str(exc)[:300]}"
             ) from exc
@@ -1176,6 +1205,13 @@ class GoogleAIClient:
                 log_label="external_semantic",
             )
         except Exception as exc:
+            if self.external_accounting_compat and self._is_missing_rpc_error(
+                exc, "google_ai_record_interaction_semantic"
+            ):
+                logger.warning(
+                    "External semantic verdict retained only in operational DB; migration 007 is missing"
+                )
+                return
             raise ReservationError(
                 f"external semantic result failed: {str(exc)[:300]}"
             ) from exc

@@ -7,10 +7,12 @@ Events, Smart Update и исследовательскими collectors.
 Проектируемая нормализованная модель series/edition/revision, семь
 discovery/UI-топологий, отдельный programme structure, programme-item
 dispositions и общий `festival-edition-v2` описаны в
-[`data-model-v2.md`](data-model-v2.md). Это preproduction design: текущую
+[`data-model-v2.md`](data-model-v2.md). Это preproduction contract: текущую
 production-модель и страницы он пока не заменяет. Antigravity проектируется
-единственным primary collector для нового non-social web-контура с первой
-реализации, но до acceptance работает только collect-only с ручным approval.
+единственным primary collector для нового non-social web-контура. Его
+collect-only runtime реализован, но live acceptance заблокирован одинаковым
+provider `403 permission_denied` на пяти зарегистрированных API keys; feature
+остаётся выключенной, а public apply не реализован.
 Kaggle+Gemma построен, ни разу не запускался на production и в текущую работу
 не входит; в целевом end-state он должен стать fallback, но его
 repair/conformance/acceptance — отдельный будущий проект.

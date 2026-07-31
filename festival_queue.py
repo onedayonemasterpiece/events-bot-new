@@ -101,6 +101,18 @@ def festival_queue_status_text() -> str:
     return "вкл" if is_festival_queue_enabled() else "выкл"
 
 
+def is_festival_web_research_enabled() -> bool:
+    """Opt-in switch for the collect-only Antigravity URL contour.
+
+    When enabled, URL rows must never fall through to the legacy direct-write
+    parser merely because the research service is unavailable.
+    """
+
+    return (os.getenv("ENABLE_FESTIVAL_WEB_RESEARCH") or "").strip().lower() in {
+        "1", "true", "yes", "on"
+    }
+
+
 def festival_queue_schedule_text() -> str:
     times = (os.getenv("FESTIVAL_QUEUE_TIMES_LOCAL") or "03:30,16:30").strip() or "03:30,16:30"
     tz = (os.getenv("FESTIVAL_QUEUE_TZ") or "Europe/Kaliningrad").strip() or "Europe/Kaliningrad"
@@ -1220,6 +1232,7 @@ async def process_festival_queue(
     trigger: str = "manual",
     operator_id: int | None = None,
     run_id: str | None = None,
+    web_research_service: Any | None = None,
 ) -> FestivalQueueRunReport:
     effective_limit = festival_queue_effective_limit(limit)
 
@@ -1309,7 +1322,9 @@ async def process_festival_queue(
 
         def _festival_group_key(it: FestivalQueueItem) -> tuple[str, str] | None:
             kind = str(getattr(it, "source_kind", "") or "").strip().lower()
-            if kind not in {"vk", "tg"}:
+            if kind not in {"vk", "tg", "url"}:
+                return None
+            if kind == "url" and not is_festival_web_research_enabled():
                 return None
             name = _clean_fest_name(getattr(it, "festival_name", None)) or _clean_fest_name(
                 getattr(it, "festival_series", None)
@@ -1396,6 +1411,56 @@ async def process_festival_queue(
                 await session.commit()
 
             try:
+                if kind == "url" and is_festival_web_research_enabled():
+                    if web_research_service is None:
+                        raise RuntimeError(
+                            "Antigravity URL research is enabled but no strict-limiter service was injected"
+                        )
+                    if not fest_hint:
+                        raise RuntimeError(
+                            "Antigravity URL research requires a festival_name/series hint; identity guessing is disabled"
+                        )
+                    research_result = await web_research_service.collect(
+                        name_hint=fest_hint,
+                        edition_hint=_clean_fest_name(getattr(primary, "festival_full", None)) or None,
+                        urls=[str(it.source_url).strip() for it in group_items],
+                        target_key=f"queue:{','.join(str(value) for value in sorted(item_ids))}",
+                    )
+                    if research_result.state != "review":
+                        raise RuntimeError(
+                            f"Antigravity research run {research_result.run_id} did not produce a review candidate: "
+                            f"state={research_result.state}"
+                        )
+                    queue_result = {
+                        "research_run_id": research_result.run_id,
+                        "research_state": research_result.state,
+                        "review_status": research_result.review_status,
+                        "quality": research_result.quality,
+                        "public_apply": False,
+                    }
+                    async with db.get_session() as session:
+                        await session.execute(
+                            update(FestivalQueueItem)
+                            .where(FestivalQueueItem.id.in_(item_ids))
+                            .values(
+                                status="review",
+                                result_json=queue_result,
+                                last_error=None,
+                                updated_at=datetime.now(timezone.utc),
+                            )
+                        )
+                        await session.commit()
+                    report.success += len(group_items)
+                    report.details.append(
+                        f"Antigravity candidate awaiting review: run #{research_result.run_id}; "
+                        "Festival/Event/public pages were not changed."
+                    )
+                    await _progress(
+                        f"🎪 Фестивальная очередь: {idx}/{total}\nСтатус: review\n"
+                        f"research_run={research_result.run_id}\npublic_apply=disabled"
+                    )
+                    continue
+
                 # Apply festival metadata from a "best" item (links/context) and then
                 # from the newest item (fresh excerpt/source_text), without re-running
                 # heavy imports for every queue row.

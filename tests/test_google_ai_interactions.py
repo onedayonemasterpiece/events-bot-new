@@ -221,6 +221,28 @@ async def test_wait_polls_without_extra_rpd_and_finalizes_provider_not_semantics
 
 
 @pytest.mark.asyncio
+async def test_non_retryable_poll_rejection_finalizes_original_lease():
+    client, limiter, _transport = _client(
+        [
+            _json_response(_interaction_payload("in_progress")),
+            _json_response(
+                {"error": {"message": "The caller does not have permission", "code": "permission_denied"}},
+                status=403,
+            ),
+        ]
+    )
+    interaction = await client.create("probe", max_total_tokens=1000)
+    with pytest.raises(ProviderError) as caught:
+        await client.get(interaction)
+    assert caught.value.status_code == 403
+    assert len(limiter.reserve_calls) == 1
+    assert len(limiter.finalized) == 1
+    assert limiter.finalized[0]["provider_terminal_status"] == "failed"
+    assert limiter.finalized[0]["semantic_status"] == "not_evaluated"
+    assert limiter.finalized[0]["provider_interaction_id"] == interaction.id
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("status", ["incomplete", "budget_exceeded", "requires_action"])
 async def test_non_success_stops_are_not_collapsed_to_semantic_success(status):
     client, limiter, _transport = _client(
