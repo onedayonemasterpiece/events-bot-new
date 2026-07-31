@@ -256,6 +256,7 @@ app = "events-bot-new-wngqia"
   STATIC_SITE_SCRATCH_DIR = "/data/static_site_builder/tmp"
   STATIC_SITE_STORAGE_WARN_FREE_MB = "1536"
   STATIC_SITE_STORAGE_CRITICAL_FREE_MB = "1024"
+  STATIC_SITE_MAX_DEBOUNCE_SECONDS = "1800"
   STATIC_SITE_OUTPUT_KEEP_LATEST_TERMINAL = "0"
   STATIC_SITE_BUILDER_LIMIT = "5000"
   # Production related remains on the accepted pgvector rail until the frozen

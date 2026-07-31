@@ -605,15 +605,51 @@ def test_add_build_01_payload_union_is_bounded_and_keeps_latest_effect() -> None
         event_revisions={2: "r2"},
         correlation_id="c-new",
         effect_at="2026-07-17T10:05:00Z",
+        trigger="operator_request",
     )
     merged = merge_request_payload(old, new)
     assert merged["release_channel"] == "secret_preview"
+    assert merged["first_effect_at"] == "2026-07-17T10:00:00Z"
     assert merged["latest_effect_at"] == "2026-07-17T10:05:00Z"
+    assert merged["trigger"] == "operator_request"
     assert merged["reasons"] == ["smart_update", "operator"]
     assert merged["event_revisions"] == {"1": "r1", "2": "r2"}
     assert len(merged["event_ids"]) == MAX_EVENT_IDS
     assert len(merged["correlation_ids"]) <= MAX_CORRELATIONS
     assert len(merged["target_watermark"]) == 64
+
+
+def test_static_site_debounce_has_maximum_wait_and_preserves_immediate_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import main
+
+    now = datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setenv("STATIC_SITE_MAX_DEBOUNCE_SECONDS", "1800")
+    capped = main._static_site_coalesced_next_run(
+        old_next=now + timedelta(minutes=14),
+        requested=now + timedelta(minutes=15),
+        merged_payload={
+            "trigger": "smart_update",
+            "first_effect_at": "2026-07-31T11:35:00Z",
+            "latest_effect_at": "2026-07-31T12:00:00Z",
+        },
+        now=now,
+        incoming_immediate=False,
+    )
+    assert capped == now + timedelta(minutes=5)
+
+    immediate = main._static_site_coalesced_next_run(
+        old_next=now,
+        requested=now + timedelta(minutes=15),
+        merged_payload={
+            "trigger": "operator_request",
+            "first_effect_at": "2026-07-31T11:59:00Z",
+        },
+        now=now,
+        incoming_immediate=False,
+    )
+    assert immediate == now
 
 
 def test_add_build_08_online_backup_is_immutable_and_hash_bound(tmp_path) -> None:

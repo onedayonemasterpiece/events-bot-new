@@ -9,6 +9,10 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Smart Update's trailing static-site debounce now has a production 30-minute
+  maximum from the first coalesced change, so a continuous repair/import stream
+  cannot postpone publication forever. Immediate operator, calendar-rollover
+  and startup requests also retain priority when later Smart Updates merge.
 - Source-parsing replay now treats an exact official URL, date and explicit
   time as an idempotent occurrence even when Smart Update previously expanded
   the presentation title; shared URLs without an exact slot still reach the
