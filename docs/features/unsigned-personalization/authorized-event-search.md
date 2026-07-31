@@ -418,7 +418,9 @@ Migrations: `supabase/migrations/20260628_event_search_pgvector.sql` plus harden
 `20260628_event_search_public_fields_and_model_filter.sql`,
 `20260629_event_search_query_facets.sql` and
 `20260630_event_search_embedding_doc_kind.sql`, plus
-`20260701_event_search_feedback_tags.sql` for feedback/tag-candidate intake.
+`20260701_event_search_feedback_tags.sql` for feedback/tag-candidate intake and
+`20260731174313_harden_event_search_internal_rpc.sql` for the service-only
+execution boundary, idempotent quota reservations and capped feedback.
 
 Tables:
 
@@ -431,18 +433,35 @@ Tables:
 - `public.event_search_requests` — audit log with query hash and length only, no raw query text.
 - `public.event_search_feedback` — private authenticated feedback rows with raw query text for moderation only;
 - `public.event_search_tag_candidates` — private aggregated candidate tags keyed by query hash.
+- `public.event_search_quota_operation` — private 48-hour per-user operation
+  ledger; one `(user_id, client_request_id)` consumes quota at most once.
 
 RPCs:
 
-- `search_events_by_embedding_v1(...)` — authenticated vector retrieval through `SECURITY DEFINER`, no direct table reads; it accepts optional query facets `p_weekday_iso`, `p_time_of_day_filter` and `p_admission_filter` and applies them as small boosts after the nearest pgvector candidate set is retrieved;
-- `event_search_fallback_cards_v1(...)` — authenticated fallback cards for “Возможно вам будет интересно”;
+- `search_events_by_embedding_v1(...)` and
+  `event_search_fallback_cards_v1(...)` — service-role-only primitives; the
+  authenticated Edge Function reaches them through wrappers bound to the
+  already verified `auth.users.id`;
 - `get_event_search_quota_v2(...)` — visible quota state with hourly/daily remaining counts and hour reset time;
-- `reserve_event_search_quota_v3(...)` — atomic hourly+daily quota reservation before provider calls; cached results do not call it;
+- `reserve_event_search_quota_v3(...)` — service-role-only atomic primitive;
+  `reserve_event_search_quota_internal_v1(...)` adds a verified user id and
+  idempotent client request id before provider calls; cached results do not
+  reserve quota;
 - `get_event_search_result_cache_v1(...)` / `upsert_event_search_result_cache_v1(...)` / `purge_event_search_result_cache_v1(...)` — private service-role result-cache operations;
-- `record_event_search_request_v1(...)` — compact search audit.
-- `record_event_search_feedback_v1(...)` — authenticated feedback intake; records local result ids/count and updates a candidate tag aggregate, but exposes no raw feedback tables to browser roles.
+- `record_event_search_request_v1(...)` — service-role-only compact audit,
+  reached through the verified-user internal wrapper.
+- `record_event_search_feedback_v1(...)` — the remaining authenticated write
+  API: owner-scoped operation-id dedupe, 30 rows/user/hour, 90-day raw-feedback
+  retention, at most 40 distinct event IDs and an allowlisted compact metadata
+  shape; raw feedback tables remain unreadable to browser roles.
 
-Direct browser `select` on raw tables is forbidden and currently rejected by grants/RLS. Browser access is through Auth + Edge Function/RPC only.
+Direct browser `select` on raw tables and execution of vector/quota-reservation/
+audit primitives are forbidden by grants/RLS. The Edge Function first validates
+the caller with its user-scoped client, only then constructs its internal
+service client. It accepts an optional UUID `client_request_id` (body or
+`X-Client-Request-Id`), echoes it, and otherwise generates one for compatibility.
+The request body is rejected above 16 KiB before parsing. The service key is
+never returned to or embedded in the browser.
 
 ### Embedding model
 

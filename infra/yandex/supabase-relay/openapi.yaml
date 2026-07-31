@@ -1,8 +1,15 @@
 openapi: 3.0.0
 info:
   title: KenigEvents stateless Supabase transport relay
-  version: 1.0.0
+  version: 2.0.0
 
+# API Gateway intentionally performs no identity transformation: original
+# Authorization/apikey headers reach Supabase, which remains the JWT/RLS
+# authority. Safety here is the explicit route/method allowlist below.
+security: []
+
+# The relay intentionally has no greedy paths. Unsupported Auth, REST, Storage,
+# Realtime, admin and Edge Function routes fail at API Gateway before Supabase.
 x-yc-apigateway:
   cors:
     origin: https://kenigevents.ru
@@ -10,8 +17,6 @@ x-yc-apigateway:
       - GET
       - HEAD
       - POST
-      - PATCH
-      - PUT
       - DELETE
       - OPTIONS
     allowedHeaders:
@@ -21,6 +26,8 @@ x-yc-apigateway:
       - apikey
       - X-Client-Info
       - X-Supabase-Api-Version
+      - X-Upsert
+      - Cache-Control
       - Prefer
       - Range
       - Range-Unit
@@ -35,24 +42,626 @@ x-yc-apigateway:
     maxAge: 600
 
 paths:
-  /auth/v1/{path+}:
-    x-yc-apigateway-any-method:
-      operationId: relayAuth
+  /auth/v1/health:
+    get:
+      operationId: authHealth
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/health
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 10
+    head:
+      operationId: authHealthHead
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/health
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 10
+  /auth/v1/settings:
+    get:
+      operationId: authSettings
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/settings
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 10
+  /auth/v1/authorize:
+    get:
+      operationId: authAuthorize
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/authorize
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 15
+  /auth/v1/token:
+    post:
+      operationId: authToken
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/token
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 20
+  /auth/v1/otp:
+    post:
+      operationId: authOtp
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/otp
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 20
+  /auth/v1/verify:
+    get:
+      operationId: authVerifyLink
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/verify
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 20
+    post:
+      operationId: authVerify
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/verify
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 20
+  /auth/v1/callback:
+    get:
+      operationId: authProviderCallback
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/callback
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 20
+  /auth/v1/resend:
+    post:
+      operationId: authResend
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/resend
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 20
+  /auth/v1/logout:
+    post:
+      operationId: authLogout
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/logout
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 15
+  /auth/v1/user:
+    get:
+      operationId: authUser
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/user
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 15
+  /auth/v1/user/identities/authorize:
+    get:
+      operationId: authLinkIdentity
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/user/identities/authorize
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 15
+  /rest/v1/personalization_event_reaction_counter:
+    get:
+      operationId: readReactionCounter
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/personalization_event_reaction_counter
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 15
+    head:
+      operationId: headReactionCounter
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/personalization_event_reaction_counter
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 15
+  /rest/v1/my_saved_events_v1:
+    get:
+      operationId: readSavedEvents
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/my_saved_events_v1
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 15
+    head:
+      operationId: headSavedEvents
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/my_saved_events_v1
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 15
+  /rest/v1/rpc/set_saved_event_state_v1:
+    post:
+      operationId: setSavedEventState
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/rpc/set_saved_event_state_v1
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 15
+  /rest/v1/rpc/get_event_search_quota_v2:
+    post:
+      operationId: getSearchQuota
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/rpc/get_event_search_quota_v2
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 15
+  /rest/v1/rpc/record_event_search_feedback_v1:
+    post:
+      operationId: recordSearchFeedback
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/rpc/record_event_search_feedback_v1
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 15
+  /rest/v1/rpc/ingest_transport_experiment_event_v1:
+    post:
+      operationId: ingestTransportExperiment
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/rpc/ingest_transport_experiment_event_v1
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 15
+  /rest/v1/rpc/record_pwa_lifecycle_v1:
+    post:
+      operationId: recordPwaLifecycle
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/rpc/record_pwa_lifecycle_v1
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 15
+  /rest/v1/rpc/get_listing_personal_feed_v1:
+    post:
+      operationId: getPersonalFeed
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/rpc/get_listing_personal_feed_v1
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 20
+  /functions/v1/event-search:
+    post:
+      operationId: eventSearch
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/functions/v1/event-search
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 55
+  /storage/v1/object/focus-feedback/{path+}:
+    post:
+      operationId: uploadFocusFeedback
       parameters:
         - name: path
           in: path
           required: true
           schema:
             type: string
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
       x-yc-apigateway-integration:
         type: http
-        url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/{path}
+        url: https://epyznmylqmchteykjsqj.supabase.co/storage/v1/object/focus-feedback/{path}
         headers:
           '*': '*'
           Host: ''
           Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
           X-Forwarded-Host: ''
           X-Forwarded-Proto: ''
+          X-Real-IP: ''
         query:
           '*': '*'
         omitEmptyHeaders: true
@@ -60,53 +669,58 @@ paths:
         timeouts:
           connect: 3
           read: 30
-  /rest/v1/{path+}:
-    x-yc-apigateway-any-method:
-      operationId: relayRest
+    delete:
+      operationId: deleteFocusFeedbackObject
       parameters:
         - name: path
           in: path
           required: true
           schema:
             type: string
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
       x-yc-apigateway-integration:
         type: http
-        url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/{path}
+        url: https://epyznmylqmchteykjsqj.supabase.co/storage/v1/object/focus-feedback/{path}
         headers:
           '*': '*'
           Host: ''
           Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
           X-Forwarded-Host: ''
           X-Forwarded-Proto: ''
+          X-Real-IP: ''
         query:
           '*': '*'
         omitEmptyHeaders: true
         omitEmptyQueryParameters: true
         timeouts:
           connect: 3
-          read: 30
-  /functions/v1/{path+}:
-    x-yc-apigateway-any-method:
-      operationId: relayFunctions
-      parameters:
-        - name: path
-          in: path
-          required: true
-          schema:
-            type: string
+          read: 20
+  /storage/v1/object/focus-feedback:
+    delete:
+      operationId: deleteFocusFeedbackObjects
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
       x-yc-apigateway-integration:
         type: http
-        url: https://epyznmylqmchteykjsqj.supabase.co/functions/v1/{path}
+        url: https://epyznmylqmchteykjsqj.supabase.co/storage/v1/object/focus-feedback
         headers:
           '*': '*'
           Host: ''
           Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
           X-Forwarded-Host: ''
           X-Forwarded-Proto: ''
+          X-Real-IP: ''
         query:
           '*': '*'
         omitEmptyHeaders: true
         omitEmptyQueryParameters: true
         timeouts:
           connect: 3
-          read: 30
+          read: 20

@@ -1,5 +1,6 @@
 -- Transactional RLS/RPC/view contract. Run only after
--- 20260727141820_durable_saved_events_v1.sql; all fixtures are rolled back.
+-- 20260727141820_durable_saved_events_v1.sql and
+-- 20260731174310_harden_saved_event_mutations.sql; all fixtures are rolled back.
 begin;
 
 insert into auth.users (id, email, email_confirmed_at)
@@ -19,6 +20,14 @@ begin
     'execute'
   ) then
     raise exception 'anon must not execute the saved-event mutation RPC';
+  end if;
+  if has_table_privilege('authenticated', 'public.user_saved_event', 'insert')
+     or has_table_privilege('authenticated', 'public.user_saved_event', 'update')
+     or has_table_privilege('authenticated', 'public.user_saved_event', 'delete') then
+    raise exception 'authenticated direct saved-event DML must be revoked';
+  end if;
+  if not has_table_privilege('authenticated', 'public.user_saved_event', 'select') then
+    raise exception 'authenticated owner-scoped saved-event read is missing';
   end if;
   if not has_function_privilege(
     'authenticated',
@@ -107,6 +116,25 @@ begin
   if exists (select 1 from public.my_saved_events_v1 where event_id = 7001) then
     raise exception 'inactive saved-event row was not deleted';
   end if;
+end;
+$$;
+
+do $$
+declare
+  v_event_id bigint;
+begin
+  -- One row (7002) is still active, so 499 additional rows reach the cap.
+  for v_event_id in 8001..8499 loop
+    perform public.set_saved_event_state_v1(v_event_id, 'favorite', true);
+  end loop;
+
+  begin
+    perform public.set_saved_event_state_v1(8500, 'favorite', true);
+    raise exception 'saved-event cap was not enforced';
+  exception
+    when sqlstate '54000' then
+      null;
+  end;
 end;
 $$;
 

@@ -21,7 +21,7 @@ import {
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-client-request-id",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -64,6 +64,7 @@ function normalizeQuery(value: unknown): string {
 }
 
 const MAX_QUERY_LENGTH = 180;
+const MAX_REQUEST_BODY_BYTES = 16 * 1024;
 
 type QueryValidation =
   { ok: true; query: string } | { ok: false; error: string; detail: string };
@@ -1647,10 +1648,14 @@ async function llmVerify(
 
 async function recordSearchRequest(
   supabase: { rpc: (fn: string, args?: Record<string, unknown>) => unknown },
+  userId: string,
   payload: Record<string, unknown>,
 ): Promise<void> {
   try {
-    await supabase.rpc("record_event_search_request_v1", payload);
+    await supabase.rpc("record_event_search_request_internal_v1", {
+      p_user_id: userId,
+      ...payload,
+    });
   } catch (_) {
     // Search telemetry must never break the user-facing search request.
   }
@@ -1711,7 +1716,17 @@ async function runEventSearch(
       body: { error: "auth_required", request_id: requestId },
     };
   }
-  const userHash = shortHash(await sha256Hex(userResult.user.id));
+  const userId = userResult.user.id;
+  const userHash = shortHash(await sha256Hex(userId));
+  // Privileged RPC access is constructed only after the caller JWT has been
+  // verified. Browser code never receives this key/client.
+  const service = personalizationServiceClient(supabaseUrl);
+  if (!service) {
+    return {
+      status: 500,
+      body: { error: "supabase_service_env_missing", request_id: requestId },
+    };
+  }
 
   await progress?.({
     stage: "validate",
@@ -1720,7 +1735,21 @@ async function runEventSearch(
   });
   let body: Record<string, unknown> = {};
   try {
-    body = await request.json();
+    const contentLength = Number(request.headers.get("Content-Length") || "0");
+    if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BODY_BYTES) {
+      return {
+        status: 413,
+        body: { error: "request_too_large", request_id: requestId },
+      };
+    }
+    const rawBody = await request.text();
+    if (new TextEncoder().encode(rawBody).byteLength > MAX_REQUEST_BODY_BYTES) {
+      return {
+        status: 413,
+        body: { error: "request_too_large", request_id: requestId },
+      };
+    }
+    body = JSON.parse(rawBody) as Record<string, unknown>;
   } catch (_) {
     return {
       status: 400,
@@ -1741,6 +1770,21 @@ async function runEventSearch(
   }
 
   const query = validation.query;
+  const requestedOperationId = String(
+    body.client_request_id || request.headers.get("X-Client-Request-Id") || "",
+  ).trim();
+  if (
+    requestedOperationId &&
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
+      requestedOperationId,
+    )
+  ) {
+    return {
+      status: 400,
+      body: { error: "invalid_client_request_id", request_id: requestId },
+    };
+  }
+  const quotaOperationId = requestedOperationId || requestId;
   const queryFacets = parseQueryFacets(query);
   const limit = clampInt(body.limit, DEFAULT_LIMIT, 1, MAX_LIMIT);
   const offset = clampInt(body.offset, 0, 0, 500);
@@ -1805,9 +1849,9 @@ async function runEventSearch(
   timings.result_cache_ms = nowMs() - Math.round(resultCacheStartedAt);
   if (cachedResult) {
     const quotaStartedAt = performance.now();
-    const { data: quotaRows } = await supabase.rpc(
-      "get_event_search_quota_v2",
-      { p_plan_id: "registered" },
+    const { data: quotaRows } = await service.rpc(
+      "get_event_search_quota_internal_v1",
+      { p_user_id: userId, p_plan_id: "registered" },
     );
     timings.quota_ms = nowMs() - Math.round(quotaStartedAt);
     timings.total_ms = nowMs() - Math.round(requestStartedAt);
@@ -1815,6 +1859,7 @@ async function runEventSearch(
     const bodyFromCache = {
       ...cachedResult,
       request_id: requestId,
+      client_request_id: quotaOperationId,
       quota: quotaState || cachedResult.quota || null,
       result_cache_status: "hit",
       served_from_cache: true,
@@ -1843,16 +1888,18 @@ async function runEventSearch(
     label: "Проверяю лимит поиска",
   });
   const quotaStartedAt = performance.now();
-  const { data: quotaRows, error: quotaError } = await supabase.rpc(
-    "reserve_event_search_quota_v3",
+  const { data: quotaRows, error: quotaError } = await service.rpc(
+    "reserve_event_search_quota_internal_v1",
     {
+      p_user_id: userId,
+      p_client_request_id: quotaOperationId,
       p_plan_id: "registered",
       p_use_llm: useLlmVerifier,
     },
   );
   timings.quota_ms = nowMs() - Math.round(quotaStartedAt);
   if (quotaError) {
-    await recordSearchRequest(supabase, {
+    await recordSearchRequest(service, userId, {
       p_request_kind: "vector_search",
       p_query_hash: queryHash,
       p_query_length: query.length,
@@ -1880,6 +1927,7 @@ async function runEventSearch(
           ? "Часовой лимит поисков закончился. Окно обновится в начале следующего часа; повтор уже найденного из кэша лимит не тратит."
           : "Лимит поисков на сегодня закончился. Повтор уже найденного из кэша лимит не тратит.",
         request_id: requestId,
+        client_request_id: quotaOperationId,
       },
     };
   }
@@ -1912,9 +1960,10 @@ async function runEventSearch(
       label: "Ищу похожие события",
     });
     const searchStartedAt = performance.now();
-    const { data: rows, error: searchError } = await supabase.rpc(
-      "search_events_by_embedding_v1",
+    const { data: rows, error: searchError } = await service.rpc(
+      "search_events_by_embedding_internal_v1",
       {
+        p_user_id: userId,
         p_query_embedding: embedding,
         // Pagination is applied after reciprocal-family collapse below. Fetch
         // the complete ranked server window so a lower-ranked sibling cannot
@@ -2039,9 +2088,10 @@ async function runEventSearch(
         label: "Подбираю запасные варианты",
       });
       const fallbackStartedAt = performance.now();
-      const { data: fallbackRows } = await supabase.rpc(
-        "event_search_fallback_cards_v1",
+      const { data: fallbackRows } = await service.rpc(
+        "event_search_fallback_cards_internal_v1",
         {
+          p_user_id: userId,
           // Same bounded complete-pool rule as vector pagination: family
           // collapse happens before the result limit is applied.
           p_match_count: 60,
@@ -2078,6 +2128,7 @@ async function runEventSearch(
         ? "pgvector_gemini_embedding_2_llm_high_match_v1"
         : "pgvector_gemini_embedding_2_possible_only_v1",
       request_id: requestId,
+      client_request_id: quotaOperationId,
       served_list_id: servedListId,
       served_list_hash: servedHash,
       query_hash: queryHash,
@@ -2127,7 +2178,7 @@ async function runEventSearch(
     responseBody.result_cache_status = resultCacheStatus;
     responseBody.timings_ms = timings;
 
-    await recordSearchRequest(supabase, {
+    await recordSearchRequest(service, userId, {
       p_request_kind: llmResult.used ? "llm_rerank" : "vector_search",
       p_query_hash: queryHash,
       p_query_length: query.length,
@@ -2202,7 +2253,7 @@ async function runEventSearch(
 
     return { status: 200, body: responseBody };
   } catch (error) {
-    await recordSearchRequest(supabase, {
+    await recordSearchRequest(service, userId, {
       p_request_kind: "vector_search",
       p_query_hash: queryHash,
       p_query_length: query.length,

@@ -139,6 +139,15 @@ The comment pipeline reads canonical event/source snapshots from Fly SQLite, kee
 - The existing `ru-central1` YDB resource does not by itself establish compliance: privacy tables require an isolated IAM/KMS/audit/retention boundary, and broader Supabase PII flows remain a release/legal audit item.
 - Recommendation admission and every send claim fail closed above the 200-user launch ceiling.
 - Provider credentials and mailbox passwords stay in the approved secret manager and never enter Git, artifacts or application logs.
+- The browser may read only owner-scoped saved-event state and must mutate it
+  through the capped desired-state RPC; direct authenticated table DML is
+  forbidden. Expensive vector search, quota reservation and search audit RPCs
+  are service-role-only behind an Edge Function that first validates the caller
+  JWT and passes the verified `auth.users.id` to fixed-`search_path` wrappers.
+- The stateless relay is an explicit method/path allowlist, not a generic
+  Supabase proxy. The only Storage exception is authenticated upload/delete in
+  private bucket `focus-feedback`; Storage RLS remains authoritative. Unknown
+  RPC/functions, Auth admin, Realtime and other buckets fail closed.
 
 ## Consequences for existing branches
 

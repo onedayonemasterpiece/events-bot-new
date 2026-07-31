@@ -313,8 +313,11 @@ rollout or completed email E2E.
 Implementation state on 31 July:
 
 - the permanent `kenigevents-supabase-relay` Gateway is active with exact
-  production-origin CORS, fixed `/auth/v1`, `/rest/v1` and `/functions/v1`
-  upstream prefixes, no service account and logging disabled;
+  production-origin CORS, no service account and logging disabled; the reviewed
+  v2 desired state replaces its broad Auth/REST/Functions prefixes with exact
+  method/path entries, plus upload/delete only under private Storage bucket
+  `focus-feedback` (migration of live gateway state is an explicit release
+  step, not performed by the migration file or static build);
 - the shared browser client preserves the original Supabase URL for project
   identity/OAuth and the exact historical `sb-<project-ref>-auth-token` storage
   key, while a custom `global.fetch` selects direct or relay transport;
@@ -322,6 +325,12 @@ Implementation state on 31 July:
   successful route for a short session window;
 - GET/HEAD may fall back once after network/timeout/5xx; POST and every other
   non-safe method are sent exactly once by the framework;
+- the exact Auth surface includes magic-link GET verify, code verify, PKCE and
+  refresh token exchange, provider callback, logout and identity linking, so
+  narrowing must be accepted against each session lifecycle case;
+- unknown RPC/functions, Auth admin, Realtime and every other Storage bucket
+  fail at API Gateway; upload/delete inside `focus-feedback` still requires the
+  user JWT and Supabase Storage RLS;
 - `PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL` is carried through local preview
   and Kaggle static-build configuration but is never used by bulk exports;
 - the `KE3` diagnostic compares raw direct checks with the actual framework
@@ -333,6 +342,16 @@ Implementation state on 31 July:
 This is not incident closure: separate live OTP code and magic-link E2E, an
 affected-phone `KE3` receipt, verified membership activation and delivery
 correlation remain mandatory.
+
+The deprecated API Gateway `rateLimit` extension is not part of v2 desired
+state. No reviewed Smart Web Security profile exists in the KenigEvents folder,
+and a low global relay limit would let one source starve unrelated users.
+Supabase Auth limits and per-user database quotas remain authoritative until a
+Smart Web Security Advanced Rate Limiter keying strategy is staged and proven.
+CAPTCHA must not be enabled without both provider credentials and the matching
+browser challenge UX. API Gateway supplies no safe per-wildcard body-size gate
+for this contract; `event-search` rejects more than 16 KiB before JSON parsing,
+while typed RPC and private Storage policies own their downstream caps.
 
 ## P1 gates before canary
 
