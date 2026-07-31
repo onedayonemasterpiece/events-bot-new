@@ -18247,6 +18247,31 @@ EVENT_PIPELINE_INDEPENDENT_TASKS: set[JobTask] = {
 }
 DEPENDENCY_RETRY_HORIZON = timedelta(days=7)
 
+
+def _static_site_pre_handoff_stale_seconds() -> int:
+    """Short recovery window before a durable static-build claim exists.
+
+    A remote build keeps the full 90-minute runtime budget.  A row left
+    ``running`` by a process restart before it wrote a durable claim/handoff
+    must not block Smart Update for the same 90 minutes.
+    """
+
+    raw = (os.getenv("STATIC_SITE_PRE_HANDOFF_STALE_SECONDS") or "").strip()
+    try:
+        value = int(raw) if raw else 600
+    except ValueError:
+        value = 600
+    return max(120, min(value, JOB_MAX_RUNTIME[JobTask.static_site_build]))
+
+
+def _static_site_claim_retry_seconds() -> int:
+    raw = (os.getenv("STATIC_SITE_CLAIM_RETRY_SECONDS") or "").strip()
+    try:
+        value = int(raw) if raw else 30
+    except ValueError:
+        value = 30
+    return max(5, min(value, 300))
+
 # runtime storage for progress callbacks keyed by event id
 _EVENT_PROGRESS: dict[int, SimpleNamespace] = {}
 # mapping from coalesce key to events waiting for progress updates
@@ -18489,6 +18514,15 @@ async def _run_due_jobs_once_locked(
     # in SQL before ORM row conversion.
     known_job_tasks = list(JobTask)
     async with db.get_session() as session:
+        active_static_job_result = await session.execute(
+            sql_text(
+                """
+                SELECT active_job_id FROM static_site_build_state
+                WHERE release_channel='secret_preview'
+                """
+            )
+        )
+        active_static_job_id = active_static_job_result.scalar_one_or_none()
         running_rows = await session.execute(
             select(JobOutbox).where(
                 JobOutbox.status == JobStatus.running,
@@ -18515,6 +18549,14 @@ async def _run_due_jobs_once_locked(
                     )
                     continue
             limit = JOB_MAX_RUNTIME.get(rjob.task, DEFAULT_JOB_MAX_RUNTIME)
+            if rjob.task == JobTask.static_site_build:
+                payload = rjob.payload if isinstance(rjob.payload, Mapping) else {}
+                has_durable_owner = bool(
+                    (active_static_job_id and int(active_static_job_id) == int(rjob.id))
+                    or isinstance(payload.get("remote_handoff"), Mapping)
+                )
+                if not has_durable_owner:
+                    limit = min(limit, _static_site_pre_handoff_stale_seconds())
             age = (now - rjob.updated_at).total_seconds()
             if age > limit:
                 if rjob.task == JobTask.static_site_build:
@@ -18993,7 +19035,29 @@ async def _run_due_jobs_once_locked(
                 )
                 if claim_result.rowcount != 1:
                     await session.rollback()
-                    logging.info("STATIC_SITE_CLAIM_LOST job_id=%s", claim_job_id)
+                    retry_at = claimed_at + timedelta(
+                        seconds=_static_site_claim_retry_seconds()
+                    )
+                    deferred = await session.execute(
+                        update(JobOutbox)
+                        .where(
+                            JobOutbox.id == claim_job_id,
+                            JobOutbox.status.in_([JobStatus.pending, JobStatus.error]),
+                        )
+                        .values(
+                            next_run_at=retry_at,
+                            updated_at=claimed_at,
+                            last_error="waiting_for_static_site_owner",
+                        )
+                        .execution_options(synchronize_session=False)
+                    )
+                    await session.commit()
+                    logging.info(
+                        "STATIC_SITE_CLAIM_LOST job_id=%s deferred=%s retry_at=%s",
+                        claim_job_id,
+                        deferred.rowcount == 1,
+                        retry_at.isoformat(),
+                    )
                     continue
                 await session.commit()
                 obj.status = JobStatus.running

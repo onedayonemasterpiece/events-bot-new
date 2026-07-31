@@ -109,3 +109,20 @@ Cache the integer job id before the CAS and use that scalar after rollback.
 
 All values needed after rollback must be copied to plain scalars before the
 transaction boundary; diagnostics must never lazy-load expired ORM objects.
+
+## 2026-07-31 recurrence
+
+Two Fly restarts interrupted job `44365` before it persisted a remote handoff.
+The row remained `running` with no active build claim, while newer Smart Update
+job `45903` lost its CAS roughly every two seconds. The worker remained alive,
+but the July 29 checked candidate stayed current.
+
+The regression fix gives pre-handoff orphans a separate ten-minute stale
+window and defers a CAS loser for 30 seconds without spending its attempt. A
+durable exact owner or remote handoff retains the full 90-minute build budget.
+Closure additionally requires a compensating production build with terminal
+Kaggle ledger, released exact lease and advanced checked-candidate receipt.
+The recurrence also exposed an invalid deployed configuration:
+`STATIC_SITE_REQUIRE_VECTOR_BARRIER=1` with `ENABLE_EVENT_VECTOR_SYNC=0`.
+Production now enables the vector owner after the shared atomic limiter gate;
+the barrier and its producer must be changed together.

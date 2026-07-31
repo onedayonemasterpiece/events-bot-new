@@ -59,6 +59,15 @@ robots, sitemap and PWA manifest files. The PWA gate binds MIME, root
 under `_review/`, `_static/`, `ics/` and `p/`, plus release-control JSON, are
 unexpressible.
 
+The inventory and smoke set also require `/fokus-gruppa/priglashenie/` and
+`/fokus-gruppa/manifest.webmanifest`. The focus manifest is separately bound
+to `id=/fokus-gruppa/pwa`, `scope=/` and
+`start_url=/fokus-gruppa/priglashenie/?launch=pwa`. This prevents an otherwise
+complete root release from breaking the already installed focus-group app.
+Root HTML and manifests remain short-revalidated network resources; immutable
+long caching is restricted to content-hashed assets, so a stable URL does not
+require a new PWA installation for every release.
+
 ## One-time infrastructure setup (not yet executed)
 
 Do this through an reviewed Terraform/YC change, save before/after JSON under

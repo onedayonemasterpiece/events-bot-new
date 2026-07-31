@@ -620,3 +620,30 @@ useful personalization during a slow route without making Fly a general
 backend. The complete routing/outbox acceptance contract is canonical in
 `docs/features/unsigned-personalization/production-integration.md`, section
 `P0.5 Thin transport resilience gate`.
+
+## Stable install identity and operator clean-start
+
+The focus-group PWA has one permanent identity and must not move when a new
+static release is approved:
+
+- manifest URL: `/fokus-gruppa/manifest.webmanifest`;
+- `id`: `/fokus-gruppa/pwa`;
+- `scope`: `/`;
+- start URL: `/fokus-gruppa/priglashenie/?launch=pwa`.
+
+The checked production archive, atomic publisher and public smoke gate all
+require both the invitation page and this exact manifest contract. A release
+cannot pass while an installed focus PWA would open a 404. There is no
+cache-first service worker: navigation requests use the network, HTML is
+revalidated within 60 seconds, the manifest within five minutes and only
+content-hashed assets are immutable.
+
+For a clean operator retest on one device use:
+
+`/fokus-gruppa/priglashenie/?focus_test_reset=1#invite=focus-group-2026-announcements`
+
+The reset clears only that device's focus participation, optional continuing
+contact consent and local Auth/PKCE state, then consumes the invitation again.
+It preserves favorites and personalization. It does not uninstall an already
+installed PWA or recreate the browser's one-shot install prompt; those two
+behaviours require uninstalling the app and clearing the site's browser data.

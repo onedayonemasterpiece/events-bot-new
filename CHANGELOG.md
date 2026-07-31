@@ -14,6 +14,15 @@
   planner and notifier both fail closed while ImageDiagnostic owns that auth
   bundle, stable MTProto `random_id` preserves retry idempotency, and local
   E2E/generic human sessions remain excluded.
+- Made the stable focus-group install URL a mandatory production-root gate,
+  preserved its exact PWA identity across releases, and expanded the operator
+  clean-start link to reset optional contact consent as well as local focus and
+  Auth state without deleting personalization.
+- Prevented interrupted pre-handoff static builds from blocking Smart Update
+  for the full remote-build timeout, and deferred CAS losers instead of
+  hot-spinning against SQLite and logs every two seconds; durable remote owners
+  retain the full build budget. Re-enabled the production vector-sync owner so
+  the mandatory static vector barrier can actually converge after Smart Update.
 - Smart Update eventness review now includes bounded poster OCR as first-class
   source evidence, so concrete events described on an attached poster are not
   rejected merely because the social caption is generic.

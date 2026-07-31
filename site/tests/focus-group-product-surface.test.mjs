@@ -80,6 +80,8 @@ test('invite intake and secret hub state the local marker boundary', async () =>
   assert.match(intake, /Шаг 1 из 3/u);
   assert.match(intake, /Шаг 2 из 3/u);
   assert.match(intake, /clearFocusParticipationMarker/u);
+  assert.match(intake, /clearFocusContinuingConsent/u);
+  assert.match(intake, /focus_test_reset/u);
   assert.match(secret, /UX-проверка, а не проверка авторизации/u);
   assert.match(secret, /readFocusParticipationMarker/u);
   assert.match(helper, /FOCUS_PARTICIPATION_DURATION_MS = 30 \* 24/u);

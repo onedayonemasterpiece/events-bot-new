@@ -63,6 +63,8 @@ ROOT_REQUIRED_ROUTES = (
     "partners/index.html",
     "partnerstvo/index.html",
     "podborki/besplatnye-sobytiya/index.html",
+    "fokus-gruppa/priglashenie/index.html",
+    "fokus-gruppa/manifest.webmanifest",
     "robots.txt",
     "sitemap.xml",
     "manifest.webmanifest",
@@ -72,6 +74,8 @@ ROOT_SMOKE_KEYS = (
     "segodnya/index.html",
     "poisk/index.html",
     "manifest.webmanifest",
+    "fokus-gruppa/priglashenie/index.html",
+    "fokus-gruppa/manifest.webmanifest",
 )
 ROOT_PROTECTED_PREFIXES = ("_review/", "_static/", "ics/", "p/")
 ROOT_PROTECTED_KEYS = {"current.json", "previous.json", "promotion-lease.json"}
@@ -780,6 +784,40 @@ def _validate_extracted_root(
         src = str(icon.get("src") or "")
         if not src.startswith("/") or src.startswith("//") or src[1:] not in seen:
             raise StaticSitePermanentError("atomic_root_pwa_icon_file_missing")
+    try:
+        focus_pwa = json.loads(
+            (root / "fokus-gruppa/manifest.webmanifest").read_text(encoding="utf-8")
+        )
+    except Exception as exc:
+        raise StaticSitePermanentError("atomic_root_focus_pwa_manifest_invalid") from exc
+    focus_pwa_item = next(
+        item for item in files if item["key"] == "fokus-gruppa/manifest.webmanifest"
+    )
+    if focus_pwa_item["content_type"] != "application/manifest+json; charset=utf-8":
+        raise StaticSitePermanentError("atomic_root_focus_pwa_mime_invalid")
+    if (
+        focus_pwa.get("id") != "/fokus-gruppa/pwa"
+        or focus_pwa.get("scope") != "/"
+        or focus_pwa.get("start_url") != "/fokus-gruppa/priglashenie/?launch=pwa"
+        or focus_pwa.get("display") != "standalone"
+        or not str(focus_pwa.get("name") or "").strip()
+        or not str(focus_pwa.get("short_name") or "").strip()
+    ):
+        raise StaticSitePermanentError("atomic_root_focus_pwa_contract_invalid")
+    focus_icons = focus_pwa.get("icons")
+    if not isinstance(focus_icons, list):
+        raise StaticSitePermanentError("atomic_root_focus_pwa_icons_invalid")
+    focus_icon_sizes = {
+        str(item.get("sizes") or "") for item in focus_icons if isinstance(item, Mapping)
+    }
+    if not {"192x192", "512x512"}.issubset(focus_icon_sizes):
+        raise StaticSitePermanentError("atomic_root_focus_pwa_icon_sizes_missing")
+    for icon in focus_icons:
+        if not isinstance(icon, Mapping):
+            raise StaticSitePermanentError("atomic_root_focus_pwa_icon_invalid")
+        src = str(icon.get("src") or "")
+        if not src.startswith("/") or src.startswith("//") or src[1:] not in seen:
+            raise StaticSitePermanentError("atomic_root_focus_pwa_icon_file_missing")
     manifest_sha = _sha256_bytes(manifest_bytes)
     manifest_item = {
         "key": "static-release-manifest.json",

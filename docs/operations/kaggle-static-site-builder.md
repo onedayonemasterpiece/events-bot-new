@@ -503,3 +503,21 @@ treated as enabled research UI. The unavailable-state gate is tied to that DOM
 contract, not to mutable reader-facing Russian copy. `/artefakty/` remains
 intentionally `noindex` even while the ordinary production route renders only
 the unavailable fallback.
+
+### Restart before remote handoff
+
+The outbox distinguishes a durable remote build from a process orphan. A row
+with an exact `static_site_build_state.active_job_id` or a persisted
+`remote_handoff` keeps the full 5400-second build budget. A `running` row with
+neither marker is a pre-handoff owner and is recovered after the bounded
+`STATIC_SITE_PRE_HANDOFF_STALE_SECONDS` window (600 seconds by default), so a
+restart between outbox claim and Kaggle handoff cannot block Smart Update for
+90 minutes. When a follow-up loses its CAS to a real owner, it is deferred for
+`STATIC_SITE_CLAIM_RETRY_SECONDS` (30 seconds by default) without consuming an
+attempt; a two-second log/SQLite hot-spin is forbidden.
+
+Production must not enable `STATIC_SITE_REQUIRE_VECTOR_BARRIER=1` while leaving
+`ENABLE_EVENT_VECTOR_SYNC=0`: that configuration makes every new Smart Update
+revision permanently unproducible. After the shared atomic Google limiter and
+event-vector path have passed their release gate, both flags stay enabled and
+the independent vector receipt is allowed to converge before the static build.

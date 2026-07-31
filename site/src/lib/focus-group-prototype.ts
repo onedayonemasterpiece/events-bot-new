@@ -245,6 +245,14 @@ export function readFocusContinuingConsent(
   }
 }
 
+export function clearFocusContinuingConsent(storage: FocusStorage): void {
+  try {
+    storage.removeItem(FOCUS_CONTINUING_CONSENT_STORAGE_KEY);
+  } catch {
+    // An operator reset remains best-effort when browser storage is unavailable.
+  }
+}
+
 export function setFocusContinuingConsent(
   storage: FocusStorage,
   accepted: boolean,

@@ -69,6 +69,19 @@ def _root_archive(tmp_path: Path, *, build_id: str = "production-atomic-test") -
         ],
     }
     files["manifest.webmanifest"] = json.dumps(pwa).encode()
+    focus_pwa = {
+        "id": "/fokus-gruppa/pwa",
+        "name": "Анонсы",
+        "short_name": "Анонсы",
+        "start_url": "/fokus-gruppa/priglashenie/?launch=pwa",
+        "scope": "/",
+        "display": "standalone",
+        "icons": [
+            {"src": "/assets/pwa/icon-192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "/assets/pwa/icon-512.png", "sizes": "512x512", "type": "image/png"},
+        ],
+    }
+    files["fokus-gruppa/manifest.webmanifest"] = json.dumps(focus_pwa).encode()
     files["assets/pwa/icon-192.png"] = b"png-192"
     files["assets/pwa/icon-512.png"] = b"png-512"
     inventory: list[dict[str, object]] = []

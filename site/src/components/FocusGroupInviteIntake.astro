@@ -205,6 +205,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
   import { EMAIL_OTP_LENGTH, canSubmitEmailOtp, normalizeEmailOtp } from '../lib/emailOtp';
   import {
     activateFocusParticipation,
+    clearFocusContinuingConsent,
     clearFocusParticipationMarker,
     inspectFocusInviteUrl,
     readFocusContinuingConsent,
@@ -257,7 +258,10 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     if (resetRequested) {
       if (pendingTitle) pendingTitle.textContent = 'Начинаем проверку заново…';
       if (pendingCopy) pendingCopy.textContent = 'Сбрасываем только вход в фокус-группу на этом устройстве.';
-      if (storage) clearFocusParticipationMarker(storage);
+      if (storage) {
+        clearFocusParticipationMarker(storage);
+        clearFocusContinuingConsent(storage);
+      }
       await auth?.resetForOnboardingTest();
       const restartUrl = new URL(initialUrl);
       restartUrl.searchParams.delete('focus_test_reset');
@@ -430,6 +434,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     restartButton?.addEventListener('click', async () => {
       if (!storage) return;
       clearFocusParticipationMarker(storage);
+      clearFocusContinuingConsent(storage);
       await auth?.resetForOnboardingTest();
       const restarted = storeFocusParticipationMarker(storage);
       if (!restarted) {
