@@ -148,6 +148,20 @@ after any failed transport result and therefore communicated a false success.
   Desktop 1440 px returned `KE4 113D-7E39` in `2.21 s`. All live cases had no
   console errors or horizontal overflow and were visually inspected. A new
   affected-participant phone receipt remains the incident acceptance gate.
+- 2026-07-31 16:24–16:33 UTC — four participant-supplied `KE4`
+  phone receipts (`82DC-0753`, `2F08-11DC`, `A33B-8D1B`, `4216-D659`) completed
+  all seven checks without a timeout or HTTP/network error. The framework
+  retained direct routing in two sessions and relay routing in two. Three
+  framework reads completed in `77–417 ms`. `A33B-8D1B` is the useful outlier:
+  raw direct reads had just completed in about `300 ms`, but both subsequent
+  framework reads needed the bounded safe-read recovery and completed through
+  relay in `4.47–4.48 s`, leaving `PATH=2`. This validates recovery from
+  transient post-probe degradation and removes the previous 12-second failure
+  shape, while also showing why route selection must remain cached and
+  periodically revalidated rather than assumed stable. The receipts are real
+  phone evidence; whether one belongs to the originally affected participant
+  is not established by the PII-free result format, so that narrower gate and
+  the separate live OTP journeys remain open.
 
 ## Root Cause
 
