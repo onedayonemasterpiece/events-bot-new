@@ -656,6 +656,11 @@ def candidate_message(row: dict[str, Any]) -> str:
     source_url = str(row.get("source_url") or "").strip()
     if not source_url and publication.get("source_domain"):
         source_url = "https://" + str(publication["source_domain"]).strip().lstrip("/")
+    draft = (
+        str(row.get("publication_draft_telegram_text") or "").strip()
+        if str(row.get("publication_draft_status") or "") == "ready_for_operator_review"
+        else ""
+    )
     return "\n".join([
         f"✅ Region Talk candidate #{rank}",
         str(url),
@@ -666,6 +671,7 @@ def candidate_message(row: dict[str, Any]) -> str:
         "🎬 Видео: требуется ручной просмотр" if video_manual else "",
         f"Кратко: {summary}" if summary else "",
         f"Gemini: {reason}" if reason else "",
+        f"\n📝 Черновик для Telegram:\n{draft}" if draft else "",
     ]).strip()
 
 

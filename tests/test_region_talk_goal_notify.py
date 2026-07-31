@@ -326,6 +326,16 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertIn("О публикации: Нерегиональный научный журнал.", message)
         self.assertIn("Кратко: Исследование объясняет", message)
 
+    def test_candidate_message_includes_ready_grounded_telegram_draft(self) -> None:
+        mod = load_module()
+        message = mod.candidate_message({
+            "post_url": "https://example.org/article",
+            "publication_draft_status": "ready_for_operator_review",
+            "publication_draft_telegram_text": "Короткий фактический текст.\n\nОригинал: https://example.org/article",
+        })
+        self.assertIn("📝 Черновик для Telegram", message)
+        self.assertIn("Короткий фактический текст", message)
+
     def test_latest_bge_vector_is_attached_by_canonical_url(self) -> None:
         mod = load_module()
         publications = [{"post_url": "https://example.org/a/"}]

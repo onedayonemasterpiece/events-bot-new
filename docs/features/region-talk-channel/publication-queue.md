@@ -289,6 +289,17 @@ exists. If no alternative exists, the snapshot records
 model/encoder/dimension/encoding vector contracts are comparable; missing or
 incompatible vectors use a visible source/topic/content fallback.
 
+## Grounded final-post draft
+
+For every newly Gemini-accepted social post, editorial article or academic
+publication, final verification also returns a bounded fact-grounded draft for
+Telegram and VK. It is persisted before working source text is compacted.
+`publication_draft_status=ready_for_operator_review` requires a title, explicit
+source attribution, canonical original URL, both platform texts and one to
+three internal claim/support pairs. The operator candidate message includes the
+Telegram draft. This is the input to the future target-channel publisher; it
+does not bypass diversity ordering, rights policy or manual release gates.
+
 ## YDB state
 
 CandidateReport writes:

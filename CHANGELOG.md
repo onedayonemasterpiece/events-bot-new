@@ -42,6 +42,12 @@
 
 ### Added
 
+- Region Talk final verifier v7 now creates an accept-only, fact-grounded
+  Telegram/VK draft with explicit source attribution, canonical original link
+  and durable claim-to-support evidence; the draft survives downstream queue
+  refreshes and is shown in new operator candidate notifications, while public
+  auto-publishing remains disabled.
+
 - Added the permanent no-logging Yandex API Gateway transport relay and a
   provider-neutral `KE3` phone diagnostic that compares direct Auth/Data reads
   with the actual resilient framework path in one run.

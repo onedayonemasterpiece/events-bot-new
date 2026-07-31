@@ -484,7 +484,12 @@ visibility.
   retry metadata (`attempt_count`, `next_attempt_after`), authoritative source
   fingerprint/version, tombstone/revoke
   markers, the Gemini Lite verifier decision, goal-stop marker and
-  local notification markers (`sent_to_chat`, `sent_message_id`);
+  local notification markers (`sent_to_chat`, `sent_message_id`). Newly
+  accepted rows also carry the v7 grounded writer projection:
+  `publication_draft_status`, title/source attribution, Telegram/VK text,
+  compact `publication_draft_fact_points_json` claim/support evidence and the
+  draft prompt version. These fields are finalizer-owned and preserved by
+  later CandidateReport refreshes;
 - kind `telegram_entity_cache_item`, pk
   `telegram_entity_cache_item:<canonical-entity-key>` — private durable
   `channel_id/access_hash` cache written in bounded batches immediately after

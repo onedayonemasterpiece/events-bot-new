@@ -354,6 +354,10 @@ state. См. [MVP candidate report](mvp-candidate-report.md).
   but Bot API `getChat` fails closed with `chat not found`.
 - Only after this autonomy gate is green does product work move to diversity
   ordering and generation of the actual target-channel post.
+- That next stage is now implemented for newly accepted rows: final verifier
+  v7 persists grounded Telegram/VK drafts with explicit source/original link
+  and claim/support evidence. Public sending remains disabled; the remaining
+  product gate is selection from the diversified queue plus operator approval.
 
 
 ## MVP-1.x strict selection update

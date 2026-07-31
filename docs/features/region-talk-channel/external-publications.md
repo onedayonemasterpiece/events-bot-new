@@ -153,7 +153,8 @@ publishes. `--execute` is required for any YDB change.
 
 The E5 and BGE-M3 semantic bank contains separate
 `ko_editorial_publication` and `ko_academic_publication` positive classes. The
-final verifier uses the origin-aware `region_talk_final_verifier_v6` contract:
+final verifier uses the origin-aware
+`region_talk_final_verifier_v7_grounded_draft` contract:
 editorial/academic work needs attributed analysis/research, an evidence or
 expert basis, a concrete public-interest insight and a memorable useful detail;
 it does not need a first-person trip. Sharp negative regional framing remains a
