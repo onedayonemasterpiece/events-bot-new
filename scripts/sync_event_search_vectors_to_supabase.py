@@ -819,17 +819,25 @@ def write_report(report: dict[str, Any], path: str) -> None:
 def build_embedding_client(*, key_env: str) -> GoogleAIClient:
     """Build a fail-closed embedding client backed by the shared quota ledger."""
 
-    try:
-        from supabase import create_client
-    except ImportError as exc:  # pragma: no cover - deployment dependency guard
-        raise SystemExit("supabase package is required for shared Google AI limiting") from exc
+    from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
 
-    url = env_required("SUPABASE_URL")
-    service_key = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
-    if not service_key:
-        raise SystemExit("Missing SUPABASE_SERVICE_KEY for shared Google AI limiting")
+    def legacy_limiter_client():
+        try:
+            from supabase import create_client
+        except ImportError as exc:  # pragma: no cover - deployment dependency guard
+            raise SystemExit("supabase package is required for shared Google AI limiting") from exc
+
+        url = env_required("SUPABASE_URL")
+        service_key = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
+        if not service_key:
+            raise SystemExit("Missing SUPABASE_SERVICE_KEY for shared Google AI limiting")
+        return create_client(url, service_key)
+
     return GoogleAIClient(
-        supabase_client=create_client(url, service_key),
+        supabase_client=build_google_ai_limiter_supabase_client(
+            fallback_factory=legacy_limiter_client,
+            require_configured=True,
+        ),
         secrets_provider=SecretsProvider(),
         consumer="event_vector_sync",
         default_env_var_name=key_env,

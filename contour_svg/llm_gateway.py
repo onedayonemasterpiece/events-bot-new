@@ -11,21 +11,28 @@ from .dependencies import optional_import
 
 @lru_cache(maxsize=1)
 def _build_supabase_client() -> Any | None:
-    if (os.getenv("SUPABASE_DISABLED") or "").strip() == "1":
-        return None
-    base_url = (os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
-    key = (os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY") or "").strip()
-    if not base_url or not key:
-        return None
-    try:
-        from supabase import create_client
-        from supabase.client import ClientOptions
+    from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
 
-        options = ClientOptions()
-        options.schema = (os.getenv("SUPABASE_SCHEMA") or "public").strip() or "public"
-        return create_client(base_url, key, options=options)
-    except Exception:
-        return None
+    def legacy_factory() -> Any | None:
+        if (os.getenv("SUPABASE_DISABLED") or "").strip() == "1":
+            return None
+        base_url = (os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
+        key = (os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY") or "").strip()
+        if not base_url or not key:
+            return None
+        try:
+            from supabase import create_client
+            from supabase.client import ClientOptions
+
+            options = ClientOptions()
+            options.schema = (os.getenv("SUPABASE_SCHEMA") or "public").strip() or "public"
+            return create_client(base_url, key, options=options)
+        except Exception:
+            return None
+
+    return build_google_ai_limiter_supabase_client(
+        fallback_factory=legacy_factory
+    )
 
 
 @lru_cache(maxsize=8)

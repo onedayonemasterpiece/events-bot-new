@@ -1182,10 +1182,13 @@ async def _call_reviewer(
     await session.commit()
 
     from google_ai import GoogleAIClient, SecretsProvider
+    from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
     from main import get_supabase_client
 
     client = GoogleAIClient(
-        supabase_client=get_supabase_client(),
+        supabase_client=build_google_ai_limiter_supabase_client(
+            fallback_factory=get_supabase_client
+        ),
         secrets_provider=SecretsProvider(),
         consumer="event_media_review",
         account_name="event-media-review",
@@ -1345,12 +1348,15 @@ def _image_geometry_prompt() -> str:
 @lru_cache(maxsize=4)
 def _get_image_geometry_client(pool_csv: str):
     from google_ai import GoogleAIClient, SecretsProvider
+    from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
     from main import get_supabase_client
 
     pool = [item.strip() for item in pool_csv.split(",") if item.strip()]
     default_env = pool[0] if pool else "GOOGLE_API_KEY4"
     client = GoogleAIClient(
-        supabase_client=get_supabase_client(),
+        supabase_client=build_google_ai_limiter_supabase_client(
+            fallback_factory=get_supabase_client
+        ),
         secrets_provider=SecretsProvider(),
         consumer="smart_update_image_geometry",
         account_name="smart-update-image-geometry",
@@ -1812,6 +1818,7 @@ async def _classify_event_poster_role(event_id: int, poster_id: int, db: Any) ->
     error: str | None = None
     try:
         from google_ai import GoogleAIClient, SecretsProvider
+        from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
         from main import get_supabase_client
 
         pool_csv = (
@@ -1822,7 +1829,9 @@ async def _classify_event_poster_role(event_id: int, poster_id: int, db: Any) ->
         pool = [item.strip() for item in pool_csv.split(",") if item.strip()]
         default_env = pool[0] if pool else "GOOGLE_API_KEY4"
         client = GoogleAIClient(
-            supabase_client=get_supabase_client(),
+            supabase_client=build_google_ai_limiter_supabase_client(
+                fallback_factory=get_supabase_client
+            ),
             secrets_provider=SecretsProvider(),
             consumer="event_media_role",
             account_name="event-media-role",

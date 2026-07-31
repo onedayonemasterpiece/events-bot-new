@@ -58,8 +58,6 @@ async def _main() -> int:
     _load_env(Path(args.env_file))
     if args.allow_legacy_accounting:
         os.environ["GOOGLE_AI_EXTERNAL_ACCOUNTING_COMPAT"] = "1"
-    from supabase import create_client
-
     from db import Database
     from festival_web_research.coordinator import FestivalResearchCoordinator
     from festival_web_research.formatting import format_research_result
@@ -68,11 +66,17 @@ async def _main() -> int:
     from festival_web_research.validators import load_taxonomy_registry, taxonomy_registry_hash
     from google_ai.client import GoogleAIClient
     from google_ai.interactions import AntigravityInteractionsClient
+    from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
 
-    supabase_url = os.environ.get("SUPABASE_URL", "").strip()
-    supabase_key = os.environ.get("SUPABASE_KEY", "").strip()
-    if not supabase_url or not supabase_key:
-        raise RuntimeError("SUPABASE_URL/SUPABASE_KEY are required for the shared limiter")
+    def legacy_limiter_client():
+        supabase_url = os.environ.get("SUPABASE_URL", "").strip()
+        supabase_key = os.environ.get("SUPABASE_KEY", "").strip()
+        if not supabase_url or not supabase_key:
+            raise RuntimeError("SUPABASE_URL/SUPABASE_KEY are required for the shared limiter")
+        from supabase import create_client
+
+        return create_client(supabase_url, supabase_key)
+
     allowed_key_envs = ("GOOGLE_API_KEY", "GOOGLE_API_KEY2", "GOOGLE_API_KEY3", "GOOGLE_API_KEY4", "GOOGLE_API_KEY5")
     requested_key_envs = tuple(args.key_env or allowed_key_envs)
     if any(name not in allowed_key_envs for name in requested_key_envs):
@@ -83,7 +87,10 @@ async def _main() -> int:
     )
     if not key_envs:
         raise RuntimeError("no configured Google key envs")
-    supabase = create_client(supabase_url, supabase_key)
+    supabase = build_google_ai_limiter_supabase_client(
+        fallback_factory=legacy_limiter_client,
+        require_configured=True,
+    )
     limiter = GoogleAIClient(
         supabase_client=supabase,
         consumer="festival_antigravity",

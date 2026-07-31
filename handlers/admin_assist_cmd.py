@@ -1236,8 +1236,11 @@ def _build_prompt(request_text: str) -> str:
 @lru_cache(maxsize=1)
 def _get_gemma_client() -> Any:
     from google_ai import GoogleAIClient, SecretsProvider
+    from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
 
-    supabase = require_main_attr("get_supabase_client")()
+    supabase = build_google_ai_limiter_supabase_client(
+        fallback_factory=require_main_attr("get_supabase_client")
+    )
     incident_notifier = require_main_attr("notify_llm_incident")
     return GoogleAIClient(
         supabase_client=supabase,

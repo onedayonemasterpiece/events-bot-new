@@ -22,6 +22,7 @@ from kaggle_status import (
     create_kaggle_run_config,
     write_kaggle_status_files,
 )
+from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
 from kenigsberg_stories.state import (
     KENIGSBERG_PROFILE_KEY,
     apply_generated_timeline_bans,
@@ -414,7 +415,9 @@ async def _ask_story_text_split_llm(thought_text: str) -> dict:
     try:
         from google_ai import GoogleAIClient, SecretsProvider
 
-        supabase = require_main_attr("get_supabase_client")()
+        supabase = build_google_ai_limiter_supabase_client(
+            fallback_factory=require_main_attr("get_supabase_client")
+        )
         client = GoogleAIClient(
             supabase_client=supabase,
             secrets_provider=SecretsProvider(),

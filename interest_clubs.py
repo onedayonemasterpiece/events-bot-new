@@ -312,11 +312,14 @@ def _provider_prompt(packet: EvidencePacket) -> str:
 def _create_google_verifier() -> Verifier | None:
     try:
         from google_ai import GoogleAIClient, SecretsProvider
+        from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
         from main import get_supabase_client, notify_llm_incident
     except Exception as exc:  # pragma: no cover - optional runtime dependency
         logger.warning("interest_clubs: GoogleAIClient unavailable: %s", exc)
         return None
-    supabase = get_supabase_client()
+    supabase = build_google_ai_limiter_supabase_client(
+        fallback_factory=get_supabase_client
+    )
     if supabase is None:
         logger.error("interest_clubs: Supabase limiter unavailable; verifier disabled")
         return None

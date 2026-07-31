@@ -268,11 +268,24 @@ class SupabaseRestClient:
 
 
 def build_supabase_rest_client() -> SupabaseRestClient:
-    url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
-    key = str(os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY") or "").strip()
-    if not url or not key:
-        raise RuntimeError("missing_SUPABASE_URL_or_service_key")
-    return SupabaseRestClient(url, key, schema=str(os.getenv("SUPABASE_SCHEMA") or "public").strip() or "public")
+    from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
+
+    def legacy_factory() -> SupabaseRestClient:
+        url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
+        key = str(os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY") or "").strip()
+        if not url or not key:
+            raise RuntimeError("missing_SUPABASE_URL_or_service_key")
+        return SupabaseRestClient(
+            url,
+            key,
+            schema=str(os.getenv("SUPABASE_SCHEMA") or "public").strip() or "public",
+        )
+
+    return build_google_ai_limiter_supabase_client(
+        fallback_factory=legacy_factory,
+        require_configured=True,
+        client_factory=lambda url, key: SupabaseRestClient(url, key),
+    )
 
 
 def build_google_ai_client(*, default_env_var_name: str, consumer: str) -> Any:

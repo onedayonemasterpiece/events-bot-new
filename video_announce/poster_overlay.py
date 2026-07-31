@@ -233,6 +233,8 @@ def _coerce_check(obj: dict[str, Any], *, model: str) -> PosterCheck | None:
 
 
 async def _gemma_check(*, ocr_text: str, title: str, date: str, location: str) -> PosterCheck | None:
+    from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
+
     prompt = _build_gemma_prompt(
         ocr_text=_shorten(ocr_text, 6000),
         title=_shorten(title, 200),
@@ -240,7 +242,9 @@ async def _gemma_check(*, ocr_text: str, title: str, date: str, location: str) -
         location=_shorten(location, 200),
     )
     client = GoogleAIClient(
-        supabase_client=get_supabase_client(),
+        supabase_client=build_google_ai_limiter_supabase_client(
+            fallback_factory=get_supabase_client
+        ),
         secrets_provider=get_provider(),
         consumer="bot",
     )

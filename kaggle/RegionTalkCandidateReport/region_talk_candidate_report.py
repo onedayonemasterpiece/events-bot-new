@@ -14608,14 +14608,24 @@ def build_region_talk_supabase_client() -> Any:
     global _REGION_TALK_SUPABASE_CLIENT
     if _REGION_TALK_SUPABASE_CLIENT is not None:
         return _REGION_TALK_SUPABASE_CLIENT
-    if (os.getenv("SUPABASE_DISABLED") or "").strip() == "1":
-        raise RuntimeError("supabase_disabled")
-    base_url = (os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
-    key = (os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY") or "").strip()
-    if not base_url or not key:
-        raise RuntimeError("missing_SUPABASE_URL_or_service_key")
-    schema = (os.getenv("SUPABASE_SCHEMA") or "public").strip() or "public"
-    _REGION_TALK_SUPABASE_CLIENT = _SupabaseRestClient(base_url, key, schema=schema)
+    ensure_google_ai_import_path()
+    from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
+
+    def legacy_factory() -> Any:
+        if (os.getenv("SUPABASE_DISABLED") or "").strip() == "1":
+            raise RuntimeError("supabase_disabled")
+        base_url = (os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
+        key = (os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY") or "").strip()
+        if not base_url or not key:
+            raise RuntimeError("missing_SUPABASE_URL_or_service_key")
+        schema = (os.getenv("SUPABASE_SCHEMA") or "public").strip() or "public"
+        return _SupabaseRestClient(base_url, key, schema=schema)
+
+    _REGION_TALK_SUPABASE_CLIENT = build_google_ai_limiter_supabase_client(
+        fallback_factory=legacy_factory,
+        require_configured=True,
+        client_factory=lambda url, key: _SupabaseRestClient(url, key),
+    )
     return _REGION_TALK_SUPABASE_CLIENT
 
 

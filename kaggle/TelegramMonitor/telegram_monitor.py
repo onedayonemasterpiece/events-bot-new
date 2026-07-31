@@ -1168,14 +1168,21 @@ def _key_env_aliases(name: str | None) -> list[str]:
 
 
 def _build_supabase_client():
-    if not SUPABASE_ENABLED:
-        return None
-    from supabase import create_client
-    from supabase.client import ClientOptions
+    from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
 
-    options = ClientOptions()
-    options.schema = SUPABASE_SCHEMA or 'public'
-    return create_client(SUPABASE_URL, SUPABASE_KEY, options=options)
+    def legacy_factory():
+        if not SUPABASE_ENABLED:
+            return None
+        from supabase import create_client
+        from supabase.client import ClientOptions
+
+        options = ClientOptions()
+        options.schema = SUPABASE_SCHEMA or 'public'
+        return create_client(SUPABASE_URL, SUPABASE_KEY, options=options)
+
+    return build_google_ai_limiter_supabase_client(
+        fallback_factory=legacy_factory
+    )
 
 
 def _get_supabase_client():

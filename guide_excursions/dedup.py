@@ -391,18 +391,22 @@ def _guide_account_name() -> str | None:
 def _get_dedup_client():
     try:
         from google_ai import GoogleAIClient, SecretsProvider
+        from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
     except Exception as exc:  # pragma: no cover - optional dependency
         logger.warning("guide_dedup: google_ai client unavailable: %s", exc)
         return None, None
-    supabase = None
+    supabase_fallback = None
     incident_notifier = None
     try:
         from main import get_supabase_client, notify_llm_incident  # type: ignore
 
-        supabase = get_supabase_client()
+        supabase_fallback = get_supabase_client
         incident_notifier = notify_llm_incident
     except Exception:
         pass
+    supabase = build_google_ai_limiter_supabase_client(
+        fallback_factory=supabase_fallback
+    )
     client = GoogleAIClient(
         supabase_client=supabase,
         secrets_provider=GuideSecretsProviderAdapter(

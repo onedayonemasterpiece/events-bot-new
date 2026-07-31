@@ -1069,17 +1069,21 @@ async def _google_generate_json(
         return None
     try:
         from google_ai import GoogleAIClient, SecretsProvider
+        from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
 
-        supabase_client = None
+        supabase_fallback = None
         incident_notifier = None
         try:
-            supabase_client = require_main_attr("get_supabase_client")()
+            supabase_fallback = require_main_attr("get_supabase_client")
         except Exception:
-            supabase_client = None
+            supabase_fallback = None
         try:
             incident_notifier = require_main_attr("notify_llm_incident")
         except Exception:
             incident_notifier = None
+        supabase_client = build_google_ai_limiter_supabase_client(
+            fallback_factory=supabase_fallback
+        )
         client = GoogleAIClient(
             supabase_client=supabase_client,
             secrets_provider=SecretsProvider(),

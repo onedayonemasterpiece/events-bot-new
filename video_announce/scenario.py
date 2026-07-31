@@ -1810,10 +1810,13 @@ class VideoAnnounceScenario:
     def _gemma_client_for_partner_filters(self):
         try:
             from google_ai import GoogleAIClient, SecretsProvider  # type: ignore
+            from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
             from main import get_supabase_client, notify_llm_incident
 
             return GoogleAIClient(
-                supabase_client=get_supabase_client(),
+                supabase_client=build_google_ai_limiter_supabase_client(
+                    fallback_factory=get_supabase_client
+                ),
                 secrets_provider=SecretsProvider(),
                 consumer="video_partner_filter",
                 incident_notifier=notify_llm_incident,

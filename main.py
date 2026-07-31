@@ -9756,10 +9756,13 @@ class ParsedEvents(list):
 def _get_event_parse_gemma_client():
     try:
         from google_ai import GoogleAIClient, SecretsProvider
+        from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
     except Exception as exc:  # pragma: no cover - optional dependency
         logger.warning("event_parse: gemma client unavailable: %s", exc)
         return None
-    supabase = get_supabase_client()
+    supabase = build_google_ai_limiter_supabase_client(
+        fallback_factory=get_supabase_client
+    )
     return GoogleAIClient(
         supabase_client=supabase,
         secrets_provider=SecretsProvider(),
@@ -11062,10 +11065,13 @@ def _extract_available_hashtags(event: Event) -> list[str]:
 def _get_event_topics_gemma_client():
     try:
         from google_ai import GoogleAIClient, SecretsProvider
+        from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
     except Exception as exc:  # pragma: no cover - optional dependency
         logger.warning("event_topics: gemma client unavailable: %s", exc)
         return None
-    supabase = get_supabase_client()
+    supabase = build_google_ai_limiter_supabase_client(
+        fallback_factory=get_supabase_client
+    )
     return GoogleAIClient(
         supabase_client=supabase,
         secrets_provider=SecretsProvider(),

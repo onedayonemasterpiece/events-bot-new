@@ -22,6 +22,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from sqlalchemy import and_, delete, or_, select
 
 from db import Database
+from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
 from event_age_rating import (
     AGE_DECISION_JSON_SCHEMA,
     AgeRatingDecision,
@@ -7342,7 +7343,9 @@ def _get_gemma_client():
     except Exception as exc:  # pragma: no cover - optional dependency
         logger.warning("smart_update: gemma client unavailable: %s", exc)
         return None
-    supabase = get_supabase_client()
+    supabase = build_google_ai_limiter_supabase_client(
+        fallback_factory=get_supabase_client
+    )
     client = GoogleAIClient(
         supabase_client=supabase,
         secrets_provider=SecretsProvider(),
@@ -9749,7 +9752,9 @@ def _get_identity_embedding_client():
         logger.warning("smart_update.identity_gate embedding client unavailable: %s", exc)
         return None
     return GoogleAIClient(
-        supabase_client=get_supabase_client(),
+        supabase_client=build_google_ai_limiter_supabase_client(
+            fallback_factory=get_supabase_client
+        ),
         secrets_provider=SecretsProvider(),
         consumer="smart_update_identity_embedding",
         account_name="smart-update-identity-embedding",

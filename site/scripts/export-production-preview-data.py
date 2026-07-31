@@ -3366,16 +3366,8 @@ def save_related_cache(path: Path | None, payload: dict[str, Any], *, previous_e
 
 
 def supabase_limiter_client():
-    url = (os.getenv("SUPABASE_URL") or "").strip()
-    key = (
-        os.getenv("SUPABASE_SERVICE_KEY")
-        or os.getenv("SUPABASE_KEY")
-        or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-        or os.getenv("SUPABASE_ANON_KEY")
-        or ""
-    ).strip()
-    if not url or not key:
-        raise RuntimeError("Supabase limiter env is missing: need SUPABASE_URL and SUPABASE_KEY/SUPABASE_SERVICE_KEY")
+    from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
+
     original_sys_path = list(sys.path)
     try:
         # The repository may contain a local `supabase/migrations/` directory,
@@ -3393,7 +3385,25 @@ def supabase_limiter_client():
         raise RuntimeError(f"supabase python client unavailable for limiter: {exc}") from exc
     finally:
         sys.path = original_sys_path
-    return create_client(url, key)
+
+    def legacy_factory():
+        url = (os.getenv("SUPABASE_URL") or "").strip()
+        key = (
+            os.getenv("SUPABASE_SERVICE_KEY")
+            or os.getenv("SUPABASE_KEY")
+            or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+            or os.getenv("SUPABASE_ANON_KEY")
+            or ""
+        ).strip()
+        if not url or not key:
+            raise RuntimeError("Supabase limiter env is missing: need SUPABASE_URL and SUPABASE_KEY/SUPABASE_SERVICE_KEY")
+        return create_client(url, key)
+
+    return build_google_ai_limiter_supabase_client(
+        fallback_factory=legacy_factory,
+        require_configured=True,
+        client_factory=create_client,
+    )
 
 
 def _related_audit_text(value: Any, *, max_chars: int) -> str:
