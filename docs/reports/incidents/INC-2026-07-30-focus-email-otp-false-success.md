@@ -148,6 +148,24 @@ after any failed transport result and therefore communicated a false success.
   Desktop 1440 px returned `KE4 113D-7E39` in `2.21 s`. All live cases had no
   console errors or horizontal overflow and were visually inspected. A new
   affected-participant phone receipt remains the incident acceptance gate.
+- 2026-07-31 16:24–16:57 UTC — six participant-supplied `KE4` phone
+  receipts (`82DC-0753`, `2F08-11DC`, `A33B-8D1B`, `4216-D659`, `831F-D5FA`,
+  `731F-07A1`) completed every framework Auth/Data read without an HTTP/network
+  error or framework timeout. The framework retained direct routing in four
+  sessions and relay routing in two. Five framework pairs completed in
+  `77–432 ms`. `A33B-8D1B` is the useful direct-degradation outlier: raw direct
+  reads had just completed in about `300 ms`, but both subsequent framework
+  reads needed the bounded safe-read recovery and completed through relay in
+  `4.47–4.48 s`, leaving `PATH=2`. `831F-D5FA` supplies the inverse failure
+  shape: the independent relay Data read timed out at `5 s`, while direct and
+  both framework reads succeeded and retained `PATH=1` in `144–155 ms`.
+  `731F-07A1` also found relay slow at about `4.8 s`, selected direct and
+  completed both framework reads in about `430 ms`. Together these validate
+  bidirectional route choice and recovery, and remove the previous 12-second
+  algorithm failure. The receipts are real phone evidence; whether one belongs
+  to the originally affected participant is not established by the PII-free
+  result format, so that narrower gate and the separate live OTP journeys
+  remain open.
 
 ## Root Cause
 
