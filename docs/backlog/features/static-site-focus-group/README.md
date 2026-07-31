@@ -565,3 +565,9 @@ logs. The public receipt uses only neutral labels (`Прямой доступ`, 
 The connection API's `effectiveType` is presented only as qualitative speed,
 not as a claim that Wi-Fi is cellular 4G. No email, OTP, JWT or account identity
 appears in the result.
+
+The same receipt is also exposed as one copyable `KE2` line. It contains only
+the opaque correlation code, UTC timestamp, four compact probe states/timings,
+browser/app mode, qualitative connection class and whether offline support
+controls the page. It contains no email, IP, token or raw user agent, so a
+participant may paste it into the review thread instead of sending a screenshot.
