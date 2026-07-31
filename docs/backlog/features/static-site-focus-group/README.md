@@ -402,8 +402,9 @@ Canary не входит в 30.07 GO. Если ролики/posters/rights не 
 
 Fly SQLite продолжает владеть событиями, publication и operational jobs.
 Supabase/Postgres владеет tester identity, consent, access, feedback и compact
-personal state. Object Storage хранит большие private daily reports. YDB/Kaggle
-для 200 человек и одного месяца не нужны.
+personal state. Object Storage хранит большие private daily reports. YDB не
+становится второй product/auth БД: допустимы только узкие диагностические и
+mail-attempt receipts; Kaggle не участвует в online-path.
 
 Минимальные новые сущности в private `focus_group` schema:
 
@@ -545,3 +546,84 @@ bounded aggregates for accepted retention; delete/anonymize raw research text on
 schedule.
 
 - Secret-candidate packaging keeps the private focus routes noindex/noarchive and adds `nosnippet`; root-form production keeps the same routes private without changing the public candidate policy.
+
+## Phone connectivity diagnostic
+
+The unlinked `noindex` routes `/fokus-gruppa/diagnostika/` and
+`/fokus-gruppa/diagnostika-ustoychivost/` are narrow incident tools, not a
+focus-group replacement. The current page compares direct Auth/Data reads, the
+second stateless route, the same Auth/Data reads through the resilience
+framework and a dedicated control read. Direct checks are not silently
+substituted with framework checks, so one copied result shows whether the
+framework actually recovered a blocked route. Every operation is read-only,
+bounded and `no-store`; the page never sends an OTP or changes account data.
+
+The entire result fits one phone screenshot: understandable statuses, response
+times, one opaque correlation code, local time and browser/PWA plus effective
+network mode. The same code is sent as Supabase `X-Client-Info` and the Yandex
+gateway query marker so the screenshot time can be compared with both provider
+logs. The public receipt uses only neutral labels (`Прямой доступ`, `Вход по
+почте`, `Данные сайта`, `Резервный канал`) and never exposes provider names.
+The connection API's `effectiveType` is presented only as qualitative speed,
+not as a claim that Wi-Fi is cellular 4G. No email, OTP, JWT or account identity
+appears in the result.
+
+The current receipt is exposed as one copyable `KE3` line. It contains only the
+opaque correlation code, UTC timestamp, six compact probe states/timings, the
+selected route number, browser/app mode, qualitative connection class and
+whether offline support controls the page. It contains no email, IP, token,
+provider name or raw user agent, so a participant may paste it into the review
+thread instead of sending a screenshot. Older `KE2` receipts remain valid
+incident evidence and are not reinterpreted as framework results.
+
+Ten returned phone receipts produced eight fully healthy runs and two
+reproduced route failures. For `C6DB-202B`, Supabase edge answered the transport
+probe and both preflights in 31–59 ms, but the MTS phone browser did not receive
+them in 20 seconds; the Yandex control completed in 1.2 seconds. The additional
+`3D6A-BCDD` run completed all four paths in 300/572/590/1177 ms and was also
+confirmed in both provider logs. For affected-participant run `C03E-CB61`, the
+three Supabase checks timed out at roughly 20 seconds and produced no matching
+Supabase edge row, while the same opaque code reached the Yandex Gateway with
+HTTP 200. This is sufficient to reject a universal client/network outage and
+to require a second thin transport path.
+
+The architectural decision is intentionally not “move Auth to YDB”. Supabase
+remains the only identity, OTP, OAuth, JWT, refresh-session and RLS owner. A
+Yandex API Gateway HTTP integration may serve as a stateless relay to those
+same Supabase endpoints. A small serverless function is allowed only for the
+Send Email Hook/provider fallback and opaque delivery receipt; it must not
+become an Auth service.
+
+The permanent fixed-upstream gateway `kenigevents-supabase-relay` now provides
+this thin route without a service account, secret key, application state or
+request logging. A real browser at the production origin received Auth and Data
+reads with HTTP 200; deliberately invalid verify and refresh POST bodies reached
+Supabase once and returned the expected 403/400 Auth responses. The shared
+client keeps the original `sb-<project-ref>-auth-token` storage key, selects a
+route with safe parallel health reads and never retries OTP/verify/refresh over
+the alternate route after an ambiguous response. The Yandex provider callback
+still points to the existing Supabase Auth host, so complete OAuth hostname
+independence remains a separate supported-custom-domain decision.
+
+The browser implementation binds native `fetch` before storing it on the
+transport object. This is a regression requirement: a `NET/0` framework result
+means no browser request was created. Relay smoke must also assert that the
+publishable-key env is non-empty before sending a request; otherwise an expected
+upstream `401` can be misdiagnosed as failed header forwarding.
+
+The phone diagnostic measures both Auth and Data through both routes
+concurrently. It renders each answer as soon as it arrives, selects the first
+healthy route without waiting for a slower one and stores that short-lived
+choice for the next page in the same browser session. Independent measurements
+have a five-second ceiling; the framework's 3.5-second route budget is only an
+emergency guard if a route degrades after its successful health ping. Equal
+inner/outer deadlines and a serial twelve-second diagnostic fallback are
+forbidden.
+
+Personal actions remain local-first. Save/like/hide/calendar/feedback update the
+current-device profile immediately, enter a bounded idempotent outbox and are
+delivered to Supabase later through direct or relay transport. This preserves
+useful personalization during a slow route without making Fly a general
+backend. The complete routing/outbox acceptance contract is canonical in
+`docs/features/unsigned-personalization/production-integration.md`, section
+`P0.5 Thin transport resilience gate`.

@@ -1512,6 +1512,8 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
 
     def test_vlm_backlog_requires_strict_dual_complete_album_and_current_gate(self) -> None:
         mod = load_module()
+        self.assertEqual(mod.IMAGE_VLM_PROMPT_VERSION, "region_talk_visual_adjudicator_v2")
+        self.assertEqual(mod.IMAGE_VLM_DECISION_VERSION, "region_talk_visual_decision_v2")
         row = {
             "image_quality_decision": "needs_visual_review",
             "image_quality_reason": "uncalibrated_legacy_low_score_requires_visual_review",
@@ -2071,7 +2073,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
 
     def test_prepare_action_command_does_not_add_run_id_to_notifier(self) -> None:
         mod = load_module()
-        action = {"action": "notify_confirmed", "cmd": ["python3", "scripts/region_talk_goal_notify.py", "--limit", "20"], "run_id": "ignored"}
+        action = {"action": "notify_confirmed", "cmd": ["python3", "scripts/region_talk_goal_notify.py", "--limit", "20", "--transport", "bot_api"], "run_id": "ignored"}
         cmd, _ = mod.prepare_action_command(action, env_file="/tmp/region.env")
         self.assertIn("--env-file", cmd)
         self.assertNotIn("--run-id", cmd)

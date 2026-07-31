@@ -751,6 +751,13 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             "image_quality_decision": "needs_visual_review",
             "image_quality_reason": "low_score_requires_review",
             "kaliningrad_oblast_only_scope": True,
+            "publication_draft_status": "ready_for_operator_review",
+            "publication_draft_title": "Музей и город",
+            "publication_draft_source_attribution": "Архи.ру",
+            "publication_draft_telegram_text": "Фактический черновик.\n\nОригинал: https://example.test/post/1",
+            "publication_draft_vk_text": "Фактический черновик для VK.\n\nОригинал: https://example.test/post/1",
+            "publication_draft_fact_points_json": '[{"claim":"Факт","support_excerpt":"Опора"}]',
+            "publication_draft_prompt_version": "region_talk_final_verifier_v7_grounded_draft",
         })
         captured = {}
 
@@ -780,6 +787,8 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(payload["rights_policy"], "link_only")
         self.assertEqual(payload["media_use_policy"], "score_only_no_reuse")
         self.assertEqual(payload["image_quality_decision"], "needs_visual_review")
+        self.assertEqual(payload["publication_draft_status"], "ready_for_operator_review")
+        self.assertIn("Оригинал:", payload["publication_draft_telegram_text"])
         self.assertTrue(payload["kaliningrad_oblast_only_scope"])
         self.assertNotIn("text", payload)
 

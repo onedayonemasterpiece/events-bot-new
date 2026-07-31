@@ -9204,7 +9204,32 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         }, {"stage": "final_publication_verifier"})
         self.assertIn("short recurring footer", prompt)
         self.assertIn("alone is not ad", prompt)
-        self.assertEqual(mod.REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION, "region_talk_final_verifier_v6")
+        self.assertIn("fact_points", prompt)
+        self.assertIn("telegram_text", prompt)
+        self.assertEqual(mod.REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION, "region_talk_final_verifier_v7_grounded_draft")
+
+    def test_grounded_publication_draft_is_accept_only_and_appends_source_link(self) -> None:
+        mod = load_module()
+        draft = mod.grounded_publication_draft({
+            "title_short": "Как устроен новый музей",
+            "source_attribution": "Архи.ру",
+            "fact_points": [
+                {"claim": "Проект объединяет музейные и общественные пространства.", "support_excerpt": "общественные пространства включены в музейный комплекс"},
+            ],
+            "telegram_text": "Архи.ру разбирает архитектуру музейного комплекса.",
+            "vk_text": "Архи.ру разбирает архитектуру музейного комплекса в Калининграде.",
+        }, {
+            "post_url": "https://archi.ru/example",
+            "source_title": "Архи.ру",
+        }, "accept")
+
+        self.assertEqual(draft["publication_draft_status"], "ready_for_operator_review")
+        self.assertIn("Оригинал: https://archi.ru/example", draft["publication_draft_telegram_text"])
+        self.assertIn("Источник: Архи.ру", draft["publication_draft_vk_text"])
+        self.assertEqual(len(json.loads(draft["publication_draft_fact_points_json"])), 1)
+        rejected = mod.grounded_publication_draft({"telegram_text": "ignore"}, {"post_url": "https://x"}, "reject")
+        self.assertEqual(rejected["publication_draft_status"], "not_applicable")
+        self.assertEqual(rejected["publication_draft_telegram_text"], "")
 
     def test_image_queue_rows_carry_preimage_publication_eligibility_attestation(self) -> None:
         mod = load_module()

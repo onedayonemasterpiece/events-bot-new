@@ -29,6 +29,47 @@ test('focus programme stays on dedicated noindex/noarchive routes without replac
   assert.match(invitation, /FocusGroupInviteIntake/u);
 });
 
+test('phone connectivity diagnostic is unlinked, noindex and compares direct with resilient reads', async () => {
+  const [root, hub, page, resiliencePage, component, helper, transport, infra] = await Promise.all([
+    read('../src/pages/index.astro'),
+    read('../src/pages/fokus-gruppa/index.astro'),
+    read('../src/pages/fokus-gruppa/diagnostika/index.astro'),
+    read('../src/pages/fokus-gruppa/diagnostika-ustoychivost/index.astro'),
+    read('../src/components/FocusConnectivityDiagnostic.astro'),
+    read('../src/lib/connectivityDiagnostic.ts'),
+    read('../src/lib/resilientSupabaseTransport.ts'),
+    read('../../infra/yandex/focus-connectivity/openapi.yaml'),
+  ]);
+  assert.match(page, /noindex,nofollow,noarchive,nosnippet/u);
+  assert.match(resiliencePage, /noindex,nofollow,noarchive,nosnippet/u);
+  assert.doesNotMatch(root + hub, /fokus-gruppa\/diagnostika/u);
+  assert.match(component, /Вход напрямую/u);
+  assert.match(component, /Данные напрямую/u);
+  assert.match(component, /Данные вторым путём/u);
+  assert.match(component, /Устойчивый вход/u);
+  assert.match(component, /Устойчивые данные/u);
+  assert.doesNotMatch(component, /<small>\{service\}<\/small>/u);
+  assert.doesNotMatch(component, /label: 'Supabase/u);
+  assert.match(component, /Отправьте скриншот или скопируйте строку результата/u);
+  assert.match(component, /X-Client-Info/u);
+  assert.match(component, /Promise\.all/u);
+  assert.match(component, /createResilientSupabaseTransport/u);
+  assert.match(component, /selectionPromise = transport \? transport\.selectRoute\(true\)/u);
+  assert.match(component, /attempts: 1, timeoutMs: 5_000/u);
+  assert.match(component, /probeTimeoutMs: 3_500/u);
+  assert.match(component, /safeRequestTimeoutMs: 3_500/u);
+  assert.match(component, /promise\.then\(renderResult\)/u);
+  assert.match(component, /Скопировать результат/u);
+  assert.match(component, /navigator\.clipboard\?\.writeText/u);
+  assert.match(component, /'KE4'/u);
+  assert.match(helper, /cache: 'no-store'/u);
+  assert.match(helper, /credentials: 'omit'/u);
+  assert.match(transport, /isSafeMethod/u);
+  assert.match(transport, /selection\.route/u);
+  assert.match(infra, /action: GetItem/u);
+  assert.doesNotMatch(component, /type="email"|one-time-code|signInWithOtp|verifyOtp/u);
+});
+
 test('invite intake and secret hub state the local marker boundary', async () => {
   const [intake, secret, helper] = await Promise.all([
     read('../src/components/FocusGroupInviteIntake.astro'),

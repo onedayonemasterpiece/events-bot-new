@@ -20,7 +20,7 @@ Run one bounded offline discovery/scoring pass that reads [`seed-sources-v1.csv`
   post IDs; execute in bounded groups and re-read metrics after every batch.
 - `tests/test_region_talk_candidate_report.py` — workbook/seed/scoring smoke coverage.
 
-Telegram reading is through Telethon, not through Bot API. Role-scoped manual Region Talk runs use `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` for CandidateReport and `TELEGRAM_AUTH_BUNDLE_DISCOVERY2` for ImageDiagnostic, and only the E2E human session for local Saved Messages delivery. `TELEGRAM_AUTH_BUNDLE_S22` remains reserved for production Kaggle/remote monitoring and is not packaged unless explicitly selected as `REGION_TALK_AUTH_BUNDLE_ENV`.
+Telegram reading is through Telethon, not through Bot API. Role-scoped manual Region Talk runs use `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` for CandidateReport and `TELEGRAM_AUTH_BUNDLE_DISCOVERY2` for ImageDiagnostic, and only the E2E human session for **local/manual** Saved Messages delivery. Scheduled Fly notification uses Bot API and must never open that human session remotely. `TELEGRAM_AUTH_BUNDLE_S22` remains reserved for production Kaggle/remote monitoring and is not packaged unless explicitly selected as `REGION_TALK_AUTH_BUNDLE_ENV`.
 
 For the queue-driven To-Be flow, provision two Discovery roles before
 parallelizing Telegram-dependent notebooks:
@@ -625,7 +625,7 @@ python scripts/region_talk_embedding_quality_compare.py \
   authoritative online state and the snapshot should not spend the tail of a
   20-minute run rewriting thousands of unchanged rows.
   Send periodic operator stats with `scripts/region_talk_goal_notify.py --stats`; it must read row-level YDB state, not heartbeat-only rows.
-- The 20-candidate product goal is tracked in YDB `publication_goal` with `target_confirmed=20` and `llm_budget_max=100`; Gemini Lite confirmations must go through the Supabase limiter. Use local `scripts/region_talk_goal_notify.py` with the E2E human session to send confirmed links to the operator chat and mark them as sent.
+- The 20-candidate product goal is tracked in YDB `publication_goal` with `target_confirmed=20` and `llm_budget_max=100`; Gemini Lite confirmations must go through the Supabase limiter. Use local `scripts/region_talk_goal_notify.py` with the E2E human session for manual delivery. Scheduled delivery uses `--transport bot_api`, `TELEGRAM_BOT_TOKEN` and a bot already added to `REGION_TALK_NOTIFY_CHAT_ID`; it never reuses the E2E session on Fly.
 - CandidateReport live-canary acceptance requires exactly one
   `state_load_completed` event before acquisition, no second complete YDB state
   load after `posts_fetched`, and no `RESOURCE_EXHAUSTED` between a successful

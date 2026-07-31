@@ -4,7 +4,9 @@ Status: implemented origin-aware contract. Use Gemini Flash-Lite / current confi
 
 The external-publication research and intake contract is canonical in
 [`external-publications.md`](external-publications.md). Final-verifier policy
-`region_talk_final_verifier_v6` selects rules by `content_origin_type`:
+`region_talk_final_verifier_v7_grounded_draft` selects rules by
+`content_origin_type` and, only for an accepted row, produces the first
+operator-reviewable Telegram/VK draft in the same grounded call:
 
 - `external_social` keeps the firsthand visit/subscriber report and
   emotion/review requirements;
@@ -41,6 +43,11 @@ When actual-image evidence is missing, the event name is
 `final_verifier_deferred_until_image_scoring` and its payload must make clear
 that this is non-blocking (`blocking_wait=false`, `llm_calls=0`,
 `next_action=run_region_talk_image_diagnostic`).
+
+The v7 verifier+draft response defaults to a bounded 1200 output tokens
+(`REGION_TALK_LLM_MAX_OUTPUT_TOKENS`, clamped to `700..1800`) so both platform
+drafts and claim/support evidence fit without turning the top-candidate call
+into an unbounded writer request.
 
 ## Input
 
@@ -95,6 +102,22 @@ uncertainty and limitations when applicable.
 }
 ```
 
+The durable YDB projection uses flat fields
+`publication_draft_status`, `publication_draft_title`,
+`publication_draft_source_attribution`,
+`publication_draft_telegram_text`, `publication_draft_vk_text`,
+`publication_draft_fact_points_json` and
+`publication_draft_prompt_version`. `fact_points` contains one to three
+`claim → support_excerpt` pairs derived from the supplied source text. The
+deterministic normalizer always appends explicit `Источник:` and `Оригинал:`
+lines and the canonical URL; it does not invent missing body text. A complete
+result is `ready_for_operator_review`, never `ready_for_autopublish`.
+
+Rejected/review rows store no draft. A partial accept response becomes
+`needs_grounding_review` and is excluded from any future target-channel
+publisher until an explicit writer/review pass completes. CandidateReport and
+the finalizer preserve the draft fields across later asynchronous refreshes.
+
 ## Writing rules
 
 - Do not copy full original text.
@@ -103,3 +126,5 @@ uncertainty and limitations when applicable.
 - Always include source attribution and original link.
 - Keep useful concerns when present, but do not sensationalize.
 - Avoid “лучший”, “все в восторге” and similar overclaims unless directly justified, and still prefer restrained wording.
+- A generated draft is a review artifact, not permission to reuse source media
+  or publish it automatically.

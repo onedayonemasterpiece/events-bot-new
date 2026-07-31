@@ -64,6 +64,7 @@ const catalogSrc = withBase('/data/personal-feed.json');
     if (!supabaseUrl || !publishableKey) return null;
     return {
       supabaseUrl,
+      relayUrl: runtime.dataset.supabaseRelayUrl || '',
       publishableKey,
       provider: runtime.dataset.yandexProvider || 'custom:yandex',
     };

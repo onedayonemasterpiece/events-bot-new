@@ -16,6 +16,24 @@
 - Google AI shared reservations now serialize check-and-increment per key/model,
   preventing concurrent workers from oversubscribing the configured RPM/TPM/RPD
   cap.
+- Region Talk production documentation now states the actual session boundary:
+  scheduled discovery uses only the two role-scoped discovery bundles and Bot
+  API delivery, never a local E2E or generic human session.
+- Region Talk scheduled operator delivery now uses the production Telegram bot
+  instead of opening the local human E2E session on Fly; read-only notifier
+  dry-runs make no Telegram connection, and Bot API delivery fails closed when
+  the bot is not a member of the pinned operator chat or a prior send is
+  ambiguous.
+- Changed connectivity diagnosis to race both routes, render results as they
+  arrive, reuse the selected route for two minutes and cache a successful
+  recovery. Safe reads now have separate four-second route budgets, so a caller
+  deadline cannot abort the alternate before it starts.
+- Region Talk orchestration now recognizes ImageDiagnostic's current v2 visual
+  attestations, so completed Gemini image reviews leave the actionable backlog
+  instead of causing repeated zero-yield Kaggle launches.
+- Bound the resilient static-site transport to browser-native `fetch`,
+  preventing Chromium `NET/0` failures before any direct or relay request left
+  the device.
 - Region Talk Kaggle workers now install the pinned core YDB SDK rather than
   the unnecessary `yc` extra and exchange their authorized-key JWT through the
   official IAM REST endpoint, preventing runtime replacement of Kaggle's
@@ -94,6 +112,33 @@
   `60 / 100000 / 100` provider quota) and documented the first bounded
   Interactions API festival-research probe, including incomplete-budget and
   provenance-review guardrails.
+- Telegram Monitoring now evaluates only confirmed-event portrait videos under
+  10 MiB through a strict, quota-capped multi-key Gemini Flash-Lite gateway,
+  caps physical provider sends at six per run with app/SDK retries and 429
+  rotation disabled (legacy SDK fails closed), requires an explicit source
+  republication allowlist, permanently caches accepted and rejected SHA
+  decisions as encrypted sidecars, uploads accepted bytes directly from Kaggle
+  to content-addressed Yandex CDN paths, persists updating ranked many-to-many
+  event links, safely deletes last-reference binaries after a minimum 24-hour
+  production grace period, and exports ranked `video_assets` for a future
+  static-site player.
+- Added a fail-closed autonomous Region Talk web-publication research adapter:
+  it applies the saved broad external-source prompt with Search + URL Context,
+  strict JSON validation, the live YDB duplicate guard, the existing importer,
+  a durable cooldown and retained evidence before the normal CandidateReport
+  loop. The scheduler integration is provider-gated and remains disabled until
+  a live search-enabled API key succeeds, so grounding quota failures cannot
+  degrade Telegram/VK discovery.
+- Registered the exact `gemini-3-flash-preview` provider id in the shared
+  Google AI limiter while retaining the former alias row for historical usage.
+- Region Talk final verifier v7 now creates an accept-only, fact-grounded
+  Telegram/VK draft with explicit source attribution, canonical original link
+  and durable claim-to-support evidence; the draft survives downstream queue
+  refreshes and is shown in new operator candidate notifications, while public
+  auto-publishing remains disabled.
+- Added the permanent no-logging Yandex API Gateway transport relay and a
+  provider-neutral `KE3` phone diagnostic that compares direct Auth/Data reads
+  with the actual resilient framework path in one run.
 - Added the Region Talk autonomous production runner and three configurable
   daily APScheduler slots. The runner chains discovery, E5/BGE fusion, image
   diagnostics, Gemini finalization and operator-chat delivery with

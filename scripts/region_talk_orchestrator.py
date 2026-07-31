@@ -1293,8 +1293,8 @@ LEGACY_IMAGE_PUBLICATION_GATES = frozenset({
     "region_talk_publication_eligibility_v3",
     "region_talk_publication_eligibility_v4",
 })
-IMAGE_VLM_PROMPT_VERSION = "region_talk_visual_adjudicator_v1"
-IMAGE_VLM_DECISION_VERSION = "region_talk_visual_decision_v1"
+IMAGE_VLM_PROMPT_VERSION = "region_talk_visual_adjudicator_v2"
+IMAGE_VLM_DECISION_VERSION = "region_talk_visual_decision_v2"
 
 
 def _image_vlm_verdict_is_current(row: dict[str, Any]) -> bool:
@@ -4142,7 +4142,13 @@ def build_decision_plan(
 ) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
     if int(metrics.get("publication_unsent_confirmed_total") or 0) > 0:
-        actions.append(_action("notify_confirmed", ["python3", "scripts/region_talk_goal_notify.py", "--limit", "20"], "confirmed rows not sent to operator chat", resource="telegram:e2e", timeout_seconds=180))
+        actions.append(_action(
+            "notify_confirmed",
+            ["python3", "scripts/region_talk_goal_notify.py", "--limit", "20", "--transport", "bot_api"],
+            "confirmed rows not sent to operator chat",
+            resource="telegram:bot_api",
+            timeout_seconds=180,
+        ))
 
     # Discovery/manual intake is continuous product work, not a recommendation
     # that stops when the publication goal is reached. ``include_main`` remains

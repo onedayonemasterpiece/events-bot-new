@@ -289,6 +289,17 @@ exists. If no alternative exists, the snapshot records
 model/encoder/dimension/encoding vector contracts are comparable; missing or
 incompatible vectors use a visible source/topic/content fallback.
 
+## Grounded final-post draft
+
+For every newly Gemini-accepted social post, editorial article or academic
+publication, final verification also returns a bounded fact-grounded draft for
+Telegram and VK. It is persisted before working source text is compacted.
+`publication_draft_status=ready_for_operator_review` requires a title, explicit
+source attribution, canonical original URL, both platform texts and one to
+three internal claim/support pairs. The operator candidate message includes the
+Telegram draft. This is the input to the future target-channel publisher; it
+does not bypass diversity ordering, rights policy or manual release gates.
+
 ## YDB state
 
 CandidateReport writes:
@@ -332,14 +343,23 @@ durable finalizer state instead.
 
 ## Local Telegram notification
 
-Use `scripts/region_talk_goal_notify.py` locally, never on Kaggle. It uses
-`TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION` and sends unsent `llm_confirmed`
+Use `scripts/region_talk_goal_notify.py`, never on Kaggle. Local/manual mode
+uses `TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION`; the scheduled Fly runner
+uses `--transport bot_api` with `TELEGRAM_BOT_TOKEN` and must never open the
+local human session remotely. The production bot must already be a member of
+the numeric `REGION_TALK_NOTIFY_CHAT_ID`. Both modes send unsent `llm_confirmed`
 links to the operator chat. Delivery is deduplicated by canonical post URL plus
 numeric chat id in `publication_delivery_item`. A deterministic Telegram
 `random_id` is persisted before sending and reused after a crash; the notifier
 also takes a local exclusive lock. After Telegram acceptance it records chat,
 random id, message id and timestamps both in the delivery ledger and candidate
 row. Finalizer/CandidateReport writers preserve these sent markers.
+
+The deterministic `random_id` replay applies to Telethon. Bot API does not
+accept a caller-supplied idempotency key, so a pre-existing ambiguous
+`status=sending` is stopped for operator reconciliation instead of risking a
+duplicate. A successful Bot API response is persisted before the candidate is
+marked sent.
 
 The small per-run send limit is applied only after scanning the durable
 publication ledger. YDB primary-key order is not a readiness order, so older
@@ -350,6 +370,10 @@ For an explicit, read-only ranked snapshot use:
 ```bash
 python3 scripts/region_talk_goal_notify.py --queue --limit 20 --dry-run
 ```
+
+`--dry-run` performs no Telegram connection. For a scheduled-equivalent Bot API
+transport check use `--transport bot_api`; it will first validate `getMe` and
+the pinned chat through `getChat`.
 
 Removing `--dry-run` sends the snapshot to the same pinned operator chat. This
 mode does not set `sent_to_chat` and does not alter the candidate delivery

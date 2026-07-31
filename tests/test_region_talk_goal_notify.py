@@ -5,6 +5,8 @@ import os
 import subprocess
 import sys
 import unittest
+import argparse
+import asyncio
 from pathlib import Path
 from unittest import mock
 
@@ -324,6 +326,16 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertIn("О публикации: Нерегиональный научный журнал.", message)
         self.assertIn("Кратко: Исследование объясняет", message)
 
+    def test_candidate_message_includes_ready_grounded_telegram_draft(self) -> None:
+        mod = load_module()
+        message = mod.candidate_message({
+            "post_url": "https://example.org/article",
+            "publication_draft_status": "ready_for_operator_review",
+            "publication_draft_telegram_text": "Короткий фактический текст.\n\nОригинал: https://example.org/article",
+        })
+        self.assertIn("📝 Черновик для Telegram", message)
+        self.assertIn("Короткий фактический текст", message)
+
     def test_latest_bge_vector_is_attached_by_canonical_url(self) -> None:
         mod = load_module()
         publications = [{"post_url": "https://example.org/a/"}]
@@ -351,6 +363,63 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         ]
         mod.attach_latest_bge_vectors(publications, vectors)
         self.assertEqual(publications[0]["embedding_vector_f16_b64"], "new")
+
+    def test_dry_run_never_decodes_or_connects_human_session(self) -> None:
+        mod = load_module()
+        args = argparse.Namespace(
+            stats=False,
+            message="diagnostic",
+            queue=False,
+            limit=20,
+            vector_scan_limit=100,
+            history_limit=100,
+            diversity_weight=0.28,
+            adjacency_threshold=0.86,
+            dry_run=True,
+            expected_chat_id="-100123",
+            transport="telethon",
+        )
+        with mock.patch.object(mod, "decode_e2e_bundle", side_effect=AssertionError("must not connect")):
+            result = asyncio.run(mod.send_rows(args))
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["dry_run"])
+        self.assertEqual(result["transport"], "telethon")
+
+    def test_bot_api_delivery_uses_bot_and_persists_candidate(self) -> None:
+        mod = load_module()
+        args = argparse.Namespace(expected_chat_id="-100123", chat="", transport="bot_api")
+        calls = []
+        persisted = []
+
+        def fake_call(_token, method, payload):
+            calls.append((method, payload))
+            if method == "getMe":
+                return {"id": 99, "username": "region_bot"}
+            if method == "getChat":
+                return {"id": -100123, "title": "Region Talk"}
+            return {"message_id": 777}
+
+        mod._bot_api_call = fake_call
+        mod.read_delivery = lambda *_args: {}
+        mod.upsert_delivery = lambda *_args: persisted.append(("delivery", _args[-1]))
+        mod.upsert_sent = lambda *_args, **_kwargs: persisted.append(("sent", _kwargs))
+        row = {"post_url": "https://t.me/example/1"}
+        with mock.patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "token"}, clear=False):
+            result = asyncio.run(mod.send_rows_bot_api(
+                args,
+                messages=["candidate"],
+                rows=[row],
+                ydb=object(),
+                driver=object(),
+                pool=object(),
+                table="table",
+            ))
+
+        self.assertEqual(result["sent_count"], 1)
+        self.assertEqual(result["transport"], "bot_api")
+        self.assertEqual([method for method, _payload in calls], ["getMe", "getChat", "sendMessage"])
+        self.assertEqual(calls[-1][1], {"chat_id": "-100123", "text": "candidate"})
+        self.assertEqual([item[1]["status"] for item in persisted if item[0] == "delivery"], ["sending", "delivered"])
 
 
 if __name__ == "__main__":

@@ -21,7 +21,7 @@ def complete_env(tmp_path: Path) -> dict[str, str]:
         "KAGGLE_KEY": "secret",
         "TELEGRAM_AUTH_BUNDLE_DISCOVERY1": "bundle-1",
         "TELEGRAM_AUTH_BUNDLE_DISCOVERY2": "bundle-2",
-        "TELEGRAM_AUTH_BUNDLE_E2E": "bundle-e2e",
+        "TELEGRAM_BOT_TOKEN": "bot-token",
         "TELEGRAM_API_ID": "123",
         "TELEGRAM_API_HASH": "hash",
         "SUPABASE_URL": "https://example.supabase.co",
@@ -29,6 +29,7 @@ def complete_env(tmp_path: Path) -> dict[str, str]:
         "GOOGLE_API_KEY3": "google-key",
         "REGION_TALK_SCHEDULED_LOCK_FILE": str(tmp_path / "region-talk.lock"),
         "REGION_TALK_SCHEDULED_LOG_DIR": str(tmp_path / "logs"),
+        "REGION_TALK_EXTERNAL_RESEARCH_ENABLED": "0",
     }
 
 
@@ -44,6 +45,18 @@ def test_missing_autonomy_config_reports_names_only(tmp_path: Path) -> None:
     assert "secret" not in " ".join(missing)
 
 
+def test_scheduled_preflight_requires_bot_not_remote_human_session(tmp_path: Path) -> None:
+    env = complete_env(tmp_path)
+    env.pop("TELEGRAM_BOT_TOKEN")
+    env["TELEGRAM_AUTH_BUNDLE_E2E"] = "must-not-count-for-remote-delivery"
+    env["TELEGRAM_SESSION"] = "must-not-count-either"
+
+    missing = runner.missing_autonomy_config(env)
+
+    assert "TELEGRAM_BOT_TOKEN" in missing
+    assert "TELEGRAM_AUTH_BUNDLE_E2E|TELEGRAM_SESSION" not in missing
+
+
 def test_build_command_does_not_require_dotenv(monkeypatch, tmp_path: Path) -> None:
     env = complete_env(tmp_path)
     for key, value in env.items():
@@ -56,6 +69,15 @@ def test_build_command_does_not_require_dotenv(monkeypatch, tmp_path: Path) -> N
     assert "--execute-ready" in command
     assert "--env-file" not in command
     assert command[command.index("--target-confirmed") + 1] == "0"
+
+
+def test_external_research_command_is_server_side_and_has_no_telegram_session(tmp_path: Path) -> None:
+    env = complete_env(tmp_path)
+    command = runner.build_external_research_command(env)
+
+    assert command[-1] == "--execute"
+    assert command[1].endswith("region_talk_external_research_autorun.py")
+    assert all("TELEGRAM" not in part for part in command)
 
 
 def test_cli_preflight_is_redacted(monkeypatch, tmp_path: Path, capsys) -> None:
@@ -116,6 +138,7 @@ async def test_scheduled_run_writes_cycle_log_and_returns_metrics(monkeypatch, t
     async def fake_subprocess(*args, **kwargs):
         assert "--env-file" not in args
         assert kwargs["env"]["REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL"] == "1"
+        assert kwargs["env"]["REGION_TALK_NOTIFY_TRANSPORT"] == "bot_api"
         return FakeProcess()
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_subprocess)
@@ -128,3 +151,65 @@ async def test_scheduled_run_writes_cycle_log_and_returns_metrics(monkeypatch, t
     output_path = Path(result["output_path"])
     assert output_path.is_file()
     assert output_path.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.asyncio
+async def test_external_research_failure_does_not_stop_social_orchestrator(monkeypatch, tmp_path: Path) -> None:
+    env = complete_env(tmp_path)
+    env["REGION_TALK_EXTERNAL_RESEARCH_ENABLED"] = "1"
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+
+    class ResearchProcess:
+        returncode = 1
+
+        async def communicate(self):
+            return (
+                b'{"ok":false,"stage":"external_research","status":"failed",'
+                b'"error":"ProviderError: 429"}\n',
+                None,
+            )
+
+        async def wait(self) -> int:
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = -15
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+    class OrchestratorProcess:
+        returncode = 0
+
+        def __init__(self) -> None:
+            self.stdout = asyncio.StreamReader()
+            self.stdout.feed_data(
+                b'{"ok":true,"cycle":1,"selected_actions":["launch_candidate_report"],'
+                b'"metrics":{"publication_candidate_total":128}}\n'
+            )
+            self.stdout.feed_eof()
+
+        async def wait(self) -> int:
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = -15
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+    processes = [ResearchProcess(), OrchestratorProcess()]
+
+    async def fake_subprocess(*args, **kwargs):
+        return processes.pop(0)
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_subprocess)
+
+    result = await runner.run_region_talk_scheduled(None, scheduler_run_id="research-failure")
+
+    assert result["ok"] is True
+    assert result["external_research_ok"] is False
+    assert result["external_research_status"] == "failed"
+    assert result["external_research_exit_code"] == 1
+    assert result["metrics"]["publication_candidate_total"] == 128

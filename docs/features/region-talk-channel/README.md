@@ -1,6 +1,6 @@
 # О Калининграде говорят / Region Talk Channel
 
-> Canonical slug: `region-talk-channel`. User-facing working name: **«О Калининграде говорят»**. Product/implementation alias: **Kaliningrad-best-post-monitoring**. Status: **MVP live-YDB runner / scheduled autonomy rollout**. Telegram/VK public publishing remains disabled; the current product goal is a Gemini-confirmed operator queue and Telegram notifications with source links.
+> Canonical slug: `region-talk-channel`. User-facing working name: **«О Калининграде говорят»**. Product/implementation alias: **Kaliningrad-best-post-monitoring**. Status: **MVP live-YDB runner / scheduled discovery enabled**. Telegram/VK public publishing remains disabled; the current product goal is a Gemini-confirmed operator queue and Telegram notifications with source links.
 
 ## Document map
 
@@ -194,7 +194,7 @@ Implementation entrypoints added for the first Candidate Report Only run:
 - BGE-vs-Qwen quality comparison helper: `scripts/region_talk_embedding_quality_compare.py`;
 - focused smoke tests: `tests/test_region_talk_candidate_report.py`.
 
-Telegram source monitoring is explicitly **Telethon-based**. Manual Kaggle handoff uses role-scoped sessions: `RegionTalkCandidateReport` and `RegionTalkImageDiagnostic` default to `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` / `TELEGRAM_AUTH_BUNDLE_DISCOVERY2` respectively, while local Telegram Saved Messages delivery uses only the E2E human session (`TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION`). `TELEGRAM_AUTH_BUNDLE_S22` is reserved for production Kaggle/remote monitoring and must not be shipped with Region Talk runs unless explicitly selected for that one run. Never run two Kaggle kernels against the same Telethon auth key concurrently. Region Talk does not use Bot API for reading public channel history and it never calls Telegram/VK publication APIs.
+Telegram source monitoring is explicitly **Telethon-based**. Manual Kaggle handoff uses role-scoped sessions: `RegionTalkCandidateReport` and `RegionTalkImageDiagnostic` default to `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` / `TELEGRAM_AUTH_BUNDLE_DISCOVERY2` respectively. Local/manual operator delivery may use only the E2E human session (`TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION`); scheduled Fly delivery uses the existing bot through Bot API and therefore requires that bot to be a member of the pinned operator chat. A remote scheduler must never reuse the local E2E session: Telegram can invalidate one MTProto authorization used from parallel connections/IPs with `AUTH_KEY_DUPLICATED`. `TELEGRAM_AUTH_BUNDLE_S22` is reserved for production Kaggle/remote monitoring and must not be shipped with Region Talk runs unless explicitly selected for that one run. Never run two Kaggle kernels against the same Telethon auth key concurrently. Region Talk does not use Bot API for reading public channel history and it never calls Telegram/VK **public-channel** publication APIs.
 
 ### Reuse existing Kaggle infrastructure
 
@@ -325,6 +325,16 @@ state. См. [MVP candidate report](mvp-candidate-report.md).
   REST endpoint, then give the short-lived token to `ydb.AccessTokenCredentials`.
   This avoids `ydb[yc]`, whose full Yandex Cloud SDK dependency would replace
   Kaggle's shared native cryptography/protobuf stack after the worker starts.
+- Visual backlog contract: the orchestrator and ImageDiagnostic share the
+  current `region_talk_visual_adjudicator_v2` / `region_talk_visual_decision_v2`
+  attestation versions. A completed v2 verdict is terminal for that exact media
+  manifest and must not be relaunched as an apparent stale v1 backlog.
+- Scheduled notification contract: Fly uses `TELEGRAM_BOT_TOKEN` and Bot API;
+  it never opens `TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION`. A read-only
+  `--dry-run` renders the queue without connecting any Telegram transport.
+  The bot must already belong to `REGION_TALK_NOTIFY_CHAT_ID`; `getChat` and
+  `sendMessage` fail closed otherwise. Local Telethon delivery remains an
+  explicit manual-only mode with deterministic MTProto `random_id` replay.
 - Fast-check KO contract: a source-local keyword hit is both an exact-post task
   (`post_link_queue_item`) and a source-priority signal. CandidateReport must
   persist `fast_check_status=ko_hit` on the corresponding `source_queue_item`,
@@ -334,12 +344,20 @@ state. См. [MVP candidate report](mvp-candidate-report.md).
 - Channel/community creation: **not done**.
 - Real tokens/secrets: **not introduced**.
 - Publishing: **not performed**.
-- Rollout gate: install the dedicated least-privilege YDB service-account key
-  and independent `DISCOVERY1` / `DISCOVERY2` / notifier Telegram credentials,
-  deploy from `origin/main`, verify scheduler health and one supervised
-  scheduled-equivalent cycle, then leave the three daily slots enabled.
+- Rollout gate: the dedicated least-privilege YDB service-account key,
+  independent `DISCOVERY1` / `DISCOVERY2` sessions, deployment from
+  `origin/main`, scheduler health and a supervised scheduled-equivalent cycle
+  are installed/verified. The cycle launched CandidateReport+BGE, reported
+  `image_vlm_backlog_total=0` and did not relaunch ImageDiagnostic for completed
+  v2 verdicts. Operator delivery becomes fully green when the production bot
+  is added to the pinned operator chat; until then discovery remains autonomous
+  but Bot API `getChat` fails closed with `chat not found`.
 - Only after this autonomy gate is green does product work move to diversity
   ordering and generation of the actual target-channel post.
+- That next stage is now implemented for newly accepted rows: final verifier
+  v7 persists grounded Telegram/VK drafts with explicit source/original link
+  and claim/support evidence. Public sending remains disabled; the remaining
+  product gate is selection from the diversified queue plus operator approval.
 
 
 ## MVP-1.x strict selection update

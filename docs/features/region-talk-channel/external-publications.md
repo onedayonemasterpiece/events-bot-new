@@ -112,6 +112,37 @@ The importer:
 - writes `external_publication_intake_item`, a compact publisher attestation as `external_publication_source_item`, row errors as `external_publication_import_error_item`, and `external_publication_import_batch`;
 - does not itself write `candidate_memory_item`, `image_queue_item`, or `publication_candidate_item`: only CandidateReport may promote a strictly ready row through the normal gates.
 
+### Autonomous server-side research stage
+
+`scripts/region_talk_external_research_autorun.py` is the bounded control-plane
+adapter for the saved research prompt. It uses the live public registry, asks a
+grounded model to search with both Google Search and URL Context, parses one
+strict JSON result, and then invokes the same schema validation, live YDB
+duplicate guard, idempotent importer and registry publication used by an
+operator-supplied file. It never opens or receives a Telegram session.
+
+The scheduled wrapper can execute this stage before the ordinary queue
+orchestrator so newly staged articles can enter CandidateReport during the same
+90-minute session. The stage is intentionally independent from Telegram/VK
+discovery: a web-provider error is recorded but cannot stop the social
+Candidate/BGE/Image/finalizer chain. A durable six-hour success marker prevents
+duplicate paid research calls when scheduler slots overlap or are retried.
+
+The production switch is `REGION_TALK_EXTERNAL_RESEARCH_ENABLED=1` and is
+**off by default until a search-enabled provider project passes a live smoke**.
+Ordinary text-generation quota does not imply web-grounding quota. On
+2026-07-31 the configured redacted `GOOGLE_API_KEY3` lane returned provider
+`429 RESOURCE_EXHAUSTED` for both `gemini-3-flash-preview` and the stable
+`gemini-3.1-flash-lite` when `google_search` + `url_context` were enabled, so
+enabling three guaranteed failures per day would be false autonomy. The worker
+defaults to `gemini-3.1-flash-lite` once the provider gate is opened; this is a
+production discovery worker, not an external-consultant review. Flash/Lite
+output must never be represented as a Gemini Pro consultant verdict.
+
+Provider references: [Google Search grounding](https://ai.google.dev/gemini-api/docs/google-search),
+[structured outputs with tools](https://ai.google.dev/gemini-api/docs/structured-output),
+and [Gemini 3.1 Flash-Lite capabilities](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite).
+
 ### CandidateReport handoff
 
 `RegionTalkCandidateReport` reads `external_publication_intake_item` beside the
@@ -153,7 +184,8 @@ publishes. `--execute` is required for any YDB change.
 
 The E5 and BGE-M3 semantic bank contains separate
 `ko_editorial_publication` and `ko_academic_publication` positive classes. The
-final verifier uses the origin-aware `region_talk_final_verifier_v6` contract:
+final verifier uses the origin-aware
+`region_talk_final_verifier_v7_grounded_draft` contract:
 editorial/academic work needs attributed analysis/research, an evidence or
 expert basis, a concrete public-interest insight and a memorable useful detail;
 it does not need a first-person trip. Sharp negative regional framing remains a

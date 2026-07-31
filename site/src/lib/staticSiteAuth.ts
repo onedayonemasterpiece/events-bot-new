@@ -1,7 +1,13 @@
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
+import {
+  createResilientSupabaseTransport,
+  supabaseAuthStorageKey,
+  type ResilientSupabaseTransport,
+} from './resilientSupabaseTransport';
 
 export interface StaticSiteAuthConfig {
   supabaseUrl: string;
+  relayUrl?: string;
   publishableKey: string;
   provider?: string;
 }
@@ -20,6 +26,7 @@ const PKCE_COOKIE_PREFIX = 'ke_pkce_';
 const AUTH_INTENT_KEY = 'ke_yandex_auth_intent_v1';
 const CALLBACK_TIMEOUT_MS = 20_000;
 const SESSION_TIMEOUT_MS = 8_000;
+const EMAIL_OTP_TIMEOUT_MS = 12_000;
 const CALLBACK_KEYS = ['code', 'error', 'error_code', 'error_description', 'state', 'sb'];
 
 function isPkceCodeVerifierKey(key: string): boolean {
@@ -169,6 +176,7 @@ export function staticAuthUserInitial(value: string): string {
 class StaticSiteAuthController {
   readonly config: Required<StaticSiteAuthConfig>;
   readonly client: SupabaseClient;
+  readonly transport: ResilientSupabaseTransport;
   private subscribers = new Set<AuthSubscriber>();
   private initialization: Promise<StaticSiteAuthSnapshot> | null = null;
   private snapshot: StaticSiteAuthSnapshot = {
@@ -181,16 +189,26 @@ class StaticSiteAuthController {
   constructor(config: StaticSiteAuthConfig) {
     this.config = {
       supabaseUrl: config.supabaseUrl.replace(/\/+$/u, ''),
+      relayUrl: String(config.relayUrl || '').replace(/\/+$/u, ''),
       publishableKey: config.publishableKey,
       provider: config.provider || 'custom:yandex',
     };
+    this.transport = createResilientSupabaseTransport({
+      directUrl: this.config.supabaseUrl,
+      relayUrl: this.config.relayUrl,
+      publishableKey: this.config.publishableKey,
+    });
     this.client = createClient(this.config.supabaseUrl, this.config.publishableKey, {
+      global: {
+        fetch: this.transport.fetch,
+      },
       auth: {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: false,
         flowType: 'pkce',
         storage: authStorage,
+        storageKey: supabaseAuthStorageKey(this.config.supabaseUrl),
       },
     });
     this.client.auth.onAuthStateChange((_event, session) => {
@@ -394,13 +412,23 @@ class StaticSiteAuthController {
       message: 'Отправляю одноразовую ссылку на email…',
       callbackAttempted: false,
     });
-    const { error } = await this.client.auth.signInWithOtp({
-      email: normalizedEmail,
-      options: {
-        emailRedirectTo: redirectTo,
-        shouldCreateUser: true,
-      },
-    });
+    let error: unknown = null;
+    try {
+      const result = await withTimeout(
+        this.client.auth.signInWithOtp({
+          email: normalizedEmail,
+          options: {
+            emailRedirectTo: redirectTo,
+            shouldCreateUser: true,
+          },
+        }),
+        EMAIL_OTP_TIMEOUT_MS,
+        'email_otp_timeout',
+      );
+      error = result.error;
+    } catch (caught) {
+      error = caught;
+    }
     if (!error) {
       this.publish({
         status: 'signed_out',
@@ -410,11 +438,16 @@ class StaticSiteAuthController {
       });
       return true;
     }
-    writeAuthIntent('email_login_failed', { reason: String(error.message || error).slice(0, 120) });
+    const rawMessage = String((error as Error)?.message || error);
+    writeAuthIntent('email_login_failed', { reason: rawMessage.slice(0, 120) });
     this.publish({
       status: 'error',
       user: null,
-      message: 'Не удалось отправить письмо. Проверьте адрес и попробуйте ещё раз.',
+      message: rawMessage === 'email_otp_timeout'
+        ? 'Не получили подтверждение отправки. Письмо могло не уйти — подождите и попробуйте ещё раз.'
+        : /rate|too many|429/iu.test(rawMessage)
+          ? 'Слишком много попыток подряд. Подождите немного и повторите отправку.'
+          : 'Не удалось отправить письмо. Проверьте адрес и попробуйте ещё раз.',
       callbackAttempted: false,
     });
     return false;
@@ -484,6 +517,7 @@ declare global {
 
 export function getStaticSiteAuth(config: StaticSiteAuthConfig): StaticSiteAuthController {
   const normalizedUrl = String(config.supabaseUrl || '').replace(/\/+$/u, '');
+  const normalizedRelayUrl = String(config.relayUrl || '').replace(/\/+$/u, '');
   const publishableKey = String(config.publishableKey || '');
   if (!normalizedUrl || !publishableKey) {
     throw new Error('static_site_auth_public_config_missing');
@@ -492,6 +526,7 @@ export function getStaticSiteAuth(config: StaticSiteAuthConfig): StaticSiteAuthC
   if (existing) {
     if (
       existing.config.supabaseUrl !== normalizedUrl
+      || existing.config.relayUrl !== normalizedRelayUrl
       || existing.config.publishableKey !== publishableKey
     ) {
       throw new Error('static_site_auth_config_conflict');
@@ -500,6 +535,7 @@ export function getStaticSiteAuth(config: StaticSiteAuthConfig): StaticSiteAuthC
   }
   const controller = new StaticSiteAuthController({
     supabaseUrl: normalizedUrl,
+    relayUrl: normalizedRelayUrl,
     publishableKey,
     provider: config.provider,
   });

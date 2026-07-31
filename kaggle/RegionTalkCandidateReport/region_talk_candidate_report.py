@@ -2677,6 +2677,9 @@ PUBLICATION_CANDIDATE_STATE_FIELDS = [
     "attempt_count", "last_attempt_at", "next_attempt_after", "llm_attempted_this_run",
     "llm_request_fingerprint", "llm_prompt_version", "llm_budget_id", "llm_budget_status",
     "llm_gate_status", "llm_decision", "llm_reason", "llm_model", "llm_limit_source",
+    "publication_draft_status", "publication_draft_title", "publication_draft_source_attribution",
+    "publication_draft_telegram_text", "publication_draft_vk_text",
+    "publication_draft_fact_points_json", "publication_draft_prompt_version",
     "source_onboarding_status", "source_onboarding_paragraph", "source_onboarding_profile_id",
     "source_onboarding_profile_fingerprint", "source_onboarding_writer_fingerprint",
     "source_onboarding_writer_prompt_version", "source_onboarding_entity_type",
@@ -10521,6 +10524,9 @@ def build_publication_candidate_queue(
                     "attempt_count", "last_attempt_at", "next_attempt_after", "llm_attempted_this_run",
                     "llm_request_fingerprint", "llm_prompt_version", "llm_budget_id", "llm_budget_status",
                     "llm_gate_status", "llm_decision", "llm_reason", "llm_model", "llm_limit_source",
+                    "publication_draft_status", "publication_draft_title", "publication_draft_source_attribution",
+                    "publication_draft_telegram_text", "publication_draft_vk_text",
+                    "publication_draft_fact_points_json", "publication_draft_prompt_version",
                     "publication_tombstone", "publication_revoked", "revoked_at",
                     "media_kind", "media_review_mode", "manual_media_review_required", "video_manual_review_eligible",
                 ]
@@ -14317,7 +14323,7 @@ def _region_talk_llm_text(post: dict[str, Any]) -> str:
     return text[:max(300, limit)]
 
 
-REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION = "region_talk_final_verifier_v6"
+REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION = "region_talk_final_verifier_v7_grounded_draft"
 
 
 def llm_text_gate_prompt(post: dict[str, Any], evidence: dict[str, Any]) -> str:
@@ -14369,8 +14375,9 @@ def llm_text_gate_prompt(post: dict[str, Any], evidence: dict[str, Any]) -> str:
             "content_origin_type": content_origin_type,
             "publication_content_type": post.get("publication_content_type"),
         })
-    social_schema = "JSON keys only: decision accept|needs_review|reject; whole_post_about_kaliningrad_oblast_score 0..1; kaliningrad_mention_role main_subject|one_item|passing_mention|footer|hashtag|link_only|unclear; booleans is_digest_or_roundup,is_multi_region_roundup,is_multi_topic_digest,is_single_location_card,is_ad_or_promo,is_news_or_trash,has_firsthand_visit_evidence,emotion_or_impression_evidence,review_or_opinion_evidence,memorable_detail_evidence,original_photo_evidence; content_type one of visit_impression_candidate|route_useful_candidate|single_location_photo_card|encyclopedic_card_candidate|official_project_material|news_or_event|low_substance|reject; visit_evidence_type one of firsthand_author_visit|subscriber_photo_report|route_guide|single_location_photo_card|official_project_material|news_or_event|unknown; reason short ru"
-    publication_schema = "JSON keys only: decision accept|needs_review|reject; whole_post_about_kaliningrad_oblast_score 0..1; kaliningrad_mention_role main_subject|one_item|passing_mention|unclear; booleans is_digest_or_roundup,is_multi_region_roundup,is_multi_topic_digest,is_ad_or_promo,is_news_or_trash,review_or_opinion_evidence,memorable_detail_evidence,evidence_or_expert_basis,public_interest_insight,sharp_negative_region_image; content_type editorial_publication_candidate|academic_publication_candidate|news_or_event|low_substance|reject; reason short ru"
+    draft_schema = "; when decision=accept also return title_short,source_attribution,telegram_text,vk_text in Russian and fact_points array of 1..3 objects {claim,support_excerpt}; drafts must be concise original paraphrases, contain only facts supported by this post, explicitly attribute the source, preserve uncertainty, and end with the original URL; otherwise return empty draft fields"
+    social_schema = "JSON keys only: decision accept|needs_review|reject; whole_post_about_kaliningrad_oblast_score 0..1; kaliningrad_mention_role main_subject|one_item|passing_mention|footer|hashtag|link_only|unclear; booleans is_digest_or_roundup,is_multi_region_roundup,is_multi_topic_digest,is_single_location_card,is_ad_or_promo,is_news_or_trash,has_firsthand_visit_evidence,emotion_or_impression_evidence,review_or_opinion_evidence,memorable_detail_evidence,original_photo_evidence; content_type one of visit_impression_candidate|route_useful_candidate|single_location_photo_card|encyclopedic_card_candidate|official_project_material|news_or_event|low_substance|reject; visit_evidence_type one of firsthand_author_visit|subscriber_photo_report|route_guide|single_location_photo_card|official_project_material|news_or_event|unknown; reason short ru" + draft_schema
+    publication_schema = "JSON keys only: decision accept|needs_review|reject; whole_post_about_kaliningrad_oblast_score 0..1; kaliningrad_mention_role main_subject|one_item|passing_mention|unclear; booleans is_digest_or_roundup,is_multi_region_roundup,is_multi_topic_digest,is_ad_or_promo,is_news_or_trash,review_or_opinion_evidence,memorable_detail_evidence,evidence_or_expert_basis,public_interest_insight,sharp_negative_region_image; content_type editorial_publication_candidate|academic_publication_candidate|news_or_event|low_substance|reject; reason short ru" + draft_schema
     payload = {
         "task": "Return JSON for one Region Talk post.",
         "prompt_version": REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION,
@@ -14397,6 +14404,71 @@ def parse_llm_json(text: str) -> dict[str, Any]:
         match = re.search(r"\{.*\}", raw, flags=re.S)
         data = json.loads(match.group(0)) if match else {}
     return data if isinstance(data, dict) else {}
+
+
+def _compact_draft_text(value: Any, limit: int) -> str:
+    return re.sub(r"\s+", " ", str(value or "")).strip()[:limit]
+
+
+def grounded_publication_draft(data: dict[str, Any], post: dict[str, Any], decision: str) -> dict[str, Any]:
+    """Normalize an accept-only, source-linked operator draft.
+
+    This is deliberately not an autopublish decision. Gemini supplies compact
+    claim/support pairs; the deterministic tail guarantees attribution and the
+    canonical original URL but never invents missing copy.
+    """
+
+    empty = {
+        "publication_draft_status": "not_applicable",
+        "publication_draft_title": "",
+        "publication_draft_source_attribution": "",
+        "publication_draft_telegram_text": "",
+        "publication_draft_vk_text": "",
+        "publication_draft_fact_points_json": "[]",
+        "publication_draft_prompt_version": REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION,
+    }
+    if decision != "accept":
+        return empty
+    url = canonical_post_url_for_storage(post.get("post_url") or post.get("canonical_url"))
+    source = _compact_draft_text(post.get("source_title") or post.get("publication_source_name") or "Источник", 160)
+    title = _compact_draft_text(data.get("title_short"), 140)
+    attribution = _compact_draft_text(data.get("source_attribution") or source, 220)
+    points: list[dict[str, str]] = []
+    for raw in data.get("fact_points") or []:
+        if not isinstance(raw, dict):
+            continue
+        claim = _compact_draft_text(raw.get("claim"), 320)
+        support = _compact_draft_text(raw.get("support_excerpt"), 220)
+        if claim and support:
+            points.append({"claim": claim, "support_excerpt": support})
+        if len(points) >= 3:
+            break
+
+    def finalize(value: Any, limit: int) -> str:
+        text = str(value or "").strip()[:limit]
+        if not text:
+            return ""
+        tail: list[str] = []
+        if attribution and "источник:" not in text.lower():
+            tail.append("Источник: " + attribution)
+        if url and url.rstrip("/") not in text.rstrip("/"):
+            tail.append("Оригинал: " + url)
+        if tail:
+            text = text.rstrip() + "\n\n" + "\n".join(tail)
+        return text[:limit]
+
+    telegram_text = finalize(data.get("telegram_text"), 1800)
+    vk_text = finalize(data.get("vk_text"), 2600)
+    ready = bool(url and title and attribution and points and telegram_text and vk_text)
+    return {
+        "publication_draft_status": "ready_for_operator_review" if ready else "needs_grounding_review",
+        "publication_draft_title": title,
+        "publication_draft_source_attribution": attribution,
+        "publication_draft_telegram_text": telegram_text,
+        "publication_draft_vk_text": vk_text,
+        "publication_draft_fact_points_json": json.dumps(points, ensure_ascii=False, separators=(",", ":")),
+        "publication_draft_prompt_version": REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION,
+    }
 
 
 def _llm_json_bool(value: Any) -> bool:
@@ -14652,7 +14724,7 @@ def call_region_talk_semantic_llm(post: dict[str, Any], evidence: dict[str, Any]
                 model=model,
                 prompt=prompt,
                 generation_config={"temperature": 0.1, "response_mime_type": "application/json"},
-                max_output_tokens=700,
+                max_output_tokens=max(700, min(1800, getenv_int("REGION_TALK_LLM_MAX_OUTPUT_TOKENS", 1200))),
             )
         try:
             running_loop = asyncio.get_running_loop()
@@ -14720,6 +14792,7 @@ def call_region_talk_semantic_llm(post: dict[str, Any], evidence: dict[str, Any]
             "public_interest_insight": str(_llm_json_bool(data.get("public_interest_insight"))).lower(),
             "sharp_negative_region_image": str(_llm_json_bool(data.get("sharp_negative_region_image"))).lower(),
             "llm_reason": llm_reason,
+            **grounded_publication_draft(data, post, decision),
             "llm_usage_input_tokens": getattr(usage, "input_tokens", ""),
             "llm_usage_output_tokens": getattr(usage, "output_tokens", ""),
             "llm_usage_total_tokens": getattr(usage, "total_tokens", ""),
