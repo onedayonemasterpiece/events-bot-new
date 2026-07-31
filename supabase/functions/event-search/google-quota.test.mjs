@@ -20,6 +20,8 @@ function reservation(overrides = {}) {
     env_var_name: "GOOGLE_API_KEY5",
     minute_bucket: "2026-07-31T17:00:00Z",
     day_bucket: "2026-07-31",
+    quota_scope: "google:test-project",
+    limiter_contract: "google_ai_project_model_atomic_v1",
     ...overrides,
   };
 }
@@ -250,6 +252,67 @@ test("malformed successful reservation is cleaned up and never sent", async () =
     backend.calls.some((call) => call.name === "google_ai_finalize"),
     true,
   );
+});
+
+test("missing limiter contract is cleaned up before reading the key or sending", async () => {
+  let sent = false;
+  let keyRead = false;
+  const backend = fakeBackend({
+    responses: {
+      google_ai_reserve: reservation({ limiter_contract: undefined }),
+      google_ai_finalize: null,
+    },
+  });
+  const options = runOptions(backend, async () => {
+    sent = true;
+    return { value: "unexpected" };
+  });
+  options.readEnv = () => {
+    keyRead = true;
+    return SECRET;
+  };
+  await assert.rejects(
+    withSharedGoogleQuotaAttempt(options),
+    (error) =>
+      error instanceof SharedGoogleQuotaError &&
+      error.stage === "metadata" &&
+      error.message === "shared_google_limiter_contract_missing",
+  );
+  assert.equal(keyRead, false);
+  assert.equal(sent, false);
+  assert.deepEqual(
+    backend.calls.map((call) => call.name),
+    ["google_ai_reserve", "google_ai_finalize"],
+  );
+});
+
+test("incompatible limiter contract and missing quota scope both fail closed", async () => {
+  for (const invalid of [
+    { limiter_contract: "legacy_key_scoped_v0" },
+    { quota_scope: "" },
+  ]) {
+    let sent = false;
+    const backend = fakeBackend({
+      responses: {
+        google_ai_reserve: reservation(invalid),
+        google_ai_finalize: null,
+      },
+    });
+    await assert.rejects(
+      withSharedGoogleQuotaAttempt(
+        runOptions(backend, async () => {
+          sent = true;
+          return { value: "unexpected" };
+        }),
+      ),
+      (error) => error instanceof SharedGoogleQuotaError && error.stage === "metadata",
+    );
+    assert.equal(sent, false);
+    assert.equal(
+      backend.calls.some((call) => call.name === "google_ai_mark_sent"),
+      false,
+    );
+  }
 });
 
 test("finalize failure fails closed after one provider send", async () => {

@@ -37,7 +37,11 @@ export type GoogleQuotaLease = GoogleQuotaKey & {
   model: string;
   minute_bucket: string;
   day_bucket: string;
+  quota_scope: string;
+  limiter_contract: string;
 };
+
+export const REQUIRED_LIMITER_CONTRACT = "google_ai_project_model_atomic_v1";
 
 type SharedGoogleQuotaErrorStage =
   | "backend"
@@ -340,12 +344,16 @@ export async function withSharedGoogleQuotaAttempt<T>(options: {
   const returnedEnvName = String(reservation.env_var_name || "").trim();
   const minuteBucket = String(reservation.minute_bucket || "").trim();
   const dayBucket = String(reservation.day_bucket || "").trim();
+  const quotaScope = String(reservation.quota_scope || "").trim();
+  const limiterContract = String(reservation.limiter_contract || "").trim();
   if (
     returnedKeyId !== options.key.api_key_id ||
     !returnedEnvName ||
     !limiterEnvMatches(options.key.limiter_env_name, returnedEnvName) ||
     !minuteBucket ||
-    !dayBucket
+    !dayBucket ||
+    !quotaScope ||
+    limiterContract !== REQUIRED_LIMITER_CONTRACT
   ) {
     try {
       await cleanupUnsentReservation(
@@ -364,7 +372,11 @@ export async function withSharedGoogleQuotaAttempt<T>(options: {
     }
     throw new SharedGoogleQuotaError(
       "metadata",
-      "shared_google_reservation_metadata_invalid",
+      limiterContract !== REQUIRED_LIMITER_CONTRACT
+        ? `shared_google_limiter_contract_${limiterContract ? "incompatible" : "missing"}`
+        : !quotaScope
+        ? "shared_google_quota_scope_missing"
+        : "shared_google_reservation_metadata_invalid",
     );
   }
 
@@ -375,6 +387,8 @@ export async function withSharedGoogleQuotaAttempt<T>(options: {
     model,
     minute_bucket: minuteBucket,
     day_bucket: dayBucket,
+    quota_scope: quotaScope,
+    limiter_contract: limiterContract,
   };
   const apiKey = String(options.readEnv(options.key.configured_env_name) || "").trim();
   if (!apiKey) {
