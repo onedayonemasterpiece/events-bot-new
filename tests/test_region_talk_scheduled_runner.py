@@ -21,7 +21,7 @@ def complete_env(tmp_path: Path) -> dict[str, str]:
         "KAGGLE_KEY": "secret",
         "TELEGRAM_AUTH_BUNDLE_DISCOVERY1": "bundle-1",
         "TELEGRAM_AUTH_BUNDLE_DISCOVERY2": "bundle-2",
-        "TELEGRAM_AUTH_BUNDLE_E2E": "bundle-e2e",
+        "TELEGRAM_BOT_TOKEN": "bot-token",
         "TELEGRAM_API_ID": "123",
         "TELEGRAM_API_HASH": "hash",
         "SUPABASE_URL": "https://example.supabase.co",
@@ -42,6 +42,18 @@ def test_missing_autonomy_config_reports_names_only(tmp_path: Path) -> None:
     assert "TELEGRAM_AUTH_BUNDLE_DISCOVERY2" in missing
     assert "REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON" in missing
     assert "secret" not in " ".join(missing)
+
+
+def test_scheduled_preflight_requires_bot_not_remote_human_session(tmp_path: Path) -> None:
+    env = complete_env(tmp_path)
+    env.pop("TELEGRAM_BOT_TOKEN")
+    env["TELEGRAM_AUTH_BUNDLE_E2E"] = "must-not-count-for-remote-delivery"
+    env["TELEGRAM_SESSION"] = "must-not-count-either"
+
+    missing = runner.missing_autonomy_config(env)
+
+    assert "TELEGRAM_BOT_TOKEN" in missing
+    assert "TELEGRAM_AUTH_BUNDLE_E2E|TELEGRAM_SESSION" not in missing
 
 
 def test_build_command_does_not_require_dotenv(monkeypatch, tmp_path: Path) -> None:
@@ -116,6 +128,7 @@ async def test_scheduled_run_writes_cycle_log_and_returns_metrics(monkeypatch, t
     async def fake_subprocess(*args, **kwargs):
         assert "--env-file" not in args
         assert kwargs["env"]["REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL"] == "1"
+        assert kwargs["env"]["REGION_TALK_NOTIFY_TRANSPORT"] == "bot_api"
         return FakeProcess()
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_subprocess)

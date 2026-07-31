@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Fixed
+- Region Talk scheduled operator delivery now uses the production Telegram bot
+  instead of opening the local human E2E session on Fly; read-only notifier
+  dry-runs make no Telegram connection, and Bot API delivery fails closed when
+  the bot is not a member of the pinned operator chat or a prior send is
+  ambiguous.
 - Region Talk orchestration now recognizes ImageDiagnostic's current v2 visual
   attestations, so completed Gemini image reviews leave the actionable backlog
   instead of causing repeated zero-yield Kaggle launches.

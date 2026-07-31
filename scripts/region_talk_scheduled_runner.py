@@ -56,7 +56,7 @@ def missing_autonomy_config(env: Mapping[str, str] | None = None) -> list[str]:
         ("KAGGLE_KEY",),
         ("TELEGRAM_AUTH_BUNDLE_DISCOVERY1",),
         ("TELEGRAM_AUTH_BUNDLE_DISCOVERY2",),
-        ("TELEGRAM_AUTH_BUNDLE_E2E", "TELEGRAM_SESSION"),
+        ("TELEGRAM_BOT_TOKEN",),
         ("TG_API_ID", "TELEGRAM_API_ID"),
         ("TG_API_HASH", "TELEGRAM_API_HASH"),
         ("SUPABASE_URL",),
@@ -201,6 +201,10 @@ async def run_region_talk_scheduled(
         child_env = os.environ.copy()
         child_env["REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL"] = "1"
         child_env["REGION_TALK_ALLOW_LOCAL_YC_FALLBACK"] = "0"
+        # Scheduled delivery must never reuse the local live-E2E human
+        # session from a remote Fly machine.  Telegram invalidates an MTProto
+        # authorization used concurrently from separate connections/IPs.
+        child_env["REGION_TALK_NOTIFY_TRANSPORT"] = "bot_api"
         child_env["PYTHONUNBUFFERED"] = "1"
         max_runtime_minutes = _env_int(
             "REGION_TALK_SCHEDULED_MAX_RUNTIME_MINUTES", 90, minimum=15, maximum=240

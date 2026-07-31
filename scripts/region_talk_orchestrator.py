@@ -4142,7 +4142,13 @@ def build_decision_plan(
 ) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
     if int(metrics.get("publication_unsent_confirmed_total") or 0) > 0:
-        actions.append(_action("notify_confirmed", ["python3", "scripts/region_talk_goal_notify.py", "--limit", "20"], "confirmed rows not sent to operator chat", resource="telegram:e2e", timeout_seconds=180))
+        actions.append(_action(
+            "notify_confirmed",
+            ["python3", "scripts/region_talk_goal_notify.py", "--limit", "20", "--transport", "bot_api"],
+            "confirmed rows not sent to operator chat",
+            resource="telegram:bot_api",
+            timeout_seconds=180,
+        ))
 
     # Discovery/manual intake is continuous product work, not a recommendation
     # that stops when the publication goal is reached. ``include_main`` remains

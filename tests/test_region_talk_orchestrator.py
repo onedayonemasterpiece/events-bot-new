@@ -2073,7 +2073,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
 
     def test_prepare_action_command_does_not_add_run_id_to_notifier(self) -> None:
         mod = load_module()
-        action = {"action": "notify_confirmed", "cmd": ["python3", "scripts/region_talk_goal_notify.py", "--limit", "20"], "run_id": "ignored"}
+        action = {"action": "notify_confirmed", "cmd": ["python3", "scripts/region_talk_goal_notify.py", "--limit", "20", "--transport", "bot_api"], "run_id": "ignored"}
         cmd, _ = mod.prepare_action_command(action, env_file="/tmp/region.env")
         self.assertIn("--env-file", cmd)
         self.assertNotIn("--run-id", cmd)
