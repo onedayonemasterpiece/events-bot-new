@@ -218,7 +218,14 @@ app = "events-bot-new-wngqia"
   EVENT_MEDIA_ROLE_TRANSIENT_RETRY_SECONDS = "900"
   EVENT_MEDIA_REQUIRE_CDN = "1"
   EVENT_MEDIA_CDN_BASE_URL = "https://static.kenigevents.ru"
-  ENABLE_EVENT_VECTOR_SYNC = "1"
+  # Cross-process quota safety: production must never replace the shared
+  # Supabase ledger with a process-local/direct-key fallback.
+  GOOGLE_AI_ALLOW_RESERVE_FALLBACK = "0"
+  GOOGLE_AI_LOCAL_LIMITER_FALLBACK = "0"
+  GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR = "0"
+  # Incident containment: re-enable only after migration 008 is verified and
+  # the shared project-scoped limiter rollout gate passes.
+  ENABLE_EVENT_VECTOR_SYNC = "0"
   EVENT_VECTOR_SYNC_DEBOUNCE_SECONDS = "90"
   EVENT_VECTOR_SYNC_INTERVAL_MINUTES = "180"
   EVENT_VECTOR_SYNC_CATALOG_LIMIT = "5000"

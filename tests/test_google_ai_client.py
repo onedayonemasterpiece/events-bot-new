@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -243,8 +244,52 @@ def test_requested_gemma_model_stays_first_in_model_chain():
 
 
 @pytest.mark.asyncio
-async def test_no_supabase_uses_local_rpm_limiter_by_default(monkeypatch):
+async def test_no_supabase_fails_closed_by_default(monkeypatch):
+    monkeypatch.delenv("GOOGLE_AI_ALLOW_RESERVE_FALLBACK", raising=False)
+    monkeypatch.delenv("GOOGLE_AI_LOCAL_LIMITER_FALLBACK", raising=False)
+    client = GoogleAIClient(supabase_client=None, consumer="video_partner_filter")
+    ctx = RequestContext(
+        request_uid="req-shared-limiter-required",
+        consumer="video_partner_filter",
+        account_name=None,
+        model="gemma-4-31b",
+        requested_model="gemma-4-31b-it",
+        reserved_tpm=100,
+    )
+
+    reserve = await client._reserve(ctx, attempt_no=1, candidate_key_ids=None)
+
+    assert reserve.ok is False
+    assert reserve.env_var_name is None
+    assert reserve.key_alias is None
+    assert reserve.blocked_reason == "shared_limiter_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_no_supabase_never_becomes_direct_key_fallback(monkeypatch):
+    monkeypatch.setenv("GOOGLE_AI_ALLOW_RESERVE_FALLBACK", "1")
+    monkeypatch.setenv("GOOGLE_AI_LOCAL_LIMITER_FALLBACK", "0")
+    client = GoogleAIClient(supabase_client=None, consumer="parallel_agent")
+    ctx = RequestContext(
+        request_uid="req-no-direct-key",
+        consumer="parallel_agent",
+        account_name=None,
+        model="gemini-3.1-flash-lite",
+        requested_model="gemini-3.1-flash-lite",
+        reserved_tpm=100,
+    )
+
+    reserve = await client._reserve(ctx, attempt_no=1, candidate_key_ids=None)
+
+    assert reserve.ok is False
+    assert reserve.env_var_name is None
+    assert reserve.blocked_reason == "shared_limiter_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_no_supabase_local_limiter_requires_explicit_opt_in(monkeypatch):
     monkeypatch.delenv("GOOGLE_AI_LOCAL_RPM", raising=False)
+    monkeypatch.setenv("GOOGLE_AI_LOCAL_LIMITER_FALLBACK", "1")
     GoogleAIClient._local_limiter_minute_bucket = None
     GoogleAIClient._local_limiter_used_rpm = 0
     GoogleAIClient._local_limiter_used_tpm = 0
@@ -271,6 +316,17 @@ async def test_no_supabase_uses_local_rpm_limiter_by_default(monkeypatch):
     assert ok_reserves[-1].used_after["rpm"] == 15
     assert blocked.ok is False
     assert blocked.blocked_reason == "rpm"
+
+
+def test_fly_runtime_disables_cross_process_limiter_fallbacks() -> None:
+    fly_config = (Path(__file__).resolve().parents[1] / "fly.toml").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'GOOGLE_AI_ALLOW_RESERVE_FALLBACK = "0"' in fly_config
+    assert 'GOOGLE_AI_LOCAL_LIMITER_FALLBACK = "0"' in fly_config
+    assert 'GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR = "0"' in fly_config
+    assert 'ENABLE_EVENT_VECTOR_SYNC = "0"' in fly_config
 
 
 @pytest.mark.asyncio

@@ -131,12 +131,16 @@ Live debug `2026-07-31` затем выполнил ровно по одному
 каждом из пяти зарегистрированных ключей. На всех ключах create вернул
 `in_progress` и remote environment, но первый poll завершился одинаковым
 provider `403 permission_denied: The caller does not have permission`. Поэтому
-полноценный A/B результат «Балтийской Уханы» не получен: одинаковый ответ
-совместим с provider project/key eligibility problem; quota exhaustion и
-prompt/schema rejection данными ответа не подтверждаются.
-Shared daily counters после прогона: `RPD=1` на каждом ключе; код дополнительно
+полноценный A/B результат «Балтийской Уханы» не получен. Доказан разрыв
+create-versus-poll permission/resource contract; quota exhaustion,
+prompt/schema rejection и provider-wide Antigravity ineligibility этим ответом
+не доказаны.
+Shared daily counters после прогона: `RPD=1` на каждом ключе; обход лимитера в
+этих пяти Antigravity POST не найден. Код дополнительно
 финализирует non-retryable poll rejection, чтобы не оставлять TPM reservation
-зависшей. Повторять запросы этими же ключами до исправления eligibility нельзя.
+зависшей. Повторять provider-запросы до явного operator approval нельзя;
+параллельный limiter incident ведётся отдельно в
+`INC-2026-07-31-google-ai-parallel-limiter-bypass`.
 
 ### Kaggle+Gemma
 

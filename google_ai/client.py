@@ -324,15 +324,15 @@ class GoogleAIClient:
         self.default_env_var_name = (default_env_var_name or "GOOGLE_API_KEY").strip() or "GOOGLE_API_KEY"
         self.dry_run = dry_run
         self.allow_reserve_fallback = (
-            os.getenv(self.RESERVE_FALLBACK_ENV, "1").strip().lower()
+            os.getenv(self.RESERVE_FALLBACK_ENV, "0").strip().lower()
             in {"1", "true", "yes", "on"}
         )
         self.allow_local_limiter_fallback = (
-            os.getenv(self.LOCAL_FALLBACK_ENV, "1").strip().lower()
+            os.getenv(self.LOCAL_FALLBACK_ENV, "0").strip().lower()
             in {"1", "true", "yes", "on"}
         )
         self.allow_local_limiter_on_reserve_error = (
-            os.getenv(self.LOCAL_FALLBACK_ON_ERROR_ENV, "1").strip().lower()
+            os.getenv(self.LOCAL_FALLBACK_ON_ERROR_ENV, "0").strip().lower()
             in {"1", "true", "yes", "on"}
         )
         self.incident_notifier = incident_notifier
@@ -1683,12 +1683,7 @@ class GoogleAIClient:
                     key_alias="local-fallback-no-supabase",
                     blocked_reason="supabase_unavailable",
                 )
-            return ReserveResult(
-                ok=True,
-                env_var_name=self.default_env_var_name,
-                key_alias="reserve-fallback-no-supabase",
-                blocked_reason="supabase_unavailable",
-            )
+            return ReserveResult(ok=False, blocked_reason="shared_limiter_unavailable")
         was_cached_missing = self._reserve_rpc_missing
         if was_cached_missing:
             now = _monotonic()
@@ -1705,12 +1700,7 @@ class GoogleAIClient:
                         key_alias="local-fallback-no-rpc-cached",
                         blocked_reason="reserve_rpc_missing",
                     )
-                return ReserveResult(
-                    ok=True,
-                    env_var_name=self.default_env_var_name,
-                    key_alias="reserve-fallback-no-rpc-cached",
-                    blocked_reason="reserve_rpc_missing",
-                )
+                return ReserveResult(ok=False, blocked_reason="reserve_rpc_missing")
             # Cooldown elapsed: retry RPC once instead of staying in cached fallback forever.
             self._reserve_rpc_missing = False
             logger.warning(
@@ -1728,12 +1718,7 @@ class GoogleAIClient:
                     key_alias="local-fallback-no-rpc-cached",
                     blocked_reason="reserve_rpc_missing",
                 )
-            return ReserveResult(
-                ok=True,
-                env_var_name=self.default_env_var_name,
-                key_alias="reserve-fallback-no-rpc-cached",
-                blocked_reason="reserve_rpc_missing",
-            )
+            return ReserveResult(ok=False, blocked_reason="reserve_rpc_missing")
         
         caller_candidate_scope_explicit = candidate_key_ids is not None
         scoped_candidate_key_ids = candidate_key_ids
@@ -1763,12 +1748,7 @@ class GoogleAIClient:
                     key_alias="local-fallback-default-env-missing",
                     blocked_reason="default_env_candidates_missing",
                 )
-            return ReserveResult(
-                ok=True,
-                env_var_name=self.default_env_var_name,
-                key_alias="reserve-fallback-default-env-missing",
-                blocked_reason="default_env_candidates_missing",
-            )
+            return ReserveResult(ok=False, blocked_reason="default_env_candidates_missing")
 
         payload = {
             "p_request_uid": ctx.request_uid,
@@ -1909,12 +1889,7 @@ class GoogleAIClient:
                         key_alias="local-fallback",
                         blocked_reason="reserve_rpc_missing",
                     )
-                return ReserveResult(
-                    ok=True,
-                    env_var_name=self.default_env_var_name,
-                    key_alias="reserve-fallback",
-                    blocked_reason="reserve_rpc_missing",
-                )
+                return ReserveResult(ok=False, blocked_reason="reserve_rpc_missing")
             if (
                 self.allow_reserve_fallback
                 and self.allow_local_limiter_on_reserve_error

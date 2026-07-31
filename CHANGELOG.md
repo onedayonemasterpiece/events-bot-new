@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Fixed
+- Google AI calls now fail closed by default when the shared Supabase limiter is
+  unavailable; production explicitly disables process-local/direct fallbacks,
+  and event-vector embeddings use the shared reserve/finalize gateway instead
+  of a direct six-retry REST loop; its Fly schedule remains disabled until the
+  atomic migration is verified. Formalized the remaining parallel-consumer,
+  Edge Function, atomic-migration and project-quota-scope gaps as
+  `INC-2026-07-31-google-ai-parallel-limiter-bypass`.
 - Antigravity non-retryable polling failures now finalize their shared limiter
   reservation and persist provider failure instead of leaving an in-progress
   TPM lease/state stranded.
@@ -38,9 +45,10 @@
   seven-topology/evidence/Event-gate validation, immutable artifacts,
   operational collect/review persistence, a manual runner and a fail-closed
   opt-in URL-queue seam. The 2026-07-31 five-key live debug accounted exactly
-  one request per key but found a provider-wide `403 permission_denied`
-  eligibility blocker, so public apply remains absent and the feature stays
-  disabled.
+  one request per key; every create succeeded but polling returned the same
+  `403 permission_denied`. That transport/account/resource issue is unresolved
+  and was not Antigravity quota exhaustion, so public apply remains absent and
+  the feature stays disabled.
 - Wired the Antigravity contour into manual and scheduled festival queue runs
   behind its disabled-by-default flag; URL rows now pass explicit-date/DNS
   preflight and complete-edition grouping before quota is spent, while

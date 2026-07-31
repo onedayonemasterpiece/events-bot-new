@@ -1,7 +1,8 @@
 # LLM Limit Management Framework (LLM Gateway)
 
 > **Linear Task:** [EVE-11](https://linear.app/events-bot-new/issue/EVE-11/llm-rate-limits)
-> **Status:** ✅ Implemented
+> **Status:** ⚠️ Implemented in code; cross-process rollout blocked by
+> `INC-2026-07-31-google-ai-parallel-limiter-bypass`
 > **Component:** `google_ai.client.GoogleAIClient`
 
 ## 1. Цель
@@ -15,25 +16,34 @@
 *   **Supabase Database**:
     *   Таблицы `google_ai_*` хранят лимиты/счётчики/аудит. Схема описана в `docs/architecture/eve-arch-phase-1.md`.
     *   *Примечание:* Сами ключи хранятся в ENV, а Supabase возвращает имя переменной окружения для выбранного ключа.
-*   **Supabase RPC (`google_ai_reserve`)**: Атомарное резервирование лимитов. Возвращает `env_var_name` (какую переменную среды читать).
+*   **Supabase RPC (`google_ai_reserve`)**: Резервирование лимитов. Оно является
+    атомарным между процессами только после применения
+    `migrations/008_google_ai_atomic_reserve.sql`; наличие старой RPC с тем же
+    именем не доказывает этот контракт. RPC возвращает `env_var_name` (какую
+    переменную среды читать).
     *   По умолчанию reserve теперь **scope-ится к `default_env_var_name` клиента**: если вызывающий consumer не передал явные `candidate_key_ids`, клиент сначала резолвит metadata только для своего ENV-ключа (`GOOGLE_API_KEY` для обычных bot-потоков, `GOOGLE_API_KEY2` для guide-only runtimes). Это защищает общие пайплайны от случайного “перетекания” на чужой ключ только потому, что в `google_ai_api_keys` появилась новая активная строка.
     *   Если metadata для scoped ENV-ключа отсутствует в Supabase registry (например `GOOGLE_API_KEY3` в Telegram Monitoring canary), клиент **не** снимает scope и не берёт общий key pool. Он переходит на process-local limiter fallback с тем же `default_env_var_name`, чтобы provider call всё равно шёл через выбранный runtime key.
     *   Empty scoped-key cache is sticky: an empty result is cached as `[]` and remains local-limiter fallback on later calls in the same process, instead of widening back to an unscoped reserve.
 *   **Supabase RPC (`google_ai_mark_sent`)**: Помечает, что запрос реально отправлен провайдеру (для диагностики/восстановления).
 *   **Supabase RPC (`google_ai_finalize`)**: Фиксирует фактическое потребление токенов и статус провайдера.
-*   **Reserve fallback (защита от “вечного fallback в Smart Update”)**:
-    * если `google_ai_reserve` временно недоступен из-за миграционного/схемного рассинхрона (`PGRST202`, `Route ... not found`), клиент может перейти в bypass-режим и использовать `GOOGLE_API_KEY` напрямую;
-    * управляется ENV `GOOGLE_AI_ALLOW_RESERVE_FALLBACK` (`1` по умолчанию, `0` для strict-режима).
+*   **Reserve fallback (только изолированная локальная разработка)**:
+    * production/agent/Kaggle/Fly default — fail closed. При недоступном
+      `google_ai_reserve`, Supabase или key metadata provider-вызов запрещён;
+    * `GOOGLE_AI_ALLOW_RESERVE_FALLBACK`,
+      `GOOGLE_AI_LOCAL_LIMITER_FALLBACK` и
+      `GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR` по умолчанию равны `0`;
+    * process-local limiter разрешается только явным opt-in в одном
+      изолированном dev-процессе. Он не является контролем для параллельных
+      Codex/Fly/Kaggle процессов и не должен включаться в remote runtime;
     * fallback больше не “залипает” навсегда в процессе: клиент периодически перепроверяет RPC и автоматически возвращается к Supabase-limiter после восстановления.
     * интервал перепроверки: `GOOGLE_AI_RESERVE_RPC_RECHECK_SECONDS` (по умолчанию `600` сек).
     * при transient сетевых сбоях (`SSL handshake timeout`, `server disconnected`, `EOF`) reserve RPC сначала делает короткие retry и только затем переключается в local fallback:
       - `GOOGLE_AI_RESERVE_RPC_RETRY_ATTEMPTS` (по умолчанию `2`);
       - `GOOGLE_AI_RESERVE_RPC_RETRY_BASE_DELAY_MS` (по умолчанию `350` мс, exponential backoff + jitter).
-    * если клиент создан без Supabase (`supabase_client=None`), это больше не
-      считается unlimited local-dev режимом: по умолчанию включается тот же
-      process-local fail-fast limiter. Его дефолтный RPM равен `15`, чтобы
-      случайный server-side fallback не пробивал Gemma 4 free-tier лимит; для
-      локальных probes можно явно переопределить `GOOGLE_AI_LOCAL_RPM`.
+    * если клиент создан без Supabase (`supabase_client=None`), по умолчанию он
+      возвращает `shared_limiter_unavailable`, не env-key. Для локального probe
+      оператор должен явно включить local fallback и может задать
+      `GOOGLE_AI_LOCAL_RPM`.
 *   **Совместимость с legacy Supabase-проектами (без миграций):**
     * если отсутствует `google_ai_finalize`, клиент автоматически переключается на `finalize_google_ai_usage`;
     * fallback на legacy finalize применяется не только для первого запроса, а для всех следующих в процессе;
@@ -51,6 +61,10 @@
 Если локально/в CI вы видите `PGRST202` по `google_ai_reserve`/`google_ai_finalize`, это означает, что PostgREST не видит RPC в текущей схеме или роль не имеет прав на выполнение функции.
 
 Важно: в таком состоянии межсервисный лимитер не работает как единый атомарный контроль (можно превысить общий RPM/TPM/RPD при параллельной нагрузке нескольких сервисов).
+
+То же относится к старой версии `google_ai_reserve` без advisory lock. Для
+параллельного rollout недостаточно получить HTTP 2xx от RPC: должна быть
+применена migration 008 и зафиксирована capability/version-проверка.
 
 Что проверить:
 
@@ -92,6 +106,40 @@ python scripts/inspect/probe_supabase_rpc.py google_ai_finalize --schema public
 Ожидание:
 *   больше нет `404/PGRST202` по `google_ai_reserve/google_ai_mark_sent/google_ai_finalize`;
 *   `google_ai_reserve` отвечает JSON-объектом (даже если `ok:false` по причине `rpd/rpm/tpm/no_keys`).
+
+После базовой migration 002 для существующей БД обязательно применить также:
+
+```sql
+-- migrations/008_google_ai_atomic_reserve.sql
+```
+
+Она сериализует check+increment по key/model. Пока применение не подтверждено,
+одновременные provider consumers должны оставаться выключенными.
+
+### 2.4.1. Provider quota scope и прямые обходы
+
+Google AI Studio показывает квоту на уровне Cloud project/model, тогда как
+текущая таблица counters исторически разделена по `google_ai_api_keys.id`.
+Поэтому до инвентаризации `API key -> Cloud project` нельзя считать два разных
+ключа независимыми quota lanes. Если они принадлежат одному проекту, их расход
+должен суммироваться перед admission. Это открытый rollout blocker из
+`INC-2026-07-31-google-ai-parallel-limiter-bypass`.
+
+Запрещены production-вызовы `generativelanguage.googleapis.com`,
+`google.genai` или `google.generativeai` в обход shared reserve/mark/finalize.
+На 2026-07-31 остаются известные legacy/direct поверхности:
+
+* Supabase Edge Function `event-search` — embedding и LLM с raw multi-key
+  rotation (P0, ещё не мигрирован);
+* Universal Festival Parser, AfishaThumb и отдельные benchmark/probe scripts
+  (P1/P2, должны быть мигрированы или явно отключены);
+* локальные `agy`/Gemini CLI используют отдельную OAuth-аутентификацию и не
+  входят в API-key ledger; их нельзя запускать как будто они защищены этим
+  limiter.
+
+Production event-vector sync с этого изменения использует
+`GoogleAIClient.embed_content_async()`; скрытый direct REST retry-loop удалён,
+каждая реальная попытка проходит отдельный shared reserve/finalize.
 
 ### 2.5. Канонические model-id и текущие лимиты
 

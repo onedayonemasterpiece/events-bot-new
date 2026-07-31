@@ -291,6 +291,31 @@ def test_delete_stale_events_removes_embeddings_before_documents(monkeypatch):
     assert calls[1] == ("DELETE", "event_search_documents?event_id=in.(2)")
 
 
+def test_gemini_embed_uses_shared_gateway_instead_of_direct_http() -> None:
+    calls: list[dict] = []
+
+    class FakeGateway:
+        async def embed_content_async(self, **kwargs):
+            calls.append(kwargs)
+            return ((0.1, 0.2, 0.3), SimpleNamespace(total_tokens=7))
+
+    values = sync.gemini_embed(
+        "semantic query",
+        model="gemini-embedding-2",
+        dim=3,
+        client=FakeGateway(),
+    )
+
+    assert values == [0.1, 0.2, 0.3]
+    assert calls == [
+        {
+            "model": "gemini-embedding-2",
+            "text": "semantic query",
+            "output_dimensionality": 3,
+        }
+    ]
+
+
 def test_unknown_admission_is_not_tagged_as_ticketed():
     event = {
         "id": 6767,

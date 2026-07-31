@@ -13,7 +13,7 @@ Integration branch: `integration/festival-antigravity-runtime-20260731`
   groups complete editions before applying the group cap, includes queue IDs,
   snapshot/prompt/normalizer hashes in fingerprints, and performs public DNS
   preflight.
-- R03 **Done offline; live blocked externally** — independent A and B, at most
+- R03 **Done offline; live polling blocked** — independent A and B, at most
   one evidence-conflict C with search/url tools disabled, durable interaction
   handles, a resume consumer, mandatory checkpoint-chain and inventory
   conservation, and distinct provider/semantic operational states. C can select
@@ -30,7 +30,10 @@ Integration branch: `integration/festival-antigravity-runtime-20260731`
   manual collect and review CLIs, approve/reject state, and opt-in queue routing
   that stops at `review`. No Festival/Event/Telegraph/static-page apply path was
   added. Kaggle+Gemma was not changed.
-- R06 **Blocked by provider eligibility after bounded debug** — see below.
+- R06 **Blocked by unresolved poll permission after bounded debug** — create is
+  admitted and returns handles/environments, while subsequent GET polling is
+  rejected with 403; the evidence does not establish quota exhaustion or a
+  provider-wide Antigravity eligibility failure.
 - R07 **Done locally** — docs/changelog, negative safety tests and independent
   review findings are closed; rollout evidence remains subject to R01/R06
   external blockers below.
@@ -90,10 +93,15 @@ never enables this bridge.
 
 ## Stop condition / next external action
 
-Do not spend more Antigravity requests on these five keys until Google enables
-managed-agent execution for their project/account. Then:
+Do not spend more Antigravity requests. The broader parallel Google limiter
+incident is tracked as
+`INC-2026-07-31-google-ai-parallel-limiter-bypass`; no new provider diagnostic
+is authorized in the current incident. After atomic limiter rollout and a
+separate explicit operator authorization:
 
 1. apply migration 007 using a credential with Supabase database-write access;
-2. run a 1-request `1000`-token eligibility smoke on one key;
-3. only after it completes, rerun «Балтийская Ухана» A+B and review its evidence;
-4. use C only if host validation finds a real A/B conflict.
+2. apply/verify migration 008 and close all direct production limiter bypasses;
+3. diagnose the create-versus-poll permission/resource contract with one
+   bounded request on one mapped Cloud project;
+4. only after it completes, rerun «Балтийская Ухана» A+B and review its evidence;
+5. use C only if host validation finds a real A/B conflict.

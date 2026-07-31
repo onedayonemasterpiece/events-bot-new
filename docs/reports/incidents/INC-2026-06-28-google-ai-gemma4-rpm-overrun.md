@@ -6,7 +6,7 @@ Service: events-bot Google AI / CherryFlash partner filters
 Opened: 2026-06-28
 Closed: —
 Owners: events-bot maintainers
-Related incidents: —
+Related incidents: `INC-2026-07-31-google-ai-parallel-limiter-bypass.md`
 Related docs: `docs/features/llm-gateway/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
 
 ## Summary
@@ -84,8 +84,9 @@ CherryFlash eco partner-track filter burst on 2026-06-27.
 
 ### Mandatory checks before closure or deploy
 
-- Unit test proving `supabase_client=None` uses process-local RPM limiting by
-  default and blocks the 16th Gemma 4 request in one minute.
+- Unit test proving `supabase_client=None` fails closed by default. A
+  process-local limiter may be tested only behind explicit dev opt-in; it is not
+  a production safety boundary after the 2026-07-31 recurrence.
 - Unit test proving the video partner-filter client is constructed with
   `get_supabase_client()`, `SecretsProvider`, `consumer="video_partner_filter"`,
   and incident notifier.
@@ -158,3 +159,6 @@ CherryFlash eco partner-track filter burst on 2026-06-27.
 
 - The incident record is now an active regression contract for Google AI client
   construction and local fallback behavior.
+- The cross-process assumption in the original mitigation was invalidated by
+  `INC-2026-07-31-google-ai-parallel-limiter-bypass`: production now requires a
+  shared atomic limiter and local fallback defaults to off.

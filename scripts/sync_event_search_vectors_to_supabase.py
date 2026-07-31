@@ -10,6 +10,7 @@ state in Supabase.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import hashlib
 import html
 import json
@@ -26,6 +27,11 @@ from pathlib import Path
 from typing import Any, Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from google_ai import GoogleAIClient, SecretsProvider
+
 DEFAULT_PREVIEW_JSON = ROOT / "site" / "src" / "data" / "preview-events.json"
 WEEKDAY_RU = {
     1: "понедельник",
@@ -810,67 +816,43 @@ def write_report(report: dict[str, Any], path: str) -> None:
     target.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def retry_delay_seconds(exc: urllib.error.HTTPError, attempt: int) -> float:
-    retry_after = exc.headers.get("Retry-After") if exc.headers else None
-    if retry_after:
-        try:
-            return max(1.0, min(120.0, float(retry_after)))
-        except Exception:
-            pass
-    if exc.code == 429:
-        return min(90.0, 15.0 * (2 ** attempt))
-    return min(20.0, 2.0 * (attempt + 1))
+def build_embedding_client(*, key_env: str) -> GoogleAIClient:
+    """Build a fail-closed embedding client backed by the shared quota ledger."""
 
+    try:
+        from supabase import create_client
+    except ImportError as exc:  # pragma: no cover - deployment dependency guard
+        raise SystemExit("supabase package is required for shared Google AI limiting") from exc
 
-def gemini_embed(text: str, *, model: str, dim: int, key_env: str, timeout: float = 45.0, retries: int = 6) -> list[float]:
-    key = env_required(key_env)
-    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:embedContent"
-    body = {
-        "model": f"models/{model}",
-        "content": {"parts": [{"text": text}]},
-        "outputDimensionality": int(dim),
-    }
-    req = urllib.request.Request(
-        endpoint,
-        data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
-        method="POST",
-        headers={"Content-Type": "application/json", "x-goog-api-key": key},
+    url = env_required("SUPABASE_URL")
+    service_key = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
+    if not service_key:
+        raise SystemExit("Missing SUPABASE_SERVICE_KEY for shared Google AI limiting")
+    return GoogleAIClient(
+        supabase_client=create_client(url, service_key),
+        secrets_provider=SecretsProvider(),
+        consumer="event_vector_sync",
+        default_env_var_name=key_env,
     )
-    last_error: Exception | None = None
-    for attempt in range(max(1, retries)):
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-            break
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")[:1500]
-            last_error = RuntimeError(f"Gemini embedding failed HTTP {exc.code}: {detail}")
-            if exc.code not in {429, 500, 502, 503, 504} or attempt >= max(1, retries) - 1:
-                raise last_error from exc
-            delay = retry_delay_seconds(exc, attempt)
-            print(
-                json.dumps({
-                    "stage": "embedding_retry",
-                    "model": model,
-                    "http_code": exc.code,
-                    "attempt": attempt + 1,
-                    "sleep_seconds": delay,
-                }, ensure_ascii=False),
-                file=sys.stderr,
-                flush=True,
-            )
-            time.sleep(delay)
-        except Exception as exc:
-            last_error = exc
-            if attempt >= max(1, retries) - 1:
-                raise
-            time.sleep(min(8.0, 1.5 * (attempt + 1)))
-    else:
-        raise RuntimeError(f"Gemini embedding failed: {last_error}")
-    values = payload.get("embedding", {}).get("values")
-    if not isinstance(values, list) or len(values) != int(dim):
-        raise RuntimeError(f"Gemini embedding returned unexpected dimension: {len(values) if isinstance(values, list) else 'missing'}")
-    return [float(x) for x in values]
+
+
+def gemini_embed(
+    text: str,
+    *,
+    model: str,
+    dim: int,
+    client: GoogleAIClient,
+) -> list[float]:
+    """Embed through the shared gateway; every retry owns its own DB reserve."""
+
+    values, _usage = asyncio.run(
+        client.embed_content_async(
+            model=model,
+            text=text,
+            output_dimensionality=dim,
+        )
+    )
+    return list(values)
 
 
 def main() -> int:
@@ -979,6 +961,7 @@ def main() -> int:
     }
     rows: list[dict[str, Any]] = []
     provider_calls = 0
+    embedding_client: GoogleAIClient | None = None
     skipped_by_kind = {kind: 0 for kind in document_kinds}
     upserted_embeddings = 0
     started_at = time.monotonic()
@@ -1000,7 +983,14 @@ def main() -> int:
                 # scanning the remaining documents so a zero-call audit can
                 # prove that every stored embedding is current.
                 continue
-            vector = gemini_embed(embedding_input, model=args.embedding_model, dim=args.embedding_dim, key_env=args.google_key_env)
+            if embedding_client is None:
+                embedding_client = build_embedding_client(key_env=args.google_key_env)
+            vector = gemini_embed(
+                embedding_input,
+                model=args.embedding_model,
+                dim=args.embedding_dim,
+                client=embedding_client,
+            )
             provider_calls += 1
             rows.append({
                 "event_id": doc.event_id,

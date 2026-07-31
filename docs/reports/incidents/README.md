@@ -18,6 +18,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-31-google-ai-parallel-limiter-bypass.md`
+  - Scope: all Google AI provider calls from Codex agents, Fly, Kaggle, Edge
+    Functions and probes; shared atomic admission and project-level quota scope.
+  - Must not regress: production/parallel consumers cannot fall back to a
+    process-local or raw-key path; every provider attempt must own a shared
+    reserve/sent/finalize record, and concurrent rollout is blocked until the
+    atomic migration and direct-call inventory are closed.
+
 - `INC-2026-07-31-false-kgd80-festival-link.md`
   - Scope: source-grounded KGD80 association in Telegram Monitoring, Smart
     Update, festival queue and all event public surfaces.
