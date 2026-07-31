@@ -220,6 +220,7 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
       && authRuntime.dataset.supabaseKey
       ? getStaticSiteAuth({
           supabaseUrl: authRuntime.dataset.supabaseUrl,
+          relayUrl: authRuntime.dataset.supabaseRelayUrl || '',
           publishableKey: authRuntime.dataset.supabaseKey,
           provider: authRuntime.dataset.yandexProvider || 'custom:yandex',
         })

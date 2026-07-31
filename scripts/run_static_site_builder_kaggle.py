@@ -674,6 +674,7 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'ics_base_url': args.ics_base_url or None,
         'public_personalization_supabase_url': args.public_personalization_supabase_url or None,
         'public_personalization_supabase_publishable_key': args.public_personalization_supabase_publishable_key or None,
+        'public_personalization_supabase_relay_url': getattr(args, 'public_personalization_supabase_relay_url', '') or None,
         'public_yandex_auth_provider': args.public_yandex_auth_provider or 'custom:yandex',
         'public_authorized_search_transport': getattr(args, 'public_authorized_search_transport', '') or 'json',
         'secret_candidate_artifact_research': bool(args.secret_candidate_artifact_research),
@@ -846,6 +847,15 @@ def main() -> int:
             'PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY',
         ),
         help='Browser-safe Supabase publishable key for AuthorizedEventSearch in the static build.',
+    )
+    parser.add_argument(
+        '--public-personalization-supabase-relay-url',
+        default=first_env(
+            'STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL',
+            'PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL',
+            'PERSONALIZATION_SUPABASE_RELAY_URL',
+        ),
+        help='Browser-safe stateless relay URL used only by resilient static clients.',
     )
     parser.add_argument(
         '--public-yandex-auth-provider',

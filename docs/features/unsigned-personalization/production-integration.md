@@ -174,6 +174,141 @@ Supabase RPC ingest may be used only if all are true:
 
 CTA/navigation must never wait for either write path. Telemetry is disposable; event page UX is not.
 
+### P0.5 Thin transport resilience gate
+
+The 30 July focus onboarding incident proved one route where Supabase edge
+processed and answered a health request plus Auth/Data preflights in 31–59 ms,
+but the phone browser did not complete those responses in 20 seconds. The same
+browser completed the Yandex API Gateway control in 1.2 seconds. A second run
+from a participant affected by missing email timed out on all three Supabase
+checks without any matching Supabase edge request, while its correlated Yandex
+request completed with HTTP 200 in about one second. The product therefore
+needs transport diversity without introducing a second application backend.
+
+Ownership stays fixed:
+
+```text
+Supabase Auth       identity, OTP verification, OAuth, JWT and refresh sessions
+Supabase Postgres   RLS-protected durable personalization state
+static browser      immediate local UX + bounded retry outbox
+Yandex API Gateway  stateless HTTP relay only
+YDB                 diagnostic/mail-attempt receipts only; never account/session ownership
+Fly web             emergency bounded proxy only; never the default personalization path
+```
+
+Forbidden designs:
+
+- implementing email OTP generation/verification, refresh sessions or a second
+  identity database in YDB, Yandex Functions or Fly;
+- putting a Supabase service-role/secret key in the relay or browser;
+- retrying a non-idempotent `/auth/v1/otp` request over a second route after an
+  ambiguous timeout;
+- racing the same search/LLM request over two routes;
+- treating a mail-provider switch as a fix for a browser request that never
+  reached Auth.
+
+Required routing contract:
+
+| Operation | Client behavior | Server ownership |
+|---|---|---|
+| Email OTP issue/verify/refresh | one selected relay route; no blind cross-route resend | Supabase Auth |
+| Yandex OAuth | current callback remains an explicit dependency until a supported Supabase custom domain is activated | Supabase Auth + Yandex |
+| Safe reads | direct route selected by a bounded probe; relay fallback is allowed because the operation is read-only | Supabase Data/Functions |
+| Search or expensive read-like POST | select one route before sending; no hedged duplicate | Supabase Edge Function |
+| Save/like/hide/calendar/feedback | update local UI first, enqueue one idempotent operation, retry direct/relay later | narrow RLS/RPC contract |
+
+Route choice is cached for a short browser session window and refreshed on a
+transport failure. Auth issuance, verify and refresh do not race two upstreams:
+the client selects the known-good Auth base before starting that operation and
+keeps it for the whole attempt. A write from the local action outbox may move
+between direct and relay transports after an ambiguous response only because
+the durable RPC deduplicates the same `action_id`.
+
+The relay is a fixed upstream HTTP integration. It forwards the publishable key,
+user JWT and request body, while Supabase still performs token validation and
+RLS. It stores no user or business data and runs no application function. CORS
+must allow only the production origin(s); request bodies and authorization
+headers must not be logged.
+
+The browser outbox is bounded and local-first:
+
+- IndexedDB primary with a bounded localStorage fallback;
+- client-generated `action_id`, `device_id`, monotonic device sequence,
+  schema version and expiry;
+- reversible state changes are coalesced by `(device,event,action-kind)`;
+- server RPC deduplicates `action_id` and rejects out-of-order device sequence;
+- flush on page start, `online`, focus and supported Background Sync;
+- queue failure never blocks CTA/navigation; current-device personalization
+  uses the local state immediately and cross-device state catches up later;
+- explicit visible pending/error state for feedback whose loss would matter.
+
+Email delivery is a separate downstream boundary. A Supabase Send Email Hook may
+call the configured providers with fallback and record one opaque attempt/provider
+receipt in YDB. The hook does not issue or verify OTP. It returns success only
+after a provider accepted the message; Delivery/Bounce/Reject webhooks remain
+separate evidence.
+
+The opaque attempt id travels in the Auth `redirect_to`, which the Send Email
+Hook receives as signed request data. Provider fallback is allowed only after a
+definitive pre-acceptance failure. An accepted or ambiguous provider attempt is
+not duplicated automatically. A status lookup by the opaque id may resolve a
+lost browser response; it never returns an email address, token or provider
+payload.
+
+Changing the Supabase API base must not sign out installed PWAs. Before rollout,
+set one explicit Auth `storageKey` derived from the original project ref and
+migrate/read the existing default key once. API hostname, PWA scope and session
+storage then evolve independently.
+
+A transparent relay is not a full substitute for a Supabase custom domain for
+OAuth. Supabase documents that activating its custom domain changes OAuth
+callbacks immediately; current Auth source builds custom-provider callback from
+the configured external URL rather than arbitrary proxy headers. Full OAuth
+hostname independence therefore uses the supported custom-domain activation,
+while the default Supabase domain remains available for rollback.
+
+Acceptance evidence before rollout:
+
+- successful email code and magic-link sessions through the relay;
+- timeout/429/ambiguous-response states never claim that mail was sent;
+- refresh persists after reload and after switching the configured API base;
+- custom-Yandex login completes on the exact callback registered with Yandex;
+- one failing mobile route completes Auth and Data through the relay;
+- one offline save changes local recommendations immediately, survives reload,
+  and reaches Supabase exactly once after connectivity returns;
+- logs contain attempt/action ids and stage/status only, never email, OTP, JWT,
+  provider code or raw request body.
+
+An isolated canary on 31 July established that an API Gateway fixed-upstream
+relay can forward Auth and Data requests from the production web origin without
+application code or credentials in the gateway. Browser evidence: Auth health
+and a Data API read returned 200; deliberately invalid verify and refresh calls
+reached Auth and returned 403/400 in 747 ms total. A custom-Yandex authorize
+smoke returned the same existing Supabase callback through both direct and
+relay paths. This is transport feasibility evidence only, not production
+rollout or completed email E2E.
+
+Implementation state on 31 July:
+
+- the permanent `kenigevents-supabase-relay` Gateway is active with exact
+  production-origin CORS, fixed `/auth/v1`, `/rest/v1` and `/functions/v1`
+  upstream prefixes, no service account and logging disabled;
+- the shared browser client preserves the original Supabase URL for project
+  identity/OAuth and the exact historical `sb-<project-ref>-auth-token` storage
+  key, while a custom `global.fetch` selects direct or relay transport;
+- route selection races only safe Auth-health reads and caches the first
+  successful route for a short session window;
+- GET/HEAD may fall back once after network/timeout/5xx; POST and every other
+  non-safe method are sent exactly once by the framework;
+- `PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL` is carried through local preview
+  and Kaggle static-build configuration but is never used by bulk exports;
+- the `KE3` diagnostic compares raw direct checks with the actual framework
+  path and reports the selected route without exposing provider names or PII.
+
+This is not incident closure: separate live OTP code and magic-link E2E, an
+affected-phone `KE3` receipt, verified membership activation and delivery
+correlation remain mandatory.
+
 ## P1 gates before canary
 
 ### P1.1 Fly runtime budget

@@ -1,0 +1,112 @@
+openapi: 3.0.0
+info:
+  title: KenigEvents stateless Supabase transport relay
+  version: 1.0.0
+
+x-yc-apigateway:
+  cors:
+    origin: https://kenigevents.ru
+    methods:
+      - GET
+      - HEAD
+      - POST
+      - PATCH
+      - PUT
+      - DELETE
+      - OPTIONS
+    allowedHeaders:
+      - Authorization
+      - Content-Type
+      - Accept
+      - apikey
+      - X-Client-Info
+      - X-Supabase-Api-Version
+      - Prefer
+      - Range
+      - Range-Unit
+    exposedHeaders:
+      - Content-Length
+      - Content-Range
+      - Content-Type
+      - Date
+      - Location
+      - Range-Unit
+      - X-Request-Id
+    maxAge: 600
+
+paths:
+  /auth/v1/{path+}:
+    x-yc-apigateway-any-method:
+      operationId: relayAuth
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/{path}
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 30
+  /rest/v1/{path+}:
+    x-yc-apigateway-any-method:
+      operationId: relayRest
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/{path}
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 30
+  /functions/v1/{path+}:
+    x-yc-apigateway-any-method:
+      operationId: relayFunctions
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/functions/v1/{path}
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 30

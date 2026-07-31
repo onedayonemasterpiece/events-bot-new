@@ -362,6 +362,26 @@ Static related publication policy:
 - same-day events that already started, past events and cancelled/deleted/duplicate rows are excluded at export/generation time;
 - static related generation retries Gemma 4 26B with backoff and does not fall back to Gemini/Flash-Lite, preserving Lite quota for runtime flows.
 
+### P0 Supabase egress guard for related rebuilds
+
+The 24–28 July usage audit attributes approximately `3.10 GB` of Supabase
+egress to the full-catalog related-candidate RPC used by static builds. The
+daily pattern matches the reported project egress graph. The exporter consumes
+only `event_id` and `vector_similarity`, but the current RPC response carries a
+much wider row, about `64–65 MB` per complete rebuild.
+
+Before scheduled production-root builds are enabled, replace that response
+with a dedicated minimal RPC projection containing only those two fields (plus
+no debug/document payload). The measured estimate for the same historical run
+set is about `79 MB`, a `97.45%` reduction. Add a response-byte budget to the
+builder receipt and fail the release gate if a full related rebuild exceeds
+the agreed compact-response ceiling. Static page generation must not fetch the
+same related corpus a second time after the checked cache was produced.
+
+This is independent from browser Auth transport. The Auth/Data relay, if
+enabled, is for small user requests only and must never proxy the bulk static
+related rebuild.
+
 This still does **not** mean Smart Update publishes the production root. With all
 three flags enabled it can build and publish only a checked unlisted candidate.
 Root activation remains a separate NO-GO until a reader-atomic resolver/origin

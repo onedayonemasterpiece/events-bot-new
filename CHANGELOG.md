@@ -10,6 +10,10 @@
 - Region Talk Kaggle script kernels now opt out of the shared sibling-file
   status wrapper: Kaggle uploads only the configured `code_file` body, while
   these self-contained workers already emit their own durable YDB heartbeats.
+- Static-site Auth now preserves existing PWA sessions while selecting between
+  direct and stateless relay transport with safe health probes; OTP, verify,
+  refresh and other non-safe requests are never blindly repeated across routes,
+  and an ambiguous email-send timeout no longer claims that a letter was sent.
 - Region Talk orchestration no longer forwards a nonexistent default `.env` to
   child launchers in deployed environments that receive secrets directly.
 - Region Talk's production wrapper now exposes one canonical CLI for supervised
@@ -27,6 +31,10 @@
 
 ### Added
 
+- Added the permanent no-logging Yandex API Gateway transport relay and a
+  provider-neutral `KE3` phone diagnostic that compares direct Auth/Data reads
+  with the actual resilient framework path in one run.
+
 - Added the Region Talk autonomous production runner and three configurable
   daily APScheduler slots. The runner chains discovery, E5/BGE fusion, image
   diagnostics, Gemini finalization and operator-chat delivery with
@@ -34,6 +42,17 @@
   logs, scheduler health, resource-specific session/kernel guards and `ops_run`
   evidence; unrelated global heavy jobs cannot starve all discovery slots, and
   public TG/VK publishing stays disabled.
+- Added a compact unlinked `noindex` phone diagnostic at
+  `/fokus-gruppa/diagnostika/`: three parallel, bounded, read-only checks compare
+  Supabase Auth/data with a dedicated Yandex API Gateway → YDB control and show
+  one screenshot-sized result with an opaque correlation code; its public
+  labels remain provider-neutral.
+- Split the phone diagnostic into transport-only, browser-checked, data and
+  reserve probes, using one shared 20-second budget instead of three serial
+  eight-second attempts; browser connection type is now described as speed
+  rather than incorrectly calling Wi-Fi `4G`.
+- Added a one-tap copyable, PII-free `KE2` diagnostic line so participants can
+  paste one complete four-stage result instead of attaching a screenshot.
 - Integrated the noindex 30-day focus-group product shell into the R15 candidate: fragment onboarding, separate participation state, optional identity intent, installable focus PWA, closed hub, feedback specimens, local interest prototype and the 12-item research Easter-egg collection remain isolated from the ordinary public home.
 - Added a focus-group PWA start controller that returns an active participant to the closed hub while keeping participation independent from personalization reset; the previous 72-hour preview marker is migration input only, never the access period.
 - Added a deterministic self-contained SVG QR and exact visible fragment link
