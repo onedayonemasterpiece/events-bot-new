@@ -13,9 +13,9 @@
 - Region Talk external-publication scoring now honors the strict imported
   noncommercial policy attestation before applying generic social ad regexes,
   preventing editorial caveats such as a hotel-selection mention from
-  tombstoning a verified external article; regex evidence is retained for the
-  final controlled Gemini review, while social and sales/sponsored rows remain
-  fail-closed.
+  tombstoning a verified external article; a changed eligibility-only tombstone
+  can now reach its first controlled Gemini review, while provider/operator
+  decisions, social rows and sales/sponsored rows remain fail-closed.
 - Region Talk external editorial/academic articles with verified nonlocal
   publishers, strict dual-vector acceptance and `link_only` rights now enter a
   dedicated no-media-reuse finalizer lane instead of being stranded as

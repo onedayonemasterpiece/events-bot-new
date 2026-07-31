@@ -210,6 +210,58 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         }
         self.assertFalse(self.mod._ineligible_state_is_current(row, "reject"))
 
+    def test_changed_eligibility_tombstone_reopens_without_reopening_operator_reject(self) -> None:
+        mod = self.mod
+        previous = candidate_row(
+            publication_status="eligibility_reject_tombstone",
+            publication_candidate_status="tombstoned_reject",
+            publication_eligibility_verdict="reject",
+            publication_tombstone="true",
+        )
+        row = candidate_row(
+            finalization_trigger="never_finalized",
+            _previous_publication=previous,
+        )
+        with (
+            mock.patch.object(mod, "_eligibility_fields", return_value=("eligible", {})),
+            mock.patch.object(mod.rt, "call_region_talk_semantic_llm", return_value={
+                "llm_gate_status": "ok",
+                "llm_decision": "accept",
+                "llm_reason": "verified",
+            }) as llm,
+        ):
+            result = mod.verify_rows(
+                [row],
+                max_llm=1,
+                model="gemini-test",
+                default_env_var_name="KEY",
+                now_iso="2026-07-31T19:40:00+00:00",
+            )
+        self.assertEqual(result[0]["publication_status"], "gemini_accept")
+        llm.assert_called_once()
+
+        operator_previous = {
+            **previous,
+            "publication_status": "operator_rejected",
+        }
+        operator_row = candidate_row(
+            finalization_trigger="never_finalized",
+            _previous_publication=operator_previous,
+        )
+        with (
+            mock.patch.object(mod, "_eligibility_fields", return_value=("eligible", {})),
+            mock.patch.object(mod.rt, "call_region_talk_semantic_llm") as operator_llm,
+        ):
+            operator_result = mod.verify_rows(
+                [operator_row],
+                max_llm=1,
+                model="gemini-test",
+                default_env_var_name="KEY",
+                now_iso="2026-07-31T19:40:00+00:00",
+            )
+        self.assertEqual(operator_result[0]["publication_status"], "operator_rejected")
+        operator_llm.assert_not_called()
+
     def test_visual_review_state_is_nonterminal_and_idempotent(self) -> None:
         mod = self.mod
         row = candidate_row()

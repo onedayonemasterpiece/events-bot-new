@@ -97,6 +97,9 @@ noncommercial attestation now owns pre-Gemini routing for external web articles.
 - preserve research policy/decision evidence in compact state;
 - version only the external-publication processing fingerprint, avoiding a
   costly rescan of unrelated social posts;
+- reopen only changed deterministic eligibility tombstones that have no
+  provider/operator verdict; all paid or human terminal decisions stay
+  monotonic;
 - keep Gemini as the final semantic ad/editorial gate.
 
 ## Follow-up Actions
