@@ -5340,13 +5340,28 @@ async def _llm_review_create_bundle_grounding(
     if not quotes or any(_norm_text_for_grounding(item) not in corpus_norm for item in quotes):
         return False, "llm_evidence_not_verbatim", []
     if decision != "grounded" or confidence < 0.9 or unsupported:
+        public_fields = ("title", "description", "facts", "search_digest", "short_description")
         safe_unsupported = [
             field
             for field in dict.fromkeys(unsupported)
-            if field in {"title", "description", "facts", "search_digest", "short_description"}
+            if field in public_fields
         ]
-        if decision == "ungrounded" and confidence >= 0.9 and safe_unsupported:
-            return False, "llm_ungrounded", safe_unsupported
+        if decision == "ungrounded":
+            # An ``ungrounded`` verdict can only make the create payload more
+            # conservative: we remove generated prose and fall back to the
+            # already-grounded candidate fields.  If the reviewer omitted the
+            # optional per-field diagnosis, drop every populated public field
+            # rather than reject an otherwise valid occurrence or guess which
+            # generated sentence was unsafe.  Verbatim evidence was validated
+            # above; ``uncertain`` still fails closed without this repair.
+            if not safe_unsupported:
+                safe_unsupported = [
+                    field
+                    for field in public_fields
+                    if bundle.get(field) not in (None, "", [])
+                ]
+            if safe_unsupported:
+                return False, "llm_ungrounded", safe_unsupported
         return False, f"llm_{decision or 'uncertain'}", []
     return True, "llm_grounded", []
 

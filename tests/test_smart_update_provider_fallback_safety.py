@@ -335,6 +335,53 @@ async def test_uncertain_bundle_grounding_cannot_trigger_field_stripping(monkeyp
 
 
 @pytest.mark.asyncio
+async def test_ungrounded_bundle_without_field_diagnosis_drops_all_generated_public_fields(
+    monkeypatch,
+) -> None:
+    candidate = su.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-1_5",
+        source_text="7 августа в 11:00 — семинар о продвижении в соцсетях.",
+        title="Семинар о продвижении",
+        date="2026-08-07",
+        time="11:00",
+        location_name="Онлайн",
+    )
+    bundle = {
+        "title": "Неподтверждённый заголовок",
+        "description": "Неподтверждённое описание",
+        "facts": [],
+        "search_digest": None,
+        "short_description": "Неподтверждённый анонс",
+        "age_decision": {"value": "0+"},
+    }
+
+    async def fake_ask(*_args, **_kwargs):
+        return {
+            "decision": "ungrounded",
+            "confidence": 0.62,
+            "unsupported_fields": [],
+            "evidence_quotes": ["семинар о продвижении в соцсетях"],
+            "reason_short": "generated prose is not fully supported",
+        }
+
+    monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+    assert await su._llm_review_create_bundle_grounding(bundle, candidate) == (
+        False,
+        "llm_ungrounded",
+        ["title", "description", "short_description"],
+    )
+    assert su._remove_llm_rejected_bundle_fields(
+        bundle,
+        ["title", "description", "short_description"],
+    ) == {
+        "facts": [],
+        "search_digest": None,
+        "age_decision": {"value": "0+"},
+    }
+
+
+@pytest.mark.asyncio
 async def test_multicity_occurrence_cannot_mix_target_date_and_sibling_city(monkeypatch) -> None:
     candidate = su.EventCandidate(
         source_type="vk",

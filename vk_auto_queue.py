@@ -753,6 +753,24 @@ def _rate_limit_max_defers() -> int:
     return max(0, min(value, 1000))
 
 
+def _partial_import_max_attempts() -> int:
+    raw = (os.getenv("VK_AUTO_IMPORT_PARTIAL_MAX_ATTEMPTS") or "3").strip()
+    try:
+        value = int(raw)
+    except Exception:
+        value = 3
+    return max(1, min(value, 1000))
+
+
+def _partial_import_retry_sec() -> float:
+    raw = (os.getenv("VK_AUTO_IMPORT_PARTIAL_RETRY_SEC") or "60").strip()
+    try:
+        value = float(raw)
+    except Exception:
+        value = 60.0
+    return max(0.0, min(value, 86_400.0))
+
+
 def _vk_auto_import_max_photos() -> int:
     raw = (os.getenv("VK_AUTO_IMPORT_MAX_PHOTOS") or "4").strip()
     try:
@@ -2424,8 +2442,16 @@ async def _process_vk_inbox_row(
             ok = False
             exc_txt = str(exc)
             if "smart_update rejected:" in exc_txt:
-                report.inbox_rejected += 1
                 report.errors.append(f"persist_rejected {source_url}: {exc_txt}")
+                if imported_event_ids:
+                    # A roundup is one queue row but several independent Smart
+                    # Update writes. Preserve/link successful children and let
+                    # a later batch retry the row idempotently; never discard the
+                    # already committed event ids by rejecting the whole row.
+                    partial_error = exc_txt
+                    ok = True
+                    break
+                report.inbox_rejected += 1
                 await vk_review.mark_rejected(db, post.id)
                 await _emit_progress(
                     "⛔",
@@ -2438,8 +2464,12 @@ async def _process_vk_inbox_row(
                 _log_row_timing(drafts_count=len(drafts or []), ok_value=False)
                 return
             if "smart_update returned no event_id:" in exc_txt:
-                report.inbox_rejected += 1
                 report.errors.append(f"persist_skipped {source_url}: {exc_txt}")
+                if imported_event_ids:
+                    partial_error = exc_txt
+                    ok = True
+                    break
+                report.inbox_rejected += 1
                 await vk_review.mark_rejected(db, post.id)
                 await _emit_progress(
                     "⏭️",
@@ -2452,9 +2482,9 @@ async def _process_vk_inbox_row(
                 _log_row_timing(drafts_count=len(drafts or []), ok_value=False)
                 return
 
-            report.inbox_failed += 1
             report.errors.append(f"persist_failed {source_url}: {exc_txt}")
             if not imported_event_ids:
+                report.inbox_failed += 1
                 await vk_review.mark_failed(db, post.id)
                 await _emit_progress(
                     "❌",
@@ -2487,7 +2517,22 @@ async def _process_vk_inbox_row(
         event_dates=imported_event_dates,
     )
     _tmark("mark_imported_events", time.monotonic() - t0)
-    report.inbox_imported += 1
+    partial_queue_state: str | None = None
+    partial_attempts = 0
+    if partial_error:
+        partial_queue_state, partial_attempts = await vk_review.mark_rate_limited(
+            db,
+            int(post.id),
+            batch_id=batch_id,
+            retry_after_sec=_partial_import_retry_sec(),
+            max_attempts=_partial_import_max_attempts(),
+        )
+        if partial_queue_state == "failed":
+            report.inbox_failed += 1
+        else:
+            report.inbox_deferred += 1
+    else:
+        report.inbox_imported += 1
     report.created_event_ids.extend(created_ids)
     report.updated_event_ids.extend(updated_ids)
 
@@ -2508,7 +2553,15 @@ async def _process_vk_inbox_row(
         "Отчёт Smart Update: ⏳",
     ]
     if partial_error:
-        extra_lines.insert(0, f"⚠️ Частично: {_shorten_reason(partial_error) or 'persist error'}")
+        retry_state = (
+            f"повтор {partial_attempts}/{_partial_import_max_attempts()}"
+            if partial_queue_state != "failed"
+            else f"failed после {partial_attempts} попыток"
+        )
+        extra_lines.insert(
+            0,
+            f"⚠️ Частично ({retry_state}): {_shorten_reason(partial_error) or 'persist error'}",
+        )
     await _emit_progress(icon, extra_lines)
 
     if inline_jobs_enabled:

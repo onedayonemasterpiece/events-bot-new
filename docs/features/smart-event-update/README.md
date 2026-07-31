@@ -687,6 +687,22 @@ failure blocks automatic creation. This prevents performer/program facts from
 sibling dates being written into `event_source_fact`, descriptions, search
 digests and public projections.
 
+The generated public bundle has a second source-grounding review. A `grounded`
+decision is accepted only at confidence `>=0.9` with no unsupported fields. An
+`uncertain` decision remains fail-closed. An explicit `ungrounded` decision does
+not authorize replacement prose: the importer mechanically removes the fields
+named by the reviewer and falls back to the already scoped candidate evidence.
+If the reviewer omits its per-field diagnosis, all populated generated public
+fields are removed; this is a conservative reduction, not a semantic guess.
+Verbatim reviewer evidence is required before either outcome is trusted.
+
+A VK roundup row is not atomic with its child Smart Update writes. If an early
+child succeeds and a later child is rejected or fails, the successful event ids
+are linked in `vk_inbox_import_event` and the inbox row becomes `deferred` for a
+bounded, idempotent retry in a later batch (default: 60 seconds, at most three
+attempts). It must not be marked fully imported, and the committed child links
+must not be discarded by rejecting the entire row.
+
 ### Vector-first future quality audit contract
 
 The future-event quality audit is separate from identity deduplication:

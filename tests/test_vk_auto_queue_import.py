@@ -532,6 +532,86 @@ async def test_vk_auto_import_marks_inbox_imported_and_links_multiple_events(tmp
 
 
 @pytest.mark.asyncio
+async def test_vk_auto_import_defers_partial_roundup_and_keeps_successful_event_links(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_source(group_id, screen_name, name, location, default_time, default_ticket_link) VALUES(?,?,?,?,?,?)",
+            (1, "club1", "Test Community", "Научная библиотека", None, None),
+        )
+        await conn.execute(
+            "INSERT INTO vk_inbox(id, group_id, post_id, date, text, matched_kw, has_date, event_ts_hint, status) VALUES(?,?,?,?,?,?,?,?,?)",
+            (1, 1, 100, 0, "stub", vk_intake.OCR_PENDING_SENTINEL, 0, None, "pending"),
+        )
+        await conn.commit()
+
+    async def fake_fetch(*_args, **_kwargs):
+        return (
+            "text",
+            [],
+            datetime.now(timezone.utc),
+            {"views": 10, "likes": 1},
+            vk_auto_queue.VkFetchStatus(True, "ok"),
+        )
+
+    async def fake_build_event_drafts(*_args, **_kwargs):
+        return [
+            vk_intake.EventDraft(title="E1", date="2026-12-31", time="18:30"),
+            vk_intake.EventDraft(title="E2", date="2027-01-01", time="19:00"),
+        ], None
+
+    calls = 0
+
+    async def fake_persist(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("smart_update rejected: create_bundle_grounding:llm_uncertain")
+        return vk_intake.PersistResult(
+            event_id=1001,
+            telegraph_url="",
+            ics_supabase_url="",
+            ics_tg_url="",
+            event_date="2026-12-31",
+            event_end_date=None,
+            event_time="18:30",
+            event_type=None,
+            is_free=False,
+            smart_status="created",
+            smart_created=True,
+            smart_merged=False,
+        )
+
+    monkeypatch.setenv("VK_AUTO_IMPORT_INLINE_JOBS", "0")
+    monkeypatch.setenv("VK_AUTO_IMPORT_PARTIAL_RETRY_SEC", "60")
+    monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch)
+    monkeypatch.setattr(vk_intake, "build_event_drafts", fake_build_event_drafts)
+    monkeypatch.setattr(vk_intake, "persist_event_and_pages", fake_persist)
+
+    report = await vk_auto_queue.run_vk_auto_import(
+        db, DummyBot(), chat_id=1, limit=1, operator_id=123
+    )
+
+    assert report.inbox_imported == 0
+    assert report.inbox_rejected == 0
+    assert report.inbox_deferred == 1
+    assert report.created_event_ids == [1001]
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT status, imported_event_id, attempts FROM vk_inbox WHERE id=1"
+        )
+        assert await cur.fetchone() == ("deferred", 1001, 1)
+        cur = await conn.execute(
+            "SELECT event_id FROM vk_inbox_import_event WHERE inbox_id=1 ORDER BY event_id"
+        )
+        assert await cur.fetchall() == [(1001,)]
+
+
+@pytest.mark.asyncio
 async def test_vk_auto_import_rejects_low_confidence_drafts(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
