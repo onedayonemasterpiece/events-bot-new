@@ -7356,7 +7356,6 @@ def _get_gemma_client():
         secrets_provider=SecretsProvider(),
         consumer="smart_update",
         incident_notifier=notify_llm_incident,
-        reserve_key_envs=os.getenv("SMART_UPDATE_GOOGLE_KEY_ENVS", ""),
     )
     raw_max_retries = (os.getenv("SMART_UPDATE_GOOGLE_AI_MAX_RETRIES", "1") or "").strip()
     try:

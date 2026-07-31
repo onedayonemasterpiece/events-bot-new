@@ -212,6 +212,10 @@ class GoogleAIClient:
     RESERVE_DIRECT_RETRY_ENV = "GOOGLE_AI_RESERVE_DIRECT_RETRY"
     RESERVE_DIRECT_SCHEMA_ENV = "GOOGLE_AI_RESERVE_DIRECT_SCHEMA"
     RESERVE_SCOPE_TO_DEFAULT_ENV_ENV = "GOOGLE_AI_RESERVE_SCOPE_TO_DEFAULT_ENV"
+    # Shared normal allocation for ordinary Google AI consumers. Rotation and
+    # provider-side 429 failover belong to this gateway, not to feature code.
+    # Explicit constructor pools remain available for genuinely scoped lanes.
+    NORMAL_KEY_ENVS_ENV = "GOOGLE_AI_NORMAL_KEY_ENVS"
     # Comma-separated env names whose keys may be borrowed as emergency overflow
     # when the scoped lane is exhausted for the day. Empty = no overflow.
     RESERVE_OVERFLOW_KEY_ENVS_ENV = "GOOGLE_AI_RESERVE_OVERFLOW_KEY_ENVS"
@@ -389,10 +393,21 @@ class GoogleAIClient:
             if reserve_overflow_key_envs is not None
             else os.getenv(self.RESERVE_OVERFLOW_KEY_ENVS_ENV, "")
         )
-        # A normal pool participates from the first reservation.  It is not a
-        # fallback/overflow chain: every request starts at the next pool member
-        # and atomically probes only eligible members through the shared RPC.
-        self.reserve_key_envs = self._normalize_overflow_envs(reserve_key_envs)
+        # A normal pool participates from the first reservation. It is owned by
+        # the shared gateway rather than any one consumer: when no explicit
+        # scoped override or explicit default lane is supplied, ordinary
+        # clients inherit the same operator-configured allocation. Every
+        # request starts at the next pool member and atomically probes only
+        # eligible members through the RPC.
+        self.reserve_key_envs = self._normalize_overflow_envs(
+            reserve_key_envs
+            if reserve_key_envs is not None
+            else (
+                os.getenv(self.NORMAL_KEY_ENVS_ENV, "")
+                if default_env_var_name is None
+                else ""
+            )
+        )
 
         # Cache missing Supabase RPCs to avoid noisy per-request fallbacks when
         # the Supabase project hasn't been migrated yet (PGRST202).

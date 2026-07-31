@@ -27,10 +27,6 @@ def build_festival_web_research_service(db: Database) -> FestivalWebResearchServ
 
         return create_client(url, key)
 
-    allowed = ("GOOGLE_API_KEY", "GOOGLE_API_KEY2", "GOOGLE_API_KEY3", "GOOGLE_API_KEY4", "GOOGLE_API_KEY5")
-    key_envs = tuple(name for name in allowed if (os.getenv(name) or "").strip())
-    if not key_envs:
-        raise RuntimeError("no registered Antigravity Google key envs are configured")
     limiter = GoogleAIClient(
         supabase_client=build_google_ai_limiter_supabase_client(
             fallback_factory=legacy_limiter_client,
@@ -38,8 +34,15 @@ def build_festival_web_research_service(db: Database) -> FestivalWebResearchServ
         ),
         consumer="festival_antigravity",
         account_name="festival_web_research",
-        reserve_key_envs=key_envs,
     )
+    key_envs = tuple(limiter.reserve_key_envs)
+    if not key_envs:
+        raise RuntimeError("GOOGLE_AI_NORMAL_KEY_ENVS is required for Antigravity")
+    missing_secrets = [name for name in key_envs if not (os.getenv(name) or "").strip()]
+    if missing_secrets:
+        raise RuntimeError(
+            "configured Google key envs are missing secrets: " + ",".join(missing_secrets)
+        )
     provider = AntigravityInteractionsClient(limiter, key_envs=key_envs)
     registry_path = Path(__file__).parent / "schemas/festival-taxonomy-registry-v2.json"
     registry_hash = taxonomy_registry_hash(load_taxonomy_registry(registry_path.read_bytes()))

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+- Registered operator-provided `GOOGLE_API_KEY6` as a separately accounted
+  shared-limiter lane and added it to the gateway-owned normal rotation pool
+  used by Smart Update, Antigravity festival research and other ordinary Google
+  AI consumers; fail-fast reserve rotation adds no quota-window sleep.
+
 ### Fixed
 - Smart Update eventness review now includes bounded poster OCR as first-class
   source evidence, so concrete events described on an attached poster are not

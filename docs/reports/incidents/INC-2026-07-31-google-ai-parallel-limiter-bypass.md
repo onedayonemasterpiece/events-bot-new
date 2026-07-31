@@ -80,6 +80,13 @@ no Antigravity limiter bypass was found.
   into the canonical ledger before cutover. The shared scope now carries
   Antigravity `4 RPD`, Flash-Lite `900 RPD`, Gemma 4 31B `519 RPD` and Gemini
   3 Flash Preview `1 RPD`; no provider request was made by this import.
+- 2026-07-31 19:48 UTC — operator-provided `GOOGLE_API_KEY6` was registered
+  without its secret as a separately accounted scope
+  `google:key6-operator-isolated-20260731`. A rollback-only atomic reservation
+  proved the required limiter contract and was removed without a provider call.
+- 2026-07-31 20:14 UTC — normal key rotation was moved from Smart Update
+  configuration ownership to the shared gateway. Ordinary clients inherit
+  `GOOGLE_AI_NORMAL_KEY_ENVS`; explicit default/scoped lanes remain overrides.
 
 ## Root Cause
 
@@ -180,6 +187,9 @@ no Antigravity limiter bypass was found.
   atomic rollout gate.
 - The dedicated schema and conservative registry are live; all five keys remain
   in one `google:unmapped-shared` scope until a project mapping is proved.
+- The sixth operator-confirmed fresh key is registered in its own redacted
+  scope and its Fly secret is staged for the gateway-owned normal pool. Smart
+  Update is only a consumer of that pool and contains no key rotation list.
 - Current-day counters were imported before cutover, so the new ledger does not
   incorrectly treat 2026-07-31 as an unused day. In particular, the shared
   Flash-Lite scope is already above its conservative daily cap and must deny
@@ -201,6 +211,9 @@ no Antigravity limiter bypass was found.
   GemmaKey2 probe.
 - Added an offline repository audit and agent policy that reject any newly
   introduced direct endpoint/SDK path.
+- Centralized ordinary key-pool ownership in `GoogleAIClient` through
+  `GOOGLE_AI_NORMAL_KEY_ENVS`; reservation scans and provider-429 rotation are
+  fail-fast and never sleep until a quota window resets.
 
 ## Follow-up Actions
 
@@ -226,6 +239,11 @@ no Antigravity limiter bypass was found.
   `13` Edge tests, TypeScript check; audit of `808` files with
   `allowlisted_debt=0`, `unapproved=0`)
 - post-deploy verification: not performed; external requests explicitly stopped
+- key6 pre-deploy verification: live atomic rollback probe completed in
+  `46.39 ms`, required contract/scope present, persisted rows after rollback
+  `0`; targeted gateway/Smart Update/festival tests `119 + 73 passed`, limiter
+  and bypass-audit tests `24 passed`, static audit `808` files,
+  `allowlisted_debt=0`, `unapproved=0`
 
 ## Prevention
 

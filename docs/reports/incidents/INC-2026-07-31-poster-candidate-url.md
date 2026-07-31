@@ -57,6 +57,9 @@ VK auto-import и live-проверку Telegram Monitoring с `@meowafisha`.
   но server import падает до event/video persistence.
 - 2026-07-31 17:10 UTC — runtime mirror + `ops_run` audit формализует инцидент
   как sev1 и запускает hotfix/replay/catch-up workflow.
+- 2026-07-31 19:44 UTC — release 1815 (`6fa882ab`, включая poster provenance,
+  Gemma 4 minimal-thinking и poster-OCR eventness fixes) активирован на Fly;
+  `/healthz` ready, SHA достижим из последующего `origin/main`.
 
 ## Root Cause
 
@@ -156,12 +159,14 @@ Root cause механический (API/transport compatibility), а не seman
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- deployed SHA: `6fa882ab` (Fly release 1815; ancestor of `origin/main`)
+- deploy path: clean integration release after main reconciliation; active
+  machine `48e419df93e078`, `/healthz` ready
 - regression checks: canonical incident tests `3 passed` (включая exact
   Telegram replay); релевантный Smart Update, KGD80, Telegram, source-status и
   video persistence/export набор `111 passed`; release CI pending
-- post-deploy verification: pending
+- post-deploy verification: code/health ready; four-row VK compensating catch-up
+  (`11019`, `11022`, `11028`, `11033`) remains the closure gate
 
 ## Prevention
 

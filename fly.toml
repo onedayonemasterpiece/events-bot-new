@@ -190,10 +190,11 @@ app = "events-bot-new-wngqia"
   SMART_UPDATE_IDENTITY_EMBEDDING_MODEL = "gemini-embedding-2"
   SMART_UPDATE_IDENTITY_EMBEDDING_DIM = "768"
   SMART_UPDATE_IDENTITY_GOOGLE_KEY_ENV = "GOOGLE_API_KEY4"
-  # Smart Update uses all registered Google keys as a normal round-robin pool
-  # from the first reservation. Provider-side 429 on one member rotates to the
-  # next member without waiting or changing models.
-  SMART_UPDATE_GOOGLE_KEY_ENVS = "GOOGLE_API_KEY,GOOGLE_API_KEY2,GOOGLE_API_KEY3,GOOGLE_API_KEY4,GOOGLE_API_KEY5"
+  # Shared gateway allocation for ordinary Google AI consumers. The limiter
+  # rotates from the first reservation and, on provider 429, tries another
+  # admitted lane without sleeping until a quota window resets. Features such
+  # as Smart Update consume this pool but do not own or reimplement it.
+  GOOGLE_AI_NORMAL_KEY_ENVS = "GOOGLE_API_KEY6,GOOGLE_API_KEY,GOOGLE_API_KEY2,GOOGLE_API_KEY3,GOOGLE_API_KEY4,GOOGLE_API_KEY5"
   # Keep Lite on the bounded facts/writer stages only.  Forcing every Smart
   # Update contract onto Lite costs roughly ten requests per imported event
   # and can exhaust the shared daily project quota.

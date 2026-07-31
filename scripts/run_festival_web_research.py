@@ -39,7 +39,7 @@ def _args() -> argparse.Namespace:
     parser.add_argument(
         "--key-env",
         action="append",
-        help="Explicit registered key env pool (repeatable); defaults to configured GOOGLE_API_KEY[2-5]",
+        help="Explicit registered key env pool override (repeatable); defaults to gateway GOOGLE_AI_NORMAL_KEY_ENVS",
     )
     parser.add_argument("--deadline-seconds", type=float, default=900)
     parser.add_argument("--no-conflict-check", action="store_true", help="Never spend the optional third interaction")
@@ -77,16 +77,6 @@ async def _main() -> int:
 
         return create_client(supabase_url, supabase_key)
 
-    allowed_key_envs = ("GOOGLE_API_KEY", "GOOGLE_API_KEY2", "GOOGLE_API_KEY3", "GOOGLE_API_KEY4", "GOOGLE_API_KEY5")
-    requested_key_envs = tuple(args.key_env or allowed_key_envs)
-    if any(name not in allowed_key_envs for name in requested_key_envs):
-        raise RuntimeError("--key-env must be one of the registered GOOGLE_API_KEY[2-5] names")
-    key_envs = tuple(
-        name for name in requested_key_envs
-        if os.environ.get(name, "").strip()
-    )
-    if not key_envs:
-        raise RuntimeError("no configured Google key envs")
     supabase = build_google_ai_limiter_supabase_client(
         fallback_factory=legacy_limiter_client,
         require_configured=True,
@@ -95,8 +85,16 @@ async def _main() -> int:
         supabase_client=supabase,
         consumer="festival_antigravity",
         account_name="festival_web_research",
-        reserve_key_envs=key_envs,
+        reserve_key_envs=tuple(args.key_env) if args.key_env else None,
     )
+    key_envs = tuple(limiter.reserve_key_envs)
+    if not key_envs:
+        raise RuntimeError("GOOGLE_AI_NORMAL_KEY_ENVS or --key-env is required")
+    missing_secrets = [name for name in key_envs if not os.environ.get(name, "").strip()]
+    if missing_secrets:
+        raise RuntimeError(
+            "configured Google key envs are missing secrets: " + ",".join(missing_secrets)
+        )
     provider = AntigravityInteractionsClient(limiter, key_envs=key_envs)
     db = Database(str(Path(args.db)))
     await db.init()

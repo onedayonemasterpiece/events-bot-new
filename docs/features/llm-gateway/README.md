@@ -309,9 +309,13 @@ fail-closed завершаться при недоступном shared limiter.
     `google_ai_api_keys.env_var_name`; env-only ключ не виден атомарному reserve RPC. Успешный borrow запасного ключа
     пишет `google_ai.reserve_overflow_used` в structured log, но не отправляет operator-facing LLM incident: алерт нужен
     только когда рабочий ключ/модель не найдены или provider call реально завершился ошибкой.
-*   **Normal rotating pool**: consumer может передать
-    `GoogleAIClient(reserve_key_envs=[...])`. В отличие от emergency overflow,
-    это его обычный candidate set с самого первого reserve: process-wide cursor
+*   **Normal rotating pool**: `GOOGLE_AI_NORMAL_KEY_ENVS` задаёт общий пул на
+    уровне gateway; обычные клиенты без явно закреплённого
+    `default_env_var_name` наследуют его без feature-specific списка. Явный
+    `GoogleAIClient(reserve_key_envs=[...])` или `default_env_var_name` остаётся
+    scoped override. В
+    отличие от emergency overflow, это обычный candidate set с самого первого
+    reserve: process-wide cursor
     меняет стартовый env на каждом запросе, а существующий atomic RPC проверяет
     кандидатов по одному и при `rpm`/`tpm`/`rpd` пробует следующего участника той
     же нормальной allocation. Каждый env обязан существовать и в runtime, и как
@@ -326,6 +330,13 @@ fail-closed завершаться при недоступном shared limiter.
     Google AI квоты принадлежат Cloud project, поэтому несколько ключей одного
     project не создают несколько независимых RPD. Feature-specific total caps
     всё равно обязательны.
+    `GOOGLE_API_KEY6` добавлен 2026-07-31 как явно подтверждённый оператором
+    свежий quota lane с отдельным `quota_scope` и первый участник общего normal
+    pool. Smart Update, Antigravity festival research и другие обычные
+    потребители лишь вызывают gateway и не реализуют ротацию сами.
+    Заблокированные scope проверяются fail-fast, без sleep: транзакционный
+    live-check reserve занял около 55 мс, поэтому ротация не ждёт сброса
+    минутного окна.
 *   **Smart Update 4o fallback budget**: 4o остаётся аварийным fallback после Gemma/Gemini ошибок, но массовые Smart Update
     переливы можно ограничить `SMART_UPDATE_4O_FALLBACK_MAX_PER_HOUR=N`. `SMART_UPDATE_4O_FALLBACK=0` — временный
     incident kill-switch, не steady-state policy.

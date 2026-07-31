@@ -943,6 +943,50 @@ def test_normalize_overflow_envs_parses_csv_and_list() -> None:
     assert GoogleAIClient._normalize_overflow_envs(["A", "B", "A"]) == ["A", "B"]
 
 
+def test_normal_pool_defaults_to_gateway_owned_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        GoogleAIClient.NORMAL_KEY_ENVS_ENV,
+        "GOOGLE_API_KEY6, GOOGLE_API_KEY,GOOGLE_API_KEY6",
+    )
+
+    client = GoogleAIClient(supabase_client=_FakeSupabaseClient(), consumer="smart_update")
+
+    assert client.reserve_key_envs == ["GOOGLE_API_KEY6", "GOOGLE_API_KEY"]
+
+
+def test_explicit_normal_pool_overrides_gateway_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        GoogleAIClient.NORMAL_KEY_ENVS_ENV,
+        "GOOGLE_API_KEY6,GOOGLE_API_KEY",
+    )
+
+    client = GoogleAIClient(
+        supabase_client=_FakeSupabaseClient(),
+        consumer="scoped_consumer",
+        reserve_key_envs=["GOOGLE_API_KEY3", "GOOGLE_API_KEY5"],
+    )
+
+    assert client.reserve_key_envs == ["GOOGLE_API_KEY3", "GOOGLE_API_KEY5"]
+
+
+def test_explicit_default_lane_does_not_inherit_gateway_pool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        GoogleAIClient.NORMAL_KEY_ENVS_ENV,
+        "GOOGLE_API_KEY6,GOOGLE_API_KEY",
+    )
+
+    client = GoogleAIClient(
+        supabase_client=_FakeSupabaseClient(),
+        consumer="scoped_consumer",
+        default_env_var_name="GOOGLE_API_KEY4",
+    )
+
+    assert client.default_env_var_name == "GOOGLE_API_KEY4"
+    assert client.reserve_key_envs == []
+
+
 class _NormalPoolSupabase:
     rows = [
         {"id": "id-key4", "env_var_name": "GOOGLE_API_KEY4", "priority": 2},
