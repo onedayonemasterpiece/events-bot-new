@@ -1,0 +1,14 @@
+{
+  "id": "zigomaro/region-talk-qwen3-embedding-06b-enrichment",
+  "title": "Region Talk Qwen3 Embedding 06B Enrichment",
+  "code_file": "region_talk_qwen3_embedding_06b_enrichment.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "slug": "region-talk-qwen3-embedding-06b-enrichment"
+}

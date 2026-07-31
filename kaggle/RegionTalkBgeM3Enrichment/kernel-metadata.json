@@ -1,0 +1,17 @@
+{
+  "id": "zigomaro/region-talk-bge-m3-enrichment",
+  "title": "Region Talk BGE-M3 Enrichment",
+  "code_file": "region_talk_bge_m3_enrichment.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "model_sources": [
+    "andreasbis/baai-bge-m3/Transformers/default/1"
+  ],
+  "kernel_sources": [],
+  "slug": "region-talk-bge-m3-enrichment"
+}

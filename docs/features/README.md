@@ -34,6 +34,7 @@
 - `docs/features/telegram-business-stories/README.md` — Telegram Business webhook contract, encrypted connection cache и публикация сторис через Bot API
 - `docs/features/tg-monitoring-on-demand/README.md` — fast-path запуск Telegram Monitoring по новым постам в allowlisted Telegram-каналах
 - `docs/features/kaggle-status-framework/README.md` — единый callback/heartbeat/status framework для Kaggle runtime/notebooks без скрытой дедупликации публикаций
+- `docs/features/region-talk-channel/README.md` — автономный discovery внешних Telegram/VK/web-публикаций о Калининградской области, YDB funnel и доставка подтверждённых кандидатов в операторский чат
 
 ## Черновики требований
 

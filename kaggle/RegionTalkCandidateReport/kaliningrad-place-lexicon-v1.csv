@@ -1,0 +1,199 @@
+place_id,canonical_name,place_type,municipality,district_or_okrug,is_city,is_settlement,is_tourist_place,is_nature_place,is_historical_name,aliases,old_names,latin_aliases,common_misspellings,geo_scope,priority_tier,ambiguity_level,allowed_for_kaliningrad_scope,requires_context,reject_if_external_context,source_url,source_note
+kgd_kaliningradskaya_oblast,Калининградская область,region,,,false,false,true,false,false,Калининградский регион;Калининградчина;янтарный край;самый западный регион России;российская Балтика;Балтика в России,,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,official region + common aliases
+kgd_39_region,39 регион,region,,,false,false,true,false,false,,,,,kaliningrad_oblast,alias_only,high,true,true,true,https://gov39.ru/vlast/muni/,ambiguous car-code style alias; requires Kaliningrad context
+kgd_kaliningrad,Калининград,city,Калининград,,true,true,true,false,false,,Кёнигсберг;Кенигсберг;Koenigsberg;Königsberg,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_bagrationovsk,Багратионовск,city,Багратионовск,,true,true,true,false,false,,Прейсиш-Эйлау;Preussisch Eylau,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_baltiisk,Балтийск,city,Балтийск,,true,true,true,false,false,,Пиллау;Pillau,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_gvardeisk,Гвардейск,city,Гвардейск,,true,true,true,false,false,,Тапиау;Tapiau,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_gurevsk,Гурьевск,city,Гурьевск,,true,true,true,false,false,,Нойхаузен;Neuhausen,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_gusev,Гусев,city,Гусев,,true,true,true,false,false,,Гумбиннен;Gumbinnen,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_zelenogradsk,Зеленоградск,city,Зеленоградск,,true,true,true,false,false,,Кранц;Cranz,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_krasnoznamensk,Краснознаменск,city,Краснознаменск,,true,true,true,false,false,,Ласденен;Хазельберг;Lasdehnen;Haselberg,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_ladushkin,Ладушкин,city,Ладушкин,,true,true,true,false,false,,Людвигсорт;Ludwigsort,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_mamonovo,Мамоново,city,Мамоново,,true,true,true,false,false,,Хайлигенбайль;Heiligenbeil,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_neman,Неман,city,Неман,,true,true,true,false,false,,Рагнит;Ragnit,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_nesterov,Нестеров,city,Нестеров,,true,true,true,false,false,,Шталлупёнен;Эбенроде;Stallupönen;Ebenrode,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_ozersk,Озёрск,city,Озёрск,,true,true,true,false,false,,Даркемен;Ангерапп;Darkehmen;Angerapp,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_pionerskii,Пионерский,city,Пионерский,,true,true,true,false,false,,Нойкурен;Neukuhren,,,kaliningrad_oblast,core,high,true,true,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_polessk,Полесск,city,Полесск,,true,true,true,false,false,,Лабиау;Labiau,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_pravdinsk,Правдинск,city,Правдинск,,true,true,true,false,false,,Фридланд;Friedland,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_svetlogorsk,Светлогорск,city,Светлогорск,,true,true,true,false,false,,Раушен;Rauschen,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_svetlyi,Светлый,city,Светлый,,true,true,true,false,false,,Циммербуде;Zimmerbude,,,kaliningrad_oblast,core,high,true,true,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_slavsk,Славск,city,Славск,,true,true,true,false,false,,Хайнрихсвальде;Heinrichswalde,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_sovetsk,Советск,city,Советск,,true,true,true,false,false,,Тильзит;Tilsit,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_chernyahovsk,Черняховск,city,Черняховск,,true,true,true,false,false,,Инстербург;Insterburg,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_yantarnyi,Янтарный,city,Янтарный,,true,true,true,false,false,,Пальмникен;Palmnicken,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_kurshskaya_kosa,Куршская коса,spit,Зеленоградский муниципальный округ,,false,false,true,true,false,нацпарк; Балтийское море; Куршский залив,,,,kaliningrad_oblast,tourist,low,true,false,true,https://www.park-kosa.ru/,tourist/nature seed
+kgd_baltiiskaya_kosa,Балтийская коса,spit,Балтийский городской округ,,false,false,true,true,false,,,,,kaliningrad_oblast,tourist,low,true,false,true,https://visit-kaliningrad.ru/,tourist/nature seed
+kgd_vislinskaya_kosa,Вислинская коса,spit,Балтийский городской округ,,false,false,true,true,false,Балтийская коса,,,,kaliningrad_oblast,tourist,low,true,false,true,https://visit-kaliningrad.ru/,tourist/nature seed
+kgd_baltiiskoe_more,Балтийское море,nature_place,,,false,false,true,true,false,,,,,kaliningrad_oblast,tourist,medium,true,true,true,https://visit-kaliningrad.ru/,tourist/nature seed
+kgd_kaliningradskii_zaliv,Калининградский залив,nature_place,,,false,false,true,true,false,,,,,kaliningrad_oblast,tourist,low,true,false,true,https://visit-kaliningrad.ru/,tourist/nature seed
+kgd_kurshskii_zaliv,Куршский залив,nature_place,,,false,false,true,true,false,,,,,kaliningrad_oblast,tourist,low,true,false,true,https://www.park-kosa.ru/,tourist/nature seed
+kgd_vishtynetskoe_ozero,Виштынецкое озеро,lake,Нестеровский муниципальный округ,,false,false,true,true,false,Виштынец; европейский Байкал,,,,kaliningrad_oblast,tourist,low,true,false,true,https://visit-kaliningrad.ru/entertainment/sights/nature/romintenskaya-pushha/,tourist/nature seed
+kgd_vishtynets,Виштынец,route_area,Нестеровский муниципальный округ,,false,false,true,true,false,Виштынецкое озеро,,,,kaliningrad_oblast,tourist,medium,true,true,true,https://visit-kaliningrad.ru/entertainment/sights/nature/romintenskaya-pushha/,tourist/nature seed
+kgd_vishtynetskii_prirodnyi_park,Виштынецкий природный парк,nature_place,Нестеровский муниципальный округ,,false,false,true,true,false,,,,,kaliningrad_oblast,tourist,low,true,false,true,https://visit-kaliningrad.ru/entertainment/sights/nature/romintenskaya-pushha/,tourist/nature seed
+kgd_romintenskaya_puscha,Роминтенская пуща,forest,Нестеровский муниципальный округ,,false,false,true,true,false,Роминтская пуща; Красный лес; Роминта; Роминтен,,,,kaliningrad_oblast,tourist,low,true,false,true,https://visit-kaliningrad.ru/entertainment/sights/nature/romintenskaya-pushha/,tourist/nature seed
+kgd_romintskaya_puscha,Роминтская пуща,forest,Нестеровский муниципальный округ,,false,false,true,true,false,Роминтенская пуща,,,,kaliningrad_oblast,tourist,low,true,false,true,https://visit-kaliningrad.ru/entertainment/sights/nature/romintenskaya-pushha/,tourist/nature seed
+kgd_krasnyi_les,Красный лес,forest,Нестеровский муниципальный округ,,false,false,true,true,false,Роминтенская пуща,,,,kaliningrad_oblast,tourist,medium,true,true,true,https://visit-kaliningrad.ru/entertainment/sights/nature/romintenskaya-pushha/,tourist/nature seed
+kgd_krasnolese,Краснолесье,settlement,Нестеровский муниципальный округ,,false,true,true,false,false,Роминтен; Краснолесье посёлок,,,,kaliningrad_oblast,tourist,low,true,false,true,https://visit-kaliningrad.ru/entertainment/sights/nature/romintenskaya-pushha/,tourist/nature seed
+kgd_rominten,Роминтен,historical_alias,Нестеровский муниципальный округ,,false,true,true,false,true,Краснолесье,,,,kaliningrad_oblast,alias_only,low,true,false,true,https://visit-kaliningrad.ru/entertainment/sights/nature/romintenskaya-pushha/,tourist/nature seed
+kgd_ostrov_kanta,остров Канта,landmark,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_kafedralnyi_sobor,Кафедральный собор,landmark,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,medium,true,true,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_rybnaya_derevnya,Рыбная деревня,landmark,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_verhnee_ozero,Верхнее озеро,lake,Калининград,,false,false,true,true,false,,,,,kaliningrad_city,important,medium,true,true,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_nizhnee_ozero,Нижнее озеро,lake,Калининград,,false,false,true,true,false,,,,,kaliningrad_city,important,medium,true,true,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_amalienau,Амалиенау,microdistrict,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_maraunenhof,Марауненхоф,microdistrict,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_hufen,Хуфен,microdistrict,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_zakhaim,Закхайм,microdistrict,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_ponart,Понарт,microdistrict,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_ratshof,Ратсхоф,microdistrict,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_korolevskie_vorota,Королевские ворота,landmark,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_fridrihsburgskie_vorota,Фридрихсбургские ворота,landmark,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_fridlandskie_vorota,Фридландские ворота,landmark,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_brandenburgskie_vorota,Бранденбургские ворота,landmark,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_rosgartenskie_vorota,Росгартенские ворота,landmark,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_zakhaimskie_vorota,Закхаймские ворота,landmark,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_bashnya_dona,Башня Дона,landmark,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_muzei_yantarya,Музей янтаря,museum,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_muzei_mirovogo_okeana,Музей Мирового океана,museum,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_fort_5,Форт № 5,fort,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_fort_11,Форт № 11,fort,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_kirha_svyatogo_semeistva,кирха Святого Семейства,landmark,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_raion_staryh_vill,район старых вилл,microdistrict,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_villy_amalienau,виллы Амалиенау,microdistrict,Калининград,,false,false,true,false,false,,,,,kaliningrad_city,important,low,true,false,true,https://visit-kaliningrad.ru/,Kaliningrad city landmark seed
+kgd_morskoe,Морское,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,high,true,true,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_rybachii,Рыбачий,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,high,true,true,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_lesnoi,Лесной,nature_place,,,false,false,true,true,false,,,,,kaliningrad_oblast,important,high,true,true,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_dyuna_efa,дюна Эфа,nature_place,,,false,false,true,true,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_vysota_efa,высота Эфа,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_tantsuyuschii_les,Танцующий лес,nature_place,,,false,false,true,true,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_korolevskii_bor,Королевский бор,nature_place,,,false,false,true,true,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_ozero_lebed,озеро Лебедь,nature_place,,,false,false,true,true,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_ornitologicheskaya_stantsiya_fringilla,орнитологическая станция Фрингилла,landmark,,,false,false,true,false,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_stantsiya_fringilla,станция Фрингилла,landmark,,,false,false,true,false,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_malinovka,Малиновка,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,high,true,true,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_kulikovo,Куликово,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,high,true,true,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_sokolniki,Сокольники,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,high,true,true,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_zaostrove,Заостровье,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_pereslavskoe,Переславское,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_primore,Приморье,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,high,true,true,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_otradnoe,Отрадное,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_donskoe,Донское,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_filinskaya_buhta,Филинская бухта,nature_place,,,false,false,true,true,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_yantarnyi_plyazh,Янтарный пляж,nature_place,,,false,false,true,true,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_plyazh_yantarnogo,пляж Янтарного,nature_place,,,false,false,true,true,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_sinyavino,Синявино,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_pokrovskoe,Покровское,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,high,true,true,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_russkoe,Русское,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,high,true,true,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_kruglovo,Круглово,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_krasnotorovka,Красноторовка,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_severnyi_mol,Северный мол,nature_place,,,false,false,true,true,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,baltiysk seed from user-provided v1 list
+kgd_yuzhnyi_mol,Южный мол,nature_place,,,false,false,true,true,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,baltiysk seed from user-provided v1 list
+kgd_krepost_pillau,крепость Пиллау,landmark,,,false,false,true,false,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,baltiysk seed from user-provided v1 list
+kgd_tsitadel_pillau,цитадель Пиллау,landmark,,,false,false,true,false,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,baltiysk seed from user-provided v1 list
+kgd_mayak_baltiiska,маяк Балтийска,landmark,,,false,false,true,false,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,baltiysk seed from user-provided v1 list
+kgd_primorsk,Приморск,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,baltiysk seed from user-provided v1 list
+kgd_divnoe,Дивное,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,high,true,true,true,https://visit-kaliningrad.ru/,baltiysk seed from user-provided v1 list
+kgd_vzmore,Взморье,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,baltiysk seed from user-provided v1 list
+kgd_lyublino,Люблино,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,baltiysk seed from user-provided v1 list
+kgd_chistye_prudy,Чистые Пруды,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,east seed from user-provided v1 list
+kgd_chistoprudnoe,Чистопрудное,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,east seed from user-provided v1 list
+kgd_ilyushino,Илюшино,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,east seed from user-provided v1 list
+kgd_pugachevo,Пугачёво,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,east seed from user-provided v1 list
+kgd_kalinino,Калинино,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,east seed from user-provided v1 list
+kgd_babushkino,Бабушкино,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,east seed from user-provided v1 list
+kgd_nevskoe,Невское,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,high,true,true,true,https://visit-kaliningrad.ru/,east seed from user-provided v1 list
+kgd_chernyshevskoe,Чернышевское,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,east seed from user-provided v1 list
+kgd_tokarevka,Токаревка,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,east seed from user-provided v1 list
+kgd_yasnaya_polyana,Ясная Поляна,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,east seed from user-provided v1 list
+kgd_vishtynetskii_ekologo_istoricheskii_muzei,Виштынецкий эколого-исторический музей,landmark,,,false,false,true,false,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,east seed from user-provided v1 list
+kgd_oleni_mosty,оленьи мосты,landmark,,,false,false,true,false,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,east seed from user-provided v1 list
+kgd_mosty_rominty,мосты Роминты,landmark,,,false,false,true,false,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,east seed from user-provided v1 list
+kgd_rominta,Роминта,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,east seed from user-provided v1 list
+kgd_zheleznodorozhnyi,Железнодорожный,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,south seed from user-provided v1 list
+kgd_druzhba,Дружба,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,south seed from user-provided v1 list
+kgd_domnovo,Домново,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,south seed from user-provided v1 list
+kgd_krylovo,Крылово,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,south seed from user-provided v1 list
+kgd_kurortnoe,Курортное,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,south seed from user-provided v1 list
+kgd_znamensk,Знаменск,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,south seed from user-provided v1 list
+kgd_ushakovo,Ушаково,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,medium,true,true,true,https://visit-kaliningrad.ru/,south seed from user-provided v1 list
+kgd_zamok_tapiau,замок Тапиау,landmark,,,false,false,true,false,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,south seed from user-provided v1 list
+kgd_zamok_insterburg,замок Инстербург,landmark,,,false,false,true,false,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,south seed from user-provided v1 list
+kgd_zamok_ragnit,замок Рагнит,landmark,,,false,false,true,false,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,south seed from user-provided v1 list
+kgd_zamok_valdau,замок Вальдау,landmark,,,false,false,true,false,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,south seed from user-provided v1 list
+kgd_zamok_shaaken,замок Шаакен,landmark,,,false,false,true,false,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,south seed from user-provided v1 list
+kgd_kirha_arnau,кирха Арнау,landmark,,,false,false,true,false,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,south seed from user-provided v1 list
+kgd_kirha_gerdauena,кирха Гердауэна,landmark,,,false,false,true,false,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,south seed from user-provided v1 list
+kgd_shlyuzy_mazurskogo_kanala,шлюзы Мазурского канала,nature_place,,,false,false,true,true,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,south seed from user-provided v1 list
+kgd_mazurskii_kanal,Мазурский канал,nature_place,,,false,false,true,true,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,south seed from user-provided v1 list
+kgd_bolshakovo,Большаково,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,north seed from user-provided v1 list
+kgd_timiryazevo,Тимирязево,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,north seed from user-provided v1 list
+kgd_yasnoe,Ясное,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,high,true,true,true,https://visit-kaliningrad.ru/,north seed from user-provided v1 list
+kgd_gastellovo,Гастеллово,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,north seed from user-provided v1 list
+kgd_zapovednoe,Заповедное,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,north seed from user-provided v1 list
+kgd_golovkino,Головкино,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,north seed from user-provided v1 list
+kgd_mysovka,Мысовка,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,north seed from user-provided v1 list
+kgd_mostovoe,Мостовое,landmark,,,false,false,true,false,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,north seed from user-provided v1 list
+kgd_nemonin,Немонин,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,north seed from user-provided v1 list
+kgd_tavskoe,Тавское,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,north seed from user-provided v1 list
+kgd_tyulenino,Тюленино,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,north seed from user-provided v1 list
+kgd_dyunnoe,Дюнное,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,north seed from user-provided v1 list
+kgd_zalivino,Заливино,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,north seed from user-provided v1 list
+kgd_lugovoe,Луговое,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,high,true,true,true,https://visit-kaliningrad.ru/,north seed from user-provided v1 list
+kgd_vasilkovo,Васильково,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,gurbelt seed from user-provided v1 list
+kgd_maloe_isakovo,Малое Исаково,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,gurbelt seed from user-provided v1 list
+kgd_bolshoe_isakovo,Большое Исаково,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,gurbelt seed from user-provided v1 list
+kgd_hrabrovo,Храброво,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,gurbelt seed from user-provided v1 list
+kgd_orlovka,Орловка,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,gurbelt seed from user-provided v1 list
+kgd_rodniki,Родники,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,gurbelt seed from user-provided v1 list
+kgd_nizove,Низовье,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,gurbelt seed from user-provided v1 list
+kgd_konstantinovka,Константиновка,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,gurbelt seed from user-provided v1 list
+kgd_dobrino,Добрино,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,gurbelt seed from user-provided v1 list
+kgd_matrosovo,Матросово,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,gurbelt seed from user-provided v1 list
+kgd_novosele,Новоселье,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,gurbelt seed from user-provided v1 list
+kgd_lesnoe,Лесное,nature_place,,,false,false,true,true,false,,,,,kaliningrad_oblast,important,medium,true,true,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_kolosovka,Колосовка,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_kovrovo,Коврово,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_romanovo,Романово,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_melnikovo,Мельниково,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_povarovka,Поваровка,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_dorozhnyi,Дорожный,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_ozerki,Озерки,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_krasnoe,Красное,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,high,true,true,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_tishino,Тишино,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_veselovka,Веселовка,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_volochaevskoe,Волочаевское,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_cherepanovo,Черепаново,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_izhevskoe,Ижевское,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_bobrovo,Боброво,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_shosseinoe,Шоссейное,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_nivenskoe,Нивенское,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_vladimirovo,Владимирово,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_kornevo,Корнево,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_pyatidorozhnoe,Пятидорожное,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_medovoe,Медовое,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_pogranichnyi,Пограничный,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_veseloe,Весёлое,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,high,true,true,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_dolgorukovo,Долгоруково,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_pushkarevo,Пушкарёво,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_vysokoe,Высокое,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,high,true,true,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_dobrovolsk,Добровольск,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_pobedino,Победино,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_mayakovskoe,Маяковское,landmark,,,false,false,true,false,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_furmanovo,Фурманово,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_podduby,Поддубы,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_kubanovka,Кубановка,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_maiskoe,Майское,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_filippovka,Филипповка,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_lipovo,Липово,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_olhovatka,Ольховатка,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_pervomaiskoe,Первомайское,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_priozernoe,Приозёрное,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_severnyi,Северный,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,high,true,true,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_yarovoe,Яровое,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_yasnoe_pole,Ясное Поле,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,additional seed from user-provided v1 list
+kgd_pregolya,Преголя,river,Калининград,,false,false,true,true,false,,Прегель,Pregel,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,river and historical-name source-local search seed
+kgd_balga,замок Бальга,landmark,Мамоново,,false,false,true,false,false,Бальга,,Balga,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,castle and historical landmark source-local search seed
+kgd_kurshale,Куршале,landmark,Куршская коса,,false,false,true,false,false,,,Kurshale;Kursale,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,distinctive Curonian Spit source-local search seed; downstream semantic gate remains authoritative
+kgd_talpaki,Талпаки,settlement,Гвардейск,,false,true,true,false,false,,Taplacken;Таплакен,Taplacken,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,distinctive settlement and historical-route source-local search seed

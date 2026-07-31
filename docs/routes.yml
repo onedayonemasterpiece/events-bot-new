@@ -218,6 +218,22 @@ features:
     event_quality_operations: docs/operations/event-quality-release-monitoring.md
     email_operations: docs/operations/email-delivery.md
 
+  region_talk_channel:
+    status: scheduled_runner_rollout
+    docs: docs/features/region-talk-channel/README.md
+    orchestration: docs/features/region-talk-channel/orchestration-to-be.md
+    publication_queue: docs/features/region-talk-channel/publication-queue.md
+    ydb_schema: docs/features/region-talk-channel/ydb-schema.md
+    cron: docs/operations/cron.md
+    entrypoints:
+      - scripts/region_talk_scheduled_runner.py
+      - scripts/region_talk_orchestrator.py
+      - kaggle/execute_region_talk_candidate_report.py
+      - kaggle/execute_region_talk_bge_m3_enrichment.py
+      - kaggle/execute_region_talk_image_diagnostic.py
+      - scripts/region_talk_publication_finalizer.py
+      - scripts/region_talk_goal_notify.py
+
   digests:
     status: implemented
     docs: docs/features/digests/README.md

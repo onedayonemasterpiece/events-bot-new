@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Fixed
+- Region Talk orchestration no longer forwards a nonexistent default `.env` to
+  child launchers in deployed environments that receive secrets directly.
 - Prevented Telegram Monitoring and Smart Update from turning generic
   Kaliningrad-region 80th-anniversary wording into the specific «80 историй о
   главном» campaign; added literal-anchor guards, incident replay coverage and
@@ -11,6 +13,12 @@
 
 ### Added
 
+- Added the Region Talk autonomous production runner and three configurable
+  daily APScheduler slots. The runner chains discovery, E5/BGE fusion, image
+  diagnostics, Gemini finalization and operator-chat delivery with
+  non-interactive credential preflight, single-flight locking, retained JSONL
+  logs, scheduler health and `ops_run` evidence; public TG/VK publishing stays
+  disabled.
 - Integrated the noindex 30-day focus-group product shell into the R15 candidate: fragment onboarding, separate participation state, optional identity intent, installable focus PWA, closed hub, feedback specimens, local interest prototype and the 12-item research Easter-egg collection remain isolated from the ordinary public home.
 - Added a focus-group PWA start controller that returns an active participant to the closed hub while keeping participation independent from personalization reset; the previous 72-hour preview marker is migration input only, never the access period.
 - Added a deterministic self-contained SVG QR and exact visible fragment link

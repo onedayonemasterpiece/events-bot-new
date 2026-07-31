@@ -1,0 +1,287 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenigevents.ru/contracts/region-talk/external-publication-research.v1.schema.json",
+  "title": "Region Talk external publication research result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run", "coverage", "candidates", "excluded", "unresolved", "run_uncertainties"],
+  "properties": {
+    "schema_version": {"const": "region_talk_external_research.v1"},
+    "run": {"$ref": "#/$defs/run"},
+    "coverage": {"type": "array", "items": {"$ref": "#/$defs/coverage"}},
+    "candidates": {"type": "array", "items": {"$ref": "#/$defs/candidate"}},
+    "excluded": {"type": "array", "items": {"$ref": "#/$defs/excluded"}},
+    "unresolved": {"type": "array", "items": {"$ref": "#/$defs/unresolved"}},
+    "run_uncertainties": {"type": "array", "items": {"type": "string", "maxLength": 600}}
+  },
+  "$defs": {
+    "url": {"type": "string", "format": "uri", "pattern": "^https?://", "maxLength": 2000},
+    "nullableUrl": {"anyOf": [{"$ref": "#/$defs/url"}, {"type": "null"}]},
+    "evidenceRefs": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{1,80}$"}},
+    "score": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["score", "reason", "evidence_refs"],
+      "properties": {
+        "score": {"type": "integer", "minimum": 0, "maximum": 4},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 600},
+        "evidence_refs": {"$ref": "#/$defs/evidenceRefs"}
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request_id", "executed_at", "window_start", "window_end", "research_languages", "product_language_policy", "scope_note"],
+      "properties": {
+        "request_id": {"type": "string", "minLength": 1, "maxLength": 160},
+        "executed_at": {"type": "string", "format": "date-time"},
+        "window_start": {"type": "string", "format": "date"},
+        "window_end": {"type": "string", "format": "date"},
+        "research_languages": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z]{2,3}$"}},
+        "product_language_policy": {"enum": ["ru_only", "ru_or_mostly_ru", "multilingual_manual_review"]},
+        "scope_note": {"type": "string", "minLength": 1, "maxLength": 600}
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contour", "queries", "domains_opened", "verified_candidate_count", "notes"],
+      "properties": {
+        "contour": {"enum": ["natural_science", "social_science", "architecture_urbanism", "project_catalog", "history_memory", "film_criticism", "culture_feature", "intellectual_media", "editorial_travel", "other"]},
+        "queries": {"type": "array", "items": {"type": "string", "maxLength": 600}},
+        "domains_opened": {"type": "array", "items": {"type": "string", "maxLength": 255}},
+        "verified_candidate_count": {"type": "integer", "minimum": 0},
+        "notes": {"type": "string", "maxLength": 1000}
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "authors", "source_name", "source_domain", "published_at", "modified_at", "date_precision", "date_basis", "language", "content_type", "access_status"],
+      "properties": {
+        "title": {"type": "string", "minLength": 1, "maxLength": 500},
+        "authors": {"type": "array", "items": {"type": "string", "maxLength": 240}},
+        "source_name": {"type": "string", "minLength": 1, "maxLength": 300},
+        "source_domain": {"type": "string", "minLength": 1, "maxLength": 255},
+        "published_at": {"anyOf": [{"type": "string", "format": "date"}, {"type": "null"}]},
+        "modified_at": {"anyOf": [{"type": "string", "format": "date"}, {"type": "null"}]},
+        "date_precision": {"enum": ["day", "month", "year", "unknown"]},
+        "date_basis": {"enum": ["page_metadata", "issue_metadata", "doi_metadata", "search_snippet", "unknown"]},
+        "language": {"type": "string", "pattern": "^[a-z]{2,3}$"},
+        "content_type": {"enum": ["research_article", "review_article", "architecture_criticism", "project_feature", "historical_essay", "film_criticism", "interview", "essay", "editorial_guide", "cultural_feature", "other"]},
+        "access_status": {"enum": ["full_text", "abstract_only", "paywalled", "partial", "unknown"]}
+      }
+    },
+    "sourceAssessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entity_type", "scope", "externality_basis", "externality_evidence_refs"],
+      "properties": {
+        "entity_type": {"enum": ["journal", "media_brand", "professional_platform", "cultural_platform", "other"]},
+        "scope": {"enum": ["external", "mixed", "regional", "unknown"]},
+        "externality_basis": {"type": "string", "maxLength": 800},
+        "externality_evidence_refs": {"$ref": "#/$defs/evidenceRefs"}
+      }
+    },
+    "regionRelevance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["centrality", "topics", "summary", "evidence_refs"],
+      "properties": {
+        "centrality": {"enum": ["central", "substantial", "secondary", "episodic"]},
+        "topics": {"type": "array", "items": {"type": "string", "maxLength": 160}},
+        "summary": {"type": "string", "minLength": 1, "maxLength": 1200},
+        "evidence_refs": {"$ref": "#/$defs/evidenceRefs"}
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["newsiness", "commerciality", "research_match", "product_policy_match", "language_policy_match", "hard_exclusion_codes", "boundary_flags"],
+      "properties": {
+        "newsiness": {"enum": ["non_news", "analysis_tied_to_current_event", "news", "unknown"]},
+        "commerciality": {"enum": ["independent", "institutional_noncommercial", "sponsored", "sales", "unknown"]},
+        "research_match": {"type": "boolean"},
+        "product_policy_match": {"type": "boolean"},
+        "language_policy_match": {"type": "boolean"},
+        "hard_exclusion_codes": {"type": "array", "uniqueItems": true, "items": {"type": "string", "maxLength": 80}},
+        "boundary_flags": {"type": "array", "uniqueItems": true, "items": {"type": "string", "maxLength": 120}}
+      }
+    },
+    "scholarly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["publication_status", "peer_review_basis", "study_type", "methods_visible", "data_or_sample_scope", "limitations_visible", "funding_disclosed", "conflicts_disclosed", "correction_status", "scientific_caveat"],
+      "properties": {
+        "publication_status": {"enum": ["peer_reviewed", "preprint", "conference", "unknown"]},
+        "peer_review_basis": {"type": ["string", "null"], "maxLength": 600},
+        "study_type": {"enum": ["empirical", "review", "modeling", "case_study", "other", "unknown"]},
+        "methods_visible": {"type": "boolean"},
+        "data_or_sample_scope": {"type": ["string", "null"], "maxLength": 800},
+        "limitations_visible": {"type": "boolean"},
+        "funding_disclosed": {"enum": ["yes", "no", "unknown"]},
+        "conflicts_disclosed": {"enum": ["yes", "no", "unknown"]},
+        "correction_status": {"enum": ["none_found", "corrected", "expression_of_concern", "retracted", "not_checked"]},
+        "scientific_caveat": {"type": ["string", "null"], "maxLength": 1000}
+      }
+    },
+    "editorialDetails": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["byline_present", "original_reporting_or_analysis", "sources_or_method_visible"],
+      "properties": {
+        "byline_present": {"type": "boolean"},
+        "original_reporting_or_analysis": {"type": "boolean"},
+        "sources_or_method_visible": {"type": "boolean"}
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["track", "source_authority", "evidence_depth", "editorial_independence", "originality", "kaliningrad_centrality", "public_interest", "accessibility", "quality_tier", "scholarly_details", "editorial_details"],
+      "properties": {
+        "track": {"enum": ["scholarly", "professional_editorial", "popular_editorial", "reference_or_project_catalog"]},
+        "source_authority": {"$ref": "#/$defs/score"},
+        "evidence_depth": {"$ref": "#/$defs/score"},
+        "editorial_independence": {"$ref": "#/$defs/score"},
+        "originality": {"$ref": "#/$defs/score"},
+        "kaliningrad_centrality": {"$ref": "#/$defs/score"},
+        "public_interest": {"$ref": "#/$defs/score"},
+        "accessibility": {"$ref": "#/$defs/score"},
+        "quality_tier": {"enum": ["strong", "credible", "boundary", "weak", "unknown"]},
+        "scholarly_details": {"anyOf": [{"$ref": "#/$defs/scholarly"}, {"type": "null"}]},
+        "editorial_details": {"anyOf": [{"$ref": "#/$defs/editorialDetails"}, {"type": "null"}]}
+      }
+    },
+    "copySupport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["surface", "sentence_index", "evidence_refs"],
+      "properties": {
+        "surface": {"enum": ["teaser", "source_overview", "reader_takeaway", "why_selected", "caveat"]},
+        "sentence_index": {"type": "integer", "minimum": 0},
+        "evidence_refs": {"$ref": "#/$defs/evidenceRefs"}
+      }
+    },
+    "editorialPack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title_short", "teaser", "source_overview", "reader_takeaway", "why_selected", "caveat", "copy_support"],
+      "properties": {
+        "title_short": {"type": "string", "minLength": 1, "maxLength": 180},
+        "teaser": {"type": "string", "minLength": 1, "maxLength": 800},
+        "source_overview": {"type": "string", "minLength": 1, "maxLength": 600},
+        "reader_takeaway": {"type": "string", "minLength": 1, "maxLength": 500},
+        "why_selected": {"type": "string", "minLength": 1, "maxLength": 600},
+        "caveat": {"type": ["string", "null"], "maxLength": 500},
+        "copy_support": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/copySupport"}}
+      }
+    },
+    "media": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["media_gate_status", "rights_policy", "license", "media_reuse_allowed", "candidate_urls", "evidence_refs"],
+      "properties": {
+        "media_gate_status": {"enum": ["not_evaluated", "strong", "weak", "none", "unknown"]},
+        "rights_policy": {"enum": ["link_only", "reuse_verified", "unknown", "blocked"]},
+        "license": {"type": ["string", "null"], "maxLength": 300},
+        "media_reuse_allowed": {"type": "boolean"},
+        "candidate_urls": {"type": "array", "items": {"$ref": "#/$defs/url"}, "maxItems": 10},
+        "evidence_refs": {"$ref": "#/$defs/evidenceRefs"}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_id", "supports", "url", "page_role", "retrieved_at", "location_hint", "paraphrase", "quote_short"],
+      "properties": {
+        "evidence_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{1,80}$"},
+        "supports": {"type": "array", "items": {"type": "string", "maxLength": 100}},
+        "url": {"$ref": "#/$defs/url"},
+        "page_role": {"enum": ["primary_article", "source_about", "journal_policy", "doi_record", "correction_or_retraction_record", "other"]},
+        "retrieved_at": {"type": "string", "format": "date-time"},
+        "location_hint": {"type": "string", "maxLength": 300},
+        "paraphrase": {"type": "string", "minLength": 1, "maxLength": 600},
+        "quote_short": {"type": ["string", "null"], "maxLength": 240}
+      }
+    },
+    "uncertainty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "severity", "reason", "required_manual_check", "evidence_refs"],
+      "properties": {
+        "field": {"type": "string", "maxLength": 160},
+        "severity": {"enum": ["low", "medium", "high"]},
+        "reason": {"type": "string", "maxLength": 600},
+        "required_manual_check": {"type": "string", "maxLength": 600},
+        "evidence_refs": {"$ref": "#/$defs/evidenceRefs"}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["research_decision", "downstream_readiness", "reason_codes", "reason_short"],
+      "properties": {
+        "research_decision": {"enum": ["candidate", "needs_review", "exclude"]},
+        "downstream_readiness": {"enum": ["candidate_report", "manual_review_required", "blocked"]},
+        "reason_codes": {"type": "array", "items": {"type": "string", "maxLength": 100}},
+        "reason_short": {"type": "string", "maxLength": 600}
+      }
+    },
+    "related": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["duplicate_of", "primary_source_url", "syndicated_or_commentary_urls"],
+      "properties": {
+        "duplicate_of": {"type": ["string", "null"], "maxLength": 2000},
+        "primary_source_url": {"$ref": "#/$defs/url"},
+        "syndicated_or_commentary_urls": {"type": "array", "items": {"$ref": "#/$defs/url"}}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canonical_url", "doi", "publication", "source_assessment", "region_relevance", "policy_classification", "quality_assessment", "editorial_pack", "media_and_rights", "evidence", "uncertainties", "decision", "related_items"],
+      "properties": {
+        "canonical_url": {"$ref": "#/$defs/url"},
+        "doi": {"type": ["string", "null"], "maxLength": 300},
+        "publication": {"$ref": "#/$defs/publication"},
+        "source_assessment": {"$ref": "#/$defs/sourceAssessment"},
+        "region_relevance": {"$ref": "#/$defs/regionRelevance"},
+        "policy_classification": {"$ref": "#/$defs/policy"},
+        "quality_assessment": {"$ref": "#/$defs/quality"},
+        "editorial_pack": {"$ref": "#/$defs/editorialPack"},
+        "media_and_rights": {"$ref": "#/$defs/media"},
+        "evidence": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/evidence"}},
+        "uncertainties": {"type": "array", "items": {"$ref": "#/$defs/uncertainty"}},
+        "decision": {"$ref": "#/$defs/decision"},
+        "related_items": {"$ref": "#/$defs/related"}
+      }
+    },
+    "excluded": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canonical_url", "title", "source_name", "reason_codes", "reason_short", "checked_at", "evidence"],
+      "properties": {
+        "canonical_url": {"$ref": "#/$defs/url"},
+        "title": {"type": "string", "maxLength": 500},
+        "source_name": {"type": "string", "maxLength": 300},
+        "reason_codes": {"type": "array", "minItems": 1, "items": {"type": "string", "maxLength": 100}},
+        "reason_short": {"type": "string", "maxLength": 600},
+        "checked_at": {"type": "string", "format": "date-time"},
+        "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}}
+      }
+    },
+    "unresolved": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "title_guess", "blocking_unknowns", "next_check"],
+      "properties": {
+        "url": {"$ref": "#/$defs/url"},
+        "title_guess": {"type": "string", "maxLength": 500},
+        "blocking_unknowns": {"type": "array", "minItems": 1, "items": {"type": "string", "maxLength": 160}},
+        "next_check": {"type": "string", "maxLength": 600}
+      }
+    }
+  }
+}

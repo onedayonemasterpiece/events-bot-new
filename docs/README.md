@@ -25,6 +25,7 @@
   - дефолты APScheduler: `scheduling.py`
   - production overrides: `fly.toml` (`[env]`)
   - локальный/env шаблон: `.env.example`
+- Region Talk / «О Калининграде говорят»: `docs/features/region-talk-channel/README.md`
 - Telegram link inspection через Telethon: `docs/operations/telegram-link-inspection.md`
 - LLM: `docs/llm/` (промпты, формат запросов, классификатор тем)
 - Справочники: `docs/reference/` (локации, праздники, шаблоны)

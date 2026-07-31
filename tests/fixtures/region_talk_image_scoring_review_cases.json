@@ -1,0 +1,89 @@
+{
+  "fixture_version": "region_talk_image_scoring_review_cases_v1_2026_07_14",
+  "unit_of_evaluation": "post_or_album",
+  "copyrighted_media_included": false,
+  "notes": [
+    "Operator labels are stronger than model scores and are locked regression outcomes.",
+    "Compliance exclusions are not negative examples for the image-quality model.",
+    "Album image counts were verified from exact source posts during the 2026-07-14 audit."
+  ],
+  "operator_confirmed_positive_regressions": [
+    {
+      "post_url": "https://t.me/arkhlikbez/65432",
+      "source_key": "telegram:arkhlikbez",
+      "album_image_count": 10,
+      "expected_post_decision": "accept_strong",
+      "must_not_be_terminal_quality_reject": true,
+      "operator_verdict": "very_good_must_not_be_rejected",
+      "overall_media_score": 0.384,
+      "clip_postcardness_score": 0.002,
+      "laion_aesthetic_score": 0.406,
+      "nima_quality_score": 0.521,
+      "cv_overall_media_score": 0.606,
+      "technical_quality_score": 0.706,
+      "model_disagreement_score": 0.218
+    },
+    {
+      "post_url": "https://t.me/arkhlikbez/65489",
+      "source_key": "telegram:arkhlikbez",
+      "album_image_count": 6,
+      "expected_post_decision": "accept_strong",
+      "must_not_be_terminal_quality_reject": true,
+      "operator_verdict": "good_must_not_be_rejected",
+      "overall_media_score": 0.501,
+      "clip_postcardness_score": 0.512,
+      "laion_aesthetic_score": 0.361,
+      "nima_quality_score": 0.495,
+      "cv_overall_media_score": 0.637,
+      "technical_quality_score": 0.732
+    },
+    {
+      "post_url": "https://t.me/routecommunity/1342",
+      "source_key": "telegram:routecommunity",
+      "album_image_count": 10,
+      "expected_post_decision": "accept_strong",
+      "must_not_be_terminal_quality_reject": true,
+      "operator_verdict": "strong_photographs",
+      "overall_media_score": 0.518,
+      "clip_postcardness_score": 0.240,
+      "laion_aesthetic_score": 0.689,
+      "nima_quality_score": 0.471,
+      "cv_overall_media_score": 0.672,
+      "technical_quality_score": 0.701,
+      "audit_note": "The scored anchor contains cars; later frames contain dunes, sea, coast and lighthouse."
+    },
+    {
+      "post_url": "https://t.me/figarotravel/7491",
+      "source_key": "telegram:figarotravel",
+      "album_image_count": 5,
+      "expected_post_decision": "accept_mixed_diverse",
+      "must_not_be_terminal_quality_reject": true,
+      "operator_verdict": "mixed_but_useful_diverse_region_view",
+      "overall_media_score": 0.604,
+      "clip_postcardness_score": 0.923,
+      "laion_aesthetic_score": 0.475,
+      "nima_quality_score": 0.436,
+      "cv_overall_media_score": 0.582,
+      "technical_quality_score": 0.679
+    }
+  ],
+  "pre_scoring_compliance_exclusions": [
+    {
+      "source_key": "telegram:meduzalive",
+      "source_url": "https://t.me/meduzalive",
+      "expected_source_decision": "deny_no_spend",
+      "decision_basis": "official_foreign_agent_exact_resource_and_undesirable_entity",
+      "must_not_be_used_as_image_negative": true
+    },
+    {
+      "source_key": "telegram:imnotbozhena",
+      "source_url": "https://t.me/imnotbozhena",
+      "expected_source_decision": "deny_no_spend",
+      "decision_basis": "manual_editorial_source_block",
+      "official_foreign_agent_match": false,
+      "official_extremist_match": false,
+      "identity_resolution": "anonymous_author_commercial_operator_only",
+      "must_not_be_used_as_image_negative": true
+    }
+  ]
+}

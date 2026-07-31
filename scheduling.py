@@ -2706,6 +2706,7 @@ def runtime_health_status() -> dict[str, Any]:
     vk_auto_import_enabled = _env_enabled("ENABLE_VK_AUTO_IMPORT", default=False)
     email_worker_enabled = _env_enabled("ENABLE_EMAIL_OUTBOX_WORKER", default=False)
     email_monitor_enabled = _env_enabled("ENABLE_EMAIL_OUTBOX_MONITOR", default=False)
+    region_talk_enabled = _env_enabled("ENABLE_REGION_TALK_SCHEDULED", default=False)
     critical_watchdog_enabled = (
         tg_monitoring_enabled or guide_enabled or vk_auto_import_enabled
     )
@@ -2717,6 +2718,7 @@ def runtime_health_status() -> dict[str, Any]:
         "vk_auto_import": "disabled",
         "email_outbox_worker": "disabled",
         "email_outbox_monitor": "disabled",
+        "region_talk": "disabled",
         "video_tomorrow": "disabled",
         "video_popular_review": "disabled",
         "video_popular_review_watchdog": "disabled",
@@ -2745,6 +2747,8 @@ def runtime_health_status() -> dict[str, Any]:
             payload["email_outbox_worker"] = "missing_scheduler"
         if email_monitor_enabled:
             payload["email_outbox_monitor"] = "missing_scheduler"
+        if region_talk_enabled:
+            payload["region_talk"] = "missing_scheduler"
         if guide_enabled:
             payload["guide_excursions_light"] = "missing_scheduler"
             payload["guide_excursions_full"] = "missing_scheduler"
@@ -2791,6 +2795,36 @@ def runtime_health_status() -> dict[str, Any]:
 
     if email_monitor_enabled:
         _set_job_health("email_outbox_monitor", "email_outbox_monitor")
+
+    if region_talk_enabled:
+        try:
+            jobs = list(scheduler.get_jobs()) if hasattr(scheduler, "get_jobs") else []
+        except Exception:
+            jobs = []
+            payload["region_talk"] = "lookup_error"
+        if jobs or payload.get("region_talk") != "lookup_error":
+            region_jobs = [
+                job for job in jobs if str(getattr(job, "id", "")).startswith("region_talk_")
+            ]
+            if not region_jobs:
+                idx = 0
+                while True:
+                    try:
+                        job = scheduler.get_job(f"region_talk_{idx}")
+                    except Exception:
+                        job = None
+                    if job is None:
+                        break
+                    region_jobs.append(job)
+                    idx += 1
+            region_next = [_job_next_run(job) for job in region_jobs]
+            region_next = [value for value in region_next if value is not None]
+            payload["region_talk"] = "ok" if region_next else "missing"
+            if region_next:
+                first_next = min(region_next)
+                payload["region_talk_next_run"] = (
+                    first_next.isoformat() if hasattr(first_next, "isoformat") else str(first_next)
+                )
 
     if vk_auto_import_enabled:
         try:
@@ -3381,6 +3415,7 @@ _HEAVY_JOB_IDS: set[str] = {
     "telegraph_cache_sanitize",
     "vk_post_prune",
     "event_vector_sync",
+    "region_talk",
 }
 
 _OPS_RUN_KIND_BY_JOB_ID: dict[str, str] = {
@@ -3391,6 +3426,7 @@ _OPS_RUN_KIND_BY_JOB_ID: dict[str, str] = {
     "guide_visual_digest": "guide_visual_digest",
     "source_parsing": "parse",
     "source_parsing_day": "parse",
+    "region_talk": "region_talk",
 }
 
 
@@ -3813,6 +3849,84 @@ def startup(
             )
     else:
         logging.info("SCHED skipping core schedulers (ENABLE_CORE_SCHEDULERS!=1)")
+
+    if _env_enabled("ENABLE_REGION_TALK_SCHEDULED", default=False):
+        from scripts.region_talk_scheduled_runner import run_region_talk_scheduled
+
+        async def region_talk_scheduler(
+            db_obj,
+            bot_obj,
+            *,
+            run_id: str | None = None,
+        ) -> None:
+            result = await run_region_talk_scheduled(
+                db_obj,
+                bot_obj,
+                scheduler_run_id=run_id,
+            )
+            if not result.get("ok") and result.get("status") != "skipped":
+                logging.error("region_talk scheduled cycle failed result=%s", result)
+
+        times_raw = os.getenv(
+            "REGION_TALK_TIMES_LOCAL", "06:20,13:20,21:20"
+        )
+        tz_name = os.getenv("REGION_TALK_TZ", "Europe/Kaliningrad")
+        tz = _safe_zoneinfo(tz_name, label="REGION_TALK_TZ")
+        try:
+            misfire_grace = max(
+                60,
+                min(
+                    7200,
+                    int((os.getenv("REGION_TALK_MISFIRE_GRACE_SECONDS") or "1800").strip()),
+                ),
+            )
+        except ValueError:
+            misfire_grace = 1800
+        registered_times: set[tuple[int, int]] = set()
+        for idx, value in enumerate(times_raw.split(",")):
+            value = value.strip()
+            if not value:
+                continue
+            try:
+                hour, minute = map(int, value.split(":"))
+                if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                    raise ValueError
+            except ValueError:
+                logging.warning("invalid REGION_TALK_TIMES_LOCAL entry: %s", value)
+                continue
+            if (hour, minute) in registered_times:
+                logging.warning("duplicate REGION_TALK_TIMES_LOCAL entry ignored: %s", value)
+                continue
+            registered_times.add((hour, minute))
+            local_run = datetime.now(tz).replace(
+                hour=hour,
+                minute=minute,
+                second=0,
+                microsecond=0,
+            )
+            utc_run = local_run.astimezone(timezone.utc)
+            physical_job_id = f"region_talk_{idx}"
+            _register_job(
+                physical_job_id,
+                _job_wrapper(
+                    "region_talk",
+                    region_talk_scheduler,
+                    notify_skip=_notify_admin_skip,
+                ),
+                "cron",
+                id=physical_job_id,
+                hour=str(utc_run.hour),
+                minute=str(utc_run.minute),
+                args=[db, bot],
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=misfire_grace,
+            )
+        if not registered_times:
+            logging.error("SCHED Region Talk enabled but no valid REGION_TALK_TIMES_LOCAL entries")
+    else:
+        logging.info("SCHED skipping Region Talk autonomy (ENABLE_REGION_TALK_SCHEDULED!=1)")
 
     if _env_enabled("ENABLE_EMAIL_OUTBOX_WORKER", default=False):
         from email_control.scheduler import run_email_outbox_worker

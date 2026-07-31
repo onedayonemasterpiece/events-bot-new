@@ -47,9 +47,12 @@ def test_scheduler_and_extract_do_not_import_main(monkeypatch):
         pass
 
     class DummyJob:
-        def __init__(self, job_id: str) -> None:
+        def __init__(self, job_id: str, *, trigger=None, args=None, kwargs=None) -> None:
             self.id = job_id
             self.next_run_time = None
+            self.trigger = trigger
+            self.args = args
+            self.kwargs = kwargs or {}
 
     class DummyScheduler:
         def __init__(self, executors=None, timezone=None):
@@ -63,7 +66,7 @@ def test_scheduler_and_extract_do_not_import_main(monkeypatch):
             self.job_defaults = job_defaults
 
         def add_job(self, func, trigger, id, args=None, **kwargs):
-            job = DummyJob(id)
+            job = DummyJob(id, trigger=trigger, args=args, kwargs=kwargs)
             self.jobs[id] = job
             return job
 
@@ -82,6 +85,9 @@ def test_scheduler_and_extract_do_not_import_main(monkeypatch):
     monkeypatch.setattr(scheduling, "AsyncIOExecutor", lambda: DummyExecutor())
     monkeypatch.setattr(scheduling, "AsyncIOScheduler", DummyScheduler)
     monkeypatch.setattr(scheduling, "_scheduler", None)
+    monkeypatch.setenv("ENABLE_REGION_TALK_SCHEDULED", "1")
+    monkeypatch.setenv("REGION_TALK_TIMES_LOCAL", "06:20,13:20,21:20")
+    monkeypatch.setenv("REGION_TALK_TZ", "Europe/Kaliningrad")
 
     try:
         scheduler = scheduling.startup(
@@ -97,6 +103,11 @@ def test_scheduler_and_extract_do_not_import_main(monkeypatch):
         )
         assert isinstance(scheduler, DummyScheduler)
         assert "main" not in sys.modules
+        assert {"region_talk_0", "region_talk_1", "region_talk_2"} <= set(scheduler.jobs)
+        assert scheduler.jobs["region_talk_0"].kwargs["hour"] == "4"
+        assert scheduler.jobs["region_talk_0"].kwargs["minute"] == "20"
+        assert "region_talk" in scheduling._HEAVY_JOB_IDS
+        assert scheduling._ops_run_kind_for_job("region_talk") == "region_talk"
 
         tz = ZoneInfo("UTC")
         ts_hint = vk_intake.extract_event_ts_hint("завтра", tz=tz)
@@ -577,6 +588,39 @@ def test_runtime_health_status_reports_critical_monitoring_jobs(monkeypatch):
     assert "critical_scheduler_watchdog_next_run" in payload
     assert "tg_monitoring_next_run" in payload
     assert "vk_auto_import_next_run" in payload
+
+
+def test_runtime_health_status_reports_region_talk_jobs(monkeypatch):
+    monkeypatch.setenv("ENABLE_REGION_TALK_SCHEDULED", "1")
+    monkeypatch.setenv("DEV_MODE", "1")
+
+    class Job:
+        def __init__(self, job_id: str) -> None:
+            self.id = job_id
+            self.next_run_time = datetime(2026, 7, 31, 19, 20, tzinfo=timezone.utc)
+
+    class Scheduler:
+        running = True
+
+        def __init__(self) -> None:
+            self.jobs = {
+                "region_talk_0": Job("region_talk_0"),
+                "region_talk_1": Job("region_talk_1"),
+                "region_talk_2": Job("region_talk_2"),
+            }
+
+        def get_job(self, job_id: str):
+            return self.jobs.get(job_id)
+
+        def get_jobs(self):
+            return list(self.jobs.values())
+
+    monkeypatch.setattr(scheduling, "_scheduler", Scheduler())
+
+    payload = scheduling.runtime_health_status()
+
+    assert payload["region_talk"] == "ok"
+    assert payload["region_talk_next_run"] == "2026-07-31T19:20:00+00:00"
 
 
 def test_runtime_health_status_reports_email_worker_and_monitor(monkeypatch):
