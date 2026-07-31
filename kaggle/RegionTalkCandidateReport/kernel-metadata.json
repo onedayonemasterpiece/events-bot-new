@@ -1,0 +1,18 @@
+{
+  "id": "zigomaro/region-talk-candidate-report",
+  "title": "Region Talk Candidate Report",
+  "code_file": "region_talk_candidate_report.py",
+  "language": "python",
+  "kernel_type": "script",
+  "events_bot_disable_status_instrumentation": true,
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "model_sources": [
+    "ranaabdulrehman145/intfloatmultilingual-e5-base/Transformers/default/1"
+  ],
+  "kernel_sources": [],
+  "slug": "region-talk-candidate-report"
+}

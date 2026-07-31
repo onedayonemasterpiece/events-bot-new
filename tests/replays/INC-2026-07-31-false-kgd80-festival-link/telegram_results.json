@@ -1,0 +1,60 @@
+{
+  "schema_version": 2,
+  "run_id": "INC-2026-07-31-false-kgd80-festival-link-replay",
+  "generated_at": "2026-07-31T10:00:00+00:00",
+  "stats": {
+    "sources_total": 1,
+    "messages_scanned": 2,
+    "messages_with_events": 2,
+    "events_extracted": 2
+  },
+  "messages": [
+    {
+      "source_username": "kldevents",
+      "source_title": "Калининград: мероприятия",
+      "message_id": 2988,
+      "message_date": "2026-07-30T21:26:00+00:00",
+      "source_link": "https://t.me/kldevents/2988",
+      "text": "🤝 Встреча «Портрет на фоне города»\n\n5 августа в 15:00 состоится встреча, приуроченная к 80-летию образования Калининградской области.\n\nЗеленоградская городская библиотека, ул. Ленина, 1.",
+      "events": [
+        {
+          "title": "Встреча «Портрет на фоне города»",
+          "date": "2026-08-05",
+          "time": "15:00",
+          "location_name": "Зеленоградская городская библиотека",
+          "location_address": "ул. Ленина, 1",
+          "city": "Зеленоградск",
+          "event_type": "встреча",
+          "festival": "80 историй о главном"
+        }
+      ]
+    },
+    {
+      "source_username": "kldevents",
+      "source_title": "Калининград: мероприятия",
+      "message_id": 2990,
+      "message_date": "2026-07-30T21:30:00+00:00",
+      "source_link": "https://t.me/kldevents/2990",
+      "text": "Лекция «История здравоохранения»\n\n19 августа в 18:30. Событие проходит в рамках фестиваля «80 историй о главном».\n\nИсторико-художественный музей.\n#80_историй_о_главном",
+      "links": [
+        {
+          "url": "https://kgd80.ru/sobytiya/istoriya-zdravoohraneniya/",
+          "text": "Регистрация",
+          "source": "entity"
+        }
+      ],
+      "events": [
+        {
+          "title": "Лекция «История здравоохранения»",
+          "date": "2026-08-19",
+          "time": "18:30",
+          "location_name": "Историко-художественный музей",
+          "location_address": "ул. Клиническая, 21",
+          "city": "Калининград",
+          "event_type": "лекция",
+          "festival": "80 историй о главном"
+        }
+      ]
+    }
+  ]
+}

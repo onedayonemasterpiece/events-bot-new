@@ -27,6 +27,20 @@ To avoid parallel long-running operations (especially **manual** starts overlapp
 
 VK crawling runs six times per day by default at `05:15`, `09:15`, `13:15`, `17:15`, `21:15` and `22:45` Europe/Kaliningrad time (`VK_CRAWL_TIMES_LOCAL` / `VK_CRAWL_TZ`).
 
+Region Talk autonomous discovery is opt-in via
+`ENABLE_REGION_TALK_SCHEDULED=1`. It runs at `06:20`, `13:20`, and `21:20`
+Europe/Kaliningrad by default (`REGION_TALK_TIMES_LOCAL` / `REGION_TALK_TZ`).
+Each slot invokes the bounded queue orchestrator chain through
+`scripts/region_talk_scheduled_runner.py`; it has a cross-process lock, strict
+non-interactive credential preflight, 14-day JSONL log retention and
+`ops_run(kind='region_talk')` evidence. Scheduler health reports the earliest
+next Region Talk slot. The job sends accepted candidates only to the prepared
+operator chat and does not enable target-channel publishing. It is deliberately
+outside the legacy global heavy-job gate: CandidateReport/ImageDiagnostic use
+dedicated `DISCOVERY1`/`DISCOVERY2` sessions and every Region Talk resource has
+its own kernel/lock guard, so an unrelated long render cannot starve all three
+daily discovery slots.
+
 ## Observed runtimes (local runs)
 
 Numbers below are from `ops_run` snapshots + local `/parse` logs (p50/p90/max). Use them to spread heavy jobs across the day.

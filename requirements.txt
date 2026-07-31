@@ -23,6 +23,8 @@ PyYAML>=6.0
 telethon>=1.34.0  # E2E testing with real Telegram accounts
 cryptography>=41.0.0  # encrypted Telegram Business connection cache
 PyJWT==2.10.1  # short-lived Yandex IAM tokens for the Postbox worker
+openpyxl>=3.1.5  # Excel-safe Region Talk review exports
+ydb[yc]>=3.31.2  # non-interactive Region Talk YDB runtime
 
 
 # Google AI (Gemma) client (used by Smart Update / monitoring / video checks).

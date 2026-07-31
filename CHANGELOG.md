@@ -3,6 +3,26 @@
 ## [Unreleased]
 
 ### Fixed
+- Region Talk Kaggle workers now install the pinned core YDB SDK rather than
+  the unnecessary `yc` extra and exchange their authorized-key JWT through the
+  official IAM REST endpoint, preventing runtime replacement of Kaggle's
+  preloaded cryptography/protobuf stack during service-account authentication.
+- Region Talk Kaggle script kernels now opt out of the shared sibling-file
+  status wrapper: Kaggle uploads only the configured `code_file` body, while
+  these self-contained workers already emit their own durable YDB heartbeats.
+- Region Talk orchestration no longer forwards a nonexistent default `.env` to
+  child launchers in deployed environments that receive secrets directly.
+- Region Talk's production wrapper now exposes one canonical CLI for supervised
+  diagnostics and a redacted `--preflight-only` mode instead of requiring an
+  ad-hoc Python invocation on Fly; absolute-path execution also bootstraps the
+  repository import root before loading `ops_run`.
+- Region Talk no-wait launchers now proactively delete expired private input
+  datasets before each Candidate/BGE/Image launch, rather than waiting for a
+  future Kaggle quota error to trigger emergency cleanup.
+- Prevented Telegram Monitoring and Smart Update from turning generic
+  Kaliningrad-region 80th-anniversary wording into the specific «80 историй о
+  главном» campaign; added literal-anchor guards, incident replay coverage and
+  a production association-audit contract.
 - Focus-group private routes now add `nosnippet` in immutable secret-candidate builds, satisfying the candidate-wide robots contract without changing production root indexing.
 
 ### Added
@@ -41,6 +61,13 @@
   `60 / 100000 / 100` provider quota) and documented the first bounded
   Interactions API festival-research probe, including incomplete-budget and
   provenance-review guardrails.
+- Added the Region Talk autonomous production runner and three configurable
+  daily APScheduler slots. The runner chains discovery, E5/BGE fusion, image
+  diagnostics, Gemini finalization and operator-chat delivery with
+  non-interactive credential preflight, single-flight locking, retained JSONL
+  logs, scheduler health, resource-specific session/kernel guards and `ops_run`
+  evidence; unrelated global heavy jobs cannot starve all discovery slots, and
+  public TG/VK publishing stays disabled.
 - Integrated the noindex 30-day focus-group product shell into the R15 candidate: fragment onboarding, separate participation state, optional identity intent, installable focus PWA, closed hub, feedback specimens, local interest prototype and the 12-item research Easter-egg collection remain isolated from the ordinary public home.
 - Added a focus-group PWA start controller that returns an active participant to the closed hub while keeping participation independent from personalization reset; the previous 72-hour preview marker is migration input only, never the access period.
 - Added a deterministic self-contained SVG QR and exact visible fragment link

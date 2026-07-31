@@ -18,6 +18,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-31-false-kgd80-festival-link.md`
+  - Scope: source-grounded KGD80 association in Telegram Monitoring, Smart
+    Update, festival queue and all event public surfaces.
+  - Must not regress: generic «80-летие Калининградской области» wording cannot
+    become «80 историй о главном» without the literal campaign name/hashtag,
+    `kgd80.ru` or an explicit curated festival-source binding; closure includes
+    a full production association audit and repair of every published surface.
+
 - `INC-2026-07-27-pwa-presentation-install-missing.md`
   - Scope: production root, web app manifest/icons, Android
     `beforeinstallprompt`, `?install=presentation`, Object Storage root publish.

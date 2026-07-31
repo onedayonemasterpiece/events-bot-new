@@ -31,6 +31,7 @@ from event_age_rating import (
     declared_structured_decision,
     reconcile_age_decision,
 )
+from festival_grounding import ground_kgd80_festival
 from location_reference import (
     find_known_venue_in_text,
     normalise_event_location_from_reference,
@@ -14844,6 +14845,41 @@ async def _smart_event_update_impl(
     canonical_ticket_link = canonicalize_tg_url(candidate.ticket_link)
     if canonical_ticket_link:
         candidate.ticket_link = canonical_ticket_link
+    grounded_festival, dropped_kgd80 = ground_kgd80_festival(
+        candidate.festival,
+        source_evidence=(
+            candidate.source_text,
+            candidate.raw_excerpt,
+            candidate.occurrence_scope_text,
+            candidate.source_url,
+            candidate.ticket_link,
+            candidate.festival_dedup_links,
+            candidate.links_payload,
+            [
+                {
+                    "ocr_text": poster.ocr_text,
+                    "ocr_title": poster.ocr_title,
+                    "url": poster.url,
+                }
+                for poster in (candidate.posters or [])
+            ],
+        ),
+        curated_festival_series=(
+            candidate.festival_series if candidate.festival_source else None
+        ),
+    )
+    if dropped_kgd80:
+        logger.warning(
+            "smart_update: dropped ungrounded KGD80 festival source_type=%s source_url=%s title=%s",
+            candidate.source_type,
+            candidate.source_url,
+            _clip_title(candidate.title),
+        )
+        candidate.festival = None
+        if (candidate.festival_context or "").strip().lower() == "event_with_festival":
+            candidate.festival_context = None
+    else:
+        candidate.festival = grounded_festival
     logger.info(
         "smart_update.start source_type=%s source_url=%s title=%s date=%s time=%s location=%s city=%s posters=%d trust=%s festival_context=%s festival=%s festival_full=%s festival_source=%s festival_series=%s",
         candidate.source_type,

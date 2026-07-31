@@ -18,6 +18,7 @@ from sqlalchemy.exc import OperationalError
 
 from db import Database
 from event_utils import strip_city_from_address
+from festival_grounding import ground_kgd80_festival
 from location_reference import (
     find_known_venue_in_text,
     match_known_venue,
@@ -265,6 +266,30 @@ def _coerce_optional_text(value: Any) -> str | None:
         return None
     raw = str(value).strip()
     return raw or None
+
+
+def _ground_extracted_festival(
+    festival: Any,
+    *,
+    source_payloads: tuple[Any, ...],
+    source_username: str,
+    message_id: int | None,
+    title: Any,
+    curated_festival_series: str | None = None,
+) -> str | None:
+    value, dropped = ground_kgd80_festival(
+        festival,
+        source_evidence=source_payloads,
+        curated_festival_series=curated_festival_series,
+    )
+    if dropped:
+        logger.warning(
+            "telegram: dropped ungrounded KGD80 festival source=%s message_id=%s title=%r",
+            source_username,
+            message_id,
+            title,
+        )
+    return value
 
 
 def _should_skip_past_event_candidate(candidate: EventCandidate, *, today: date | None = None) -> bool:
@@ -4756,6 +4781,28 @@ def _build_candidate(
         }
     )
 
+    festival = _ground_extracted_festival(
+        event_data.get("festival"),
+        source_payloads=(
+            message_text_s,
+            event_source_text_raw,
+            event_source_text,
+            raw_excerpt,
+            ocr_source_text,
+            message.get("links"),
+            assigned_posters_payload,
+            message_posters_payload,
+        ),
+        source_username=username,
+        message_id=message_id,
+        title=title,
+        curated_festival_series=(
+            (getattr(source, "festival_series", None) or "").strip()
+            if bool(getattr(source, "festival_source", False))
+            else None
+        ),
+    )
+
     return EventCandidate(
         source_type="telegram",
         source_url=source_link or None,
@@ -4765,7 +4812,7 @@ def _build_candidate(
         time=str(time_raw).strip() if time_raw else "",
         time_is_default=bool(time_is_default),
         end_date=str(end_date).strip() if end_date else None,
-        festival=_coerce_optional_text(event_data.get("festival")),
+        festival=festival,
         festival_source=bool(getattr(source, "festival_source", False)),
         festival_series=(getattr(source, "festival_series", None) or "").strip() or None,
         location_name=str(location_name).strip() if location_name else None,
