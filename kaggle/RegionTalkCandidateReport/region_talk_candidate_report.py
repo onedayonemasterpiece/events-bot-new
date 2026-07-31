@@ -2575,6 +2575,7 @@ IMAGE_QUEUE_STATE_FIELDS = [
     "post_url", "platform_post_key", "source_id", "source_title", "source_url", "post_date",
     "platform", "canonical_source_key", "content_origin_type", "publication_content_type", "publication_language", "external_publication_id",
     "external_research_quality_score", "source_overview", "diversity_topics", "rights_policy", "media_use_policy", "media_reuse_allowed",
+    "research_policy_classification", "research_decision", "external_research_policy_attestation_version",
     "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
     "source_surface_filter_reason", "monitoring_exclusion_reason",
     "text_region_confirmation_status", "kaliningrad_oblast_only_scope", "kaliningrad_mention_role",
@@ -2634,6 +2635,7 @@ CANDIDATE_MEMORY_STATE_FIELDS = [
     "candidate_memory_id", "post_id", "source_id", "source_title", "platform", "post_url", "post_date",
     "canonical_source_key", "content_origin_type", "publication_content_type", "publication_language", "external_publication_id",
     "external_research_quality_score", "source_overview", "diversity_topics", "rights_policy", "media_use_policy", "media_reuse_allowed",
+    "research_policy_classification", "research_decision", "external_research_policy_attestation_version",
     "platform_post_key", "source_url", "source_scope", "source_geo_class", "source_topic_class",
     "source_quick_class", "source_queue_status", "fetch_status", "source_surface_filter_reason", "monitoring_exclusion_reason",
     "current_stage", "current_lifecycle_status", "best_candidate_score_ever", "best_media_score_ever",
@@ -2658,6 +2660,7 @@ PUBLICATION_CANDIDATE_STATE_FIELDS = [
     "post_id", "post_url", "source_id", "source_title", "source_geo_class", "source_topic_class",
     "platform", "canonical_source_key", "source_url", "content_origin_type", "publication_content_type", "publication_language", "external_publication_id",
     "external_research_quality_score", "source_overview", "diversity_topics", "rights_policy", "media_use_policy", "media_reuse_allowed",
+    "research_policy_classification", "research_decision", "external_research_policy_attestation_version",
     "post_date", "short_summary", "why_selected", "why_not_selected", "matched_place_names",
     "candidate_score", "publication_score", "visual_score", "text_story_score", "diversity_penalty",
     "overall_media_score", "postcardness_score", "aesthetic_score", "image_model_input_type",
@@ -7588,6 +7591,9 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
             "rights_policy": row.get("rights_policy", prev.get("rights_policy", "")),
             "media_use_policy": row.get("media_use_policy", prev.get("media_use_policy", "")),
             "media_reuse_allowed": row.get("media_reuse_allowed", prev.get("media_reuse_allowed", False)),
+            "research_policy_classification": row.get("research_policy_classification", prev.get("research_policy_classification", {})),
+            "research_decision": row.get("research_decision", prev.get("research_decision", {})),
+            "external_research_policy_attestation_version": row.get("external_research_policy_attestation_version", prev.get("external_research_policy_attestation_version", "")),
             "full_text": row.get("text") or row.get("full_text") or prev.get("full_text", ""),
             "text_hash": row.get("text_hash") or prev.get("text_hash", ""),
             "kaliningrad_oblast_only_scope": row.get("kaliningrad_oblast_only_scope", prev.get("kaliningrad_oblast_only_scope", "")),
@@ -7872,7 +7878,10 @@ def apply_external_bge_m3_fusion_to_candidate_memory(
             scope2["kaliningrad_oblast_only_scope"] = True
             scope2["matched_place_names"] = row.get("matched_place_names", scope2.get("matched_place_names", ""))
             scope2["region_scope_reason"] = row.get("region_scope_reason", scope2.get("region_scope_reason", "stored candidate-memory KO scope"))
-        promotion_ad_gate = ad_promo_gate(sample_text)
+        promotion_ad_gate = apply_external_publication_policy_attestation(
+            ad_promo_gate(sample_text),
+            row,
+        )
         gate = text_vector_gate(
             sample_text or str(row.get("short_summary") or ""),
             score_text(sample_text),
@@ -9729,6 +9738,9 @@ def build_image_candidate_queue(
             "rights_policy": row.get("rights_policy", entries[key].get("rights_policy", "")),
             "media_use_policy": row.get("media_use_policy", entries[key].get("media_use_policy", "")),
             "media_reuse_allowed": row.get("media_reuse_allowed", entries[key].get("media_reuse_allowed", False)),
+            "research_policy_classification": row.get("research_policy_classification", entries[key].get("research_policy_classification", {})),
+            "research_decision": row.get("research_decision", entries[key].get("research_decision", {})),
+            "external_research_policy_attestation_version": row.get("external_research_policy_attestation_version", entries[key].get("external_research_policy_attestation_version", "")),
             "source_scope": row.get("source_scope", entries[key].get("source_scope", "")),
             "source_geo_class": row.get("source_geo_class", entries[key].get("source_geo_class", "")),
             "source_topic_class": row.get("source_topic_class", entries[key].get("source_topic_class", "")),
@@ -10555,6 +10567,9 @@ def build_publication_candidate_queue(
             "rights_policy": row.get("rights_policy"),
             "media_use_policy": row.get("media_use_policy"),
             "media_reuse_allowed": row.get("media_reuse_allowed"),
+            "research_policy_classification": row.get("research_policy_classification"),
+            "research_decision": row.get("research_decision"),
+            "external_research_policy_attestation_version": row.get("external_research_policy_attestation_version"),
             "post_date": row.get("post_date"),
             "short_summary": row.get("short_summary"),
             "matched_place_names": row.get("matched_place_names"),
@@ -15564,7 +15579,7 @@ def post_processing_fingerprint(
         "bge_contract": BGE_M3_ENCODER_CONTRACT if require_bge_m3 else "disabled",
     }
     if str(content_origin_type or "") in EXTERNAL_PUBLICATION_ORIGIN_TYPES:
-        payload["external_publication_scope_policy"] = "external_publication_scope_source_media_transition_v4"
+        payload["external_publication_scope_policy"] = "external_publication_scope_source_media_policy_transition_v5"
     return hashlib.sha256(
         json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
@@ -16419,6 +16434,56 @@ def apply_external_publication_scope_attestation(
     return out
 
 
+EXTERNAL_PUBLICATION_POLICY_ATTESTATION_VERSION = "external_publication_research_policy_v1"
+
+
+def apply_external_publication_policy_attestation(
+    ad_gate: dict[str, Any],
+    post: dict[str, Any],
+) -> dict[str, Any]:
+    """Prefer the strict research/import commerciality verdict for web articles.
+
+    The generic social regex remains useful evidence, but phrases such as
+    ``выбор гостиниц`` inside an editorial caveat are not enough to overturn a
+    validated external-publication row. The importer admits a candidate only
+    after page-level research classified it as independent or institutional
+    noncommercial and rejected every hard exclusion. Gemini remains the final
+    semantic publication gate.
+    """
+    out = dict(ad_gate or {})
+    if str(post.get("content_origin_type") or "") not in EXTERNAL_PUBLICATION_ORIGIN_TYPES:
+        return out
+    policy = post.get("research_policy_classification")
+    decision = post.get("research_decision")
+    if not isinstance(policy, dict) or not isinstance(decision, dict):
+        return out
+    hard_exclusions = [str(value).strip() for value in (policy.get("hard_exclusion_codes") or []) if str(value).strip()]
+    attested = bool(
+        str(policy.get("newsiness") or "") == "non_news"
+        and str(policy.get("commerciality") or "") in {"independent", "institutional_noncommercial"}
+        and policy.get("product_policy_match") is True
+        and not hard_exclusions
+        and str(decision.get("import_status") or "") == "ready_for_region_talk_scoring"
+        and str(decision.get("downstream_readiness") or "") == "candidate_report"
+    )
+    if not attested:
+        return out
+    regex_hard = bool(out.get("is_ad_or_promo"))
+    out.update({
+        "is_ad_or_promo": False,
+        "is_ad_or_promo_hard": "false",
+        "external_research_noncommercial_attested": "true",
+        "external_research_commerciality": str(policy.get("commerciality") or ""),
+        "external_research_policy_attestation_version": EXTERNAL_PUBLICATION_POLICY_ATTESTATION_VERSION,
+        "deterministic_ad_promo_evidence_overridden": str(regex_hard).lower(),
+        "ad_promo_reason": (
+            "accepted: strict external research/import noncommercial attestation; "
+            "generic regex evidence retained for final Gemini review"
+        ),
+    })
+    return out
+
+
 def build_report(
     seeds: list[Seed],
     source_rows: list[dict[str, Any]],
@@ -16770,7 +16835,10 @@ def build_report(
             p,
         )
         fresh = freshness_gate(p.get("post_date"))
-        ad_gate = ad_promo_gate(text)
+        ad_gate = apply_external_publication_policy_attestation(
+            ad_promo_gate(text),
+            p,
+        )
         substance = score_substance(text)
         link_rows, edge_rows = discover_links_for_post(p, run_id)
         discovered_rows.extend(link_rows)

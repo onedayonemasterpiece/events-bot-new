@@ -4791,7 +4791,12 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             },
             "source_assessment": {"scope": "external"},
             "region_relevance": {"summary": "Обзор музея в Калининграде", "topics": ["архитектура", "наука"]},
-            "policy_classification": {"product_policy_match": True, "hard_exclusion_codes": []},
+            "policy_classification": {
+                "newsiness": "non_news",
+                "commerciality": "institutional_noncommercial",
+                "product_policy_match": True,
+                "hard_exclusion_codes": [],
+            },
             "quality_assessment": {
                 "track": "professional_editorial",
                 "source_authority": {"score": 3},
@@ -4852,6 +4857,33 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertTrue(attested_scope["kaliningrad_oblast_only_scope"])
         self.assertEqual(attested_scope["kaliningrad_reference_role"], "external_research_main_subject")
         self.assertIn("research/import contract", attested_scope["region_scope_reason"])
+        regex_ad = {
+            "is_ad_or_promo": True,
+            "is_ad_or_promo_hard": "true",
+            "ad_promo_hits": "paid_tour_service",
+            "ad_promo_reason": "reject: generic social regex hit",
+        }
+        attested_policy = mod.apply_external_publication_policy_attestation(regex_ad, projected)
+        self.assertFalse(attested_policy["is_ad_or_promo"])
+        self.assertEqual(attested_policy["external_research_noncommercial_attested"], "true")
+        self.assertEqual(attested_policy["deterministic_ad_promo_evidence_overridden"], "true")
+        self.assertEqual(attested_policy["ad_promo_hits"], "paid_tour_service")
+        social_policy = mod.apply_external_publication_policy_attestation(
+            regex_ad,
+            {**projected, "content_origin_type": "social_post"},
+        )
+        self.assertTrue(social_policy["is_ad_or_promo"])
+        untrusted_policy = mod.apply_external_publication_policy_attestation(
+            regex_ad,
+            {
+                **projected,
+                "research_policy_classification": {
+                    **projected["research_policy_classification"],
+                    "commerciality": "sales",
+                },
+            },
+        )
+        self.assertTrue(untrusted_policy["is_ad_or_promo"])
         row["operator_policy_override"] = {"decision": "blocked"}
         self.assertIsNone(mod.external_publication_intake_to_post(row))
 

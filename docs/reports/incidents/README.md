@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-31-region-talk-external-commerciality-regex.md`
+  - Scope: Region Talk external research commerciality evidence and generic
+    social ad/promo routing.
+  - Must not regress: strict noncommercial external research cannot be
+    tombstoned by a generic social regex alone; social and sales/sponsored rows
+    remain fail-closed and Gemini retains the final semantic decision.
+
 - `INC-2026-07-31-region-talk-article-link-precedence.md`
   - Scope: Region Talk external article eligibility/finalizer routing and the
     daily article lane.

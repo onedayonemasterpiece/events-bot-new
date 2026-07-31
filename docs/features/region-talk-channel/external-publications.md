@@ -176,6 +176,16 @@ research quality, source overview, diversity topics and rights fields. A direct
 article image may be sent to ImageDiagnostic only as
 `score_only_no_reuse`; an image score is not permission to republish it.
 
+The strict research/import commerciality decision also takes precedence over
+the recall-oriented social ad regex before Gemini. A ready external row must
+already be `non_news`, `independent|institutional_noncommercial`, product-policy
+matched and free of hard exclusions. CandidateReport therefore retains any
+regex hit as diagnostic evidence but does not let wording in an editorial
+caveat (for example, a mention of a hotel selection) tombstone the article.
+This exception cannot apply to Telegram/VK rows or to
+`sponsored|sales|unknown` research classifications; Gemini still performs the
+final semantic ad/editorial decision.
+
 ### Evidence-backed operator review
 
 Rows held in `manual_review_required` are promoted only through an explicit,
