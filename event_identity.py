@@ -7,11 +7,10 @@ match/create decision.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import math
-import os
-import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from queue import Queue
@@ -291,56 +290,73 @@ def build_identity_candidate_document(
 def embed_identity_document_with_gemini(
     document: IdentityCandidateDocument | str,
     *,
-    api_key: str,
+    google_ai_client: Any | None = None,
+    api_key: str | None = None,
     model: str = "gemini-embedding-2",
     dim: int = 768,
     timeout_seconds: float = 10.0,
-    allow_direct_without_limiter: bool = False,
 ) -> EventIdentityEmbeddingResult:
     """Generate an ephemeral Gemini embedding for a candidate identity document.
 
     The candidate embedding is not stored.  Failures are returned as data so
     Smart Update can log/review instead of silently bypassing the identity gate.
 
-    This is a low-level/debug helper. Production code must use GoogleAIClient's
-    limiter-aware embedding path. To avoid accidental quota bypasses, direct
-    provider access requires either ``allow_direct_without_limiter=True`` from a
-    trusted local caller or ``EVENT_IDENTITY_ALLOW_DIRECT_EMBEDDING=1``.
+    ``google_ai_client`` must be an initialized :class:`GoogleAIClient`.  Raw
+    API-key transport was intentionally removed: every provider send, including
+    SDK retries, must pass through the client's shared reserve/mark/finalize
+    accounting.  ``api_key`` remains only as a fail-closed compatibility
+    argument so older callers receive a useful error instead of silently making
+    an unaccounted request.
     """
 
     text = document.text if isinstance(document, IdentityCandidateDocument) else _as_clean_text(document)
     try:
-        direct_allowed = bool(allow_direct_without_limiter) or (
-            os.getenv("EVENT_IDENTITY_ALLOW_DIRECT_EMBEDDING", "").strip().lower()
-            in {"1", "true", "yes", "on"}
-        )
-        if not direct_allowed:
-            raise RuntimeError("direct identity embedding without GoogleAIClient limiter is disabled")
-        if not api_key:
-            raise RuntimeError("Google API key is required for identity embedding")
+        if api_key:
+            raise RuntimeError(
+                "direct identity embedding without GoogleAIClient limiter is disabled; "
+                "raw Google API keys are not accepted"
+            )
+        if google_ai_client is None:
+            raise RuntimeError("shared-limiter GoogleAIClient is required for identity embedding")
+        embed_async = getattr(google_ai_client, "embed_content_async", None)
+        if not callable(embed_async):
+            raise TypeError("google_ai_client must provide embed_content_async")
         if not text:
             raise RuntimeError("identity document text is empty")
-        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:embedContent"
-        payload = {
-            "model": f"models/{model}",
-            "content": {"parts": [{"text": text}]},
-            "outputDimensionality": int(dim),
-        }
-        request = urllib.request.Request(
-            endpoint,
-            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-            method="POST",
-            headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
-        )
-        with urllib.request.urlopen(request, timeout=max(0.1, float(timeout_seconds or 10.0))) as response:
-            response_payload = json.loads(response.read().decode("utf-8") or "{}")
-        values = response_payload.get("embedding", {}).get("values")
-        if not isinstance(values, list) or len(values) != int(dim):
-            got = len(values) if isinstance(values, list) else "missing"
+
+        async def _embed() -> tuple[float, ...]:
+            values, _usage = await embed_async(
+                model=model,
+                text=text,
+                output_dimensionality=int(dim),
+            )
+            return tuple(float(value) for value in values)
+
+        result_queue: Queue[tuple[str, Any]] = Queue(maxsize=1)
+
+        def _run_embed() -> None:
+            try:
+                result_queue.put(("ok", asyncio.run(_embed())))
+            except BaseException as exc:  # preserve the safe result contract
+                result_queue.put(("error", exc))
+
+        worker = Thread(target=_run_embed, name="event-identity-embedding", daemon=True)
+        worker.start()
+        effective_timeout = max(0.1, float(timeout_seconds or 10.0))
+        worker.join(timeout=effective_timeout)
+        if worker.is_alive():
+            raise TimeoutError(
+                f"GoogleAIClient identity embedding exceeded {effective_timeout:.1f}s"
+            )
+        status, values = result_queue.get_nowait()
+        if status == "error":
+            raise values
+        if len(values) != int(dim):
+            got = len(values)
             raise RuntimeError(f"Gemini embedding returned unexpected dimension: {got}")
         return EventIdentityEmbeddingResult(
             ok=True,
-            embedding=tuple(float(v) for v in values),
+            embedding=values,
             model=model,
             dim=int(dim),
         )

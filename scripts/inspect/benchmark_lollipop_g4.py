@@ -23,21 +23,14 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import smart_event_update as su
+from google_ai import GoogleAIClient, SecretsProvider
 from smart_event_update import EventCandidate
 from smart_update_lollipop_lab.full_cascade import run_full_cascade_variant
 from smart_update_lollipop_lab import writer_final_4o_family as writer_final_family
 from smart_update_lollipop_lab import legacy_writer_family
 
-_LEGACY_GENAI = None
-
-
-def _legacy_genai():
-    global _LEGACY_GENAI
-    if _LEGACY_GENAI is None:
-        import google.generativeai as genai
-
-        _LEGACY_GENAI = genai
-    return _LEGACY_GENAI
+_GOOGLE_AI_CLIENT: GoogleAIClient | None = None
+_GOOGLE_KEY_ENV = "GOOGLE_API_KEY"
 
 
 ARTIFACTS_ROOT = PROJECT_ROOT / "artifacts" / "codex"
@@ -1181,41 +1174,6 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
     return None
 
 
-def _extract_model_text(response: Any) -> str:
-    try:
-        text = getattr(response, "text", None)
-        if isinstance(text, str) and text.strip():
-            return text.strip()
-    except Exception:
-        pass
-    parts: list[str] = []
-    for candidate in list(getattr(response, "candidates", None) or []):
-        content = getattr(candidate, "content", None)
-        if content is None and isinstance(candidate, dict):
-            content = candidate.get("content")
-        if content is None:
-            continue
-        candidate_parts = getattr(content, "parts", None)
-        if candidate_parts is None and isinstance(content, dict):
-            candidate_parts = content.get("parts")
-        for part in list(candidate_parts or []):
-            if getattr(part, "thought", False):
-                continue
-            if isinstance(part, dict) and part.get("thought"):
-                continue
-            text = getattr(part, "text", None)
-            if text is None and isinstance(part, dict):
-                text = part.get("text")
-            if isinstance(text, str) and text.strip():
-                parts.append(text.strip())
-    return "\n".join(parts).strip()
-
-
-def _gemma_model_name(model: str) -> str:
-    raw = (model or "").strip()
-    return raw if raw.startswith("models/") else f"models/{raw}"
-
-
 def _gemma_direct_timeout_sec() -> float:
     raw = (os.getenv("LOLLIPOP_GEMMA_DIRECT_TIMEOUT_SEC") or "").strip()
     if raw:
@@ -1236,13 +1194,76 @@ def _gemma_writer_timeout_sec() -> float:
     return DEFAULT_GEMMA_WRITER_TIMEOUT_SEC
 
 
-def _quota_retry_delay_seconds(message: str) -> float | None:
-    match = re.search(r"retry in ([0-9]+(?:\.[0-9]+)?)s", message, re.I)
-    if match:
-        return float(match.group(1)) + 1.0
-    if "quota exceeded" in message.lower() or "resource_exhausted" in message.lower():
-        return 45.0
-    return None
+def _require_shared_google_ai_client() -> GoogleAIClient:
+    """Build the benchmark's fail-closed shared-limiter client lazily."""
+
+    global _GOOGLE_AI_CLIENT
+    if _GOOGLE_AI_CLIENT is not None:
+        return _GOOGLE_AI_CLIENT
+
+    supabase_url = (os.getenv("SUPABASE_URL") or "").strip()
+    service_key = (os.getenv("SUPABASE_SERVICE_KEY") or "").strip()
+    if not supabase_url or not service_key:
+        raise RuntimeError(
+            "benchmark Google calls require SUPABASE_URL and SUPABASE_SERVICE_KEY "
+            "for shared limiter accounting"
+        )
+    try:
+        from supabase import create_client
+    except ImportError as exc:
+        raise RuntimeError("supabase package is required for shared Google AI limiting") from exc
+
+    _GOOGLE_AI_CLIENT = GoogleAIClient(
+        supabase_client=create_client(supabase_url, service_key),
+        secrets_provider=SecretsProvider(),
+        consumer="lollipop_g4_benchmark",
+        account_name=(os.getenv("GOOGLE_API_LOCALNAME") or "lollipop-g4-benchmark").strip(),
+        default_env_var_name=_GOOGLE_KEY_ENV,
+    )
+    # Benchmark/provider sends must never fall back to an unshared process-local
+    # budget. GoogleAIClient accounts each internal SDK retry as a new attempt.
+    _GOOGLE_AI_CLIENT.allow_reserve_fallback = False
+    _GOOGLE_AI_CLIENT.allow_local_limiter_fallback = False
+    _GOOGLE_AI_CLIENT.allow_local_limiter_on_reserve_error = False
+    return _GOOGLE_AI_CLIENT
+
+
+async def _generate_gemma_via_shared_limiter(
+    *,
+    model: str,
+    system_prompt: str,
+    user_text: str,
+    max_tokens: int,
+    response_schema: dict[str, Any] | None = None,
+    timeout_sec: float | None = None,
+) -> str:
+    client = _require_shared_google_ai_client()
+    effective_timeout = timeout_sec or _gemma_direct_timeout_sec()
+    generation_config: dict[str, Any] = {
+        "temperature": 0,
+        "max_output_tokens": int(max_tokens),
+    }
+    if response_schema is not None:
+        generation_config["response_mime_type"] = "application/json"
+        generation_config["response_schema"] = response_schema
+    prompt = (
+        "SYSTEM POLICY:\n"
+        + system_prompt.strip()
+        + "\n\nUSER PAYLOAD:\n"
+        + user_text
+    )
+    previous_timeout = client.provider_timeout_seconds
+    client.provider_timeout_seconds = float(effective_timeout)
+    try:
+        response_text, _usage = await client.generate_content_async(
+            model=model,
+            prompt=prompt,
+            generation_config=generation_config,
+            max_output_tokens=int(max_tokens),
+        )
+    finally:
+        client.provider_timeout_seconds = previous_timeout
+    return response_text.strip()
 
 
 async def _ask_gemma_json_direct(
@@ -1255,81 +1276,17 @@ async def _ask_gemma_json_direct(
     timeout_sec: float | None = None,
     allow_json_repair: bool = True,
 ) -> dict[str, Any]:
-    api_key = (os.getenv("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEY2") or "").strip()
-    if not api_key:
-        raise RuntimeError("GOOGLE_API_KEY is missing")
-    genai = _legacy_genai()
-    genai.configure(api_key=api_key)
+    """Compatibility name for a now limiter-accounted benchmark call."""
+
     prompt_json = json.dumps(user_payload, ensure_ascii=False, indent=2)
-    model_name = _gemma_model_name(model)
-    timeout_sec = timeout_sec or _gemma_direct_timeout_sec()
-    async def _invoke(system_text: str, user_text: str, *, override_max_tokens: int | None, use_system_instruction: bool) -> Any:
-        generation_config = {
-            "temperature": 0,
-            "max_output_tokens": override_max_tokens or max_tokens,
-            "response_mime_type": "application/json",
-        }
-        if response_schema is not None:
-            generation_config["response_schema"] = response_schema
-        if use_system_instruction:
-            return await asyncio.wait_for(
-                genai.GenerativeModel(
-                    model_name=model_name,
-                    system_instruction=system_text.strip(),
-                ).generate_content_async(
-                    user_text,
-                    generation_config=generation_config,
-                ),
-                timeout=timeout_sec,
-            )
-        return await asyncio.wait_for(
-            genai.GenerativeModel(model_name=model_name).generate_content_async(
-                "SYSTEM:\n"
-                + system_text.strip()
-                + "\n\nUSER:\n"
-                + user_text
-                + "\n\nReturn only valid JSON.",
-                generation_config=generation_config,
-            ),
-            timeout=timeout_sec,
-        )
-
-    async def _generate(system_text: str, user_text: str, *, override_max_tokens: int | None = None) -> str:
-        use_system_instruction = True
-        last_error: Exception | None = None
-        for _attempt in range(3):
-            try:
-                response = await _invoke(
-                    system_text,
-                    user_text,
-                    override_max_tokens=override_max_tokens,
-                    use_system_instruction=use_system_instruction,
-                )
-                return _extract_model_text(response)
-            except Exception as exc:
-                last_error = exc
-                lower = str(exc).lower()
-                if use_system_instruction and (
-                    "developer instruction is not enabled" in lower or "system instruction" in lower
-                ):
-                    use_system_instruction = False
-                    continue
-                retry_delay = _quota_retry_delay_seconds(str(exc))
-                if retry_delay is None and (
-                    "internal error encountered" in lower
-                    or "statuscode.internal" in lower
-                    or "500 internal" in lower
-                ):
-                    retry_delay = 5.0
-                if retry_delay is not None:
-                    await asyncio.sleep(retry_delay)
-                    continue
-                raise
-        if last_error is not None:
-            raise last_error
-        raise RuntimeError(f"Gemma call failed without explicit error for {model}")
-
-    raw = await _generate(system_prompt, prompt_json)
+    raw = await _generate_gemma_via_shared_limiter(
+        model=model,
+        system_prompt=system_prompt,
+        user_text=prompt_json,
+        max_tokens=max_tokens,
+        response_schema=response_schema,
+        timeout_sec=timeout_sec,
+    )
     data = _extract_json_object(raw)
     if data is not None:
         return data
@@ -1344,10 +1301,13 @@ async def _ask_gemma_json_direct(
         ensure_ascii=False,
         indent=2,
     )
-    repaired_raw = await _generate(
-        "JSON repair mode. Return one valid JSON object only.",
-        repair_payload,
-        override_max_tokens=max(max_tokens + 800, 2200),
+    repaired_raw = await _generate_gemma_via_shared_limiter(
+        model=model,
+        system_prompt="JSON repair mode. Return one valid JSON object only.",
+        user_text=repair_payload,
+        max_tokens=max(max_tokens + 800, 2200),
+        response_schema=response_schema,
+        timeout_sec=timeout_sec,
     )
     repaired = _extract_json_object(repaired_raw)
     if repaired is None:
@@ -1363,64 +1323,15 @@ async def _ask_gemma_text_direct(
     max_tokens: int,
     timeout_sec: float | None = None,
 ) -> str:
-    api_key = (os.getenv("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEY2") or "").strip()
-    if not api_key:
-        raise RuntimeError("GOOGLE_API_KEY is missing")
-    genai = _legacy_genai()
-    genai.configure(api_key=api_key)
-    prompt_json = json.dumps(user_payload, ensure_ascii=False, indent=2)
-    model_name = _gemma_model_name(model)
-    timeout_sec = timeout_sec or _gemma_direct_timeout_sec()
+    """Compatibility name for a now limiter-accounted benchmark call."""
 
-    async def _invoke(system_text: str, user_text: str, *, use_system_instruction: bool) -> Any:
-        generation_config = {
-            "temperature": 0,
-            "max_output_tokens": max_tokens,
-        }
-        if use_system_instruction:
-            return await asyncio.wait_for(
-                genai.GenerativeModel(
-                    model_name=model_name,
-                    system_instruction=system_text.strip(),
-                ).generate_content_async(user_text, generation_config=generation_config),
-                timeout=timeout_sec,
-            )
-        return await asyncio.wait_for(
-            genai.GenerativeModel(model_name=model_name).generate_content_async(
-                "SYSTEM:\n" + system_text.strip() + "\n\nUSER:\n" + user_text,
-                generation_config=generation_config,
-            ),
-            timeout=timeout_sec,
-        )
-
-    use_system_instruction = True
-    last_error: Exception | None = None
-    for _attempt in range(3):
-        try:
-            response = await _invoke(system_prompt, prompt_json, use_system_instruction=use_system_instruction)
-            return _extract_model_text(response).strip()
-        except Exception as exc:
-            last_error = exc
-            lower = str(exc).lower()
-            if use_system_instruction and (
-                "developer instruction is not enabled" in lower or "system instruction" in lower
-            ):
-                use_system_instruction = False
-                continue
-            retry_delay = _quota_retry_delay_seconds(str(exc))
-            if retry_delay is None and (
-                "internal error encountered" in lower
-                or "statuscode.internal" in lower
-                or "500 internal" in lower
-            ):
-                retry_delay = 5.0
-            if retry_delay is not None:
-                await asyncio.sleep(retry_delay)
-                continue
-            raise
-    if last_error is not None:
-        raise last_error
-    raise RuntimeError(f"Gemma text call failed without explicit error for {model}")
+    return await _generate_gemma_via_shared_limiter(
+        model=model,
+        system_prompt=system_prompt,
+        user_text=json.dumps(user_payload, ensure_ascii=False, indent=2),
+        max_tokens=max_tokens,
+        timeout_sec=timeout_sec,
+    )
 
 
 def _extract_prompt_system() -> str:
@@ -3082,12 +2993,19 @@ async def _run(args: argparse.Namespace) -> tuple[Path, Path]:
 
 
 def main() -> int:
+    global _GOOGLE_KEY_ENV
+
     parser = argparse.ArgumentParser(description="Run baseline/baseline g4/lollipop/lollipop g4/lollipop legacy benchmark.")
     parser.add_argument("--fixtures", default=DEFAULT_FIXTURES, help="Comma-separated fixture names")
     parser.add_argument("--variants", default=DEFAULT_VARIANTS, help="Comma-separated variants: baseline,baseline_g4,lollipop,lollipop_g4,lollipop_legacy")
     parser.add_argument("--g3-model", default=DEFAULT_G3_MODEL, help="Gemma 3 upstream/baseline model")
     parser.add_argument("--g4-model", default=DEFAULT_G4_MODEL, help="Gemma 4 upstream model")
     parser.add_argument("--four-o-model", default=DEFAULT_4O_MODEL, help="Final writer model")
+    parser.add_argument(
+        "--google-key-env",
+        default="GOOGLE_API_KEY",
+        help="Registered Google API-key env lane used by the shared limiter",
+    )
     parser.add_argument("--gemma-call-gap-s", type=float, default=DEFAULT_GEMMA_CALL_GAP_S, help="Sleep between Gemma calls")
     parser.add_argument(
         "--legacy-g4-extract",
@@ -3107,6 +3025,10 @@ def main() -> int:
         help="Existing benchmark JSON to reuse fixture source texts for matching fixture names",
     )
     args = parser.parse_args()
+    key_env = str(args.google_key_env or "").strip()
+    if not re.fullmatch(r"GOOGLE_API_KEY(?:_?[2-9][0-9]*)?", key_env):
+        parser.error("--google-key-env must name a registered GOOGLE_API_KEY lane")
+    _GOOGLE_KEY_ENV = key_env
     json_path, md_path = asyncio.run(_run(args))
     print(json.dumps({"ok": True, "json_path": str(json_path), "md_path": str(md_path)}, ensure_ascii=False))
     return 0

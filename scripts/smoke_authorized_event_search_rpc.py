@@ -18,15 +18,19 @@ No secrets or raw token values are printed.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import hashlib
 import json
 import os
+import re
 import secrets
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
+
+from google_ai import GoogleAIClient, SecretsProvider
 
 DEFAULT_QUERY = "урбанистика будущее города"
 DEFAULT_EXPECTED_EVENT_ID = 6310
@@ -120,17 +124,43 @@ def sign_in(base_url: str, publishable_key: str, email: str, password: str) -> s
     return token
 
 
-def embed_query(query: str, google_key: str, model: str) -> list[float]:
-    text = f"task: search result | query: {query}"
-    _, payload = request_json(
-        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:embedContent",
-        headers={"Content-Type": "application/json", "x-goog-api-key": google_key},
-        body={"model": f"models/{model}", "content": {"parts": [{"text": text}]}, "outputDimensionality": EMBEDDING_DIM},
-        timeout=60,
+def build_google_ai_client(key_env: str) -> GoogleAIClient:
+    """Build the legacy-project shared limiter for a personalization smoke."""
+
+    limiter_url = require_env("SUPABASE_URL")
+    limiter_service_key = require_env("SUPABASE_SERVICE_KEY")
+    try:
+        from supabase import create_client
+    except ImportError as exc:
+        raise RuntimeError("supabase package is required for shared Google AI limiting") from exc
+    client = GoogleAIClient(
+        supabase_client=create_client(limiter_url, limiter_service_key),
+        secrets_provider=SecretsProvider(),
+        consumer="authorized_event_search_rpc_smoke",
+        account_name=(os.getenv("GOOGLE_API_LOCALNAME") or "authorized-event-search-smoke").strip(),
+        default_env_var_name=key_env,
     )
-    values = payload.get("embedding", {}).get("values")
-    if not isinstance(values, list) or len(values) != EMBEDDING_DIM:
-        raise RuntimeError(f"Bad embedding dimension: {len(values) if isinstance(values, list) else 'missing'}")
+    client.allow_reserve_fallback = False
+    client.allow_local_limiter_fallback = False
+    client.allow_local_limiter_on_reserve_error = False
+    client.provider_timeout_seconds = 60.0
+    return client
+
+
+async def embed_query(
+    query: str,
+    model: str,
+    *,
+    google_ai_client: GoogleAIClient,
+) -> list[float]:
+    text = f"task: search result | query: {query}"
+    values, _usage = await google_ai_client.embed_content_async(
+        model=model,
+        text=text,
+        output_dimensionality=EMBEDDING_DIM,
+    )
+    if len(values) != EMBEDDING_DIM:
+        raise RuntimeError(f"Bad embedding dimension: {len(values)}")
     return [float(value) for value in values]
 
 
@@ -144,29 +174,16 @@ def rpc(base_url: str, publishable_key: str, token: str, name: str, payload: dic
     return data
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--env-file", default=".env")
-    parser.add_argument("--query", default=DEFAULT_QUERY)
-    parser.add_argument("--expected-event-id", type=int, default=DEFAULT_EXPECTED_EVENT_ID)
-    parser.add_argument("--expected-top-n", type=int, default=3)
-    parser.add_argument("--limit", type=int, default=10)
-    parser.add_argument("--date-from", default="2026-06-29")
-    parser.add_argument("--weekday-iso", type=int, default=None, help="Optional query weekday facet, ISO 1..7")
-    parser.add_argument("--time-of-day", choices=["morning", "day", "evening", "night"], default=None)
-    parser.add_argument("--admission", choices=["free", "registration_required", "paid"], default=None)
-    parser.add_argument("--embedding-model", default=os.getenv("EVENT_SEARCH_EMBEDDING_MODEL", "gemini-embedding-2"))
-    parser.add_argument("--google-key-env", default="GOOGLE_API_KEY4")
-    parser.add_argument("--keep-user", action="store_true")
-    parser.add_argument("--skip-quota", action="store_true")
-    parser.add_argument("--skip-audit", action="store_true")
-    args = parser.parse_args()
+async def _main(args: argparse.Namespace) -> int:
+    key_env = str(args.google_key_env or "").strip()
+    if not re.fullmatch(r"GOOGLE_API_KEY(?:_?[2-9][0-9]*)?", key_env):
+        raise RuntimeError("--google-key-env must name a registered GOOGLE_API_KEY lane")
 
     load_env(Path(args.env_file))
     base_url = require_env("PERSONALIZATION_SUPABASE_URL").rstrip("/")
     secret_key = require_env("PERSONALIZATION_SUPABASE_SECRET_KEY")
     publishable_key = require_env("PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY")
-    google_key = require_env(args.google_key_env)
+    google_ai_client = build_google_ai_client(key_env)
 
     user_id = ""
     try:
@@ -179,7 +196,11 @@ def main() -> int:
             quota = rpc(base_url, publishable_key, token, "reserve_event_search_quota_v1", {"p_plan_id": "registered", "p_use_llm": False})
             print(f"quota=ok remaining={(quota[0] if isinstance(quota, list) and quota else quota).get('day_remaining') if quota else 'n/a'}")
 
-        vector = embed_query(args.query, google_key, args.embedding_model.replace("models/", ""))
+        vector = await embed_query(
+            args.query,
+            args.embedding_model.replace("models/", ""),
+            google_ai_client=google_ai_client,
+        )
         print(f"embedding=ok dim={len(vector)} model={args.embedding_model}")
 
         rows = rpc(
@@ -238,6 +259,26 @@ def main() -> int:
             finally:
                 delete_temp_user(base_url, secret_key, user_id)
                 print("temp_user=deleted")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--env-file", default=".env")
+    parser.add_argument("--query", default=DEFAULT_QUERY)
+    parser.add_argument("--expected-event-id", type=int, default=DEFAULT_EXPECTED_EVENT_ID)
+    parser.add_argument("--expected-top-n", type=int, default=3)
+    parser.add_argument("--limit", type=int, default=10)
+    parser.add_argument("--date-from", default="2026-06-29")
+    parser.add_argument("--weekday-iso", type=int, default=None, help="Optional query weekday facet, ISO 1..7")
+    parser.add_argument("--time-of-day", choices=["morning", "day", "evening", "night"], default=None)
+    parser.add_argument("--admission", choices=["free", "registration_required", "paid"], default=None)
+    parser.add_argument("--embedding-model", default=os.getenv("EVENT_SEARCH_EMBEDDING_MODEL", "gemini-embedding-2"))
+    parser.add_argument("--google-key-env", default="GOOGLE_API_KEY4")
+    parser.add_argument("--keep-user", action="store_true")
+    parser.add_argument("--skip-quota", action="store_true")
+    parser.add_argument("--skip-audit", action="store_true")
+    args = parser.parse_args()
+    return asyncio.run(_main(args))
 
 
 if __name__ == "__main__":
