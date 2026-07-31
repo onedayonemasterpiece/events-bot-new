@@ -4,6 +4,7 @@ import base64
 import importlib.util
 import struct
 import sys
+from datetime import date
 from pathlib import Path
 
 
@@ -117,3 +118,66 @@ def test_nested_external_contract_fields_render_without_flattening() -> None:
     assert "Научный журнал" in card
     assert "Исследование берега" in card
     assert "Нерегиональный научный журнал" in card
+
+
+def test_daily_plan_selects_one_article_and_social_per_day_with_lane_history() -> None:
+    mod = load_module()
+    candidates = [
+        {**row("https://example.org/article-a", 1.0, [1.0, 0.0]), "content_origin_type": "editorial_publication"},
+        {**row("https://example.org/article-b", 0.95, [0.99, 0.01]), "content_origin_type": "academic_publication"},
+        {**row("https://example.org/article-c", 0.90, [0.0, 1.0]), "content_origin_type": "editorial_publication"},
+        row("https://t.me/source/1", 0.98, [1.0, 0.0]),
+        row("https://vk.com/wall-1_2", 0.88, [0.0, 1.0]),
+    ]
+
+    planned = mod.build_daily_publication_plan(
+        candidates,
+        start_date=date(2026, 8, 1),
+        days=2,
+        diversity_weight=0.35,
+        pair_similarity_threshold=0.82,
+    )
+
+    assert [(item["plan_date"], item["content_lane"]) for item in planned] == [
+        ("2026-08-01", "article"),
+        ("2026-08-01", "social"),
+        ("2026-08-02", "article"),
+        ("2026-08-02", "social"),
+    ]
+    assert planned[0]["post_url"] == "https://example.org/article-a"
+    assert planned[1]["post_url"] == "https://vk.com/wall-1_2"
+    assert planned[2]["post_url"] == "https://example.org/article-c"
+    assert planned[1]["pair_diversity_relaxed"] is False
+
+
+def test_daily_plan_recalculates_unlocked_slots_but_preserves_published_slot() -> None:
+    mod = load_module()
+    fixed = row("https://example.org/published", 0.7, [1.0, 0.0])
+    fixed.update({"content_origin_type": "editorial_publication", "plan_status": "published"})
+    planned = mod.build_daily_publication_plan(
+        [
+            {**row("https://example.org/new", 0.9, [0.0, 1.0]), "content_origin_type": "editorial_publication"},
+            row("https://t.me/source/5", 0.8, [0.0, 1.0]),
+        ],
+        start_date=date(2026, 8, 1),
+        days=1,
+        locked_slots={("2026-08-01", "article"): fixed},
+    )
+
+    assert planned[0]["post_url"] == "https://example.org/published"
+    assert planned[0]["slot_locked"] is True
+    assert planned[1]["post_url"] == "https://t.me/source/5"
+
+
+def test_daily_plan_keeps_vacant_lane_visible() -> None:
+    mod = load_module()
+    planned = mod.build_daily_publication_plan(
+        [row("https://t.me/source/7", 0.8, [1.0, 0.0])],
+        start_date=date(2026, 8, 1),
+        days=1,
+    )
+
+    assert planned[0]["content_lane"] == "article"
+    assert planned[0]["plan_status"] == "vacant"
+    assert planned[1]["content_lane"] == "social"
+    assert planned[1]["plan_status"] == "planned"

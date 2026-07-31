@@ -586,6 +586,69 @@ async def test_provider_call_timeout_is_bounded(monkeypatch: pytest.MonkeyPatch)
         )
 
 
+@pytest.mark.asyncio
+async def test_hard_single_attempt_configures_new_sdk_without_internal_retries() -> None:
+    class _Models:
+        async def generate_content(self, **_kwargs):
+            return SimpleNamespace(text='{"ok":true}', usage_metadata={})
+
+    class _NewSdk:
+        def __init__(self):
+            self.client_kwargs = None
+
+        def Client(self, **kwargs):
+            self.client_kwargs = kwargs
+            return SimpleNamespace(aio=SimpleNamespace(models=_Models()))
+
+    new_sdk = _NewSdk()
+    client = GoogleAIClient()
+    client._genai = None
+    client._genai_new = new_sdk
+    client.hard_single_provider_attempt = True
+
+    text, _usage = await client._call_provider(
+        api_key="test-key",
+        model="gemini-3.1-flash-lite",
+        prompt="one HTTP attempt",
+        generation_config={"temperature": 0},
+        safety_settings=None,
+        max_output_tokens=16,
+    )
+
+    assert text == '{"ok":true}'
+    assert new_sdk.client_kwargs == {
+        "api_key": "test-key",
+        "http_options": {"retry_options": {"attempts": 1}},
+    }
+
+
+@pytest.mark.asyncio
+async def test_hard_single_attempt_forbids_legacy_sdk_fallback() -> None:
+    class _LegacySdk:
+        def __init__(self):
+            self.configure_calls = 0
+
+        def configure(self, **_kwargs):
+            self.configure_calls += 1
+
+    legacy = _LegacySdk()
+    client = GoogleAIClient()
+    client._genai = legacy
+    client.hard_single_provider_attempt = True
+
+    with pytest.raises(ProviderError, match="legacy SDK fallback is disabled"):
+        await client._call_provider(
+            api_key="test-key",
+            model="gemini-3.1-flash-lite",
+            prompt="no legacy retries",
+            generation_config={"temperature": 0},
+            safety_settings=None,
+            max_output_tokens=16,
+        )
+
+    assert legacy.configure_calls == 0
+
+
 # --- Emergency reserve overflow (INC-2026-06-03) -------------------------------
 
 _OVERFLOW_KEY_ROWS = [
@@ -959,6 +1022,46 @@ async def test_normal_pool_rotates_to_another_key_on_provider_429(
     assert rotation["exhausted_api_key_id"] == "id-key4"
     assert rotation["remaining_pool_members"] == 1
     assert rotation["retry_after_ms"] == 45000
+
+
+@pytest.mark.asyncio
+async def test_normal_pool_can_disable_provider_429_rotation_for_hard_send_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _NORMAL_POOL_ENV_CANDIDATE_CACHE.clear()
+    _NORMAL_POOL_CURSOR.clear()
+    client = GoogleAIClient(
+        supabase_client=_NormalPoolSupabase(),
+        consumer="tg_monitor_video_quality",
+        reserve_key_envs=["GOOGLE_API_KEY3", "GOOGLE_API_KEY5"],
+        reserve_overflow_key_envs=[],
+    )
+    client.max_retries = 1
+    client.allow_provider_429_rotation = False
+    calls = 0
+
+    async def fake_attempt_generate(*, ctx, **_kwargs):
+        nonlocal calls
+        calls += 1
+        ctx.api_key_id = "id-key4"
+        raise ProviderError(
+            error_type="ClientError",
+            error_message="429 RESOURCE_EXHAUSTED",
+            retryable=True,
+            status_code=429,
+            retry_after_ms=45000,
+        )
+
+    monkeypatch.setattr(client, "_attempt_generate", fake_attempt_generate)
+
+    with pytest.raises(ProviderError):
+        await client.generate_content_async(
+            model="gemini-3.1-flash-lite",
+            prompt="one physical send only",
+            max_output_tokens=16,
+        )
+
+    assert calls == 1
 
 
 @pytest.mark.asyncio

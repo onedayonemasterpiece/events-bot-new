@@ -122,6 +122,7 @@ sections:
     incidents: docs/reports/incidents/README.md
     incident_template: docs/reports/incidents/TEMPLATE.md
     incident_false_kgd80_festival_link_2026_07_31: docs/reports/incidents/INC-2026-07-31-false-kgd80-festival-link.md
+    incident_poster_candidate_url_2026_07_31: docs/reports/incidents/INC-2026-07-31-poster-candidate-url.md
     incident_future_event_source_coverage_drop_2026_07_27: docs/reports/incidents/INC-2026-07-27-future-event-source-coverage-drop.md
     incident_icae_casting_wrong_venue_2026_07_27: docs/reports/incidents/INC-2026-07-27-icae-casting-wrong-venue.md
     incident_faberge_tg_public_writer_gap_2026_07_21: docs/reports/incidents/INC-2026-07-21-faberge-tg-public-writer-gap.md
@@ -630,6 +631,13 @@ features:
       - source_parsing/telegram/handlers.py
       - smart_event_update.py
       - scheduling.py
+  telegram_monitoring_video_quality:
+    status: implemented
+    docs: docs/features/telegram-monitoring/video-quality.md
+    entrypoints:
+      - kaggle/TelegramMonitor/telegram_monitor.py
+      - source_parsing/telegram/handlers.py
+      - site/scripts/export-production-preview-data.py
   telegram_business_stories:
     status: implemented
     docs: docs/features/telegram-business-stories/README.md

@@ -986,6 +986,79 @@ class EventMediaAsset(SQLModel, table=True):
     )
 
 
+class VideoAsset(SQLModel, table=True):
+    """Content-addressed video analysis and managed-CDN state.
+
+    The row is deliberately global rather than event-owned.  Event links may
+    disappear as events age out, while the terminal analysis remains useful as
+    an exact-SHA cache and prevents paying to review the same bytes again.
+    """
+
+    __tablename__ = "video_asset"
+    __table_args__ = (
+        UniqueConstraint("sha256", name="ux_video_asset_sha256"),
+        Index("ix_video_asset_status_showcase", "analysis_status", "showcase_score"),
+        Index("ix_video_asset_cdn_path", "cdn_bucket", "cdn_path"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    sha256: str
+    analysis_status: str = "accepted"
+    cdn_url: Optional[str] = None
+    cdn_path: Optional[str] = None
+    cdn_bucket: Optional[str] = None
+    size_bytes: Optional[int] = None
+    mime_type: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    duration_seconds: Optional[float] = None
+    aesthetic_score: Optional[float] = None
+    technical_score: Optional[float] = None
+    showcase_score: Optional[float] = None
+    description: Optional[str] = None
+    search_text: Optional[str] = None
+    analysis_model: Optional[str] = None
+    analysis_version: Optional[str] = None
+    analysis_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    analyzed_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    orphaned_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+
+
+class EventVideoLink(SQLModel, table=True):
+    """Many-to-many link between an event and a globally analyzed video."""
+
+    __tablename__ = "event_video_link"
+    __table_args__ = (
+        UniqueConstraint(
+            "event_id", "video_asset_id", name="ux_event_video_link_event_asset"
+        ),
+        Index("ix_event_video_link_event_rank", "event_id", "ranking_score"),
+        Index("ix_event_video_link_asset", "video_asset_id"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    event_id: int = Field(foreign_key="event.id")
+    video_asset_id: int = Field(foreign_key="video_asset.id")
+    event_relevance_score: Optional[float] = None
+    ranking_score: Optional[float] = None
+    match_reason: Optional[str] = None
+    relation_confidence: Optional[float] = None
+    source_url: Optional[str] = None
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+
+
 class EventSource(SQLModel, table=True):
     __tablename__ = "event_source"
     __table_args__ = (

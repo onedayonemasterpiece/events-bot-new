@@ -16,6 +16,8 @@
 - Incident management / closure gate: `docs/operations/incident-management.md`
 - Event-quality release monitoring: `docs/operations/event-quality-release-monitoring.md`
 - Event-media automatic gate: `docs/features/event-media/README.md`
+- Telegram vertical-video quality, SHA cache, Yandex CDN and ranking:
+  `docs/features/telegram-monitoring/video-quality.md`
 - Event age rating (declared/assessed, Smart Update, CPU BGE, backfill): `docs/features/event-age-rating/README.md`
 - Event participants/headliners UI and static projection: `docs/features/event-people/README.md`
 - Read-only duplicate-image audit: `docs/operations/event-image-duplicate-audit.md`

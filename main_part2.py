@@ -8161,6 +8161,12 @@ async def vk_crawl_cron(db: Database, bot: Bot, run_id: str | None = None) -> No
         logging.exception("vk.crawl.cron.error")
 
 
+async def _enqueue_orphan_video_assets(db: Database) -> int:
+    from supabase_storage import enqueue_orphan_video_assets
+
+    return await enqueue_orphan_video_assets(db)
+
+
 async def cleanup_old_events(db: Database, now_utc: datetime | None = None) -> int:
     """Delete events that finished more than a week ago."""
     cutoff = (now_utc or datetime.now(timezone.utc)) - timedelta(days=7)
@@ -8372,36 +8378,47 @@ async def cleanup_old_events(db: Database, now_utc: datetime | None = None) -> i
             logging.debug("db cleanup_old_events took %.1f ms", dur)
 
     deleted = len(deleted_ids)
+    try:
+        video_orphans_queued = await _enqueue_orphan_video_assets(db)
+    except Exception:
+        video_orphans_queued = 0
+        logging.warning("cleanup: failed to enqueue orphan video assets", exc_info=True)
 
     # Best-effort Supabase cleanup:
     # - deletes are persisted in SQLite (supabase_delete_queue) so we can retry later;
     # - do not block DB cleanup if Supabase is unavailable.
     removed_total = 0
-    if os.getenv("SUPABASE_DISABLED") != "1":
-        try:
-            from main import get_supabase_client
-            from supabase_storage import flush_supabase_delete_queue
+    try:
+        from main import get_supabase_client
+        from supabase_storage import flush_supabase_delete_queue
 
-            client = get_supabase_client()
-            if client:
-                media_delete_raw = (os.getenv("SUPABASE_MEDIA_DELETE_ENABLED") or "1").strip().lower()
-                media_delete_enabled = media_delete_raw not in {"0", "false", "no", "off"}
-                path_filter = None
-                if not media_delete_enabled:
-                    path_filter = lambda p: str(p or "").lower().endswith(".ics")  # noqa: E731
-                removed_total = await flush_supabase_delete_queue(
-                    db,
-                    supabase_client=client,
-                    path_filter=path_filter,
-                )
-        except Exception:
-            logging.warning("cleanup: supabase delete queue flush failed", exc_info=True)
+        client = None
+        if os.getenv("SUPABASE_DISABLED") != "1":
+            try:
+                client = get_supabase_client()
+            except Exception:
+                client = None
+        media_delete_raw = (os.getenv("SUPABASE_MEDIA_DELETE_ENABLED") or "1").strip().lower()
+        media_delete_enabled = media_delete_raw not in {"0", "false", "no", "off"}
+        path_filter = None
+        if not media_delete_enabled:
+            path_filter = lambda p: str(p or "").lower().endswith(".ics")  # noqa: E731
+        # Yandex Object Storage deletion is supported even when no Supabase
+        # client is configured, so never gate the generic queue on that client.
+        removed_total = await flush_supabase_delete_queue(
+            db,
+            supabase_client=client,
+            path_filter=path_filter,
+        )
+    except Exception:
+        logging.warning("cleanup: managed-storage delete queue flush failed", exc_info=True)
 
-    if deleted or removed_total:
+    if deleted or removed_total or video_orphans_queued:
         logging.info(
-            "cleanup_ok deleted=%s supabase_removed=%s",
+            "cleanup_ok deleted=%s storage_removed=%s video_orphans_queued=%s",
             deleted,
             removed_total,
+            video_orphans_queued,
         )
 
     return deleted

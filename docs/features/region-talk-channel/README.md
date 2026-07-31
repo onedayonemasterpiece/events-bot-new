@@ -194,7 +194,18 @@ Implementation entrypoints added for the first Candidate Report Only run:
 - BGE-vs-Qwen quality comparison helper: `scripts/region_talk_embedding_quality_compare.py`;
 - focused smoke tests: `tests/test_region_talk_candidate_report.py`.
 
-Telegram source monitoring is explicitly **Telethon-based**. Manual Kaggle handoff uses role-scoped sessions: `RegionTalkCandidateReport` and `RegionTalkImageDiagnostic` default to `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` / `TELEGRAM_AUTH_BUNDLE_DISCOVERY2` respectively. Local/manual operator delivery may use only the E2E human session (`TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION`); scheduled Fly delivery uses the existing bot through Bot API and therefore requires that bot to be a member of the pinned operator chat. A remote scheduler must never reuse the local E2E session: Telegram can invalidate one MTProto authorization used from parallel connections/IPs with `AUTH_KEY_DUPLICATED`. `TELEGRAM_AUTH_BUNDLE_S22` is reserved for production Kaggle/remote monitoring and must not be shipped with Region Talk runs unless explicitly selected for that one run. Never run two Kaggle kernels against the same Telethon auth key concurrently. Region Talk does not use Bot API for reading public channel history and it never calls Telegram/VK **public-channel** publication APIs.
+Telegram source monitoring is explicitly **Telethon-based** and uses only the
+role-scoped discovery sessions: `RegionTalkCandidateReport` defaults to
+`TELEGRAM_AUTH_BUNDLE_DISCOVERY1`, while `RegionTalkImageDiagnostic` defaults
+to `TELEGRAM_AUTH_BUNDLE_DISCOVERY2`. Region Talk functional notification is
+Bot API-only in every environment and requires the production bot to belong to
+the pinned operator chat. `TELEGRAM_AUTH_BUNDLE_E2E` belongs exclusively to
+Codex/manual live E2E and, like generic `TELEGRAM_SESSION`, is neither read nor
+passed to Region Talk scripts. `TELEGRAM_AUTH_BUNDLE_S22` remains reserved for
+its separate production monitoring role. Never run two Kaggle kernels against
+the same Telethon discovery key concurrently. Region Talk does not use Bot API
+for reading public channel history and it never calls Telegram/VK
+**public-channel** publication APIs.
 
 ### Reuse existing Kaggle infrastructure
 
@@ -330,11 +341,14 @@ state. См. [MVP candidate report](mvp-candidate-report.md).
   attestation versions. A completed v2 verdict is terminal for that exact media
   manifest and must not be relaunched as an apparent stale v1 backlog.
 - Scheduled notification contract: Fly uses `TELEGRAM_BOT_TOKEN` and Bot API;
-  it never opens `TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION`. A read-only
+  the functional notifier has no Telethon/human-session transport in local or
+  remote operation. The scheduled wrapper also removes
+  `TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION` from every child environment.
+  A read-only
   `--dry-run` renders the queue without connecting any Telegram transport.
   The bot must already belong to `REGION_TALK_NOTIFY_CHAT_ID`; `getChat` and
-  `sendMessage` fail closed otherwise. Local Telethon delivery remains an
-  explicit manual-only mode with deterministic MTProto `random_id` replay.
+  `sendMessage` fail closed otherwise. The E2E session remains outside the
+  application and is available only to Codex/manual live-E2E tooling.
 - Fast-check KO contract: a source-local keyword hit is both an exact-post task
   (`post_link_queue_item`) and a source-priority signal. CandidateReport must
   persist `fast_check_status=ko_hit` on the corresponding `source_queue_item`,
@@ -357,7 +371,11 @@ state. См. [MVP candidate report](mvp-candidate-report.md).
 - That next stage is now implemented for newly accepted rows: final verifier
   v7 persists grounded Telegram/VK drafts with explicit source/original link
   and claim/support evidence. Public sending remains disabled; the remaining
-  product gate is selection from the diversified queue plus operator approval.
+  product gate is operator approval and public publisher enablement. Durable
+  selection is implemented by `region_talk_daily_pair_antivector_v1`: after
+  each scheduled discovery session it recalculates 14 days with exactly one
+  external article and one Telegram/VK post per day, using separate long-range
+  anti-vector histories plus a same-day cross-lane similarity guard.
 
 
 ## MVP-1.x strict selection update

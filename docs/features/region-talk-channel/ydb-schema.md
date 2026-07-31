@@ -544,6 +544,17 @@ visibility.
   overlap instead of only same-source/place heuristics. If Qwen3 is promoted
   after the research gate, its fingerprint may be stored here as an additional
   or replacement model slot; the anti-vector is not E5-only;
+- kind `publication_schedule_item`, pk
+  `publication_schedule_item:<YYYY-MM-DD>:<article|social>` — the current
+  deterministic daily slot. Future `planned`/`vacant` rows are recalculated as
+  candidates arrive; `locked`/`published` rows are immutable. The payload
+  stores lane, local scheduled time, candidate URL/id, both target platforms,
+  quality/diversity evidence and the same-day pair-similarity decision;
+- kind `publication_schedule_snapshot`, pk
+  `publication_schedule_snapshot:latest` — compact 14-day result of
+  `region_talk_daily_pair_antivector_v1`, including lane/history/vacancy counts.
+  It is a selection ledger and does not itself call Telegram/VK publication
+  APIs;
 - kind `external_publication_intake_item`, pk
   `external_publication_intake_item:extpub_<stable-id>` — validated external
   editorial/academic research staging. It is not a publication candidate and

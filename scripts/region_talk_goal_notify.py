@@ -2,15 +2,13 @@
 """Region Talk operator-chat notifier.
 
 Reads Gemini-confirmed `publication_candidate_item` rows from YDB and sends
-unsent links to the operator Telegram chat. Local/manual runs may use the E2E
-Telethon session. Scheduled Fly runs must use Bot API and must never reuse a
-human MTProto session remotely. Never run this script on Kaggle or use S22.
+unsent links to the operator Telegram chat through Bot API only. Human MTProto
+sessions are not inputs to the functional Region Talk pipeline.
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
-import base64
 import hashlib
 import json
 import os
@@ -54,25 +52,6 @@ def load_env(path: Path) -> None:
         k = k.strip(); v = v.strip().strip('"').strip("'")
         if k and k not in os.environ:
             os.environ[k] = v
-
-
-def decode_e2e_bundle() -> dict[str, Any]:
-    api_id = os.getenv("TG_API_ID") or os.getenv("TELEGRAM_API_ID")
-    api_hash = os.getenv("TG_API_HASH") or os.getenv("TELEGRAM_API_HASH")
-    if not api_id or not api_hash:
-        raise RuntimeError("TG_API_ID/TG_API_HASH or TELEGRAM_API_ID/TELEGRAM_API_HASH are required")
-    bundle_b64 = (os.getenv("TELEGRAM_AUTH_BUNDLE_E2E") or "").strip()
-    if bundle_b64:
-        bundle = json.loads(base64.urlsafe_b64decode(bundle_b64.encode("ascii")).decode("utf-8"))
-        session = str(bundle.get("session") or "").strip()
-        if not session:
-            raise RuntimeError("TELEGRAM_AUTH_BUNDLE_E2E has no session")
-        device = {k: bundle[k] for k in ["device_model", "system_version", "app_version", "lang_code", "system_lang_code"] if bundle.get(k)}
-        return {"api_id": int(api_id), "api_hash": api_hash, "session": session, "device": device}
-    session = (os.getenv("TELEGRAM_SESSION") or "").strip()
-    if session:
-        return {"api_id": int(api_id), "api_hash": api_hash, "session": session, "device": {}}
-    raise RuntimeError("TELEGRAM_AUTH_BUNDLE_E2E or TELEGRAM_SESSION is required for local notification")
 
 
 def getenv_bool(name: str, default: bool = False) -> bool:
@@ -675,45 +654,6 @@ def candidate_message(row: dict[str, Any]) -> str:
     ]).strip()
 
 
-async def resolve_peer(client: Any, target: str, *, allow_join_chat: bool = False) -> Any:
-    raw = (target or "").strip()
-    invite = re.search(r"t\.me/(?:\+|joinchat/)([A-Za-z0-9_-]+)", raw)
-    if invite:
-        from telethon import functions, errors  # type: ignore
-        code = invite.group(1)
-        checked = await client(functions.messages.CheckChatInviteRequest(code))
-        chat = getattr(checked, "chat", None)
-        if chat is not None:
-            return chat
-        if not allow_join_chat:
-            raise RuntimeError("E2E delivery account is not a member of the prepared Region Talk chat; pass --allow-join-chat once after operator approval")
-        try:
-            result = await client(functions.messages.ImportChatInviteRequest(code))
-            chats = getattr(result, "chats", None) or []
-            if chats:
-                return chats[0]
-        except errors.UserAlreadyParticipantError:
-            checked = await client(functions.messages.CheckChatInviteRequest(code))
-            chat = getattr(checked, "chat", None)
-            if chat is not None:
-                return chat
-    return await client.get_entity(raw)
-
-
-def _message_id_from_updates(result: Any, random_id: int) -> int:
-    for update in getattr(result, "updates", None) or []:
-        if int(getattr(update, "random_id", 0) or 0) == int(random_id):
-            mid = int(getattr(update, "id", 0) or 0)
-            if mid:
-                return mid
-    for update in getattr(result, "updates", None) or []:
-        message = getattr(update, "message", None)
-        mid = int(getattr(message, "id", 0) or 0)
-        if mid:
-            return mid
-    return 0
-
-
 async def send_rows(args: argparse.Namespace) -> dict[str, Any]:
     ydb = driver = pool = table = None
     rows: list[dict[str, Any]] = []
@@ -752,9 +692,8 @@ async def send_rows(args: argparse.Namespace) -> dict[str, Any]:
         rows = list(deduped.values())[: args.limit]
         messages = [candidate_message(r) for r in rows]
 
-    # Rendering is a read-only operation. In particular it must not connect a
-    # human MTProto authorization: doing so from a remote diagnostic machine
-    # can invalidate the local E2E session with AUTH_KEY_DUPLICATED.
+    # Rendering is read-only.  This functional notifier is Bot API-only and
+    # therefore never reads or connects a human MTProto authorization.
     if args.dry_run:
         if driver is not None:
             driver.stop()
@@ -775,112 +714,19 @@ async def send_rows(args: argparse.Namespace) -> dict[str, Any]:
             "transport": str(args.transport),
         }
 
-    if args.transport == "bot_api":
-        try:
-            return await send_rows_bot_api(
-                args,
-                messages=messages,
-                rows=rows,
-                ydb=ydb,
-                driver=driver,
-                pool=pool,
-                table=table,
-            )
-        finally:
-            if driver is not None:
-                driver.stop()
-
-    from telethon import TelegramClient  # type: ignore
-    from telethon.sessions import StringSession  # type: ignore
-
-    auth = decode_e2e_bundle()
-    client = TelegramClient(StringSession(auth["session"]), auth["api_id"], auth["api_hash"], **auth.get("device", {}))
-    await client.connect()
-    sent: list[dict[str, Any]] = []
-    chat_id = ""
-    actual_account_id = ""
     try:
-        if not await client.is_user_authorized():
-            raise RuntimeError("local E2E Telegram session is not authorized")
-        me = await client.get_me()
-        expected_account_id = str(os.getenv("REGION_TALK_NOTIFY_ACCOUNT_ID") or "").strip()
-        actual_account_id = str(getattr(me, "id", "") or "")
-        if expected_account_id and actual_account_id != expected_account_id:
-            raise RuntimeError(f"E2E delivery account id {actual_account_id} does not match expected {expected_account_id}")
-        peer = await resolve_peer(client, args.chat, allow_join_chat=bool(args.allow_join_chat))
-        from telethon import functions, utils  # type: ignore
-        input_peer = await client.get_input_entity(peer)
-        chat_id = str(utils.get_peer_id(peer))
-        expected_chat_id = str(args.expected_chat_id or "").strip()
-        if expected_chat_id and chat_id != expected_chat_id:
-            raise RuntimeError(f"resolved Region Talk chat id {chat_id} does not match expected {expected_chat_id}")
-        for idx, text in enumerate(messages):
-            if args.dry_run:
-                sent.append({"dry_run": True, "text": text[:120], "post_url": rows[idx].get("post_url") if idx < len(rows) else ""})
-                continue
-            if idx < len(rows) and ydb is not None and pool is not None and table is not None:
-                row = rows[idx]
-                delivery_key = publication_delivery_key(row, chat_id)
-                existing = read_delivery(pool, ydb, table, delivery_key)
-                random_id = int(existing.get("random_id") or delivery_random_id(delivery_key))
-                if str(existing.get("status") or "") == "delivered":
-                    mid = int(existing.get("message_id") or 0)
-                    upsert_sent(pool, ydb, table, row, mid, chat_id=chat_id, delivery_key=delivery_key, random_id=random_id)
-                    sent.append({"message_id": mid, "post_url": row.get("post_url"), "delivery_key": delivery_key, "replayed": True})
-                    continue
-                upsert_delivery(pool, ydb, table, delivery_key, {
-                    **existing,
-                    "status": "sending",
-                    "post_url": canonical_post_url(row),
-                    "chat_id": chat_id,
-                    "random_id": str(random_id),
-                    "sending_started_at": existing.get("sending_started_at") or datetime.now(timezone.utc).isoformat(),
-                })
-                try:
-                    result = await client(functions.messages.SendMessageRequest(
-                        peer=input_peer,
-                        message=text,
-                        random_id=random_id,
-                        no_webpage=False,
-                    ))
-                    mid = _message_id_from_updates(result, random_id)
-                except Exception as exc:
-                    if type(exc).__name__ != "RandomIdDuplicateError":
-                        raise
-                    # Telegram has already accepted this deterministic delivery.
-                    mid = int(existing.get("message_id") or 0)
-                upsert_delivery(pool, ydb, table, delivery_key, {
-                    **existing,
-                    "status": "delivered",
-                    "post_url": canonical_post_url(row),
-                    "chat_id": chat_id,
-                    "random_id": str(random_id),
-                    "message_id": str(mid),
-                    "delivered_at": datetime.now(timezone.utc).isoformat(),
-                })
-                upsert_sent(pool, ydb, table, row, mid, chat_id=chat_id, delivery_key=delivery_key, random_id=random_id)
-            else:
-                msg = await client.send_message(peer, text, link_preview=True)
-                mid = int(getattr(msg, "id", 0) or 0)
-            sent.append({"message_id": mid, "post_url": rows[idx].get("post_url") if idx < len(rows) else ""})
-            if idx + 1 < len(messages) and not args.dry_run:
-                await asyncio.sleep(random.uniform(
-                    float(os.getenv("REGION_TALK_NOTIFY_DELAY_MIN_SECONDS") or "2"),
-                    float(os.getenv("REGION_TALK_NOTIFY_DELAY_MAX_SECONDS") or "5"),
-                ))
+        return await send_rows_bot_api(
+            args,
+            messages=messages,
+            rows=rows,
+            ydb=ydb,
+            driver=driver,
+            pool=pool,
+            table=table,
+        )
     finally:
-        await client.disconnect()
         if driver is not None:
             driver.stop()
-    return {
-        "ok": True,
-        "sent": sent,
-        "sent_count": len(sent),
-        "dry_run": bool(args.dry_run),
-        "resolved_chat_id": chat_id,
-        "delivery_account_id": actual_account_id,
-        "transport": "telethon",
-    }
 
 
 def _bot_api_call(token: str, method: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -1022,7 +868,6 @@ def main() -> int:
     ap.add_argument("--env-file", type=Path, default=Path(".env"))
     ap.add_argument("--chat", default="")
     ap.add_argument("--expected-chat-id", default="")
-    ap.add_argument("--allow-join-chat", action="store_true")
     ap.add_argument("--limit", type=int, default=20)
     ap.add_argument("--message", default="", help="Send a single status message instead of YDB publication candidates")
     ap.add_argument("--stats", action="store_true", help="Send live Region Talk YDB statistics instead of candidate links")
@@ -1035,9 +880,9 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument(
         "--transport",
-        choices=("telethon", "bot_api"),
-        default=(os.getenv("REGION_TALK_NOTIFY_TRANSPORT") or "telethon").strip().lower(),
-        help="telethon is local-only; scheduled Fly delivery must use bot_api",
+        choices=("bot_api",),
+        default="bot_api",
+        help="Region Talk functional delivery is Bot API-only",
     )
     args = ap.parse_args()
     load_env(args.env_file)
@@ -1049,7 +894,7 @@ def main() -> int:
         try:
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
-            raise RuntimeError("another Region Talk notifier already owns the E2E delivery session") from exc
+            raise RuntimeError("another Region Talk notifier already owns the delivery lock") from exc
         result = asyncio.run(send_rows(args))
     print(json.dumps(result, ensure_ascii=False))
     return 0

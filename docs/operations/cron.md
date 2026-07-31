@@ -40,6 +40,11 @@ outside the legacy global heavy-job gate: CandidateReport/ImageDiagnostic use
 dedicated `DISCOVERY1`/`DISCOVERY2` sessions and every Region Talk resource has
 its own kernel/lock guard, so an unrelated long render cannot starve all three
 daily discovery slots.
+After each bounded orchestrator session, the runner recalculates the next
+14-day `1 article + 1 social post` selection plan in YDB. The planner uses
+actual target-publication history plus BGE anti-vector ordering, overwrites only
+future unlocked slots and does not connect any Telegram human session or call
+public Telegram/VK publishing APIs.
 
 ## Observed runtimes (local runs)
 

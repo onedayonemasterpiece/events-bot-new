@@ -1,4 +1,5 @@
 import json
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,21 @@ def _disable_public_tg_fallback(monkeypatch):
         return []
 
     monkeypatch.setattr(tg_handlers, "_fallback_fetch_posters_from_public_tg_page", fake_fetch_posters)
+    # Freeze the incident replay at its original operational window so the
+    # fixture does not silently turn into a past-event test over time.
+    should_skip = tg_handlers._should_skip_past_event_candidate
+    can_import = tg_handlers._event_payload_can_still_be_imported
+    fixed_today = date(2026, 6, 13)
+    monkeypatch.setattr(
+        tg_handlers,
+        "_should_skip_past_event_candidate",
+        lambda candidate, *, today=None: should_skip(candidate, today=fixed_today),
+    )
+    monkeypatch.setattr(
+        tg_handlers,
+        "_event_payload_can_still_be_imported",
+        lambda event_data, *, today=None: can_import(event_data, today=fixed_today),
+    )
 
 
 def _results_path(tmp_path: Path) -> Path:

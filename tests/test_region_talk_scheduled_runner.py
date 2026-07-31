@@ -30,6 +30,7 @@ def complete_env(tmp_path: Path) -> dict[str, str]:
         "REGION_TALK_SCHEDULED_LOCK_FILE": str(tmp_path / "region-talk.lock"),
         "REGION_TALK_SCHEDULED_LOG_DIR": str(tmp_path / "logs"),
         "REGION_TALK_EXTERNAL_RESEARCH_ENABLED": "0",
+        "REGION_TALK_PUBLICATION_PLAN_ENABLED": "0",
     }
 
 
@@ -80,6 +81,18 @@ def test_external_research_command_is_server_side_and_has_no_telegram_session(tm
     assert all("TELEGRAM" not in part for part in command)
 
 
+def test_publication_plan_command_is_server_side_and_has_no_telegram_session(tmp_path: Path) -> None:
+    env = complete_env(tmp_path)
+    env["REGION_TALK_PUBLICATION_PLAN_DAYS"] = "21"
+    command = runner.build_publication_plan_command(env)
+
+    assert "--execute" in command
+    assert "--days" in command
+    assert command[command.index("--days") + 1] == "21"
+    assert command[1].endswith("region_talk_publication_plan.py")
+    assert all("TELEGRAM" not in part for part in command)
+
+
 def test_cli_preflight_is_redacted(monkeypatch, tmp_path: Path, capsys) -> None:
     env = complete_env(tmp_path)
     for key, value in env.items():
@@ -112,6 +125,8 @@ def test_cli_runs_by_absolute_path_outside_repo(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_scheduled_run_writes_cycle_log_and_returns_metrics(monkeypatch, tmp_path: Path) -> None:
     env = complete_env(tmp_path)
+    env["TELEGRAM_AUTH_BUNDLE_E2E"] = "codex-only-must-be-stripped"
+    env["TELEGRAM_SESSION"] = "generic-human-session-must-be-stripped"
     for key, value in env.items():
         monkeypatch.setenv(key, value)
 
@@ -139,6 +154,8 @@ async def test_scheduled_run_writes_cycle_log_and_returns_metrics(monkeypatch, t
         assert "--env-file" not in args
         assert kwargs["env"]["REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL"] == "1"
         assert kwargs["env"]["REGION_TALK_NOTIFY_TRANSPORT"] == "bot_api"
+        assert "TELEGRAM_AUTH_BUNDLE_E2E" not in kwargs["env"]
+        assert "TELEGRAM_SESSION" not in kwargs["env"]
         return FakeProcess()
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_subprocess)
@@ -213,3 +230,60 @@ async def test_external_research_failure_does_not_stop_social_orchestrator(monke
     assert result["external_research_status"] == "failed"
     assert result["external_research_exit_code"] == 1
     assert result["metrics"]["publication_candidate_total"] == 128
+
+
+@pytest.mark.asyncio
+async def test_scheduled_run_recalculates_publication_plan_after_orchestrator(monkeypatch, tmp_path: Path) -> None:
+    env = complete_env(tmp_path)
+    env["REGION_TALK_PUBLICATION_PLAN_ENABLED"] = "1"
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+
+    class OrchestratorProcess:
+        returncode = 0
+
+        def __init__(self) -> None:
+            self.stdout = asyncio.StreamReader()
+            self.stdout.feed_data(b'{"ok":true,"cycle":1,"metrics":{"publication_candidate_total":129}}\n')
+            self.stdout.feed_eof()
+
+        async def wait(self) -> int:
+            return 0
+
+        def terminate(self) -> None:
+            self.returncode = -15
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+    class PlanProcess:
+        returncode = 0
+
+        async def communicate(self):
+            return (
+                b'{"ok":true,"stage":"publication_plan","snapshot_id":"rtdayplan_test",'
+                b'"counts":{"planned_article":3,"planned_social":14}}\n',
+                None,
+            )
+
+        async def wait(self) -> int:
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = -15
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+    processes = [OrchestratorProcess(), PlanProcess()]
+
+    async def fake_subprocess(*args, **kwargs):
+        return processes.pop(0)
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_subprocess)
+    result = await runner.run_region_talk_scheduled(None, scheduler_run_id="plan-after-discovery")
+
+    assert result["ok"] is True
+    assert result["publication_plan_ok"] is True
+    assert result["publication_plan_snapshot_id"] == "rtdayplan_test"
+    assert result["publication_plan_counts"]["planned_article"] == 3

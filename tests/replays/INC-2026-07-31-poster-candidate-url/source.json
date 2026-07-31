@@ -1,0 +1,13 @@
+{
+  "source_type": "vk",
+  "source_url": "https://vk.com/wall-168966993_23531",
+  "source_text": "Минимальный replay механического persist-сбоя с постером",
+  "festival": "80 историй о главном",
+  "posters": [
+    {
+      "catbox_url": "https://source.example/poster.jpg",
+      "supabase_url": "https://static.example/managed-poster.webp"
+    },
+    {}
+  ]
+}

@@ -359,6 +359,16 @@ class GoogleAIClient:
             60,
         )
         self.max_retries = self._read_int_env("GOOGLE_AI_MAX_RETRIES", self.MAX_RETRIES)
+        # A declared normal pool normally rotates to another member after a
+        # provider-side 429.  Consumers with a hard *physical send* budget may
+        # disable that behavior explicitly; ordinary callers retain the
+        # availability-oriented default.
+        self.allow_provider_429_rotation = True
+        # When true, the current google.genai SDK is mandatory and receives an
+        # explicit one-attempt HTTP policy.  This is stronger than
+        # ``max_retries=1``: the deprecated google.generativeai/GAPIC path can
+        # retry transient HTTP failures underneath the application loop.
+        self.hard_single_provider_attempt = False
         self.retry_delays_ms = self._read_retry_delays()
         self.fallback_models = self._read_fallback_models()
         self.provider_timeout_seconds = self._read_float_env(self.PROVIDER_TIMEOUT_ENV, 0.0)
@@ -1356,6 +1366,8 @@ class GoogleAIClient:
                 except ProviderError as e:
                     last_error = e
                     if int(getattr(e, "status_code", 0) or 0) == 429:
+                        if not self.allow_provider_429_rotation:
+                            raise
                         selected_key_id = (ctx.api_key_id or "").strip()
                         selected_key_was_already_excluded = (
                             selected_key_id in provider_429_excluded_key_ids
@@ -2355,13 +2367,30 @@ class GoogleAIClient:
             new_config = dict(config)
             if safety_settings and "safety_settings" not in new_config:
                 new_config["safety_settings"] = safety_settings
-            gen_client = new_sdk.Client(api_key=api_key)
+            client_kwargs: dict[str, Any] = {}
+            if self.hard_single_provider_attempt:
+                # HttpRetryOptions.attempts includes the original request; 1
+                # therefore disables SDK-internal retries and makes the
+                # feature-level physical-send counter authoritative.
+                client_kwargs["http_options"] = {
+                    "retry_options": {"attempts": 1},
+                }
+            gen_client = new_sdk.Client(api_key=api_key, **client_kwargs)
             provider_call = gen_client.aio.models.generate_content(
                 model=model_name,
                 contents=prompt,
                 config=new_config or None,
             )
         else:
+            if self.hard_single_provider_attempt:
+                raise ProviderError(
+                    error_type="provider_sdk_unavailable",
+                    error_message=(
+                        "google.genai is required for a hard single-attempt "
+                        "provider budget; legacy SDK fallback is disabled"
+                    ),
+                    retryable=False,
+                )
             self.genai.configure(api_key=api_key)
             gen_model = self.genai.GenerativeModel(model_name)
             provider_call = gen_model.generate_content_async(

@@ -792,6 +792,73 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_event_media_asset_kind ON event_media_asset(kind)"
             )
 
+            dbg("video_asset")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS video_asset(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    sha256 TEXT NOT NULL UNIQUE,
+                    analysis_status TEXT NOT NULL DEFAULT 'accepted',
+                    cdn_url TEXT,
+                    cdn_path TEXT,
+                    cdn_bucket TEXT,
+                    size_bytes INTEGER,
+                    mime_type TEXT,
+                    width INTEGER,
+                    height INTEGER,
+                    duration_seconds REAL,
+                    aesthetic_score REAL,
+                    technical_score REAL,
+                    showcase_score REAL,
+                    description TEXT,
+                    search_text TEXT,
+                    analysis_model TEXT,
+                    analysis_version TEXT,
+                    analysis_json JSON NOT NULL DEFAULT '{}',
+                    analyzed_at TIMESTAMP,
+                    orphaned_at TIMESTAMP,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CHECK(analysis_status IN ('accepted', 'rejected', 'error', 'pending'))
+                )
+                """
+            )
+            await _add_column(conn, "video_asset", "orphaned_at TIMESTAMP")
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_video_asset_status_showcase "
+                "ON video_asset(analysis_status, showcase_score)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_video_asset_cdn_path "
+                "ON video_asset(cdn_bucket, cdn_path)"
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS event_video_link(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_id INTEGER NOT NULL,
+                    video_asset_id INTEGER NOT NULL,
+                    event_relevance_score REAL,
+                    ranking_score REAL,
+                    match_reason TEXT,
+                    relation_confidence REAL,
+                    source_url TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(event_id, video_asset_id),
+                    FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE,
+                    FOREIGN KEY(video_asset_id) REFERENCES video_asset(id) ON DELETE CASCADE
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_video_link_event_rank "
+                "ON event_video_link(event_id, ranking_score)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_video_link_asset "
+                "ON event_video_link(video_asset_id)"
+            )
+
             dbg("poll_repost_run")
             await conn.execute(
                 """

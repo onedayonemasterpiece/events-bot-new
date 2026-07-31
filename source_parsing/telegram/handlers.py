@@ -3,6 +3,7 @@ import hashlib
 import html
 import json
 import logging
+import math
 import os
 import re
 import time
@@ -13,7 +14,8 @@ from typing import Any, Awaitable, Callable
 from collections import defaultdict
 from urllib.parse import urlparse
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import OperationalError
 
 from db import Database
@@ -28,7 +30,7 @@ from markup import tel_href_for_phone_value
 from models import (
     Channel,
     Event,
-    EventMediaAsset,
+    EventVideoLink,
     EventSource,
     JobOutbox,
     JobStatus,
@@ -36,6 +38,7 @@ from models import (
     TelegramScannedMessage,
     TelegramSource,
     TelegramSourceForceMessage,
+    VideoAsset,
 )
 from source_parsing.date_utils import normalize_implicit_iso_date_to_anchor
 from smart_event_update import EventCandidate, PosterCandidate, SmartUpdateResult, smart_event_update
@@ -864,6 +867,149 @@ def _normalize_video_status(value: Any) -> str | None:
     return raw[:48]
 
 
+_VIDEO_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_VIDEO_TERMINAL_STATUSES = {"accepted", "rejected"}
+
+
+def _video_sha256(value: Any) -> str | None:
+    raw = str(value or "").strip().lower()
+    return raw if _VIDEO_SHA256_RE.fullmatch(raw) else None
+
+
+def _video_score(value: Any, *, clamp: bool = True) -> float | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(parsed):
+        return None
+    if not clamp and not 0.0 <= parsed <= 100.0:
+        return None
+    return max(0.0, min(100.0, parsed))
+
+
+def _video_confidence(value: Any) -> float | None:
+    """Return a finite model confidence in the canonical ``0..1`` range.
+
+    Unlike visual/relevance scores, confidence is a probability rather than a
+    percentage.  Reject malformed values instead of clamping them so a payload
+    that accidentally sends ``80`` cannot be persisted as high confidence.
+    """
+
+    if isinstance(value, bool):
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(parsed) or not 0.0 <= parsed <= 1.0:
+        return None
+    return parsed
+
+
+def _video_positive_int(value: Any, *, maximum: int) -> int | None:
+    parsed = _to_int(value)
+    if parsed is None or parsed <= 0:
+        return None
+    return min(int(parsed), int(maximum))
+
+
+def _video_duration_seconds(item: dict[str, Any]) -> float | None:
+    raw = item.get("duration_seconds")
+    if raw is None:
+        raw = item.get("duration_sec")
+    if raw is None and item.get("duration_ms") is not None:
+        try:
+            raw = float(item.get("duration_ms")) / 1000.0
+        except (TypeError, ValueError):
+            raw = None
+    try:
+        parsed = float(raw) if raw is not None and not isinstance(raw, bool) else None
+    except (TypeError, ValueError):
+        parsed = None
+    if parsed is None or not math.isfinite(parsed) or parsed <= 0:
+        return None
+    return min(parsed, 24 * 60 * 60.0)
+
+
+def _video_text(value: Any, *, limit: int) -> str | None:
+    raw = str(value or "").strip()
+    return raw[:limit] if raw else None
+
+
+def _video_event_indexes(value: Any) -> list[int]:
+    if not isinstance(value, list):
+        return []
+    out: list[int] = []
+    seen: set[int] = set()
+    for raw in value:
+        if isinstance(raw, bool):
+            continue
+        try:
+            idx = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if idx < 0 or idx > 999 or idx in seen:
+            continue
+        seen.add(idx)
+        out.append(idx)
+    return out
+
+
+def _video_event_relevance_scores(value: Any) -> list[dict[str, Any]]:
+    """Validate event-specific matching decisions without widening them.
+
+    A malformed or out-of-range relationship score is rejected rather than
+    clamped: silently turning e.g. 900 into a perfect match would attach media
+    to an unrelated event.  General visual scores may still be normalized at
+    the payload boundary, but relationship decisions are safety-critical.
+    """
+
+    if not isinstance(value, list):
+        return []
+    by_index: dict[int, dict[str, Any]] = {}
+    for raw in value:
+        if not isinstance(raw, dict):
+            continue
+        indexes = _video_event_indexes([raw.get("event_index")])
+        if not indexes:
+            continue
+        relevance = _video_score(
+            raw.get("relevance_score", raw.get("event_relevance_score")),
+            clamp=False,
+        )
+        if relevance is None:
+            continue
+        relation: dict[str, Any] = {
+            "event_index": indexes[0],
+            "event_relevance_score": relevance,
+            "match_reason": _video_text(
+                raw.get("reason", raw.get("match_reason")), limit=500
+            ),
+            "relation_confidence": _video_confidence(
+                raw.get("confidence", raw.get("relation_confidence"))
+            ),
+        }
+        by_index[indexes[0]] = relation
+    return [by_index[index] for index in sorted(by_index)]
+
+
+def _video_terminal_status(item: dict[str, Any]) -> str | None:
+    raw = _normalize_video_status(item.get("analysis_status") or item.get("status"))
+    if raw in {"accepted", "cached_accepted", "cache_hit"}:
+        return "accepted"
+    if raw in {"rejected", "cached_rejected"}:
+        return "rejected"
+    # Backward-compatible accepted payload emitted by the old producer.  It is
+    # allowed only at the payload boundary; new persisted rows use provider-
+    # neutral CDN names and terminal analysis status.
+    if raw in {"supabase", "uploaded"}:
+        return "accepted"
+    return None
+
+
 def _extract_message_videos_payload(message: dict[str, Any]) -> tuple[list[dict[str, Any]], str | None]:
     videos_payload = message.get("videos")
     items = videos_payload if isinstance(videos_payload, list) else []
@@ -875,91 +1021,309 @@ def _extract_message_videos_payload(message: dict[str, Any]) -> tuple[list[dict[
         status = _normalize_video_status(item.get("status"))
         if status:
             statuses.append(status)
-        supabase_url = _clean_url(item.get("supabase_url"))
-        supabase_path = str(item.get("supabase_path") or "").strip() or None
-        if not supabase_url and not supabase_path:
+        terminal_status = _video_terminal_status(item)
+        sha256 = _video_sha256(item.get("sha256"))
+        if terminal_status is None or sha256 is None:
+            continue
+        cdn_url = _clean_url(item.get("cdn_url") or item.get("supabase_url"))
+        cdn_path = str(item.get("cdn_path") or item.get("supabase_path") or "").strip().lstrip("/") or None
+        cdn_bucket = str(item.get("cdn_bucket") or item.get("storage_bucket") or "").strip() or None
+        analysis_json = item.get("analysis_json")
+        if not isinstance(analysis_json, dict):
+            analysis_json = {}
+        # A rejected row without any auditable analysis metadata belongs only in
+        # the producer's durable SHA sidecar; do not create an ambiguous core row.
+        if terminal_status == "rejected" and not (
+            analysis_json
+            or str(item.get("analysis_model") or item.get("model") or "").strip()
+            or str(item.get("analysis_version") or item.get("prompt_version") or "").strip()
+        ):
+            continue
+        if terminal_status == "accepted" and not (cdn_url or cdn_path):
             continue
         size_bytes = _to_int(item.get("size_bytes"))
         if size_bytes is not None and size_bytes < 0:
             size_bytes = None
+        event_indexes = _video_event_indexes(item.get("event_indexes"))
+        event_relevance_scores = _video_event_relevance_scores(
+            item.get("event_relevance_scores")
+        )
+        for relation in event_relevance_scores:
+            relation_index = int(relation["event_index"])
+            if relation_index not in event_indexes:
+                event_indexes.append(relation_index)
+        raw_status = _normalize_video_status(item.get("analysis_status") or item.get("status"))
+        if not event_indexes and raw_status in {"supabase", "uploaded"}:
+            event_indexes = [0]
         out.append(
             {
-                "supabase_url": supabase_url,
-                "supabase_path": supabase_path,
-                "sha256": str(item.get("sha256") or "").strip() or None,
+                "analysis_status": terminal_status,
+                "cdn_url": cdn_url,
+                "cdn_path": cdn_path,
+                "cdn_bucket": cdn_bucket,
+                "sha256": sha256,
                 "size_bytes": size_bytes,
                 "mime_type": str(item.get("mime_type") or "").strip() or None,
+                "width": _video_positive_int(item.get("width"), maximum=32768),
+                "height": _video_positive_int(item.get("height"), maximum=32768),
+                "duration_seconds": _video_duration_seconds(item),
+                "aesthetic_score": _video_score(item.get("aesthetic_score")),
+                "technical_score": _video_score(item.get("technical_score")),
+                "showcase_score": _video_score(item.get("showcase_score")),
+                # ``event_relevance_scores`` is the canonical M:N contract.
+                # Keep the scalar fields only as a one-event compatibility
+                # fallback; they are never copied across multiple event links.
+                "event_relevance_score": _video_score(
+                    item.get("event_relevance_score"), clamp=False
+                ),
+                "match_reason": _video_text(item.get("match_reason"), limit=500),
+                "relation_confidence": _video_confidence(
+                    item.get("relation_confidence")
+                ),
+                "event_relevance_scores": event_relevance_scores,
+                "description": _video_text(item.get("description"), limit=4000),
+                "search_text": _video_text(item.get("search_text"), limit=8000),
+                "analysis_model": _video_text(
+                    item.get("analysis_model") or item.get("model"), limit=160
+                ),
+                "analysis_version": _video_text(
+                    item.get("analysis_version") or item.get("prompt_version"), limit=160
+                ),
+                "analysis_json": analysis_json,
+                "analyzed_at": _parse_datetime(item.get("analyzed_at")),
+                "event_indexes": event_indexes,
             }
         )
     msg_status = _normalize_video_status(message.get("video_status"))
     if msg_status:
+        if msg_status in {
+            "accepted",
+            "cached_accepted",
+            "cache_hit",
+            "supabase",
+            "uploaded",
+        }:
+            msg_status = "accepted"
+        elif msg_status in {"rejected", "cached_rejected"}:
+            msg_status = "rejected"
         return out, msg_status
     if statuses:
         unique = sorted(set(statuses))
-        if any(v in {"supabase", "uploaded"} for v in unique):
-            if any(v not in {"supabase", "uploaded"} for v in unique):
+        accepted_statuses = {
+            "accepted",
+            "cached_accepted",
+            "cache_hit",
+            "supabase",
+            "uploaded",
+        }
+        if any(v in accepted_statuses for v in unique):
+            if any(v not in accepted_statuses for v in unique):
                 first = next(
-                    (v for v in unique if v not in {"supabase", "uploaded"}),
+                    (v for v in unique if v not in accepted_statuses),
                     None,
                 )
-                return out, f"partial:{first}" if first else "supabase"
-            return out, "supabase"
+                return out, f"partial:{first}" if first else "accepted"
+            return out, "accepted"
         return out, f"skipped:{unique[0]}"
     if out:
-        return out, "supabase"
+        return out, "accepted"
     return out, None
 
 
 async def _persist_event_video_assets(
     db: Database,
     *,
-    event_id: int,
+    event_ids_by_index: dict[int, int | set[int] | list[int] | tuple[int, ...]],
     videos: list[dict[str, Any]],
-) -> tuple[int, int]:
+    source_url: str | None,
+) -> tuple[int, int, dict[int, int]]:
     if not videos:
-        return 0, 0
+        return 0, 0, {}
     for attempt in range(1, 8):
         try:
-            inserted = 0
+            inserted_links = 0
             total = 0
+            inserted_by_event: dict[int, int] = defaultdict(int)
             async with db.get_session() as session:
                 for item in videos:
-                    supabase_url = _clean_url(item.get("supabase_url"))
-                    supabase_path = str(item.get("supabase_path") or "").strip() or None
-                    sha256 = str(item.get("sha256") or "").strip() or None
-                    size_bytes = _to_int(item.get("size_bytes"))
-                    mime_type = str(item.get("mime_type") or "").strip() or None
-                    if not supabase_url and not supabase_path:
+                    sha256 = _video_sha256(item.get("sha256"))
+                    status = str(item.get("analysis_status") or "").strip().lower()
+                    if sha256 is None or status not in _VIDEO_TERMINAL_STATUSES:
                         continue
                     total += 1
-                    query = select(EventMediaAsset.id).where(
-                        EventMediaAsset.event_id == int(event_id),
-                        EventMediaAsset.kind == "video",
+                    cdn_url = _clean_url(item.get("cdn_url"))
+                    cdn_path = str(item.get("cdn_path") or "").strip().lstrip("/") or None
+                    cdn_bucket = str(item.get("cdn_bucket") or "").strip() or None
+                    if cdn_url and (not cdn_bucket or not cdn_path):
+                        try:
+                            from supabase_storage import parse_storage_object_url
+
+                            parsed_storage = parse_storage_object_url(cdn_url)
+                        except Exception:
+                            parsed_storage = None
+                        if parsed_storage:
+                            parsed_bucket, parsed_path = parsed_storage
+                            cdn_bucket = cdn_bucket or parsed_bucket
+                            cdn_path = cdn_path or parsed_path
+
+                    now = datetime.now(timezone.utc)
+                    insert_values = {
+                        "sha256": sha256,
+                        "analysis_status": status,
+                        "cdn_url": cdn_url if status == "accepted" else None,
+                        "cdn_path": cdn_path if status == "accepted" else None,
+                        "cdn_bucket": cdn_bucket if status == "accepted" else None,
+                        "size_bytes": item.get("size_bytes"),
+                        "mime_type": item.get("mime_type"),
+                        "width": item.get("width"),
+                        "height": item.get("height"),
+                        "duration_seconds": item.get("duration_seconds"),
+                        "aesthetic_score": item.get("aesthetic_score"),
+                        "technical_score": item.get("technical_score"),
+                        "showcase_score": item.get("showcase_score"),
+                        "description": item.get("description"),
+                        "search_text": item.get("search_text"),
+                        "analysis_model": item.get("analysis_model"),
+                        "analysis_version": item.get("analysis_version"),
+                        "analysis_json": item.get("analysis_json") or {},
+                        "analyzed_at": item.get("analyzed_at") or now,
+                        "orphaned_at": None,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                    await session.execute(
+                        sqlite_insert(VideoAsset)
+                        .values(**insert_values)
+                        .on_conflict_do_nothing(index_elements=["sha256"])
                     )
-                    if supabase_path:
-                        query = query.where(EventMediaAsset.supabase_path == supabase_path)
-                    elif supabase_url:
-                        query = query.where(EventMediaAsset.supabase_url == supabase_url)
-                    elif sha256:
-                        query = query.where(EventMediaAsset.sha256 == sha256)
-                    exists = (await session.execute(query.limit(1))).first()
-                    if exists:
-                        continue
-                    session.add(
-                        EventMediaAsset(
-                            event_id=int(event_id),
-                            kind="video",
-                            supabase_url=supabase_url,
-                            supabase_path=supabase_path,
-                            sha256=sha256,
-                            size_bytes=size_bytes,
-                            mime_type=mime_type,
+                    asset = (
+                        await session.execute(
+                            select(VideoAsset).where(VideoAsset.sha256 == sha256).limit(1)
                         )
-                    )
-                    inserted += 1
-                if inserted:
-                    await session.commit()
-            return inserted, total
+                    ).scalar_one()
+
+                    existing_status = str(asset.analysis_status or "").strip().lower()
+                    if existing_status not in _VIDEO_TERMINAL_STATUSES:
+                        for key, value in insert_values.items():
+                            if key not in {"sha256", "created_at"}:
+                                setattr(asset, key, value)
+                        session.add(asset)
+                        existing_status = status
+                    elif existing_status == "accepted" and status == "accepted":
+                        # A terminal decision is immutable, but an orphaned binary
+                        # may be materialized again without another model call.
+                        for key in ("cdn_url", "cdn_path", "cdn_bucket"):
+                            value = insert_values.get(key)
+                            if value:
+                                setattr(asset, key, value)
+                        asset.orphaned_at = None
+                        asset.updated_at = now
+                        session.add(asset)
+
+                    effective_path = str(asset.cdn_path or "").strip().lstrip("/") or None
+                    effective_bucket = str(asset.cdn_bucket or "").strip() or None
+                    if effective_bucket and effective_path:
+                        from sqlalchemy import text
+
+                        await session.execute(
+                            text(
+                                "DELETE FROM supabase_delete_queue "
+                                "WHERE bucket=:bucket AND path=:path"
+                            ),
+                            {"bucket": effective_bucket, "path": effective_path},
+                        )
+
+                    if existing_status != "accepted" or not (asset.cdn_url or asset.cdn_path):
+                        continue
+                    if asset.id is None:
+                        await session.flush()
+                    showcase_score = _video_score(asset.showcase_score)
+                    relations_by_index = {
+                        int(relation["event_index"]): relation
+                        for relation in list(item.get("event_relevance_scores") or [])
+                        if isinstance(relation, dict)
+                        and _video_event_indexes([relation.get("event_index")])
+                    }
+                    event_indexes = list(item.get("event_indexes") or [])
+                    allow_scalar_fallback = len(event_indexes) == 1
+                    for event_index in list(item.get("event_indexes") or []):
+                        mapped_event_ids = event_ids_by_index.get(int(event_index))
+                        if not mapped_event_ids:
+                            continue
+                        if isinstance(mapped_event_ids, int):
+                            target_event_ids = [mapped_event_ids]
+                        else:
+                            target_event_ids = sorted(
+                                {
+                                    int(value)
+                                    for value in mapped_event_ids
+                                    if int(value) > 0
+                                }
+                            )
+                        relation = relations_by_index.get(int(event_index), {})
+                        relevance_score = _video_score(
+                            relation.get("event_relevance_score"), clamp=False
+                        )
+                        match_reason = relation.get("match_reason")
+                        relation_confidence = _video_confidence(
+                            relation.get("relation_confidence")
+                        )
+                        if not relation and allow_scalar_fallback:
+                            relevance_score = _video_score(
+                                item.get("event_relevance_score"), clamp=False
+                            )
+                            match_reason = item.get("match_reason")
+                            relation_confidence = _video_confidence(
+                                item.get("relation_confidence")
+                            )
+                        ranking_score = (
+                            float(
+                                round(
+                                    0.75 * showcase_score
+                                    + 0.25 * relevance_score
+                                )
+                            )
+                            if showcase_score is not None
+                            and relevance_score is not None
+                            else None
+                        )
+                        for event_id in target_event_ids:
+                            existing_link = (
+                                await session.execute(
+                                    select(EventVideoLink).where(
+                                        EventVideoLink.event_id == int(event_id),
+                                        EventVideoLink.video_asset_id == int(asset.id),
+                                    )
+                                )
+                            ).scalar_one_or_none()
+                            if existing_link is None:
+                                session.add(
+                                    EventVideoLink(
+                                        event_id=int(event_id),
+                                        video_asset_id=int(asset.id),
+                                        event_relevance_score=relevance_score,
+                                        ranking_score=ranking_score,
+                                        match_reason=match_reason,
+                                        relation_confidence=relation_confidence,
+                                        source_url=_clean_url(source_url),
+                                        created_at=now,
+                                    )
+                                )
+                                await session.flush()
+                                inserted_links += 1
+                                inserted_by_event[int(event_id)] += 1
+                            else:
+                                # Idempotent upsert: the relation identity is
+                                # stable, while newer source-grounded ranking
+                                # evidence replaces stale metadata.
+                                existing_link.event_relevance_score = relevance_score
+                                existing_link.ranking_score = ranking_score
+                                existing_link.match_reason = match_reason
+                                existing_link.relation_confidence = relation_confidence
+                                existing_link.source_url = _clean_url(source_url)
+                                session.add(existing_link)
+                await session.commit()
+            return inserted_links, total, dict(inserted_by_event)
         except OperationalError as exc:
             if "database is locked" not in str(exc).lower() or attempt >= 7:
                 raise
@@ -4872,6 +5236,19 @@ def _dedupe_norm_time(value: str | None) -> str:
 def _dedupe_merge_event_dict(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any]:
     out = dict(base)
 
+    original_indexes: list[int] = []
+    for payload in (
+        out.get("_telegram_result_indexes"),
+        [out.get("_telegram_result_index")],
+        extra.get("_telegram_result_indexes"),
+        [extra.get("_telegram_result_index")],
+    ):
+        for index in _video_event_indexes(payload):
+            if index not in original_indexes:
+                original_indexes.append(index)
+    if original_indexes:
+        out["_telegram_result_indexes"] = original_indexes
+
     def _prefer_longer_str(key: str) -> None:
         a = str(out.get(key) or "").strip()
         b = str(extra.get(key) or "").strip()
@@ -5226,8 +5603,18 @@ async def process_telegram_results(
         if not source_link and username and message_id:
             source_link = f"https://t.me/{username}/{message_id}"
         source_text = message.get("text") or ""
+        raw_events_payload = message.get("events") or []
+        indexed_events_payload: list[dict[str, Any]] = []
+        if isinstance(raw_events_payload, list):
+            for original_index, raw_event in enumerate(raw_events_payload):
+                if not isinstance(raw_event, dict):
+                    continue
+                indexed_event = dict(raw_event)
+                indexed_event.setdefault("_telegram_result_index", int(original_index))
+                indexed_event.setdefault("_telegram_result_indexes", [int(original_index)])
+                indexed_events_payload.append(indexed_event)
         events = _dedupe_message_events(
-            message.get("events") or [],
+            indexed_events_payload,
             username=username,
             message_id=message_id,
         )
@@ -5249,6 +5636,7 @@ async def process_telegram_results(
         message_merged_events: list[TelegramMonitorEventInfo] = []
         created_event_ids: list[int] = []
         merged_event_ids: list[int] = []
+        event_ids_by_original_index: dict[int, set[int]] = defaultdict(set)
         added_posters_total = 0
 
         def _sorted_breakdown(value: dict[str, int] | defaultdict[str, int] | None) -> dict[str, int]:
@@ -6025,10 +6413,16 @@ async def process_telegram_results(
         scraped_posters: list[PosterCandidate] | None = None
         scraped_full_text: str | None = None
         is_single_event_post = len(events) <= 1
-        single_event_id: int | None = None
 
-        for event_data in events:
+        for transformed_event_index, event_data in enumerate(events):
             try:
+                original_event_indexes = [transformed_event_index]
+                if isinstance(event_data, dict):
+                    original_event_indexes = _video_event_indexes(
+                        event_data.get("_telegram_result_indexes")
+                    ) or _video_event_indexes(
+                        [event_data.get("_telegram_result_index", transformed_event_index)]
+                    ) or [transformed_event_index]
                 if _looks_like_poster_only_non_event(message, event_data if isinstance(event_data, dict) else {}):
                     report.events_filtered += 1
                     report.events_skipped += 1
@@ -6206,11 +6600,13 @@ async def process_telegram_results(
                             exc_info=True,
                         )
                 if (
-                    is_single_event_post
-                    and getattr(result, "event_id", None)
+                    getattr(result, "event_id", None)
                     and result.status in {"created", "merged", "skipped_nochange"}
                 ):
-                    single_event_id = int(result.event_id)
+                    for original_event_index in original_event_indexes:
+                        event_ids_by_original_index[int(original_event_index)].add(
+                            int(result.event_id)
+                        )
                 linked_added = 0
                 if result.event_id:
                     linked_added = await _attach_linked_sources(
@@ -6435,68 +6831,78 @@ async def process_telegram_results(
                 )
             )
 
-        imported_ids = sorted({int(v) for v in (created_event_ids + merged_event_ids) if v})
         if message_videos:
-            attach_ids = list(imported_ids)
-            if not attach_ids and single_event_id:
-                attach_ids = [int(single_event_id)]
-            if len(attach_ids) == 1:
-                try:
-                    inserted, total = await _persist_event_video_assets(
-                        db,
-                        event_id=int(attach_ids[0]),
-                        videos=message_videos,
+            try:
+                inserted, total, inserted_by_event = await _persist_event_video_assets(
+                    db,
+                    event_ids_by_index=event_ids_by_original_index,
+                    videos=message_videos,
+                    source_url=source_link,
+                )
+                accepted_videos = [
+                    item
+                    for item in message_videos
+                    if str(item.get("analysis_status") or "").strip().lower()
+                    == "accepted"
+                ]
+                if total > 0 and not post_video_status:
+                    post_video_status = "accepted" if accepted_videos else "rejected"
+                linked_event_ids = sorted(inserted_by_event)
+                for linked_event_id in linked_event_ids:
+                    await _requeue_event_telegraph_build(
+                        db, event_id=int(linked_event_id)
                     )
-                    if total > 0 and not post_video_status:
-                        post_video_status = "supabase"
-                    if total > 0 and inserted > 0:
-                        await _requeue_event_telegraph_build(db, event_id=int(attach_ids[0]))
-                    # Update per-event report objects so Smart Update details can show added videos.
-                    try:
-                        from sqlalchemy import select, func
-                        from models import EventMediaAsset
 
-                        async with db.get_session() as session:
-                            count = (
-                                await session.execute(
-                                    select(func.count())
-                                    .select_from(EventMediaAsset)
-                                    .where(
-                                        EventMediaAsset.event_id == int(attach_ids[0]),
-                                        EventMediaAsset.kind == "video",
-                                    )
-                                )
-                            ).scalar_one()
-                        video_total = int(count or 0)
-                    except Exception:
-                        video_total = None  # type: ignore[assignment]
-                    for info in list(message_created_events) + list(message_merged_events):
-                        if getattr(info, "event_id", None) == int(attach_ids[0]):
-                            info.added_videos = int(inserted or 0)
-                            if video_total is not None:
-                                info.video_count = int(video_total)
-                    logger.info(
-                        "tg_monitor.videos attached source=%s message_id=%s event_id=%s inserted=%s total=%s",
-                        username,
-                        message_id,
-                        int(attach_ids[0]),
-                        int(inserted),
-                        int(total),
-                    )
-                except Exception:
-                    logger.warning(
-                        "tg_monitor.videos attach failed source=%s message_id=%s",
-                        username,
-                        message_id,
-                        exc_info=True,
-                    )
-                    if not post_video_status:
-                        post_video_status = "skipped:attach_error"
-            elif len(attach_ids) >= 2:
-                post_video_status = "skipped:multi_event_message"
-                skip_breakdown["video_skipped_multi_event"] += 1
-            else:
-                post_video_status = "skipped:no_imported_event"
+                video_totals: dict[int, int] = {}
+                event_ids_for_report = {
+                    int(info.event_id)
+                    for info in list(message_created_events) + list(message_merged_events)
+                    if getattr(info, "event_id", None)
+                }
+                if event_ids_for_report:
+                    async with db.get_session() as session:
+                        rows = (
+                            await session.execute(
+                                select(EventVideoLink.event_id, func.count())
+                                .where(EventVideoLink.event_id.in_(event_ids_for_report))
+                                .group_by(EventVideoLink.event_id)
+                            )
+                        ).all()
+                    video_totals = {
+                        int(event_id): int(count or 0) for event_id, count in rows
+                    }
+                for info in list(message_created_events) + list(message_merged_events):
+                    info_event_id = int(getattr(info, "event_id", 0) or 0)
+                    if not info_event_id:
+                        continue
+                    info.added_videos = int(inserted_by_event.get(info_event_id, 0))
+                    info.video_count = int(video_totals.get(info_event_id, 0))
+                logger.info(
+                    "tg_monitor.videos attached source=%s message_id=%s events=%s inserted_links=%s assets=%s",
+                    username,
+                    message_id,
+                    sorted(
+                        (index, sorted(event_ids))
+                        for index, event_ids in event_ids_by_original_index.items()
+                    ),
+                    int(inserted),
+                    int(total),
+                )
+                if accepted_videos and not any(
+                    item.get("event_indexes") for item in accepted_videos
+                ):
+                    post_video_status = "skipped:unmatched_event"
+                elif accepted_videos and not event_ids_by_original_index:
+                    post_video_status = "skipped:no_imported_event"
+            except Exception:
+                logger.warning(
+                    "tg_monitor.videos attach failed source=%s message_id=%s",
+                    username,
+                    message_id,
+                    exc_info=True,
+                )
+                if not post_video_status:
+                    post_video_status = "skipped:attach_error"
 
         final_status = "done"
         if events_extracted and events_imported <= 0:

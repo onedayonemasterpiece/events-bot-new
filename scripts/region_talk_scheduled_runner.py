@@ -117,6 +117,23 @@ def build_external_research_command(env: Mapping[str, str] | None = None) -> lis
     ]
 
 
+def build_publication_plan_command(env: Mapping[str, str] | None = None) -> list[str]:
+    values = env if env is not None else os.environ
+    python_bin = str(values.get("REGION_TALK_ORCHESTRATOR_PYTHON") or sys.executable or "python3").strip()
+    try:
+        days = int(str(values.get("REGION_TALK_PUBLICATION_PLAN_DAYS") or "14").strip())
+    except ValueError:
+        days = 14
+    days = max(1, min(60, days))
+    return [
+        python_bin,
+        str(ROOT / "scripts" / "region_talk_publication_plan.py"),
+        "--execute",
+        "--days",
+        str(days),
+    ]
+
+
 def _compact_metrics(payload: Mapping[str, Any]) -> dict[str, int]:
     metrics = payload.get("metrics") if isinstance(payload.get("metrics"), Mapping) else {}
     keys = (
@@ -216,9 +233,12 @@ async def run_region_talk_scheduled(
         child_env = os.environ.copy()
         child_env["REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL"] = "1"
         child_env["REGION_TALK_ALLOW_LOCAL_YC_FALLBACK"] = "0"
-        # Scheduled delivery must never reuse the local live-E2E human
-        # session from a remote Fly machine.  Telegram invalidates an MTProto
-        # authorization used concurrently from separate connections/IPs.
+        # Human sessions are outside the Region Talk functional pipeline.
+        # Strip them even when an operator shell inherited either variable:
+        # delivery uses Bot API, while remote discovery receives only its
+        # explicitly role-scoped DISCOVERY1/DISCOVERY2 bundles.
+        child_env.pop("TELEGRAM_AUTH_BUNDLE_E2E", None)
+        child_env.pop("TELEGRAM_SESSION", None)
         child_env["REGION_TALK_NOTIFY_TRANSPORT"] = "bot_api"
         child_env["PYTHONUNBUFFERED"] = "1"
         max_runtime_minutes = _env_int(
@@ -226,6 +246,12 @@ async def run_region_talk_scheduled(
         )
         hard_timeout = (max_runtime_minutes + 15) * 60
         last_payload: dict[str, Any] = {}
+        publication_plan: dict[str, Any] = {
+            "ok": True,
+            "stage": "publication_plan",
+            "status": "disabled",
+        }
+        publication_plan_exit_code: int | None = None
 
         with output_path.open("w", encoding="utf-8") as output:
             os.chmod(output_path, 0o600)
@@ -335,6 +361,57 @@ async def run_region_talk_scheduled(
                     await process.wait()
             await consumer
 
+            if _env_bool("REGION_TALK_PUBLICATION_PLAN_ENABLED", True):
+                plan_process = await asyncio.create_subprocess_exec(
+                    *build_publication_plan_command(),
+                    cwd=str(ROOT),
+                    env=child_env,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                )
+                try:
+                    plan_stdout, _ = await asyncio.wait_for(
+                        plan_process.communicate(),
+                        timeout=_env_int(
+                            "REGION_TALK_PUBLICATION_PLAN_TIMEOUT_SECONDS",
+                            300,
+                            minimum=30,
+                            maximum=900,
+                        ),
+                    )
+                except asyncio.TimeoutError:
+                    plan_process.terminate()
+                    try:
+                        await asyncio.wait_for(plan_process.wait(), timeout=20)
+                    except asyncio.TimeoutError:
+                        plan_process.kill()
+                        await plan_process.wait()
+                    plan_stdout = b""
+                    publication_plan = {
+                        "ok": False,
+                        "stage": "publication_plan",
+                        "status": "timed_out",
+                    }
+                publication_plan_exit_code = int(plan_process.returncode or 0)
+                for raw in plan_stdout.decode("utf-8", errors="replace").splitlines():
+                    line = raw.strip()
+                    if not line:
+                        continue
+                    output.write(line + "\n")
+                    output.flush()
+                    try:
+                        candidate = json.loads(line)
+                    except (TypeError, ValueError):
+                        continue
+                    if isinstance(candidate, dict) and candidate.get("stage") == "publication_plan":
+                        publication_plan = candidate
+                LOGGER.info(
+                    "region_talk publication plan ok=%s exit_code=%s counts=%s",
+                    publication_plan.get("ok"),
+                    publication_plan_exit_code,
+                    publication_plan.get("counts") or {},
+                )
+
         exit_code = int(process.returncode or 0)
         metrics = _compact_metrics(last_payload)
         details = {
@@ -348,8 +425,20 @@ async def run_region_talk_scheduled(
             "external_research_ok": bool(external_research.get("ok")),
             "external_research_exit_code": external_research_exit_code,
             "external_research_ready": int(external_research.get("ready_for_region_talk_scoring") or 0),
+            "publication_plan_ok": bool(publication_plan.get("ok")),
+            "publication_plan_status": publication_plan.get("status") or (
+                "complete" if publication_plan.get("ok") else "failed"
+            ),
+            "publication_plan_exit_code": publication_plan_exit_code,
+            "publication_plan_snapshot_id": publication_plan.get("snapshot_id"),
+            "publication_plan_counts": publication_plan.get("counts") or {},
         }
-        status = "success" if exit_code == 0 and not timed_out else "failed"
+        status = "success" if (
+            exit_code == 0
+            and not timed_out
+            and bool(publication_plan.get("ok"))
+            and (publication_plan_exit_code in {None, 0})
+        ) else "failed"
         await _finish(db_obj, ops_run_id=ops_run_id, status=status, metrics=metrics, details=details)
         LOGGER.info(
             "region_talk scheduled finished status=%s exit_code=%s output=%s metrics=%s",

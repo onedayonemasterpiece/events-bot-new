@@ -8,12 +8,14 @@ import hashlib
 import json
 import math
 import struct
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 
 QUEUE_POLICY_VERSION = "region_talk_mmr_adjacency_v1"
+DAILY_PLAN_POLICY_VERSION = "region_talk_daily_pair_antivector_v1"
 SUPPORTED_VECTOR_ENCODING = "f16_le_base64"
+ARTICLE_ORIGIN_TYPES = {"editorial_publication", "academic_publication"}
 
 
 def canonical_url(row: dict[str, Any]) -> str:
@@ -137,6 +139,138 @@ def _max_similarity(candidate: dict[str, Any], references: list[dict[str, Any]])
         "diversity_mode": best_mode,
         "fallback_reasons": sorted(fallback_reasons),
     }
+
+
+def max_similarity(candidate: dict[str, Any], references: list[dict[str, Any]]) -> tuple[float, dict[str, Any]]:
+    """Public wrapper used by durable queue planners and diagnostics."""
+
+    return _max_similarity(candidate, references)
+
+
+def content_lane(row: dict[str, Any]) -> str:
+    """Split external articles from Telegram/VK/social publication posts."""
+
+    explicit = str(row.get("content_lane") or row.get("publication_lane") or "").strip().lower()
+    if explicit in {"article", "social"}:
+        return explicit
+    origin = str(row.get("content_origin_type") or "").strip().lower()
+    if origin in ARTICLE_ORIGIN_TYPES or row.get("external_publication_id"):
+        return "article"
+    return "social"
+
+
+def build_daily_publication_plan(
+    candidates: list[dict[str, Any]],
+    *,
+    history: list[dict[str, Any]] | None = None,
+    start_date: date,
+    days: int = 14,
+    diversity_weight: float = 0.35,
+    pair_similarity_threshold: float = 0.82,
+    locked_slots: dict[tuple[str, str], dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Build one article and one social slot per day.
+
+    Each lane is ranked against its own long-term published history and all
+    earlier selections in that lane.  The social choice is additionally kept
+    away from the article selected for the same day.  Future planned slots are
+    intentionally not locks: callers may recalculate them whenever candidates
+    arrive.  Only explicit ``locked``/``published`` slots belong in
+    ``locked_slots``.
+    """
+
+    history = [dict(row) for row in (history or [])]
+    locked_slots = dict(locked_slots or {})
+    remaining: dict[str, list[dict[str, Any]]] = {"article": [], "social": []}
+    seen: set[str] = set()
+    for row in candidates:
+        url = canonical_url(row)
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        remaining[content_lane(row)].append(dict(row))
+
+    lane_references = {
+        lane: [row for row in history if content_lane(row) == lane]
+        for lane in ("article", "social")
+    }
+    result: list[dict[str, Any]] = []
+    pair_similarity_threshold = max(-1.0, min(1.0, float(pair_similarity_threshold)))
+
+    for offset in range(max(0, int(days))):
+        day = (start_date + timedelta(days=offset)).isoformat()
+        selected_today: dict[str, dict[str, Any]] = {}
+        for lane in ("article", "social"):
+            fixed = locked_slots.get((day, lane))
+            if fixed:
+                fixed_row = {
+                    **fixed,
+                    "plan_date": day,
+                    "content_lane": lane,
+                    "queue_policy_version": DAILY_PLAN_POLICY_VERSION,
+                    "slot_locked": True,
+                }
+                result.append(fixed_row)
+                selected_today[lane] = fixed_row
+                lane_references[lane].append(fixed_row)
+                continue
+
+            pool = remaining[lane]
+            if not pool:
+                result.append({
+                    "plan_date": day,
+                    "content_lane": lane,
+                    "plan_status": "vacant",
+                    "queue_policy_version": DAILY_PLAN_POLICY_VERSION,
+                    "slot_locked": False,
+                    "vacancy_reason": f"no_eligible_{lane}_candidate",
+                })
+                continue
+
+            references = list(lane_references[lane])
+            if lane == "social" and selected_today.get("article"):
+                references.append(selected_today["article"])
+            ranked = rank_publication_queue(
+                pool,
+                history=references,
+                limit=len(pool),
+                diversity_weight=diversity_weight,
+                adjacency_threshold=1.0,
+            )
+            chosen = ranked[0]
+            pair_relaxed = False
+            pair_similarity = 0.0
+            pair_mode = "not_applicable"
+            if lane == "social" and selected_today.get("article"):
+                article = selected_today["article"]
+                alternatives: list[tuple[dict[str, Any], float, dict[str, Any]]] = []
+                for row in ranked:
+                    similarity, meta = _max_similarity(row, [article])
+                    alternatives.append((row, similarity, meta))
+                below = [item for item in alternatives if item[1] < pair_similarity_threshold]
+                selected = below[0] if below else alternatives[0]
+                chosen, pair_similarity, pair_meta = selected
+                pair_mode = str(pair_meta.get("diversity_mode") or "heuristic_fallback")
+                pair_relaxed = not bool(below)
+
+            planned = {
+                **chosen,
+                "plan_date": day,
+                "content_lane": lane,
+                "plan_status": "planned",
+                "queue_policy_version": DAILY_PLAN_POLICY_VERSION,
+                "slot_locked": False,
+                "pair_similarity": round(float(pair_similarity), 6),
+                "pair_similarity_mode": pair_mode,
+                "pair_similarity_threshold": pair_similarity_threshold,
+                "pair_diversity_relaxed": pair_relaxed,
+            }
+            result.append(planned)
+            selected_today[lane] = planned
+            lane_references[lane].append(planned)
+            chosen_url = canonical_url(chosen)
+            remaining[lane] = [row for row in pool if canonical_url(row) != chosen_url]
+    return result
 
 
 def rank_publication_queue(
