@@ -71,6 +71,15 @@ migration endpoint. Read-only postflight verified Postgres 17, RLS enabled,
 four policies, the view/RPC present and zero pre-existing rows; the security
 advisor reported no finding tied to these objects.
 
+Migration `20260731174310_harden_saved_event_mutations.sql` is the reviewed
+next security state (not applied by the static build): authenticated callers
+retain owner-scoped `SELECT`, but direct `INSERT/UPDATE/DELETE` is revoked.
+The same desired-state RPC becomes a fixed-`search_path` `SECURITY DEFINER`
+boundary that derives ownership only from `auth.uid()`, serializes concurrent
+tabs per owner, preserves idempotent repeats and enforces at most 500 active
+saved-event rows per user. It accepts no caller-supplied `user_id` and never
+uses `user_metadata` for authorization.
+
 The date calendar itself is event-aware: navigation extends through the
 furthest month that contains a public event in the generated availability
 manifest. Dates without events are not ordinary active targets—pointer events

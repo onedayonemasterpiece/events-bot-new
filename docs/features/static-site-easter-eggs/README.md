@@ -22,7 +22,7 @@
 шаринга, streak, loot-box случайности и потери найденного прогресса. Отдельная
 фокус-группа имеет принятое owner exception — collection-first результат и один
 приз из двух билетов, но только после самостоятельных legal/privacy/anti-fraud
-gates; каноника исключения — [программа фокус-группы](../../backlog/features/static-site-focus-group/easter-egg-program.md).
+gates; каноника исключения — [программа фокус-группы](../../features/static-site-focus-group/easter-egg-program.md).
 Перед кодом
 нужны owner acceptance, прототип, аналитический контракт, first-class модель
 пасхалки, privacy/a11y/IP gates и эксперимент с holdout.
@@ -271,7 +271,7 @@ exposure. Promo-показ не обучает organic preference model.
 ранжирование с bounded participation. Это не активный конкурс: versioned score,
 responsive placement matrix, caps, tie-break, anti-abuse, accessibility и честный
 `Правила готовятся` определены только в
-[focus programme contract](../../backlog/features/static-site-focus-group/easter-egg-program.md).
+[focus programme contract](../../features/static-site-focus-group/easter-egg-program.md).
 
 - Любой материальный приз — отдельный release с утверждёнными organizer,
   eligibility, сроками, правилами выбора, числом призов, consent, audit,
@@ -329,6 +329,6 @@ Stage 13 остаётся post-release и не блокирует первую �
 - [Партнёрское промо](../promo-campaigns/partner-promo.md)
 - [Мои события](../event-favorites-calendar/README.md)
 - [Personalization data ownership](../../architecture/personalization-data-ownership.md)
-- [Focus-group score и placement contract](../../backlog/features/static-site-focus-group/easter-egg-program.md)
+- [Focus-group score и placement contract](../../features/static-site-focus-group/easter-egg-program.md)
 - [Static-site design system](../static-site-pages/design-system/README.md)
 - [Release readiness / Stage 13](../../reports/static-personal-announcements-release-readiness-2026-07-11.md#stage-13--feature-discovery-пасхалки-о-калининграде)

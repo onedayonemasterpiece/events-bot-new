@@ -22,8 +22,8 @@
 
 Канонические входы:
 
-- `docs/backlog/features/static-site-focus-group/README.md`
-- `docs/backlog/features/static-site-focus-group/current-state-audit.md`
+- `docs/features/static-site-focus-group/README.md`
+- `docs/features/static-site-focus-group/current-state-audit.md`
 - `docs/features/static-site-pages/release-plan.md`
 - `docs/features/static-site-pages/presentation-release-checklist.md`
 - `docs/architecture/personalization-data-ownership.md`

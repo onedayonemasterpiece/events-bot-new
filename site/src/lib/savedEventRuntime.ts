@@ -7,7 +7,7 @@ import {
 } from './savedEventRuntimeCore.mjs';
 
 const INSTALL_KEY = '__KENIGEVENTS_SAVED_EVENT_RUNTIME_V1__';
-const RECONCILIATION_KEY = 'ke_saved_event_reconciliation_v1';
+const RECONCILIATION_KEY = 'ke_saved_event_reconciliation_v2';
 const ACTION_SETTLE_MS = 30_000;
 
 declare global {
@@ -18,20 +18,32 @@ declare global {
 
 function readReconciliationMarkers(): Record<string, string> {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(RECONCILIATION_KEY) || '{}');
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    const parsed = JSON.parse(window.localStorage.getItem(RECONCILIATION_KEY) || 'null');
+    if (parsed?.v !== 2 || !Array.isArray(parsed.e)) return {};
+    return Object.fromEntries(parsed.e.filter((item: unknown) => Array.isArray(item) && item.length === 2));
   } catch {
     return {};
   }
 }
 
+function compactUserKey(userId: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < userId.length; index += 1) {
+    hash ^= userId.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36).padStart(7, '0');
+}
+
 function writeReconciliationMarker(userId: string, signature: string) {
   try {
     const markers = readReconciliationMarkers();
-    markers[userId] = signature;
-    window.localStorage.setItem(RECONCILIATION_KEY, JSON.stringify(
-      Object.fromEntries(Object.entries(markers).slice(-8)),
-    ));
+    const userKey = compactUserKey(userId);
+    markers[userKey] = signature;
+    window.localStorage.setItem(RECONCILIATION_KEY, JSON.stringify({
+      v: 2,
+      e: Object.entries(markers).slice(-8),
+    }));
   } catch {
     // The RPC writes remain authoritative; a later page may retry idempotently.
   }
@@ -96,7 +108,7 @@ export function installSavedEventRuntime(auth: {
   const reconcileLocalState = async (userId: string) => {
     const plan = buildSavedEventReconciliationPlan(window.localStorage);
     const signature = savedEventReconciliationSignature(plan);
-    if (readReconciliationMarkers()[userId] === signature) return;
+    if (readReconciliationMarkers()[compactUserKey(userId)] === signature) return;
     for (const item of plan) {
       await setDurableSavedEvent(auth.client, item.eventId, item.source, item.saved);
       sentState.set(`${item.source}:${item.eventId}`, true);

@@ -14,6 +14,15 @@
   planner and notifier both fail closed while ImageDiagnostic owns that auth
   bundle, stable MTProto `random_id` preserves retry idempotency, and local
   E2E/generic human sessions remain excluded.
+- Made the stable focus-group install URL a mandatory production-root gate,
+  preserved its exact PWA identity across releases, and expanded the operator
+  clean-start link to reset optional contact consent as well as local focus and
+  Auth state without deleting personalization.
+- Prevented interrupted pre-handoff static builds from blocking Smart Update
+  for the full remote-build timeout, and deferred CAS losers instead of
+  hot-spinning against SQLite and logs every two seconds; durable remote owners
+  retain the full build budget. Re-enabled the production vector-sync owner so
+  the mandatory static vector barrier can actually converge after Smart Update.
 - Smart Update eventness review now includes bounded poster OCR as first-class
   source evidence, so concrete events described on an attached poster are not
   rejected merely because the social caption is generic.
@@ -21,6 +30,10 @@
   `thinking_level=minimal`, preventing bounded extraction/rewrite stages from
   returning `MAX_TOKENS` responses containing only private thought tokens;
   event parsing also uses the documented Gemma 4 sampling defaults.
+- Turned the already installed focus PWA into the ordinary `Анонсы`
+  product without changing its published manifest id (standard icons, no `Lab`
+  app branding and no reinstall); unfinished invitations still resume
+  onboarding, while an active participant opens the ordinary home page.
 - Region Talk external-publication scoring now honors the strict imported
   noncommercial policy attestation before applying generic social ad regexes,
   preventing editorial caveats such as a hotel-selection mention from
@@ -49,6 +62,12 @@
   attempt for the stale sweeper. Retry attempts now retain their own minute/day
   bucket and terminal state, so attempt 1 cannot block or mis-reconcile later
   physical sends.
+- Restored the focus-group email login contract with one-time link and six-digit numeric code, sequential mobile onboarding, honest ambiguous-send handling, and bounded 24-hour per-page-family feedback state; feedback writes now have idempotency keys and a compact offline queue instead of disappearing after navigation.
+- Restored the repository migrations for focus feedback and participant contact that had already been applied in production, and moved the focus-group documentation from backlog into its canonical implemented-feature location while keeping a redirect stub.
+- Reconciled the remaining production Supabase migration history for durable
+  saved events and participant likes, so a clean checkout and the live project
+  now report the same applied schema sequence.
+- Added a fixed-cutoff presentation participant backfill and an advisory-lock-protected 200-member admission cap without inferring communication consent; participant registration and page feedback use the idempotent resilient route and remain on the relay exact allowlist.
 - Replaced the per-key/partly local Google AI limiter with a dedicated
   project-scoped atomic Supabase contract, corrected Gemma 4 to conservative
   `15 RPM / 15000 TPM / 14000 RPD`, made all runtime construction prefer the
@@ -72,6 +91,21 @@
   closed when Supabase, `google_ai_reserve`, or the scoped API-key registration
   is unavailable. Region Talk Gemini Lite stages can no longer fall through to
   an unreserved direct environment key.
+- Replaced full-catalog static related retrieval with a service-role-only
+  two-field Supabase RPC, bounded response bodies and aggregate rebuild
+  ceilings; related/build receipts now expose request, row and byte counters,
+  while valid cache hits make zero candidate-retrieval calls.
+- Hardened the resilient Supabase path without adding a thick backend: the
+  Yandex relay now allowlists exact Auth/read/RPC/search and private
+  `focus-feedback` upload/delete routes, strips spoofable forwarding headers,
+  replaces untrusted browser `Origin` before the fixed upstream so CORS cannot
+  reflect an unrelated site,
+  and fails closed for Auth admin, unknown RPC/functions, Realtime and other
+  Storage buckets. The exact allowlist also retains participant registration and idempotent focus-feedback submission required by the focus-group UI. Saved-event direct DML is replaced by a capped owner-bound
+  desired-state RPC; event search authenticates the user before service-only
+  vector/quota/audit RPCs, adds idempotent quota operation IDs, caps request
+  bodies and makes search feedback idempotent, rate- and retention-bounded.
+- Unified static-site browser database access behind a configuration-keyed resilient client: safe reads can use one bounded alternate route, cost-bearing Search/OTP writes are never duplicated after ambiguous timeouts, idempotent telemetry uses a channel-safe bounded outbox, and application storage has per-key plus aggregate 64 KiB caps without touching Supabase Auth sessions.
 - Fixed a production Smart Update crash introduced by KGD80 provenance
   grounding: poster evidence now reads the real managed/source URL fields
   instead of nonexistent `PosterCandidate.url`; poster-bearing VK and exact
@@ -123,6 +157,13 @@
 - Focus-group private routes now add `nosnippet` in immutable secret-candidate builds, satisfying the candidate-wide robots contract without changing production root indexing.
 
 ### Added
+
+- Added a default-off, fail-closed static-site canonical-root publisher for two
+  complete page-only Yandex Object Storage buckets behind ALB: inactive-only
+  reconciliation, manifest/hash/size/MIME and route/PWA gates, old/new-complete
+  weight convergence, durable current/previous operation receipt, idempotent
+  retry, stable-hash smoke and automatic rollback. Live buckets, ALB/SWS and
+  DNS remain unprovisioned; plan mode is non-mutating.
 
 - Implemented the approval-gated Antigravity festival web-research runtime:
   strict five-key Interactions accounting, A+B with optional conflict-only C,

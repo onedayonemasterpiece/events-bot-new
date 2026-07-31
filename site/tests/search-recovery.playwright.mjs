@@ -11,6 +11,7 @@ const buildDir = process.env.SEARCH_RECOVERY_BUILD_DIR
   : resolve('dist');
 const hasBuild = existsSync(join(buildDir, 'poisk', 'index.html'));
 const builtSearchHtml = hasBuild ? readFileSync(join(buildDir, 'poisk', 'index.html'), 'utf8') : '';
+const hasEnabledSearchBuild = hasBuild && /\bdata-search-enabled="true"/u.test(builtSearchHtml);
 const builtSupabaseUrl = builtSearchHtml.match(/\bdata-supabase-url="([^"]+)"/u)?.[1] || 'https://example.supabase.co';
 const builtBasePath = builtSearchHtml.match(/\bsrc="(\/[^"]*?)\/_astro\//u)?.[1] || '';
 const builtProjectRef = new URL(builtSupabaseUrl).hostname.split('.', 1)[0] || 'example';
@@ -53,7 +54,7 @@ async function withStaticServer(root, callback) {
   }
 }
 
-test('authenticated Search recovers from missing headers and stalled streams', { skip: !hasBuild }, async () => {
+test('authenticated Search recovers from missing headers and stalled streams', { skip: !hasEnabledSearchBuild }, async () => {
   await withStaticServer(buildDir, async (origin) => {
     const browser = await chromium.launch({ headless: true });
     try {
@@ -132,6 +133,7 @@ test('authenticated Search recovers from missing headers and stalled streams', {
         const nativeFetch = window.fetch.bind(window);
         window.fetch = (input, init = {}) => {
           const url = String(input instanceof Request ? input.url : input);
+          if (url.includes('/auth/v1/health')) return Promise.resolve(json({ version: 'test' }));
           if (url.includes('/auth/v1/token?grant_type=pkce')) return Promise.resolve(json(session));
           if (url.endsWith('/auth/v1/user')) return Promise.resolve(json(user));
           if (url.includes('/auth/v1/logout')) return Promise.resolve(new Response(null, { status: 204 }));
@@ -202,19 +204,16 @@ test('authenticated Search recovers from missing headers and stalled streams', {
 
       await input.fill('заголовки не пришли');
       await form.evaluate((node) => node.requestSubmit());
-      await page.waitForSelector('[data-search-results] [data-event-card][data-event-id="7003"]');
+      await page.waitForFunction(() => document.querySelector('[data-search-status]')?.getAttribute('role') === 'alert');
       assert.equal(await input.isEditable(), true);
       assert.equal(await button.isEnabled(), true);
       assert.equal(await button.getAttribute('aria-busy'), 'false');
       assert.equal(await skeletons.isHidden(), true);
-      const headerRescueCalls = await page.evaluate(() => (
+      const headerTimeoutCalls = await page.evaluate(() => (
         window.__r11SearchCalls.filter((call) => call.query === 'заголовки не пришли')
       ));
-      assert.equal(headerRescueCalls.length, 2, 'a JSON header timeout receives exactly one fast JSON retry');
-      assert.match(headerRescueCalls[0].accept, /application\/json/u);
-      assert.match(headerRescueCalls[1].accept, /application\/json/u);
-      assert.equal(headerRescueCalls[1].body.stream_rescue, true);
-      assert.equal(headerRescueCalls[1].body.use_llm_verifier, false);
+      assert.equal(headerTimeoutCalls.length, 1, 'an ambiguous cost-bearing POST is never duplicated');
+      assert.match(headerTimeoutCalls[0].accept, /application\/json/u);
 
       assert.equal(await input.getAttribute('enterkeyhint'), 'search');
       await input.fill('ввод через ime');
@@ -235,24 +234,21 @@ test('authenticated Search recovers from missing headers and stalled streams', {
       await page.locator('[data-authorized-search]').evaluate((node) => {
         node.dataset.searchTransport = 'ndjson';
       });
-      const cancellationsBeforeIdleRescue = await page.evaluate(() => window.__r11StreamCancelCount);
+      const cancellationsBeforeIdleTimeout = await page.evaluate(() => window.__r11StreamCancelCount);
       await input.fill('поток замер');
       await form.evaluate((node) => node.requestSubmit());
-      await page.waitForSelector('[data-search-results] [data-event-card][data-event-id="7003"]');
+      await page.waitForFunction(() => document.querySelector('[data-search-status]')?.getAttribute('role') === 'alert');
       assert.equal(await input.isEditable(), true);
       assert.equal(await button.isEnabled(), true);
       assert.equal(await skeletons.isHidden(), true);
-      const rescueCalls = await page.evaluate(() => (
+      const stalledCalls = await page.evaluate(() => (
         window.__r11SearchCalls.filter((call) => call.query === 'поток замер')
       ));
-      assert.equal(rescueCalls.length, 2, 'one streaming request receives exactly one JSON rescue');
-      assert.match(rescueCalls[0].accept, /application\/x-ndjson/u);
-      assert.match(rescueCalls[1].accept, /application\/json/u);
-      assert.equal(rescueCalls[1].body.stream_rescue, true);
-      assert.equal(rescueCalls[1].body.use_llm_verifier, false);
+      assert.equal(stalledCalls.length, 1, 'a stalled stream is cancelled without a duplicate POST');
+      assert.match(stalledCalls[0].accept, /application\/x-ndjson/u);
       assert.equal(
         await page.evaluate(() => window.__r11StreamCancelCount),
-        cancellationsBeforeIdleRescue + 1,
+        cancellationsBeforeIdleTimeout + 1,
       );
       await page.locator('[data-authorized-search]').evaluate((node) => {
         node.dataset.searchTransport = 'json';

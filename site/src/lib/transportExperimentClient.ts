@@ -9,6 +9,8 @@ import {
   type TransportExperimentMode,
   type TransportExperimentVariant,
 } from './transportExperiment';
+import { getIdempotentOutbox } from './idempotentOutbox.ts';
+import { getResilientDataClient } from './resilientDataClient.ts';
 
 const SUBJECT_KEY = 'ke_experiment_subject_v1';
 const PROFILE_KEY = 'ke_personalization_profile';
@@ -151,6 +153,7 @@ async function ingest(root: HTMLElement, state: ClientState, eventKind: string, 
   if ((mode !== 'focus_group' && mode !== 'live') || state.qaOverride || automationActor()) return false;
   const profile = consentedProfile();
   const url = String(root.dataset.supabaseUrl || '').replace(/\/+$/u, '');
+  const relayUrl = String(root.dataset.supabaseRelayUrl || '').replace(/\/+$/u, '');
   const key = String(root.dataset.supabaseKey || '');
   const clientEventId = uuid();
   if (!profile || !url || !key || !clientEventId) return false;
@@ -174,15 +177,49 @@ async function ingest(root: HTMLElement, state: ClientState, eventKind: string, 
     consent_version: profile.consent_version,
     metadata,
   };
-  try {
-    const response = await fetch(`${url}/rest/v1/rpc/ingest_transport_experiment_event_v1`, {
+  const send = async (nextPayload: typeof payload): Promise<boolean> => {
+    try {
+      const response = await getResilientDataClient({
+        directUrl: url,
+        relayUrl,
+        publishableKey: key,
+      }).idempotentReplay(`${url}/rest/v1/rpc/ingest_transport_experiment_event_v1`, {
       method: 'POST',
       headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_payload: payload }),
+      body: JSON.stringify({ p_payload: nextPayload }),
       keepalive: true,
-    });
-    return response.ok;
-  } catch { return false; }
+      });
+      return response.ok;
+    } catch { return false; }
+  };
+  if (await send(payload)) return true;
+  await getIdempotentOutbox().enqueue({
+    id:`transport:${clientEventId}`,
+    channel:'transport-experiment-v1',
+    payload,
+  });
+  return false;
+}
+
+async function flushTransportOutbox(root: HTMLElement): Promise<void> {
+  const url = String(root.dataset.supabaseUrl || '').replace(/\/+$/u, '');
+  const relayUrl = String(root.dataset.supabaseRelayUrl || '').replace(/\/+$/u, '');
+  const key = String(root.dataset.supabaseKey || '');
+  if (!url || !key) return;
+  const client = getResilientDataClient({ directUrl:url, relayUrl, publishableKey:key });
+  await getIdempotentOutbox().flush(async (entry) => {
+    if (entry.channel !== 'transport-experiment-v1') return 'skip';
+    try {
+      const response = await client.idempotentReplay(`${url}/rest/v1/rpc/ingest_transport_experiment_event_v1`, {
+        method:'POST',
+        headers:{ apikey:key, Authorization:`Bearer ${key}`, 'Content-Type':'application/json' },
+        body:JSON.stringify({ p_payload:entry.payload }),
+        keepalive:true,
+      });
+      if (response.ok || response.status === 409) return 'sent';
+      return response.status >= 400 && response.status < 500 ? 'drop' : 'retry';
+    } catch { return 'retry'; }
+  });
 }
 
 function observeExposure(root: HTMLElement, treatment: HTMLElement, state: ClientState): void {
@@ -215,6 +252,7 @@ async function initRoot(root: HTMLElement): Promise<void> {
   initialized.add(root);
   const mode = root.dataset.experimentMode as TransportExperimentMode;
   if (mode === 'off') return;
+  void flushTransportOutbox(root);
   const forcedVariant = qaOverride(mode);
   // Automation may render an explicitly forced QA arm for deterministic visual
   // acceptance, but never receives a normal assignment or trusted telemetry.

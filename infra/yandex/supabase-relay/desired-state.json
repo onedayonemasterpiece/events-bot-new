@@ -1,5 +1,5 @@
 {
-  "schema": "kenigevents.supabase_relay.yc_desired_state.v1",
+  "schema": "kenigevents.supabase_relay.yc_desired_state.v2",
   "folder_id": "b1g5tck18cgqtjb7rn3s",
   "api_gateway": {
     "id": "d5di5tr5vvck7ld8vbcn",
@@ -9,12 +9,69 @@
     "logging": false,
     "stateful": false,
     "service_account_id": null,
-    "allowed_upstream_prefixes": ["/auth/v1/", "/rest/v1/", "/functions/v1/"]
+    "allowed_methods": [
+      "GET",
+      "HEAD",
+      "POST",
+      "DELETE",
+      "OPTIONS"
+    ],
+    "allowed_upstream_routes": {
+      "auth": [
+        "GET /auth/v1/health",
+        "HEAD /auth/v1/health",
+        "GET /auth/v1/settings",
+        "GET /auth/v1/authorize",
+        "POST /auth/v1/token",
+        "POST /auth/v1/otp",
+        "GET /auth/v1/verify",
+        "POST /auth/v1/verify",
+        "GET /auth/v1/callback",
+        "POST /auth/v1/resend",
+        "POST /auth/v1/logout",
+        "GET /auth/v1/user",
+        "GET /auth/v1/user/identities/authorize"
+      ],
+      "rest_reads": [
+        "GET /rest/v1/personalization_event_reaction_counter",
+        "HEAD /rest/v1/personalization_event_reaction_counter",
+        "GET /rest/v1/my_saved_events_v1",
+        "HEAD /rest/v1/my_saved_events_v1"
+      ],
+      "rest_rpcs": [
+        "POST /rest/v1/rpc/set_saved_event_state_v1",
+        "POST /rest/v1/rpc/get_event_search_quota_v2",
+        "POST /rest/v1/rpc/record_event_search_feedback_v1",
+        "POST /rest/v1/rpc/register_focus_group_participant_v1",
+        "POST /rest/v1/rpc/submit_focus_group_feedback_v2",
+        "POST /rest/v1/rpc/ingest_transport_experiment_event_v1",
+        "POST /rest/v1/rpc/record_pwa_lifecycle_v1",
+        "POST /rest/v1/rpc/get_listing_personal_feed_v1"
+      ],
+      "functions": [
+        "POST /functions/v1/event-search"
+      ],
+      "storage": [
+        "POST /storage/v1/object/focus-feedback/{path+}",
+        "DELETE /storage/v1/object/focus-feedback/{path+}",
+        "DELETE /storage/v1/object/focus-feedback"
+      ]
+    }
+  },
+  "smart_web_security": {
+    "security_profile_id": null,
+    "deployment_status": "not_attached",
+    "reason": "No reviewed KenigEvents profile exists yet; deprecated API Gateway rateLimit is not used. Preserve Supabase per-user quotas and Auth limits until an Advanced Rate Limiter rule keyed beyond the relay shared IP is staged and verified."
   },
   "security": {
     "service_role_key": false,
     "stores_request_body": false,
     "stores_authorization_header": false,
-    "owns_identity_or_sessions": false
+    "forwards_cookie": false,
+    "forwards_client_host": false,
+    "forwards_client_ip_headers": false,
+    "forwards_browser_origin": false,
+    "owns_identity_or_sessions": false,
+    "storage_scope": "private bucket focus-feedback only; Supabase JWT and RLS remain authoritative"
   }
 }

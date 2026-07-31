@@ -240,10 +240,16 @@ local participation hint как UX-прототип: он открывает м�
 
 ### 4.5. PWA return contract
 
-- focus manifest стартует через
+- focus invitation manifest сохраняет уже опубликованный stable `id`
+  `/fokus-gruppa/pwa`: менять manifest identity у уже установленного PWA
+  нельзя. При этом его публичное имя — `Анонсы`, icons — обычные
+  product icons, а не `Lab`-брендинг. После фокус-группы это же
+  установленное приложение остаётся обычной афишей и не требует
+  удаления/повторной установки;
+- invitation start controller стартует через
   `/fokus-gruppa/priglashenie/?launch=pwa`;
-- `active_local|active_verified` сразу перенаправляются в
-  `/zakrytaya-afisha/`;
+- `active_local|active_verified` при обычном PWA launch сразу перенаправляются на
+  главную афиши; `confirm=1` остаётся явным путём к подтверждению;
 - при отсутствии/истечении participation hint остаётся onboarding с объяснением
   восстановления, а не бесконечный redirect;
 - установка и запуск происходят только после действия пользователя;

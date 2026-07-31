@@ -5,13 +5,12 @@
   data-pwa-install-ready="false"
   aria-labelledby="focus-pwa-title"
 >
-  <div class="focus-pwa__step" aria-hidden="true">02</div>
   <div class="focus-pwa__copy">
-    <p>Приложение для периода исследования</p>
+    <p>Приложение «Анонсы»</p>
     <h2 id="focus-pwa-title">Установите афишу на главный экран</h2>
     <span>
-      Так секретная афиша не потеряется среди вкладок. Установка и последующий
-      запуск происходят только по вашей команде в интерфейсе телефона.
+      Так афиша не потеряется среди вкладок. Приложение почти не занимает места:
+      события открываются с сайта.
     </span>
   </div>
 
@@ -39,17 +38,15 @@
     </span>
   </div>
   <p class="focus-pwa__after">
-    После установки запустите приложение с главного экрана. До выбора способа
-    подтверждения оно вернёт вас на этот onboarding; после явного продолжения —
-    откроет закрытую афишу.
+    После установки откройте «Анонсы» с главного экрана и продолжите подключение.
   </p>
 </section>
 
 <style>
   .focus-pwa {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: .8rem 1rem;
+    grid-template-columns: minmax(0, 1fr);
+    gap: .8rem;
     border: 1px solid var(--ke-color-line, #e1d3c2);
     border-radius: 1.5rem;
     padding: clamp(1.1rem, 4vw, 2rem);
@@ -57,19 +54,6 @@
       radial-gradient(circle at 100% 0, rgb(15 118 110 / 13%), transparent 16rem),
       #fff;
     box-shadow: var(--ke-shadow-1, 0 8px 25px rgb(72 45 25 / 8%));
-  }
-  .focus-pwa__step {
-    width: 2.5rem;
-    height: 2.5rem;
-    display: grid;
-    place-items: center;
-    grid-row: span 2;
-    border-radius: .85rem;
-    background: var(--ke-color-success-50, #e6f4ef);
-    color: var(--ke-color-success-700, #166a64);
-    font-size: .72rem;
-    font-weight: 900;
-    letter-spacing: .08em;
   }
   .focus-pwa__copy { display: grid; gap: .35rem; }
   .focus-pwa__copy p {
@@ -96,7 +80,7 @@
   .focus-pwa__status,
   .focus-pwa__guidance,
   .focus-pwa__after {
-    grid-column: 2;
+    grid-column: 1;
   }
   .focus-pwa__button[hidden] { display: none; }
   .focus-pwa__status,
@@ -121,7 +105,6 @@
       grid-template-columns: 1fr;
       border-radius: 1.25rem;
     }
-    .focus-pwa__step { grid-row: auto; }
     .focus-pwa__button,
     .focus-pwa__status,
     .focus-pwa__guidance,

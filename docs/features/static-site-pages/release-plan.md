@@ -1,6 +1,6 @@
 # План production-релиза статических страниц событий
 
-> **Срез:** 2026-07-27
+> **Срез:** 2026-07-31
 > **Решение:** `NO-GO` для переключения event pages на canonical root прямо сейчас.
 > **Scope:** production-контур статических страниц событий и переход event-detail
 > с Telegraph. Полный релиз всех F1–F17 персональных анонсов остаётся отдельным
@@ -26,11 +26,12 @@ fingerprint/result validation и публикация исключительно
 архива. Такой кандидат не закрывает Kaggle status-ledger, promotion/rollback
 или canonical-root gates.
 | Schedule freshness | Blocked | Актуальный rail+bus snapshot/manifest и failed-refresh drill не приложены |
-| Production root promotion/rollback | Missing | `_review` publication не меняет root/current/stable ICS; atomic promote/rollback не выполнены |
+| Production root promotion/rollback | Implemented default-off; live blocked | Два полных page-only bucket + ALB state machine, inactive-only reconcile, exact readback, stable smoke и rollback реализованы; buckets/ALB/SWS/DNS ещё не созданы, apply не запускался |
 
-Следовательно, разрешён следующий шаг — **только один новый immutable secret
-noindex candidate** на свежем production snapshot. Публикация такого candidate
-не является релизом, D0 или переносом текущих страниц на canonical root.
+Следовательно, до provisioned ALB разрешены только новый immutable secret
+noindex candidate на свежем production snapshot и read-only `plan` atomic-root
+publisher против подготовленного inventory. `apply`, DNS и перенос текущих
+страниц на canonical root не разрешены.
 Исторические controlled runs ниже — regression evidence, а не текущий GO.
 
 ### R14 immutable review evidence, 2026-07-27
@@ -76,10 +77,21 @@ promotion and rollback remain open.
 immutable Fly SQLite snapshot
   -> coalesced static_site_build after effective Smart Update
   -> Kaggle CPU checked artifact
-  -> immutable release prefix + static_release_manifest_v1
-  -> atomic promotion/current pointer
-  -> retained previous release and verified rollback
+  -> immutable review candidate + static_release_manifest_v1 root proof
+  -> inactive complete root bucket
+  -> Yandex ALB old/new complete-tree weight convergence
+  -> retained previous bucket and verified rollback
 ```
+
+Код production-root publisher находится в `static_site_atomic_root.py`, а
+единственный setup/plan/apply/rollback runbook — в
+[`docs/operations/static-site-atomic-root.md`](../../operations/static-site-atomic-root.md).
+Он намеренно не копирует файлы в active root и не создаёт browser pointer.
+`_finish_static_site_candidate` вызывает его только после result/root/candidate
+gates и успешной immutable review publication, только при явном
+`ENABLE_STATIC_SITE_ROOT_PROMOTION=1`. Текущий default `0`; `plan` не пишет ни
+objects, ни ALB config. До live inventory, SWS/ARL/WAF, failure drill и DNS
+приёмки статус остаётся `NO-GO`.
 
 ## Реализованный secret-candidate этап
 

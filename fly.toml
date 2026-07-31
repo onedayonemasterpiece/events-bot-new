@@ -232,9 +232,9 @@ app = "events-bot-new-wngqia"
   GOOGLE_AI_ALLOW_RESERVE_FALLBACK = "0"
   GOOGLE_AI_LOCAL_LIMITER_FALLBACK = "0"
   GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR = "0"
-  # Incident containment: re-enable only after migration 008 is verified and
-  # the shared project-scoped limiter rollout gate passes.
-  ENABLE_EVENT_VECTOR_SYNC = "0"
+  # Migration 008 and the shared project-scoped limiter rollout gate are
+  # verified; keep this owner enabled whenever the static vector barrier is on.
+  ENABLE_EVENT_VECTOR_SYNC = "1"
   EVENT_VECTOR_SYNC_DEBOUNCE_SECONDS = "90"
   EVENT_VECTOR_SYNC_INTERVAL_MINUTES = "180"
   EVENT_VECTOR_SYNC_CATALOG_LIMIT = "5000"

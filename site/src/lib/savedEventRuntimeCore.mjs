@@ -34,7 +34,13 @@ export function buildSavedEventReconciliationPlan(storage) {
 }
 
 export function savedEventReconciliationSignature(plan) {
-  return (Array.isArray(plan) ? plan : [])
+  const canonical = (Array.isArray(plan) ? plan : [])
     .map((item) => `${item.source}:${item.eventId}:${item.saved ? 1 : 0}`)
     .join('|');
+  let hash = 2166136261;
+  for (let index = 0; index < canonical.length; index += 1) {
+    hash ^= canonical.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `v2:${(hash >>> 0).toString(36)}:${Array.isArray(plan) ? plan.length : 0}`;
 }

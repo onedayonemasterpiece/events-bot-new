@@ -1,6 +1,6 @@
 # Static Site Event Pages
 
-> **Status:** accepted v11 baseline plus v12 fidelity corrections are the primary preproduction event-page family, integrated with the checked Smart Update/Kaggle secret-candidate pipeline; root promotion remains blocked/disabled
+> **Status:** accepted v11 baseline plus v12 fidelity corrections are the primary preproduction event-page family, integrated with the checked Smart Update/Kaggle secret-candidate pipeline; atomic two-bucket/ALB promotion exists default-off, while live infrastructure/DNS promotion remains blocked
 > **Scope for MVP:** только публичные страницы **событий** на `kenigevents.ru`  
 > **Core fallback:** страницы событий работают без авторизации; optional Yandex/email identity, smart search and personalization are separate enhancements. Core event DB never moves to Supabase.
 > **Current release plan:** [production profile, atomic promotion and 10-day Telegraph cutover](release-plan.md).
@@ -12,7 +12,7 @@ integration: a root testing stub, invite/auth-choice flow, bounded local preview
 marker, secret hub, participant feedback specimens, lifecycle end states and an
 explainable local `/dlya-menya/` editor. Canonical product decisions and the
 strict prototype/production boundary live in
-[`docs/backlog/features/static-site-focus-group/README.md`](../../backlog/features/static-site-focus-group/README.md).
+[`docs/features/static-site-focus-group/README.md`](../../features/static-site-focus-group/README.md).
 
 This does not promote a production root, provision a cohort, implement Auth or
 Supabase membership, send email, persist feedback, run a prize programme or
@@ -91,8 +91,8 @@ The accepted event-detail templates are the primary preproduction surface. A
 coalesced Smart Update rebuild publishes an immutable noindex
 `/_review/<token>/` candidate and advances a durable internal pointer only after
 the full candidate gate succeeds. Historical dated previews are evidence, not
-current review links; production root stays stable until atomic promotion, URL
-lifecycle and rollback gates pass.
+current review links; production root stays stable until the default-off atomic
+publisher's live ALB/SWS/DNS, URL lifecycle and rollback gates pass.
 
 The durable single-flight lock follows the remote Kaggle ledger rather than
 the age of the local claim alone. A terminal remote run remains available to
@@ -168,9 +168,12 @@ accessibility and rollout gates are open.
 статические страницы событий, `event.ics`, `sitemap.xml`, `robots.txt` из
 production SQLite export и публикуется под noindex-prefix в bucket
 `kenigevents.ru`. Production root-form artifact уже проверяет indexable canonical
-output и полный eligible catalog, но это ещё не event-page production rollout:
-Object Storage website не умеет reader-atomic переключать целое дерево через
-`current.json`, поэтому root promotion отсутствует и остаётся `NO-GO`.
+output и полный eligible catalog. Default-off publisher теперь умеет сверить
+inactive page-only bucket и переключить два полных root через веса Yandex ALB,
+не используя browser `current.json`; канонический runbook —
+[Static-site atomic root](../../operations/static-site-atomic-root.md). Это ещё
+не event-page production rollout: live root buckets/ALB/SWS/DNS отсутствуют,
+поэтому `ENABLE_STATIC_SITE_ROOT_PROMOTION=0` и решение остаётся `NO-GO`.
 
 Принятый промежуточный release mode — один immutable noindex candidate под
 `/_review/<256-bit-token>/`. Он собирается из того же snapshot/repo SHA, что и
@@ -285,9 +288,10 @@ tests visible-footer `P`/`S` from `BODY` and retained off-screen event focus. It
 not intercept navigation or pre-focus the share buttons, which were the two
 false-positive patterns in the rejected test.
 
-This is a prefix-only review release. It does not promote or delete the
-production root and does not modify stable `/p/` media or `/ics/` calendars.
-Automatic root promotion remains the release-protocol gate.
+The normal enabled flow is a prefix-only review release. It does not promote or
+delete the production root and does not modify stable `/p/` media or `/ics/`
+calendars. Atomic root code is an additional explicit default-off gate; see
+[the runbook](../../operations/static-site-atomic-root.md).
 
 Mobile event-detail UI был отработан в контролируемом preview lab: четыре исходных
 варианта образуют матрицу `current/open prose × current/grouped actions`,

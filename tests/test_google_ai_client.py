@@ -459,7 +459,8 @@ def test_fly_runtime_disables_cross_process_limiter_fallbacks() -> None:
     assert 'GOOGLE_AI_ALLOW_RESERVE_FALLBACK = "0"' in fly_config
     assert 'GOOGLE_AI_LOCAL_LIMITER_FALLBACK = "0"' in fly_config
     assert 'GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR = "0"' in fly_config
-    assert 'ENABLE_EVENT_VECTOR_SYNC = "0"' in fly_config
+    assert 'ENABLE_EVENT_VECTOR_SYNC = "1"' in fly_config
+    assert 'STATIC_SITE_REQUIRE_VECTOR_BARRIER = "1"' in fly_config
 
 
 @pytest.mark.asyncio

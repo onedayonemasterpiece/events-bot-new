@@ -48,8 +48,9 @@ Its 21-item July–December catalog is exported from core Fly SQLite rather than
 the former hardcoded TypeScript array. Source/status honesty rules, DB/backfill
 ownership and compact one-to-four-card packing are canonical in
 [`festival-timeline.md`](festival-timeline.md). Immutable review artifacts
-remain noindex; the generated root-form page does not imply that the still
-missing reader-atomic root publisher has been enabled.
+remain noindex; the generated root-form page does not imply that the
+default-off two-bucket/ALB publisher or its still-missing live infrastructure
+has been enabled.
 The current `r3` correction withdraws the split-body `r1` candidate: cards are
 now full-cover overlays in donor-density rows, the `390px` layout keeps two
 columns, and all media is hash-bound to festival/organiser/venue provenance

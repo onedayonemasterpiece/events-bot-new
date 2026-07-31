@@ -283,6 +283,7 @@ from static_site_release import (
     prune_immutable_snapshots,
     prune_static_site_outputs,
     request_watermark as static_site_request_watermark,
+    resolve_checked_static_site_artifact,
     resolve_current_secret_candidate,
     recoverable_static_site_build,
     finish_static_site_build_claim,
@@ -18246,6 +18247,31 @@ EVENT_PIPELINE_INDEPENDENT_TASKS: set[JobTask] = {
 }
 DEPENDENCY_RETRY_HORIZON = timedelta(days=7)
 
+
+def _static_site_pre_handoff_stale_seconds() -> int:
+    """Short recovery window before a durable static-build claim exists.
+
+    A remote build keeps the full 90-minute runtime budget.  A row left
+    ``running`` by a process restart before it wrote a durable claim/handoff
+    must not block Smart Update for the same 90 minutes.
+    """
+
+    raw = (os.getenv("STATIC_SITE_PRE_HANDOFF_STALE_SECONDS") or "").strip()
+    try:
+        value = int(raw) if raw else 600
+    except ValueError:
+        value = 600
+    return max(120, min(value, JOB_MAX_RUNTIME[JobTask.static_site_build]))
+
+
+def _static_site_claim_retry_seconds() -> int:
+    raw = (os.getenv("STATIC_SITE_CLAIM_RETRY_SECONDS") or "").strip()
+    try:
+        value = int(raw) if raw else 30
+    except ValueError:
+        value = 30
+    return max(5, min(value, 300))
+
 # runtime storage for progress callbacks keyed by event id
 _EVENT_PROGRESS: dict[int, SimpleNamespace] = {}
 # mapping from coalesce key to events waiting for progress updates
@@ -18488,6 +18514,15 @@ async def _run_due_jobs_once_locked(
     # in SQL before ORM row conversion.
     known_job_tasks = list(JobTask)
     async with db.get_session() as session:
+        active_static_job_result = await session.execute(
+            sql_text(
+                """
+                SELECT active_job_id FROM static_site_build_state
+                WHERE release_channel='secret_preview'
+                """
+            )
+        )
+        active_static_job_id = active_static_job_result.scalar_one_or_none()
         running_rows = await session.execute(
             select(JobOutbox).where(
                 JobOutbox.status == JobStatus.running,
@@ -18514,6 +18549,14 @@ async def _run_due_jobs_once_locked(
                     )
                     continue
             limit = JOB_MAX_RUNTIME.get(rjob.task, DEFAULT_JOB_MAX_RUNTIME)
+            if rjob.task == JobTask.static_site_build:
+                payload = rjob.payload if isinstance(rjob.payload, Mapping) else {}
+                has_durable_owner = bool(
+                    (active_static_job_id and int(active_static_job_id) == int(rjob.id))
+                    or isinstance(payload.get("remote_handoff"), Mapping)
+                )
+                if not has_durable_owner:
+                    limit = min(limit, _static_site_pre_handoff_stale_seconds())
             age = (now - rjob.updated_at).total_seconds()
             if age > limit:
                 if rjob.task == JobTask.static_site_build:
@@ -18992,7 +19035,29 @@ async def _run_due_jobs_once_locked(
                 )
                 if claim_result.rowcount != 1:
                     await session.rollback()
-                    logging.info("STATIC_SITE_CLAIM_LOST job_id=%s", claim_job_id)
+                    retry_at = claimed_at + timedelta(
+                        seconds=_static_site_claim_retry_seconds()
+                    )
+                    deferred = await session.execute(
+                        update(JobOutbox)
+                        .where(
+                            JobOutbox.id == claim_job_id,
+                            JobOutbox.status.in_([JobStatus.pending, JobStatus.error]),
+                        )
+                        .values(
+                            next_run_at=retry_at,
+                            updated_at=claimed_at,
+                            last_error="waiting_for_static_site_owner",
+                        )
+                        .execution_options(synchronize_session=False)
+                    )
+                    await session.commit()
+                    logging.info(
+                        "STATIC_SITE_CLAIM_LOST job_id=%s deferred=%s retry_at=%s",
+                        claim_job_id,
+                        deferred.rowcount == 1,
+                        retry_at.isoformat(),
+                    )
                     continue
                 await session.commit()
                 obj.status = JobStatus.running
@@ -23183,6 +23248,38 @@ async def _finish_static_site_candidate(
             public_base_url=(os.getenv("KENIGEVENTS_SITE_PUBLIC_BASE_URL") or "https://kenigevents.ru").strip(),
             **required_env,
         )
+    root_promotion_receipt = None
+    if _env_flag("ENABLE_STATIC_SITE_ROOT_PROMOTION"):
+        if publication_receipt is None:
+            raise StaticSitePermanentError(
+                "atomic_root_promotion_requires_checked_secret_candidate_publication"
+            )
+        # validate_production_candidate_result has already checked the complete
+        # artifact set and all root/candidate browser gates.  Resolve and hash
+        # the root archive again immediately before crossing the publisher
+        # boundary; the publisher can write only the ALB-inactive root bucket.
+        root_archive = await asyncio.to_thread(
+            resolve_checked_static_site_artifact,
+            result,
+            output_dir=output_dir,
+            kind="production_root",
+        )
+        from static_site_atomic_root import publish_atomic_root_from_env
+
+        root_promotion_receipt = await asyncio.to_thread(
+            publish_atomic_root_from_env,
+            root_archive,
+            build_result=result,
+            extraction_root=output_dir / "atomic-root-publication",
+        )
+        if root_promotion_receipt.get("status") == "rolled_back":
+            logging.error(
+                "static_site_build: atomic root smoke failed and routing rolled back "
+                "build_id=%s run_id=%s revision=%s",
+                build_id,
+                run_id,
+                root_promotion_receipt.get("revision"),
+            )
     counts = static_site_result_counts(
         result,
         object_count=(publication_receipt.object_count if publication_receipt else None),
@@ -23215,6 +23312,12 @@ async def _finish_static_site_candidate(
                     if publication_receipt
                     else {"status": "disabled", "root_mutation": False, "stable_ics_mutation": False}
                 ),
+                "root_promotion": root_promotion_receipt
+                or {
+                    "status": "disabled",
+                    "root_mutation": False,
+                    "stable_ics_mutation": False,
+                },
                 "finished_at": result.get("finished_at") or static_site_iso_utc(),
                 "release_channel": "secret_preview",
                 "recovered_remote": recovered_remote,
@@ -23237,6 +23340,7 @@ async def _finish_static_site_candidate(
         "service_share": result.get("service_share"),
         "published": bool(publication_receipt),
         "recovered_remote": recovered_remote,
+        "root_promotion": root_promotion_receipt,
     }
     if publication_receipt:
         success_receipt["current_secret_candidate"] = {

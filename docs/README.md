@@ -23,6 +23,8 @@
 - Read-only duplicate-image audit: `docs/operations/event-image-duplicate-audit.md`
 - Email delivery/deliverability: `docs/operations/email-delivery.md`
 - Kaggle static-site builder / publisher protocol: `docs/operations/kaggle-static-site-builder.md`
+- Default-off two-bucket/ALB atomic root publisher and setup/rollback runbook:
+  `docs/operations/static-site-atomic-root.md`
 - Расписание / cron / scheduler routing: `docs/operations/cron.md`
   - дефолты APScheduler: `scheduling.py`
   - production overrides: `fly.toml` (`[env]`)
@@ -49,7 +51,7 @@
 - 3D previews (`/3di`): `docs/features/preview-3d/README.md`
 - Бэклог (не реализовано): `docs/backlog/`
   - Фокус-группа статического сайта: product/page prototype и production
-    boundary — `docs/backlog/features/static-site-focus-group/README.md`
+    boundary — `docs/features/static-site-focus-group/README.md`
 - Отчёты и планы: `docs/reports/` (incident index: `docs/reports/incidents/README.md`, template: `docs/reports/incidents/TEMPLATE.md`)
 - Инструменты: `docs/tools/`
 
