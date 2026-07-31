@@ -9900,6 +9900,77 @@ def _event_parse_normalize_parsed_events(data: Any) -> ParsedEvents:
     raise RuntimeError("bad parse response")
 
 
+def _fit_event_parse_gemma_output_budget(
+    client: Any,
+    *,
+    model: str,
+    prompt: str,
+    configured_max_tokens: int,
+) -> int:
+    """Keep Gemma event-parse reservations below the real per-minute cap.
+
+    The shared limiter reserves estimated input + output + safety overhead.
+    Gemma 4 free-tier TPM is 15K, while the event extraction system prompt is
+    itself about 9-10K estimated tokens. A fixed 4K output allowance can make
+    one request permanently larger than the whole minute and cause pointless
+    minute-boundary retries without ever contacting the provider.
+
+    Only Gemma 4 is adjusted here. Other models retain their configured output
+    budget and are governed by their own registry limits.
+    """
+
+    normalized_model = str(model or "").strip().lower()
+    if normalized_model.startswith("models/"):
+        normalized_model = normalized_model[7:]
+    if normalized_model.endswith("-it"):
+        normalized_model = normalized_model[:-3]
+    if normalized_model not in {"gemma-4-31b", "gemma-4-26b-a4b"}:
+        return int(configured_max_tokens)
+
+    estimate = getattr(client, "_estimate_prompt_tokens", None)
+    if not callable(estimate):
+        # Lightweight test doubles and non-standard gateways cannot expose the
+        # estimator; preserve the caller's explicit budget rather than guess.
+        return int(configured_max_tokens)
+
+    try:
+        input_estimate = max(1, int(estimate(prompt)))
+        reserve_extra = max(
+            0,
+            int(getattr(client, "DEFAULT_TPM_RESERVE_EXTRA", 1000) or 0),
+        )
+        target = int(
+            os.getenv("EVENT_PARSE_GEMMA_TPM_RESERVATION_TARGET", "14500")
+            or "14500"
+        )
+        target = max(1000, min(target, 15000))
+        min_output = int(
+            os.getenv("EVENT_PARSE_GEMMA_MIN_OUTPUT_TOKENS", "2400") or "2400"
+        )
+        min_output = max(400, min(min_output, int(configured_max_tokens)))
+    except Exception:
+        logging.warning("event_parse: invalid Gemma TPM budget config", exc_info=True)
+        return int(configured_max_tokens)
+
+    fitted = min(
+        int(configured_max_tokens),
+        max(min_output, target - input_estimate - reserve_extra),
+    )
+    if fitted < int(configured_max_tokens):
+        logging.info(
+            "event_parse: fitted Gemma output budget model=%s configured=%s fitted=%s "
+            "input_estimate=%s reserve_extra=%s target_tpm=%s target_reachable=%s",
+            model,
+            configured_max_tokens,
+            fitted,
+            input_estimate,
+            reserve_extra,
+            target,
+            int(input_estimate + reserve_extra + min_output <= target),
+        )
+    return int(fitted)
+
+
 async def _parse_event_via_gemma(
     text: str,
     source_channel: str | None = None,
@@ -10012,6 +10083,12 @@ async def _parse_event_via_gemma(
     # capping the upper bound so a runaway response can't blow the context.
     max_tokens = int(os.getenv("EVENT_PARSE_GEMMA_MAX_TOKENS", "4000") or "4000")
     max_tokens = max(400, min(max_tokens, 8000))
+    max_tokens = _fit_event_parse_gemma_output_budget(
+        client,
+        model=model,
+        prompt=full_prompt,
+        configured_max_tokens=max_tokens,
+    )
 
     raw, usage = await _generate_with_rate_limit_wait(
         full_prompt,

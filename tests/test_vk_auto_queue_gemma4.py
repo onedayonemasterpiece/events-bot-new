@@ -403,6 +403,67 @@ async def test_event_parse_gemma_model_extra_overrides_global_env(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_event_parse_gemma4_output_budget_fits_shared_15k_tpm(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeClient:
+        DEFAULT_TPM_RESERVE_EXTRA = 1000
+
+        @staticmethod
+        def _estimate_prompt_tokens(_prompt):
+            # Production replay 11019 was approximately this size after the
+            # festival hint registry and poster OCR were included.
+            return 10134
+
+        async def generate_content_async(
+            self, *, model, prompt, generation_config, max_output_tokens
+        ):
+            captured["model"] = model
+            captured["max_output_tokens"] = max_output_tokens
+            return "[]", SimpleNamespace(
+                input_tokens=1, output_tokens=1, total_tokens=2
+            )
+
+    async def noop_log(*_args, **_kwargs):
+        return None
+
+    monkeypatch.delenv("EVENT_PARSE_GEMMA_TPM_RESERVATION_TARGET", raising=False)
+    monkeypatch.delenv("EVENT_PARSE_GEMMA_MIN_OUTPUT_TOKENS", raising=False)
+    monkeypatch.setenv("EVENT_PARSE_GEMMA_MAX_TOKENS", "4000")
+    monkeypatch.setattr(main, "_get_event_parse_gemma_client", lambda: FakeClient())
+    monkeypatch.setattr(main, "log_token_usage", noop_log)
+
+    parsed = await main._parse_event_via_gemma(
+        "Одно событие.",
+        gemma_model="models/gemma-4-31b-it",
+    )
+
+    assert list(parsed) == []
+    assert captured["model"] == "models/gemma-4-31b-it"
+    assert captured["max_output_tokens"] == 3366
+    assert 10134 + 1000 + int(captured["max_output_tokens"]) == 14500
+
+
+def test_event_parse_output_budget_does_not_rewrite_non_gemma_models():
+    class FakeClient:
+        DEFAULT_TPM_RESERVE_EXTRA = 1000
+
+        @staticmethod
+        def _estimate_prompt_tokens(_prompt):
+            return 200000
+
+    assert (
+        main._fit_event_parse_gemma_output_budget(
+            FakeClient(),
+            model="gemini-3.1-flash-lite",
+            prompt="large",
+            configured_max_tokens=4000,
+        )
+        == 4000
+    )
+
+
+@pytest.mark.asyncio
 async def test_event_parse_gemma_default_is_gemma4_without_implicit_4o_fallback(monkeypatch):
     captured: dict[str, object] = {"models": [], "four_o_called": False}
 
