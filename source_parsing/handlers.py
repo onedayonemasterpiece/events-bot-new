@@ -565,6 +565,60 @@ async def attach_parser_source_to_exact_existing(
     return True
 
 
+async def find_exact_parser_ticket_slot(
+    db: Database,
+    event: TheatreEvent,
+) -> int | None:
+    """Find one canonical occurrence by exact official ticket URL and slot.
+
+    This is the source-parser equivalent of Smart Update's
+    ``deterministic_specific_ticket_same_slot`` shortcut.  It deliberately
+    runs only after the ordinary title/location lookup misses, requires an
+    explicit date and non-placeholder time, and refuses ambiguous duplicate
+    rows.  Semantic/fuzzy identity remains in Smart Update.
+    """
+
+    normalized_url = _normalize_source_url_for_match(event.url)
+    candidate_date = str(event.parsed_date or "").strip()[:10]
+    candidate_time = str(event.parsed_time or "").strip()[:5]
+    if (
+        not normalized_url
+        or not candidate_date
+        or not candidate_time
+        or candidate_time == "00:00"
+    ):
+        return None
+
+    async with db.get_session() as session:
+        rows = list(
+            (
+                await session.execute(
+                    select(Event).where(
+                        Event.date == candidate_date,
+                        Event.time == candidate_time,
+                    )
+                )
+            ).scalars()
+        )
+    matches = [
+        row
+        for row in rows
+        if _normalize_source_url_for_match(row.ticket_link) == normalized_url
+    ]
+    if len(matches) != 1:
+        return None
+    event_id = int(matches[0].id or 0)
+    if event_id:
+        logger.info(
+            "source_parsing: exact ticket slot lookup event_id=%d url=%s date=%s time=%s",
+            event_id,
+            normalized_url,
+            candidate_date,
+            candidate_time,
+        )
+    return event_id or None
+
+
 def unpack_add_event_result(
     raw: tuple[int | None, bool] | tuple[int | None, bool, str | None],
 ) -> tuple[int | None, bool, str]:
@@ -2825,6 +2879,9 @@ async def process_source_events(
                 event.parsed_time or "00:00",
                 event.title,
             )
+            if not existing_id:
+                existing_id = await find_exact_parser_ticket_slot(db, event)
+                needs_full_update = False
             
             parser_source_present = False
             if existing_id:

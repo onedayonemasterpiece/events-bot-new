@@ -112,7 +112,9 @@ async def test_exact_ticket_slot_allows_presentation_title_without_llm(
         event_id = int(stored.id)
 
     async def find_existing(*_args, **_kwargs):
-        return event_id, False
+        # Presentation title no longer matches the terse official title.  The
+        # exact-ticket-slot fallback must discover the stored occurrence.
+        return None, False
 
     async def true_result(*_args, **_kwargs):
         return True
