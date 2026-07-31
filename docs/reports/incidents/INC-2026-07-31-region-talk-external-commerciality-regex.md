@@ -1,10 +1,10 @@
 # INC-2026-07-31-region-talk-external-commerciality-regex External article caveat was treated as advertising
 
-Status: mitigated
+Status: closed
 Severity: sev2
 Service: Region Talk external article discovery/publication funnel
 Opened: 2026-07-31
-Closed: —
+Closed: 2026-07-31
 Owners: events-bot / Region Talk
 Related incidents: `INC-2026-07-31-region-talk-article-link-precedence`
 Related docs: `docs/features/region-talk-channel/external-publications.md`
@@ -39,6 +39,17 @@ CPU-only replay of the exact imported editorial text localized the hit to
   inside the research-authored caveat.
 - 2026-07-31 19:08 UTC — bounded LLM-first policy-attestation fix and negative
   controls implemented.
+- 2026-07-31 19:36 UTC — no-LLM production reconciliation proved the article
+  eligible but exposed a stale eligibility-only tombstone that the monotonic
+  provider merge would not reopen.
+- 2026-07-31 19:44 UTC — the bounded reopen fix was live and remotely probed;
+  a controlled finalizer moved the row from the advertising tombstone into the
+  normal text-restore/downstream path without a provider bypass.
+- 2026-07-31 19:56 UTC — CandidateReport restored the article state. The row
+  no longer carries the false advertising decision and now waits at the
+  independent current visual-review gate.
+- 2026-07-31 20:34 UTC — the daily anti-vector plan was rebuilt successfully;
+  one accepted article and nineteen accepted social candidates were eligible.
 
 ## Root Cause
 
@@ -104,15 +115,38 @@ noncommercial attestation now owns pre-Gemini routing for external web articles.
 
 ## Follow-up Actions
 
-- [ ] Region Talk owner: verify the affected article after the next production
-  CandidateReport pass and record its controlled Gemini result after RPD reset.
+- [x] Region Talk owner: verify the affected article after a current production
+  CandidateReport pass; it left the advertising tombstone and reached the
+  independent visual-review gate.
+- [ ] Region Talk owner: record the article's controlled Gemini result after
+  its current visual review is resolved and provider RPD is available. This is
+  downstream product work and does not reopen the commerciality incident.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHAs: `877e4183` (strict imported noncommercial attestation) and
+  `6438a98f` (eligibility-only tombstone reopen), both reachable from
+  `origin/main`; the remote `v1815`/`v1816` code probes contained both guards.
+- deploy path: clean Fly remote builds from commits already reachable from
+  `origin/main`; `/healthz` returned `ok=true`, `ready=true`, Region Talk
+  scheduler `ok`.
+- regression checks: candidate-policy attestation focused test passed; full
+  publication-finalizer suite passed with 43 tests, including social,
+  sales/sponsored, operator-reject and paid-provider negative controls.
+- reconciliation evidence:
+  `region-talk-external-commerciality-reconcile-20260731T1936Z-877e4183`
+  read 96 inputs (72 actual-image, 16 video, eight link articles) with zero LLM
+  calls; the controlled follow-up
+  `region-talk-external-commerciality-reopen-20260731T1947Z-6438a98f`
+  retained the shared Gemini limiter and made three normal verifier attempts.
+- post-deploy verification: the exact article now has
+  `publication_status=needs_visual_review`,
+  `publication_candidate_status=visual_review_pending`, and no advertising
+  tombstone. Candidate memory preserves `rights_policy=link_only`,
+  `media_reuse_allowed=false`, the strict research-policy attestation and the
+  generic regex evidence. Anti-vector snapshot
+  `rtdayplan_63afa25453b33ab35ce6d475` produced one planned article and fourteen
+  planned social slots over fourteen days.
 
 ## Prevention
 
