@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Region Talk orchestration now recognizes ImageDiagnostic's current v2 visual
+  attestations, so completed Gemini image reviews leave the actionable backlog
+  instead of causing repeated zero-yield Kaggle launches.
 - Region Talk Kaggle workers now install the pinned core YDB SDK rather than
   the unnecessary `yc` extra and exchange their authorized-key JWT through the
   official IAM REST endpoint, preventing runtime replacement of Kaggle's

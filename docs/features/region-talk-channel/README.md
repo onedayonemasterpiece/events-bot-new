@@ -325,6 +325,10 @@ state. См. [MVP candidate report](mvp-candidate-report.md).
   REST endpoint, then give the short-lived token to `ydb.AccessTokenCredentials`.
   This avoids `ydb[yc]`, whose full Yandex Cloud SDK dependency would replace
   Kaggle's shared native cryptography/protobuf stack after the worker starts.
+- Visual backlog contract: the orchestrator and ImageDiagnostic share the
+  current `region_talk_visual_adjudicator_v2` / `region_talk_visual_decision_v2`
+  attestation versions. A completed v2 verdict is terminal for that exact media
+  manifest and must not be relaunched as an apparent stale v1 backlog.
 - Fast-check KO contract: a source-local keyword hit is both an exact-post task
   (`post_link_queue_item`) and a source-priority signal. CandidateReport must
   persist `fast_check_status=ko_hit` on the corresponding `source_queue_item`,

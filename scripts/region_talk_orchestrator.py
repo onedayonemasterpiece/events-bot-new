@@ -1293,8 +1293,8 @@ LEGACY_IMAGE_PUBLICATION_GATES = frozenset({
     "region_talk_publication_eligibility_v3",
     "region_talk_publication_eligibility_v4",
 })
-IMAGE_VLM_PROMPT_VERSION = "region_talk_visual_adjudicator_v1"
-IMAGE_VLM_DECISION_VERSION = "region_talk_visual_decision_v1"
+IMAGE_VLM_PROMPT_VERSION = "region_talk_visual_adjudicator_v2"
+IMAGE_VLM_DECISION_VERSION = "region_talk_visual_decision_v2"
 
 
 def _image_vlm_verdict_is_current(row: dict[str, Any]) -> bool:
