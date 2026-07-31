@@ -549,15 +549,19 @@ schedule.
 ## Phone connectivity diagnostic
 
 The unlinked `noindex` route `/fokus-gruppa/diagnostika/` is a narrow incident
-tool, not a focus-group replacement. One tap runs three parallel bounded
-`no-store` reads: Supabase Auth health, one tiny RLS-safe Supabase Data API read
-and a dedicated Yandex API Gateway → YDB `GetItem`. It never sends an OTP or
-changes account data.
+tool, not a focus-group replacement. One tap runs four parallel bounded
+`no-store` reads: a transport-only opaque health read without CORS/preflight,
+the normal Supabase Auth health request, one tiny RLS-safe Supabase Data API
+read and a dedicated Yandex API Gateway → YDB `GetItem`. Each read gets one
+20-second total budget instead of multiplying an eight-second wait by retries.
+It never sends an OTP or changes account data.
 
 The entire result fits one phone screenshot: understandable statuses, response
 times, one opaque correlation code, local time and browser/PWA plus effective
 network mode. The same code is sent as Supabase `X-Client-Info` and the Yandex
 gateway query marker so the screenshot time can be compared with both provider
-logs. The public receipt uses only neutral labels (`Вход по почте`, `Данные
-сайта`, `Резервный канал`) and never exposes provider names. No email, OTP, JWT
-or account identity appears in the result.
+logs. The public receipt uses only neutral labels (`Прямой доступ`, `Вход по
+почте`, `Данные сайта`, `Резервный канал`) and never exposes provider names.
+The connection API's `effectiveType` is presented only as qualitative speed,
+not as a claim that Wi-Fi is cellular 4G. No email, OTP, JWT or account identity
+appears in the result.
