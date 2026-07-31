@@ -415,6 +415,79 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(rows[0]["media_review_mode"], "operator_video_review")
         self.assertEqual(rows[0]["manual_media_review_required"], "true")
 
+    def test_read_live_rows_includes_verified_link_only_external_article_without_image(self) -> None:
+        mod = self.mod
+        source = {
+            "canonical_source_key": "web:publisher.example",
+            "platform": "web",
+            "source_url": "https://publisher.example",
+            "source_title": "Publisher Example",
+            "source_scope": "external",
+            "source_geo_class": "nonlocal_russia",
+            "source_topic_class": "editorial_publication",
+            "source_quick_class": "candidate_keep",
+            "source_queue_status": "confirmed_external_publication_research",
+        }
+        kinds = {
+            "image_queue_item": {},
+            "candidate_memory_item": {
+                "memory:article": {
+                    "post_url": "https://publisher.example/kaliningrad",
+                    "platform": "web",
+                    "external_publication_id": "extpub-1",
+                    "content_origin_type": "editorial_publication",
+                    "source_url": "https://publisher.example",
+                    "source_title": "Publisher Example",
+                    "canonical_source_key": "web:publisher.example",
+                    "source_scope": "external",
+                    "source_geo_class": "nonlocal_russia",
+                    "source_topic_class": "editorial_publication",
+                    "kaliningrad_oblast_only_scope": True,
+                    "kaliningrad_mention_role": "main_subject",
+                    "is_ad_or_promo": False,
+                    "vector_gate_status": "vector_accept_candidate",
+                    "vector_content_type": "editorial_publication_candidate",
+                    "text_vector_fusion_status": "fused_e5_bge_m3",
+                    "current_stage": "good_text_weak_media",
+                    "rights_policy": "link_only",
+                    "media_use_policy": "score_only_no_reuse",
+                    "media_reuse_allowed": False,
+                    "external_research_quality_score": 0.86,
+                    "full_text": "Проверенная статья о Калининградской области.",
+                }
+            },
+            "publication_candidate_item": {},
+            "source_queue_item": {},
+            "source_status_item": {},
+            "online_source_item": {},
+            "external_publication_source_item": {"source:publisher": source},
+            "source_onboarding_profile_item": {},
+        }
+
+        class Pool:
+            def retry_operation_sync(self, operation):
+                return operation(object())
+
+        class Ydb:
+            def SessionPool(self, _driver):
+                return Pool()
+
+        with (
+            mock.patch.object(mod.rt, "ydb_connect", return_value=(Ydb(), object(), object())),
+            mock.patch.object(mod.rt, "ydb_kv_table_path", return_value="table"),
+            mock.patch.object(mod.rt, "ydb_select_kind_items", side_effect=lambda _s, _y, _t, kind, limit: kinds.get(kind, {})),
+            mock.patch.object(mod.rt, "utc_now_iso", return_value="2026-07-31T18:00:00+00:00"),
+        ):
+            _ydb, _driver, _pool, _table, rows, _strict_priority = mod.read_live_rows(100, 100)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["post_url"], "https://publisher.example/kaliningrad")
+        self.assertEqual(rows[0]["media_kind"], "external_article_link")
+        self.assertEqual(rows[0]["media_review_mode"], "link_only_no_media_reuse")
+        self.assertEqual(rows[0]["image_model_input_type"], "not_required_link_only")
+        self.assertEqual(rows[0]["_authoritative_source"], source)
+        self.assertGreater(rows[0]["publication_pre_score"], 0.8)
+
     def test_read_live_rows_prefers_current_memory_text_reject_over_stale_image_snapshot(self) -> None:
         mod = self.mod
         source = external_source("kseniacalm")

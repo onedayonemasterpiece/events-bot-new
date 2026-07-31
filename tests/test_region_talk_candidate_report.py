@@ -9066,6 +9066,85 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertFalse(document["eligible"])
         self.assertEqual(document["primary_reason"], "actual_image_required")
 
+    def test_publication_eligibility_accepts_verified_link_only_external_article_without_media(self) -> None:
+        mod = load_module()
+        article = {
+            "post_url": "https://publisher.example/kaliningrad-architecture",
+            "platform": "web",
+            "external_publication_id": "extpub-article-1",
+            "content_origin_type": "editorial_publication",
+            "source_geo_class": "nonlocal_russia",
+            "source_scope": "external",
+            "source_topic_class": "editorial_publication",
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "is_ad_or_promo": False,
+            "vector_gate_status": "vector_accept_candidate",
+            "vector_content_type": "editorial_publication_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+            "current_stage": "good_text_weak_media",
+            "rights_policy": "link_only",
+            "media_use_policy": "score_only_no_reuse",
+            "media_reuse_allowed": False,
+            "has_media": False,
+        }
+
+        accepted = mod.publication_eligibility(article)
+        ambiguous = mod.publication_eligibility({**article, "vector_gate_status": "vector_ambiguous_keep_for_ranking"})
+        reusable_media = mod.publication_eligibility({**article, "media_reuse_allowed": True})
+        social_without_media = mod.publication_eligibility({
+            **article,
+            "platform": "telegram",
+            "external_publication_id": "",
+            "content_origin_type": "social_post",
+            "source_topic_class": "travel_blogger",
+            "vector_content_type": "visit_impression_candidate",
+        })
+
+        self.assertTrue(accepted["eligible"])
+        self.assertEqual(accepted["media_review_mode"], "link_only_no_media_reuse")
+        self.assertEqual(accepted["evidence"]["eligibility_phase"], "publication_external_article_link")
+        self.assertEqual(
+            accepted["evidence"]["external_article_link_gate_version"],
+            mod.EXTERNAL_ARTICLE_LINK_GATE_VERSION,
+        )
+        self.assertFalse(ambiguous["eligible"])
+        self.assertEqual(ambiguous["primary_reason"], "vector_accept_candidate_required")
+        self.assertFalse(reusable_media["eligible"])
+        self.assertFalse(social_without_media["eligible"])
+        self.assertEqual(social_without_media["primary_reason"], "no_media_for_image_analysis")
+
+        with mock.patch.object(mod, "call_region_talk_semantic_llm", return_value={
+            "llm_gate_status": "ok",
+            "llm_decision": "accept",
+            "llm_reason": "verified article",
+            "llm_model": "gemini-test",
+        }):
+            queue, _goal = mod.build_publication_candidate_queue(
+                [{
+                    **article,
+                    "external_research_quality_score": 0.86,
+                    "candidate_score": 0.74,
+                    "source_id": "web:publisher-example",
+                    "source_title": "Publisher Example",
+                    "short_summary": "Проверенная статья о Калининградской области.",
+                }],
+                [],
+                [],
+                {"llm_budget_max": 10, "target_confirmed": 10},
+                run_id="article-link-unit",
+                run_now="2026-07-31T18:00:00+00:00",
+                llm_model="gemini-test",
+                llm_default_env_var_name="GOOGLE_API_KEY3",
+            )
+        self.assertEqual(len(queue), 1)
+        self.assertEqual(queue[0]["publication_candidate_status"], "llm_confirmed")
+        self.assertEqual(
+            queue[0]["visual_confirmation_source"],
+            "not_required_link_only_article_no_media_reuse",
+        )
+        self.assertGreater(queue[0]["publication_score"], 0.5)
+
     def test_publication_eligibility_allows_narrow_high_postcard_near_threshold_lane(self) -> None:
         mod = load_module()
         base = {

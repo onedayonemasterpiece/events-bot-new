@@ -154,6 +154,19 @@ row only when all of these remain true at read time:
 - `product_policy_match=true` and there is no hard exclusion;
 - no later operator override blocks the row.
 
+After the strict intake handoff, editorial and academic publications use a
+separate **link-only article lane**. They still require authoritative nonlocal
+publisher attestation, Kaliningrad-main-subject scope, current fused E5+BGE-M3,
+an exact external-article vector acceptance and the normal controlled Gemini
+finalizer. They do **not** require actual-image scoring when
+`rights_policy=link_only`, `media_use_policy=score_only_no_reuse` and media
+reuse is forbidden. This is contract
+`region_talk_external_article_link_gate_v1`; it cannot admit Telegram/VK social
+posts, ambiguous vector decisions or an article that claims reusable media.
+The finalizer reports these inputs as `external_link_article_rows` and records
+`media_review_mode=link_only_no_media_reuse` instead of pretending a picture
+was reviewed.
+
 The adapter creates a `platform=web` scoring projection, never a synthetic
 Telegram/VK post. It preserves `content_origin_type`, canonical publisher key,
 research quality, source overview, diversity topics and rights fields. A direct
