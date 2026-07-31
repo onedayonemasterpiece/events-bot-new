@@ -1,10 +1,10 @@
 # INC-2026-07-31-region-talk-deploy-interrupted-sessions Fly deploys interrupted autonomous sessions
 
-Status: mitigated
+Status: closed
 Severity: sev2
 Service: Region Talk scheduled discovery/orchestration
 Opened: 2026-07-31
-Closed: —
+Closed: 2026-07-31
 Owners: events-bot / Region Talk
 Related incidents: `INC-2026-07-31-region-talk-external-commerciality-regex`
 Related docs: `docs/operations/cron.md`, `docs/features/region-talk-channel/orchestration-to-be.md`
@@ -46,6 +46,11 @@ machine although scheduler health reported only tomorrow's next slot.
   unsent count became zero and delivery-ledger count increased 25 to 27.
 - 2026-07-31 20:34 UTC — the 14-day article/social anti-vector plan rebuilt
   successfully.
+- 2026-07-31 20:50 UTC — clean manual Fly deploy installed the watchdog as
+  release `v1818`; startup cleanup marked interrupted `ops_run=4977` crashed.
+- 2026-07-31 20:56 UTC — the first independent watchdog tick resumed the
+  19:20 UTC slot without operator action as running `ops_run=4984`, trigger
+  `watchdog_catchup`.
 
 ## Root Cause
 
@@ -106,16 +111,31 @@ BGE and finalizer work, and rebuilt the anti-vector plan.
 
 ## Follow-up Actions
 
-- [ ] Verify a deployed watchdog registration and health field.
-- [ ] Record the first natural or deploy-triggered `watchdog_catchup` production
+- [x] Verify a deployed watchdog registration and health field.
+- [x] Record the first natural or deploy-triggered `watchdog_catchup` production
   row; do not intentionally destroy useful work solely to create evidence.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: focused scheduling/runner suite pending final record
-- post-deploy verification: pending
+- deployed SHA: `8b264739b8fca7416e4b46e02adc0efe2278519e`
+  (`origin/main` ancestor at verification time)
+- Fly release: `v1818`, image
+  `deployment-01KYWZ0QB3E1JJXAWXVKD1Q8HY`
+- deploy path: clean manual `flyctl deploy --remote-only`
+- regression checks: 53 focused scheduling/runner tests passed; the combined
+  scheduling/runner/notifier/orchestrator suite reached 172 passed before a
+  post-suite background-thread shutdown hang, and the process was interrupted
+  only after pytest had printed `100% passed`
+- remote code/health: `/app/scheduling.py` contains the watchdog definition and
+  registered job; `/healthz` reported `scheduler=ok`, `region_talk=ok`,
+  `region_talk_watchdog=ok`, daily next run `2026-08-01T04:20:00+00:00`, and
+  watchdog next run `2026-07-31T20:55:36.326352+00:00`
+- post-deploy durable evidence: production `ops_run=4984` started at
+  `2026-07-31 20:56:31`, status `running`, trigger `watchdog_catchup`, with
+  scheduler run id
+  `watchdog-catchup-20260731T192000Z-f626c925a35e412f8ba9ed49323d2aed`;
+  the Region Talk orchestrator child was present and its retained JSONL path
+  was created under `/data/runtime_logs/region_talk/`
 
 ## Prevention
 
