@@ -38,7 +38,7 @@ def test_relay_is_stateless_fixed_upstream_and_exact_origin() -> None:
     assert desired["security"]["forwards_client_ip_headers"] is False
     assert "origin: https://kenigevents.ru" in spec
     assert "origin: '*'" not in spec
-    assert spec.count("type: http") == 27
+    assert spec.count("type: http") == 29
     assert "type: cloud_functions" not in spec
     assert "type: cloud_ydb" not in spec
     assert "serviceAccount" not in spec
@@ -79,6 +79,8 @@ def test_relay_has_only_explicit_product_routes_and_methods() -> None:
     assert _methods_for_path(spec, "/auth/v1/user/identities/authorize") == {"get"}
     assert _methods_for_path(spec, "/rest/v1/my_saved_events_v1") == {"get", "head"}
     assert _methods_for_path(spec, "/rest/v1/rpc/set_saved_event_state_v1") == {"post"}
+    assert _methods_for_path(spec, "/rest/v1/rpc/register_focus_group_participant_v1") == {"post"}
+    assert _methods_for_path(spec, "/rest/v1/rpc/submit_focus_group_feedback_v2") == {"post"}
     assert _methods_for_path(spec, "/functions/v1/event-search") == {"post"}
     assert _methods_for_path(
         spec, "/storage/v1/object/focus-feedback/{path+}"

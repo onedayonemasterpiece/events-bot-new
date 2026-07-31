@@ -82,7 +82,7 @@
   Yandex relay now allowlists exact Auth/read/RPC/search and private
   `focus-feedback` upload/delete routes, strips spoofable forwarding headers,
   and fails closed for Auth admin, unknown RPC/functions, Realtime and other
-  Storage buckets. Saved-event direct DML is replaced by a capped owner-bound
+  Storage buckets. The exact allowlist also retains participant registration and idempotent focus-feedback submission required by the focus-group UI. Saved-event direct DML is replaced by a capped owner-bound
   desired-state RPC; event search authenticates the user before service-only
   vector/quota/audit RPCs, adds idempotent quota operation IDs, caps request
   bodies and makes search feedback idempotent, rate- and retention-bounded.

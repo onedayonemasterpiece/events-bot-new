@@ -538,6 +538,56 @@ paths:
         timeouts:
           connect: 3
           read: 15
+  /rest/v1/rpc/register_focus_group_participant_v1:
+    post:
+      operationId: registerFocusGroupParticipant
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/rpc/register_focus_group_participant_v1
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 15
+  /rest/v1/rpc/submit_focus_group_feedback_v2:
+    post:
+      operationId: submitFocusGroupFeedback
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/rpc/submit_focus_group_feedback_v2
+        headers:
+          '*': '*'
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 15
   /rest/v1/rpc/ingest_transport_experiment_event_v1:
     post:
       operationId: ingestTransportExperiment
