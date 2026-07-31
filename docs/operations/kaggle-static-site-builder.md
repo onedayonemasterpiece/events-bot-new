@@ -339,6 +339,17 @@ fail-closed and never removed. Failed/nonterminal outputs remain available for
 explicit incident disposition rather than being mistaken for regenerable
 success artifacts.
 
+Capacity recovery runs before the durable-space probe. The Fly owner removes
+all complete snapshots except the exact paths named by a readable active
+handoff; an unreadable active handoff still fails closed. After acquiring the
+single local runner lock and before creating a new staging tree, the Kaggle
+launcher removes only real, non-symlink `static-site-kaggle-*` directories
+inside its configured scratch root. Those directories are owned by
+`TemporaryDirectory` during a normal run, so their presence before a new
+locked run is evidence of process death. Unknown paths and symlinks are never
+followed or removed. This ordering ensures that a regenerable staged SQLite
+copy cannot itself cause the next storage preflight to fail.
+
 Production health reports persistent and scratch disk separately. A critical
 or unwritable `/tmp` keeps `/healthz` not ready and blocks the static preflight
 even during startup grace. The coalesced request is deferred without incrementing

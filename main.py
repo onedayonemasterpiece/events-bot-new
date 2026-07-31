@@ -23680,6 +23680,53 @@ async def _reconcile_current_static_site_candidate_status(db: Database) -> dict[
     return result
 
 
+async def _prune_static_site_terminal_snapshots_for_capacity(
+    db: Database,
+) -> dict[str, Any]:
+    """Recover volume capacity before the builder write probe.
+
+    Exact active handoff paths are preserved fail-closed.  Every other complete
+    snapshot is terminal and reproducible from the canonical database, so it
+    must not prevent the next Smart Update build from starting.
+    """
+
+    snapshot_root = Path(
+        (os.getenv("STATIC_SITE_SNAPSHOT_DIR") or "").strip()
+        or str(Path(db.path).resolve().parent / "static_site_snapshots")
+    )
+    prune_safe, active_snapshot_paths = await asyncio.to_thread(
+        _static_site_snapshot_retention_context, db.path
+    )
+    if not prune_safe:
+        logging.error(
+            "static_site_build: capacity snapshot cleanup skipped; "
+            "active handoff is unreadable"
+        )
+        return {
+            "removed_snapshot_ids": [],
+            "removed_incomplete_files": [],
+            "removed_bytes": 0,
+            "preserved_paths": [],
+            "retained_terminal_count": 0,
+            "status": "skipped_unreadable_active_handoff",
+        }
+    report = await asyncio.to_thread(
+        prune_immutable_snapshots,
+        snapshot_root,
+        preserve_paths=active_snapshot_paths,
+        keep_latest_terminal=0,
+        stale_incomplete_seconds=max(
+            60, _env_int("STATIC_SITE_SNAPSHOT_STALE_INCOMPLETE_SECONDS", 900)
+        ),
+    )
+    if report["removed_snapshot_ids"] or report["removed_incomplete_files"]:
+        logging.info(
+            "static_site_build: capacity snapshot cleanup %s",
+            json.dumps(report, sort_keys=True),
+        )
+    return report
+
+
 async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) -> bool | str:
     """Coalesced static-site build after Smart Update.
 
@@ -23705,6 +23752,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     # to remove only recognized terminal outputs not named by the exact active
     # handoff in durable state.
     await _prune_static_site_terminal_outputs(db)
+    await _prune_static_site_terminal_snapshots_for_capacity(db)
     try:
         await asyncio.to_thread(_static_site_storage_preflight)
     except StaticSiteRetryableError as exc:
