@@ -541,6 +541,12 @@ class PosterCandidate:
     total_tokens: int = 0
 
 
+def _poster_candidate_evidence_url(poster: PosterCandidate) -> str | None:
+    """Return the real URL fields used for provenance-only grounding."""
+
+    return str(poster.supabase_url or poster.catbox_url or "").strip() or None
+
+
 @dataclass(slots=True)
 class EventCandidate:
     source_type: str
@@ -14859,7 +14865,7 @@ async def _smart_event_update_impl(
                 {
                     "ocr_text": poster.ocr_text,
                     "ocr_title": poster.ocr_title,
-                    "url": poster.url,
+                    "url": _poster_candidate_evidence_url(poster),
                 }
                 for poster in (candidate.posters or [])
             ],

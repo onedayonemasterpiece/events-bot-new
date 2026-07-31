@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-31-poster-candidate-url.md`
+  - Scope: poster-bearing source imports and the KGD80 provenance projection at
+    the Smart Update persistence boundary.
+  - Must not regress: evidence uses real `PosterCandidate` fields; a missing
+    optional URL cannot abort persistence, and same-day failures require a
+    verified catch-up after deployment.
+
 - `INC-2026-07-30-focus-email-otp-false-success.md`
   - Scope: focus email onboarding, Supabase Auth OTP, Postbox correlation,
     browser connectivity and focus-member activation.

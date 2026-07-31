@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Fixed a production Smart Update crash introduced by KGD80 provenance
+  grounding: poster evidence now reads the real managed/source URL fields
+  instead of nonexistent `PosterCandidate.url`, with a poster-bearing VK replay
+  guarding the persistence boundary.
 - Region Talk local operator delivery now accepts only the role-scoped
   `TELEGRAM_AUTH_BUNDLE_E2E`; the generic `TELEGRAM_SESSION` fallback was
   removed so local diagnostics cannot borrow another process's session.
