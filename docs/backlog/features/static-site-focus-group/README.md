@@ -573,13 +573,16 @@ browser/app mode, qualitative connection class and whether offline support
 controls the page. It contains no email, IP, token or raw user agent, so a
 participant may paste it into the review thread instead of sending a screenshot.
 
-Nine returned phone receipts produced eight fully healthy runs and one
-reproduced route failure. For `C6DB-202B`, Supabase edge answered the transport
+Ten returned phone receipts produced eight fully healthy runs and two
+reproduced route failures. For `C6DB-202B`, Supabase edge answered the transport
 probe and both preflights in 31–59 ms, but the MTS phone browser did not receive
 them in 20 seconds; the Yandex control completed in 1.2 seconds. The additional
 `3D6A-BCDD` run completed all four paths in 300/572/590/1177 ms and was also
-confirmed in both provider logs. This is sufficient to reject a universal
-client/network outage and to require a second thin transport path.
+confirmed in both provider logs. For affected-participant run `C03E-CB61`, the
+three Supabase checks timed out at roughly 20 seconds and produced no matching
+Supabase edge row, while the same opaque code reached the Yandex Gateway with
+HTTP 200. This is sufficient to reject a universal client/network outage and
+to require a second thin transport path.
 
 The architectural decision is intentionally not “move Auth to YDB”. Supabase
 remains the only identity, OTP, OAuth, JWT, refresh-session and RLS owner. A
