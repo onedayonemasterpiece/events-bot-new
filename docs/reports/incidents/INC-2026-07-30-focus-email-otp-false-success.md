@@ -280,7 +280,8 @@ after any failed transport result and therefore communicated a false success.
 
 ## Release And Closure Evidence
 
-- deployed SHA: `d1628867c0d8b3485e7ae9a8b622239f932682a8` plus pending browser-fetch hotfix SHA
+- deployed SHAs: framework/main `d1628867c0d8b3485e7ae9a8b622239f932682a8`;
+  browser-fetch hotfix `625bfc3b` (root diagnostic assets verified live)
 - relay deploy path: Yandex API Gateway `kenigevents-supabase-relay`
 - regression checks: local focus suite, relay infra tests and Astro build pass;
   live production-origin CORS/Auth/Data/invalid-verify/invalid-refresh smoke pass
