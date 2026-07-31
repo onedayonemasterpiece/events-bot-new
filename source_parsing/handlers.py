@@ -492,9 +492,11 @@ async def attach_parser_source_to_exact_existing(
         candidate_date = str(event.parsed_date or "").strip()[:10]
         stored_time = str(stored.time or "").strip()[:5]
         candidate_time = str(event.parsed_time or "").strip()[:5]
+        title_matches = (
+            _normalize_title(stored.title or "") == normalized_candidate_title
+        )
         if (
-            _normalize_title(stored.title or "") != normalized_candidate_title
-            or not candidate_date
+            not candidate_date
             or stored_date != candidate_date
             or (
                 candidate_time
@@ -511,6 +513,27 @@ async def attach_parser_source_to_exact_existing(
                 )
             ).scalars()
         )
+        # A source row may point at a shared performance/festival page.  Only
+        # the canonical ticket URL has the same-slot identity strength used by
+        # Smart Update's deterministic_specific_ticket_same_slot match.
+        exact_url_identity = (
+            _normalize_source_url_for_match(stored.ticket_link) == normalized_url
+        )
+        if not title_matches:
+            # Smart Update may legitimately turn a terse official title into a
+            # presentation title.  Replaying that same occurrence must not pay
+            # for the full semantic merge again.  Keep this deterministic
+            # exception narrower than the ordinary title path: an exact
+            # official URL plus an explicit matching date/time are mandatory.
+            # Shared performance/festival URLs with another slot, or sources
+            # without an explicit time, still reach the LLM identity gate.
+            if (
+                not exact_url_identity
+                or not candidate_time
+                or candidate_time == "00:00"
+                or stored_time != candidate_time
+            ):
+                return False
         existing = next(
             (
                 row

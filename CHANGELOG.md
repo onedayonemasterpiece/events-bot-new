@@ -9,6 +9,11 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Source-parsing replay now treats an exact official URL, date and explicit
+  time as an idempotent occurrence even when Smart Update previously expanded
+  the presentation title; shared URLs without an exact slot still reach the
+  LLM identity gate, while deploy-interrupted catch-ups no longer repay the
+  full semantic merge for already restored rows.
 - Smart Update event-vector catch-up now honors bounded shared-ledger RPM/TPM
   retry windows inside one projection instead of restarting the whole job every
   ten minutes; day-level exhaustion remains fail-closed.
