@@ -52,8 +52,18 @@ after any failed transport result and therefore communicated a false success.
   Auth requests produced 39 provider `Send` events.
 - 2026-07-31 09:35 UTC — dedicated read-only API Gateway → YDB control deployed
   and verified; source for an unlinked noindex connectivity page added.
-- 2026-07-31 — false-success source fix and regression tests prepared; live
-  deployment and phone-network acceptance remain open.
+- 2026-07-31 11:32–12:30 UTC — eight returned `KE2` receipts collected from
+  phone browsers: seven completed all four checks and one timed out on all
+  direct Supabase checks while the Yandex control completed.
+- 2026-07-31 12:17 UTC — for the failing `C6DB-202B` receipt, Supabase edge
+  logs recorded the transport-only request and both Auth/Data preflights from
+  the MTS route twice (HTTP/3, then HTTP/2), all answered in 31–59 ms. The
+  browser received none of those responses within 20 seconds, did not issue
+  the checked Auth/Data GETs, and did complete the Yandex control in 1.2 s.
+- 2026-07-31 12:25 UTC — the control logs retained one additional diagnostic
+  code that was not pasted into Telegram; its Supabase Auth/Data and control
+  requests all completed. This proves that a copied receipt is useful for
+  product communication but is not the only available diagnostic evidence.
 
 ## Root Cause
 
@@ -63,6 +73,13 @@ after any failed transport result and therefore communicated a false success.
    control/attempt ledger. Seven edge client signatures completed
    `/auth/v1/otp` preflight but produced no matching POST in the presentation
    window.
+   A live diagnostic now confirms this failure class on one MTS route: the
+   Supabase edge processed and answered the simple GET and both preflights,
+   but the phone browser did not complete those responses and therefore never
+   sent the checked Auth/Data requests. The same phone completed the Yandex
+   control request. The precise ISP/browser filtering mechanism is not yet
+   proven, but Supabase processing time and the mail provider are downstream
+   of the observed loss and cannot be its cause.
 3. Resends could generate several active-looking messages while the UI did not
    clearly bind code entry to the latest accepted issuance. This contributed
    to 59 `otp_expired` verification failures; the exact distribution still
@@ -146,6 +163,11 @@ after any failed transport result and therefore communicated a false success.
 - Add independent, PII-minimal request-stage telemetry with an opaque attempt
   id so “browser did not send”, “Auth rejected”, “SMTP not handed off” and
   “provider did not deliver” are distinct.
+- Remove direct browser dependence on the Supabase hostname for onboarding:
+  send OTP initiation and verification through the already reachable
+  KenigEvents/Yandex control boundary, then call Auth and the selected mail
+  provider server-to-server. Keep an explicit provider result and fallback
+  decision in the attempt ledger rather than changing only the SMTP provider.
 - Bind every OTP verification to the latest accepted issuance in the UI and
   suppress duplicate automatic submissions.
 - Replace the client-only participant projection with an idempotent
@@ -155,7 +177,12 @@ after any failed transport result and therefore communicated a false success.
 
 ## Follow-up Actions
 
-- [ ] P0 deploy the false-success fix and run phone acceptance on three network modes.
+- [x] P0 deploy the read-only diagnostic and collect phone evidence; one MTS
+      route reproduced the pre-Auth response loss while the Yandex control
+      stayed available.
+- [ ] P0 deploy the false-success fix to the focus onboarding itself.
+- [ ] P0 move OTP initiation and verification behind the reachable
+      KenigEvents/Yandex boundary and run phone acceptance on the failing route.
 - [ ] P0 complete separate live code and magic-link E2E issuances.
 - [ ] P0 reconcile all confirmed Auth users into the focus participant table.
 - [ ] P1 add PII-minimal stage telemetry and delivery correlation for hosted Auth.
