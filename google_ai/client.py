@@ -27,6 +27,10 @@ from typing import Any, Callable, Optional, Sequence, TYPE_CHECKING
 from time import monotonic as _monotonic
 
 from google_ai.exceptions import RateLimitError, ProviderError, ReservationError
+from google_ai.limiter_supabase import (
+    GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY_ENV,
+    GOOGLE_AI_LIMITER_SUPABASE_URL_ENV,
+)
 
 if TYPE_CHECKING:
     from supabase import Client as SupabaseClient
@@ -1975,8 +1979,14 @@ class GoogleAIClient:
         a different schema (e.g. 'private') and PostgREST returns 404 for an RPC
         that exists in 'public'.
         """
-        base_url = (os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
-        key = (os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY") or "").strip()
+        # The limiter ledger is an independent security boundary. Never retry
+        # its RPC against a general/storage/personalization Supabase project.
+        base_url = (
+            os.getenv(GOOGLE_AI_LIMITER_SUPABASE_URL_ENV) or ""
+        ).strip().rstrip("/")
+        key = (
+            os.getenv(GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY_ENV) or ""
+        ).strip()
         if not base_url or not key:
             return None
         schema = (os.getenv(self.RESERVE_DIRECT_SCHEMA_ENV) or "public").strip() or "public"

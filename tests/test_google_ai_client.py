@@ -1325,3 +1325,27 @@ def test_personalization_limiter_bootstrap_is_self_contained_and_secret_free() -
     assert "('gemma-4-31b', 15, 15000, 14000, 1000)" in migration
     assert "('gemma-4-26b-a4b', 15, 15000, 14000, 1000)" in migration
     assert "2147483647" not in migration
+
+
+@pytest.mark.asyncio
+async def test_direct_reserve_retry_never_uses_general_supabase_env(monkeypatch) -> None:
+    monkeypatch.setenv("SUPABASE_URL", "https://general.example")
+    monkeypatch.setenv("SUPABASE_SERVICE_KEY", "general-secret")
+    monkeypatch.delenv("GOOGLE_AI_LIMITER_SUPABASE_URL", raising=False)
+    monkeypatch.delenv("GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY", raising=False)
+    client = GoogleAIClient()
+    context = RequestContext(
+        request_uid="00000000-0000-4000-8000-000000000003",
+        consumer="test",
+        account_name=None,
+        model="gemini-3.1-flash-lite",
+        reserved_tpm=100,
+    )
+
+    result = await client._reserve_via_direct_rest(
+        context,
+        attempt_no=1,
+        payload={},
+    )
+
+    assert result is None
