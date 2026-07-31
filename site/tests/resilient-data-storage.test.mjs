@@ -42,6 +42,24 @@ test('cleanup drops expired, oversized and orphaned preview state without touchi
   assert.ok(result.removed.length >= 3);
 });
 
+
+test('cleanup enforces one aggregate app budget across many individually valid prefix keys', () => {
+  const authKey = 'sb-project-auth-token';
+  const initial = {
+    [authKey]: 'a'.repeat(90_000),
+    'kenigevents:focus-participation:v1': JSON.stringify({ version:1, status:'active' }),
+  };
+  for (let index = 0; index < 40; index += 1) {
+    initial[`ke_cache_${String(index).padStart(2, '0')}`] = 'x'.repeat(1_900);
+  }
+  const storage = storageFixture(initial);
+  const result = cleanupAppStorage(storage);
+  assert.ok(result.bytes <= NON_AUTH_STORAGE_BUDGET_BYTES);
+  assert.ok(result.removed.length > 0);
+  assert.notEqual(storage.getItem('kenigevents:focus-participation:v1'), null);
+  assert.equal(storage.getItem(authKey)?.length, 90_000);
+});
+
 test('profile collections and maps are deterministically capped', () => {
   const ids = Array.from({ length:300 }, (_, index) => index + 1);
   const tags = Object.fromEntries(ids.map((id) => [`tag-${id}`, id / 10]));

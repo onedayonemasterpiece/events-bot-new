@@ -49,6 +49,9 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       <span>Так к афише будет удобно возвращаться. Можно продолжить и без установки.</span>
     </div>
     <FocusPwaInstallAction />
+    <button class="focus-intake__skip" type="button" data-focus-install-skip>
+      Продолжить без установки
+    </button>
   </section>
 
   <section class="focus-intake__card" data-intake-stage="identity" hidden>
@@ -444,7 +447,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       if (verified) {
         if (identityStatus) identityStatus.textContent = 'Сохраняем участие…';
         const saved = await auth?.registerFocusGroupParticipant({
-          communicationOptIn: contactConsent?.checked === true,
+          focusUpdatesConsent: contactConsent?.checked === true,
           sourceRoute: window.location.pathname,
         });
         if (!saved) {
@@ -493,22 +496,33 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       if (storage) updateFocusParticipationIdentityChoice(storage, selectedChoice);
       setSending(true);
       if (identityStatus) identityStatus.textContent = 'Отправляем письмо…';
-      let sent = false;
+      let result = null;
       try {
         const emailRedirect = new URL(cleanStaticAuthUrl(window.location.href));
         emailRedirect.searchParams.set('email_callback', '1');
-        sent = await auth.signInWithEmailOtp(email, emailRedirect.href);
+        result = await auth.signInWithEmailOtp(email, emailRedirect.href);
       } catch {
-        sent = false;
+        result = {
+          status: 'request_failed',
+          accepted: false,
+          message: 'Не удалось отправить письмо. Проверьте соединение и попробуйте ещё раз.',
+        } as const;
       }
       setSending(false);
-      showEmailCode();
-      if (identityStatus) {
-        identityStatus.textContent = sent
-          ? 'Письмо отправлено. Введите код или нажмите кнопку в письме.'
-          : 'Письмо могло уже прийти. Проверьте почту; если письма нет, отправьте ещё раз через минуту.';
+      if (result.accepted) {
+        showEmailCode();
+        if (identityStatus) identityStatus.textContent = 'Письмо отправлено. Введите код или нажмите кнопку в письме.';
+        startResendTimer();
+        return;
       }
-      startResendTimer();
+      showEmailAddress(false);
+      if (identityStatus) identityStatus.textContent = result.message;
+      if (result.status === 'ambiguous' || result.status === 'rate_limited') {
+        if (emailSend) emailSend.disabled = true;
+        window.setTimeout(() => {
+          if (emailSend) emailSend.disabled = false;
+        }, 60_000);
+      }
     };
 
     emailOpen?.addEventListener('click', () => showEmailAddress(false));
@@ -555,11 +569,12 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       if (identityStatus) identityStatus.textContent = 'Проверяем код…';
       const verified = await auth.verifyEmailOtp(pendingEmail, token);
       otpVerifying = false;
-      if (!verified) {
+      if (!verified.ok) {
         otpInput.disabled = false;
         lastSubmittedOtp = '';
         otpInput.select();
         if (otpSubmit) otpSubmit.disabled = false;
+        if (identityStatus) identityStatus.textContent = verified.message;
       }
     };
 

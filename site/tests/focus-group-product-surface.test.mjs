@@ -77,9 +77,9 @@ test('invite intake and secret hub state the local marker boundary', async () =>
     read('../src/lib/focus-group-prototype.ts'),
   ]);
   assert.match(intake, /history\.replaceState/u);
-  assert.match(intake, /метка участия на полные 30 дней/u);
-  assert.match(intake, /не зависит от\s+настроек «Для меня»/u);
-  assert.match(intake, /не подтверждение личности и не защита/u);
+  assert.match(intake, /Шаг 1 из 3/u);
+  assert.match(intake, /Шаг 2 из 3/u);
+  assert.match(intake, /clearFocusParticipationMarker/u);
   assert.match(secret, /UX-проверка, а не проверка авторизации/u);
   assert.match(secret, /readFocusParticipationMarker/u);
   assert.match(helper, /FOCUS_PARTICIPATION_DURATION_MS = 30 \* 24/u);

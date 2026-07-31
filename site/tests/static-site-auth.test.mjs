@@ -63,13 +63,15 @@ test('focus identity supports real email OTP and Yandex linking through the shar
   assert.match(auth, /token_hash:\s*tokenHash/u);
   assert.match(auth, /async registerFocusGroupParticipant/u);
   assert.match(auth, /p_communication_opt_in:/u);
+  assert.match(auth, /dataClient\.idempotentReplay[\s\S]*register_focus_group_participant_v1/u);
   assert.match(auth, /async resetForOnboardingTest/u);
   assert.match(auth, /async linkYandexIdentity/u);
   assert.match(auth, /this\.client\.auth\.linkIdentity/u);
-  assert.match(intake, /new URL\(intake\.cleanHref, window\.location\.origin\)\.href/u);
-  assert.match(intake, /auth\.signInWithEmailOtp\(email, emailRedirectTo\)/u);
+  assert.match(intake, /new URL\(cleanStaticAuthUrl\(window\.location\.href\)\)/u);
+  assert.match(intake, /auth\.signInWithEmailOtp\(email, emailRedirect\.href\)/u);
   assert.match(intake, /auth\.linkYandexIdentity\(\)/u);
-  assert.match(intake, /введённый адрес локально не сохраняется/u);
+  assert.match(intake, /pendingEmail = email/u);
+  assert.doesNotMatch(intake, /localStorage\.setItem\([^)]*email/iu);
   assert.match(invitation, /<StaticSiteAuthRuntime \/>/u);
   assert.doesNotMatch(intake, /Макет не отправлял код|провайдер не запускается/u);
 });

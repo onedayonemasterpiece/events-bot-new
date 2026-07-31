@@ -17,6 +17,8 @@ test('focus onboarding is sequential and offers link plus six-digit mobile OTP',
   assert.match(intake, /autocomplete="one-time-code"/u);
   assert.match(intake, /pattern="\[0-9\]\{6\}"/u);
   assert.match(intake, /token\.length === EMAIL_OTP_LENGTH[\s\S]*void verifyOtp\(\)/u);
+  assert.match(intake, /if \(result\.accepted\) \{[\s\S]*showEmailCode\(\)/u);
+  assert.match(intake, /result\.status === 'ambiguous'[\s\S]*60_000/u);
   assert.match(helper, /EMAIL_OTP_LENGTH = 6/u);
 });
 
@@ -29,6 +31,7 @@ test('focus page rating is durable for a day and replays through an idempotent o
   assert.match(panel, /getIdempotentOutbox/u);
   assert.match(panel, /channel: 'focus_feedback_v2'/u);
   assert.match(panel, /submit_focus_group_feedback_v2/u);
+  assert.match(panel, /dataClient\.idempotentReplay/u);
   assert.match(panel, /return 'skip' as const/u);
   assert.match(panel, /window\.addEventListener\('online'/u);
   assert.match(state, /24 \* 60 \* 60 \* 1000/u);

@@ -26,7 +26,7 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
   aria-labelledby="focus-lab-panel-title"
 >
   <div class="focus-lab-panel__head">
-    <FocusLabBadge />
+    <FocusLabBadge label="Lab" detail="Фокус-группа" />
     <div>
       <h2 id="focus-lab-panel-title">Помогла ли вам эта страница?</h2>
       <p>Оцените {pageLabel} от 0 до 10.</p>
@@ -58,7 +58,7 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
     <form class="focus-lab-panel__sheet" data-focus-issue-form>
       <header>
         <div>
-          <FocusLabBadge />
+          <FocusLabBadge label="Lab" detail="Фокус-группа" />
           <h2 id="focus-issue-title">Что пошло не так?</h2>
         </div>
         <button type="button" data-focus-dialog-close aria-label="Закрыть">×</button>
@@ -83,7 +83,7 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
     <div class="focus-lab-panel__sheet focus-lab-panel__sheet--invite">
       <header>
         <div>
-          <FocusLabBadge />
+          <FocusLabBadge label="Lab" detail="Фокус-группа" />
           <h2 id="focus-invite-title">Пригласить в фокус-группу</h2>
         </div>
         <button type="button" data-focus-dialog-close aria-label="Закрыть">×</button>
@@ -135,17 +135,34 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
     };
 
     const feedbackOutbox = getIdempotentOutbox();
-    const sendFeedbackRecord = async (record: IdempotentOutboxRecord) => {
+    const sendFeedbackRecord = async (record: IdempotentOutboxRecord, accessToken: string) => {
       if (record.channel !== 'focus_feedback_v2') return 'skip' as const;
-      const { error } = await auth!.client.rpc(
-        'submit_focus_group_feedback_v2',
-        record.payload as Record<string, unknown>,
-      );
-      return error ? 'retry' as const : 'sent' as const;
+      try {
+        const response = await auth!.dataClient.idempotentReplay(
+          `${auth!.config.supabaseUrl}/rest/v1/rpc/submit_focus_group_feedback_v2`,
+          {
+            method: 'POST',
+            headers: {
+              apikey: auth!.config.publishableKey,
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(record.payload),
+            keepalive: true,
+          },
+        );
+        if (response.ok || response.status === 409) return 'sent' as const;
+        if (response.status === 429 || response.status >= 500) return 'retry' as const;
+        return 'drop' as const;
+      } catch {
+        return 'retry' as const;
+      }
     };
     const flushFeedbackOutbox = async () => {
-      if (!auth || !(await requireSession())?.user) return;
-      await feedbackOutbox.flush(sendFeedbackRecord);
+      if (!auth) return;
+      const session = await requireSession();
+      if (!session?.user || !session.access_token) return;
+      await feedbackOutbox.flush((record) => sendFeedbackRecord(record, session.access_token));
     };
 
     let browserStorage: Storage | null = null;
@@ -201,11 +218,17 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
           p_message: null,
           p_attachment_path: null,
         };
-        await feedbackOutbox.enqueue({
+        const queued = await feedbackOutbox.enqueue({
           id: clientRequestId,
           channel: 'focus_feedback_v2',
           payload,
         });
+        if (!queued) {
+          scoreInFlight = false;
+          scoreButtons.forEach((item) => { item.disabled = false; });
+          if (feedbackStatus) feedbackStatus.textContent = 'Оценка сохранена на этой странице, но сейчас не отправилась. Попробуйте ещё раз позже.';
+          return;
+        }
         await flushFeedbackOutbox();
         const pending = (await feedbackOutbox.inspect()).some((record) => record.id === clientRequestId);
         scoreInFlight = false;
@@ -267,11 +290,16 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
         p_message: message,
         p_attachment_path: attachmentPath,
       };
-      await feedbackOutbox.enqueue({
+      const queued = await feedbackOutbox.enqueue({
         id: clientRequestId,
         channel: 'focus_feedback_v2',
         payload,
       });
+      if (!queued) {
+        if (submit) submit.disabled = false;
+        if (issueStatus) issueStatus.textContent = 'Сообщение сейчас не сохранилось. Скопируйте текст и попробуйте ещё раз позже.';
+        return;
+      }
       await flushFeedbackOutbox();
       const pending = (await feedbackOutbox.inspect()).some((record) => record.id === clientRequestId);
       if (pending) {

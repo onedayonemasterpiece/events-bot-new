@@ -14,15 +14,19 @@ export const APP_STORAGE_REGISTRY: readonly StorageRegistryEntry[] = [
   { key: 'ke_event_feedback_log_v2', maxBytes: 7 * 1024, ttlMs: 14 * 86_400_000, version: 2 },
   { key: 'ke_search_feedback_queue_v2', maxBytes: 5 * 1024, ttlMs: 7 * 86_400_000, version: 2 },
   { key: 'ke_idempotent_outbox_v1', maxBytes: 12 * 1024, ttlMs: 86_400_000, version: 1 },
+  { key: 'ke_fg_scores_v1', maxBytes: 2 * 1024, ttlMs: 86_400_000, version: 1 },
   { key: 'ke_calendar_saved_v1', maxBytes: 4 * 1024, version: 1 },
   { key: 'ke_listing_personal_feed_hint_v2', maxBytes: 1024, ttlMs: 30 * 60_000, version: 2 },
   { key: 'ke_saved_event_reconciliation_v2', maxBytes: 768, version: 2 },
   { key: 'ke_artifact_collection_v1', maxBytes: 3 * 1024, version: 1 },
   { key: 'ke_unusual_seen_v1', maxBytes: 2 * 1024, version: 1 },
   { key: 'ke_festival_likes_v1', maxBytes: 2 * 1024, version: 1 },
+  { key: 'kenigevents:focus-participation:v1', maxBytes: 640, version: 1 },
+  { key: 'kenigevents:focus-continuing-consent:v1', maxBytes: 320, version: 1 },
   { key: 'ke_experiment_', prefix: true, maxBytes: 3 * 1024 },
   { key: 'kenigevents:pwa-', prefix: true, maxBytes: 512 },
-  { key: 'ke_', prefix: true, maxBytes: 8 * 1024 },
+  { key: 'ke_', prefix: true, maxBytes: 2 * 1024 },
+  { key: 'kenigevents:', prefix: true, maxBytes: 4 * 1024 },
 ] as const;
 
 const LEGACY_DROP_KEYS = new Set([
@@ -77,6 +81,30 @@ export function registeredWorstCaseBudget(): number {
   return APP_STORAGE_REGISTRY.reduce((total, item) => total + item.maxBytes, 0);
 }
 
+const STORAGE_PROTECTED_KEYS = new Set([
+  'ke_personalization_profile',
+  'ke_artifact_collection_v1',
+  'kenigevents:focus-participation:v1',
+  'kenigevents:focus-continuing-consent:v1',
+  'kenigevents:focus-eggs:prototype:v1',
+]);
+
+function appStorageBytes(
+  storage: Pick<Storage, 'length' | 'key' | 'getItem'>,
+): Array<{ key: string; bytes: number; disposable: boolean }> {
+  return keysOf(storage)
+    .filter((key) => !isSupabaseAuthKey(key) && registryEntry(key) !== null)
+    .map((key) => {
+      let raw = '';
+      try { raw = storage.getItem(key) || ''; } catch { raw = ''; }
+      return {
+        key,
+        bytes: bytes(key) + bytes(raw),
+        disposable: /(?:cache|hint|queue|outbox|reconciliation|seen|viewed|density|cities|toast|hero|feedback_log)/iu.test(key),
+      };
+    });
+}
+
 export function cleanupAppStorage(
   storage: Pick<Storage, 'length' | 'key' | 'getItem' | 'removeItem'>,
   options: { now?: number; currentBasePath?: string } = {},
@@ -99,12 +127,24 @@ export function cleanupAppStorage(
     if (!remove) continue;
     try { storage.removeItem(key); removed.push(key); } catch { /* best effort */ }
   }
-  let total = 0;
-  for (const key of keysOf(storage)) {
-    if (isSupabaseAuthKey(key)) continue;
-    try { total += bytes(key) + bytes(storage.getItem(key) || ''); } catch { /* ignored */ }
+  let appEntries = appStorageBytes(storage);
+  let total = appEntries.reduce((sum, item) => sum + item.bytes, 0);
+  if (total > NON_AUTH_STORAGE_BUDGET_BYTES) {
+    const candidates = appEntries
+      .filter((item) => !STORAGE_PROTECTED_KEYS.has(item.key))
+      .sort((left, right) => Number(right.disposable) - Number(left.disposable) || right.bytes - left.bytes || left.key.localeCompare(right.key));
+    for (const item of candidates) {
+      if (total <= NON_AUTH_STORAGE_BUDGET_BYTES) break;
+      try {
+        storage.removeItem(item.key);
+        removed.push(item.key);
+        total -= item.bytes;
+      } catch { /* best effort */ }
+    }
+    appEntries = appStorageBytes(storage);
+    total = appEntries.reduce((sum, item) => sum + item.bytes, 0);
   }
-  return { removed, bytes: total };
+  return { removed: [...new Set(removed)], bytes: total };
 }
 
 export function boundedJsonWrite(

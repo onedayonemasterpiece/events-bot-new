@@ -153,11 +153,14 @@ limits, schema validation, authentication and idempotency enforcement remain
 authoritative; client probes/cooldowns must never be represented as DDoS
 protection.
 
-KenigEvents-owned browser state has a registered worst-case budget below 64 KiB,
-excluding the Supabase-owned auth token. Profiles, feedback/search queues,
-reconciliation markers and personal-feed hints are capped and/or expiring.
-Full per-preview feed manifests and obsolete continuation caches are removed.
-Cleanup never reads, compacts or rewrites Supabase Auth storage.
+KenigEvents-owned browser state has both per-key limits and an enforced aggregate
+budget of 64 KiB, excluding the Supabase-owned auth token. Profiles,
+feedback/search queues, reconciliation markers and personal-feed hints are
+capped and/or expiring. If many individually valid cache keys exceed the total,
+disposable queues/caches are evicted first while the current focus participation
+and compact personalization state are preserved. Full per-preview feed manifests
+and obsolete continuation caches are removed. Cleanup never reads, compacts or
+rewrites Supabase Auth storage.
 
 ## Security gates
 
@@ -181,6 +184,10 @@ Cleanup never reads, compacts or rewrites Supabase Auth storage.
   Supabase proxy. The only Storage exception is authenticated upload/delete in
   private bucket `focus-feedback`; Storage RLS remains authoritative. Unknown
   RPC/functions, Auth admin, Realtime and other buckets fail closed.
+- Focus participant registration and page feedback are idempotent desired-state
+  RPCs routed through the same thin client. The participant projection has a
+  serialized 200-active-member ceiling; the one-time presentation backfill uses
+  a fixed cutoff and never infers communication consent from Auth history.
 
 ## Consequences for existing branches
 

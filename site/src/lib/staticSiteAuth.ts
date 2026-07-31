@@ -550,12 +550,27 @@ class StaticSiteAuthController {
 
   async registerFocusGroupParticipant(input: { focusUpdatesConsent: boolean; sourceRoute: string }): Promise<boolean> {
     const session = await this.getSession();
-    if (!session?.user) return false;
-    const { error } = await this.client.rpc('register_focus_group_participant_v1', {
-      p_communication_opt_in: input.focusUpdatesConsent === true,
-      p_source_route: String(input.sourceRoute || window.location.pathname).slice(0, 160),
-    });
-    return !error;
+    if (!session?.user || !session.access_token) return false;
+    try {
+      const response = await this.dataClient.idempotentReplay(
+        `${this.config.supabaseUrl}/rest/v1/rpc/register_focus_group_participant_v1`,
+        {
+          method: 'POST',
+          headers: {
+            apikey: this.config.publishableKey,
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            p_communication_opt_in: input.focusUpdatesConsent === true,
+            p_source_route: String(input.sourceRoute || window.location.pathname).slice(0, 160),
+          }),
+        },
+      );
+      return response.ok || response.status === 409;
+    } catch {
+      return false;
+    }
   }
 
   async resetForOnboardingTest(): Promise<void> {

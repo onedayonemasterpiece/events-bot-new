@@ -467,14 +467,19 @@ leaderboards of tiny page cohorts.
   immutable focus candidate including post-R14 PWA/icon/analytics changes.
 - [ ] Rehearse candidate rollback/freshness and close live OAuth/Search on the
   exact frozen candidate; do not call old R14 candidate current.
-- [ ] Implement optional email OTP/magic link + Yandex identity upgrade,
-  anonymous continuation and idempotent anonymous→verified progress merge.
-- [ ] Implement program/membership/invite RPC, seed QR, referral, atomic cap 200,
-  expiry/alumni/withdrawal and negative auth/concurrency tests.
+- [x] Implement email OTP/magic link + Yandex identity upgrade and honest
+  anonymous continuation. Live link/code/Yandex E2E remains a release gate;
+  cross-device anonymous→verified progress merge is not yet claimed.
+- [ ] Complete the full program/membership/invite lifecycle. The current verified
+  participant projection has an atomic cap of 200, a fixed presentation cutoff
+  backfill and one mass invite QR, but expiry/alumni/referral redemption still
+  require their own server contract.
 - [ ] Publish focus terms/privacy/retention and purpose-specific tester-mail
   consent; keep recommendation consent separate.
-- [ ] Implement shared usefulness/improvement UI plus typed event-fact issue UI,
-  authenticated RPC, idempotency/rate limits and operator-visible receipt.
+- [x] Implement shared per-page-family usefulness and issue UI with a private
+  screenshot bucket, authenticated idempotent RPC, daily cap, 24-hour editable
+  score and bounded offline queue. Production migration/apply and live receipt
+  remain release gates.
 - [ ] Implement one daily digest claim/redaction/clustering/triage path and
   immediate critical event-issue alert; no automatic event mutation.
 - [ ] Expose existing local personalization as an honest `Прототип` with static

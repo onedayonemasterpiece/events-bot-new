@@ -51,6 +51,7 @@
   physical sends.
 - Restored the focus-group email login contract with one-time link and six-digit numeric code, sequential mobile onboarding, honest ambiguous-send handling, and bounded 24-hour per-page-family feedback state; feedback writes now have idempotency keys and a compact offline queue instead of disappearing after navigation.
 - Restored the repository migrations for focus feedback and participant contact that had already been applied in production, and moved the focus-group documentation from backlog into its canonical implemented-feature location while keeping a redirect stub.
+- Added a fixed-cutoff presentation participant backfill and an advisory-lock-protected 200-member admission cap without inferring communication consent; participant registration and page feedback use the idempotent resilient route and remain on the relay exact allowlist.
 - Replaced the per-key/partly local Google AI limiter with a dedicated
   project-scoped atomic Supabase contract, corrected Gemma 4 to conservative
   `15 RPM / 15000 TPM / 14000 RPD`, made all runtime construction prefer the
@@ -86,7 +87,7 @@
   desired-state RPC; event search authenticates the user before service-only
   vector/quota/audit RPCs, adds idempotent quota operation IDs, caps request
   bodies and makes search feedback idempotent, rate- and retention-bounded.
-- Unified static-site browser database access behind a configuration-keyed resilient client: safe reads can use one bounded alternate route, cost-bearing Search/OTP writes are never duplicated after ambiguous timeouts, idempotent telemetry uses a channel-safe bounded outbox, and application storage is capped below 64 KiB without touching Supabase Auth sessions.
+- Unified static-site browser database access behind a configuration-keyed resilient client: safe reads can use one bounded alternate route, cost-bearing Search/OTP writes are never duplicated after ambiguous timeouts, idempotent telemetry uses a channel-safe bounded outbox, and application storage has per-key plus aggregate 64 KiB caps without touching Supabase Auth sessions.
 - Fixed a production Smart Update crash introduced by KGD80 provenance
   grounding: poster evidence now reads the real managed/source URL fields
   instead of nonexistent `PosterCandidate.url`; poster-bearing VK and exact
