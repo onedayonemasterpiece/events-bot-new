@@ -211,6 +211,10 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
 </script>
 
 <style>
+  .connectivity,
+  .connectivity * {
+    box-sizing: border-box;
+  }
   .connectivity {
     min-height: 100dvh;
     display: grid;
@@ -220,7 +224,9 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     font-family: var(--ke-font-sans, system-ui, sans-serif);
   }
   .connectivity__card {
-    width: min(520px, 100%);
+    width: 100%;
+    max-width: 520px;
+    min-width: 0;
     display: grid;
     gap: .7rem;
     padding: clamp(1rem, 4vw, 1.5rem);
@@ -240,12 +246,15 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
   h1 { margin: 0; font-size: clamp(2rem, 8vw, 3rem); line-height: .98; letter-spacing: -.045em; }
   .connectivity__lead, .connectivity__status, .connectivity__privacy { margin: 0; line-height: 1.5; }
   .connectivity__run {
+    width: 100%;
+    min-width: 0;
     min-height: 3.15rem;
     border: 0;
     border-radius: 999px;
     padding: .8rem 1.25rem;
     font: inherit;
     font-weight: 850;
+    white-space: normal;
     cursor: pointer;
   }
   .connectivity__run { color: #fff; background: #a74523; box-shadow: 0 10px 26px rgb(167 69 35 / 24%); }
