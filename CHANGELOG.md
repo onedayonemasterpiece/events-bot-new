@@ -86,6 +86,8 @@
 - Hardened the resilient Supabase path without adding a thick backend: the
   Yandex relay now allowlists exact Auth/read/RPC/search and private
   `focus-feedback` upload/delete routes, strips spoofable forwarding headers,
+  replaces untrusted browser `Origin` before the fixed upstream so CORS cannot
+  reflect an unrelated site,
   and fails closed for Auth admin, unknown RPC/functions, Realtime and other
   Storage buckets. The exact allowlist also retains participant registration and idempotent focus-feedback submission required by the focus-group UI. Saved-event direct DML is replaced by a capped owner-bound
   desired-state RPC; event search authenticates the user before service-only

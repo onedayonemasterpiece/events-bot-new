@@ -29,10 +29,13 @@ browser JWT; bucket RLS remains the authorization boundary. No public object
 read is exposed through the relay.
 
 The integration strips `Cookie`, `Host`, `Forwarded`, `X-Forwarded-*` and
-`X-Real-IP` before the fixed upstream request. This prevents a caller from
-spoofing an address or host through the relay. `apikey` and `Authorization` are
-forwarded because Supabase publishable-key checks and JWT/RLS enforcement need
-them.
+`X-Real-IP` before the fixed upstream request. It also replaces the incoming
+`Origin` with `https://kenigevents.ru`: Supabase reflects that header, so
+forwarding an arbitrary browser origin would accidentally make the otherwise
+narrow relay readable cross-origin. This prevents a caller from spoofing an
+address, host or readable browser origin through the relay. `apikey` and
+`Authorization` are forwarded because Supabase publishable-key checks and
+JWT/RLS enforcement need them.
 
 ## Rate limiting and request size
 

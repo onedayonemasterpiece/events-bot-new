@@ -70,6 +70,7 @@
     "forwards_cookie": false,
     "forwards_client_host": false,
     "forwards_client_ip_headers": false,
+    "forwards_browser_origin": false,
     "owns_identity_or_sessions": false,
     "storage_scope": "private bucket focus-feedback only; Supabase JWT and RLS remain authoritative"
   }

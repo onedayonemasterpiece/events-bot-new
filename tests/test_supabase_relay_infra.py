@@ -36,6 +36,7 @@ def test_relay_is_stateless_fixed_upstream_and_exact_origin() -> None:
     assert desired["security"]["forwards_cookie"] is False
     assert desired["security"]["forwards_client_host"] is False
     assert desired["security"]["forwards_client_ip_headers"] is False
+    assert desired["security"]["forwards_browser_origin"] is False
     assert "origin: https://kenigevents.ru" in spec
     assert "origin: '*'" not in spec
     assert spec.count("type: http") == 29
@@ -105,6 +106,19 @@ def test_relay_strips_cookie_host_and_spoofable_forwarding_headers() -> None:
         "X-Real-IP: ''",
     ):
         assert sum(line.strip() == header for line in spec.splitlines()) == integration_count
+
+
+def test_relay_never_reflects_an_untrusted_browser_origin() -> None:
+    spec = _spec()
+    integration_count = spec.count("type: http")
+
+    # Supabase reflects the Origin it receives. Every fixed HTTP integration
+    # must therefore override the caller-provided value with the one public
+    # KenigEvents origin instead of forwarding it via the wildcard mapping.
+    assert sum(
+        line.strip() == "Origin: https://kenigevents.ru"
+        for line in spec.splitlines()
+    ) == integration_count
 
 
 def test_relay_does_not_use_deprecated_global_rate_limit_without_sws_profile() -> None:

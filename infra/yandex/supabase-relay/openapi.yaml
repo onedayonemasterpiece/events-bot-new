@@ -53,6 +53,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/health
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -77,6 +79,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/health
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -102,6 +106,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/settings
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -127,6 +133,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/authorize
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -152,6 +160,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/token
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -177,6 +187,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/otp
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -202,6 +214,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/verify
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -226,6 +240,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/verify
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -251,6 +267,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/callback
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -276,6 +294,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/resend
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -301,6 +321,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/logout
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -326,6 +348,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/user
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -351,6 +375,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/auth/v1/user/identities/authorize
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -376,6 +402,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/personalization_event_reaction_counter
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -400,6 +428,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/personalization_event_reaction_counter
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -425,6 +455,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/my_saved_events_v1
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -449,6 +481,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/my_saved_events_v1
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -474,6 +508,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/rpc/set_saved_event_state_v1
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -499,6 +535,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/rpc/get_event_search_quota_v2
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -524,6 +562,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/rpc/record_event_search_feedback_v1
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -549,6 +589,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/rpc/register_focus_group_participant_v1
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -574,6 +616,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/rpc/submit_focus_group_feedback_v2
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -599,6 +643,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/rpc/ingest_transport_experiment_event_v1
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -624,6 +670,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/rpc/record_pwa_lifecycle_v1
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -649,6 +697,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/rpc/get_listing_personal_feed_v1
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -674,6 +724,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/functions/v1/event-search
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -705,6 +757,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/storage/v1/object/focus-feedback/{path}
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -735,6 +789,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/storage/v1/object/focus-feedback/{path}
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
@@ -760,6 +816,8 @@ paths:
         url: https://epyznmylqmchteykjsqj.supabase.co/storage/v1/object/focus-feedback
         headers:
           '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
           Host: ''
           Cookie: ''
           Forwarded: ''
