@@ -41,7 +41,10 @@ test('phone connectivity diagnostic is unlinked, noindex and read-only', async (
   assert.match(page, /noindex,nofollow,noarchive,nosnippet/u);
   assert.doesNotMatch(root + hub, /fokus-gruppa\/diagnostika/u);
   assert.match(component, /Вход по почте/u);
+  assert.match(component, /Данные сайта/u);
   assert.match(component, /Резервный канал/u);
+  assert.doesNotMatch(component, /<small>\{service\}<\/small>/u);
+  assert.doesNotMatch(component, /label: 'Supabase/u);
   assert.match(component, /Сделайте скриншот этого экрана/u);
   assert.match(component, /X-Client-Info/u);
   assert.match(component, /Promise\.all/u);
