@@ -64,28 +64,36 @@ test('focus manifest uses a state-aware start controller and keeps the secret hu
   const manifest = await read('src/pages/fokus-gruppa/manifest.webmanifest.ts');
   assert.match(manifest, /\/fokus-gruppa\/priglashenie\/\?launch=pwa/u);
   assert.match(manifest, /const secretUrl = withBase\('\/zakrytaya-afisha\/'\)/u);
-  assert.match(manifest, /focus-group-icon\.png/u);
+  assert.match(manifest, /id: withBase\('\/fokus-gruppa\/pwa'\)/u);
+  assert.match(manifest, /name: 'Анонсы'/u);
+  assert.match(manifest, /short_name: 'Анонсы'/u);
+  assert.doesNotMatch(manifest, /Анонсы Lab|focus-group-icon\.png/u);
   assert.match(manifest, /sizes: '192x192'/u);
   assert.match(manifest, /sizes: '512x512'/u);
+  assert.match(manifest, /purpose: 'maskable'/u);
   assert.match(manifest, /display: 'standalone'/u);
   assert.match(manifest, /prefer_related_applications: false/u);
   assert.match(manifest, /application\/manifest\+json/u);
 });
 
-test('mobile onboarding mounts the focus manifest, supplied logo and explicit no-confirmation path', async () => {
+test('mobile onboarding mounts the product identity and explicit no-confirmation path', async () => {
   const [page, intake, action] = await Promise.all([
     read('src/pages/fokus-gruppa/priglashenie/index.astro'),
     read('src/components/FocusGroupInviteIntake.astro'),
     read('src/components/FocusPwaInstallAction.astro'),
   ]);
   assert.match(page, /fokus-gruppa\/manifest\.webmanifest/u);
-  assert.match(page, /apple-touch-icon/u);
-  assert.match(intake, /assets\/pwa\/focus-group-icon\.png/u);
-  assert.match(intake, /Продолжить в фокус-группе без подтверждения/u);
+  assert.match(page, /apple-touch-icon[\s\S]*announcements-brand-v2-192\.png/u);
+  assert.match(page, /apple-mobile-web-app-title" content="Анонсы"/u);
+  assert.doesNotMatch(page, /Анонсы Lab|focus-group-icon\.png/u);
+  assert.match(intake, /assets\/pwa\/announcements-brand-v2-192\.png/u);
+  assert.match(intake, /Продолжить без подтверждения/u);
   assert.match(intake, /activateFocusParticipation/u);
-  assert.match(intake, /launchFromPwa/u);
+  assert.match(intake, /launchFromApp/u);
+  assert.match(intake, /participation\.status === 'active' && launchFromApp[\s\S]*window\.location\.replace\(homeHref\)/u);
   assert.doesNotMatch(intake, /авторизац/iu);
-  assert.match(action, /Установка и последующий[\s\S]*только по вашей команде/u);
+  assert.match(action, /Приложение «Анонсы»/u);
+  assert.match(action, /почти не занимает места/u);
   assert.match(action, /Android:[\s\S]*iPhone\/iPad:/u);
 });
 

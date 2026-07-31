@@ -3,33 +3,25 @@ import { withBase } from '../../lib/events';
 
 export const GET: APIRoute = () => {
   const scope = withBase('/');
-  // A static manifest cannot inspect localStorage. This tiny onboarding route
-  // is the start controller: active local participation immediately replaces
-  // it with /zakrytaya-afisha/, while absent/pending state stays on onboarding.
+  // Preserve the already installed manifest identity: changing it would make
+  // Chromium treat this as a different application. Branding and destination
+  // are the ordinary product; the controller only resumes unfinished invites.
   const startUrl = withBase('/fokus-gruppa/priglashenie/?launch=pwa');
   const secretUrl = withBase('/zakrytaya-afisha/');
   const manifest = {
     id: withBase('/fokus-gruppa/pwa'),
-    name: 'Анонсы · фокус-группа',
-    short_name: 'Анонсы Lab',
-    description: 'Мобильная афиша для участников исследовательского периода.',
+    name: 'Анонсы',
+    short_name: 'Анонсы',
+    description: 'Полюбить Калининград: события города и области — с понятным маршрутом к следующему впечатлению.',
     lang: 'ru',
     dir: 'ltr',
     start_url: startUrl,
     scope,
     display: 'standalone',
-    background_color: '#fff7e7',
+    background_color: '#fbf7ef',
     theme_color: '#98401f',
     prefer_related_applications: false,
     icons: [
-      {
-        src: withBase('/assets/pwa/focus-group-icon.png'),
-        sizes: '1254x1254',
-        type: 'image/png',
-        purpose: 'any',
-      },
-      // Keep exact 192/512 installability fallbacks without altering the
-      // supplied focus-group artwork.
       {
         src: withBase('/assets/pwa/announcements-brand-v2-192.png'),
         sizes: '192x192',
@@ -42,6 +34,18 @@ export const GET: APIRoute = () => {
         type: 'image/png',
         purpose: 'any',
       },
+      {
+        src: withBase('/assets/pwa/announcements-brand-v2-maskable-192.png'),
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
+      {
+        src: withBase('/assets/pwa/announcements-brand-v2-maskable-512.png'),
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
     ],
     shortcuts: [
       {
@@ -50,8 +54,8 @@ export const GET: APIRoute = () => {
         url: secretUrl,
         icons: [
           {
-            src: withBase('/assets/pwa/focus-group-icon.png'),
-            sizes: '1254x1254',
+            src: withBase('/assets/pwa/announcements-brand-v2-192.png'),
+            sizes: '192x192',
             type: 'image/png',
           },
         ],

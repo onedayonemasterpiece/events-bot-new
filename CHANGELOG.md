@@ -21,6 +21,10 @@
   `thinking_level=minimal`, preventing bounded extraction/rewrite stages from
   returning `MAX_TOKENS` responses containing only private thought tokens;
   event parsing also uses the documented Gemma 4 sampling defaults.
+- Turned the already installed focus PWA into the ordinary `Анонсы`
+  product without changing its published manifest id (standard icons, no `Lab`
+  app branding and no reinstall); unfinished invitations still resume
+  onboarding, while an active participant opens the ordinary home page.
 - Region Talk external-publication scoring now honors the strict imported
   noncommercial policy attestation before applying generic social ad regexes,
   preventing editorial caveats such as a hotel-selection mention from

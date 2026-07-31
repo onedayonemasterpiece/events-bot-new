@@ -372,6 +372,9 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     if (participation.status === 'active' && confirmationRequested) {
       showStage('identity');
       showIdentityView('choices');
+    } else if (participation.status === 'active' && launchFromApp) {
+      window.location.replace(homeHref);
+      return;
     } else if (participation.status === 'active') {
       if (doneTitle) doneTitle.textContent = 'Вы уже в фокус-группе';
       if (doneCopy) doneCopy.textContent = 'Можно открыть афишу или пройти подключение заново на этом устройстве.';
