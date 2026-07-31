@@ -10058,6 +10058,20 @@ async def _parse_event_via_gemma(
         label: str,
         max_tokens: int,
     ) -> tuple[str, Any]:
+        # Hosted Gemma 4 otherwise may spend the complete output allowance in
+        # its private thought channel and return no JSON. ``minimal`` is the
+        # Gemini API's documented switch for disabling Gemma 4 thinking; use
+        # the model-card sampling defaults instead of temperature=0 as well.
+        generation_config: dict[str, Any]
+        if "gemma-4" in model.casefold():
+            generation_config = {
+                "temperature": 1.0,
+                "top_p": 0.95,
+                "top_k": 64,
+                "thinking_config": {"thinking_level": "minimal"},
+            }
+        else:
+            generation_config = {"temperature": 0}
         extra_wait_raw = extra.get("rate_limit_max_wait_sec")
         if extra_wait_raw not in (None, ""):
             try:
@@ -10073,7 +10087,7 @@ async def _parse_event_via_gemma(
                 return await client.generate_content_async(
                     model=model,
                     prompt=prompt_text,
-                    generation_config={"temperature": 0},
+                    generation_config=generation_config,
                     max_output_tokens=max_tokens,
                 )
             except Exception as exc:

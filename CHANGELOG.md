@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Event parsing now explicitly disables hosted Gemma 4 thinking with
+  `thinking_level=minimal` and uses the documented Gemma 4 sampling defaults,
+  preventing `MAX_TOKENS` responses that contain only private thought tokens.
 - Region Talk external-publication scoring now honors the strict imported
   noncommercial policy attestation before applying generic social ad regexes,
   preventing editorial caveats such as a hotel-selection mention from

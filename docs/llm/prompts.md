@@ -168,6 +168,13 @@ festival hints. The decoded result is still canonicalised against
 `locations.md` in code. If the request remains too large without the catalogue,
 it fails before a provider call.
 
+The hosted Gemini API call for Gemma 4 explicitly uses
+`thinking_config.thinking_level=minimal` (the provider's switch for disabling
+Gemma 4 thinking) and the model-card sampling defaults `temperature=1.0`,
+`top_p=0.95`, `top_k=64`. Omitting this API switch allowed
+`gemma-4-31b-it` to spend the entire output budget in a private thought channel
+and return no JSON.
+
 When `../reference/holidays.md` is present, the prompt gains a "Known holidays" section
 listing canonical seasonal festivals together with their alias hints and short
 descriptions. Treat these names as the preferred targets for the `festival`

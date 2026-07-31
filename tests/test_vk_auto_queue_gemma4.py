@@ -400,6 +400,12 @@ async def test_event_parse_gemma_model_extra_overrides_global_env(monkeypatch):
 
     assert list(parsed) == []
     assert captured["model"] == "models/gemma-4-31b-it"
+    assert captured["generation_config"] == {
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "top_k": 64,
+        "thinking_config": {"thinking_level": "minimal"},
+    }
 
 
 def test_event_parse_client_uses_one_send_no_model_fallback_and_bounded_timeout(
