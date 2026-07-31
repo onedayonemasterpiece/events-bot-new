@@ -275,10 +275,12 @@ def _ground_extracted_festival(
     source_username: str,
     message_id: int | None,
     title: Any,
+    curated_festival_series: str | None = None,
 ) -> str | None:
     value, dropped = ground_kgd80_festival(
         festival,
         source_evidence=source_payloads,
+        curated_festival_series=curated_festival_series,
     )
     if dropped:
         logger.warning(
@@ -4794,6 +4796,11 @@ def _build_candidate(
         source_username=username,
         message_id=message_id,
         title=title,
+        curated_festival_series=(
+            (getattr(source, "festival_series", None) or "").strip()
+            if bool(getattr(source, "festival_source", False))
+            else None
+        ),
     )
 
     return EventCandidate(

@@ -55,6 +55,21 @@ def test_literal_kgd80_name_hashtag_or_domain_keeps_campaign():
     assert candidate.festival == "80 историй о главном"
 
 
+def test_curated_kgd80_festival_source_keeps_series_without_per_post_anchor():
+    negative = _messages()[0]
+    source = _source()
+    source.festival_source = True
+    source.festival_series = "80 историй о главном"
+
+    candidate = tg_handlers._build_candidate(
+        source,
+        negative,
+        negative["events"][0],
+    )
+
+    assert candidate.festival == "80 историй о главном"
+
+
 @pytest.mark.asyncio
 async def test_replay_crosses_server_import_and_real_smart_update_boundary(
     tmp_path, monkeypatch
