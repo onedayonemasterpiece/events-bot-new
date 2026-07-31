@@ -324,16 +324,25 @@ Evidence from 2026-06-29 UTC:
 - authorized RPC smoke: temporary Supabase Auth user + real JWT + quota reservation + Gemini Embedding 2 query vector + `search_events_by_embedding_v1`; query `урбанистика будущее города` returns `6310` in top-3 and cleanup removes smoke rows/user.
 - authorized facet RPC smoke after `20260629_event_search_query_facets.sql`: query `урбанистика в четверг вечером по регистрации` with facets `weekday_iso=4`, `time_of_day=evening`, `admission=registration_required` returns event `6310` top-1 (`similarity≈0.9255`) while preserving the pgvector nearest-candidate path.
 - mocked browser UI smoke: `scripts/smoke_authorized_search_ui.py` renders the static preview with public Supabase env, simulates a Supabase Auth callback, calls a mocked `event-search`, and verifies authorized search cards keep the shared feed-card actions plus investigation metadata (`request_id`, `served_list_id`, `served_list_hash`, `surface=authorized_event_search`). This is frontend regression evidence only, not the final Yandex OAuth/deployed Edge E2E.
-- production handoff command test: `main._static_site_build_kaggle_command` now passes `--related-mode pgvector`, `--sync-pgvector-vectors`, `--pgvector-*`, `--gemma-related-*`, CDN asset/ICS bases, status callback args and browser-safe AuthorizedEventSearch public env (`PUBLIC_PERSONALIZATION_SUPABASE_URL`, publishable key, `custom:yandex`) into the Kaggle runner.
+- production handoff command test passes `--related-mode pgvector`, the
+  completed vector receipt revision, `--pgvector-*`, `--gemma-related-*`, CDN
+  asset/ICS bases, status callback args and browser-safe AuthorizedEventSearch
+  public env into the Kaggle runner; production explicitly omits
+  `--sync-pgvector-vectors` because the dedicated Fly owner already completed
+  the projection.
 - deploy/browser readiness check: `scripts/check_authorized_search_readiness.py --env-file .env --probe-auth-config --probe-yandex-provider --probe-edge --strict` is green for the current personalization Supabase/Yandex canary; v51 additionally verifies the browser PKCE callback path with a mocked public preview smoke and the live `custom:yandex` provider now points at the Yandex userinfo adapter instead of direct non-standard Yandex JSON.
 
 ## Job sequence after Smart Update
 
 1. Smart Update updates canonical events in Fly SQLite.
-2. Static-site build is coalesced after the update window, as for Telegraph/page generation.
-3. Kaggle StaticSiteBuilder runs on CPU from a production SQLite snapshot.
-4. Static exporter emits compact preview events and search documents.
-5. Vector sync upserts changed `event_search_documents` and only changed/missing `event_embeddings` into personalization Supabase.
+2. The coalesced Fly `event_vector_sync` owner upserts only changed documents
+   and embeddings, then writes a complete revision receipt.
+3. The coalesced static build waits at the vector barrier until that receipt
+   covers its source revision.
+4. Kaggle StaticSiteBuilder runs on CPU from an immutable production SQLite
+   snapshot and emits compact preview events.
+5. The exporter reads only the bounded compact related-candidate RPC; it does
+   not repeat the vector write projection.
 
 ### Durable production projection
 
@@ -348,9 +357,10 @@ counts/errors in `ops_run(kind='event_vector_sync')`. The vector-only export
 skips remote image-dimension probes; it reuses canonical media URLs/card facts
 without turning a semantic projection into a slow media-quality crawl.
 
-StaticSiteBuilder remains a build consumer and may explicitly refresh vectors
-for a preview, but it no longer owns regular production ingestion. Ephemeral
-audit embeddings never count as persistent sidecar coverage.
+StaticSiteBuilder remains a build consumer. A manual canary/backfill may
+explicitly refresh vectors, but production keeps
+`STATIC_SITE_SYNC_PGVECTOR_VECTORS=0`; ephemeral audit embeddings never count
+as persistent sidecar coverage.
 6. Related graph is recomputed for the whole active/future set, not only changed anchors: a new event can become the best related candidate for older events.
 7. Gemma 4 26B verifier reranks/rejects already retrieved candidates; strict publication must not label raw pgvector candidates as similar when Gemma verification fails.
 8. Astro builds HTML/JSON/ICS from the static manifest.

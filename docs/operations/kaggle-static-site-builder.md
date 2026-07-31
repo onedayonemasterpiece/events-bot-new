@@ -186,8 +186,11 @@ missed-build reconciliation and the feature-specific 5400-second runtime are
 bounded in `static_site_release.py`/`main.py`.
 
 The Smart Update build now also owns the accepted desktop keyboard navigator:
-the exact deployed `STATIC_SITE_REPO_SHA` is packed into the immutable source
-dataset, and every event route in the resulting secret candidate mounts the
+the exact deployed revision is written into `/app/.static-site-repo-sha` at
+Docker build time by `scripts/deploy_fly_main.sh`, then packed into the
+immutable source dataset. A legacy `STATIC_SITE_REPO_SHA` environment value is
+only a local/backwards-compatible fallback; an image value always wins and a
+drift is logged. Every event route in the resulting secret candidate mounts the
 shared reviewed V7 router while
 `PUBLIC_KEYBOARD_EVENT_NAVIGATION_ENABLED != 0`. This is still secret-only
 preproduction publication. The checked production-form proof, public root,
@@ -234,6 +237,7 @@ ENABLE_STATIC_SITE_KAGGLE_BUILDER=0
 ENABLE_STATIC_SITE_SECRET_PUBLISH=0
 ENABLE_STATIC_SITE_ROOT_PROMOTION=0
 STATIC_SITE_ROOT_PROMOTION_MODE=plan
+# local-only fallback; production identity is baked into the Fly image
 STATIC_SITE_REPO_SHA=<exact clean pushed SHA>
 STATIC_SITE_SECRET_CANDIDATE_ARTIFACT_RESEARCH=0
 STATIC_SITE_SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH=0
@@ -272,6 +276,16 @@ npm --prefix site run check:browser-release -- \
   --browser chromium --root <generated-root> \
   --report <browser-report.json> --artifact-dir <browser-evidence-dir>
 ```
+
+Production Fly releases must be made from exact clean `origin/main` with:
+
+```bash
+scripts/deploy_fly_main.sh
+```
+
+The wrapper supplies `STATIC_SITE_IMAGE_REPO_SHA` as a Docker build argument.
+The Dockerfile rejects missing or malformed values, so a release cannot
+silently pair new runtime code with an old static-site source revision.
 
 The blocking Chromium gate waits for lazy recommendation images to decode,
 asserts that a loaded `contain` image hides the semantic failure fallback,
@@ -344,17 +358,25 @@ mass-event URLs. The replacement
 `check:production-desktop`, full-catalog browser acceptance and exact public
 URL review. Either prefix proves only the noindex artifact path; neither removes
 the separate atomic production-root promotion gate described above.
-The integration branch stages the corresponding Fly non-secret env
-(`ENABLE_STATIC_SITE_KAGGLE_BUILDER=1`, full-catalog limit, pgvector sync and
-CDN/ICS bases). It becomes active only after this branch is merged and deployed;
-the currently running Fly release does not contain that config yet.
+Production Fly config enables the builder, full-catalog limit, pgvector
+retrieval and CDN/ICS bases, but keeps vector writes owned by the separate
+coalesced `event_vector_sync` job. This removes a duplicate full-catalog write
+pass and its avoidable Supabase egress from every static build.
 
 
 ## Historical v59 strict pgvector evidence and open gate
 
 `preview-20260629-event-pages-v59-related-gemma50` is historical strict related canary evidence on real production-snapshot data: 50 events focused on 2026-06-30/2026-07-01, CDN-enabled assets/ICS, `npm run check:preview` passed, public Playwright smoke passed, and `/data/discovery/6447.json` shows `6310` “Архитектурно-урбанистическая студия...” as the strict Gemma-approved first related candidate (`llm_semantic_score=0.88`).
 
-Smart Update handoff now passes the pgvector/Gemma flags from environment into `scripts/run_static_site_builder_kaggle.py`: `--related-mode`, `--sync-pgvector-vectors`, `--pgvector-*`, `--gemma-related-*`, status DB/callback, CDN asset/ICS bases, browser-safe AuthorizedEventSearch public env (`--public-personalization-supabase-url`, `--public-personalization-supabase-publishable-key`, `--public-yandex-auth-provider`) and the date-focus controls `--current-datetime`, `--focus-date-from`, `--focus-date-to`. This means the coalesced `static_site_build` job can reproduce the v59-style vector sync/retrieval/Gemma strict-verification process from `/data/db.sqlite` after Smart Update and can render the one-line authorized search UI in focus-group previews when Yandex/Supabase Auth is configured.
+Smart Update handoff passes the pgvector/Gemma flags from environment into
+`scripts/run_static_site_builder_kaggle.py`: `--related-mode`, `--pgvector-*`,
+`--gemma-related-*`, status DB/callback, CDN asset/ICS bases, browser-safe
+AuthorizedEventSearch public env and the date-focus controls. Production keeps
+`STATIC_SITE_SYNC_PGVECTOR_VECTORS=0`: the dedicated Fly vector owner must
+finish first and the build validates its receipt at the vector barrier. Kaggle
+then performs only bounded read-only compact related-candidate RPCs. The
+optional `--sync-pgvector-vectors` switch remains a manual canary/backfill tool,
+not a production-build owner.
 
 `INC-2026-07-11-event-vector-sidecar-sync-stalled` restored this optional
 handoff after a merge dropped it. Regular production vector ingestion is owned

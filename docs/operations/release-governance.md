@@ -11,7 +11,11 @@
 
 ## Allowed Deploy Paths
 
-- Единственный штатный production deploy path для этого репозитория — ручной `flyctl deploy` из clean worktree, который явно проверен относительно `origin/main`.
+- Единственный штатный production deploy path для этого репозитория —
+  `scripts/deploy_fly_main.sh` из clean checkout exact `origin/main`. Скрипт
+  сам выполняет fetch/clean/SHA gates и передаёт этот SHA в Docker build;
+  прямой `flyctl deploy` запрещён, потому что он может собрать актуальный код
+  с устаревшей mutable-меткой версии для StaticSiteBuilder.
 - GitHub Actions deploy не используется и не является допустимым release path. Если в репозитории появляется workflow, который деплоит Fly app на push/workflow_dispatch, это process drift: его нужно удалить или отключить до следующего production-bound task.
 - Emergency deploy из отдельной ветки допустим только для быстрого восстановления production, если одновременно выполняются все условия:
   - ветка создана от актуального `origin/main`;
@@ -49,6 +53,9 @@
 6. Сверить релевантные пункты `CHANGELOG.md` с реальными commit/SHA
 7. Поднять релевантные incident records из `docs/reports/incidents/README.md` для всех затронутых prod-поверхностей и выполнить их mandatory regression checks
 8. Проверить, нет ли удалённых `release/*` / `hotfix/*`, которые всё ещё ahead of `origin/main`
+9. Запускать release только через `scripts/deploy_fly_main.sh`; Dockerfile
+   fail-closed без `STATIC_SITE_IMAGE_REPO_SHA`, а runtime читает SHA из
+   immutable файла образа и игнорирует отличающийся legacy secret.
 
 ## Emergency Hotfix Flow
 
@@ -56,7 +63,8 @@
 2. Внести только incident-related fix
 3. Прогнать таргетные тесты и smoke checks
 4. Запушить ветку в `origin`
-5. Задеплоить через `flyctl` из этой clean branch
+5. После merge/back-merge и зелёного CI задеплоить exact `origin/main` через
+   `scripts/deploy_fly_main.sh`; штатный скрипт намеренно отвергает не-main SHA
 6. Если инцидент затронул daily/scheduled prod-задачу за текущий день, сразу после deploy выполнить compensating rerun/catch-up и убедиться, что сегодняшние данные/публикация восстановлены
 7. Открыть или обновить PR в `main`
 8. Не закрывать инцидент, пока deployed SHA не достижим из `origin/main`

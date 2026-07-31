@@ -18,6 +18,36 @@ def _utc(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
+def test_static_site_repo_sha_prefers_immutable_image_revision(tmp_path, monkeypatch, caplog):
+    image_sha = "b" * 40
+    revision_file = tmp_path / ".static-site-repo-sha"
+    revision_file.write_text(image_sha + "\n", encoding="utf-8")
+    monkeypatch.setenv("STATIC_SITE_IMAGE_REPO_SHA_FILE", str(revision_file))
+    monkeypatch.setenv("STATIC_SITE_REPO_SHA", "a" * 40)
+
+    assert main._resolve_static_site_repo_sha() == image_sha
+    assert "drift ignored" in caplog.text
+
+
+def test_static_site_repo_sha_rejects_invalid_image_revision(tmp_path, monkeypatch):
+    revision_file = tmp_path / ".static-site-repo-sha"
+    revision_file.write_text("not-a-revision\n", encoding="utf-8")
+    monkeypatch.setenv("STATIC_SITE_IMAGE_REPO_SHA_FILE", str(revision_file))
+    monkeypatch.setenv("STATIC_SITE_REPO_SHA", "a" * 40)
+
+    with pytest.raises(main.StaticSitePermanentError, match="image revision"):
+        main._resolve_static_site_repo_sha()
+
+
+def test_static_site_repo_sha_keeps_legacy_fallback_for_local_tests(tmp_path, monkeypatch):
+    monkeypatch.setenv(
+        "STATIC_SITE_IMAGE_REPO_SHA_FILE", str(tmp_path / "missing-revision")
+    )
+    monkeypatch.setenv("STATIC_SITE_REPO_SHA", "c" * 40)
+
+    assert main._resolve_static_site_repo_sha() == "c" * 40
+
+
 async def _seed_failed_static_build(
     db: Database,
     *,
