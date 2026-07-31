@@ -1,6 +1,5 @@
 ---
 import FocusConnectivityDiagnostic from '../../../components/FocusConnectivityDiagnostic.astro';
-import { absoluteUrl } from '../../../lib/events';
 
 const supabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
 const publishableKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
@@ -13,7 +12,7 @@ const publishableKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHAB
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow,noarchive,nosnippet" />
     <meta name="referrer" content="no-referrer" />
-    <link rel="canonical" href={absoluteUrl('/fokus-gruppa/diagnostika/')} />
+    <link rel="canonical" href="https://kenigevents.ru/fokus-gruppa/diagnostika/" />
     <title>Проверка соединения · Анонсы</title>
     <meta name="description" content="Проверка доступности сервисов с устройства участника фокус-группы." />
   </head>
