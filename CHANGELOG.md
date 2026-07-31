@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Region Talk production documentation now states the actual session boundary:
+  scheduled discovery uses only the two role-scoped discovery bundles and Bot
+  API delivery, never a local E2E or generic human session.
 - Region Talk scheduled operator delivery now uses the production Telegram bot
   instead of opening the local human E2E session on Fly; read-only notifier
   dry-runs make no Telegram connection, and Bot API delivery fails closed when
@@ -45,6 +48,16 @@
 - Focus-group private routes now add `nosnippet` in immutable secret-candidate builds, satisfying the candidate-wide robots contract without changing production root indexing.
 
 ### Added
+
+- Added a fail-closed autonomous Region Talk web-publication research adapter:
+  it applies the saved broad external-source prompt with Search + URL Context,
+  strict JSON validation, the live YDB duplicate guard, the existing importer,
+  a durable cooldown and retained evidence before the normal CandidateReport
+  loop. The scheduler integration is provider-gated and remains disabled until
+  a live search-enabled API key succeeds, so grounding quota failures cannot
+  degrade Telegram/VK discovery.
+- Registered the exact `gemini-3-flash-preview` provider id in the shared
+  Google AI limiter while retaining the former alias row for historical usage.
 
 - Region Talk final verifier v7 now creates an accept-only, fact-grounded
   Telegram/VK draft with explicit source attribution, canonical original link

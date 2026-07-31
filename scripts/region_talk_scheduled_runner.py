@@ -40,6 +40,11 @@ def _env_int(name: str, default: int, *, minimum: int, maximum: int) -> int:
     return max(minimum, min(maximum, value))
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = (os.getenv(name) or ("1" if default else "0")).strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
 def missing_autonomy_config(env: Mapping[str, str] | None = None) -> list[str]:
     """Return missing credential groups without ever returning secret values."""
 
@@ -100,6 +105,16 @@ def build_orchestrator_command(env: Mapping[str, str] | None = None) -> list[str
     if env_file:
         cmd.extend(["--env-file", str(Path(env_file).expanduser())])
     return cmd
+
+
+def build_external_research_command(env: Mapping[str, str] | None = None) -> list[str]:
+    values = env if env is not None else os.environ
+    python_bin = str(values.get("REGION_TALK_ORCHESTRATOR_PYTHON") or sys.executable or "python3").strip()
+    return [
+        python_bin,
+        str(ROOT / "scripts" / "region_talk_external_research_autorun.py"),
+        "--execute",
+    ]
 
 
 def _compact_metrics(payload: Mapping[str, Any]) -> dict[str, int]:
@@ -214,6 +229,67 @@ async def run_region_talk_scheduled(
 
         with output_path.open("w", encoding="utf-8") as output:
             os.chmod(output_path, 0o600)
+            external_research: dict[str, Any] = {
+                "ok": True,
+                "stage": "external_research",
+                "status": "disabled",
+            }
+            external_research_exit_code: int | None = None
+            # Opt in only after the provider project has non-zero web-search
+            # quota.  Ordinary text quota is not sufficient for grounding and
+            # a disabled web lane must not degrade social discovery cycles.
+            if _env_bool("REGION_TALK_EXTERNAL_RESEARCH_ENABLED", False):
+                research_process = await asyncio.create_subprocess_exec(
+                    *build_external_research_command(),
+                    cwd=str(ROOT),
+                    env=child_env,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                )
+                try:
+                    research_stdout, _ = await asyncio.wait_for(
+                        research_process.communicate(),
+                        timeout=_env_int(
+                            "REGION_TALK_EXTERNAL_RESEARCH_TIMEOUT_SECONDS",
+                            900,
+                            minimum=60,
+                            maximum=1800,
+                        ),
+                    )
+                except asyncio.TimeoutError:
+                    research_process.terminate()
+                    try:
+                        await asyncio.wait_for(research_process.wait(), timeout=20)
+                    except asyncio.TimeoutError:
+                        research_process.kill()
+                        await research_process.wait()
+                    research_stdout = b""
+                    external_research = {
+                        "ok": False,
+                        "stage": "external_research",
+                        "status": "timed_out",
+                    }
+                external_research_exit_code = int(research_process.returncode or 0)
+                for raw in research_stdout.decode("utf-8", errors="replace").splitlines():
+                    line = raw.strip()
+                    if not line:
+                        continue
+                    output.write(line + "\n")
+                    output.flush()
+                    try:
+                        candidate = json.loads(line)
+                    except (TypeError, ValueError):
+                        continue
+                    if isinstance(candidate, dict) and candidate.get("stage") == "external_research":
+                        external_research = candidate
+                LOGGER.info(
+                    "region_talk external research status=%s exit_code=%s valid=%s ready=%s",
+                    external_research.get("status"),
+                    external_research_exit_code,
+                    external_research.get("candidate_rows_valid"),
+                    external_research.get("ready_for_region_talk_scoring"),
+                )
+
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 cwd=str(ROOT),
@@ -268,6 +344,10 @@ async def run_region_talk_scheduled(
             "timed_out": timed_out,
             "last_cycle": last_payload.get("cycle"),
             "last_selected_actions": last_payload.get("selected_actions") or [],
+            "external_research_status": external_research.get("status"),
+            "external_research_ok": bool(external_research.get("ok")),
+            "external_research_exit_code": external_research_exit_code,
+            "external_research_ready": int(external_research.get("ready_for_region_talk_scoring") or 0),
         }
         status = "success" if exit_code == 0 and not timed_out else "failed"
         await _finish(db_obj, ops_run_id=ops_run_id, status=status, metrics=metrics, details=details)
