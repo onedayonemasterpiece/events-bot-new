@@ -1,10 +1,10 @@
 # INC-2026-07-31-region-talk-article-link-precedence Region Talk article lane revoked an existing visual candidate
 
-Status: mitigated
+Status: closed
 Severity: sev2
 Service: Region Talk external article publication queue
 Opened: 2026-07-31
-Closed: —
+Closed: 2026-07-31 18:57 UTC
 Owners: events-bot / Region Talk
 Related incidents: `INC-2026-07-31-google-ai-parallel-limiter-bypass`
 Related docs: `docs/features/region-talk-channel/external-publications.md`, `docs/features/region-talk-channel/publication-queue.md`, `docs/operations/release-governance.md`
@@ -43,6 +43,16 @@ The controlled production finalizer result
   the three new calls were RPD-limited.
 - 2026-07-31 18:48 UTC — root cause localized to article-lane precedence;
   containment/fix prepared.
+- 2026-07-31 18:51 UTC — `origin/main` SHA `7d1f530d` deployed as Fly
+  `v1808`; health check passed and the remote image contained the corrected
+  article routing predicate.
+- 2026-07-31 18:53 UTC — compensating finalizer reconciliation completed with
+  `--max-llm 0`: 96 inputs, 8 link-only article rows, 0 provider calls and 26
+  accepted rows in the durable ledger. Archi.ru returned to `gemini_accept` /
+  `sent_to_chat` while retaining `actual_scored` / `actual_image` evidence.
+- 2026-07-31 18:56 UTC — the daily anti-vector plan was rebuilt and persisted:
+  one eligible/planned article and 19 eligible social candidates, with 14
+  social slots planned in the current horizon.
 
 ## Root Cause
 
@@ -117,13 +127,33 @@ the no-media-reuse link lane. No provider-quota bypass was enabled.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: clean Fly deploy from an `origin/main`-reachable SHA
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `7d1f530d2206504e0238fca12fd17c68ae5b09fc`, reachable from
+  `origin/main`;
+- deploy path: clean Fly deploy, machine version `v1808`, image
+  `deployment-01KYWR5YEYHTJBJXNE2TCAMT4S`;
+- health: `/healthz` returned `ok=true`, `ready=true`, Region Talk scheduler
+  `ok`, with the next autonomous start at `2026-07-31T19:20:00Z`;
+- remote code probe: `uses_external_link_article_lane` and the actual-image
+  precedence branch are present in the deployed CandidateReport/finalizer;
+- regression checks: the focused link-only/actual-image/negative controls
+  passed; the complete finalizer module passed 42 tests;
+- controlled provider evidence: the preceding bounded catch-up reserved all
+  three new requests through the shared gateway and persisted RPD failures as
+  retryable `gemini_rate_limited` / `llm_budget_deferred`; no raw-key fallback
+  was enabled;
+- compensating artifact:
+  `/data/runtime_logs/region_talk/article-link-reconcile/region-talk-article-incident-reconcile-20260731T1854Z-7d1f530d/publication_finalizer_results.json`;
+- plan artifact:
+  `/data/runtime_logs/region_talk/incident-reconcile-publication-plan-20260731T1857Z.json`;
+- post-fix production state: Archi.ru is `gemini_accept` / `sent_to_chat`, with
+  `image_queue_status=actual_scored` and
+  `image_model_input_type=actual_image`; the rebuilt plan contains one article
+  and 14 social posts.
 
 ## Prevention
 
 Article routing tests now contain positive link-only, positive actual-image and
-negative ambiguous/media-reuse/social-no-media controls. The incident remains
-open until production state and the daily plan are restored.
+negative ambiguous/media-reuse/social-no-media controls. Production state and
+the daily plan were restored without another provider verdict, so this
+incident is closed. The broader article-supply RPD limit remains a separate
+capacity follow-up and does not justify bypassing the shared request gateway.
