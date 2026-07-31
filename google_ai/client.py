@@ -56,6 +56,8 @@ class ReserveResult:
     used_after: Optional[dict] = None
     blocked_reason: Optional[str] = None
     retry_after_ms: Optional[int] = None
+    quota_scope: Optional[str] = None
+    limiter_contract: Optional[str] = None
 
 
 @dataclass
@@ -214,6 +216,10 @@ class GoogleAIClient:
     # per-minute spike (rpm/tpm), where waiting on the same key is correct.
     _RESERVE_OVERFLOW_TRIGGER_REASONS = frozenset({"rpd", "no_keys"})
     PROVIDER_TIMEOUT_ENV = "GOOGLE_AI_PROVIDER_TIMEOUT_SEC"
+    # A successful reservation is safe for concurrent production clients only
+    # when the database proves it aggregates and locks by Cloud project/model.
+    # Older key/model-only RPCs omit this marker and are rejected fail-closed.
+    REQUIRED_LIMITER_CONTRACT = "google_ai_project_model_atomic_v1"
     EXTERNAL_ACCOUNTING_COMPAT_ENV = "GOOGLE_AI_EXTERNAL_ACCOUNTING_COMPAT"
     _EXTERNAL_TERMINAL_STATUSES = frozenset(
         {
@@ -671,19 +677,49 @@ class GoogleAIClient:
         _NORMAL_POOL_CURSOR[pool_key] = (cursor + 1) % len(candidate_key_ids)
         return candidate_key_ids[cursor:] + candidate_key_ids[:cursor]
 
-    @staticmethod
-    def _reserve_result_from_data(data: dict[str, Any]) -> "ReserveResult":
+    @classmethod
+    def _reserve_result_from_data(cls, data: dict[str, Any]) -> "ReserveResult":
+        limiter_contract = str(data.get("limiter_contract") or "").strip() or None
+        quota_scope = str(data.get("quota_scope") or "").strip() or None
+        raw_ok = bool(data.get("ok", False))
+        ok = raw_ok
+        blocked_reason = data.get("blocked_reason")
+        if ok and limiter_contract != cls.REQUIRED_LIMITER_CONTRACT:
+            blocked_reason = (
+                "limiter_contract_missing"
+                if limiter_contract is None
+                else "limiter_contract_incompatible"
+            )
+            logger.critical(
+                "google_ai.reserve_contract_rejected required=%s received=%s",
+                cls.REQUIRED_LIMITER_CONTRACT,
+                limiter_contract or "<missing>",
+            )
+            ok = False
+        elif ok and quota_scope is None:
+            blocked_reason = "limiter_quota_scope_missing"
+            logger.critical(
+                "google_ai.reserve_quota_scope_rejected contract=%s",
+                limiter_contract,
+            )
+            ok = False
+        expose_key_metadata = ok or not raw_ok
         return ReserveResult(
-            ok=data.get("ok", False),
-            api_key_id=data.get("api_key_id"),
-            env_var_name=data.get("env_var_name"),
-            key_alias=data.get("key_alias"),
+            ok=ok,
+            # Never expose usable key metadata from an unverified successful
+            # response.  This prevents callers from accidentally bypassing the
+            # gate by inspecting fields while ``ok`` is false.
+            api_key_id=data.get("api_key_id") if expose_key_metadata else None,
+            env_var_name=data.get("env_var_name") if expose_key_metadata else None,
+            key_alias=data.get("key_alias") if expose_key_metadata else None,
             minute_bucket=data.get("minute_bucket"),
             day_bucket=data.get("day_bucket"),
             limits=data.get("limits"),
             used_after=data.get("used_after"),
-            blocked_reason=data.get("blocked_reason"),
+            blocked_reason=blocked_reason,
             retry_after_ms=data.get("retry_after_ms"),
+            quota_scope=quota_scope,
+            limiter_contract=limiter_contract,
         )
 
     async def _run_reserve_rpc(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -1041,6 +1077,12 @@ class GoogleAIClient:
             ) from exc
 
         if not last_result.ok:
+            if (last_result.blocked_reason or "").startswith("limiter_contract_"):
+                raise ReservationError(
+                    "external reservation requires limiter contract "
+                    f"{self.REQUIRED_LIMITER_CONTRACT}; received "
+                    f"{last_result.limiter_contract or '<missing>'}"
+                )
             raise RateLimitError(
                 blocked_reason=last_result.blocked_reason or "unknown",
                 retry_after_ms=last_result.retry_after_ms,
@@ -1994,18 +2036,9 @@ class GoogleAIClient:
             status=status,
             schema=schema,
         )
-        return ReserveResult(
-            ok=bool(data.get("ok", False)),
-            api_key_id=data.get("api_key_id"),
-            env_var_name=data.get("env_var_name"),
-            key_alias=data.get("key_alias") or f"direct:{schema}",
-            minute_bucket=data.get("minute_bucket"),
-            day_bucket=data.get("day_bucket"),
-            limits=data.get("limits"),
-            used_after=data.get("used_after"),
-            blocked_reason=data.get("blocked_reason"),
-            retry_after_ms=data.get("retry_after_ms"),
-        )
+        if data.get("ok") and not data.get("key_alias"):
+            data = {**data, "key_alias": f"direct:{schema}"}
+        return self._reserve_result_from_data(data)
 
     def _read_local_limit(self, name: str, default: int) -> int:
         raw = (os.getenv(name) or "").strip()

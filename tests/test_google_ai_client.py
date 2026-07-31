@@ -19,6 +19,8 @@ from google_ai.client import (
 )
 from google_ai.exceptions import ProviderError, ReservationError
 
+_ATOMIC_LIMITER_CONTRACT = GoogleAIClient.REQUIRED_LIMITER_CONTRACT
+
 
 class _FakeModel:
     def __init__(self, owner: "_FakeGenAI", model_name: str):
@@ -85,13 +87,16 @@ class _FakeSupabaseClient:
             "ok": True,
             "env_var_name": "GOOGLE_API_KEY2",
             "key_alias": "unexpected-unscoped-key",
+            "quota_scope": "google:test-project",
+            "limiter_contract": _ATOMIC_LIMITER_CONTRACT,
         }
         return SimpleNamespace(execute=lambda: SimpleNamespace(data=data))
 
 
 class _StrictExternalSupabase:
-    def __init__(self, rows):
+    def __init__(self, rows, *, limiter_contract=_ATOMIC_LIMITER_CONTRACT):
         self.rows = rows
+        self.limiter_contract = limiter_contract
         self.rpc_calls: list[tuple[str, dict]] = []
 
     def table(self, _name: str):
@@ -109,6 +114,8 @@ class _StrictExternalSupabase:
                 "key_alias": row.get("key_alias", "fixture"),
                 "minute_bucket": "2026-07-31T00:00:00Z",
                 "day_bucket": "2026-07-31",
+                "quota_scope": "google:test-project",
+                "limiter_contract": self.limiter_contract,
             }
         else:
             data = None
@@ -284,6 +291,107 @@ async def test_no_supabase_never_becomes_direct_key_fallback(monkeypatch):
     assert reserve.ok is False
     assert reserve.env_var_name is None
     assert reserve.blocked_reason == "shared_limiter_unavailable"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("limiter_contract", "blocked_reason"),
+    [
+        (None, "limiter_contract_missing"),
+        ("google_ai_key_model_atomic_v0", "limiter_contract_incompatible"),
+    ],
+)
+async def test_reserve_success_fails_closed_without_required_atomic_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    limiter_contract: str | None,
+    blocked_reason: str,
+) -> None:
+    _DEFAULT_ENV_CANDIDATE_CACHE.clear()
+    monkeypatch.setenv("GOOGLE_AI_LOCAL_LIMITER_FALLBACK", "0")
+    supabase = _FakeSupabaseClient(
+        data=[
+            {
+                "id": "key-a",
+                "env_var_name": "GOOGLE_API_KEY",
+                "priority": 1,
+            }
+        ],
+        reserve_data={
+            "ok": True,
+            "api_key_id": "key-a",
+            "env_var_name": "GOOGLE_API_KEY",
+            "quota_scope": "google:test-project",
+            "limiter_contract": limiter_contract,
+        },
+    )
+    client = GoogleAIClient(supabase_client=supabase, consumer="parallel_agent")
+    ctx = RequestContext(
+        request_uid="req-contract-gate",
+        consumer="parallel_agent",
+        account_name=None,
+        model="gemma-4-31b",
+        reserved_tpm=100,
+    )
+
+    reserve = await client._reserve(ctx, attempt_no=1, candidate_key_ids=None)
+
+    assert reserve.ok is False
+    assert reserve.blocked_reason == blocked_reason
+    assert reserve.api_key_id is None
+    assert reserve.env_var_name is None
+    assert reserve.limiter_contract == limiter_contract
+
+
+@pytest.mark.asyncio
+async def test_reserve_accepts_versioned_project_scope_atomic_contract() -> None:
+    _DEFAULT_ENV_CANDIDATE_CACHE.clear()
+    supabase = _FakeSupabaseClient(
+        data=[
+            {
+                "id": "key-a",
+                "env_var_name": "GOOGLE_API_KEY",
+                "priority": 1,
+            }
+        ],
+        reserve_data={
+            "ok": True,
+            "api_key_id": "key-a",
+            "env_var_name": "GOOGLE_API_KEY",
+            "quota_scope": "google:cloud-project-a",
+            "limiter_contract": _ATOMIC_LIMITER_CONTRACT,
+        },
+    )
+    client = GoogleAIClient(supabase_client=supabase, consumer="parallel_agent")
+    ctx = RequestContext(
+        request_uid="req-contract-ok",
+        consumer="parallel_agent",
+        account_name=None,
+        model="gemma-4-31b",
+        reserved_tpm=100,
+    )
+
+    reserve = await client._reserve(ctx, attempt_no=1, candidate_key_ids=None)
+
+    assert reserve.ok is True
+    assert reserve.api_key_id == "key-a"
+    assert reserve.quota_scope == "google:cloud-project-a"
+    assert reserve.limiter_contract == _ATOMIC_LIMITER_CONTRACT
+
+
+def test_reserve_rejects_contract_response_without_quota_scope() -> None:
+    reserve = GoogleAIClient._reserve_result_from_data(
+        {
+            "ok": True,
+            "api_key_id": "key-a",
+            "env_var_name": "GOOGLE_API_KEY",
+            "limiter_contract": _ATOMIC_LIMITER_CONTRACT,
+        }
+    )
+
+    assert reserve.ok is False
+    assert reserve.blocked_reason == "limiter_quota_scope_missing"
+    assert reserve.api_key_id is None
+    assert reserve.env_var_name is None
 
 
 @pytest.mark.asyncio
@@ -509,6 +617,8 @@ class _OverflowFakeSupabase:
                 "env_var_name": "GOOGLE_API_KEY3",
                 "key_alias": "k3",
                 "api_key_id": "id-key3",
+                "quota_scope": "google:test-project",
+                "limiter_contract": _ATOMIC_LIMITER_CONTRACT,
             }
         elif has_spare:  # spare present but still exhausted
             data = {"ok": False, "blocked_reason": "rpd", "api_key_id": None}
@@ -683,7 +793,13 @@ class _NormalPoolSupabase:
             data = {"ok": False, "blocked_reason": "rpm", "retry_after_ms": 1000}
         else:
             env = "GOOGLE_API_KEY4" if key_id == "id-key4" else "GOOGLE_API_KEY5"
-            data = {"ok": True, "api_key_id": key_id, "env_var_name": env}
+            data = {
+                "ok": True,
+                "api_key_id": key_id,
+                "env_var_name": env,
+                "quota_scope": "google:test-project",
+                "limiter_contract": _ATOMIC_LIMITER_CONTRACT,
+            }
         return SimpleNamespace(execute=lambda d=data: SimpleNamespace(data=d))
 
 
@@ -930,6 +1046,8 @@ async def test_embed_content_async_reserves_before_provider_call(monkeypatch):
             "api_key_id": "id-embed",
             "env_var_name": "GOOGLE_API_KEY_EMBED",
             "key_alias": "embedding-key",
+            "quota_scope": "google:test-project",
+            "limiter_contract": _ATOMIC_LIMITER_CONTRACT,
         },
     )
     client = GoogleAIClient(
@@ -1047,6 +1165,31 @@ async def test_external_call_reservation_fails_closed_without_ledger_or_complete
 
 
 @pytest.mark.asyncio
+async def test_external_call_reservation_rejects_unversioned_limiter_contract():
+    supabase = _StrictExternalSupabase(
+        [
+            {
+                "id": "key-a",
+                "env_var_name": "GOOGLE_ANTIGRAVITY_KEY_A",
+                "priority": 1,
+            }
+        ],
+        limiter_contract=None,
+    )
+    client = GoogleAIClient(
+        supabase_client=supabase,
+        consumer="festival_antigravity",
+    )
+
+    with pytest.raises(ReservationError, match="requires limiter contract"):
+        await client.reserve_external_call(
+            model="antigravity-preview-05-2026",
+            reserved_tpm=10,
+            key_envs=["GOOGLE_ANTIGRAVITY_KEY_A"],
+        )
+
+
+@pytest.mark.asyncio
 async def test_external_finalize_keeps_provider_and_semantic_status_separate():
     supabase = _StrictExternalSupabase([])
     client = GoogleAIClient(supabase_client=supabase)
@@ -1110,3 +1253,75 @@ def test_external_call_api_key_is_resolved_only_from_leased_env(monkeypatch):
     checkpoint = lease.to_dict()
     assert "never-log-this-secret" not in json.dumps(checkpoint)
     assert ExternalCallLease.from_dict(checkpoint) == lease
+
+
+def test_project_scope_atomic_migration_exposes_verifiable_contract() -> None:
+    migration = (
+        Path(__file__).resolve().parents[1]
+        / "migrations"
+        / "009_google_ai_project_scope_atomic_reserve.sql"
+    ).read_text(encoding="utf-8")
+
+    assert "ADD COLUMN IF NOT EXISTS quota_scope TEXT NOT NULL" in migration
+    assert "google:default-project" in migration
+    assert "CREATE OR REPLACE FUNCTION google_ai_limiter_capabilities()" in migration
+    assert _ATOMIC_LIMITER_CONTRACT in migration
+    assert "'limiter_contract', v_contract" in migration
+    assert "('gemma-4-31b', 15, 15000, 14000, 1000)" in migration
+    assert "('gemma-4-26b-a4b', 15, 15000, 14000, 1000)" in migration
+
+
+def test_project_scope_atomic_migration_locks_and_aggregates_by_scope_model() -> None:
+    migration = (
+        Path(__file__).resolve().parents[1]
+        / "migrations"
+        / "009_google_ai_project_scope_atomic_reserve.sql"
+    ).read_text(encoding="utf-8")
+
+    assert "pg_advisory_xact_lock" in migration
+    assert "v_quota_scope || ':' || p_model" in migration
+    assert migration.count("JOIN google_ai_api_keys scope_key") >= 2
+    assert migration.count("scope_key.quota_scope = v_quota_scope") >= 2
+    assert "COALESCE(SUM(c.rpm_used), 0)" in migration
+    assert "COALESCE(SUM(c.tpm_used), 0)" in migration
+    assert "COALESCE(SUM(c.rpd_used), 0)" in migration
+
+
+def test_personalization_limiter_bootstrap_is_self_contained_and_secret_free() -> None:
+    migration = (
+        Path(__file__).resolve().parents[1]
+        / "supabase"
+        / "migrations"
+        / "20260731170000_google_ai_canonical_limiter_bootstrap.sql"
+    ).read_text(encoding="utf-8")
+
+    for table in (
+        "google_ai_model_limits",
+        "google_ai_api_keys",
+        "google_ai_usage_counters",
+        "google_ai_requests",
+        "google_ai_request_attempts",
+    ):
+        assert f"CREATE TABLE IF NOT EXISTS {table}" in migration
+        assert f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY" in migration
+    for rpc in (
+        "google_ai_limiter_capabilities",
+        "google_ai_reserve",
+        "google_ai_mark_sent",
+        "google_ai_finalize",
+        "google_ai_sweep_stale",
+        "google_ai_finalize_interaction",
+        "google_ai_record_interaction_semantic",
+    ):
+        assert f"CREATE OR REPLACE FUNCTION {rpc}(" in migration
+        assert f"REVOKE ALL ON FUNCTION {rpc}(" in migration
+
+    assert _ATOMIC_LIMITER_CONTRACT in migration
+    assert "pg_advisory_xact_lock" in migration
+    assert "scope_key.quota_scope = v_quota_scope" in migration
+    assert "INSERT INTO google_ai_api_keys" not in migration
+    assert "Split-ledger" in migration
+    assert "old Antigravity lease must finalize where" in migration
+    assert "('gemma-4-31b', 15, 15000, 14000, 1000)" in migration
+    assert "('gemma-4-26b-a4b', 15, 15000, 14000, 1000)" in migration
+    assert "2147483647" not in migration
