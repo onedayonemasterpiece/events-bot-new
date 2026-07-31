@@ -22,7 +22,7 @@ Integration branch: `integration/festival-antigravity-runtime-20260731`
 - R04 **Done for approval-gated collection, not auto-apply** — exactly seven
   primary topologies; exact hash/quote/reference validation; every non-empty
   festival fact and classification decision is claim-bound; Event candidates
-  require identity and logistics claims plus the seven-part gate. Agent apply
+  require same-programme-subject identity/logistics claims plus the seven-part gate. Agent apply
   authority is rejected recursively. Agent-fetched source bodies are still
   operator-reviewed rather than treated as host-certified auto-apply evidence.
 - R05 **Done for preproduction scope** — main/manual and scheduler construct the
@@ -31,19 +31,22 @@ Integration branch: `integration/festival-antigravity-runtime-20260731`
   that stops at `review`. No Festival/Event/Telegraph/static-page apply path was
   added. Kaggle+Gemma was not changed.
 - R06 **Blocked by provider eligibility after bounded debug** — see below.
-- R07 **Tests/docs/changelog done; independent review pending at report write**.
+- R07 **Done locally** — docs/changelog, negative safety tests and independent
+  review findings are closed; rollout evidence remains subject to R01/R06
+  external blockers below.
 
 ## Verification
 
 Targeted regression command passed:
 
 ```text
-127 targeted tests passed (final regression run)
+135 targeted tests passed (final regression run)
 ```
 
 It covered existing Google client/limits, Interactions transport, festival
 contracts/selection/source/evidence/schema, coordinator/service/queue seam,
-legacy festival context/parser and DB regressions. `py_compile` and
+persisted-handle resume without a new POST, legacy festival context/parser and
+DB regressions. `py_compile` and
 `git diff --check` also passed.
 
 ## Live debug and quota evidence

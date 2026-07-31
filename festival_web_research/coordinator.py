@@ -5,6 +5,7 @@ import hashlib
 import json
 import shutil
 import uuid
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
@@ -193,11 +194,25 @@ def load_and_validate_candidate(
             }[field]
             if any(accepted_claims[ref].field.value not in allowed_claim_fields for ref in refs):
                 raise ValueError(f"festival fact cites wrong claim field: {field}")
+            cited_values = [accepted_claims[ref].normalized_value for ref in refs]
+            expected_values = value if isinstance(value, list) else [value]
+            if any(expected not in cited_values for expected in expected_values):
+                raise ValueError(f"festival fact does not equal cited normalized value: {field}")
     if not set(candidate.classification.claim_ids).issubset(claim_ids):
         raise ValueError("classification cites unknown/non-accepted claims")
     classification_decisions = [decision_by_id.get(value) for value in candidate.classification.decision_ids]
     if any(value is None for value in classification_decisions):
         raise ValueError("classification cites unknown decisions")
+    if any(
+        decision.actor_kind.value != "lane_model"
+        or decision.status.value != "supported"
+        or not decision.evidence_claim_ids
+        or not set(decision.evidence_claim_ids).issubset(claim_ids)
+        for decision in candidate.decisions
+    ):
+        raise ValueError("agent candidate contains non-supported/lane/evidence-backed decision")
+    if any(decision.status.value != "supported" for decision in classification_decisions):
+        raise ValueError("classification uses a non-supported decision")
     topology_value = (
         candidate.classification.primary_topology.value
         if candidate.classification.primary_topology
@@ -254,6 +269,23 @@ def load_and_validate_adjudication(extracted_root: Path, *, context: list[dict[s
     return result
 
 
+def _programme_signature(candidate: LaneCandidate, item: ProgrammeItem) -> str:
+    claims = {claim.claim_id: claim for claim in candidate.claims}
+    fields: dict[str, list[Any]] = {}
+    for ref in (*item.identity_claim_ids, *item.logistics_claim_ids):
+        claim = claims[ref]
+        fields.setdefault(claim.field.value, []).append(claim.normalized_value)
+    return canonical_json_sha256({
+        "entity_role": item.entity_role.value,
+        "disposition": item.disposition.value,
+        "fields": {key: sorted(values, key=lambda value: str(value)) for key, values in sorted(fields.items())},
+    })
+
+
+def _programme_signatures(candidate: LaneCandidate) -> dict[str, str]:
+    return {item.item_id: _programme_signature(candidate, item) for item in candidate.programme_items}
+
+
 def reconcile_candidates(candidates: list[LaneCandidate]) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
     if not candidates:
         raise ValueError("no semantically valid lane candidate")
@@ -280,6 +312,14 @@ def reconcile_candidates(candidates: list[LaneCandidate]) -> tuple[dict[str, Any
         b_events = sum(item.disposition.value in {"create_event_candidate", "link_existing_event"} for item in other.programme_items)
         if a_events != b_events:
             conflicts.append({"field": "materialized_event_count", "lanes": [a.lane, other.lane], "values": [a_events, b_events]})
+        a_inventory = sorted(_programme_signatures(a).values())
+        b_inventory = sorted(_programme_signatures(other).values())
+        if a_inventory != b_inventory:
+            conflicts.append({
+                "field": "programme_inventory",
+                "lanes": [a.lane, other.lane],
+                "values": [a_inventory, b_inventory],
+            })
     payload = {
         "schema_version": CONTRACT_VERSION,
         "selected_lane": a.lane,
@@ -553,11 +593,18 @@ class FestivalResearchCoordinator:
         candidate, quality, conflicts = reconcile_candidates(valid)
         a_ids = [item.item_id for item in valid[0].programme_items]
         b_ids = [item.item_id for item in valid[1].programme_items] if len(valid) > 1 else []
+        a_signatures = _programme_signatures(valid[0])
+        b_signatures = _programme_signatures(valid[1]) if len(valid) > 1 else {}
+        a_ids_by_signature: dict[str, deque[str]] = defaultdict(deque)
+        for item_id, signature in a_signatures.items():
+            a_ids_by_signature[signature].append(item_id)
         resolutions = {f"A:{item_id}": f"canonical:A:{item_id}" for item_id in a_ids}
-        a_id_set = set(a_ids)
         for item_id in b_ids:
+            matching_a_ids = a_ids_by_signature[b_signatures[item_id]]
             resolutions[f"B:{item_id}"] = (
-                f"canonical:A:{item_id}" if item_id in a_id_set else "unresolved"
+                f"canonical:A:{matching_a_ids.popleft()}"
+                if matching_a_ids
+                else "unresolved"
             )
         validate_inventory_conservation(
             a_item_ids=a_ids,
@@ -582,6 +629,39 @@ class FestivalResearchCoordinator:
                     selected_candidate = next(item for item in valid if item.lane == selected_lane)
                     candidate, selected_quality, _ = reconcile_candidates([selected_candidate])
                     quality.update(selected_quality)
+                    selected_signatures = _programme_signatures(selected_candidate)
+                    selected_ids_by_signature: dict[str, deque[str]] = defaultdict(deque)
+                    for item_id, signature in selected_signatures.items():
+                        selected_ids_by_signature[signature].append(item_id)
+                    c_resolutions: dict[str, str] = {}
+                    for lane_candidate in valid:
+                        lane_signatures = _programme_signatures(lane_candidate)
+                        if lane_candidate.lane == selected_lane:
+                            for item_id in lane_signatures:
+                                c_resolutions[f"{lane_candidate.lane}:{item_id}"] = (
+                                    f"canonical:{selected_lane}:{item_id}"
+                                )
+                            continue
+                        available = {
+                            signature: deque(item_ids)
+                            for signature, item_ids in selected_ids_by_signature.items()
+                        }
+                        for item_id, signature in lane_signatures.items():
+                            ref = f"{lane_candidate.lane}:{item_id}"
+                            matches = available.get(signature)
+                            if matches:
+                                c_resolutions[ref] = (
+                                    f"canonical:{selected_lane}:{matches.popleft()}"
+                                )
+                            else:
+                                c_resolutions[ref] = "rejected:C:adjudication"
+                    validate_inventory_conservation(
+                        a_item_ids=a_ids,
+                        b_item_ids=b_ids,
+                        resolutions=c_resolutions,
+                    )
+                    quality["inventory_resolutions"] = c_resolutions
+                    quality["unresolved_inventory_count"] = 0
                 quality.update({
                     "c_was_used": True,
                     "c_applied": c_applied,

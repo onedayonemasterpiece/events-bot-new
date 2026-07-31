@@ -45,6 +45,12 @@
   behind its disabled-by-default flag; URL rows now pass explicit-date/DNS
   preflight and complete-edition grouping before quota is spent, while
   checkpoints, inventory and fact/Event evidence references fail closed.
+- Added a no-new-request resume CLI for persisted A/B interaction handles and
+  strengthened semantic binding: agent decisions cannot claim host/operator
+  authority, final facts must equal accepted normalized claims, Event evidence
+  must be accepted title/date/time/place data bound to the same programme-item
+  subject, conflicting labelled queue dates fail closed, and unresolved A/B
+  programme inventory blocks approval.
 
 - Corrected the festival web-research target: Antigravity is the sole planned
   primary collector from the first implementation, initially collect-only and

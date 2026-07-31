@@ -34,7 +34,12 @@ async def test_service_persists_collect_only_run_and_approval_does_not_apply(tmp
         )
         assert result.state == "review"
         # Fake coordinator does not persist the final candidate, so mirror the real coordinator boundary.
-        await repository.update_run(result.run_id, state="review", candidate_json=result.candidate)
+        await repository.update_run(
+            result.run_id,
+            state="review",
+            candidate_json=result.candidate,
+            quality_json={"independent_agreement": True, "unresolved_inventory_count": 0},
+        )
         approved = await service.approve(result.run_id, operator="test")
         assert approved.review_status == "approved"
         assert approved.mode == "collect_only"
@@ -54,5 +59,25 @@ async def test_service_is_idempotent_by_input_fingerprint(tmp_path: Path) -> Non
         second = await service.collect(name_hint="X", edition_hint=None, urls=["https://example.org/"])
         assert second.run_id == first.run_id
         assert second.lanes == []
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_approval_rejects_unresolved_inventory(tmp_path: Path) -> None:
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        repository = FestivalResearchRepository(db)
+        service = FestivalWebResearchService(repository=repository, coordinator=FakeCoordinator())
+        result = await service.collect(name_hint="X", edition_hint=None, urls=["https://example.org/"])
+        await repository.update_run(
+            result.run_id,
+            state="review",
+            candidate_json=result.candidate,
+            quality_json={"independent_agreement": True, "unresolved_inventory_count": 1},
+        )
+        with pytest.raises(ValueError, match="unresolved programme inventory"):
+            await service.approve(result.run_id, operator="test")
     finally:
         await db.close()

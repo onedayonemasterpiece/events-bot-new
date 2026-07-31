@@ -104,7 +104,11 @@ Missing/ambiguous dates переходят в operator review без provider ca
 Candidate принимается только с hash-chain checkpoint manifest. Все непустые
 festival facts и topology/programme decisions связаны с accepted claims;
 Event disposition дополнительно требует identity/logistics claims и семь pass
-gates. A/B inventory получает явную судьбу каждого item. C ограничен 12k,
+gates, включая accepted title/date/time/place claims одного и того же
+programme-item subject (`local_subject_id == item_id`). Agent не может объявить
+себя operator/host actor, а итоговое fact value обязано совпасть с cited
+normalized claim value. A/B programme items сопоставляются по evidence-derived
+semantic signature, а unresolved inventory запрещает approval. C ограничен 12k,
 не получает search/URL tools и может переключить host candidate на целую
 валидную lane только если все конфликты однозначно выбрали одну lane; иначе
 результат остаётся review.
@@ -639,7 +643,16 @@ python scripts/run_festival_web_research.py \
 
 python scripts/review_festival_web_research.py 1 approve \
   --operator operator-name --db artifacts/codex/festival-web-research.sqlite
+
+python scripts/resume_festival_web_research.py 3 \
+  --db artifacts/codex/festival-web-research.sqlite
 ```
+
+`resume_festival_web_research.py` принимает ID уже сохранённой A/B lane,
+продолжает polling по последнему interaction handle и не выполняет новый
+creating POST, поэтому восстановление после падения процесса не расходует RPD.
+Несколько различных строк `Дата:` или противоречие диапазона с
+`Дата окончания:` считаются ambiguous и уходят в review до provider call.
 
 Without migration 007 the command fails closed. `--allow-legacy-accounting` is
 only for a bounded diagnostic and is never set by the queue/scheduler.

@@ -175,6 +175,11 @@ def validate_reference_graph(
             raise ContractViolation("unresolved_decision_claim", f"{decision.decision_id}:{sorted(missing)}")
         if decision.actor_kind.value == "lane_model" and not decision.evidence_claim_ids:
             raise ContractViolation("model_decision_without_evidence", decision.decision_id)
+        if decision.status.value == "supported" and any(
+            claim_map[ref].status.value != "accepted"
+            for ref in decision.evidence_claim_ids
+        ):
+            raise ContractViolation("supported_decision_uses_nonaccepted_claim", decision.decision_id)
 
     for item in item_map.values():
         missing_claims = (set(item.identity_claim_ids) | set(item.logistics_claim_ids)) - set(claim_map)
@@ -187,6 +192,15 @@ def validate_reference_graph(
             ItemDisposition.CREATE_EVENT_CANDIDATE,
             ItemDisposition.LINK_EXISTING_EVENT,
         }:
+            item_claims = [claim_map[ref] for ref in (*item.identity_claim_ids, *item.logistics_claim_ids)]
+            if any(claim.status.value != "accepted" for claim in item_claims):
+                raise ContractViolation("event_uses_nonaccepted_claim", item.item_id)
+            if any(
+                claim.subject_kind.value != "programme_item"
+                or claim.local_subject_id != item.item_id
+                for claim in item_claims
+            ):
+                raise ContractViolation("event_claim_subject_mismatch", item.item_id)
             identity_fields = {claim_map[ref].field for ref in item.identity_claim_ids}
             logistics_fields = {claim_map[ref].field for ref in item.logistics_claim_ids}
             if ClaimField.TITLE not in identity_fields:
@@ -200,7 +214,12 @@ def validate_reference_graph(
             ):
                 raise ContractViolation("event_logistics_without_place_claim", item.item_id)
         disposition_decisions = [decision_map[ref] for ref in item.decision_ids if decision_map[ref].decision_kind == DecisionKind.PROGRAMME_ITEM_DISPOSITION]
-        if len(disposition_decisions) != 1 or disposition_decisions[0].selected_value != item.disposition.value:
+        if (
+            len(disposition_decisions) != 1
+            or disposition_decisions[0].selected_value != item.disposition.value
+            or disposition_decisions[0].status.value != "supported"
+            or disposition_decisions[0].subject_ref != f"programme_item:{item.item_id}"
+        ):
             raise ContractViolation("item_disposition_decision_mismatch", item.item_id)
         validate_programme_item(item)
 

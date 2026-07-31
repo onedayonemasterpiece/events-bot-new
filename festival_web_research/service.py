@@ -104,6 +104,12 @@ class FestivalWebResearchService:
             raise LookupError(f"research run {run_id} not found")
         if run.state != "review" or not run.candidate_json:
             raise ValueError("only a validated review candidate can be approved")
+        quality = run.quality_json if isinstance(run.quality_json, dict) else {}
+        independently_supported = bool(quality.get("independent_agreement")) or bool(quality.get("c_applied"))
+        if not independently_supported:
+            raise ValueError("candidate lacks A/B agreement or an applied C adjudication")
+        if int(quality.get("unresolved_inventory_count") or 0) != 0:
+            raise ValueError("candidate has unresolved programme inventory")
         # Approval records a human revision decision only. No Festival/Event/page mutation exists here.
         return await self.repository.review(run_id, decision="approved", operator=operator, reason=reason)
 

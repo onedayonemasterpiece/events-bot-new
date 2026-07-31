@@ -77,7 +77,7 @@ candidate.json MUST be one JSON object with exactly this shape (arrays may be em
   "uncertainties":[],
   "source_exclusions":[]
 }}
-Use only enum values demonstrated/defined above and in the shape. Every non-empty festival fact field needs accepted Claim IDs in claim_ids_by_field. Classification needs matching evidence-backed discovery_topology and programme_structure decisions. Each programme item needs exactly one programme_item_disposition decision whose selected_value equals disposition. Event dispositions require an identity title Claim and logistics Claims for date, start time and place, in addition to all seven pass gates. Be conservative: programme_only/schedule_slot/continuous_activity/service_information/reject may have unknown/not_applicable gate values.
+Use only enum values demonstrated/defined above and in the shape. Every non-empty festival fact field needs accepted Claim IDs in claim_ids_by_field. Classification needs matching evidence-backed discovery_topology and programme_structure decisions. Each programme item needs exactly one programme_item_disposition decision whose subject_ref is `programme_item:<item_id>` and selected_value equals disposition. Event dispositions require accepted programme_item Claims whose local_subject_id exactly equals item_id: an identity title Claim and logistics Claims for date, start time and place, in addition to all seven pass gates. Be conservative: programme_only/schedule_slot/continuous_activity/service_information/reject may have unknown/not_applicable gate values.
 
 At completion, respond briefly with the candidate path and counts. The JSON files, not prose response, are authoritative.
 """.strip()

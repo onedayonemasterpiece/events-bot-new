@@ -119,6 +119,26 @@ def test_candidate_rejects_agent_apply_authority(tmp_path: Path) -> None:
         raise AssertionError("agent authority must fail closed")
 
 
+@pytest.mark.parametrize(
+    ("mutation", "expected"),
+    [
+        (lambda data: data["decisions"][0].update(actor_kind="operator"), "non-supported/lane/evidence-backed"),
+        (lambda data: data["decisions"][0].update(status="unknown"), "non-supported/lane/evidence-backed"),
+        (lambda data: data["festival"].update(name="Недостоверное имя"), "does not equal cited normalized value"),
+    ],
+)
+def test_candidate_rejects_spoofed_semantic_authority_or_fact(
+    tmp_path: Path,
+    mutation,
+    expected: str,
+) -> None:
+    data = _candidate(tmp_path)
+    mutation(data)
+    next(tmp_path.rglob("candidate.json")).write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(ValueError, match=expected):
+        load_and_validate_candidate(tmp_path, expected_lane="A")
+
+
 def test_reconcile_detects_independent_taxonomy_conflict(tmp_path: Path) -> None:
     a_root = tmp_path / "a"
     b_root = tmp_path / "b"
@@ -127,6 +147,40 @@ def test_reconcile_detects_independent_taxonomy_conflict(tmp_path: Path) -> None
     _, quality, conflicts = reconcile_candidates([a, b])
     assert not quality["independent_agreement"]
     assert any(item["field"] == "classification.primary_topology" for item in conflicts)
+
+
+def test_reconcile_detects_same_count_but_different_programme_subjects(tmp_path: Path) -> None:
+    def with_item(data: dict, title: str) -> LaneCandidate:
+        digest = data["sources"][0]["content_sha256"]
+        data["claims"].append({
+            "claim_id": "CI", "source_id": "S1", "local_subject_id": "item",
+            "subject_kind": "programme_item", "field": "title", "raw_value": title,
+            "normalized_value": title, "normalization": "none",
+            "evidence": {"quote": title, "quote_start": 0, "quote_end": len(title)},
+            "content_sha256": digest, "normalizer_version": "festival-text-normalizer-v1",
+            "status": "accepted",
+        })
+        data["decisions"].append({
+            "decision_id": "DI", "decision_kind": "programme_item_disposition",
+            "subject_ref": "programme_item:item", "selected_value": "schedule_slot",
+            "alternatives_rejected": [], "evidence_claim_ids": ["CI"],
+            "reason_codes": [], "status": "supported", "actor_kind": "lane_model",
+        })
+        data["programme_items"] = [{
+            "item_id": "item", "entity_role": "temporal_anchor", "disposition": "schedule_slot",
+            "identity_claim_ids": ["CI"], "logistics_claim_ids": [], "decision_ids": ["DI"],
+            "event_gate": {key: "unknown" for key in (
+                "current_edition", "independent_choice", "event_grade_occurrence",
+                "meaningful_identity", "access_compatibility", "topology_guardrail",
+                "evidence_validation",
+            )},
+        }]
+        return LaneCandidate.model_validate(data)
+
+    a = with_item(_candidate(tmp_path / "a", "A"), "Детский концерт")
+    b = with_item(_candidate(tmp_path / "b", "B"), "Гала-концерт")
+    _, _, conflicts = reconcile_candidates([a, b])
+    assert any(item["field"] == "programme_inventory" for item in conflicts)
 
 
 def test_conflict_adjudication_conserves_fields_and_cites_selected_lane(tmp_path: Path) -> None:
@@ -180,6 +234,35 @@ class _PollDeniedProvider:
         )
 
 
+class _ResumeRateLimiter:
+    def __init__(self) -> None:
+        self.semantic_results: list[str] = []
+
+    async def record_external_call_semantic_result(self, lease, *, semantic_status):
+        self.semantic_results.append(semantic_status)
+
+
+class _ResumeOnlyProvider:
+    def __init__(self) -> None:
+        self.rate_limiter = _ResumeRateLimiter()
+        self.waited_ids: list[str] = []
+
+    async def wait(self, interaction, *, deadline_seconds):
+        self.waited_ids.append(interaction.id)
+        return ProviderInteraction(
+            id=interaction.id,
+            provider_status="completed",
+            environment_id=interaction.environment_id,
+            steps=(),
+            usage=UsageInfo(),
+            raw={},
+            lease=interaction.lease,
+        )
+
+    async def download_environment(self, interaction, destination, *, extract_to):
+        Path(extract_to).mkdir(parents=True, exist_ok=True)
+
+
 @pytest.mark.asyncio
 async def test_nonretryable_poll_error_is_persisted_as_provider_failed(tmp_path: Path) -> None:
     db = Database(str(tmp_path / "db.sqlite"))
@@ -201,5 +284,57 @@ async def test_nonretryable_poll_error_is_persisted_as_provider_failed(tmp_path:
         assert {lane.provider_state for lane in lanes} == {"failed"}
         assert {lane.semantic_state for lane in lanes} == {"failed"}
         assert {lane.provider_error_code for lane in lanes} == {"403"}
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_resume_lane_uses_persisted_handle_without_create(tmp_path: Path, monkeypatch) -> None:
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        repository = FestivalResearchRepository(db)
+        run = await repository.create_run(
+            run_uid=str(uuid.uuid4()), target_key="test", series_candidate="Test",
+            edition_candidate="2026", input_fingerprint="f" * 64,
+            orchestration_version="test", contract_version="festival-web-research-v2",
+            taxonomy_version="festival-taxonomy-registry-v2", taxonomy_sha256="a" * 64,
+        )
+        lease = ExternalCallLease(
+            request_uid=str(uuid.uuid4()), attempt_no=1, consumer="test", account_name=None,
+            model="antigravity-preview-05-2026", reserved_tpm=1000,
+            api_key_id="key", env_var_name="GOOGLE_API_KEY", key_alias=None,
+            minute_bucket=None, day_bucket=None, started_at=datetime.now(timezone.utc),
+        )
+        checkpoint = ProviderInteraction(
+            id="interaction-resume", provider_status="in_progress",
+            environment_id="environment-resume", steps=(), usage=UsageInfo(), raw={}, lease=lease,
+        ).to_checkpoint()
+        lane = await repository.create_lane(
+            run_id=run.id, lane="A", attempt_no=1, request_uid=lease.request_uid,
+            provider_state="in_progress", semantic_state="pending",
+            interaction_ids_json=[checkpoint], prompt_version="test",
+            contract_version="festival-web-research-v2",
+            taxonomy_version="festival-taxonomy-registry-v2", taxonomy_sha256="a" * 64,
+            input_fingerprint="e" * 64,
+        )
+        candidate = LaneCandidate.model_validate(_candidate(tmp_path / "fixture", "A"))
+        monkeypatch.setattr(
+            "festival_web_research.coordinator.load_and_validate_candidate",
+            lambda *args, **kwargs: candidate,
+        )
+        provider = _ResumeOnlyProvider()
+        coordinator = FestivalResearchCoordinator(
+            provider=provider, repository=repository,
+            artifact_root=tmp_path / "artifacts", taxonomy_sha256="a" * 64,
+            deadline_seconds=30,
+        )
+        result = await coordinator.resume_lane(lane.id)
+        assert result.semantic_status == "passed"
+        assert provider.waited_ids == ["interaction-resume"]
+        assert provider.rate_limiter.semantic_results == ["passed"]
+        persisted = await repository.get_lane(lane.id)
+        assert persisted.provider_state == "completed"
+        assert persisted.semantic_state == "passed"
     finally:
         await db.close()

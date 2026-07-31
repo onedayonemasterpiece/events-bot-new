@@ -142,4 +142,4 @@ lanes:
     forbidden_files: ['*']
     expected_output: PASS or actionable findings with requirement evidence.
     verification_scope: full_local
-    status: in_progress
+    status: completed

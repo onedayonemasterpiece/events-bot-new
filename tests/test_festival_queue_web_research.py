@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import select
 
 from db import Database
-from festival_queue import process_festival_queue
+from festival_queue import explicit_period_from_source_text, process_festival_queue
 from festival_web_research.coordinator import ResearchResult
 from models import FestivalQueueItem
 
@@ -28,6 +28,24 @@ class FakeResearchService:
             quality={"independent_agreement": True},
             lanes=[],
         )
+
+
+def test_explicit_labelled_source_text_period_parser() -> None:
+    assert explicit_period_from_source_text(
+        "Фестиваль\nДата: 7–9 августа 2026\nПлощадка: поле"
+    ) == {"start_date": "2026-08-07", "end_date": "2026-08-09"}
+    assert explicit_period_from_source_text(
+        "Дата: 07.08.2026\nДата окончания: 09.08.2026"
+    ) == {"start_date": "2026-08-07", "end_date": "2026-08-09"}
+    assert explicit_period_from_source_text("Встретимся 7 августа 2026") is None
+    assert explicit_period_from_source_text("Дата: 7 августа 2026 или 1 сентября 2026") is None
+    assert explicit_period_from_source_text("Дата: 2026-99-99") is None
+    assert explicit_period_from_source_text(
+        "Дата: 7 августа 2026\nДата: 1 сентября 2026"
+    ) is None
+    assert explicit_period_from_source_text(
+        "Дата: 7–9 августа 2026\nДата окончания: 10 августа 2026"
+    ) is None
 
 
 @pytest.mark.asyncio

@@ -34,6 +34,76 @@ _DAY_BIRTHDAY_RE = re.compile(
     r"\bдень\s+рождения\s+[а-яёa-z0-9][^,\n.;:]{1,90}",
     re.IGNORECASE,
 )
+_RU_MONTHS = {
+    "января": 1, "февраля": 2, "марта": 3, "апреля": 4,
+    "мая": 5, "июня": 6, "июля": 7, "августа": 8,
+    "сентября": 9, "октября": 10, "ноября": 11, "декабря": 12,
+}
+
+
+def _parse_explicit_label_date(value: str) -> tuple[str, str | None] | None:
+    raw = " ".join(str(value or "").strip().lower().split())
+    if not raw or re.search(r"\b(?:или|or)\b", raw):
+        return None
+    iso = re.fullmatch(r"(20\d{2})-(\d{2})-(\d{2})", raw)
+    if iso:
+        try:
+            return datetime.strptime(raw, "%Y-%m-%d").date().isoformat(), None
+        except ValueError:
+            return None
+    numeric = re.fullmatch(r"(\d{1,2})[./](\d{1,2})[./](20\d{2})", raw)
+    if numeric:
+        day, month, year = map(int, numeric.groups())
+        try:
+            return datetime(year, month, day).date().isoformat(), None
+        except ValueError:
+            return None
+    textual = re.fullmatch(
+        r"(\d{1,2})(?:\s*[–—-]\s*(\d{1,2}))?\s+([а-яё]+)\s+(20\d{2})",
+        raw,
+    )
+    if textual and textual.group(3) in _RU_MONTHS:
+        start_day = int(textual.group(1))
+        end_day = int(textual.group(2)) if textual.group(2) else None
+        month = _RU_MONTHS[textual.group(3)]
+        year = int(textual.group(4))
+        try:
+            start = datetime(year, month, start_day).date().isoformat()
+            end = datetime(year, month, end_day).date().isoformat() if end_day else None
+        except ValueError:
+            return None
+        return start, end
+    return None
+
+
+def explicit_period_from_source_text(source_text: str | None) -> dict[str, str] | None:
+    """Parse only explicit labelled date lines; never infer dates from prose."""
+
+    periods: set[tuple[str, str | None]] = set()
+    explicit_ends: set[str] = set()
+    for line in str(source_text or "").splitlines():
+        match = re.match(r"^\s*Дата(?:\s+начала)?\s*:\s*(.+?)\s*$", line, re.IGNORECASE)
+        end_match = re.match(r"^\s*Дата\s+окончания\s*:\s*(.+?)\s*$", line, re.IGNORECASE)
+        if end_match:
+            parsed = _parse_explicit_label_date(end_match.group(1))
+            if parsed is None:
+                return None
+            explicit_ends.add(parsed[0])
+        elif match:
+            parsed = _parse_explicit_label_date(match.group(1))
+            if parsed is None:
+                return None
+            periods.add(parsed)
+    if len(periods) != 1 or len(explicit_ends) > 1:
+        return None
+    start, range_end = next(iter(periods))
+    explicit_end = next(iter(explicit_ends), None)
+    if range_end and explicit_end and range_end != explicit_end:
+        return None
+    end = range_end or explicit_end or start
+    if end < start:
+        return None
+    return {"start_date": start, "end_date": end}
 
 
 def _is_vk_domain(url: str) -> bool:
@@ -1375,6 +1445,10 @@ async def process_festival_queue(
                     for key in ("event_start_date", "event_end_date", "start_date", "end_date", "event_date"):
                         if signals.get(key):
                             row[key] = signals[key]
+                    if not any(row.get(key) for key in ("event_start_date", "event_end_date", "start_date", "end_date", "event_date")):
+                        labelled_period = explicit_period_from_source_text(it.source_text)
+                        if labelled_period:
+                            row["explicit_date_signals"] = [labelled_period]
                 raw_rows.append(row)
             current_rows, rejected = select_current_url_rows(
                 raw_rows,

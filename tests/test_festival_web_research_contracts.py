@@ -130,6 +130,39 @@ def test_reference_graph_positive_and_negative() -> None:
     mismatch = decision.model_copy(update={"selected_value": "schedule_slot"})
     with pytest.raises(ContractViolation, match="item_disposition_decision_mismatch"):
         validate_reference_graph(sources=[source], snapshot_text_by_source={"S1": text}, claims=[claim], decisions=[mismatch], programme_items=[item])
+    wrong_subject = decision.model_copy(update={"subject_ref": "programme_item:other"})
+    with pytest.raises(ContractViolation, match="item_disposition_decision_mismatch"):
+        validate_reference_graph(sources=[source], snapshot_text_by_source={"S1": text}, claims=[claim], decisions=[wrong_subject], programme_items=[item])
+
+
+def test_event_evidence_must_belong_to_the_same_programme_subject() -> None:
+    text, source, claim, decision, _ = _graph()
+    claims = [
+        claim.model_copy(update={"claim_id": claim_id, "field": field})
+        for claim_id, field in (
+            ("CT", "title"), ("CD", "date"), ("CM", "time_start"), ("CV", "venue_name")
+        )
+    ]
+    event_decision = decision.model_copy(update={
+        "selected_value": "create_event_candidate",
+        "evidence_claim_ids": [value.claim_id for value in claims],
+    })
+    event = ProgrammeItem(
+        item_id="i1", entity_role=EntityRole.CHILD_EVENT,
+        disposition=ItemDisposition.CREATE_EVENT_CANDIDATE,
+        identity_claim_ids=["CT"], logistics_claim_ids=["CD", "CM", "CV"],
+        decision_ids=["D1"], event_gate=passing_gate(),
+    )
+    with pytest.raises(ContractViolation, match="event_claim_subject_mismatch"):
+        validate_reference_graph(
+            sources=[source], snapshot_text_by_source={"S1": text}, claims=claims,
+            decisions=[event_decision], programme_items=[event],
+        )
+    bound_claims = [value.model_copy(update={"local_subject_id": "i1"}) for value in claims]
+    validate_reference_graph(
+        sources=[source], snapshot_text_by_source={"S1": text}, claims=bound_claims,
+        decisions=[event_decision], programme_items=[event],
+    )
 
 
 def test_classification_unknown_is_none_not_eighth_topology() -> None:
