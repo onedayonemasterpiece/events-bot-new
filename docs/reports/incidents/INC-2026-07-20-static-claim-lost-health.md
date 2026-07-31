@@ -150,3 +150,13 @@ completed the same projection. That duplicate write lane reached
 limiter's Supabase SDK absent from the read-only builder environment.
 Production now disables the redundant Kaggle write pass; the builder consumes
 the completed revision and bounded compact related RPCs.
+
+The compensating run exposed one more independent stale-input condition. Event
+`7357` queued revision `cc9d6942…`; deterministic post-Smart-Update media work
+then advanced the canonical event and vector receipt to `13021c30…`. The static
+barrier compared the newer projection only with the historical queued hash and
+could never converge, even though the projection already matched current
+SQLite. The worker now refreshes only the request's covered event revisions
+from current canonical SQLite and recomputes its watermark immediately before
+the barrier. Deleted rows are removed from that current barrier set. A matching
+current vector receipt proceeds; a genuinely stale receipt still retries.

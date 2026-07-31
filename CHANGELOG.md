@@ -9,6 +9,11 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- StaticSiteBuilder now refreshes queued Smart Update event revisions from the
+  current canonical database immediately before its vector barrier. A later
+  deterministic media/publication update can therefore advance both the vector
+  projection and static snapshot without leaving the build waiting forever for
+  an obsolete intermediate revision.
 - Fly releases now bake exact clean `origin/main` into the application image
   through the canonical deploy wrapper, and StaticSiteBuilder uses that
   immutable identity instead of a drift-prone secret; malformed or missing

@@ -23239,6 +23239,70 @@ async def _patch_static_site_request_payload(
             await asyncio.sleep(delay)
 
 
+async def _refresh_static_site_vector_barrier_payload(
+    db: Database,
+    request_payload: Mapping[str, Any],
+) -> tuple[dict[str, Any], list[int]]:
+    """Bind the vector barrier to current canonical event revisions.
+
+    Smart Update records the revision that caused the build request, but
+    deterministic follow-up jobs (for example media review) may update another
+    public field before the debounced vector projection and static build run.
+    A newer complete projection must not be rejected forever merely because the
+    queued request still contains that historical intermediate hash.
+
+    Only ids already covered by the request are refreshed.  Missing rows are
+    removed from the barrier because a hard-deleted event is absent from both
+    the current static snapshot and the current vector projection.
+    """
+
+    payload = dict(request_payload)
+    expected = payload.get("event_revisions")
+    if not isinstance(expected, Mapping) or not expected:
+        return payload, []
+    event_ids: list[int] = []
+    for raw_id in expected:
+        try:
+            event_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if event_id > 0:
+            event_ids.append(event_id)
+    if not event_ids:
+        return payload, []
+
+    async with db.get_session() as session:
+        events = list(
+            (
+                await session.execute(
+                    select(Event).where(Event.id.in_(sorted(set(event_ids))))
+                )
+            ).scalars().all()
+        )
+    current = {
+        str(int(event.id)): event_public_revision(event)
+        for event in events
+        if event.id is not None
+    }
+    previous = {
+        str(int(key)): str(expected[key])
+        for key in expected
+        if str(key).isdigit() and int(key) > 0
+    }
+    changed_ids = sorted(
+        {
+            int(event_id)
+            for event_id in set(previous) | set(current)
+            if previous.get(event_id) != current.get(event_id)
+        }
+    )
+    if not changed_ids:
+        return payload, []
+    payload["event_revisions"] = current
+    payload["target_watermark"] = static_site_request_watermark(payload)
+    return payload, changed_ids
+
+
 async def _finish_static_site_candidate(
     *,
     db: Database,
@@ -23680,6 +23744,24 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         if isinstance(handoff, Mapping) and handoff.get("build_id"):
             await _delete_terminal_static_site_output(str(handoff["build_id"]))
         return recovered_result if recovered_result is not None else True
+    request_payload, refreshed_revision_ids = (
+        await _refresh_static_site_vector_barrier_payload(db, request_payload)
+    )
+    if refreshed_revision_ids:
+        await _patch_static_site_request_payload(
+            db,
+            job_id,
+            {
+                "event_revisions": request_payload["event_revisions"],
+                "target_watermark": request_payload["target_watermark"],
+            },
+        )
+        logging.info(
+            "static_site_build: refreshed vector barrier revisions "
+            "job_id=%s event_ids=%s",
+            job_id,
+            refreshed_revision_ids,
+        )
     vector_evidence = await asyncio.to_thread(
         validate_vector_barrier,
         request_payload,
