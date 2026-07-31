@@ -9,6 +9,9 @@
   diagnostics and a redacted `--preflight-only` mode instead of requiring an
   ad-hoc Python invocation on Fly; absolute-path execution also bootstraps the
   repository import root before loading `ops_run`.
+- Region Talk no-wait launchers now proactively delete expired private input
+  datasets before each Candidate/BGE/Image launch, rather than waiting for a
+  future Kaggle quota error to trigger emergency cleanup.
 - Prevented Telegram Monitoring and Smart Update from turning generic
   Kaliningrad-region 80th-anniversary wording into the specific «80 историй о
   главном» campaign; added literal-anchor guards, incident replay coverage and

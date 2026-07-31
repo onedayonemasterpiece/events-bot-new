@@ -406,6 +406,11 @@ python3 scripts/region_talk_scheduled_runner.py \
 `--preflight-only` validates secret names without printing values or touching
 YDB/Kaggle/Telegram.
 
+Every launcher also runs bounded proactive garbage collection for private
+Region Talk input/config datasets older than six hours (TTL and delete cap are
+configurable). No-wait scheduling may retain inputs while a kernel is active,
+but autonomous daily operation must not depend on a human deleting them.
+
 Important invariants:
 
 - BGE-M3 is launched immediately when `bge_pending_sample_total >= 1`, using

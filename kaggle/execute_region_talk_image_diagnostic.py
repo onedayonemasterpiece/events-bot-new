@@ -23,6 +23,7 @@ build_input_datasets = _candidate_executor.build_input_datasets
 poll_kernel = _candidate_executor.poll_kernel
 preflight_ydb_access = _candidate_executor.preflight_ydb_access
 assert_region_talk_kaggle_slots_free = _candidate_executor.assert_region_talk_kaggle_slots_free
+cleanup_stale_region_talk_input_datasets = _candidate_executor.cleanup_stale_region_talk_input_datasets
 
 KERNEL_PATH = PROJECT_ROOT / "kaggle" / "RegionTalkImageDiagnostic"
 OUT_ROOT = PROJECT_ROOT / "artifacts" / "codex" / "kaggle" / "region-talk-image-diagnostic"
@@ -91,6 +92,7 @@ def main() -> int:
         if not rows: print("image queue empty, diagnostic image scoring skipped", flush=True); return 0
     client=KaggleClient() if KaggleClient is not None else DirectKaggleClient(); username=(os.getenv("KAGGLE_USERNAME") or "").strip()
     if not username: raise RuntimeError("KAGGLE_USERNAME is required")
+    cleanup_stale_region_talk_input_datasets(client)
     if args.source == "ydb":
         os.environ.setdefault("REGION_TALK_REQUIRE_YDB_STATE", "1")
         preflight_ydb_access()

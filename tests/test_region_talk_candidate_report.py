@@ -7085,6 +7085,48 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
 
 
 class RegionTalkKaggleLauncherTests(unittest.TestCase):
+    def test_proactive_input_dataset_gc_deletes_only_expired_unprotected_rows(self) -> None:
+        mod = load_runner_module()
+        now = datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc)
+
+        class Item:
+            def __init__(self, ref: str, updated: datetime) -> None:
+                self._data = {"ref": ref, "lastUpdated": updated.isoformat()}
+
+            def to_dict(self):
+                return dict(self._data)
+
+        class Api:
+            def dataset_list(self, **kwargs):
+                if kwargs.get("page") != 1:
+                    return []
+                return [
+                    Item("u/region-talk-config-expired", now - timedelta(hours=7)),
+                    Item("u/rt-bge-secret-protected", now - timedelta(hours=7)),
+                    Item("u/rt-img-diag-active", now - timedelta(hours=1)),
+                    Item("u/unrelated-dataset", now - timedelta(days=2)),
+                ]
+
+        class Client:
+            api = Api()
+
+            def __init__(self) -> None:
+                self.deleted: list[str] = []
+
+            def delete_dataset(self, ref: str) -> None:
+                self.deleted.append(ref)
+
+        client = Client()
+        with mock.patch.dict(os.environ, {"REGION_TALK_KAGGLE_INPUT_DATASET_TTL_SECONDS": "21600"}):
+            result = mod.cleanup_stale_region_talk_input_datasets(
+                client,
+                protected_refs={"u/rt-bge-secret-protected"},
+                now=now,
+            )
+
+        self.assertEqual(client.deleted, ["u/region-talk-config-expired"])
+        self.assertEqual(result["deleted"], 1)
+
     def test_prepared_kernel_attaches_pinned_e5_model(self) -> None:
         mod = load_runner_module()
         kernel_path = mod.prepared_kernel_path(run_id="unit-e5-model", kernel_slug="unit-e5-model")

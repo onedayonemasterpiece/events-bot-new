@@ -977,6 +977,7 @@ def main() -> int:
     username = (os.getenv("KAGGLE_USERNAME") or "").strip()
     if not username:
         raise RuntimeError("KAGGLE_USERNAME is required")
+    cleanup_stale_region_talk_input_datasets(client)
     kernel_ref = kernel_ref_from_meta(kernel_path, kernel_slug=args.kernel_slug)
     image_kernel_ref = f"{username}/region-talk-image-diagnostic"
     assert_region_talk_kaggle_slots_free(

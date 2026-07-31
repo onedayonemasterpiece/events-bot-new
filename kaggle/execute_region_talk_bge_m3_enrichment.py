@@ -33,6 +33,7 @@ load_env_file = _candidate_executor.load_env_file
 poll_kernel = _candidate_executor.poll_kernel
 preflight_ydb_access = _candidate_executor.preflight_ydb_access
 run_dataset_slug = _candidate_executor.run_dataset_slug
+cleanup_stale_region_talk_input_datasets = _candidate_executor.cleanup_stale_region_talk_input_datasets
 
 KERNEL_PATH = PROJECT_ROOT / "kaggle" / "RegionTalkBgeM3Enrichment"
 OUT_ROOT = PROJECT_ROOT / "artifacts" / "codex" / "kaggle" / "region-talk-bge-m3-enrichment"
@@ -209,6 +210,7 @@ def main() -> int:
     username = (os.getenv("KAGGLE_USERNAME") or "").strip()
     if not username:
         raise RuntimeError("KAGGLE_USERNAME is required")
+    cleanup_stale_region_talk_input_datasets(client)
     kref = kernel_ref(username=username, kernel_slug=args.kernel_slug)
     assert_bge_kernel_slot_free(client, kref, allow_active=bool(args.allow_active_bge_kernel))
     config_ref = build_config_dataset(client, username=username, run_id=run_id, args=args)
