@@ -9,6 +9,9 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Smart Update event-vector catch-up now honors bounded shared-ledger RPM/TPM
+  retry windows inside one projection instead of restarting the whole job every
+  ten minutes; day-level exhaustion remains fail-closed.
 - Smart Update now scopes multi-occurrence VK/TG roundups before reviewing
   date/range/time roles, and treats only the visible label of VK
   `[target|label]` markup as verbatim evidence; roundup headings can no longer

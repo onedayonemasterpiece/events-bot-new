@@ -126,3 +126,10 @@ The recurrence also exposed an invalid deployed configuration:
 `STATIC_SITE_REQUIRE_VECTOR_BARRIER=1` with `ENABLE_EVENT_VECTOR_SYNC=0`.
 Production now enables the vector owner after the shared atomic limiter gate;
 the barrier and its producer must be changed together.
+
+The first compensating projection after enabling the owner then crossed the
+shared embedding RPM bucket. The limiter correctly returned a bounded
+`retry_after_ms`, but the batch process treated that expected minute boundary
+as a terminal run failure, forcing ten-minute whole-job retries. The projector
+now waits and retries only the same idempotent embedding for bounded `rpm`/`tpm`
+admission; day-level or unknown failures still terminate immediately.

@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 import event_vector_sync as evs
+from google_ai.exceptions import RateLimitError
 from scripts import sync_event_search_vectors_to_supabase as sync
 
 
@@ -314,6 +315,74 @@ def test_gemini_embed_uses_shared_gateway_instead_of_direct_http() -> None:
             "output_dimensionality": 3,
         }
     ]
+
+
+def test_gemini_embed_waits_for_bounded_minute_bucket_then_retries() -> None:
+    calls: list[dict] = []
+    sleeps: list[float] = []
+
+    class FakeGateway:
+        async def embed_content_async(self, **kwargs):
+            calls.append(kwargs)
+            if len(calls) == 1:
+                raise RateLimitError(blocked_reason="rpm", retry_after_ms=2_000)
+            return ((0.4, 0.5), SimpleNamespace(total_tokens=5))
+
+    values = sync.gemini_embed(
+        "semantic query",
+        model="gemini-embedding-2",
+        dim=2,
+        client=FakeGateway(),
+        rate_limit_retries=2,
+        rate_limit_max_wait_seconds=5,
+        sleep_fn=sleeps.append,
+        jitter_fn=lambda: 0.1,
+    )
+
+    assert values == [0.4, 0.5]
+    assert len(calls) == 2
+    assert sleeps == [2.1]
+
+
+def test_gemini_embed_never_waits_for_day_level_exhaustion() -> None:
+    sleeps: list[float] = []
+
+    class FakeGateway:
+        async def embed_content_async(self, **_kwargs):
+            raise RateLimitError(blocked_reason="rpd", retry_after_ms=60_000)
+
+    with pytest.raises(RateLimitError, match="rpd"):
+        sync.gemini_embed(
+            "semantic query",
+            model="gemini-embedding-2",
+            dim=2,
+            client=FakeGateway(),
+            rate_limit_retries=3,
+            sleep_fn=sleeps.append,
+        )
+
+    assert sleeps == []
+
+
+def test_gemini_embed_rejects_wait_beyond_batch_budget() -> None:
+    sleeps: list[float] = []
+
+    class FakeGateway:
+        async def embed_content_async(self, **_kwargs):
+            raise RateLimitError(blocked_reason="tpm", retry_after_ms=66_000)
+
+    with pytest.raises(RateLimitError, match="tpm"):
+        sync.gemini_embed(
+            "semantic query",
+            model="gemini-embedding-2",
+            dim=2,
+            client=FakeGateway(),
+            rate_limit_retries=3,
+            rate_limit_max_wait_seconds=65,
+            sleep_fn=sleeps.append,
+        )
+
+    assert sleeps == []
 
 
 def test_unknown_admission_is_not_tagged_as_ticketed():
