@@ -9,6 +9,15 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Region Talk now restores missing grounded Telegram and VK copy for legacy
+  confirmed social candidates in bounded autonomous batches: Telegram uses an
+  idle role-scoped `DISCOVERY1/2` Telethon identity with both remote-kernel and
+  local-agent single-flight guards, VK uses exact read-only `wall.getById`, and
+  both reuse the current LLM writer through the shared Supabase limiter plus a
+  durable request budget. Operator notifications and ranked snapshots now fail
+  closed unless the complete Telegram/VK draft and support points exist; local
+  E2E/generic sessions remain excluded and future MTProto premium-emoji support
+  stays available behind the same role/session gate.
 - Smart Update event-vector catch-up now honors bounded shared-ledger RPM/TPM
   retry windows inside one projection instead of restarting the whole job every
   ten minutes; day-level exhaustion remains fail-closed.

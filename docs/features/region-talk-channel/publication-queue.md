@@ -351,6 +351,27 @@ projection is unavailable to social posts and fails closed on a missing or
 broken support reference. Social rows without a current grounded draft remain
 outside the schedule until the LLM-first writer has produced one.
 
+Legacy confirmed social rows are repaired by
+`scripts/region_talk_publication_draft_backfill.py` in bounded batches. For a
+Telegram URL it fetches the exact original message through an explicitly
+selected `telethon_discovery1` or `telethon_discovery2` identity; for a VK URL
+it uses the existing read-token chain and exact `wall.getById` identity. The
+source body is held only for the current writer call and is not restored into
+the compact terminal publication row. Gemini uses the same final-verifier /
+grounded-writer prompt and the shared Supabase limiter, plus a separate daily
+durable fingerprint budget. The original `llm_confirmed` or `sent_to_chat`
+verdict is monotonic: the backfill may add draft fields or a review/retry
+status, but never replace that historical verdict.
+
+The orchestrator exposes separate Telegram and VK actionable counts. Telegram
+defaults to `DISCOVERY2` because the continuously launched CandidateReport
+normally owns `DISCOVERY1`; either discovery transport is valid only while its
+mapped Kaggle notebook is verified idle. A per-auth-bundle local file lock also
+prevents two local agents from connecting the same StringSession after the
+same idle observation. Provider errors retry durably; three source-fetch
+failures become manual `source_text_unavailable`, while a semantic disagreement
+becomes manual review rather than an infinite paid retry loop.
+
 ## YDB state
 
 CandidateReport writes:
@@ -411,7 +432,8 @@ and the scheduled wrapper removes both from child environments. Before
 Telethon connects, the notifier rechecks the mapped Kaggle kernel and fails
 closed for active or unverified status. The selected account must already be a
 member of the numeric `REGION_TALK_NOTIFY_CHAT_ID`. The
-notifier sends unsent `llm_confirmed` links to the operator chat and deduplicates
+notifier sends only complete draft-ready unsent `llm_confirmed` candidates to
+the operator chat and deduplicates
 them by canonical post URL plus numeric chat id in
 `publication_delivery_item`. After Telegram acceptance it records chat and
 message ids and timestamps both in the delivery ledger and candidate row.
@@ -420,7 +442,9 @@ Finalizer/CandidateReport writers preserve these sent markers.
 Telethon delivery uses the durable ledger's stable `random_id`, allowing a
 crash-ambiguous `sending` row to be retried idempotently. This transport also
 keeps the MTProto entity surface available for future target-channel custom
-premium emoji. Bot API does not accept a caller-supplied idempotency key, so a pre-existing ambiguous
+premium emoji. The discovery identity is never connected merely to decorate a
+candidate: custom-emoji entities are optional and belong to the future public
+publisher after the same session-idle/lease gate. Bot API does not accept a caller-supplied idempotency key, so a pre-existing ambiguous
 `status=sending` is stopped for operator reconciliation instead of risking a
 duplicate. A successful Bot API response is persisted before the candidate is
 marked sent.

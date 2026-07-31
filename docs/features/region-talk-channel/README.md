@@ -209,6 +209,14 @@ the same Telethon discovery key concurrently. Region Talk does not use Bot API
 for reading public channel history and it never calls Telegram/VK
 **public-channel** publication APIs.
 
+The same role boundary applies to legacy publication-copy backfill. Exact
+Telegram bodies are refetched through an idle discovery identity (D2 by
+production default because CandidateReport normally owns D1), exact VK bodies
+through read-only `wall.getById`, and both go through the current grounded LLM
+writer. A local per-bundle lock protects against concurrent agents. Operator
+delivery and future MTProto public delivery can retain custom premium-emoji
+entity support without making a generic/E2E session part of Region Talk.
+
 ### Reuse existing Kaggle infrastructure
 
 Before implementation, the Region Talk runner must inspect and reuse existing repo patterns instead of writing a runner from scratch. Required local anchors:

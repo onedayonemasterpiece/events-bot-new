@@ -54,6 +54,16 @@ Operational contract:
 - store Telegram API response in `region_talk_publication_log`;
 - document rollback/edit/delete limitations.
 
+The future Telegram publisher may use MTProto instead of Bot API when custom
+premium emoji entities are editorially needed. Only
+`TELEGRAM_AUTH_BUNDLE_DISCOVERY1` / `DISCOVERY2` are eligible for that Region
+Talk path, and only after the mapped Kaggle notebook is verified idle and the
+per-bundle local lease is acquired. Generic `TELEGRAM_SESSION` and
+`TELEGRAM_AUTH_BUNDLE_E2E` remain Codex/manual-E2E inputs and are never passed
+to the functional publisher. Plain text remains the fallback; missing premium
+emoji capability must not block a publication. This is a transport contract,
+not an enabled target-channel publisher.
+
 ## VK target
 
 Target: future VK community for **«О Калининграде говорят»**.
@@ -108,3 +118,7 @@ Mitigations if community token is insufficient:
 - separate VK publisher dry-run;
 - fallback to text+link;
 - fallback to Telegram-only until VK image upload is validated.
+
+VK source-text restoration for the draft writer is a read-only operation and
+already uses exact `wall.getById` through the established service/user token
+priority. It neither grants nor implies permission to call `wall.post`.

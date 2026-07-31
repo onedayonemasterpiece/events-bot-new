@@ -31,6 +31,7 @@ from scripts.region_talk_goal_notify import (  # noqa: E402
     canonical_source_key_for_row,
     AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
     is_confirmed_publication,
+    is_publication_draft_ready,
     is_unsent_confirmed_publication,
     ensure_ydb_module,
     load_env,
@@ -2537,7 +2538,43 @@ def _publication_handoff_metrics(
     )
 
     confirmed_urls = {url for url, row in publication_by_url.items() if is_confirmed_publication(row)}
-    unsent_confirmed_urls = {url for url in confirmed_urls if is_unsent_confirmed_publication(publication_by_url[url])}
+    draft_ready_confirmed_urls = {
+        url for url in confirmed_urls if is_publication_draft_ready(publication_by_url[url])
+    }
+    draft_missing_confirmed_urls = confirmed_urls - draft_ready_confirmed_urls
+    draft_missing_telegram_urls = {
+        url for url in draft_missing_confirmed_urls
+        if re.fullmatch(r"https://t\.me/[^/]+/[0-9]+", url, re.I)
+    }
+    draft_missing_vk_urls = {
+        url for url in draft_missing_confirmed_urls
+        if re.fullmatch(r"https://vk\.com/wall-?[0-9]+_[0-9]+", url, re.I)
+    }
+
+    def draft_backfill_is_actionable(url: str) -> bool:
+        row = publication_by_url[url]
+        status = str(row.get("publication_draft_backfill_status") or "").lower()
+        if status in {
+            "ready", "llm_not_accepted", "needs_grounding_review",
+            "source_text_unavailable", "unsupported_surface",
+        }:
+            return False
+        retry_at = _parse_iso_datetime(row.get("publication_draft_backfill_next_attempt_after"))
+        return retry_at is None or retry_at <= now
+
+    draft_backfill_actionable_telegram_urls = {
+        url for url in draft_missing_telegram_urls if draft_backfill_is_actionable(url)
+    }
+    draft_backfill_actionable_vk_urls = {
+        url for url in draft_missing_vk_urls if draft_backfill_is_actionable(url)
+    }
+    draft_backfill_actionable_urls = (
+        draft_backfill_actionable_telegram_urls | draft_backfill_actionable_vk_urls
+    )
+    unsent_confirmed_urls = {
+        url for url in draft_ready_confirmed_urls
+        if is_unsent_confirmed_publication(publication_by_url[url])
+    }
     sent_urls = {
         url for url, row in publication_by_url.items()
         if str(row.get("sent_to_chat") or "").lower() == "true"
@@ -2573,6 +2610,14 @@ def _publication_handoff_metrics(
         # image-ready or ready_for_llm row is not publication-ready yet.
         "publication_ready_total": len(unsent_confirmed_urls),
         "publication_confirmed_total": len(confirmed_urls),
+        "publication_draft_ready_confirmed_total": len(draft_ready_confirmed_urls),
+        "publication_draft_missing_confirmed_total": len(draft_missing_confirmed_urls),
+        "publication_draft_missing_telegram_total": len(draft_missing_telegram_urls),
+        "publication_draft_missing_vk_total": len(draft_missing_vk_urls),
+        "publication_draft_backfill_actionable_total": len(draft_backfill_actionable_urls),
+        "publication_draft_backfill_actionable_telegram_total": len(draft_backfill_actionable_telegram_urls),
+        "publication_draft_backfill_actionable_vk_total": len(draft_backfill_actionable_vk_urls),
+        "publication_draft_backfill_actionable_urls": sorted(draft_backfill_actionable_urls),
         "publication_sent_total": len(sent_urls),
         "publication_unsent_confirmed_total": len(unsent_confirmed_urls),
         "publication_verifier_pending_total": sum(1 for status in status_by_url.values() if status == "ready_for_llm"),
@@ -3360,6 +3405,7 @@ PRODUCT_PROGRESS_METRIC_KEYS = (
     "image_actual_scored_total",
     "publication_candidate_total",
     "publication_confirmed_total",
+    "publication_draft_ready_confirmed_total",
     "publication_delivery_completed_total",
 )
 
@@ -4177,6 +4223,47 @@ def build_decision_plan(
     include_main: bool = True,
 ) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
+    if int(metrics.get("publication_draft_backfill_actionable_telegram_total") or 0) > 0:
+        draft_transport = str(
+            os.getenv("REGION_TALK_DRAFT_BACKFILL_TRANSPORT") or "telethon_discovery2"
+        ).strip()
+        draft_resource = NOTIFY_TRANSPORT_RESOURCES.get(draft_transport)
+        if draft_transport == "bot_api" or not draft_resource:
+            draft_transport = "telethon_discovery2"
+            draft_resource = NOTIFY_TRANSPORT_RESOURCES[draft_transport]
+        actions.append(_action(
+            "backfill_publication_drafts",
+            [
+                "python3",
+                "scripts/region_talk_publication_draft_backfill.py",
+                "--limit",
+                str(max(1, min(5, _env_int("REGION_TALK_DRAFT_BACKFILL_BATCH_SIZE", 2)))),
+                "--transport",
+                draft_transport,
+                "--surface",
+                "telegram",
+            ],
+            f"{int(metrics.get('publication_draft_backfill_actionable_telegram_total') or 0)} confirmed Telegram candidates need grounded publication copy",
+            resource=draft_resource,
+            parallel_safe=True,
+            timeout_seconds=300,
+        ))
+    if int(metrics.get("publication_draft_backfill_actionable_vk_total") or 0) > 0:
+        actions.append(_action(
+            "backfill_publication_drafts_vk",
+            [
+                "python3",
+                "scripts/region_talk_publication_draft_backfill.py",
+                "--limit",
+                str(max(1, min(5, _env_int("REGION_TALK_DRAFT_BACKFILL_VK_BATCH_SIZE", 2)))),
+                "--surface",
+                "vk",
+            ],
+            f"{int(metrics.get('publication_draft_backfill_actionable_vk_total') or 0)} confirmed VK candidates need grounded publication copy",
+            resource="local:vk-api",
+            parallel_safe=True,
+            timeout_seconds=300,
+        ))
     if int(metrics.get("publication_unsent_confirmed_total") or 0) > 0:
         notify_transport = str(os.getenv("REGION_TALK_NOTIFY_TRANSPORT") or "telethon_discovery2").strip()
         notify_resource = NOTIFY_TRANSPORT_RESOURCES.get(notify_transport)

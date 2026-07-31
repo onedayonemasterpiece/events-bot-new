@@ -145,6 +145,11 @@ def _compact_metrics(payload: Mapping[str, Any]) -> dict[str, int]:
     keys = (
         "publication_candidate_total",
         "publication_unsent_confirmed_total",
+        "publication_draft_ready_confirmed_total",
+        "publication_draft_missing_confirmed_total",
+        "publication_draft_backfill_actionable_total",
+        "publication_draft_backfill_actionable_telegram_total",
+        "publication_draft_backfill_actionable_vk_total",
         "publication_onboarding_ready_total",
         "bge_missing_current_sample_total",
         "image_pending_total",
