@@ -18,6 +18,11 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-31-region-talk-deploy-interrupted-sessions.md`
+  - Scope: Region Talk scheduled-run durability across Fly machine replacement.
+  - Must not regress: a crashed/missing latest slot is resumed automatically;
+    running/success sessions are never duplicated and recovery is bounded.
+
 - `INC-2026-07-31-region-talk-external-commerciality-regex.md`
   - Scope: Region Talk external research commerciality evidence and generic
     social ad/promo routing.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 import time
@@ -104,6 +105,7 @@ def test_scheduler_and_extract_do_not_import_main(monkeypatch):
         assert isinstance(scheduler, DummyScheduler)
         assert "main" not in sys.modules
         assert {"region_talk_0", "region_talk_1", "region_talk_2"} <= set(scheduler.jobs)
+        assert "region_talk_watchdog" in scheduler.jobs
         assert scheduler.jobs["region_talk_0"].kwargs["hour"] == "4"
         assert scheduler.jobs["region_talk_0"].kwargs["minute"] == "20"
         assert scheduling._ops_run_kind_for_job("region_talk") == "region_talk"
@@ -606,6 +608,7 @@ def test_runtime_health_status_reports_region_talk_jobs(monkeypatch):
                 "region_talk_0": Job("region_talk_0"),
                 "region_talk_1": Job("region_talk_1"),
                 "region_talk_2": Job("region_talk_2"),
+                "region_talk_watchdog": Job("region_talk_watchdog"),
             }
 
         def get_job(self, job_id: str):
@@ -620,6 +623,77 @@ def test_runtime_health_status_reports_region_talk_jobs(monkeypatch):
 
     assert payload["region_talk"] == "ok"
     assert payload["region_talk_next_run"] == "2026-07-31T19:20:00+00:00"
+    assert payload["region_talk_watchdog"] == "ok"
+
+
+def test_last_region_talk_slot_selects_latest_due_time(monkeypatch):
+    monkeypatch.setenv("REGION_TALK_TIMES_LOCAL", "06:20,13:20,21:20")
+    monkeypatch.setenv("REGION_TALK_TZ", "Europe/Kaliningrad")
+
+    _now_local, scheduled_local, scheduled_utc = scheduling._last_region_talk_slot(
+        datetime(2026, 7, 31, 20, 30, tzinfo=timezone.utc)
+    )
+
+    assert scheduled_local.isoformat() == "2026-07-31T21:20:00+02:00"
+    assert scheduled_utc.isoformat() == "2026-07-31T19:20:00+00:00"
+
+
+@pytest.mark.asyncio
+async def test_region_talk_watchdog_resumes_crashed_slot(monkeypatch):
+    monkeypatch.setenv("ENABLE_REGION_TALK_SCHEDULED", "1")
+    monkeypatch.setenv("REGION_TALK_TIMES_LOCAL", "06:20,13:20,21:20")
+    monkeypatch.setenv("REGION_TALK_TZ", "Europe/Kaliningrad")
+    monkeypatch.setattr(
+        scheduling,
+        "_region_talk_slot_runs",
+        lambda *_args, **_kwargs: asyncio.sleep(0, result=[("crashed", "scheduled")]),
+    )
+    calls = []
+
+    async def fake_run(db, bot, **kwargs):
+        calls.append((db, bot, kwargs))
+        return {"ok": True, "status": "success"}
+
+    monkeypatch.setattr(
+        "scripts.region_talk_scheduled_runner.run_region_talk_scheduled",
+        fake_run,
+    )
+    scheduling._region_talk_catchup_inflight.clear()
+
+    result = await scheduling.maybe_dispatch_region_talk_watchdog(
+        object(),
+        object(),
+        now_utc=datetime(2026, 7, 31, 20, 30, tzinfo=timezone.utc),
+    )
+
+    assert result is True
+    assert len(calls) == 1
+    assert calls[0][2]["ops_trigger"] == "watchdog_catchup"
+    assert calls[0][2]["scheduler_run_id"].startswith("watchdog-catchup-20260731T192000Z-")
+
+
+@pytest.mark.asyncio
+async def test_region_talk_watchdog_skips_running_or_completed_slot(monkeypatch):
+    monkeypatch.setenv("ENABLE_REGION_TALK_SCHEDULED", "1")
+    monkeypatch.setattr(
+        scheduling,
+        "_region_talk_slot_runs",
+        lambda *_args, **_kwargs: asyncio.sleep(
+            0,
+            result=[("crashed", "scheduled"), ("running", "watchdog_catchup")],
+        ),
+    )
+    run = AsyncMock()
+    monkeypatch.setattr("scripts.region_talk_scheduled_runner.run_region_talk_scheduled", run)
+
+    result = await scheduling.maybe_dispatch_region_talk_watchdog(
+        object(),
+        object(),
+        now_utc=datetime(2026, 7, 31, 20, 30, tzinfo=timezone.utc),
+    )
+
+    assert result is False
+    run.assert_not_awaited()
 
 
 def test_runtime_health_status_reports_email_worker_and_monitor(monkeypatch):

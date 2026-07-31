@@ -40,6 +40,14 @@ outside the legacy global heavy-job gate: CandidateReport/ImageDiagnostic use
 dedicated `DISCOVERY1`/`DISCOVERY2` sessions and every Region Talk resource has
 its own kernel/lock guard, so an unrelated long render cannot starve all three
 daily discovery slots.
+An independent `region_talk_watchdog` runs every five minutes. It reads the
+durable `ops_run` ledger for the latest due slot and, within a three-hour
+lookback, resumes a missing/crashed/failed session through the same wrapper.
+`running`/`success` rows, the wrapper's file lock and a six-attempt cap prevent
+duplicate or unbounded recovery. This makes a Fly deploy/process replacement a
+recoverable interruption instead of silently deferring discovery until the
+next day's slot. Health reports the watchdog separately while
+`region_talk_next_run` remains the next real daily slot.
 After each bounded orchestrator session, the runner recalculates the next
 14-day `1 article + 1 social post` selection plan in YDB. The planner uses
 actual target-publication history plus BGE anti-vector ordering, overwrites only

@@ -2719,6 +2719,7 @@ def runtime_health_status() -> dict[str, Any]:
         "email_outbox_worker": "disabled",
         "email_outbox_monitor": "disabled",
         "region_talk": "disabled",
+        "region_talk_watchdog": "disabled",
         "video_tomorrow": "disabled",
         "video_popular_review": "disabled",
         "video_popular_review_watchdog": "disabled",
@@ -2749,6 +2750,7 @@ def runtime_health_status() -> dict[str, Any]:
             payload["email_outbox_monitor"] = "missing_scheduler"
         if region_talk_enabled:
             payload["region_talk"] = "missing_scheduler"
+            payload["region_talk_watchdog"] = "missing_scheduler"
         if guide_enabled:
             payload["guide_excursions_light"] = "missing_scheduler"
             payload["guide_excursions_full"] = "missing_scheduler"
@@ -2804,7 +2806,8 @@ def runtime_health_status() -> dict[str, Any]:
             payload["region_talk"] = "lookup_error"
         if jobs or payload.get("region_talk") != "lookup_error":
             region_jobs = [
-                job for job in jobs if str(getattr(job, "id", "")).startswith("region_talk_")
+                job for job in jobs
+                if str(getattr(job, "id", "")).removeprefix("region_talk_").isdigit()
             ]
             if not region_jobs:
                 idx = 0
@@ -2825,6 +2828,7 @@ def runtime_health_status() -> dict[str, Any]:
                 payload["region_talk_next_run"] = (
                     first_next.isoformat() if hasattr(first_next, "isoformat") else str(first_next)
                 )
+        _set_job_health("region_talk_watchdog", "region_talk_watchdog")
 
     if vk_auto_import_enabled:
         try:
@@ -3117,6 +3121,135 @@ async def _run_startup_catchups(db: Any, bot: Any) -> None:
         await _enqueue_static_site_calendar_refresh(db, trigger="startup_catchup")
     except Exception:
         logging.exception("SCHED static site startup catch-up failed")
+
+
+_region_talk_catchup_inflight: set[str] = set()
+
+
+def _last_region_talk_slot(now_utc: datetime) -> tuple[datetime, datetime, datetime] | None:
+    times_raw = os.getenv("REGION_TALK_TIMES_LOCAL", "06:20,13:20,21:20").strip()
+    tz_name = os.getenv("REGION_TALK_TZ", "Europe/Kaliningrad").strip()
+    candidates: list[tuple[datetime, datetime, datetime]] = []
+    for raw in times_raw.split(","):
+        value = raw.strip()
+        if not value:
+            continue
+        try:
+            hour, minute = map(int, value.split(":"))
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                raise ValueError
+        except ValueError:
+            continue
+        candidates.append(_last_local_slot(
+            now_utc=now_utc,
+            tz_name=tz_name,
+            time_raw=value,
+            default_hour=hour,
+            default_minute=minute,
+            label="REGION_TALK_TIMES_LOCAL",
+        ))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item[2])
+
+
+async def _region_talk_slot_runs(
+    db: Any,
+    *,
+    window_start_utc: datetime,
+    window_end_utc: datetime,
+) -> list[tuple[str, str]]:
+    if db is None or not hasattr(db, "raw_conn"):
+        return []
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT status, trigger
+            FROM ops_run
+            WHERE kind = 'region_talk'
+              AND started_at >= ?
+              AND started_at < ?
+            ORDER BY id DESC
+            """,
+            (_utc_sql_text(window_start_utc), _utc_sql_text(window_end_utc)),
+        )
+        rows = await cur.fetchall()
+    return [(str(status or "").strip(), str(trigger or "").strip()) for status, trigger in rows]
+
+
+async def maybe_dispatch_region_talk_watchdog(
+    db: Any,
+    bot: Any,
+    *,
+    now_utc: datetime | None = None,
+) -> bool:
+    """Resume the latest Region Talk slot after a deploy/process interruption."""
+
+    if not _env_enabled("ENABLE_REGION_TALK_SCHEDULED", default=False):
+        return False
+    current = now_utc or datetime.now(timezone.utc)
+    slot = _last_region_talk_slot(current)
+    if slot is None:
+        return False
+    now_local, scheduled_local, scheduled_utc = slot
+    try:
+        grace_seconds = max(60, min(1800, int(
+            (os.getenv("REGION_TALK_WATCHDOG_GRACE_SECONDS") or "300").strip()
+        )))
+        lookback_seconds = max(900, min(14400, int(
+            (os.getenv("REGION_TALK_CATCHUP_LOOKBACK_SECONDS") or "10800").strip()
+        )))
+        max_attempts = max(1, min(10, int(
+            (os.getenv("REGION_TALK_CATCHUP_MAX_ATTEMPTS") or "6").strip()
+        )))
+    except ValueError:
+        grace_seconds, lookback_seconds, max_attempts = 300, 10800, 6
+    if current <= scheduled_utc + timedelta(seconds=grace_seconds):
+        return False
+    if current - scheduled_utc > timedelta(seconds=lookback_seconds):
+        return False
+
+    window_start = scheduled_utc - timedelta(minutes=5)
+    rows = await _region_talk_slot_runs(
+        db,
+        window_start_utc=window_start,
+        window_end_utc=current + timedelta(seconds=1),
+    )
+    relevant_triggers = {"scheduled", "startup_catchup", "watchdog_catchup"}
+    relevant = [(status, trigger) for status, trigger in rows if trigger in relevant_triggers]
+    if any(status in {"running", "success"} for status, _trigger in relevant):
+        return False
+    if len(relevant) >= max_attempts:
+        logging.error(
+            "SCHED Region Talk catch-up retry cap reached scheduled_local=%s attempts=%s",
+            scheduled_local.isoformat(),
+            len(relevant),
+        )
+        return False
+
+    catchup_key = scheduled_local.isoformat()
+    if catchup_key in _region_talk_catchup_inflight:
+        return False
+    from scripts.region_talk_scheduled_runner import run_region_talk_scheduled
+
+    _region_talk_catchup_inflight.add(catchup_key)
+    try:
+        run_id = f"watchdog-catchup-{scheduled_utc.strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex}"
+        logging.error(
+            "SCHED Region Talk watchdog resuming interrupted slot scheduled_local=%s now_local=%s run_id=%s",
+            scheduled_local.isoformat(),
+            now_local.isoformat(),
+            run_id,
+        )
+        result = await run_region_talk_scheduled(
+            db,
+            bot,
+            scheduler_run_id=run_id,
+            ops_trigger="watchdog_catchup",
+        )
+        return bool(result.get("ok") or result.get("status") == "skipped")
+    finally:
+        _region_talk_catchup_inflight.discard(catchup_key)
 
 
 class BatchProgress:
@@ -3924,6 +4057,33 @@ def startup(
             )
         if not registered_times:
             logging.error("SCHED Region Talk enabled but no valid REGION_TALK_TIMES_LOCAL entries")
+        try:
+            watchdog_seconds = max(60, min(900, int(
+                (os.getenv("REGION_TALK_WATCHDOG_INTERVAL_SECONDS") or "300").strip()
+            )))
+        except ValueError:
+            watchdog_seconds = 300
+
+        async def region_talk_watchdog(db_obj, bot_obj, *, run_id: str | None = None) -> None:
+            del run_id
+            await maybe_dispatch_region_talk_watchdog(db_obj, bot_obj)
+
+        _register_job(
+            "region_talk_watchdog",
+            _job_wrapper(
+                "region_talk_watchdog",
+                region_talk_watchdog,
+                notify_skip=_notify_admin_skip,
+            ),
+            "interval",
+            id="region_talk_watchdog",
+            seconds=watchdog_seconds,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=60,
+        )
     else:
         logging.info("SCHED skipping Region Talk autonomy (ENABLE_REGION_TALK_SCHEDULED!=1)")
 

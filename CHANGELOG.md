@@ -9,6 +9,10 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Region Talk now has a durable five-minute scheduler watchdog that resumes the
+  latest due 90-minute session after a Fly deploy/process interruption, while
+  running/success ledger guards, the existing file lock, a three-hour lookback
+  and a bounded retry cap prevent duplicate or runaway catch-ups.
 - Region Talk operator delivery can now use the role-scoped `DISCOVERY2`
   Telethon identity instead of depending on bot membership in the review chat;
   planner and notifier both fail closed while ImageDiagnostic owns that auth
