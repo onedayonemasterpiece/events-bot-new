@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Prevented Telegram Monitoring and Smart Update from turning generic
+  Kaliningrad-region 80th-anniversary wording into the specific «80 историй о
+  главном» campaign; added literal-anchor guards, incident replay coverage and
+  a production association-audit contract.
 - Focus-group private routes now add `nosnippet` in immutable secret-candidate builds, satisfying the candidate-wide robots contract without changing production root indexing.
 
 ### Added

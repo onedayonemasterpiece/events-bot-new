@@ -206,6 +206,12 @@ Guidelines:
   an address like "Музейная аллея", weekdays, dates, or times. If it announces attendee-facing
   lectures, shows, talks, workshops, excursions, or festival program slots with concrete dates/times,
   extract those events even when they happen at a museum or library.
+- The KGD80 campaign field `festival="80 историй о главном"` requires a literal
+  campaign anchor in the current input: the exact name (including a
+  separator-style hashtag) or `kgd80.ru`. Generic regional-anniversary wording
+  such as «80-летие Калининградской области» / «80 лет области» is not that
+  campaign and must leave `festival` empty. A curated source explicitly bound
+  to the KGD80 series remains valid context.
 - Do NOT use historical/background dates from a story, exhibit text, document quote, or noisy poster OCR
   as the event date. For example, a line like "9 октября 1947 года..." inside an exhibition narrative is
   historical content, not an upcoming schedule anchor. If the source only says an exhibition already opened
