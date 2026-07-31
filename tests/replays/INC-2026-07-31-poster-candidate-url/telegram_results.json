@@ -1,0 +1,288 @@
+{
+  "schema_version": 2,
+  "run_id": "video-release-20260731-meowafisha",
+  "generated_at": "2026-07-31T17:02:08.193251+00:00",
+  "sources_meta": [
+    {
+      "username": "meowafisha",
+      "source_type": "channel",
+      "title": "MEOW Афиша | Калининград",
+      "about": "Твоя самая ласковая афиша 🐾\n\n➡️ MEOW Афиша в VK https://vk.ru/im/channels/-240090157\n\n😸 Шайка Meow Records https://instagram.com/meow_records_39\n\n📫 По вопросам сотрудничества @zhankovaelena",
+      "about_links": [
+        "https://vk.ru/im/channels/-240090157",
+        "https://instagram.com/meow_records_39"
+      ],
+      "fetched_at": "2026-07-31T17:00:37Z",
+      "meta_hash": "sha256:3e1ccd3eb43596ba8c33a5d08138f6c9b87a216533db3b59c72816abcfb75d8a",
+      "suggestions": {
+        "is_festival_channel": false,
+        "festival_series": "",
+        "website_url": "",
+        "aliases": [
+          "MEOW Афиша"
+        ],
+        "confidence": 0.8,
+        "rationale_short": "The channel is a local event guide (afisha) for Kaliningrad, not a festival channel."
+      }
+    }
+  ],
+  "messages": [
+    {
+      "source_username": "meowafisha",
+      "source_type": "channel",
+      "source_chat_id": 1719804061,
+      "source_title": "MEOW Афиша | Калининград",
+      "message_id": 8101,
+      "message_date": "2026-07-30T18:44:45+00:00",
+      "grouped_id": null,
+      "has_video": true,
+      "video_status": "accepted",
+      "post_author": {
+        "user_id": null,
+        "username": "meowafisha",
+        "display_name": "MEOW Афиша | Калининград",
+        "is_user": false,
+        "is_channel": true,
+        "is_chat": false
+      },
+      "source_link": "https://t.me/meowafisha/8101",
+      "text": "31.07 | Практика\n\nВ эту пятницу за пультом в Bus Station DJ’s Statkevich, Bella и Remarque. Раздают хаус «с берлинским оттенком».\n\nСтарт в 22.00\nВход свободный \n\n📍Bus Station, Генделя 3а\n➡️ More info\n#meowafisha\n#meow3107",
+      "ocr_text": null,
+      "metrics": {
+        "views": 1039,
+        "likes": 11,
+        "comments": 0,
+        "channel_median_views": 967,
+        "channel_median_likes": 12
+      },
+      "links": [
+        {
+          "url": "https://www.instagram.com/reel/DbX1kOxyjO3/?igsh=MTQ5ZXNwcndmbXQ0MA==",
+          "text": "ore info",
+          "source": "entity"
+        }
+      ],
+      "posters": [],
+      "videos": [
+        {
+          "cdn_url": "https://static.kenigevents.ru/v/video/v1/40/40d9b68ce40918fba9a1ab432cb00550d7da5bfe6b4c4a19807f13271ce5a60c.mp4",
+          "cdn_path": "v/video/v1/40/40d9b68ce40918fba9a1ab432cb00550d7da5bfe6b4c4a19807f13271ce5a60c.mp4",
+          "supabase_url": "https://static.kenigevents.ru/v/video/v1/40/40d9b68ce40918fba9a1ab432cb00550d7da5bfe6b4c4a19807f13271ce5a60c.mp4",
+          "supabase_path": "v/video/v1/40/40d9b68ce40918fba9a1ab432cb00550d7da5bfe6b4c4a19807f13271ce5a60c.mp4",
+          "sha256": "40d9b68ce40918fba9a1ab432cb00550d7da5bfe6b4c4a19807f13271ce5a60c",
+          "size_bytes": 4258199,
+          "mime_type": "video/mp4",
+          "width": 720,
+          "height": 1280,
+          "duration_seconds": 53.241,
+          "source_url": "https://t.me/meowafisha/8101",
+          "aesthetic_score": 82.25,
+          "technical_score": 85,
+          "visual_score": 80,
+          "motion_score": 85,
+          "legibility_score": 75,
+          "usefulness_score": 90,
+          "score_confidence": 0.85,
+          "event_relevance_score": 100.0,
+          "event_relevance_scores": [
+            {
+              "event_index": 0,
+              "relevance_score": 100.0,
+              "relation_confidence": 1.0,
+              "ranking_score": 87.06,
+              "reason": "Ролик содержит все ключевые данные о событии: название, имена диджеев, локацию, дату и время."
+            }
+          ],
+          "showcase_score": 82.75,
+          "ranking_score": 87.06,
+          "description": "Динамичный промо-ролик для вечеринки «Практика» в Bus Station. Видео выполнено в стиле «road movie»: герои (диджеи Statkevich, Bella и Remarque) едут в машине, создавая атмосферу подготовки к событию. Монтаж быстрый, с использованием крупных планов и титров с именами артистов. В конце представлена вся необходимая информация о дате, времени и месте проведения.",
+          "search_text": "Динамичный промо-ролик для вечеринки «Практика» в Bus Station. Видео выполнено в стиле «road movie»: герои (диджеи Statkevich, Bella и Remarque) едут в машине, создавая атмосферу подготовки к событию. Монтаж быстрый, с использованием крупных планов и титров с именами артистов. В конце представлена вся необходимая информация о дате, времени и месте проведения. REMARQUE STATKEVICH BELLA SPRT 001 PRAKTIKA BUS STATION INFO: 31 JULY 22:00 ГЕНДЕЛЯ 3А вечеринка хаус диджей афиша промо Bus Station Калининград электронная музыка ночная жизнь танцы",
+          "analysis_model": "gemini-3.1-flash-lite",
+          "analysis_version": "video-showcase-v2",
+          "analysis_json": {
+            "schema_version": 1,
+            "sha256": "40d9b68ce40918fba9a1ab432cb00550d7da5bfe6b4c4a19807f13271ce5a60c",
+            "decision": "accepted",
+            "analysis_model": "gemini-3.1-flash-lite",
+            "analysis_version": "video-showcase-v2",
+            "analyzed_at": "2026-07-31T17:01:57.073944+00:00",
+            "analysis": {
+              "v": 1,
+              "description": "Динамичный промо-ролик для вечеринки «Практика» в Bus Station. Видео выполнено в стиле «road movie»: герои (диджеи Statkevich, Bella и Remarque) едут в машине, создавая атмосферу подготовки к событию. Монтаж быстрый, с использованием крупных планов и титров с именами артистов. В конце представлена вся необходимая информация о дате, времени и месте проведения.",
+              "visible_text": [
+                "REMARQUE",
+                "STATKEVICH",
+                "BELLA",
+                "SPRT 001",
+                "PRAKTIKA",
+                "BUS STATION",
+                "INFO:",
+                "31 JULY",
+                "22:00",
+                "ГЕНДЕЛЯ 3А"
+              ],
+              "tags": [
+                "вечеринка",
+                "хаус",
+                "диджей",
+                "афиша",
+                "промо",
+                "Bus Station",
+                "Калининград",
+                "электронная музыка",
+                "ночная жизнь",
+                "танцы"
+              ],
+              "scores": {
+                "technical": 85,
+                "visual": 80,
+                "motion": 85,
+                "legibility": 75,
+                "usefulness": 90
+              },
+              "technical_score": 85,
+              "visual_score": 80,
+              "motion_score": 85,
+              "legibility_score": 75,
+              "usefulness_score": 90,
+              "legibility_applicable": true,
+              "muted_ok": true,
+              "best_frame_sec": 43.5,
+              "pros": [
+                "отличная стилизация под тематику события",
+                "четкое представление всех артистов",
+                "информативный финальный кадр"
+              ],
+              "cons": [
+                "быстрая смена кадров затрудняет чтение имен",
+                "некоторые титры наложены на пестрый фон"
+              ],
+              "risk_flags": [],
+              "score_confidence": 0.85,
+              "events": [
+                {
+                  "id": "event-0",
+                  "event_index": 0,
+                  "relevance_score": 100,
+                  "relation_confidence": 1.0,
+                  "reason": "Ролик содержит все ключевые данные о событии: название, имена диджеев, локацию, дату и время.",
+                  "contradictions": [],
+                  "ranking_score": 87.06
+                }
+              ],
+              "event_matches": [
+                {
+                  "id": "event-0",
+                  "event_index": 0,
+                  "relevance_score": 100,
+                  "relation_confidence": 1.0,
+                  "reason": "Ролик содержит все ключевые данные о событии: название, имена диджеев, локацию, дату и время.",
+                  "contradictions": [],
+                  "ranking_score": 87.06
+                }
+              ],
+              "aesthetic_score": 82.25,
+              "showcase_score": 82.75,
+              "search_text": "Динамичный промо-ролик для вечеринки «Практика» в Bus Station. Видео выполнено в стиле «road movie»: герои (диджеи Statkevich, Bella и Remarque) едут в машине, создавая атмосферу подготовки к событию. Монтаж быстрый, с использованием крупных планов и титров с именами артистов. В конце представлена вся необходимая информация о дате, времени и месте проведения. REMARQUE STATKEVICH BELLA SPRT 001 PRAKTIKA BUS STATION INFO: 31 JULY 22:00 ГЕНДЕЛЯ 3А вечеринка хаус диджей афиша промо Bus Station Калининград электронная музыка ночная жизнь танцы"
+            },
+            "source_event_count": 1,
+            "matched_event_fingerprints": [
+              "практика|2026-07-31"
+            ],
+            "event_relations_by_fingerprint": {
+              "практика|2026-07-31": {
+                "relevance_score": 100.0,
+                "relation_confidence": 1.0,
+                "ranking_score": 87.06,
+                "reason": "Ролик содержит все ключевые данные о событии: название, имена диджеев, локацию, дату и время.",
+                "contradictions": []
+              }
+            },
+            "source_url": "https://t.me/meowafisha/8101",
+            "rights_policy": {
+              "status": "allowed",
+              "basis": "configured_source_allowlist",
+              "source_username": "meowafisha"
+            },
+            "source_video_meta": {
+              "width": 720,
+              "height": 1280,
+              "duration_seconds": 53.241,
+              "size_bytes": 4258199,
+              "mime_type": "video/mp4"
+            }
+          },
+          "analysis_status": "accepted",
+          "event_indexes": [
+            0
+          ],
+          "status": "accepted"
+        }
+      ],
+      "events": [
+        {
+          "title": "Практика",
+          "date": "2026-07-31",
+          "time": "22:00",
+          "end_date": "",
+          "location_name": "Bus Station",
+          "location_address": "Генделя 3а",
+          "city": "Калининград",
+          "ticket_link": "",
+          "ticket_status": "",
+          "raw_excerpt": "В эту пятницу за пультом в Bus Station DJ’s Statkevich, Bella и Remarque. Раздают хаус «с берлинским оттенком».",
+          "event_type": "концерт",
+          "emoji": "🎧",
+          "is_free": true,
+          "search_digest": "DJ-сеты от Statkevich, Bella и Remarque в Bus Station",
+          "festival": ""
+        }
+      ]
+    },
+    {
+      "source_username": "meowafisha",
+      "source_type": "channel",
+      "source_chat_id": 1719804061,
+      "source_title": "MEOW Афиша | Калининград",
+      "message_id": 8096,
+      "message_date": "2026-07-29T18:32:02+00:00",
+      "grouped_id": null,
+      "has_video": true,
+      "video_status": "skipped:no_event",
+      "post_author": {
+        "user_id": null,
+        "username": "meowafisha",
+        "display_name": "MEOW Афиша | Калининград",
+        "is_user": false,
+        "is_channel": true,
+        "is_chat": false
+      },
+      "source_link": "https://t.me/meowafisha/8096",
+      "text": "01.08 | День рождения PULSE\n\nЭлектронный танцевальный проект PULSE отмечает год вечеринкой совместно с ребятками из Come with Us.\n\n«Танцевальные ритмы disco и house: от приятного soulful до эстетики редкого lo-fi-звучания для посвященных».\n\nLine up:\nV.Kan\nArsenio\nDp/dt\n\nСтарт в 23.00\nВход свободный \n\n📍Терапия, Мира 31\n➡️ More info\n#meowafisha\n#meow0108",
+      "ocr_text": null,
+      "metrics": {
+        "views": 895,
+        "likes": 13,
+        "comments": 0,
+        "channel_median_views": 967,
+        "channel_median_likes": 12
+      },
+      "links": [
+        {
+          "url": "https://t.me/pulse_kld/295",
+          "text": "ore info",
+          "source": "entity"
+        }
+      ],
+      "posters": [],
+      "videos": [],
+      "events": []
+    }
+  ],
+  "stats": {
+    "sources_total": 1,
+    "messages_scanned": 2,
+    "messages_with_events": 1,
+    "events_extracted": 1
+  }
+}

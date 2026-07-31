@@ -5,8 +5,10 @@
 ### Fixed
 - Fixed a production Smart Update crash introduced by KGD80 provenance
   grounding: poster evidence now reads the real managed/source URL fields
-  instead of nonexistent `PosterCandidate.url`, with a poster-bearing VK replay
-  guarding the persistence boundary.
+  instead of nonexistent `PosterCandidate.url`; poster-bearing VK and exact
+  `@meowafisha` Telegram replays guard real Smart Update plus accepted-video
+  M:N persistence, and the incident contract requires current-day source/VK
+  catch-up.
 - Region Talk functional operator notification is now Bot API-only in every
   environment; its notifier has no Telethon/human-session transport, and the
   scheduled wrapper strips `TELEGRAM_AUTH_BUNDLE_E2E` and generic
