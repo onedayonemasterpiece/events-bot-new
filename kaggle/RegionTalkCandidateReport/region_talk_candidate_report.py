@@ -2967,16 +2967,59 @@ def compact_region_talk_checkpoint_for_ydb(compact: dict[str, Any]) -> dict[str,
     }
 
 
+def kaggle_ydb_pip_spec() -> str:
+    # Install only the core client.  Service-account JWT exchange is performed
+    # below through the official IAM REST API, avoiding the much larger ``yc``
+    # extra that upgrades Kaggle's shared native dependencies mid-process.
+    return (os.getenv("REGION_TALK_KAGGLE_YDB_PIP_SPEC") or "ydb==3.31.2").strip()
+
+
 def ensure_ydb_module() -> Any:
     try:
         import ydb  # type: ignore
         return ydb
     except Exception:
         if getenv_bool("REGION_TALK_AUTO_INSTALL", True):
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "ydb[yc]"])
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", kaggle_ydb_pip_spec()])
             import ydb  # type: ignore
             return ydb
         raise
+
+
+def service_account_iam_token(key_json: str) -> str:
+    """Exchange an authorized-key JWT through the documented IAM REST API."""
+    try:
+        import jwt  # type: ignore
+    except ImportError:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "PyJWT==2.10.1"])
+        import jwt  # type: ignore
+    key = json.loads(key_json)
+    key_id = str(key.get("id") or "").strip()
+    service_account_id = str(key.get("service_account_id") or "").strip()
+    private_key = str(key.get("private_key") or "").strip()
+    if not key_id or not service_account_id or not private_key:
+        raise RuntimeError("YDB service-account key is missing id/service_account_id/private_key")
+    token_url = "https://iam.api.cloud.yandex.net/iam/v1/tokens"
+    now = int(time.time())
+    signed_jwt = jwt.encode(
+        {"iss": service_account_id, "aud": token_url, "iat": now, "exp": now + 3600},
+        private_key,
+        algorithm="PS256",
+        headers={"typ": "JWT", "alg": "PS256", "kid": key_id},
+    )
+    request = urllib.request.Request(
+        token_url,
+        data=json.dumps({"jwt": signed_jwt}).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    timeout = max(5, min(60, getenv_int("REGION_TALK_YDB_IAM_TOKEN_TIMEOUT_SECONDS", 20)))
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec B310 - fixed official IAM endpoint
+        payload = json.loads(response.read().decode("utf-8"))
+    token = str(payload.get("iamToken") or "").strip()
+    if not token:
+        raise RuntimeError("Yandex IAM token response did not contain iamToken")
+    return token
 
 
 def ydb_credentials(ydb: Any) -> Any:
@@ -2985,12 +3028,7 @@ def ydb_credentials(ydb: Any) -> Any:
         return ydb.AccessTokenCredentials(token)
     key_json = (os.getenv("REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON") or "").strip()
     if key_json:
-        import tempfile
-        import ydb.iam  # type: ignore
-        fd, path = tempfile.mkstemp(prefix="region-talk-ydb-sa-", suffix=".json")
-        os.close(fd)
-        Path(path).write_text(key_json, encoding="utf-8")
-        return ydb.iam.ServiceAccountCredentials.from_file(path)
+        return ydb.AccessTokenCredentials(service_account_iam_token(key_json))
     if os.getenv("YDB_USER"):
         return ydb.StaticCredentials.from_user_password(os.getenv("YDB_USER"), os.getenv("YDB_PASSWORD", ""))
     return ydb.credentials_from_env_variables()

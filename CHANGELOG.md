@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Region Talk Kaggle workers now install the pinned core YDB SDK rather than
+  the unnecessary `yc` extra and exchange their authorized-key JWT through the
+  official IAM REST endpoint, preventing runtime replacement of Kaggle's
+  preloaded cryptography/protobuf stack during service-account authentication.
 - Region Talk Kaggle script kernels now opt out of the shared sibling-file
   status wrapper: Kaggle uploads only the configured `code_file` body, while
   these self-contained workers already emit their own durable YDB heartbeats.
