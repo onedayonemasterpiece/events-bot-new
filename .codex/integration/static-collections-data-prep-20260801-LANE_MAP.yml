@@ -1,0 +1,168 @@
+mode: worktree_worker_then_serial_integrator
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/main@59d5edd520bdd75f097832f5017ad6ea695b172d
+base_branch: origin/main
+integration_branch: integration/static-collections-data-prep-20260801
+integration_worktree: /home/dev/.codex/worktrees/events-bot-new/static-collections-data-prep-20260801
+analysis_commits:
+  - 7ffd5b8b
+  - ada86072
+  - c01e0ade
+global_constraints:
+  - data-prep only; no Astro routes, navigation, sitemap or public rollout
+  - do not modify cinema source pipelines or festival extraction/pages
+  - Fly SQLite remains canonical core event source; no new Supabase core reads
+  - all writable lanes use isolated branches/worktrees and commit their changes
+  - workers must not revert or absorb concurrent changes from other project agents
+  - integrator owns exporter wiring, shared docs, CHANGELOG and final reconciliation
+verification_owner: root integrator
+stop_conditions:
+  - schema migration is not backward compatible
+  - semantic compute can silently disable a published collection
+  - a lane requires production writes or deploy without a reviewed integration commit
+  - current origin/main introduces overlapping unreviewed changes in owned files
+requirements:
+  R01:
+    requirement: club registry updates, durable relations and six-calendar-month show/hide lifecycle
+    area: core SQLite + exporter
+    dependencies: []
+    conflict_risk: high
+    done_when: six approved clubs visible on 2026-08-01 fixture; dormant/reactivation, hash match and retry semantics tested
+  R02:
+    requirement: shared place/organization registry and exact theatre/venue membership with reasons
+    area: static data adapters
+    dependencies: []
+    conflict_risk: medium
+    done_when: eight theatres and six venue pilots resolve by exact structured evidence; exclusions fail closed
+  R03:
+    requirement: strict +15m Smart Update trailing debounce and one in-builder BGE run
+    area: outbox + StaticSiteBuilder
+    dependencies: []
+    conflict_risk: high
+    done_when: one running plus one rearmed pending job; operator/calendar overrides tested; no second kernel
+  R04:
+    requirement: source-bound admission correction, targeted replay and no ticket_status re-inference
+    area: Event schema + Smart Update + exporter
+    dependencies: []
+    conflict_risk: very_high
+    done_when: true->paid, unknown preservation, manual lock, donation and 5370/7145/7244/7246/7247/7287 replays tested
+  R05:
+    requirement: grounded audience decision and structured people appearances without a fat global prompt
+    area: Smart Update LLM facts
+    dependencies: [R04]
+    conflict_risk: very_high
+    done_when: versioned hash-bound schemas, abstention and candidate-only evaluation tests exist
+  R06:
+    requirement: shared evidence-only BGE cache and collection-batch-v1 receipts independent of publication flags
+    area: exporter + Kaggle runner
+    dependencies: [R03]
+    conflict_risk: very_high
+    done_when: per-label compute/quality/publication status, float32 cache, independent prototype invalidation and last-good gates tested
+  R07:
+    requirement: integrate lanes, update canonical docs/CHANGELOG, run acceptance and push durable branch
+    area: integration
+    dependencies: [R01, R02, R03, R04, R05, R06]
+    conflict_risk: very_high
+    done_when: every lane disposition recorded; targeted/full tests and diff audit complete; branch pushed
+lanes:
+  - id: W_CLUBS
+    role: worker
+    effort: high
+    requirement_ids: [R01]
+    target: club relation reliability and projection
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-collections-data-prep/W_CLUBS
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collections-W_CLUBS
+    writable_files:
+      - interest_clubs.py
+      - static_site_release.py
+      - site/scripts/export-production-preview-data.py
+      - tests/test_interest_clubs.py
+      - tests/test_static_site_release.py
+      - tests/fixtures/interest_clubs_*
+      - .codex/lanes/static-collections-W_CLUBS/RESULTS.md
+    forbidden_files: [main.py, models.py, db.py, smart_event_update.py, CHANGELOG.md, docs]
+    expected_output: committed club lifecycle/reliability implementation and tests
+    verification_scope: targeted
+    status: planned
+  - id: W_REGISTRY
+    role: worker
+    effort: high
+    requirement_ids: [R02]
+    target: independent exact entity registry module and tests
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-collections-data-prep/W_REGISTRY
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collections-W_REGISTRY
+    writable_files:
+      - site/scripts/static_place_org_registry.v1.json
+      - site/scripts/static_place_org_registry.py
+      - tests/test_static_place_org_registry.py
+      - tests/fixtures/static_place_org_registry_*
+      - .codex/lanes/static-collections-W_REGISTRY/RESULTS.md
+    forbidden_files: [site/scripts/export-production-preview-data.py, smart_event_update.py, main.py, models.py, db.py, CHANGELOG.md, docs]
+    expected_output: committed registry, deterministic resolver and fixtures
+    verification_scope: targeted
+    status: planned
+  - id: W_FACTS
+    role: worker
+    effort: extra-high-required_using-high
+    requirement_ids: [R04, R05]
+    target: backward-compatible factual decision storage and Smart Update merge/extraction
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-collections-data-prep/W_FACTS
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collections-W_FACTS
+    writable_files:
+      - models.py
+      - db.py
+      - alembic/versions/*static_collection_facts*.py
+      - smart_event_update.py
+      - tests/test_smart_event_update.py
+      - tests/test_event_update_merge.py
+      - tests/fixtures/static_collection_facts_*
+      - .codex/lanes/static-collections-W_FACTS/RESULTS.md
+    forbidden_files: [main.py, interest_clubs.py, site/scripts/export-production-preview-data.py, kaggle, CHANGELOG.md, docs]
+    expected_output: committed admission/audience/people schemas, merge logic and targeted tests
+    verification_scope: targeted
+    status: planned
+  - id: W_SEMANTIC
+    role: worker
+    effort: extra-high-required_using-high
+    requirement_ids: [R03, R06]
+    target: debounce, in-builder always-compute semantics and receipt contract excluding exporter wiring
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-collections-data-prep/W_SEMANTIC
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collections-W_SEMANTIC
+    writable_files:
+      - main.py
+      - site/scripts/static_event_bge.py
+      - site/scripts/unusual_event_semantics.py
+      - site/scripts/static_collection_batch.py
+      - kaggle/StaticSiteBuilder/static_site_builder.py
+      - scripts/run_static_site_builder_kaggle.py
+      - tests/test_static_site_build_debounce.py
+      - tests/test_static_event_bge.py
+      - tests/test_unusual_event_semantics.py
+      - tests/test_static_collection_batch.py
+      - .codex/lanes/static-collections-W_SEMANTIC/RESULTS.md
+    forbidden_files: [site/scripts/export-production-preview-data.py, smart_event_update.py, models.py, db.py, interest_clubs.py, CHANGELOG.md, docs]
+    expected_output: committed scheduling/semantic primitives and tests; explicit exporter integration notes
+    verification_scope: targeted
+    status: planned
+  - id: INTEGRATOR
+    role: merge_reviewer
+    effort: extra-high-required_using-high
+    requirement_ids: [R07]
+    target: cherry-pick, exporter/schema wiring, docs/changelog and full validation
+    depends_on: [W_CLUBS, W_REGISTRY, W_FACTS, W_SEMANTIC]
+    execution_mode: serial_after_dependency
+    branch: integration/static-collections-data-prep-20260801
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collections-data-prep-20260801
+    writable_files: [all integration-conflict files, docs, CHANGELOG.md, .codex/integration]
+    forbidden_files: []
+    expected_output: integrated pushed branch and INTEGRATION_REPORT
+    verification_scope: full_local
+    status: in_progress
