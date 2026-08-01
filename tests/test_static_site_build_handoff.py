@@ -15,6 +15,25 @@ def _arg_after(cmd: list[str], name: str) -> str:
     return cmd[cmd.index(name) + 1]
 
 
+def test_publication_workspace_uses_ephemeral_scratch_and_cleans_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import main
+
+    scratch = tmp_path / "publication-scratch"
+    scratch.mkdir()
+    monkeypatch.setenv("STATIC_SITE_PUBLICATION_SCRATCH_DIR", str(scratch))
+    workspace = main._static_site_publication_workspace()
+    path = Path(workspace.name)
+
+    assert path.parent == scratch.resolve()
+    assert path.is_dir()
+    (path / "expanded-candidate.bin").write_bytes(b"candidate")
+
+    workspace.cleanup()
+    assert not path.exists()
+
+
 @pytest.mark.asyncio
 async def test_vector_barrier_refreshes_intermediate_smart_update_revision(tmp_path: Path) -> None:
     import main

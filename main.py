@@ -22914,6 +22914,17 @@ def _env_flag(name: str, default: bool = False) -> bool:
     return value in {"1", "true", "yes", "on"}
 
 
+def _static_site_publication_workspace() -> tempfile.TemporaryDirectory:
+    """Keep expanded publication trees off the small persistent Fly volume."""
+
+    configured = (os.getenv("STATIC_SITE_PUBLICATION_SCRATCH_DIR") or "").strip()
+    parent = Path(configured).expanduser().resolve() if configured else None
+    return tempfile.TemporaryDirectory(
+        prefix="static-site-publication-",
+        dir=str(parent) if parent is not None else None,
+    )
+
+
 def _env_int(name: str, default: int) -> int:
     raw = (os.getenv(name) or "").strip()
     if not raw:
@@ -23426,56 +23437,63 @@ async def _finish_static_site_candidate(
     )
     result_sha256 = hashlib.sha256(result_path.read_bytes()).hexdigest()
     publication_receipt = None
-    if _env_flag("ENABLE_STATIC_SITE_SECRET_PUBLISH"):
-        required_env = {
-            "bucket": (os.getenv("KENIGEVENTS_SITE_YC_BUCKET") or "").strip(),
-            "endpoint": (os.getenv("KENIGEVENTS_SITE_YC_ENDPOINT") or "https://storage.yandexcloud.net").strip(),
-            "region": (os.getenv("KENIGEVENTS_SITE_YC_REGION") or "ru-central1").strip(),
-            "access_key_id": (os.getenv("KENIGEVENTS_SITE_YC_ACCESS_KEY_ID") or "").strip(),
-            "secret_access_key": (os.getenv("KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY") or "").strip(),
-        }
-        if not required_env["bucket"] or not required_env["access_key_id"] or not required_env["secret_access_key"]:
-            raise StaticSitePermanentError("secret_candidate_publisher_credentials_missing")
-        publication_receipt = await asyncio.to_thread(
-            publish_secret_candidate_archive,
-            candidate_archive,
-            build_result=result,
-            extraction_root=output_dir / "candidate-publication",
-            public_base_url=(os.getenv("KENIGEVENTS_SITE_PUBLIC_BASE_URL") or "https://kenigevents.ru").strip(),
-            **required_env,
-        )
     root_promotion_receipt = None
-    if _env_flag("ENABLE_STATIC_SITE_ROOT_PROMOTION"):
-        if publication_receipt is None:
-            raise StaticSitePermanentError(
-                "atomic_root_promotion_requires_checked_secret_candidate_publication"
+    publication_workspace = None
+    try:
+        if _env_flag("ENABLE_STATIC_SITE_SECRET_PUBLISH"):
+            required_env = {
+                "bucket": (os.getenv("KENIGEVENTS_SITE_YC_BUCKET") or "").strip(),
+                "endpoint": (os.getenv("KENIGEVENTS_SITE_YC_ENDPOINT") or "https://storage.yandexcloud.net").strip(),
+                "region": (os.getenv("KENIGEVENTS_SITE_YC_REGION") or "ru-central1").strip(),
+                "access_key_id": (os.getenv("KENIGEVENTS_SITE_YC_ACCESS_KEY_ID") or "").strip(),
+                "secret_access_key": (os.getenv("KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY") or "").strip(),
+            }
+            if not required_env["bucket"] or not required_env["access_key_id"] or not required_env["secret_access_key"]:
+                raise StaticSitePermanentError("secret_candidate_publisher_credentials_missing")
+            publication_workspace = _static_site_publication_workspace()
+            publication_root = Path(publication_workspace.name)
+            publication_receipt = await asyncio.to_thread(
+                publish_secret_candidate_archive,
+                candidate_archive,
+                build_result=result,
+                extraction_root=publication_root / "secret-candidate",
+                public_base_url=(os.getenv("KENIGEVENTS_SITE_PUBLIC_BASE_URL") or "https://kenigevents.ru").strip(),
+                **required_env,
             )
-        # validate_production_candidate_result has already checked the complete
-        # artifact set and all root/candidate browser gates.  Resolve and hash
-        # the root archive again immediately before crossing the publisher
-        # boundary; the publisher can write only the ALB-inactive root bucket.
-        root_archive = await asyncio.to_thread(
-            resolve_checked_static_site_artifact,
-            result,
-            output_dir=output_dir,
-            kind="production_root",
-        )
-        from static_site_atomic_root import publish_atomic_root_from_env
+        if _env_flag("ENABLE_STATIC_SITE_ROOT_PROMOTION"):
+            if publication_receipt is None or publication_workspace is None:
+                raise StaticSitePermanentError(
+                    "atomic_root_promotion_requires_checked_secret_candidate_publication"
+                )
+            # validate_production_candidate_result has already checked the complete
+            # artifact set and all root/candidate browser gates.  Resolve and hash
+            # the root archive again immediately before crossing the publisher
+            # boundary; the publisher can write only the ALB-inactive root bucket.
+            root_archive = await asyncio.to_thread(
+                resolve_checked_static_site_artifact,
+                result,
+                output_dir=output_dir,
+                kind="production_root",
+            )
+            from static_site_atomic_root import publish_atomic_root_from_env
 
-        root_promotion_receipt = await asyncio.to_thread(
-            publish_atomic_root_from_env,
-            root_archive,
-            build_result=result,
-            extraction_root=output_dir / "atomic-root-publication",
-        )
-        if root_promotion_receipt.get("status") == "rolled_back":
-            logging.error(
-                "static_site_build: atomic root smoke failed and routing rolled back "
-                "build_id=%s run_id=%s revision=%s",
-                build_id,
-                run_id,
-                root_promotion_receipt.get("revision"),
+            root_promotion_receipt = await asyncio.to_thread(
+                publish_atomic_root_from_env,
+                root_archive,
+                build_result=result,
+                extraction_root=Path(publication_workspace.name) / "atomic-root",
             )
+            if root_promotion_receipt.get("status") == "rolled_back":
+                logging.error(
+                    "static_site_build: atomic root smoke failed and routing rolled back "
+                    "build_id=%s run_id=%s revision=%s",
+                    build_id,
+                    run_id,
+                    root_promotion_receipt.get("revision"),
+                )
+    finally:
+        if publication_workspace is not None:
+            await asyncio.to_thread(publication_workspace.cleanup)
     counts = static_site_result_counts(
         result,
         object_count=(publication_receipt.object_count if publication_receipt else None),

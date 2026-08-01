@@ -16,6 +16,11 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Static-site candidate and atomic-root publication now expand checked archives
+  on ephemeral process scratch instead of duplicating the generated tree on
+  Fly's small persistent volume. Long create-only uploads no longer push
+  `/data` below the production health threshold, and the workspace is removed
+  after both successful and failed publication attempts.
 - The two unlinked focus-group connectivity diagnostics now use the same
   release-aware robots and canonical contract as every other private focus
   route. Production root builds no longer fail after rendering all pages,
