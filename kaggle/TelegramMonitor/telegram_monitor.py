@@ -4404,6 +4404,7 @@ async def extract_events(
         'with concrete dates/times, extract those events even when they happen at a museum or library. '
         'Do not use historical/background dates from exhibit text, document quotes, story prose, or noisy OCR as event dates. '
         'For example, "9 октября 1947 года..." inside an exhibition narrative is historical content, not an upcoming schedule anchor. '
+        'Interviews, memoirs, museum chronicles, and anniversary articles are not events. A historical opening, collection-acquisition, or employment date must not be rolled into the current/future year merely because its day and month resembles an event date; require a separate explicit attendee-facing announcement. '
         'If the source only says an exhibition already opened and can be visited during institution work hours, return [] unless it also gives an explicit future opening, lecture, curator talk, excursion, or other attendee-facing slot. '
         'A named festival context does not make a concrete post a whole-festival non-event: if a post says an event is '
         '"in the framework of" a festival, or includes a festival hashtag, and also gives a specific title/date/time/venue '

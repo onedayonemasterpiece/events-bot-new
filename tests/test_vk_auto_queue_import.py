@@ -52,6 +52,22 @@ class DummyBot:
         return Me()
 
 
+def test_schedule_cards_use_expanded_bounded_photo_cap(monkeypatch):
+    monkeypatch.setenv("VK_AUTO_IMPORT_MAX_PHOTOS", "4")
+    monkeypatch.setenv("VK_AUTO_IMPORT_SCHEDULE_MAX_PHOTOS", "10")
+    text = (
+        "С 1 по 9 августа пройдут соревнования. "
+        "Расписание и места проведения – в карточках."
+    )
+    assert vk_auto_queue._vk_auto_import_photo_limit_for_text(text) == 10
+
+
+def test_ordinary_vk_gallery_keeps_default_photo_cap(monkeypatch):
+    monkeypatch.setenv("VK_AUTO_IMPORT_MAX_PHOTOS", "4")
+    monkeypatch.setenv("VK_AUTO_IMPORT_SCHEDULE_MAX_PHOTOS", "10")
+    assert vk_auto_queue._vk_auto_import_photo_limit_for_text("Фото с открытия выставки") == 4
+
+
 @pytest.mark.asyncio
 async def test_vk_auto_import_scheduler_uses_db_superadmin_when_env_missing(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))

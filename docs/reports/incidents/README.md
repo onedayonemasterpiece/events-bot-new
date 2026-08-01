@@ -25,6 +25,10 @@
     unexpanded source group is capped at six in source order; local
     materialization failures never leave a false ambiguous `sending` state.
 
+- `INC-2026-08-01-kldevents-event-quality.md`
+  - Scope: Telegram/VK historical eventness, title/programme-vs-venue grounding, multi-event schedule-card galleries and all managed event publications.
+  - Must not regress: historical interviews create no future events; a programme label cannot replace its building venue; independent dated/located cards never collapse into one envelope occurrence, and explicit schedule galleries reach the bounded semantic parser intact.
+
 - `INC-2026-08-01-region-talk-empty-reaction-sync.md`
   - Scope: Region Talk exact operator-reaction observation for reaction-less
     messages and last-reaction removal races.

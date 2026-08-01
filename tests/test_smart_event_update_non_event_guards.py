@@ -11,6 +11,89 @@ async def _no_topics(*_args, **_kwargs):  # noqa: ANN001 - test helper
     return None
 
 
+def _historical_museum_interview_source() -> str:
+    return (
+        "ИСТОРИЯ ИЗ ПЕРВЫХ УСТ: к 80-летию КОИХМ. "
+        "Она работает в музее с 1978 года. В июне 1979 года привезли останки "
+        "Кристионаса Донелайтиса. 11 октября 1979 года состоялось открытие музея. "
+        "Из интервью журналу «Музеи 39», апрель 2026."
+    )
+
+
+def test_historical_museum_interview_routes_to_llm_eventness() -> None:
+    candidate = EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/koihm/5936",
+        source_text=_historical_museum_interview_source(),
+        title="Литературный музей в Чистых Прудах",
+        date="2026-10-11",
+        location_name="Историко-художественный музей",
+        city="Калининград",
+    )
+
+    assert su._has_historical_anniversary_interview_risk(candidate, candidate.source_text) is True
+    assert su._candidate_needs_llm_eventness_review(candidate, candidate.source_text) is True
+
+
+@pytest.mark.asyncio
+async def test_historical_museum_interview_llm_rejects_without_future_announcement(monkeypatch) -> None:
+    candidate = EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/koihm/5936",
+        source_text=_historical_museum_interview_source(),
+        title="Литературный музей в Чистых Прудах",
+        date="2026-10-11",
+        location_name="Историко-художественный музей",
+        city="Калининград",
+    )
+
+    async def _ask(prompt, _schema, **kwargs):
+        assert kwargs["label"] == "eventness_review"
+        assert "музейная летопись" in prompt
+        return {"decision": "non_event", "confidence": 0.99, "reason_short": "historical interview"}
+
+    monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+    monkeypatch.setattr(su, "_ask_gemma_json", _ask)
+    decision, confidence, _ = await su._llm_review_candidate_eventness(
+        candidate,
+        clean_title=candidate.title,
+        clean_source_text=candidate.source_text,
+        clean_raw_excerpt=None,
+    )
+    assert (decision, confidence) == ("non_event", 0.99)
+
+
+@pytest.mark.asyncio
+async def test_real_future_museum_lecture_survives_historical_context_review(monkeypatch) -> None:
+    source = (
+        "Музей открыт в 1979 году. 11 октября 2026 года в 15:00 приглашаем на лекцию "
+        "«История музея». Место: Литературный музей в Чистых Прудах."
+    )
+    candidate = EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/koihm/control",
+        source_text=source,
+        title="Лекция «История музея»",
+        date="2026-10-11",
+        time="15:00",
+        location_name="Литературный музей в Чистых Прудах",
+        city="Чистые Пруды",
+    )
+
+    async def _ask(*_args, **_kwargs):
+        return {"decision": "event", "confidence": 0.98, "reason_short": "explicit future invite"}
+
+    monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+    monkeypatch.setattr(su, "_ask_gemma_json", _ask)
+    decision, confidence, _ = await su._llm_review_candidate_eventness(
+        candidate,
+        clean_title=candidate.title,
+        clean_source_text=source,
+        clean_raw_excerpt=None,
+    )
+    assert (decision, confidence) == ("event", 0.98)
+
+
 def test_online_registration_does_not_make_offline_event_online_only() -> None:
     text = (
         "2 мая в округе пройдет большой велопробег. "

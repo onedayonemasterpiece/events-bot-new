@@ -232,6 +232,9 @@ Guidelines:
   historical content, not an upcoming schedule anchor. If the source only says an exhibition already opened
   and can be visited during institution work hours, return no future event unless it also gives an explicit
   future attendee-facing opening, lecture, curator talk, excursion, or other scheduled slot.
+- Interviews, memoirs, museum chronicles, and anniversary articles are not events. A historical opening,
+  collection-acquisition, or employment date must not be rolled into the current/future year merely because
+  its day and month resemble an event date; require a separate explicit attendee-facing announcement.
 - Do NOT create events out of post-event reports / recaps. If the text mainly describes what already happened
   (past-tense narrative like "мы провели/исследовали/работали", after-the-fact summary like "было здорово",
   gratitude/wrap-up like "спасибо ...", "скоро увидимся вновь") and there is no concrete attendable future anchor,
@@ -243,6 +246,7 @@ Guidelines:
 - The “Known venues” list is for normalising venues that are explicitly mentioned (or provided as an explicit default hint).
   Do NOT pick a random venue just because it contains a similar word (e.g. “ворота”).
 - For multi-date, multi-event, timetable, digest, or repost posts, each event's venue fields must come from the local block nearest that event's own date/title. Do NOT reuse a venue/default/source hint from another block when the event-local block explicitly names its own venue/address.
+- A cover card with a broad date range is only an envelope when the source says schedule/venues are in attached cards. If those cards name different competitions/events, dates, cities, or venues, extract separate grounded events per card; never create one aggregate event from the cover range. If only a partial card set is visible and no concrete child is grounded, return no events rather than collapsing the roundup.
 - Never output literal field-name placeholders such as `location_address`, `address`, `location_name`, `venue`, `city`, `адрес`, or `город`; use an empty string when the value is unresolved.
 - If the source/group/default location conflicts with an explicitly named event-local venue (for example a repost from a bar about a library event), prefer the explicit venue in the event text.
 - `city` must be the city name only (no street/house number). If the city is unknown, return an empty string.
