@@ -1,23 +1,27 @@
 # Source profile and one-paragraph onboarding
 
-Status: **bounded MVP-2 implementation is live in the local publication finalizer**. Evidence/profile/paragraph rows are durable in YDB and a supported paragraph is included in the operator-chat candidate message. Profile/about/pinned-post acquisition and archive-wide dual-vector recall remain follow-up work; the current implementation intentionally fails closed when the already collected public evidence is insufficient.
+Status: **bounded MVP-2 implementation is live in the publication finalizer and draft backfill**. Evidence/profile/paragraph rows are durable in YDB and a supported paragraph is included in the operator revision. Profile/about/pinned-post acquisition and archive-wide dual-vector recall remain follow-up work; the implementation fails closed when the collected public evidence is insufficient.
 
-## Implemented bounded path (2026-07-13)
+## Implemented bounded path (updated 2026-08-01)
 
 The first production-safe slice is implemented in `scripts/region_talk_publication_finalizer.py` and `scripts/region_talk_goal_notify.py`:
 
-1. When a post reaches the finalizer, it consolidates the canonical source row, the verified external-blogger registry fields and up to eight distinct authored excerpts already present in candidate memory.
+1. When a post reaches the finalizer/backfill, it consolidates the canonical source row, verified external-blogger fields and up to eight authored excerpts. An external article additionally contributes only the publisher-level, copy-supported slice of its retained research intake: outlet overview, scope attestation and referenced page evidence.
 2. The compact evidence pack is stored as `source_onboarding_evidence_item` with stable `source_profile_id`, evidence ids, URLs/dates and `evidence_fingerprint`.
 3. A Gemini profile request is made only for a new/changed evidence fingerprint. Its atomic claims and angles are rejected unless all referenced evidence ids exist. The resulting `source_onboarding_profile_item` is reusable across candidates.
-4. A second candidate-specific request writes a 300–600 character paragraph. Deterministic validation requires valid claim/evidence references and the length contract; otherwise status is `needs_review` and no paragraph is shown.
-5. `publication_candidate_item` retains the profile/writer fingerprints, references, entity type and paragraph. The notifier adds `О блогере: …` only for `source_onboarding_status=ready`.
-6. Profile and writer calls share the same durable daily Region Talk budget and Supabase provider limiter as the final verifier. A new source/candidate therefore uses at most two extra point requests; an unchanged source profile needs only the writer request.
+4. For a publisher, the reusable profile must contain three separately grounded dimensions: `outlet_identity`, `intended_audience` and `distinctive_value`. Audience may be labelled as a cautious editorial inference from supported topics/formats. Missing evidence makes the profile `needs_review`.
+5. A second candidate-specific request writes a 300–600 character reader brief. Deterministic validation requires valid claim/evidence references, all three publisher dimensions for article lanes, the length contract and the shared final-copy style guard; otherwise no paragraph is shown.
+6. `publication_candidate_item` retains the profile/writer fingerprints, dimension payload, references, entity type and paragraph. Social cards render `О блогере`; editorial/academic copy must carry the publisher brief into paragraph one of the atomic reviewed caption.
+7. The staged public-copy Writer receives three ID-addressable publisher facts and must cite all of them from paragraph one. Critic/readiness fail closed on `missing_publisher_reader_brief`; paragraph two remains the current-material summary and click reason.
+8. Profile and writer calls share the same durable daily Region Talk budget and Supabase provider limiter as the final verifier. A new source/candidate therefore uses at most two extra point requests; an unchanged source profile needs only the writer request.
 
 Current limitation: this bounded path does not issue additional Telegram profile/full-channel requests and does not crawl an archive solely for biography. It uses evidence already collected by the product pipeline, avoiding new Telegram pressure and unsupported claims. The broader recall design below remains the target for evidence-poor sources.
 
 ## Product result
 
-For every author/channel whose post reaches manual publication review, Region Talk should prepare a short onboarding paragraph that helps the reader understand **who is speaking and from what perspective** before following the original post.
+For every author/channel whose post reaches manual publication review, Region Talk prepares a short onboarding paragraph that helps the reader understand **who is speaking and from what perspective** before following the original post.
+
+For an external editorial/academic publication, the equivalent result is a **publisher reader brief**. It answers: what kind of outlet this is, whom it serves, and what distinguishes its editorial approach. The current article is then summarized separately. An outlet name plus a generic adjective such as “professional” is insufficient.
 
 The paragraph should answer no more than four questions:
 
@@ -96,6 +100,12 @@ Use public data only:
 3. authored posts, with special recall for self-description and retrospective posts;
 4. explicit public interviews/about pages when provenance is retained;
 5. reposts, quotations and third-party mentions only as weaker leads, never as first-person proof.
+
+External publishers use a narrower evidence path: About/editorial-policy or
+navigation evidence captured by the bounded external-research contract,
+copy-supported `source_overview`, and the publisher scope attestation. Article
+facts may illustrate the current material; they cannot establish a reusable
+audience or editorial identity by themselves.
 
 Evidence precedence for consolidation:
 
