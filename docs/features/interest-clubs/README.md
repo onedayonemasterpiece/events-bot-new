@@ -4,16 +4,21 @@
 
 **Production canary live 2026-07-17.** Implementation PR #54 и release PR #60 достижимы из `origin/main`; Fly runtime v1688 работает с relation pipeline, static projection и public gates ON. В production импортированы шесть confirmed identities и две shadow identities; public freshness/boundary gates опубликовали четыре клуба на canonical root routes. Точные SHA, counts, hashes, rollback и HTTP evidence записаны в [release plan](release-plan.md#production-evidence-2026-07-17). Семидневное наблюдение Stage 5 ещё продолжается и не подменяется фактом deploy.
 
-**Data-prep v2 candidate 2026-08-01:** в ветке
-`integration/static-collections-data-prep-20260801` реализованы durable
+**Data-prep v2 production 2026-08-01:** implementation PR #182 слит в main и
+развёрнут на Fly v1853 из
+`c5e3f6bc79e912992379280644515137917a414d`. Реализованы durable
 `interest_club_relation` outbox, immutable running owner + один successor,
 hash/policy-versioned evaluation history, provider-deferred retry с сохранением
 совместимого accepted relation, bounded shadow discovery и
 `interest-clubs-static-v2.json`. V2 показывает approved identity при будущей
 встрече или подтверждённой активности за включительные шесть календарных
 месяцев; на read-only production control это все 6 approved identities и 13
-grounded relations. Это ещё не production deploy и не изменение существующих
-Astro routes.
+grounded relations. Production catch-up поставил `80` exact candidates в тот же
+outbox; первая волна увеличила relations `19 -> 34`, а provider-limited хвост
+остаётся retryable. На live DB все шесть approved identities имеют активность в
+inclusive окне 2026-02-01..2026-08-01 (`15, 3, 7, 2, 2, 1` relations), две
+shadow identities не публикуются. Это не изменение существующих Astro routes;
+terminal StaticSiteBuilder cold/warm acceptance ещё открыт.
 
 Для noindex candidate от 2026-07-23 проекция пересчитана из свежего SQLite
 snapshot по текущему 90-дневному freshness contract, а не скопирована из

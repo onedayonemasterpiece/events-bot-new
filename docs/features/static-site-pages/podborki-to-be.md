@@ -1,13 +1,15 @@
 # Подборки статического сайта: анализ извлечения и простой общий проект
 
-Статус: **анализ завершён; data-prep MVP реализован в integration-ветке, но
-ещё не развёрнут и не принят real Kaggle canary**, обновлён 2026-08-01.
+Статус: **анализ завершён; data-prep MVP слит в main, развёрнут и получил
+production backfill; real Kaggle cold canary запущен, но terminal cold/warm
+acceptance ещё не закрыт**, обновлён 2026-08-01.
 Исходные требования и последующие уточнения владельца сохранены в [`podborki.md`](./podborki.md).
 
 ## 0. Состояние реализации data-prep MVP
 
-Реализация подготовлена в ветке
-`integration/static-collections-data-prep-20260801`. Это только граница данных:
+Исходная реализация подготовлена в ветке
+`integration/static-collections-data-prep-20260801`, слита PR #182 и развёрнута
+из main SHA `c5e3f6bc79e912992379280644515137917a414d` на Fly v1853. Это только граница данных:
 Astro routes, страницы, navigation, sitemap и публичное включение в этой ветке
 не делались. Киноисточники и фестивальный extraction/page track не менялись.
 
@@ -56,17 +58,34 @@ Generated handoff для следующего окна:
 - BGE NPZ/receipt, semantic receipt и unusual cache остаются builder artifacts,
   а не источником смысла в Astro.
 
-Не завершено и не должно маскироваться локальными тестами:
+Production execution 2026-08-01:
 
-1. применить additive migrations на проверенной production copy, затем отдельно
-   в production change window;
-2. выполнить current-catalog real Kaggle CPU cold run и warm run с нулём
+- runtime migration добавила `Event.collection_decisions` и сохранила `4608`
+  evaluation rows при замене legacy unique key на hash-versioned history;
+- admission apply обработал `6` событий/`9` источников: `5` source decisions
+  применены, `4` не изменили truth, deferral `0`;
+- audience apply: `73` источника, `58` applied, `11` unchanged, `4` deferred;
+  people apply: `38` источников, `29` applied, `1` unchanged, `8` deferred;
+- club catch-up поставил `80` exact known-identity кандидатов в durable outbox;
+  первая волна увеличила grounded relations с `19` до `34`, а provider-limited
+  хвост остаётся retryable вместо потери last-good;
+- все 6 approved identities сейчас проходят шестимесячное правило; две shadow
+  identities не публикуются и не approve-ятся автоматически;
+- cold StaticSiteBuilder run
+  `static-site:production-secret-20260801T191228-efb845fd:c1acf5c7d03b`
+  стартовал на immutable snapshot `snapshot-20260801T171228-1202c99aa1`; после
+  backfill поставлен один single-flight successor `JobOutbox.id=46465`.
+
+Не завершено и не должно маскироваться deploy/backfill evidence:
+
+1. дождаться terminal current-catalog real Kaggle CPU cold run и выполнить warm
+   run с нулём
    re-encode unchanged events и `provider_calls=0`;
-3. разметить owner gold для новых heads и заново откалибровать «Необычное» на
+2. разметить owner gold для новых heads и заново откалибровать «Необычное» на
    evidence-only document;
-4. выполнить targeted admission/audience/people backfill/review; production DB
-   этой веткой не исправлялась;
-5. после quality acceptance передать manifests в отдельную Astro/UI ветку.
+3. дождаться durable retry хвоста club provider deferrals и проверить terminal
+   relation/evaluation counts в post-backfill successor;
+4. после quality acceptance передать manifests в отдельную Astro/UI ветку.
 
 Production-аудит, на котором основаны fixtures и contracts, выполнен read-only
 на Fly SQLite 2026-08-01 15:43 UTC (`PRAGMA integrity_check=ok`; DB mtime

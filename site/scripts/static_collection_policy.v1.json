@@ -2,6 +2,7 @@
   "schema_version": "static-collection-policy-v1",
   "document_kind": "collection_semantics_v1",
   "document_version": "collection-semantics-doc-v1",
+  "facts_policy_version": "static-collection-facts-v2",
   "publication_default": "shadow",
   "semantic_quality_gate": {
     "minimum_positives": 15,

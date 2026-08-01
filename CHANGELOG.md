@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Deployed the static-selection data-prep MVP to production main: Fly SQLite now preserves hash-versioned club evaluation history, bounded admission/audience/people backfills store source-bound decisions, the six-month known-club catch-up runs through the durable outbox, and the first real collection-semantic StaticSiteBuilder cold canary plus one post-backfill successor are active. Astro routes/navigation, cinema sources, festival extraction/pages and public root promotion remain unchanged.
+- Tightened the children/family fact policy after production backfill review: family-themed copy, “with loved ones”, family atmosphere, social-support subject matter and artist popularity among children no longer prove that children can attend. Fact input hashes now include the semantic policy version, and the exporter ignores stale v1 audience/guest decisions until grounded v2 re-adjudication.
+
 - Fixed three production event-quality regressions: historical interviews now enter the LLM eventness gate instead of becoming future events; explicit attendee-facing location markers outrank programme/club labels through semantic review; and VK schedule-card posts receive both a bounded complete attachment set and the matching complete OCR evidence set, so the LLM can split independent dates/venues rather than collapse a cover range into one aggregate event. The parser now budgets poster OCR against the raw source caption rather than its own appended policy text, and a semantic rejection of one independent card no longer discards valid siblings from the same bounded roundup.
 
 - Enabled the production Region Talk reaction gate: future article/social plan slots now require an exact-current ❤️/👍 approval with clean copy; pending, rejected, conflicting, rewrite-requested and stale revisions remain outside the public-content queue.
