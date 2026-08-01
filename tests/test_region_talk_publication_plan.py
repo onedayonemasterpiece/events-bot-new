@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import tomllib
 import json
 from types import SimpleNamespace
 
 from scripts import region_talk_publication_plan as plan
+
+
+def test_production_enables_exact_current_reaction_gate() -> None:
+    config = tomllib.loads((plan.ROOT / "fly.toml").read_text(encoding="utf-8"))
+    assert config["env"]["REGION_TALK_REACTION_SYNC_ENABLED"] == "1"
+    assert config["env"]["REGION_TALK_REACTION_GATE_ENABLED"] == "1"
 
 
 def external_article_fixture() -> tuple[dict, dict]:

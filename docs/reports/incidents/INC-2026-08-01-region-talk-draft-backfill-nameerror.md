@@ -1,10 +1,10 @@
 # INC-2026-08-01 Region Talk draft backfill namespace failure
 
-Status: open
+Status: closed
 Severity: sev2
 Service: Region Talk autonomous editorial draft backfill and operator delivery
 Opened: 2026-08-01
-Closed: —
+Closed: 2026-08-01
 Owners: events-bot / Region Talk
 Related incidents: `INC-2026-07-31-region-talk-candidate-chat-incomplete-drafts`
 Related docs: `docs/features/region-talk-channel/publication-queue.md`, `docs/features/region-talk-channel/telegram-vk-publishing.md`
@@ -40,6 +40,11 @@ same `NameError: name 'read_kind_rows' is not defined` at
   selection with the same namespace error.
 - 2026-08-01 13:11 UTC — production log evidence localized the missing notifier
   qualification; no provider or Telegram-auth failure was involved.
+- 2026-08-01 14:27 UTC — the final retained-article execution fix reached Fly
+  as `c9ea269f`; health and immutable image SHA checks passed.
+- 2026-08-01 14:29–14:32 UTC — compensating article and social backfills each
+  produced one current v8 draft, then Telethon delivered messages `33783` and
+  `33784` to the operator chat.
 
 ## Root Cause
 
@@ -88,29 +93,43 @@ same `NameError: name 'read_kind_rows' is not defined` at
 
 ## Immediate Mitigation
 
-The useful Guide S22 catch-up and CandidateReport run are allowed to finish.
-The broken worker does not mutate rows before the failing read, so no data
-rollback is required.
+The useful Guide S22 catch-up and CandidateReport run were allowed to finish.
+The broken worker did not mutate rows before the failing read, so no data
+rollback was required.
 
 ## Corrective Actions
 
 - qualify every supporting-kind read through `notify.read_kind_rows`;
 - add an `execute()` regression test that traverses all four supporting-kind
   reads and verifies driver cleanup.
+- include imported `external_publication_source_item` rows in orchestration
+  metrics, preserve exact source-album locators for later 3–6-photo
+  materialization, join article image evidence into retained rows, and return
+  immediately after the retained-article intake path instead of unpacking a
+  nonexistent fetched social item.
 
 ## Follow-up Actions
 
-- [ ] Deploy after the active Guide catch-up finishes; do not kill its S22 run.
-- [ ] Run the compensating Region Talk backfill/delivery catch-up.
-- [ ] Close only after operator message IDs are present for current v8
-  fingerprints or the queue is verified genuinely empty.
+- [x] Deploy after the active Guide catch-up finished without borrowing its S22
+  session.
+- [x] Run the compensating Region Talk backfill/delivery catch-up.
+- [x] Verify current-v8 operator message IDs plus media and delivery ledger
+  fingerprints.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `ec13322e15e7bef66840ce6ebd442bafd16db0cb`
+  (contains the backfill correction series through `c9ea269f`, reachable from
+  `origin/main`, Fly version `1848`)
+- deploy path: clean exact-`origin/main` `scripts/deploy_fly_main.sh`
+- regression checks: focused execute regressions plus full Region Talk suite
+  `689 passed`; Fly machine check `1/1 passing`; `/healthz ok=true, ready=true`
+- post-deploy verification: article backfill selected
+  `https://archi.ru/russia/101203/vsya-mudrost-okeana`, social backfill selected
+  `https://t.me/myplanettravel/5700`, both `ready_total=1`; delivery messages
+  `33783` and `33784` are ledger-confirmed and exist in Telegram. Message
+  `33783` has the associated Archi photo; `33784` is a six-photo native album.
+  Ready current-v8 inventory increased from `0` to `2`.
 
 ## Prevention
 

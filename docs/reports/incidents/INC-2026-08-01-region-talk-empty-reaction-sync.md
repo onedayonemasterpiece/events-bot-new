@@ -1,10 +1,10 @@
 # INC-2026-08-01 Region Talk empty-reaction synchronization failure
 
-Status: open
+Status: closed
 Severity: sev2
 Service: Region Talk operator approval and daily publication planning
 Opened: 2026-08-01
-Closed: —
+Closed: 2026-08-01
 Owners: events-bot / Region Talk
 Related incidents: `INC-2026-08-01-region-talk-draft-backfill-nameerror`, `INC-2026-07-31-region-talk-candidate-chat-incomplete-drafts`
 Related docs: `docs/features/region-talk-channel/publication-queue.md`, `docs/operations/cron.md`
@@ -109,15 +109,21 @@ delivery ledger are preserved; no manual approval projection is manufactured.
 
 ## Follow-up Actions
 
-- [ ] Deploy and execute the two-message compensating sync.
-- [ ] Recalculate the anti-vector plan after the successful observation.
+- [x] Deploy and execute the two-message compensating sync.
+- [x] Recalculate the anti-vector plan after the successful observation.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- deployed SHA: `ec13322e15e7bef66840ce6ebd442bafd16db0cb`, exact
+  `origin/main`, Fly version `1848`
+- deploy path: clean exact-`origin/main` `scripts/deploy_fly_main.sh`
 - regression checks: focused `11 passed`; full Region Talk `689 passed`
-- post-deploy verification: pending
+- post-deploy verification: Fly health `ok=true, ready=true`, immutable image
+  SHA matched; execute sync observed both current deliveries completely,
+  projected both candidates and wrote six YDB rows. The following 14-day
+  planner run wrote 28 rows under `region_talk_daily_pair_antivector_v1` and
+  selected the current article/social pair with BGE similarity `0.431206`
+  below threshold `0.82`.
 
 ## Prevention
 

@@ -1,10 +1,10 @@
 # INC-2026-08-01 Guide Google AI Package Closure
 
-Status: open
+Status: closed
 Severity: sev2
 Service: scheduled Guide Excursions monitoring / Kaggle LLM extraction
 Opened: 2026-08-01
-Closed: —
+Closed: 2026-08-01
 Owners: bot operations / guide excursions
 Related incidents: `INC-2026-07-31-google-ai-parallel-limiter-bypass`, `INC-2026-04-21-guide-gemma4-partial-monitoring`
 Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -56,6 +56,11 @@ scheduled scans produced no occurrence imports or updates.
   `secrets.py` in `embedded_repo_bundle/google_ai`.
 - 2026-08-01 11:45 UTC: code inspection confirmed the same fixed allowlist in
   production `guide_excursions/kaggle_service.py`.
+- 2026-08-01 12:42 UTC: production-equivalent full S22 catch-up `ops_run=5050`,
+  Kaggle run `01cc2b93915d`, completed with 21 sources, 98 posts, 51
+  prefiltered, `llm_ok=51`, `llm_error=0`, 9 creates and 12 updates.
+- 2026-08-01 13:16 UTC: recovery import `ops_run=5054` completed and digest
+  issue `#196` was published to both Telegram targets and VK.
 
 ## Root Cause
 
@@ -124,8 +129,9 @@ scheduled scans produced no occurrence imports or updates.
 
 - The fault is isolated to Guide extraction; the serving bot remains healthy
   and the failed remote Kaggle lease was released normally.
-- A surgical hotfix replaces both four-file lists with deterministic complete
-  Python-source packaging. Deployment and production catch-up remain pending.
+- A surgical hotfix replaced both four-file lists with deterministic complete
+  Python-source packaging. The production catch-up and digest compensation are
+  complete.
 
 ## Corrective Actions
 
@@ -138,23 +144,31 @@ scheduled scans produced no occurrence imports or updates.
 
 ## Follow-up Actions
 
-- [ ] Deploy the hotfix from a clean `origin/main`-reachable SHA.
-- [ ] Run and verify the five-day full catch-up for the 46 affected candidate
+- [x] Deploy the hotfix from a clean `origin/main`-reachable SHA.
+- [x] Run and verify the five-day full catch-up for the affected candidate
   URLs before accepting the next digest result.
 - [ ] Add an operational alert for a Guide run where prefiltered posts are
   non-zero but `llm_ok=0` and every LLM outcome has the same exception class.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending final branch test evidence
-- post-deploy verification: pending full catch-up and digest evidence
+- deployed SHA: hotfix first reached production in `9b2eea40`; current deployed
+  descendant `ec13322e15e7bef66840ce6ebd442bafd16db0cb` is reachable from
+  `origin/main` (Fly version `1848`)
+- deploy path: clean exact-`origin/main` Fly release
+- regression checks: focused generated-notebook/package suite `12 passed`;
+  isolated package reconstruction/import passed; production full run had no
+  `ModuleNotFoundError`
+- post-deploy verification: `ops_run=5050`, run `01cc2b93915d`, 51/51 LLM
+  successes, 9 creates, 12 updates; recovery import `ops_run=5054`; digest issue
+  `#196`, Telegram message ranges `301–306` in `@wheretogo39` and `320–325` in
+  `@youwillsee39`, plus VK `wall-238875824_175`.
 
 ## Prevention
 
 - The package boundary is source-tree driven rather than a module allowlist.
 - Generated artifact acceptance executes the same self-contained import
   boundary used by Kaggle instead of checking source strings only.
-- This incident remains open until the missed full scan is compensated and the
-  resulting publication state is verified.
+- The missed full scan and resulting publication state were compensated and
+  verified. The remaining homogeneous-failure alert is tracked as a bounded
+  prevention follow-up and does not block restoration.

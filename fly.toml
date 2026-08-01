@@ -76,6 +76,9 @@ app = "events-bot-new-wngqia"
   REGION_TALK_AUTH_BUNDLE_ENV = "TELEGRAM_AUTH_BUNDLE_DISCOVERY1"
   REGION_TALK_HISTORY_REVISIT_RESERVE_PERCENT = "20"
   REGION_TALK_REACTION_SYNC_ENABLED = "1"
+  # Owner review is authoritative: only an exact-current positive reaction
+  # with clean copy may enter a future public-content plan.
+  REGION_TALK_REACTION_GATE_ENABLED = "1"
   REGION_TALK_TZ = "Europe/Kaliningrad"
   REGION_TALK_MISFIRE_GRACE_SECONDS = "1800"
   REGION_TALK_SCHEDULED_MAX_RUNTIME_MINUTES = "90"

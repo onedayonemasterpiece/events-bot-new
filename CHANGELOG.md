@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Enabled the production Region Talk reaction gate: future article/social plan slots now require an exact-current ❤️/👍 approval with clean copy; pending, rejected, conflicting, rewrite-requested and stale revisions remain outside the public-content queue.
+
 - Fixed Region Talk reaction synchronization for valid review messages with no reactions: it now treats an absent Telegram `Message.reactions` field as a complete empty observation, safely rechecks the last-reaction removal race, and no longer lets Telegram's `MSG_ID_INVALID` response block all later approvals.
 
 - Fixed static-site Smart Update recovery after a Fly deploy: an exact remote

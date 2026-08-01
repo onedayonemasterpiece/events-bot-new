@@ -526,12 +526,13 @@ and a projection onto `publication_candidate_item` only when the observed
 fingerprint still equals the candidate's current fingerprint. It never
 tombstones or deletes a candidate/source.
 
-Public-plan enforcement is deliberately rollout-gated. With
-`REGION_TALK_REACTION_GATE_ENABLED=0` (default), the legacy queue behavior is
-unchanged while historical deliveries are re-rendered and reviewed. After that
-backfill, enabling it admits only exact-current `approved + clean` rows;
-pending, rejected, conflict, rewrite-requested and stale-fingerprint rows all
-fail closed.
+Public-plan enforcement is rollout-gated. Local/dev keeps
+`REGION_TALK_REACTION_GATE_ENABLED=0` as the safe migration default, while
+production enables it after the historical-review migration. With the gate on,
+only exact-current `approved + clean` rows are admitted; pending, rejected,
+conflict, rewrite-requested and stale-fingerprint rows all fail closed. The
+one-time historical projection (`principle approved + rewrite requested`) is
+audit context for regenerating copy, never approval of the new revision.
 
 Use `scripts/region_talk_goal_notify.py`, never on Kaggle. It supports Bot API
 and role-scoped `telethon_discovery1` / `telethon_discovery2` transports;
