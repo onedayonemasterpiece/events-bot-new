@@ -227,6 +227,44 @@ def _budget_vk_parse_poster_texts(post_text: str, poster_texts: Sequence[str]) -
         return []
 
     main_text_len = len((post_text or "").strip())
+    schedule_cards = bool(
+        re.search(
+            r"\b(?:расписание|места?\s+проведения|подробности)\b[^.!?\n]{0,80}\b(?:в|на)\s+карточках\b",
+            unicodedata.normalize("NFKC", post_text or "").casefold().replace("ё", "е"),
+            flags=re.I | re.U,
+        )
+    )
+    if schedule_cards:
+        # This is source-completeness transport, not a semantic event rule.  An
+        # explicit "schedule/venues are in the cards" caption says that every
+        # card is primary evidence.  Applying the ordinary three-block budget
+        # here can hide sibling occurrences and invite the LLM to collapse the
+        # cover range into one synthetic event.
+        max_blocks = max(1, _read_int_env("VK_PARSE_SCHEDULE_POSTER_TEXT_MAX_BLOCKS", 10))
+        max_block_chars = max(80, _read_int_env("VK_PARSE_SCHEDULE_POSTER_TEXT_MAX_BLOCK_CHARS", 1200))
+        max_total_chars = max(
+            max_block_chars,
+            _read_int_env("VK_PARSE_SCHEDULE_POSTER_TEXT_MAX_TOTAL_CHARS", 9000),
+        )
+        selected: list[str] = []
+        remaining = max_total_chars
+        for block in cleaned:
+            if len(selected) >= max_blocks or remaining <= 0:
+                break
+            trimmed = _truncate_prompt_block(block, min(max_block_chars, remaining)).strip()
+            if not trimmed:
+                continue
+            selected.append(trimmed)
+            remaining -= len(trimmed)
+        logger.info(
+            "vk.parse budget: explicit schedule cards kept blocks=%s/%s chars=%s/%s",
+            len(selected),
+            len(cleaned),
+            sum(len(block) for block in selected),
+            sum(len(block) for block in cleaned),
+        )
+        return selected
+
     skip_main_text_chars = max(0, _read_int_env("VK_PARSE_POSTER_TEXT_SKIP_MAIN_TEXT_CHARS", 1600))
     max_blocks = max(1, _read_int_env("VK_PARSE_POSTER_TEXT_MAX_BLOCKS", 3))
     max_block_chars = max(80, _read_int_env("VK_PARSE_POSTER_TEXT_MAX_BLOCK_CHARS", 500))
@@ -2148,6 +2186,7 @@ async def _download_photo_media(urls: Sequence[str]) -> list[tuple[bytes, str]]:
 async def vk_intake_parse_llm(
     prompt_text: str,
     *,
+    source_text: str | None = None,
     source_name: str | None = None,
     festival_names: Sequence[str] | None = None,
     festival_alias_pairs: Sequence[tuple[str, int]] | None = None,
@@ -2169,7 +2208,7 @@ async def vk_intake_parse_llm(
     parse_kwargs: dict[str, Any] = {}
     poster_items = list(poster_media or [])
     poster_texts = _budget_vk_parse_poster_texts(
-        prompt_text,
+        source_text if source_text is not None else prompt_text,
         collect_poster_texts(poster_items),
     )
     poster_summary = build_poster_summary(poster_items)
@@ -2377,6 +2416,7 @@ async def build_event_drafts_from_vk(
     t0 = time.monotonic()
     parsed = await vk_intake_parse_llm(
         llm_text,
+        source_text=text,
         source_name=source_name,
         festival_names=festival_names,
         festival_alias_pairs=festival_alias_pairs,
