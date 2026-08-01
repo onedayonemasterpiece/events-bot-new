@@ -43,8 +43,9 @@ jobs:
   read:
     name: Read selected Telegram messages
     # This repository is public. Only the owner may release the role-scoped
-    # Telegram secret into a runner. In particular, PR workflows never receive it.
-    if: github.actor == 'onedayonemasterpiece'
+    # Telegram secret into a runner. In particular, PR workflows never receive it,
+    # and a different collaborator cannot re-run an owner-triggered execution.
+    if: github.actor == 'onedayonemasterpiece' && github.triggering_actor == 'onedayonemasterpiece'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
