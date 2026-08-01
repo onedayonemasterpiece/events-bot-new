@@ -90,7 +90,7 @@ lanes:
     forbidden_files: [CHANGELOG.md, docs]
     expected_output: committed club lifecycle/reliability implementation and tests
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: W_REGISTRY
     role: worker
     effort: high
@@ -170,4 +170,4 @@ lanes:
     forbidden_files: []
     expected_output: integrated pushed branch and INTEGRATION_REPORT
     verification_scope: full_local
-    status: in_progress
+    status: completed
