@@ -619,6 +619,13 @@ publisher after the same session-idle/lease gate. Bot API does not accept a call
 duplicate. A successful Bot API response is persisted before the candidate is
 marked sent.
 
+Telethon resolves and verifies every reviewed media item before persisting the
+ambiguous `sending` state. A failure at that pre-send boundary is recorded as
+`materialization_failed` with the exact revision fingerprint and error, the
+candidate remains unsent, and delivery continues with later candidates in the
+same bounded batch. Thus one stale source asset cannot hide the rest of the
+operator queue; it also cannot be silently substituted or marked delivered.
+
 The small per-run send limit is applied only after scanning the durable
 publication ledger. YDB primary-key order is not a readiness order, so older
 tombstones cannot hide a later confirmed unsent candidate from notification.
