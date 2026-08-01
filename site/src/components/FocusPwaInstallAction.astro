@@ -1,7 +1,16 @@
+---
+import { withBase } from '../lib/events';
+
+const pwaInstallId = withBase('/fokus-gruppa/pwa');
+const pwaOpenHref = withBase('/fokus-gruppa/priglashenie/?launch=pwa');
+---
+
 <section
   class="focus-pwa"
   data-focus-pwa-install
   data-pwa-install-root
+  data-pwa-install-id={pwaInstallId}
+  data-pwa-open-href={pwaOpenHref}
   data-pwa-install-ready="false"
   aria-labelledby="focus-pwa-title"
 >

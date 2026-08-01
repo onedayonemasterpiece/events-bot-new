@@ -4946,6 +4946,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(projected["canonical_source_key"], "web:archi.example")
         self.assertEqual(projected["media_use_policy"], "score_only_no_reuse")
         self.assertTrue(projected["has_media"])
+        self.assertEqual(projected["media_acquisition_target_type"], "external_article_page")
+        self.assertEqual(projected["media_acquisition_target_url"], row["canonical_url"])
         planned, work = mod.plan_posts_for_vector_scoring(
             [projected],
             previous_posts={},
@@ -9738,6 +9740,68 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(queue[0]["selected_for_next_image_batch"], "true")
         self.assertEqual(metrics["image_queue_selected_next_batch"], 1)
         self.assertEqual(previous_state["unified_source_queue"], {})
+
+    def test_external_publication_without_research_image_enters_page_acquisition_queue(self) -> None:
+        mod = load_module()
+        publication = {
+            "post_id": "extpub-no-direct-image",
+            "post_url": "https://publisher.example/kaliningrad-longread",
+            "platform": "web",
+            "source_id": "web:publisher-example",
+            "source_title": "Publisher Example",
+            "source_url": "https://publisher.example",
+            "canonical_source_key": "web:publisher.example",
+            "external_publication_id": "extpub-no-direct-image",
+            "content_origin_type": "editorial_publication",
+            "current_stage": "good_text_weak_media",
+            "current_lifecycle_status": "good_text_weak_media",
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "is_ad_or_promo": False,
+            "vector_gate_status": "vector_accept_candidate",
+            "vector_content_type": "editorial_publication_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+            "has_media": False,
+            "media_count": 0,
+            "primary_media_path": "",
+            "image_url_or_local_path": "",
+            "media_acquisition_target_type": "external_article_page",
+            "media_acquisition_target_url": "https://publisher.example/kaliningrad-longread",
+            "source_scope": "external",
+            "source_geo_class": "nonlocal_russia",
+            "source_topic_class": "editorial_publication",
+            "source_quick_class": "candidate_keep",
+            "source_queue_status": "confirmed_external_publication_research",
+        }
+
+        queue, top, metrics = mod.build_image_candidate_queue(
+            {},
+            [publication],
+            [publication],
+            [],
+            "external-page-acquisition-run",
+            "2026-08-01T16:00:00+00:00",
+        )
+
+        self.assertEqual(len(queue), 1)
+        self.assertEqual(top, [])
+        row = queue[0]
+        self.assertEqual(row["image_queue_status"], "needs_actual_image_fetch")
+        self.assertEqual(row["media_acquisition_status"], "needs_actual_image_fetch")
+        self.assertEqual(row["media_acquisition_target_type"], "external_article_page")
+        self.assertEqual(row["media_acquisition_target_url"], publication["post_url"])
+        self.assertEqual(row["has_media"], "false")
+        self.assertEqual(row["publication_eligibility_decision"], "accept")
+        evidence = json.loads(row["publication_eligibility_evidence_json"])
+        self.assertEqual(
+            evidence["eligibility_phase"],
+            "pre_image_external_article_page_acquisition",
+        )
+        self.assertTrue(evidence["external_article_page_acquisition_target"])
+        self.assertEqual(row["selected_for_next_image_batch"], "true")
+        self.assertEqual(metrics["image_queue_selected_next_batch"], 1)
+        reasons = json.loads(metrics["image_queue_product_block_reasons_json"])
+        self.assertNotIn("no_media_for_image_analysis", reasons)
 
 
 if __name__ == "__main__":

@@ -360,6 +360,13 @@ state. См. [MVP candidate report](mvp-candidate-report.md).
   current `region_talk_visual_adjudicator_v2` / `region_talk_visual_decision_v2`
   attestation versions. A completed v2 verdict is terminal for that exact media
   manifest and must not be relaunched as an apparent stale v1 backlog.
+- External-article acquisition handoff: a ready editorial or academic article
+  with a canonical HTTP(S) page is an actionable `external_article_page`
+  acquisition target even when external research supplied no `candidate_urls`.
+  CandidateReport must create a `needs_actual_image_fetch` queue row without
+  claiming `has_media=true`; ImageDiagnostic then discovers and verifies
+  article-associated page images, or records the bounded browser/terminal
+  fallback. An untouched article may not bypass this handoff into publication.
 - Scheduled notification contract: Fly defaults to the role-scoped
   `TELEGRAM_AUTH_BUNDLE_DISCOVERY2` Telethon transport; Bot API remains an
   explicit alternative. The orchestrator maps notification to the same

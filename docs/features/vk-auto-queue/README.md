@@ -188,7 +188,7 @@ ENV:
 - `VK_AUTO_IMPORT_PARSE_GEMMA_MODEL` (по умолчанию `models/gemma-4-31b-it`) scoped model override только для VK auto-import draft extraction. Он передаётся в `event_parse` через `vk_intake`, но не меняет Smart Update и не меняет глобальный `/parse`.
 - `VK_AUTO_IMPORT_PREFETCH` (по умолчанию `0`) включает конвейер N/N+1: пока сохраняется пост N, параллельно подтягиваем лёгкие данные поста N+1 (wall.getById + мета). При `0` очередь держит только текущий row locked и берёт следующий post уже после завершения текущего, что безопаснее для startup recovery.
 - `VK_AUTO_IMPORT_PREFETCH_DRAFTS` (по умолчанию `0`) если включён — в префетче дополнительно выполняется (download media + OCR + LLM-parse) для N+1. ⚠️ Может заметно увеличить RAM и привести к OOM на маленьких машинах (например Fly `512MB`).
-- `VK_AUTO_IMPORT_MAX_PHOTOS` (по умолчанию `4`) ограничивает число VK-афиш/фото, которые auto-import подтягивает в live row для OCR/upload/LLM. Это отдельный guardrail для production RAM и не меняет глобальный `MAX_ALBUM_IMAGES` для других путей. Для постов, где автор явно пишет, что расписание/места находятся в карточках, transport-only router использует отдельный `VK_AUTO_IMPORT_SCHEDULE_MAX_PHOTOS` (по умолчанию `10`): LLM получает полный bounded-набор карточек вместо произвольных первых четырёх, но семантическое решение о числе событий по-прежнему принадлежит extraction/Smart Update.
+- `VK_AUTO_IMPORT_MAX_PHOTOS` (по умолчанию `4`) ограничивает число VK-афиш/фото, которые auto-import подтягивает в live row для OCR/upload/LLM. Это отдельный guardrail для production RAM и не меняет глобальный `MAX_ALBUM_IMAGES` для других путей. Для постов, где автор явно пишет, что расписание/места находятся в карточках, transport-only router использует отдельный `VK_AUTO_IMPORT_SCHEDULE_MAX_PHOTOS` (по умолчанию `10`), а parse-prompt lane сохраняет OCR всех этих карточек в пределах отдельных schedule caps. LLM получает полный bounded-набор карточек вместо произвольных первых четырёх/трёх OCR-блоков, но семантическое решение о числе событий по-прежнему принадлежит extraction/Smart Update.
 - `VK_AUTO_IMPORT_INLINE_JOBS` (по умолчанию `1`) ждать inline-джобы для отчёта (Telegraph/ICS).
 - `VK_AUTO_IMPORT_INLINE_INCLUDE_ICS` (по умолчанию `0`) ждать ICS inline вместе с Telegraph (обычно не нужно для E2E/local).
 - `VK_AUTO_IMPORT_SLOW_ROW_LOG_SEC` (по умолчанию `60`) порог для автоматического stage timing log по одной строке очереди даже без `PIPELINE_TIMINGS=1`; `0` означает логировать все строки.
@@ -238,10 +238,11 @@ Recovery: legacy-строки `vk_inbox.status='importing'`, зависшие д
 
 ### LLM budget for poster OCR
 
-Чтобы длинные VK-посты с несколькими афишами не раздували `event_parse` prompt до provider-side `429 TPM`, OCR афиш теперь подмешивается в LLM-запрос с budget policy:
+Чтобы VK-посты с несколькими афишами не раздували `event_parse` prompt до provider-side `429 TPM`, OCR афиш подмешивается в LLM-запрос с budget policy. Budget считается от **сырого текста источника**, а не от prompt после добавления policy-инструкций:
 
-- если основной текст поста уже длинный, poster OCR для parse пропускается целиком;
+- если основной текст поста уже длинный, остаются только компактные строки логистики poster OCR;
 - если текст короткий, в prompt попадает только ограниченное число OCR-блоков и символов;
+- если источник явно сообщает, что расписание/места находятся в карточках, все карточки являются первичным source evidence и получают отдельный bounded schedule budget вместо обычного cap в три блока;
 - festival normalisation JSON подмешивается только для источников `vk_source.festival_source=1`, а не для всей очереди подряд;
 - `poster_summary` сохраняется, а сами постеры и OCR по-прежнему доступны Smart Update как source facts/illustrations.
 
@@ -250,6 +251,9 @@ ENV для тонкой настройки:
 - `VK_PARSE_POSTER_TEXT_MAX_BLOCKS` (по умолчанию `3`) — максимум OCR-блоков в prompt для коротких постов.
 - `VK_PARSE_POSTER_TEXT_MAX_BLOCK_CHARS` (по умолчанию `500`) — максимум символов на один OCR-блок.
 - `VK_PARSE_POSTER_TEXT_MAX_TOTAL_CHARS` (по умолчанию `1200`) — общий лимит символов OCR в parse prompt.
+- `VK_PARSE_SCHEDULE_POSTER_TEXT_MAX_BLOCKS` (по умолчанию `10`) — максимум OCR-карточек для явного schedule-in-cards источника.
+- `VK_PARSE_SCHEDULE_POSTER_TEXT_MAX_BLOCK_CHARS` (по умолчанию `1200`) — максимум символов одной schedule-карточки.
+- `VK_PARSE_SCHEDULE_POSTER_TEXT_MAX_TOTAL_CHARS` (по умолчанию `9000`) — общий bounded OCR budget schedule-карточек.
 
 ### Conservative prefilter for obvious non-events
 

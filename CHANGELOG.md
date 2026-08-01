@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- Fixed three production event-quality regressions: historical interviews now enter the LLM eventness gate instead of becoming future events; explicit attendee-facing location markers outrank programme/club labels through semantic review; and VK schedule-card posts receive a bounded complete attachment set and must split independent dates/venues rather than collapse a cover range into one aggregate event.
+- Fixed three production event-quality regressions: historical interviews now enter the LLM eventness gate instead of becoming future events; explicit attendee-facing location markers outrank programme/club labels through semantic review; and VK schedule-card posts receive both a bounded complete attachment set and the matching complete OCR evidence set, so the LLM can split independent dates/venues rather than collapse a cover range into one aggregate event. The parser now budgets poster OCR against the raw source caption rather than its own appended policy text.
 
 - Enabled the production Region Talk reaction gate: future article/social plan slots now require an exact-current ❤️/👍 approval with clean copy; pending, rejected, conflicting, rewrite-requested and stale revisions remain outside the public-content queue.
 
@@ -74,6 +74,12 @@
 
 ### Fixed
 - Fixed static-selection scheduling and truth boundaries: Smart Update now uses a strict trailing 15-minute static-build debounce, club provider failures preserve accepted relations with durable retry, and the exporter no longer infers free admission from prose ticket status. Production-candidate semantic computation is independent from legacy Unusual publication flags.
+- Region Talk now hands every eligible external editorial/academic article to
+  page-image acquisition even when imported research contains no prefilled
+  `candidate_urls`. The queue records the canonical page as an acquisition
+  target without falsely asserting that media already exists, while untouched
+  articles remain ineligible for publication until ImageDiagnostic or the
+  bounded browser fallback produces terminal evidence.
 - Region Talk social draft backfill now carries the exact reviewed ordered
   ImageDiagnostic selection into the publication manifest. Telegram source
   albums without expanded selections are deterministically bounded to the
@@ -82,7 +88,9 @@
 - Focus-group Android onboarding now registers a base-aware, network-only PWA
   worker and captures Chromium's one-shot install event before hydration. It no
   longer presents a plain `Добавить на главный экран` shortcut as equivalent
-  to installing the `Анонсы` application.
+  to installing the `Анонсы` application. The CTA now stays visible while the
+  installation completes and becomes `Открыть Анонсы`; repeat visits remember
+  the exact installed candidate/root identity.
 - Region Talk orchestrator metrics now merge external publication source
   attestations, making imported article candidates autonomously actionable for
   v8 backfill. Exact native Telegram album anchors are recognized as durable

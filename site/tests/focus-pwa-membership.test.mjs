@@ -25,14 +25,23 @@ class FakeTarget {
   }
 }
 
-function fixture({ userAgent = 'Mozilla/5.0 (Linux; Android 15)', standalone = false } = {}) {
+function fixture({ userAgent = 'Mozilla/5.0 (Linux; Android 15)', standalone = false, storage = null } = {}) {
   const windowRef = new FakeTarget();
-  windowRef.location = { search: '' };
+  windowRef.location = { search: '', assigned: '', assign(value) { this.assigned = value; } };
   windowRef.matchMedia = () => ({ matches: standalone });
+  windowRef.localStorage = storage || {
+    values: new Map(),
+    getItem(key) { return this.values.get(key) || null; },
+    setItem(key, value) { this.values.set(key, String(value)); },
+    removeItem(key) { this.values.delete(key); },
+  };
   const navigatorRef = { userAgent, platform: '', maxTouchPoints: 0 };
   const root = new FakeTarget();
   root.hidden = false;
-  root.dataset = {};
+  root.dataset = {
+    pwaInstallId: '/preview-test/fokus-gruppa/pwa',
+    pwaOpenHref: '/preview-test/fokus-gruppa/priglashenie/?launch=pwa',
+  };
   const button = new FakeTarget();
   button.hidden = false;
   button.disabled = false;
@@ -135,7 +144,33 @@ test('focus install action preserves one-shot beforeinstallprompt and honest ins
 
   state.windowRef.dispatch('appinstalled');
   assert.equal(state.root.dataset.focusPwaInstalled, 'true');
-  assert.match(state.status.textContent, /запуск остаётся действием пользователя/u);
+  assert.equal(state.button.textContent, 'Открыть Анонсы');
+  assert.equal(state.button.hidden, false);
+  assert.equal(state.button.disabled, false);
+  assert.match(state.status.textContent, /Приложение установлено/u);
+});
+
+test('repeat invite remembers a completed install and keeps an open-app button', () => {
+  const storage = {
+    values: new Map(),
+    getItem(key) { return this.values.get(key) || null; },
+    setItem(key, value) { this.values.set(key, String(value)); },
+    removeItem(key) { this.values.delete(key); },
+  };
+  const first = fixture({ storage });
+  first.windowRef.dispatch('appinstalled');
+  first.controller.destroy();
+
+  const repeated = fixture({ storage });
+  assert.equal(repeated.button.hidden, false);
+  assert.equal(repeated.button.textContent, 'Открыть Анонсы');
+  assert.equal(repeated.root.dataset.pwaInstallReady, 'installed');
+  repeated.button.dispatch('click', { preventDefault() {} });
+  assert.equal(
+    repeated.windowRef.location.assigned,
+    '/preview-test/fokus-gruppa/priglashenie/?launch=pwa',
+  );
+  repeated.controller.destroy();
 });
 
 test('focus install action consumes an early captured Chromium prompt', async () => {
