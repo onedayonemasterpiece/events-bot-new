@@ -160,9 +160,10 @@ jobs:
           RUN_STATE: ${{ job.status }}
         run: |
           set -euo pipefail
-          python - <<'PY' > "${RUNNER_TEMP}/telegram-read-status.json"
+          python - <<'PY'
           import json
           import os
+          from pathlib import Path
 
           state = os.environ.get("RUN_STATE", "error")
           if state not in {"success", "failure"}:
@@ -177,7 +178,8 @@ jobs:
               "description": f"run {run_id}; artifact telegram-read-{run_id}",
               "context": "telegram-read/artifact",
           }
-          json.dump(payload, open(os.environ["RUNNER_TEMP"] + "/telegram-read-status.json", "w"), separators=(",", ":"))
+          path = Path(os.environ["RUNNER_TEMP"]) / "telegram-read-status.json"
+          path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
           PY
           curl --fail-with-body --silent --show-error \
             --request POST \
