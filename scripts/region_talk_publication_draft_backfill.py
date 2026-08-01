@@ -939,7 +939,8 @@ def call_editorial_stage(
         result.update({
             "_stage_status": "ok",
             "_stage": stage,
-            "_model": model,
+            "_model": str(getattr(_usage, "model", "") or model),
+            "_requested_model": model,
             "_request_fingerprint": stage_fingerprint,
             "_prompt_hash": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
             "_usage_input_tokens": getattr(_usage, "input_tokens", ""),
@@ -1293,7 +1294,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
                 "transport": str(args.transport),
             }
 
-        model = str(args.model or os.getenv("REGION_TALK_LLM_MODEL") or "gemini-3.1-flash-lite")
+        model = str(args.model or os.getenv("REGION_TALK_LLM_MODEL") or "gemini-3.5-flash-lite")
         default_env = str(
             args.default_env_var_name
             or os.getenv("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME")

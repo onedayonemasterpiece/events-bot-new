@@ -1679,7 +1679,8 @@ def _structured_llm_call(
         return {
             "llm_gate_status": "ok",
             "data": rt.parse_llm_json(text),
-            "llm_model": model,
+            "llm_model": str(getattr(usage, "model", "") or model),
+            "llm_requested_model": model,
             "llm_usage_input_tokens": getattr(usage, "input_tokens", ""),
             "llm_usage_output_tokens": getattr(usage, "output_tokens", ""),
             "llm_usage_total_tokens": getattr(usage, "total_tokens", ""),
@@ -2373,7 +2374,7 @@ def main() -> int:
     parser.add_argument("--llm-budget-max", type=int, default=None)
     parser.add_argument("--limit-images", type=int, default=5000)
     parser.add_argument("--limit-memory", type=int, default=20000)
-    parser.add_argument("--model", default=os.getenv("REGION_TALK_LLM_MODEL") or "gemini-3.1-flash-lite")
+    parser.add_argument("--model", default=os.getenv("REGION_TALK_LLM_MODEL") or "gemini-3.5-flash-lite")
     parser.add_argument("--default-env-var-name", default=os.getenv("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME") or "GOOGLE_API_KEY3")
     parser.add_argument("--output-dir", type=Path, default=PROJECT_ROOT / "artifacts" / "codex" / "region-talk-finalizer")
     parser.add_argument("--dry-run", action="store_true")

@@ -90,7 +90,8 @@ REGION_TALK_MAX_IMAGES_PER_POST=8
 # LLM call/key/rate limits are strict Supabase google_ai limiter state, not env counters.
 # Required for live/Kaggle quality runs: SUPABASE_URL + SUPABASE_KEY/SUPABASE_SERVICE_KEY.
 REGION_TALK_MAX_VLM_CALLS=10
-REGION_TALK_LLM_MODEL=gemini-3.1-flash-lite
+REGION_TALK_LLM_MODEL=gemini-3.5-flash-lite
+REGION_TALK_LLM_FALLBACK_MODELS=gemini-3.1-flash-lite
 REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME=GOOGLE_API_KEY3
 REGION_TALK_LLM_CALL_TIMEOUT_SECONDS=60
 REGION_TALK_LLM_PROMPT_TEXT_MAX_CHARS=1800
@@ -242,13 +243,14 @@ Comments are only for source discovery/link evidence and never publication mater
 
 ## MVP-1.y reviewable pre-candidate policy
 
-If the LLM semantic gate is required but Supabase limiter/RPC is unavailable, rows are fail-closed into `pre_candidate_needs_llm` with `llm_gate_status=not_run_supabase_limiter_unavailable`; there is no direct SDK/key fallback. If Supabase reserve/provider returns quota/error, rows become `needs_llm_retry` and are exported in `04b_needs_llm_retry` / `14c_llm_errors`.
+If the LLM semantic gate is required but Supabase limiter/RPC is unavailable, rows are fail-closed into `pre_candidate_needs_llm` with `llm_gate_status=not_run_supabase_limiter_unavailable`; there is no direct SDK/key fallback. A model-scoped `rpm`/`tpm`/`rpd` block advances from `gemini-3.5-flash-lite` to the separately limited `gemini-3.1-flash-lite` row. If both model reservations or the provider fail, rows become `needs_llm_retry` and are exported in `04b_needs_llm_retry` / `14c_llm_errors`.
 
 Recommended next dry-run:
 
 ```bash
 REGION_TALK_MAX_VLM_CALLS=20
-REGION_TALK_LLM_MODEL=gemini-3.1-flash-lite
+REGION_TALK_LLM_MODEL=gemini-3.5-flash-lite
+REGION_TALK_LLM_FALLBACK_MODELS=gemini-3.1-flash-lite
 REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME=GOOGLE_API_KEY3
 GOOGLE_AI_ALLOW_RESERVE_FALLBACK=0
 GOOGLE_AI_LOCAL_LIMITER_FALLBACK=0

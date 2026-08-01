@@ -528,7 +528,8 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_FETCH_VKVIDEO_WALL_FALLBACK": os.environ.get("REGION_TALK_FETCH_VKVIDEO_WALL_FALLBACK", "1"),
         "REGION_TALK_AUTH_BUNDLE_ENV": os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_DISCOVERY1"),
         "REGION_TALK_SEMANTIC_GATE_MODE": os.environ.get("REGION_TALK_SEMANTIC_GATE_MODE", "vector_first_final_llm"),
-        "REGION_TALK_LLM_MODEL": os.environ.get("REGION_TALK_LLM_MODEL", "gemini-3.1-flash-lite"),
+        "REGION_TALK_LLM_MODEL": os.environ.get("REGION_TALK_LLM_MODEL", "gemini-3.5-flash-lite"),
+        "REGION_TALK_LLM_FALLBACK_MODELS": os.environ.get("REGION_TALK_LLM_FALLBACK_MODELS", "gemini-3.1-flash-lite"),
         "REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME": os.environ.get("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME", "GOOGLE_API_KEY3"),
         "REGION_TALK_LLM_CALL_TIMEOUT_SECONDS": os.environ.get("REGION_TALK_LLM_CALL_TIMEOUT_SECONDS", "60"),
         "GOOGLE_AI_PROVIDER_TIMEOUT_SEC": os.environ.get(
@@ -957,7 +958,8 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_YDB_CANDIDATE_MEMORY_WRITE_CHANGED_ONLY", "1")
     os.environ.setdefault("REGION_TALK_YDB_ONLINE_CANDIDATE_WRITE_MAX_ROWS", "0")
     os.environ.setdefault("REGION_TALK_WRITE_SOURCE_STATUS_QUEUE_MIRROR", "0")
-    os.environ.setdefault("REGION_TALK_LLM_MODEL", "gemini-3.1-flash-lite")
+    os.environ.setdefault("REGION_TALK_LLM_MODEL", "gemini-3.5-flash-lite")
+    os.environ.setdefault("REGION_TALK_LLM_FALLBACK_MODELS", "gemini-3.1-flash-lite")
     os.environ.setdefault("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME", "GOOGLE_API_KEY3")
     os.environ.setdefault("REGION_TALK_LLM_CALL_TIMEOUT_SECONDS", "60")
     os.environ.setdefault("GOOGLE_AI_PROVIDER_TIMEOUT_SEC", os.environ.get("REGION_TALK_LLM_CALL_TIMEOUT_SECONDS", "60"))

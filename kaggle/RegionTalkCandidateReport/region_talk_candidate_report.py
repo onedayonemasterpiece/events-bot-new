@@ -52,6 +52,8 @@ apply_huggingface_runtime_env_defaults()
 RUN_STARTED_AT = datetime.now(timezone.utc)
 RUN_STARTED_MONOTONIC = time.monotonic()
 _REGION_TALK_STACK_WATCHDOG_STARTED = False
+REGION_TALK_PRIMARY_TEXT_MODEL = "gemini-3.5-flash-lite"
+REGION_TALK_FALLBACK_TEXT_MODELS = ("gemini-3.1-flash-lite",)
 DEFAULT_ANCHORS = ["Калининград", "Калининградская область", "Куршская коса", "Зеленоградск", "Светлогорск", "Балтийское море", "Кёнигсберг", "Краснолесье", "Виштынец", "Роминтенская пуща", "Балтийская коса", "Янтарный", "Балтийск", "Советск", "Неман", "Правдинск", "Черняховск"]
 TELEGRAM_KEYWORD_DISCOVERY_TERMS = [
     "Калининград", "Кёнигсберг", "Зеленоградск", "Светлогорск", "Янтарный", "Балтийск", "Пионерский",
@@ -15086,6 +15088,19 @@ def get_region_talk_llm_gateway(default_env_var_name: str) -> Any:
     client.allow_reserve_fallback = False
     client.allow_local_limiter_fallback = False
     client.allow_local_limiter_on_reserve_error = False
+    raw_fallbacks = str(os.getenv("REGION_TALK_LLM_FALLBACK_MODELS") or "").strip()
+    configured_fallbacks = [part.strip() for part in raw_fallbacks.split(",") if part.strip()]
+    primary_model = str(os.getenv("REGION_TALK_LLM_MODEL") or REGION_TALK_PRIMARY_TEXT_MODEL).strip()
+    seen_models = {primary_model.lower()}
+    client.fallback_models = []
+    for fallback_model in configured_fallbacks or REGION_TALK_FALLBACK_TEXT_MODELS:
+        if fallback_model.lower() in seen_models:
+            continue
+        seen_models.add(fallback_model.lower())
+        client.fallback_models.append(fallback_model)
+    # The Region Talk daily ledger is a physical-send ceiling. Quota fallback
+    # occurs before provider dispatch; provider errors remain one-send failures.
+    client.allow_provider_model_fallback = False
     _REGION_TALK_GOOGLE_CLIENT = client
     return client
 
@@ -15122,7 +15137,7 @@ def load_llm_limit_snapshot(model: str, default_env_var_name: str) -> dict[str, 
 
 def call_region_talk_semantic_llm(post: dict[str, Any], evidence: dict[str, Any], *, model: str | None = None, default_env_var_name: str | None = None) -> dict[str, Any]:
     # Final semantic decision only. Budget/key selection must go through Supabase google_ai_reserve.
-    model = (model or os.getenv("REGION_TALK_LLM_MODEL") or "gemini-3.1-flash-lite").strip()
+    model = (model or os.getenv("REGION_TALK_LLM_MODEL") or REGION_TALK_PRIMARY_TEXT_MODEL).strip()
     default_env_var_name = (default_env_var_name or os.getenv("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME") or "GOOGLE_API_KEY3").strip()
     try:
         llm_call_timeout = max(0.001, float(os.getenv("REGION_TALK_LLM_CALL_TIMEOUT_SECONDS") or os.getenv("REGION_TALK_LLM_TIMEOUT_SECONDS") or "60"))
@@ -15190,6 +15205,7 @@ def call_region_talk_semantic_llm(post: dict[str, Any], evidence: dict[str, Any]
             if not timed_out:
                 pool.shutdown(wait=True, cancel_futures=False)
         data = parse_llm_json(text)
+        actual_model = str(getattr(usage, "model", "") or model)
         decision = str(data.get("decision") or "needs_review").strip().lower()
         if decision not in {"accept", "needs_review", "reject"}:
             decision = "needs_review"
@@ -15202,7 +15218,8 @@ def call_region_talk_semantic_llm(post: dict[str, Any], evidence: dict[str, Any]
         return {
             "llm_gate_status": "ok",
             "llm_provider": "google_gemini",
-            "llm_model": model,
+            "llm_model": actual_model,
+            "llm_requested_model": model,
             "llm_default_env_var_name": default_env_var_name,
             "llm_limit_source": "supabase_google_ai_reserve",
             "llm_decision": decision,
@@ -16865,7 +16882,7 @@ def build_report(
     place_match_rows: list[dict[str, Any]] = []
     seed_by_id = {s.source_seed_id: s for s in seeds}
     pre_candidates: list[dict[str, Any]] = []
-    llm_model = (os.getenv("REGION_TALK_LLM_MODEL") or "gemini-3.1-flash-lite").strip()
+    llm_model = (os.getenv("REGION_TALK_LLM_MODEL") or REGION_TALK_PRIMARY_TEXT_MODEL).strip()
     llm_default_env_var_name = (os.getenv("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME") or "GOOGLE_API_KEY3").strip()
     llm_limit_snapshot = load_llm_limit_snapshot(llm_model, llm_default_env_var_name)
     llm_calls_used = 0
