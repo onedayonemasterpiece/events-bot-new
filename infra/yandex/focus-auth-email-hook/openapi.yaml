@@ -1,0 +1,23 @@
+openapi: 3.0.0
+info:
+  title: KenigEvents focus Auth email hook
+  version: 1.0.0
+paths:
+  /v1/send-email:
+    post:
+      operationId: sendFocusAuthEmail
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: ${FOCUS_AUTH_EMAIL_HOOK_FUNCTION_ID}
+        service_account_id: ${FOCUS_AUTH_EMAIL_HOOK_INVOKER_SERVICE_ACCOUNT_ID}
+      responses:
+        "200":
+          description: Provider accepted the Auth email or the exact attempt was already accepted
+        "400":
+          description: Invalid hook payload
+        "401":
+          description: Invalid Standard Webhook signature
+        "500":
+          description: Hook configuration failure
+        "503":
+          description: Delivery was rejected, ambiguous or still in progress

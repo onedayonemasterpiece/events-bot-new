@@ -47,6 +47,27 @@ export interface ResilientRequestOptions {
   operation?: BackendOperationDefinition;
 }
 
+export type SupabaseTransportOutcomeKind =
+  | 'definitive'
+  | 'recovered'
+  | 'ambiguous'
+  | 'no_route'
+  | 'transport_failure';
+
+export interface SupabaseTransportOutcome {
+  operationId: string;
+  operation: string;
+  capability: BackendCapability;
+  policy: ResilientOperationPolicy;
+  initialRoute: SupabaseTransportRoute | null;
+  finalRoute: SupabaseTransportRoute | null;
+  kind: SupabaseTransportOutcomeKind;
+  status: number | null;
+  phase: SupabaseTransportFailurePhase | 'selection' | null;
+  startedAt: number;
+  elapsedMs: number;
+}
+
 interface CircuitState {
   failures: number;
   openUntil: number;
@@ -66,6 +87,7 @@ const ROUTE_CACHE_PREFIX = 'ke_supabase_transport_route_v3:';
 const TRANSPORT_ERROR_PREFIX = 'ke_transport_v3';
 const CONTRACT_VERSION = 3;
 const CIRCUIT_DELAYS_MS = [30_000, 60_000, 120_000, 300_000] as const;
+const OUTCOME_HISTORY_LIMIT = 24;
 
 const trimOrigin = (value: string): string => String(value || '').replace(/\/+$/u, '');
 
@@ -333,6 +355,7 @@ export class ResilientSupabaseTransport {
   private readonly selections = new Map<BackendCapability, SupabaseRouteSelection>();
   private readonly selecting = new Map<BackendCapability, Promise<SupabaseRouteSelection>>();
   private readonly circuits = new Map<string, CircuitState>();
+  private readonly outcomes: SupabaseTransportOutcome[] = [];
 
   constructor(config: ResilientSupabaseTransportConfig) {
     this.directUrl = trimOrigin(config.directUrl);
@@ -402,6 +425,22 @@ export class ResilientSupabaseTransport {
       this.selections.delete(item);
       this.selecting.delete(item);
       try { this.storage?.removeItem(this.storageKey(item)); } catch { /* best effort */ }
+    }
+  }
+
+  latestOutcome(operation?: string, startedAfter = 0): SupabaseTransportOutcome | null {
+    for (let index = this.outcomes.length - 1; index >= 0; index -= 1) {
+      const outcome = this.outcomes[index];
+      if (outcome.startedAt < startedAfter) continue;
+      if (!operation || outcome.operation === operation) return { ...outcome };
+    }
+    return null;
+  }
+
+  private recordOutcome(outcome: SupabaseTransportOutcome): void {
+    this.outcomes.push(outcome);
+    if (this.outcomes.length > OUTCOME_HISTORY_LIMIT) {
+      this.outcomes.splice(0, this.outcomes.length - OUTCOME_HISTORY_LIMIT);
     }
   }
 
@@ -707,8 +746,32 @@ export class ResilientSupabaseTransport {
       throw new Error(`backend_operation_policy_mismatch:${operation.name}:${options.policy}:${expectedPolicy}`);
     }
     const id = operationId();
+    const startedAt = this.now();
+    let initialRoute: SupabaseTransportRoute | null = null;
+    const record = (
+      kind: SupabaseTransportOutcomeKind,
+      finalRoute: SupabaseTransportRoute | null,
+      status: number | null,
+      phase: SupabaseTransportFailurePhase | 'selection' | null = null,
+    ) => this.recordOutcome({
+      operationId: id,
+      operation: operation.name,
+      capability: operation.capability,
+      policy: expectedPolicy,
+      initialRoute,
+      finalRoute,
+      kind,
+      status,
+      phase,
+      startedAt,
+      elapsedMs: Math.max(0, Math.round(this.now() - startedAt)),
+    });
     const selection = await this.selectRoute(false, operation.capability, operation.routeSupport);
-    if (!selection.route) throw new SupabaseNoHealthyRouteError(id);
+    if (!selection.route) {
+      record('no_route', null, null, 'selection');
+      throw new SupabaseNoHealthyRouteError(id);
+    }
+    initialRoute = selection.route;
     const replayable = expectedPolicy === 'safe-read' || expectedPolicy === 'idempotent-replay';
     const timeoutMs = replayable ? this.safeRequestTimeoutMs : this.selectedRequestTimeoutMs;
 
@@ -720,15 +783,23 @@ export class ResilientSupabaseTransport {
       if (operation.responseMode === 'stream' && response.ok) return response;
       if (!replayable || response.status < 500) {
         this.markRouteSuccess(operation.capability, selection.route);
+        record('definitive', selection.route, response.status);
         return response;
       }
       const alternate = this.alternate(selection.route, operation);
-      if (!alternate) return response;
+      if (!alternate) {
+        record('definitive', selection.route, response.status);
+        return response;
+      }
       const recovered = await this.executeRoute(alternate, input, init, timeoutMs, operation, id);
       if (recovered.status < 500) this.markRouteSuccess(operation.capability, alternate);
+      record('recovered', alternate, recovered.status);
       return recovered;
     } catch (error) {
-      if (error instanceof SupabaseAmbiguousWriteError) throw error;
+      if (error instanceof SupabaseAmbiguousWriteError) {
+        record('ambiguous', error.route, null, error.phase);
+        throw error;
+      }
       const phase = (error as InternalPhaseError)?.transportPhase || 'dispatch';
       this.markRouteFailure(operation.capability, selection.route);
       const alternate = replayable ? this.alternate(selection.route, operation) : null;
@@ -736,15 +807,24 @@ export class ResilientSupabaseTransport {
         try {
           const recovered = await this.executeRoute(alternate, input, init, timeoutMs, operation, id);
           if (recovered.status < 500) this.markRouteSuccess(operation.capability, alternate);
+          record('recovered', alternate, recovered.status);
           return recovered;
         } catch (alternateError) {
           const alternatePhase = (alternateError as InternalPhaseError)?.transportPhase || 'dispatch';
           this.markRouteFailure(operation.capability, alternate);
-          if (expectedPolicy === 'idempotent-replay') throw alternateError;
+          if (expectedPolicy === 'idempotent-replay') {
+            record('transport_failure', alternate, null, alternatePhase);
+            throw alternateError;
+          }
+          record('transport_failure', alternate, null, alternatePhase);
           throw phaseError(alternatePhase, alternateError);
         }
       }
-      if (!replayable) throw new SupabaseAmbiguousWriteError(error, id, selection.route, phase);
+      if (!replayable) {
+        record('ambiguous', selection.route, null, phase);
+        throw new SupabaseAmbiguousWriteError(error, id, selection.route, phase);
+      }
+      record('transport_failure', selection.route, null, phase);
       throw error;
     }
   }

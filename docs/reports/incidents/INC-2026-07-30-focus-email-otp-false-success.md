@@ -231,6 +231,21 @@ after any failed transport result and therefore communicated a false success.
   `200` and the confirmed final screen. This is internal Auth integration
   evidence, not external mailbox-delivery E2E.
 
+- 2026-08-01 22:52 UTC — implemented the server-side receipt boundary and
+  provider routing in an isolated branch. A signed Send Email Hook now selects
+  Postbox for a new first send and paid NotiSend `subscriber` for returning,
+  repeated and fixed test identities; accepted/ambiguous attempts never switch
+  provider or duplicate. Private PII-free ledgers correlate provider acceptance,
+  direct/relay OTP issue and verify, plus actual email/Yandex method attempts.
+  NotiSend candidates pass an atomic shared unique-recipient admission gate:
+  repeated users reuse a slot, while the 201st new provider recipient is
+  assigned to Postbox before dispatch. Email magic-link code exchange is also
+  classified as email rather than being miscounted as Yandex OAuth.
+  The client resolves a lost `/otp` response through an exact bounded receipt
+  RPC. Unit/infrastructure tests and a transactional remote SQL compile pass;
+  production hook activation and a real external-mailbox GitHub Action remain
+  release gates, so the incident stays open.
+
 ## Root Cause
 
 1. `FocusGroupInviteIntake.astro` called `showEmailCode()` unconditionally

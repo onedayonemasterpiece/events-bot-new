@@ -30,10 +30,14 @@ const SMALL_STORAGE_RESPONSE_LIMIT = 256 * 1024;
 const READ_ONLY_RPCS = new Set([
   'get_event_search_quota_v2',
   'get_listing_personal_feed_v1',
+  'focus_auth_get_delivery_receipt_v1',
   'transport_probe_v1',
 ]);
 
 const IDEMPOTENT_RPCS = new Set([
+  'focus_auth_record_client_outcome_v1',
+  'focus_auth_record_verification_v1',
+  'focus_auth_record_method_attempt_v1',
   'ingest_transport_experiment_event_v1',
   'record_pwa_lifecycle_v1',
   'register_focus_group_participant_v1',
@@ -90,13 +94,13 @@ export function classifyBackendOperation(
         return definition(
           `auth.${action.replaceAll('/', '.')}`,
           'oauth-navigation',
-          'safe-read',
+          'selected-once',
           empty ? 'empty' : 'buffered-json',
           AUTH_RESPONSE_LIMIT,
           ['direct', 'relay'],
         );
       }
-      if (action === 'health' || action === 'settings' || action === 'user' || action === 'verify') {
+      if (action === 'health' || action === 'settings' || action === 'user') {
         return definition(
           `auth.${action.replaceAll('/', '.')}`,
           'auth',
@@ -104,6 +108,9 @@ export function classifyBackendOperation(
           empty ? 'empty' : 'buffered-json',
           AUTH_RESPONSE_LIMIT,
         );
+      }
+      if (action === 'verify') {
+        return definition('auth.verify-link', 'auth', 'selected-once', 'buffered-json', AUTH_RESPONSE_LIMIT);
       }
       throw new UnclassifiedBackendOperationError(method, path);
     }

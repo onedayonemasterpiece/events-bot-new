@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- Added deterministic focus Auth email routing and evidence: new first sends use
+  Postbox, while returning/repeated and fixed E2E/operator identities use paid
+  NotiSend subscriber capacity. One opaque attempt now correlates provider
+  receipt, direct/relay issue/verify outcome and actual email/Yandex login
+  method without storing OTP or browser identifiers; an ambiguous browser
+  response resolves through a bounded receipt RPC and never sends a duplicate.
+  NotiSend admission now counts unique users across Auth and recommendation
+  traffic under the real 200-recipient ceiling; repeated fixed identities reuse
+  one slot, while new Auth recipients above capacity are assigned to Postbox
+  before dispatch.
+
 - Fixed focus-group email code entry on phones: the sixth digit visibly starts
   verification, Android autofill/change commits are handled, failures return
   control to the six-cell input, successful verification explicitly completes

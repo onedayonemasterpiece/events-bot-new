@@ -14,8 +14,17 @@
 8. **Verified-email login supports both a code and a one-click link.** Both complete one Supabase Auth verification flow and recover the same identity.
 9. **Personal pages use a forwardable public secret link.** Anyone who has the high-entropy URL may open it without authentication. The page is `noindex` and contains no raw profile/private identity data; the token remains revocable/rotatable under retention policy.
 10. **Anonymous-to-authenticated profile linking is automatic and intelligent.** No extra merge-confirmation dialog is required after login. The merge is idempotent, deduplicates saved/action state, preserves explicit user actions over inferred interests, decays/conflict-checks inferred signals, shows the result and keeps reset/unlink available.
-11. **Email providers have non-overlapping roles.** SpaceWeb owns and retains the human/inbound mailbox. Because its mailbox destination modes are mutually exclusive, a read-only Yandex IMAP collector handles the production automation copy without changing `Seen`; Yandex Mail Trigger remains a direct technical canary. Postbox sends transactional mail only, and NotiSend sends personal recommendations/announcements only. Supabase remains the consent/suppression/outbox authority; YDB remains analytics-only.
-12. **Recommendation email has a hard launch ceiling of 200 actively consented users.** Capacity must be enforced in Supabase and fail closed; provider limits do not authorize an extra recipient or a fallback to Postbox.
+11. **Email provider routing is explicit.** SpaceWeb owns and retains the
+human/inbound mailbox. A read-only Yandex IMAP collector handles the production
+automation copy without changing `Seen`; Yandex Mail Trigger remains a direct
+technical canary. Postbox sends transactional mail. NotiSend sends personal
+recommendations and the narrow returning/repeated/fixed-test Auth route.
+Supabase remains the consent/suppression/admission authority; YDB remains
+analytics-only.
+12. **NotiSend has a shared hard launch ceiling of 200 unique recipients.**
+Recommendation consent remains independently capped and fail-closed; provider
+limits do not authorize an extra recipient or a recommendation fallback to
+Postbox. Auth assigns over-capacity new recipients to Postbox before dispatch.
 
 13. **Пасхалки — отдельный post-release campaign format, а не engagement North Star.** Они используют общий promo control plane, но требуют first-class egg subject/progress ledger вместо fake event ids. Первый пилот — конечная non-prize коллекция с добровольными подсказками/share, отдельным блоком в `Моё`, feedback/partner intake, admin kill switch и holdout по downstream event value; до product/legal/privacy/a11y/IP/anti-abuse acceptance production implementation запрещена.
 

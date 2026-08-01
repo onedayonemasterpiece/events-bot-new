@@ -268,15 +268,12 @@ The browser outbox is bounded and local-first:
   uses the local state immediately and cross-device state catches up later;
 - explicit visible pending/error state for feedback whose loss would matter.
 
-Email delivery is a separate downstream boundary. A Supabase Send Email Hook may
-call the configured providers with fallback and record one opaque attempt/provider
-receipt in YDB. The hook does not issue or verify OTP. It returns success only
+Email delivery is a separate downstream boundary. A Supabase Send Email Hook calls one provider selected before dispatch and records one opaque attempt/provider receipt in the private personalization database. The public Yandex relay exposes only the exact bounded receipt RPC. The hook does not issue or verify OTP. It returns success only
 after a provider accepted the message; Delivery/Bounce/Reject webhooks remain
 separate evidence.
 
 The opaque attempt id travels in the Auth `redirect_to`, which the Send Email
-Hook receives as signed request data. Provider fallback is allowed only after a
-definitive pre-acceptance failure. An accepted or ambiguous provider attempt is
+Hook receives as signed request data. A new attempt may select a provider under the routing policy only before network dispatch. An accepted or ambiguous provider attempt is
 not duplicated automatically. A status lookup by the opaque id may resolve a
 lost browser response; it never returns an email address, token or provider
 payload.
@@ -505,25 +502,28 @@ action type and the Supabase token, so the hook can correlate the attempt
 without moving Auth ownership.
 
 The hook is the transactional mail boundary. It verifies the Standard Webhooks
-signature, reserves the attempt in YDB, sends the message through the configured
-transactional provider and records only bounded states:
+signature, reserves the attempt in the private personalization database, sends the message through exactly one configured provider and records only bounded states:
 
 ```text
 reserved -> dispatching -> provider_accepted | provider_rejected
                          -> provider_ambiguous
 ```
 
-The receipt stores the opaque attempt id, state, provider identifier, a keyed
-hash of the provider message id, timestamps and short expiry. It stores no
+The private receipt stores the opaque attempt id, state, selected provider, provider message id, timestamps and short retention. Its browser RPC projects only the bounded state and never exposes the provider receipt. It stores no
 email, OTP, token hash, JWT or message body. Because the Postbox SendEmail API
 does not expose an idempotency key, a crash after provider acceptance cannot be
 made exactly-once: `dispatching`/`provider_ambiguous` must never cause an
-automatic second send. Provider fallback is allowed only after a definitive
-pre-acceptance rejection and remains a separate mail-routing policy, not a
-browser-transport fix.
+automatic second send. Provider selection is deterministic before dispatch: a
+new first send uses Postbox; existing/repeated and fixed E2E/operator identities
+are candidates for paid NotiSend `subscriber`. A private atomic admission set
+counts unique NotiSend users across Auth and recommendations. An existing member
+of that set keeps using NotiSend; once the shared 200-user capacity (including
+operator-reserved provider contacts) is full, a new Auth recipient is assigned
+to Postbox before dispatch. No accepted, rejected or ambiguous attempt switches
+provider automatically.
 
 When the browser loses the `/otp` response, it performs a small bounded receipt
-lookup through the independent Yandex endpoint instead of repeating `/otp`:
+lookup through the exact direct/relay receipt RPC instead of repeating `/otp`:
 
 - `provider_accepted` opens code entry and says the message was accepted for
   delivery;

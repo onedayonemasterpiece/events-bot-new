@@ -69,6 +69,9 @@ test('keeps the historical auth storage key', () => {
 test('operation catalog owns semantics and rejects unknown mutations', () => {
   assert.equal(policyForOperation(classifyBackendOperation(`${direct}/auth/v1/otp`, { method: 'POST' })), 'selected-once');
   assert.equal(policyForOperation(classifyBackendOperation(`${direct}/rest/v1/rpc/get_listing_personal_feed_v1`, { method: 'POST' })), 'safe-read');
+  assert.equal(policyForOperation(classifyBackendOperation(`${direct}/auth/v1/verify?token=x&type=magiclink`, { method: 'GET' })), 'selected-once');
+  assert.equal(policyForOperation(classifyBackendOperation(`${direct}/auth/v1/callback?code=x`, { method: 'GET' })), 'selected-once');
+  assert.equal(policyForOperation(classifyBackendOperation(`${direct}/rest/v1/rpc/focus_auth_get_delivery_receipt_v1`, { method: 'POST' })), 'safe-read');
   assert.equal(policyForOperation(classifyBackendOperation(`${direct}/rest/v1/rpc/submit_focus_group_feedback_v2`, { method: 'POST' })), 'idempotent-replay');
   assert.equal(classifyBackendOperation(`${direct}/functions/v1/event-search`, {
     method: 'POST', headers: { Accept: 'application/x-ndjson' },
@@ -298,6 +301,15 @@ test('429 is definitive and is not replayed', async () => {
   assert.equal(response.status, 429);
   assert.equal(response.headers.get('retry-after'), '60');
   assert.equal(count, 1);
+  assert.deepEqual(
+    (({ operation, policy, initialRoute, finalRoute, kind, status, phase }) => ({
+      operation, policy, initialRoute, finalRoute, kind, status, phase,
+    }))(transport.latestOutcome('auth.otp')!),
+    {
+      operation: 'auth.otp', policy: 'selected-once', initialRoute: 'direct', finalRoute: 'direct',
+      kind: 'definitive', status: 429, phase: null,
+    },
+  );
 });
 
 test('idempotent command may retry once and selected-once may not', async () => {
@@ -316,6 +328,8 @@ test('idempotent command may retry once and selected-once may not', async () => 
     method: 'POST', body: '{}',
   })).ok, true);
   assert.equal(calls.filter((url) => url.includes('register_focus_group_participant_v1')).length, 2);
+  assert.equal(transport.latestOutcome('rpc.register_focus_group_participant_v1')?.kind, 'recovered');
+  assert.equal(transport.latestOutcome('rpc.register_focus_group_participant_v1')?.finalRoute, 'relay');
 
   let otpCount = 0;
   const auth = createResilientSupabaseTransport({
@@ -332,6 +346,8 @@ test('idempotent command may retry once and selected-once may not', async () => 
     (error) => parseSupabaseTransportError(error)?.code === 'ambiguous',
   );
   assert.equal(otpCount, 1);
+  assert.equal(auth.latestOutcome('auth.otp')?.kind, 'ambiguous');
+  assert.equal(auth.latestOutcome('auth.otp')?.finalRoute, 'direct');
 });
 
 test('no route prevents selected-once dispatch', async () => {
@@ -345,6 +361,8 @@ test('no route prevents selected-once dispatch', async () => {
     (error) => parseSupabaseTransportError(error)?.code === 'no_route',
   );
   assert.equal(calls.filter((url) => url.endsWith('/auth/v1/otp')).length, 0);
+  assert.equal(transport.latestOutcome('auth.otp')?.kind, 'no_route');
+  assert.equal(transport.latestOutcome('auth.otp')?.phase, 'selection');
 });
 
 test('unrelated fetch bypasses the catalog and native fetch keeps its receiver', async () => {

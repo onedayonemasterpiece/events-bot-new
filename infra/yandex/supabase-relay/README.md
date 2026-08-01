@@ -18,7 +18,7 @@ method/path pair used by the static client:
 
 - Auth health/settings, OAuth authorize/callback, PKCE or refresh token
   exchange, OTP send/verify/resend, logout, current user and identity linking;
-- two narrow REST reads and nine named RPCs, including the side-effect-free
+- two narrow REST reads and thirteen named RPCs, including the side-effect-free
   nonce capability probe, participant registration and idempotent focus feedback;
 - `POST /functions/v1/event-search` plus its separate lightweight nonce probe;
 - authenticated upload/delete only inside private bucket `focus-feedback`.

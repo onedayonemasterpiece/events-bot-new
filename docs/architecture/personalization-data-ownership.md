@@ -17,8 +17,11 @@ Email providers are transports and ingress surfaces, not additional systems of r
 
 - **SpaceWeb** owns the durable human/inbound mailbox `info@kenigevents.ru` and manual webmail/IMAP/SMTP access.
 - **Yandex serverless inbound pipeline** polls the retained SpaceWeb mailbox read-only by UID; its direct Mail Trigger address is canary-only. Functions, private storage and DLQs do not become identity, consent or subscription owners.
-- **Yandex Cloud Postbox** sends transactional account/event-lifecycle mail only.
-- **NotiSend** sends personal recommendations/announcements only, with a hard launch ceiling of 200 actively consented users.
+- **Yandex Cloud Postbox** sends transactional account/event-lifecycle mail and
+  remains the capacity route for first/new or over-capacity Auth recipients.
+- **NotiSend** sends personal recommendations/announcements plus the narrow
+  returning/repeated/fixed-test Auth route. Supabase enforces one shared hard
+  ceiling of 200 unique NotiSend recipients.
 
 This decision follows the implementation already present in `origin/main`: Supabase Auth/Yandex, pgvector search, reaction counters and the personalization project boundary. There is no production YDB user-profile write path to migrate.
 
@@ -122,8 +125,10 @@ The comment pipeline reads canonical event/source snapshots from Fly SQLite, kee
 - Full canonical event copies in Supabase/YDB.
 - Comment sentiment directly applied to a user profile without a separate product/ranking contract.
 - NotiSend treated as the consent, subscription, suppression or capacity source of truth.
-- More than 200 actively consented recommendation users at launch, or a provider-only over-limit check in place of an atomic Supabase admission gate.
-- Postbox used as a hidden recommendation fallback, or NotiSend used for critical transactional mail.
+- More than 200 unique NotiSend recipients at launch, or a provider-only
+  over-limit check in place of an atomic Supabase admission gate.
+- Postbox used as a hidden recommendation fallback, or NotiSend used for
+  transactional mail outside the reviewed Auth repeat/test rule.
 - Mail-trigger processing that removes the retained SpaceWeb mailbox copy, exposes attachments publicly or can create reply/Bcc loops.
 
 ## Static browser transport and storage boundary
