@@ -1,6 +1,6 @@
 # Подборки статического сайта: анализ извлечения и простой общий проект
 
-Статус: **проектный анализ**, обновлён 2026-08-01.
+Статус: **анализ завершён; реализация не начиналась**, обновлён 2026-08-01.
 Исходные требования и последующие уточнения владельца сохранены в [`podborki.md`](./podborki.md).
 
 ## 1. Короткий ответ на уточнения
@@ -542,20 +542,68 @@ BGE может найти кандидатов, но не имеет права 
 
 ## 8. Страницы конкретных площадок: продуктовое решение, SEO и GEO
 
-### 8.1. Решение
+### 8.1. Решение и его продуктовое основание
 
-Страницы площадок **нужны** и для качественного curated-набора должны быть
-**indexable**, а не `noindex`:
+Корректная формулировка не «всем площадкам обязательно нужны SEO-страницы», а
+такая: **у страниц площадок есть самостоятельный пользовательский сценарий и
+достаточный supply для дешёвого пилота; поэтому делаем шесть curated-кандидатов,
+проверяем спрос и только прошедшие gate страницы индексируем**:
 
 ```text
 /mesta/<stable-slug>/
 ```
 
-Они отвечают на самостоятельный запрос пользователя: «Что сейчас проходит
-именно здесь?», дают адрес/карту, будущую афишу и одну стабильную ссылку. Для
-партнёра это медальонный landing, ссылка для соцсетей и канал «исправить
-сведения / передать анонс». Партнёрский статус не меняет органический порядок
-событий и не превращает площадку в организатора без отдельного доказательства.
+Основной job пользователя: «Я знаю это место или увидел его в карточке; покажи,
+что ещё там будет». Это отличается и от категории «Театр», и от организатора,
+и от произвольного поиска. Страница позволяет:
+
+- продолжить путь из события к другим датам того же места;
+- проверить точный адрес, город, карту и официальный сайт до покупки/поездки;
+- сохранить или переслать одну стабильную ссылку на расписание места;
+- после окончания одного события не возвращаться в общий каталог и не вводить
+  имя площадки заново.
+
+Для партнёра это вторичная, а не главная причина: готовый медальонный landing,
+ссылка для сайта/соцсетей и канал «исправить сведения / передать анонс». В P0
+не нужны кабинет, отчётность или платное ранжирование. Партнёрский статус не
+скрывает чужие события и не превращает площадку в организатора без отдельного
+доказательства.
+
+Для KenigEvents это стабильный evergreen-узел между быстро истекающими event
+pages, нормализованный `Place @id` и практическая причина довести venue aliases
+до качества. Но entity/SEO-польза сама по себе не доказывает продуктовый спрос.
+
+### 8.2. Что доказано, а что пока гипотеза
+
+- Доказан **supply**: место есть у 407 из 408 актуальных событий, а у шести
+  сильных кандидатов — от 14 до 69 ближайших событий и много разных дат.
+- В текущей карточке имя/адрес и медальон уже являются заметным decision fact,
+  но не дают продолжения на другие события места. Значит, information scent
+  уже есть, а destination отсутствует.
+- Внешняя выдача содержит самостоятельные venue schedule pages, например
+  [официальную афишу Янтарь-холла](https://www.yantarhall.com/afisha/),
+  [филиал Третьяковской галереи](https://kaliningrad.tretyakovgallery.ru/) и
+  [филармонию](https://filarmonia39.ru/); это подтверждает существование типа
+  намерения, но **не его частотность для нашего сайта**.
+- В репозитории нет достаточной выгрузки Search Console, Яндекс Вебмастера,
+  Wordstat или внутренних venue-query logs. Поэтому нельзя утверждать, что спрос
+  уже измерен или высок.
+
+Именно поэтому решение — ограниченный пилот, а не массовый rollout. Альтернативы
+не дают того же результата:
+
+| Вариант | Что полезного | Почему не заменяет curated venue page |
+|---|---|---|
+| Предзаполненный поиск | дешёвый ad-hoc fallback | результат меняется, нет verified venue facts, stable entity URL и партнёрской ссылки |
+| Страница организатора | показывает программу организации | организация может работать offsite, а зал принимать чужих организаторов |
+| Постоянный `noindex` | годится для preview/партнёрской сверки | не даёт поисковой/GEO-ценности и не должен попадать в sitemap |
+| Вообще без страницы | нулевая поддержка | оставляет тупик после event page; нормально только для слабых и непроверенных мест |
+
+### 8.3. Index/noindex — не компромисс, а состояния
+
+`candidate` сначала публикуется только в secret/partner preview: `noindex`, без
+sitemap и публичной навигации. `public` получает `index,follow`, self-canonical,
+sitemap и внутренние ссылки из event pages только после relation/content gate.
 
 `noindex` оставляем только secret preview, partner preview, диагностическим и
 не прошедшим gate кандидатам. Хорошая venue page должна индексироваться:
@@ -569,7 +617,12 @@ city`: там уже есть aliases, разные залы, ошибки city 
 thin/doorway риск и низкое качество для пользователя. Curated venue entity —
 да, массовый `GROUP BY location_name` — нет.
 
-### 8.2. Минимальная модель без нового сервиса
+Есть общий blocker: live-корень 2026-08-01 отдаёт
+`meta robots=noindex,nofollow`, а `/robots.txt` отвечает `404`. Поэтому до
+исправления общей indexability даже принятые площадки остаются preview; нельзя
+объявлять SEO/GEO-релиз только потому, что route построился.
+
+### 8.4. Минимальная модель без нового сервиса
 
 В проекте уже есть `docs/reference/locations.md`, location aliases/resolver и
 23 уникальных `venue_brand` medallions. Нужен небольшой versioned registry:
@@ -593,7 +646,7 @@ alias. Fuzzy/substring matching, BGE и LLM для projection не нужны. �
 площадка и организация — разные сущности: venue page показывает события,
 проходящие там; offsite-программа организатора не добавляется автоматически.
 
-### 8.3. Launch gate и первая партия
+### 8.5. Launch gate и первая партия
 
 Для первого indexable выпуска нужны одновременно:
 
@@ -621,7 +674,7 @@ alias. Fuzzy/substring matching, BGE и LLM для projection не нужны. �
 evergreen venue facts и явно пишем дату последней проверки афиши. Alias/rename —
 `301`, закрытие без преемника — `410`; не `noindex` как средство canonicalization.
 
-### 8.4. Медальон, schema и GEO
+### 8.6. Медальон, schema и GEO
 
 Минимальный верх страницы:
 
@@ -631,10 +684,12 @@ evergreen venue facts и явно пишем дату последней про�
 Светлогорск · улица Ленина, 11
 Афиша обновлена 1 августа
 [Открыть карту] [Официальный сайт]
-Ближайшие события
+События, которые мы нашли
 ```
 
-Только подтверждённые дополнительные факты: описание места, доступность,
+Если нет измеренной полноты официальной афиши, страница не обещает «все
+события» и честно говорит «События, которые мы нашли». Только подтверждённые
+дополнительные факты: описание места, доступность,
 транспорт, часы кассы/посещения, вложенные залы. Медальон не заменяет обычную
 текстовую ссылку.
 
@@ -657,62 +712,169 @@ GEO/citability дают SSR HTML, точный первый абзац, адре
 [OpenAI crawlers](https://developers.openai.com/api/docs/bots),
 [Schema.org Place](https://schema.org/Place).
 
-## 9. Supabase egress: отдельный обязательный контракт
+### 8.7. Как пилот отвечает «нужно ли это людям и партнёрам»
 
-### 9.1. Наблюдаемое состояние
+Пилот оценивается не раньше шести недель после реальной индексации и накопления
+не менее 100 совокупных человеческих сессий; при меньшей выборке решение только
+продлевается. Минимально собираем:
 
-Production-аудит 2026-08-01:
+- входы по referrer и venue-name queries из Search Console/Яндекс Вебмастера;
+- `venue -> event`, официальный сайт/билет, карта — как одну meaningful action;
+- возвраты/переходы из event medallion;
+- correction reports и фактическое использование ссылки площадкой;
+- freshness и ошибки relation.
 
-- 408 search documents и 816 embeddings; vectors текущие sync/static paths не
-  скачивают;
-- vector sync читает примерно 90 139 B (88 KiB) hash projections за полный
-  408-event run, но 32 запуска за сутки дали около 2.88 MB read egress и 10 148
-  повторных document upserts при только 176 изменившихся embeddings;
-- cold pgvector-related делает 408 компактных RPC, 24 480 строк только
-  `{event_id, vector_similarity}`, всего 1 440 717 B (1.374 MiB); warm build
-  использует локальный cache и не читает Supabase;
-- обычная static personalization сейчас static-first и почти не читает
-  Supabase; browser search может тянуть до 60 полных card snapshots, а затем
-  отдельно до 60 полных `search_digest`, хотя пользователю нужно 12–24 результата.
+Рабочий go-критерий для расширения: meaningful action не ниже 20% после
+достаточной выборки, ноль критических чужих площадок, freshness gate выполнен
+не менее чем у 95% сборок и venue-intent impressions появились хотя бы у трёх
+из шести страниц. Это пилотные пороги, а не уже измеренный baseline. Если venue
+page не лучше предзаполненного поиска или поддержка aliases систематически
+дороже пользы, реестр не масштабируем. Партнёрские переходы усиливают решение,
+но их отсутствие само по себе не отменяет пользовательскую пользу.
 
-### 9.2. Решение для подборок и venue pages
+## 9. Egress всего конвейера, а не только Supabase
 
-Новые static collections и `/mesta/*` не должны добавлять Supabase read egress:
+### 9.1. Ответ на возражение про Fly
+
+Да: предыдущая фраза была неполной. Fly SQLite выбран **не потому, что исходящий
+трафик Fly бесплатный**. По действующему тарифу Fly для Европы public egress
+стоит `$0.02/GB`; реальный тариф организации надо сверить в billing. Причины
+переиспользовать этот snapshot другие:
+
+1. Fly SQLite — канонический core-каталог событий и площадок, тогда как Supabase
+   в проекте отвечает за auth/search/personalization, а не за вторую копию core.
+2. Production StaticSiteBuilder уже обязан передать один immutable snapshot в
+   Kaggle для обычной статической сборки.
+3. Если вычислить все подборки **внутри того же build**, snapshot и model load не
+   передаются второй раз. Предельная стоимость новых labels — compact manifest и
+   HTML, а не ещё один catalog transfer.
+4. Отдельный collection job или чтение тех же карточек из Supabase создали бы
+   второй оплачиваемый путь и две расходящиеся версии каталога.
+
+То есть обещание такое: **нулевой прирост Supabase egress и почти нулевой
+предельный трафик на подборку в уже необходимой сборке**, но не «нулевая общая
+стоимость static pipeline». Новый label не имеет права повышать частоту полных
+сборок.
+
+### 9.2. Измеренный end-to-end путь
 
 ```text
-immutable Fly SQLite snapshot
-  -> существующий Kaggle StaticSiteBuilder
-  -> local CPU BGE + exact adapters
-  -> compact collection/venue manifests
-  -> static HTML/Object Storage/CDN
+Fly /data/db.sqlite
+  -> immutable snapshot + site source + warm caches
+  -> private per-run Kaggle dataset
+  -> Kaggle CPU: export + exact adapters + BGE + Astro
+  -> root/review/browser archives обратно на Fly
+  -> Fly publisher -> Yandex Object Storage -> CDN -> browser
 ```
 
-- ноль Supabase RPC на BGE label, страницу или площадку;
-- не записывать BGE scores/collection memberships/venue manifests в Supabase;
-- не скачивать vectors в builder/browser;
-- auth/telemetry runtime на обычных venue/collection pages инициализировать
-  лениво: callback, существующая session или явный user action, а не при каждом
-  page load;
-- будущий «следить за площадкой» отправляет только `venue_id + action`.
+Production success 2026-08-01 (`404` events) дал следующую базу:
 
-Для существующих Supabase consumers:
+- SQLite snapshot: `310,312,960 B` (`295.94 MiB`);
+- warm related cache: `20,611,144 B` (`19.66 MiB`);
+- production tree: `642,764,482 B`, 3 289 файлов;
+- Kaggle outputs, скачанные на Fly: `232,841,551 B` — root tar, review tar и
+  browser evidence;
+- cold Supabase related: 404 compact RPC, 24 240 строк, `1,426,605 B`; warm
+  cache — `0 B`;
+- vector-sync hash projection: около `90,139 B` на полный каталог, но 32
+  запусков в сутки уже превращали маленький запрос в 2.88 MB и лишние upserts.
 
-1. vector sync: один corpus receipt/hash или запрос только changed IDs;
-   coalesce один barrier после Smart Update плюс редкий fallback, не десятки
-   одинаковых outbox runs;
-2. related: один bulk compact RPC или постепенный переход static related на
-   локальную shared BGE matrix; не 408 HTTP requests;
-3. search: один RPC возвращает IDs/similarity + минимальные display facts и уже
-   compact <=420-char digest, SQL/Edge сразу схлопывает families и ограничивает
-   12/24 rows;
-4. personalization: сохранить static-first; компактный fallback — максимум 30
-   minimal cards с corpus revision/ETag/TTL, либо удалить несуществующий RPC.
+Build evidence: `artifacts/codex/static-site-live-20260801/kaggle-success.log`
+и `artifacts/codex/podborki-data-audit-20260801/pipeline-prod-probe.json`;
+стоимость публикации дополнительно сверена с
+`scripts/run_static_site_builder_kaggle.py` и `static_site_atomic_root.py`.
 
-Каждая сборка пишет receipt `supabase_read_calls/rows/bytes`, cache status и
-corpus revision. Новая подборка принимается только при **нулевом приросте**
-Supabase egress относительно того же catalog build. Это следует официальной
-рекомендации Supabase сокращать поля, строки и число запросов и использовать
-кеширование: [Supabase egress guidance](https://supabase.com/docs/guides/platform/manage-your-usage/egress).
+Это logical/application bytes, а не показание счётчика провайдера. Точная сумма
+счёта требует receipts и billing dashboards.
+
+| Граница | Что происходит сейчас | Кто считает egress | Вклад новой подборки в том же build |
+|---|---|---|---|
+| Fly -> Kaggle | каждый run создаёт уникальный dataset с полным snapshot, source и caches | Fly public egress | `0` snapshot bytes; только небольшой source/policy delta |
+| Supabase -> Kaggle | cold pgvector-related/vector sync; warm cache может дать ноль | Supabase uncached egress | контракт: `0 calls / 0 rows / 0 bytes` |
+| Kaggle compute/storage | private dataset + quota-based CPU notebook/output | отдельного денежного egress-тарифа в доступной официальной документации не найдено; бюджет — quota/availability | тот же run и model load; только policy/HTML delta |
+| Kaggle -> Fly | Fly скачивает все output archives | для Fly это inbound | только сжатый HTML/manifest delta, но весь archive всё равно скачивается |
+| Fly -> Object Storage | secret candidate и изменившиеся production objects публикуются с Fly | Fly public egress; Yandex inbound free | новые HTML/manifest objects, без копий media |
+| Object Storage -> Fly verification | publisher проверяет remote tree; текущий путь может читать тела объектов повторно | Yandex outgoing, Fly inbound | не Supabase и не Fly outbound, но реальный общий cost hotspot |
+| CDN -> browser | только реальный пользовательский трафик | Yandex CDN | полезный demand-driven трафик, shared media cache |
+
+Грубая верхняя application-byte оценка текущего Fly egress на полный build —
+около `0.91 GiB` (input dataset + production root) или до `1.50 GiB`, если
+пересылается и полный review candidate; после перевода в decimal GB это примерно
+`$0.020–$0.032/build` при `$0.02/GB`. Реальная
+публикация переиспользует неизменившиеся production objects, но receipt пока не
+показывает uploaded bytes, поэтому считать её «бесплатной» нельзя. Главный
+рычаг — число full builds и дублирование review tree, а не микросжатие JSON.
+
+### 9.3. Самая простая архитектура для этого проекта
+
+P0, обязательный для подборок:
+
+1. После coalesced Smart Update barrier создаётся один snapshot и одна сборка на
+   revision; superseded job прекращается **до** upload.
+2. Exact adapters, общий BGE pass, venue projection и Astro работают в одном
+   существующем StaticSiteBuilder run.
+3. Astro получает только ID-проекции: `item_ids`, порядок, status и hashes. Он
+   join-ит их с уже экспортированным catalog; полные card JSON не копируются в
+   каждый label/venue manifest.
+4. Collection/venue pages не вызывают Supabase до auth callback, найденной
+   сохранённой session или явного действия пользователя.
+5. Main/status/secret Kaggle datasets удаляются по terminal receipt; Fly
+   snapshot удаляется после проверенного handoff; review candidate получает TTL
+   48 часов. Сейчас main/status dataset cleanup в runner явно не завершён — это
+   найденный retention gap.
+6. Release receipt считает байты на каждой границе. Без receipt есть только
+   оценка, а не доказанная экономия.
+
+Не делаем для P0 отдельную передачу данных из Supabase и не переносим туда core.
+Не делаем также немедленно новый transport-service. Если receipts подтвердят,
+что повторная пересылка root/review tree действительно доминирует, отдельным P1
+Kaggle пишет checked tree прямо в уникальный Yandex staging prefix по
+короткоживущим prefix-scoped credentials, а Fly получает manifests/hashes и
+только управляет promotion. Это убирает relay через Fly, но не является
+условием запуска подборок: без измерения это лишняя сложность.
+
+### 9.4. Бюджеты и acceptance
+
+Минимальный, измеримый контракт:
+
+- target при текущем объёме не более 2 успешных full builds/day; все изменения
+  в 15-минутном окне coalesce. Превышение создаёт cost alert/разбор причины, но
+  **не** молча пропускает нужное обновление и не является ещё одним enable-флагом;
+- Fly -> Kaggle input до `350 MiB`; production tree до `700 MiB`, 3 500 objects;
+- warm build: Supabase `0 calls / 0 rows / 0 bytes`; cold fallback не более трёх
+  bulk calls и `2 MiB`; новая подборка/площадка всегда даёт ровно нулевой delta;
+- одна новая подборка: до 20 новых objects и `1 MiB` payload на retained release,
+  без дублированных изображений;
+- хранить current + один rollback production release и не более одного review
+  candidate с TTL 48 h; orphan datasets/prefixes старше 24 h запрещены;
+- page load до явного auth/search action не делает Supabase requests;
+- receipt: `fly_input_bytes`, `kaggle_output_bytes`, `yandex_put_bytes`,
+  `yandex_verification_get_bytes`, object counts, retained bytes,
+  `supabase_read_calls/rows/bytes/cache_status`, `yandex_cdn_bytes/requests` и
+  `yandex_cdn_resource_count/package`, repo/snapshot SHA.
+
+Пороги — начальные guardrails по наблюдаемой сборке, не обещание провайдерского
+счёта. Проверяются холодным и идентичным тёплым canary и сверяются с usage
+dashboard.
+
+Официальные опорные данные на 2026-08-01:
+
+- [Fly pricing](https://fly.io/docs/about/pricing/) — inbound free, Europe public
+  egress `$0.02/GB`;
+- [Supabase egress](https://supabase.com/docs/guides/platform/manage-your-usage/egress)
+  — egress считается по всем сервисам; сверх quota `$0.09/GB` uncached и
+  `$0.03/GB` cached для Pro/Team;
+- [Yandex Object Storage pricing](https://yandex.cloud/en/docs/storage/pricing)
+  — входящий трафик бесплатен, оплачиваются storage, operations и outgoing;
+- [Yandex CDN pricing](https://yandex.cloud/en/docs/cdn/pricing) — с 2026-07-01
+  действует новая модель с package/resource fee, включённым порогом 150 GB на
+  resource и отдельным outgoing/request overage; точные рублёвые ставки зависят
+  от billing account;
+- [Kaggle quota guidance](https://www.kaggle.com/docs/efficient-gpu-usage) описывает
+  бесплатный quota-based notebook compute, но не обещает денежный egress-тариф
+  или production SLA. Поэтому для Kaggle сейчас фиксируем **`$0` отдельно
+  наблюдаемых network charges**, а не «навсегда бесплатно», и контролируем
+  runtime/dataset/output quota и cleanup.
 
 ## 10. Минимальный quality gate
 
@@ -746,7 +908,163 @@ wording и взрослые вечерние форматы.
 
 ## 11. Эффективная очередь реализации
 
-### Шаг 1 — восстановить обязательный semantic compute и свежий «Необычное» candidate
+Текущая ветка содержит **только этот анализ**. Код, конфиг, production jobs и
+данные в этом окне не меняются. Реализацию безопаснее разделить ровно на две
+ветки по стабильной границе manifest, а не смешивать extraction и Astro UI.
+
+### 11.1. Ветка A — сбор данных и подготовка
+
+Предлагаемое имя следующей ветки: `feature/static-collections-data-prep`, от
+свежего `origin/main`. Она не меняет публичные routes, sitemap и меню и может
+быть принята отдельно.
+
+Один компактный набор source contracts:
+
+- `site/scripts/static_collection_policy.v1.json` — стратегия, thresholds,
+  minimum supply и publication default всех labels;
+- `site/scripts/static_collection_prototypes.v1.json` — namespaced prototypes и
+  hard negatives для `unusual/science/strong_impressions/medieval`;
+- `tests/fixtures/static_collections_gold_v1.json` — gold и отдельный
+  high-recall audience gold;
+- `site/scripts/static_venue_profiles.v1.json` — stable venue ID/slug, exact
+  aliases/facts/source bindings, medallion и flags `official_theatre` /
+  `medieval_site`. Отдельные theatre/castle registries не нужны.
+
+Один nullable JSON-контейнер в `Event`, а не множество bool-колонок:
+
+```json
+{
+  "is_free_decision": {},
+  "audience_decision": {},
+  "people_appearances": []
+}
+```
+
+Его ключи версионируются и merge-ятся независимо. Smart Update benchmark-ит
+piggyback; если расширение rich-facts снижает качество, используется один
+короткий candidate-only adjudicator. Backfill ограничен `topic ∪ BGE`
+audience-кандидатами/конфликтами, people candidates и явными free corrections.
+
+Exporter-side Python, а не Astro, выполняет exact adapters. В частности,
+`collect_source_records()` сохраняет `event_source.source_type/domain/trust`,
+которые текущий `collect_source_urls()` теряет и которые нужны театрам.
+
+Один BGE batch:
+
+- строит evidence-only `collection_semantics_v1` без topics/regex leakage;
+- одной загрузкой BGE кодирует изменившиеся events и все namespaced prototypes;
+- event cache не инвалидируется из-за изменения чужого prototype bank;
+- пишет `float32` NPZ и per-label status;
+- выполняется в production-candidate независимо от старого unusual publication
+  flag;
+- один проваленный label блокируется отдельно.
+
+Два generated outputs являются единственной границей с сайтом:
+
+1. `collection-batch-v1.json`: snapshot/catalog/policy/model hashes,
+   compute/quality/publication status, `item_ids`, family/supply counts, failure
+   codes, last-good identity и egress receipt;
+2. `venue-pages-v1.json`: verified venue facts, exact event IDs, date/family
+   counts, registry/catalog hashes и per-venue gate/status.
+
+Идентификаторы в обоих manifest обязаны существовать в
+`production-catalog.json`. Полные cards и изображения туда не копируются.
+
+Основные файлы ветки A:
+
+- `models.py`, `db.py`, одна Alembic migration, `smart_event_update.py`;
+- `site/scripts/export-production-preview-data.py`, `static_event_bge.py`,
+  `unusual_event_semantics.py`;
+- `kaggle/StaticSiteBuilder/static_site_builder.py`,
+  `scripts/run_static_site_builder_kaggle.py`, `main.py`;
+- узкий backfill, Python tests, канонические docs и `CHANGELOG.md`.
+
+Она **не трогает** `site/src/pages`, UI components, sitemap и navigation.
+
+Done ветки A:
+
+- schema сначала развёрнута совместимо со старыми readers;
+- targeted backfill имеет before/after/abstain counts;
+- current-catalog cold canary и идентичный warm canary дают `0` повторно
+  закодированных event rows;
+- каждый label имеет явный `pass/blocked`, нет silent disabled;
+- exact adapters и шесть venue candidates имеют review evidence;
+- прирост Supabase по каждой новой сущности равен нулю;
+- fresh secret candidate закрывает обязательные проверки инцидента
+  `INC-2026-08-01-unusual-feed-disabled-by-config`, но public rollout всё ещё
+  требует приёмки владельца;
+- публичное поведение сайта не изменилось.
+
+### 11.2. Handoff A -> B
+
+Ветка Astro стартует только после merge A и получения реального immutable
+artifact. Handoff bundle:
+
+1. точный `origin/main` SHA и snapshot/catalog hashes;
+2. оба generated manifests и их SHA-256;
+3. policy/prototype/venue-registry и BGE receipt hashes;
+4. per-label/per-venue gate table и approved public route list;
+5. cold/warm counts и egress receipt;
+6. свежая secret review URL/evidence для «Необычного».
+
+Astro не имеет права заново угадывать membership по raw fields, расширять
+`blocked` label или публиковать `candidate` venue.
+
+### 11.3. Ветка B — страницы, SEO и навигация в другом окне
+
+Предлагаемое имя: `feature/static-collections-astro`, от `origin/main` после A.
+Один `CollectionListingSurface.astro` и один loader `staticCollections.ts`
+обслуживают все labels; route files остаются тонкими. Venue использует отдельный
+`venues.ts` и `/mesta/[slug]/`, но тот же event-card surface.
+
+Сохраняются существующие canonical URLs:
+
+- `/podborki/besplatnye-sobytiya/`, `/vystavki/`, `/populyarnoe/`,
+  `/neobychnoe/`, `/kluby-po-interesam/`, `/dlya-menya/`.
+
+Новые explicit routes:
+
+- `/detyam/`;
+- `/teatr/`;
+- `/spektakli/`;
+- `/nauchpop/`;
+- `/nauka/`;
+- `/silnye-vpechatleniya/`;
+- `/k-nam-edut/` с двумя полками «из России» и «зарубежные гости», чтобы не
+  выпускать две тонкие страницы из одного extraction contract;
+- `/zamki-rytsari-srednevekove/`;
+- `/mesta/` и `/mesta/<slug>/`.
+
+Из-за существующего top-level `[preview]` не добавляется новый generic
+top-level `[slug]`; используются explicit wrappers. `Для меня` остаётся
+noindex/auth/secret delivery, а не обычной подборкой.
+
+Навигацию нельзя просто раздувать пятнадцатью primary links. Делается одна
+центральная navigation registry, которую используют четыре сейчас отдельно
+захардкоженных consumer: `EventLayout.astro`, `Reference4MobileMenu.astro`,
+`HomeQuickNav.astro`, `SiteFooter.astro`.
+
+- desktop primary сохраняет даты/главные surfaces и ссылку «Подборки» на
+  `/podborki/` hub;
+- mobile plane «Подборки» показывает только `publication_status=public`;
+- «Детям» переключается с search на `/detyam/` только после public manifest;
+- Home Quick Nav содержит лишь несколько самых полезных входов, а не весь
+  каталог;
+- footer получает «Подборки» и «Площадки»;
+- venue name и медальон event page ведут на принятую `/mesta/<slug>/`, но
+  обычная текстовая ссылка остаётся доступной;
+- blocked/candidate labels отсутствуют в navigation и sitemap;
+- фестивали не меняются, кино не добавляется.
+
+Build/release checks связывают manifest hashes с release, сравнивают карточки с
+`item_ids`, проверяют sitemap/index policy, shared venue `@id`, отсутствие
+Supabase requests и round-trip venue<->event. Если уже публичный обязательный
+manifest пропал, promotion блокируется или сохраняется previous root; ссылка не
+исчезает молча.
+
+### 11.4. Порядок выпуска
+
+#### Шаг 1 — восстановить обязательный semantic compute и свежий «Необычное» candidate
 
 - отделить compute/quality/publication state;
 - production-candidate всегда запускает shared BGE, даже если старый enable env
@@ -756,7 +1074,7 @@ wording и взрослые вечерние форматы.
 - сохранить NPZ/receipt/cache/manifest и дать владельцу стабильную current review
   ссылку; public root включать только после приёмки.
 
-### Шаг 2 — общий batch без новых semantic страниц
+#### Шаг 2 — общий batch без новых semantic страниц
 
 - обобщить существующий BGE cache и отделить event rows от prototype banks;
 - перейти на evidence-only collection document и повторно откалибровать unusual;
@@ -765,7 +1083,7 @@ wording и взрослые вечерние форматы.
 - новые heads держать в shadow;
 - доказать cold run на текущих 408 событиях и warm run с 0 re-encode.
 
-### Шаг 3 — быстрые страницы без нового LLM extraction
+#### Шаг 3 — быстрые страницы без нового LLM extraction
 
 - Спектакли;
 - Театр после утверждения allowlist;
@@ -775,7 +1093,7 @@ wording и взрослые вечерние форматы.
 - шесть `/mesta/*` pilot pages после exact relation review, robots/sitemap/schema
   gate.
 
-### Шаг 4 — компактная доработка Smart Update, не один жирный prompt
+#### Шаг 4 — компактная доработка Smart Update, не один жирный prompt
 
 1. Бесплатно не re-extract: оставить `is_free`; добавить decision/provenance только
    вместе с correction policy и May-9 replay.
@@ -794,7 +1112,7 @@ candidates, hash-bound и cached. Не прогонять LLM по всем 408 
 - материализовать «События для детей» `/detyam/`;
 - построить «К нам едут».
 
-### Шаг 5 — три новых BGE heads
+#### Шаг 5 — три новых BGE heads
 
 В рамках одного prototype bank и одного запуска:
 
@@ -804,7 +1122,7 @@ candidates, hash-bound и cached. Не прогонять LLM по всем 408 
 
 Добавлять label только после короткой owner-разметки, не параллельно строить отдельные pipelines.
 
-### Шаг 6 — Для меня
+#### Шаг 6 — Для меня
 
 Переиспользовать текущий event pool/vectors. Это отдельная задача доставки персонального результата: profile, consent, daily issue, high-entropy secret URL и noindex page. Новый event classifier для неё не нужен.
 
@@ -837,9 +1155,15 @@ candidates, hash-bound и cached. Не прогонять LLM по всем 408 
   утечки topics/regex и с grounded adjudication конфликтов;
 - точные типы, официальные источники, popularity и club relations не надо прогонять через BGE;
 - итогом одного existing StaticSiteBuilder run должен быть один проверяемый collection manifest;
-- страницы площадок нужны как небольшой indexable `/mesta/*` registry с
-  медальоном; массовые страницы по сырым location strings не нужны;
-- новые collections/venues должны давать нулевой дополнительный Supabase egress.
+- страницы площадок имеют достаточное продуктовое основание для пилота из шести
+  curated candidates; index получают только прошедшие relation/content и общий
+  robots/indexability gate, массовые страницы по raw locations запрещены;
+- один существующий Fly snapshot выбран как source-of-truth и переиспользуемый
+  input, а не как бесплатный транспорт: новые collections/venues дают нулевой
+  дополнительный Supabase egress, не создают второй Kaggle build и отчитываются
+  по Fly/Kaggle/Yandex bytes целиком;
+- data-prep и Astro glue разделяются generated manifests, поэтому в следующем
+  окне UI не сможет незаметно переопределить quality decisions.
 
 Минимальное число новых смысловых механизмов:
 
