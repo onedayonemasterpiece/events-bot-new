@@ -25,6 +25,14 @@
     complete empty observation without an invalid list RPC; missing messages
     and incomplete reactor pages still fail closed.
 
+- `INC-2026-08-01-focus-pwa-shortcut-instead-of-install.md`
+  - Scope: focus invitation manifest, Android install prompt, network-only
+    service worker and early `beforeinstallprompt` capture.
+  - Must not regress: onboarding must offer installation of `Анонсы`, never
+    present a plain home-screen shortcut as the installed application, and a
+    candidate must have an active worker plus zero manifest/installability
+    errors before it is sent for phone acceptance.
+
 - `INC-2026-08-01-region-talk-draft-backfill-nameerror.md`
   - Scope: Region Talk v8 backfill entrypoint, supporting YDB reads and
     Telegram/VK operator delivery catch-up.

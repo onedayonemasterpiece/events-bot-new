@@ -6,6 +6,8 @@ import '../../../styles/design-system.css';
 const robots = IS_SECRET_CANDIDATE
   ? 'noindex,nofollow,noarchive,nosnippet'
   : 'noindex,nofollow,noarchive';
+const pwaServiceWorkerUrl = withBase('/pwa-sw.js');
+const pwaServiceWorkerScope = withBase('/');
 
 ---
 
@@ -25,6 +27,23 @@ const robots = IS_SECRET_CANDIDATE
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Анонсы" />
     <meta name="theme-color" content="#fff7e7" />
+    <script is:inline define:vars={{ pwaServiceWorkerUrl, pwaServiceWorkerScope }}>
+      // Capture Chromium's one-shot prompt before hydrated UI modules run.
+      // Without this early listener a fast browser can offer only a shortcut.
+      window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        window.__kenigEventsPwaInstallPrompt = event;
+      });
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register(pwaServiceWorkerUrl, {
+          scope: pwaServiceWorkerScope,
+          updateViaCache: 'none',
+        }).catch(() => {
+          // The install UI stays fail-closed until Chromium confirms that the
+          // page is installable through beforeinstallprompt.
+        });
+      }
+    </script>
   </head>
   <body>
     <FocusGroupInviteIntake />

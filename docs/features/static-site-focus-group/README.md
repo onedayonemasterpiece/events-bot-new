@@ -637,10 +637,14 @@ static release is approved:
 
 The checked production archive, atomic publisher and public smoke gate all
 require both the invitation page and this exact manifest contract. A release
-cannot pass while an installed focus PWA would open a 404. There is no
-cache-first service worker: navigation requests use the network, HTML is
-revalidated within 60 seconds, the manifest within five minutes and only
-content-hashed assets are immutable.
+cannot pass while an installed focus PWA would open a 404. A minimal
+network-only service worker claims the release scope so Android installs the
+site as the `Анонсы` application rather than offering a plain home-screen
+shortcut. It has no Cache Storage and proxies GET requests to the network;
+HTML is revalidated within 60 seconds, the manifest within five minutes and
+only content-hashed assets are immutable. The invitation captures Chromium's
+one-shot `beforeinstallprompt` before hydrated UI starts, and the public copy
+must never describe `Добавить на главный экран` as equivalent to PWA install.
 
 For a clean operator retest on one device use:
 

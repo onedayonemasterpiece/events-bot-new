@@ -1,0 +1,4 @@
+interface:
+  display_name: "Static Site Resilient Data Access"
+  short_description: "Reliable thin-client access for static pages"
+  default_prompt: "Audit or implement resilient browser-to-Supabase access without turning Fly into a thick backend."

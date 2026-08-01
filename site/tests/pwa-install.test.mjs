@@ -169,6 +169,15 @@ test('presentation QR flow explains the fallback immediately and upgrades to the
   assert.match(installed.status.textContent, /уже установлено/u);
 });
 
+test('presentation install never describes an Android shortcut as the installed app', async () => {
+  const [controller, focusAction] = await Promise.all([
+    read('src/lib/pwa-install-controller.js'),
+    read('src/components/FocusPwaInstallAction.astro'),
+  ]);
+  assert.doesNotMatch(controller, /Добавить на главный экран/u);
+  assert.doesNotMatch(focusAction, /Добавить на главный экран/u);
+});
+
 test('site exposes a base-aware installable manifest and footer-owned controller', async () => {
   const [manifest, action, footer, layout, home, release, deploy] = await Promise.all([
     read('src/pages/manifest.webmanifest.ts'),
