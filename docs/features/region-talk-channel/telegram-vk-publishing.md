@@ -97,6 +97,11 @@ item presentation contract.
 External article source attestations participate in the same live-fingerprint
 merge as Telegram/VK sources so the autonomous orchestrator sees article
 backfill work instead of leaving it visible only to the notifier.
+Direct article images are refetched with the same image `Accept` and user-agent
+headers used by ImageDiagnostic. This matters for content-negotiating CDNs
+where one stable URL returns WebP to the reviewer and JPEG to a bare request;
+delivery still verifies the exact reviewed-byte digest and fails closed on a
+real source-media change.
 The v8 backfill also fills missing presentation fields from the newest exact-URL
 durable `image_queue_item`. This narrow evidence join carries either an already
 extracted publisher hero or the reviewed ordered social selection into the
