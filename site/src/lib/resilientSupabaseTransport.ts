@@ -338,25 +338,32 @@ export class ResilientSupabaseTransport {
     }
     const safe = options.policy === 'safe-read';
     const replayable = options.policy === 'idempotent-replay';
+    // Idempotent state upserts must not inherit the long ambiguity budget used
+    // by non-replayable Auth writes. If the selected route stalls after a
+    // healthy probe, give it the same short budget as a safe read and replay
+    // once through the alternate route.
+    const primaryTimeoutMs = safe || replayable
+      ? this.safeRequestTimeoutMs
+      : this.selectedRequestTimeoutMs;
     try {
       const response = await this.rawRequest(
         selection.route,
         input,
         init,
-        safe ? this.safeRequestTimeoutMs : this.selectedRequestTimeoutMs,
+        primaryTimeoutMs,
       );
       if ((!safe && !replayable) || response.status < 500) return response;
       const alternate = this.alternate(selection.route);
       if (!alternate) return response;
       this.invalidate();
-      const recovered = await this.rawRequest(alternate, input, init, safe ? this.safeRequestTimeoutMs : this.selectedRequestTimeoutMs);
+      const recovered = await this.rawRequest(alternate, input, init, primaryTimeoutMs);
       if (recovered.status < 500) this.cacheSelection({ route: alternate, selectedAt: this.now(), probes: [] });
       return recovered;
     } catch (error) {
       this.invalidate();
       const alternate = safe || replayable ? this.alternate(selection.route) : null;
       if (alternate) {
-        const recovered = await this.rawRequest(alternate, input, init, safe ? this.safeRequestTimeoutMs : this.selectedRequestTimeoutMs);
+        const recovered = await this.rawRequest(alternate, input, init, primaryTimeoutMs);
         if (recovered.status < 500) this.cacheSelection({ route: alternate, selectedAt: this.now(), probes: [] });
         return recovered;
       }

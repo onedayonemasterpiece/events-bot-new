@@ -4,6 +4,7 @@ import {
   type ResilientSupabaseTransport,
 } from './resilientSupabaseTransport';
 import { getResilientDataClient, type ResilientDataClient } from './resilientDataClient';
+import { AUTH_INTENT_KEY, purgeStaticAuthStorage } from './staticAuthReset.ts';
 
 export interface StaticSiteAuthConfig {
   supabaseUrl: string;
@@ -37,9 +38,9 @@ type AuthSubscriber = (snapshot: StaticSiteAuthSnapshot) => void;
 
 const CONTROLLER_KEY = '__KENIGEVENTS_STATIC_SITE_AUTH_V1__';
 const PKCE_COOKIE_PREFIX = 'ke_pkce_';
-const AUTH_INTENT_KEY = 'ke_yandex_auth_intent_v1';
 const CALLBACK_TIMEOUT_MS = 20_000;
 const SESSION_TIMEOUT_MS = 8_000;
+const LOCAL_RESET_TIMEOUT_MS = 1_500;
 const CALLBACK_KEYS = ['code', 'error', 'error_code', 'error_description', 'state', 'sb', 'email_callback', 'token_hash', 'type'];
 
 function isPkceCodeVerifierKey(key: string): boolean {
@@ -107,6 +108,18 @@ const authStorage = {
     removePkceCookie(key);
   },
 };
+
+function purgePkceCookies(): void {
+  try {
+    for (const part of document.cookie.split(';')) {
+      const name = part.split('=', 1)[0]?.trim() || '';
+      if (!name.startsWith(PKCE_COOKIE_PREFIX)) continue;
+      document.cookie = `${name}=; Max-Age=0; Path=/; SameSite=Lax; Secure`;
+    }
+  } catch {
+    // localStorage cleanup is the authoritative session reset.
+  }
+}
 
 function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number, message: string): Promise<T> {
   let timeoutId = 0;
@@ -573,8 +586,29 @@ class StaticSiteAuthController {
     }
   }
 
-  async resetForOnboardingTest(): Promise<void> {
-    try { await this.client.auth.signOut({ scope: 'local' }); } catch { /* best effort test reset */ }
+  async resetForOnboardingTest(): Promise<boolean> {
+    this.client.auth.stopAutoRefresh();
+    const clearPersistedSession = () => {
+      let cleared = false;
+      try { cleared = purgeStaticAuthStorage(this.config.supabaseUrl, window.localStorage); } catch { cleared = false; }
+      purgePkceCookies();
+      return cleared;
+    };
+    // Clear the browser session before attempting any network-assisted Auth
+    // cleanup. A blocked logout request must never preserve the old identity
+    // while the reset page claims that a clean test has started.
+    clearPersistedSession();
+    try {
+      await withTimeout(
+        this.client.auth.signOut({ scope: 'local' }),
+        LOCAL_RESET_TIMEOUT_MS,
+        'local_auth_reset_timeout',
+      );
+    } catch {
+      // The unconditional storage purge below remains authoritative.
+    }
+    const cleared = clearPersistedSession();
+    this.transport.invalidate();
     clearAuthIntent();
     this.initialization = null;
     this.publish({
@@ -584,6 +618,7 @@ class StaticSiteAuthController {
       callbackAttempted: false,
     });
     cleanCallbackHistory();
+    return cleared;
   }
 
   async linkYandexIdentity(): Promise<boolean> {

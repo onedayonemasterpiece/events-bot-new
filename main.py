@@ -23048,6 +23048,12 @@ def _static_site_build_kaggle_command(
             "PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY",
             "PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY",
         ),
+        "--public-personalization-supabase-relay-url",
+        _first_env(
+            "STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL",
+            "PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL",
+            "PERSONALIZATION_SUPABASE_RELAY_URL",
+        ),
         "--public-yandex-auth-provider",
         _first_env("STATIC_SITE_PUBLIC_YANDEX_AUTH_PROVIDER", "PUBLIC_YANDEX_AUTH_PROVIDER", default="custom:yandex"),
         "--export-in-kaggle",
@@ -24062,6 +24068,11 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
             "STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_URL",
             "PUBLIC_PERSONALIZATION_SUPABASE_URL",
             "PERSONALIZATION_SUPABASE_URL",
+        ),
+        "public_personalization_supabase_relay_url": _first_env(
+            "STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL",
+            "PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL",
+            "PERSONALIZATION_SUPABASE_RELAY_URL",
         ),
         # The browser-safe key can affect the generated JS, but evidence stores
         # only its digest rather than the key itself.

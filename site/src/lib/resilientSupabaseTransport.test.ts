@@ -315,3 +315,38 @@ test('selected-once does not retry while explicitly idempotent POST may recover 
   assert.equal(response.ok, true);
   assert.equal(calls.filter((url) => url.includes('/rest/v1/rpc/idempotent_metric')).length, 2);
 });
+
+test('idempotent participant registration gets a short primary budget and a fresh relay retry', async () => {
+  const calls: string[] = [];
+  const transport = createResilientSupabaseTransport({
+    directUrl: direct,
+    relayUrl: relay,
+    publishableKey: key,
+    sessionStorage: null,
+    safeRequestTimeoutMs: 1_000,
+    selectedRequestTimeoutMs: 8_000,
+    fetchImpl: (async (input, init) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.endsWith('/auth/v1/health')) return new Response('{}', { status: 200 });
+      if (url.startsWith(relay)) return new Response('{}', { status: 200 });
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('primary timed out', 'AbortError'));
+        }, { once: true });
+      });
+    }) as typeof fetch,
+  });
+  const started = Date.now();
+  const response = await transport.request(
+    `${direct}/rest/v1/rpc/register_focus_group_participant_v1`,
+    { method: 'POST', body: '{}' },
+    { policy: 'idempotent-replay' },
+  );
+  assert.equal(response.ok, true);
+  assert.ok(Date.now() - started < 3_000, 'must not use the eight-second non-idempotent write budget');
+  assert.deepEqual(calls.filter((url) => url.includes('register_focus_group_participant_v1')), [
+    `${direct}/rest/v1/rpc/register_focus_group_participant_v1`,
+    `${relay}/rest/v1/rpc/register_focus_group_participant_v1`,
+  ]);
+});

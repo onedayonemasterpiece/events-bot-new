@@ -16,6 +16,13 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Focus-group clean retest now removes the persisted Supabase session, chunked
+  Auth fragments, PKCE verifier and Auth intent even when logout transport is
+  blocked, and fails visibly instead of silently reusing the previous email.
+  Smart Update now forwards the configured stateless relay into Kaggle builds,
+  required authorized candidates fail closed when that relay is absent, and
+  idempotent participant registration switches routes on the short recovery
+  budget instead of waiting on the non-replayable Auth-write timeout.
 - Region Talk daily planning now shares the notifier's strict ready-draft
   predicate, so empty or malformed grounded fact-point JSON cannot occupy a
   publication slot that the operator chat correctly refuses to deliver.

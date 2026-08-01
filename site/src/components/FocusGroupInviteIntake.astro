@@ -262,7 +262,12 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
         clearFocusParticipationMarker(storage);
         clearFocusContinuingConsent(storage);
       }
-      await auth?.resetForOnboardingTest();
+      const authReset = await auth?.resetForOnboardingTest();
+      if (auth && authReset !== true) {
+        if (pendingTitle) pendingTitle.textContent = 'Не получилось очистить вход';
+        if (pendingCopy) pendingCopy.textContent = 'Закройте другие вкладки «Анонсов», обновите страницу и повторите сброс.';
+        return;
+      }
       const restartUrl = new URL(initialUrl);
       restartUrl.searchParams.delete('focus_test_reset');
       restartUrl.searchParams.delete('code');
@@ -435,7 +440,11 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       if (!storage) return;
       clearFocusParticipationMarker(storage);
       clearFocusContinuingConsent(storage);
-      await auth?.resetForOnboardingTest();
+      const authReset = await auth?.resetForOnboardingTest();
+      if (auth && authReset !== true) {
+        if (doneCopy) doneCopy.textContent = 'Не получилось очистить сохранённый вход. Закройте другие вкладки и повторите.';
+        return;
+      }
       const restarted = storeFocusParticipationMarker(storage);
       if (!restarted) {
         if (doneCopy) doneCopy.textContent = 'Не получилось начать заново. Обновите страницу и повторите.';

@@ -484,6 +484,14 @@ This is independent from browser Auth transport. The Auth/Data relay, if
 enabled, is for small user requests only and must never proxy the bulk static
 related rebuild.
 
+For production candidates with authorized surfaces the relay is mandatory,
+not optional degradation. Fly passes
+`STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL` (or its documented
+public/personalization aliases) into the runner's
+`--public-personalization-supabase-relay-url`; Kaggle copies it only to the
+browser-safe `PUBLIC_*` build environment. The required-authorized gate rejects
+a candidate that has the Supabase URL/key but omitted the relay.
+
 This still does **not** mean Smart Update publishes the production root. The
 ordinary enabled flags build and publish only a checked unlisted candidate.
 The separate two-bucket/ALB state machine is default-off and remains `NO-GO`

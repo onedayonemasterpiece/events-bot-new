@@ -651,3 +651,16 @@ contact consent and local Auth/PKCE state, then consumes the invitation again.
 It preserves favorites and personalization. It does not uninstall an already
 installed PWA or recreate the browser's one-shot install prompt; those two
 behaviours require uninstalling the app and clearing the site's browser data.
+The reset is fail-closed: it removes the exact project Auth key and all of its
+chunked/verifier fragments before any network-assisted logout, verifies that
+they are gone and does not redirect to a supposedly clean journey if browser
+storage refused the removal. A blocked Auth logout therefore cannot make the
+next screen remember the previous email.
+
+Every generated focus-group candidate that requires authorized surfaces must
+also contain `PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL`. Smart Update carries
+the public relay from Fly into the Kaggle handoff; the candidate build fails
+before publication if URL/key exist but the resilient route is missing.
+Participant registration remains one authenticated idempotent RPC. It may
+retry once on the alternate route using the short recovery budget; OTP issue
+remains selected-once and is never duplicated after an ambiguous response.
