@@ -428,3 +428,14 @@ Historical VK albums that exhausted their bounded media attempts specifically
 on IP-bound token error `1130` receive one durable, versioned retry reset when
 the Kaggle worker has a service read token.  The normal three-attempt cap still
 applies after that migration and the reset marker prevents a retry loop.
+
+### Stable Flash-Lite routing
+
+Region Talk requests `gemini-3.5-flash-lite` first. Its explicit overflow is
+`gemini-3.1-flash-lite`. Both models are registered in the shared Supabase
+limiter at the conservative per-project operating caps
+`13 RPM / 240000 TPM / 450 RPD`. Atomic reserve failures for `rpm`, `tpm` or
+`rpd` advance to the second model before a provider request is sent. Direct-key
+and process-local limiter paths remain disabled. Provider-error model switching
+is disabled for Region Talk so the durable 100-call product ledger retains its
+single-provider-send contract.

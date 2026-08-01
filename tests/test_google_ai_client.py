@@ -18,7 +18,7 @@ from google_ai.client import (
     RequestContext,
     ReserveResult,
 )
-from google_ai.exceptions import ProviderError, ReservationError
+from google_ai.exceptions import ProviderError, RateLimitError, ReservationError
 
 _ATOMIC_LIMITER_CONTRACT = GoogleAIClient.REQUIRED_LIMITER_CONTRACT
 
@@ -273,6 +273,62 @@ def test_requested_gemma_model_stays_first_in_model_chain():
         "gemma-3-27b",
         "gemma-4-26b-a4b",
     ]
+
+
+@pytest.mark.asyncio
+async def test_quota_block_falls_through_to_next_model(monkeypatch):
+    client = GoogleAIClient()
+    client.fallback_models = ["gemini-3.1-flash-lite"]
+    calls: list[str] = []
+    events: list[tuple[str, dict]] = []
+
+    async def fake_attempt_generate(*, ctx, **_kwargs):
+        calls.append(ctx.model)
+        if ctx.model == "gemini-3.5-flash-lite":
+            raise RateLimitError(blocked_reason="rpd", model=ctx.model)
+        return "fallback-ok", SimpleNamespace(total_tokens=1)
+
+    monkeypatch.setattr(client, "_attempt_generate", fake_attempt_generate)
+    monkeypatch.setattr(
+        client,
+        "_log_event",
+        lambda event, _ctx, **payload: events.append((event, payload)),
+    )
+
+    text, usage = await client.generate_content_async(
+        model="gemini-3.5-flash-lite",
+        prompt="bounded",
+        max_output_tokens=16,
+    )
+
+    assert text == "fallback-ok"
+    assert usage.model == "gemini-3.1-flash-lite"
+    assert calls == ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
+    fallback = next(payload for event, payload in events if event == "google_ai.model_quota_fallback")
+    assert fallback["blocked_reason"] == "rpd"
+    assert fallback["next_model"] == "gemini-3.1-flash-lite"
+
+
+@pytest.mark.asyncio
+async def test_non_quota_reservation_block_does_not_change_model(monkeypatch):
+    client = GoogleAIClient()
+    client.fallback_models = ["gemini-3.1-flash-lite"]
+    calls: list[str] = []
+
+    async def fake_attempt_generate(*, ctx, **_kwargs):
+        calls.append(ctx.model)
+        raise RateLimitError(blocked_reason="model_not_found", model=ctx.model)
+
+    monkeypatch.setattr(client, "_attempt_generate", fake_attempt_generate)
+
+    with pytest.raises(RateLimitError):
+        await client.generate_content_async(
+            model="gemini-3.5-flash-lite",
+            prompt="bounded",
+            max_output_tokens=16,
+        )
+
+    assert calls == ["gemini-3.5-flash-lite"]
 
 
 @pytest.mark.asyncio

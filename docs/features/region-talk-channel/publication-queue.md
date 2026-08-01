@@ -493,8 +493,13 @@ durable finalizer state instead.
 All Region Talk Gemini consumers (final verifier/onboarding, visual
 adjudicator and optional grounded external research) disable direct reserve and
 process-local limiter fallbacks. If Supabase, `google_ai_reserve`, the
-`gemini-3.1-flash-lite` model row or the scoped `GOOGLE_API_KEY3` registration
-is unavailable, the request fails/defer-closes before the provider call. YDB's
+scoped `GOOGLE_API_KEY3` registration or both stable Flash-Lite model rows are
+unavailable, the request fails/defer-closes before the provider call. The
+default order is `gemini-3.5-flash-lite` followed by
+`gemini-3.1-flash-lite`; each has an independent conservative
+`13 RPM / 240000 TPM / 450 RPD` registry row. A model-scoped quota block uses
+the next row immediately. Provider failures remain single-send failures for
+the Region Talk product budget. YDB's
 `DurableGeminiBudget` adds a cumulative 100-request ceiling and fingerprint
 replay for finalizer/onboarding and image-VLM work; it does not replace the
 shared RPM/TPM/RPD reservation.

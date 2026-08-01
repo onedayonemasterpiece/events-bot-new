@@ -70,6 +70,7 @@ class UsageInfo:
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
+    model: str = ""
 
 
 @dataclass
@@ -368,6 +369,10 @@ class GoogleAIClient:
         # disable that behavior explicitly; ordinary callers retain the
         # availability-oriented default.
         self.allow_provider_429_rotation = True
+        # Model fallback after a provider request is availability-oriented by
+        # default. Consumers with a strict physical-send budget can disable it
+        # while still allowing a fallback when the limiter blocks before send.
+        self.allow_provider_model_fallback = True
         # When true, the current google.genai SDK is mandatory and receives an
         # explicit one-attempt HTTP policy.  This is stronger than
         # ``max_retries=1``: the deprecated google.generativeai/GAPIC path can
@@ -1347,7 +1352,7 @@ class GoogleAIClient:
                 attempt_cursor += 1
                 attempt_no = attempt_cursor
                 try:
-                    return await self._attempt_generate(
+                    response_text, usage = await self._attempt_generate(
                         ctx=ctx,
                         attempt_no=attempt_no,
                         prompt=prompt,
@@ -1356,8 +1361,38 @@ class GoogleAIClient:
                         max_output_tokens=max_output_tokens,
                         candidate_key_ids=attempt_candidate_key_ids,
                     )
+                    usage.model = limit_model
+                    return response_text, usage
                 except RateLimitError as e:
-                    if (e.blocked_reason or "").strip().lower() in {"no_keys", "model_not_found"}:
+                    blocked_reason = (e.blocked_reason or "").strip().lower()
+                    has_quota_fallback = (
+                        blocked_reason in {"rpm", "tpm", "rpd"}
+                        and model_index < (len(model_chain) - 1)
+                    )
+                    if has_quota_fallback:
+                        last_error = e
+                        next_model = model_chain[model_index + 1]
+                        self._log_event(
+                            "google_ai.model_quota_fallback",
+                            ctx,
+                            attempt_no=attempt_no,
+                            blocked_reason=blocked_reason,
+                            retry_after_ms=e.retry_after_ms,
+                            next_model=next_model,
+                        )
+                        await self._notify_incident(
+                            "rate_limit_model_fallback",
+                            ctx=ctx,
+                            severity="warning",
+                            message=str(e),
+                            details={
+                                "blocked_reason": blocked_reason,
+                                "retry_after_ms": e.retry_after_ms,
+                                "next_model": next_model,
+                            },
+                        )
+                        break
+                    if blocked_reason in {"no_keys", "model_not_found"}:
                         await self._notify_incident(
                             "rate_limit_blocked",
                             ctx=ctx,
@@ -1424,7 +1459,10 @@ class GoogleAIClient:
                         self._log_event("google_ai.retry", ctx, attempt_no=attempt_no, error=str(e))
                         continue
 
-                    has_fallback = model_index < (len(model_chain) - 1)
+                    has_fallback = (
+                        self.allow_provider_model_fallback
+                        and model_index < (len(model_chain) - 1)
+                    )
                     await self._notify_incident(
                         "provider_error_fallback" if has_fallback else "provider_error",
                         ctx=ctx,
