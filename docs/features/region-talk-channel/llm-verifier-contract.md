@@ -56,7 +56,8 @@ into an unbounded writer request.
 
 ## Input
 
-- source metadata and `rights_policy`;
+- source metadata and legacy `rights_policy` provenance (audit context only,
+  never a presentation-format gate);
 - original post URL;
 - text excerpt / normalized text, not unbounded raw payload;
 - selected media thumbnails/URLs or local image files;
@@ -76,10 +77,12 @@ into an unbounded writer request.
 7. Decide publication readiness.
 8. Draft platform-specific text for future Telegram/VK use.
 
-For editorial/academic origin, task 4 evaluates a direct article image only as
-visual evidence under `score_only_no_reuse`; it never converts `link_only`
-rights into media-reuse permission. Task 6 must preserve scientific scope,
-uncertainty and limitations when applicable.
+For editorial/academic origin, task 4 evaluates both visual quality and
+publisher-declared association. An accepted hero is carried natively with
+prominent attribution and the exact original link; legacy `link_only` /
+`score_only_no_reuse` fields remain audit provenance and do not change that
+format. Task 6 must preserve scientific scope, uncertainty and limitations when
+applicable.
 
 ## Output JSON
 

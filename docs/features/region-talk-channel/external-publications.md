@@ -62,13 +62,18 @@ Scientific rigor and public interest are separate. A technically sound paper is 
 
 Region Talk additionally prioritizes materials that form an **evidence-based positive image of the region**: discovery, culture, heritage, nature, science, architecture, creative work, civic initiative, distinctive places, and achievements. This is not a demand for praise or PR. Neutral and problem-focused work may remain eligible when it is respectful, balanced, explanatory, and has a constructive reader value. A dominantly hostile, stigmatizing, contemptuous, sensational, or catastrophizing portrayal is not sought and is blocked as `sharp_negative_region_image`; uncertainty about the dominant effect requires manual review rather than optimistic guessing.
 
-### Text-only and rights policy
+### Article media and provenance policy
 
-- Default article-image policy is `link_only` + `score_only_no_reuse`.
-- RegionTalkImageDiagnostic may evaluate a direct hero/OG image for quality, but evaluation permission is not reuse permission.
-- `reuse_verified` is allowed only for the exact asset with verifiable licence/permission.
-- A paper/PDF/paywalled page without a suitable direct image remains in Candidate Report/manual review; it does not receive a fake image score.
-- A future deterministic link-card renderer may create owned visuals, but that is a separate decision.
+- Region Talk natively carries one publisher-associated source hero with a
+  prominent source name and exact original link; legacy `link_only` /
+  `score_only_no_reuse` values remain research provenance only.
+- RegionTalkImageDiagnostic proves article association and visual suitability;
+  it must not substitute a site logo, related-content thumbnail or stock image.
+- A paper/PDF/paywalled page without a materializable suitable image receives a
+  recorded terminal system-link-preview fallback; it does not receive a fake
+  image score or an unrelated card.
+- A deterministic owned card remains a separate future format and never
+  replaces a source image while pretending to be source media.
 
 ## Machine contract and importer
 
@@ -159,27 +164,28 @@ row only when all of these remain true at read time:
 - `product_policy_match=true` and there is no hard exclusion;
 - no later operator override blocks the row.
 
-After the strict intake handoff, editorial and academic publications use a
-separate **link-only article lane**. They still require authoritative nonlocal
-publisher attestation, Kaliningrad-main-subject scope, current fused E5+BGE-M3,
-an exact external-article vector acceptance and the normal controlled Gemini
-finalizer. They do **not** require actual-image scoring when
-`rights_policy=link_only`, `media_use_policy=score_only_no_reuse` and media
-reuse is forbidden. This is contract
-`region_talk_external_article_link_gate_v1`; it cannot admit Telegram/VK social
-posts, ambiguous vector decisions or an article that claims reusable media.
-If an article already has a current actual-image attestation, that stricter
-visual lane keeps priority; the link-only path is a fallback for the absence of
-reusable media, not a replacement for valid visual evidence.
-The finalizer reports these inputs as `external_link_article_rows` and records
-`media_review_mode=link_only_no_media_reuse` instead of pretending a picture
-was reviewed.
+After the strict intake handoff, editorial and academic publications first use
+the media-first integrity path: ImageDiagnostic extracts publisher image
+candidates, verifies article association and selects one hero; JS-only pages
+go through the bounded browser materializer. Research `rights_policy` remains
+provenance metadata and cannot downgrade an associated source image to a
+premature link-only post. The source, region, fused E5+BGE-M3, exact
+external-article vector and controlled Gemini gates remain mandatory.
+
+Only an explicit terminal media result (`not_reviewable_no_media`, exhausted
+browser/fetch failure, or another terminal system-preview recommendation) may
+enter `region_talk_external_article_terminal_link_preview_fallback_v2`. An
+untouched candidate-memory row cannot use the fallback. The finalizer records
+`media_review_mode=system_link_preview_terminal_fallback` instead of pretending
+a picture was reviewed.
 
 The adapter creates a `platform=web` scoring projection, never a synthetic
 Telegram/VK post. It preserves `content_origin_type`, canonical publisher key,
-research quality, source overview, diversity topics and rights fields. A direct
-article image may be sent to ImageDiagnostic only as
-`score_only_no_reuse`; an image score is not permission to republish it.
+research quality, source overview, diversity topics and rights fields. Direct
+article images are source-media candidates: ImageDiagnostic must prove their
+association and quality, while the public renderer carries prominent source
+and original links rather than using the research rights field as a format
+gate.
 
 The strict research/import commerciality decision also takes precedence over
 the recall-oriented social ad regex before Gemini. A ready external row must
@@ -288,9 +294,9 @@ automatic-score threshold reduction.
 
 Human `approve_visual` feedback is supported as a durable, manifest-bound
 visual attestation. It never bypasses regional scope, nonlocal-source,
-anti-ad/news/negative-image rules, dual-vector evidence, rights policy or the
-final Gemini publication verifier. External images remain link-only and
-score-only/no-reuse by default.
+anti-ad/news/negative-image rules, dual-vector evidence, exact attribution or
+the final Gemini publication verifier. Research rights fields remain auditable
+metadata but do not downgrade the native attributed source-media format.
 
 An explicit one-shot request renders a **read-only** queue without marking candidates `sent_to_chat`:
 
@@ -327,10 +333,10 @@ Implemented now:
   YDB persistence and cursor recovery. ImageDiagnostic consumes
   `selected_for_next_image_batch=true` ahead of older unselected backlog, so
   the CandidateReport handoff is operational rather than display-only. For a
-  web publication it downloads only the direct image URL supplied by the
-  research contract, scores the decoded bytes, and preserves
-  `link_only`/`score_only_no_reuse`; it does not invent a platform fallback or
-  grant reuse rights.
+  web publication it downloads only publisher-declared article-image evidence,
+  scores the decoded bytes, preserves legacy provenance fields for audit, and
+  emits an exact refetch manifest for native attributed delivery. It does not
+  invent an unrelated platform fallback or substitute another asset.
 
 The finalizer normally treats candidate memory as the refreshable text source.
 For an external-publication canary that intentionally stopped after the early

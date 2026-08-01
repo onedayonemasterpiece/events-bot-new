@@ -53,8 +53,8 @@ same hero/album and verify it has not silently changed.
 The media-first presentation contract is:
 
 - article: one VLM-confirmed, article-associated source image;
-- visual social post: one hero image, or up to 10 selected source images as a
-  carousel when the complete album is visually accepted;
+- visual social post: one hero image, or 3–6 selected source images as a
+  carousel when that ordered subset is visually accepted;
 - `system_link_preview`: fallback only while relevant media is missing,
   unextractable or not yet accepted.
 

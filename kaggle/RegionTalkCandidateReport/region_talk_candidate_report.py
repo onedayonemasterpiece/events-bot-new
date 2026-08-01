@@ -10187,7 +10187,16 @@ def publication_goal_defaults(previous_state: dict[str, Any], *, run_now: str) -
 
 
 VIDEO_MEDIA_SUFFIXES = (".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv")
-EXTERNAL_ARTICLE_LINK_GATE_VERSION = "region_talk_external_article_link_gate_v1"
+EXTERNAL_ARTICLE_LINK_GATE_VERSION = "region_talk_external_article_terminal_link_preview_fallback_v2"
+EXTERNAL_ARTICLE_MEDIA_TERMINAL_STATUSES = {
+    "not_reviewable_no_media",
+    "not_reviewable_unsupported_media",
+    "broken_media",
+}
+EXTERNAL_ARTICLE_BROWSER_TERMINAL_STATUSES = {
+    "terminal_no_associated_images",
+    "terminal_fetch_failed",
+}
 
 
 def is_video_media_candidate(row: dict[str, Any]) -> bool:
@@ -10210,13 +10219,12 @@ def is_video_media_candidate(row: dict[str, Any]) -> bool:
 
 
 def is_external_link_article_candidate(row: dict[str, Any]) -> bool:
-    """Return true for the verified link-only article publication lane.
+    """Return true only for a terminal article system-preview fallback.
 
-    Social posts still need an actual-image or explicit video-review contract.
-    Editorial/academic articles are different product objects: Region Talk links
-    to the original page and must not require (or imply permission for) image
-    reuse.  The remaining source, region, dual-vector and Gemini gates stay
-    fail-closed downstream.
+    ``rights_policy`` is provenance metadata, not a product-format gate. A web
+    article must first pass source-image acquisition, association and visual
+    selection. Only explicit terminal media evidence may fall back to a native
+    link preview; untouched candidate memory cannot bypass ImageDiagnostic.
     """
     origin = str(row.get("content_origin_type") or "").strip().lower()
     if origin not in EXTERNAL_PUBLICATION_ORIGIN_TYPES:
@@ -10225,18 +10233,21 @@ def is_external_link_article_candidate(row: dict[str, Any]) -> bool:
         return False
     if not str(row.get("external_publication_id") or "").strip():
         return False
-    if str(row.get("rights_policy") or "").strip().lower() != "link_only":
-        return False
-    if _rt_bool(row.get("media_reuse_allowed")):
-        return False
-    return str(row.get("media_use_policy") or "").strip().lower() in {
-        "score_only_no_reuse",
-        "link_only_no_reuse",
-    }
+    image_status = str(row.get("image_queue_status") or "").strip().lower()
+    browser_status = str(row.get("browser_materialization_status") or "").strip().lower()
+    explicit_preview = str(row.get("presentation_recommendation") or "").strip().lower() == "system_link_preview"
+    return bool(
+        image_status in EXTERNAL_ARTICLE_MEDIA_TERMINAL_STATUSES
+        or browser_status in EXTERNAL_ARTICLE_BROWSER_TERMINAL_STATUSES
+        or (
+            explicit_preview
+            and str(row.get("image_quality_terminality") or "").strip().lower() == "terminal"
+        )
+    )
 
 
 def uses_external_link_article_lane(row: dict[str, Any]) -> bool:
-    """Prefer an existing actual-image attestation over the no-reuse lane."""
+    """Prefer an actual-image attestation over terminal system preview."""
     return bool(
         is_external_link_article_candidate(row)
         and str(row.get("image_model_input_type") or "") != "actual_image"
@@ -10480,7 +10491,7 @@ def publication_eligibility(
         require_actual_image = actual_image_scored or video_manual_review
     if external_link_article:
         base_ok, base_reason = _publication_candidate_base_ok(merged)
-        eligibility_phase = "publication_external_article_link"
+        eligibility_phase = "publication_external_article_link_preview_fallback"
     elif require_actual_image:
         base_ok, base_reason = _publication_candidate_base_ok(merged)
         eligibility_phase = "publication_video_manual_review" if video_manual_review else "publication"
@@ -10519,7 +10530,8 @@ def publication_eligibility(
         "images_scored_actual_count": merged.get("images_scored_actual_count") or 0,
         "media_kind": "video" if video_manual_review else (merged.get("media_kind") or ""),
         "manual_media_review_required": video_manual_review,
-        "external_article_link_only": external_link_article,
+        "external_article_link_only": external_link_article,  # compatibility: terminal fallback only
+        "external_article_system_preview_fallback": external_link_article,
         "external_article_link_gate_version": (
             EXTERNAL_ARTICLE_LINK_GATE_VERSION if external_link_article else ""
         ),
@@ -10561,7 +10573,7 @@ def publication_eligibility(
         "media_review_mode": (
             "operator_video_review"
             if video_manual_review
-            else "link_only_no_media_reuse"
+            else "system_link_preview_terminal_fallback"
             if external_link_article
             else "visual_review_pending"
             if decision == "needs_visual_review"
@@ -10711,7 +10723,7 @@ def build_publication_candidate_queue(
                     "image_model_input_type": row.get("image_model_input_type"),
                     "image_model_type": row.get("image_model_type"),
                     "visual_confirmation_source": (
-                        "not_required_link_only_article_no_media_reuse"
+                        "terminal_media_fallback_system_link_preview"
                         if row.get("_publication_external_link_article")
                         else "RegionTalkImageDiagnostic actual-image scoring"
                     ),
@@ -10793,7 +10805,7 @@ def build_publication_candidate_queue(
             "publication_llm_reason": llm_reason[:500],
             "publication_llm_model": llm_model_used,
             "visual_confirmation_source": (
-                "not_required_link_only_article_no_media_reuse"
+                "terminal_media_fallback_system_link_preview"
                 if base_ok and row.get("_publication_external_link_article")
                 else "RegionTalkImageDiagnostic actual-image scoring"
                 if base_ok

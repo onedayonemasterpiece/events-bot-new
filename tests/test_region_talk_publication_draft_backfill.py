@@ -128,17 +128,49 @@ def test_v8_validator_enforces_two_grounded_russian_paragraphs() -> None:
     )
 
 
+def test_v8_validator_requires_at_least_95_percent_cyrillic() -> None:
+    mod = load_module()
+    output = _valid_writer_output(mod)
+    output["public_copy"]["paragraph_2"] += " English English English English."
+    assert "russian_language" in mod.validate_editorial_output(
+        output, {"source.name", "content.exact_text"}
+    )
+
+
 def test_history_uses_only_published_or_clean_approved_rows() -> None:
     mod = load_module()
+    approved = {
+        "post_url": "https://t.me/a/3",
+        "operator_review_decision": "approved",
+        "operator_review_rewrite_status": "clean",
+        "updated_at": "2026-08-01",
+        "publication_draft_telegram_text": "Один.\n\nДва.",
+    }
+    approved["operator_review_fingerprint"] = mod.notify.publication_operator_review_fingerprint(approved)
     rows = [
         {"post_url": "https://t.me/a/1", "publication_draft_telegram_text": "Один.\n\nДва."},
         {"post_url": "https://t.me/a/2", "operator_review_decision": "approved", "operator_review_rewrite_status": "rewrite_requested", "publication_draft_telegram_text": "Один.\n\nДва."},
-        {"post_url": "https://t.me/a/3", "operator_review_decision": "approved", "operator_review_rewrite_status": "clean", "updated_at": "2026-08-01", "publication_draft_telegram_text": "Один.\n\nДва."},
+        approved,
+        {"post_url": "https://t.me/a/stale", "operator_review_decision": "approved", "operator_review_rewrite_status": "clean", "operator_review_fingerprint": "stale", "updated_at": "2026-08-03", "publication_draft_telegram_text": "Старое.\n\nРешение."},
         {"post_url": "https://t.me/a/4", "status": "published", "published_at": "2026-08-02", "publication_draft_telegram_text": "Три.\n\nЧетыре."},
     ]
     assert [item["candidate_url"] for item in mod.publication_history(rows)] == [
         "https://t.me/a/4", "https://t.me/a/3"
     ]
+
+
+def test_recent_history_forces_fresh_start_after_two_transitions() -> None:
+    mod = load_module()
+    assert mod.recent_history_requires_fresh_start([
+        {"throughline_mode": "explicit_transition"},
+        {"throughline_mode": "fresh_start"},
+        {"throughline_mode": "contrast_or_scale_shift"},
+    ]) is True
+    assert mod.recent_history_requires_fresh_start([
+        {"throughline_mode": "explicit_transition"},
+        {"throughline_mode": "fresh_start"},
+        {"throughline_mode": "fresh_start"},
+    ]) is False
 
 
 def test_media_plan_is_media_first_and_fails_article_without_hero() -> None:
@@ -162,10 +194,24 @@ def test_media_plan_is_media_first_and_fails_article_without_hero() -> None:
     assert len(album["items"]) == 4
     associated = mod.publication_media_plan({
         "post_url": "https://example.org/a", "content_origin_type": "editorial_publication",
-        "selected_media_materialization_json": '[{"media_id":"frame:1","ordinal":1,"source_ref":"https://cdn.example.org/associated.jpg","refetch_locator":{"method":"article_page_image_evidence","association_reason":"publisher_declared_article_role"}}]',
+        "selected_media_materialization_json": '[{"media_id":"frame:1","ordinal":1,"source_ref":"https://cdn.example.org/associated.jpg","reviewed_content_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","materialization_fingerprint":"fp1","refetch_locator":{"method":"article_page_image_evidence","association_reason":"publisher_declared_article_role"}}]',
     })
     assert associated["mode"] == "article_hero"
     assert associated["items"][0]["ref"].endswith("associated.jpg")
+    assert associated["items"][0]["reviewed_content_sha256"] == "a" * 64
+    assert associated["items"][0]["materialization_fingerprint"] == "fp1"
+    assert associated["items"][0]["refetch_locator"]["method"] == "article_page_image_evidence"
+    fallback = mod.publication_media_plan({
+        "post_url": "https://example.org/a",
+        "platform": "web",
+        "external_publication_id": "extpub-1",
+        "content_origin_type": "editorial_publication",
+        "image_queue_status": "not_reviewable_no_media",
+        "browser_materialization_status": "terminal_no_associated_images",
+        "presentation_recommendation": "system_link_preview",
+        "image_quality_terminality": "terminal",
+    })
+    assert (fallback["mode"], fallback["status"]) == ("link_preview_fallback", "fallback")
 
 
 def test_legacy_review_is_archived_but_never_approves_v8_revision(monkeypatch) -> None:

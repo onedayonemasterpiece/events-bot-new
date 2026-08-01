@@ -328,9 +328,10 @@ selection plan with policy `region_talk_daily_pair_antivector_v1`:
 - exactly one `article` slot and one `social` slot per Kaliningrad day;
 - articles are editorial/academic external publications; social rows are
   Telegram/VK posts;
-- article slots may use the verified link-only lane: the original article is
-  linked and no publisher image is reused. Social slots keep the strict
-  actual-image/video-review gate;
+- article slots normally carry one verified publisher-associated hero plus the
+  prominent original link. Only an explicit terminal missing/unextractable
+  media result may use the system-link-preview fallback. Social slots keep the
+  strict source-image/album/video-review gate;
 - each lane is ranked against actual target-publication history plus all
   earlier selections in that lane, so long-range diversity is recalculated
   rather than frozen when new candidates arrive;
@@ -382,10 +383,14 @@ Telegram and VK. It is persisted before working source text is compacted.
 source attribution, canonical original URL, both platform texts and one to
 three internal claim/support pairs. The operator candidate message includes the
 Telegram draft. This is the input to the future target-channel publisher; it
-does not bypass diversity ordering, rights policy or manual release gates.
-For a link-only article the eligibility evidence explicitly says
-`publication_external_article_link` and
-`not_required_link_only_article_no_media_reuse`; this is not visual approval.
+does not bypass diversity ordering, source-media association/attribution or
+manual release gates.
+For an article whose source media is terminally absent or unextractable, the
+eligibility evidence explicitly says
+`publication_external_article_link_preview_fallback` and
+`terminal_media_fallback_system_link_preview`; this is not visual approval.
+The fallback is unavailable while source-media extraction or browser
+materialization is merely pending, and `rights_policy` alone cannot trigger it.
 
 Historical external articles accepted before the grounded-draft rollout may be
 repaired without another semantic verdict only when their strict intake row
@@ -408,6 +413,13 @@ grounded-writer prompt and the shared Supabase limiter, plus a separate daily
 durable fingerprint budget. The original `llm_confirmed` or `sent_to_chat`
 verdict is monotonic: the backfill may add draft fields or a review/retry
 status, but never replace that historical verdict.
+
+Writer history accepts a public `published` row or an operator-approved clean
+row whose `operator_review_fingerprint` still equals the current exact
+draft-plus-media fingerprint. Stale reactions never become narrative context.
+The last three stored editorial plans also enforce the anti-template rule: if
+two used an explicit transition/scale shift, the next plan is deterministically
+forced to `fresh_start`.
 
 The orchestrator exposes separate Telegram and VK actionable counts. Telegram
 defaults to `DISCOVERY2` because the continuously launched CandidateReport

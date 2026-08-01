@@ -1,6 +1,6 @@
 # Region Talk editorial approval — integration report
 
-Integration branch: `integration/region-talk-editorial-approval`  
+Integration branch: `integration/region-talk-editorial-approval`
 Rebased base: `origin/main@d08ecf320d231e6b934715a5930b3d6d92c771ac`
 
 | Lane | Requirements | Status | Integrated evidence |
@@ -26,9 +26,17 @@ Rebased base: `origin/main@d08ecf320d231e6b934715a5930b3d6d92c771ac`
   ImageDiagnostic work only after direct source-media materialization.
 - Documentation and `[Unreleased]` changelog entries accompany every behavior
   change.
+- Final checklist remediation is integrated: article link previews are terminal
+  fallback only, reviewed media SHA/refetch evidence survives into delivery and
+  is verified against materialized bytes, and narrative history rejects stale
+  approval fingerprints while enforcing the two-of-three fresh-start rule.
 
 ## Verification
 
 - Focused browser/orchestrator suite: **107 passed**.
 - Full Region Talk suite before final rebase: **678 passed**.
 - Full Region Talk suite after the final `origin/main` rebase: **678 passed in 45.91s**.
+- Final editorial/delivery focused suite: **83 passed in 1.50s**.
+- Final full Region Talk suite with checklist remediation: **682 passed in 38.22s**.
+- Region Talk scheduler selection: **4 passed, 37 deselected**.
+- Guide incident regression suite retained by the shared base: **85 passed in 32.97s**.

@@ -9246,7 +9246,7 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertFalse(document["eligible"])
         self.assertEqual(document["primary_reason"], "actual_image_required")
 
-    def test_publication_eligibility_accepts_verified_link_only_external_article_without_media(self) -> None:
+    def test_publication_eligibility_uses_link_preview_only_after_terminal_media_evidence(self) -> None:
         mod = load_module()
         article = {
             "post_url": "https://publisher.example/kaliningrad-architecture",
@@ -9267,11 +9267,21 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             "media_use_policy": "score_only_no_reuse",
             "media_reuse_allowed": False,
             "has_media": False,
+            "image_queue_status": "not_reviewable_no_media",
+            "browser_materialization_status": "terminal_no_associated_images",
+            "image_quality_terminality": "terminal",
+            "presentation_recommendation": "system_link_preview",
         }
 
         accepted = mod.publication_eligibility(article)
         ambiguous = mod.publication_eligibility({**article, "vector_gate_status": "vector_ambiguous_keep_for_ranking"})
-        reusable_media = mod.publication_eligibility({**article, "media_reuse_allowed": True})
+        not_yet_reviewed = mod.publication_eligibility({
+            **article,
+            "image_queue_status": "",
+            "browser_materialization_status": "",
+            "image_quality_terminality": "",
+            "presentation_recommendation": "",
+        })
         actual_image_article = mod.publication_eligibility({
             **article,
             "vector_content_type": "route_useful_candidate",
@@ -9290,15 +9300,16 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         })
 
         self.assertTrue(accepted["eligible"])
-        self.assertEqual(accepted["media_review_mode"], "link_only_no_media_reuse")
-        self.assertEqual(accepted["evidence"]["eligibility_phase"], "publication_external_article_link")
+        self.assertEqual(accepted["media_review_mode"], "system_link_preview_terminal_fallback")
+        self.assertEqual(accepted["evidence"]["eligibility_phase"], "publication_external_article_link_preview_fallback")
         self.assertEqual(
             accepted["evidence"]["external_article_link_gate_version"],
             mod.EXTERNAL_ARTICLE_LINK_GATE_VERSION,
         )
         self.assertFalse(ambiguous["eligible"])
         self.assertEqual(ambiguous["primary_reason"], "vector_accept_candidate_required")
-        self.assertFalse(reusable_media["eligible"])
+        self.assertFalse(not_yet_reviewed["eligible"])
+        self.assertEqual(not_yet_reviewed["primary_reason"], "no_media_for_image_analysis")
         self.assertTrue(actual_image_article["eligible"])
         self.assertEqual(actual_image_article["media_review_mode"], "scored_actual_image")
         self.assertEqual(actual_image_article["evidence"]["eligibility_phase"], "publication")
@@ -9333,7 +9344,7 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(queue[0]["publication_candidate_status"], "llm_confirmed")
         self.assertEqual(
             queue[0]["visual_confirmation_source"],
-            "not_required_link_only_article_no_media_reuse",
+            "terminal_media_fallback_system_link_preview",
         )
         self.assertGreater(queue[0]["publication_score"], 0.5)
 

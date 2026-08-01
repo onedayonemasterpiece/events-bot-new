@@ -108,7 +108,8 @@ The first test run can start only when:
 ## MVP-2 Favorites + manual approval
 
 - Import/manual edit favorites decisions.
-- Render Telegram/VK preview cards where rights allow.
+- Carry exact source hero/album/video with prominent attribution; branded
+  preview cards remain a later transformation only when they add product value.
 - Add approval status.
 - Still no auto-publish.
 
@@ -141,5 +142,6 @@ The first test run can start only when:
 3. Whether MVP-1 writes to real YDB dev/test or dry-run JSON first.
 4. Fusion policy for dual-model recall: top-K per model, score normalization, union/rerank weights and disagreement handling for e5-base + BGE-M3 enrichment rows.
 5. Final model id/default env lane and quota budget must be visible in Supabase limiter/report summary; `GOOGLE_API_KEY2` is not a default for Region Talk; current scoped default is the Supabase-registered reserve lane `GOOGLE_API_KEY3`.
-6. Media rights policy thresholds for `media_reuse_allowed`.
+6. Source-media association, attribution, reviewed-order and terminal-fallback
+   thresholds; legacy rights fields stay provenance metadata.
 7. First-run caps for `REGION_TALK_MAX_SOURCES` and post/image budgets.

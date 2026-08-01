@@ -163,10 +163,14 @@ def publication_history(rows: list[dict[str, Any]], *, limit: int = 5) -> list[d
         approved = (
             str(row.get("operator_review_decision") or "") == "approved"
             and str(row.get("operator_review_rewrite_status") or "") == "clean"
+            and bool(str(row.get("operator_review_fingerprint") or "").strip())
+            and str(row.get("operator_review_fingerprint") or "").strip()
+            == notify.publication_operator_review_fingerprint(row)
         )
         if not (published or approved):
             continue
         p1, p2 = editorial_paragraphs(str(row.get("publication_draft_telegram_text") or ""))
+        editorial_plan = _json_value(row.get("publication_draft_editorial_plan_json"), {})
         selected.append({
             "candidate_url": _canonical_url(row),
             "source": str(row.get("publication_draft_source_attribution") or row.get("source_title") or "")[:220],
@@ -174,6 +178,7 @@ def publication_history(rows: list[dict[str, Any]], *, limit: int = 5) -> list[d
             "paragraph_1": p1[:500],
             "paragraph_2": p2[:500],
             "title": str(row.get("publication_draft_title") or row.get("publication_title") or "")[:180],
+            "throughline_mode": str(editorial_plan.get("throughline_mode") or "")[:80],
             "state": "published" if published else "operator_approved",
             "event_at": str(
                 row.get("published_at") or row.get("target_published_at")
@@ -192,6 +197,17 @@ def publication_history(rows: list[dict[str, Any]], *, limit: int = 5) -> list[d
         if len(result) >= max(0, min(5, int(limit))):
             break
     return result
+
+
+def recent_history_requires_fresh_start(history: list[dict[str, Any]]) -> bool:
+    """Two transitions among the latest three force a non-template opening."""
+
+    return sum(
+        1 for item in history[:3]
+        if str(item.get("throughline_mode") or "") in {
+            "explicit_transition", "contrast_or_scale_shift",
+        }
+    ) >= 2
 
 
 def article_intake_index(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -318,7 +334,7 @@ def validate_editorial_output(output: dict[str, Any], evidence_ids: set[str]) ->
         violations.append("third_person_boundary")
     cyrillic = len(re.findall(r"[А-Яа-яЁё]", combined))
     letters = len(re.findall(r"[A-Za-zА-Яа-яЁё]", combined))
-    if letters and cyrillic / letters < 0.85:
+    if letters and cyrillic / letters < 0.95:
         violations.append("russian_language")
     grounding = output.get("grounding_map") if isinstance(output.get("grounding_map"), list) else []
     if not grounding:
@@ -610,12 +626,21 @@ def publication_media_plan(row: dict[str, Any]) -> dict[str, Any]:
                 or locator.get("source_url") or locator.get("post_url") or ""
             ).strip()
             if ref:
-                explicit_items.append({
+                item = {
                     "media_id": str(raw.get("media_id") or raw.get("id") or ref),
                     "ordinal": int(raw.get("ordinal") or len(explicit_items) + 1),
                     "kind": str(raw.get("kind") or raw.get("media_kind") or "image"),
                     "ref": ref,
-                })
+                }
+                for evidence_key in (
+                    "reviewed_content_sha256",
+                    "materialization_fingerprint",
+                    "refetch_locator",
+                ):
+                    value = raw.get(evidence_key)
+                    if value not in (None, "", {}, []):
+                        item[evidence_key] = value
+                explicit_items.append(item)
         if field == "selected_media_materialization_json" and explicit_items:
             break
     scalar_ref = str(
@@ -627,11 +652,16 @@ def publication_media_plan(row: dict[str, Any]) -> dict[str, Any]:
     explicit_items.sort(key=lambda item: int(item.get("ordinal") or 0))
 
     if lane == "article":
-        mode = "article_hero"
         items = explicit_items[:1]
-        if not items:
+        terminal_fallback = rt.is_external_link_article_candidate(row)
+        if not items and terminal_fallback:
+            mode = "link_preview_fallback"
+            status, reason = "fallback", "article_source_media_terminally_unavailable"
+        elif not items:
+            mode = "article_hero"
             status, reason = "pending", "associated_article_hero_not_materialized"
         else:
+            mode = "article_hero"
             status, reason = "ready", "associated_article_hero_has_exact_ref"
     elif media_kind == "video":
         mode = "social_video"
@@ -831,7 +861,11 @@ def generate_editorial_draft(
     evidence_ids = {str(item.get("evidence_id")) for item in evidence_pack.get("evidence") or [] if isinstance(item, dict)}
     used_history = set(str(value) for value in (strategy.get("used_history_urls") or []))
     allowed_history = {str(item.get("candidate_url") or "") for item in history}
-    if not used_history.issubset(allowed_history) or len(used_history) > 1:
+    if (
+        not used_history.issubset(allowed_history)
+        or len(used_history) > 1
+        or recent_history_requires_fresh_start(history)
+    ):
         strategy["throughline_mode"] = "fresh_start"
         strategy["used_history_urls"] = []
 

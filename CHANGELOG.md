@@ -66,6 +66,14 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- External Region Talk articles no longer bypass source-image extraction merely
+  because research provenance says `rights_policy=link_only`. An associated
+  publisher hero is attempted and visually verified first; native link preview
+  is now a terminal missing/unextractable-media fallback only.
+- Region Talk v8 delivery now preserves per-item reviewed SHA/refetch evidence,
+  verifies materialized Telethon bytes, rejects stale approval fingerprints
+  from writer history, forces a fresh opening after repeated transitions, and
+  carries terminal article link-preview fallback through the media plan.
 - Guide Excursions generated Kaggle notebooks now embed the complete
   deterministic `google_ai` Python source tree instead of a stale four-module
   allowlist. Shared-limiter and future nested imports therefore survive the

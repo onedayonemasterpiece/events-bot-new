@@ -2,7 +2,7 @@
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Legal/media reuse risk | Reposting or modifying source images can violate rights. | `rights_policy`, link-only fallback, no autopublish with unknown rights, source attribution. |
+| Source-media integrity risk | A copied asset may be unrelated, substituted, reordered or lose attribution. | Exact source/original links, association VLM, reviewed hashes/order, no substitution; terminal link-preview fallback. Legacy `rights_policy` remains provenance metadata, not a format gate. |
 | VK image publishing token risk | Community token may post text but fail photo upload. | Validate API path in dry-run, consider limited user-token policy, fallback text/link or Telegram-only. |
 | Telegram source reading risk | Bot API cannot read arbitrary public channel history. | Separate acquisition modes; use authorized/manual/web-preview modes only after policy review; respect session boundaries. |
 | Full autonomy risk | Pipeline publishes bad/unsafe post. | Dry-run, XLSX favorites report, manual approval, strict verifier gates, canary. |

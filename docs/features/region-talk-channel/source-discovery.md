@@ -674,7 +674,8 @@ Accept/monitor when:
 - topics include travel, architecture, history, nature, city walks, weekend routes, food or photogenic places;
 - source posts original or well-attributed content;
 - media style likely supports strong photos;
-- rights policy can be inferred enough for report/link-only or later publication.
+- the exact source/original link and media provenance are recoverable enough for
+  prominent attribution and later native source-media publication.
 
 Reject or block when:
 
@@ -682,7 +683,8 @@ Reject or block when:
 - federal news wire or repost-only aggregators;
 - pure ads/catalogs/coupon feeds;
 - low-quality memes/screenshots;
-- questionable rights behavior or blocked source.
+- deceptive attribution, removed provenance, tampered source media or a blocked
+  source.
 
 ## Discovery graph
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import base64
+import hashlib
 import json
 import os
 import subprocess
@@ -214,6 +215,22 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(RuntimeError, "exact ordered materialization manifest"):
             mod.publication_delivery_mode(row)
+
+    def test_reviewed_media_digest_is_verified_before_delivery(self) -> None:
+        mod = load_module()
+        data = b"exact-reviewed-source-media"
+        item = {"reviewed_content_sha256": hashlib.sha256(data).hexdigest()}
+        mod.verify_reviewed_media_digest(data, item)
+        with self.assertRaisesRegex(RuntimeError, "differs from reviewed_content_sha256"):
+            mod.verify_reviewed_media_digest(b"changed-source-media", item)
+        with self.assertRaisesRegex(RuntimeError, "invalid reviewed_content_sha256"):
+            mod.verify_reviewed_media_digest(data, {"reviewed_content_sha256": "not-a-sha"})
+
+    def test_manifest_message_id_uses_exact_numeric_suffix(self) -> None:
+        mod = load_module()
+        self.assertEqual(mod.manifest_item_message_id({"media_id": "telegram:110"}), 110)
+        self.assertEqual(mod.manifest_item_message_id({"media_id": "tg:10"}), 10)
+        self.assertIsNone(mod.manifest_item_message_id({"media_id": "frame:hero"}))
 
     def test_source_fingerprint_changes_when_source_classification_changes(self) -> None:
         mod = load_module()

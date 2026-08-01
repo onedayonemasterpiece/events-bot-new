@@ -88,7 +88,7 @@ Reuse product discipline: social-source discovery, Telegram/VK surface discovery
 
 Related: [`docs/features/post-metrics/README.md`](../post-metrics/README.md), `source_parsing/post_metrics.py`.
 
-Post metrics remain the quantitative layer (`views`, `likes`, comments/reposts where available, per-source baselines). Region Talk is the qualitative discovery/curation layer. `engagement_normalized_score` may read metrics as a weak tie-breaker, but strong media + semantic fit + rights/safety gates dominate.
+Post metrics remain the quantitative layer (`views`, `likes`, comments/reposts where available, per-source baselines). Region Talk is the qualitative discovery/curation layer. `engagement_normalized_score` may read metrics as a weak tie-breaker, but strong associated source media, semantic fit, attribution and visual safety dominate.
 
 ### Unsigned personalization semantic retrieval
 
@@ -302,7 +302,7 @@ state. См. [MVP candidate report](mvp-candidate-report.md).
   live YDB under no-publication guardrails. `scripts/region_talk_scheduled_runner.py`
   adds fail-closed non-interactive preflight, cross-process single-flight,
   retained JSONL logs and `ops_run(kind=region_talk)` accounting; APScheduler
-  registers three configurable local-time slots when
+  registers five configurable local-time slots when
   `ENABLE_REGION_TALK_SCHEDULED=1`. A separate five-minute watchdog resumes
   the latest due slot after a deploy/process interruption by consulting the
   same durable ledger and bounded retry cap; it never launches beside a

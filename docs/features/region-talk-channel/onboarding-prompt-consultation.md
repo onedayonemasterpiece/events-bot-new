@@ -1,4 +1,10 @@
-Ниже представлен инженерный и редакционный проект производственного конвейера для канала «О Калининграде говорят» (Region Talk).1. Короткий диагноз текущего разрываТекущий монолитный промпт (region_talk_final_verifier_v7_grounded_draft) страдает от проблемы «сборки Франкенштейна». Когда LLM в одной операции просят извлечь факты, сформировать досье, написать подводку и поставить ссылки, она переходит в режим суммаризации, а не редактуры.Отдельный onboarding-абзац и summary порождают link-dump, потому что у текста нет единой прагматики. Первый абзац отвечает на вопрос «что это за файл в базе» (досье), а второй — «что написано по ссылке» (пересказ). В результате читатель получает исчерпывающую справку, которая убивает мотивацию кликать. Настоящий редакционный текст должен отвечать на вопросы: «почему этот внешний взгляд важен для нас сегодня?» и «ради какой конкретной детали стоит открыть оригинал?».2. Редакционные принципыРадикальная атрибуция (Third-person boundary): Region Talk — это куратор, а не автор опыта. Любое впечатление, вывод или маршрут принадлежат источнику. Редакция не присваивает чужое «я».Презумпция внешнего взгляда: Каждое одобренное сообщение должно доказывать свою внерегиональность не штампом «известный тревел-блогер», а оптикой (например, метод сравнения со своим регионом, удивление привычному).Мотивационный дефицит: Текст не должен заменять оригинал. Мы продаем «клик», подсвечивая метод, необычный вывод или сильный визуальный ряд, оставляя само мясо (полный маршрут, все фото, весь список аргументов) по ссылке.Доказательность (Strict Grounding): Запрещено выводить профессию из темы канала или додумывать эмоции. Нет evidence — нет утверждения в публичном тексте.Сквозное повествование без фальши: История публикаций нужна для контраста и смены масштаба, а не для искусственного склеивания несвязанных людей. Fresh start — всегда лучше вымученного мостика.3. Рекомендуемая stage split (Архитектура конвейера)Для баланса между качеством текста, задержкой и стоимостью токенов в изолированном контейнерном окружении (например, при оркестрации через Docker/DevPod) рекомендуется 3-стадийная архитектура (Strategy -> Writer -> Critic).Объединять планирование и написание в один промпт опасно: модель начнет «срезать углы».Stage 1: Editorial Strategy (Planner)Вход: JSON кандидата, профиль источника, history context (последние 5 постов).Выход: JSON-план (editorial_plan), где зафиксированы throughline_mode, source_angle, и why_this_material_now.Логика: Модель работает только с метаданными и принимает композиционные решения.Stage 2: Grounded WriterВход: Утвержденный editorial_plan, сырые evidence_ids (текст и факты).Выход: Черновик (paragraph_1, paragraph_2), grounding_map.Логика: Жестко ограничена планом. Пишет текст, мапит каждое предложение на ID.Stage 3: Verifier / CriticВход: Результат Writer, исходные Evidence.Выход: Статус (Pass / Rewrite / Reject), список reason_codes.Policy: Допускается максимум один автоматический retry (передача Critic feedback обратно во Writer). Если вторая попытка провалена — needs_review для живого редактора.Кеширование и Fingerprint:Fingerprint черновика вычисляется как hash(candidate_id + evidence_hash + strategy_hash). Изменение системного промпта меняет contract_version, что инвалидирует кеш.4. Полный production system promptPrompt 1: Editorial Strategy (Planner)PlaintextYou are the Lead Product Editor for "Region Talk", a Russian-language curation channel. 
+> **Decision record.** Консультация ниже сохранена как полученный внешний
+> материал. В production приняты stage split, grounding, anti-template и
+> one-retry policy. Её советы, связывающие формат с `rights_policy`, отменены
+> решением владельца продукта: исходные медиа публикуются нативно с заметной
+> атрибуцией и точной ссылкой; link preview — только терминальный fallback.
+
+Ниже представлен инженерный и редакционный проект производственного конвейера для канала «О Калининграде говорят» (Region Talk).1. Короткий диагноз текущего разрываТекущий монолитный промпт (region_talk_final_verifier_v7_grounded_draft) страдает от проблемы «сборки Франкенштейна». Когда LLM в одной операции просят извлечь факты, сформировать досье, написать подводку и поставить ссылки, она переходит в режим суммаризации, а не редактуры.Отдельный onboarding-абзац и summary порождают link-dump, потому что у текста нет единой прагматики. Первый абзац отвечает на вопрос «что это за файл в базе» (досье), а второй — «что написано по ссылке» (пересказ). В результате читатель получает исчерпывающую справку, которая убивает мотивацию кликать. Настоящий редакционный текст должен отвечать на вопросы: «почему этот внешний взгляд важен для нас сегодня?» и «ради какой конкретной детали стоит открыть оригинал?».2. Редакционные принципыРадикальная атрибуция (Third-person boundary): Region Talk — это куратор, а не автор опыта. Любое впечатление, вывод или маршрут принадлежат источнику. Редакция не присваивает чужое «я».Презумпция внешнего взгляда: Каждое одобренное сообщение должно доказывать свою внерегиональность не штампом «известный тревел-блогер», а оптикой (например, метод сравнения со своим регионом, удивление привычному).Мотивационный дефицит: Текст не должен заменять оригинал. Мы продаем «клик», подсвечивая метод, необычный вывод или сильный визуальный ряд, оставляя само мясо (полный маршрут, все фото, весь список аргументов) по ссылке.Доказательность (Strict Grounding): Запрещено выводить профессию из темы канала или додумывать эмоции. Нет evidence — нет утверждения в публичном тексте.Сквозное повествование без фальши: История публикаций нужна для контраста и смены масштаба, а не для искусственного склеивания несвязанных людей. Fresh start — всегда лучше вымученного мостика.3. Рекомендуемая stage split (Архитектура конвейера)Для баланса между качеством текста, задержкой и стоимостью токенов в изолированном контейнерном окружении (например, при оркестрации через Docker/DevPod) рекомендуется 3-стадийная архитектура (Strategy -> Writer -> Critic).Объединять планирование и написание в один промпт опасно: модель начнет «срезать углы».Stage 1: Editorial Strategy (Planner)Вход: JSON кандидата, профиль источника, history context (последние 5 постов).Выход: JSON-план (editorial_plan), где зафиксированы throughline_mode, source_angle, и why_this_material_now.Логика: Модель работает только с метаданными и принимает композиционные решения.Stage 2: Grounded WriterВход: Утвержденный editorial_plan, сырые evidence_ids (текст и факты).Выход: Черновик (paragraph_1, paragraph_2), grounding_map.Логика: Жестко ограничена планом. Пишет текст, мапит каждое предложение на ID.Stage 3: Verifier / CriticВход: Результат Writer, исходные Evidence.Выход: Статус (Pass / Rewrite / Reject), список reason_codes.Policy: Допускается максимум один автоматический retry (передача Critic feedback обратно во Writer). Если вторая попытка провалена — needs_review для живого редактора.Кеширование и Fingerprint:Fingerprint черновика вычисляется как hash(candidate_id + evidence_hash + strategy_hash). Изменение системного промпта меняет contract_version, что инвалидирует кеш.4. Полный production system promptPrompt 1: Editorial Strategy (Planner)PlaintextYou are the Lead Product Editor for "Region Talk", a Russian-language curation channel.
 Your task is to design the editorial strategy for presenting an external (non-regional) perspective on the Kaliningrad region.
 Do not write the final text. Produce ONLY the JSON plan.
 
@@ -19,12 +25,12 @@ RULES:
 4. Define 'opening_device': How to start paragraph 1 without using banned lexemes from the context.
 
 Respond in strict adherence to the EditorialPlanOutput schema. Language: Russian for text fields, exact IDs for references.
-Prompt 2: Grounded WriterPlaintextYou are the Onboarding Writer for "Region Talk". 
+Prompt 2: Grounded WriterPlaintextYou are the Onboarding Writer for "Region Talk".
 Write EXACTLY two paragraphs in Russian based STRICTLY on the provided 'editorial_plan' and 'evidence'.
 
 RULES:
 Paragraph 1 (Source & Bridge):
-- Introduce the source based on 'source_angle_id'. 
+- Introduce the source based on 'source_angle_id'.
 - Establish their non-regional perspective.
 - Implement the 'throughline_mode' and 'opening_device'.
 - DO NOT write a standard biography.
@@ -63,13 +69,13 @@ Respond in strict adherence to the WriterOutput schema.
         "properties": {
           "sentence_index": { "type": "integer" },
           "sentence_text": { "type": "string" },
-          "claim_type": { 
-            "type": "string", 
-            "enum": ["source_profile_fact", "content_fact", "source_impression", "visual_observation", "history_bridge"] 
+          "claim_type": {
+            "type": "string",
+            "enum": ["source_profile_fact", "content_fact", "source_impression", "visual_observation", "history_bridge"]
           },
-          "evidence_ids": { 
-            "type": "array", 
-            "items": { "type": "string" } 
+          "evidence_ids": {
+            "type": "array",
+            "items": { "type": "string" }
           },
           "third_person_maintained": { "type": "boolean" }
         },

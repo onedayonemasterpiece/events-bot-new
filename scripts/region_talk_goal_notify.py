@@ -887,6 +887,26 @@ def publication_delivery_mode(row: dict[str, Any]) -> str:
     return mode
 
 
+def verify_reviewed_media_digest(data: bytes, item: dict[str, Any]) -> None:
+    """Fail closed when refetched bytes differ from the reviewed revision."""
+
+    expected = str(item.get("reviewed_content_sha256") or "").strip().lower()
+    if not expected:
+        return
+    if not re.fullmatch(r"[0-9a-f]{64}", expected):
+        raise RuntimeError("media manifest has an invalid reviewed_content_sha256")
+    actual = hashlib.sha256(data).hexdigest()
+    if actual != expected:
+        raise RuntimeError("materialized source media differs from reviewed_content_sha256")
+
+
+def manifest_item_message_id(item: dict[str, Any]) -> int | None:
+    """Return the exact Telegram message id encoded by a manifest media id."""
+
+    match = re.search(r"([0-9]+)$", str(item.get("media_id") or ""))
+    return int(match.group(1)) if match else None
+
+
 async def _telegram_source_media(client: Any, ref: str, media_ids: list[str]) -> list[Any]:
     match = re.fullmatch(r"https://t\.me/([^/]+)/([0-9]+)", canonical_post_url({"post_url": ref}), re.I)
     if not match:
@@ -918,25 +938,38 @@ async def materialize_telethon_media(client: Any, row: dict[str, Any]) -> list[A
     items = [dict(item) for item in manifest.get("items") or [] if isinstance(item, dict)]
     if not items:
         return []
-    source_refs: dict[str, list[str]] = {}
-    direct_refs: list[tuple[str, str]] = []
+    source_refs: dict[str, list[dict[str, Any]]] = {}
+    direct_refs: list[dict[str, Any]] = []
     for item in items:
         ref = str(item.get("ref") or "").strip()
         if telegram_post_ref := re.fullmatch(r"https://t\.me/[^/]+/[0-9]+", canonical_post_url({"post_url": ref}), re.I):
             del telegram_post_ref
-            source_refs.setdefault(ref, []).append(str(item.get("media_id") or ""))
+            source_refs.setdefault(ref, []).append(item)
         else:
-            direct_refs.append((ref, str(item.get("kind") or "image")))
+            direct_refs.append(item)
     files: list[Any] = []
-    for ref, media_ids in source_refs.items():
-        for message in await _telegram_source_media(client, ref, media_ids):
+    for ref, source_items in source_refs.items():
+        media_ids = [str(item.get("media_id") or "") for item in source_items]
+        messages = await _telegram_source_media(client, ref, media_ids)
+        for index, message in enumerate(messages):
             data = await client.download_media(message, file=bytes)
             if not isinstance(data, (bytes, bytearray)) or not data:
                 raise RuntimeError("failed to materialize exact Telegram source media bytes")
+            message_id = int(getattr(message, "id", 0) or 0)
+            item = next(
+                (
+                    candidate for candidate in source_items
+                    if manifest_item_message_id(candidate) == message_id
+                ),
+                source_items[index] if index < len(source_items) else {},
+            )
+            verify_reviewed_media_digest(bytes(data), item)
             file = io.BytesIO(bytes(data))
             file.name = "region-talk-source.mp4" if getattr(message, "video", None) else "region-talk-source.jpg"
             files.append(file)
-    for ref, kind in direct_refs:
+    for item in direct_refs:
+        ref = str(item.get("ref") or "").strip()
+        kind = str(item.get("kind") or "image")
         if not ref:
             continue
         if Path(ref).is_file():
@@ -951,6 +984,7 @@ async def materialize_telethon_media(client: Any, row: dict[str, Any]) -> list[A
             data = await asyncio.to_thread(download)
         else:
             raise RuntimeError("media manifest item has no materializable URL/path/source post")
+        verify_reviewed_media_digest(data, item)
         file = io.BytesIO(data)
         file.name = "region-talk-source.mp4" if kind == "video" else "region-talk-source.jpg"
         files.append(file)
@@ -1471,6 +1505,14 @@ async def send_rows_bot_api(
         else:
             mode = publication_delivery_mode(row)
             manifest = publication_presentation_manifest(row)
+            if any(
+                str(item.get("reviewed_content_sha256") or "").strip()
+                for item in manifest.get("items") or []
+                if isinstance(item, dict)
+            ):
+                raise RuntimeError(
+                    "Bot API URL delivery cannot verify reviewed media bytes; use telethon_discovery2"
+                )
             refs = [str(item.get("ref") or "") for item in manifest.get("items") or [] if isinstance(item, dict)]
             if mode == "link_preview_fallback":
                 method = "sendMessage"

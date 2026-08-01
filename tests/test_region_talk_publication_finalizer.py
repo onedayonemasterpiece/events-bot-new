@@ -467,7 +467,7 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(rows[0]["media_review_mode"], "operator_video_review")
         self.assertEqual(rows[0]["manual_media_review_required"], "true")
 
-    def test_read_live_rows_includes_verified_link_only_external_article_without_image(self) -> None:
+    def test_read_live_rows_uses_terminal_article_link_preview_fallback(self) -> None:
         mod = self.mod
         source = {
             "canonical_source_key": "web:publisher.example",
@@ -481,7 +481,19 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             "source_queue_status": "confirmed_external_publication_research",
         }
         kinds = {
-            "image_queue_item": {},
+            "image_queue_item": {
+                "image:article": {
+                    "post_url": "https://publisher.example/kaliningrad",
+                    "platform": "web",
+                    "external_publication_id": "extpub-1",
+                    "content_origin_type": "editorial_publication",
+                    "canonical_source_key": "web:publisher.example",
+                    "image_queue_status": "not_reviewable_no_media",
+                    "browser_materialization_status": "terminal_no_associated_images",
+                    "image_quality_terminality": "terminal",
+                    "presentation_recommendation": "system_link_preview",
+                }
+            },
             "candidate_memory_item": {
                 "memory:article": {
                     "post_url": "https://publisher.example/kaliningrad",
@@ -524,6 +536,9 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             def SessionPool(self, _driver):
                 return Pool()
 
+        self.assertFalse(
+            mod.rt.is_external_link_article_candidate(kinds["candidate_memory_item"]["memory:article"])
+        )
         with (
             mock.patch.object(mod.rt, "ydb_connect", return_value=(Ydb(), object(), object())),
             mock.patch.object(mod.rt, "ydb_kv_table_path", return_value="table"),
@@ -534,9 +549,9 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
 
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["post_url"], "https://publisher.example/kaliningrad")
-        self.assertEqual(rows[0]["media_kind"], "external_article_link")
-        self.assertEqual(rows[0]["media_review_mode"], "link_only_no_media_reuse")
-        self.assertEqual(rows[0]["image_model_input_type"], "not_required_link_only")
+        self.assertEqual(rows[0]["media_kind"], "external_article_link_preview")
+        self.assertEqual(rows[0]["media_review_mode"], "system_link_preview_terminal_fallback")
+        self.assertEqual(rows[0]["image_queue_status"], "not_reviewable_no_media")
         self.assertEqual(rows[0]["_authoritative_source"], source)
         self.assertGreater(rows[0]["publication_pre_score"], 0.8)
 

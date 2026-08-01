@@ -740,9 +740,9 @@ def read_live_rows(
         finalizer_inputs["external-link:" + str(memory_pk)] = {
             **memory,
             "_ydb_pk": "",
-            "image_queue_status": "not_required_link_only",
-            "image_model_input_type": "not_required_link_only",
-            "media_review_mode": "link_only_no_media_reuse",
+            "image_queue_status": "terminal_link_preview_fallback",
+            "image_model_input_type": "terminal_link_preview_fallback",
+            "media_review_mode": "system_link_preview_terminal_fallback",
         }
 
     for image in finalizer_inputs.values():
@@ -773,9 +773,9 @@ def read_live_rows(
             row["video_manual_review_eligible"] = "true"
             row["media_review_mode"] = "operator_video_review"
         elif external_link_article:
-            row["media_kind"] = "external_article_link"
+            row["media_kind"] = "external_article_link_preview"
             row["manual_media_review_required"] = "false"
-            row["media_review_mode"] = "link_only_no_media_reuse"
+            row["media_review_mode"] = "system_link_preview_terminal_fallback"
         row["original_post_url"] = original_post_url
         row["post_url"] = post_url
         row["post_url_normalization_version"] = POST_URL_NORMALIZATION_VERSION

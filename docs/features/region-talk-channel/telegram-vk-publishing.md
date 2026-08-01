@@ -42,8 +42,9 @@ notifier/publisher:
 - `source_media_hero` — one accepted source image;
 - `source_media_carousel` — ordered `selected_media_ids`, capped by
   `presentation_max_assets` (currently 6; prefer 3–6 when available);
-- `system_link_preview` — fallback when media is missing, unextractable,
-  unsafe, unaccepted or explicitly link-only;
+- `system_link_preview` — terminal fallback when associated source media is
+  genuinely missing, unextractable, unsafe or unaccepted; a legacy
+  `rights_policy=link_only` value is not sufficient;
 - `browser_materialization_pending` — do not publish yet: the article exposed
   no safe static image evidence and its one-page bounded Playwright request is
   still unresolved;
@@ -63,7 +64,12 @@ where the platform still provides identical bytes, and otherwise send it back
 through visual review rather than silently substitute another image.
 The notifier resolves this exact manifest and sends the media being reviewed;
 the bounded Playwright consumer handles JS-only article pages before the next
-ImageDiagnostic pass.
+ImageDiagnostic pass. Materialization preserves `reviewed_content_sha256`, the
+per-item fingerprint and the refetch locator. Telethon delivery verifies every
+available reviewed SHA against the downloaded bytes before sending; a mismatch
+returns the revision to review instead of publishing substituted media. Bot API
+URL delivery fails closed for hash-bound revisions because it cannot inspect
+the bytes Telegram will fetch.
 
 ### Product format priority
 
