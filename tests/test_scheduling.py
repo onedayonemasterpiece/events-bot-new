@@ -87,7 +87,7 @@ def test_scheduler_and_extract_do_not_import_main(monkeypatch):
     monkeypatch.setattr(scheduling, "AsyncIOScheduler", DummyScheduler)
     monkeypatch.setattr(scheduling, "_scheduler", None)
     monkeypatch.setenv("ENABLE_REGION_TALK_SCHEDULED", "1")
-    monkeypatch.setenv("REGION_TALK_TIMES_LOCAL", "06:20,13:20,21:20")
+    monkeypatch.setenv("REGION_TALK_TIMES_LOCAL", "06:20,09:50,13:50,17:50,21:50")
     monkeypatch.setenv("REGION_TALK_TZ", "Europe/Kaliningrad")
 
     try:
@@ -104,7 +104,7 @@ def test_scheduler_and_extract_do_not_import_main(monkeypatch):
         )
         assert isinstance(scheduler, DummyScheduler)
         assert "main" not in sys.modules
-        assert {"region_talk_0", "region_talk_1", "region_talk_2"} <= set(scheduler.jobs)
+        assert {"region_talk_0", "region_talk_1", "region_talk_2", "region_talk_3", "region_talk_4"} <= set(scheduler.jobs)
         assert "region_talk_watchdog" in scheduler.jobs
         assert scheduler.jobs["region_talk_0"].kwargs["hour"] == "4"
         assert scheduler.jobs["region_talk_0"].kwargs["minute"] == "20"

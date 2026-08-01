@@ -15,6 +15,13 @@
   indexable medallion venue pilot, records zero-added-Supabase-egress gates, and
   opens `INC-2026-08-01-unusual-feed-disabled-by-config` for the expired Unusual
   review surface and silent compute/publication coupling.
+- Region Talk autonomous canary now has five non-overlapping 90-minute local
+  slots, a 20% due history-revisit reserve, numeric Telegram message-id delta
+  cursors with overlap, and truthful primary/delta attempted/completed metrics.
+- The scheduled Region Talk runner now attempts fail-closed DISCOVERY2 operator
+  reaction synchronization after orchestration and before publication planning;
+  an active ImageDiagnostic lane is recorded for retry instead of failing the
+  discovery slot.
 - Region Talk ImageDiagnostic now extracts bounded article-image candidates
   HTTP-first from JSON-LD, article/main DOM, lightboxes and preview metadata,
   records association evidence, rejects obvious logos/ads/avatars/related
@@ -45,6 +52,10 @@
   deterministic `google_ai` Python source tree instead of a stale four-module
   allowlist. Shared-limiter and future nested imports therefore survive the
   isolated Kaggle bootstrap, with an executable import-closure regression test.
+- Region Talk source admission/cursor traversal now uses immutable `queue_seq`,
+  can rewind a timestamped canonical cursor to repair a historical low-sequence
+  gap, and no longer falls back to generic `TELEGRAM_SESSION`/`TG_SESSION` for
+  CandidateReport or scheduled children.
 - StaticSiteBuilder adoption now removes its stale local duplicate before the
   durable capacity probe and checks free space again before re-downloading the
   exact completed Kaggle output. Recovery can therefore free a volume that the

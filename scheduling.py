@@ -3127,7 +3127,9 @@ _region_talk_catchup_inflight: set[str] = set()
 
 
 def _last_region_talk_slot(now_utc: datetime) -> tuple[datetime, datetime, datetime] | None:
-    times_raw = os.getenv("REGION_TALK_TIMES_LOCAL", "06:20,13:20,21:20").strip()
+    times_raw = os.getenv(
+        "REGION_TALK_TIMES_LOCAL", "06:20,09:50,13:50,17:50,21:50"
+    ).strip()
     tz_name = os.getenv("REGION_TALK_TZ", "Europe/Kaliningrad").strip()
     candidates: list[tuple[datetime, datetime, datetime]] = []
     for raw in times_raw.split(","):
@@ -4000,7 +4002,7 @@ def startup(
                 logging.error("region_talk scheduled cycle failed result=%s", result)
 
         times_raw = os.getenv(
-            "REGION_TALK_TIMES_LOCAL", "06:20,13:20,21:20"
+            "REGION_TALK_TIMES_LOCAL", "06:20,09:50,13:50,17:50,21:50"
         )
         tz_name = os.getenv("REGION_TALK_TZ", "Europe/Kaliningrad")
         tz = _safe_zoneinfo(tz_name, label="REGION_TALK_TZ")

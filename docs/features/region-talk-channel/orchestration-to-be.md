@@ -375,11 +375,13 @@ artifacts/codex/region-talk-ydb-venv/bin/python scripts/region_talk_orchestrator
 Production uses the server wrapper rather than this local command:
 
 ```text
-APScheduler (06:20, 13:20, 21:20 Europe/Kaliningrad)
+APScheduler (06:20, 09:50, 13:50, 17:50, 21:50 Europe/Kaliningrad)
   -> scripts/region_talk_scheduled_runner.py
   -> optional grounded external-publication research/import (provider-gated)
   -> scripts/region_talk_orchestrator.py --loop --execute-ready
   -> CandidateReport / BGE-M3 / ImageDiagnostic / finalizer / notifier
+  -> D2-idle-gated operator reaction sync
+  -> publication plan recalculation
 ```
 
 The schedule is gated by `ENABLE_REGION_TALK_SCHEDULED=1`. The wrapper requires
@@ -389,7 +391,7 @@ Kaggle credentials and separate `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` and
 `DISCOVERY2` Telethon identity; Bot API and its production token remain an
 explicit alternative. The same bundle is never used while its mapped Kaggle
 kernel is active. The wrapper never uses `TELEGRAM_AUTH_BUNDLE_E2E`,
-`TELEGRAM_SESSION`, another generic human session, or interactive `yc`
+`TELEGRAM_SESSION`, `TG_SESSION`, another generic human session, or interactive `yc`
 fallback. One run is bounded to 90 minutes by default,
 uses `/data/region_talk_orchestrator.lock`, retains redacted operational output
 under `/data/runtime_logs/region_talk/`, and records success/failure/skip in
@@ -660,9 +662,11 @@ Important invariants:
 - Source selection is queue-first. Once the durable YDB source queue exists,
   pending rows after `unified_source_queue` cursor are selected before legacy
   CSV/static seeds, even if the static seed has a lower numeric priority. The
-  cursor is monotonic and must not move backward because of historical pending
-  gaps or keyword reinserts; gaps are diagnostics, not a reason to rescan old
-  seed rows for hours. When YDB contains both canonical cursor rows and retained
+  cursor is the highest contiguous immutable `queue_seq` before the earliest
+  primary gap. It may move backward when a newly detected low-sequence gap
+  repairs an older faulty high-water mark; a newer timestamped canonical cursor
+  therefore wins even at a lower position. Priority/display `queue_order` never
+  changes cursor identity. When YDB contains both canonical cursor rows and retained
   per-run cursor history, loaders and metrics prefer the canonical cursor row
   (`queue_cursor:source` / `queue_cursor:image`) and do not let retained
   per-run history override the active cursor.
@@ -675,6 +679,10 @@ Important invariants:
   full-ledger repair is written with YDB `BulkUpsert` in bounded 500-row chunks
   (`REGION_TALK_SOURCE_QUEUE_REPAIR_BULK_CHUNK_SIZE`), not one YQL execution per
   row; otherwise a 7k-row migration can consume the entire notebook budget.
+- Normal history capacity keeps an explicit 20% due-revisit reserve for
+  confirmed-external/high-yield sources while the primary queue continues to
+  grow. The other 80% remains first-scan capacity. Attempted/completed/deferred
+  primary and delta counts are separate product metrics.
 - Exact post-link fetch is the first **bounded** intake phase of every normal
   CandidateReport run (`REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST=1`, three rows
   by default). It scans up to `REGION_TALK_POST_LINK_QUEUE_SCAN_LIMIT=5000`

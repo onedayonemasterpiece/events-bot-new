@@ -33,6 +33,7 @@ def complete_env(tmp_path: Path) -> dict[str, str]:
         "REGION_TALK_SCHEDULED_LOG_DIR": str(tmp_path / "logs"),
         "REGION_TALK_EXTERNAL_RESEARCH_ENABLED": "0",
         "REGION_TALK_PUBLICATION_PLAN_ENABLED": "0",
+        "REGION_TALK_REACTION_SYNC_ENABLED": "0",
     }
 
 
@@ -111,6 +112,89 @@ def test_publication_plan_command_is_server_side_and_has_no_telegram_session(tmp
     assert all("TELEGRAM" not in part for part in command)
 
 
+def test_reaction_sync_command_is_execute_only_and_never_loads_dotenv(tmp_path: Path) -> None:
+    env = complete_env(tmp_path)
+    env["REGION_TALK_REACTION_SYNC_LIMIT"] = "75"
+    command = runner.build_reaction_sync_command(env)
+
+    assert command[1].endswith("region_talk_reaction_sync.py")
+    assert command[command.index("--env-file") + 1] == "/dev/null"
+    assert "--execute" in command
+    assert command[command.index("--limit") + 1] == "75"
+
+
+def test_reaction_sync_busy_is_nonfatal_deferred_status() -> None:
+    payload = {
+        "ok": False,
+        "error": "RuntimeError: region-talk-image-diagnostic is RUNNING; refusing concurrent use of its Telegram auth bundle",
+    }
+    assert runner.reaction_sync_status(payload, 1) == "deferred_d2_or_image_diagnostic_busy"
+
+
+@pytest.mark.asyncio
+async def test_reaction_sync_runs_after_orchestrator_before_publication_plan(monkeypatch, tmp_path: Path) -> None:
+    env = complete_env(tmp_path)
+    env["REGION_TALK_REACTION_SYNC_ENABLED"] = "1"
+    env["REGION_TALK_PUBLICATION_PLAN_ENABLED"] = "1"
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    sync_script = tmp_path / "region_talk_reaction_sync.py"
+    sync_script.write_text("# test placeholder\n", encoding="utf-8")
+    monkeypatch.setattr(runner, "reaction_sync_script_path", lambda: sync_script)
+    stages: list[str] = []
+
+    class StreamProcess:
+        returncode = 0
+
+        def __init__(self, payload: dict[str, object], stage: str) -> None:
+            self.stage = stage
+            self.stdout = asyncio.StreamReader()
+            self.stdout.feed_data((json.dumps(payload) + "\n").encode())
+            self.stdout.feed_eof()
+
+        async def wait(self) -> int:
+            stages.append(self.stage)
+            return self.returncode
+
+        async def communicate(self):
+            stages.append(self.stage)
+            raw = await self.stdout.read()
+            return raw, None
+
+        def terminate(self) -> None:
+            self.returncode = -15
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+    processes = [
+        StreamProcess({"ok": True, "cycle": 1, "metrics": {}}, "orchestrator"),
+        StreamProcess({
+            "ok": True,
+            "stage": "operator_reaction_sync",
+            "deliveries_observed_complete": 4,
+            "candidate_projections_changed": 2,
+        }, "reaction"),
+        StreamProcess({"ok": True, "stage": "publication_plan", "counts": {}}, "plan"),
+    ]
+
+    async def fake_subprocess(*args, **kwargs):
+        if str(args[1]).endswith("region_talk_reaction_sync.py"):
+            assert args[args.index("--env-file") + 1] == "/dev/null"
+            assert "TELEGRAM_SESSION" not in kwargs["env"]
+            assert "TG_SESSION" not in kwargs["env"]
+        return processes.pop(0)
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_subprocess)
+    result = await runner.run_region_talk_scheduled(None, scheduler_run_id="reaction-order")
+
+    assert stages == ["orchestrator", "reaction", "plan"]
+    assert result["ok"] is True
+    assert result["reaction_sync_status"] == "complete"
+    assert result["reaction_sync_deliveries_observed"] == 4
+    assert result["metrics"]["reaction_candidate_projections_changed"] == 2
+
+
 def test_cli_preflight_is_redacted(monkeypatch, tmp_path: Path, capsys) -> None:
     env = complete_env(tmp_path)
     for key, value in env.items():
@@ -145,6 +229,7 @@ async def test_scheduled_run_writes_cycle_log_and_returns_metrics(monkeypatch, t
     env = complete_env(tmp_path)
     env["TELEGRAM_AUTH_BUNDLE_E2E"] = "codex-only-must-be-stripped"
     env["TELEGRAM_SESSION"] = "generic-human-session-must-be-stripped"
+    env["TG_SESSION"] = "generic-human-session-must-also-be-stripped"
     for key, value in env.items():
         monkeypatch.setenv(key, value)
 
@@ -174,6 +259,8 @@ async def test_scheduled_run_writes_cycle_log_and_returns_metrics(monkeypatch, t
         assert kwargs["env"]["REGION_TALK_NOTIFY_TRANSPORT"] == "telethon_discovery2"
         assert "TELEGRAM_AUTH_BUNDLE_E2E" not in kwargs["env"]
         assert "TELEGRAM_SESSION" not in kwargs["env"]
+        assert "TG_SESSION" not in kwargs["env"]
+        assert kwargs["env"]["REGION_TALK_AUTH_BUNDLE_ENV"] == "TELEGRAM_AUTH_BUNDLE_DISCOVERY1"
         return FakeProcess()
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_subprocess)

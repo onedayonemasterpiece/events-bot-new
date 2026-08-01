@@ -259,12 +259,16 @@ uses the other three. Keyword and similar discovery are separate stages and
 remain enabled, so this allocation accelerates the high-probability cohort
 without stopping discovery or bypassing the publication tail.
 Evidence slots are platform-balanced inside the first-scan tier. While the
-single canonical Telegram/VK queue still contains any source without durable
-primary-scan evidence, ordinary known-KO and confirmed-source delta rescans are
-not eligible at all. Rescans resume only after the complete first pass (or when
-a concrete dual-text finalist explicitly needs a bounded source-attestation
-completion). This prevents a productive cached source from consuming every
-run while unvisited sources remain. When only one uncached Telegram source is
+single canonical Telegram/VK queue still contains sources without durable
+primary-scan evidence, the default `REGION_TALK_HISTORY_REVISIT_RESERVE_PERCENT=20`
+reserves only one fifth of a normal history batch for due confirmed-external or
+previously productive (`ko_posts_found`/`candidate_posts_found`) revisits.
+Terminal local/spam/compliance rows are never eligible. Ordinary rescans above
+that reserve remain suppressed until the primary pass is exhausted. For tiny
+batches the percentage is rounded down so a one-off diagnostic cannot starve
+all first scans. This bounded reserve prevents an effectively endless inflow
+from starving future monitoring without letting one productive cached source
+consume every run. When only one uncached Telegram source is
 safely resolvable, the remaining slots are filled by never-scanned VK sources
 instead of repeating cached Telegram channels merely to preserve TG/VK/TG/VK
 symmetry. The in-memory selection pool is widened only enough to expose the
@@ -277,6 +281,15 @@ a bounded `wall.search` pass (default up to eight evidence-specific queries,
 stop on the first fresh exact-text hit) in addition to the recent wall slice;
 this avoids treating ten recent non-trip posts as a meaningful check of a
 blogger known to have visited the region.
+
+Telegram revisit reads use a durable numeric per-source message cursor. A
+completed delta pass sends `min_id = telegram_highest_message_id -
+REGION_TALK_DELTA_OVERLAP_POSTS` (default overlap `10`) to both recent and
+anchor searches, deduplicates the overlap, and advances the high-water message
+id only after the bounded history pass completes. First/deep scans keep the
+existing recent-plus-anchor behavior. A runtime/request-budget interruption is
+`attempted` but not `completed`, does not advance the durable message cursor,
+and is reported as deferred for the next run.
 
 VK personal profiles remain valid evidence sources. VK wall identifiers retain
 their full URL token: `club<ID>` and `public<ID>` must not be reduced to a

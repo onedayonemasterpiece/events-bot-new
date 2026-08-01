@@ -905,6 +905,76 @@ MEMORABLE_WORDS = ["больше всего", "особенно", "запомн�
 URL_RE = re.compile(r"(?i)\b(?:https?://|www\.)\S+|\bt\.me/[A-Za-z0-9_+/.-]+|\bvk\.com/[A-Za-z0-9_./-]+")
 HANDLE_RE = re.compile(r"(?<!\w)@[A-Za-z0-9_]{4,}")
 STATE_FILE_NAME = "region-talk-state.json"
+REGION_TALK_DISCOVERY_AUTH_BUNDLE_ENVS = {
+    "TELEGRAM_AUTH_BUNDLE_DISCOVERY1",
+    "TELEGRAM_AUTH_BUNDLE_DISCOVERY2",
+}
+
+
+def decode_selected_discovery_bundle(environ: dict[str, str] | None = None) -> tuple[str, dict[str, Any]]:
+    """Decode only the explicitly selected Region Talk discovery credential.
+
+    A functional CandidateReport run must never borrow a generic local/E2E
+    session.  The selected role is part of the run contract so a missing or
+    misspelled discovery secret fails closed before Telethon connects.
+    """
+    values = environ if environ is not None else os.environ
+    bundle_env = str(
+        values.get("REGION_TALK_AUTH_BUNDLE_ENV")
+        or "TELEGRAM_AUTH_BUNDLE_DISCOVERY1"
+    ).strip()
+    if bundle_env not in REGION_TALK_DISCOVERY_AUTH_BUNDLE_ENVS:
+        raise RuntimeError(
+            "Region Talk CandidateReport requires REGION_TALK_AUTH_BUNDLE_ENV="
+            "TELEGRAM_AUTH_BUNDLE_DISCOVERY1 or TELEGRAM_AUTH_BUNDLE_DISCOVERY2"
+        )
+    raw = str(values.get(bundle_env) or "").strip()
+    if not raw:
+        raise RuntimeError(f"missing explicitly selected Region Talk discovery bundle: {bundle_env}")
+    try:
+        padded = raw + "=" * (-len(raw) % 4)
+        decoded = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8"))
+    except Exception as exc:
+        raise RuntimeError(f"invalid explicitly selected Region Talk discovery bundle: {bundle_env}") from exc
+    if not isinstance(decoded, dict) or not str(decoded.get("session") or "").strip():
+        raise RuntimeError(f"selected Region Talk discovery bundle has no session: {bundle_env}")
+    return bundle_env, decoded
+
+
+def source_admission_seq(row: dict[str, Any] | None) -> int:
+    """Return immutable admission sequence, with legacy order as migration fallback."""
+    item = row if isinstance(row, dict) else {}
+    for field in ("queue_seq", "queue_order"):
+        try:
+            value = int(float(item.get(field) or 0))
+        except Exception:
+            value = 0
+        if value > 0:
+            return value
+    return 0
+
+
+def source_row_positive_int(row: dict[str, Any] | None, field: str) -> int:
+    item = row if isinstance(row, dict) else {}
+    try:
+        value = int(float(item.get(field) or 0))
+    except Exception:
+        value = 0
+    return max(0, value)
+
+
+def source_cursor_seq(state: dict[str, Any] | None) -> int:
+    item = state if isinstance(state, dict) else {}
+    try:
+        return max(0, int(float(
+            item.get("unified_source_queue_cursor_seq")
+            or item.get("canonical_source_cursor_seq")
+            or item.get("unified_source_queue_cursor_position")
+            or item.get("canonical_source_cursor_position")
+            or 0
+        )))
+    except Exception:
+        return 0
 
 def _source_cursor_for_seed(seed: Seed, previous_state: dict[str, Any] | None = None) -> dict[str, Any]:
     state = previous_state if isinstance(previous_state, dict) else {}
@@ -1217,11 +1287,8 @@ def source_selection_queue_bucket(due: dict[str, Any], previous_state: dict[str,
         return 3
     if str(due.get("reason") or "") == "publication_source_evidence_completion":
         return -1
-    cursor = int(state.get("unified_source_queue_cursor_position") or state.get("canonical_source_cursor_position") or 0)
-    try:
-        order = int(float(row.get("queue_order") or 0))
-    except Exception:
-        order = 0
+    cursor = source_cursor_seq(state)
+    order = source_admission_seq(row)
     status = str(row.get("source_queue_status") or row.get("queue_status") or "").strip()
     if order > cursor and status in {"", "pending_scan", "needs_rescan_or_retry", "retry", "error"}:
         return 0
@@ -1266,15 +1333,14 @@ def should_replace_queue_cursor(current: dict[str, Any] | None, candidate: dict[
     candidate_canonical = is_canonical_queue_cursor_row(candidate, short)
     if current_canonical != candidate_canonical:
         return candidate_canonical
-    if short in {"source", "image"} and current_canonical and candidate_canonical:
-        try:
-            current_pos = int(float(current.get("cursor_position") or 0))
-        except Exception:
-            current_pos = 0
-        try:
-            candidate_pos = int(float(candidate.get("cursor_position") or 0))
-        except Exception:
-            candidate_pos = 0
+    # A canonical source cursor is a timestamped snapshot, not a monotonic
+    # high-water mark.  It is allowed to move backwards when a newly detected
+    # low-admission-sequence gap must be repaired.  Historical per-run cursor
+    # rows still never replace the canonical row (checked above). Image queue
+    # positions retain their existing monotonic contract.
+    if short == "image" and current_canonical and candidate_canonical:
+        current_pos = source_row_positive_int(current, "cursor_position")
+        candidate_pos = source_row_positive_int(candidate, "cursor_position")
         if candidate_pos != current_pos:
             return candidate_pos > current_pos
     return str(candidate.get("_ydb_updated_at") or candidate.get("updated_at") or "") >= str(current.get("_ydb_updated_at") or current.get("updated_at") or "")
@@ -1306,7 +1372,7 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
         item[0].priority,
         source_queue_priority_bucket(item[1].get("queue_row")),
         -source_product_priority_score(item[0], item[1].get("queue_row")) if prioritize_product_sources else 0,
-        str((_source_queue_row_for_seed(item[0], previous_state) or {}).get("queue_order") or "999999999").zfill(12),
+        str(source_admission_seq(_source_queue_row_for_seed(item[0], previous_state)) or 999999999).zfill(12),
         seed_sort_number(item[0].source_seed_id),
         item[0].canonical_url,
     ))
@@ -1344,6 +1410,38 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
     confirmed_external_selected: list[Seed] = []
     confirmed_external_pairs: list[tuple[Seed, dict[str, Any]]] = []
 
+    # A permanently non-empty first-scan backlog must not starve sources that
+    # already proved product value. Reserve a small, explicit share for due
+    # confirmed-external/high-yield revisits; terminal local/spam/compliance
+    # rows are already excluded by _seed_scan_due_state().
+    revisit_share_percent = max(
+        0,
+        min(50, getenv_int("REGION_TALK_HISTORY_REVISIT_RESERVE_PERCENT", 20)),
+    )
+    revisit_slots = min(
+        max(0, max_sources),
+        (max(0, max_sources) * revisit_share_percent) // 100,
+    )
+    priority_revisit_pairs = [
+        (seed, due) for seed, due in annotated
+        if bool(due.get("due"))
+        and bool(due.get("is_rescan"))
+        and (
+            str((due.get("queue_row") or {}).get("external_blogger_evidence_status") or "").strip().lower()
+            == "confirmed_external"
+            or source_row_positive_int(due.get("queue_row"), "ko_posts_found") > 0
+            or source_row_positive_int(due.get("queue_row"), "candidate_posts_found") > 0
+        )
+    ]
+    priority_revisit_pairs = sorted(priority_revisit_pairs, key=lambda item: (
+        str((item[1].get("queue_row") or {}).get("external_blogger_evidence_status") or "").strip().lower()
+        != "confirmed_external",
+        -source_product_priority_score(item[0], item[1].get("queue_row")),
+        source_admission_seq(_source_queue_row_for_seed(item[0], previous_state)) or 999999999,
+        item[0].canonical_url,
+    ))
+    priority_revisit_selected = [seed for seed, _due in priority_revisit_pairs[:revisit_slots]]
+
     def confirmed_pair_has_scan_evidence(pair: tuple[Seed, dict[str, Any]]) -> bool:
         _seed, due = pair
         row = due.get("queue_row") if isinstance(due, dict) else {}
@@ -1369,12 +1467,18 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
             (seed, due) for seed, due in annotated
             if bool(due.get("due"))
             and str((due.get("queue_row") or {}).get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
-            and (not bool(due.get("is_rescan")) or not global_primary_backlog_exists)
         ]
+        if global_primary_backlog_exists:
+            # Rescans above the explicit history reserve must not consume the
+            # remaining first-scan capacity while the primary queue is open.
+            confirmed_external_pairs = [
+                pair for pair in confirmed_external_pairs
+                if not confirmed_pair_has_scan_evidence(pair)
+            ]
         confirmed_external_pairs = sorted(confirmed_external_pairs, key=lambda item: (
                 confirmed_pair_has_scan_evidence(item),
                 source_selection_cache_bucket(item[0], previous_state),
-                str((_source_queue_row_for_seed(item[0], previous_state) or {}).get("queue_order") or "999999999").zfill(12),
+                str(source_admission_seq(_source_queue_row_for_seed(item[0], previous_state)) or 999999999).zfill(12),
                 item[0].canonical_url,
             ))
         confirmed_external_priority = [seed for seed, _due in confirmed_external_pairs]
@@ -1385,7 +1489,7 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
         publication_completion = [
             seed for seed, due in sorted(publication_completion_pairs, key=lambda item: (
                 source_selection_cache_bucket(item[0], previous_state),
-                str((_source_queue_row_for_seed(item[0], previous_state) or {}).get("queue_order") or "999999999").zfill(12),
+                str(source_admission_seq(_source_queue_row_for_seed(item[0], previous_state)) or 999999999).zfill(12),
                 item[0].canonical_url,
             ))
         ]
@@ -1433,7 +1537,7 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
         high_yield_rescan = [
             seed for seed, due in sorted(high_yield_rescan_pairs, key=lambda item: (
                 -source_product_priority_score(item[0], item[1].get("queue_row")),
-                str((_source_queue_row_for_seed(item[0], previous_state) or {}).get("queue_order") or "999999999").zfill(12),
+                str(source_admission_seq(_source_queue_row_for_seed(item[0], previous_state)) or 999999999).zfill(12),
                 item[0].priority,
                 seed_sort_number(item[0].source_seed_id),
                 item[0].canonical_url,
@@ -1443,18 +1547,22 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
         # to publication than a generic known-KO source rescan. Finish its
         # bounded five-post source attestation first; the previous ordering
         # let four generic KO rescans consume the entire history budget.
-        selected = confirmed_external_selected + [
-            seed for seed in publication_completion if seed not in confirmed_external_selected
+        selected = priority_revisit_selected + [
+            seed for seed in confirmed_external_selected if seed not in priority_revisit_selected
         ] + [
-            seed for seed in high_yield_rescan if seed not in publication_completion and seed not in confirmed_external_selected
+            seed for seed in publication_completion if seed not in confirmed_external_selected and seed not in priority_revisit_selected
+        ] + [
+            seed for seed in high_yield_rescan if seed not in publication_completion and seed not in confirmed_external_selected and seed not in priority_revisit_selected
         ] + [
             seed for seed in primary_due
-            if seed not in publication_completion and seed not in high_yield_rescan and seed not in confirmed_external_selected
+            if seed not in publication_completion and seed not in high_yield_rescan and seed not in confirmed_external_selected and seed not in priority_revisit_selected
         ]
         if not selected and not global_primary_backlog_exists:
             selected = rescan_due
     else:
-        selected = primary_due if primary_due else ([] if global_primary_backlog_exists else rescan_due)
+        selected = priority_revisit_selected + [seed for seed in primary_due if seed not in priority_revisit_selected]
+        if not selected and not global_primary_backlog_exists:
+            selected = rescan_due
     if (
         len(selected) < max(0, max_sources)
         and not global_primary_backlog_exists
@@ -1466,8 +1574,12 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_rescan_due_total"] = len(rescan_due)
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_global_primary_backlog_exists"] = bool(global_primary_backlog_exists)
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_rescan_suppressed_by_primary_backlog_total"] = (
-        len(rescan_due) if global_primary_backlog_exists else 0
+        max(0, len(rescan_due) - len(priority_revisit_selected)) if global_primary_backlog_exists else 0
     )
+    _REGION_TALK_TELEGRAM_RUNTIME["history_revisit_reserve_percent"] = revisit_share_percent
+    _REGION_TALK_TELEGRAM_RUNTIME["history_revisit_reserved_slots"] = revisit_slots
+    _REGION_TALK_TELEGRAM_RUNTIME["history_revisit_eligible_total"] = len(priority_revisit_pairs)
+    _REGION_TALK_TELEGRAM_RUNTIME["history_revisit_selected_total"] = len(priority_revisit_selected)
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_not_due_total"] = sum(1 for _seed, due in annotated if not bool(due.get("due")))
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_not_due_sample"] = [
         {"source_title": seed.source_title, "canonical_url": seed.canonical_url, "reason": str(due.get("reason") or "")}
@@ -1607,7 +1719,10 @@ def seed_from_unified_queue_row(row: dict[str, Any], idx: int) -> Seed | None:
         initial_status=str(row.get("source_queue_status") or "pending_scan"),
         monitoring_enabled=True,
         rights_policy="unknown",
-        notes=f"queue_order={row.get('queue_order')}; cursor_marker={row.get('cursor_marker')}",
+        notes=(
+            f"queue_seq={row.get('queue_seq')}; queue_order={row.get('queue_order')}; "
+            f"cursor_marker={row.get('cursor_marker')}"
+        ),
     )
 
 
@@ -1627,7 +1742,7 @@ def unified_queue_dynamic_seeds(previous_state: dict[str, Any], max_items: int) 
     rows = _previous_rows_dict(previous_state.get("unified_source_queue") or previous_state.get("canonical_source_queue"))
     if not rows:
         return []
-    cursor = int(previous_state.get("unified_source_queue_cursor_position") or previous_state.get("canonical_source_cursor_position") or 0)
+    cursor = source_cursor_seq(previous_state)
     rows = [
         r for r in rows
         if normalize_source_platform(str(r.get("platform") or ""), str(r.get("source_url") or r.get("canonical_url") or "")) in {"telegram", "vk"}
@@ -1661,8 +1776,8 @@ def unified_queue_dynamic_seeds(previous_state: dict[str, Any], max_items: int) 
         source_queue_priority_bucket(r),
         cached_entity_only and normalize_source_platform(str(r.get("platform") or ""), str(r.get("source_url") or r.get("canonical_url") or "")) == "telegram" and not source_queue_row_has_cached_entity(r, previous_state),
         str(r.get("source_queue_status") or "") not in {"pending_scan", "needs_rescan_or_retry"},
-        int(r.get("queue_order") or 999999999) <= cursor,
-        int(r.get("queue_order") or 999999999),
+        source_admission_seq(r) <= cursor,
+        source_admission_seq(r) or 999999999,
     ))
     # Choose the one safe uncached Telegram lane from never-attempted rows
     # before retry/deferred rows. Without this preselection an old retry at the
@@ -1702,7 +1817,7 @@ def unified_queue_dynamic_seeds(previous_state: dict[str, Any], max_items: int) 
             str(pair[1].get("source_queue_status") or pair[1].get("fetch_status") or ""),
         ),
         str(pair[1].get("external_blogger_evidence_status") or "").strip().lower() != "confirmed_external",
-        int(pair[1].get("queue_order") or 999999999),
+        source_admission_seq(pair[1]) or 999999999,
         canonical_source_key(pair[0].platform, pair[0].handle, pair[0].canonical_url),
     ))
     preferred_uncached_keys = {
@@ -2386,7 +2501,8 @@ def build_queue_cursor_state(state: dict[str, Any], source_queue: dict[str, Any]
     return {
         "source": {
             "queue_name": "unified_source_queue",
-            "cursor_position": int(state.get("unified_source_queue_cursor_position") or 0),
+            "cursor_position": source_cursor_seq(state),
+            "cursor_seq": source_cursor_seq(state),
             "cursor_key": state.get("unified_source_queue_cursor_key") or "",
             "total": len(source_rows),
             "pending_total": sum(1 for r in source_rows if r.get("source_queue_status") == "pending_scan"),
@@ -2443,6 +2559,8 @@ SOURCE_STATE_FIELDS = [
     "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
     "source_profile_build_mode", "source_profile_sampled_posts", "source_profile_recent_history_exhausted",
     "source_queue_status", "fetch_attempted", "last_history_fetch_at", "history_fetch_mode",
+    "history_scan_completed", "history_scan_deferred_reason", "source_scan_tier", "telegram_highest_message_id",
+    "telegram_resume_min_id", "telegram_resume_overlap_ids",
     "source_history_scan_ever_completed", "source_history_posts_scanned_max",
     "posts_scanned", "ko_posts_found", "candidate_posts_found",
     "source_surface_filter_version", "source_surface_filter_reason",
@@ -2479,7 +2597,8 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "keyword_discovery_status", "keyword_evidence_run_id", "keyword_evidence_at", "insertion_policy",
     "priority_lane", "priority_reason", "priority_updated_at",
     "last_processed_at", "last_scan_run_id", "last_scan_status", "fetch_attempted",
-    "last_history_fetch_at", "history_fetch_mode", "platform",
+    "last_history_fetch_at", "history_fetch_mode", "history_scan_completed", "history_scan_deferred_reason", "source_scan_tier",
+    "telegram_highest_message_id", "telegram_resume_min_id", "telegram_resume_overlap_ids", "platform",
     "source_history_scan_ever_completed", "source_history_posts_scanned_max",
     "source_url", "canonical_url", "canonical_source_key", "source_title", "handle",
     "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
@@ -2919,7 +3038,8 @@ def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
             for k, v in list(publication_candidates.items())[:max_candidates]
             if isinstance(v, dict)
         },
-        "unified_source_queue_cursor_position": state.get("unified_source_queue_cursor_position", 0),
+        "unified_source_queue_cursor_position": source_cursor_seq(state),
+        "unified_source_queue_cursor_seq": source_cursor_seq(state),
         "unified_source_queue_cursor_key": state.get("unified_source_queue_cursor_key", ""),
         "unified_source_queue_total": len(source_queue),
         "unified_source_queue": {
@@ -2963,6 +3083,10 @@ def compact_region_talk_checkpoint_for_ydb(compact: dict[str, Any]) -> dict[str,
         "telegram_cooldowns": compact.get("telegram_cooldowns") or {},
         "publication_goal": compact.get("publication_goal") or {},
         "unified_source_queue_cursor_position": compact.get("unified_source_queue_cursor_position", 0),
+        "unified_source_queue_cursor_seq": compact.get(
+            "unified_source_queue_cursor_seq",
+            compact.get("unified_source_queue_cursor_position", 0),
+        ),
         "unified_source_queue_cursor_key": compact.get("unified_source_queue_cursor_key", ""),
         "unified_source_queue_total": source_queue_total,
         "image_candidate_queue_cursor_position": compact.get("image_candidate_queue_cursor_position", 0),
@@ -3361,6 +3485,13 @@ def _online_source_payload(row: dict[str, Any], *, run_id: str, stage: str, stat
         "ko_posts_found": row.get("ko_posts_found") or 0,
         "candidate_posts_found": row.get("candidate_posts_found") or 0,
         "last_seen_post_date": row.get("last_seen_post_date") or "",
+        "history_scan_completed": row.get("history_scan_completed") or "",
+        "history_scan_deferred_reason": row.get("history_scan_deferred_reason") or "",
+        "history_fetch_mode": row.get("history_fetch_mode") or "",
+        "source_scan_tier": row.get("source_scan_tier") or "",
+        "telegram_highest_message_id": row.get("telegram_highest_message_id") or 0,
+        "telegram_resume_min_id": row.get("telegram_resume_min_id") or 0,
+        "telegram_resume_overlap_ids": row.get("telegram_resume_overlap_ids") or 0,
         "telegram_resolve_status": row.get("telegram_resolve_status") or "",
         "fetch_error_code": row.get("fetch_error_code") or row.get("last_resolve_error_code") or row.get("method_error_code") or "",
         "fetch_error_message": row.get("fetch_error_message") or row.get("last_resolve_error_message_short") or row.get("method_error_message_short") or "",
@@ -4444,7 +4575,7 @@ def write_region_talk_live_cursor(name: str, payload: dict[str, Any]) -> None:
         now = utc_now_iso()
         item = compact_record({**payload, "updated_at": now}, [
             "run_id", "updated_at", "queue_name", "phase", "status", "progress_label",
-            "cursor_position", "cursor_key", "total", "done", "pending_total",
+            "cursor_position", "cursor_seq", "cursor_key", "total", "done", "pending_total",
             "processed_total", "retry_total", "needs_actual_fetch_total",
             "in_progress_total", "actual_scored_total", "current_source_url",
             "current_source_title", "current_post_url", "current_image_queue_id",
@@ -5158,6 +5289,7 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                             cursors[short] = {**(cursors.get(short) or {}), **item}
                             if short == "source":
                                 data0["unified_source_queue_cursor_position"] = item.get("cursor_position", data0.get("unified_source_queue_cursor_position", 0))
+                                data0["unified_source_queue_cursor_seq"] = item.get("cursor_seq", item.get("cursor_position", data0.get("unified_source_queue_cursor_seq", 0)))
                                 data0["unified_source_queue_cursor_key"] = item.get("cursor_key", data0.get("unified_source_queue_cursor_key", ""))
                             elif short == "image":
                                 data0["image_candidate_queue_cursor_position"] = item.get("cursor_position", data0.get("image_candidate_queue_cursor_position", 0))
@@ -5652,7 +5784,12 @@ class TelegramRequestGovernor:
         self.recommendation_channels_returned = 0
         self.recommendation_channels_added_to_frontier = 0
         self.history_sources_attempted = 0
+        self.history_sources_completed = 0
         self.history_sources_ok = 0
+        self.history_primary_sources_attempted = 0
+        self.history_primary_sources_completed = 0
+        self.history_delta_sources_attempted = 0
+        self.history_delta_sources_completed = 0
         self.history_posts_fetched = 0
         self.media_downloads_attempted = 0
         self.media_downloads_ok = 0
@@ -5986,7 +6123,15 @@ class TelegramRequestGovernor:
             "recommendation_channels_returned": self.recommendation_channels_returned,
             "recommendation_channels_added_to_frontier": self.recommendation_channels_added_to_frontier,
             "history_sources_attempted": self.history_sources_attempted,
+            "history_sources_completed": self.history_sources_completed,
+            "history_sources_deferred": max(0, self.history_sources_attempted - self.history_sources_completed),
             "history_sources_ok": self.history_sources_ok,
+            "history_primary_sources_attempted": self.history_primary_sources_attempted,
+            "history_primary_sources_completed": self.history_primary_sources_completed,
+            "history_primary_sources_deferred": max(0, self.history_primary_sources_attempted - self.history_primary_sources_completed),
+            "history_delta_sources_attempted": self.history_delta_sources_attempted,
+            "history_delta_sources_completed": self.history_delta_sources_completed,
+            "history_delta_sources_deferred": max(0, self.history_delta_sources_attempted - self.history_delta_sources_completed),
             "history_sources_target": self.max_history_sources,
             "history_posts_fetched": self.history_posts_fetched,
             "media_downloads_attempted": self.media_downloads_attempted,
@@ -6595,6 +6740,32 @@ def telegram_message_embedded_links(message: Any) -> list[dict[str, Any]]:
             "link_context": link_context,
         })
     return rows
+
+
+def telegram_highest_message_id_for_seed(seed: Seed, previous_state: dict[str, Any]) -> int:
+    """Read the durable numeric message cursor for one Telegram source."""
+    cursor = _source_cursor_for_seed(seed, previous_state)
+    queue_row = _source_queue_row_for_seed(seed, previous_state)
+    for value in (
+        cursor.get("telegram_highest_message_id"),
+        queue_row.get("telegram_highest_message_id"),
+    ):
+        try:
+            parsed = int(float(value or 0))
+        except Exception:
+            parsed = 0
+        if parsed > 0:
+            return parsed
+    platform_key = str(cursor.get("last_seen_post_key") or queue_row.get("last_seen_post_key") or "")
+    match = re.search(r"(?:^|:)(\d+)$", platform_key)
+    return int(match.group(1)) if match else 0
+
+
+def telegram_history_resume_min_id(seed: Seed, previous_state: dict[str, Any]) -> tuple[int, int, int]:
+    """Return ``(highest, min_id, overlap_ids)`` for an incremental revisit."""
+    highest = telegram_highest_message_id_for_seed(seed, previous_state)
+    overlap_ids = max(0, getenv_int("REGION_TALK_DELTA_OVERLAP_POSTS", 10))
+    return highest, max(0, highest - overlap_ids) if highest > 0 else 0, overlap_ids
 
 
 def serialize_embedded_links(rows: list[dict[str, Any]], *, max_chars: int = 800) -> str:
@@ -8303,7 +8474,7 @@ def build_unified_source_queue(
     previous_queue_rows = _previous_rows_dict(previous_state.get("unified_source_queue") or previous_state.get("canonical_source_queue"))
     previous_image_queue_rows = _previous_rows_dict(previous_state.get("image_candidate_queue"))
     external_blogger_rows = external_blogger_evidence_source_rows(previous_state, run_id, run_now)
-    prev_cursor = int(previous_state.get("unified_source_queue_cursor_position") or previous_state.get("canonical_source_cursor_position") or 0)
+    prev_cursor = source_cursor_seq(previous_state)
     entries: dict[str, dict[str, Any]] = {}
     touched_keys: set[str] = set()
     skipped_non_target_queue_rows = 0
@@ -8630,7 +8801,7 @@ def build_unified_source_queue(
 
     progress_every = max(100, getenv_int("REGION_TALK_SOURCE_QUEUE_PROGRESS_EVERY_ROWS", 500))
     full_reclassify = getenv_bool("REGION_TALK_SOURCE_QUEUE_RECLASSIFY_FULL", False)
-    processed_orders: list[int] = []
+    processed_seqs: list[int] = []
     out: list[dict[str, Any]] = []
     entries_total = len(entries)
     reused_unchanged_rows = 0
@@ -8689,7 +8860,7 @@ def build_unified_source_queue(
         if not should_recompute:
             reused_unchanged_rows += 1
             if existing_status.startswith("processed") or existing_status == "needs_rescan_or_retry" or source_terminal_rejected_status(existing_status):
-                processed_orders.append(int(rec.get("queue_order") or 0))
+                processed_seqs.append(source_admission_seq(rec))
             out.append(dict(rec))
             continue
         recomputed_rows += 1
@@ -8872,7 +9043,7 @@ def build_unified_source_queue(
             or ""
         )
         if scanned:
-            processed_orders.append(int(rec.get("queue_order") or 0))
+            processed_seqs.append(source_admission_seq(rec))
         if terminal_rejected_status:
             qstatus, color, next_action = terminal_rejected_status, "gray_rejected", "do_not_rescan_rejected_source"
             image_quality_source_status = "source_rejected_before_candidate_scoring"
@@ -8902,6 +9073,15 @@ def build_unified_source_queue(
             "last_scan_status": fetch_status if scanned else rec.get("last_scan_status", ""),
             "fetch_attempted": srow.get("fetch_attempted") or rec.get("fetch_attempted") or "",
             "history_fetch_mode": srow.get("history_fetch_mode") or rec.get("history_fetch_mode") or "",
+            "history_scan_completed": srow.get("history_scan_completed") or rec.get("history_scan_completed") or "",
+            "history_scan_deferred_reason": srow.get("history_scan_deferred_reason") or rec.get("history_scan_deferred_reason") or "",
+            "source_scan_tier": srow.get("source_scan_tier") or rec.get("source_scan_tier") or "",
+            "telegram_highest_message_id": max(
+                source_row_positive_int(rec, "telegram_highest_message_id"),
+                source_row_positive_int(srow, "telegram_highest_message_id"),
+            ),
+            "telegram_resume_min_id": srow.get("telegram_resume_min_id") or rec.get("telegram_resume_min_id") or 0,
+            "telegram_resume_overlap_ids": srow.get("telegram_resume_overlap_ids") or rec.get("telegram_resume_overlap_ids") or 0,
             "source_history_scan_ever_completed": str(source_history_scan_ever_completed).lower(),
             "source_history_posts_scanned_max": source_history_posts_scanned_max,
             "last_history_fetch_at": (
@@ -8953,22 +9133,22 @@ def build_unified_source_queue(
             "next_action": next_action,
             "queue_item_updated_at": run_now,
         })
-    pending_primary_orders = [
-        int(r.get("queue_order") or 0)
+    pending_primary_seqs = [
+        source_admission_seq(r)
         for r in out
-        if int(r.get("queue_order") or 0) > 0 and str(r.get("source_queue_status") or "") == "pending_scan"
+        if source_admission_seq(r) > 0 and str(r.get("source_queue_status") or "") == "pending_scan"
     ]
-    cursor_position = max([prev_cursor] + processed_orders) if out else 0
-    if pending_primary_orders:
-        # Cursor means "highest contiguous queue position before the next primary
-        # scan gap", not just max processed order. Historical runs could process
-        # later rows first and leave keyword-hit rows behind the cursor forever.
-        cursor_position = max(prev_cursor, min(cursor_position, max(0, min(pending_primary_orders) - 1)))
-    cursor_key = next((str(r.get("canonical_source_key") or "") for r in out if int(r.get("queue_order") or 0) == cursor_position), "")
+    cursor_position = max([prev_cursor] + processed_seqs) if out else 0
+    if pending_primary_seqs:
+        # Cursor is the highest contiguous immutable admission sequence before
+        # the earliest primary gap. It may move backwards once to repair an old
+        # low-seq gap; a mutable priority/display order must never hide it.
+        cursor_position = min(cursor_position, max(0, min(pending_primary_seqs) - 1))
+    cursor_key = next((str(r.get("canonical_source_key") or "") for r in out if source_admission_seq(r) == cursor_position), "")
     display_rows = sorted(out, key=lambda r: (0 if str(r.get("source_queue_status") or "").startswith("processed") or str(r.get("source_queue_status")) == "needs_rescan_or_retry" or source_terminal_rejected_status(r.get("source_queue_status")) else 1, int(r.get("queue_order") or 0)))
     next_pending_marked = False
     for idx, row in enumerate(display_rows, start=1):
-        order = int(row.get("queue_order") or 0)
+        order = source_admission_seq(row)
         row["display_order"] = idx
         row["cursor_marker"] = "cursor_here" if order == cursor_position else ""
         row["is_after_cursor"] = str(order > cursor_position).lower()
@@ -8982,8 +9162,9 @@ def build_unified_source_queue(
         "source_queue_retry_total": sum(1 for r in out if r.get("source_queue_status") == "needs_rescan_or_retry"),
         "source_queue_rejected_high_volume_total": sum(1 for r in out if source_rejected_by_text_volume_status(r.get("source_queue_status"))),
         "source_queue_fake_processed_without_scan_evidence_total": sum(1 for r in out if str(r.get("fake_processed_without_scan_evidence") or "").lower() == "true"),
-        "source_queue_pending_before_max_processed_gap_total": sum(1 for order in pending_primary_orders if processed_orders and order <= max(processed_orders)),
+        "source_queue_pending_before_max_processed_gap_total": sum(1 for seq in pending_primary_seqs if processed_seqs and seq <= max(processed_seqs)),
         "source_queue_cursor_position": cursor_position,
+        "source_queue_cursor_seq": cursor_position,
         "source_queue_cursor_key": cursor_key,
         "source_queue_keyword_inserted_this_run": keyword_inserted,
         "source_queue_keyword_prioritized_this_run": keyword_prioritized,
@@ -9039,10 +9220,7 @@ def _source_queue_handoff_rows(rows: list[dict[str, Any]], cursor_position: int,
         return "keyword" in text or "hashtag" in text or "telegram_keyword_search" in text
 
     def order(row: dict[str, Any]) -> int:
-        try:
-            return int(float(row.get("queue_order") or 999999999))
-        except Exception:
-            return 999999999
+        return source_admission_seq(row) or 999999999
 
     selected: dict[str, dict[str, Any]] = {}
     mandatory: dict[str, dict[str, Any]] = {}
@@ -11261,7 +11439,7 @@ def source_fast_check_backlog_seeds(previous_state: dict[str, Any], max_items: i
     if max_items <= 0:
         return []
     rows = _previous_rows_dict(previous_state.get("unified_source_queue") or previous_state.get("canonical_source_queue"))
-    cursor = int(previous_state.get("unified_source_queue_cursor_position") or previous_state.get("canonical_source_cursor_position") or 0)
+    cursor = source_cursor_seq(previous_state)
     adaptive_enabled = source_fast_check_adaptive_enabled()
     adaptive_terms_total = len(source_fast_check_query_bank()) if adaptive_enabled else 0
     prefer_continuations = adaptive_enabled and getenv_bool("REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS", False)
@@ -11287,7 +11465,7 @@ def source_fast_check_backlog_seeds(previous_state: dict[str, Any], max_items: i
         # one-resolve budget on them instead.
         if confirmed_evidence_backlog_exists and not confirmed_external_evidence:
             continue
-        if int(row.get("queue_order") or 999999999) <= cursor and not confirmed_external_evidence:
+        if source_admission_seq(row) <= cursor and not confirmed_external_evidence:
             continue
         if normalize_source_platform(str(row.get("platform") or ""), str(row.get("source_url") or row.get("canonical_url") or "")) != "telegram":
             continue
@@ -11309,7 +11487,7 @@ def source_fast_check_backlog_seeds(previous_state: dict[str, Any], max_items: i
         0 if source_queue_priority_bucket(r) == -2 else 1,
         str(r.get("fast_check_status") or "") == "no_hit" if not adaptive_enabled else False,
         source_queue_priority_bucket(r),
-        int(r.get("queue_order") or 999999999),
+        source_admission_seq(r) or 999999999,
     ))
     if adaptive_enabled:
         continuations = [
@@ -13925,18 +14103,14 @@ async def fetch_telegram_posts(
             for s in monitored:
                 append_source_row_online(source_rows, source_status_row(s, "skipped_telethon_not_installed"), run_id=run_id, stage="source_fetch", sources_total=len(monitored))
             return source_rows, posts
-    bundle_env = (os.getenv("REGION_TALK_AUTH_BUNDLE_ENV") or "TELEGRAM_AUTH_BUNDLE_DISCOVERY1").strip()
-    raw = (os.getenv(bundle_env) or "").strip()
+    bundle_env, bundle = decode_selected_discovery_bundle()
     api_id = int((os.getenv("TG_API_ID") or os.getenv("TELEGRAM_API_ID") or "0").strip() or 0)
     api_hash = (os.getenv("TG_API_HASH") or os.getenv("TELEGRAM_API_HASH") or "").strip()
-    bundle: dict[str, Any] = {}
-    if raw:
-        bundle = json.loads(base64.urlsafe_b64decode(raw.encode("ascii")).decode("utf-8"))
-    session = str(bundle.get("session") or os.getenv("TG_SESSION") or os.getenv("TELEGRAM_SESSION") or "").strip()
+    session = str(bundle.get("session") or "").strip()
     if not session or not api_id or not api_hash:
-        for s in monitored:
-            append_source_row_online(source_rows, source_status_row(s, "skipped_missing_telethon_credentials"), run_id=run_id, stage="source_fetch", sources_total=len(monitored))
-        return source_rows, posts
+        raise RuntimeError(
+            f"Region Talk Telethon credentials incomplete for explicitly selected {bundle_env}"
+        )
     client = TelegramClient(StringSession(session), api_id, api_hash, device_model=str(bundle.get("device_model") or "Region Talk Discovery"), system_version=str(bundle.get("system_version") or "Linux"), app_version=str(bundle.get("app_version") or "1.0"), lang_code=str(bundle.get("lang_code") or "ru"), system_lang_code=str(bundle.get("system_lang_code") or "ru"))
     try:
         client.flood_sleep_threshold = getenv_int("REGION_TALK_TG_FLOODWAIT_MAX_SLEEP_SECONDS", 60)
@@ -14110,11 +14284,34 @@ async def fetch_telegram_posts(
                 status.event("alive", **{**source_progress, "progress_label": f"источники {idx}/{len(monitored)} · budget exhausted · {seed.source_title or seed.canonical_url}", "sources_done": idx, "fetch_status": src_row.get("fetch_status"), "posts_scanned": 0})
                 continue
             entity_by_source[seed.source_id] = entity
+            previous_highest_message_id, resume_min_id, resume_overlap_ids = telegram_history_resume_min_id(
+                seed, previous_state
+            )
+            previous_cursor = _source_cursor_for_seed(seed, previous_state)
+            had_primary_scan = _source_has_primary_scan_evidence(
+                selected_queue_row,
+                previous_cursor,
+                str(selected_queue_row.get("source_queue_status") or selected_queue_row.get("fetch_status") or ""),
+            )
+            scan_tier = "delta_rescan" if had_primary_scan else "primary_scan"
             governor.history_sources_attempted += 1
+            if had_primary_scan:
+                governor.history_delta_sources_attempted += 1
+            else:
+                governor.history_primary_sources_attempted += 1
             src_row["fetch_attempted"] = "true"
+            src_row["history_scan_completed"] = "false"
             history_fetch_started = time.monotonic()
-            src_row["history_fetch_mode"] = "delta_scan_active" if not seed.source_seed_id.startswith("frontier_dynamic_") else "first_probe_or_shallow_backfill"
-            src_row["is_new_source_this_run"] = str(seed.source_seed_id.startswith("frontier_dynamic_")).lower()
+            src_row["history_fetch_mode"] = (
+                "delta_since_message_id_with_anchor_overlap"
+                if had_primary_scan and previous_highest_message_id > 0
+                else "primary_deep_scan_recent_plus_anchor_search"
+            )
+            src_row["source_scan_tier"] = scan_tier
+            src_row["is_new_source_this_run"] = str(not had_primary_scan).lower()
+            src_row["telegram_highest_message_id"] = previous_highest_message_id
+            src_row["telegram_resume_min_id"] = resume_min_id
+            src_row["telegram_resume_overlap_ids"] = resume_overlap_ids
             src_row["history_source_cached_entity"] = str(resolve_meta.get("telegram_resolve_status") == "resolved_from_private_cache").lower()
             src_row["history_source_network_resolved"] = str(resolve_meta.get("telegram_resolve_status") == "resolved_network").lower()
             try:
@@ -14130,11 +14327,14 @@ async def fetch_telegram_posts(
                 last_surface_decision: dict[str, Any] = {}
                 cutoff = history_min_post_datetime()
                 old_posts_cutoff_hit = False
+                history_scan_deferred = False
+                highest_message_id_seen = previous_highest_message_id
                 anchor_cap = getenv_int("REGION_TALK_TG_MAX_ANCHOR_QUERIES_PER_SOURCE", 3)
                 queries = [None] + DEFAULT_ANCHORS[:max(0, anchor_cap)]
                 for q in queries:
                     if not governor.has_total_request_budget("iter_messages", seed.source_id, seed.canonical_url):
                         src_row.update({"fetch_status": "skipped_telegram_total_request_budget_exhausted", "source_probe_reason": "total Telegram request budget exhausted"})
+                        history_scan_deferred = True
                         break
                     per_query = max(3, min(max_posts, getenv_int("REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE", max_posts)) // len(queries) + 1)
                     if not await governor.humanlike_pause(
@@ -14148,13 +14348,22 @@ async def fetch_telegram_posts(
                         reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180),
                     ):
                         src_row.update({"fetch_status": "skipped_runtime_budget_before_telegram_history", "source_probe_reason": "runtime budget exhausted before paced Telegram history call"})
+                        history_scan_deferred = True
                         break
                     governor.total_attempted += 1
                     governor.requests_by_method["iter_messages"] = governor.requests_by_method.get("iter_messages", 0) + 1
-                    for msg in await telethon_iter_messages_list(client, entity, method_name="iter_messages", limit=per_query, search=q):
+                    for msg in await telethon_iter_messages_list(
+                        client,
+                        entity,
+                        method_name="iter_messages",
+                        limit=per_query,
+                        search=q,
+                        min_id=resume_min_id if had_primary_scan else 0,
+                    ):
                         mid = int(getattr(msg, "id", 0) or 0)
                         if not mid or mid in seen:
                             continue
+                        highest_message_id_seen = max(highest_message_id_seen, mid)
                         seen.add(mid)
                         text = str(getattr(msg, "message", None) or "").strip()
                         if not text:
@@ -14280,8 +14489,26 @@ async def fetch_telegram_posts(
                     if commercial_terminal:
                         src_row.update(commercial_terminal)
                         source_post_rows = []
-                governor.total_ok += 1
-                governor.history_sources_ok += 1
+                if history_scan_deferred:
+                    src_row["history_scan_completed"] = "false"
+                    src_row["history_scan_deferred_reason"] = str(src_row.get("source_probe_reason") or "history scan deferred")
+                    # A partial delta must not advance the durable cursor and
+                    # hide older unprocessed messages.  The overlap is for
+                    # normal completed revisits, not for recovering an
+                    # arbitrarily interrupted scan.
+                    src_row["telegram_highest_message_id"] = previous_highest_message_id
+                else:
+                    governor.total_ok += 1
+                    governor.history_sources_completed += 1
+                    if had_primary_scan:
+                        governor.history_delta_sources_completed += 1
+                    else:
+                        governor.history_primary_sources_completed += 1
+                    src_row["history_scan_completed"] = "true"
+                    src_row["telegram_highest_message_id"] = highest_message_id_seen
+                if not source_terminal_rejected_status(src_row.get("fetch_status")):
+                    if not history_scan_deferred:
+                        governor.history_sources_ok += 1
                 if source_terminal_rejected_status(src_row.get("fetch_status")):
                     src_row["posts_scanned"] = 0
                     src_row["last_seen_post_date"] = ""
@@ -15194,10 +15421,24 @@ async def telethon_await(coro: Any, method_name: str) -> Any:
     return await asyncio.wait_for(coro, timeout=telethon_call_timeout_seconds(method_name))
 
 
-async def telethon_iter_messages_list(client: Any, entity: Any, *, method_name: str, limit: int, search: Any = None) -> list[Any]:
+async def telethon_iter_messages_list(
+    client: Any,
+    entity: Any,
+    *,
+    method_name: str,
+    limit: int,
+    search: Any = None,
+    min_id: int = 0,
+    offset_id: int = 0,
+) -> list[Any]:
     async def collect() -> list[Any]:
         out: list[Any] = []
-        async for msg in client.iter_messages(entity, limit=limit, search=search):
+        kwargs: dict[str, Any] = {"limit": limit, "search": search}
+        if min_id > 0:
+            kwargs["min_id"] = int(min_id)
+        if offset_id > 0:
+            kwargs["offset_id"] = int(offset_id)
+        async for msg in client.iter_messages(entity, **kwargs):
             out.append(msg)
         return out
 
@@ -17565,10 +17806,21 @@ def build_report(
     for srow in source_rows:
         sid = str(srow.get("source_id") or "")
         sampled = posts_by_source.get(sid, [])
-        newest = max([str(r.get("post_date") or "") for r in sampled] or [""])
         prev_cursor = source_cursors.get(sid, {})
-        scanned_ok = srow.get("fetch_status") == "ok"
+        history_completed = str(srow.get("history_scan_completed") or "").lower() == "true"
+        scanned_ok = srow.get("fetch_status") == "ok" and history_completed
+        cursor_sampled = sampled if history_completed else []
+        newest = max([str(r.get("post_date") or "") for r in cursor_sampled] or [""])
         is_new_source = str(srow.get("is_new_source_this_run") or "").lower() == "true" or not prev_cursor.get("primary_scan_completed_at")
+        telegram_highest_message_id = max(
+            source_row_positive_int(prev_cursor, "telegram_highest_message_id"),
+            source_row_positive_int(srow, "telegram_highest_message_id"),
+            *[
+                int(match.group(1))
+                for row in cursor_sampled
+                if (match := re.search(r"(?:^|:)(\d+)$", str(row.get("platform_post_key") or "")))
+            ],
+        )
         source_cursors[sid] = {
             **prev_cursor,
             "source_id": sid,
@@ -17580,7 +17832,9 @@ def build_report(
             "fetch_status": srow.get("fetch_status"),
             "last_history_fetch_run_id": run_id if scanned_ok else prev_cursor.get("last_history_fetch_run_id", ""),
             "last_history_fetch_at": run_now if scanned_ok else prev_cursor.get("last_history_fetch_at", ""),
-            "last_seen_post_key": max([str(r.get("platform_post_key") or "") for r in sampled] or [str(prev_cursor.get("last_seen_post_key") or "")]),
+            "last_seen_post_key": max([str(r.get("platform_post_key") or "") for r in cursor_sampled] or [str(prev_cursor.get("last_seen_post_key") or "")]),
+            "telegram_highest_message_id": telegram_highest_message_id,
+            "telegram_resume_overlap_ids": int(srow.get("telegram_resume_overlap_ids") or prev_cursor.get("telegram_resume_overlap_ids") or getenv_int("REGION_TALK_DELTA_OVERLAP_POSTS", 10)),
             "last_seen_post_date": newest or prev_cursor.get("last_seen_post_date", ""),
             "last_seen_post_published_at": newest or prev_cursor.get("last_seen_post_published_at", ""),
             "posts_seen_total": int(prev_cursor.get("posts_seen_total") or 0) + int(srow.get("posts_scanned") or 0),
@@ -17598,7 +17852,7 @@ def build_report(
             "delta_scan_window_days": getenv_int("REGION_TALK_DELTA_SCAN_WINDOW_DAYS", 14),
             "delta_overlap_posts": getenv_int("REGION_TALK_DELTA_OVERLAP_POSTS", 10),
             "last_run_id": run_id,
-            "cursor_strategy": "fresh_first_min_post_date_then_anchor_search",
+            "cursor_strategy": "numeric_message_id_resume_with_anchor_overlap",
         }
     source_frontier_unique = build_source_frontier_unique(discovered_rows, updated_discovered_state, run_id)
     write_region_talk_online_discovery_items(source_frontier_unique, [], run_id=run_id, stage="source_frontier_unique_built")
@@ -17903,6 +18157,7 @@ def build_report(
         "phase": "unified_source_queue_built",
         "status": "running",
         "cursor_position": unified_source_queue_metrics.get("source_queue_cursor_position", 0),
+        "cursor_seq": unified_source_queue_metrics.get("source_queue_cursor_seq", 0),
         "cursor_key": unified_source_queue_metrics.get("source_queue_cursor_key", ""),
         "total": len([r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")]),
         "pending_total": sum(1 for r in unified_source_queue_sheet if isinstance(r, dict) and r.get("source_queue_status") == "pending_scan"),
@@ -18022,6 +18277,7 @@ def build_report(
         "source_frontier_queue_next": {str(r.get("canonical_url") or r.get("queue_rank")): r for r in source_frontier_queue_next},
         "unified_source_queue": {str(r.get("canonical_source_key")): r for r in unified_source_queue_sheet if r.get("canonical_source_key")},
         "unified_source_queue_cursor_position": unified_source_queue_metrics.get("source_queue_cursor_position", 0),
+        "unified_source_queue_cursor_seq": unified_source_queue_metrics.get("source_queue_cursor_seq", 0),
         "unified_source_queue_cursor_key": unified_source_queue_metrics.get("source_queue_cursor_key", ""),
         "similar_seed_queue": {str(r.get("similar_seed_id") or r.get("canonical_url")): r for r in similar_seed_queue},
         "image_candidate_queue": {str(r.get("image_queue_id") or r.get("post_url")): r for r in image_candidate_queue_sheet if r.get("image_queue_id") or r.get("post_url")},
@@ -18052,6 +18308,13 @@ def build_report(
         "sources_selected": len(source_rows),
         "sources_attempted": sum(1 for r in source_rows if str(r.get("fetch_attempted") or "").lower() == "true"),
         "sources_history_ok": sum(1 for r in source_rows if str(r.get("fetch_status") or "") == "ok"),
+        "history_sources_attempted": sum(1 for r in source_rows if str(r.get("fetch_attempted") or "").lower() == "true"),
+        "history_sources_completed": sum(1 for r in source_rows if str(r.get("history_scan_completed") or "").lower() == "true"),
+        "history_sources_deferred": sum(1 for r in source_rows if str(r.get("fetch_attempted") or "").lower() == "true" and str(r.get("history_scan_completed") or "").lower() != "true"),
+        "history_primary_sources_attempted": sum(1 for r in source_rows if r.get("source_scan_tier") == "primary_scan" and str(r.get("fetch_attempted") or "").lower() == "true"),
+        "history_primary_sources_completed": sum(1 for r in source_rows if r.get("source_scan_tier") == "primary_scan" and str(r.get("history_scan_completed") or "").lower() == "true"),
+        "history_delta_sources_attempted": sum(1 for r in source_rows if r.get("source_scan_tier") == "delta_rescan" and str(r.get("fetch_attempted") or "").lower() == "true"),
+        "history_delta_sources_completed": sum(1 for r in source_rows if r.get("source_scan_tier") == "delta_rescan" and str(r.get("history_scan_completed") or "").lower() == "true"),
         "source_status_counts": source_status_counts,
         "posts_fetched": len(posts),
         "posts_unique_for_vector_planning": int(post_work_plan.get("posts_unique_for_vector_planning") or 0),
@@ -18179,7 +18442,15 @@ def build_report(
         "sources_history_fetched_ok":sum(1 for s in source_rows if s.get("fetch_status") == "ok"),
         "history_sources_target":_REGION_TALK_TELEGRAM_RUNTIME.get("history_sources_target") or tg_obs.get("history_sources_target") or "",
         "history_sources_attempted":tg_obs.get("history_sources_attempted", sum(1 for s in source_rows if str(s.get("fetch_attempted") or "").lower() == "true")),
+        "history_sources_completed":tg_obs.get("history_sources_completed", sum(1 for s in source_rows if str(s.get("history_scan_completed") or "").lower() == "true")),
+        "history_sources_deferred":tg_obs.get("history_sources_deferred", sum(1 for s in source_rows if str(s.get("fetch_attempted") or "").lower() == "true" and str(s.get("history_scan_completed") or "").lower() != "true")),
         "history_sources_ok":tg_obs.get("history_sources_ok", sum(1 for s in source_rows if s.get("fetch_status") == "ok")),
+        "history_primary_sources_attempted":tg_obs.get("history_primary_sources_attempted", sum(1 for s in source_rows if s.get("source_scan_tier") == "primary_scan" and str(s.get("fetch_attempted") or "").lower() == "true")),
+        "history_primary_sources_completed":tg_obs.get("history_primary_sources_completed", sum(1 for s in source_rows if s.get("source_scan_tier") == "primary_scan" and str(s.get("history_scan_completed") or "").lower() == "true")),
+        "history_primary_sources_deferred":tg_obs.get("history_primary_sources_deferred", sum(1 for s in source_rows if s.get("source_scan_tier") == "primary_scan" and str(s.get("fetch_attempted") or "").lower() == "true" and str(s.get("history_scan_completed") or "").lower() != "true")),
+        "history_delta_sources_attempted":tg_obs.get("history_delta_sources_attempted", sum(1 for s in source_rows if s.get("source_scan_tier") == "delta_rescan" and str(s.get("fetch_attempted") or "").lower() == "true")),
+        "history_delta_sources_completed":tg_obs.get("history_delta_sources_completed", sum(1 for s in source_rows if s.get("source_scan_tier") == "delta_rescan" and str(s.get("history_scan_completed") or "").lower() == "true")),
+        "history_delta_sources_deferred":tg_obs.get("history_delta_sources_deferred", sum(1 for s in source_rows if s.get("source_scan_tier") == "delta_rescan" and str(s.get("fetch_attempted") or "").lower() == "true" and str(s.get("history_scan_completed") or "").lower() != "true")),
         "history_sources_new_to_system":sum(1 for s in source_rows if s.get("fetch_status") == "ok" and str(s.get("is_new_source_this_run") or "").lower() == "true"),
         "history_sources_cached_entity":sum(1 for s in source_rows if s.get("fetch_status") == "ok" and str(s.get("history_source_cached_entity") or "").lower() == "true"),
         "history_sources_network_resolved":sum(1 for s in source_rows if s.get("fetch_status") == "ok" and str(s.get("history_source_network_resolved") or "").lower() == "true"),
@@ -18323,6 +18594,10 @@ def build_report(
         "confirmed_external_blogger_history_selected_total":_REGION_TALK_TELEGRAM_RUNTIME.get("confirmed_external_blogger_history_selected_total", 0),
         "confirmed_external_blogger_history_primary_selected_total":_REGION_TALK_TELEGRAM_RUNTIME.get("confirmed_external_blogger_history_primary_selected_total", 0),
         "confirmed_external_blogger_history_rescan_selected_total":_REGION_TALK_TELEGRAM_RUNTIME.get("confirmed_external_blogger_history_rescan_selected_total", 0),
+        "history_revisit_reserve_percent":_REGION_TALK_TELEGRAM_RUNTIME.get("history_revisit_reserve_percent", 0),
+        "history_revisit_reserved_slots":_REGION_TALK_TELEGRAM_RUNTIME.get("history_revisit_reserved_slots", 0),
+        "history_revisit_eligible_total":_REGION_TALK_TELEGRAM_RUNTIME.get("history_revisit_eligible_total", 0),
+        "history_revisit_selected_total":_REGION_TALK_TELEGRAM_RUNTIME.get("history_revisit_selected_total", 0),
         "frontier_duplicate_canonical_keys":len(source_frontier_unique) - len({r.get("canonical_source_key") or r.get("canonical_url") for r in source_frontier_unique}),
         "frontier_self_loops":0,
         "telegram_similar_seed_used":_REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_channels_seed_count", 0),

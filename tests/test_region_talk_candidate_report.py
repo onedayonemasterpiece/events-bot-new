@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import importlib.util
 import os
 import json
@@ -768,7 +769,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             selected = mod.selected_sources_for_run([cached_rescan, fresh], 1, previous_state=previous)
         self.assertEqual([seed.canonical_url for seed in selected], [fresh.canonical_url])
 
-    def test_source_cursor_never_regresses_when_pending_gap_is_before_previous_cursor(self) -> None:
+    def test_source_cursor_rewinds_to_repair_pending_gap_before_previous_cursor(self) -> None:
         mod = load_module()
         seed = self._seed(mod, "@freshcursor", seed_id="seed_cursor")
         key = mod.canonical_source_key("telegram", seed.handle, seed.canonical_url)
@@ -821,7 +822,127 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             "2026-07-09T00:00:00+00:00",
         )
 
-        self.assertGreaterEqual(metrics["source_queue_cursor_position"], 100)
+        self.assertEqual(metrics["source_queue_cursor_position"], 89)
+
+    def test_newer_canonical_source_cursor_may_rewind_but_history_cannot_replace_it(self) -> None:
+        mod = load_module()
+        current = {
+            "_ydb_pk": "queue_cursor:source",
+            "cursor_position": 100,
+            "cursor_seq": 100,
+            "_ydb_updated_at": "2026-07-09T15:40:00Z",
+        }
+        repaired = {
+            "_ydb_pk": "queue_cursor:source",
+            "cursor_position": 89,
+            "cursor_seq": 89,
+            "_ydb_updated_at": "2026-07-09T15:50:00Z",
+        }
+        historical = {
+            "_ydb_pk": "queue_cursor:source:old-run",
+            "cursor_position": 999,
+            "_ydb_updated_at": "2026-07-09T16:00:00Z",
+        }
+
+        self.assertTrue(mod.should_replace_queue_cursor(current, repaired, "source"))
+        self.assertFalse(mod.should_replace_queue_cursor(repaired, historical, "source"))
+
+    def test_revisit_reserve_uses_twenty_percent_without_starving_tiny_batches(self) -> None:
+        mod = load_module()
+        fresh = [self._seed(mod, f"@fresh{idx}", seed_id=f"fresh_{idx}") for idx in range(5)]
+        revisit = self._seed(mod, "@revisit", seed_id="revisit")
+        queue = {}
+        for idx, seed in enumerate([revisit, *fresh], start=1):
+            key = mod.canonical_source_key(seed.platform, seed.handle, seed.canonical_url)
+            queue[key] = {
+                "canonical_source_key": key,
+                "platform": "telegram",
+                "handle": seed.handle,
+                "source_url": seed.canonical_url,
+                "queue_seq": idx,
+                "queue_order": 1000 - idx,
+                "source_queue_status": "processed_found_ko_candidate" if seed is revisit else "pending_scan",
+                "posts_scanned": 10 if seed is revisit else 0,
+                "ko_posts_found": 1 if seed is revisit else 0,
+                "last_history_fetch_at": "2026-01-01T00:00:00+00:00" if seed is revisit else "",
+            }
+        previous = {"unified_source_queue": queue}
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_HISTORY_REVISIT_RESERVE_PERCENT": "20",
+            "REGION_TALK_SOURCE_DELTA_RESCAN_INTERVAL_SECONDS": "1",
+        }, clear=False):
+            selected = mod.selected_sources_for_run([*fresh, revisit], 5, previous_state=previous)
+
+        self.assertEqual(len(selected), 5)
+        self.assertEqual(selected[0].canonical_url, revisit.canonical_url)
+        self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["history_revisit_reserved_slots"], 1)
+
+    def test_telegram_history_resume_uses_numeric_cursor_with_overlap(self) -> None:
+        mod = load_module()
+        seed = self._seed(mod, "@delta", seed_id="delta")
+        key = mod.canonical_source_key(seed.platform, seed.handle, seed.canonical_url)
+        previous = {"unified_source_queue": {key: {
+            "canonical_source_key": key,
+            "platform": "telegram",
+            "source_url": seed.canonical_url,
+            "telegram_highest_message_id": 125,
+        }}}
+        with mock.patch.dict(os.environ, {"REGION_TALK_DELTA_OVERLAP_POSTS": "10"}, clear=False):
+            highest, min_id, overlap = mod.telegram_history_resume_min_id(seed, previous)
+        self.assertEqual((highest, min_id, overlap), (125, 115, 10))
+
+    def test_telethon_history_call_forwards_numeric_min_id(self) -> None:
+        mod = load_module()
+        captured: dict[str, object] = {}
+
+        class Client:
+            async def iter_messages(self, entity, **kwargs):
+                captured.update({"entity": entity, **kwargs})
+                for message_id in (130, 129):
+                    yield types.SimpleNamespace(id=message_id)
+
+        rows = asyncio.run(mod.telethon_iter_messages_list(
+            Client(), "entity", method_name="iter_messages", limit=20,
+            search="Калининград", min_id=115,
+        ))
+        self.assertEqual([row.id for row in rows], [130, 129])
+        self.assertEqual(captured["min_id"], 115)
+        self.assertEqual(captured["limit"], 20)
+
+    def test_history_governor_reports_attempted_completed_and_deferred_separately(self) -> None:
+        mod = load_module()
+        with tempfile.TemporaryDirectory() as td:
+            governor = mod.TelegramRequestGovernor("metrics-run", Path(td), {})
+            governor.history_sources_attempted = 3
+            governor.history_sources_completed = 2
+            governor.history_primary_sources_attempted = 2
+            governor.history_primary_sources_completed = 1
+            governor.history_delta_sources_attempted = 1
+            governor.history_delta_sources_completed = 1
+            row = governor.observability_row(
+                "2026-08-01T00:00:00+00:00", "2026-08-01T00:01:00+00:00"
+            )
+        self.assertEqual(row["history_sources_deferred"], 1)
+        self.assertEqual(row["history_primary_sources_deferred"], 1)
+        self.assertEqual(row["history_delta_sources_deferred"], 0)
+
+    def test_selected_discovery_bundle_never_falls_back_to_generic_session(self) -> None:
+        mod = load_module()
+        payload = base64.urlsafe_b64encode(json.dumps({"session": "D1"}).encode()).decode().rstrip("=")
+        env = {
+            "REGION_TALK_AUTH_BUNDLE_ENV": "TELEGRAM_AUTH_BUNDLE_DISCOVERY1",
+            "TELEGRAM_AUTH_BUNDLE_DISCOVERY1": payload,
+            "TELEGRAM_SESSION": "generic-must-not-be-used",
+            "TG_SESSION": "generic-must-not-be-used-either",
+        }
+        name, decoded = mod.decode_selected_discovery_bundle(env)
+        self.assertEqual(name, "TELEGRAM_AUTH_BUNDLE_DISCOVERY1")
+        self.assertEqual(decoded["session"], "D1")
+        with self.assertRaises(RuntimeError):
+            mod.decode_selected_discovery_bundle({
+                "REGION_TALK_AUTH_BUNDLE_ENV": "TELEGRAM_SESSION",
+                "TELEGRAM_SESSION": "generic",
+            })
 
     def test_loaded_queue_cursor_prefers_highest_source_position_over_stale_history(self) -> None:
         mod = load_module()

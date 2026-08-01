@@ -28,8 +28,13 @@ To avoid parallel long-running operations (especially **manual** starts overlapp
 VK crawling runs six times per day by default at `05:15`, `09:15`, `13:15`, `17:15`, `21:15` and `22:45` Europe/Kaliningrad time (`VK_CRAWL_TIMES_LOCAL` / `VK_CRAWL_TZ`).
 
 Region Talk autonomous discovery is opt-in via
-`ENABLE_REGION_TALK_SCHEDULED=1`. It runs at `06:20`, `13:20`, and `21:20`
+`ENABLE_REGION_TALK_SCHEDULED=1`. The production canary runs at `06:20`,
+`09:50`, `13:50`, `17:50`, and `21:50`
 Europe/Kaliningrad by default (`REGION_TALK_TIMES_LOCAL` / `REGION_TALK_TZ`).
+Each slot is bounded to 90 minutes and Region Talk slots are spaced by more
+than that bound. The former `13:20` time is deliberately unused because it is
+the Guide light-monitoring slot; the last Region Talk window ends nominally at
+`23:20`, before Telegram monitoring at `23:40`.
 Each slot invokes the bounded queue orchestrator chain through
 `scripts/region_talk_scheduled_runner.py`; it has a cross-process lock, strict
 non-interactive credential preflight, 14-day JSONL log retention and
@@ -48,7 +53,13 @@ duplicate or unbounded recovery. This makes a Fly deploy/process replacement a
 recoverable interruption instead of silently deferring discovery until the
 next day's slot. Health reports the watchdog separately while
 `region_talk_next_run` remains the next real daily slot.
-After each bounded orchestrator session, the runner recalculates the next
+After each bounded orchestrator session, the runner first attempts exact
+operator-reaction synchronization through
+`scripts/region_talk_reaction_sync.py --execute`. That command is restricted
+to `DISCOVERY2` and verifies that ImageDiagnostic is idle. A busy/unverified
+D2 lane is recorded as a non-fatal deferral and retried at the next scheduled
+slot; no generic or E2E session is borrowed. The reaction projection happens
+before the runner recalculates the next
 14-day `1 article + 1 social post` selection plan in YDB. The planner uses
 actual target-publication history plus BGE anti-vector ordering, overwrites only
 future unlocked slots and does not connect any Telegram human session or call

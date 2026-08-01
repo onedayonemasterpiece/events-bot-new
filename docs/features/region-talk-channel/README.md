@@ -359,7 +359,10 @@ state. См. [MVP candidate report](mvp-candidate-report.md).
   explicit alternative. The orchestrator maps notification to the same
   `telegram:DISCOVERY2` resource as ImageDiagnostic, and both the planner and
   notifier recheck Kaggle status before connecting. The scheduled wrapper removes
-  `TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION` from every child environment.
+  `TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION`/`TG_SESSION` from every child environment.
+  After the orchestrator exits it attempts the fail-closed `DISCOVERY2`
+  operator-reaction sync before recalculating the publication plan; a busy
+  ImageDiagnostic/D2 lane is deferred to the next slot without failing discovery.
   A read-only
   `--dry-run` renders the queue without connecting any Telegram transport.
   The selected discovery account must already belong to

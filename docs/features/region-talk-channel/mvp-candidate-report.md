@@ -838,11 +838,12 @@ not selected again every run: `processed_*` queue rows are held until
 rescan cooldown says they are due. The default processed-source cooldown is two
 weeks (`REGION_TALK_SOURCE_DELTA_RESCAN_INTERVAL_SECONDS=1209600`, overridable
 by `REGION_TALK_SOURCE_RESCAN_PROCESSED_AFTER_SECONDS`). Even when a processed
-public is technically due, CandidateReport first spends scan slots on
-`pending_scan` / retry / never-scanned publics; processed-source delta rescans
-start only after the primary frontier is exhausted. That later monitoring loop is
-cursor-based: it uses the stored per-source history cursor, delta window and
-overlap to fetch new or boundary posts, not to repeat the original full scan.
+public is technically due, CandidateReport spends 80% of normal history
+capacity on `pending_scan` / retry / never-scanned publics and reserves 20% for
+due confirmed-external/high-yield revisits. Other processed rescans start only
+after the primary frontier is exhausted. The revisit loop uses the stored
+numeric Telegram message id with a ten-id overlap (`min_id`), not the original
+full scan. A partial/deferred pass does not advance that id.
 Normal product runs also enforce freshness and high-volume source guardrails:
 `REGION_TALK_HISTORY_MAX_POST_AGE_DAYS` defaults to 365, `REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS` is honored when explicitly set by the orchestrator, and `REGION_TALK_HIGH_VOLUME_TEXT_POSTS_PER_DAY_REJECT_THRESHOLD` defaults to 30.
 If a source hits the daily text-post threshold, CandidateReport writes

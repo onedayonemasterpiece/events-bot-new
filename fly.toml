@@ -72,7 +72,10 @@ app = "events-bot-new-wngqia"
   # per-kernel/resource locks, so its chain can progress independently from the
   # legacy global heavy-job gate without reusing another scheduler's session.
   ENABLE_REGION_TALK_SCHEDULED = "1"
-  REGION_TALK_TIMES_LOCAL = "06:20,13:20,21:20"
+  REGION_TALK_TIMES_LOCAL = "06:20,09:50,13:50,17:50,21:50"
+  REGION_TALK_AUTH_BUNDLE_ENV = "TELEGRAM_AUTH_BUNDLE_DISCOVERY1"
+  REGION_TALK_HISTORY_REVISIT_RESERVE_PERCENT = "20"
+  REGION_TALK_REACTION_SYNC_ENABLED = "1"
   REGION_TALK_TZ = "Europe/Kaliningrad"
   REGION_TALK_MISFIRE_GRACE_SECONDS = "1800"
   REGION_TALK_SCHEDULED_MAX_RUNTIME_MINUTES = "90"

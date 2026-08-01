@@ -81,6 +81,17 @@ def missing_autonomy_config(env: Mapping[str, str] | None = None) -> list[str]:
         missing.append("REGION_TALK_NOTIFY_TRANSPORT(valid)")
     elif notify_transport == "bot_api" and not present("TELEGRAM_BOT_TOKEN"):
         missing.append("TELEGRAM_BOT_TOKEN")
+    selected_bundle = str(
+        values.get("REGION_TALK_AUTH_BUNDLE_ENV")
+        or "TELEGRAM_AUTH_BUNDLE_DISCOVERY1"
+    ).strip()
+    if selected_bundle not in {
+        "TELEGRAM_AUTH_BUNDLE_DISCOVERY1",
+        "TELEGRAM_AUTH_BUNDLE_DISCOVERY2",
+    }:
+        missing.append("REGION_TALK_AUTH_BUNDLE_ENV(dedicated_discovery_bundle)")
+    elif not present(selected_bundle):
+        missing.append(selected_bundle)
     return missing
 
 
@@ -138,6 +149,43 @@ def build_publication_plan_command(env: Mapping[str, str] | None = None) -> list
         "--days",
         str(days),
     ]
+
+
+def reaction_sync_script_path() -> Path:
+    return ROOT / "scripts" / "region_talk_reaction_sync.py"
+
+
+def build_reaction_sync_command(env: Mapping[str, str] | None = None) -> list[str]:
+    """Build the fail-closed D2 reaction sync command without loading .env."""
+
+    values = env if env is not None else os.environ
+    python_bin = str(values.get("REGION_TALK_ORCHESTRATOR_PYTHON") or sys.executable or "python3").strip()
+    try:
+        limit = int(str(values.get("REGION_TALK_REACTION_SYNC_LIMIT") or "200").strip())
+    except ValueError:
+        limit = 200
+    return [
+        python_bin,
+        str(reaction_sync_script_path()),
+        "--env-file",
+        "/dev/null",
+        "--execute",
+        "--limit",
+        str(max(1, min(1000, limit))),
+    ]
+
+
+def reaction_sync_status(payload: Mapping[str, Any], exit_code: int | None) -> str:
+    if bool(payload.get("ok")) and exit_code in {None, 0}:
+        return "complete"
+    error = str(payload.get("error") or "").lower()
+    if any(token in error for token in (
+        " is running", " is queued", " is initializing", " is active",
+        "refusing concurrent use", "owns telegram_auth_bundle_discovery2",
+        "cannot verify that region-talk-image-diagnostic is idle",
+    )):
+        return "deferred_d2_or_image_diagnostic_busy"
+    return "failed"
 
 
 def _compact_metrics(payload: Mapping[str, Any]) -> dict[str, int]:
@@ -251,6 +299,11 @@ async def run_region_talk_scheduled(
         # DISCOVERY1/DISCOVERY2 bundles (or the independently scoped bot).
         child_env.pop("TELEGRAM_AUTH_BUNDLE_E2E", None)
         child_env.pop("TELEGRAM_SESSION", None)
+        child_env.pop("TG_SESSION", None)
+        child_env["REGION_TALK_AUTH_BUNDLE_ENV"] = str(
+            child_env.get("REGION_TALK_AUTH_BUNDLE_ENV")
+            or "TELEGRAM_AUTH_BUNDLE_DISCOVERY1"
+        ).strip()
         child_env["REGION_TALK_NOTIFY_TRANSPORT"] = str(
             child_env.get("REGION_TALK_NOTIFY_TRANSPORT") or "telethon_discovery2"
         ).strip()
@@ -266,6 +319,12 @@ async def run_region_talk_scheduled(
             "status": "disabled",
         }
         publication_plan_exit_code: int | None = None
+        reaction_sync: dict[str, Any] = {
+            "ok": True,
+            "stage": "operator_reaction_sync",
+            "status": "disabled",
+        }
+        reaction_sync_exit_code: int | None = None
 
         with output_path.open("w", encoding="utf-8") as output:
             os.chmod(output_path, 0o600)
@@ -375,6 +434,78 @@ async def run_region_talk_scheduled(
                     await process.wait()
             await consumer
 
+            # Approval/rewrite decisions must be projected before the daily
+            # publication queue is recalculated.  The sync command itself
+            # fail-closes on DISCOVERY2 and verifies that ImageDiagnostic is
+            # idle; a legitimate D2 busy state is a non-fatal deferral and is
+            # retried by the next scheduled Region Talk slot.
+            if _env_bool("REGION_TALK_REACTION_SYNC_ENABLED", True):
+                if not reaction_sync_script_path().is_file():
+                    reaction_sync = {
+                        "ok": False,
+                        "stage": "operator_reaction_sync",
+                        "status": "deferred_script_not_available",
+                        "retry": "next_scheduled_slot",
+                    }
+                else:
+                    reaction_process = await asyncio.create_subprocess_exec(
+                        *build_reaction_sync_command(child_env),
+                        cwd=str(ROOT),
+                        env=child_env,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.STDOUT,
+                    )
+                    try:
+                        reaction_stdout, _ = await asyncio.wait_for(
+                            reaction_process.communicate(),
+                            timeout=_env_int(
+                                "REGION_TALK_REACTION_SYNC_TIMEOUT_SECONDS",
+                                180,
+                                minimum=30,
+                                maximum=600,
+                            ),
+                        )
+                    except asyncio.TimeoutError:
+                        reaction_process.terminate()
+                        try:
+                            await asyncio.wait_for(reaction_process.wait(), timeout=20)
+                        except asyncio.TimeoutError:
+                            reaction_process.kill()
+                            await reaction_process.wait()
+                        reaction_stdout = b""
+                        reaction_sync = {
+                            "ok": False,
+                            "stage": "operator_reaction_sync",
+                            "status": "deferred_timeout",
+                            "retry": "next_scheduled_slot",
+                        }
+                    reaction_sync_exit_code = int(reaction_process.returncode or 0)
+                    for raw in reaction_stdout.decode("utf-8", errors="replace").splitlines():
+                        line = raw.strip()
+                        if not line:
+                            continue
+                        output.write(line + "\n")
+                        output.flush()
+                        try:
+                            candidate = json.loads(line)
+                        except (TypeError, ValueError):
+                            continue
+                        if isinstance(candidate, dict) and candidate.get("stage") == "operator_reaction_sync":
+                            reaction_sync = candidate
+                    if reaction_sync.get("status") not in {"deferred_timeout"}:
+                        reaction_sync["status"] = reaction_sync_status(
+                            reaction_sync, reaction_sync_exit_code
+                        )
+                    if str(reaction_sync.get("status") or "").startswith("deferred"):
+                        reaction_sync["retry"] = "next_scheduled_slot"
+                    LOGGER.info(
+                        "region_talk reaction sync status=%s exit_code=%s observed=%s projected=%s",
+                        reaction_sync.get("status"),
+                        reaction_sync_exit_code,
+                        reaction_sync.get("deliveries_observed_complete"),
+                        reaction_sync.get("candidate_projections_changed"),
+                    )
+
             if _env_bool("REGION_TALK_PUBLICATION_PLAN_ENABLED", True):
                 plan_process = await asyncio.create_subprocess_exec(
                     *build_publication_plan_command(),
@@ -428,6 +559,13 @@ async def run_region_talk_scheduled(
 
         exit_code = int(process.returncode or 0)
         metrics = _compact_metrics(last_payload)
+        metrics.update({
+            "reaction_sync_attempted": int(reaction_sync.get("status") != "disabled"),
+            "reaction_sync_completed": int(reaction_sync.get("status") == "complete"),
+            "reaction_sync_deferred": int(str(reaction_sync.get("status") or "").startswith("deferred")),
+            "reaction_revisions_changed": int(reaction_sync.get("reaction_revisions_changed") or 0),
+            "reaction_candidate_projections_changed": int(reaction_sync.get("candidate_projections_changed") or 0),
+        })
         details = {
             **base_details,
             "output_path": str(output_path),
@@ -446,6 +584,12 @@ async def run_region_talk_scheduled(
             "publication_plan_exit_code": publication_plan_exit_code,
             "publication_plan_snapshot_id": publication_plan.get("snapshot_id"),
             "publication_plan_counts": publication_plan.get("counts") or {},
+            "reaction_sync_ok": bool(reaction_sync.get("ok")),
+            "reaction_sync_status": reaction_sync.get("status"),
+            "reaction_sync_exit_code": reaction_sync_exit_code,
+            "reaction_sync_retry": reaction_sync.get("retry"),
+            "reaction_sync_deliveries_observed": int(reaction_sync.get("deliveries_observed_complete") or 0),
+            "reaction_sync_candidate_projections_changed": int(reaction_sync.get("candidate_projections_changed") or 0),
         }
         status = "success" if (
             exit_code == 0
