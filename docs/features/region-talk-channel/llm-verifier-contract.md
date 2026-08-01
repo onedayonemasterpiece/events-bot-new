@@ -5,8 +5,10 @@ Status: implemented origin-aware contract. Use Gemini Flash-Lite / current confi
 The external-publication research and intake contract is canonical in
 [`external-publications.md`](external-publications.md). Final-verifier policy
 `region_talk_final_verifier_v7_grounded_draft` selects rules by
-`content_origin_type` and, only for an accepted row, produces the first
-operator-reviewable Telegram/VK draft in the same grounded call:
+`content_origin_type` and, only for an accepted row, produces a provisional
+grounded Telegram/VK draft in the same call. Explicit v7 drafts are not final
+operator copy: the shared readiness gate accepts only the current staged v9
+writer contract before chat delivery or daily planning:
 
 - `external_social` keeps the firsthand visit/subscriber report and
   emotion/review requirements;
@@ -76,6 +78,11 @@ into an unbounded writer request.
 6. Extract positive, neutral/useful and constructive concern points.
 7. Decide publication readiness.
 8. Draft platform-specific text for future Telegram/VK use.
+
+The final staged writer and critic must avoid the adversative AI-cliché family
+`не …, а …`. A sentence-bounded deterministic detector rejects comma, dash,
+semicolon, colon and line-break variants; it does not edit text. One LLM rewrite
+is allowed, after which the draft fails closed into `needs_grounding_review`.
 
 For editorial/academic origin, task 4 evaluates both visual quality and
 publisher-declared association. An accepted hero is carried natively with

@@ -37,9 +37,42 @@ if str(ROOT) not in sys.path:
 PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v5"
 AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v3"
 OPERATOR_REVIEW_PAYLOAD_VERSION = "region_talk_operator_review_payload_v1"
-EDITORIAL_WRITER_VERSION = "region_talk_editorial_onboarding_writer_v8_staged"
-EDITORIAL_OUTPUT_CONTRACT = "region_talk_editorial_onboarding_output_v2"
+EDITORIAL_WRITER_VERSION = "region_talk_editorial_onboarding_writer_v9_no_not_a_cliche"
+EDITORIAL_OUTPUT_CONTRACT = "region_talk_editorial_onboarding_output_v3"
 MEDIA_MATERIALIZATION_CONTRACT_VERSION = "region_talk_media_materialization_v1"
+
+_NOT_TOKEN = r"(?<![A-Za-zА-Яа-яЁё0-9_])[Нн][Ее](?![A-Za-zА-Яа-яЁё0-9_])"
+_A_TOKEN = r"[Аа](?![A-Za-zА-Яа-яЁё0-9_])"
+_CONTRASTIVE_DELIMITER = r"(?:,|;|:|…|[—–-]|\n(?!\s*\n))\s*(?:[—–-]\s*)?"
+_CONTRASTIVE_NOT_A_CLICHE_RE = re.compile(
+    rf"(?:{_NOT_TOKEN}(?:(?!\n\s*\n)[^.!?]){{0,900}}?{_CONTRASTIVE_DELIMITER}{_A_TOKEN})"
+    # Models sometimes omit the comma entirely; reject that malformed variant
+    # inside the same sentence as well.
+    rf"|(?:{_NOT_TOKEN}[^.!?\n]{{0,900}}?\s+{_A_TOKEN})"
+)
+_COMMON_ABBREVIATION_PERIOD_RE = re.compile(
+    r"(?<![A-Za-zА-Яа-яЁё0-9_])"
+    r"(?:г|ул|д|просп|пер|пос|обл|р-н|им|оз|ст|т\.д|т\.п|т\.е)\."
+    r"(?=\s)",
+    re.I,
+)
+
+
+def contains_contrastive_not_a_cliche(value: Any) -> bool:
+    """Detect the banned Russian adversative template within one sentence.
+
+    The deterministic layer only rejects the style pattern. Rewriting remains
+    an LLM-first operation so this guard cannot silently change meaning.
+    """
+
+    text = str(value or "")
+    # Preserve common abbreviation periods as non-boundaries before the
+    # sentence-bounded detector. This catches «не в г. Калининграде, а …»
+    # without scanning into a later independent sentence containing «, а».
+    text = _COMMON_ABBREVIATION_PERIOD_RE.sub(
+        lambda match: match.group(0)[:-1] + "\ue000", text
+    )
+    return bool(_CONTRASTIVE_NOT_A_CLICHE_RE.search(text))
 
 from scripts.region_talk_review_queue import (  # noqa: E402
     queue_messages,
@@ -502,13 +535,18 @@ def is_publication_draft_ready(row: dict[str, Any]) -> bool:
     if str(row.get("publication_draft_status") or "") != "ready_for_operator_review":
         return False
     prompt_version = str(row.get("publication_draft_prompt_version") or "")
-    if prompt_version and prompt_version != EDITORIAL_WRITER_VERSION:
+    if prompt_version != EDITORIAL_WRITER_VERSION:
         return False
-    if prompt_version == EDITORIAL_WRITER_VERSION and str(row.get("publication_draft_contract_version") or "") != EDITORIAL_OUTPUT_CONTRACT:
+    if str(row.get("publication_draft_contract_version") or "") != EDITORIAL_OUTPUT_CONTRACT:
         return False
     if not all(str(row.get(field) or "").strip() for field in (
         "publication_draft_title",
         "publication_draft_source_attribution",
+        "publication_draft_telegram_text",
+        "publication_draft_vk_text",
+    )):
+        return False
+    if any(contains_contrastive_not_a_cliche(row.get(field)) for field in (
         "publication_draft_telegram_text",
         "publication_draft_vk_text",
     )):
@@ -519,10 +557,6 @@ def is_publication_draft_ready(row: dict[str, Any]) -> bool:
         return False
     if not (isinstance(points, list) and points):
         return False
-    if prompt_version != EDITORIAL_WRITER_VERSION:
-        # Compatibility for pre-version fixtures/rows only. Production v7 rows
-        # carry an explicit prompt version and are therefore stale above.
-        return True
     draft = str(row.get("publication_draft_telegram_text") or "").strip()
     editorial = re.split(r"\n(?:Источник|Оригинал):", draft, maxsplit=1, flags=re.I)[0].strip()
     paragraphs = [part.strip() for part in re.split(r"\n\s*\n", editorial) if part.strip()]
@@ -853,6 +887,8 @@ def public_caption(row: dict[str, Any], *, html_mode: bool = False) -> str:
     """Render the atomic public/review caption with visible attribution."""
 
     p1, p2 = _draft_two_paragraphs(row)
+    if contains_contrastive_not_a_cliche(f"{p1}\n\n{p2}"):
+        raise RuntimeError("Region Talk caption contains banned contrastive_not_a_cliche")
     original = str(row.get("post_url") or row.get("canonical_url") or "").strip()
     source_url = str(row.get("source_url") or original).strip()
     source_name = str(row.get("publication_draft_source_attribution") or row.get("source_title") or "Источник").strip()

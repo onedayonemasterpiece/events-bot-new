@@ -1,6 +1,6 @@
 # О Калининграде говорят / Region Talk Channel
 
-> Canonical slug: `region-talk-channel`. User-facing working name: **«О Калининграде говорят»**. Product/implementation alias: **Kaliningrad-best-post-monitoring**. Status: **MVP live-YDB runner / scheduled discovery enabled**. Telegram/VK public publishing remains disabled; the current product goal is a Gemini-confirmed operator queue and Telegram notifications with source links.
+> Canonical slug: `region-talk-channel`. Telegram channel: [«Калининград с первого взгляда»](https://t.me/kalinigrad_visit) (`@kalinigrad_visit`). User-facing editorial working name: **«О Калининграде говорят»**. Product/implementation alias: **Kaliningrad-best-post-monitoring**. Status: **MVP live-YDB runner / scheduled discovery enabled**. Telegram/VK public publishing remains disabled; the current product goal is a Gemini-confirmed operator queue and Telegram notifications with source links.
 
 ## Document map
 
@@ -18,8 +18,8 @@
 - [Publication queue](publication-queue.md) — queue, slots, idempotency, diversity caps, dry-run.
 - [Source onboarding profile](source-onboarding-profile.md) — доказательный профиль автора/канала и абзац `О блогере` для финального кандидата.
 - [External publications](external-publications.md) — broad-web prompt, JSON Schema, staging importer, public-interest contract и on-demand anti-vector queue для материалов изданий.
-- [Editorial onboarding writer prompt](editorial-onboarding-writer-gemini-review.prompt.md) — полный внешний review-пакет для двухабзацной русской редакционной подводки.
-- [Gemini Pro onboarding consultation](onboarding-prompt-consultation.md) — принятый внешний prompt-design review: Strategy → Grounded Writer → validators → Critic и свежий переход вместо натянутой сквозной связки.
+- [Editorial onboarding writer prompt](editorial-onboarding-writer-gemini-review.prompt.md) — исторический review-пакет; актуальные production-ограничения и версия v9 описаны в каноническом контракте ниже.
+- [Gemini Pro onboarding consultation](onboarding-prompt-consultation.md) — архивный prompt-design review v8/output-v2; архитектура Strategy → Grounded Writer → validators → Critic сохранена, примеры с запрещённым противопоставлением не являются production-образцами.
 - [Editorial and visual product decision](editorial-visual-product.md) — benchmark похожих Telegram-каналов и целевой hero/album/video/link-preview формат.
 - [To-Be orchestration and vector queues](orchestration-to-be.md) — короткие queue-driven прогоны, отдельный BGE-M3 worker, YDB triggers, non-region geo bank и semantic anti-vector diversity.
 - [Telegram/VK publishing](telegram-vk-publishing.md) — future publishing contracts, VK carousel/card risk, Telegram Bot API modes.

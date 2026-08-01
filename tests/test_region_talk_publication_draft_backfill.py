@@ -3,10 +3,13 @@ from __future__ import annotations
 import argparse
 import asyncio
 import importlib.util
+import json
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,7 +39,7 @@ def test_telegram_post_ref_is_exact_and_public() -> None:
     assert mod.social_post_surface("https://vk.com/wall-1_2") == "vk"
 
 
-def test_selection_skips_ready_terminal_and_future_retry_rows() -> None:
+def test_selection_migrates_unversioned_terminal_and_skips_future_current_retry_rows() -> None:
     mod = load_module()
     now = datetime(2026, 7, 31, 20, 0, tzinfo=timezone.utc)
     rows = [
@@ -50,6 +53,7 @@ def test_selection_skips_ready_terminal_and_future_retry_rows() -> None:
             "post_url": "https://t.me/source/3",
             "publication_rank": 3,
             "publication_draft_backfill_status": "retry_due",
+            "publication_draft_backfill_version": mod.DRAFT_BACKFILL_VERSION,
             "publication_draft_backfill_next_attempt_after": (now + timedelta(hours=1)).isoformat(),
         },
     ]
@@ -58,7 +62,23 @@ def test_selection_skips_ready_terminal_and_future_retry_rows() -> None:
         mock.patch.object(mod.notify, "is_publication_draft_ready", return_value=False),
     ):
         selected = mod.select_rows(rows, limit=10, now=now, surface="telegram")
-    assert [row["post_url"] for row in selected] == ["https://t.me/source/1"]
+    assert [row["post_url"] for row in selected] == [
+        "https://t.me/source/2", "https://t.me/source/1",
+    ]
+
+
+def test_current_v3_ready_with_unversioned_draft_is_corrective_actionable() -> None:
+    mod = load_module()
+    row = {
+        "post_url": "https://t.me/source/4",
+        "publication_draft_backfill_version": mod.DRAFT_BACKFILL_VERSION,
+        "publication_draft_backfill_status": "ready",
+    }
+    with (
+        mock.patch.object(mod.notify, "is_confirmed_publication", return_value=True),
+        mock.patch.object(mod.notify, "is_publication_draft_ready", return_value=False),
+    ):
+        assert mod.backfill_is_actionable(row, surface="telegram") is True
 
 
 def test_execute_reads_supporting_kinds_through_notifier_namespace() -> None:
@@ -274,6 +294,129 @@ def test_v8_validator_requires_at_least_95_percent_cyrillic() -> None:
     assert "russian_language" in mod.validate_editorial_output(
         output, {"source.name", "content.exact_text"}
     )
+
+
+def test_v9_validator_rejects_banned_not_a_construction() -> None:
+    mod = load_module()
+    output = _valid_writer_output(mod)
+    output["public_copy"]["paragraph_2"] = (
+        "В публикации автор показывает музей не как цепочку отдельных залов, а как цельный "
+        "маршрут вокруг океана. Оригинал стоит открыть ради деталей конструкций, экспозиции "
+        "и последовательного объяснения архитектурного замысла здания."
+    )
+    assert "contrastive_not_a_cliche" in mod.validate_editorial_output(
+        output, {"source.name", "content.exact_text"}
+    )
+    with mock.patch.object(mod.notify, "contains_contrastive_not_a_cliche", return_value=True):
+        with mock.patch.object(mod, "_source_name", return_value="Источник"):
+            with mock.patch.object(mod, "_canonical_url", return_value="https://example.org/a"):
+                with mock.patch.object(mod, "render_public_copy", wraps=mod.render_public_copy):
+                    try:
+                        mod.render_public_copy({}, output)
+                    except ValueError as exc:
+                        assert str(exc) == "contrastive_not_a_cliche"
+                    else:
+                        raise AssertionError("render must fail closed on banned style")
+
+
+def test_v9_writer_gets_one_style_retry_then_fails_closed(monkeypatch) -> None:
+    mod = load_module()
+    clean = _valid_writer_output(mod)
+    clean["_stage_status"] = "ok"
+    clean["public_copy"]["paragraph_2"] += (
+        " Также автор объясняет, какие детали связывают отдельные точки прогулки в общий маршрут."
+    )
+    banned = json.loads(json.dumps(clean, ensure_ascii=False))
+    banned["public_copy"]["paragraph_2"] = (
+        "В публикации автор показывает музей не как цепочку отдельных залов, а как цельный "
+        "маршрут вокруг океана. Оригинал стоит открыть ради деталей конструкций, экспозиции "
+        "и последовательного объяснения архитектурного замысла здания."
+    )
+    strategy = {
+        "_stage_status": "ok", "status": "ready", "throughline_mode": "fresh_start",
+        "used_history_urls": [], "visual_hook_evidence_ids": [],
+    }
+    critic = {"_stage_status": "ok", "status": "pass", "reason_codes": []}
+    row = {
+        "post_url": "https://example.org/article", "source_title": "Внешнее издание",
+        "content_origin_type": "editorial_publication",
+        "publication_primary_image_url": "https://cdn.example.org/hero.jpg",
+    }
+    evidence = mod.build_editorial_evidence(row, source_text="Подробный текст о музейном маршруте.")
+
+    sequence = iter([(strategy, True), (banned, True), (clean, True), (critic, True)])
+    monkeypatch.setattr(mod, "call_editorial_stage", lambda **_kwargs: next(sequence))
+    updates, calls = mod.generate_editorial_draft(
+        row, evidence_pack=evidence, history=[], model="test", default_env="KEY", budget=object(),
+    )
+    assert calls == 4
+    assert updates["publication_draft_backfill_status"] == "ready"
+    assert updates["publication_draft_generation_attempts"] == 2
+    assert not mod.notify.contains_contrastive_not_a_cliche(
+        updates["publication_draft_telegram_text"]
+    )
+
+    sequence = iter([(strategy, True), (banned, True), (banned, True)])
+    monkeypatch.setattr(mod, "call_editorial_stage", lambda **_kwargs: next(sequence))
+    updates, calls = mod.generate_editorial_draft(
+        row, evidence_pack=evidence, history=[], model="test", default_env="KEY", budget=object(),
+    )
+    assert calls == 3
+    assert updates["publication_draft_backfill_status"] == "needs_grounding_review"
+    assert "contrastive_not_a_cliche" in updates["publication_draft_backfill_reason"]
+
+
+def test_v9_prompts_tell_writer_and_critic_to_reject_the_style_family() -> None:
+    mod = load_module()
+    writer = mod._stage_prompt("writer", {})
+    critic = mod._stage_prompt("critic", {})
+    assert "negation-plus-adversative contrast template is forbidden" in writer
+    assert "contrastive_not_a_cliche" in critic
+
+
+def test_line_break_variant_is_rejected_before_whitespace_normalization() -> None:
+    mod = load_module()
+    paragraph = (
+        "Автор рассматривает пространство не как набор отдельных залов\n"
+        "а как цельный маршрут, который постепенно раскрывает устройство здания и "
+        "помогает читателю проследить все основные решения проекта без лишних обобщений."
+    )
+    output = {
+        "public_copy": {"paragraph_1": paragraph, "paragraph_2": "Я" * 160},
+        "grounding_map": [{
+            "sentence_index": 1, "claim_type": "content_fact",
+            "evidence_ids": ["E1"], "third_person_maintained": True,
+        }],
+    }
+    assert "contrastive_not_a_cliche" in mod.validate_editorial_output(output, {"E1"})
+    with pytest.raises(ValueError, match="contrastive_not_a_cliche"):
+        mod.render_public_copy(
+            {"post_url": "https://example.org/a", "source_title": "Источник"}, output
+        )
+
+
+def test_selection_can_force_one_candidate_but_excludes_public_history() -> None:
+    mod = load_module()
+    target = "https://archi.ru/russia/101203/vsya-mudrost-okeana"
+    rows = [
+        {"post_url": target, "content_origin_type": "editorial_publication"},
+        {"post_url": "https://example.org/other", "content_origin_type": "editorial_publication"},
+    ]
+    with mock.patch.object(mod.notify, "is_confirmed_publication", return_value=True):
+        selected = mod.select_rows(
+            rows, limit=10, surface="article", force_regenerate=True,
+            candidate_urls={target}, published_urls=set(),
+        )
+        assert [row["post_url"] for row in selected] == [target]
+        assert mod.select_rows(
+            rows, limit=10, surface="article", force_regenerate=True,
+            candidate_urls={target}, published_urls={target},
+        ) == []
+        assert mod.select_rows(
+            [{**rows[0], "publication_candidate_id": "pubcand-1"}],
+            limit=10, surface="article", force_regenerate=True,
+            candidate_urls={target}, published_candidate_ids={"pubcand-1"},
+        ) == []
 
 
 def test_history_uses_only_published_or_clean_approved_rows() -> None:
