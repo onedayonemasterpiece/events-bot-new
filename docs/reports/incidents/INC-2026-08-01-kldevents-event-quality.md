@@ -45,6 +45,7 @@ Three user-reported production publications exposed adjacent event-quality failu
 3. The VK parser prompt allowed the roundup caption range to become one umbrella event even though attached cards had independent sport/date/venue identities. Smart Update occurrence scoping likewise allowed `single_event` for this false envelope.
 4. `VK_AUTO_IMPORT_MAX_PHOTOS=4` protected RAM but truncated an explicit eight-card `расписание и места проведения — в карточках` source before OCR/LLM extraction, so later child events had no evidence available to the semantic parser.
 5. The 7 August child scoping response omitted the common `Калининград` lead line; the existing exact-city grounding rail then correctly failed closed, but the prompt did not explicitly require applicable common locality lines in `selected_excerpts`.
+6. The first post-deploy compensating replay exposed a second source-completeness cap: although transport fetched all eight images, `vk_intake_parse_llm` measured caption length after appending its own policy text, treated the source as long, and reduced eight OCR cards to three logistics-only fragments (29 characters total). Gemma consequently returned only the 7 August child; its scoped excerpt again lacked enough city evidence and correctly failed closed. The parse budget must use the raw caption and give explicit schedule-card sources their own bounded complete OCR lane.
 
 ## Contributing Factors
 
@@ -98,6 +99,7 @@ Three user-reported production publications exposed adjacent event-quality failu
 - [x] Route event/programme-label venue overlap to LLM location review.
 - [x] Strengthen multi-event roundup extraction and occurrence-scope prompts.
 - [x] Add bounded adaptive photo intake for explicit schedule-card galleries.
+- [x] Preserve the matching bounded complete OCR-card evidence in the event-parse prompt and budget it against the raw source caption.
 - [ ] Repair canonical rows and every already-published surface.
 - [ ] Deploy prevention from an `origin/main`-reachable SHA and run exact compensating roundup import.
 
