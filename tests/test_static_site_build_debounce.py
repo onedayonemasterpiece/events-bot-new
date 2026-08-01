@@ -3,7 +3,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text as sql_text
 
 import main
 from main import Database, Event, JobOutbox, JobStatus, JobTask
@@ -449,6 +449,127 @@ async def test_static_pre_handoff_orphan_recovers_before_full_runtime_budget(
     assert rows[0].last_error == "stale"
     assert rows[1].status == JobStatus.done
     assert calls == [followup_event.id]
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_terminal_remote_owner_is_rearmed_before_followup_claim(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "terminal-owner.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        owner_event = Event(
+            title="Terminal owner",
+            description="Description",
+            date="2026-08-01",
+            time="18:00",
+            location_name="Venue",
+            source_text="source",
+        )
+        followup_event = Event(
+            title="Follow-up",
+            description="Description",
+            date="2026-08-02",
+            time="18:00",
+            location_name="Venue",
+            source_text="source",
+        )
+        session.add_all([owner_event, followup_event])
+        await session.commit()
+        await session.refresh(owner_event)
+        await session.refresh(followup_event)
+        owner = JobOutbox(
+            event_id=owner_event.id,
+            task=JobTask.static_site_build,
+            payload=make_request_payload(reason="remote owner"),
+            status=JobStatus.running,
+            coalesce_key="static_site_build:prod",
+            updated_at=now,
+            next_run_at=now,
+        )
+        session.add(owner)
+        await session.commit()
+        await session.refresh(owner)
+        owner_id = int(owner.id)
+        followup = JobOutbox(
+            event_id=followup_event.id,
+            task=JobTask.static_site_build,
+            payload=make_request_payload(reason="new Smart Update"),
+            status=JobStatus.pending,
+            coalesce_key="static_site_build:prod",
+            updated_at=now,
+            next_run_at=now - timedelta(seconds=1),
+        )
+        session.add(followup)
+        await session.commit()
+
+    fingerprint = "a" * 64
+    claim = main.claim_static_site_build(
+        db.path,
+        job_id=owner_id,
+        run_id="static-site:terminal-owner",
+        input_fingerprint=fingerprint,
+        effective_date="2026-08-01",
+        request_watermark="watermark",
+        now=now,
+    )
+    assert claim.action == "claimed"
+    async with db.get_session() as session:
+        owner = await session.get(JobOutbox, owner_id)
+        owner.payload = {
+            **dict(owner.payload or {}),
+            "remote_handoff": {
+                "build_id": "production-secret-terminal-owner",
+                "run_id": "static-site:terminal-owner",
+                "repo_sha": "b" * 40,
+                "candidate_token": "candidate-token",
+                "snapshot_path": str(tmp_path / "snapshot.sqlite"),
+                "manifest_path": str(tmp_path / "snapshot.manifest.json"),
+                "input_fingerprint": fingerprint,
+                "current_datetime": "2026-08-01T02:00:00+02:00",
+            },
+        }
+        await session.execute(
+            sql_text(
+                """
+                INSERT INTO kaggle_run_ledger(
+                    run_id, kind, status, token_hash, progress_json,
+                    created_at, updated_at, terminal_at
+                ) VALUES(
+                    'static-site:terminal-owner', 'static_site_builder', 'failed',
+                    'token-hash', '{}', :created_at, :updated_at, :terminal_at
+                )
+                """
+            ),
+            {
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+                "terminal_at": now.isoformat(),
+            },
+        )
+        await session.commit()
+
+    calls: list[int] = []
+
+    async def handler(event_id, _db, _bot):
+        calls.append(event_id)
+        return False
+
+    monkeypatch.setitem(main.JOB_HANDLERS, "static_site_build", handler)
+    assert await main._run_due_jobs_once(
+        db, None, allowed_tasks={JobTask.static_site_build}
+    ) == 2
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(
+                select(JobOutbox).where(JobOutbox.task == JobTask.static_site_build).order_by(JobOutbox.id)
+            )
+        ).scalars().all()
+    assert rows[0].status == JobStatus.done
+    assert rows[1].status == JobStatus.done
+    assert calls == [owner_event.id, followup_event.id]
     await db.close()
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 import json
 import importlib.util
@@ -698,6 +699,29 @@ def test_runner_prunes_only_abandoned_owned_scratch(tmp_path: Path) -> None:
     assert unrelated.is_dir()
     assert link.is_symlink()
     assert outside.is_dir()
+
+
+def test_host_capacity_cleanup_reaches_runner_scratch_before_preflight(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import main
+
+    artifact_root = tmp_path / "static-builder"
+    abandoned = artifact_root / "tmp" / "static-site-kaggle-dead123"
+    abandoned.mkdir(parents=True)
+    (abandoned / "events.sqlite").write_bytes(b"stale")
+    monkeypatch.setenv("STATIC_SITE_ARTIFACT_ROOT", str(artifact_root))
+    monkeypatch.setenv("STATIC_SITE_SCRATCH_DIR", str(artifact_root / "tmp"))
+
+    report = asyncio.run(main._prune_static_site_abandoned_scratch_for_capacity())
+
+    assert report == {
+        "status": "ok",
+        "removed_directories": ["static-site-kaggle-dead123"],
+        "removed_bytes": 5,
+    }
+    assert not abandoned.exists()
 
 
 def test_capacity_cleanup_removes_unreferenced_terminal_snapshot(

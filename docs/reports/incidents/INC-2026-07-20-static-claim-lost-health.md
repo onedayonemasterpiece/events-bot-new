@@ -177,3 +177,20 @@ could remain pending indefinitely. Requests now retain their first coalesced
 effect timestamp and production caps trailing debounce at 30 minutes.
 Immediate operator/calendar/startup requests cannot be demoted by a later
 Smart Update merge.
+
+A deploy-overlap regression on 2026-08-01 exposed the remaining terminal-owner
+gap.  The old Fly process disappeared after recording an immutable Kaggle
+handoff; the remote run later wrote `failed`, but its JobOutbox row remained
+`running`.  The following Smart Update therefore lost its local CAS every 30
+seconds even though the remote ledger proved that no work was live.  The worker
+now re-arms that exact owner immediately when its matching durable handoff has a
+terminal ledger status.  The existing recovery handler then adopts a successful
+artifact or releases a failed claim before any replacement push; it does not
+wait for the 90-minute live-run allowance.
+
+That same killed owner left its 340 MiB runner staging tree on the durable
+volume.  The next host-side capacity check ran before the runner's own cleanup
+and therefore could not launch the code that would have freed it.  The Fly
+owner now acquires the runner's exact non-blocking file lock and removes only
+recognized abandoned `static-site-kaggle-*` trees before its capacity probe.
+An actually active runner keeps the lock and its files remain untouched.

@@ -18594,6 +18594,51 @@ async def _run_due_jobs_once_locked(
                         link,
                     )
                     continue
+            if rjob.task == JobTask.static_site_build:
+                payload = rjob.payload if isinstance(rjob.payload, Mapping) else {}
+                handoff = payload.get("remote_handoff")
+                recovery = None
+                if isinstance(handoff, Mapping):
+                    recovery = await asyncio.to_thread(
+                        recoverable_static_site_build,
+                        db.path,
+                        job_id=int(rjob.id),
+                    )
+                remote_status = str(
+                    recovery.remote_status if recovery is not None else ""
+                ).strip().lower()
+                remote_terminal = bool(
+                    recovery is not None
+                    and (
+                        recovery.remote_terminal_at
+                        or remote_status
+                        in {"done", "complete", "failed", "error", "cancelled"}
+                    )
+                )
+                if remote_terminal:
+                    # The Fly owner may disappear after the immutable Kaggle
+                    # handoff.  A terminal callback proves that no remote work
+                    # remains, so re-arm the exact owner immediately.  The
+                    # normal recovery handler will either adopt its checked
+                    # output or release the failed claim before a new push.
+                    # Waiting for the full 90-minute runtime budget here would
+                    # strand every later Smart Update behind a dead row.
+                    rjob.status = JobStatus.error
+                    rjob.last_error = f"remote_terminal:{remote_status or 'terminal'}"
+                    rjob.updated_at = now
+                    rjob.next_run_at = now
+                    session.add(rjob)
+                    stale.append(
+                        rjob.coalesce_key or f"{rjob.task.value}:{rjob.event_id}"
+                    )
+                    logging.warning(
+                        "STATIC_SITE_REMOTE_TERMINAL_RECOVERY "
+                        "job_id=%s run_id=%s status=%s",
+                        rjob.id,
+                        recovery.run_id,
+                        remote_status or "terminal",
+                    )
+                    continue
             limit = JOB_MAX_RUNTIME.get(rjob.task, DEFAULT_JOB_MAX_RUNTIME)
             if rjob.task == JobTask.static_site_build:
                 payload = rjob.payload if isinstance(rjob.payload, Mapping) else {}
@@ -23773,6 +23818,46 @@ async def _prune_static_site_terminal_snapshots_for_capacity(
     return report
 
 
+async def _prune_static_site_abandoned_scratch_for_capacity() -> dict[str, Any]:
+    """Remove only abandoned runner scratch before the Fly capacity probe.
+
+    The runner normally owns this cleanup, but a killed Fly process can leave
+    one staged snapshot large enough that the host-side preflight prevents the
+    next runner from starting.  Acquire the runner's exact flock first; if a
+    conforming runner is alive, fail closed and leave its scratch untouched.
+    """
+
+    def _prune() -> dict[str, Any]:
+        import fcntl
+        from scripts.run_static_site_builder_kaggle import (
+            prune_abandoned_static_site_scratch,
+        )
+
+        artifact_root = static_site_artifact_root(Path(__file__).resolve().parent)
+        scratch_root = static_site_scratch_root(artifact_root)
+        artifact_root.mkdir(parents=True, exist_ok=True)
+        lock_path = artifact_root / "static-site-kaggle.lock"
+        with lock_path.open("w") as lock_file:
+            try:
+                fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return {
+                    "status": "skipped_active_runner",
+                    "removed_directories": [],
+                    "removed_bytes": 0,
+                }
+            report = prune_abandoned_static_site_scratch(scratch_root)
+            return {"status": "ok", **report}
+
+    report = await asyncio.to_thread(_prune)
+    if report.get("removed_directories"):
+        logging.info(
+            "static_site_build: abandoned scratch capacity cleanup %s",
+            json.dumps(report, sort_keys=True),
+        )
+    return report
+
+
 async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) -> bool | str:
     """Coalesced static-site build after Smart Update.
 
@@ -23799,6 +23884,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     # handoff in durable state.
     await _prune_static_site_terminal_outputs(db)
     await _prune_static_site_terminal_snapshots_for_capacity(db)
+    await _prune_static_site_abandoned_scratch_for_capacity()
     try:
         await asyncio.to_thread(_static_site_storage_preflight)
     except StaticSiteRetryableError as exc:
