@@ -12,10 +12,10 @@ import hashlib
 import json
 import re
 import unicodedata
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 from urllib.parse import urlsplit
-
 
 SCHEMA_VERSION = "static_place_organization_registry_v1"
 DEFAULT_REGISTRY_PATH = (
@@ -70,8 +70,7 @@ def _normalized_parser_type(value: Any) -> str:
 
 def _normalized_vk_group_id(value: Any) -> str:
     normalized = _normalized_text(value)
-    if normalized.startswith("-"):
-        normalized = normalized[1:]
+    normalized = normalized.removeprefix("-")
     return normalized if normalized.isdigit() else ""
 
 

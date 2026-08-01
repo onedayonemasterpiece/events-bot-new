@@ -2,7 +2,6 @@
 
 from alembic import op
 
-
 revision = "20260801_club_eval_history"
 down_revision = "20260801_static_collection_facts"
 branch_labels = None

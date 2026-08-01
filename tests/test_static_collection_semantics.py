@@ -252,6 +252,7 @@ def test_runner_persists_collection_receipt_without_requiring_unusual_outputs(
     tmp_path,
 ):
     from types import SimpleNamespace
+
     from scripts import run_static_site_builder_kaggle as runner
 
     out_dir = tmp_path / "output"

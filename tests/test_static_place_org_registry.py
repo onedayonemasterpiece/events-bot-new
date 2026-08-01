@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "site" / "scripts" / "static_place_org_registry.py"
 SPEC = importlib.util.spec_from_file_location("static_place_org_registry", SCRIPT)

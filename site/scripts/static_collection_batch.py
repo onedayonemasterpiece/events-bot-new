@@ -11,9 +11,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 SCHEMA_VERSION = "collection-batch-v1"
 COMPUTE_STATUSES = frozenset({"pass", "failed", "blocked", "not_required"})
