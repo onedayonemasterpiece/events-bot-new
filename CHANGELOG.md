@@ -66,6 +66,11 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Region Talk orchestrator metrics now merge external publication source
+  attestations, making imported article candidates autonomously actionable for
+  v8 backfill. Exact native Telegram album anchors are recognized as durable
+  materialization locators; delivery still resolves the group and fails closed
+  unless 3–6 ordered source media items are actually obtained.
 - External Region Talk articles no longer bypass source-image extraction merely
   because research provenance says `rights_policy=link_only`. An associated
   publisher hero is attempted and visually verified first; native link preview

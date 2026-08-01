@@ -238,6 +238,17 @@ def test_media_plan_is_media_first_and_fails_article_without_hero() -> None:
     })
     assert album["mode"] == "social_album"
     assert len(album["items"]) == 4
+    source_album = mod.publication_media_plan({
+        "post_url": "https://t.me/travel/200", "expected_image_count": 5,
+        "original_photo_evidence": "true",
+    })
+    assert source_album["mode"] == "social_album"
+    assert source_album["status"] == "ready"
+    assert source_album["reason"] == "exact_source_album_ref"
+    assert source_album["items"] == [{
+        "media_id": "source:album", "ordinal": 1, "kind": "image",
+        "ref": "https://t.me/travel/200",
+    }]
     associated = mod.publication_media_plan({
         "post_url": "https://example.org/a", "content_origin_type": "editorial_publication",
         "selected_media_materialization_json": '[{"media_id":"frame:1","ordinal":1,"source_ref":"https://cdn.example.org/associated.jpg","reviewed_content_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","materialization_fingerprint":"fp1","refetch_locator":{"method":"article_page_image_evidence","association_reason":"publisher_declared_article_role"}}]',

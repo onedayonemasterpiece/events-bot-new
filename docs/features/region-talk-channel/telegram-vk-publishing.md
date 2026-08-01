@@ -71,6 +71,16 @@ returns the revision to review instead of publishing substituted media. Bot API
 URL delivery fails closed for hash-bound revisions because it cannot inspect
 the bytes Telegram will fetch.
 
+For a native Telegram album, the exact source-post URL is itself a valid
+materialization locator even when the upstream ledger has not expanded the
+group into individual message IDs. The notifier resolves the anchor
+`grouped_id`, keeps Telegram's original order and accepts delivery only when
+the materialized result contains 3–6 media items. A single source-album locator
+therefore means “resolve this exact group”, not “publish a one-image album”.
+External article source attestations participate in the same live-fingerprint
+merge as Telegram/VK sources so the autonomous orchestrator sees article
+backfill work instead of leaving it visible only to the notifier.
+
 ### Product format priority
 
 1. **P0:** unchanged source hero/carousel with strong attribution and original

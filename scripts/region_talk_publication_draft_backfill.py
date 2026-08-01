@@ -679,6 +679,12 @@ def publication_media_plan(row: dict[str, Any]) -> dict[str, Any]:
             if explicit_items:
                 items = explicit_items[:6]
             elif telegram_post_ref(post_url):
+                # A Telegram grouped post is itself a durable exact refetch
+                # locator.  The notifier resolves the anchor's grouped_id,
+                # downloads the ordered album and then enforces the actual
+                # 3..6 item contract before delivery.  Requiring three fake
+                # manifest rows here would keep valid source albums pending
+                # even though their exact materialization path already exists.
                 items = [{
                     "media_id": value,
                     "ordinal": index,
@@ -687,7 +693,17 @@ def publication_media_plan(row: dict[str, Any]) -> dict[str, Any]:
                 } for index, value in enumerate(selected_ids[:6] or ["source:album"], 1)]
             else:
                 items = []
-            status, reason = ("ready", "ordered_source_album_ref") if len(items) >= 3 else ("pending", "ordered_album_3_to_6_not_materialized")
+            exact_source_album_ref = bool(
+                not explicit_items
+                and telegram_post_ref(post_url)
+                and items
+                and str(items[0].get("media_id") or "") == "source:album"
+            )
+            status, reason = (
+                ("ready", "exact_source_album_ref")
+                if exact_source_album_ref
+                else (("ready", "ordered_source_album_ref") if len(items) >= 3 else ("pending", "ordered_album_3_to_6_not_materialized"))
+            )
         elif photo_led:
             mode = "social_hero"
             items = explicit_items[:1] or ([{"media_id": selected_ids[0] if selected_ids else "source:hero", "ordinal": 1, "kind": "image", "ref": post_url}] if telegram_post_ref(post_url) else [])

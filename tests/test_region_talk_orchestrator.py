@@ -656,6 +656,42 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["publication_draft_backfill_actionable_telegram_total"], 1)
         self.assertEqual(metrics["publication_draft_backfill_actionable_vk_total"], 1)
 
+    def test_external_source_attestation_makes_article_backfill_actionable(self) -> None:
+        mod = load_module()
+        source = {
+            "_ydb_pk": "external_publication_source_item:archi",
+            "canonical_source_key": "external:archi.ru",
+            "source_url": "https://archi.ru",
+            "source_scope": "external",
+            "source_geo_class": "nonlocal_russia",
+            "source_queue_status": "verified_external_publication_source",
+        }
+        publication = {
+            "post_url": "https://archi.ru/russia/example",
+            "source_url": "https://archi.ru",
+            "canonical_source_key": "external:archi.ru",
+            "content_origin_type": "editorial_publication",
+            "publication_candidate_status": "llm_confirmed",
+            "publication_status": "gemini_accept",
+            "publication_eligibility_verdict": "eligible",
+            "publication_eligibility_gate_version": mod.CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
+            "authoritative_source_fingerprint_version": mod.AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
+            "authoritative_source_fingerprint": mod.authoritative_source_fingerprint(source),
+        }
+
+        merged_sources = mod._merge_source_rows([], [], [], [source])
+        metrics = mod._publication_handoff_metrics([], [publication], merged_sources)
+
+        self.assertIn("external_publication_source_item", mod.ORCHESTRATOR_YDB_METRIC_LIMITS)
+        self.assertEqual(metrics["publication_confirmed_total"], 1)
+        self.assertEqual(metrics["publication_draft_missing_article_total"], 1)
+        self.assertEqual(metrics["publication_draft_backfill_actionable_article_total"], 1)
+        actions = mod.build_decision_plan(
+            metrics, target_confirmed=20, bge_threshold=1, image_threshold=1
+        )
+        self.assertEqual(actions[0]["action"], "backfill_publication_drafts_article")
+        self.assertIn("article", actions[0]["cmd"])
+
     def test_image_action_batch_is_explicitly_tunable_and_bounded(self) -> None:
         mod = load_module()
         metrics = {

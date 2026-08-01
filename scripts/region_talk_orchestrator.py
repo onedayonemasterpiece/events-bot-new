@@ -267,6 +267,7 @@ ORCHESTRATOR_YDB_METRIC_LIMITS = {
     "telegram_entity_cache_item": 20000,
     "source_onboarding_evidence_item": 2500,
     "source_onboarding_profile_item": 2500,
+    "external_publication_source_item": 2500,
 }
 
 # The vector payload also contains the dense embedding. Loading thousands of
@@ -3757,6 +3758,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
             "image_queue_item",
             "image_frame_score_item",
             "publication_candidate_item",
+            "external_publication_source_item",
             "region_talk_llm_budget_item",
             "publication_delivery_item",
             "source_onboarding_evidence_item",
@@ -3854,6 +3856,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         rows_by_kind["source_queue_item"],
         rows_by_kind["source_status_item"],
         rows_by_kind["online_source_item"],
+        rows_by_kind["external_publication_source_item"],
     )
     bge_mod = _load_bge_module()
     item_kinds_for_bge = {
