@@ -393,6 +393,12 @@ successful reconciliation it is deleted, and only then may a later request
 allocate a new snapshot. Active handoff output must not be removed blindly to
 make room.
 
+The adoption runner applies the same ordering internally: it verifies the
+fixed remote dataset and completed kernel, removes only the replaceable local
+duplicate for that exact build, then runs the capacity probe before downloading
+the authoritative output again. New Kaggle submissions still require the
+capacity probe before any staging or push.
+
 ### Smart Update debounce and historical 2026-07-15 data evidence
 
 Smart Update enqueues `static_site_build:prod` for 15 minutes after the latest

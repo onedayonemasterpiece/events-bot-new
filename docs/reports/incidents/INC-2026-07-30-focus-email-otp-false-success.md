@@ -193,6 +193,11 @@ after any failed transport result and therefore communicated a false success.
   output was retained for host reconciliation. Recovery is now ordered before
   the new-build capacity gate so that checked output can publish and remove
   itself; blind deletion of active handoff evidence remains forbidden.
+- 2026-08-01 10:28 UTC — the first reordered recovery reached the adoption
+  runner but its own preflight still ran before replacing the retained local
+  duplicate. Adoption now verifies the exact remote result, removes only that
+  replaceable duplicate, rechecks capacity, and downloads the authoritative
+  output; fresh submissions remain gated before staging.
 
 ## Root Cause
 

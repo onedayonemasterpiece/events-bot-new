@@ -793,6 +793,23 @@ def test_static_site_remote_recovery_precedes_new_build_capacity_gate() -> None:
     assert recovery < recovered_return < capacity
 
 
+def test_runner_adoption_cleans_duplicate_before_capacity_gate() -> None:
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "scripts"
+        / "run_static_site_builder_kaggle.py"
+    ).read_text(encoding="utf-8")
+    adopt = source.index("def adopt_existing_kernel_output(")
+    prepare = source.index("out_dir = prepare_output_directory", adopt)
+    adoption_capacity = source.index("require_static_site_storage_ready()", prepare)
+    download = source.index("download_kernel_output", adoption_capacity)
+    dispatch = source.index("if args.adopt_existing:")
+    new_build_capacity = source.index("require_static_site_storage_ready()", dispatch)
+
+    assert prepare < adoption_capacity < download
+    assert dispatch < new_build_capacity
+
+
 def test_runner_closes_status_database_after_config_creation() -> None:
     import asyncio
     from scripts.run_static_site_builder_kaggle import _create_status_config_and_close
