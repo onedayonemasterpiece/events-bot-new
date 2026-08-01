@@ -10,6 +10,11 @@ controlled IMAPS mailbox, and must not use a service key, admin link or fixed
 OTP. An ambiguous selected-once issuance keeps code entry open while resend is
 cooling down.
 
+The implemented external gate is `.github/workflows/external-focus-email-otp.yml`
+and its operating contract is [`docs/testing/external-focus-email-otp.md`](../testing/external-focus-email-otp.md).
+Routine runs reuse one fixed mailbox and therefore do not create a new Auth user;
+fresh-user aliases are explicit, non-routine coverage.
+
 Правило обновления:
 - При добавлении нового `.feature` файла или существенном изменении набора сценариев сначала обновляй эту страницу.
 - Для сценариев с «живыми» внешними ссылками отмечай, насколько быстро они устаревают.

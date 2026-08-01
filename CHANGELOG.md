@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Added a protected, manual Chromium + real-IMAPS external E2E for focus-group
+  email OTP, with fixed test identities by default, exact deployment SHA checks,
+  six-digit auto-submit coverage and sanitized ChatGPT-readable evidence.
+
 - Fixed focus-group email code entry on phones: the sixth digit visibly starts
   verification, Android autofill/change commits are handled, failures return
   control to the six-cell input, successful verification explicitly completes

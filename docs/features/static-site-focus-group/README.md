@@ -683,6 +683,14 @@ deployed page digit by digit without Enter. The external delivery gate remains
 a manual GitHub Environment workflow with a controlled IMAPS mailbox and a
 real provider-delivered random OTP; it must not use an admin-issued token.
 
+The black-box mailbox implementation lives in
+`.github/workflows/external-focus-email-otp.yml` with the canonical runbook at
+[`docs/testing/external-focus-email-otp.md`](../../testing/external-focus-email-otp.md).
+Its routine mode reuses one fixed synthetic identity so repeated acceptance runs
+do not inflate `auth.users`; unique aliases are allowed only for an explicitly
+requested fresh-user test. Workflow artifacts are PII-free and intended to be
+reviewable independently in ChatGPT.
+
 For a clean operator retest on one device use:
 
 `/fokus-gruppa/priglashenie/?focus_test_reset=1#invite=focus-group-2026-announcements`
