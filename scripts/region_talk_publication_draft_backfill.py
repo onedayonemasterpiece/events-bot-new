@@ -41,6 +41,7 @@ DRAFT_BACKFILL_VERSION = "region_talk_publication_draft_backfill_v4_publisher_re
 EDITORIAL_WRITER_VERSION = notify.EDITORIAL_WRITER_VERSION
 EDITORIAL_INPUT_CONTRACT = "region_talk_editorial_onboarding_input_v2"
 EDITORIAL_OUTPUT_CONTRACT = notify.EDITORIAL_OUTPUT_CONTRACT
+EDITORIAL_STAGE_EXECUTION_VERSION = "region_talk_writer_v10_caption_length_retry_v2"
 MEDIA_MATERIALIZATION_CONTRACT_VERSION = "region_talk_media_materialization_v1"
 LEGACY_REVIEW_MIGRATION_VERSION = "region_talk_legacy_review_to_v10_v3"
 DRAFT_FIELDS = (
@@ -499,6 +500,38 @@ def _caption_visible_length(row: dict[str, Any], paragraph_1: str, paragraph_2: 
     source = _source_name(row)
     visible = f"{paragraph_1}\n\n{paragraph_2}\n\nИсточник: {source}\nОригинал"
     return len(visible)
+
+
+def visible_caption_contract(row: dict[str, Any]) -> dict[str, int]:
+    fixed_chars = _caption_visible_length(row, "", "")
+    return {
+        "min_chars": 550,
+        "max_chars": 900,
+        "target_min_chars": 620,
+        "target_max_chars": 820,
+        "fixed_attribution_chars": fixed_chars,
+        "required_editorial_chars_min": max(0, 620 - fixed_chars),
+        "required_editorial_chars_max": max(0, 820 - fixed_chars),
+    }
+
+
+def caption_length_repair(row: dict[str, Any], output: dict[str, Any]) -> dict[str, Any]:
+    public_copy = output.get("public_copy") if isinstance(output.get("public_copy"), dict) else {}
+    p1 = re.sub(r"\s+", " ", str(public_copy.get("paragraph_1") or "")).strip()
+    p2 = re.sub(r"\s+", " ", str(public_copy.get("paragraph_2") or "")).strip()
+    actual = _caption_visible_length(row, p1, p2)
+    target_min = 620
+    return {
+        "actual_visible_chars": actual,
+        "absolute_min_visible_chars": 550,
+        "target_visible_min_chars": target_min,
+        "target_visible_max_chars": 820,
+        "required_added_editorial_chars": max(0, target_min - actual),
+        "instruction": (
+            "Rewrite both grounded paragraphs and reach the numeric target. "
+            "Add source-backed specifics from the supplied evidence; do not add generic filler or new facts."
+        ),
+    }
 
 
 def render_public_copy(row: dict[str, Any], output: dict[str, Any]) -> tuple[str, str, str]:
@@ -962,7 +995,7 @@ def _stage_prompt(stage: str, payload: dict[str, Any]) -> str:
             "task": "Write exactly two editorial paragraphs and a sentence-level grounding map as JSON.",
             "output": {
                 "status": "draft_ready|insufficient_evidence|policy_conflict",
-                "public_copy": {"paragraph_1": "150-500 chars", "paragraph_2": "150-500 chars"},
+                "public_copy": {"paragraph_1": "260-420 chars", "paragraph_2": "260-420 chars"},
                 "grounding_map": [{
                     "paragraph_index": "1|2",
                     "sentence_index": 1,
@@ -978,8 +1011,9 @@ def _stage_prompt(stage: str, payload: dict[str, Any]) -> str:
                 "Do not use first-person plural for another author's experience.",
                 "Warm observational editorial tone; no clickbait, PR jargon, dossier or exhaustive summary.",
                 "Express every positive observation directly; the negation-plus-adversative contrast template is forbidden even with punctuation, a dash or a line break between its parts.",
-                "The two paragraphs together must leave room for attribution and URL in a 550-900 character media caption.",
-                "If deterministic_feedback contains caption_visible_length:N, expand or trim the grounded paragraphs so the exact visible caption, including attribution, is 550-900 characters.",
+                "Treat input.visible_caption_contract as a hard output schema. Count characters, including spaces and punctuation, and keep the exact rendered visible caption inside its min/max range.",
+                "Aim for 260-420 characters in each paragraph. Prefer grounded specifics already present in evidence over generic padding.",
+                "If input.length_repair exists, add at least required_added_editorial_chars across the two paragraphs while preserving every claim's evidence IDs. The retry must meet target_visible_min_chars, not merely the absolute lower boundary.",
                 "Mention photos/video only when visual_hook_evidence_ids is non-empty. Source media is intentionally reused with explicit attribution.",
             ],
         }
@@ -1065,6 +1099,7 @@ def generate_editorial_draft(
     request_fp = hashlib.sha256(
         json.dumps({
             "version": EDITORIAL_WRITER_VERSION,
+            "stage_execution_version": EDITORIAL_STAGE_EXECUTION_VERSION,
             "candidate": evidence_pack.get("candidate"),
             "evidence_hash": evidence_hash,
             "history_hash": hashlib.sha256(history_raw.encode("utf-8")).hexdigest(),
@@ -1103,7 +1138,11 @@ def generate_editorial_draft(
         strategy["throughline_mode"] = "fresh_start"
         strategy["used_history_urls"] = []
 
-    writer_payload = {"editorial_plan": strategy, **evidence_pack}
+    writer_payload = {
+        "editorial_plan": strategy,
+        "visible_caption_contract": visible_caption_contract(row),
+        **evidence_pack,
+    }
     writer, called = call_editorial_stage(
         stage="writer", payload=writer_payload, request_fingerprint=request_fp + "|writer1",
         model=model, default_env=default_env, budget=budget,
@@ -1125,7 +1164,16 @@ def generate_editorial_draft(
     )
     attempts = 1
     if violations:
-        retry_payload = {**writer_payload, "previous_draft": writer, "deterministic_feedback": violations}
+        retry_payload = {
+            **writer_payload,
+            "previous_draft": writer,
+            "deterministic_feedback": violations,
+            "length_repair": (
+                caption_length_repair(row, writer)
+                if any(item.startswith("caption_visible_length:") for item in violations)
+                else None
+            ),
+        }
         writer, called = call_editorial_stage(
             stage="writer", payload=retry_payload, request_fingerprint=request_fp + "|writer2",
             model=model, default_env=default_env, budget=budget,
@@ -1157,6 +1205,8 @@ def generate_editorial_draft(
             "publication_draft_evidence_json": evidence_raw,
             "publication_draft_history_json": history_raw,
             "publication_draft_editorial_plan_json": json.dumps(strategy, ensure_ascii=False, separators=(",", ":")),
+            "publication_draft_grounding_map_json": json.dumps(writer.get("grounding_map") or [], ensure_ascii=False, separators=(",", ":")),
+            "publication_draft_stage_audit_json": json.dumps({"strategy": strategy, "writer": writer}, ensure_ascii=False, separators=(",", ":")),
             "publication_draft_generation_attempts": attempts,
         }, calls)
 

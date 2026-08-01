@@ -77,6 +77,12 @@ rows, proving that the data existed but publication preparation had not run.
   no retry opportunity. The same batch reaches the 13 RPM safety ceiling for
   `gemini-3.5-flash-lite`; overflow to `gemini-3.1-flash-lite` is unavailable
   because its conservative shared-scope RPD ledger is already full.
+- 2026-08-01 21:56–22:00 UTC — after the ordering hotfix, the next five social
+  candidates use `gemini-3.5-flash-lite` with 5.5-second stage pacing. One is
+  ready; four reach the single retry but still undershoot at 381–511 visible
+  characters. The Writer contract is tightened with exact attribution
+  overhead, measured deficit, a 620-character safe target and a revisioned
+  durable stage fingerprint before further provider calls.
 
 ## Root Cause
 
