@@ -408,6 +408,26 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         ))
         self.assertEqual([message.id for message in result], [90, 91, 92, 93, 94, 95])
 
+    def test_grouped_source_video_locator_is_bounded_to_anchor_item(self) -> None:
+        mod = load_module()
+
+        class Message:
+            def __init__(self, message_id: int, grouped_id: int = 77):
+                self.id = message_id
+                self.grouped_id = grouped_id
+                self.media = object()
+
+        class Client:
+            async def get_messages(self, _handle, ids):
+                if isinstance(ids, int):
+                    return Message(ids)
+                return [Message(message_id) for message_id in ids]
+
+        result = asyncio.run(mod._telegram_source_media(
+            Client(), "https://t.me/example/100", [], max_items=1,
+        ))
+        self.assertEqual([message.id for message in result], [100])
+
     def test_reviewed_album_ids_keep_their_selected_order(self) -> None:
         mod = load_module()
 
