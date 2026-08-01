@@ -134,6 +134,70 @@ def test_article_media_evidence_is_filled_from_latest_image_ledger_row() -> None
     assert mod.publication_media_plan(publication)["status"] == "ready"
 
 
+def test_execute_article_uses_retained_intake_without_social_fetch_unpack(monkeypatch) -> None:
+    mod = load_module()
+
+    class Driver:
+        def stop(self) -> None:
+            pass
+
+    row = {
+        "_ydb_pk": "publication_candidate_item:article",
+        "post_url": "https://archi.ru/russia/example",
+        "content_origin_type": "editorial_publication",
+    }
+    intake = {
+        "external_publication_id": "ext-1",
+        "canonical_url": row["post_url"],
+        "article_text": "Сохранённый текст статьи",
+    }
+    row["external_publication_id"] = intake["external_publication_id"]
+    args = argparse.Namespace(
+        scan_limit=5000,
+        history_limit=5000,
+        limit=1,
+        surface="article",
+        transport="telethon_discovery2",
+        dry_run=False,
+        model="gemini-3.1-flash-lite",
+        default_env_var_name="GOOGLE_API_KEY3",
+        llm_budget_id="unit-budget",
+        llm_budget_max=20,
+        delay_min=0,
+        delay_max=0,
+    )
+    written: list[dict] = []
+    monkeypatch.setattr(
+        mod.notify,
+        "read_publication_rows",
+        lambda _limit: (object(), Driver(), object(), "table", [row]),
+    )
+    monkeypatch.setattr(
+        mod.notify,
+        "read_kind_rows",
+        lambda _pool, _ydb, _table, kind, _limit: [intake] if kind == "external_publication_intake_item" else [],
+    )
+    monkeypatch.setattr(mod.notify, "is_confirmed_publication", lambda _row: True)
+    monkeypatch.setattr(mod.notify, "is_publication_draft_ready", lambda _row: False)
+    monkeypatch.setattr(mod, "DurableGeminiBudget", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(mod, "collect_source_texts", mock.AsyncMock(return_value=({}, {})))
+    monkeypatch.setattr(
+        mod,
+        "build_draft_updates",
+        lambda _row, **kwargs: ({"publication_draft_backfill_status": "ready"}, False),
+    )
+    monkeypatch.setattr(
+        mod,
+        "upsert_publication_row",
+        lambda _pool, _ydb, _table, _row, updates: written.append(updates),
+    )
+
+    result = asyncio.run(mod.execute(args))
+
+    assert result["ready_total"] == 1
+    assert written == [{"publication_draft_backfill_status": "ready"}]
+
+
 def test_request_fingerprint_changes_with_exact_source_text() -> None:
     mod = load_module()
     row = {"post_url": "https://t.me/source/1", "llm_decision": "accept"}

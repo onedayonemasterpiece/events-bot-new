@@ -75,6 +75,9 @@
   the latest durable ImageDiagnostic row, allowing an already extracted and
   reviewed publisher hero to reach operator delivery without re-scraping or
   overwriting publication decisions.
+- Region Talk retained-article backfill no longer falls through into the
+  social-fetch unpack path; the real article `execute()` route is covered so a
+  valid retained intake cannot fail with a `NoneType` unpack error.
 - External Region Talk articles no longer bypass source-image extraction merely
   because research provenance says `rights_policy=link_only`. An associated
   publisher hero is attempted and visually verified first; native link preview

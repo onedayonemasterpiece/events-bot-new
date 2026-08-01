@@ -1239,7 +1239,8 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
                 upsert_publication_row(pool, ydb, table, row, updates)
                 results.append({"post_url": url, "status": updates["publication_draft_backfill_status"]})
                 continue
-            text, fetched, source_transport = fetched_item
+            else:
+                text, fetched, source_transport = fetched_item
             updates, provider_called = build_draft_updates(
                 row,
                 text=text,
