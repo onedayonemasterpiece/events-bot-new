@@ -208,6 +208,7 @@ MEDIA_EVIDENCE_FIELDS = (
     "image_quality_terminality",
     "image_vlm_article_association_supported",
     "image_vlm_best_ordinal",
+    "media_kind",
 )
 
 
@@ -689,7 +690,10 @@ def select_media_materialization_rows(
             not notify.is_confirmed_publication(row)
             or str(row.get("publication_draft_prompt_version") or "") != EDITORIAL_WRITER_VERSION
             or str(row.get("publication_draft_contract_version") or "") != EDITORIAL_OUTPUT_CONTRACT
-            or str(row.get("publication_draft_status") or "") != "media_materialization_pending"
+            or (
+                str(row.get("publication_draft_status") or "") != "media_materialization_pending"
+                and not (candidate_urls and url in candidate_urls)
+            )
             or surface not in {"all", row_surface, row_lane}
             or (candidate_urls and url not in candidate_urls)
             or url in published_urls
@@ -798,11 +802,16 @@ async def fetch_exact_text(client: Any, row: dict[str, Any]) -> tuple[str, dict[
     if not text:
         raise RuntimeError("exact Telegram message has no text")
     date = getattr(message, "date", None)
-    return text, {
+    fields = {
         "handle": handle,
         "post_id": str(message_id),
         "post_date": date.isoformat() if date is not None else str(row.get("post_date") or ""),
     }
+    if getattr(message, "video", None) is not None:
+        fields["media_kind"] = "video"
+    elif getattr(message, "photo", None) is not None:
+        fields["media_kind"] = "image"
+    return text, fields
 
 
 def _vk_selected_media_materialization(
@@ -1032,7 +1041,9 @@ def publication_media_plan(row: dict[str, Any]) -> dict[str, Any]:
             mode = "article_hero"
             status, reason = "ready", "associated_article_hero_has_exact_ref"
     elif media_kind == "video":
-        if scalar_ref and not explicit_items:
+        if scalar_ref and not explicit_items and not (
+            telegram_post_ref(post_url) and scalar_ref.startswith(post_url + "#")
+        ):
             explicit_items.append({"media_id": "hero:1", "ordinal": 1, "kind": "video", "ref": scalar_ref})
         mode = "social_video"
         items = explicit_items[:1] or ([{"media_id": "source:video", "ordinal": 1, "kind": "video", "ref": post_url}] if telegram_post_ref(post_url) else [])

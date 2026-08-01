@@ -610,6 +610,22 @@ def test_selection_can_force_one_candidate_but_excludes_public_history() -> None
         ) == []
 
 
+def test_explicit_media_only_repair_can_reopen_ready_delivery_revision() -> None:
+    mod = load_module()
+    target = "https://t.me/travel/350"
+    row = {
+        "post_url": target,
+        "publication_draft_status": "ready_for_operator_review",
+        "publication_draft_prompt_version": mod.EDITORIAL_WRITER_VERSION,
+        "publication_draft_contract_version": mod.EDITORIAL_OUTPUT_CONTRACT,
+    }
+    with mock.patch.object(mod.notify, "is_confirmed_publication", return_value=True):
+        selected = mod.select_media_materialization_rows(
+            [row], limit=1, surface="telegram", candidate_urls={target}
+        )
+    assert selected == [row]
+
+
 def test_history_uses_only_published_or_clean_approved_rows() -> None:
     mod = load_module()
     approved = {
@@ -674,6 +690,16 @@ def test_media_plan_is_media_first_and_fails_article_without_hero() -> None:
     assert [item["media_id"] for item in legacy_album_with_scalar_preview["items"]] == [
         "telegram:300", "telegram:302", "telegram:301",
     ]
+    source_video_with_scalar_sentinel = mod.publication_media_plan({
+        "post_url": "https://t.me/travel/350",
+        "media_kind": "video",
+        "image_url_or_local_path": "https://t.me/travel/350#media",
+    })
+    assert source_video_with_scalar_sentinel["mode"] == "social_video"
+    assert source_video_with_scalar_sentinel["items"] == [{
+        "media_id": "source:video", "ordinal": 1, "kind": "video",
+        "ref": "https://t.me/travel/350",
+    }]
     source_album = mod.publication_media_plan({
         "post_url": "https://t.me/travel/200", "expected_image_count": 5,
         "original_photo_evidence": "true",
