@@ -1,6 +1,6 @@
 # План production-релиза статических страниц событий
 
-> **Срез:** 2026-07-31
+> **Срез:** 2026-08-01
 > **Решение:** `NO-GO` для переключения event pages на canonical root прямо сейчас.
 > **Scope:** production-контур статических страниц событий и переход event-detail
 > с Telegraph. Полный релиз всех F1–F17 персональных анонсов остаётся отдельным
@@ -64,6 +64,83 @@ This closes the secret visual-review lane only. Normal Fly → Kaggle remains
 blocked at private-dataset creation (`400 INVALID_ARGUMENT: Invalid token`);
 real owner-session Yandex OAuth/Edge Search, schedule freshness, root atomic
 promotion and rollback remain open.
+
+## Static selections data-prep track, 2026-08-01
+
+Этот track добавлен в общий release plan, чтобы реализация подборок не осталась
+только в исследовательском документе или side-ветке. Исходные требования
+неизменно хранятся в [`podborki.md`](podborki.md), полный анализ и product/data
+решения — в [`podborki-to-be.md`](podborki-to-be.md). Реализация подготовлена в
+`integration/static-collections-data-prep-20260801`; пока ветка не слита в
+`origin/main`, это кандидат, а не release truth.
+
+### Что уже сделано в candidate branch
+
+| Gate | Статус | Evidence/граница |
+|---|---|---|
+| Production data audit | Done, read-only | Fly SQLite 2026-08-01; `integrity_check=ok`; 6 approved clubs/13 grounded relations, 8 theatre organizations, 6 venue pilots; runtime не хардкодит counts |
+| Club registry refresh | Done in code | durable `interest_club_relation` outbox, one successor, evaluation history, provider-deferred retry, shadow discovery, inclusive six-calendar-month v2 projection |
+| Place/organization registry | Done in code | checked-in exact registry, separate theatre/venue roles, 8 official theatres, 6 venue candidates, structured membership reasons |
+| Admission/audience/people facts | Done in code | nullable source-bound `Event.collection_decisions`; candidate-only strict LLM schema; `unknown` preserves truth; `Event.is_free` remains compatible bool; no prose `ticket_status` free inference |
+| Shared collection BGE | Done in code, canary pending | evidence-only `collection_semantics_v1`, one float32 BGE-M3 cache, prototype-independent event reuse, one `collection-batch-v1.json`; mandatory compute independent of Unusual publication flag |
+| Static scheduling | Done in code | strict trailing `latest Smart Update + 15m`, one running + one pending successor; operator/calendar remain immediate |
+| Data handoff | Done in code | `collection-batch-v1.json`, `venue-pages-v1.json`, `interest-clubs-static-v2.json`; exact IDs/status/hashes only, Astro does not redefine membership |
+| Cinema/festivals boundary | Preserved | no cinema source additions/changes; no festival extraction/page changes |
+| Supabase egress | Preserved | core source is the already transferred Fly SQLite snapshot; `supabase_core_reads=0`, no second Kaggle notebook/snapshot |
+| Astro routes/navigation/sitemap | Not started by design | belongs to the next UI integration window after data quality gates |
+| Production migration/backfill/deploy | Not started | no production writes, migrations, page promotion or public flag changes in this track |
+
+Integrated local evidence on the candidate: collection/semantic/release `123
+passed`; club/outbox/Smart Update `63 passed`; facts/DB/May-incident replay `85
+passed`; Kaggle status/handoff/unusual/outbox `116 passed`. Exact commands, lane
+SHAs, merge reconciliation and final checks live in
+`.codex/integration/static-collections-data-prep-20260801-INTEGRATION_REPORT.md`.
+Local tests do not substitute for the real Kaggle gate.
+
+### Обязательная последовательность до UI и public rollout
+
+1. Merge candidate into a fresh main-based integration only after the final diff
+   audit; retain the generated-manifest boundary and both additive migrations.
+2. On a verified production copy, run migration upgrade/preservation checks and
+   a targeted source review/backfill for admission conflicts, audience candidates
+   and confirmed visiting people; do not mass-extract the historical archive.
+3. Run one current-catalog pinned Kaggle CPU cold build and an identical warm
+   build. Require complete catalog coverage, `provider_calls=0`, unchanged event
+   re-encode `0`, exact cache/receipt/batch hashes, no second notebook and no new
+   Supabase core reads.
+4. Keep Unusual/science/strong-impressions/medieval heads blocked until
+   owner-approved gold and evidence-only recalibration. An old related-v1 canary
+   cannot approve the new document contract.
+5. Produce an immutable noindex secret candidate containing the exact manifests.
+   Verify 8 theatres, all currently eligible approved clubs, the 6 venue pilots,
+   admission corrections/review abstentions and per-label failure states.
+6. Only in the next UI branch add collection/venue routes, medallion schedule
+   pages and navigation. Sitemap/indexability is a separate gate: pilot venue
+   pages are indexable only after content/relation/robots acceptance; raw-location
+   mass pages are forbidden.
+7. Promote labels separately. Exact existing shelves may ship first; children/
+   visiting guests follow grounded-fact backfill; semantic heads follow owner
+   gold. `Для меня` remains a separate personalization delivery track.
+
+### NO-GO / rollback conditions for this track
+
+- missing/partial collection batch, cache self-hash mismatch or event ID outside
+  the frozen catalog;
+- any new semantic label reported `ready` without owner gold and quality pass;
+- provider failure erases accepted admission/club truth;
+- automatic build starts before the 15-minute quiet window or starts a second
+  concurrent StaticSiteBuilder;
+- unexpected Supabase core read, second Fly snapshot transfer/notebook, cinema
+  source change or festival extraction/page coupling;
+- Astro computes membership from prose/topics instead of consuming the accepted
+  ID-only manifests.
+
+Rollback before public UI is simply no merge/no migration/no promotion. After a
+future label is public, failed data-prep must retain the previously deployed tree
+or block candidate promotion; it must never silently publish a disabled/empty
+replacement. The open Unusual incident
+[`INC-2026-08-01-unusual-feed-disabled-by-config`](../../reports/incidents/INC-2026-08-01-unusual-feed-disabled-by-config.md)
+remains the regression contract until a current accepted route exists.
 
 ## Где находится release truth
 
