@@ -12,7 +12,23 @@ TELEGRAM_AUTH_BUNDLE_GH_ACTIONS
 
 Do not fall back to `TELEGRAM_AUTH_BUNDLE_E2E`, `TELEGRAM_AUTH_BUNDLE_S22`, `TELEGRAM_SESSION`, publishing sessions, or monitoring sessions. Do not run two jobs against the same session concurrently.
 
-The bundle may be raw JSON or URL-safe base64 JSON. It must contain a Telethon `StringSession` under `session`, `session_string`, `string_session`, or `stringSession`. It may also contain `api_id`, `api_hash`, and the device metadata fields used when the session was created. If the API credentials are not in the bundle, the reader checks `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` and then `TG_API_ID` / `TG_API_HASH`.
+The bundle may be raw JSON or URL-safe base64 JSON. It must contain a Telethon `StringSession` under `session`, `session_string`, `string_session`, or `stringSession`. It may also contain `api_id`, `api_hash`, and the device metadata fields used when the session was created.
+
+A Telethon `StringSession` does not contain Telegram application credentials. If `api_id` and `api_hash` are not embedded in the bundle, configure the preferred dedicated Actions secrets:
+
+```bash
+gh secret set TELEGRAM_GH_ACTIONS_API_ID \
+  --app actions \
+  --repo onedayonemasterpiece/events-bot-new
+
+gh secret set TELEGRAM_GH_ACTIONS_API_HASH \
+  --app actions \
+  --repo onedayonemasterpiece/events-bot-new
+```
+
+Enter each value only at the interactive prompt. Do not put it in `--body` or shell history.
+
+For compatibility, the workflow can reuse existing Telegram *application* credentials in this order: `SOCIAL_METRICS_TG_API_ID` / `SOCIAL_METRICS_TG_API_HASH`, `TG_API_ID` / `TG_API_HASH`, then `TELEGRAM_API_ID` / `TELEGRAM_API_HASH`. This fallback applies only to app credentials; the user session remains strictly `TELEGRAM_AUTH_BUNDLE_GH_ACTIONS`.
 
 Never print the bundle, session, API hash, the complete environment, or a serialized client configuration.
 
