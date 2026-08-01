@@ -544,7 +544,11 @@ schedule.
 
 The unlinked `noindex` routes `/fokus-gruppa/diagnostika/` and
 `/fokus-gruppa/diagnostika-ustoychivost/` are narrow incident tools, not a
-focus-group replacement. The current page compares direct Auth/Data reads, the
+focus-group replacement. They use the same release-aware privacy contract as
+the other focus routes: production root emits exactly
+`noindex,nofollow,noarchive`, a secret review candidate additionally emits
+`nosnippet`, and canonical URLs always stay inside the active build base. The
+current page compares direct Auth/Data reads, the
 second stateless route, the same Auth/Data reads through the resilience
 framework and a dedicated control read. Direct checks are not silently
 substituted with framework checks, so one copied result shows whether the
