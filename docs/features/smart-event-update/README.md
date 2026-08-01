@@ -810,9 +810,13 @@ merged per decision and reassigned as a whole for SQLAlchemy persistence; manual
 lock wins, otherwise source trust and recency decide conflicts.
 `Event.is_free` remains the compatible materialized bool and changes only from
 `confirmed_free|confirmed_paid`; exporter code must not infer it from prose
-`ticket_status`. The additive schema is
-`20260801_static_collection_facts`; production migration/backfill and real
-source review remain separate release steps. Product/extraction contract:
+`ticket_status`. The additive schema is `20260801_static_collection_facts`. A bounded operational
+backfill is implemented in `scripts/backfill_static_collection_facts.py`: plan
+mode is read-only; `--apply` reuses persisted `EventSource`, the same strict
+adjudicator and atomic apply contract, prefers trusted/recent source evidence,
+is hash-resumable, and can be limited by reason/event/source count. It does not
+re-run Smart Update identity/writer logic or scan the whole archive. Production
+execution and source review remain release steps. Product/extraction contract:
 [`podborki-to-be.md`](../static-site-pages/podborki-to-be.md).
 
 ### Interest-club relation handoff

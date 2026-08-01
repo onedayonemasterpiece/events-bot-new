@@ -37,6 +37,13 @@ Astro routes, страницы, navigation, sitemap и публичное вкл
 - strict trailing debounce: автоматическая сборка ждёт 15 минут после последнего
   Smart Update; operator/calendar triggers остаются immediate; во время running
   build накапливается один follow-up;
+- добавлены исполняемые bounded backfill-контуры: source-bound
+  `backfill_static_collection_facts.py` и durable club relation catch-up
+  `backfill_interest_club_relations.py`; оба сначала строят проверяемый plan и
+  требуют явный `--apply`;
+- `Database.init()` действительно мигрирует production SQLite со старого
+  `UNIQUE(club_id,event_id)` на hash-versioned evaluation history с проверкой
+  сохранности количества строк; одного Alembic-файла для Fly недостаточно;
 - fingerprint включает collection decisions, source-bound evidence, club
   relation/evaluation truth, semantic policy/manifest identity.
 

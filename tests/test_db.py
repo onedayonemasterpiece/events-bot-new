@@ -196,3 +196,77 @@ async def test_event_source_backfill_excludes_and_purges_managed_vk_projection(
     assert managed_sources == []
     assert managed_facts == []
     assert [row[0] for row in external_sources] == ["https://vk.com/wall-24180215_123"]
+
+
+@pytest.mark.asyncio
+async def test_db_init_upgrades_interest_club_evaluation_history_constraint(tmp_path):
+    db_path = tmp_path / "club-history.sqlite"
+    db = Database(str(db_path))
+    await db.init()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO interest_club(slug,canonical_name,topic,public_status) "
+            "VALUES('club','Club','topic','approved')"
+        )
+        await conn.execute(
+            "INSERT INTO event(title,description,date,time,location_name,source_text) "
+            "VALUES('Event','Description','2026-08-10','18:00','Hall','Source')"
+        )
+        await conn.execute("DROP TABLE interest_club_evaluation")
+        await conn.execute(
+            """
+            CREATE TABLE interest_club_evaluation(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                club_id INTEGER NOT NULL,
+                event_id INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                verdict TEXT NOT NULL,
+                decision_lane TEXT NOT NULL,
+                evidence_quote TEXT,
+                evidence_json JSON NOT NULL DEFAULT '{}',
+                model TEXT,
+                policy_version TEXT NOT NULL DEFAULT 'interest-club-relation-v1',
+                input_hash TEXT NOT NULL,
+                error_code TEXT,
+                attempts INTEGER NOT NULL DEFAULT 1,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(club_id,event_id)
+            )
+            """
+        )
+        await conn.execute(
+            "INSERT INTO interest_club_evaluation("
+            "club_id,event_id,status,verdict,decision_lane,input_hash"
+            ") VALUES(1,1,'accepted','yes','source','hash-one')"
+        )
+        await conn.commit()
+    await db.close()
+
+    restarted = Database(str(db_path))
+    await restarted.init()
+    async with restarted.raw_conn() as conn:
+        rows = await (
+            await conn.execute(
+                "SELECT input_hash FROM interest_club_evaluation ORDER BY id"
+            )
+        ).fetchall()
+        await conn.execute(
+            "INSERT INTO interest_club_evaluation("
+            "club_id,event_id,status,verdict,decision_lane,input_hash"
+            ") VALUES(1,1,'review','unclear','source','hash-two')"
+        )
+        await conn.commit()
+        count = int(
+            (
+                await (
+                    await conn.execute(
+                        "SELECT COUNT(*) FROM interest_club_evaluation"
+                    )
+                ).fetchone()
+            )[0]
+        )
+    await restarted.close()
+
+    assert rows == [("hash-one",)]
+    assert count == 2

@@ -88,7 +88,7 @@ promotion and rollback remain open.
 | Cinema/festivals boundary | Preserved | no cinema source additions/changes; no festival extraction/page changes |
 | Supabase egress | Preserved | core source is the already transferred Fly SQLite snapshot; `supabase_core_reads=0`, no second Kaggle notebook/snapshot |
 | Astro routes/navigation/sitemap | Not started by design | belongs to the next UI integration window after data quality gates |
-| Production migration/backfill/deploy | Not started | no production writes, migrations, page promotion or public flag changes in this track |
+| Production migration/backfill/deploy | Tooling done; execution pending | runtime-safe SQLite constraint migration and bounded fact/club backfill commands are implemented; no production writes/deploy yet |
 
 Integrated local evidence on the candidate: post-merge collection/semantic/
 release `123 passed`; post-merge club/outbox/Smart Update/facts/DB `131 passed`;
@@ -102,9 +102,10 @@ Local tests do not substitute for the real Kaggle gate.
 
 1. Merge candidate into a fresh main-based integration only after the final diff
    audit; retain the generated-manifest boundary and both additive migrations.
-2. On a verified production copy, run migration upgrade/preservation checks and
-   a targeted source review/backfill for admission conflicts, audience candidates
-   and confirmed visiting people; do not mass-extract the historical archive.
+2. On a verified production copy, run the `Database.init()` upgrade/preservation
+   check, read-only plans from both backfill scripts, then bounded `--apply` for
+   admission conflicts, audience/people candidates and six-month club relations;
+   do not mass-extract the historical archive.
 3. Run one current-catalog pinned Kaggle CPU cold build and an identical warm
    build. Require complete catalog coverage, `provider_calls=0`, unchanged event
    re-encode `0`, exact cache/receipt/batch hashes, no second notebook and no new

@@ -123,12 +123,19 @@ Reviewer получает candidate identity, proposed relation, normalized anch
 
 ## Реализованные RC surfaces
 
-- additive migration: `alembic/versions/20260717_interest_clubs.py`;
-- canonical models/bootstrap: `models.py`, `db.py`;
-- explicit shadow importer and relation evaluator: `interest_clubs.py`;
-- disabled-by-default Smart Update handoff: `smart_event_update.py`;
-- disposable static projection: `site/scripts/export-production-preview-data.py` → `site/src/data/interest-clubs.json`;
-- gated index/detail UI: `site/src/pages/kluby-po-interesam/`;
+- additive base migration: `alembic/versions/20260717_interest_clubs.py`;
+- runtime hash-history upgrade: `Database.init()` preserves rows while replacing
+  legacy pair uniqueness; Alembic metadata remains a secondary schema record;
+- canonical models/bootstrap and relation evaluator: `models.py`, `db.py`,
+  `interest_clubs.py`;
+- durable Smart Update handoff: `JobTask.interest_club_relation`;
+- bounded catch-up: `scripts/backfill_interest_club_relations.py` plans exact
+  alias/source candidates overlapping the six-month window and only with
+  `--apply` enqueues the same durable jobs; it never calls LLM inline or
+  auto-approves/creates identities;
+- compatible v1 and six-month v2 projections:
+  `interest-clubs.json`, `interest-clubs-static-v2.json`;
+- existing gated index/detail UI: `site/src/pages/kluby-po-interesam/`;
 - release gates: `ENABLE_INTEREST_CLUB_PIPELINE`, `ENABLE_INTEREST_CLUB_STATIC_PROJECTION`, `PUBLIC_INTEREST_CLUBS_ENABLED`. Первые решения/связи по-прежнему fail-closed; в production static generation последние два флага включены явно, передаются в зашифрованный Kaggle runtime dataset и входят в input fingerprint. Поэтому approved DB-клубы не заменяются пустым состоянием при очередной сборке, а выключение любого флага остаётся явным rollback.
 
 Production and immutable-candidate build wrappers also default

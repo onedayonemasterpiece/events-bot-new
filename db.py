@@ -3139,6 +3139,99 @@ class Database:
                 )
                 """
             )
+            # Production bootstraps schema through Database.init(), not an
+            # Alembic command.  Upgrade the original pair-unique evaluation
+            # table in place so a changed source hash can retain decision
+            # history instead of failing on UNIQUE(club_id,event_id).
+            index_cursor = await conn.execute(
+                "PRAGMA index_list('interest_club_evaluation')"
+            )
+            index_rows = await index_cursor.fetchall()
+            await index_cursor.close()
+            unique_column_sets: set[tuple[str, ...]] = set()
+            for index_row in index_rows:
+                if not bool(index_row[2]):
+                    continue
+                index_name = str(index_row[1]).replace("'", "''")
+                info_cursor = await conn.execute(
+                    f"PRAGMA index_info('{index_name}')"
+                )
+                info_rows = await info_cursor.fetchall()
+                await info_cursor.close()
+                unique_column_sets.add(
+                    tuple(str(row[2]) for row in sorted(info_rows, key=lambda row: row[0]))
+                )
+            legacy_evaluation_unique = ("club_id", "event_id")
+            history_evaluation_unique = (
+                "club_id",
+                "event_id",
+                "policy_version",
+                "input_hash",
+            )
+            if (
+                legacy_evaluation_unique in unique_column_sets
+                and history_evaluation_unique not in unique_column_sets
+            ):
+                before_cursor = await conn.execute(
+                    "SELECT COUNT(*) FROM interest_club_evaluation"
+                )
+                before_count = int((await before_cursor.fetchone())[0])
+                await before_cursor.close()
+                await conn.execute("DROP TABLE IF EXISTS interest_club_evaluation_new")
+                await conn.execute(
+                    """
+                    CREATE TABLE interest_club_evaluation_new(
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        club_id INTEGER NOT NULL,
+                        event_id INTEGER NOT NULL,
+                        status TEXT NOT NULL,
+                        verdict TEXT NOT NULL,
+                        decision_lane TEXT NOT NULL,
+                        evidence_quote TEXT,
+                        evidence_json JSON NOT NULL DEFAULT '{}',
+                        model TEXT,
+                        policy_version TEXT NOT NULL DEFAULT 'interest-club-relation-v1',
+                        input_hash TEXT NOT NULL,
+                        error_code TEXT,
+                        attempts INTEGER NOT NULL DEFAULT 1,
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(club_id, event_id, policy_version, input_hash),
+                        FOREIGN KEY(club_id) REFERENCES interest_club(id) ON DELETE CASCADE,
+                        FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE,
+                        CHECK(status IN ('accepted','no_match','review','deferred','ineligible'))
+                    )
+                    """
+                )
+                await conn.execute(
+                    """
+                    INSERT INTO interest_club_evaluation_new(
+                        id, club_id, event_id, status, verdict, decision_lane,
+                        evidence_quote, evidence_json, model, policy_version,
+                        input_hash, error_code, attempts, created_at, updated_at
+                    )
+                    SELECT
+                        id, club_id, event_id, status, verdict, decision_lane,
+                        evidence_quote, evidence_json, model, policy_version,
+                        input_hash, error_code, attempts, created_at, updated_at
+                    FROM interest_club_evaluation
+                    """
+                )
+                after_cursor = await conn.execute(
+                    "SELECT COUNT(*) FROM interest_club_evaluation_new"
+                )
+                after_count = int((await after_cursor.fetchone())[0])
+                await after_cursor.close()
+                if before_count != after_count:
+                    raise RuntimeError(
+                        "interest_club_evaluation migration row-count mismatch: "
+                        f"{before_count}!={after_count}"
+                    )
+                await conn.execute("DROP TABLE interest_club_evaluation")
+                await conn.execute(
+                    "ALTER TABLE interest_club_evaluation_new "
+                    "RENAME TO interest_club_evaluation"
+                )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_interest_club_evaluation_status ON interest_club_evaluation(status,updated_at)"
             )
