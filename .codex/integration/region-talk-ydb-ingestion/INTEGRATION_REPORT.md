@@ -2,7 +2,7 @@
 
 ## Integration base
 
-- Base: `origin/main` at `f217b7cc`
+- Base: `origin/main` updated through `5a5d28cc` (merged into this integration branch)
 - Integration branch: `integration/region-talk-ydb-ingestion`
 - Payload audit was read-only; no historical research JSON was staged to YDB.
 
