@@ -131,6 +131,10 @@ revision participates in the durable request fingerprint, so an older cached
 short response cannot satisfy a newer prompt contract. If the retry still
 misses, its Writer output and grounding map remain in the stage audit for
 diagnosis while the candidate stays outside delivery and planning.
+The Russian-language ratio ignores only exact source-owned Latin-script names
+and `@handles` supplied by the candidate row. Arbitrary English prose still
+fails the same threshold; this keeps channels such as `Sasha Meets Russia`
+attributable without misclassifying otherwise Russian copy.
 
 Every stage uses the existing controlled Google AI gateway, Supabase
 `google_ai_reserve` limiter and durable YDB request budget. Stage prompt/model,
