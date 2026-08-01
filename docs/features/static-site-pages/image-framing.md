@@ -153,3 +153,10 @@ breakpoint. Browser acceptance measures the rendered media box and computed
 fit; a source-code declaration alone does not close the regression. The
 multi-image portrait regression is event `6823`: all three selected gallery
 cells must independently measure `140×112`, ratio `1.25`, and `cover`.
+
+The production catalog is not required to retain an expired `5297` page. While
+that route is generated, the output gate inspects its exact rail DOM. After the
+route expires, the same gate requires a current generated visual-only rail cell
+with `140×112`/`cover` and evaluates the immutable `5297` two-photo geometry and
+`65% 35%` focal point through the real resolver. This is a release-gate fixture,
+not a public-event resurrection or an event-id exception in product code.
