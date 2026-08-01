@@ -1,6 +1,6 @@
 # INC-2026-08-01 Region Talk final copy used adversative AI cliché
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: Region Talk staged editorial writer, operator candidate chat and daily plan
 Opened: 2026-08-01
@@ -43,6 +43,15 @@ exact pattern in the Telegram and VK fields of
 - 2026-08-01 — isolated fix branch is created from exact `origin/main`
   `c5e3f6bc79e9`; staged writer/notifier/orchestrator changes and regression
   tests begin.
+- 2026-08-01 — PR #184 is merged as `084d2f96c58a` and deployed to Fly release
+  v1855 from a clean worktree at exact `origin/main`.
+- 2026-08-01 — Archi.ru is regenerated with writer v9/output v3; the new copy
+  passes the deterministic guard and is delivered to the operator chat as
+  message `33805` with review fingerprint
+  `dadfda39ed7600a049d5e3acd6dfe892eba7322f1dab82e0e9d3f187e5cc1e16`.
+- 2026-08-01 — all 23 confirmed candidates are selected for bounded backfill
+  attempts. The post-write audit finds zero banned-pattern matches; provider
+  RPD exhaustion leaves a documented retry/manual-review tail.
 
 ## Root Cause
 
@@ -115,17 +124,35 @@ drafts stale and actionable without changing the semantic publication verdict.
 
 ## Follow-up Actions
 
-- [ ] deploy the exact fix from `origin/main`;
-- [ ] run compensating candidate backfill and operator delivery;
-- [ ] verify zero banned patterns in current unpublished confirmed drafts;
+- [x] deploy the core guard from exact clean `origin/main`;
+- [x] run compensating candidate backfill attempts and deliver the corrected
+  Archi.ru operator revision;
+- [x] verify zero banned patterns in current unpublished confirmed drafts;
+- [ ] finish the quota-deferred retry tail after Gemini RPD reset without
+  lowering the model/grounding contract;
 - [ ] observe the next scheduled Region Talk cycle without regression.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: focused writer/notifier/orchestrator suite pending; full Region Talk suite pending
-- post-deploy verification: pending
+- core deployed SHA: `084d2f96c58af6d492ba20ca83a3d0ca03a4bb6b`
+  (contains `cb21c118` from PR #184); Fly release v1855, health ready with all
+  scheduler checks green.
+- follow-up exact-force cooldown SHA: `a2228b70f0eb3b2ede79f9335a8d0a945a9dd1d2`
+  from PR #185, merged to `origin/main`; production rollout waits for the
+  currently active Region Talk catch-up to finish so deploy cannot interrupt
+  another role-scoped session.
+- regression checks: focused final-SHA suite `167 passed`; full Region Talk
+  suite `705 passed`; independent checklist review passed the final detector,
+  selection, readiness, published-identity and orchestration contracts.
+- post-deploy YDB verification: 23 confirmed candidates, zero banned matches;
+  statuses after the bounded attempts are `ready=1`,
+  `media_materialization_pending=4`, `needs_grounding_review=6`,
+  `retry_due=12`. The old Archi.ru cliché is replaced by v9 copy and its new
+  operator revision is delivered as message `33805`.
+- blocker evidence: registered `GOOGLE_API_KEY6`, `GOOGLE_API_KEY5` and
+  `GOOGLE_API_KEY2` lanes returned Gemini `RPD`/`RESOURCE_EXHAUSTED`; further
+  key guessing stopped because quotas are project/model scoped. No lower model
+  or uncontrolled provider path was substituted.
 
 ## Prevention
 

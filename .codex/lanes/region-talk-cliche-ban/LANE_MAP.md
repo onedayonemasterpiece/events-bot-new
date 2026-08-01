@@ -34,7 +34,7 @@ lanes:
     forbidden_files: [production credentials, unrelated modules]
     expected_output: committed code/docs/tests with fail-closed cliché guard
     verification_scope: targeted
-    status: in_progress
+    status: completed
   - id: W02
     role: integrator
     requirement_ids: [R01]
@@ -47,4 +47,4 @@ lanes:
     forbidden_files: [published Telegram/VK posts, source evidence, unrelated YDB rows]
     expected_output: dry-run inventory, backed-up mutations, post-write verification
     verification_scope: targeted
-    status: planned
+    status: partial_quota_blocked
