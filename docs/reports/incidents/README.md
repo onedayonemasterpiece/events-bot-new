@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-01-unusual-feed-disabled-by-config.md`
+  - Scope: expired Unusual review candidate, absent public route, shared static
+    BGE execution, cache/last-good durability and stable demonstration availability.
+  - Must not regress: computation, quality and publication cannot collapse into
+    one silent opt-in; closure requires a fresh approved current-catalog BGE
+    artifact, cache-reuse proof and a 200 smoke for the owner-approved route.
+
 - `INC-2026-08-01-guide-google-ai-package-closure.md`
   - Scope: Guide Kaggle notebook generation, staged/embedded `google_ai`
     package closure and scheduled LLM extraction.

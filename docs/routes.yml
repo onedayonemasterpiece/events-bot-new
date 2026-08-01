@@ -122,6 +122,7 @@ sections:
     interest_clubs_catalog_audit_2026_07_17: docs/reports/interest-clubs-catalog-audit-2026-07-17.md
     incidents: docs/reports/incidents/README.md
     incident_template: docs/reports/incidents/TEMPLATE.md
+    incident_unusual_feed_disabled_by_config_2026_08_01: docs/reports/incidents/INC-2026-08-01-unusual-feed-disabled-by-config.md
     incident_false_kgd80_festival_link_2026_07_31: docs/reports/incidents/INC-2026-07-31-false-kgd80-festival-link.md
     incident_poster_candidate_url_2026_07_31: docs/reports/incidents/INC-2026-07-31-poster-candidate-url.md
     incident_future_event_source_coverage_drop_2026_07_27: docs/reports/incidents/INC-2026-07-27-future-event-source-coverage-drop.md
@@ -363,6 +364,8 @@ features:
   static_site_pages:
     status: secret_candidate_pipeline_root_promotion_blocked
     docs: docs/features/static-site-pages/README.md
+    collections_original_requirements: docs/features/static-site-pages/podborki.md
+    collections_extraction_and_product_plan: docs/features/static-site-pages/podborki-to-be.md
     release_plan: docs/features/static-site-pages/release-plan.md
     presentation_release_checklist: docs/features/static-site-pages/presentation-release-checklist.md
     test_scenarios: docs/features/static-site-pages/test-scenarios.md

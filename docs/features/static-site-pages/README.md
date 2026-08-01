@@ -628,6 +628,9 @@ Thus the compact-card correction does not weaken large-surface protection.
 
 ## Связанные документы
 
+- Исходные требования владельца к подборкам: `docs/features/static-site-pages/podborki.md`.
+- Канонический анализ данных/extraction, общий Kaggle+BGE-план, venue SEO/GEO и
+  Supabase-egress contract: `docs/features/static-site-pages/podborki-to-be.md`.
 - Release umbrella and F1–F17 map: `docs/features/static-personal-announcements/README.md`.
 - Event-page production release and 10-day Telegraph cutover: `docs/features/static-site-pages/release-plan.md`.
 - Test/release scenario inventory: `docs/features/static-site-pages/test-scenarios.md`.
