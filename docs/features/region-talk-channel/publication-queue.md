@@ -428,6 +428,49 @@ shared RPM/TPM/RPD reservation.
 
 ## Operator Telegram notification
 
+### Reaction review contract
+
+Every newly rendered candidate carries a visible legend and is reviewed on two
+independent axes:
+
+| Exact allowlisted operator reactions | Decision | Copy state | Eligible when gate is enabled |
+|---|---|---|---|
+| `❤️` / `❤` or `👍` only | `approved` | `clean` | yes |
+| `✍️` / `✍` only | `pending` | `rewrite_requested` | no |
+| positive + `✍️` | `approved` | `rewrite_requested` | no, rewrite first |
+| `👎` (without positive) | `rejected` | clean or rewrite | no |
+| positive + `👎` | `conflict` | clean or rewrite | no |
+
+`scripts/region_talk_reaction_sync.py` reads reactions only through
+`telethon_discovery2`, under the same local lease and verified-idle guard as
+ImageDiagnostic's role-scoped session. `REGION_TALK_OPERATOR_REVIEWER_IDS` is a
+required comma/space-separated allowlist of numeric Telegram user IDs.
+Telegram's aggregate emoji counts are never authority: the synchronizer uses
+`messages.getMessageReactionsList`, follows every page, and binds only exact
+reactors from that allowlist. A missing page, looping offset or count mismatch
+aborts before any revision is written. This is what makes a completely removed
+reaction reversible without mistaking a partial page for removal.
+
+Review identity is
+`region_talk_operator_review_payload_v1`: canonical post URL, exact grounded
+draft fingerprint, and the ordered media/presentation manifest. Carousel order
+is semantic. Any changed Telegram/VK copy, selected image, carousel order or
+presentation mode gets another delivery identity and requires fresh reactions;
+the earlier event remains historical and cannot approve the new revision.
+
+The synchronizer defaults to dry-run. `--execute` writes an idempotent current
+state, an immutable observation-revision event when exact reactions changed,
+and a projection onto `publication_candidate_item` only when the observed
+fingerprint still equals the candidate's current fingerprint. It never
+tombstones or deletes a candidate/source.
+
+Public-plan enforcement is deliberately rollout-gated. With
+`REGION_TALK_REACTION_GATE_ENABLED=0` (default), the legacy queue behavior is
+unchanged while historical deliveries are re-rendered and reviewed. After that
+backfill, enabling it admits only exact-current `approved + clean` rows;
+pending, rejected, conflict, rewrite-requested and stale-fingerprint rows all
+fail closed.
+
 Use `scripts/region_talk_goal_notify.py`, never on Kaggle. It supports Bot API
 and role-scoped `telethon_discovery1` / `telethon_discovery2` transports;
 production defaults to `telethon_discovery2`. Neither

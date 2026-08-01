@@ -15,6 +15,13 @@
   indexable medallion venue pilot, records zero-added-Supabase-egress gates, and
   opens `INC-2026-08-01-unusual-feed-disabled-by-config` for the expired Unusual
   review surface and silent compute/publication coupling.
+- Added fail-closed Region Talk operator reaction synchronization through the
+  role-scoped `DISCOVERY2` Telethon identity: exact allowlisted reactor
+  pagination, reversible idempotent reaction revisions, two-axis
+  approve/reject/rewrite semantics, and draft-plus-ordered-media fingerprints.
+  Candidate messages now include the reaction legend; the daily planner can
+  require exact-current `approved + clean` review behind a default-off rollout
+  gate.
 - Registered operator-provided `GOOGLE_API_KEY6` as a separately accounted
   shared-limiter lane and added it to the gateway-owned normal rotation pool
   used by Smart Update, Antigravity festival research and other ordinary Google

@@ -117,6 +117,7 @@ def test_evidence_projection_never_fabricates_social_draft() -> None:
 
 
 def test_build_plan_projects_legacy_article_and_excludes_social_without_draft(monkeypatch) -> None:
+    monkeypatch.delenv("REGION_TALK_REACTION_GATE_ENABLED", raising=False)
     article, intake = external_article_fixture()
     social_ready = ready_social("https://t.me/source/1")
     social_missing = {
@@ -182,3 +183,57 @@ def test_build_plan_projects_legacy_article_and_excludes_social_without_draft(mo
     projected = next(payload for pk, kind, payload in writes if pk == article["_ydb_pk"] and kind == "publication_candidate_item")
     assert projected["publication_draft_status"] == "ready_for_operator_review"
     assert all(not key.startswith("_") for key in projected)
+
+
+def test_planner_reaction_rollout_gate_defaults_off_and_requires_approved_clean(monkeypatch) -> None:
+    social = ready_social("https://t.me/source/reviewed")
+
+    class Driver:
+        def stop(self, timeout=5):  # noqa: ARG002
+            return None
+
+    monkeypatch.setattr(
+        plan,
+        "read_publication_rows",
+        lambda _limit: (object(), Driver(), object(), "/db/table", [social]),
+    )
+    monkeypatch.setattr(plan, "read_kind_rows", lambda *_args: [])
+    monkeypatch.setattr(plan, "attach_latest_bge_vectors", lambda *_args: None)
+    monkeypatch.setattr(plan, "is_confirmed_publication", lambda _row: True)
+    args = SimpleNamespace(
+        scan_limit=5000,
+        vector_scan_limit=5000,
+        history_limit=5000,
+        timezone="Europe/Kaliningrad",
+        article_time="12:00",
+        social_time="18:00",
+        start_date="2026-08-02",
+        days=1,
+        diversity_weight=0.35,
+        pair_similarity_threshold=0.82,
+        execute=False,
+    )
+
+    monkeypatch.delenv("REGION_TALK_REACTION_GATE_ENABLED", raising=False)
+    legacy = plan.build_plan(args)
+    assert legacy["counts"]["reaction_gate_enabled"] is False
+    assert legacy["counts"]["eligible_social"] == 1
+
+    monkeypatch.setenv("REGION_TALK_REACTION_GATE_ENABLED", "1")
+    blocked = plan.build_plan(args)
+    assert blocked["counts"]["reaction_gate_enabled"] is True
+    assert blocked["counts"]["reaction_gate_blocked_social"] == 1
+    assert blocked["counts"]["eligible_social"] == 0
+
+    social.update({
+        "operator_review_fingerprint": plan.publication_operator_review_fingerprint(social),
+        "operator_review_decision": "approved",
+        "operator_review_rewrite_status": "clean",
+    })
+    approved = plan.build_plan(args)
+    assert approved["counts"]["reaction_gate_blocked_social"] == 0
+    assert approved["counts"]["eligible_social"] == 1
+
+    social["operator_review_rewrite_status"] = "rewrite_requested"
+    rewrite = plan.build_plan(args)
+    assert rewrite["counts"]["eligible_social"] == 0

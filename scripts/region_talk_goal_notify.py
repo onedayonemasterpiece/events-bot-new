@@ -34,6 +34,7 @@ if str(ROOT) not in sys.path:
 
 PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v5"
 AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v3"
+OPERATOR_REVIEW_PAYLOAD_VERSION = "region_talk_operator_review_payload_v1"
 
 from scripts.region_talk_review_queue import (  # noqa: E402
     queue_messages,
@@ -481,10 +482,13 @@ def is_unsent_confirmed_publication(row: dict[str, Any]) -> bool:
     # Before the publication-readiness gate, legacy candidates were marked as
     # delivered even though their operator-ready copy did not exist yet. A bare
     # sent_to_chat flag therefore cannot suppress the first completed draft.
-    delivered_fingerprint = str(
-        row.get("sent_publication_draft_fingerprint") or ""
-    ).strip()
-    return delivered_fingerprint != publication_draft_fingerprint(row)
+    delivered_fingerprint = str(row.get("sent_operator_review_fingerprint") or "").strip()
+    if delivered_fingerprint:
+        return delivered_fingerprint != publication_operator_review_fingerprint(row)
+    # Compatibility for deliveries made before review identity included media.
+    # They remain acknowledged only while no presentation/media manifest exists.
+    delivered_draft = str(row.get("sent_publication_draft_fingerprint") or "").strip()
+    return bool(operator_review_media_manifest(row)) or delivered_draft != publication_draft_fingerprint(row)
 
 
 def is_publication_draft_ready(row: dict[str, Any]) -> bool:
@@ -525,6 +529,88 @@ def publication_draft_fingerprint(row: dict[str, Any]) -> str:
         ).strip(),
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _canonical_manifest_value(value: Any) -> Any:
+    """Return JSON-stable presentation evidence without changing list order."""
+
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped[:1] in {"[", "{"}:
+            try:
+                return _canonical_manifest_value(json.loads(stripped))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return stripped
+        return stripped
+    if isinstance(value, list):
+        return [_canonical_manifest_value(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            str(key): _canonical_manifest_value(value[key])
+            for key in sorted(value)
+            if value[key] not in (None, "")
+        }
+    return value
+
+
+def operator_review_media_manifest(row: dict[str, Any]) -> dict[str, Any]:
+    """Exact ordered media/presentation surface shown for this review revision.
+
+    Lists deliberately retain order: reordering a carousel is a new operator
+    decision even when it contains the same assets.
+    """
+
+    manifest_fields = (
+        "publication_presentation_manifest_json",
+        "publication_media_manifest_json",
+        "presentation_manifest_json",
+        "selected_media_ids_json",
+        "media_manifest_items",
+        "publication_media_items",
+        "selected_media_ids",
+        "selected_media",
+        "publication_asset_ids",
+    )
+    scalar_fields = (
+        "input_media_manifest_hash",
+        "image_vlm_media_manifest_hash",
+        "publication_presentation_mode",
+        "publication_visual_strategy",
+        "publication_preview_mode",
+        "publication_media_layout",
+        "publication_primary_image_url",
+        "selected_image_url",
+        "image_url_or_local_path",
+        "media_kind",
+    )
+    payload: dict[str, Any] = {}
+    for field in (*manifest_fields, *scalar_fields):
+        value = row.get(field)
+        if value in (None, "", [], {}):
+            continue
+        payload[field] = _canonical_manifest_value(value)
+    return payload
+
+
+def publication_operator_review_payload(row: dict[str, Any]) -> dict[str, Any]:
+    """Binding payload for one exact operator decision."""
+
+    return {
+        "version": OPERATOR_REVIEW_PAYLOAD_VERSION,
+        "canonical_post_url": canonical_post_url(row),
+        "publication_draft_fingerprint": publication_draft_fingerprint(row),
+        "media_presentation_manifest": operator_review_media_manifest(row),
+    }
+
+
+def publication_operator_review_fingerprint(row: dict[str, Any]) -> str:
+    raw = json.dumps(
+        publication_operator_review_payload(row),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
@@ -612,9 +698,26 @@ def publication_delivery_key(row: dict[str, Any], chat_id: str) -> str:
     identity = "|".join((
         str(chat_id),
         canonical_post_url(row),
-        publication_draft_fingerprint(row),
+        publication_operator_review_fingerprint(row),
     ))
     return hashlib.sha256(identity.encode("utf-8")).hexdigest()
+
+
+def publication_delivery_review_fields(row: dict[str, Any]) -> dict[str, Any]:
+    review_payload = publication_operator_review_payload(row)
+    return {
+        "operator_review_fingerprint": publication_operator_review_fingerprint(row),
+        "operator_review_payload_version": OPERATOR_REVIEW_PAYLOAD_VERSION,
+        "operator_review_draft_fingerprint": review_payload["publication_draft_fingerprint"],
+        "operator_review_media_manifest_json": json.dumps(
+            review_payload["media_presentation_manifest"],
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        "publication_candidate_pk": str(row.get("_ydb_pk") or ""),
+        "publication_candidate_id": str(row.get("publication_candidate_id") or ""),
+    }
 
 
 def read_delivery(pool: Any, ydb: Any, table: str, delivery_key: str) -> dict[str, Any]:
@@ -670,6 +773,8 @@ def upsert_sent(
         "delivery_key": delivery_key,
         "delivery_random_id": str(random_id or ""),
         "sent_publication_draft_fingerprint": publication_draft_fingerprint(item),
+        "sent_operator_review_fingerprint": publication_operator_review_fingerprint(item),
+        "sent_operator_review_payload_version": OPERATOR_REVIEW_PAYLOAD_VERSION,
         "sent_publication_draft_prompt_version": str(
             item.get("publication_draft_prompt_version") or ""
         ),
@@ -752,6 +857,8 @@ def candidate_message(row: dict[str, Any]) -> str:
         f"Кратко: {summary}" if summary else "",
         f"Gemini: {reason}" if reason else "",
         f"\n📝 Черновик для Telegram:\n{draft}" if draft else "",
+        "\nРеакции редактора: ❤️ или 👍 — одобрить; 👎 — отклонить; ✍️ — нужен новый текст. "
+        "Одобрение вместе с ✍️ означает: тема подходит, но текст надо переписать.",
     ]).strip()
 
 
@@ -1031,6 +1138,7 @@ async def send_rows_telethon(
                         continue
                     upsert_delivery(pool, ydb, table, delivery_key, {
                         **existing,
+                        **publication_delivery_review_fields(row),
                         "status": "sending",
                         "transport": str(args.transport),
                         "post_url": canonical_post_url(row),
@@ -1053,6 +1161,7 @@ async def send_rows_telethon(
                 if row is not None and ydb is not None and pool is not None and table is not None:
                     upsert_delivery(pool, ydb, table, delivery_key, {
                         **existing,
+                        **publication_delivery_review_fields(row),
                         "status": "delivered",
                         "transport": str(args.transport),
                         "post_url": canonical_post_url(row),
@@ -1143,6 +1252,7 @@ async def send_rows_bot_api(
                 )
             upsert_delivery(pool, ydb, table, delivery_key, {
                 **existing,
+                **publication_delivery_review_fields(row),
                 "status": "sending",
                 "transport": "bot_api",
                 "post_url": canonical_post_url(row),
@@ -1161,6 +1271,7 @@ async def send_rows_bot_api(
         if row is not None and ydb is not None and pool is not None and table is not None:
             upsert_delivery(pool, ydb, table, delivery_key, {
                 **existing,
+                **publication_delivery_review_fields(row),
                 "status": "delivered",
                 "transport": "bot_api",
                 "post_url": canonical_post_url(row),

@@ -640,9 +640,29 @@ Additional row kinds used by the full publication tail:
   Talk Gemini budget (`reserved_total`, `remaining`, `budget_max<=100`);
 - `region_talk_llm_request_item:<budget_id>:<fingerprint>`: deterministic
   final-verifier reservation/result used to avoid repeat calls after restart;
-- `publication_delivery_item:<sha256(chat_id|canonical_post_url)>`: prepared
-  Telegram-chat delivery state, deterministic MTProto `random_id`, peer id,
-  message id and timestamps.
+- `publication_delivery_item:<sha256(chat_id|canonical_post_url|operator_review_fingerprint)>`:
+  prepared Telegram-chat delivery state, deterministic MTProto `random_id`,
+  peer id, message id and timestamps. It explicitly carries the v1 operator
+  review fingerprint, exact draft fingerprint, ordered media/presentation
+  manifest JSON and candidate id/PK. A materially changed copy or presentation
+  therefore creates a new delivery rather than inheriting an old reaction;
+- `publication_review_state_item:<operator_review_fingerprint>`: current fully
+  observed exact allowlisted per-reactor map for one immutable review revision,
+  its `approved|pending|rejected|conflict` decision, independent
+  `clean|rewrite_requested` state, message/chat identity and observation hash;
+- `publication_review_event_item:<operator_review_fingerprint>:<observation-hash-prefix>`:
+  idempotent reaction revision history. An addition or removal creates one new
+  event only after complete Telegram pagination; an unchanged observation is a
+  no-op. Old-fingerprint events are history and never project onto changed
+  draft/media revisions.
+
+The matching `publication_candidate_item` review projection uses
+`operator_review_fingerprint`, `operator_review_state_version`,
+`operator_review_decision`, `operator_review_rewrite_status`, compact booleans,
+the exact allowlisted reaction map JSON and the observation hash/time. These
+fields do not alter source/candidate lifecycle. When the publication-plan
+reaction rollout gate is active, only an exact-current `approved + clean`
+projection is eligible.
 
 Strong rows blocked only by sparse source evidence update the existing
 `source_queue_item` (not a second source queue) with

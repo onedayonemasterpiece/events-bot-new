@@ -25,9 +25,11 @@ if str(ROOT) not in sys.path:
 
 from scripts.region_talk_goal_notify import (  # noqa: E402
     attach_latest_bge_vectors,
+    getenv_bool,
     is_confirmed_publication,
     is_publication_draft_ready as publication_draft_ready,
     load_env,
+    publication_operator_review_fingerprint,
     read_kind_rows,
     read_publication_rows,
 )
@@ -43,6 +45,17 @@ DEFAULT_TIMEZONE = "Europe/Kaliningrad"
 DEFAULT_ARTICLE_TIME = "12:00"
 DEFAULT_SOCIAL_TIME = "18:00"
 EVIDENCE_PROJECTION_DRAFT_VERSION = "region_talk_external_evidence_projection_v1"
+
+
+def operator_review_approved_clean(row: dict[str, Any]) -> bool:
+    """Require approval for the exact current copy/media review revision."""
+
+    return bool(
+        str(row.get("operator_review_fingerprint") or "")
+        == publication_operator_review_fingerprint(row)
+        and str(row.get("operator_review_decision") or "") == "approved"
+        and str(row.get("operator_review_rewrite_status") or "") == "clean"
+    )
 
 
 def evidence_projected_article_draft(
@@ -366,6 +379,8 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         confirmed_by_lane = {"article": 0, "social": 0}
         missing_draft_by_lane = {"article": 0, "social": 0}
         projected_draft_rows: list[dict[str, Any]] = []
+        reaction_gate_enabled = getenv_bool("REGION_TALK_REACTION_GATE_ENABLED", False)
+        reaction_gate_blocked_by_lane = {"article": 0, "social": 0}
         for row in publications:
             if not is_confirmed_publication(row):
                 continue
@@ -382,6 +397,9 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
                     projected_draft_rows.append(row)
             if not publication_draft_ready(row):
                 missing_draft_by_lane[lane] += 1
+                continue
+            if reaction_gate_enabled and not operator_review_approved_clean(row):
+                reaction_gate_blocked_by_lane[lane] += 1
                 continue
             url = canonical_url(row)
             candidate_id = _canonical_candidate_id(row)
@@ -459,6 +477,9 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
             "draft_missing_article": missing_draft_by_lane["article"],
             "draft_missing_social": missing_draft_by_lane["social"],
             "draft_projected_article": len(projected_draft_rows),
+            "reaction_gate_enabled": reaction_gate_enabled,
+            "reaction_gate_blocked_article": reaction_gate_blocked_by_lane["article"],
+            "reaction_gate_blocked_social": reaction_gate_blocked_by_lane["social"],
             "eligible_article": sum(content_lane(row) == "article" for row in eligible),
             "eligible_social": sum(content_lane(row) == "social" for row in eligible),
             "published_history_article": sum(content_lane(row) == "article" for row in history),
