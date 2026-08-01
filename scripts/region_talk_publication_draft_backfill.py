@@ -17,6 +17,8 @@ import os
 import random
 import re
 import sys
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -98,6 +100,25 @@ _BANNED_COPY_PATTERNS = (
     r"\bв\s+данной\s+статье\b",
     r"\bв\s+рамках\b",
 )
+
+_EDITORIAL_PROVIDER_PACING_LOCK = threading.Lock()
+_EDITORIAL_PROVIDER_LAST_CALL = 0.0
+_EDITORIAL_PROVIDER_STAGE_DELAY_SECONDS = 0.0
+
+
+def pace_editorial_provider_call() -> None:
+    """Keep sequential editorial stages below the configured project RPM."""
+
+    global _EDITORIAL_PROVIDER_LAST_CALL
+    delay = max(0.0, float(_EDITORIAL_PROVIDER_STAGE_DELAY_SECONDS))
+    if delay <= 0:
+        return
+    with _EDITORIAL_PROVIDER_PACING_LOCK:
+        now = time.monotonic()
+        remaining = delay - (now - _EDITORIAL_PROVIDER_LAST_CALL)
+        if _EDITORIAL_PROVIDER_LAST_CALL and remaining > 0:
+            time.sleep(remaining)
+        _EDITORIAL_PROVIDER_LAST_CALL = time.monotonic()
 _FIRST_PERSON_OWNERSHIP = re.compile(
     r"\b(?:мы|наш(?:а|е|и|его|ему|ими)?|нам|нами)\s+"
     r"(?:увидел\w*|заметил\w*|почувствовал\w*|проехал\w*|посетил\w*|снял\w*)\b",
@@ -417,6 +438,7 @@ def validate_editorial_output(
     evidence_ids: set[str],
     *,
     required_publisher_evidence_ids: set[str] | None = None,
+    row: dict[str, Any] | None = None,
 ) -> list[str]:
     violations: list[str] = []
     public_copy = output.get("public_copy") if isinstance(output.get("public_copy"), dict) else {}
@@ -432,6 +454,10 @@ def validate_editorial_output(
         violations.append("paragraph_2_length")
     if len(p1) + len(p2) > 820:
         violations.append("editorial_copy_too_long")
+    if row is not None:
+        visible_length = _caption_visible_length(row, p1, p2)
+        if not (550 <= visible_length <= 900):
+            violations.append(f"caption_visible_length:{visible_length}")
     combined = p1 + " " + p2
     if any(re.search(pattern, combined, re.I) for pattern in _BANNED_COPY_PATTERNS):
         violations.append("banned_lexeme")
@@ -469,6 +495,12 @@ def validate_editorial_output(
     return sorted(set(violations))
 
 
+def _caption_visible_length(row: dict[str, Any], paragraph_1: str, paragraph_2: str) -> int:
+    source = _source_name(row)
+    visible = f"{paragraph_1}\n\n{paragraph_2}\n\nИсточник: {source}\nОригинал"
+    return len(visible)
+
+
 def render_public_copy(row: dict[str, Any], output: dict[str, Any]) -> tuple[str, str, str]:
     public_copy = output.get("public_copy") if isinstance(output.get("public_copy"), dict) else {}
     raw_p1 = str(public_copy.get("paragraph_1") or "").strip()
@@ -483,9 +515,9 @@ def render_public_copy(row: dict[str, Any], output: dict[str, Any]) -> tuple[str
     url = _canonical_url(row)
     source_url = str(row.get("source_url") or url).strip()
     plain = f"{p1}\n\n{p2}\n\nИсточник: {source}\nОригинал: {url}"
-    visible = f"{p1}\n\n{p2}\n\nИсточник: {source}\nОригинал"
-    if not (550 <= len(visible) <= 900):
-        raise ValueError(f"caption_visible_length:{len(visible)}")
+    visible_length = _caption_visible_length(row, p1, p2)
+    if not (550 <= visible_length <= 900):
+        raise ValueError(f"caption_visible_length:{visible_length}")
     links = json.dumps({"source_label": source, "source_url": source_url, "original_url": url}, ensure_ascii=False, separators=(",", ":"))
     return plain, plain, links
 
@@ -947,6 +979,7 @@ def _stage_prompt(stage: str, payload: dict[str, Any]) -> str:
                 "Warm observational editorial tone; no clickbait, PR jargon, dossier or exhaustive summary.",
                 "Express every positive observation directly; the negation-plus-adversative contrast template is forbidden even with punctuation, a dash or a line break between its parts.",
                 "The two paragraphs together must leave room for attribution and URL in a 550-900 character media caption.",
+                "If deterministic_feedback contains caption_visible_length:N, expand or trim the grounded paragraphs so the exact visible caption, including attribution, is 550-900 characters.",
                 "Mention photos/video only when visual_hook_evidence_ids is non-empty. Source media is intentionally reused with explicit attribution.",
             ],
         }
@@ -980,6 +1013,7 @@ def call_editorial_stage(
     prompt = _stage_prompt(stage, payload)
     try:
         client = rt.get_region_talk_llm_gateway(default_env)
+        pace_editorial_provider_call()
 
         async def invoke() -> tuple[str, Any]:
             return await client.generate_content_async(
@@ -1087,7 +1121,7 @@ def generate_editorial_draft(
             "publication_draft_editorial_plan_json": json.dumps(strategy, ensure_ascii=False, separators=(",", ":")),
         }, calls)
     violations = validate_editorial_output(
-        writer, evidence_ids, required_publisher_evidence_ids=required_publisher_ids,
+        writer, evidence_ids, required_publisher_evidence_ids=required_publisher_ids, row=row,
     )
     attempts = 1
     if violations:
@@ -1110,7 +1144,7 @@ def generate_editorial_draft(
             }, calls)
         violations = (
             validate_editorial_output(
-                writer, evidence_ids, required_publisher_evidence_ids=required_publisher_ids,
+                writer, evidence_ids, required_publisher_evidence_ids=required_publisher_ids, row=row,
             )
             if writer.get("_stage_status") == "ok" else ["writer_retry_failed"]
         )
@@ -1163,7 +1197,7 @@ def generate_editorial_draft(
                 "publication_draft_history_json": history_raw,
             }, calls)
         violations = validate_editorial_output(
-            writer, evidence_ids, required_publisher_evidence_ids=required_publisher_ids,
+            writer, evidence_ids, required_publisher_evidence_ids=required_publisher_ids, row=row,
         )
         if not violations:
             critic_payload["draft"] = writer
@@ -1186,7 +1220,7 @@ def generate_editorial_draft(
         critic.get("_stage_status") != "ok"
         or critic.get("status") != "pass"
         or validate_editorial_output(
-            writer, evidence_ids, required_publisher_evidence_ids=required_publisher_ids,
+            writer, evidence_ids, required_publisher_evidence_ids=required_publisher_ids, row=row,
         )
     ):
         return ({
@@ -1209,6 +1243,14 @@ def generate_editorial_draft(
             "publication_draft_backfill_status": "needs_grounding_review",
             "publication_draft_backfill_reason": str(exc),
             "publication_draft_input_fingerprint": request_fp,
+            "publication_draft_evidence_hash": evidence_hash,
+            "publication_draft_evidence_json": evidence_raw,
+            "publication_draft_history_json": history_raw,
+            "publication_draft_editorial_plan_json": json.dumps(strategy, ensure_ascii=False, separators=(",", ":")),
+            "publication_draft_grounding_map_json": json.dumps(writer.get("grounding_map") or [], ensure_ascii=False, separators=(",", ":")),
+            "publication_draft_critic_json": json.dumps(critic, ensure_ascii=False, separators=(",", ":")),
+            "publication_draft_stage_audit_json": json.dumps({"strategy": strategy, "writer": writer, "critic": critic}, ensure_ascii=False, separators=(",", ":")),
+            "publication_draft_generation_attempts": attempts,
         }, calls)
     media = publication_media_plan(row)
     media_reviewable = media["status"] in {"ready", "fallback"}
@@ -1309,6 +1351,10 @@ def build_draft_updates(
 
 
 async def execute(args: argparse.Namespace) -> dict[str, Any]:
+    global _EDITORIAL_PROVIDER_STAGE_DELAY_SECONDS
+    _EDITORIAL_PROVIDER_STAGE_DELAY_SECONDS = max(
+        0.0, float(getattr(args, "stage_delay_seconds", 0.0) or 0.0)
+    )
     ydb = driver = pool = table = None
     selected: list[dict[str, Any]] = []
     try:
@@ -1534,11 +1580,16 @@ def main() -> int:
     parser.add_argument("--llm-budget-max", type=int, default=20)
     parser.add_argument("--delay-min", type=float, default=2.0)
     parser.add_argument("--delay-max", type=float, default=5.0)
+    parser.add_argument("--stage-delay-seconds", type=float, default=None)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--candidate-url", action="append", default=[], help="regenerate only this exact canonical candidate URL; repeatable")
     parser.add_argument("--force-regenerate", action="store_true", help="regenerate a current-version draft; requires --candidate-url")
     args = parser.parse_args()
     notify.load_env(args.env_file)
+    if args.stage_delay_seconds is None:
+        args.stage_delay_seconds = float(
+            os.getenv("REGION_TALK_DRAFT_BACKFILL_STAGE_DELAY_SECONDS") or "5.5"
+        )
     args.transport = args.transport or os.getenv("REGION_TALK_DRAFT_BACKFILL_TRANSPORT") or "telethon_discovery2"
     if args.transport not in notify.TELETHON_TRANSPORT_AUTH_ENVS:
         raise RuntimeError(f"unsupported REGION_TALK_DRAFT_BACKFILL_TRANSPORT: {args.transport}")

@@ -112,6 +112,17 @@ candidates are rewritten by a separate LLM-first copy pipeline,
    allowed. A second failure becomes `needs_grounding_review`, never an
    invented fallback.
 
+The caption-length check uses the exact rendered text, including source
+attribution, before Critic. A short or oversized otherwise-grounded draft is
+therefore returned to Writer through the same single LLM-first retry. The
+renderer repeats this check as a final fail-closed boundary and preserves the
+complete stage audit if that secondary guard ever fires. Physical backfill
+stage calls are spaced by
+`REGION_TALK_DRAFT_BACKFILL_STAGE_DELAY_SECONDS` (default `5.5`) so a
+multi-stage candidate stays below the conservative 13 RPM project ledger;
+model-scoped overflow still prefers `gemini-3.5-flash-lite` and then
+`gemini-3.1-flash-lite`.
+
 Every stage uses the existing controlled Google AI gateway, Supabase
 `google_ai_reserve` limiter and durable YDB request budget. Stage prompt/model,
 request and prompt fingerprints, usage, input evidence, bounded history,

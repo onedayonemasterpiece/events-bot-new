@@ -59,6 +59,10 @@ exact pattern in the Telegram and VK fields of
   publications also gain a fail-closed publisher reader brief covering outlet
   identity, intended audience and distinctive editorial value from retained
   research evidence before final-copy generation.
+- 2026-08-01 21:30–21:35 UTC — three article revisions become v10-ready. The
+  first ten social attempts reveal that exact caption length was enforced too
+  late for the single Writer retry; a narrow hotfix moves that mechanical
+  validation before Critic and adds stage-call pacing before catch-up resumes.
 
 ## Root Cause
 
