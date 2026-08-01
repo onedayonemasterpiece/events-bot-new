@@ -59,10 +59,11 @@ jobs:
     timeout-minutes: 10
     env:
       TELEGRAM_AUTH_BUNDLE_GH_ACTIONS: ${{ secrets.TELEGRAM_AUTH_BUNDLE_GH_ACTIONS }}
-      TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
-      TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
-      TG_API_ID: ${{ secrets.TG_API_ID }}
-      TG_API_HASH: ${{ secrets.TG_API_HASH }}
+      # A StringSession does not carry Telegram app credentials. Prefer a
+      # dedicated Actions pair, then the repository's existing read-only or
+      # shared app credentials. The user session itself never falls back.
+      TELEGRAM_API_ID: ${{ secrets.TELEGRAM_GH_ACTIONS_API_ID || secrets.SOCIAL_METRICS_TG_API_ID || secrets.TG_API_ID || secrets.TELEGRAM_API_ID }}
+      TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_GH_ACTIONS_API_HASH || secrets.SOCIAL_METRICS_TG_API_HASH || secrets.TG_API_HASH || secrets.TELEGRAM_API_HASH }}
       TELEGRAM_READ_STARTUP_DELAY_SECONDS: "4,12"
       TELEGRAM_READ_BETWEEN_REQUESTS_SECONDS: "2,5"
       TELEGRAM_READ_BETWEEN_TARGETS_SECONDS: "5,15"
@@ -115,12 +116,16 @@ jobs:
             echo "request_path=requests/telegram-read.json" >> "${GITHUB_OUTPUT}"
           fi
 
-      - name: Verify role-scoped secret is configured
+      - name: Verify role-scoped credentials are configured
         shell: bash
         run: |
           set -euo pipefail
           if [[ -z "${TELEGRAM_AUTH_BUNDLE_GH_ACTIONS:-}" ]]; then
             echo "TELEGRAM_AUTH_BUNDLE_GH_ACTIONS is not configured" >&2
+            exit 1
+          fi
+          if [[ -z "${TELEGRAM_API_ID:-}" || -z "${TELEGRAM_API_HASH:-}" ]]; then
+            echo "Telegram app credentials are not configured in the bundle or Actions secrets" >&2
             exit 1
           fi
 
