@@ -2550,14 +2550,23 @@ def _publication_handoff_metrics(
         url for url in draft_missing_confirmed_urls
         if re.fullmatch(r"https://vk\.com/wall-?[0-9]+_[0-9]+", url, re.I)
     }
+    draft_missing_article_urls = {
+        url for url in draft_missing_confirmed_urls
+        if str(publication_by_url[url].get("content_origin_type") or "").lower()
+        in {"editorial_publication", "academic_publication"}
+    }
 
     def draft_backfill_is_actionable(url: str) -> bool:
         row = publication_by_url[url]
         status = str(row.get("publication_draft_backfill_status") or "").lower()
-        if status in {
+        if (
+            str(row.get("publication_draft_backfill_version") or "")
+            == "region_talk_publication_draft_backfill_v2_editorial"
+            and status in {
             "ready", "llm_not_accepted", "needs_grounding_review",
             "source_text_unavailable", "unsupported_surface",
-        }:
+            }
+        ):
             return False
         retry_at = _parse_iso_datetime(row.get("publication_draft_backfill_next_attempt_after"))
         return retry_at is None or retry_at <= now
@@ -2568,8 +2577,12 @@ def _publication_handoff_metrics(
     draft_backfill_actionable_vk_urls = {
         url for url in draft_missing_vk_urls if draft_backfill_is_actionable(url)
     }
+    draft_backfill_actionable_article_urls = {
+        url for url in draft_missing_article_urls if draft_backfill_is_actionable(url)
+    }
     draft_backfill_actionable_urls = (
         draft_backfill_actionable_telegram_urls | draft_backfill_actionable_vk_urls
+        | draft_backfill_actionable_article_urls
     )
     unsent_confirmed_urls = {
         url for url in draft_ready_confirmed_urls
@@ -2614,9 +2627,11 @@ def _publication_handoff_metrics(
         "publication_draft_missing_confirmed_total": len(draft_missing_confirmed_urls),
         "publication_draft_missing_telegram_total": len(draft_missing_telegram_urls),
         "publication_draft_missing_vk_total": len(draft_missing_vk_urls),
+        "publication_draft_missing_article_total": len(draft_missing_article_urls),
         "publication_draft_backfill_actionable_total": len(draft_backfill_actionable_urls),
         "publication_draft_backfill_actionable_telegram_total": len(draft_backfill_actionable_telegram_urls),
         "publication_draft_backfill_actionable_vk_total": len(draft_backfill_actionable_vk_urls),
+        "publication_draft_backfill_actionable_article_total": len(draft_backfill_actionable_article_urls),
         "publication_draft_backfill_actionable_urls": sorted(draft_backfill_actionable_urls),
         "publication_sent_total": len(sent_urls),
         "publication_unsent_confirmed_total": len(unsent_confirmed_urls),
@@ -4223,6 +4238,19 @@ def build_decision_plan(
     include_main: bool = True,
 ) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
+    if int(metrics.get("publication_draft_backfill_actionable_article_total") or 0) > 0:
+        actions.append(_action(
+            "backfill_publication_drafts_article",
+            [
+                "python3", "scripts/region_talk_publication_draft_backfill.py",
+                "--limit", str(max(1, min(5, _env_int("REGION_TALK_DRAFT_BACKFILL_ARTICLE_BATCH_SIZE", 2)))),
+                "--surface", "article",
+            ],
+            f"{int(metrics.get('publication_draft_backfill_actionable_article_total') or 0)} confirmed articles need v8 editorial copy",
+            resource="local:google-ai-region-talk-writer",
+            parallel_safe=True,
+            timeout_seconds=420,
+        ))
     if int(metrics.get("publication_draft_backfill_actionable_telegram_total") or 0) > 0:
         draft_transport = str(
             os.getenv("REGION_TALK_DRAFT_BACKFILL_TRANSPORT") or "telethon_discovery2"

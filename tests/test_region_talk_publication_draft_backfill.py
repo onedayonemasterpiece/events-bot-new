@@ -95,3 +95,141 @@ def test_vk_fetch_requires_the_exact_wall_identity() -> None:
         assert "different post" in str(exc)
     else:
         raise AssertionError("mismatched VK post must fail closed")
+
+
+def _valid_writer_output(mod):
+    p1 = (
+        "Петербургский автор смотрит на восток Калининградской области без привычного набора "
+        "открыточных остановок: его интересует, как повседневный городской ритм считывается "
+        "человеком с другим опытом путешествий и наблюдений за малыми городами."
+    )
+    p2 = (
+        "В публикации автор отмечает строгую геометрию улиц и восстановленные фрески, которые "
+        "меняют впечатление от обычной прогулки по Гусеву. Оригинал стоит открыть ради конкретных "
+        "деталей маршрута и последовательного взгляда, не сводящего город к центральной площади."
+    )
+    return {
+        "status": "draft_ready",
+        "public_copy": {"paragraph_1": p1, "paragraph_2": p2},
+        "grounding_map": [
+            {"sentence_index": 1, "sentence_text": p1, "claim_type": "source_profile_fact", "evidence_ids": ["source.name"], "third_person_maintained": True},
+            {"sentence_index": 2, "sentence_text": p2, "claim_type": "content_fact", "evidence_ids": ["content.exact_text"], "third_person_maintained": True},
+        ],
+    }
+
+
+def test_v8_validator_enforces_two_grounded_russian_paragraphs() -> None:
+    mod = load_module()
+    output = _valid_writer_output(mod)
+    assert mod.validate_editorial_output(output, {"source.name", "content.exact_text"}) == []
+    output["grounding_map"][1]["evidence_ids"] = ["invented"]
+    assert "unknown_or_empty_evidence_id" in mod.validate_editorial_output(
+        output, {"source.name", "content.exact_text"}
+    )
+
+
+def test_history_uses_only_published_or_clean_approved_rows() -> None:
+    mod = load_module()
+    rows = [
+        {"post_url": "https://t.me/a/1", "publication_draft_telegram_text": "Один.\n\nДва."},
+        {"post_url": "https://t.me/a/2", "operator_review_decision": "approved", "operator_review_rewrite_status": "rewrite_requested", "publication_draft_telegram_text": "Один.\n\nДва."},
+        {"post_url": "https://t.me/a/3", "operator_review_decision": "approved", "operator_review_rewrite_status": "clean", "updated_at": "2026-08-01", "publication_draft_telegram_text": "Один.\n\nДва."},
+        {"post_url": "https://t.me/a/4", "status": "published", "published_at": "2026-08-02", "publication_draft_telegram_text": "Три.\n\nЧетыре."},
+    ]
+    assert [item["candidate_url"] for item in mod.publication_history(rows)] == [
+        "https://t.me/a/4", "https://t.me/a/3"
+    ]
+
+
+def test_media_plan_is_media_first_and_fails_article_without_hero() -> None:
+    mod = load_module()
+    missing = mod.publication_media_plan({
+        "post_url": "https://example.org/a", "content_origin_type": "editorial_publication"
+    })
+    assert (missing["mode"], missing["status"]) == ("article_hero", "pending")
+    hero = mod.publication_media_plan({
+        "post_url": "https://example.org/a", "content_origin_type": "editorial_publication",
+        "publication_primary_image_url": "https://cdn.example.org/hero.jpg",
+    })
+    assert hero["status"] == "ready"
+    assert hero["items"][0]["ref"].endswith("hero.jpg")
+    album = mod.publication_media_plan({
+        "post_url": "https://t.me/travel/100", "expected_image_count": 4,
+        "selected_media_ids": '["tg:100","tg:101","tg:102","tg:103"]',
+        "original_photo_evidence": "true",
+    })
+    assert album["mode"] == "social_album"
+    assert len(album["items"]) == 4
+    associated = mod.publication_media_plan({
+        "post_url": "https://example.org/a", "content_origin_type": "editorial_publication",
+        "selected_media_materialization_json": '[{"media_id":"frame:1","ordinal":1,"source_ref":"https://cdn.example.org/associated.jpg","refetch_locator":{"method":"article_page_image_evidence","association_reason":"publisher_declared_article_role"}}]',
+    })
+    assert associated["mode"] == "article_hero"
+    assert associated["items"][0]["ref"].endswith("associated.jpg")
+
+
+def test_legacy_review_is_archived_but_never_approves_v8_revision(monkeypatch) -> None:
+    mod = load_module()
+    generated = {
+        "publication_draft_status": "ready_for_operator_review",
+        "publication_draft_prompt_version": mod.EDITORIAL_WRITER_VERSION,
+        "publication_draft_contract_version": mod.EDITORIAL_OUTPUT_CONTRACT,
+        "publication_draft_backfill_status": "ready",
+        "publication_draft_input_fingerprint": "new-v8",
+    }
+    monkeypatch.setattr(mod, "generate_editorial_draft", lambda *_args, **_kwargs: (generated, 0))
+    row = {
+        "post_url": "https://t.me/a/1", "publication_draft_prompt_version": "region_talk_final_verifier_v7_grounded_draft",
+        "operator_review_fingerprint": "old-fp", "operator_review_decision": "approved",
+        "operator_review_rewrite_status": "rewrite_requested",
+    }
+    updates, _called = mod.build_draft_updates(
+        row, text="Исходный текст", fetched={}, source_transport="telethon_discovery2",
+        intake=None, history=[], model="test", default_env="KEY", budget=object(),
+    )
+    assert updates["legacy_principle_status"] == "approved"
+    assert updates["legacy_copy_status"] == "rewrite_requested"
+    assert updates["legacy_operator_review_fingerprint"] == "old-fp"
+    assert updates["operator_review_fingerprint"] == ""
+    assert updates["operator_review_decision"] == "pending"
+
+
+def test_stage_calls_use_controlled_gateway_and_durable_budget() -> None:
+    source = MODULE_PATH.read_text(encoding="utf-8")
+    assert "rt.get_region_talk_llm_gateway" in source
+    assert "budget.reserve(stage_fingerprint)" in source
+    assert "budget.complete(stage_fingerprint, result)" in source
+    assert "from google import genai" not in source
+    assert "requests.post(" not in source
+
+
+def test_provider_budget_exhaustion_defers_without_uncontrolled_call(monkeypatch) -> None:
+    mod = load_module()
+
+    class Budget:
+        def reserve(self, _fingerprint):
+            return {"status": "exhausted"}
+
+        def complete(self, *_args):
+            raise AssertionError("an exhausted reservation cannot be completed")
+
+    monkeypatch.setattr(
+        mod.rt,
+        "get_region_talk_llm_gateway",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("provider must not be called")),
+    )
+    evidence = mod.build_editorial_evidence(
+        {"post_url": "https://t.me/a/1", "source_title": "Автор"},
+        source_text="Автор подробно описывает прогулку по Гусеву.",
+    )
+    updates, calls = mod.generate_editorial_draft(
+        {"post_url": "https://t.me/a/1", "source_title": "Автор"},
+        evidence_pack=evidence,
+        history=[],
+        model="test-model",
+        default_env="KEY",
+        budget=Budget(),
+    )
+    assert calls == 0
+    assert updates["publication_draft_backfill_status"] == "retry_due"
+    assert updates["publication_draft_backfill_next_attempt_after"]

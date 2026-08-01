@@ -15,6 +15,16 @@
   indexable medallion venue pilot, records zero-added-Supabase-egress gates, and
   opens `INC-2026-08-01-unusual-feed-disabled-by-config` for the expired Unusual
   review surface and silent compute/publication coupling.
+- Added the staged Region Talk editorial writer v8 and autonomous regeneration
+  contour: bounded real history, separate Strategy/Writer/Critic requests
+  through the controlled Google limiter and durable budget, strict two-Russian-
+  paragraph grounding/length/voice validators, lossless stage audit evidence,
+  retained article-intake input, exact social refetch, and one-time legacy
+  principle-approved/rewrite-requested migration without leaking approval onto
+  the newly fingerprinted revision. Operator delivery is now media-first for an
+  associated article hero, social hero/3–6 image album or source video, with an
+  explicit diagnosed link-preview fallback and atomic 550–900-character
+  source-attributed caption.
 - Region Talk autonomous canary now has five non-overlapping 90-minute local
   slots, a 20% due history-revisit reserve, numeric Telegram message-id delta
   cursors with overlap, and truthful primary/delta attempted/completed metrics.

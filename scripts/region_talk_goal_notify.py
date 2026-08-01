@@ -13,6 +13,8 @@ import argparse
 import asyncio
 import base64
 import hashlib
+import html
+import io
 import json
 import os
 import random
@@ -35,6 +37,9 @@ if str(ROOT) not in sys.path:
 PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v5"
 AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v3"
 OPERATOR_REVIEW_PAYLOAD_VERSION = "region_talk_operator_review_payload_v1"
+EDITORIAL_WRITER_VERSION = "region_talk_editorial_onboarding_writer_v8_staged"
+EDITORIAL_OUTPUT_CONTRACT = "region_talk_editorial_onboarding_output_v2"
+MEDIA_MATERIALIZATION_CONTRACT_VERSION = "region_talk_media_materialization_v1"
 
 from scripts.region_talk_review_queue import (  # noqa: E402
     queue_messages,
@@ -496,6 +501,11 @@ def is_publication_draft_ready(row: dict[str, Any]) -> bool:
 
     if str(row.get("publication_draft_status") or "") != "ready_for_operator_review":
         return False
+    prompt_version = str(row.get("publication_draft_prompt_version") or "")
+    if prompt_version and prompt_version != EDITORIAL_WRITER_VERSION:
+        return False
+    if prompt_version == EDITORIAL_WRITER_VERSION and str(row.get("publication_draft_contract_version") or "") != EDITORIAL_OUTPUT_CONTRACT:
+        return False
     if not all(str(row.get(field) or "").strip() for field in (
         "publication_draft_title",
         "publication_draft_source_attribution",
@@ -507,7 +517,25 @@ def is_publication_draft_ready(row: dict[str, Any]) -> bool:
         points = json.loads(str(row.get("publication_draft_fact_points_json") or "[]"))
     except (TypeError, ValueError, json.JSONDecodeError):
         return False
-    return bool(isinstance(points, list) and points)
+    if not (isinstance(points, list) and points):
+        return False
+    if prompt_version != EDITORIAL_WRITER_VERSION:
+        # Compatibility for pre-version fixtures/rows only. Production v7 rows
+        # carry an explicit prompt version and are therefore stale above.
+        return True
+    draft = str(row.get("publication_draft_telegram_text") or "").strip()
+    editorial = re.split(r"\n(?:Источник|Оригинал):", draft, maxsplit=1, flags=re.I)[0].strip()
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", editorial) if part.strip()]
+    source_name = str(row.get("publication_draft_source_attribution") or row.get("source_title") or "Источник").strip()
+    visible_caption = f"{paragraphs[0]}\n\n{paragraphs[1]}\n\nИсточник: {source_name}\nОригинал" if len(paragraphs) == 2 else ""
+    if len(paragraphs) != 2 or not (550 <= len(visible_caption) <= 900):
+        return False
+    media_status = str(row.get("publication_media_materialization_status") or "")
+    media_contract = str(row.get("publication_media_materialization_contract_version") or "")
+    return bool(
+        media_contract == MEDIA_MATERIALIZATION_CONTRACT_VERSION
+        and media_status in {"ready", "fallback"}
+    )
 
 
 def publication_draft_fingerprint(row: dict[str, Any]) -> str:
@@ -566,6 +594,8 @@ def operator_review_media_manifest(row: dict[str, Any]) -> dict[str, Any]:
         "publication_media_manifest_json",
         "presentation_manifest_json",
         "selected_media_ids_json",
+        "selected_media_materialization_json",
+        "media_materialization_items_json",
         "media_manifest_items",
         "publication_media_items",
         "selected_media_ids",
@@ -583,6 +613,9 @@ def operator_review_media_manifest(row: dict[str, Any]) -> dict[str, Any]:
         "selected_image_url",
         "image_url_or_local_path",
         "media_kind",
+        "publication_media_materialization_status",
+        "publication_media_materialization_reason",
+        "publication_media_materialization_contract_version",
     )
     payload: dict[str, Any] = {}
     for field in (*manifest_fields, *scalar_fields):
@@ -798,7 +831,141 @@ VALUES ($pk, $kind, $payload_json, $updated_at);
     pool.retry_operation_sync(op)
 
 
+def publication_presentation_manifest(row: dict[str, Any]) -> dict[str, Any]:
+    raw = row.get("publication_presentation_manifest_json")
+    try:
+        value = json.loads(raw) if isinstance(raw, str) else dict(raw or {})
+    except (TypeError, ValueError, json.JSONDecodeError):
+        value = {}
+    return value if isinstance(value, dict) else {}
+
+
+def _draft_two_paragraphs(row: dict[str, Any]) -> tuple[str, str]:
+    draft = str(row.get("publication_draft_telegram_text") or "").strip()
+    editorial = re.split(r"\n(?:Источник|Оригинал):", draft, maxsplit=1, flags=re.I)[0].strip()
+    parts = [part.strip() for part in re.split(r"\n\s*\n", editorial) if part.strip()]
+    if len(parts) != 2:
+        raise RuntimeError("current Region Talk draft is not exactly two editorial paragraphs")
+    return parts[0], parts[1]
+
+
+def public_caption(row: dict[str, Any], *, html_mode: bool = False) -> str:
+    """Render the atomic public/review caption with visible attribution."""
+
+    p1, p2 = _draft_two_paragraphs(row)
+    original = str(row.get("post_url") or row.get("canonical_url") or "").strip()
+    source_url = str(row.get("source_url") or original).strip()
+    source_name = str(row.get("publication_draft_source_attribution") or row.get("source_title") or "Источник").strip()
+    if not original or not source_url:
+        raise RuntimeError("source/original URL is required for Region Talk caption")
+    if html_mode:
+        caption = (
+            f"{html.escape(p1)}\n\n{html.escape(p2)}\n\n"
+            f'<b><a href="{html.escape(source_url, quote=True)}">Источник: {html.escape(source_name)}</a></b>\n'
+            f'<b><a href="{html.escape(original, quote=True)}">Оригинал</a></b>'
+        )
+        visible = f"{p1}\n\n{p2}\n\nИсточник: {source_name}\nОригинал"
+    else:
+        caption = f"{p1}\n\n{p2}\n\nИсточник: {source_name}\nОригинал: {original}"
+        visible = caption
+    if not (550 <= len(visible) <= 900):
+        raise RuntimeError(f"Region Talk caption must be 550..900 visible chars, got {len(visible)}")
+    return caption
+
+
+def publication_delivery_mode(row: dict[str, Any]) -> str:
+    manifest = publication_presentation_manifest(row)
+    mode = str(manifest.get("mode") or row.get("publication_presentation_mode") or "")
+    if mode not in {"article_hero", "social_hero", "social_album", "social_video", "link_preview_fallback"}:
+        raise RuntimeError(f"unsupported Region Talk publication presentation mode: {mode or 'empty'}")
+    status = str(manifest.get("status") or row.get("publication_media_materialization_status") or "")
+    if mode == "link_preview_fallback":
+        if status != "fallback":
+            raise RuntimeError("link preview fallback must carry explicit fallback status")
+    elif status != "ready" or not list(manifest.get("items") or []):
+        raise RuntimeError("media-first review requires an exact ordered materialization manifest")
+    return mode
+
+
+async def _telegram_source_media(client: Any, ref: str, media_ids: list[str]) -> list[Any]:
+    match = re.fullmatch(r"https://t\.me/([^/]+)/([0-9]+)", canonical_post_url({"post_url": ref}), re.I)
+    if not match:
+        return []
+    handle, anchor_id = match.group(1), int(match.group(2))
+    exact_ids = []
+    for media_id in media_ids:
+        found = re.search(r"([0-9]+)$", media_id)
+        if found:
+            exact_ids.append(int(found.group(1)))
+    messages = []
+    if exact_ids:
+        fetched = await client.get_messages(handle, ids=exact_ids)
+        messages = list(fetched if isinstance(fetched, (list, tuple)) else [fetched])
+    else:
+        anchor = await client.get_messages(handle, ids=anchor_id)
+        if anchor is not None and getattr(anchor, "grouped_id", None):
+            ids = list(range(max(1, anchor_id - 10), anchor_id + 11))
+            nearby = await client.get_messages(handle, ids=ids)
+            messages = [item for item in list(nearby or []) if item is not None and getattr(item, "grouped_id", None) == anchor.grouped_id]
+            messages.sort(key=lambda item: int(getattr(item, "id", 0) or 0))
+        elif anchor is not None:
+            messages = [anchor]
+    return [message for message in messages if getattr(message, "media", None) is not None]
+
+
+async def materialize_telethon_media(client: Any, row: dict[str, Any]) -> list[Any]:
+    manifest = publication_presentation_manifest(row)
+    items = [dict(item) for item in manifest.get("items") or [] if isinstance(item, dict)]
+    if not items:
+        return []
+    source_refs: dict[str, list[str]] = {}
+    direct_refs: list[tuple[str, str]] = []
+    for item in items:
+        ref = str(item.get("ref") or "").strip()
+        if telegram_post_ref := re.fullmatch(r"https://t\.me/[^/]+/[0-9]+", canonical_post_url({"post_url": ref}), re.I):
+            del telegram_post_ref
+            source_refs.setdefault(ref, []).append(str(item.get("media_id") or ""))
+        else:
+            direct_refs.append((ref, str(item.get("kind") or "image")))
+    files: list[Any] = []
+    for ref, media_ids in source_refs.items():
+        for message in await _telegram_source_media(client, ref, media_ids):
+            data = await client.download_media(message, file=bytes)
+            if not isinstance(data, (bytes, bytearray)) or not data:
+                raise RuntimeError("failed to materialize exact Telegram source media bytes")
+            file = io.BytesIO(bytes(data))
+            file.name = "region-talk-source.mp4" if getattr(message, "video", None) else "region-talk-source.jpg"
+            files.append(file)
+    for ref, kind in direct_refs:
+        if not ref:
+            continue
+        if Path(ref).is_file():
+            data = Path(ref).read_bytes()
+        elif re.match(r"https?://", ref, re.I):
+            def download() -> bytes:
+                with urllib.request.urlopen(ref, timeout=25) as response:
+                    payload = response.read(25 * 1024 * 1024 + 1)
+                if len(payload) > 25 * 1024 * 1024:
+                    raise RuntimeError("Region Talk media exceeds 25 MiB materialization limit")
+                return payload
+            data = await asyncio.to_thread(download)
+        else:
+            raise RuntimeError("media manifest item has no materializable URL/path/source post")
+        file = io.BytesIO(data)
+        file.name = "region-talk-source.mp4" if kind == "video" else "region-talk-source.jpg"
+        files.append(file)
+    mode = publication_delivery_mode(row)
+    if mode == "social_album" and not (3 <= len(files) <= 6):
+        raise RuntimeError(f"social_album must materialize 3..6 ordered items, got {len(files)}")
+    if mode in {"article_hero", "social_hero", "social_video"} and len(files) != 1:
+        raise RuntimeError(f"{mode} must materialize exactly one item, got {len(files)}")
+    return files
+
+
 def candidate_message(row: dict[str, Any]) -> str:
+    if str(row.get("publication_draft_prompt_version") or "") == EDITORIAL_WRITER_VERSION:
+        publication_delivery_mode(row)
+        return public_caption(row, html_mode=False)
     rank = row.get("publication_rank") or "?"
     publication = row.get("publication") if isinstance(row.get("publication"), dict) else {}
     editorial_pack = row.get("editorial_pack") if isinstance(row.get("editorial_pack"), dict) else {}
@@ -860,7 +1027,6 @@ def candidate_message(row: dict[str, Any]) -> str:
         "\nРеакции редактора: ❤️ или 👍 — одобрить; 👎 — отклонить; ✍️ — нужен новый текст. "
         "Одобрение вместе с ✍️ означает: тема подходит, но текст надо переписать.",
     ]).strip()
-
 
 async def send_rows(args: argparse.Namespace) -> dict[str, Any]:
     ydb = driver = pool = table = None
@@ -1136,6 +1302,16 @@ async def send_rows_telethon(
                             "replayed": True,
                         })
                         continue
+                    if (
+                        str(existing.get("status") or "") == "sending"
+                        and str(row.get("publication_draft_prompt_version") or "") == EDITORIAL_WRITER_VERSION
+                    ):
+                        # High-level Telethon media upload has no caller-owned
+                        # random_id. An ambiguous crash must be reconciled,
+                        # never duplicated automatically.
+                        raise RuntimeError(
+                            f"unconfirmed prior Telethon media delivery requires operator reconciliation: {delivery_key}"
+                        )
                     upsert_delivery(pool, ydb, table, delivery_key, {
                         **existing,
                         **publication_delivery_review_fields(row),
@@ -1149,13 +1325,38 @@ async def send_rows_telethon(
                 else:
                     random_id = delivery_random_id(hashlib.sha256(f"{chat_id}|{text}".encode("utf-8")).hexdigest())
 
-                result = await client(functions.messages.SendMessageRequest(
-                    peer=peer,
-                    message=text,
-                    random_id=random_id,
-                    no_webpage=getenv_bool("REGION_TALK_NOTIFY_DISABLE_WEB_PREVIEW", False),
-                ))
-                mid = _telethon_result_message_id(result, random_id)
+                current_editorial = bool(row is not None and str(row.get("publication_draft_prompt_version") or "") == EDITORIAL_WRITER_VERSION)
+                if current_editorial:
+                    mode = publication_delivery_mode(row)
+                else:
+                    mode = "link_preview_fallback"
+                if current_editorial and row is not None and mode != "link_preview_fallback":
+                    files = await materialize_telethon_media(client, row)
+                    result = await client.send_file(
+                        peer,
+                        files[0] if len(files) == 1 else files,
+                        caption=public_caption(row, html_mode=True),
+                        parse_mode="html",
+                        force_document=False,
+                    )
+                    delivered_messages = list(result if isinstance(result, (list, tuple)) else [result])
+                    mid = int(getattr(delivered_messages[0], "id", 0) or 0) if delivered_messages else 0
+                elif current_editorial and row is not None:
+                    result = await client.send_message(
+                        peer,
+                        public_caption(row, html_mode=True),
+                        parse_mode="html",
+                        link_preview=not getenv_bool("REGION_TALK_NOTIFY_DISABLE_WEB_PREVIEW", False),
+                    )
+                    mid = int(getattr(result, "id", 0) or 0)
+                else:
+                    result = await client(functions.messages.SendMessageRequest(
+                        peer=peer,
+                        message=text,
+                        random_id=random_id,
+                        no_webpage=getenv_bool("REGION_TALK_NOTIFY_DISABLE_WEB_PREVIEW", False),
+                    ))
+                    mid = _telethon_result_message_id(result, random_id)
                 if not mid:
                     raise RuntimeError("Telethon delivery returned no verifiable message id")
                 if row is not None and ydb is not None and pool is not None and table is not None:
@@ -1261,12 +1462,39 @@ async def send_rows_bot_api(
                 "sending_started_at": datetime.now(timezone.utc).isoformat(),
             })
 
-        result = await asyncio.to_thread(
-            _bot_api_call,
-            token,
-            "sendMessage",
-            {"chat_id": chat_id, "text": text},
-        )
+        if row is None:
+            method = "sendMessage"
+            payload = {"chat_id": chat_id, "text": text}
+        elif str(row.get("publication_draft_prompt_version") or "") != EDITORIAL_WRITER_VERSION:
+            method = "sendMessage"
+            payload = {"chat_id": chat_id, "text": text}
+        else:
+            mode = publication_delivery_mode(row)
+            manifest = publication_presentation_manifest(row)
+            refs = [str(item.get("ref") or "") for item in manifest.get("items") or [] if isinstance(item, dict)]
+            if mode == "link_preview_fallback":
+                method = "sendMessage"
+                payload = {"chat_id": chat_id, "text": public_caption(row, html_mode=True), "parse_mode": "HTML"}
+            elif not refs or any(not re.match(r"https?://", ref, re.I) or "t.me/" in ref.lower() for ref in refs):
+                raise RuntimeError("Bot API media delivery requires exact public media URLs; use telethon_discovery2 for source-post materialization")
+            elif mode == "social_album":
+                method = "sendMediaGroup"
+                caption = public_caption(row, html_mode=True)
+                payload = {
+                    "chat_id": chat_id,
+                    "media": [
+                        {"type": "photo", "media": ref, **({"caption": caption, "parse_mode": "HTML"} if index == 0 else {})}
+                        for index, ref in enumerate(refs)
+                    ],
+                }
+            else:
+                method = "sendVideo" if mode == "social_video" else "sendPhoto"
+                media_field = "video" if method == "sendVideo" else "photo"
+                payload = {"chat_id": chat_id, media_field: refs[0], "caption": public_caption(row, html_mode=True), "parse_mode": "HTML"}
+        result = await asyncio.to_thread(_bot_api_call, token, method, payload)
+        if method == "sendMediaGroup":
+            group = result.get("value") if isinstance(result.get("value"), list) else []
+            result = group[0] if group else {}
         mid = int(result.get("message_id") or 0)
         if row is not None and ydb is not None and pool is not None and table is not None:
             upsert_delivery(pool, ydb, table, delivery_key, {

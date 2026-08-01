@@ -387,14 +387,9 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
             row = dict(row)
             lane = content_lane(row)
             confirmed_by_lane[lane] += 1
-            if not publication_draft_ready(row):
-                projection = evidence_projected_article_draft(
-                    row,
-                    intake_by_id.get(str(row.get("external_publication_id") or "")),
-                )
-                if projection:
-                    row.update(projection)
-                    projected_draft_rows.append(row)
+            # Article intake remains evidence for the staged v8 writer.  The
+            # old deterministic teaser/takeaway projection is intentionally
+            # no longer promoted to review-ready public copy.
             if not publication_draft_ready(row):
                 missing_draft_by_lane[lane] += 1
                 continue

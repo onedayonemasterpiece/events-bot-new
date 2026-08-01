@@ -87,6 +87,48 @@ notifier renders `О блогере: …` only when the deterministic support an
 300–600-character checks return `source_onboarding_status=ready`; otherwise the
 candidate remains reviewable without an invented biography.
 
+### Editorial onboarding writer v8
+
+The final verifier remains the owner of the publication verdict. Accepted
+candidates are rewritten by a separate LLM-first copy pipeline,
+`region_talk_editorial_onboarding_writer_v8_staged`:
+
+1. **Strategy** chooses the external-source angle and an honest history mode
+   from at most five actually published or exact-current `approved + clean`
+   predecessors. A forced bridge is replaced by `fresh_start`.
+2. **Grounded Writer** produces exactly two Russian paragraphs: source and
+   editorial bridge first, then one or two concrete source-attributed details
+   in the third person and a reason to open the original.
+3. Deterministic validators check 150–500 characters per paragraph, the
+   550–900-character visible caption target, Russian language, banned
+   clickbait/PR wording, third-person ownership and evidence-ID integrity.
+4. **Critic** returns `pass|rewrite|reject`; at most one writer retry is
+   allowed. A second failure becomes `needs_grounding_review`, never an
+   invented fallback.
+
+Every stage uses the existing controlled Google AI gateway, Supabase
+`google_ai_reserve` limiter and durable YDB request budget. Stage prompt/model,
+request and prompt fingerprints, usage, input evidence, bounded history,
+strategy, grounding map and critic result are stored without truncation. The
+writer never changes `llm_decision` or the original verifier verdict.
+
+Social evidence is restored from the exact Telegram/VK post using only the
+role-scoped discovery identities/API. Article evidence is read from the
+retained `external_publication_intake_item`; a teaser projection is no longer
+treated as finished public copy. The explicit v7 prompt version is stale.
+Backfill archives its old reaction projection once as `principle approved +
+rewrite requested`, clears the current-review projection, and gives the new
+text-plus-media revision a new fingerprint that requires fresh reactions.
+
+Operator delivery is fail-closed on one atomic revision: two paragraphs,
+source/original links, ordered media manifest and layout. An article requires
+one associated hero; a photo-led social post uses one hero or an ordered 3–6
+frame album; a video-led post uses its source video. Only a material explicitly
+diagnosed as having no usable media takes `link_preview_fallback`. Source media
+reuse with prominent attribution is the product policy; visual checks verify
+association, order and usability rather than applying a speculative rights
+block.
+
 Video is not treated as a weak image and is never assigned a fabricated visual
 score. Gemini verifies only the text/product criteria. The notifier sends a
 Gemini-confirmed video link to the same operator chat, where the operator makes

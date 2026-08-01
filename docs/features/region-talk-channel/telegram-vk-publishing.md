@@ -4,11 +4,11 @@ Status: daily diversity-aware selection plan implemented; public Telegram/VK
 API publisher remains disabled. No channel/community creation or target-channel
 publishing is performed by the planner.
 
-The plan is publication-readiness gated: a terminal candidate without complete
-Telegram/VK copy, attribution and grounded support cannot occupy a future
-public slot. Evidence-backed legacy external-article copy can be projected from
-the already validated research contract; social copy remains LLM-first and has
-no heuristic fallback.
+The plan is publication-readiness gated: a terminal candidate without current
+v8 two-paragraph Russian copy, attribution, grounded support and an exact media
+materialization manifest cannot occupy a future public slot. Both articles and
+social posts pass the staged LLM-first writer; retained article intake is
+evidence, not a finished-copy projection.
 
 Operator-chat acknowledgement is bound to a fingerprint of the exact completed
 draft, not only to the candidate URL. Legacy rows marked `sent_to_chat` before
@@ -22,28 +22,15 @@ are recalculated after every autonomous discovery session against actual
 published history. Telegram and VK are two delivery targets for the same daily
 content pair, not four independent selections.
 
-## Rights and attribution policy
+## Source media and attribution policy
 
-The product default is **media-first**, not a bare link preview. A selected
-source image/album may be transported unchanged into the editorial
-recommendation when the original author/source is prominent and the original
-URL is present. This is an attribution-bound editorial-use policy, not a claim
-that Region Talk owns the file or that the asset has a reusable license.
-
-`rights_policy` values:
-
-- `unknown` — unchanged selected source media may be transported with prominent
-  attribution; modified cards/Bento remain blocked.
-- `link_only` — publish summary + original link/native preview only; do not
-  transport the image as a standalone asset.
-- `forward_allowed` — use platform-native forward/repost when technically/policy allowed.
-- `media_reuse_allowed` — can render branded cards using source media.
-- `blocked` — do not publish.
-
-Every public post must include prominent source attribution and the original
-link. `blocked` and `link_only` remain hard transport constraints. Unknown
-asset rights are persisted honestly as `not_independently_verified`; that does
-not silently convert them into either an owned asset or a Bento input.
+Region Talk intentionally republishes the selected source image, album or
+video as a native media-first post and prominently links both the source and
+the exact original. This is not a generic `rights_policy` gate. The media gate
+answers product-integrity questions instead: is the asset actually associated
+with the material, is it usable, and is the reviewed order exactly the order
+that will be published? Missing materializable bytes/refs blocks that review
+revision; genuinely absent usable media is recorded as a link-preview fallback.
 
 ## Media-first payload contract
 
@@ -74,8 +61,9 @@ refetch locator; `selected_media_materialization_fingerprint` binds that exact
 selection. The notifier must reacquire the asset, verify the reviewed digest
 where the platform still provides identical bytes, and otherwise send it back
 through visual review rather than silently substitute another image.
-Implementing that resolver/notifier and the bounded Playwright request consumer
-is outside ImageDiagnostic ownership.
+The notifier resolves this exact manifest and sends the media being reviewed;
+the bounded Playwright consumer handles JS-only article pages before the next
+ImageDiagnostic pass.
 
 ### Product format priority
 
@@ -85,7 +73,7 @@ is outside ImageDiagnostic ownership.
 2. **Fallback:** native system link preview, only if a suitable source asset
    cannot be carried.
 3. **Later:** branded Bento/card when it adds comparison or narrative value
-   and the exact asset is cleared for transformation. Do not make a decorative
+   and a derivative visual is intentionally wanted. Do not make a decorative
    card merely to replace a stronger original photograph.
 
 ## Telegram target
@@ -94,18 +82,22 @@ Target: future Telegram channel **«О Калининграде говорят»
 
 Modes:
 
-1. `sendPhoto` — one selected strong image; caption carries summary.
-2. `sendMediaGroup` — 2–10 images as album; first media caption may carry main text.
-3. `sendMessage` fallback — native source preview when `rights_policy=link_only`
-   or media is missing/unsafe/unconfirmed.
+1. `article_hero` / `social_hero` — one associated source image with the
+   complete caption.
+2. `social_album` — 3–6 ordered source images; one atomic album caption.
+3. `social_video` — the source video and the same atomic caption.
+4. `link_preview_fallback` — only when no usable source media exists, with a
+   durable fallback reason.
 
-Caption style:
+Caption contract:
 
-- concise;
-- no full copy-paste;
-- source attribution;
-- original link;
-- optional “Что отметили” block.
+- exactly two editorial Russian paragraphs;
+- paragraph 1 introduces the external source/optic and an honest bridge;
+- paragraph 2 attributes one or two concrete observations in the third person
+  and gives a reason to open the original;
+- 550–900 visible characters in total;
+- bold linked `Источник` and `Оригинал` lines;
+- the caption and ordered media remain one review/publication revision.
 
 Operational contract:
 

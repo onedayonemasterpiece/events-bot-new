@@ -116,7 +116,7 @@ def test_evidence_projection_never_fabricates_social_draft() -> None:
     assert plan.evidence_projected_article_draft(publication, intake) is None
 
 
-def test_build_plan_projects_legacy_article_and_excludes_social_without_draft(monkeypatch) -> None:
+def test_build_plan_waits_for_v8_article_writer_and_excludes_missing_social_draft(monkeypatch) -> None:
     monkeypatch.delenv("REGION_TALK_REACTION_GATE_ENABLED", raising=False)
     article, intake = external_article_fixture()
     social_ready = ready_social("https://t.me/source/1")
@@ -171,18 +171,16 @@ def test_build_plan_projects_legacy_article_and_excludes_social_without_draft(mo
 
     assert result["counts"]["confirmed_article"] == 1
     assert result["counts"]["confirmed_social"] == 2
-    assert result["counts"]["draft_projected_article"] == 1
+    assert result["counts"]["draft_projected_article"] == 0
+    assert result["counts"]["draft_missing_article"] == 1
     assert result["counts"]["draft_missing_social"] == 1
-    assert result["counts"]["eligible_article"] == 1
+    assert result["counts"]["eligible_article"] == 0
     assert result["counts"]["eligible_social"] == 1
-    assert result["counts"]["planned_article"] == 1
+    assert result["counts"]["planned_article"] == 0
     assert result["counts"]["planned_social"] == 1
     article_slot = next(row for row in result["rows"] if row["content_lane"] == "article")
-    assert article_slot["publication_title"] == "Архитектура как маршрут"
-    assert article_slot["publication_draft_status"] == "ready_for_operator_review"
-    projected = next(payload for pk, kind, payload in writes if pk == article["_ydb_pk"] and kind == "publication_candidate_item")
-    assert projected["publication_draft_status"] == "ready_for_operator_review"
-    assert all(not key.startswith("_") for key in projected)
+    assert article_slot["plan_status"] == "vacant"
+    assert not any(pk == article["_ydb_pk"] and kind == "publication_candidate_item" for pk, kind, _payload in writes)
 
 
 def test_planner_reaction_rollout_gate_defaults_off_and_requires_approved_clean(monkeypatch) -> None:

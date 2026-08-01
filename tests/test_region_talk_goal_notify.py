@@ -160,6 +160,61 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
                     with mod.discovery_session_lease("telethon_discovery2"):
                         pass
 
+    def test_v8_caption_and_media_are_one_exact_review_revision(self) -> None:
+        mod = load_module()
+        p1 = (
+            "Петербургский автор смотрит на восток Калининградской области без привычного набора "
+            "открыточных остановок: его интересует повседневный ритм малого города и взгляд "
+            "человека с другим опытом путешествий по регионам России."
+        )
+        p2 = (
+            "В публикации автор отмечает строгую геометрию улиц и восстановленные фрески, которые "
+            "меняют впечатление от прогулки по Гусеву. Оригинал стоит открыть ради конкретных "
+            "наблюдений и цельной фотосерии, не сводящей город к одной центральной площади и "
+            "показывающей обычную жизнь далеко за её пределами."
+        )
+        manifest = {
+            "contract_version": mod.MEDIA_MATERIALIZATION_CONTRACT_VERSION,
+            "mode": "article_hero", "status": "ready", "reason": "associated",
+            "items": [{"media_id": "hero", "ordinal": 1, "kind": "image", "ref": "https://cdn.example.org/hero.jpg"}],
+        }
+        row = {
+            "post_url": "https://example.org/article", "source_url": "https://example.org",
+            "publication_draft_status": "ready_for_operator_review",
+            "publication_draft_title": "Городская прогулка",
+            "publication_draft_source_attribution": "Внешнее издание",
+            "publication_draft_telegram_text": f"{p1}\n\n{p2}\n\nИсточник: Внешнее издание\nОригинал: https://example.org/article",
+            "publication_draft_vk_text": f"{p1}\n\n{p2}\n\nИсточник: Внешнее издание\nОригинал: https://example.org/article",
+            "publication_draft_fact_points_json": '[{"claim":"Факт","evidence_ids":["E1"]}]',
+            "publication_draft_prompt_version": mod.EDITORIAL_WRITER_VERSION,
+            "publication_draft_contract_version": mod.EDITORIAL_OUTPUT_CONTRACT,
+            "publication_media_materialization_status": "ready",
+            "publication_media_materialization_contract_version": mod.MEDIA_MATERIALIZATION_CONTRACT_VERSION,
+            "publication_presentation_mode": "article_hero",
+            "publication_presentation_manifest_json": json.dumps(manifest, ensure_ascii=False),
+        }
+        self.assertTrue(mod.is_publication_draft_ready(row))
+        caption = mod.public_caption(row, html_mode=True)
+        self.assertEqual(caption.count("\n\n"), 2)
+        self.assertIn("<b><a href=", caption)
+        original = mod.publication_operator_review_fingerprint(row)
+        changed_media = {**manifest, "items": [{**manifest["items"][0], "ref": "https://cdn.example.org/other.jpg"}]}
+        self.assertNotEqual(original, mod.publication_operator_review_fingerprint({
+            **row, "publication_presentation_manifest_json": json.dumps(changed_media, ensure_ascii=False)
+        }))
+
+    def test_v8_media_manifest_must_be_materializable_before_review(self) -> None:
+        mod = load_module()
+        row = {
+            "publication_presentation_mode": "social_album",
+            "publication_media_materialization_status": "pending",
+            "publication_presentation_manifest_json": json.dumps({
+                "mode": "social_album", "status": "pending", "items": []
+            }),
+        }
+        with self.assertRaisesRegex(RuntimeError, "exact ordered materialization manifest"):
+            mod.publication_delivery_mode(row)
+
     def test_source_fingerprint_changes_when_source_classification_changes(self) -> None:
         mod = load_module()
         external = {
