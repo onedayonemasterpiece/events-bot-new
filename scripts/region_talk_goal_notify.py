@@ -997,7 +997,11 @@ async def _telegram_source_media(
         messages = list(fetched if isinstance(fetched, (list, tuple)) else [fetched])
     else:
         anchor = await client.get_messages(handle, ids=anchor_id)
-        if anchor is not None and getattr(anchor, "grouped_id", None):
+        if anchor is not None and max_items == 1:
+            # A single-media contract refers to the linked Telegram message
+            # itself, even when that message belongs to a mixed media group.
+            messages = [anchor]
+        elif anchor is not None and getattr(anchor, "grouped_id", None):
             ids = list(range(max(1, anchor_id - 10), anchor_id + 11))
             nearby = await client.get_messages(handle, ids=ids)
             messages = [item for item in list(nearby or []) if item is not None and getattr(item, "grouped_id", None) == anchor.grouped_id]
@@ -1034,7 +1038,7 @@ async def materialize_telethon_media(client: Any, row: dict[str, Any]) -> list[A
             client,
             ref,
             media_ids,
-            max_items=6 if publication_delivery_mode(row) == "social_album" else None,
+            max_items=6 if publication_delivery_mode(row) == "social_album" else 1,
         )
         for index, message in enumerate(messages):
             data = await client.download_media(message, file=bytes)

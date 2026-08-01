@@ -91,6 +91,9 @@ as exact Telegram message identities. Generic manifest ordinals such as
 `<post>#media` scalar is only a diagnostic sentinel; when the exact anchor is a
 video, zero-LLM media repair persists `media_kind=video` and the canonical
 source-post ref, leaving the accepted editorial copy unchanged.
+For `social_video` and `social_hero`, grouped-source resolution is bounded to
+one exact item; only `social_album` may expand the group to the ordered 3–6
+item presentation contract.
 External article source attestations participate in the same live-fingerprint
 merge as Telegram/VK sources so the autonomous orchestrator sees article
 backfill work instead of leaving it visible only to the notifier.
