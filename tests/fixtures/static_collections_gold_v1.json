@@ -1,0 +1,17 @@
+{
+  "schema_version": "static-collections-gold-v1",
+  "status": "starter_not_approved",
+  "acceptance": {
+    "semantic_minimum_positives": 15,
+    "semantic_minimum_hard_negatives": 20,
+    "audience_minimum_recall": 0.95
+  },
+  "note": "Starter definitions exercise plumbing only. No semantic label may become ready until owner-reviewed production examples satisfy the declared counts and metrics.",
+  "labels": {
+    "science": {"positives": [], "hard_negatives": []},
+    "strong_impressions": {"positives": [], "hard_negatives": []},
+    "medieval": {"positives": [], "hard_negatives": []},
+    "audience_kids_candidate": {"positives": [], "hard_negatives": []},
+    "audience_family_candidate": {"positives": [], "hard_negatives": []}
+  }
+}

@@ -569,6 +569,8 @@ def write_collection_bge_cache(
         "document_version": metadata.get("document_version"),
         "embedding_dim": metadata.get("embedding_dim"),
         "dtype": "float32",
+        "prototype_bank_sha256": metadata.get("prototype_bank_sha256"),
+        "classifier_sha256": metadata.get("classifier_sha256"),
         "event_text_hashes": {
             event_id: events[event_id]["text_hash"] for event_id in event_ids
         },
@@ -577,6 +579,7 @@ def write_collection_bge_cache(
             for prototype_id in prototype_ids
         },
         "npz_sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
+        "metadata": dict(metadata),
     }
     receipt_target = Path(receipt_path)
     receipt_target.parent.mkdir(parents=True, exist_ok=True)
@@ -589,6 +592,105 @@ def write_collection_bge_cache(
     )
     os.replace(temporary_receipt, receipt_target)
     return receipt
+
+
+def load_collection_bge_cache(
+    *,
+    npz_path: str | Path,
+    receipt_path: str | Path,
+) -> dict[str, Any] | None:
+    """Load an integrity-checked prior collection artifact for partial reuse.
+
+    Compatibility with the *current* prototype bank is intentionally not
+    checked here.  ``build_collection_bge_vector_artifact`` owns that decision:
+    a changed bank invalidates prototype rows while preserving unchanged event
+    vectors.
+    """
+
+    import numpy as np  # type: ignore
+
+    path = Path(npz_path)
+    receipt_target = Path(receipt_path)
+    if not path.is_file() or not receipt_target.is_file():
+        return None
+    try:
+        receipt = json.loads(receipt_target.read_text(encoding="utf-8"))
+        if not isinstance(receipt, Mapping):
+            return None
+        cache_validation = validate_collection_bge_cache(
+            npz_path=path,
+            receipt=receipt,
+        )
+        if not cache_validation.get("valid"):
+            return None
+        metadata = receipt.get("metadata")
+        if not isinstance(metadata, Mapping):
+            return None
+        expected = {
+            "schema_version": COLLECTION_ARTIFACT_SCHEMA_VERSION,
+            "encoder_contract": ENCODER_CONTRACT,
+            "model_id": MODEL_ID,
+            "model_revision": MODEL_REVISION,
+            "embedding_dim": EMBEDDING_DIM,
+            "document_kind": COLLECTION_DOCUMENT_KIND,
+            "document_version": COLLECTION_DOCUMENT_VERSION,
+            "vector_normalization": VECTOR_NORMALIZATION,
+        }
+        for key, value in expected.items():
+            observed = (
+                receipt.get("schema_version")
+                if key == "schema_version"
+                else metadata.get(key)
+            )
+            if key == "schema_version":
+                # The physical receipt and the in-memory artifact have distinct
+                # schema identities.
+                observed = COLLECTION_ARTIFACT_SCHEMA_VERSION
+            if observed != value:
+                return None
+        event_hashes = receipt.get("event_text_hashes")
+        prototype_hashes = receipt.get("prototype_text_hashes")
+        if not isinstance(event_hashes, Mapping) or not isinstance(prototype_hashes, Mapping):
+            return None
+        with np.load(path, allow_pickle=False) as stored:
+            event_ids = [str(value) for value in stored["event_ids"].tolist()]
+            prototype_ids = [str(value) for value in stored["prototype_ids"].tolist()]
+            event_matrix = stored["event_vectors"]
+            prototype_matrix = stored["prototype_vectors"]
+        if set(event_ids) != set(event_hashes) or set(prototype_ids) != set(prototype_hashes):
+            return None
+        artifact = {
+            "schema_version": COLLECTION_ARTIFACT_SCHEMA_VERSION,
+            "metadata": dict(metadata),
+            "event_vectors": {
+                event_id: {
+                    "text_hash": str(event_hashes[event_id]),
+                    "vector": [float(value) for value in event_matrix[index].tolist()],
+                }
+                for index, event_id in enumerate(event_ids)
+            },
+            "prototype_vectors": {
+                prototype_id: {
+                    "text_hash": str(prototype_hashes[prototype_id]),
+                    "vector": [float(value) for value in prototype_matrix[index].tolist()],
+                }
+                for index, prototype_id in enumerate(prototype_ids)
+            },
+        }
+        unhashed_metadata = dict(metadata)
+        declared = unhashed_metadata.pop("artifact_sha256", None)
+        actual = stable_hash(
+            {
+                "metadata": unhashed_metadata,
+                "event_vectors": artifact["event_vectors"],
+                "prototype_vectors": artifact["prototype_vectors"],
+            }
+        )
+        if declared != actual:
+            return None
+        return artifact
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return None
 
 
 def validate_collection_bge_cache(

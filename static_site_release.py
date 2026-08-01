@@ -611,13 +611,17 @@ _PUBLIC_FINGERPRINT_TABLES: dict[str, tuple[str, ...]] = {
         "age_restriction_input_hash", "age_assessment", "age_assessment_status",
         "age_assessment_decision_version", "age_assessment_input_hash",
         "linked_event_ids", "other_date_ids", "photo_urls", "photo_count", "topics",
+        "collection_decisions",
         "source_post_url", "source_vk_post_url", "tg_event_post_url", "vk_repost_url",
     ),
     "eventposter": (
         "id", "event_id", "supabase_url", "catbox_url", "ocr_text", "review_status",
         "display_order", "media_role", "recommended_hero_fit", "width", "height",
     ),
-    "event_source": ("event_id", "source_url"),
+    "event_source": (
+        "event_id", "source_type", "source_url", "source_chat_username",
+        "source_chat_id", "source_message_id", "trust_level",
+    ),
     "event_publication": ("event_id", "status", "stored_url", "live_url"),
     "interest_club": (
         "id", "slug", "canonical_name", "topic", "description", "city", "typical_place",

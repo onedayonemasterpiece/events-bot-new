@@ -619,17 +619,22 @@ def test_add_build_01_payload_union_is_bounded_and_keeps_latest_effect() -> None
     assert len(merged["target_watermark"]) == 64
 
 
-def test_static_site_debounce_has_maximum_wait_and_preserves_immediate_request(
+def test_static_site_debounce_is_strict_trailing_and_trigger_local(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import main
 
     now = datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc)
     monkeypatch.setenv("STATIC_SITE_MAX_DEBOUNCE_SECONDS", "1800")
-    capped = main._static_site_coalesced_next_run(
+    trailing = main._static_site_coalesced_next_run(
         old_next=now + timedelta(minutes=14),
         requested=now + timedelta(minutes=15),
-        merged_payload={
+        incoming_payload={
+            "trigger": "smart_update",
+            "first_effect_at": "2026-07-31T11:35:00Z",
+            "latest_effect_at": "2026-07-31T12:00:00Z",
+        },
+        effect_payload={
             "trigger": "smart_update",
             "first_effect_at": "2026-07-31T11:35:00Z",
             "latest_effect_at": "2026-07-31T12:00:00Z",
@@ -637,17 +642,29 @@ def test_static_site_debounce_has_maximum_wait_and_preserves_immediate_request(
         now=now,
         incoming_immediate=False,
     )
-    assert capped == now + timedelta(minutes=5)
+    assert trailing == now + timedelta(minutes=15)
 
-    immediate = main._static_site_coalesced_next_run(
+    historical_operator_is_not_immediate = main._static_site_coalesced_next_run(
         old_next=now,
         requested=now + timedelta(minutes=15),
-        merged_payload={
+        incoming_payload={"trigger": "smart_update"},
+        effect_payload={
             "trigger": "operator_request",
             "first_effect_at": "2026-07-31T11:59:00Z",
+            "latest_effect_at": "2026-07-31T12:05:00Z",
         },
         now=now,
         incoming_immediate=False,
+    )
+    assert historical_operator_is_not_immediate == now + timedelta(minutes=20)
+
+    immediate = main._static_site_coalesced_next_run(
+        old_next=now + timedelta(minutes=14),
+        requested=now,
+        incoming_payload={"trigger": "operator_request"},
+        effect_payload={"trigger": "operator_request"},
+        now=now,
+        incoming_immediate=True,
     )
     assert immediate == now
 

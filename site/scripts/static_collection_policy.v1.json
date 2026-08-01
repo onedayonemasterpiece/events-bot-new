@@ -1,0 +1,75 @@
+{
+  "schema_version": "static-collection-policy-v1",
+  "document_kind": "collection_semantics_v1",
+  "document_version": "collection-semantics-doc-v1",
+  "publication_default": "shadow",
+  "semantic_quality_gate": {
+    "minimum_positives": 15,
+    "minimum_hard_negatives": 20,
+    "minimum_recall": 0.8,
+    "maximum_hard_negative_fpr": 0.05
+  },
+  "audience_recall_gate": {
+    "minimum_recall": 0.95,
+    "publication_truth": "grounded_audience_decision"
+  },
+  "labels": {
+    "free": {"strategy": "fact", "publication": "shadow"},
+    "kids": {"strategy": "hybrid_audience", "publication": "shadow"},
+    "theatre": {"strategy": "exact_registry", "publication": "shadow"},
+    "performances": {"strategy": "exact_topic_type", "publication": "shadow"},
+    "exhibitions": {"strategy": "exact_topic_type", "publication": "shadow"},
+    "science_pop": {"strategy": "exact_topic", "publication": "shadow"},
+    "popular": {"strategy": "existing_ranking", "publication": "shadow"},
+    "guests_russia": {"strategy": "grounded_people_fact", "publication": "shadow"},
+    "guests_foreign": {"strategy": "grounded_people_fact", "publication": "shadow"},
+    "unusual": {
+      "strategy": "semantic_bge",
+      "positive_prefix": "unusual.positive.",
+      "negative_prefix": "unusual.hard_negative.",
+      "minimum_positive_similarity": 0.42,
+      "minimum_margin": 0.02,
+      "publication": "blocked"
+    },
+    "science": {
+      "strategy": "semantic_bge",
+      "positive_prefix": "science.positive.",
+      "negative_prefix": "science.hard_negative.",
+      "minimum_positive_similarity": 0.42,
+      "minimum_margin": 0.02,
+      "publication": "blocked"
+    },
+    "strong_impressions": {
+      "strategy": "semantic_bge",
+      "positive_prefix": "strong_impressions.positive.",
+      "negative_prefix": "strong_impressions.hard_negative.",
+      "minimum_positive_similarity": 0.42,
+      "minimum_margin": 0.02,
+      "publication": "blocked"
+    },
+    "medieval": {
+      "strategy": "semantic_bge",
+      "positive_prefix": "medieval.positive.",
+      "negative_prefix": "medieval.hard_negative.",
+      "minimum_positive_similarity": 0.42,
+      "minimum_margin": 0.02,
+      "publication": "blocked"
+    },
+    "audience_kids_candidate": {
+      "strategy": "semantic_bge_recall",
+      "positive_prefix": "audience_kids.positive.",
+      "negative_prefix": "audience_kids.hard_negative.",
+      "minimum_positive_similarity": 0.38,
+      "minimum_margin": -0.01,
+      "publication": "blocked"
+    },
+    "audience_family_candidate": {
+      "strategy": "semantic_bge_recall",
+      "positive_prefix": "audience_family.positive.",
+      "negative_prefix": "audience_family.hard_negative.",
+      "minimum_positive_similarity": 0.38,
+      "minimum_margin": -0.01,
+      "publication": "blocked"
+    }
+  }
+}

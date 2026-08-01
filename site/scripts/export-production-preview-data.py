@@ -663,7 +663,10 @@ def ticket_info(row: sqlite3.Row) -> dict[str, Any]:
     status = clean_text(row["ticket_status"])
     status_l = status.lower()
     href = TICKET_LINK_OVERRIDES.get(event_id) or clean_text(row["ticket_link"]) or None
-    free = bool(row["is_free"]) or bool(re.search(r"бесплат|free", status_l))
+    # Admission semantics are materialized by Smart Update.  A status string
+    # may describe registration, availability or one sub-program and must not
+    # silently turn the whole event into a free-admission fact.
+    free = bool(row["is_free"])
     price = price_label(row)
     has_registration = bool(re.search(r"регистрац|registration|запис", status_l))
     if is_sold_out_status(status):
@@ -1824,6 +1827,49 @@ def collect_source_urls(con: sqlite3.Connection, event_id: int, row: sqlite3.Row
     except sqlite3.OperationalError:
         pass
     return urls
+
+
+def collect_source_records(con: sqlite3.Connection, event_id: int) -> list[dict[str, Any]]:
+    """Keep structured source identity/trust for exact registry adapters.
+
+    Public cards continue to receive URL-only ``source_urls``.  These compact
+    records stay inside the exporter and generated registry projection.
+    """
+
+    try:
+        rows = con.execute(
+            """
+            select source_type, source_url, source_chat_username,
+                   source_chat_id, source_message_id, trust_level
+            from event_source
+            where event_id=?
+            order by id asc
+            """,
+            (event_id,),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        try:
+            rows = con.execute(
+                "select source_type, source_url from event_source where event_id=? order by rowid asc",
+                (event_id,),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+    records: list[dict[str, Any]] = []
+    for source in rows:
+        source_type = clean_text(row_get(source, "source_type"))
+        username = clean_text(row_get(source, "source_chat_username"))
+        record = {
+            "source_type": source_type or None,
+            "source_url": clean_text(row_get(source, "source_url")) or None,
+            "trust_level": clean_text(row_get(source, "trust_level")) or None,
+            "source_chat_id": row_get(source, "source_chat_id"),
+            "source_message_id": row_get(source, "source_message_id"),
+        }
+        if username and source_type.casefold() in {"telegram", "tg"}:
+            record["telegram_username"] = username
+        records.append({key: value for key, value in record.items() if value is not None})
+    return records
 
 
 def source_metrics(con: sqlite3.Connection, urls: list[str]) -> tuple[int, int, int, int]:
@@ -5474,6 +5520,158 @@ def build_shared_bge_and_unusual(
     }
 
 
+def build_collection_semantic_outputs(
+    events: list[dict[str, Any]],
+    *,
+    out_dir: Path,
+    build_metadata: dict[str, Any],
+    catalog_ledger: dict[str, Any],
+    collection_decisions_by_id: dict[int, Any],
+    theatre_event_ids: set[int],
+    registry_sha256: str,
+    vector_cache_path: Path,
+    vector_receipt_path: Path,
+    unusual_cache_path: Path,
+    model_revision: str,
+    batch_size: int,
+    collection_batch_output: Path,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Run the single mandatory collection BGE pass and emit fail-closed receipts."""
+
+    import static_collection_export as collection_module
+    import static_collection_batch as collection_batch_module
+    import static_event_bge as bge_module
+    import unusual_event_semantics as unusual_module
+
+    policy = collection_module.load_object(collection_module.DEFAULT_POLICY_PATH)
+    extension = collection_module.load_object(collection_module.DEFAULT_PROTOTYPES_PATH)
+    unusual_bank = unusual_module.load_unusual_prototype_bank()
+    prototype_bank = collection_module.merged_prototype_bank(unusual_bank, extension)
+    classifier_contract = {
+        "schema_version": "static-collection-head-contract-v1",
+        "policy_sha256": collection_module.stable_hash(policy),
+    }
+    previous_artifact = bge_module.load_collection_bge_cache(
+        npz_path=vector_cache_path,
+        receipt_path=vector_receipt_path,
+    )
+    artifact = bge_module.build_collection_bge_vector_artifact(
+        events,
+        prototype_bank,
+        model_revision=model_revision,
+        classifier=classifier_contract,
+        batch_size=max(1, int(batch_size)),
+        build_metadata=build_metadata,
+        previous_artifact=previous_artifact,
+    )
+    validation = bge_module.validate_collection_bge_vector_artifact(
+        artifact,
+        prototype_bank=prototype_bank,
+        expected_classifier_sha256=bge_module.stable_hash(classifier_contract),
+    )
+    if not validation.get("valid"):
+        raise RuntimeError(
+            "collection BGE artifact validation failed: "
+            + "; ".join(validation.get("errors") or [])
+        )
+    receipt = bge_module.write_collection_bge_cache(
+        artifact,
+        npz_path=vector_cache_path,
+        receipt_path=vector_receipt_path,
+    )
+    physical_validation = bge_module.validate_collection_bge_cache(
+        npz_path=vector_cache_path,
+        receipt=receipt,
+    )
+    if not physical_validation.get("valid"):
+        raise RuntimeError(
+            "collection BGE cache validation failed: "
+            + "; ".join(physical_validation.get("errors") or [])
+        )
+
+    candidates = collection_module.score_semantic_candidates(artifact, policy)
+    catalog_hash = collection_module.stable_hash(catalog_ledger)
+    batch = collection_module.build_collection_batch_payload(
+        events=events,
+        collection_decisions_by_id=collection_decisions_by_id,
+        theatre_event_ids=theatre_event_ids,
+        semantic_candidates=candidates,
+        artifact=artifact,
+        policy=policy,
+        catalog_hash=catalog_hash,
+        generated_at=str(build_metadata.get("generated_at") or datetime.now(timezone.utc).isoformat()),
+        snapshot=catalog_ledger.get("snapshot") if isinstance(catalog_ledger.get("snapshot"), dict) else {},
+        registry_sha256=registry_sha256,
+    )
+    catalog_ids = [
+        int(row["event_id"])
+        for row in catalog_ledger.get("eligible") or []
+        if isinstance(row, dict) and str(row.get("event_id") or "").isdigit()
+    ]
+    batch_validation = collection_batch_module.validate_collection_batch(
+        batch,
+        catalog_item_ids=catalog_ids,
+        require_compute=True,
+    )
+    if not batch_validation.get("valid"):
+        raise RuntimeError(
+            "collection batch validation failed: "
+            + "; ".join(batch_validation.get("errors") or [])
+        )
+    collection_batch_module.write_collection_batch(
+        collection_batch_output,
+        batch,
+    )
+
+    unusual_candidates = (candidates.get("unusual") or {}).get("item_ids") or []
+    unusual_manifest = collection_module.unusual_shadow_manifest(
+        events=events,
+        candidate_ids=unusual_candidates,
+        generated_at=str(build_metadata.get("generated_at") or ""),
+        build_metadata=build_metadata,
+        artifact=artifact,
+    )
+    unusual_path = out_dir / "unusual-events.json"
+    _atomic_write_json(unusual_path, unusual_manifest)
+    unusual_cache = {
+        "schema_version": "unusual-event-score-cache-v1",
+        "status": "blocked",
+        "reason": "collection_document_recalibration_required",
+        "model_revision": (artifact.get("metadata") or {}).get("model_revision"),
+        "prototype_bank_hash": (artifact.get("metadata") or {}).get("prototype_bank_sha256"),
+        "input_fingerprint": build_metadata.get("input_fingerprint"),
+        "candidate_event_ids": sorted(int(value) for value in unusual_candidates),
+        "provider_calls": 0,
+    }
+    _atomic_write_json(unusual_cache_path, unusual_cache)
+    metadata = artifact.get("metadata") or {}
+    encoded_events = int(metadata.get("encoded_event_count") or 0)
+    encoded_prototypes = int(metadata.get("encoded_prototype_count") or 0)
+    return artifact, {
+        "status": "validated",
+        "provider_calls": 0,
+        "event_count": len(events),
+        "artifact_event_count": int(metadata.get("event_count") or 0),
+        "artifact_sha256": metadata.get("artifact_sha256"),
+        "cache_state": (
+            "hit_reused"
+            if previous_artifact is not None and encoded_events == 0 and encoded_prototypes == 0
+            else "partial_rebuild"
+            if previous_artifact is not None
+            else "miss_rebuilt"
+        ),
+        "encoded_event_count": encoded_events,
+        "encoded_prototype_count": encoded_prototypes,
+        "manifest_sha256": hashlib.sha256(unusual_path.read_bytes()).hexdigest(),
+        "vector_cache_sha256": hashlib.sha256(vector_cache_path.read_bytes()).hexdigest(),
+        "vector_receipt_sha256": hashlib.sha256(vector_receipt_path.read_bytes()).hexdigest(),
+        "unusual_cache_sha256": hashlib.sha256(unusual_cache_path.read_bytes()).hexdigest(),
+        "collection_batch_sha256": hashlib.sha256(collection_batch_output.read_bytes()).hexdigest(),
+        "collection_batch_contract_sha256": batch.get("batch_sha256"),
+        "input_fingerprint": build_metadata.get("input_fingerprint"),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", required=True, help="Path to production SQLite snapshot")
@@ -5555,6 +5753,22 @@ def main() -> int:
         "--bge-batch-size",
         type=int,
         default=int(os.getenv("STATIC_SITE_BGE_BATCH_SIZE", "8") or "8"),
+    )
+    parser.add_argument(
+        "--collection-semantic-compute",
+        action="store_true",
+        default=os.getenv("STATIC_SITE_COLLECTION_SEMANTIC_COMPUTE", "").strip().lower()
+        in {"1", "true", "yes", "on"},
+        help="Compute and validate the shared collection matrix even when publication is disabled.",
+    )
+    parser.add_argument(
+        "--collection-batch-output",
+        default=os.getenv("STATIC_SITE_COLLECTION_BATCH", ""),
+    )
+    parser.add_argument(
+        "--collection-batch-last-good",
+        default=os.getenv("STATIC_SITE_COLLECTION_LAST_GOOD", ""),
+        help="Reserved durable last-good path; promotion occurs only after a ready quality gate.",
     )
     parser.add_argument(
         "--unusual-cache",
@@ -5712,6 +5926,18 @@ def main() -> int:
         json.dumps(event_detail_archive, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+    ledger: dict[str, Any] = {
+        "schema_version": CATALOG_LEDGER_SCHEMA_VERSION,
+        "generated_at": generated_at,
+        "current_date": effective_date,
+        "snapshot": {
+            "snapshot_id": args.snapshot_id or None,
+            "sha256": args.snapshot_sha256 or None,
+            "size": args.snapshot_size or None,
+        },
+        "eligible": [{"event_id": int(event["id"])} for event in events],
+        "excluded": [],
+    }
     if args.catalog_mode == "full":
         ledger = build_catalog_ledger(
             con,
@@ -5730,6 +5956,26 @@ def main() -> int:
             json.dumps(ledger, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
+    import static_collection_export as collection_export_module
+    from static_place_org_registry import load_registry, registry_hash
+
+    place_org_registry = load_registry()
+    source_records_by_id = {
+        int(event["id"]): collect_source_records(con, int(event["id"]))
+        for event in events
+    }
+    catalog_hash = collection_export_module.stable_hash(ledger)
+    venue_pages, theatre_event_ids = collection_export_module.build_registry_projection(
+        events,
+        source_records_by_id=source_records_by_id,
+        registry=place_org_registry,
+        generated_at=generated_at,
+        catalog_hash=catalog_hash,
+    )
+    _atomic_write_json(out_dir / "venue-pages-v1.json", venue_pages)
+    collection_decisions_by_id = {
+        int(row["id"]): row_get(row, "collection_decisions") for row in rows
+    }
     clubs_projection = build_interest_clubs_projection(
         con,
         current_date=effective_date,
@@ -5751,7 +5997,7 @@ def main() -> int:
         json.dumps(festival_projection, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    if args.skip_related:
+    if args.skip_related and not args.collection_semantic_compute:
         print(f"Exported {len(events)} events to {out_dir}")
         print("IDs:", ",".join(str(event["id"]) for event in events))
         print("Related: skipped")
@@ -5761,7 +6007,53 @@ def main() -> int:
         "status": "disabled",
         "provider_calls": 0,
     }
-    if args.related_mode == "bge" or args.unusual_enabled:
+    if args.collection_semantic_compute:
+        if not re.fullmatch(r"[0-9a-f]{40}", str(args.bge_model_revision or "")):
+            raise SystemExit("--bge-model-revision must be a pinned 40-character commit")
+        vector_cache = (
+            Path(args.bge_vector_cache)
+            if args.bge_vector_cache
+            else out_dir.parent / "static_event_bge_vectors.npz"
+        )
+        vector_receipt = (
+            Path(args.bge_vector_receipt)
+            if args.bge_vector_receipt
+            else out_dir.parent / "static_event_bge_vectors.receipt.json"
+        )
+        unusual_cache = (
+            Path(args.unusual_cache)
+            if args.unusual_cache
+            else out_dir.parent / "unusual_events_cache.json"
+        )
+        collection_batch_output = (
+            Path(args.collection_batch_output)
+            if args.collection_batch_output
+            else out_dir / "collection-batch-v1.json"
+        )
+        shared_bge_artifact, semantic_result = build_collection_semantic_outputs(
+            events,
+            out_dir=out_dir,
+            build_metadata={
+                "build_id": args.build_id or args.base_path or "local-static-build",
+                "generated_at": generated_at,
+                "as_of_date": effective_date,
+                "source_snapshot_id": args.snapshot_id or None,
+                "source_snapshot_hash": args.snapshot_sha256 or None,
+                "input_fingerprint": args.input_fingerprint or None,
+            },
+            catalog_ledger=ledger,
+            collection_decisions_by_id=collection_decisions_by_id,
+            theatre_event_ids=theatre_event_ids,
+            registry_sha256=registry_hash(place_org_registry),
+            vector_cache_path=vector_cache,
+            vector_receipt_path=vector_receipt,
+            unusual_cache_path=unusual_cache,
+            model_revision=args.bge_model_revision,
+            batch_size=max(1, int(args.bge_batch_size)),
+            collection_batch_output=collection_batch_output,
+        )
+        _atomic_write_json(out_dir / "static-semantic-build-result.json", semantic_result)
+    elif args.related_mode == "bge" or args.unusual_enabled:
         if not re.fullmatch(r"[0-9a-f]{40}", str(args.bge_model_revision or "")):
             raise SystemExit("--bge-model-revision must be a pinned 40-character commit")
         vector_cache = (
@@ -5804,6 +6096,11 @@ def main() -> int:
             migration=bool(args.unusual_migration),
         )
         _atomic_write_json(out_dir / "static-semantic-build-result.json", semantic_result)
+    if args.skip_related:
+        print(f"Exported {len(events)} events to {out_dir}")
+        print("IDs:", ",".join(str(event["id"]) for event in events))
+        print("Related: skipped")
+        return 0
     if args.related_mode == "pgvector" and args.sync_pgvector_vectors:
         sync_event_vectors_to_supabase(
             preview_events_json=preview_events_path,

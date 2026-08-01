@@ -109,7 +109,7 @@ lanes:
     forbidden_files: [site/scripts/export-production-preview-data.py, smart_event_update.py, main.py, models.py, db.py, CHANGELOG.md, docs]
     expected_output: committed registry, deterministic resolver and fixtures
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: W_FACTS
     role: worker
     effort: extra-high-required_using-high
@@ -131,7 +131,7 @@ lanes:
     forbidden_files: [main.py, interest_clubs.py, site/scripts/export-production-preview-data.py, kaggle, CHANGELOG.md, docs]
     expected_output: committed admission/audience/people schemas, merge logic and targeted tests
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: W_SEMANTIC
     role: worker
     effort: extra-high-required_using-high
@@ -156,7 +156,7 @@ lanes:
     forbidden_files: [site/scripts/export-production-preview-data.py, smart_event_update.py, models.py, db.py, interest_clubs.py, CHANGELOG.md, docs]
     expected_output: committed scheduling/semantic primitives and tests; explicit exporter integration notes
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: INTEGRATOR
     role: merge_reviewer
     effort: extra-high-required_using-high

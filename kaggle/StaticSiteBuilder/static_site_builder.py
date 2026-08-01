@@ -529,7 +529,11 @@ def read_collection_semantic_receipt(config: dict) -> dict:
             else None
         )
         if isinstance(rows, list):
-            catalog_ids = [row.get('id') for row in rows if isinstance(row, dict)]
+            catalog_ids = [
+                row.get('event_id', row.get('id'))
+                for row in rows
+                if isinstance(row, dict)
+            ]
     validation = validate_collection_batch(
         batch,
         catalog_item_ids=catalog_ids,

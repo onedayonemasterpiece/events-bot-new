@@ -224,7 +224,7 @@ def test_kernel_requires_and_validates_collection_receipt_for_pgvector_without_u
     )
     batch_module.write_collection_batch(data_dir / "collection-batch-v1.json", batch)
     (data_dir / "production-catalog.json").write_text(
-        json.dumps({"eligible": [{"id": 1}]}), encoding="utf-8"
+        json.dumps({"eligible": [{"event_id": 1}]}), encoding="utf-8"
     )
     working = tmp_path / "working"
     working.mkdir()
