@@ -399,7 +399,13 @@ def test_selection_can_force_one_candidate_but_excludes_public_history() -> None
     mod = load_module()
     target = "https://archi.ru/russia/101203/vsya-mudrost-okeana"
     rows = [
-        {"post_url": target, "content_origin_type": "editorial_publication"},
+        {
+            "post_url": target,
+            "content_origin_type": "editorial_publication",
+            "publication_draft_backfill_version": mod.DRAFT_BACKFILL_VERSION,
+            "publication_draft_backfill_status": "retry_due",
+            "publication_draft_backfill_next_attempt_after": "2099-01-01T00:00:00+00:00",
+        },
         {"post_url": "https://example.org/other", "content_origin_type": "editorial_publication"},
     ]
     with mock.patch.object(mod.notify, "is_confirmed_publication", return_value=True):

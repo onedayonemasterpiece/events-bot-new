@@ -470,6 +470,11 @@ def backfill_is_actionable(
         row_surface = "article"
     if not row_surface or surface not in {"all", row_surface, row_lane}:
         return False
+    if force_regenerate:
+        # The CLI permits force only with an explicit candidate URL. Once
+        # confirmation/surface checks have passed, bypass terminal status and
+        # retry cooldown so an operator can repair that exact unpublished row.
+        return True
     status = str(row.get("publication_draft_backfill_status") or "").strip().lower()
     row_backfill_version = str(row.get("publication_draft_backfill_version") or "").strip()
     current_backfill = row_backfill_version == DRAFT_BACKFILL_VERSION
