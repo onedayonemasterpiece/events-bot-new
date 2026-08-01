@@ -462,3 +462,31 @@ claim rather than merely share its topic; unsupported numbers fail the contract.
 may produce sparse output. Never fill a schema by inferring goals, format, benefits, programme,
 regularity, or series continuity from a title. Deterministic code may validate the evidence
 contract and fail closed, but may not synthesize or semantically repair public prose.
+
+
+## Static collection candidate adjudication (2026-08-01)
+
+Smart Update uses one compact LLM-first decision stage only for routed
+collection-fact candidates. The implementation schema is canonical in
+`smart_event_update.py::COLLECTION_ADJUDICATION_JSON_SCHEMA`; do not copy a
+divergent loose schema into another provider.
+
+Prompt contract:
+
+- decide only admission, intended audience and named-person appearance for the
+  exact event/source packet; never write public prose;
+- every non-empty `evidence_quote` is an exact contiguous fragment of
+  `source_corpus` and must support the whole decision;
+- `ticket_status`, sale availability or a ticket URL without an explicit price
+  or paid-admission statement does not prove `confirmed_paid`; optional donation
+  may coexist with `confirmed_free`;
+- age restriction, topics and BGE are routing signals, not proof of
+  `kids|family`; direct target-audience/family-format evidence is required;
+- a named mention is not confirmed future appearance, and origin must not be
+  inferred from a name; non-unknown origin needs its own exact quote;
+- uncertainty returns `unknown`/an empty people list. Invalid JSON, ungrounded
+  quote or provider failure is abstention and must preserve last accepted truth.
+
+The request is hash-bound to source URL/type, event identity fields, exact
+source/OCR corpus and routing signals. It runs on changed/candidate cases, not on
+page views and not as a full-history mass extraction.

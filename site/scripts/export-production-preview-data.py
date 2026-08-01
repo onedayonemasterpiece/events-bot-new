@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import calendar
 import copy
 import hashlib
 import html
@@ -663,7 +664,10 @@ def ticket_info(row: sqlite3.Row) -> dict[str, Any]:
     status = clean_text(row["ticket_status"])
     status_l = status.lower()
     href = TICKET_LINK_OVERRIDES.get(event_id) or clean_text(row["ticket_link"]) or None
-    free = bool(row["is_free"]) or bool(re.search(r"бесплат|free", status_l))
+    # Admission semantics are materialized by Smart Update.  A status string
+    # may describe registration, availability or one sub-program and must not
+    # silently turn the whole event into a free-admission fact.
+    free = bool(row["is_free"])
     price = price_label(row)
     has_registration = bool(re.search(r"регистрац|registration|запис", status_l))
     if is_sold_out_status(status):
@@ -1826,6 +1830,49 @@ def collect_source_urls(con: sqlite3.Connection, event_id: int, row: sqlite3.Row
     return urls
 
 
+def collect_source_records(con: sqlite3.Connection, event_id: int) -> list[dict[str, Any]]:
+    """Keep structured source identity/trust for exact registry adapters.
+
+    Public cards continue to receive URL-only ``source_urls``.  These compact
+    records stay inside the exporter and generated registry projection.
+    """
+
+    try:
+        rows = con.execute(
+            """
+            select source_type, source_url, source_chat_username,
+                   source_chat_id, source_message_id, trust_level
+            from event_source
+            where event_id=?
+            order by id asc
+            """,
+            (event_id,),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        try:
+            rows = con.execute(
+                "select source_type, source_url from event_source where event_id=? order by rowid asc",
+                (event_id,),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+    records: list[dict[str, Any]] = []
+    for source in rows:
+        source_type = clean_text(row_get(source, "source_type"))
+        username = clean_text(row_get(source, "source_chat_username"))
+        record = {
+            "source_type": source_type or None,
+            "source_url": clean_text(row_get(source, "source_url")) or None,
+            "trust_level": clean_text(row_get(source, "trust_level")) or None,
+            "source_chat_id": row_get(source, "source_chat_id"),
+            "source_message_id": row_get(source, "source_message_id"),
+        }
+        if username and source_type.casefold() in {"telegram", "tg"}:
+            record["telegram_username"] = username
+        records.append({key: value for key, value in record.items() if value is not None})
+    return records
+
+
 def source_metrics(con: sqlite3.Connection, urls: list[str]) -> tuple[int, int, int, int]:
     # Managed reposts are distribution of one event inside one owned audience,
     # not independent sources. Keep the strongest counter per component for
@@ -2472,6 +2519,7 @@ def build_event(
 
 
 INTEREST_CLUBS_SCHEMA_VERSION = "interest-clubs-static-v1"
+INTEREST_CLUBS_V2_SCHEMA_VERSION = "interest-clubs-static-v2"
 INTEREST_CLUB_REQUIRED_COLUMNS = {
     "id",
     "slug",
@@ -2480,6 +2528,14 @@ INTEREST_CLUB_REQUIRED_COLUMNS = {
     "public_status",
 }
 INTEREST_CLUB_EVENT_REQUIRED_COLUMNS = {"club_id", "event_id", "status"}
+INTEREST_CLUB_EVALUATION_REQUIRED_COLUMNS = {
+    "club_id",
+    "event_id",
+    "status",
+    "verdict",
+    "policy_version",
+    "input_hash",
+}
 INTEREST_CLUB_EVENT_SOURCE_COLUMNS = ("source_url", "url", "public_url")
 FESTIVAL_TIMELINE_SCHEMA_VERSION = "festival-timeline-static-v1"
 FESTIVAL_TIMELINE_REQUIRED_COLUMNS = {
@@ -2519,6 +2575,7 @@ def _sqlite_table_columns(con: sqlite3.Connection, table: str) -> set[str]:
     if table not in {
         "interest_club",
         "interest_club_event",
+        "interest_club_evaluation",
         "event",
         "event_source",
         "festival",
@@ -2604,10 +2661,12 @@ def build_interest_clubs_projection(
 
     club_columns = _sqlite_table_columns(con, "interest_club")
     relation_columns = _sqlite_table_columns(con, "interest_club_event")
+    evaluation_columns = _sqlite_table_columns(con, "interest_club_evaluation")
     event_columns = _sqlite_table_columns(con, "event")
     contract_available = (
         INTEREST_CLUB_REQUIRED_COLUMNS.issubset(club_columns)
         and INTEREST_CLUB_EVENT_REQUIRED_COLUMNS.issubset(relation_columns)
+        and INTEREST_CLUB_EVALUATION_REQUIRED_COLUMNS.issubset(evaluation_columns)
         and {"id", "title", "date"}.issubset(event_columns)
     )
     projection = {
@@ -2643,6 +2702,15 @@ def build_interest_clubs_projection(
             from interest_club_event ice
             join event e on e.id = ice.event_id
             where ice.club_id=? and ice.status='active'
+              and exists (
+                select 1 from interest_club_evaluation ie
+                where ie.club_id=ice.club_id
+                  and ie.event_id=ice.event_id
+                  and ie.status='accepted'
+                  and ie.verdict='yes'
+                  and ie.policy_version=ice.policy_version
+                  and ie.input_hash=ice.input_hash
+              )
             order by e.date asc, e.id asc
             """,
             (club_id,),
@@ -2705,6 +2773,233 @@ def build_interest_clubs_projection(
                 },
                 "future_meetings": future_meetings,
                 "updated_at": clean_text(row_get(club_row, "updated_at")) or None,
+            }
+        )
+    projection["clubs"] = clubs
+    return projection
+
+
+def _calendar_months_before(value: date, months: int) -> date:
+    ordinal = value.year * 12 + (value.month - 1) - int(months)
+    year, month0 = divmod(ordinal, 12)
+    month = month0 + 1
+    return date(year, month, min(value.day, calendar.monthrange(year, month)[1]))
+
+
+def _club_event_v2_exclusion_reason(row: sqlite3.Row) -> str | None:
+    reason = public_projection_gate_reason(row)
+    if reason:
+        return "event_public_gate"
+    if clean_text(row_get(row, "lifecycle_status") or "active").lower() != "active":
+        return "event_lifecycle"
+    if bool(row_get(row, "silent")):
+        return "event_silent"
+    return None
+
+
+def build_interest_clubs_projection_v2(
+    con: sqlite3.Connection,
+    *,
+    current_date: str,
+    generated_at: str,
+    exported_events: list[dict[str, Any]],
+    enabled: bool = False,
+) -> dict[str, Any]:
+    """Build the six-calendar-month club registry projection.
+
+    Relations remain semantic truth only when their exact hash/policy has an
+    accepted evaluation. Festival containment is not a negative publication
+    signal here: it neither creates nor invalidates a grounded relation.
+    """
+
+    receipt = {
+        "approved_identity_count": 0,
+        "invalid_identity_count": 0,
+        "non_active_relation_count": 0,
+        "unaccepted_relation_count": 0,
+        "event_public_gate_count": 0,
+        "event_lifecycle_count": 0,
+        "event_silent_count": 0,
+        "outside_six_month_window_count": 0,
+        "dormant_identity_count": 0,
+        "catalog_event_id_omitted_count": 0,
+        "festival_relation_allowed_count": 0,
+    }
+    projection: dict[str, Any] = {
+        "schema_version": INTEREST_CLUBS_V2_SCHEMA_VERSION,
+        "projection_version": 2,
+        "generated_at": generated_at,
+        "current_date": current_date,
+        "source": "disabled-by-build-gate",
+        "window": {},
+        "exclusion_receipts": receipt,
+        "clubs": [],
+    }
+    if not enabled:
+        return projection
+
+    club_columns = _sqlite_table_columns(con, "interest_club")
+    relation_columns = _sqlite_table_columns(con, "interest_club_event")
+    evaluation_columns = _sqlite_table_columns(con, "interest_club_evaluation")
+    event_columns = _sqlite_table_columns(con, "event")
+    contract_available = (
+        INTEREST_CLUB_REQUIRED_COLUMNS.issubset(club_columns)
+        and INTEREST_CLUB_EVENT_REQUIRED_COLUMNS.issubset(relation_columns)
+        and INTEREST_CLUB_EVALUATION_REQUIRED_COLUMNS.issubset(evaluation_columns)
+        and {"id", "title", "date"}.issubset(event_columns)
+    )
+    projection["source"] = (
+        "sqlite-interest-clubs-v2" if contract_available else "empty-contract-fallback"
+    )
+    if not contract_available:
+        return projection
+
+    current_day = date.fromisoformat(current_date)
+    cutoff_6m = _calendar_months_before(current_day, 6)
+    cutoff_12m = _calendar_months_before(current_day, 12)
+    projection["window"] = {
+        "six_months_start_inclusive": cutoff_6m.isoformat(),
+        "twelve_months_start_inclusive": cutoff_12m.isoformat(),
+        "as_of_inclusive": current_date,
+    }
+    exported_slug_by_id = {
+        int(item["id"]): str(item["slug"])
+        for item in exported_events
+        if str(item.get("id", "")).isdigit() and clean_text(item.get("slug"))
+    }
+    club_rows = con.execute(
+        "select * from interest_club where public_status='approved' "
+        "order by canonical_name collate nocase, id"
+    ).fetchall()
+    receipt["approved_identity_count"] = len(club_rows)
+    clubs: list[dict[str, Any]] = []
+    for club_row in club_rows:
+        club_id = int(row_get(club_row, "id"))
+        slug = clean_text(row_get(club_row, "slug"))
+        name = clean_text(row_get(club_row, "canonical_name"))
+        topic = clean_text(row_get(club_row, "topic"))
+        if not name or not topic or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug):
+            receipt["invalid_identity_count"] += 1
+            continue
+
+        receipt["non_active_relation_count"] += int(
+            con.execute(
+                "select count(*) from interest_club_event where club_id=? and status<>'active'",
+                (club_id,),
+            ).fetchone()[0]
+        )
+        relation_rows = con.execute(
+            """
+            select e.*,
+                   ice.input_hash as club_relation_input_hash,
+                   ice.policy_version as club_relation_policy_version,
+                   ice.updated_at as club_relation_updated_at,
+                   ie.id as accepted_evaluation_id,
+                   ie.updated_at as accepted_evaluation_updated_at
+            from interest_club_event ice
+            join event e on e.id=ice.event_id
+            left join interest_club_evaluation ie
+              on ie.club_id=ice.club_id
+             and ie.event_id=ice.event_id
+             and ie.status='accepted'
+             and ie.verdict='yes'
+             and ie.policy_version=ice.policy_version
+             and ie.input_hash=ice.input_hash
+            where ice.club_id=? and ice.status='active'
+            order by e.date,e.id
+            """,
+            (club_id,),
+        ).fetchall()
+        eligible_rows: list[sqlite3.Row] = []
+        history_rows_12m: list[sqlite3.Row] = []
+        for event_row in relation_rows:
+            if row_get(event_row, "accepted_evaluation_id") is None:
+                receipt["unaccepted_relation_count"] += 1
+                continue
+            exclusion = _club_event_v2_exclusion_reason(event_row)
+            if exclusion:
+                receipt[f"{exclusion}_count"] += 1
+                continue
+            if clean_text(row_get(event_row, "festival")):
+                receipt["festival_relation_allowed_count"] += 1
+            event_end = date.fromisoformat(
+                clean_text(row_get(event_row, "end_date"))
+                or clean_text(row_get(event_row, "date"))
+            )
+            if event_end >= cutoff_12m:
+                history_rows_12m.append(event_row)
+            if event_end < cutoff_6m:
+                receipt["outside_six_month_window_count"] += 1
+                continue
+            eligible_rows.append(event_row)
+
+        if not eligible_rows:
+            receipt["dormant_identity_count"] += 1
+            continue
+
+        dates = [date.fromisoformat(clean_text(row_get(row, "date"))) for row in eligible_rows]
+        historical_dates = [value for value in dates if value <= current_day]
+        future_dates = [value for value in dates if value >= current_day]
+        count_6m = sum(cutoff_6m <= value <= current_day for value in dates)
+        count_12m = sum(
+            cutoff_12m <= date.fromisoformat(clean_text(row_get(row, "date"))) <= current_day
+            for row in history_rows_12m
+        )
+        catalog_event_ids: list[int] = []
+        future_meetings: list[dict[str, Any]] = []
+        for event_row in eligible_rows:
+            event_id = int(row_get(event_row, "id"))
+            event_slug = exported_slug_by_id.get(event_id)
+            if event_slug:
+                catalog_event_ids.append(event_id)
+            else:
+                receipt["catalog_event_id_omitted_count"] += 1
+            start_date = clean_text(row_get(event_row, "date"))
+            if start_date < current_date or not event_slug:
+                continue
+            start_time, _, display_time = split_time(row_get(event_row, "time"))
+            city = clean_place(row_get(event_row, "city"))
+            venue = drop_city_only_venue(clean_place(row_get(event_row, "location_name")), city)
+            future_meetings.append(
+                {
+                    "event_id": event_id,
+                    "title": strip_emoji_prefix(row_get(event_row, "title")) or f"Событие {event_id}",
+                    "start_date": start_date,
+                    "start_time": start_time,
+                    "display_time": display_time,
+                    "city": city,
+                    "venue_name": venue,
+                    "event_path": f"/sobytiya/{event_slug}/",
+                    "source_url": _club_event_source_url(con, event_id, event_row, event_columns),
+                }
+            )
+        updated_candidates = [
+            clean_text(row_get(club_row, "updated_at")),
+            *[clean_text(row_get(row, "club_relation_updated_at")) for row in eligible_rows],
+            *[clean_text(row_get(row, "accepted_evaluation_updated_at")) for row in eligible_rows],
+            *[clean_text(row_get(row, "club_relation_updated_at")) for row in history_rows_12m],
+            *[clean_text(row_get(row, "accepted_evaluation_updated_at")) for row in history_rows_12m],
+        ]
+        clubs.append(
+            {
+                "id": club_id,
+                "slug": slug,
+                "name": name,
+                "topic": topic,
+                "description": clean_text(row_get(club_row, "description")) or None,
+                "city": clean_place(row_get(club_row, "city")),
+                "typical_venue": clean_place(row_get(club_row, "typical_place")),
+                "status": "active",
+                "activity": {
+                    "meeting_count_6m": count_6m,
+                    "meeting_count_12m": count_12m,
+                    "last_activity_date": max(historical_dates).isoformat() if historical_dates else None,
+                    "next_activity_date": min(future_dates).isoformat() if future_dates else None,
+                    "future_meeting_count": len(future_meetings),
+                },
+                "current_catalog_event_ids": sorted(set(catalog_event_ids)),
+                "future_meetings": future_meetings,
+                "data_updated_at": max(filter(None, updated_candidates), default=None),
             }
         )
     projection["clubs"] = clubs
@@ -5474,6 +5769,158 @@ def build_shared_bge_and_unusual(
     }
 
 
+def build_collection_semantic_outputs(
+    events: list[dict[str, Any]],
+    *,
+    out_dir: Path,
+    build_metadata: dict[str, Any],
+    catalog_ledger: dict[str, Any],
+    collection_decisions_by_id: dict[int, Any],
+    theatre_event_ids: set[int],
+    registry_sha256: str,
+    vector_cache_path: Path,
+    vector_receipt_path: Path,
+    unusual_cache_path: Path,
+    model_revision: str,
+    batch_size: int,
+    collection_batch_output: Path,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Run the single mandatory collection BGE pass and emit fail-closed receipts."""
+
+    import static_collection_export as collection_module
+    import static_collection_batch as collection_batch_module
+    import static_event_bge as bge_module
+    import unusual_event_semantics as unusual_module
+
+    policy = collection_module.load_object(collection_module.DEFAULT_POLICY_PATH)
+    extension = collection_module.load_object(collection_module.DEFAULT_PROTOTYPES_PATH)
+    unusual_bank = unusual_module.load_unusual_prototype_bank()
+    prototype_bank = collection_module.merged_prototype_bank(unusual_bank, extension)
+    classifier_contract = {
+        "schema_version": "static-collection-head-contract-v1",
+        "policy_sha256": collection_module.stable_hash(policy),
+    }
+    previous_artifact = bge_module.load_collection_bge_cache(
+        npz_path=vector_cache_path,
+        receipt_path=vector_receipt_path,
+    )
+    artifact = bge_module.build_collection_bge_vector_artifact(
+        events,
+        prototype_bank,
+        model_revision=model_revision,
+        classifier=classifier_contract,
+        batch_size=max(1, int(batch_size)),
+        build_metadata=build_metadata,
+        previous_artifact=previous_artifact,
+    )
+    validation = bge_module.validate_collection_bge_vector_artifact(
+        artifact,
+        prototype_bank=prototype_bank,
+        expected_classifier_sha256=bge_module.stable_hash(classifier_contract),
+    )
+    if not validation.get("valid"):
+        raise RuntimeError(
+            "collection BGE artifact validation failed: "
+            + "; ".join(validation.get("errors") or [])
+        )
+    receipt = bge_module.write_collection_bge_cache(
+        artifact,
+        npz_path=vector_cache_path,
+        receipt_path=vector_receipt_path,
+    )
+    physical_validation = bge_module.validate_collection_bge_cache(
+        npz_path=vector_cache_path,
+        receipt=receipt,
+    )
+    if not physical_validation.get("valid"):
+        raise RuntimeError(
+            "collection BGE cache validation failed: "
+            + "; ".join(physical_validation.get("errors") or [])
+        )
+
+    candidates = collection_module.score_semantic_candidates(artifact, policy)
+    catalog_hash = collection_module.stable_hash(catalog_ledger)
+    batch = collection_module.build_collection_batch_payload(
+        events=events,
+        collection_decisions_by_id=collection_decisions_by_id,
+        theatre_event_ids=theatre_event_ids,
+        semantic_candidates=candidates,
+        artifact=artifact,
+        policy=policy,
+        catalog_hash=catalog_hash,
+        generated_at=str(build_metadata.get("generated_at") or datetime.now(timezone.utc).isoformat()),
+        snapshot=catalog_ledger.get("snapshot") if isinstance(catalog_ledger.get("snapshot"), dict) else {},
+        registry_sha256=registry_sha256,
+    )
+    catalog_ids = [
+        int(row["event_id"])
+        for row in catalog_ledger.get("eligible") or []
+        if isinstance(row, dict) and str(row.get("event_id") or "").isdigit()
+    ]
+    batch_validation = collection_batch_module.validate_collection_batch(
+        batch,
+        catalog_item_ids=catalog_ids,
+        require_compute=True,
+    )
+    if not batch_validation.get("valid"):
+        raise RuntimeError(
+            "collection batch validation failed: "
+            + "; ".join(batch_validation.get("errors") or [])
+        )
+    collection_batch_module.write_collection_batch(
+        collection_batch_output,
+        batch,
+    )
+
+    unusual_candidates = (candidates.get("unusual") or {}).get("item_ids") or []
+    unusual_manifest = collection_module.unusual_shadow_manifest(
+        events=events,
+        candidate_ids=unusual_candidates,
+        generated_at=str(build_metadata.get("generated_at") or ""),
+        build_metadata=build_metadata,
+        artifact=artifact,
+    )
+    unusual_path = out_dir / "unusual-events.json"
+    _atomic_write_json(unusual_path, unusual_manifest)
+    unusual_cache = {
+        "schema_version": "unusual-event-score-cache-v1",
+        "status": "blocked",
+        "reason": "collection_document_recalibration_required",
+        "model_revision": (artifact.get("metadata") or {}).get("model_revision"),
+        "prototype_bank_hash": (artifact.get("metadata") or {}).get("prototype_bank_sha256"),
+        "input_fingerprint": build_metadata.get("input_fingerprint"),
+        "candidate_event_ids": sorted(int(value) for value in unusual_candidates),
+        "provider_calls": 0,
+    }
+    _atomic_write_json(unusual_cache_path, unusual_cache)
+    metadata = artifact.get("metadata") or {}
+    encoded_events = int(metadata.get("encoded_event_count") or 0)
+    encoded_prototypes = int(metadata.get("encoded_prototype_count") or 0)
+    return artifact, {
+        "status": "validated",
+        "provider_calls": 0,
+        "event_count": len(events),
+        "artifact_event_count": int(metadata.get("event_count") or 0),
+        "artifact_sha256": metadata.get("artifact_sha256"),
+        "cache_state": (
+            "hit_reused"
+            if previous_artifact is not None and encoded_events == 0 and encoded_prototypes == 0
+            else "partial_rebuild"
+            if previous_artifact is not None
+            else "miss_rebuilt"
+        ),
+        "encoded_event_count": encoded_events,
+        "encoded_prototype_count": encoded_prototypes,
+        "manifest_sha256": hashlib.sha256(unusual_path.read_bytes()).hexdigest(),
+        "vector_cache_sha256": hashlib.sha256(vector_cache_path.read_bytes()).hexdigest(),
+        "vector_receipt_sha256": hashlib.sha256(vector_receipt_path.read_bytes()).hexdigest(),
+        "unusual_cache_sha256": hashlib.sha256(unusual_cache_path.read_bytes()).hexdigest(),
+        "collection_batch_sha256": hashlib.sha256(collection_batch_output.read_bytes()).hexdigest(),
+        "collection_batch_contract_sha256": batch.get("batch_sha256"),
+        "input_fingerprint": build_metadata.get("input_fingerprint"),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", required=True, help="Path to production SQLite snapshot")
@@ -5555,6 +6002,22 @@ def main() -> int:
         "--bge-batch-size",
         type=int,
         default=int(os.getenv("STATIC_SITE_BGE_BATCH_SIZE", "8") or "8"),
+    )
+    parser.add_argument(
+        "--collection-semantic-compute",
+        action="store_true",
+        default=os.getenv("STATIC_SITE_COLLECTION_SEMANTIC_COMPUTE", "").strip().lower()
+        in {"1", "true", "yes", "on"},
+        help="Compute and validate the shared collection matrix even when publication is disabled.",
+    )
+    parser.add_argument(
+        "--collection-batch-output",
+        default=os.getenv("STATIC_SITE_COLLECTION_BATCH", ""),
+    )
+    parser.add_argument(
+        "--collection-batch-last-good",
+        default=os.getenv("STATIC_SITE_COLLECTION_LAST_GOOD", ""),
+        help="Reserved durable last-good path; promotion occurs only after a ready quality gate.",
     )
     parser.add_argument(
         "--unusual-cache",
@@ -5712,6 +6175,18 @@ def main() -> int:
         json.dumps(event_detail_archive, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+    ledger: dict[str, Any] = {
+        "schema_version": CATALOG_LEDGER_SCHEMA_VERSION,
+        "generated_at": generated_at,
+        "current_date": effective_date,
+        "snapshot": {
+            "snapshot_id": args.snapshot_id or None,
+            "sha256": args.snapshot_sha256 or None,
+            "size": args.snapshot_size or None,
+        },
+        "eligible": [{"event_id": int(event["id"])} for event in events],
+        "excluded": [],
+    }
     if args.catalog_mode == "full":
         ledger = build_catalog_ledger(
             con,
@@ -5730,6 +6205,26 @@ def main() -> int:
             json.dumps(ledger, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
+    import static_collection_export as collection_export_module
+    from static_place_org_registry import load_registry, registry_hash
+
+    place_org_registry = load_registry()
+    source_records_by_id = {
+        int(event["id"]): collect_source_records(con, int(event["id"]))
+        for event in events
+    }
+    catalog_hash = collection_export_module.stable_hash(ledger)
+    venue_pages, theatre_event_ids = collection_export_module.build_registry_projection(
+        events,
+        source_records_by_id=source_records_by_id,
+        registry=place_org_registry,
+        generated_at=generated_at,
+        catalog_hash=catalog_hash,
+    )
+    _atomic_write_json(out_dir / "venue-pages-v1.json", venue_pages)
+    collection_decisions_by_id = {
+        int(row["id"]): row_get(row, "collection_decisions") for row in rows
+    }
     clubs_projection = build_interest_clubs_projection(
         con,
         current_date=effective_date,
@@ -5739,6 +6234,17 @@ def main() -> int:
     )
     (out_dir / "interest-clubs.json").write_text(
         json.dumps(clubs_projection, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    clubs_projection_v2 = build_interest_clubs_projection_v2(
+        con,
+        current_date=effective_date,
+        generated_at=generated_at,
+        exported_events=events,
+        enabled=os.getenv("ENABLE_INTEREST_CLUB_STATIC_PROJECTION", "").strip().lower() in {"1", "true", "yes", "on"},
+    )
+    (out_dir / "interest-clubs-static-v2.json").write_text(
+        json.dumps(clubs_projection_v2, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     festival_projection = build_festival_timeline_projection(
@@ -5751,7 +6257,7 @@ def main() -> int:
         json.dumps(festival_projection, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    if args.skip_related:
+    if args.skip_related and not args.collection_semantic_compute:
         print(f"Exported {len(events)} events to {out_dir}")
         print("IDs:", ",".join(str(event["id"]) for event in events))
         print("Related: skipped")
@@ -5761,7 +6267,53 @@ def main() -> int:
         "status": "disabled",
         "provider_calls": 0,
     }
-    if args.related_mode == "bge" or args.unusual_enabled:
+    if args.collection_semantic_compute:
+        if not re.fullmatch(r"[0-9a-f]{40}", str(args.bge_model_revision or "")):
+            raise SystemExit("--bge-model-revision must be a pinned 40-character commit")
+        vector_cache = (
+            Path(args.bge_vector_cache)
+            if args.bge_vector_cache
+            else out_dir.parent / "static_event_bge_vectors.npz"
+        )
+        vector_receipt = (
+            Path(args.bge_vector_receipt)
+            if args.bge_vector_receipt
+            else out_dir.parent / "static_event_bge_vectors.receipt.json"
+        )
+        unusual_cache = (
+            Path(args.unusual_cache)
+            if args.unusual_cache
+            else out_dir.parent / "unusual_events_cache.json"
+        )
+        collection_batch_output = (
+            Path(args.collection_batch_output)
+            if args.collection_batch_output
+            else out_dir / "collection-batch-v1.json"
+        )
+        shared_bge_artifact, semantic_result = build_collection_semantic_outputs(
+            events,
+            out_dir=out_dir,
+            build_metadata={
+                "build_id": args.build_id or args.base_path or "local-static-build",
+                "generated_at": generated_at,
+                "as_of_date": effective_date,
+                "source_snapshot_id": args.snapshot_id or None,
+                "source_snapshot_hash": args.snapshot_sha256 or None,
+                "input_fingerprint": args.input_fingerprint or None,
+            },
+            catalog_ledger=ledger,
+            collection_decisions_by_id=collection_decisions_by_id,
+            theatre_event_ids=theatre_event_ids,
+            registry_sha256=registry_hash(place_org_registry),
+            vector_cache_path=vector_cache,
+            vector_receipt_path=vector_receipt,
+            unusual_cache_path=unusual_cache,
+            model_revision=args.bge_model_revision,
+            batch_size=max(1, int(args.bge_batch_size)),
+            collection_batch_output=collection_batch_output,
+        )
+        _atomic_write_json(out_dir / "static-semantic-build-result.json", semantic_result)
+    elif args.related_mode == "bge" or args.unusual_enabled:
         if not re.fullmatch(r"[0-9a-f]{40}", str(args.bge_model_revision or "")):
             raise SystemExit("--bge-model-revision must be a pinned 40-character commit")
         vector_cache = (
@@ -5804,6 +6356,11 @@ def main() -> int:
             migration=bool(args.unusual_migration),
         )
         _atomic_write_json(out_dir / "static-semantic-build-result.json", semantic_result)
+    if args.skip_related:
+        print(f"Exported {len(events)} events to {out_dir}")
+        print("IDs:", ",".join(str(event["id"]) for event in events))
+        print("Related: skipped")
+        return 0
     if args.related_mode == "pgvector" and args.sync_pgvector_vectors:
         sync_event_vectors_to_supabase(
             preview_events_json=preview_events_path,

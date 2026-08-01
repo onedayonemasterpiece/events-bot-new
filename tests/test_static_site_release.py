@@ -168,6 +168,89 @@ def test_fingerprint_ignores_operational_churn_but_changes_for_public_date_and_c
     assert publish_enabled != publish_disabled
 
 
+def test_club_fingerprint_is_hash_aware_and_bounded_to_six_calendar_months(tmp_path) -> None:
+    database = tmp_path / "club-fingerprint.sqlite"
+    _fingerprint_db(database)
+    with sqlite3.connect(database) as connection:
+        for definition in (
+            "end_date TEXT", "time TEXT", "city TEXT", "location_name TEXT",
+            "lifecycle_status TEXT", "identity_status TEXT",
+            "merged_into_event_id INTEGER", "silent INTEGER", "festival TEXT",
+        ):
+            connection.execute(f"ALTER TABLE event ADD COLUMN {definition}")
+        connection.executescript(
+            """
+            CREATE TABLE interest_club(
+              id INTEGER PRIMARY KEY,slug TEXT,canonical_name TEXT,topic TEXT,
+              description TEXT,city TEXT,typical_place TEXT,public_status TEXT,
+              identity_version INTEGER,policy_version TEXT,aliases_json TEXT,
+              source_anchors_json TEXT,provenance_json TEXT
+            );
+            CREATE TABLE interest_club_event(
+              id INTEGER PRIMARY KEY,club_id INTEGER,event_id INTEGER,status TEXT,
+              decision_lane TEXT,policy_version TEXT,input_hash TEXT
+            );
+            CREATE TABLE interest_club_evaluation(
+              id INTEGER PRIMARY KEY,club_id INTEGER,event_id INTEGER,status TEXT,
+              verdict TEXT,decision_lane TEXT,policy_version TEXT,input_hash TEXT,
+              error_code TEXT,attempts INTEGER,updated_at TEXT
+            );
+            INSERT INTO interest_club VALUES(
+              1,'control-club','Control','topic',NULL,NULL,NULL,'approved',1,'p1','[]','[]','{}'
+            );
+            INSERT INTO event(id,title,date,end_date,lifecycle_status,identity_status,silent)
+              VALUES(2,'Boundary','2026-02-01',NULL,'active','canonical',0);
+            INSERT INTO interest_club_event VALUES(1,1,2,'active','source','p1','h1');
+            INSERT INTO interest_club_evaluation VALUES(
+              1,1,2,'accepted','yes','source','p1','h1',NULL,1,'2026-08-01T00:00:00Z'
+            );
+            """
+        )
+    base, _ = compute_static_site_input_fingerprint(
+        database,
+        effective_date="2026-08-01",
+        repo_sha="a" * 40,
+        build_config={"catalog_mode": "full"},
+    )
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "UPDATE interest_club_evaluation SET attempts=9,updated_at='2026-08-01T12:00:00Z' WHERE id=1"
+        )
+    operational, _ = compute_static_site_input_fingerprint(
+        database,
+        effective_date="2026-08-01",
+        repo_sha="a" * 40,
+        build_config={"catalog_mode": "full"},
+    )
+    assert operational == base
+    with sqlite3.connect(database) as connection:
+        connection.execute("UPDATE interest_club_evaluation SET status='review',verdict='no' WHERE id=1")
+    truth_changed, _ = compute_static_site_input_fingerprint(
+        database,
+        effective_date="2026-08-01",
+        repo_sha="a" * 40,
+        build_config={"catalog_mode": "full"},
+    )
+    assert truth_changed != base
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "INSERT INTO event(id,title,date,end_date,lifecycle_status,identity_status,silent) VALUES(3,'Too old','2026-01-31',NULL,'active','canonical',0)"
+        )
+        connection.execute(
+            "INSERT INTO interest_club_event VALUES(2,1,3,'active','source','p1','old')"
+        )
+        connection.execute(
+            "INSERT INTO interest_club_evaluation VALUES(2,1,3,'accepted','yes','source','p1','old',NULL,1,'2026-08-01T12:00:00Z')"
+        )
+    old_history, _ = compute_static_site_input_fingerprint(
+        database,
+        effective_date="2026-08-01",
+        repo_sha="a" * 40,
+        build_config={"catalog_mode": "full"},
+    )
+    assert old_history == truth_changed
+
+
 def test_durable_noop_force_and_concurrent_single_flight(tmp_path) -> None:
     database = tmp_path / "claims.sqlite"
     _fingerprint_db(database)
@@ -619,17 +702,22 @@ def test_add_build_01_payload_union_is_bounded_and_keeps_latest_effect() -> None
     assert len(merged["target_watermark"]) == 64
 
 
-def test_static_site_debounce_has_maximum_wait_and_preserves_immediate_request(
+def test_static_site_debounce_is_strict_trailing_and_trigger_local(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import main
 
     now = datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc)
     monkeypatch.setenv("STATIC_SITE_MAX_DEBOUNCE_SECONDS", "1800")
-    capped = main._static_site_coalesced_next_run(
+    trailing = main._static_site_coalesced_next_run(
         old_next=now + timedelta(minutes=14),
         requested=now + timedelta(minutes=15),
-        merged_payload={
+        incoming_payload={
+            "trigger": "smart_update",
+            "first_effect_at": "2026-07-31T11:35:00Z",
+            "latest_effect_at": "2026-07-31T12:00:00Z",
+        },
+        effect_payload={
             "trigger": "smart_update",
             "first_effect_at": "2026-07-31T11:35:00Z",
             "latest_effect_at": "2026-07-31T12:00:00Z",
@@ -637,17 +725,29 @@ def test_static_site_debounce_has_maximum_wait_and_preserves_immediate_request(
         now=now,
         incoming_immediate=False,
     )
-    assert capped == now + timedelta(minutes=5)
+    assert trailing == now + timedelta(minutes=15)
 
-    immediate = main._static_site_coalesced_next_run(
+    historical_operator_is_not_immediate = main._static_site_coalesced_next_run(
         old_next=now,
         requested=now + timedelta(minutes=15),
-        merged_payload={
+        incoming_payload={"trigger": "smart_update"},
+        effect_payload={
             "trigger": "operator_request",
             "first_effect_at": "2026-07-31T11:59:00Z",
+            "latest_effect_at": "2026-07-31T12:05:00Z",
         },
         now=now,
         incoming_immediate=False,
+    )
+    assert historical_operator_is_not_immediate == now + timedelta(minutes=20)
+
+    immediate = main._static_site_coalesced_next_run(
+        old_next=now + timedelta(minutes=14),
+        requested=now,
+        incoming_payload={"trigger": "operator_request"},
+        effect_payload={"trigger": "operator_request"},
+        now=now,
+        incoming_immediate=True,
     )
     assert immediate == now
 

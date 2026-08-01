@@ -602,6 +602,563 @@ class EventCandidate:
     organizer_names: list[str] = field(default_factory=list)
     # Ephemeral result piggybacked on an already-paid facts/create call.
     age_semantic_decision: dict[str, Any] | None = None
+    # High-recall routing signals only. They are never accepted as evidence by
+    # the collection fact validator.
+    topics: list[str] = field(default_factory=list)
+    collection_bge_signals: list[str] = field(default_factory=list)
+    # Explicit routing only: these facts are evaluated by a compact, cached
+    # candidate-only stage rather than growing every rich-facts/merge prompt.
+    collection_adjudication_reasons: list[str] = field(default_factory=list)
+    # Raw strict-schema provider output (or a source-native structured result).
+    # Provenance is injected only after the matching EventSource is attached.
+    collection_semantic_decisions: dict[str, Any] | None = None
+
+
+STATIC_COLLECTION_FACTS_POLICY_VERSION = "static-collection-facts-v1"
+STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION = "static-collection-adjudication-v1"
+
+_ADMISSION_VALUES = {"confirmed_free", "confirmed_paid", "unknown"}
+_ADMISSION_REASON_CODES = {
+    "explicit_free_admission",
+    "structured_free_admission",
+    "free_registration",
+    "optional_donation",
+    "explicit_price",
+    "explicit_paid_admission",
+    "insufficient_evidence",
+    "conflicting_evidence",
+}
+_AUDIENCE_VALUES = {"kids", "family", "none", "unknown"}
+_AUDIENCE_REASON_CODES = {
+    "explicit_target_audience",
+    "explicit_family_format",
+    "explicit_adult_only",
+    "insufficient_evidence",
+    "conflicting_evidence",
+}
+_PEOPLE_ROLES = {"performer", "speaker", "author", "host"}
+_PEOPLE_APPEARANCES = {"confirmed", "mentioned", "unknown"}
+_PEOPLE_ORIGINS = {"russia_nonlocal", "foreign", "local", "unknown"}
+_PEOPLE_REASON_CODES = {
+    "explicit_program_role",
+    "explicit_future_participation",
+    "report_only",
+    "ambiguous_mention",
+}
+
+
+COLLECTION_ADJUDICATION_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "schema_version": {
+            "type": "string",
+            "enum": [STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION],
+        },
+        "admission_decision": {
+            "type": "object",
+            "properties": {
+                "value": {"type": "string", "enum": sorted(_ADMISSION_VALUES)},
+                "evidence_quote": {"type": "string"},
+                "reason_code": {"type": "string", "enum": sorted(_ADMISSION_REASON_CODES)},
+            },
+            "required": ["value", "evidence_quote", "reason_code"],
+            "additionalProperties": False,
+        },
+        "audience_decision": {
+            "type": "object",
+            "properties": {
+                "value": {"type": "string", "enum": sorted(_AUDIENCE_VALUES)},
+                "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                "evidence_quote": {"type": "string"},
+                "reason_code": {"type": "string", "enum": sorted(_AUDIENCE_REASON_CODES)},
+            },
+            "required": ["value", "confidence", "evidence_quote", "reason_code"],
+            "additionalProperties": False,
+        },
+        "people_appearances": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "role": {"type": "string", "enum": sorted(_PEOPLE_ROLES)},
+                    "appearance": {"type": "string", "enum": sorted(_PEOPLE_APPEARANCES)},
+                    "origin_scope": {"type": "string", "enum": sorted(_PEOPLE_ORIGINS)},
+                    "evidence_quote": {"type": "string"},
+                    "origin_evidence_quote": {"type": "string"},
+                    "reason_code": {"type": "string", "enum": sorted(_PEOPLE_REASON_CODES)},
+                },
+                "required": [
+                    "name",
+                    "role",
+                    "appearance",
+                    "origin_scope",
+                    "evidence_quote",
+                    "origin_evidence_quote",
+                    "reason_code",
+                ],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": [
+        "schema_version",
+        "admission_decision",
+        "audience_decision",
+        "people_appearances",
+    ],
+    "additionalProperties": False,
+}
+
+
+def _collection_source_corpus(candidate: EventCandidate) -> str:
+    return "\n\n".join(
+        value
+        for value in [
+            str(candidate.occurrence_scope_text or "").strip(),
+            str(candidate.source_text or "").strip(),
+            str(candidate.raw_excerpt or "").strip(),
+            *[
+                "\n".join(
+                    part
+                    for part in (
+                        str(p.ocr_title or "").strip(),
+                        str(p.ocr_text or "").strip(),
+                    )
+                    if part
+                )
+                for p in candidate.posters
+            ],
+        ]
+        if value
+    )
+
+
+def collection_adjudication_input_hash(candidate: EventCandidate) -> str:
+    """Stable hash for candidate-only cache/no-op semantics."""
+
+    payload = {
+        "schema_version": STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION,
+        "source_type": str(candidate.source_type or "").strip(),
+        "source_url": str(candidate.source_url or "").strip(),
+        "title": str(candidate.title or "").strip(),
+        "corpus": _collection_source_corpus(candidate),
+        # Signals are routing context only and never part of quoted evidence.
+        "signals": {
+            "topics": sorted(str(v) for v in candidate.topics),
+            "age_restriction": str(candidate.age_restriction or "").strip(),
+            "reasons": sorted(set(candidate.collection_adjudication_reasons or [])),
+        },
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def build_collection_adjudication_request(candidate: EventCandidate) -> dict[str, Any] | None:
+    """Build a compact candidate-only request, or return ``None`` when unrouted."""
+
+    allowed_reasons = {"admission", "audience", "people", "conflict", "changed", "backfill"}
+    reasons = sorted(
+        {str(v or "").strip().lower() for v in candidate.collection_adjudication_reasons}
+        & allowed_reasons
+    )
+    if not reasons:
+        return None
+    corpus = _collection_source_corpus(candidate)
+    if not corpus or not candidate.source_url:
+        return None
+    return {
+        "schema_version": STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION,
+        "policy_version": STATIC_COLLECTION_FACTS_POLICY_VERSION,
+        "input_hash": collection_adjudication_input_hash(candidate),
+        "candidate_reasons": reasons,
+        "source": {
+            "source_type": candidate.source_type,
+            "source_url": candidate.source_url,
+            "trust": candidate.trust_level,
+        },
+        "event": {
+            "title": candidate.title,
+            "date": candidate.date,
+            "time": candidate.time,
+            "location_name": candidate.location_name,
+        },
+        "candidate_signals_not_proof": {
+            "age_restriction": candidate.age_restriction,
+            "topics": list(candidate.topics),
+            "bge": list(candidate.collection_bge_signals),
+        },
+        "source_corpus": corpus,
+    }
+
+
+def route_collection_adjudication_reasons(
+    candidate: EventCandidate,
+    existing_event: Event | None = None,
+) -> list[str]:
+    """Select bounded high-recall candidates without deciding their meaning."""
+
+    reasons = {
+        str(value or "").strip().lower()
+        for value in candidate.collection_adjudication_reasons
+        if str(value or "").strip()
+    }
+    existing_decisions = (
+        existing_event.collection_decisions
+        if existing_event is not None and isinstance(existing_event.collection_decisions, dict)
+        else {}
+    )
+    # Free claims and explicit price conflicts are candidates. ticket_status
+    # or a ticket link alone deliberately does not enter this route.
+    if candidate.is_free is True or (
+        existing_event is not None
+        and bool(existing_event.is_free)
+        and (
+            candidate.is_free is False
+            or candidate.ticket_price_min is not None
+            or candidate.ticket_price_max is not None
+        )
+    ):
+        reasons.add("admission")
+    if "admission_decision" in existing_decisions:
+        reasons.add("admission")
+
+    topics = {str(value or "").strip().upper() for value in candidate.topics}
+    if existing_event is not None:
+        topics.update(
+            str(value or "").strip().upper()
+            for value in (getattr(existing_event, "topics", None) or [])
+        )
+    bge = {str(value or "").strip().casefold() for value in candidate.collection_bge_signals}
+    if (
+        topics & {"FAMILY", "KIDS_SCHOOL"}
+        or bge & {"audience:kids", "audience:family"}
+        or "audience_decision" in existing_decisions
+    ):
+        reasons.add("audience")
+    if (
+        "PERSONALITIES" in topics
+        or any(value.startswith("people:") for value in bge)
+        or "people_appearances" in existing_decisions
+    ):
+        reasons.add("people")
+    allowed = {"admission", "audience", "people", "conflict", "changed", "backfill"}
+    return sorted(reasons & allowed)
+
+
+def _strict_keys(value: Any, required: set[str]) -> bool:
+    return isinstance(value, dict) and set(value) == required
+
+
+def _exact_collection_quote(quote: Any, corpus: str, *, required: bool) -> str | None:
+    if not isinstance(quote, str):
+        return None
+    clean = quote.strip()
+    if not clean:
+        return None if required else ""
+    return clean if clean in corpus else None
+
+
+def validate_collection_adjudication_output(
+    payload: Any,
+    *,
+    source_corpus: str,
+) -> dict[str, Any] | None:
+    """Strictly validate provider output; semantic uncertainty fails closed.
+
+    Exact evidence is checked against source/OCR text only. Age, topics and BGE
+    signals are deliberately absent here: they can route the call but cannot
+    validate a decision.
+    """
+
+    if not _strict_keys(
+        payload,
+        {"schema_version", "admission_decision", "audience_decision", "people_appearances"},
+    ):
+        return None
+    if payload.get("schema_version") != STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION:
+        return None
+    admission = payload.get("admission_decision")
+    if not _strict_keys(admission, {"value", "evidence_quote", "reason_code"}):
+        return None
+    avalue = admission.get("value")
+    areason = admission.get("reason_code")
+    if avalue not in _ADMISSION_VALUES or areason not in _ADMISSION_REASON_CODES:
+        return None
+    if avalue == "confirmed_free" and areason not in {
+        "explicit_free_admission", "structured_free_admission", "free_registration", "optional_donation"
+    }:
+        return None
+    if avalue == "confirmed_paid" and areason not in {"explicit_price", "explicit_paid_admission"}:
+        # Ticket availability/sale status alone is not a paid-admission fact.
+        return None
+    aquote = _exact_collection_quote(
+        admission.get("evidence_quote"), source_corpus, required=avalue != "unknown"
+    )
+    if aquote is None:
+        return None
+
+    audience = payload.get("audience_decision")
+    if not _strict_keys(audience, {"value", "confidence", "evidence_quote", "reason_code"}):
+        return None
+    uvalue = audience.get("value")
+    ureason = audience.get("reason_code")
+    confidence = audience.get("confidence")
+    if (
+        uvalue not in _AUDIENCE_VALUES
+        or ureason not in _AUDIENCE_REASON_CODES
+        or isinstance(confidence, bool)
+        or not isinstance(confidence, (int, float))
+        or not 0 <= float(confidence) <= 1
+    ):
+        return None
+    uquote = _exact_collection_quote(
+        audience.get("evidence_quote"), source_corpus, required=uvalue != "unknown"
+    )
+    if uquote is None:
+        return None
+
+    people = payload.get("people_appearances")
+    if not isinstance(people, list) or len(people) > 24:
+        return None
+    clean_people: list[dict[str, Any]] = []
+    for person in people:
+        required = {
+            "name", "role", "appearance", "origin_scope", "evidence_quote",
+            "origin_evidence_quote", "reason_code",
+        }
+        if not _strict_keys(person, required):
+            return None
+        name = str(person.get("name") or "").strip()
+        role = person.get("role")
+        appearance = person.get("appearance")
+        origin = person.get("origin_scope")
+        reason = person.get("reason_code")
+        if (
+            not name
+            or role not in _PEOPLE_ROLES
+            or appearance not in _PEOPLE_APPEARANCES
+            or origin not in _PEOPLE_ORIGINS
+            or reason not in _PEOPLE_REASON_CODES
+        ):
+            return None
+        evidence = _exact_collection_quote(person.get("evidence_quote"), source_corpus, required=True)
+        if evidence is None or name not in evidence:
+            return None
+        origin_evidence = _exact_collection_quote(
+            person.get("origin_evidence_quote"),
+            source_corpus,
+            required=origin != "unknown",
+        )
+        if origin_evidence is None:
+            return None
+        clean_people.append(
+            {
+                "name": name,
+                "role": role,
+                "appearance": appearance,
+                "origin_scope": origin,
+                "evidence_quote": evidence,
+                "origin_evidence_quote": origin_evidence,
+                "reason_code": reason,
+            }
+        )
+    return {
+        "schema_version": STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION,
+        "admission_decision": {
+            "value": avalue,
+            "evidence_quote": aquote,
+            "reason_code": areason,
+        },
+        "audience_decision": {
+            "value": uvalue,
+            "confidence": float(confidence),
+            "evidence_quote": uquote,
+            "reason_code": ureason,
+        },
+        "people_appearances": clean_people,
+    }
+
+
+def _decision_timestamp(value: Any) -> datetime | None:
+    try:
+        return datetime.fromisoformat(str(value or "").replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _decision_wins(existing: Mapping[str, Any] | None, incoming: Mapping[str, Any]) -> bool:
+    if not existing:
+        return True
+    if bool(existing.get("manual_lock")) and not bool(incoming.get("manual_lock")):
+        return False
+    if bool(incoming.get("manual_lock")) and not bool(existing.get("manual_lock")):
+        return True
+    if str(existing.get("input_hash") or "") == str(incoming.get("input_hash") or ""):
+        return False
+    old_trust = _trust_priority(str(existing.get("source_trust") or ""))
+    new_trust = _trust_priority(str(incoming.get("source_trust") or ""))
+    if new_trust != old_trust:
+        return new_trust > old_trust
+    old_time = _decision_timestamp(existing.get("decided_at"))
+    new_time = _decision_timestamp(incoming.get("decided_at"))
+    return bool(new_time and (old_time is None or new_time > old_time))
+
+
+def deep_merge_collection_decisions(
+    existing: Mapping[str, Any] | None,
+    incoming: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Merge keys independently while preserving truth on abstention/failure."""
+
+    result: dict[str, Any] = json.loads(json.dumps(dict(existing or {})))
+    if not isinstance(incoming, Mapping):
+        return result
+    changed = False
+    for key in ("admission_decision", "audience_decision"):
+        item = incoming.get(key)
+        if not isinstance(item, Mapping) or item.get("value") == "unknown":
+            continue
+        previous = result.get(key)
+        if _decision_wins(previous if isinstance(previous, Mapping) else None, item):
+            result[key] = dict(item)
+            changed = True
+
+    incoming_people = incoming.get("people_appearances")
+    current_people = [dict(v) for v in (result.get("people_appearances") or []) if isinstance(v, Mapping)]
+    by_key = {(str(v.get("name") or "").casefold(), str(v.get("role") or "")): i for i, v in enumerate(current_people)}
+    if isinstance(incoming_people, list):
+        for item in incoming_people:
+            if not isinstance(item, Mapping) or item.get("appearance") == "unknown":
+                continue
+            key = (str(item.get("name") or "").casefold(), str(item.get("role") or ""))
+            old_index = by_key.get(key)
+            if old_index is None:
+                by_key[key] = len(current_people)
+                current_people.append(dict(item))
+                changed = True
+                continue
+            old = current_people[old_index]
+            # A mere mention does not retract a confirmed appearance.
+            if old.get("appearance") == "confirmed" and item.get("appearance") != "confirmed":
+                continue
+            if _decision_wins(old, item):
+                current_people[old_index] = dict(item)
+                changed = True
+    if current_people and (changed or result.get("people_appearances")):
+        result["people_appearances"] = current_people
+    if changed:
+        result["schema_version"] = STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION
+    return result
+
+
+def _collection_provenance(
+    source: EventSource,
+    *,
+    input_hash: str,
+    decided_at: datetime,
+    manual_lock: bool,
+) -> dict[str, Any]:
+    stamp = decided_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    return {
+        "source_id": int(source.id or 0),
+        "source_url": str(source.source_url or ""),
+        "source_type": str(source.source_type or ""),
+        "source_trust": str(source.trust_level or "medium"),
+        "input_hash": input_hash,
+        "policy_version": STATIC_COLLECTION_FACTS_POLICY_VERSION,
+        "decided_at": stamp,
+        "manual_lock": bool(manual_lock),
+    }
+
+
+def apply_collection_decisions(
+    event: Event,
+    provider_payload: Any,
+    *,
+    source: EventSource,
+    source_corpus: str,
+    input_hash: str,
+    decided_at: datetime | None = None,
+    manual_lock: bool = False,
+) -> bool:
+    """Validate, merge and materialize decisions for an attached same-event source."""
+
+    if not event.id or not source.id or int(source.event_id) != int(event.id):
+        return False
+    if not input_hash or not str(source.source_url or "").strip():
+        return False
+    validated = validate_collection_adjudication_output(
+        provider_payload,
+        source_corpus=source_corpus,
+    )
+    if validated is None:
+        return False
+    provenance = _collection_provenance(
+        source,
+        input_hash=input_hash,
+        decided_at=decided_at or datetime.now(timezone.utc),
+        manual_lock=manual_lock,
+    )
+    incoming = {
+        "schema_version": STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION,
+        "admission_decision": {**validated["admission_decision"], **provenance},
+        "audience_decision": {**validated["audience_decision"], **provenance},
+        "people_appearances": [
+            {**item, **provenance} for item in validated["people_appearances"]
+        ],
+    }
+    before = dict(event.collection_decisions or {})
+    merged = deep_merge_collection_decisions(before, incoming)
+    if merged == before:
+        return False
+    # Whole-value reassignment is intentional: JSON is not MutableDict-backed.
+    event.collection_decisions = merged
+    admission = merged.get("admission_decision")
+    if isinstance(admission, Mapping):
+        if admission.get("value") == "confirmed_free":
+            event.is_free = True
+        elif admission.get("value") == "confirmed_paid":
+            event.is_free = False
+    return True
+
+
+async def adjudicate_collection_candidate(candidate: EventCandidate) -> dict[str, Any] | None:
+    """Run the small candidate-only semantic stage; provider failures abstain."""
+
+    if candidate.collection_semantic_decisions is not None:
+        return candidate.collection_semantic_decisions
+    request = build_collection_adjudication_request(candidate)
+    if request is None or SMART_UPDATE_LLM_DISABLED:
+        return None
+    prompt = (
+        "Ты проверяешь только три факта КОНКРЕТНОГО события. Верни JSON строго по схеме.\n"
+        "Каждая непустая evidence_quote должна быть точной непрерывной цитатой из source_corpus.\n"
+        "Admission: ticket_status, наличие продажи или ссылки без явной цены/платного входа не доказывает paid; "
+        "необязательный донат может быть confirmed_free.\n"
+        "Audience: age_restriction, topics и BGE — только candidate signals, никогда не доказательство kids/family; "
+        "нужна прямая фраза о целевой аудитории/семейном формате, иначе unknown.\n"
+        "People: mentioned не равно confirmed; не выводи происхождение по имени. Для non-unknown origin_scope "
+        "нужна отдельная точная origin_evidence_quote.\n"
+        "При сомнении верни unknown/пустой список. Не пиши публичный текст.\n\n"
+        f"Данные:\n{json.dumps(request, ensure_ascii=False)}"
+    )
+    try:
+        raw = await _ask_gemma_json(
+            prompt,
+            COLLECTION_ADJUDICATION_JSON_SCHEMA,
+            max_tokens=700,
+            label="collection_candidate_adjudication",
+        )
+    except Exception:
+        logger.warning("smart_update: collection adjudication provider failed", exc_info=True)
+        return None
+    validated = validate_collection_adjudication_output(
+        raw,
+        source_corpus=str(request["source_corpus"]),
+    )
+    candidate.collection_semantic_decisions = validated
+    return validated
 
 
 def _should_skip_festival_post_candidate(candidate: EventCandidate) -> bool:
@@ -16617,6 +17174,24 @@ async def _smart_event_update_impl(
                 "smart_update: dedup adjudicator failed (fallback to create)", exc_info=True
             )
 
+    # The compact semantics stage is explicitly candidate-routed, but it runs
+    # for both create and ordinary merge paths. Provider/schema failure is an
+    # abstention and must not block the canonical Smart Update transaction.
+    candidate.collection_adjudication_reasons = route_collection_adjudication_reasons(
+        candidate,
+        match_event,
+    )
+    if candidate.collection_adjudication_reasons and candidate.collection_semantic_decisions is None:
+        try:
+            await adjudicate_collection_candidate(candidate)
+        except Exception:
+            logger.warning(
+                "smart_update: candidate collection adjudication failed source_type=%s source_url=%s",
+                candidate.source_type,
+                candidate.source_url,
+                exc_info=True,
+            )
+
     if match_event is None:
         if candidate_location_unsupported_prose:
             logger.warning(
@@ -17473,8 +18048,9 @@ async def _smart_event_update_impl(
                         reason="final_transaction_duplicate_probe",
                     )
             session.add(new_event)
-            await session.commit()
-            await session.refresh(new_event)
+            # Keep create, accepted source attachment and collection decision
+            # materialization in one transaction. flush supplies the event id.
+            await session.flush()
 
             added_posters, added_poster_urls, preview_invalidated, pruned_posters, _photo_urls_changed = await _apply_posters(
                 session,
@@ -17486,6 +18062,22 @@ async def _smart_event_update_impl(
             added_sources, _same_source = await _ensure_event_source(
                 session, new_event.id, candidate
             )
+            await session.flush()
+            attached_collection_source = await _attached_collection_source(
+                session, new_event.id, candidate
+            )
+            if (
+                attached_collection_source is not None
+                and candidate.collection_semantic_decisions is not None
+                and apply_collection_decisions(
+                    new_event,
+                    candidate.collection_semantic_decisions,
+                    source=attached_collection_source,
+                    source_corpus=_collection_source_corpus(candidate),
+                    input_hash=collection_adjudication_input_hash(candidate),
+                )
+            ):
+                session.add(new_event)
             await _enqueue_ticket_sites_queue(session, event_id=int(new_event.id or 0))
             if candidate.source_text:
                 await _sync_source_texts(session, new_event)
@@ -17565,21 +18157,20 @@ async def _smart_event_update_impl(
             except Exception:
                 logger.warning("smart_update: schedule/update failed for event %s", new_event.id, exc_info=True)
 
-        # Interest-club relation verification is an optional shadow projection.
-        # It must never extend the Smart Update critical path or affect the
-        # canonical event transaction. The feature helper is a no-op unless its
-        # disabled-by-default flag is explicitly enabled.
+        # Interest-club verification is durable outbox work. Enqueueing remains
+        # outside the canonical event transaction, while provider/restart
+        # failures can no longer lose the relation evaluation.
         try:
             from interest_clubs import schedule_interest_club_evaluation
 
-            schedule_interest_club_evaluation(
+            await schedule_interest_club_evaluation(
                 db,
                 int(new_event.id or 0),
                 schedule_projection=schedule_tasks,
             )
         except Exception:
             logger.warning(
-                "smart_update: failed to launch interest-club evaluation event=%s",
+                "smart_update: failed to enqueue interest-club evaluation event=%s",
                 new_event.id,
                 exc_info=True,
             )
@@ -18809,6 +19400,26 @@ async def _smart_event_update_impl(
         await _ensure_legacy_event_sources(session, event_db)
 
         added_sources, same_source = await _ensure_event_source(session, event_db.id, candidate)
+        await session.flush()
+        attached_collection_source = await _attached_collection_source(
+            session, event_db.id, candidate
+        )
+        if (
+            attached_collection_source is not None
+            and candidate.collection_semantic_decisions is not None
+            and apply_collection_decisions(
+                event_db,
+                candidate.collection_semantic_decisions,
+                source=attached_collection_source,
+                source_corpus=_collection_source_corpus(candidate),
+                input_hash=collection_adjudication_input_hash(candidate),
+            )
+        ):
+            updated_fields = True
+            if "collection_decisions" not in updated_keys:
+                updated_keys.append("collection_decisions")
+            if "is_free" not in updated_keys:
+                updated_keys.append("is_free")
         if clean_source_text:
             if same_source:
                 event_db.source_text = clean_source_text
@@ -19093,14 +19704,14 @@ async def _smart_event_update_impl(
         try:
             from interest_clubs import schedule_interest_club_evaluation
 
-            schedule_interest_club_evaluation(
+            await schedule_interest_club_evaluation(
                 db,
                 int(existing.id or 0),
                 schedule_projection=schedule_tasks,
             )
         except Exception:
             logger.warning(
-                "smart_update: failed to launch interest-club evaluation event=%s",
+                "smart_update: failed to enqueue interest-club evaluation event=%s",
                 existing.id,
                 exc_info=True,
             )
@@ -19647,6 +20258,26 @@ async def _ensure_event_source(
             exc_info=True,
         )
     return True, False
+
+
+async def _attached_collection_source(
+    session,
+    event_id: int | None,
+    candidate: EventCandidate,
+) -> EventSource | None:
+    """Return only the exact source accepted for this event transaction."""
+
+    if not event_id or not candidate.source_url:
+        return None
+    return (
+        await session.execute(
+            select(EventSource).where(
+                EventSource.event_id == int(event_id),
+                EventSource.source_url == str(candidate.source_url),
+                EventSource.source_type == str(candidate.source_type),
+            )
+        )
+    ).scalar_one_or_none()
 
 
 async def _record_source_facts(

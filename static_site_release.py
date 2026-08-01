@@ -9,6 +9,7 @@ payload carries the effect watermark and correlation evidence.
 from __future__ import annotations
 
 import hashlib
+import calendar
 import json
 import os
 import re
@@ -611,19 +612,18 @@ _PUBLIC_FINGERPRINT_TABLES: dict[str, tuple[str, ...]] = {
         "age_restriction_input_hash", "age_assessment", "age_assessment_status",
         "age_assessment_decision_version", "age_assessment_input_hash",
         "linked_event_ids", "other_date_ids", "photo_urls", "photo_count", "topics",
+        "collection_decisions",
         "source_post_url", "source_vk_post_url", "tg_event_post_url", "vk_repost_url",
     ),
     "eventposter": (
         "id", "event_id", "supabase_url", "catbox_url", "ocr_text", "review_status",
         "display_order", "media_role", "recommended_hero_fit", "width", "height",
     ),
-    "event_source": ("event_id", "source_url"),
-    "event_publication": ("event_id", "status", "stored_url", "live_url"),
-    "interest_club": (
-        "id", "slug", "canonical_name", "topic", "description", "city", "typical_place",
-        "public_status",
+    "event_source": (
+        "event_id", "source_type", "source_url", "source_chat_username",
+        "source_chat_id", "source_message_id", "trust_level",
     ),
-    "interest_club_event": ("club_id", "event_id", "status"),
+    "event_publication": ("event_id", "status", "stored_url", "live_url"),
     "festival_calendar_item": (
         "id", "calendar_year", "slug", "title", "description", "start_date",
         "end_date", "date_precision", "date_label", "sort_date", "month_key",
@@ -647,6 +647,98 @@ def _canonical_scalar(value: Any) -> Any:
         except (TypeError, ValueError):
             pass
     return value
+
+
+def _calendar_months_before(value: date, months: int) -> date:
+    ordinal = value.year * 12 + (value.month - 1) - int(months)
+    year, month0 = divmod(ordinal, 12)
+    month = month0 + 1
+    return date(year, month, min(value.day, calendar.monthrange(year, month)[1]))
+
+
+def _interest_club_projection_digest(
+    connection: sqlite3.Connection,
+    *,
+    effective_date: str,
+) -> str:
+    """Hash only approved club truth relevant to the bounded v2 window."""
+
+    digest = hashlib.sha256()
+    tables = {
+        str(row[0])
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )
+    }
+    required = {
+        "interest_club",
+        "interest_club_event",
+        "interest_club_evaluation",
+        "event",
+    }
+    if not required.issubset(tables):
+        digest.update(b"interest-club-v2:absent")
+        return digest.hexdigest()
+    cutoff = _calendar_months_before(date.fromisoformat(effective_date), 6).isoformat()
+    queries: tuple[tuple[str, tuple[Any, ...]], ...] = (
+        (
+            """
+            SELECT id,slug,canonical_name,topic,description,city,typical_place,
+                   public_status,identity_version,policy_version,
+                   aliases_json,source_anchors_json,provenance_json
+            FROM interest_club
+            WHERE public_status='approved'
+            ORDER BY id
+            """,
+            (),
+        ),
+        (
+            """
+            SELECT ice.club_id,ice.event_id,ice.status,ice.decision_lane,
+                   ice.policy_version,ice.input_hash,
+                   e.title,e.date,e.end_date,e.time,e.city,e.location_name,
+                   e.lifecycle_status,e.identity_status,e.merged_into_event_id,
+                   e.silent,e.festival
+            FROM interest_club_event ice
+            JOIN interest_club c ON c.id=ice.club_id AND c.public_status='approved'
+            JOIN event e ON e.id=ice.event_id
+            WHERE COALESCE(NULLIF(e.end_date,''),e.date)>=?
+            ORDER BY ice.club_id,ice.event_id
+            """,
+            (cutoff,),
+        ),
+        (
+            """
+            SELECT ie.club_id,ie.event_id,ie.status,ie.verdict,ie.decision_lane,
+                   ie.policy_version,ie.input_hash,ie.error_code
+            FROM interest_club_evaluation ie
+            JOIN interest_club c ON c.id=ie.club_id AND c.public_status='approved'
+            JOIN event e ON e.id=ie.event_id
+            WHERE COALESCE(NULLIF(e.end_date,''),e.date)>=?
+            ORDER BY ie.club_id,ie.event_id,ie.policy_version,ie.input_hash
+            """,
+            (cutoff,),
+        ),
+    )
+    digest.update(
+        json.dumps(
+            {"schema": "interest-club-fingerprint-v2", "cutoff": cutoff},
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
+    for query, params in queries:
+        for row in connection.execute(query, params):
+            digest.update(
+                json.dumps(
+                    [_canonical_scalar(value) for value in row],
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    default=str,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            )
+            digest.update(b"\n")
+    return digest.hexdigest()
 
 
 def _table_projection_digest(
@@ -737,6 +829,10 @@ def compute_static_site_input_fingerprint(
             )
             for table, columns in sorted(_PUBLIC_FINGERPRINT_TABLES.items())
         }
+        table_digests["interest_club_projection_v2"] = _interest_club_projection_digest(
+            connection,
+            effective_date=clock.effective_date,
+        )
     finally:
         connection.close()
     cache_path = Path(related_cache_path).resolve() if related_cache_path else None

@@ -55,6 +55,15 @@ def _env_nonnegative_int(name: str, default: int) -> int:
         return max(0, int(default))
 
 
+def collection_semantic_compute_required(args: argparse.Namespace) -> bool:
+    """Production candidates always compute, regardless of publication flags."""
+
+    return bool(
+        getattr(args, 'collection_semantic_compute', False)
+        or getattr(args, 'profile', 'preview') == 'production-candidate'
+    )
+
+
 def require_static_site_storage_ready() -> None:
     """Fail before Kaggle submission when root temp or durable work is unusable."""
 
@@ -169,19 +178,31 @@ def persist_semantic_outputs(
 ) -> None:
     semantic = result.get('semantic')
     semantic = semantic if isinstance(semantic, dict) else {}
-    outputs = (
+    outputs = [
         ('static_event_bge_vectors.npz', args.bge_vector_cache, 'vector_cache_sha256'),
         ('static_event_bge_vectors.receipt.json', args.bge_vector_receipt, 'vector_receipt_sha256'),
-        ('unusual_events_cache.json', args.unusual_cache, 'unusual_cache_sha256'),
-        ('unusual_events_last_good.json', args.unusual_last_good, 'last_good_sha256'),
-    )
+    ]
+    if getattr(args, 'unusual_enabled', False) or semantic.get('unusual_cache_sha256'):
+        outputs.extend([
+            ('unusual_events_cache.json', args.unusual_cache, 'unusual_cache_sha256'),
+            ('unusual_events_last_good.json', args.unusual_last_good, 'last_good_sha256'),
+        ])
+    if collection_semantic_compute_required(args):
+        outputs.extend([
+            ('collection-batch-v1.json', args.collection_batch, 'collection_batch_sha256'),
+            (
+                'collection-batch-last-good.json',
+                args.collection_batch_last_good,
+                'collection_last_good_sha256',
+            ),
+        ])
     for filename, target_value, hash_key in outputs:
         if not target_value:
             continue
         source = out_dir / filename
         expected_hash = str(semantic.get(hash_key) or '')
         if not source.is_file():
-            if hash_key == 'last_good_sha256' and not expected_hash:
+            if hash_key in {'last_good_sha256', 'collection_last_good_sha256'} and not expected_hash:
                 continue
             raise RuntimeError(f'validated semantic cache output missing: {filename}')
         if not re.fullmatch(r'[0-9a-f]{64}', expected_hash) or sha256_file(source) != expected_hash:
@@ -238,12 +259,22 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
             raise RuntimeError('Kaggle result input fingerprint mismatch')
         if result.get('build_clock') != args.build_clock:
             raise RuntimeError('Kaggle result build clock mismatch')
-        if args.related_mode == 'bge' or getattr(args, 'unusual_enabled', False):
+        if collection_semantic_compute_required(args):
             semantic = result.get('semantic')
             if not isinstance(semantic, dict):
-                raise RuntimeError('Kaggle shared BGE/unusual result metadata missing')
+                raise RuntimeError('Kaggle collection semantic result metadata missing')
             if (
                 int(semantic.get('provider_calls', -1)) != 0
+                or int(semantic.get('event_count') or -1) <= 0
+                or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('artifact_sha256') or ''))
+                or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('collection_batch_sha256') or ''))
+            ):
+                raise RuntimeError('Kaggle collection semantic result metadata mismatch')
+        elif args.related_mode == 'bge' or getattr(args, 'unusual_enabled', False):
+            semantic = result.get('semantic')
+            if (
+                not isinstance(semantic, dict)
+                or int(semantic.get('provider_calls', -1)) != 0
                 or int(semantic.get('event_count') or -1) <= 0
                 or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('artifact_sha256') or ''))
                 or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('manifest_sha256') or ''))
@@ -375,6 +406,14 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
             '--unusual-cache', str(Path(getattr(args, 'unusual_cache', ARTIFACT_ROOT / 'unusual_events_cache.json')).resolve()),
             '--unusual-last-good', str(Path(getattr(args, 'unusual_last_good', ARTIFACT_ROOT / 'unusual_events_last_good.json')).resolve()),
         ])
+        if collection_semantic_compute_required(args):
+            cmd.extend([
+                '--collection-semantic-compute',
+                '--collection-batch-output',
+                str(staged_site / 'src' / 'data' / 'collection-batch-v1.json'),
+                '--collection-batch-last-good',
+                str(Path(getattr(args, 'collection_batch_last_good', ARTIFACT_ROOT / 'collection-batch-last-good.json')).resolve()),
+            ])
         if args.profile != 'preview':
             cmd.extend([
                 '--repo-sha', args.repo_sha,
@@ -732,6 +771,8 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'bge_vector_receipt_filename': 'static_event_bge_vectors.receipt.json',
         'unusual_cache_filename': 'unusual_events_cache.json',
         'unusual_last_good_filename': 'unusual_events_last_good.json',
+        'collection_batch_filename': 'collection-batch-v1.json',
+        'collection_batch_last_good_filename': 'collection-batch-last-good.json',
         'related_mode': args.related_mode,
         'related_corpus_revision': args.related_corpus_revision or None,
         'related_response_max_bytes': getattr(args, 'related_response_max_bytes', 256 * 1024),
@@ -748,6 +789,7 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'bge_batch_size': getattr(args, 'bge_batch_size', 8),
         'unusual_enabled': bool(getattr(args, 'unusual_enabled', False)),
         'unusual_migration': bool(getattr(args, 'unusual_migration', False)),
+        'collection_semantic_compute': collection_semantic_compute_required(args),
         'queued_at': datetime.now(timezone.utc).isoformat(),
         'payload_mode': 'dataset_source',
     }
@@ -764,8 +806,13 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
             (getattr(args, 'bge_vector_receipt', ''), 'static_event_bge_vectors.receipt.json'),
             (getattr(args, 'unusual_cache', ''), 'unusual_events_cache.json'),
             (getattr(args, 'unusual_last_good', ''), 'unusual_events_last_good.json'),
+            (getattr(args, 'collection_batch_last_good', ''), 'collection-batch-last-good.json'),
         )
-        if args.related_mode == 'bge' or getattr(args, 'unusual_enabled', False)
+        if (
+            collection_semantic_compute_required(args)
+            or args.related_mode == 'bge'
+            or getattr(args, 'unusual_enabled', False)
+        )
         else ()
     )
     for source_value, filename in semantic_inputs:
@@ -845,7 +892,8 @@ def adopt_existing_kernel_output(args: argparse.Namespace, client, kernel_ref: s
     print(f'[static-site-kaggle] adopted and downloaded {len(files)} files to {out_dir}', flush=True)
     validated = validate_downloaded_result(out_dir, args)
     if getattr(args, 'export_in_kaggle', False) and (
-        getattr(args, 'related_mode', 'sparse') == 'bge'
+        collection_semantic_compute_required(args)
+        or getattr(args, 'related_mode', 'sparse') == 'bge'
         or getattr(args, 'unusual_enabled', False)
     ):
         persist_semantic_outputs(out_dir, args, validated)
@@ -957,6 +1005,9 @@ def main() -> int:
     parser.add_argument('--bge-batch-size', type=int, default=int(os.getenv('STATIC_SITE_BGE_BATCH_SIZE', '8') or '8'))
     parser.add_argument('--unusual-cache', default=os.getenv('STATIC_SITE_UNUSUAL_CACHE', str(ARTIFACT_ROOT / 'unusual_events_cache.json')))
     parser.add_argument('--unusual-last-good', default=os.getenv('STATIC_SITE_UNUSUAL_LAST_GOOD', str(ARTIFACT_ROOT / 'unusual_events_last_good.json')))
+    parser.add_argument('--collection-batch', default=os.getenv('STATIC_SITE_COLLECTION_BATCH', str(ARTIFACT_ROOT / 'collection-batch-v1.json')))
+    parser.add_argument('--collection-batch-last-good', default=os.getenv('STATIC_SITE_COLLECTION_LAST_GOOD', str(ARTIFACT_ROOT / 'collection-batch-last-good.json')))
+    parser.add_argument('--collection-semantic-compute', action='store_true', default=(os.getenv('STATIC_SITE_COLLECTION_SEMANTIC_COMPUTE', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
     parser.add_argument('--unusual-enabled', action='store_true', default=(os.getenv('STATIC_SITE_UNUSUAL_ENABLED', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
     parser.add_argument('--unusual-migration', action='store_true', default=(os.getenv('STATIC_SITE_UNUSUAL_MIGRATION', '1').strip().lower() in {'1', 'true', 'yes', 'on'}))
     parser.add_argument('--keep-secret-datasets', action='store_true', default=(os.getenv('STATIC_SITE_KEEP_SECRET_DATASETS', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
@@ -980,7 +1031,12 @@ def main() -> int:
     args.build_id = args.build_id or f"preview-{datetime.now(timezone.utc).strftime('%Y%m%d-static-prod50')}"
     if not BUILD_ID_RE.fullmatch(args.build_id):
         raise SystemExit('--build-id must be one bounded preview-* or production-* identity')
-    if (args.related_mode == 'bge' or args.unusual_enabled) and not re.fullmatch(
+    if (
+        args.related_mode == 'bge'
+        or args.unusual_enabled
+        or args.collection_semantic_compute
+        or args.profile == 'production-candidate'
+    ) and not re.fullmatch(
         r'[0-9a-f]{40}', args.bge_model_revision or ''
     ):
         raise SystemExit('shared BGE requires a pinned 40-character --bge-model-revision')
@@ -995,6 +1051,9 @@ def main() -> int:
         raise SystemExit('--related-total-response-max-bytes must be at least the per-response limit')
 
     if args.profile == 'production-candidate':
+        # A production candidate may keep every new route shadow/blocked, but
+        # it may not skip semantic computation or receipt validation.
+        args.collection_semantic_compute = True
         if args.catalog_mode != 'full' or not args.export_in_kaggle:
             raise SystemExit('production-candidate requires --catalog-mode full and --export-in-kaggle')
         if not re.fullmatch(r'[0-9a-f]{40}', args.repo_sha or ''):
@@ -1104,7 +1163,11 @@ def main() -> int:
                                 cache_target.parent.mkdir(parents=True, exist_ok=True)
                                 atomic_copy_file(cache_out, cache_target)
                                 print(f"[static-site-kaggle] related cache persisted atomically: {cache_target}", flush=True)
-                            if args.export_in_kaggle and (args.related_mode == 'bge' or getattr(args, 'unusual_enabled', False)):
+                            if args.export_in_kaggle and (
+                                collection_semantic_compute_required(args)
+                                or args.related_mode == 'bge'
+                                or getattr(args, 'unusual_enabled', False)
+                            ):
                                 persist_semantic_outputs(out_dir, args, validated)
                         return 0
                     if raw in {'ERROR', 'FAILED', 'CANCELLED'}:

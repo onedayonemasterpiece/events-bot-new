@@ -4,6 +4,17 @@
 
 **Production canary live 2026-07-17.** Implementation PR #54 и release PR #60 достижимы из `origin/main`; Fly runtime v1688 работает с relation pipeline, static projection и public gates ON. В production импортированы шесть confirmed identities и две shadow identities; public freshness/boundary gates опубликовали четыре клуба на canonical root routes. Точные SHA, counts, hashes, rollback и HTTP evidence записаны в [release plan](release-plan.md#production-evidence-2026-07-17). Семидневное наблюдение Stage 5 ещё продолжается и не подменяется фактом deploy.
 
+**Data-prep v2 candidate 2026-08-01:** в ветке
+`integration/static-collections-data-prep-20260801` реализованы durable
+`interest_club_relation` outbox, immutable running owner + один successor,
+hash/policy-versioned evaluation history, provider-deferred retry с сохранением
+совместимого accepted relation, bounded shadow discovery и
+`interest-clubs-static-v2.json`. V2 показывает approved identity при будущей
+встрече или подтверждённой активности за включительные шесть календарных
+месяцев; на read-only production control это все 6 approved identities и 13
+grounded relations. Это ещё не production deploy и не изменение существующих
+Astro routes.
+
 Для noindex candidate от 2026-07-23 проекция пересчитана из свежего SQLite
 snapshot по текущему 90-дневному freshness contract, а не скопирована из
 старого root HTML. Она содержит три current identity (`game-vibes`,
@@ -78,10 +89,10 @@ Research stand дал 22/24 grounded positives, 0/24 unsafe false positives и 4
 
 ### Identity lifecycle
 
-- **active:** approved identity с будущей встречей либо verified meeting не старше 90 дней;
-- **dormant:** нет будущей встречи, последняя verified meeting старше 90, но не старше 365 дней; доступна в контролируемом архиве, не в актуальной выдаче;
-- **archived:** нет verified активности более 365 дней или владелец подтвердил завершение;
-- новая grounded meeting может вернуть approved identity из dormant/archive в active; история и прежний slug сохраняются;
+- **active/visible:** approved identity с будущей встречей либо verified meeting, чья effective end date входит во включительное окно шести календарных месяцев;
+- **dormant:** approved identity без такой активности; она не попадает в общий каталог, но identity, slug и история сохраняются;
+- **archived/merged:** только явное редакционное состояние, а не результат таймера;
+- новая grounded meeting автоматически возвращает approved dormant identity в visible; возврат archived/merged остаётся редакционным решением;
 - freshness считается по distinct meeting dates после collapse дубликатов и linked occurrences, а не по числу source posts.
 
 ### Merge, rename и split
@@ -112,12 +123,19 @@ Reviewer получает candidate identity, proposed relation, normalized anch
 
 ## Реализованные RC surfaces
 
-- additive migration: `alembic/versions/20260717_interest_clubs.py`;
-- canonical models/bootstrap: `models.py`, `db.py`;
-- explicit shadow importer and relation evaluator: `interest_clubs.py`;
-- disabled-by-default Smart Update handoff: `smart_event_update.py`;
-- disposable static projection: `site/scripts/export-production-preview-data.py` → `site/src/data/interest-clubs.json`;
-- gated index/detail UI: `site/src/pages/kluby-po-interesam/`;
+- additive base migration: `alembic/versions/20260717_interest_clubs.py`;
+- runtime hash-history upgrade: `Database.init()` preserves rows while replacing
+  legacy pair uniqueness; Alembic metadata remains a secondary schema record;
+- canonical models/bootstrap and relation evaluator: `models.py`, `db.py`,
+  `interest_clubs.py`;
+- durable Smart Update handoff: `JobTask.interest_club_relation`;
+- bounded catch-up: `scripts/backfill_interest_club_relations.py` plans exact
+  alias/source candidates overlapping the six-month window and only with
+  `--apply` enqueues the same durable jobs; it never calls LLM inline or
+  auto-approves/creates identities;
+- compatible v1 and six-month v2 projections:
+  `interest-clubs.json`, `interest-clubs-static-v2.json`;
+- existing gated index/detail UI: `site/src/pages/kluby-po-interesam/`;
 - release gates: `ENABLE_INTEREST_CLUB_PIPELINE`, `ENABLE_INTEREST_CLUB_STATIC_PROJECTION`, `PUBLIC_INTEREST_CLUBS_ENABLED`. Первые решения/связи по-прежнему fail-closed; в production static generation последние два флага включены явно, передаются в зашифрованный Kaggle runtime dataset и входят в input fingerprint. Поэтому approved DB-клубы не заменяются пустым состоянием при очередной сборке, а выключение любого флага остаётся явным rollback.
 
 Production and immutable-candidate build wrappers also default

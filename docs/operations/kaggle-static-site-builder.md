@@ -24,6 +24,24 @@ to Fly/page views. Exact semantic and rollback rules live in
 The real Kaggle CPU canary is still pending and must not be inferred from local
 fixture tests.
 
+### Static collection data-prep contract (candidate 2026-08-01)
+
+`production-candidate` now requires `collection_semantic_compute=true` even when
+legacy Unusual publication is disabled and related results remain pgvector. The
+existing kernel passes the same immutable SQLite snapshot to the exporter, which
+materializes exact collections/venue/club projections, encodes changed
+`collection_semantics_v1` rows and the namespaced prototype union once, and
+writes `collection-batch-v1.json`. Astro consumes files only after the kernel
+validates exact catalog coverage and hashes. There is no second notebook,
+snapshot upload, Supabase event read or page-view provider call.
+
+The Fly runner persists BGE cache/receipt and optional compatible last-good only
+after complete exact-run validation. A new/changed semantic label without
+approved gold remains `blocked`; missing/partial/mismatched output fails the
+production candidate rather than publishing an empty success. Cold and warm
+real Kaggle CPU evidence is still mandatory before deploy. Exact implementation
+and pending gates: [static selections data-prep](../features/static-site-pages/podborki-to-be.md#0-состояние-реализации-data-prep-mvp).
+
 Kaggle must not be treated as an uncontrolled production publisher. Production trust belongs to the release protocol, not to the notebook itself.
 
 Generated-output canaries must follow catalog lifecycle. A historical event may

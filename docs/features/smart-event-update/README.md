@@ -785,6 +785,40 @@ feature не увеличивает число provider requests на событ
 разделены; конфликт fail-closed, публичный default — declared-only. Полная
 каноника, CPU Kaggle/BGE gate и backfill: [Event age rating](../event-age-rating/README.md).
 
+### Collection facts for static selections (data-prep v1)
+
+Static selections do not make admission, target-audience or visiting-person
+decisions in Astro/BGE. Smart Update owns a nullable, independently merged
+`Event.collection_decisions` container with three grounded projections:
+
+- `admission_decision.value = confirmed_free|confirmed_paid|unknown`;
+- `audience_decision.value = kids|family|none|unknown`;
+- `people_appearances[]` with explicit role, `confirmed|mentioned|unknown` and
+  separately evidenced origin scope.
+
+The stage is a short strict-schema `collection_candidate_adjudication`, not an
+extension of every large writer request. It is routed only by admission
+claims/conflicts, `FAMILY|KIDS_SCHOOL`, `PERSONALITIES`, explicit backfill/conflict
+reasons or BGE candidate signals. Ticket status/link alone and age alone do not
+route or prove meaning. Topics/BGE are recall signals only; every accepted
+non-unknown result requires an exact contiguous quote from the attached
+same-event source/OCR corpus. Provider failure, invalid schema/quote and
+`unknown` abstain without erasing accepted truth.
+
+Accepted source attachment and decision application are atomic. JSON is deep
+merged per decision and reassigned as a whole for SQLAlchemy persistence; manual
+lock wins, otherwise source trust and recency decide conflicts.
+`Event.is_free` remains the compatible materialized bool and changes only from
+`confirmed_free|confirmed_paid`; exporter code must not infer it from prose
+`ticket_status`. The additive schema is `20260801_static_collection_facts`. A bounded operational
+backfill is implemented in `scripts/backfill_static_collection_facts.py`: plan
+mode is read-only; `--apply` reuses persisted `EventSource`, the same strict
+adjudicator and atomic apply contract, prefers trusted/recent source evidence,
+is hash-resumable, and can be limited by reason/event/source count. It does not
+re-run Smart Update identity/writer logic or scan the whole archive. Production
+execution and source review remain release steps. Product/extraction contract:
+[`podborki-to-be.md`](../static-site-pages/podborki-to-be.md).
+
 ### Interest-club relation handoff
 
 Interest-club matching is a downstream identity relation, not part of the

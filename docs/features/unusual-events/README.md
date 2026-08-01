@@ -7,6 +7,13 @@
 > widths; production root was not changed and still requires explicit owner
 > acceptance. The older `11d8c984` run remains superseded evidence.
 
+> **Data-prep candidate, 2026-08-01:** branch
+> `integration/static-collections-data-prep-20260801` separates mandatory
+> collection semantic compute from publication and moves future scoring to the
+> evidence-only `collection_semantics_v1` document/cache. New/recalibrated heads
+> remain blocked without owner gold. No real current-catalog cold/warm Kaggle run
+> or public rollout has happened yet; the incident remains open.
+
 `/neobychnoe/` is a static discovery feed for attendable events whose **way of
 participating, access, place, practice or combination of formats** is materially
 uncommon. It is not a synonym for a rare genre, an exciting title, a fashionable
@@ -69,29 +76,32 @@ build never pads an under-diverse result with ordinary events.
 
 ## Shared BGE: one document, one vector, several consumers
 
-The static pipeline has one BGE encoding boundary:
-`site/scripts/static_event_bge.py`.
+The production-candidate static pipeline has one BGE encoding boundary:
+`site/scripts/static_event_bge.py`, orchestrated by
+`site/scripts/static_collection_export.py` and the existing StaticSiteBuilder.
 
-1. `build_related_v1_document()` reuses the existing canonical `related_v1`
-   document builder rather than copying its text policy.
-2. `BAAI/bge-m3` is pinned to revision
-   `5617a9f61b028005a4858fdac845db406aefb181` and emits normalized 1024-dimension
-   dense vectors under `bge_m3_cpu_dense_fp32_l2_v1`.
-3. `build_shared_bge_vector_artifact()` compares exact document hashes with the
-   previous artifact, copies unchanged normalized rows and sends only changed
-   events/prototypes through one model session. Removing one event drops only
-   that row; changing one event encodes only that event. The same resulting
-   vector is consumed by public static related retrieval, unusual scoring,
-   family evidence and presentation concept clustering/support.
-   A classifier-only calibration is also cache-compatible: the dense vectors
-   do not depend on the lightweight head. The rebuilt artifact reuses all rows,
-   binds the **new** classifier SHA in fresh metadata and recomputes its artifact
-   SHA. Runtime consumers still reject a vector receipt that was not rebound to
-   their current classifier.
-4. Consumers call `validate_shared_bge_vector_artifact()` and bind the model,
-   revision, dimension, document version, normalization, prototype-bank hash,
-   classifier hash and artifact hash. A mismatch means abstain/disable, never
-   an implicit recompute in a second scorer.
+1. Event rows use evidence-only `collection_semantics_v1`; derived audience
+   topics/regex are excluded so the audience head cannot merely repeat its own
+   routing signal. Historical `related_v1`/`event-related-doc-v1` canary hashes
+   are not quality evidence for this new document.
+2. `BAAI/bge-m3` stays pinned to revision
+   `5617a9f61b028005a4858fdac845db406aefb181` and emits normalized 1024d
+   `float32` vectors. The event cache is physically/self-hash validated and is
+   compatible independently from prototype/classifier banks. Changing one
+   prototype must not re-encode all events.
+3. One model session encodes changed event rows plus the namespaced union of
+   prototypes. One matrix is then consumed by Unusual, audience recall and the
+   new semantic heads; each label retains its own policy, gold, thresholds and
+   fail-closed publication status.
+4. `production-candidate` requires the compute even when legacy
+   `STATIC_SITE_UNUSUAL_ENABLED=0` and related mode is pgvector. The builder
+   validates full catalog coverage, exact snapshot/catalog/model/document/
+   prototype/classifier hashes, `provider_calls=0`, cache identity and
+   `collection-batch-v1.json`. Publication remains a separate per-label gate.
+5. No current Unusual decision can be accepted merely by rebinding the old
+   prototype bank: evidence-only document migration requires a fresh owner gold
+   evaluation plus real cold/warm pinned-BGE canary. Until then the label emits
+   an explicit blocked receipt and the previously deployed site is not mutated.
 
 The Kaggle CPU bootstrap pins `FlagEmbedding==1.4.0`, the
 Transformers-5-compatible runtime already used by the repository's BGE

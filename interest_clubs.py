@@ -44,7 +44,10 @@ _ENABLED_VALUES = {"1", "true", "yes", "on"}
 _URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
 _SPACE_RE = re.compile(r"\s+")
 _WORD_RE = re.compile(r"(?u)\b[\wЁё-]+\b")
-_BACKGROUND_TASKS: set[asyncio.Task[Any]] = set()
+
+
+class InterestClubProviderDeferred(RuntimeError):
+    """Retryable marker after a deferred provider verdict was persisted."""
 
 _VERDICT_SCHEMA: dict[str, Any] = {
     "type": "OBJECT",
@@ -392,6 +395,8 @@ async def _upsert_evaluation(
             select(InterestClubEvaluation).where(
                 InterestClubEvaluation.club_id == club_id,
                 InterestClubEvaluation.event_id == event_id,
+                InterestClubEvaluation.policy_version == POLICY_VERSION,
+                InterestClubEvaluation.input_hash == input_hash,
             )
         )
     ).scalar_one_or_none()
@@ -419,6 +424,42 @@ async def _upsert_evaluation(
     row.updated_at = now
     session.add(row)
     return row
+
+
+async def _active_grounded_relation(
+    session: Any,
+    *,
+    club_id: int,
+    event_id: int,
+) -> InterestClubEvent | None:
+    """Return the last-good relation only with an exact accepted decision."""
+
+    relation = (
+        await session.execute(
+            select(InterestClubEvent).where(
+                InterestClubEvent.club_id == club_id,
+                InterestClubEvent.event_id == event_id,
+                InterestClubEvent.status == "active",
+            )
+        )
+    ).scalar_one_or_none()
+    if relation is None:
+        return None
+    accepted = (
+        await session.execute(
+            select(InterestClubEvaluation.id)
+            .where(
+                InterestClubEvaluation.club_id == club_id,
+                InterestClubEvaluation.event_id == event_id,
+                InterestClubEvaluation.status == "accepted",
+                InterestClubEvaluation.verdict == "yes",
+                InterestClubEvaluation.policy_version == relation.policy_version,
+                InterestClubEvaluation.input_hash == relation.input_hash,
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return relation if accepted is not None else None
 
 
 async def _upsert_relation(
@@ -491,6 +532,7 @@ async def evaluate_interest_clubs_for_event(
     *,
     verifier: Verifier | None = None,
     schedule_projection: bool = True,
+    retry_provider_failures: bool = False,
 ) -> bool:
     """Evaluate one canonical event; return whether active membership changed."""
 
@@ -508,6 +550,19 @@ async def evaluate_interest_clubs_for_event(
             ).scalars().all()
         )
         if not event_is_relation_eligible(event):
+            for club_id in previous_active:
+                ineligible_hash = hashlib.sha256(
+                    f"{POLICY_VERSION}:{club_id}:{event_id}:ineligible".encode("utf-8")
+                ).hexdigest()
+                await _upsert_evaluation(
+                    session,
+                    club_id=club_id,
+                    event_id=int(event_id),
+                    status="ineligible",
+                    verdict="ineligible",
+                    lane="none",
+                    input_hash=ineligible_hash,
+                )
             await session.execute(delete(InterestClubEvent).where(InterestClubEvent.event_id == int(event_id)))
             await session.commit()
             changed = bool(previous_active)
@@ -531,18 +586,26 @@ async def evaluate_interest_clubs_for_event(
 
     active_after: set[int] = set()
     provider = verifier
+    provider_deferred = False
     for club in clubs:
         club_id = int(club.id or 0)
         packet = build_evidence_packet(event, sources, club)
         async with db.get_session() as session:
-            previous_eval = (
+            current_eval = (
                 await session.execute(
                     select(InterestClubEvaluation).where(
                         InterestClubEvaluation.club_id == club_id,
                         InterestClubEvaluation.event_id == int(event_id),
+                        InterestClubEvaluation.policy_version == POLICY_VERSION,
+                        InterestClubEvaluation.input_hash == (
+                            packet.input_hash if packet is not None else ""
+                        ),
                     )
                 )
             ).scalar_one_or_none()
+            last_good = await _active_grounded_relation(
+                session, club_id=club_id, event_id=int(event_id)
+            )
             if packet is None:
                 no_match_hash = hashlib.sha256(
                     f"{POLICY_VERSION}:{club_id}:{event_id}:no_match".encode("utf-8")
@@ -566,12 +629,10 @@ async def evaluate_interest_clubs_for_event(
                 continue
 
             if (
-                previous_eval is not None
-                and previous_eval.input_hash == packet.input_hash
-                and previous_eval.policy_version == POLICY_VERSION
-                and previous_eval.status != "deferred"
+                current_eval is not None
+                and current_eval.status != "deferred"
             ):
-                if previous_eval.status == "accepted":
+                if current_eval.status == "accepted":
                     relation = (
                         await session.execute(
                             select(InterestClubEvent).where(
@@ -589,7 +650,19 @@ async def evaluate_interest_clubs_for_event(
                     if relation is not None:
                         active_after.add(club_id)
                         continue
-                else:
+                elif current_eval.verdict == "no" or current_eval.status == "no_match":
+                    await session.execute(
+                        delete(InterestClubEvent).where(
+                            InterestClubEvent.club_id == club_id,
+                            InterestClubEvent.event_id == int(event_id),
+                        )
+                    )
+                    await session.commit()
+                    continue
+                elif last_good is not None:
+                    # ``unclear`` is not negative evidence. Keep serving the
+                    # accepted older hash until a grounded yes/no supersedes it.
+                    active_after.add(club_id)
                     continue
 
         if provider is None:
@@ -603,12 +676,13 @@ async def evaluate_interest_clubs_for_event(
             result = VerificationResult("unclear", error_code="invalid_evidence_quote")
 
         if result.verdict == "yes":
-            evaluation_status, relation_status = "accepted", "active"
+            evaluation_status = "accepted"
             active_after.add(club_id)
         elif result.verdict == "provider_error":
-            evaluation_status, relation_status = "deferred", "deferred"
+            evaluation_status = "deferred"
+            provider_deferred = True
         else:
-            evaluation_status, relation_status = "review", "review"
+            evaluation_status = "review"
 
         evidence = {
             "packet_version": PACKET_VERSION,
@@ -629,14 +703,30 @@ async def evaluate_interest_clubs_for_event(
                 error_code=result.error_code,
                 evidence=evidence,
             )
-            await _upsert_relation(
-                session,
-                club_id=club_id,
-                event_id=int(event_id),
-                status=relation_status,
-                packet=packet,
-                result=result,
-            )
+            if result.verdict == "yes":
+                await _upsert_relation(
+                    session,
+                    club_id=club_id,
+                    event_id=int(event_id),
+                    status="active",
+                    packet=packet,
+                    result=result,
+                )
+            elif result.verdict == "no":
+                # Explicit semantic negative invalidates the old projection.
+                await session.execute(
+                    delete(InterestClubEvent).where(
+                        InterestClubEvent.club_id == club_id,
+                        InterestClubEvent.event_id == int(event_id),
+                    )
+                )
+            else:
+                # Provider failure/unclear never overwrites last-good truth.
+                retained = await _active_grounded_relation(
+                    session, club_id=club_id, event_id=int(event_id)
+                )
+                if retained is not None:
+                    active_after.add(club_id)
             await session.commit()
 
     # Identities can be archived/merged between evaluations. Do not leave an
@@ -656,35 +746,88 @@ async def evaluate_interest_clubs_for_event(
     changed = previous_active != active_after
     if changed and schedule_projection:
         await _schedule_projection_build(db, int(event_id))
+    if provider_deferred and retry_provider_failures:
+        raise InterestClubProviderDeferred(
+            f"interest_club_provider_deferred:event_id={int(event_id)}"
+        )
     return changed
 
 
-async def _background_evaluate(db: Database, event_id: int, *, schedule_projection: bool) -> None:
-    try:
-        await evaluate_interest_clubs_for_event(
-            db, event_id, schedule_projection=schedule_projection
-        )
-    except Exception:
-        logger.exception("interest_clubs: background evaluation failed event_id=%s", event_id)
-
-
-def schedule_interest_club_evaluation(
+async def schedule_interest_club_evaluation(
     db: Database,
     event_id: int | None,
     *,
     schedule_projection: bool = True,
-) -> asyncio.Task[Any] | None:
-    """Launch best-effort incremental evaluation without blocking Smart Update."""
+) -> str:
+    """Persist one coalesced relation job; no in-memory work is launched."""
 
     if not pipeline_enabled() or not event_id:
-        return None
-    task = asyncio.create_task(
-        _background_evaluate(db, int(event_id), schedule_projection=schedule_projection),
-        name=f"interest-club-event-{int(event_id)}",
+        return "disabled"
+    from main import JobTask, enqueue_job
+
+    event_id = int(event_id)
+    return await enqueue_job(
+        db,
+        event_id,
+        JobTask.interest_club_relation,
+        payload={
+            "reason": "smart_update",
+            "event_id": event_id,
+            "schedule_projection": bool(schedule_projection),
+        },
+        coalesce_key=f"interest_club_relation:{event_id}",
+        requeue_done=True,
     )
-    _BACKGROUND_TASKS.add(task)
-    task.add_done_callback(_BACKGROUND_TASKS.discard)
-    return task
+
+
+async def build_shadow_identity_discovery_report(
+    db: Database,
+    *,
+    enabled: bool | None = None,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Return a bounded review report; never creates or approves identities.
+
+    This deliberately reports only already-materialized shadow identities. It
+    is a default-off acquisition seam, not a classifier and not relation truth.
+    """
+
+    if enabled is None:
+        enabled = (
+            os.getenv("ENABLE_INTEREST_CLUB_SHADOW_DISCOVERY") or ""
+        ).strip().lower() in _ENABLED_VALUES
+    bounded_limit = max(1, min(int(limit), 200))
+    report: dict[str, Any] = {
+        "schema_version": "interest-club-shadow-discovery-v1",
+        "enabled": bool(enabled),
+        "limit": bounded_limit,
+        "candidates": [],
+    }
+    if not enabled:
+        return report
+    async with db.get_session() as session:
+        rows = list(
+            (
+                await session.execute(
+                    select(InterestClub)
+                    .where(InterestClub.public_status == "shadow")
+                    .order_by(InterestClub.updated_at.desc(), InterestClub.id.desc())
+                    .limit(bounded_limit)
+                )
+            ).scalars()
+        )
+    report["candidates"] = [
+        {
+            "id": int(row.id or 0),
+            "slug": row.slug,
+            "name": row.canonical_name,
+            "topic": row.topic,
+            "identity_version": int(row.identity_version or 1),
+            "review_state": "shadow",
+        }
+        for row in rows
+    ]
+    return report
 
 
 async def import_review_fixture(
@@ -766,7 +909,25 @@ async def _run_cli(args: argparse.Namespace) -> None:
             match_fixture=Path(args.match_fixture),
             approve_confirmed=bool(args.approve_confirmed),
         )
-        print(json.dumps(counts, ensure_ascii=False, sort_keys=True))
+        result: dict[str, Any] = {"import": counts}
+        if args.shadow_discovery_report:
+            report = await build_shadow_identity_discovery_report(
+                db,
+                enabled=bool(args.enable_shadow_discovery),
+                limit=int(args.shadow_discovery_limit),
+            )
+            report_path = Path(args.shadow_discovery_report)
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(
+                json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            result["shadow_discovery"] = {
+                "enabled": report["enabled"],
+                "candidate_count": len(report["candidates"]),
+                "path": str(report_path),
+            }
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     finally:
         await db.close()
 
@@ -787,6 +948,16 @@ def main() -> None:
         action="store_true",
         help="explicitly mark confirmed fixture identities approved; default is shadow",
     )
+    parser.add_argument(
+        "--shadow-discovery-report",
+        help="write a bounded shadow-only review report; disabled unless explicitly enabled",
+    )
+    parser.add_argument(
+        "--enable-shadow-discovery",
+        action="store_true",
+        help="explicitly enable the shadow-only report for this invocation",
+    )
+    parser.add_argument("--shadow-discovery-limit", type=int, default=50)
     asyncio.run(_run_cli(parser.parse_args()))
 
 

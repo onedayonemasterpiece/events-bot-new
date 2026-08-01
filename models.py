@@ -428,6 +428,12 @@ class Event(SQLModel, table=True):
     telegraph_path: Optional[str] = None
     source_text: str
     source_texts: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    # Versioned, source-bound factual decisions used by exact static collections.
+    # Keep this nullable for old rows/snapshots; callers must reassign the whole
+    # mapping after a deep merge so SQLAlchemy observes JSON changes reliably.
+    collection_decisions: Optional[dict[str, Any]] = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
     # Source-grounded organizations responsible for this concrete event.
     # A publisher is not an organizer without an explicit curated source
     # binding or quoted event-local LLM evidence.
@@ -1208,11 +1214,17 @@ class InterestClubEvent(SQLModel, table=True):
 
 
 class InterestClubEvaluation(SQLModel, table=True):
-    """Compact latest-decision ledger, including fail-closed non-relations."""
+    """Hash-versioned decision history, including fail-closed non-relations."""
 
     __tablename__ = "interest_club_evaluation"
     __table_args__ = (
-        UniqueConstraint("club_id", "event_id", name="ux_interest_club_evaluation_pair"),
+        UniqueConstraint(
+            "club_id",
+            "event_id",
+            "policy_version",
+            "input_hash",
+            name="ux_interest_club_evaluation_history",
+        ),
         Index("ix_interest_club_evaluation_status", "status", "updated_at"),
         Index("ix_interest_club_evaluation_event", "event_id"),
     )
@@ -2096,6 +2108,7 @@ class JobTask(str, Enum):
     static_site_build = "static_site_build"
     event_vector_sync = "event_vector_sync"
     event_age_bge_assessment = "event_age_bge_assessment"
+    interest_club_relation = "interest_club_relation"
     fest_nav_update_all = "fest_nav:update_all"
 
 

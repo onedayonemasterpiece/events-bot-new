@@ -194,3 +194,21 @@ and therefore could not launch the code that would have freed it.  The Fly
 owner now acquires the runner's exact non-blocking file lock and removes only
 recognized abandoned `static-site-kaggle-*` trees before its capacity probe.
 An actually active runner keeps the lock and its files remain untouched.
+
+
+## Static collections data-prep regression — 2026-08-01
+
+The candidate branch `integration/static-collections-data-prep-20260801` changes
+Smart-Update static scheduling to the owner-requested strict trailing rule: each
+automatic effect moves the single pending build to `latest_effect_at + 15m`;
+operator/calendar/startup triggers remain immediate. This deliberately replaces
+the temporary 30-minute automatic cap described in the 2026-07-31 recurrence,
+because starting an expensive immutable build during a still-active import burst
+would violate the accepted collection snapshot contract. During a running build
+there is still only one successor and the claim/recovery payload is preserved.
+
+The change does not touch the post-rollback scalar-ID fix. `63` integrated
+club/outbox/Smart Update tests plus `116` Kaggle status/handoff/outbox/unusual
+tests passed with no `MissingGreenlet`. No live deploy-overlap cycle or deploy
+was performed; the existing incident remains mitigated and its live closure gate
+is still pending.

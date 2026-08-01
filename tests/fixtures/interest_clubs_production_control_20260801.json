@@ -1,0 +1,327 @@
+{
+  "schema_version": "interest-clubs-production-control-v1",
+  "audited_at": "2026-08-01",
+  "current_date": "2026-08-01",
+  "source": "read-only Fly SQLite audit; compact public projection fields only",
+  "clubs": [
+    {
+      "id": 1,
+      "slug": "game-vibes",
+      "canonical_name": "Game Vibes",
+      "topic": "настольные игры",
+      "public_status": "approved"
+    },
+    {
+      "id": 2,
+      "slug": "neural-researchers",
+      "canonical_name": "Клуб исследователей нейронок",
+      "topic": "ИИ и нейросети",
+      "public_status": "approved"
+    },
+    {
+      "id": 3,
+      "slug": "technology-researchers",
+      "canonical_name": "Клуб исследователей технологий",
+      "topic": "электроника и технологии",
+      "public_status": "approved"
+    },
+    {
+      "id": 4,
+      "slug": "s-toboi-ok",
+      "canonical_name": "Клуб «С тобой всё в порядке»",
+      "topic": "психологическая взаимопомощь",
+      "public_status": "approved"
+    },
+    {
+      "id": 5,
+      "slug": "autoretroclub",
+      "canonical_name": "АвтоРетроКлуб Калининград",
+      "topic": "ретроавтомобили",
+      "public_status": "approved"
+    },
+    {
+      "id": 8,
+      "slug": "cinemango",
+      "canonical_name": "СИНЕМАНГО",
+      "topic": "киноклуб",
+      "public_status": "approved"
+    }
+  ],
+  "events": [
+    {
+      "id": 2533,
+      "title": "🤖 Клуб Исследователей Нейронок: Создаём сайт с помощью ИИ",
+      "date": "2026-02-11",
+      "end_date": null,
+      "time": "19:00",
+      "city": "Калининград",
+      "location_name": "Арт-пространство Сигнал",
+      "lifecycle_status": "active",
+      "identity_status": "canonical",
+      "merged_into_event_id": null,
+      "silent": 0,
+      "festival": null
+    },
+    {
+      "id": 2897,
+      "title": "Вавилон",
+      "date": "2026-03-14",
+      "end_date": "2026-03-14",
+      "time": "14:15",
+      "city": "Калининград",
+      "location_name": "Сигнал, Леонова 22, Калининград",
+      "lifecycle_status": "active",
+      "identity_status": "canonical",
+      "merged_into_event_id": null,
+      "silent": 0,
+      "festival": null
+    },
+    {
+      "id": 3032,
+      "title": "Оживляем устройства! Мастер-класс по Arduino",
+      "date": "2026-03-14",
+      "end_date": null,
+      "time": "17:00",
+      "city": "Калининград",
+      "location_name": "Сигнал, Леонова 22, Калининград",
+      "lifecycle_status": "active",
+      "identity_status": "canonical",
+      "merged_into_event_id": null,
+      "silent": 0,
+      "festival": null
+    },
+    {
+      "id": 3265,
+      "title": "День открытых дверей в АвтоРетроКлубе",
+      "date": "2026-03-28",
+      "end_date": null,
+      "time": "17:00",
+      "city": "Калининград",
+      "location_name": "Калининград Сити Джаз Клуб",
+      "lifecycle_status": "active",
+      "identity_status": "canonical",
+      "merged_into_event_id": null,
+      "silent": 0,
+      "festival": null
+    },
+    {
+      "id": 3393,
+      "title": "СИНЕМАНГО: Путешествие по Азии — «Маленький лес»",
+      "date": "2026-03-28",
+      "end_date": null,
+      "time": "12:00",
+      "city": "Калининград",
+      "location_name": "Научная библиотека, Мира 9, Калининград",
+      "lifecycle_status": "active",
+      "identity_status": "canonical",
+      "merged_into_event_id": null,
+      "silent": 0,
+      "festival": null
+    },
+    {
+      "id": 3488,
+      "title": "Встреча клуба «С тобой всё в порядке» «Где брать силы, когда нервы на пределе»",
+      "date": "2026-04-04",
+      "end_date": null,
+      "time": "16:00",
+      "city": "Калининград",
+      "location_name": "ОКЦ",
+      "lifecycle_status": "active",
+      "identity_status": "canonical",
+      "merged_into_event_id": null,
+      "silent": 0,
+      "festival": null
+    },
+    {
+      "id": 3516,
+      "title": "Клуб Исследователей Технологий: мастер-класс по пайке",
+      "date": "2026-04-01",
+      "end_date": null,
+      "time": "19:00",
+      "city": "Калининград",
+      "location_name": "Сигнал, Леонова 22, Калининград",
+      "lifecycle_status": "active",
+      "identity_status": "canonical",
+      "merged_into_event_id": null,
+      "silent": 0,
+      "festival": null
+    },
+    {
+      "id": 3923,
+      "title": "Игра «С тобой всё в порядке»",
+      "date": "2026-04-18",
+      "end_date": "2026-04-18",
+      "time": "16:00-17:30",
+      "city": "Калининград",
+      "location_name": "«Зеленый дом»",
+      "lifecycle_status": "active",
+      "identity_status": "canonical",
+      "merged_into_event_id": null,
+      "silent": 0,
+      "festival": null
+    },
+    {
+      "id": 5806,
+      "title": "Клуб исследователей технологий",
+      "date": "2026-06-10",
+      "end_date": null,
+      "time": "19:00",
+      "city": "Калининград",
+      "location_name": "Сигнал",
+      "lifecycle_status": "active",
+      "identity_status": "canonical",
+      "merged_into_event_id": null,
+      "silent": 0,
+      "festival": null
+    },
+    {
+      "id": 6662,
+      "title": "Клуб исследователей нейронок",
+      "date": "2026-07-04",
+      "end_date": null,
+      "time": "11:00",
+      "city": "Калининград",
+      "location_name": "встречу в субботу",
+      "lifecycle_status": "active",
+      "identity_status": "canonical",
+      "merged_into_event_id": null,
+      "silent": 0,
+      "festival": null
+    },
+    {
+      "id": 6853,
+      "title": "Выставка ретроавтомобилей на Дне города в Янтарном",
+      "date": "2026-07-18",
+      "end_date": null,
+      "time": "",
+      "city": "Янтарный",
+      "location_name": "Янтарный",
+      "lifecycle_status": "active",
+      "identity_status": "canonical",
+      "merged_into_event_id": null,
+      "silent": 0,
+      "festival": "День города"
+    },
+    {
+      "id": 6929,
+      "title": "Настольные игры",
+      "date": "2026-07-19",
+      "end_date": null,
+      "time": "14:00",
+      "city": "Калининград",
+      "location_name": "Сигнал",
+      "lifecycle_status": "active",
+      "identity_status": "canonical",
+      "merged_into_event_id": null,
+      "silent": 0,
+      "festival": null
+    },
+    {
+      "id": 6990,
+      "title": "День Всех Игр (ДВИ)",
+      "date": "2026-07-26",
+      "end_date": null,
+      "time": "13:00",
+      "city": "Калининград",
+      "location_name": "Сигнал",
+      "lifecycle_status": "active",
+      "identity_status": "canonical",
+      "merged_into_event_id": null,
+      "silent": 0,
+      "festival": null
+    }
+  ],
+  "relations": [
+    {
+      "club_id": 1,
+      "event_id": 2897,
+      "status": "active",
+      "policy_version": "interest-club-relation-v1",
+      "input_hash": "00b276ba267efd766403f294c841391bd18e789689009a4b5cdac4330ff281e8"
+    },
+    {
+      "club_id": 1,
+      "event_id": 6929,
+      "status": "active",
+      "policy_version": "interest-club-relation-v1",
+      "input_hash": "b66eb33f75299b1643dda6e3082acf394b7e203056e2bdd586d61d81a45330bc"
+    },
+    {
+      "club_id": 1,
+      "event_id": 6990,
+      "status": "active",
+      "policy_version": "interest-club-relation-v1",
+      "input_hash": "3445e7b4519b93c1935a242f4d21cee8a06343f1669629d902124d17f0268bbd"
+    },
+    {
+      "club_id": 2,
+      "event_id": 2533,
+      "status": "active",
+      "policy_version": "interest-club-relation-v1",
+      "input_hash": "bb363f32b6c86867d4aadb5436fcd725b97264f6961df01eff764b44c8abd64f"
+    },
+    {
+      "club_id": 2,
+      "event_id": 6662,
+      "status": "active",
+      "policy_version": "interest-club-relation-v1",
+      "input_hash": "ff400ac21aaa5fddd99e4342b34429f2456ca25d88669096c445e8be516d85ec"
+    },
+    {
+      "club_id": 3,
+      "event_id": 3032,
+      "status": "active",
+      "policy_version": "interest-club-relation-v1",
+      "input_hash": "31454a84ac1f8d2bb354b8a6daf3ac3428ce95cc658bc26184cad5ef37159484"
+    },
+    {
+      "club_id": 3,
+      "event_id": 3516,
+      "status": "active",
+      "policy_version": "interest-club-relation-v1",
+      "input_hash": "dd02d1caa1b025eb88e1a75c0be8aa66af0208701780f710dde1c0d7c8aa4da9"
+    },
+    {
+      "club_id": 3,
+      "event_id": 5806,
+      "status": "active",
+      "policy_version": "interest-club-relation-v1",
+      "input_hash": "149c61d1b170cc58f49811214bc5ef302bc8a9854606489f689f5c7c18918283"
+    },
+    {
+      "club_id": 4,
+      "event_id": 3488,
+      "status": "active",
+      "policy_version": "interest-club-relation-v1",
+      "input_hash": "585d08430e4c13df918f36df484f8108e533d09ea3e66e9cab76a06387547d83"
+    },
+    {
+      "club_id": 4,
+      "event_id": 3923,
+      "status": "active",
+      "policy_version": "interest-club-relation-v1",
+      "input_hash": "8d59c833d6156c9214597b88c8427d3dd9cbc59863641c9555cd8bee79e11c98"
+    },
+    {
+      "club_id": 5,
+      "event_id": 3265,
+      "status": "active",
+      "policy_version": "interest-club-relation-v1",
+      "input_hash": "fe0c09d05c9df918462f06fc2138ed35aa20696c51bcbb2655ba9104e6acb87b"
+    },
+    {
+      "club_id": 5,
+      "event_id": 6853,
+      "status": "active",
+      "policy_version": "interest-club-relation-v1",
+      "input_hash": "539953863505c00e9cbc5baf5f4dc72f2b45e6a783a0016419875d4eac224810"
+    },
+    {
+      "club_id": 8,
+      "event_id": 3393,
+      "status": "active",
+      "policy_version": "interest-club-relation-v1",
+      "input_hash": "031175fa23da24c69140ebb5a07fc2bdabf2b8b3e8f78b8a06ebf7674786d649"
+    }
+  ]
+}

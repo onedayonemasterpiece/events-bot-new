@@ -16,6 +16,8 @@
   reproducible Astro dependencies and generated site trees.
 
 ### Added
+- Added executable, bounded static-collection catch-up tooling: a source-bound admission/audience/people backfill and a six-month exact club-relation enqueue plan. Both default to planning, require explicit apply, and reuse production decision/outbox contracts.
+- Added the static-selection data-prep MVP: source-bound admission/audience/people decisions, exact theatre/venue registry, durable club relation evaluation, six-month club projection, evidence-only shared BGE cache, ID-only collection/venue manifests and production-control fixtures. New semantic labels remain blocked until owner gold and a real Kaggle cold/warm canary.
 - Added the canonical static-collection extraction/product plan: it distinguishes
   ready exact-data pages from Smart Update and shared-BGE work, designs a small
   indexable medallion venue pilot, records zero-added-Supabase-egress gates, and
@@ -72,6 +74,8 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Fixed Fly SQLite rollout for club evaluation history: `Database.init()` now upgrades the legacy pair-unique table to hash-versioned history with row-count preservation, rather than relying on an Alembic revision that production does not invoke.
+- Fixed static-selection scheduling and truth boundaries: Smart Update now uses a strict trailing 15-minute static-build debounce, club provider failures preserve accepted relations with durable retry, and the exporter no longer infers free admission from prose ticket status. Production-candidate semantic computation is independent from legacy Unusual publication flags.
 - Region Talk now hands every eligible external editorial/academic article to
   page-image acquisition even when imported research contains no prefilled
   `candidate_urls`. The queue records the canonical page as an acquisition
