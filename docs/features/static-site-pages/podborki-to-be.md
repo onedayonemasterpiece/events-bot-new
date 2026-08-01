@@ -1,6 +1,7 @@
 # Подборки статического сайта: анализ извлечения и простой общий проект
 
-Статус: **анализ завершён; реализация не начиналась**, обновлён 2026-08-01.
+Статус: **анализ завершён, включая production-аудит клубов, театров,
+бесплатности и расписания BGE; реализация не начиналась**, обновлён 2026-08-01.
 Исходные требования и последующие уточнения владельца сохранены в [`podborki.md`](./podborki.md).
 
 ## 1. Короткий ответ на уточнения
@@ -9,55 +10,70 @@
 
 Да: **сам признак бесплатности не новый**. `Event.is_free`, индекс по нему,
 консервативное извлечение и страница «Бесплатно» существуют давно. Перестраивать
-их ради этого проекта не нужно.
+саму страницу и её простой predicate не нужно; ниже речь только о найденной
+ошибке коррекции source facts.
 
-Новыми в предыдущем предложении были не только цитата, но ещё две возможности:
+Проверка была нужна не для оправдания новой схемы, а чтобы выяснить, есть ли
+реальная проблема. Простой поиск конфликтов `is_free + positive price` её не
+показывает, но source chronology production-событий показывает: **проблема
+реальна уже сейчас**.
 
-1. отличать явное «платно» от «источник ничего не сказал»;
-2. безопасно исправлять старое `true`, если официальный источник явно сообщает
-   цену или платный вход.
+В срезе 2026-08-01 среди 411 актуальных событий 49 имеют `is_free=true`:
 
-Сейчас входной `false` часто означает именно `unknown`, а merge практически
-монотонный: `false -> true` возможен, `true -> false` при обычном обновлении —
-нет. Кроме того, static exporter может повторно вывести `free` из текста
-`ticket_status`, даже если канонический bool уже исправлен. Поэтому простое
-last-write-wins тоже опасно: неизвестность не должна снимать подтверждённую
-бесплатность.
+- событие `5370 «Точка и линия»` — подтверждённый false positive: бесплатным
+  был отдельный кураторский круглый стол, ошибочно перенесённый на платную
+  длительную выставку; поздние официальные источники говорят о билетах, но
+  sticky `true` не снимается;
+- ещё 6 из 49 free rows не имеют явного source evidence бесплатного входа и
+  требуют adjudication; итого review-set — 7/49, или 14,3%;
+- минимум 5 актуальных false negatives содержат прямое «вход свободный» /
+  «бесплатный показ», но DB оставляет `false`; в одном случае 200 ₽ —
+  добровольный донат, в четырёх также ошибочно извлечена цена.
 
-**Решение для первой версии:** оставить `is_free` и текущий predicate страницы.
-Полную taxonomy `free / paid / mixed / unknown` не делать обязательным условием
-релиза. Если в этом треке исправляем provenance/correction, достаточно одного
-необязательного JSON-поля:
+Компактный audit receipt, который должен стать regression fixture в ветке A:
 
-```json
-{
-  "basis": "explicit_source|structured|manual|legacy",
-  "evidence_quote": "Вход свободный, по регистрации",
-  "source_url": "...",
-  "input_hash": "...",
-  "policy_version": "is-free-decision-v1",
-  "locked": false
-}
-```
+| Event ID | Verdict | Source-bound evidence |
+|---:|---|---|
+| 5370 | confirmed false positive | free quote относится к отдельному круглому столу; более поздние official rows: «Билеты» / Пушкинская карта |
+| 7145 | confirmed false negative | «Вход свободный»; 200 ₽ прямо описаны как добровольный донат |
+| 7244, 7246, 7247 | confirmed false negative | official descriptions: «БЕСПЛАТНЫЙ ПОКАЗ. РЕГИСТРАЦИЯ…»; ticket prices извлечены не из admission этих показов |
+| 7287 | confirmed false negative | source прямо сообщает о бесплатных festival concerts |
+| 7280, 7281, 7349, 7350, 4211, 5376 | review / abstain | у текущего `true` нет явной source-фразы о бесплатном входе; open/accessibility prose не считается admission evidence |
 
-Правило merge минимальное:
+Audit predicate: canonical active non-silent unmerged event с effective end не
+раньше 2026-08-01; source chronology читается из `event_source` по `event_id` и
+`imported_at`. В fixture сохраняются минимальные quotes, source URL hashes и
+verdict/reason, а не полный чужой текст. Так следующий агент может воспроизвести
+вывод без доступа к текущему live snapshot.
+Исправление admission у уже существующего `7287` не подключает и не меняет
+festival extraction/pages; это общий ticket fact события.
 
-- отсутствие сведений ничего не меняет;
-- явное бесплатное основание включает `is_free`;
-- явная цена/платный вход из источника достаточного trust может снять флаг;
-- ручное решение с lock автоматически не перетирается;
-- `ticket_status` влияет на подпись кнопки, но не имеет права сам создавать
-  каноническую бесплатность.
+В коде причина воспроизводима: merge умеет `false -> true`, но не умеет
+`true -> confirmed paid`; ticket fields обновляются раздельно, а exporter ещё
+раз повторно угадывает free regex-ом из prose `ticket_status`. Исторические
+инциденты апреля–мая подтверждают, что это повторяющийся класс ручных ремонтов.
 
-Цитата обязательна только для решения из текста/OCR/LLM. Для нативного
-структурированного поля парсера достаточно source URL/ID и hash. Более богатые
-`mixed`, donation, registration/booking нужны только если позже появятся
-отдельные индексируемые фильтры или UI этих режимов, но не для сохранения
-нынешней подборки.
+Новое нужно **не ради самой цитаты**. Нужна source-bound correction provenance,
+чтобы различать `confirmed_free`, `confirmed_paid` и `unknown`, не переносить
+факт соседнего мероприятия и безопасно отменять устаревший `true`.
 
-Любая реализация correction должна идти через открытый regression contract
-`INC-2026-05-09-event-location-alias-free-dup-regressions`; в текущем документе
-это пока проектное решение, а не изменение production-данных.
+**Финальное решение MVP:** сохранить `Event.is_free` как совместимый
+материализованный bool, но добавить компактное admission decision с состоянием,
+source/evidence quote, source URL, input hash, decided_at и manual lock.
+`unknown` ничего не снимает; явный high-trust paid-факт того же события снимает
+free; явный free-факт устанавливает его. Exporter перестаёт выводить
+бесплатность из произвольного `ticket_status`.
+
+`mixed` сейчас не нужен как обязательное четвёртое состояние ради этой полки:
+условные/смешанные режимы сохраняются в ticket details и идут в review, а не
+автоматически считаются бесплатными. Если production supply таких режимов
+потребует отдельного UI/filter, taxonomy расширяется отдельным решением.
+
+Это не массовый re-extraction 6 969 исторических строк. Один раз аудируется
+current public pool из 411 строк детерминированными checks, LLM/review получает
+только кандидатов: исправить `5370`, пять подтверждённых false negatives и
+разобрать шесть unsupported free rows. Обязательны incident replays, включая
+`INC-2026-05-09-event-location-alias-free-dup-regressions`.
 
 ### События для детей
 
@@ -112,24 +128,18 @@ BGE **может** определять детскую/семейную ауди
 
 ### Театр — только театры
 
-Предыдущая формулировка «venue/organization entities» была чрезмерной. Для первой версии не нужна новая база сущностей и не нужен LLM.
+Предыдущая фраза про будущий абстрактный allowlist действительно была сырой.
+Production-инвентаризация ниже уже фиксирует конкретные театры, aliases,
+источники, места, активность и пограничные случаи. Для projection не нужен LLM,
+но нужен **общий маленький реестр мест и организаций**, потому что это разные
+отношения. Например, театр `Act.Opus` является организацией, а играет в Доме
+молодёжи; считать Дом молодёжи самим театром было бы ошибкой.
 
-Достаточно маленького версионированного списка официальных театров:
-
-```text
-canonical_name
-name aliases
-официальные source/parser IDs или домены
-варианты location_name
-```
-
-Если смысл страницы — **афиша конкретных театров**, основное правило должно быть таким:
-
-1. событие пришло из официального источника театра;
-2. либо явно связано с этим театром через уже нормализованное место/организатора;
-3. театр присутствует в проверенном allowlist.
-
-Это надёжнее, чем фильтровать все события с темой `THEATRE`. Последние нужны для страницы «Спектакли», включая камерные, уличные и независимые постановки.
+Страница `/teatr/` — не вторая плоская лента спектаклей. Это справочник
+подтверждённых театральных сущностей с медальоном и компактным ближайшим
+расписанием по каждой. Полная жанровая лента любых постановок остаётся на
+`/spektakli/`. Так официальный большой репертуар Янтарь-холла не подавляет все
+остальные театры в одной выдаче.
 
 ## 2. Scope
 
@@ -174,7 +184,11 @@ venue-intent/официального URL; они не являются исто
 
 ### 3.1. Данные событий
 
-Production-срез 2026-08-01 содержит 408 актуальных/продолжающихся событий, подходящих под общий static public pool.
+Базовый production-срез 2026-08-01 содержал 408 актуальных/продолжающихся
+событий, подходящих под общий static public pool. Более поздний в тот же день
+free-аудит увидел 411 eligible rows после новых импортов; это живой каталог, а
+не фиксированный лимит, поэтому implementation gates привязываются к
+snapshot/catalog hash, а не к числу 408.
 
 | Поле | Покрытие |
 |---|---:|
@@ -200,7 +214,7 @@ Production-срез 2026-08-01 содержит 408 актуальных/про�
 | `SCIENCE_POP` | 7 |
 | `PERSONALITIES` | 17 |
 | `HISTORICAL_IMMERSION` | 11 |
-| `is_free=true` | 48 |
+| `is_free=true` | 49 |
 
 ### 3.2. Smart Update уже делает большую часть фактической работы
 
@@ -216,7 +230,8 @@ Production-срез 2026-08-01 содержит 408 актуальных/про�
 Нужен не новый Smart Update и не отдельный LLM-запрос на каждую подборку.
 Нужны три узкие доработки, каждая с benchmark до объединения в большой prompt:
 
-1. optional `is_free_decision/provenance` только для явного free/paid correction;
+1. source-bound admission correction только для конфликтных/неподтверждённых
+   current facts;
 2. grounded audience decision для `topic ∪ BGE` кандидатов и конфликтов;
 3. структурированные именованные участники и подтверждённый приезд.
 
@@ -284,6 +299,233 @@ Event Age и Region Talk подтверждают, что Kaggle+BGE как те
 работает, но их матрицы и contracts нельзя физически переиспользовать для
 static events. Переиспользовать надо общий pattern: pinned model, один CPU run,
 hash cache, frozen gold, hard negatives, abstention и receipt.
+
+### 3.5. Клубы: реестр уже есть, но правило показа реализовано неверно
+
+Это не задача нового classifier. В production уже есть канонический реестр:
+
+- `interest_club` — identity, stable slug, aliases, source anchors и редакционный
+  `public_status`;
+- `interest_club_event` — grounded relation клуба и события;
+- `interest_club_evaluation` — verdict, quote, input hash и policy version;
+- Smart Update инкрементально запускает существующую relation-проверку.
+
+Состояние production на 2026-08-01:
+
+- 8 identities: 6 `approved`, 2 `shadow`;
+- 15 `active` relations, и все 15 имеют согласованное
+  `accepted/yes` evaluation с тем же hash/policy/evidence;
+- ещё 1 relation `deferred` и 3 `review`; они не считаются активностью;
+- текущий exporter показывает только 3 клуба из-за сочетания окна 90 дней,
+  требования двух дат и festival-фильтра;
+- live root ещё старее: показывает четыре клуба из сборки 17 июля и называет
+  уже прошедшую встречу будущей.
+
+| Registry identity | Статус | Последняя подтверждённая активность | Решение на 2026-08-01 |
+|---|---|---:|---|
+| Game Vibes | approved | 2026-07-26 | показывать |
+| Клуб исследователей нейронок | approved | 2026-07-04 | показывать |
+| Клуб исследователей технологий | approved | 2026-06-10 | показывать |
+| «С тобой всё в порядке» | approved | 2026-04-18 | показывать |
+| АвтоРетроКлуб | approved | 2026-07-18 | показывать |
+| СИНЕМАНГО | approved | 2026-03-28 | показывать |
+| psychology-book-signal | shadow | — | не показывать |
+| quizprosvet | shadow | — | не показывать |
+
+Значит, в MVP должны появиться **все шесть approved клубов**, а не три. Число
+не хардкодится: оно является результатом реестра и окна активности.
+
+#### Как реестр и сведения обновляются
+
+Текущий positive relation pipeline работает, но у него два операционных пробела:
+identity создаются только reviewed fixture-командой, а post-Smart-Update
+evaluation запускается best-effort background task без durable replay. Поэтому
+MVP не переписывает клубы через BGE, а доводит один существующий контур:
+
+1. На каждый новый/изменённый event после Smart Update ставится durable
+   idempotent club-relation job; accepted/review/deferred пишутся в существующие
+   таблицы и обычным образом coalesce static build.
+2. Ошибка LLM/provider не демотирует совместимое последнее accepted relation:
+   она записывает deferred evaluation и retry. Новое решение заменяет relation
+   только после успешной hash-bound проверки.
+3. Для **новых identities** Smart Update создаёт только `shadow` candidate, если
+   source text явно называет клуб/регулярную серию и даёт grounded name/source
+   anchor. Публичный `approved` остаётся owner/review решением: два разных
+   occurrence dates либо явное подтверждение регулярности, без fuzzy-name
+   догадки.
+4. Перед MVP один bounded discovery/backfill проходит только события последних
+   шести месяцев и future с клубными candidate signals. Он не прогоняет весь
+   архив и не публикует shadow автоматически.
+5. Название, aliases, source anchors, описание и merge/rename меняются только
+   через reviewed registry update. Дата активности и `data_updated_at` выводятся
+   автоматически из relations/evaluations/events, поэтому новая встреча сразу
+   отражается в manifest и sitemap lastmod.
+
+Так реестр остаётся маленьким и контролируемым, но не застывает на fixture от
+17 июля. Отдельный Kaggle classifier клубов или новый reviewer-сервис для MVP
+не нужен; достаточно existing outbox, existing LLM relation schema и одного
+reviewable shadow report.
+
+#### Простое правило lifecycle
+
+Редакторское решение и свежесть не смешиваются:
+
+- `public_status=approved` означает, что identity клуба подтверждена;
+- `catalog_state=visible`, если есть будущая подтверждённая встреча **или**
+  последняя подтверждённая активность попадает в включительное окно шести
+  календарных месяцев; для 2026-08-01 cutoff — 2026-02-01;
+- после окна клуб становится `dormant` и скрывается из общего каталога,
+  навигации и sitemap; identity, slug и история не удаляются;
+- следующая accepted relation автоматически возвращает его в `visible` с тем
+  же ID/slug;
+- `archived/merged` остаются явными редакционными решениями, а не таймером.
+
+Не нужна новая DB-колонка `hidden`: derived state считается в exporter и
+пишется в manifest. Approval уже подтверждает повторяемость клуба, поэтому
+нельзя повторно требовать две встречи внутри каждого скользящего окна. Одна
+новая проверенная встреча достаточна, чтобы показать approved identity.
+
+Подтверждённая активность — `interest_club_event.active` плюс совпадающее
+`interest_club_evaluation.accepted/yes` с теми же `input_hash` и
+`policy_version`, связанное с canonical active non-silent event. Повторы одного
+occurrence из разных источников схлопываются. Явно подтверждённое участие клуба
+в уже существующем festival-scoped событии может обновить активность клуба и
+показываться как встреча клуба; это не создаёт фестивальную подборку и не
+расширяет фестивальный трек.
+
+Граница scope здесь явная: `СИНЕМАНГО` — уже approved identity клуба по
+интересам, а не подключение кинотеатров; festival-scoped row — уже существующее
+событие, используемое только как evidence активности клуба. Ни киноисточники,
+ни festival extraction/manifests/pages этим не меняются.
+
+Manifest v2 хранит `catalog_state`, `last_verified_activity_date`,
+`next_meeting_date`, counts за 6/12 месяцев и `data_updated_at=max(identity,
+relation,evaluation,event)`. Его fingerprint обязан учитывать relations за все
+шесть месяцев, а не только future rows. На карточке без будущей даты пишется
+«Новых дат пока нет. Последняя подтверждённая встреча — …», а не устаревшее
+«будущая встреча». Техническая ошибка manifest не маскируется продуктовым empty
+state.
+
+### 3.6. Театры: production-инвентаризация и решение реестра
+
+Простой поиск по слову «театр» дал множество ложных кандидатов: `кинотеатр`,
+описания вместо места и разовые фестивальные названия. Поэтому ниже только
+exact entity/source audit production-событий. В v1 входят **восемь театральных
+организаций**, для которых официальный source binding уже подтверждается
+проектом, а не догадкой по названию.
+
+| Театральная организация | Future / 6 мес. / 12 мес. | Official bindings |
+|---|---:|---|
+| Калининградский областной драматический театр | 23 / 176 / 271 | `parser:dramteatr`, `dramteatr39.ru`, TG/VK `dramteatr39` |
+| Калининградский областной музыкальный театр | 20 / 110 / 153 | `parser:muzteatr`, `muzteatr39.ru`, TG `muztear39`, VK `muzteatr39` |
+| Калининградский областной театр кукол | 1 / 23 / 32 | official VK `koenigkukol39` / group `20898960` |
+| Калининградский театр эстрады / Дом искусств | 23 / 35 / 67 | `parser:estrada`, official host/VK `teatrestrady39` |
+| Театр современной драмы «Акт.Опус» | 1 / 27 / 39 | `actop.us`, official VK `actopustheatre` |
+| Театр «Третий этаж» | 0 / 31 / 43 | official VK `tretazh` |
+| «Мой театр» | 1 / 8 / 9 | official VK `moyteatr_kld` |
+| «Город-Театр», Железнодорожный | 2 / 0 / 12 | official VK `gorodteatr39` |
+
+Воспроизводимый контракт именно этой таблицы:
+
+```text
+eligible = canonical AND unmerged AND active AND non-silent
+future   = effective_end >= 2026-08-01
+6 months = event range overlaps 2026-02-01..2026-07-31
+12 months= event range overlaps 2025-08-01..2026-07-31
+member   = exact official source binding
+        OR exact normalized organizer alias
+        OR exact normalized canonical venue tuple/approved alias
+```
+
+Official source binding разбирается структурированно: parser ID, exact TG
+username, VK owner/group ID или equal/subdomain official hostname; SQL
+substring не используется. Поэтому final counts выше предварительного
+exact-venue-only probe: они намеренно включают подтверждённые offsite rows
+`Act.Opus`, «Моего театра» и «Город-Театра». Counts являются event rows, а не
+суммой parser-only rows и не family count. Ветка A сохраняет этот registry и
+контрольные ID sets как минимальный fixture/receipt, чтобы любые изменения
+чисел объяснялись snapshot hash и reason breakdown.
+
+Зафиксированные home venue tuples из существующего location reference:
+
+- Драматический театр — Мира 4, Калининград;
+- Музыкальный театр — Мира 87, Калининград;
+- Театр кукол — Победы 1А, Калининград;
+- Театр эстрады / Дом искусств — Ленинский проспект 155, Калининград;
+- «Третий этаж», сцена «Чердак» — Коммунальная 6, Калининград;
+- «Мой театр» — Больничная 24, Калининград;
+- «Город-Театр» — Черняховского 9, Железнодорожный;
+- `Act.Opus` часто играет в Доме молодёжи, Октябрьская 76, но это shared venue,
+  а не alias организации; offsite source rows не переписываются на этот адрес.
+
+Здесь counts — event rows до family collapse; разные даты одного спектакля
+сохраняются, дубли одного occurrence схлопываются позже. У восьми организаций
+вместе 71 future row на 48 start dates. «Город-Театр» имеет свежие будущие
+offsite-события в Гусеве, поэтому его нельзя скрывать только из-за отсутствия
+домашних событий за предыдущие шесть месяцев.
+
+Осознанные исключения из v1:
+
+- **Янтарь-холл** — подтверждённая performing-arts площадка, но не theater
+  organization: он получает `/mesta/`, а его постановки — `/spektakli/`, но не
+  отдельную организацию в `/teatr/`;
+- «Солёная ворона» зарегистрирована как кафе и в основном содержит
+  music/dining — не официальный театр;
+- «Содружество актёров» Николая Захарова имеет только qTickets/location rows без
+  подтверждённого official binding — candidate до evidence;
+- «Театр Слово», «Театр-школа 217», «Сказки Холмогорья» и generic «Театр» в
+  Советске имеют только строковые/location evidence — не включать;
+- `кинотеатр` и амфитеатр — лексические false positives; киноисточники не
+  затрагиваются.
+
+Если ожидаемый театр, например «Тильзит», отсутствует среди восьми, это не
+молчаливое отрицание его существования, а `candidate_missing_source`: добавить
+его можно после появления/привязки официального источника. Реестр должен иметь
+review-отчёт excluded/candidate причин, чтобы расширение было управляемым.
+
+Medallion coverage сейчас 4/8: готовые entries есть у Драмтеатра, Музыкального,
+Дома искусств и `Act.Opus`; у Театра кукол, «Третьего этажа», «Моего театра» и
+«Город-Театра» их нет. Это не причина портить membership: registry хранит
+`medallion=null` и review reason, а UI использует честный text/initial fallback
+до отдельной source/provenance-приёмки изображения. Substring-matching
+существующего organizer-medallion JSON не становится entity resolver.
+
+#### Механика связи события с театром
+
+Один общий `place/organization registry`, а не отдельные несогласованные
+театральный и venue-списки, хранит:
+
+```text
+stable entity ID + slug + kind(place|organization|mixed)
+canonical name + exact aliases
+official parser/source/domain bindings
+canonical venue binding, address/city и medallion
+status(public|candidate|dormant|excluded)
+flags: official_theatre, venue_page_candidate
+```
+
+Membership строится в строгом порядке:
+
+1. canonical `venue_id` связывает событие с театральным **местом**;
+2. dedicated parser/source binding связывает событие с театральной
+   **организацией**, включая её подтверждённое offsite-мероприятие;
+3. exact grounded organizer alias — запасной путь организации;
+4. конфликт venue/organization сохраняет оба ID и идёт в review, а не
+   склеивает сущности;
+5. generic Telegram/VK/агрегатор, topic `THEATRE` или слово «театр» сами по себе
+   никогда не дают public membership.
+
+Для этого exporter должен получать из `event_source` не только URL, но и
+`source_type`, parser/source ID, username/domain и trust. Текущий
+`organizer_names` технически пригоден, но в production пока почти не даёт
+theatre matches, поэтому source и exact venue остаются основой. BGE может
+выявлять подозрительные пропуски типизации, но не определяет entity membership.
+`/teatr/` выводит восемь entity-секций с ближайшими occurrence IDs;
+`/spektakli/` по-прежнему строится по `event_type=спектакль`. Offsite event из
+официального источника театра остаётся программой организации; guest event в
+его canonical venue остаётся афишей места; при пересечении допустимы два
+`theatre_ids` с разными reason codes. Киноисточники и фестивальные страницы
+этим реестром не добавляются и не меняются.
 
 ## 4. Главное архитектурное решение
 
@@ -355,21 +597,89 @@ fail-closed и включается только принятым release manife
 осознанное incident-действие, которое удерживает последнюю валидную версию или
 блокирует promotion, а не тихо публикует пустой fallback.
 
+### 4.3. Когда запускается BGE и кто кого ждёт
+
+Отдельный BGE notebook не нужен. Фактическая цепочка уже почти правильная:
+
+```text
+import / merge
+  -> Smart Update и grounded facts
+  -> vector sync (~90 секунд)
+  -> один coalesced static_site_build
+  -> immutable Fly SQLite snapshot
+  -> один existing StaticSiteBuilder kernel на Kaggle
+       export полного catalog
+       shared BGE для новых/изменённых documents
+       exact/semantic manifests
+       related projection
+       Astro build + checks
+  -> host validation / publication
+```
+
+**Решение:** shared BGE всегда выполняется внутри этого же StaticSiteBuilder,
+после материализации frozen catalog и до related/Astro. Astro в том же kernel
+синхронно ждёт manifests. Нет второго upload snapshot, второго запуска Kaggle,
+отдельного resource lease или внешней связи «генератор ждёт классификатор».
+
+Сегодня Smart Update ставит static build на `+15 минут`, а atomic coalescing уже
+держит максимум один running и один pending job. Но текущая реализация не равна
+строгому условию владельца:
+
+- действует максимум 30 минут от первого effect;
+- если pending уже стал due, новый Smart Update оставляет запуск `now`, вместо
+  нового полного quiet window.
+
+В ветке data-prep это меняется для trigger=`smart_update` на простой
+**trailing debounce**: каждый новый effect переустанавливает единственный
+pending job на `latest_effect_at + 15 минут`; 30-минутный cap для этой причины
+не форсирует дорогой build посреди активной серии. Calendar rollover и явный
+operator request остаются осознанными immediate overrides и могут запускаться
+внутри этих 15 минут; quiet-window contract относится именно к автоматическим
+`smart_update` effects. Это означает «одна логическая сборка после 15 минут без
+свежего Smart Update», а не обещание физического exactly-once:
+доказанный внешний сбой может потребовать retry, а совпадающий успешный
+fingerprint даёт no-op без нового Kaggle push.
+
+Если обновление приходит во время running build, frozen snapshot не меняется.
+Создаётся ровно один pending follow-up, последующие effects переносят его на
+свои `+15 минут`; текущая сборка заканчивает честный manifest своего snapshot,
+а follow-up берёт последние данные. Никакого параллельного второго kernel.
+
+#### Взаимоотношение BGE и audience LLM
+
+Grounded `audience_decision` из Smart Update является publication truth и уже
+попадает в snapshot. BGE в текущей сборке — high-recall страховка и detector
+разногласий. Он не может задним числом мутировать замороженную DB.
+
+- подтверждённые `kids|family` из snapshot попадают в `/detyam/`;
+- новый BGE-only кандидат получает `needs_adjudication` и в эту сборку не
+  включается;
+- validated receipt возвращает только compact candidate IDs/hashes на Fly;
+- один durable candidate-only LLM job проверяет их и при изменении canonical
+  decision пользуется обычным coalesced follow-up build;
+- второй Kaggle run для того же fingerprint не запускается.
+
+Перед первым public rollout выполняется targeted backfill по `topics ∪ BGE`,
+поэтому стартовая страница не ждёт same-build callback. В steady state временный
+пропуск неясного события предпочтительнее неточного включения; last-good/public
+страница остаётся precision-safe.
+
 ## 5. Что обрабатывает Smart Update, а что BGE
 
 ### 5.1. Только Smart Update/LLM: факты, которые нельзя угадывать по похожести
 
 #### Бесплатно
 
-Не добавлять полный `admission-v1` только ради существующей страницы. Оставить
-`is_free`; при доработке correction добавить компактный `is_free_decision`.
-Source-native parser пишет structured basis без LLM, а текст/OCR принимается
-только с grounded quote.
+Оставить `is_free` совместимым полем страницы, но добавить компактный
+source-bound `admission_decision` (`confirmed_free|confirmed_paid|unknown`) с
+evidence/source/hash/lock. Source-native parser пишет structured basis без LLM,
+а текст/OCR принимается только с grounded quote.
 
-Особенно важно исправить merge behavior: unknown ничего не снимает, но новый
-достаточно доверенный источник с явной ценой/платным входом может исправить
-ошибочный `true`. Static export больше не переугадывает canonical bool по prose
-`ticket_status`.
+Unknown ничего не снимает; новый достаточно доверенный источник с явной
+ценой/платным входом **того же события** может исправить ошибочный `true`.
+Static export больше не переугадывает canonical bool по prose `ticket_status`.
+Targeted backfill ограничен текущими конфликтами/unsupported facts; полный
+исторический каталог не прогоняется.
 
 #### События для детей
 
@@ -418,7 +728,12 @@ BGE может найти кандидатов, но не имеет права 
 
 #### Театр
 
-Небольшой checked-in реестр официальных театров и их источников/aliases. Основной membership — официальный source, запасной — exact alias места/организатора.
+Checked-in реестр восьми уже перечисленных организаций, их official
+source/parser/domain/VK IDs и exact aliases. Membership — union независимых
+оснований `official_source | exact_organizer | exact_canonical_venue`, с
+сохранённым reason и допустимой multi-membership; source сохраняет offsite
+программу. Янтарь-холл остаётся venue, а не theatre organization. BGE, topic и
+substring не включают событие.
 
 #### Спектакли
 
@@ -438,7 +753,11 @@ BGE может найти кандидатов, но не имеет права 
 
 #### Клубы
 
-Существующие approved club identities и grounded relations. Общий BGE-классификатор не заменяет связь конкретного события с конкретным клубом.
+Существующие approved identities и согласованные grounded relations. Exporter
+меняет только lifecycle projection: approved + future или подтверждённая
+активность за шесть календарных месяцев; после окна hidden/dormant, следующая
+встреча автоматически возвращает. Все шесть текущих approved identities
+показываются. Общий BGE не заменяет relation.
 
 ### 5.3. Общий Kaggle+BGE: мягкие смысловые подборки
 
@@ -521,14 +840,14 @@ BGE может найти кандидатов, но не имеет права 
 
 | Подборка | Данных сейчас | Механизм | Основная работа |
 |---|---:|---|---|
-| Бесплатно | 48 candidates | существующий `is_free` + exact filter | predicate готов; точечно provenance/correction, без обязательной admission taxonomy |
+| Бесплатно | 49 `true`; 1 confirmed FP, 5 confirmed FN, 6 review | existing bool + source-bound admission correction | targeted current-pool repair, убрать exporter re-inference, incident replay |
 | События для детей | 72 topic candidates | LLM primary + evidence-only BGE insurance | audience gold, cached disagreement adjudication, `/detyam/` |
-| Клубы | 6 approved; свежих future relations мало | existing relation | источники и freshness, не новый classifier |
+| Клубы | 8 identities: 6 approved, 2 shadow; 15 accepted active relations | existing registry/relation | 6-month lifecycle manifest; сейчас должны показываться все 6 approved |
 | Выставки | 41 exact | type | quality gate и rollout |
 | Популярное | полный каталог и social metrics | existing ranking | editorial top sample, не extraction |
 | Необычное | historical review canary, текущего manifest нет | existing BGE head | always-compute candidate, новый canary, current receipt, owner rollout |
 | Для меня | 408-event candidate pool | existing vectors + personal ranker | profile/consent/issue/secret page, не extraction |
-| Театр | 65 official-source candidates | official source/alias allowlist | утвердить список театров |
+| Театр | 8 verified organizations; 71 future rows / 48 dates | official source + exact organizer/venue registry | registry уже зафиксирован; сохранить reason/multi-membership и excluded review |
 | Спектакли | 66 exact | event type | страница и gate |
 | Научпоп | 7 exact topic | topic | conditional page и supply monitoring |
 | Наука | нет точного label | shared BGE | definition, gold, head |
@@ -539,11 +858,10 @@ BGE может найти кандидатов, но не имеет права 
 
 Вывод по достаточности данных:
 
-- **готовы без нового extraction:** Бесплатно (для самой выдачи), Выставки,
-  Популярное, Спектакли; Театр после маленького allowlist; Научпоп условно при
-  достаточном supply;
-- **данные есть, нужен repair/rollout существующего механизма:** Необычное,
-  Клубы, Для меня;
+- **готовы без нового extraction:** Выставки, Популярное, Спектакли, Театр по
+  уже зафиксированному реестру; Научпоп условно при достаточном supply;
+- **данные есть, нужен repair/rollout существующего механизма:** Бесплатно,
+  Необычное, Клубы, Для меня;
 - **нужно компактное смысловое доизвлечение:** События для детей и приезжающие
   люди;
 - **нужен новый head на общей BGE-матрице и gold, но не Smart Update-поля:**
@@ -1008,6 +1326,23 @@ dashboard.
 - manifest не старше 24 часов;
 - минимум три разные сущности/occurrence families, если у страницы нет более строгого правила.
 
+Отдельные exact gates:
+
+- Бесплатно: только canonical materialized `is_free` из current
+  `confirmed_free`/совместимого reviewed legacy; никакого regex из
+  `ticket_status`; current conflict/review receipt должен быть закрыт или
+  содержать явные abstains. Focused baseline сейчас 3/5 tests pass: отдельно
+  чинятся explicit «Вход свободный» и zero-price/eventness replay, плюс fixtures
+  `5370`, `7145`, `7244`, `7246`, `7247`, `7287`;
+- Клубы: identity approved, relation/evaluation hash-policy match, inclusive
+  six-calendar-month cutoff; контрольный snapshot 2026-08-01 даёт 6 visible,
+  а не 3/4;
+- Театр: только 8 public registry organizations, каждый event содержит
+  `theatre_id` и reason `official_source|organizer|venue`; excluded fixtures
+  Янтарь-холла, «Солёной вороны», кинотеатров и festival-name не проходят;
+- Площадки: только stable place ID и exact canonical/approved alias; organization
+  и place не склеиваются.
+
 Для нового semantic BGE label достаточно начать с:
 
 - не менее 15 проверенных positives;
@@ -1046,24 +1381,30 @@ wording и взрослые вечерние форматы.
   hard negatives для `unusual/science/strong_impressions/medieval`;
 - `tests/fixtures/static_collections_gold_v1.json` — gold и отдельный
   high-recall audience gold;
-- `site/scripts/static_venue_profiles.v1.json` — stable venue ID/slug, exact
-  aliases/facts/source bindings, medallion и flags `official_theatre` /
-  `medieval_site`. Отдельные theatre/castle registries не нужны.
+- `site/scripts/static_place_org_registry.v1.json` — общий stable ID/slug,
+  `kind=place|organization`, exact aliases/facts/source bindings, medallion и
+  flags `official_theatre`, `venue_page_candidate`, `medieval_site`; в первой
+  версии явно содержит восемь theater organizations и шесть venue-page pilots.
+  Отдельные theatre/venue/castle allowlists не плодятся.
 
 Один nullable JSON-контейнер в `Event`, а не множество bool-колонок:
 
 ```json
 {
-  "is_free_decision": {},
+  "admission_decision": {
+    "value": "confirmed_free|confirmed_paid|unknown"
+  },
   "audience_decision": {},
   "people_appearances": []
 }
 ```
 
-Его ключи версионируются и merge-ятся независимо. Smart Update benchmark-ит
-piggyback; если расширение rich-facts снижает качество, используется один
-короткий candidate-only adjudicator. Backfill ограничен `topic ∪ BGE`
-audience-кандидатами/конфликтами, people candidates и явными free corrections.
+Его ключи версионируются и merge-ятся независимо; индексируемый `Event.is_free`
+остаётся совместимым materialized value. Smart Update benchmark-ит piggyback;
+если расширение rich-facts снижает качество, используется один короткий
+candidate-only adjudicator. Backfill ограничен `topic ∪ BGE`
+audience-кандидатами/конфликтами, people candidates и найденными admission
+corrections.
 
 Exporter-side Python, а не Astro, выполняет exact adapters. В частности,
 `collect_source_records()` сохраняет `event_source.source_type/domain/trust`,
@@ -1079,7 +1420,8 @@ Exporter-side Python, а не Astro, выполняет exact adapters. В ча�
   flag;
 - один проваленный label блокируется отдельно.
 
-Два generated outputs являются единственной границей с сайтом:
+Два новых generated outputs и один обновлённый существующий являются
+единственной границей с сайтом:
 
 1. `collection-batch-v1.json`: snapshot/catalog/policy/model hashes,
    compute/quality/publication status, `item_ids`, family/supply counts, failure
@@ -1087,8 +1429,10 @@ Exporter-side Python, а не Astro, выполняет exact adapters. В ча�
 2. `venue-pages-v1.json`: verified venue facts, `family_id` и exact occurrence
    event/date/time IDs, date/family counts, registry/catalog hashes и per-venue
    gate/status.
+3. `interest-clubs-static-v2.json`: только public club identities, derived
+   six-month state, last/next activity, event IDs и exclusion receipt counts.
 
-Идентификаторы в обоих manifest обязаны существовать в
+Идентификаторы во всех трёх manifests обязаны существовать в
 `production-catalog.json`. Полные cards и изображения туда не копируются.
 
 Основные файлы ветки A:
@@ -1109,7 +1453,14 @@ Done ветки A:
 - current-catalog cold canary и идентичный warm canary дают `0` повторно
   закодированных event rows;
 - каждый label имеет явный `pass/blocked`, нет silent disabled;
-- exact adapters и шесть venue candidates имеют review evidence;
+- клубный projector даёт 6 visible approved identities на контрольном срезе и
+  автоматически скрывает/возвращает их по six-month rule;
+- новый/изменённый club event переживает restart/provider error: durable retry
+  не стирает accepted last-good, shadow candidate не выходит в public;
+- theater adapter даёт 8 организаций и сохраняет source/venue/organizer reason;
+- шесть venue candidates имеют review evidence;
+- admission audit чинит подтверждённые current ошибки и выдаёт явный abstain/
+  review для неподтверждённых;
 - прирост Supabase по каждой новой сущности равен нулю;
 - fresh secret candidate закрывает обязательные проверки инцидента
   `INC-2026-08-01-unusual-feed-disabled-by-config`, но public rollout всё ещё
@@ -1122,7 +1473,7 @@ Done ветки A:
 artifact. Handoff bundle:
 
 1. точный `origin/main` SHA и snapshot/catalog hashes;
-2. оба generated manifests и их SHA-256;
+2. три generated manifests и их SHA-256;
 3. policy/prototype/venue-registry и BGE receipt hashes;
 4. per-label/per-venue gate table и approved public route list;
 5. cold/warm counts и egress receipt;
@@ -1185,8 +1536,10 @@ manifest пропал, promotion блокируется или сохраняе�
 
 ### 11.4. Порядок выпуска
 
-#### Шаг 1 — восстановить обязательный semantic compute и свежий «Необычное» candidate
+#### Шаг 1 — исправить orchestration и восстановить обязательный semantic compute
 
+- заменить smart-update scheduling на один strict trailing `+15 минут` pending
+  job; проверить update-during-running и no-op fingerprint;
 - отделить compute/quality/publication state;
 - production-candidate всегда запускает shared BGE, даже если старый enable env
   отсутствует или равен `0`;
@@ -1202,36 +1555,37 @@ manifest пропал, promotion блокируется или сохраняе�
 - создать `collection-batch-v1.json`;
 - подключить существующие exact adapters;
 - новые heads держать в shadow;
-- доказать cold run на текущих 408 событиях и warm run с 0 re-encode.
+- доказать cold run на полном current catalog и warm run с 0 re-encode.
 
-#### Шаг 3 — быстрые страницы без нового LLM extraction
+#### Шаг 3 — точные реестры и projection без нового LLM extraction
 
-- Спектакли;
-- Театр после утверждения allowlist;
-- Научпоп с minimum-supply;
-- усиление gates Выставок;
-- приёмка и включение Необычного;
-- шесть `/mesta/*` pilot pages после exact relation review, robots/sitemap/schema
-  gate.
+- заменить club 90-day/2-date filter на approved + six-calendar-month lifecycle,
+  проверить все 6 текущих identities, fingerprint и truthful empty states;
+- перенести relation evaluation в durable idempotent outbox, сохранять
+  compatible last-good при provider failure и выполнить bounded six-month
+  shadow-discovery report для новых club identities;
+- зафиксировать общий place/organization registry: 8 theater organizations,
+  exact source/venue/organizer binding reasons и явный excluded report;
+- спроецировать 6 venue pilots из той же registry, без сканирования официальных
+  сайтов и без повторного чтения Supabase;
+- добавить exact manifests для Спектаклей, Выставок и Научпопа с minimum-supply;
+- киноисточники и фестивальные страницы не трогать.
 
 #### Шаг 4 — компактная доработка Smart Update, не один жирный prompt
 
-1. Бесплатно не re-extract: оставить `is_free`; добавить decision/provenance только
-   вместе с correction policy и May-9 replay.
+1. Admission: добавить source-bound decision/provenance, двунаправленный
+   evidence-aware merge, убрать `ticket_status` re-inference; targeted current
+   audit исправляет `5370`, пять confirmed false negatives и adjudicate шесть
+   unsupported free rows, затем проходит incident replay.
 2. Audience сначала piggyback в существующий rich-facts/create pass и прогнать
    benchmark. Если accuracy общей schema падает — вынести один маленький
    changed/candidate-only adjudicator, а не утяжелять каждый Smart Update.
 3. Structured people также benchmark-ить как компактный stage; не объединять
    независимые сложные решения только ради меньшего числа названий функций.
 
-Backfill только `topic ∪ BGE` audience candidates и `PERSONALITIES`/named-person
-candidates, hash-bound и cached. Не прогонять LLM по всем 408 строкам без нужды.
-
-После quality review:
-
-- обновить Бесплатно;
-- материализовать «События для детей» `/detyam/`;
-- построить «К нам едут».
+Backfill только admission conflict/review set, `topic ∪ BGE` audience candidates
+и `PERSONALITIES`/named-person candidates, hash-bound и cached. Не прогонять
+LLM по всем историческим 6 969 строкам.
 
 #### Шаг 5 — три новых BGE heads
 
@@ -1243,7 +1597,18 @@ candidates, hash-bound и cached. Не прогонять LLM по всем 408 
 
 Добавлять label только после короткой owner-разметки, не параллельно строить отдельные pipelines.
 
-#### Шаг 6 — Для меня
+#### Шаг 6 — общий canary и handoff в Astro-окно
+
+- получить один immutable candidate с тремя manifests и exact hashes;
+- проверить per-label fail-closed, 8 theaters, 6 clubs, 6 venues, admission
+  repairs, audience disagreement queue, cold/warm egress receipt;
+- передать ветку и bundle следующему агенту; только там строятся routes, страницы
+  и общая navigation registry;
+- recommended UI rollout: сначала исправно работающие существующие/точные
+  страницы, затем accepted «Необычное», `/detyam/` и «К нам едут», потом новые
+  BGE heads; venue public index только после общего robots/indexability gate.
+
+#### Шаг 7 — Для меня
 
 Переиспользовать текущий event pool/vectors. Это отдельная задача доставки персонального результата: profile, consent, daily issue, high-entropy secret URL и noindex page. Новый event classifier для неё не нужен.
 
@@ -1271,11 +1636,23 @@ candidates, hash-bound и cached. Не прогонять LLM по всем 408 
 - проблема не в работоспособности BGE, а в смешанном compute/publication control,
   отсутствии обязательного current manifest и привязке cache к unusual bank;
 - её надо обобщить, а не создавать новые конвейеры;
+- BGE запускается внутри того же StaticSiteBuilder после strict 15-minute
+  Smart Update quiet window; отдельный notebook и второй snapshot не нужны;
 - твёрдые факты остаются обязанностью Smart Update;
+- бесплатность давно работает, но source-аудит нашёл текущий sticky false
+  positive, минимум пять false negatives и шесть unsupported facts; нужен
+  targeted correction provenance, а не массовая новая taxonomy всего архива;
 - BGE может и должен страховать аудиторию, но на evidence-only документе без
   утечки topics/regex и с grounded adjudication конфликтов;
-- точные типы, официальные источники, popularity и club relations не надо прогонять через BGE;
-- итогом одного existing StaticSiteBuilder run должен быть один проверяемый collection manifest;
+- клубный реестр уже содержит 6 approved identities; после замены ошибочного
+  90-day/2-date projection на six-month lifecycle все шесть должны показываться
+  и автоматически скрываться/возвращаться по активности;
+- театр больше не является «allowlist потом»: production audit зафиксировал 8
+  official organizations, точные source/venue/organizer bindings и exclusions;
+- точные типы, официальные sources, popularity и club relations не надо
+  прогонять через BGE;
+- итогом одного existing StaticSiteBuilder run должны быть проверяемые
+  collection, venue и club manifests;
 - страницы площадок имеют достаточное продуктовое основание для пилота из шести
   curated candidates; index получают только прошедшие relation/content и общий
   robots/indexability gate, массовые страницы по raw locations запрещены;
@@ -1293,8 +1670,10 @@ candidates, hash-bound и cached. Не прогонять LLM по всем 408 
 
 1. один обязательный shared semantic compute внутри existing StaticSiteBuilder;
 2. один общий evidence-only BGE event matrix с несколькими label heads;
-3. один небольшой cached LLM adjudicator только для factual/ambiguous candidates;
-4. один generated collection manifest;
-5. маленькие curated registries театров/замков/площадок, без нового сервиса.
+3. один небольшой cached LLM adjudicator только для factual/ambiguous
+   candidates, включая admission/audience/people schemas;
+4. три компактных ID-only manifests как граница с Astro;
+5. один маленький общий place/organization registry и существующий DB-реестр
+   клубов, без нового сервиса.
 
 Это даёт меньше разрозненных решений, повторное использование уже оплаченной исследовательской работы и fail-closed качество выборки.
