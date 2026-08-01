@@ -324,7 +324,8 @@ Store only redacted evidence under ignored `artifacts/codex/<task>/`. Correlate 
 ## Safety invariants
 
 - Never send to an unverified, unsubscribed, non-admitted or suppressed recipient.
-- Never exceed 200 actively consented recommendation users at launch.
+- Never exceed 200 unique NotiSend recipients across recommendation and the
+  scoped Auth repeat/fixed-test route; recommendation consent remains mandatory.
 - Never infer recommendation consent from auth presence, calendar save, favorite or prior transactional mail.
 - A personal page must be published and validated before its email becomes sendable.
 - Sender retries never create a second logical message for the same idempotency key.

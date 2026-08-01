@@ -17,7 +17,12 @@ This is distinct from [personal recommendation email](../personal-email-announce
 
 Supabase owns authenticated email profile, follow/favorite relation, transactional consent, outbox, idempotency/send guard, suppression and provider delivery evidence. YDB may receive de-identified statistics only. Event facts/lifecycle come from Fly SQLite and must be revalidated server-side.
 
-Yandex Cloud Postbox is the exclusive transactional transport, with the intended sender `Kenig Events <notify@kenigevents.ru>` and `Reply-To: info@kenigevents.ru` after identity/DNS verification. NotiSend is reserved for opt-in personal recommendations and must not be a transactional fallback.
+Yandex Cloud Postbox is the exclusive transport for these event-lifecycle
+messages, with the intended sender `Kenig Events <notify@kenigevents.ru>` and
+`Reply-To: info@kenigevents.ru` after identity/DNS verification. NotiSend is not
+a fallback for this stream. The separately reviewed returning/fixed-test Auth
+email route is documented in [email delivery](../../operations/email-delivery.md)
+and does not change event-notification routing.
 
 ## Runtime status
 

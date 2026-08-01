@@ -97,7 +97,9 @@ The personal page itself is intentionally readable through a forwardable public 
 3. Yandex Cloud Postbox sends from the verified transactional identity with `Reply-To: info@kenigevents.ru`.
 4. Provider events update send-critical delivery/suppression evidence in Supabase; YDB receives only the asynchronous de-identified projection.
 
-Postbox is not a recommendation fallback, and NotiSend is not a transactional fallback.
+Postbox is not a recommendation fallback. NotiSend is not a generic
+transactional fallback; its only transactional exception is the reviewed Auth
+repeat/fixed-test route selected before dispatch under the shared capacity gate.
 
 ### Inbound email
 

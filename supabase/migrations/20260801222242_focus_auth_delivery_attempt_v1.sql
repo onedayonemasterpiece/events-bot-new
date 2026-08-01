@@ -12,7 +12,9 @@ alter table email_control.recommendation_capacity
   check (external_reserved_count between 0 and capacity);
 
 create table email_control.notisend_recipient_admission (
-  user_id uuid primary key references auth.users (id) on delete cascade,
+  -- Intentionally no FK/cascade: deleting a disposable Auth identity does not
+  -- release a recipient already counted by the provider's tariff.
+  user_id uuid primary key,
   first_source text not null,
   first_attempt_id uuid unique,
   admitted_at timestamptz not null default now(),
@@ -151,7 +153,7 @@ revoke all on function public.focus_auth_reserve_notisend_recipient_v1(uuid, uui
 
 create table personalization.focus_auth_delivery_attempt (
   attempt_id uuid primary key,
-  user_id uuid references auth.users (id) on delete cascade,
+  user_id uuid,
   action_type text not null,
   send_ordinal integer not null,
   provider text,
@@ -213,7 +215,7 @@ create table personalization.focus_auth_method_attempt (
   attempt_id uuid primary key,
   auth_method text not null,
   outcome text not null default 'started',
-  user_id uuid references auth.users (id) on delete cascade,
+  user_id uuid,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint focus_auth_method_attempt_method_chk check (auth_method in ('email', 'custom:yandex')),

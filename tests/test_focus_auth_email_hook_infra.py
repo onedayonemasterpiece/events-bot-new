@@ -53,6 +53,8 @@ def test_provider_policy_has_one_dispatch_and_shared_unique_recipient_cap() -> N
     assert source.count("_postbox_send(") == 2  # definition + one dispatch site
     assert "email_control.notisend_recipient_admission" in migration
     assert "external_reserved_count" in migration
+    assert "does not\n  -- release a recipient" in migration
+    assert "references auth.users (id) on delete cascade" not in migration
     assert "notisend_capacity_full" in migration
     assert "first_attempt_id" in migration
     assert "normalized_email" not in migration

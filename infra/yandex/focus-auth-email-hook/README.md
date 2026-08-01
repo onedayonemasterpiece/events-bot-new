@@ -113,4 +113,11 @@ Use one stable mailbox by default. Put that mailbox in the secret
 `FOCUS_AUTH_NOTISEND_EMAILS` and keep GitHub Actions in `fixed` mode. Use a tiny
 pre-created persona set only when personalization scenarios need distinct stable
 profiles. Unique addresses are reserved for an explicit fresh-user test and must
-be cleaned by an operator; they are not the routine CI mode.
+have their disposable Auth identity cleaned by an operator; they are not the
+routine CI mode. Their PII-free NotiSend admission remains because deleting an
+Auth row cannot restore provider capacity already spent.
+
+The exact fixed mailbox configured as `E2E_RECIPIENT_TEMPLATE` in the protected
+GitHub Environment must be included in `FOCUS_AUTH_NOTISEND_EMAILS`. Routine
+live runs consequently reuse one NotiSend recipient admission. A `{run_id}`
+recipient template is an explicit capacity-consuming fresh-user test.

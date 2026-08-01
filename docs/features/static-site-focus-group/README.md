@@ -588,7 +588,7 @@ The architectural decision is intentionally not “move Auth to YDB”. Supabase
 remains the only identity, OTP, OAuth, JWT, refresh-session and RLS owner. A
 Yandex API Gateway HTTP integration may serve as a stateless relay to those
 same Supabase endpoints. A small serverless function is allowed only for the
-Send Email Hook/provider fallback and opaque delivery receipt; it must not
+Send Email Hook's pre-dispatch provider selection and opaque delivery receipt; it must not
 become an Auth service.
 
 The permanent fixed-upstream gateway `kenigevents-supabase-relay` now provides
