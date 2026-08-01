@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed three production event-quality regressions: historical interviews now enter the LLM eventness gate instead of becoming future events; explicit attendee-facing location markers outrank programme/club labels through semantic review; and VK schedule-card posts receive a bounded complete attachment set and must split independent dates/venues rather than collapse a cover range into one aggregate event.
+
 - Enabled the production Region Talk reaction gate: future article/social plan slots now require an exact-current ❤️/👍 approval with clean copy; pending, rejected, conflicting, rewrite-requested and stale revisions remain outside the public-content queue.
 
 - Fixed Region Talk reaction synchronization for valid review messages with no reactions: it now treats an absent Telegram `Message.reactions` field as a complete empty observation, safely rechecks the last-reaction removal race, and no longer lets Telegram's `MSG_ID_INVALID` response block all later approvals.

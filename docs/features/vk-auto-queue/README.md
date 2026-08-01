@@ -188,7 +188,7 @@ ENV:
 - `VK_AUTO_IMPORT_PARSE_GEMMA_MODEL` (по умолчанию `models/gemma-4-31b-it`) scoped model override только для VK auto-import draft extraction. Он передаётся в `event_parse` через `vk_intake`, но не меняет Smart Update и не меняет глобальный `/parse`.
 - `VK_AUTO_IMPORT_PREFETCH` (по умолчанию `0`) включает конвейер N/N+1: пока сохраняется пост N, параллельно подтягиваем лёгкие данные поста N+1 (wall.getById + мета). При `0` очередь держит только текущий row locked и берёт следующий post уже после завершения текущего, что безопаснее для startup recovery.
 - `VK_AUTO_IMPORT_PREFETCH_DRAFTS` (по умолчанию `0`) если включён — в префетче дополнительно выполняется (download media + OCR + LLM-parse) для N+1. ⚠️ Может заметно увеличить RAM и привести к OOM на маленьких машинах (например Fly `512MB`).
-- `VK_AUTO_IMPORT_MAX_PHOTOS` (по умолчанию `4`) ограничивает число VK-афиш/фото, которые auto-import подтягивает в live row для OCR/upload/LLM. Это отдельный guardrail для production RAM и не меняет глобальный `MAX_ALBUM_IMAGES` для других путей.
+- `VK_AUTO_IMPORT_MAX_PHOTOS` (по умолчанию `4`) ограничивает число VK-афиш/фото, которые auto-import подтягивает в live row для OCR/upload/LLM. Это отдельный guardrail для production RAM и не меняет глобальный `MAX_ALBUM_IMAGES` для других путей. Для постов, где автор явно пишет, что расписание/места находятся в карточках, transport-only router использует отдельный `VK_AUTO_IMPORT_SCHEDULE_MAX_PHOTOS` (по умолчанию `10`): LLM получает полный bounded-набор карточек вместо произвольных первых четырёх, но семантическое решение о числе событий по-прежнему принадлежит extraction/Smart Update.
 - `VK_AUTO_IMPORT_INLINE_JOBS` (по умолчанию `1`) ждать inline-джобы для отчёта (Telegraph/ICS).
 - `VK_AUTO_IMPORT_INLINE_INCLUDE_ICS` (по умолчанию `0`) ждать ICS inline вместе с Telegraph (обычно не нужно для E2E/local).
 - `VK_AUTO_IMPORT_SLOW_ROW_LOG_SEC` (по умолчанию `60`) порог для автоматического stage timing log по одной строке очереди даже без `PIPELINE_TIMINGS=1`; `0` означает логировать все строки.
@@ -229,7 +229,7 @@ Recovery: legacy-строки `vk_inbox.status='importing'`, зависшие д
 ### Media safety
 
 - `ENSURE_JPEG_MAX_PIXELS` (по умолчанию `20000000`) — ограничение на конвертацию WEBP/AVIF→JPEG: слишком большие изображения пропускаются вместо риска OOM.
-- `VK_AUTO_IMPORT_MAX_PHOTOS` (по умолчанию `4`) — отдельный runtime cap для auto-import, чтобы тяжёлые VK posts не тащили в row одновременно 10-12 больших афиш и не раздували RAM/OCR/upload path.
+- `VK_AUTO_IMPORT_MAX_PHOTOS` (по умолчанию `4`) — отдельный runtime cap для auto-import, чтобы обычные тяжёлые VK posts не тащили в row одновременно 10-12 больших афиш и не раздували RAM/OCR/upload path; `VK_AUTO_IMPORT_SCHEDULE_MAX_PHOTOS` (по умолчанию `10`) применяется только к явным schedule-in-cards источникам.
 - Для multi-event source один `VK_MEDIA_ASSIGN_MODEL` call (default
   `gemma-4-31b-it`) распределяет все source posters между всеми draft events и
   может явно назвать одиночную roundup-афишу shared. Retrieval scores только

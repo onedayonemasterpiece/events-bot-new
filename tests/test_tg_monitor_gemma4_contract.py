@@ -211,6 +211,7 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "extract those events even when they happen at a museum or library" in source
     assert "Do not use historical/background dates from exhibit text" in source
     assert '"9 октября 1947 года..." inside an exhibition narrative is historical content' in source
+    assert "Interviews, memoirs, museum chronicles, and anniversary articles are not events" in source
     assert "return [] unless it also gives an explicit future opening" in source
     assert "Ticket/free contract: is_free=true ONLY when the source or OCR explicitly says attendance is free" in source
     assert "Missing price is unknown, not free." in source

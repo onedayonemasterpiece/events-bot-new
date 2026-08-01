@@ -5086,7 +5086,12 @@ async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[
         "локацию/город target; если дата в источнике связана с другим городом/площадкой, верни uncertain. "
         "Верни selected_excerpts как короткие ДОСЛОВНЫЕ непрерывные "
         "фрагменты source_text. Если принадлежность строк неясна — uncertain. Если источник "
-        "действительно описывает одну многодневную программу, верни single_event. Только JSON.\n"
+        "действительно описывает одну многодневную программу, верни single_event. "
+        "Но обложка афиши с общим диапазоном дат не является одной многодневной программой, "
+        "если отдельные карточки/блоки называют разные соревнования, даты, города или площадки: "
+        "такой aggregate/envelope target верни uncertain, а конкретный target — scoped. "
+        "В selected_excerpts сохрани общую строку города/региона, когда она явно относится ко всем карточкам. "
+        "Только JSON.\n"
         f"INPUT:\n{json.dumps(payload, ensure_ascii=False)}"
     )
     data = await _ask_gemma_json(
@@ -5456,6 +5461,29 @@ def _candidate_needs_llm_location_grounding_review(
     if not name_supported and not address_supported:
         return True, "canonical_location_not_in_source"
 
+    # A programme/club label may appear verbatim elsewhere in the post and thus
+    # look "grounded", while an explicit attendee-facing marker names another
+    # place (INC-2026-08-01: ``ДЕТСКИЙ КНИЖНЫЙ КЛУБ`` versus
+    # ``📍Летний читальный зал``). This remains retrieval-only: the LLM decides.
+    explicit_role_values: list[str] = []
+    for match in re.finditer(
+        r"(?imu)(?:📍|^\s*(?:где|место|площадка|адрес)\s*[:—-])\s*([^\n]{3,180})",
+        corpus,
+    ):
+        value = str(match.group(1) or "").strip()
+        if value:
+            explicit_role_values.append(value)
+    if (
+        candidate.location_name
+        and explicit_role_values
+        and not any(
+            _source_supports_location_value(value, candidate.location_name)
+            or _source_supports_location_value(candidate.location_name, value)
+            for value in explicit_role_values
+        )
+    ):
+        return True, "explicit_location_role_conflicts_candidate"
+
     try:
         explicit = find_known_venue_in_text(corpus, city=candidate.city)
     except Exception:
@@ -5549,7 +5577,8 @@ async def _llm_review_candidate_location_grounding(
         "Определи attendee-facing место проведения именно этого события. Не путай: "
         "площадку с артистом/организатором, парк с одноимённым дворцом спорта, "
         "конкретный зал с широким кварталом, один остров/озеро с другим, а название "
-        "фестиваля, праздника или Дня города — с площадкой. Event context вроде "
+        "фестиваля, праздника, книжного/детского клуба или Дня города — с площадкой. "
+        "Название программы или сообщества не является venue только потому, что оно дословно есть в посте. Event context вроде "
         "«День города в Янтарном» не является названием venue. "
         "Если источник явно называет более конкретное место, выбери его. "
         "Если источник подтверждает только город/посёлок, но не attendee-facing площадку, "
@@ -12533,6 +12562,21 @@ _WEAK_IMPERATIVE_LOCATION_RE = re.compile(
 )
 
 
+_HISTORICAL_INTERVIEW_MARKER_RE = re.compile(
+    r"(?iu)\b(?:интервью|воспоминан\w*|истори\w*|летопис\w*|архив\w*|"
+    r"работа(?:ю|л[аи]?|ет)\s+(?:здесь|в\s+музе\w*)|"
+    r"музей\w*\s+(?:открыл\w*|создал\w*|основал\w*))\b"
+)
+
+
+def _has_historical_anniversary_interview_risk(candidate: EventCandidate, text: str | None) -> bool:
+    """Route old chronology in editorial prose to semantic eventness review."""
+
+    raw = str(text or candidate.source_text or candidate.raw_excerpt or "").strip()
+    years = {int(value) for value in re.findall(r"(?<!\d)(?:18|19|20)\d{2}(?!\d)", raw)}
+    return len(years) >= 2 and bool(_HISTORICAL_INTERVIEW_MARKER_RE.search(raw))
+
+
 def _candidate_needs_llm_eventness_review(candidate: EventCandidate, text: str | None) -> bool:
     """Route weak rubric/digest candidates to an LLM eventness decision.
 
@@ -12554,6 +12598,8 @@ def _candidate_needs_llm_eventness_review(candidate: EventCandidate, text: str |
     # eventness gate, whose prompt explicitly checks whether the date/place
     # are supported by the source.
     if _candidate_date_is_inferred(candidate, is_canonical_site=False):
+        return True
+    if _has_historical_anniversary_interview_risk(candidate, raw):
         return True
     if _WEAK_RUBRIC_TITLE_RE.match(title):
         return True
@@ -12636,6 +12682,7 @@ async def _llm_review_candidate_eventness(
         "- Акции/скидки/льготы/инструкции участия (например по Пушкинской карте) — non_event, если это не один конкретный сеанс/программа/выставка с собственным событием. Длинный период действия акции сам по себе не делает её событием.\n"
         "- Режим работы площадки, часы посетителей/касс, сообщение 'открыто и работает в обычном режиме', правила покупки билетов и срок действия входного билета — non_event, если источник не называет отдельную attendee-facing программу. Дата 'билет действителен до ...' — срок действия, не дата события; часы площадки/кассы — не время события.\n"
         "- Пост-отчёт о прошедшем событии с коротким хвостом вроде 'ждём вас на следующей выставке/ярмарке ...' — non_event/uncertain, если будущие дата, площадка, адрес и программа не подтверждены явно в источнике.\n"
+        "- Интервью, воспоминания, музейная летопись и юбилейная статья — non_event, если день/месяц относится к исторической дате открытия, поступления экспонатов или прошлой работе героя. Даже совпадающий DD месяц нельзя переносить в текущий/будущий год без отдельного явного attendee-facing анонса.\n"
         "- Разделяй occurrence-роли: факты, программа, автомобили, фото и площадка из прошедшей части не являются фактами будущего события. Кандидат event допустим только если его будущие дата и attendee-facing место подтверждены именно будущим анонсом; иначе non_event/uncertain.\n"
         "- Если дата/место/тип выглядят извлечёнными из воздуха, а источник не подтверждает событие, верни non_event.\n"
         "- Если это короткий, но конкретный анонс одного события с названием/форматом и приглашением/расписанием — event.\n"

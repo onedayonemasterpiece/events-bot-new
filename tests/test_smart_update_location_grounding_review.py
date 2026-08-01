@@ -52,6 +52,65 @@ def test_supported_address_does_not_ground_unmentioned_venue_name() -> None:
     assert reason == "canonical_location_name_not_in_source"
 
 
+def test_programme_label_does_not_beat_explicit_attendee_location_marker() -> None:
+    candidate = seu.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-30777579_15738",
+        source_text=(
+            "Читаем «Гарри Поттер» в Детском книжном клубе\n"
+            "📅 6 августа 2026 года, 12:00\n"
+            "📍Летний читальный зал\n"
+            "При дожде — лекционный зал, 4 этаж\n"
+            "#детскийкнижныйклуб"
+        ),
+        title="Гарри Поттер club",
+        date="2026-08-06",
+        time="12:00",
+        location_name="ДЕТСКИЙ КНИЖНЫЙ КЛУБ",
+        location_address="Мира 9",
+        city="Калининград",
+    )
+
+    needed, reason = seu._candidate_needs_llm_location_grounding_review(candidate)
+    assert (needed, reason) == (True, "explicit_location_role_conflicts_candidate")
+
+
+def test_programme_label_location_review_repairs_to_marked_room(monkeypatch) -> None:
+    candidate = seu.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-30777579_15738",
+        source_text="Детский книжный клуб\n📍Летний читальный зал\nМира 9, Калининград",
+        title="Гарри Поттер club",
+        date="2026-08-06",
+        location_name="ДЕТСКИЙ КНИЖНЫЙ КЛУБ",
+        location_address="Мира 9",
+        city="Калининград",
+    )
+
+    async def fake_ask(prompt, *_args, **_kwargs):
+        assert "Название программы или сообщества" in prompt
+        return {
+            "decision": "repair",
+            "confidence": 0.99,
+            "location_name": "Летний читальный зал",
+            "location_address": "Мира 9",
+            "city": "Калининград",
+            "evidence_quote": "Летний читальный зал",
+            "reason_short": "explicit attendee location",
+        }
+
+    monkeypatch.setattr(seu, "SMART_UPDATE_LLM_DISABLED", False)
+    monkeypatch.setattr(seu, "_ask_gemma_json", fake_ask)
+    ok, reason = asyncio.run(
+        seu._llm_review_candidate_location_grounding(
+            candidate,
+            trigger_reason="explicit_location_role_conflicts_candidate",
+        )
+    )
+    assert (ok, reason) == (True, "llm_repair")
+    assert candidate.location_name == "Летний читальный зал"
+
+
 def test_post_review_reference_cannot_undo_llm_repair(monkeypatch) -> None:
     candidate = seu.EventCandidate(
         source_type="telegram",
