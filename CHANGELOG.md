@@ -16,6 +16,10 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- StaticSiteBuilder adoption now removes its stale local duplicate before the
+  durable capacity probe and checks free space again before re-downloading the
+  exact completed Kaggle output. Recovery can therefore free a volume that the
+  retained duplicate itself had pushed below the new-build threshold.
 - StaticSiteBuilder now reconciles an exact completed remote handoff before
   applying the free-space gate for a new build. A checked downloaded artifact
   can therefore publish and clean itself even when that same artifact is what

@@ -836,6 +836,11 @@ def adopt_existing_kernel_output(args: argparse.Namespace, client, kernel_ref: s
     if raw != 'COMPLETE':
         return ADOPT_REMOTE_UNAVAILABLE_EXIT
     out_dir = prepare_output_directory(ARTIFACT_ROOT, args.build_id)
+    # Replacing the local duplicate can itself restore enough durable space
+    # for the exact remote output. Check capacity only after the stale partial
+    # directory is removed; the remote Kaggle result remains authoritative and
+    # can be retried if this post-cleanup probe still fails.
+    require_static_site_storage_ready()
     files = client.download_kernel_output(kernel_ref, path=out_dir, force=True)
     print(f'[static-site-kaggle] adopted and downloaded {len(files)} files to {out_dir}', flush=True)
     validated = validate_downloaded_result(out_dir, args)
@@ -1021,7 +1026,6 @@ def main() -> int:
                 f"bytes={scratch_prune['removed_bytes']}",
                 flush=True,
             )
-        require_static_site_storage_ready()
         # Import after --help parsing so optional Kaggle deps are not required for docs.
         from video_announce.kaggle_client import KaggleClient
 
@@ -1032,6 +1036,7 @@ def main() -> int:
         kernel_ref = f'{env_user}/kenigevents-static-site-builder'
         if args.adopt_existing:
             return adopt_existing_kernel_output(args, client, kernel_ref)
+        require_static_site_storage_ready()
 
         with tempfile.TemporaryDirectory(
             prefix='static-site-kaggle-', dir=SCRATCH_ROOT
