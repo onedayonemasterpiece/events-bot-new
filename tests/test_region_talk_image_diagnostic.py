@@ -358,8 +358,10 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                 "post_url": "https://publisher.example/article",
                 "content_origin_type": "editorial_publication",
                 "publication_content_type": "architecture_criticism",
-                "image_url_or_local_path": "https://cdn.example/og.jpg",
-                "media_count": 1,
+                "media_acquisition_target_type": "external_article_page",
+                "media_acquisition_target_url": "https://publisher.example/article",
+                "has_media": "false",
+                "media_count": 0,
                 "rights_policy": "link_only",
                 "media_use_policy": "score_only_no_reuse",
             }
@@ -371,13 +373,12 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                 [
                     "https://publisher.example/gallery/1.jpg",
                     "https://publisher.example/gallery/2.jpg",
-                    "https://cdn.example/og.jpg",
                 ],
             )
             self.assertEqual(row["web_gallery_discovered_count"], 2)
-            self.assertEqual(row["web_gallery_used_count"], 3)
-            self.assertEqual(row["expected_image_count"], 3)
-            self.assertEqual(row["fetched_image_count"], 3)
+            self.assertEqual(row["web_gallery_used_count"], 2)
+            self.assertEqual(row["expected_image_count"], 2)
+            self.assertEqual(row["fetched_image_count"], 2)
             self.assertEqual(row["image_acquisition_status"], "complete")
             self.assertEqual(row["rights_policy"], "link_only")
             self.assertEqual(row["media_use_policy"], "score_only_no_reuse")

@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-01-region-talk-article-image-handoff-gap.md`
+  - Scope: external article intake without prefilled image URLs, CandidateReport
+    image-queue admission and ImageDiagnostic page acquisition.
+  - Must not regress: an eligible canonical article page enters
+    `needs_actual_image_fetch` without a false `has_media` claim; publication
+    remains blocked until actual or terminal browser/media evidence exists.
+
 - `INC-2026-08-01-region-talk-oversized-album-delivery.md`
   - Scope: Region Talk social image-ledger join, bounded Telegram grouped-media
     materialization and pre-send delivery state.

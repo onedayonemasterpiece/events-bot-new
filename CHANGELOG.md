@@ -72,6 +72,12 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Region Talk now hands every eligible external editorial/academic article to
+  page-image acquisition even when imported research contains no prefilled
+  `candidate_urls`. The queue records the canonical page as an acquisition
+  target without falsely asserting that media already exists, while untouched
+  articles remain ineligible for publication until ImageDiagnostic or the
+  bounded browser fallback produces terminal evidence.
 - Region Talk social draft backfill now carries the exact reviewed ordered
   ImageDiagnostic selection into the publication manifest. Telegram source
   albums without expanded selections are deterministically bounded to the

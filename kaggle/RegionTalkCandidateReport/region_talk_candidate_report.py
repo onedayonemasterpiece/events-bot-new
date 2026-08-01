@@ -9765,6 +9765,16 @@ def build_image_candidate_queue(
             return True
         return False
 
+    def has_external_article_page_target(row: dict[str, Any]) -> bool:
+        origin = str(row.get("content_origin_type") or "").strip().lower()
+        target_url = str(
+            row.get("media_acquisition_target_url") or row.get("post_url") or ""
+        ).strip()
+        return bool(
+            origin in EXTERNAL_PUBLICATION_ORIGIN_TYPES
+            and target_url.startswith(("http://", "https://"))
+        )
+
     def candidate_memory_should_try_image(row: dict[str, Any]) -> bool:
         stage = str(row.get("current_stage") or "")
         lifecycle = str(row.get("current_lifecycle_status") or "")
@@ -9784,10 +9794,18 @@ def build_image_candidate_queue(
         if block_reason:
             image_queue_pruned_non_region_previous += 1
             bump_block(block_reason)
-            eligibility = publication_eligibility(row, require_actual_image=False)
+            eligibility = publication_eligibility(
+                row,
+                require_actual_image=False,
+                allow_external_article_page_acquisition=has_external_article_page_target(row),
+            )
             entries[key] = apply_nonaccept_transition(row, row, block_reason, eligibility)
             continue
-        eligibility = publication_eligibility(row, require_actual_image=False)
+        eligibility = publication_eligibility(
+            row,
+            require_actual_image=False,
+            allow_external_article_page_acquisition=has_external_article_page_target(row),
+        )
         if str(eligibility.get("decision") or "") != "accept":
             image_queue_pruned_non_region_previous += 1
             eligibility_reason = str(eligibility.get("primary_reason") or "publication_eligibility_not_accept")
@@ -9851,7 +9869,11 @@ def build_image_candidate_queue(
             image_queue_rejected_non_region_inputs += 1
             bump_block(block_reason)
             if key in entries:
-                eligibility = publication_eligibility(row, require_actual_image=False)
+                eligibility = publication_eligibility(
+                    row,
+                    require_actual_image=False,
+                    allow_external_article_page_acquisition=has_external_article_page_target(row),
+                )
                 entries[key] = apply_nonaccept_transition(entries[key], row, block_reason, eligibility)
             return
         if added_from == "media_scoring" and key not in entries and block_reason:
@@ -9859,11 +9881,16 @@ def build_image_candidate_queue(
             bump_block(block_reason)
             return
         media = media_by_url.get(post_url) or row
-        if added_from != "media_scoring" and not has_image_media(row, media):
+        article_page_target = has_external_article_page_target(row)
+        if added_from != "media_scoring" and not has_image_media(row, media) and not article_page_target:
             image_queue_rejected_non_region_inputs += 1
             bump_block("no_media_for_image_analysis")
             return
-        eligibility = publication_eligibility(row, require_actual_image=False)
+        eligibility = publication_eligibility(
+            row,
+            require_actual_image=False,
+            allow_external_article_page_acquisition=article_page_target,
+        )
         if str(eligibility.get("decision") or "") != "accept":
             image_queue_rejected_non_region_inputs += 1
             bump_block(str(eligibility.get("primary_reason") or "publication_eligibility_not_accept"))
@@ -9896,7 +9923,11 @@ def build_image_candidate_queue(
         elif previous_status in terminal_unsupported_statuses:
             status = previous_status
         else:
-            status = "needs_actual_image_fetch" if metadata or row.get("has_media") else "not_reviewable_no_media"
+            status = (
+                "needs_actual_image_fetch"
+                if metadata or row.get("has_media") or article_page_target
+                else "not_reviewable_no_media"
+            )
         reactivated_from_soft_gate = bool(
             previous_status in {"rejected_text_gate", "rejected_publication_eligibility", "deferred_text_gate"}
             and status in {"actual_scored", "needs_actual_image_fetch"}
@@ -9978,6 +10009,16 @@ def build_image_candidate_queue(
             "image_model_input_type": "actual_image" if actual else media.get("image_model_input_type", row.get("image_model_input_type", entries[key].get("image_model_input_type", ""))),
             "image_model_type": media.get("image_model_type", row.get("image_model_type", entries[key].get("image_model_type", ""))),
             "image_url_or_local_path": direct_image_ref,
+            "media_acquisition_target_type": (
+                "external_article_page"
+                if article_page_target
+                else row.get("media_acquisition_target_type", entries[key].get("media_acquisition_target_type", ""))
+            ),
+            "media_acquisition_target_url": (
+                post_url
+                if article_page_target
+                else row.get("media_acquisition_target_url", entries[key].get("media_acquisition_target_url", ""))
+            ),
             "vk_media_photo_urls": row.get("vk_media_photo_urls") or entries[key].get("vk_media_photo_urls", ""),
             "vk_media_prefetch_status": row.get("vk_media_prefetch_status") or entries[key].get("vk_media_prefetch_status", ""),
             "vk_media_prefetch_source": row.get("vk_media_prefetch_source") or entries[key].get("vk_media_prefetch_source", ""),
@@ -10026,11 +10067,12 @@ def build_image_candidate_queue(
         })
 
     for row in new_posts:
-        if row.get("has_media"):
+        if row.get("has_media") or has_external_article_page_target(row):
             add_or_update(row, added_from="current_run_text_gate")
     for row in candidate_memory_rows:
         if row.get("post_url") and (
             candidate_memory_should_try_image(row)
+            or has_external_article_page_target(row)
             or str(row.get("post_url") or "") in entries
         ):
             add_or_update(row, added_from="candidate_memory")
@@ -10446,6 +10488,7 @@ def publication_eligibility(
     authoritative_source: dict[str, Any] | None = None,
     *,
     require_actual_image: bool | None = None,
+    allow_external_article_page_acquisition: bool = False,
 ) -> dict[str, Any]:
     """Return a side-effect-free, fail-closed publication gate decision.
 
@@ -10499,8 +10542,21 @@ def publication_eligibility(
         has_media = _rt_bool(merged.get("has_media")) or _rt_float(merged.get("media_count")) > 0 or bool(
             str(merged.get("primary_media_path") or merged.get("image_url_or_local_path") or "").strip()
         )
-        base_ok, base_reason = (has_media, "" if has_media else "no_media_for_image_analysis")
-        eligibility_phase = "pre_image"
+        external_article_page_target = bool(
+            allow_external_article_page_acquisition
+            and str(merged.get("content_origin_type") or "").strip().lower()
+            in EXTERNAL_PUBLICATION_ORIGIN_TYPES
+            and str(
+                merged.get("media_acquisition_target_url") or merged.get("post_url") or ""
+            ).strip().startswith(("http://", "https://"))
+        )
+        base_ok = bool(has_media or external_article_page_target)
+        base_reason = "" if base_ok else "no_media_for_image_analysis"
+        eligibility_phase = (
+            "pre_image_external_article_page_acquisition"
+            if external_article_page_target and not has_media
+            else "pre_image"
+        )
     evidence = {
         "source_verdict": source_verdict,
         "authoritative_source_used": authoritative_source is not None,
@@ -10536,6 +10592,10 @@ def publication_eligibility(
             EXTERNAL_ARTICLE_LINK_GATE_VERSION if external_link_article else ""
         ),
         "eligibility_phase": eligibility_phase,
+        "external_article_page_acquisition_target": bool(
+            allow_external_article_page_acquisition
+            and eligibility_phase == "pre_image_external_article_page_acquisition"
+        ),
     }
     if source_verdict == PUBLICATION_SOURCE_CONFIRMED_REJECTED:
         primary_reason = source_gate_reason or "source_verdict_local_or_spam"
@@ -16675,6 +16735,12 @@ def external_publication_intake_to_post(row: dict[str, Any]) -> dict[str, Any] |
         "media_count": len(candidate_urls),
         "primary_media_path": direct_image,
         "image_url_or_local_path": direct_image,
+        # The canonical article page is a bounded media-acquisition target even
+        # when external research did not pre-populate candidate_urls. This is
+        # deliberately separate from has_media: ImageDiagnostic must discover
+        # and verify an actual article-associated image before that fact exists.
+        "media_acquisition_target_type": "external_article_page",
+        "media_acquisition_target_url": canonical_url,
         "rights_policy": media.get("rights_policy") or "link_only",
         "media_use_policy": "score_only_no_reuse",
         "media_reuse_allowed": bool(media.get("media_reuse_allowed")),
