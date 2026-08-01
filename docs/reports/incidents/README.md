@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-01-region-talk-draft-backfill-nameerror.md`
+  - Scope: Region Talk v8 backfill entrypoint, supporting YDB reads and
+    Telegram/VK operator delivery catch-up.
+  - Must not regress: both platform lanes must traverse the real worker read
+    path without namespace errors and closure requires new current-fingerprint
+    delivery evidence or a verified empty queue.
+
 - `INC-2026-08-01-unusual-feed-disabled-by-config.md`
   - Scope: expired Unusual review candidate, absent public route, shared static
     BGE execution, cache/last-good durability and stable demonstration availability.

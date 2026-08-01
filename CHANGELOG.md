@@ -77,6 +77,9 @@
 - Region Talk v8 pre-send validation now measures the same linked-label caption
   visible to the operator, so long article URLs hidden in HTML anchors cannot
   abort an otherwise valid 550–900-character draft.
+- Region Talk autonomous v8 draft backfill now reads article intake and
+  publication history through the notifier YDB namespace; the deployed worker
+  no longer aborts both Telegram and VK lanes with `NameError` before selection.
 - Guide Excursions generated Kaggle notebooks now embed the complete
   deterministic `google_ai` Python source tree instead of a stale four-module
   allowlist. Shared-limiter and future nested imports therefore survive the

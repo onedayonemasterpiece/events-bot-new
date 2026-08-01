@@ -1098,10 +1098,18 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     selected: list[dict[str, Any]] = []
     try:
         ydb, driver, pool, table, rows = notify.read_publication_rows(int(args.scan_limit))
-        external_intakes = read_kind_rows(pool, ydb, table, "external_publication_intake_item", int(args.scan_limit))
-        schedules = read_kind_rows(pool, ydb, table, "publication_schedule_item", int(args.history_limit))
-        logs = read_kind_rows(pool, ydb, table, "publication_log_item", int(args.history_limit))
-        logs += read_kind_rows(pool, ydb, table, "region_talk_publication_log", int(args.history_limit))
+        external_intakes = notify.read_kind_rows(
+            pool, ydb, table, "external_publication_intake_item", int(args.scan_limit)
+        )
+        schedules = notify.read_kind_rows(
+            pool, ydb, table, "publication_schedule_item", int(args.history_limit)
+        )
+        logs = notify.read_kind_rows(
+            pool, ydb, table, "publication_log_item", int(args.history_limit)
+        )
+        logs += notify.read_kind_rows(
+            pool, ydb, table, "region_talk_publication_log", int(args.history_limit)
+        )
         history = publication_history([*schedules, *logs, *rows], limit=5)
         intakes = article_intake_index(external_intakes)
         selected = select_rows(rows, limit=int(args.limit), surface=str(args.surface))

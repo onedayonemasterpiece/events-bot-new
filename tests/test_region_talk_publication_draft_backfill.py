@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+import asyncio
 import importlib.util
 import sys
 from datetime import datetime, timedelta, timezone
@@ -57,6 +59,50 @@ def test_selection_skips_ready_terminal_and_future_retry_rows() -> None:
     ):
         selected = mod.select_rows(rows, limit=10, now=now, surface="telegram")
     assert [row["post_url"] for row in selected] == ["https://t.me/source/1"]
+
+
+def test_execute_reads_supporting_kinds_through_notifier_namespace() -> None:
+    mod = load_module()
+
+    class Driver:
+        stopped = False
+
+        def stop(self) -> None:
+            self.stopped = True
+
+    driver = Driver()
+    kinds: list[str] = []
+
+    def read_kind_rows(_pool, _ydb, _table, kind: str, _limit: int):
+        kinds.append(kind)
+        return []
+
+    args = argparse.Namespace(
+        scan_limit=5000,
+        history_limit=5000,
+        limit=2,
+        surface="all",
+        transport="telethon_discovery2",
+        dry_run=True,
+    )
+    with (
+        mock.patch.object(
+            mod.notify,
+            "read_publication_rows",
+            return_value=(object(), driver, object(), "table", []),
+        ),
+        mock.patch.object(mod.notify, "read_kind_rows", side_effect=read_kind_rows),
+    ):
+        result = asyncio.run(mod.execute(args))
+
+    assert result["selected_total"] == 0
+    assert driver.stopped is True
+    assert kinds == [
+        "external_publication_intake_item",
+        "publication_schedule_item",
+        "publication_log_item",
+        "region_talk_publication_log",
+    ]
 
 
 def test_request_fingerprint_changes_with_exact_source_text() -> None:
