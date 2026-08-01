@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk operator delivery head-of-line blocking: a pre-send media materialization/hash failure is now persisted as `materialization_failed`, remains unsent for evidence repair, and no longer prevents later review revisions in the same bounded batch from reaching the chat.
 - Fixed Region Talk legacy album materialization during the v10 backfill: a one-image preview scalar no longer hides a reviewed 3–6-item Telegram selection, VK selections are projected onto exact `wall.getById` attachment refs with reviewed hashes, and `--materialize-only` repairs pending manifests without another editorial LLM call or copy change.
 - Fixed Region Talk's Russian-language guard for Latin-script outlet/channel names: exact source-owned labels and `@handles` are excluded from the letter-ratio calculation, while unrelated English prose remains a hard failure.
 - Fixed the daily Telegram Monitoring Kaggle launcher to embed the complete deterministic `google_ai` Python package instead of a stale four-file allowlist, added an isolated generated-notebook import-closure regression test, and preserved launcher failures in `ops_run` diagnostics for reliable watchdog and incident evidence.

@@ -1400,6 +1400,7 @@ async def send_rows_telethon(
     with discovery_session_lease(str(args.transport)):
         client, peer, chat_id, account_id = await _telethon_client_and_chat(args)
         sent: list[dict[str, Any]] = []
+        failed: list[dict[str, Any]] = []
         try:
             for idx, text in enumerate(messages):
                 row = rows[idx] if idx < len(rows) else None
@@ -1450,7 +1451,33 @@ async def send_rows_telethon(
                 # retryable after its underlying evidence is repaired.
                 files: list[Any] = []
                 if current_editorial and row is not None and mode != "link_preview_fallback":
-                    files = await materialize_telethon_media(client, row)
+                    try:
+                        files = await materialize_telethon_media(client, row)
+                    except Exception as exc:
+                        # The send has not started, so this failure is neither
+                        # ambiguous nor a reason to hide every later review
+                        # revision in the same bounded batch. Persist exact
+                        # evidence for repair and continue fail-closed.
+                        reason = f"{type(exc).__name__}: {str(exc)[:500]}"
+                        if persist_delivery:
+                            upsert_delivery(pool, ydb, table, delivery_key, {
+                                **existing,
+                                **publication_delivery_review_fields(row),
+                                "status": "materialization_failed",
+                                "transport": str(args.transport),
+                                "post_url": canonical_post_url(row),
+                                "chat_id": chat_id,
+                                "random_id": str(random_id),
+                                "delivery_stage": "pre_send_media_materialization",
+                                "failure_reason": reason,
+                                "failed_at": datetime.now(timezone.utc).isoformat(),
+                            })
+                        failed.append({
+                            "post_url": canonical_post_url(row),
+                            "delivery_key": delivery_key,
+                            "reason": reason,
+                        })
+                        continue
 
                 if persist_delivery and row is not None:
                     upsert_delivery(pool, ydb, table, delivery_key, {
@@ -1518,9 +1545,12 @@ async def send_rows_telethon(
         finally:
             await client.disconnect()
         return {
-            "ok": True,
+            "ok": not failed,
+            "partial": bool(sent and failed),
             "sent": sent,
             "sent_count": len(sent),
+            "failed": failed,
+            "failed_count": len(failed),
             "dry_run": False,
             "resolved_chat_id": chat_id,
             "delivery_account_id": account_id,

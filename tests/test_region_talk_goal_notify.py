@@ -810,12 +810,20 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertFalse(requests[0].no_webpage)
         self.assertEqual([item[1]["status"] for item in persisted if item[0] == "delivery"], ["sending", "delivered"])
 
-    def test_editorial_media_failure_does_not_leave_ambiguous_sending_state(self) -> None:
+    def test_editorial_media_failure_is_recorded_and_later_rows_continue(self) -> None:
         mod = load_module()
         args = argparse.Namespace(expected_chat_id="-100123", chat="", transport="telethon_discovery2")
         persisted = []
 
         class Client:
+            async def __call__(self, request):
+                class Update:
+                    random_id = request.random_id
+                    id = 778
+                class Result:
+                    updates = [Update()]
+                return Result()
+
             async def disconnect(self):
                 return None
 
@@ -831,7 +839,8 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         mod.discovery_session_lease = lambda _transport: contextlib.nullcontext({})
         mod.read_delivery = lambda *_args: {}
         mod.upsert_delivery = lambda *_args: persisted.append(_args[-1])
-        row = {
+        mod.upsert_sent = lambda *_args, **_kwargs: None
+        failed_row = {
             "post_url": "https://t.me/example/100",
             "publication_draft_prompt_version": mod.EDITORIAL_WRITER_VERSION,
             "publication_presentation_mode": "social_album",
@@ -847,17 +856,23 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
                 }],
             }),
         }
-        with self.assertRaisesRegex(RuntimeError, "source album unavailable"):
-            asyncio.run(mod.send_rows_telethon(
-                args,
-                messages=["candidate"],
-                rows=[row],
-                ydb=object(),
-                driver=object(),
-                pool=object(),
-                table="table",
-            ))
-        self.assertEqual(persisted, [])
+        plain_row = {"post_url": "https://t.me/example/101"}
+        result = asyncio.run(mod.send_rows_telethon(
+            args,
+            messages=["candidate", "next candidate"],
+            rows=[failed_row, plain_row],
+            ydb=object(),
+            driver=object(),
+            pool=object(),
+            table="table",
+        ))
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["partial"])
+        self.assertEqual(result["sent_count"], 1)
+        self.assertEqual(result["failed_count"], 1)
+        self.assertIn("source album unavailable", result["failed"][0]["reason"])
+        self.assertEqual(persisted[0]["status"], "materialization_failed")
+        self.assertEqual(persisted[0]["delivery_stage"], "pre_send_media_materialization")
 
 
 if __name__ == "__main__":
