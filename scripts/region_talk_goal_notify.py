@@ -968,7 +968,10 @@ def verify_reviewed_media_digest(data: bytes, item: dict[str, Any]) -> None:
 def manifest_item_message_id(item: dict[str, Any]) -> int | None:
     """Return the exact Telegram message id encoded by a manifest media id."""
 
-    match = re.search(r"([0-9]+)$", str(item.get("media_id") or ""))
+    # ``hero:1`` is a presentation ordinal, not Telegram message 1.
+    match = re.fullmatch(
+        r"(?:telegram|tg):([0-9]+)", str(item.get("media_id") or ""), re.I
+    )
     return int(match.group(1)) if match else None
 
 

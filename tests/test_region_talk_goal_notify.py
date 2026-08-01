@@ -383,6 +383,7 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertEqual(mod.manifest_item_message_id({"media_id": "telegram:110"}), 110)
         self.assertEqual(mod.manifest_item_message_id({"media_id": "tg:10"}), 10)
         self.assertIsNone(mod.manifest_item_message_id({"media_id": "frame:hero"}))
+        self.assertIsNone(mod.manifest_item_message_id({"media_id": "hero:1"}))
 
     def test_source_album_locator_is_bounded_to_six_in_original_order(self) -> None:
         mod = load_module()

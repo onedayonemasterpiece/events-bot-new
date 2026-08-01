@@ -85,6 +85,12 @@ original order and deterministically takes at most the first six frames; fewer
 than three still fails closed. A single source-album locator therefore means
 “resolve this exact group and apply the bounded fallback”, not “publish a
 one-image album” or “send all ten platform frames”.
+Only `telegram:<message_id>` / legacy `tg:<message_id>` media IDs are treated
+as exact Telegram message identities. Generic manifest ordinals such as
+`hero:1` cannot redirect materialization to message 1. Likewise, a legacy
+`<post>#media` scalar is only a diagnostic sentinel; when the exact anchor is a
+video, zero-LLM media repair persists `media_kind=video` and the canonical
+source-post ref, leaving the accepted editorial copy unchanged.
 External article source attestations participate in the same live-fingerprint
 merge as Telegram/VK sources so the autonomous orchestrator sees article
 backfill work instead of leaving it visible only to the notifier.
