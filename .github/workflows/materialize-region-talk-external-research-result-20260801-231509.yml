@@ -1,0 +1,139 @@
+name: Materialize fourth Region Talk external research result
+
+on:
+  push:
+    branches:
+      - agent/region-talk-external-research-results-20260801
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DEST: docs/features/region-talk-channel
+      RESULT_FILE: region-talk-external-research-result-region-talk-external-2026-08-01-231509.json
+      PACKED_BLOB_SHA: a9545fe91b9f4bc2042172fd28bfd92675160476
+      EXPECTED_SHA256: 55692db75e4017b6cfc6186168089ce01c8c7494fab868b3a5b094577da85a33
+    steps:
+      - name: Check out target branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/region-talk-external-research-results-20260801
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Materialize, verify and index result
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$DEST"
+
+          gh api "repos/${GITHUB_REPOSITORY}/git/blobs/${PACKED_BLOB_SHA}" --jq '.content' \
+            | tr -d '\n' \
+            | base64 --decode > /tmp/region-talk-result.b64
+          base64 --decode /tmp/region-talk-result.b64 \
+            | gzip --decompress --stdout > "$DEST/$RESULT_FILE"
+
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          dest = Path("docs/features/region-talk-channel")
+          filename = "region-talk-external-research-result-region-talk-external-2026-08-01-231509.json"
+          result_path = dest / filename
+          raw = result_path.read_bytes()
+          expected_sha = "55692db75e4017b6cfc6186168089ce01c8c7494fab868b3a5b094577da85a33"
+          actual_sha = hashlib.sha256(raw).hexdigest()
+          if actual_sha != expected_sha:
+              raise SystemExit(f"SHA-256 mismatch: {actual_sha}")
+
+          data = json.loads(raw)
+          if data.get("schema_version") != "region_talk_external_research.v1":
+              raise SystemExit("schema_version mismatch")
+          if data.get("run", {}).get("request_id") != "region-talk-external-2026-08-01-231509":
+              raise SystemExit("request_id mismatch")
+          expected_counts = {"candidates": 11, "excluded": 5, "unresolved": 6}
+          for key, expected in expected_counts.items():
+              actual = len(data.get(key, []))
+              if actual != expected:
+                  raise SystemExit(f"{key} count mismatch: {actual}")
+          readiness = {}
+          for candidate in data["candidates"]:
+              value = candidate.get("decision", {}).get("downstream_readiness")
+              readiness[value] = readiness.get(value, 0) + 1
+          if readiness != {"candidate_report": 8, "manual_review_required": 3}:
+              raise SystemExit(f"readiness mismatch: {readiness}")
+
+          index_path = dest / "external-publication-research-results.md"
+          text = index_path.read_text(encoding="utf-8")
+          row = (
+              "| 2026-08-01 23:15:09 | "
+              "[`region-talk-external-research-result-region-talk-external-2026-08-01-231509.json`]"
+              "(region-talk-external-research-result-region-talk-external-2026-08-01-231509.json) "
+              "| 11 | 8 | 3 | 5 | 6 | "
+              "`55692db75e4017b6cfc6186168089ce01c8c7494fab868b3a5b094577da85a33` |"
+          )
+          anchor = (
+              "| 2026-08-01 16:31:42 | "
+              "[`region-talk-external-research-result-region-talk-external-2026-08-01-163142.json`]"
+              "(region-talk-external-research-result-region-talk-external-2026-08-01-163142.json) "
+              "| 20 | 10 | 10 | 4 | 1 | "
+              "`e662b449811a0887dd2fa0ebe33903d8caffed3231323ee9e8fbfc55b027bad7` |"
+          )
+          if row not in text:
+              if anchor not in text:
+                  raise SystemExit("index table anchor missing")
+              text = text.replace(anchor, anchor + "\n" + row, 1)
+
+          old_total = (
+              "Итого в трёх исследовательских пакетах: **54 кандидата**, из них "
+              "**34 `candidate_report`** и **20 `manual_review_required`**; отдельно сохранены "
+              "**9 исключённых** и **7 неразрешённых** страниц."
+          )
+          new_total = (
+              "Итого в четырёх исследовательских пакетах: **65 кандидатов**, из них "
+              "**42 `candidate_report`** и **23 `manual_review_required`**; отдельно сохранены "
+              "**14 исключённых** и **13 неразрешённых** страниц."
+          )
+          if old_total in text:
+              text = text.replace(old_total, new_total, 1)
+          elif new_total not in text:
+              raise SystemExit("index total anchor missing")
+
+          list_anchor = (
+              "  docs/features/region-talk-channel/"
+              "region-talk-external-research-result-region-talk-external-2026-08-01-163142.json"
+          )
+          list_new = (
+              "  docs/features/region-talk-channel/"
+              "region-talk-external-research-result-region-talk-external-2026-08-01-231509.json"
+          )
+          if list_new not in text:
+              if list_anchor not in text:
+                  raise SystemExit("RESULTS list anchor missing")
+              text = text.replace(list_anchor, list_anchor + "\n" + list_new, 1)
+
+          index_path.write_text(text, encoding="utf-8")
+          print(json.dumps({
+              "sha256": actual_sha,
+              "candidates": len(data["candidates"]),
+              "readiness": readiness,
+              "excluded": len(data["excluded"]),
+              "unresolved": len(data["unresolved"]),
+          }, ensure_ascii=False))
+          PY
+
+          rm -f .github/workflows/materialize-region-talk-external-research-result-20260801-231509.yml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Add fourth Region Talk research result"
+          git push origin HEAD:agent/region-talk-external-research-results-20260801
