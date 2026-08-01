@@ -64,6 +64,7 @@ NOTIFY_TRANSPORT_RESOURCES = {
 CURRENT_E5_ENCODER_CONTRACT = "e5_semantic_bank_scores_v1"
 CURRENT_BGE_M3_ENCODER_CONTRACT = "bge_m3_flagembedding_dense_v1"
 CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v5"
+CURRENT_PUBLICATION_DRAFT_BACKFILL_VERSION = "region_talk_publication_draft_backfill_v4_publisher_reader_brief"
 POST_LINK_READY_STATUSES = {"", "pending_fetch", "retry_fetch", "fetch_error"}
 POST_LINK_TERMINAL_STATUSES = {
     "fetched", "scored", "terminal_no_text", "terminal_bad_url",
@@ -2635,13 +2636,16 @@ def _publication_handoff_metrics(
         status = str(row.get("publication_draft_backfill_status") or "").lower()
         if (
             str(row.get("publication_draft_backfill_version") or "")
-            == "region_talk_publication_draft_backfill_v2_editorial"
+            == CURRENT_PUBLICATION_DRAFT_BACKFILL_VERSION
             and status in {
             "ready", "llm_not_accepted", "needs_grounding_review",
             "source_text_unavailable", "unsupported_surface",
             }
         ):
-            return False
+            # A v3 row marked ready can still be invalidated by a newer
+            # deterministic final-copy guard. It is already in
+            # draft_missing_confirmed_urls, so schedule one corrective pass.
+            return status == "ready"
         retry_at = _parse_iso_datetime(row.get("publication_draft_backfill_next_attempt_after"))
         return retry_at is None or retry_at <= now
 

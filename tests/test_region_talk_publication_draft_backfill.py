@@ -3,10 +3,13 @@ from __future__ import annotations
 import argparse
 import asyncio
 import importlib.util
+import json
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,7 +39,7 @@ def test_telegram_post_ref_is_exact_and_public() -> None:
     assert mod.social_post_surface("https://vk.com/wall-1_2") == "vk"
 
 
-def test_selection_skips_ready_terminal_and_future_retry_rows() -> None:
+def test_selection_migrates_unversioned_terminal_and_skips_future_current_retry_rows() -> None:
     mod = load_module()
     now = datetime(2026, 7, 31, 20, 0, tzinfo=timezone.utc)
     rows = [
@@ -50,6 +53,7 @@ def test_selection_skips_ready_terminal_and_future_retry_rows() -> None:
             "post_url": "https://t.me/source/3",
             "publication_rank": 3,
             "publication_draft_backfill_status": "retry_due",
+            "publication_draft_backfill_version": mod.DRAFT_BACKFILL_VERSION,
             "publication_draft_backfill_next_attempt_after": (now + timedelta(hours=1)).isoformat(),
         },
     ]
@@ -58,7 +62,23 @@ def test_selection_skips_ready_terminal_and_future_retry_rows() -> None:
         mock.patch.object(mod.notify, "is_publication_draft_ready", return_value=False),
     ):
         selected = mod.select_rows(rows, limit=10, now=now, surface="telegram")
-    assert [row["post_url"] for row in selected] == ["https://t.me/source/1"]
+    assert [row["post_url"] for row in selected] == [
+        "https://t.me/source/2", "https://t.me/source/1",
+    ]
+
+
+def test_current_v3_ready_with_unversioned_draft_is_corrective_actionable() -> None:
+    mod = load_module()
+    row = {
+        "post_url": "https://t.me/source/4",
+        "publication_draft_backfill_version": mod.DRAFT_BACKFILL_VERSION,
+        "publication_draft_backfill_status": "ready",
+    }
+    with (
+        mock.patch.object(mod.notify, "is_confirmed_publication", return_value=True),
+        mock.patch.object(mod.notify, "is_publication_draft_ready", return_value=False),
+    ):
+        assert mod.backfill_is_actionable(row, surface="telegram") is True
 
 
 def test_execute_reads_supporting_kinds_through_notifier_namespace() -> None:
@@ -99,6 +119,8 @@ def test_execute_reads_supporting_kinds_through_notifier_namespace() -> None:
     assert driver.stopped is True
     assert kinds == [
         "external_publication_intake_item",
+        "external_publication_source_item",
+        "source_onboarding_profile_item",
         "image_queue_item",
         "publication_schedule_item",
         "publication_log_item",
@@ -182,6 +204,25 @@ def test_execute_article_uses_retained_intake_without_social_fetch_unpack(monkey
     monkeypatch.setattr(mod, "DurableGeminiBudget", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(mod, "collect_source_texts", mock.AsyncMock(return_value=({}, {})))
     monkeypatch.setattr(
+        mod.finalizer,
+        "build_source_onboarding_evidence",
+        lambda *_args, **_kwargs: {"source_profile_id": "profile-1", "evidence_status": "sufficient"},
+    )
+    def enrich(rows, **_kwargs):
+        rows[0].update({
+            "source_onboarding_status": "ready",
+            "source_onboarding_paragraph": "Проверенная сводка об издании для читателя.",
+            "source_onboarding_publisher_dimensions_status": "ready",
+            "source_onboarding_publisher_dimensions_json": json.dumps({
+                key: {"text": key, "evidence_ids": ["E1"]}
+                for key in ("outlet_identity", "intended_audience", "distinctive_value")
+            }),
+            "source_onboarding_summary_kind": mod.notify.PUBLISHER_READER_BRIEF_KIND,
+        })
+        return rows, [], {}
+    monkeypatch.setattr(mod.finalizer, "enrich_accepted_rows_with_onboarding", enrich)
+    monkeypatch.setattr(mod.finalizer, "write_source_onboarding_rows", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(
         mod,
         "build_draft_updates",
         lambda _row, **kwargs: ({"publication_draft_backfill_status": "ready"}, False),
@@ -195,7 +236,8 @@ def test_execute_article_uses_retained_intake_without_social_fetch_unpack(monkey
     result = asyncio.run(mod.execute(args))
 
     assert result["ready_total"] == 1
-    assert written == [{"publication_draft_backfill_status": "ready"}]
+    assert written[0]["publication_draft_backfill_status"] == "ready"
+    assert written[0]["source_onboarding_publisher_dimensions_status"] == "ready"
 
 
 def test_request_fingerprint_changes_with_exact_source_text() -> None:
@@ -276,6 +318,314 @@ def test_v8_validator_requires_at_least_95_percent_cyrillic() -> None:
     )
 
 
+def test_language_validator_exempts_only_exact_latin_source_labels() -> None:
+    mod = load_module()
+    output = _valid_writer_output(mod)
+    output["public_copy"]["paragraph_1"] = (
+        "Telegram-канал Sasha Meets Russia собирает личные путевые заметки о российских "
+        "городах и показывает регион через последовательный маршрут автора. Читателю "
+        "такой формат помогает заранее выбрать детали будущей прогулки и точки интереса."
+    )
+    row = {
+        "post_url": "https://t.me/sasha_meets_russia/530",
+        "source_title": "Sasha Meets Russia",
+        "source_username": "sasha_meets_russia",
+    }
+    violations = mod.validate_editorial_output(
+        output, {"source.name", "content.exact_text"}, row=row,
+    )
+    assert "russian_language" not in violations
+
+    output["public_copy"]["paragraph_2"] += " This unrelated sentence remains English."
+    violations = mod.validate_editorial_output(
+        output, {"source.name", "content.exact_text"}, row=row,
+    )
+    assert "russian_language" in violations
+
+
+def test_validator_checks_exact_rendered_caption_length_when_row_is_available() -> None:
+    mod = load_module()
+    output = _valid_writer_output(mod)
+    row = {"post_url": "https://t.me/example/1", "source_title": "Внешнее издание"}
+    violations = mod.validate_editorial_output(
+        output, {"source.name", "content.exact_text"}, row=row,
+    )
+    assert "caption_visible_length:536" in violations
+
+    output["public_copy"]["paragraph_2"] += (
+        " Автор также объясняет, как эти наблюдения складываются в цельный маршрут прогулки."
+    )
+    assert not any(
+        item.startswith("caption_visible_length:")
+        for item in mod.validate_editorial_output(
+            output, {"source.name", "content.exact_text"}, row=row,
+        )
+    )
+
+
+def test_short_rendered_caption_gets_writer_retry_before_critic(monkeypatch) -> None:
+    mod = load_module()
+    short = _valid_writer_output(mod)
+    short["_stage_status"] = "ok"
+    expanded = json.loads(json.dumps(short, ensure_ascii=False))
+    expanded["public_copy"]["paragraph_2"] += (
+        " Автор также объясняет, как эти наблюдения складываются в цельный маршрут прогулки."
+    )
+    strategy = {
+        "_stage_status": "ok", "status": "ready", "throughline_mode": "fresh_start",
+        "used_history_urls": [], "visual_hook_evidence_ids": [],
+    }
+    critic = {"_stage_status": "ok", "status": "pass", "reason_codes": []}
+    row = {
+        "post_url": "https://t.me/example/1", "source_title": "Внешнее издание",
+        "publication_primary_image_url": "https://cdn.example.org/hero.jpg",
+    }
+    evidence = mod.build_editorial_evidence(
+        row, source_text="Подробный текст о прогулке по Гусеву."
+    )
+    sequence = iter([(strategy, True), (short, True), (expanded, True), (critic, True)])
+    calls_seen = []
+
+    def fake_call(**kwargs):
+        calls_seen.append(kwargs)
+        return next(sequence)
+
+    monkeypatch.setattr(mod, "call_editorial_stage", fake_call)
+    updates, calls = mod.generate_editorial_draft(
+        row, evidence_pack=evidence, history=[], model="test", default_env="KEY", budget=object(),
+    )
+
+    assert calls == 4
+    assert updates["publication_draft_backfill_status"] == "ready"
+    assert updates["publication_draft_generation_attempts"] == 2
+    assert calls_seen[2]["stage"] == "writer"
+    feedback = calls_seen[2]["payload"]["deterministic_feedback"]
+    assert "caption_visible_length:536" in feedback
+    repair = calls_seen[2]["payload"]["length_repair"]
+    assert repair["actual_visible_chars"] == 536
+    assert repair["target_visible_min_chars"] == 620
+    assert repair["required_added_editorial_chars"] == 84
+
+
+def test_second_short_writer_failure_preserves_stage_audit(monkeypatch) -> None:
+    mod = load_module()
+    short = _valid_writer_output(mod)
+    short["_stage_status"] = "ok"
+    strategy = {
+        "_stage_status": "ok", "status": "ready", "throughline_mode": "fresh_start",
+        "used_history_urls": [], "visual_hook_evidence_ids": [],
+    }
+    row = {
+        "post_url": "https://t.me/example/1", "source_title": "Внешнее издание",
+        "publication_primary_image_url": "https://cdn.example.org/hero.jpg",
+    }
+    evidence = mod.build_editorial_evidence(
+        row, source_text="Подробный текст о прогулке по Гусеву."
+    )
+    sequence = iter([(strategy, True), (short, True), (short, True)])
+    monkeypatch.setattr(mod, "call_editorial_stage", lambda **_kwargs: next(sequence))
+
+    updates, calls = mod.generate_editorial_draft(
+        row, evidence_pack=evidence, history=[], model="test", default_env="KEY", budget=object(),
+    )
+
+    assert calls == 3
+    assert updates["publication_draft_backfill_status"] == "needs_grounding_review"
+    audit = json.loads(updates["publication_draft_stage_audit_json"])
+    assert audit["strategy"]["status"] == "ready"
+    assert audit["writer"]["status"] == "draft_ready"
+
+
+def test_editorial_stage_pacing_waits_between_physical_provider_calls(monkeypatch) -> None:
+    mod = load_module()
+    monotonic_values = iter([100.0, 100.0, 101.0, 105.5])
+    sleeps = []
+    monkeypatch.setattr(mod.time, "monotonic", lambda: next(monotonic_values))
+    monkeypatch.setattr(mod.time, "sleep", sleeps.append)
+    mod._EDITORIAL_PROVIDER_STAGE_DELAY_SECONDS = 5.5
+    mod._EDITORIAL_PROVIDER_LAST_CALL = 0.0
+
+    mod.pace_editorial_provider_call()
+    mod.pace_editorial_provider_call()
+
+    assert sleeps == [4.5]
+
+
+def test_article_writer_must_ground_all_publisher_reader_brief_dimensions_in_first_paragraph() -> None:
+    mod = load_module()
+    output = _valid_writer_output(mod)
+    required = {
+        "source.publisher.outlet_identity",
+        "source.publisher.intended_audience",
+        "source.publisher.distinctive_value",
+    }
+    evidence_ids = {"source.name", "content.exact_text", *required}
+    assert "missing_publisher_reader_brief" in mod.validate_editorial_output(
+        output, evidence_ids, required_publisher_evidence_ids=required,
+    )
+    output["grounding_map"][0]["paragraph_index"] = 1
+    output["grounding_map"][0]["evidence_ids"] = ["source.name", *sorted(required)]
+    output["grounding_map"][1]["paragraph_index"] = 2
+    assert mod.validate_editorial_output(
+        output, evidence_ids, required_publisher_evidence_ids=required,
+    ) == []
+
+
+def test_v9_validator_rejects_banned_not_a_construction() -> None:
+    mod = load_module()
+    output = _valid_writer_output(mod)
+    output["public_copy"]["paragraph_2"] = (
+        "В публикации автор показывает музей не как цепочку отдельных залов, а как цельный "
+        "маршрут вокруг океана. Оригинал стоит открыть ради деталей конструкций, экспозиции "
+        "и последовательного объяснения архитектурного замысла здания."
+    )
+    assert "contrastive_not_a_cliche" in mod.validate_editorial_output(
+        output, {"source.name", "content.exact_text"}
+    )
+    with mock.patch.object(mod.notify, "contains_contrastive_not_a_cliche", return_value=True):
+        with mock.patch.object(mod, "_source_name", return_value="Источник"):
+            with mock.patch.object(mod, "_canonical_url", return_value="https://example.org/a"):
+                with mock.patch.object(mod, "render_public_copy", wraps=mod.render_public_copy):
+                    try:
+                        mod.render_public_copy({}, output)
+                    except ValueError as exc:
+                        assert str(exc) == "contrastive_not_a_cliche"
+                    else:
+                        raise AssertionError("render must fail closed on banned style")
+
+
+def test_v9_writer_gets_one_style_retry_then_fails_closed(monkeypatch) -> None:
+    mod = load_module()
+    clean = _valid_writer_output(mod)
+    clean["_stage_status"] = "ok"
+    clean["public_copy"]["paragraph_2"] += (
+        " Также автор объясняет, какие детали связывают отдельные точки прогулки в общий маршрут."
+    )
+    banned = json.loads(json.dumps(clean, ensure_ascii=False))
+    banned["public_copy"]["paragraph_2"] = (
+        "В публикации автор показывает музей не как цепочку отдельных залов, а как цельный "
+        "маршрут вокруг океана. Оригинал стоит открыть ради деталей конструкций, экспозиции "
+        "и последовательного объяснения архитектурного замысла здания."
+    )
+    strategy = {
+        "_stage_status": "ok", "status": "ready", "throughline_mode": "fresh_start",
+        "used_history_urls": [], "visual_hook_evidence_ids": [],
+    }
+    critic = {"_stage_status": "ok", "status": "pass", "reason_codes": []}
+    row = {
+        "post_url": "https://example.org/article", "source_title": "Внешнее издание",
+        "content_origin_type": "editorial_publication",
+        "publication_primary_image_url": "https://cdn.example.org/hero.jpg",
+    }
+    evidence = mod.build_editorial_evidence(row, source_text="Подробный текст о музейном маршруте.")
+
+    sequence = iter([(strategy, True), (banned, True), (clean, True), (critic, True)])
+    monkeypatch.setattr(mod, "call_editorial_stage", lambda **_kwargs: next(sequence))
+    updates, calls = mod.generate_editorial_draft(
+        row, evidence_pack=evidence, history=[], model="test", default_env="KEY", budget=object(),
+    )
+    assert calls == 4
+    assert updates["publication_draft_backfill_status"] == "ready"
+    assert updates["publication_draft_generation_attempts"] == 2
+    assert not mod.notify.contains_contrastive_not_a_cliche(
+        updates["publication_draft_telegram_text"]
+    )
+
+    sequence = iter([(strategy, True), (banned, True), (banned, True)])
+    monkeypatch.setattr(mod, "call_editorial_stage", lambda **_kwargs: next(sequence))
+    updates, calls = mod.generate_editorial_draft(
+        row, evidence_pack=evidence, history=[], model="test", default_env="KEY", budget=object(),
+    )
+    assert calls == 3
+    assert updates["publication_draft_backfill_status"] == "needs_grounding_review"
+    assert "contrastive_not_a_cliche" in updates["publication_draft_backfill_reason"]
+
+
+def test_v9_prompts_tell_writer_and_critic_to_reject_the_style_family() -> None:
+    mod = load_module()
+    writer = mod._stage_prompt("writer", {})
+    critic = mod._stage_prompt("critic", {})
+    assert "negation-plus-adversative contrast template is forbidden" in writer
+    assert "contrastive_not_a_cliche" in critic
+
+
+def test_writer_prompt_uses_hard_numeric_caption_contract() -> None:
+    mod = load_module()
+    writer = json.loads(mod._stage_prompt("writer", {"visible_caption_contract": {"min_chars": 550}}))
+    assert writer["output"]["public_copy"] == {
+        "paragraph_1": "260-420 chars", "paragraph_2": "260-420 chars",
+    }
+    assert any("hard output schema" in rule for rule in writer["rules"])
+    assert any("required_added_editorial_chars" in rule for rule in writer["rules"])
+
+
+def test_line_break_variant_is_rejected_before_whitespace_normalization() -> None:
+    mod = load_module()
+    paragraph = (
+        "Автор рассматривает пространство не как набор отдельных залов\n"
+        "а как цельный маршрут, который постепенно раскрывает устройство здания и "
+        "помогает читателю проследить все основные решения проекта без лишних обобщений."
+    )
+    output = {
+        "public_copy": {"paragraph_1": paragraph, "paragraph_2": "Я" * 160},
+        "grounding_map": [{
+            "sentence_index": 1, "claim_type": "content_fact",
+            "evidence_ids": ["E1"], "third_person_maintained": True,
+        }],
+    }
+    assert "contrastive_not_a_cliche" in mod.validate_editorial_output(output, {"E1"})
+    with pytest.raises(ValueError, match="contrastive_not_a_cliche"):
+        mod.render_public_copy(
+            {"post_url": "https://example.org/a", "source_title": "Источник"}, output
+        )
+
+
+def test_selection_can_force_one_candidate_but_excludes_public_history() -> None:
+    mod = load_module()
+    target = "https://archi.ru/russia/101203/vsya-mudrost-okeana"
+    rows = [
+        {
+            "post_url": target,
+            "content_origin_type": "editorial_publication",
+            "publication_draft_backfill_version": mod.DRAFT_BACKFILL_VERSION,
+            "publication_draft_backfill_status": "retry_due",
+            "publication_draft_backfill_next_attempt_after": "2099-01-01T00:00:00+00:00",
+        },
+        {"post_url": "https://example.org/other", "content_origin_type": "editorial_publication"},
+    ]
+    with mock.patch.object(mod.notify, "is_confirmed_publication", return_value=True):
+        selected = mod.select_rows(
+            rows, limit=10, surface="article", force_regenerate=True,
+            candidate_urls={target}, published_urls=set(),
+        )
+        assert [row["post_url"] for row in selected] == [target]
+        assert mod.select_rows(
+            rows, limit=10, surface="article", force_regenerate=True,
+            candidate_urls={target}, published_urls={target},
+        ) == []
+        assert mod.select_rows(
+            [{**rows[0], "publication_candidate_id": "pubcand-1"}],
+            limit=10, surface="article", force_regenerate=True,
+            candidate_urls={target}, published_candidate_ids={"pubcand-1"},
+        ) == []
+
+
+def test_explicit_media_only_repair_can_reopen_ready_delivery_revision() -> None:
+    mod = load_module()
+    target = "https://t.me/travel/350"
+    row = {
+        "post_url": target,
+        "publication_draft_status": "ready_for_operator_review",
+        "publication_draft_prompt_version": mod.EDITORIAL_WRITER_VERSION,
+        "publication_draft_contract_version": mod.EDITORIAL_OUTPUT_CONTRACT,
+    }
+    with mock.patch.object(mod.notify, "is_confirmed_publication", return_value=True):
+        selected = mod.select_media_materialization_rows(
+            [row], limit=1, surface="telegram", candidate_urls={target}
+        )
+    assert selected == [row]
+
+
 def test_history_uses_only_published_or_clean_approved_rows() -> None:
     mod = load_module()
     approved = {
@@ -331,6 +681,25 @@ def test_media_plan_is_media_first_and_fails_article_without_hero() -> None:
     })
     assert album["mode"] == "social_album"
     assert len(album["items"]) == 4
+    legacy_album_with_scalar_preview = mod.publication_media_plan({
+        "post_url": "https://t.me/travel/300", "expected_image_count": 4,
+        "selected_media_ids": '["telegram:300","telegram:302","telegram:301"]',
+        "image_url_or_local_path": "https://t.me/travel/300#media",
+    })
+    assert legacy_album_with_scalar_preview["status"] == "ready"
+    assert [item["media_id"] for item in legacy_album_with_scalar_preview["items"]] == [
+        "telegram:300", "telegram:302", "telegram:301",
+    ]
+    source_video_with_scalar_sentinel = mod.publication_media_plan({
+        "post_url": "https://t.me/travel/350",
+        "media_kind": "video",
+        "image_url_or_local_path": "https://t.me/travel/350#media",
+    })
+    assert source_video_with_scalar_sentinel["mode"] == "social_video"
+    assert source_video_with_scalar_sentinel["items"] == [{
+        "media_id": "source:video", "ordinal": 1, "kind": "video",
+        "ref": "https://t.me/travel/350",
+    }]
     source_album = mod.publication_media_plan({
         "post_url": "https://t.me/travel/200", "expected_image_count": 5,
         "original_photo_evidence": "true",
@@ -385,6 +754,53 @@ def test_social_media_selection_is_joined_from_image_diagnostic() -> None:
     assert [item["media_id"] for item in plan["items"]] == [
         "telegram:100", "telegram:109", "telegram:102",
     ]
+
+
+def test_vk_legacy_selection_is_projected_to_exact_attachment_refs() -> None:
+    mod = load_module()
+    row = {
+        "post_url": "https://vk.com/wall-10_20",
+        "selected_media_ids": '["vk:-10_20:3","vk:-10_20:1","vk:-10_20:2"]',
+        "media_manifest_items": [
+            {"media_id": "vk:-10_20:1", "ordinal": 1, "content_sha256": "a" * 64},
+            {"media_id": "vk:-10_20:2", "ordinal": 2, "content_sha256": "b" * 64},
+            {"media_id": "vk:-10_20:3", "ordinal": 3, "content_sha256": "c" * 64},
+        ],
+    }
+    post = {
+        "owner_id": -10, "id": 20, "text": "Текст",
+        "attachments": [
+            {"type": "photo", "photo": {"sizes": [{"url": f"https://cdn.example/{i}.jpg", "width": 1000, "height": 1000}]}}
+            for i in range(1, 4)
+        ],
+    }
+    text, fields = mod.fetch_vk_text(row, {"-10_20": post}, "")
+    assert text == "Текст"
+    items = json.loads(fields["selected_media_materialization_json"])
+    assert [item["source_ref"] for item in items] == [
+        "https://cdn.example/3.jpg", "https://cdn.example/1.jpg", "https://cdn.example/2.jpg",
+    ]
+    assert items[0]["reviewed_content_sha256"] == "c" * 64
+    plan = mod.publication_media_plan({**row, **fields, "expected_image_count": 3})
+    assert plan["status"] == "ready"
+    assert len(plan["items"]) == 3
+
+
+def test_media_only_updates_preserve_copy_and_call_no_writer() -> None:
+    mod = load_module()
+    row = {
+        "post_url": "https://t.me/travel/400",
+        "publication_draft_status": "media_materialization_pending",
+        "publication_draft_telegram_text": "сохранить",
+        "expected_image_count": 3,
+        "selected_media_ids": '["telegram:400","telegram:401","telegram:402"]',
+        "image_url_or_local_path": "https://t.me/travel/400#media",
+    }
+    updates = mod.build_media_materialization_updates(row, fetched={})
+    assert updates["publication_draft_status"] == "ready_for_operator_review"
+    assert updates["publication_draft_backfill_status"] == "ready"
+    assert updates["publication_draft_backfill_provider_called"] == "false"
+    assert "publication_draft_telegram_text" not in updates
 
 
 def test_legacy_review_is_archived_but_never_approves_v8_revision(monkeypatch) -> None:

@@ -67,6 +67,28 @@ rows, proving that the data existed but publication preparation had not run.
 - 2026-08-01 10:19 UTC — the last newly ready article was delivered through
   idle role-scoped `telethon_discovery2` as operator message `33776`; the
   subsequent read-only notifier probe reported zero unsent ready candidates.
+- 2026-08-01 — operator review of Archi.ru exposes a second completeness gap:
+  an external-publication draft can describe the current article without a
+  useful overview of the outlet. Writer v10 therefore requires a grounded
+  three-part publisher reader brief before an article can become ready.
+- 2026-08-01 21:30–21:35 UTC — the first social v10 catch-up exposes a render
+  ordering defect: several grounded two-paragraph drafts pass Writer/Critic
+  validation yet fail the later exact 550-character caption minimum, leaving
+  no retry opportunity. The same batch reaches the 13 RPM safety ceiling for
+  `gemini-3.5-flash-lite`; overflow to `gemini-3.1-flash-lite` is unavailable
+  because its conservative shared-scope RPD ledger is already full.
+- 2026-08-01 21:56–22:00 UTC — after the ordering hotfix, the next five social
+  candidates use `gemini-3.5-flash-lite` with 5.5-second stage pacing. One is
+  ready; four reach the single retry but still undershoot at 381–511 visible
+  characters. The Writer contract is tightened with exact attribution
+  overhead, measured deficit, a 620-character safe target and a revisioned
+  durable stage fingerprint before further provider calls.
+- 2026-08-01 22:13–22:27 UTC — the expanded backfill reaches nine fully ready
+  candidates and four additional text-complete rows awaiting album
+  materialization. Four otherwise Russian drafts expose a narrow validator
+  false positive caused by required Latin-script source names; the guard is
+  changed to exclude exact source-owned labels while retaining rejection of
+  unrelated English prose.
 
 ## Root Cause
 
@@ -83,6 +105,10 @@ rows, proving that the data existed but publication preparation had not run.
 5. An elapsed frozen slot was preserved but its candidate identity remained in
    the future selection pool, allowing the same item to be selected again on a
    later day.
+6. Paragraph and combined-copy limits were checked before Critic, while the
+   exact rendered caption length was checked only after Critic. A short draft
+   could therefore consume its successful critique and fail without reaching
+   the existing Writer retry.
 
 ## Contributing Factors
 
@@ -113,6 +139,9 @@ rows, proving that the data existed but publication preparation had not run.
 ### Mandatory checks before closure or deploy
 
 - incomplete drafts cannot be sent or occupy daily schedule slots;
+- external-publication drafts cannot become ready until the reader can identify
+  the outlet, its intended audience and its distinctive editorial value from
+  grounded source-level evidence;
 - Telegram and VK draft debt is measured and processed independently;
 - only an idle role-scoped discovery bundle may be used; E2E and generic
   Telegram sessions never enter the functional pipeline;
@@ -120,6 +149,9 @@ rows, proving that the data existed but publication preparation had not run.
   eligible once, while retries of the same draft remain idempotent;
 - provider calls fail closed unless the dedicated atomic Supabase limiter is
   configured and returns the required contract;
+- exact rendered caption length is validated before Critic and a length miss
+  consumes the same single grounded Writer retry; physical stage calls are
+  paced below the conservative model RPM limit;
 - post-deploy backfill produces a measured increase in ready drafts and the
   operator chat receives the completed candidates.
 
@@ -161,6 +193,8 @@ retries duplicate messages.
 - [ ] Observe the next post-deploy natural slot to completion; this is a
   monitoring/closure check, not a blocker for the already active autonomous
   discovery-to-operator pipeline.
+- [ ] Complete the writer-v10 catch-up for every confirmed candidate, deliver
+  the new exact revisions and rebuild the anti-vector plan.
 
 ## Release And Closure Evidence
 

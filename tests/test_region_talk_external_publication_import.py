@@ -166,6 +166,9 @@ def test_valid_candidate_is_normalized_to_fail_closed_staging_row() -> None:
     assert len(source_rows) == 1
     assert source_rows[0]["canonical_source_key"] == "web:example.org"
     assert source_rows[0]["source_topic_class"] == "academic_publication"
+    assert source_rows[0]["publisher_source_overview"] == valid_candidate()["editorial_pack"]["source_overview"]
+    assert json.loads(source_rows[0]["publisher_source_overview_evidence_refs_json"]) == ["ev-1"]
+    assert json.loads(source_rows[0]["publisher_profile_evidence_json"])[0]["evidence_id"] == "ev-1"
     assert result["batch"]["external_sources_staged"] == 1
 
 

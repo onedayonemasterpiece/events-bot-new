@@ -87,24 +87,54 @@ notifier renders `О блогере: …` only when the deterministic support an
 300–600-character checks return `source_onboarding_status=ready`; otherwise the
 candidate remains reviewable without an invented biography.
 
-### Editorial onboarding writer v8
+### Editorial onboarding writer v10
 
 The final verifier remains the owner of the publication verdict. Accepted
 candidates are rewritten by a separate LLM-first copy pipeline,
-`region_talk_editorial_onboarding_writer_v8_staged`:
+`region_talk_editorial_onboarding_writer_v10_publisher_reader_brief`:
 
 1. **Strategy** chooses the external-source angle and an honest history mode
    from at most five actually published or exact-current `approved + clean`
    predecessors. A forced bridge is replaced by `fresh_start`.
-2. **Grounded Writer** produces exactly two Russian paragraphs: source and
-   editorial bridge first, then one or two concrete source-attributed details
-   in the third person and a reason to open the original.
-3. Deterministic validators check 150–500 characters per paragraph, the
+2. **Publisher/source onboarding** is a reusable evidence-grounded LLM profile.
+   Article lanes require outlet identity, intended audience and distinctive
+   editorial value; social lanes retain the author/channel profile.
+3. **Grounded Writer** produces exactly two Russian paragraphs. For articles,
+   paragraph one cites all three publisher dimensions and gives the reader a
+   compact reason to care about the outlet. Paragraph two covers one or two
+   concrete details of the current material and a reason to open it.
+4. Deterministic validators check 150–500 characters per paragraph, the
    550–900-character visible caption target, Russian language, banned
-   clickbait/PR wording, third-person ownership and evidence-ID integrity.
-4. **Critic** returns `pass|rewrite|reject`; at most one writer retry is
+   clickbait/PR wording, third-person ownership and evidence-ID integrity. The
+   adversative AI-cliché family built as `не …, а …` is a named hard failure,
+   including punctuation/dash/line-break variants inside one sentence.
+5. **Critic** returns `pass|rewrite|reject`; at most one writer retry is
    allowed. A second failure becomes `needs_grounding_review`, never an
    invented fallback.
+
+The caption-length check uses the exact rendered text, including source
+attribution, before Critic. A short or oversized otherwise-grounded draft is
+therefore returned to Writer through the same single LLM-first retry. The
+renderer repeats this check as a final fail-closed boundary and preserves the
+complete stage audit if that secondary guard ever fires. Physical backfill
+stage calls are spaced by
+`REGION_TALK_DRAFT_BACKFILL_STAGE_DELAY_SECONDS` (default `5.5`) so a
+multi-stage candidate stays below the conservative 13 RPM project ledger;
+model-scoped overflow still prefers `gemini-3.5-flash-lite` and then
+`gemini-3.1-flash-lite`.
+
+Writer receives the exact attribution overhead plus a hard numeric caption
+contract. Its normal paragraph targets are 260–420 characters; a length retry
+also receives the measured visible length, a 620-character safe target and the
+minimum number of grounded editorial characters to add. The stage execution
+revision participates in the durable request fingerprint, so an older cached
+short response cannot satisfy a newer prompt contract. If the retry still
+misses, its Writer output and grounding map remain in the stage audit for
+diagnosis while the candidate stays outside delivery and planning.
+The Russian-language ratio ignores only exact source-owned Latin-script names
+and `@handles` supplied by the candidate row. Arbitrary English prose still
+fails the same threshold; this keeps channels such as `Sasha Meets Russia`
+attributable without misclassifying otherwise Russian copy.
 
 Every stage uses the existing controlled Google AI gateway, Supabase
 `google_ai_reserve` limiter and durable YDB request budget. Stage prompt/model,
@@ -112,13 +142,38 @@ request and prompt fingerprints, usage, input evidence, bounded history,
 strategy, grounding map and critic result are stored without truncation. The
 writer never changes `llm_decision` or the original verifier verdict.
 
+The style rule is enforced at four boundaries: Writer instruction, Critic
+hard-fail, deterministic writer validation before/after the single retry, and
+the shared notifier/planner readiness predicate. `public_caption()` repeats the
+same check immediately before rendering. Regex only detects and rejects the
+style pattern; it never rewrites meaning. Semantic rewriting remains LLM-first.
+Two failed writer attempts become `needs_grounding_review` and cannot be sent
+to the operator chat or occupy a daily plan slot.
+
 Social evidence is restored from the exact Telegram/VK post using only the
 role-scoped discovery identities/API. Article evidence is read from the
 retained `external_publication_intake_item`; a teaser projection is no longer
 treated as finished public copy. The explicit v7 prompt version is stale.
-Backfill archives its old reaction projection once as `principle approved +
+The v10 rollout invalidates earlier draft/cache fingerprints and runs a
+bounded copy backfill over unpublished confirmed candidates. It builds/reuses
+publisher reader briefs before regenerating article copy. Backfill archives
+its old reaction projection once as `principle approved +
 rewrite requested`, clears the current-review projection, and gives the new
 text-plus-media revision a new fingerprint that requires fresh reactions.
+Already target-published rows are excluded fail-closed by canonical URL and
+candidate ID, including publication status recorded directly on the candidate.
+Unversioned drafts are stale and never satisfy readiness; unversioned/older
+terminal backfill rows are migration debt and become actionable under v10.
+Operators may target an exact URL
+with repeatable `--candidate-url`; `--force-regenerate` is allowed only together
+with that explicit selector and bypasses that row's terminal/retry cooldown.
+If the v10 copy is already current and only the legacy presentation manifest is
+pending, `--materialize-only` performs a zero-LLM repair. Telegram albums use
+the exact source post plus the reviewed message-ID order; VK albums resolve the
+reviewed attachment ordinals through exact `wall.getById` data and persist the
+direct refs, reviewed hashes and refetch locators. A scalar `#media`/preview URL
+cannot downgrade an existing 3–6-item selection to a one-item pseudo-album.
+This mode never changes editorial paragraphs or the publication verdict.
 
 Operator delivery is fail-closed on one atomic revision: two paragraphs,
 source/original links, ordered media manifest and layout. An article requires
@@ -474,8 +529,13 @@ durable finalizer state instead.
 All Region Talk Gemini consumers (final verifier/onboarding, visual
 adjudicator and optional grounded external research) disable direct reserve and
 process-local limiter fallbacks. If Supabase, `google_ai_reserve`, the
-`gemini-3.1-flash-lite` model row or the scoped `GOOGLE_API_KEY3` registration
-is unavailable, the request fails/defer-closes before the provider call. YDB's
+scoped `GOOGLE_API_KEY3` registration or both stable Flash-Lite model rows are
+unavailable, the request fails/defer-closes before the provider call. The
+default order is `gemini-3.5-flash-lite` followed by
+`gemini-3.1-flash-lite`; each has an independent conservative
+`13 RPM / 240000 TPM / 450 RPD` registry row. A model-scoped quota block uses
+the next row immediately. Provider failures remain single-send failures for
+the Region Talk product budget. YDB's
 `DurableGeminiBudget` adds a cumulative 100-request ceiling and fingerprint
 replay for finalizer/onboarding and image-VLM work; it does not replace the
 shared RPM/TPM/RPD reservation.
@@ -558,6 +618,13 @@ publisher after the same session-idle/lease gate. Bot API does not accept a call
 `status=sending` is stopped for operator reconciliation instead of risking a
 duplicate. A successful Bot API response is persisted before the candidate is
 marked sent.
+
+Telethon resolves and verifies every reviewed media item before persisting the
+ambiguous `sending` state. A failure at that pre-send boundary is recorded as
+`materialization_failed` with the exact revision fingerprint and error, the
+candidate remains unsent, and delivery continues with later candidates in the
+same bounded batch. Thus one stale source asset cannot hide the rest of the
+operator queue; it also cannot be silently substituted or marked delivered.
 
 The small per-run send limit is applied only after scanning the durable
 publication ledger. YDB primary-key order is not a readiness order, so older

@@ -37,7 +37,7 @@ from scripts.region_talk_goal_notify import load_env  # noqa: E402
 # This is a production discovery worker, not an external consultant review.
 # The stable model is registered in the shared limiter and officially supports
 # Search grounding, URL Context and structured outputs.
-DEFAULT_MODEL = "gemini-3.1-flash-lite"
+DEFAULT_MODEL = "gemini-3.5-flash-lite"
 DEFAULT_PROMPT = ROOT / "docs" / "features" / "region-talk-channel" / "external-publication-research.prompt.txt"
 DEFAULT_OUTPUT_DIR = Path("/data/runtime_logs/region_talk")
 DEFAULT_MARKER = Path("/data/region_talk_external_research_last_success.json")
@@ -121,7 +121,8 @@ async def run_autoresearch(
             "cooldown_hours": cooldown_hours,
         }
 
-    usage_payload: dict[str, int] = {}
+    usage_payload: dict[str, Any] = {}
+    actual_model = model
     if input_path is not None:
         raw = input_path.read_text(encoding="utf-8")
     else:
@@ -155,6 +156,7 @@ async def run_autoresearch(
             "output_tokens": int(getattr(usage, "output_tokens", 0) or 0),
             "total_tokens": int(getattr(usage, "total_tokens", 0) or 0),
         }
+        actual_model = str(getattr(usage, "model", "") or model)
 
     stamp = started.strftime("%Y%m%dT%H%M%SZ")
     raw_path = output_dir / f"external-research-{stamp}.json"
@@ -181,7 +183,8 @@ async def run_autoresearch(
         "ok": True,
         "stage": "external_research",
         "status": "executed" if execute else "validated",
-        "model": model,
+        "model": actual_model,
+        "requested_model": model,
         "request_id": batch.get("request_id"),
         "raw_path": str(raw_path),
         "raw_sha256": hashlib.sha256(raw.encode("utf-8")).hexdigest(),

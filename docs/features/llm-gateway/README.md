@@ -306,6 +306,8 @@ fail-closed завершаться при недоступном shared limiter.
     * ENV `GOOGLE_AI_INCIDENT_COOLDOWN_SECONDS` — антиспам/дедуп уведомлений (по умолчанию 900 сек).
 *   **Model fallback chain**: при финальном провале основной модели клиент переключается на запасные модели из `GOOGLE_AI_FALLBACK_MODELS` (через запятую) и логирует `google_ai.model_fallback`.
     * Gateway уважает `requested_model`: первой в цепочке всегда идёт запрошенная модель, а запасные модели остаются только fallback-хвостом.
+    * Если atomic reserve блокирует модель по `rpm`, `tpm` или `rpd`, gateway сразу проверяет следующую модель и пишет `google_ai.model_quota_fallback`. До провайдера на заблокированной модели запрос не доходит.
+    * Строго бюджетированные consumers могут выключить provider-error переход через `allow_provider_model_fallback=False`; quota fallback при этом сохраняется.
     * Gemma-модели меньше `12b` (`1b/4b`) автоматически исключаются из цепочки и не используются для текста.
 *   **Emergency overflow keys**: `GOOGLE_AI_RESERVE_OVERFLOW_KEY_ENVS` может дать scoped consumer запасные ключи только при
     daily-budget отказах (`rpd`/`no_keys`). Per-minute (`rpm`/`tpm`) не расширяется, чтобы параллельные задачи не пробивали

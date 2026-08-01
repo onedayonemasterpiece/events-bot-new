@@ -106,6 +106,16 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
 
     def test_only_current_eligibility_attested_confirmed_rows_are_sendable(self) -> None:
         mod = load_module()
+        p1 = (
+            "Петербургский автор внимательно исследует повседневный ритм города и собирает маршрут "
+            "из наблюдений за улицами, площадями и привычками жителей. Такой внешний взгляд помогает "
+            "увидеть знакомое пространство с новой точки и сохраняет авторскую интонацию источника."
+        )
+        p2 = (
+            "В публикации подробно описаны геометрия улиц, восстановленные фрески и последовательность "
+            "прогулки. Оригинал стоит открыть ради конкретных деталей и цельной фотосерии, которая "
+            "показывает обычную городскую жизнь далеко за пределами центральной площади и соседних районов."
+        )
         base = {
             "publication_candidate_status": "llm_confirmed",
             "publication_status": "gemini_accept",
@@ -121,9 +131,13 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
             "publication_draft_status": "ready_for_operator_review",
             "publication_draft_title": "Маршрут",
             "publication_draft_source_attribution": "Авторский канал",
-            "publication_draft_telegram_text": "Текст для Telegram",
-            "publication_draft_vk_text": "Текст для VK",
+            "publication_draft_telegram_text": f"{p1}\n\n{p2}\n\nИсточник: Авторский канал\nОригинал: https://t.me/a/1",
+            "publication_draft_vk_text": f"{p1}\n\n{p2}\n\nИсточник: Авторский канал\nОригинал: https://t.me/a/1",
             "publication_draft_fact_points_json": '[{"claim":"Факт","support_excerpt":"Опора"}]',
+            "publication_draft_prompt_version": mod.EDITORIAL_WRITER_VERSION,
+            "publication_draft_contract_version": mod.EDITORIAL_OUTPUT_CONTRACT,
+            "publication_media_materialization_status": "fallback",
+            "publication_media_materialization_contract_version": mod.MEDIA_MATERIALIZATION_CONTRACT_VERSION,
         }
         self.assertTrue(mod.is_confirmed_publication(signed))
         self.assertTrue(mod.is_unsent_confirmed_publication(signed))
@@ -140,10 +154,14 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
             **legacy_sent,
             "sent_publication_draft_fingerprint": mod.publication_draft_fingerprint(signed),
         }
+        self.assertTrue(mod.is_unsent_confirmed_publication(acknowledged))
+        acknowledged["sent_operator_review_fingerprint"] = mod.publication_operator_review_fingerprint(signed)
         self.assertFalse(mod.is_unsent_confirmed_publication(acknowledged))
         self.assertTrue(mod.is_unsent_confirmed_publication({
             **acknowledged,
-            "publication_draft_telegram_text": "Исправленный текст для Telegram",
+            "publication_draft_telegram_text": acknowledged["publication_draft_telegram_text"].replace(
+                "цельной фотосерии", "обновлённой цельной фотосерии"
+            ),
         }))
         self.assertFalse(mod.is_unsent_confirmed_publication({**signed, "publication_draft_vk_text": ""}))
 
@@ -204,6 +222,17 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
             **row, "publication_presentation_manifest_json": json.dumps(changed_media, ensure_ascii=False)
         }))
 
+    def test_unversioned_draft_never_satisfies_production_readiness(self) -> None:
+        mod = load_module()
+        self.assertFalse(mod.is_publication_draft_ready({
+            "publication_draft_status": "ready_for_operator_review",
+            "publication_draft_title": "Старый черновик",
+            "publication_draft_source_attribution": "Источник",
+            "publication_draft_telegram_text": "Первый абзац.\n\nВторой абзац.",
+            "publication_draft_vk_text": "Первый абзац.\n\nВторой абзац.",
+            "publication_draft_fact_points_json": '[{"claim":"Факт"}]',
+        }))
+
     def test_v8_media_manifest_must_be_materializable_before_review(self) -> None:
         mod = load_module()
         row = {
@@ -219,7 +248,7 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
     def test_v8_candidate_message_does_not_count_long_hidden_href(self) -> None:
         mod = load_module()
         p1 = "Внешнее издание рассматривает регион через профессиональную оптику и объясняет, почему этот взгляд заслуживает отдельного внимания читателя. " * 2
-        p2 = "Материал раскрывает конкретные детали и оставляет полный ход аргументации в оригинале, поэтому ссылка ведёт не к формальному продолжению, а к основной фактуре публикации. " * 2
+        p2 = "Материал раскрывает конкретные детали и оставляет полный ход аргументации в оригинале; ссылка ведёт к основной фактуре публикации и продолжению авторской мысли. " * 2
         long_url = "https://publisher.example/article?" + "tracking=" + "x" * 240
         manifest = {
             "mode": "article_hero", "status": "ready",
@@ -239,6 +268,106 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertIn('<b><a href="https://publisher.example/article?', message)
         self.assertIn(">Оригинал</a></b>", message)
 
+    def test_v9_style_guard_detects_not_a_family_without_crossing_sentences(self) -> None:
+        mod = load_module()
+        banned = [
+            "Автор видит здание не как памятник, а как живой городской маршрут.",
+            "Редакция читает проект не как каталог — а как разговор о городе.",
+            "Материал устроен не как справка; а как последовательность наблюдений.",
+            "Текст показывает объект не как декорацию,\nа как рабочее пространство.",
+            "Автор видит здание не как музей а как маршрут.",
+            "Материал расположен не в г. Калининграде, а в области.",
+            "Автор видит здание не как музей… а как маршрут.",
+            "Автор воспринимает объект не как " + "очень подробное наблюдение " * 14 + ", а как маршрут.",
+        ]
+        for text in banned:
+            self.assertTrue(mod.contains_contrastive_not_a_cliche(text), text)
+        allowed = [
+            "Автор не скрывает ограничений исследования.",
+            "Это не только маршрут, но и дневник наблюдений.",
+            "Автор не даёт готового ответа. А читателю оставляет исходные данные.",
+            "Автор не скрывает ограничений. Исследование подробно описывает выборку, а результаты оставляет читателю.",
+            "В слове «нега» нет запрещённой конструкции, а эта фраза проверяет границу слова.",
+        ]
+        for text in allowed:
+            self.assertFalse(mod.contains_contrastive_not_a_cliche(text), text)
+
+    def test_v9_readiness_and_caption_fail_closed_on_banned_style(self) -> None:
+        mod = load_module()
+        p1 = (
+            "Федеральное архитектурное издание рассматривает музейный комплекс через решения "
+            "проектировщиков и показывает, как посетитель проходит сквозь разные пространства здания."
+        )
+        p2 = (
+            "Автор описывает экспозицию не как набор залов, а как цельный маршрут вокруг океана. "
+            "Оригинал стоит открыть ради подробного разбора конструкций и фотографий интерьера."
+        )
+        manifest = {
+            "contract_version": mod.MEDIA_MATERIALIZATION_CONTRACT_VERSION,
+            "mode": "article_hero", "status": "ready", "reason": "associated",
+            "items": [{"media_id": "hero", "ordinal": 1, "kind": "image", "ref": "https://cdn.example.org/hero.jpg"}],
+        }
+        row = {
+            "post_url": "https://example.org/article", "source_url": "https://example.org",
+            "publication_draft_status": "ready_for_operator_review",
+            "publication_draft_title": "Архитектурный маршрут",
+            "publication_draft_source_attribution": "Внешнее издание",
+            "publication_draft_telegram_text": f"{p1}\n\n{p2}\n\nИсточник: Внешнее издание\nОригинал: https://example.org/article",
+            "publication_draft_vk_text": f"{p1}\n\n{p2}\n\nИсточник: Внешнее издание\nОригинал: https://example.org/article",
+            "publication_draft_fact_points_json": '[{"claim":"Факт","evidence_ids":["E1"]}]',
+            "publication_draft_prompt_version": mod.EDITORIAL_WRITER_VERSION,
+            "publication_draft_contract_version": mod.EDITORIAL_OUTPUT_CONTRACT,
+            "publication_media_materialization_status": "ready",
+            "publication_media_materialization_contract_version": mod.MEDIA_MATERIALIZATION_CONTRACT_VERSION,
+            "publication_presentation_mode": "article_hero",
+            "publication_presentation_manifest_json": json.dumps(manifest, ensure_ascii=False),
+        }
+        self.assertFalse(mod.is_publication_draft_ready(row))
+        with self.assertRaisesRegex(RuntimeError, "contrastive_not_a_cliche"):
+            mod.public_caption(row)
+
+    def test_article_readiness_requires_grounded_publisher_reader_brief(self) -> None:
+        mod = load_module()
+        p1 = (
+            "Профильное архитектурное издание публикует проектные разборы для архитекторов, "
+            "урбанистов и читателей, которые хотят понимать устройство современной среды. "
+            "Его материалы связывают профессиональные решения с опытом посетителя и города."
+        )
+        p2 = (
+            "В текущей статье автор прослеживает маршрут по музейному корпусу, устройство "
+            "аквариумов и работу навигации. Оригинал полезен подробными фотографиями, планами "
+            "и последовательным объяснением архитектурной концепции калининградского объекта. "
+            "Материал показывает логику проекта на конкретных пространственных решениях."
+        )
+        dimensions = {
+            key: {"text": key, "evidence_ids": ["E1"]}
+            for key in mod.PUBLISHER_READER_BRIEF_DIMENSIONS
+        }
+        row = {
+            "content_origin_type": "editorial_publication",
+            "post_url": "https://example.org/article",
+            "source_url": "https://example.org",
+            "source_title": "Архитектурное издание",
+            "publication_draft_status": "ready_for_operator_review",
+            "publication_draft_title": "Музейный маршрут",
+            "publication_draft_source_attribution": "Архитектурное издание",
+            "publication_draft_telegram_text": f"{p1}\n\n{p2}\n\nИсточник: Архитектурное издание\nОригинал: https://example.org/article",
+            "publication_draft_vk_text": f"{p1}\n\n{p2}\n\nИсточник: Архитектурное издание\nОригинал: https://example.org/article",
+            "publication_draft_fact_points_json": '[{"claim":"Факт","evidence_ids":["E1"]}]',
+            "publication_draft_prompt_version": mod.EDITORIAL_WRITER_VERSION,
+            "publication_draft_contract_version": mod.EDITORIAL_OUTPUT_CONTRACT,
+            "publication_media_materialization_status": "ready",
+            "publication_media_materialization_contract_version": mod.MEDIA_MATERIALIZATION_CONTRACT_VERSION,
+            "source_onboarding_status": "ready",
+            "source_onboarding_paragraph": "Краткая доказательная сводка об издании.",
+            "source_onboarding_publisher_dimensions_status": "ready",
+            "source_onboarding_publisher_dimensions_json": json.dumps(dimensions, ensure_ascii=False),
+            "source_onboarding_summary_kind": mod.PUBLISHER_READER_BRIEF_KIND,
+        }
+        self.assertTrue(mod.is_publication_draft_ready(row))
+        row.pop("source_onboarding_publisher_dimensions_json")
+        self.assertFalse(mod.is_publication_draft_ready(row))
+
     def test_reviewed_media_digest_is_verified_before_delivery(self) -> None:
         mod = load_module()
         data = b"exact-reviewed-source-media"
@@ -254,6 +383,7 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertEqual(mod.manifest_item_message_id({"media_id": "telegram:110"}), 110)
         self.assertEqual(mod.manifest_item_message_id({"media_id": "tg:10"}), 10)
         self.assertIsNone(mod.manifest_item_message_id({"media_id": "frame:hero"}))
+        self.assertIsNone(mod.manifest_item_message_id({"media_id": "hero:1"}))
 
     def test_source_album_locator_is_bounded_to_six_in_original_order(self) -> None:
         mod = load_module()
@@ -277,6 +407,26 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
             max_items=6,
         ))
         self.assertEqual([message.id for message in result], [90, 91, 92, 93, 94, 95])
+
+    def test_grouped_source_video_locator_is_bounded_to_anchor_item(self) -> None:
+        mod = load_module()
+
+        class Message:
+            def __init__(self, message_id: int, grouped_id: int = 77):
+                self.id = message_id
+                self.grouped_id = grouped_id
+                self.media = object()
+
+        class Client:
+            async def get_messages(self, _handle, ids):
+                if isinstance(ids, int):
+                    return Message(ids)
+                return [Message(message_id) for message_id in ids]
+
+        result = asyncio.run(mod._telegram_source_media(
+            Client(), "https://t.me/example/100", [], max_items=1,
+        ))
+        self.assertEqual([message.id for message in result], [100])
 
     def test_reviewed_album_ids_keep_their_selected_order(self) -> None:
         mod = load_module()
@@ -681,12 +831,20 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertFalse(requests[0].no_webpage)
         self.assertEqual([item[1]["status"] for item in persisted if item[0] == "delivery"], ["sending", "delivered"])
 
-    def test_editorial_media_failure_does_not_leave_ambiguous_sending_state(self) -> None:
+    def test_editorial_media_failure_is_recorded_and_later_rows_continue(self) -> None:
         mod = load_module()
         args = argparse.Namespace(expected_chat_id="-100123", chat="", transport="telethon_discovery2")
         persisted = []
 
         class Client:
+            async def __call__(self, request):
+                class Update:
+                    random_id = request.random_id
+                    id = 778
+                class Result:
+                    updates = [Update()]
+                return Result()
+
             async def disconnect(self):
                 return None
 
@@ -702,7 +860,8 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         mod.discovery_session_lease = lambda _transport: contextlib.nullcontext({})
         mod.read_delivery = lambda *_args: {}
         mod.upsert_delivery = lambda *_args: persisted.append(_args[-1])
-        row = {
+        mod.upsert_sent = lambda *_args, **_kwargs: None
+        failed_row = {
             "post_url": "https://t.me/example/100",
             "publication_draft_prompt_version": mod.EDITORIAL_WRITER_VERSION,
             "publication_presentation_mode": "social_album",
@@ -718,17 +877,23 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
                 }],
             }),
         }
-        with self.assertRaisesRegex(RuntimeError, "source album unavailable"):
-            asyncio.run(mod.send_rows_telethon(
-                args,
-                messages=["candidate"],
-                rows=[row],
-                ydb=object(),
-                driver=object(),
-                pool=object(),
-                table="table",
-            ))
-        self.assertEqual(persisted, [])
+        plain_row = {"post_url": "https://t.me/example/101"}
+        result = asyncio.run(mod.send_rows_telethon(
+            args,
+            messages=["candidate", "next candidate"],
+            rows=[failed_row, plain_row],
+            ydb=object(),
+            driver=object(),
+            pool=object(),
+            table="table",
+        ))
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["partial"])
+        self.assertEqual(result["sent_count"], 1)
+        self.assertEqual(result["failed_count"], 1)
+        self.assertIn("source album unavailable", result["failed"][0]["reason"])
+        self.assertEqual(persisted[0]["status"], "materialization_failed")
+        self.assertEqual(persisted[0]["delivery_stage"], "pre_send_media_materialization")
 
 
 if __name__ == "__main__":

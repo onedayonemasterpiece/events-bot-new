@@ -5,6 +5,7 @@ import json
 from types import SimpleNamespace
 
 from scripts import region_talk_publication_plan as plan
+from scripts import region_talk_goal_notify as notify
 
 
 def test_production_enables_exact_current_reaction_gate() -> None:
@@ -64,6 +65,16 @@ def external_article_fixture() -> tuple[dict, dict]:
 
 
 def ready_social(url: str) -> dict:
+    p1 = (
+        "Петербургский автор внимательно исследует повседневный ритм города и собирает маршрут "
+        "из наблюдений за улицами, площадями и привычками жителей. Такой внешний взгляд помогает "
+        "увидеть знакомое пространство с новой точки и сохраняет авторскую интонацию источника."
+    )
+    p2 = (
+        "В публикации подробно описаны геометрия улиц, восстановленные фрески и последовательность "
+        "прогулки. Оригинал стоит открыть ради конкретных деталей и цельной фотосерии, которая "
+        "показывает обычную городскую жизнь далеко за пределами центральной площади и соседних районов."
+    )
     return {
         "_ydb_pk": "publication_candidate_item:" + url,
         "post_url": url,
@@ -73,9 +84,13 @@ def ready_social(url: str) -> dict:
         "publication_draft_status": "ready_for_operator_review",
         "publication_draft_title": "Личный маршрут",
         "publication_draft_source_attribution": "Авторский канал",
-        "publication_draft_telegram_text": "Фактический черновик\n\nОригинал: " + url,
-        "publication_draft_vk_text": "Фактический черновик\n\nОригинал: " + url,
+        "publication_draft_telegram_text": f"{p1}\n\n{p2}\n\nИсточник: Авторский канал\nОригинал: {url}",
+        "publication_draft_vk_text": f"{p1}\n\n{p2}\n\nИсточник: Авторский канал\nОригинал: {url}",
         "publication_draft_fact_points_json": '[{"claim":"Факт","support_excerpt":"Опора"}]',
+        "publication_draft_prompt_version": notify.EDITORIAL_WRITER_VERSION,
+        "publication_draft_contract_version": notify.EDITORIAL_OUTPUT_CONTRACT,
+        "publication_media_materialization_status": "fallback",
+        "publication_media_materialization_contract_version": notify.MEDIA_MATERIALIZATION_CONTRACT_VERSION,
     }
 
 

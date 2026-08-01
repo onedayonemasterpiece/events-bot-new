@@ -1,6 +1,6 @@
 # О Калининграде говорят / Region Talk Channel
 
-> Canonical slug: `region-talk-channel`. User-facing working name: **«О Калининграде говорят»**. Product/implementation alias: **Kaliningrad-best-post-monitoring**. Status: **MVP live-YDB runner / scheduled discovery enabled**. Telegram/VK public publishing remains disabled; the current product goal is a Gemini-confirmed operator queue and Telegram notifications with source links.
+> Canonical slug: `region-talk-channel`. Telegram channel: [«Калининград с первого взгляда»](https://t.me/kalinigrad_visit) (`@kalinigrad_visit`). User-facing editorial working name: **«О Калининграде говорят»**. Product/implementation alias: **Kaliningrad-best-post-monitoring**. Status: **MVP live-YDB runner / scheduled discovery enabled**. Telegram/VK public publishing remains disabled; the current product goal is a Gemini-confirmed operator queue and Telegram notifications with source links.
 
 ## Document map
 
@@ -18,8 +18,8 @@
 - [Publication queue](publication-queue.md) — queue, slots, idempotency, diversity caps, dry-run.
 - [Source onboarding profile](source-onboarding-profile.md) — доказательный профиль автора/канала и абзац `О блогере` для финального кандидата.
 - [External publications](external-publications.md) — broad-web prompt, JSON Schema, staging importer, public-interest contract и on-demand anti-vector queue для материалов изданий.
-- [Editorial onboarding writer prompt](editorial-onboarding-writer-gemini-review.prompt.md) — полный внешний review-пакет для двухабзацной русской редакционной подводки.
-- [Gemini Pro onboarding consultation](onboarding-prompt-consultation.md) — принятый внешний prompt-design review: Strategy → Grounded Writer → validators → Critic и свежий переход вместо натянутой сквозной связки.
+- [Editorial onboarding writer prompt](editorial-onboarding-writer-gemini-review.prompt.md) — исторический review-пакет; актуальные production-ограничения и версия v10 с publisher reader brief описаны в каноническом контракте ниже.
+- [Gemini Pro onboarding consultation](onboarding-prompt-consultation.md) — архивный prompt-design review v8/output-v2; архитектура Strategy → Grounded Writer → validators → Critic сохранена, примеры с запрещённым противопоставлением не являются production-образцами.
 - [Editorial and visual product decision](editorial-visual-product.md) — benchmark похожих Telegram-каналов и целевой hero/album/video/link-preview формат.
 - [To-Be orchestration and vector queues](orchestration-to-be.md) — короткие queue-driven прогоны, отдельный BGE-M3 worker, YDB triggers, non-region geo bank и semantic anti-vector diversity.
 - [Telegram/VK publishing](telegram-vk-publishing.md) — future publishing contracts, VK carousel/card risk, Telegram Bot API modes.
@@ -428,3 +428,14 @@ Historical VK albums that exhausted their bounded media attempts specifically
 on IP-bound token error `1130` receive one durable, versioned retry reset when
 the Kaggle worker has a service read token.  The normal three-attempt cap still
 applies after that migration and the reset marker prevents a retry loop.
+
+### Stable Flash-Lite routing
+
+Region Talk requests `gemini-3.5-flash-lite` first. Its explicit overflow is
+`gemini-3.1-flash-lite`. Both models are registered in the shared Supabase
+limiter at the conservative per-project operating caps
+`13 RPM / 240000 TPM / 450 RPD`. Atomic reserve failures for `rpm`, `tpm` or
+`rpd` advance to the second model before a provider request is sent. Direct-key
+and process-local limiter paths remain disabled. Provider-error model switching
+is disabled for Region Talk so the durable 100-call product ledger retains its
+single-provider-send contract.

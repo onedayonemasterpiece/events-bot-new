@@ -692,6 +692,56 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(actions[0]["action"], "backfill_publication_drafts_article")
         self.assertIn("article", actions[0]["cmd"])
 
+    def test_invalid_current_ready_draft_is_scheduled_for_corrective_backfill(self) -> None:
+        mod = load_module()
+        source = {
+            "canonical_source_key": "telegram:travel",
+            "source_url": "https://t.me/travel",
+            "source_scope": "external",
+            "source_geo_class": "nonlocal_russia",
+            "source_queue_status": "processed_found_ko_candidate",
+        }
+        publication = {
+            "post_url": "https://t.me/travel/1",
+            "canonical_source_key": source["canonical_source_key"],
+            "publication_candidate_status": "llm_confirmed",
+            "publication_status": "gemini_accept",
+            "publication_eligibility_verdict": "eligible",
+            "publication_eligibility_gate_version": mod.CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
+            "authoritative_source_fingerprint_version": mod.AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
+            "authoritative_source_fingerprint": mod.authoritative_source_fingerprint(source),
+            "publication_draft_backfill_version": "region_talk_publication_draft_backfill_v3_no_not_a_cliche",
+            "publication_draft_backfill_status": "ready",
+        }
+        metrics = mod._publication_handoff_metrics([], [publication], [source])
+        self.assertEqual(metrics["publication_draft_missing_telegram_total"], 1)
+        self.assertEqual(metrics["publication_draft_backfill_actionable_telegram_total"], 1)
+
+    def test_current_terminal_backfill_review_is_not_reopened_forever(self) -> None:
+        mod = load_module()
+        source = {
+            "canonical_source_key": "telegram:travel",
+            "source_url": "https://t.me/travel",
+            "source_scope": "external",
+            "source_geo_class": "nonlocal_russia",
+            "source_queue_status": "processed_found_ko_candidate",
+        }
+        publication = {
+            "post_url": "https://t.me/travel/1",
+            "canonical_source_key": source["canonical_source_key"],
+            "publication_candidate_status": "llm_confirmed",
+            "publication_status": "gemini_accept",
+            "publication_eligibility_verdict": "eligible",
+            "publication_eligibility_gate_version": mod.CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
+            "authoritative_source_fingerprint_version": mod.AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
+            "authoritative_source_fingerprint": mod.authoritative_source_fingerprint(source),
+            "publication_draft_backfill_version": mod.CURRENT_PUBLICATION_DRAFT_BACKFILL_VERSION,
+            "publication_draft_backfill_status": "needs_grounding_review",
+        }
+        metrics = mod._publication_handoff_metrics([], [publication], [source])
+        self.assertEqual(metrics["publication_draft_missing_telegram_total"], 1)
+        self.assertEqual(metrics["publication_draft_backfill_actionable_telegram_total"], 0)
+
     def test_image_action_batch_is_explicitly_tunable_and_bounded(self) -> None:
         mod = load_module()
         metrics = {
@@ -1349,6 +1399,16 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
 
     def test_publication_taxonomy_and_finalizer_are_url_level(self) -> None:
         mod = load_module()
+        p1 = (
+            "Петербургский автор внимательно исследует повседневный ритм города и собирает маршрут "
+            "из наблюдений за улицами, площадями и привычками жителей. Такой внешний взгляд помогает "
+            "увидеть знакомое пространство с новой точки и сохраняет авторскую интонацию источника."
+        )
+        p2 = (
+            "В публикации подробно описаны геометрия улиц, восстановленные фрески и последовательность "
+            "прогулки. Оригинал стоит открыть ради конкретных деталей и цельной фотосерии, которая "
+            "показывает обычную городскую жизнь далеко за пределами центральной площади и соседних районов."
+        )
         images = [
             {"post_url": "https://t.me/a/1", "image_queue_status": "actual_scored", "image_model_input_type": "actual_image", "image_publication_ready": "true"},
             {"post_url": "https://t.me/b/2", "image_queue_status": "actual_scored", "image_model_input_type": "actual_image", "image_publication_ready": "true"},
@@ -1365,9 +1425,13 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
                 "publication_draft_status": "ready_for_operator_review",
                 "publication_draft_title": "Маршрут",
                 "publication_draft_source_attribution": "Автор",
-                "publication_draft_telegram_text": "Текст Telegram",
-                "publication_draft_vk_text": "Текст VK",
+                "publication_draft_telegram_text": f"{p1}\n\n{p2}\n\nИсточник: Автор\nОригинал: https://t.me/a/1",
+                "publication_draft_vk_text": f"{p1}\n\n{p2}\n\nИсточник: Автор\nОригинал: https://t.me/a/1",
                 "publication_draft_fact_points_json": '[{"claim":"Факт","support_excerpt":"Опора"}]',
+                "publication_draft_prompt_version": "region_talk_editorial_onboarding_writer_v10_publisher_reader_brief",
+                "publication_draft_contract_version": "region_talk_editorial_onboarding_output_v4",
+                "publication_media_materialization_status": "fallback",
+                "publication_media_materialization_contract_version": "region_talk_media_materialization_v1",
             },
             {
                 "post_url": "https://t.me/c/3",

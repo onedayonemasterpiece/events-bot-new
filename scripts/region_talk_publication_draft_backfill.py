@@ -17,6 +17,8 @@ import os
 import random
 import re
 import sys
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -31,15 +33,17 @@ if str(ROOT / "kaggle" / "RegionTalkCandidateReport") not in sys.path:
 import region_talk_candidate_report as rt  # type: ignore  # noqa: E402
 from region_talk_llm_runtime import DurableGeminiBudget  # noqa: E402
 from scripts import region_talk_goal_notify as notify  # noqa: E402
+from scripts import region_talk_publication_finalizer as finalizer  # noqa: E402
 from scripts.region_talk_vk_media_prefetch import local_vk_posts, parse_vk_post  # noqa: E402
 
 
-DRAFT_BACKFILL_VERSION = "region_talk_publication_draft_backfill_v2_editorial"
-EDITORIAL_WRITER_VERSION = "region_talk_editorial_onboarding_writer_v8_staged"
+DRAFT_BACKFILL_VERSION = "region_talk_publication_draft_backfill_v4_publisher_reader_brief"
+EDITORIAL_WRITER_VERSION = notify.EDITORIAL_WRITER_VERSION
 EDITORIAL_INPUT_CONTRACT = "region_talk_editorial_onboarding_input_v2"
-EDITORIAL_OUTPUT_CONTRACT = "region_talk_editorial_onboarding_output_v2"
+EDITORIAL_OUTPUT_CONTRACT = notify.EDITORIAL_OUTPUT_CONTRACT
+EDITORIAL_STAGE_EXECUTION_VERSION = "region_talk_writer_v10_caption_length_retry_v2"
 MEDIA_MATERIALIZATION_CONTRACT_VERSION = "region_talk_media_materialization_v1"
-LEGACY_REVIEW_MIGRATION_VERSION = "region_talk_legacy_review_to_v8_v1"
+LEGACY_REVIEW_MIGRATION_VERSION = "region_talk_legacy_review_to_v10_v3"
 DRAFT_FIELDS = (
     "publication_draft_status",
     "publication_draft_title",
@@ -64,6 +68,24 @@ DRAFT_FIELDS = (
     "publication_media_materialization_contract_version",
     "publication_presentation_manifest_json",
 )
+SOURCE_ONBOARDING_FIELDS = (
+    "source_onboarding_status",
+    "source_onboarding_paragraph",
+    "source_onboarding_profile_id",
+    "source_onboarding_profile_fingerprint",
+    "source_onboarding_writer_fingerprint",
+    "source_onboarding_writer_prompt_version",
+    "source_onboarding_entity_type",
+    "source_onboarding_claim_ids_json",
+    "source_onboarding_evidence_ids_json",
+    "source_onboarding_selected_angle_id",
+    "source_onboarding_publisher_dimensions_json",
+    "source_onboarding_publisher_dimensions_status",
+    "source_onboarding_summary_kind",
+    "source_onboarding_llm_status",
+    "source_onboarding_llm_reason",
+    "source_onboarding_paragraph_chars",
+)
 TERMINAL_BACKFILL_STATUSES = {
     "ready",
     "llm_not_accepted",
@@ -79,6 +101,25 @@ _BANNED_COPY_PATTERNS = (
     r"\bв\s+данной\s+статье\b",
     r"\bв\s+рамках\b",
 )
+
+_EDITORIAL_PROVIDER_PACING_LOCK = threading.Lock()
+_EDITORIAL_PROVIDER_LAST_CALL = 0.0
+_EDITORIAL_PROVIDER_STAGE_DELAY_SECONDS = 0.0
+
+
+def pace_editorial_provider_call() -> None:
+    """Keep sequential editorial stages below the configured project RPM."""
+
+    global _EDITORIAL_PROVIDER_LAST_CALL
+    delay = max(0.0, float(_EDITORIAL_PROVIDER_STAGE_DELAY_SECONDS))
+    if delay <= 0:
+        return
+    with _EDITORIAL_PROVIDER_PACING_LOCK:
+        now = time.monotonic()
+        remaining = delay - (now - _EDITORIAL_PROVIDER_LAST_CALL)
+        if _EDITORIAL_PROVIDER_LAST_CALL and remaining > 0:
+            time.sleep(remaining)
+        _EDITORIAL_PROVIDER_LAST_CALL = time.monotonic()
 _FIRST_PERSON_OWNERSHIP = re.compile(
     r"\b(?:мы|наш(?:а|е|и|его|ему|ими)?|нам|нами)\s+"
     r"(?:увидел\w*|заметил\w*|почувствовал\w*|проехал\w*|посетил\w*|снял\w*)\b",
@@ -150,6 +191,7 @@ def _canonical_url(row: dict[str, Any]) -> str:
 
 MEDIA_EVIDENCE_FIELDS = (
     "selected_media_materialization_json",
+    "selected_media_materialization_fingerprint",
     "media_materialization_items_json",
     "publication_primary_image_url",
     "selected_image_url",
@@ -166,6 +208,7 @@ MEDIA_EVIDENCE_FIELDS = (
     "image_quality_terminality",
     "image_vlm_article_association_supported",
     "image_vlm_best_ordinal",
+    "media_kind",
 )
 
 
@@ -309,6 +352,26 @@ def build_editorial_evidence(
     onboarding = str(row.get("source_onboarding_paragraph") or "").strip()
     if str(row.get("source_onboarding_status") or "") == "ready" and onboarding:
         evidence.append({"evidence_id": "source.profile", "kind": "source_profile_fact", "text": onboarding})
+    required_publisher_evidence_ids: list[str] = []
+    if content_lane(row) == "article":
+        try:
+            publisher_dimensions = json.loads(str(row.get("source_onboarding_publisher_dimensions_json") or "{}"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            publisher_dimensions = {}
+        if isinstance(publisher_dimensions, dict):
+            for key in ("outlet_identity", "intended_audience", "distinctive_value"):
+                value = publisher_dimensions.get(key) if isinstance(publisher_dimensions.get(key), dict) else {}
+                text = str(value.get("text") or "").strip()
+                if not text:
+                    continue
+                evidence_id = "source.publisher." + key
+                evidence.append({
+                    "evidence_id": evidence_id,
+                    "kind": "source_profile_fact",
+                    "text": text,
+                    "upstream_evidence_ids": [str(ref) for ref in (value.get("evidence_ids") or []) if str(ref)],
+                })
+                required_publisher_evidence_ids.append(evidence_id)
     if source_text.strip():
         evidence.append({
             "evidence_id": "content.exact_text",
@@ -360,6 +423,7 @@ def build_editorial_evidence(
         },
         "source_profile": {"name": source_name, "url": source_url},
         "evidence": list(unique.values()),
+        "required_publisher_evidence_ids": required_publisher_evidence_ids,
         "visual_hook_evidence_ids": visual_ids,
         "fetched": dict(fetched or {}),
     }
@@ -372,24 +436,54 @@ def editorial_paragraphs(text: str) -> tuple[str, str]:
     return (parts[0] if parts else "", parts[1] if len(parts) > 1 else "")
 
 
-def validate_editorial_output(output: dict[str, Any], evidence_ids: set[str]) -> list[str]:
+def validate_editorial_output(
+    output: dict[str, Any],
+    evidence_ids: set[str],
+    *,
+    required_publisher_evidence_ids: set[str] | None = None,
+    row: dict[str, Any] | None = None,
+) -> list[str]:
     violations: list[str] = []
     public_copy = output.get("public_copy") if isinstance(output.get("public_copy"), dict) else {}
-    p1 = re.sub(r"\s+", " ", str(public_copy.get("paragraph_1") or "")).strip()
-    p2 = re.sub(r"\s+", " ", str(public_copy.get("paragraph_2") or "")).strip()
+    raw_p1 = str(public_copy.get("paragraph_1") or "").strip()
+    raw_p2 = str(public_copy.get("paragraph_2") or "").strip()
+    if any(notify.contains_contrastive_not_a_cliche(value) for value in (raw_p1, raw_p2)):
+        violations.append("contrastive_not_a_cliche")
+    p1 = re.sub(r"\s+", " ", raw_p1).strip()
+    p2 = re.sub(r"\s+", " ", raw_p2).strip()
     if not (150 <= len(p1) <= 500):
         violations.append("paragraph_1_length")
     if not (150 <= len(p2) <= 500):
         violations.append("paragraph_2_length")
     if len(p1) + len(p2) > 820:
         violations.append("editorial_copy_too_long")
+    if row is not None:
+        visible_length = _caption_visible_length(row, p1, p2)
+        if not (550 <= visible_length <= 900):
+            violations.append(f"caption_visible_length:{visible_length}")
     combined = p1 + " " + p2
     if any(re.search(pattern, combined, re.I) for pattern in _BANNED_COPY_PATTERNS):
         violations.append("banned_lexeme")
+    if notify.contains_contrastive_not_a_cliche(combined):
+        violations.append("contrastive_not_a_cliche")
     if _FIRST_PERSON_OWNERSHIP.search(combined):
         violations.append("third_person_boundary")
-    cyrillic = len(re.findall(r"[А-Яа-яЁё]", combined))
-    letters = len(re.findall(r"[A-Za-zА-Яа-яЁё]", combined))
+    language_sample = combined
+    if row is not None:
+        # A Latin-script channel/outlet name is required attribution, not
+        # evidence that the surrounding Russian editorial copy changed
+        # language. Remove only exact source-owned labels plus @handles.
+        source_labels = {
+            _source_name(row),
+            str(row.get("source_title") or "").strip(),
+            str(row.get("source_name") or "").strip(),
+            str(row.get("source_username") or "").strip(),
+        }
+        for label in sorted((value for value in source_labels if value), key=len, reverse=True):
+            language_sample = re.sub(re.escape(label), "", language_sample, flags=re.I)
+        language_sample = re.sub(r"(?<!\w)@[A-Za-z0-9_]+", "", language_sample)
+    cyrillic = len(re.findall(r"[А-Яа-яЁё]", language_sample))
+    letters = len(re.findall(r"[A-Za-zА-Яа-яЁё]", language_sample))
     if letters and cyrillic / letters < 0.95:
         violations.append("russian_language")
     grounding = output.get("grounding_map") if isinstance(output.get("grounding_map"), list) else []
@@ -404,22 +498,96 @@ def validate_editorial_output(output: dict[str, Any], evidence_ids: set[str]) ->
             violations.append("unknown_or_empty_evidence_id")
         if item.get("third_person_maintained") is not True:
             violations.append("third_person_not_confirmed")
+    required_publisher_evidence_ids = set(required_publisher_evidence_ids or set())
+    if required_publisher_evidence_ids:
+        paragraph_one_refs = {
+            str(ref)
+            for item in grounding
+            if isinstance(item, dict) and str(item.get("paragraph_index") or "") == "1"
+            for ref in (item.get("evidence_ids") or [])
+            if str(ref)
+        }
+        if not required_publisher_evidence_ids.issubset(paragraph_one_refs):
+            violations.append("missing_publisher_reader_brief")
     return sorted(set(violations))
+
+
+def _caption_visible_length(row: dict[str, Any], paragraph_1: str, paragraph_2: str) -> int:
+    source = _source_name(row)
+    visible = f"{paragraph_1}\n\n{paragraph_2}\n\nИсточник: {source}\nОригинал"
+    return len(visible)
+
+
+def visible_caption_contract(row: dict[str, Any]) -> dict[str, int]:
+    fixed_chars = _caption_visible_length(row, "", "")
+    return {
+        "min_chars": 550,
+        "max_chars": 900,
+        "target_min_chars": 620,
+        "target_max_chars": 820,
+        "fixed_attribution_chars": fixed_chars,
+        "required_editorial_chars_min": max(0, 620 - fixed_chars),
+        "required_editorial_chars_max": max(0, 820 - fixed_chars),
+    }
+
+
+def caption_length_repair(row: dict[str, Any], output: dict[str, Any]) -> dict[str, Any]:
+    public_copy = output.get("public_copy") if isinstance(output.get("public_copy"), dict) else {}
+    p1 = re.sub(r"\s+", " ", str(public_copy.get("paragraph_1") or "")).strip()
+    p2 = re.sub(r"\s+", " ", str(public_copy.get("paragraph_2") or "")).strip()
+    actual = _caption_visible_length(row, p1, p2)
+    target_min = 620
+    return {
+        "actual_visible_chars": actual,
+        "absolute_min_visible_chars": 550,
+        "target_visible_min_chars": target_min,
+        "target_visible_max_chars": 820,
+        "required_added_editorial_chars": max(0, target_min - actual),
+        "instruction": (
+            "Rewrite both grounded paragraphs and reach the numeric target. "
+            "Add source-backed specifics from the supplied evidence; do not add generic filler or new facts."
+        ),
+    }
 
 
 def render_public_copy(row: dict[str, Any], output: dict[str, Any]) -> tuple[str, str, str]:
     public_copy = output.get("public_copy") if isinstance(output.get("public_copy"), dict) else {}
-    p1 = re.sub(r"\s+", " ", str(public_copy.get("paragraph_1") or "")).strip()
-    p2 = re.sub(r"\s+", " ", str(public_copy.get("paragraph_2") or "")).strip()
+    raw_p1 = str(public_copy.get("paragraph_1") or "").strip()
+    raw_p2 = str(public_copy.get("paragraph_2") or "").strip()
+    if any(notify.contains_contrastive_not_a_cliche(value) for value in (raw_p1, raw_p2)):
+        raise ValueError("contrastive_not_a_cliche")
+    p1 = re.sub(r"\s+", " ", raw_p1).strip()
+    p2 = re.sub(r"\s+", " ", raw_p2).strip()
+    if notify.contains_contrastive_not_a_cliche(f"{p1}\n\n{p2}"):
+        raise ValueError("contrastive_not_a_cliche")
     source = _source_name(row)
     url = _canonical_url(row)
     source_url = str(row.get("source_url") or url).strip()
     plain = f"{p1}\n\n{p2}\n\nИсточник: {source}\nОригинал: {url}"
-    visible = f"{p1}\n\n{p2}\n\nИсточник: {source}\nОригинал"
-    if not (550 <= len(visible) <= 900):
-        raise ValueError(f"caption_visible_length:{len(visible)}")
+    visible_length = _caption_visible_length(row, p1, p2)
+    if not (550 <= visible_length <= 900):
+        raise ValueError(f"caption_visible_length:{visible_length}")
     links = json.dumps({"source_label": source, "source_url": source_url, "original_url": url}, ensure_ascii=False, separators=(",", ":"))
     return plain, plain, links
+
+
+def publication_candidate_id(row: dict[str, Any]) -> str:
+    return str(
+        row.get("publication_candidate_id")
+        or row.get("external_publication_id")
+        or row.get("candidate_id")
+        or ""
+    ).strip()
+
+
+def has_published_status(row: dict[str, Any]) -> bool:
+    statuses = {
+        str(row.get("status") or "").strip().lower(),
+        str(row.get("plan_status") or "").strip().lower(),
+        str(row.get("target_publication_status") or "").strip().lower(),
+        str(row.get("public_publication_status") or "").strip().lower(),
+    }
+    return bool(statuses & {"published", "target_published", "completed"})
 
 
 def backfill_is_actionable(
@@ -427,8 +595,11 @@ def backfill_is_actionable(
     *,
     now: datetime | None = None,
     surface: str = "all",
+    force_regenerate: bool = False,
 ) -> bool:
-    if not notify.is_confirmed_publication(row) or current_editorial_draft(row):
+    if not notify.is_confirmed_publication(row):
+        return False
+    if current_editorial_draft(row) and not force_regenerate:
         return False
     row_surface = social_post_surface(str(row.get("post_url") or ""))
     row_lane = content_lane(row)
@@ -436,13 +607,31 @@ def backfill_is_actionable(
         row_surface = "article"
     if not row_surface or surface not in {"all", row_surface, row_lane}:
         return False
+    if force_regenerate:
+        # The CLI permits force only with an explicit candidate URL. Once
+        # confirmation/surface checks have passed, bypass terminal status and
+        # retry cooldown so an operator can repair that exact unpublished row.
+        return True
     status = str(row.get("publication_draft_backfill_status") or "").strip().lower()
+    row_backfill_version = str(row.get("publication_draft_backfill_version") or "").strip()
+    current_backfill = row_backfill_version == DRAFT_BACKFILL_VERSION
+    invalid_current_draft = bool(
+        current_backfill
+        and status == "ready"
+        and not notify.is_publication_draft_ready(row)
+    )
     if (
-        not str(row.get("publication_draft_prompt_version") or "")
-        or str(row.get("publication_draft_backfill_version") or "") == DRAFT_BACKFILL_VERSION
-    ) and status in TERMINAL_BACKFILL_STATUSES:
+        not force_regenerate
+        and not invalid_current_draft
+        and current_backfill
+        and status in TERMINAL_BACKFILL_STATUSES
+    ):
         return False
-    retry_at = parse_time(row.get("publication_draft_backfill_next_attempt_after"))
+    retry_at = (
+        parse_time(row.get("publication_draft_backfill_next_attempt_after"))
+        if current_backfill
+        else None
+    )
     return retry_at is None or retry_at <= (now or utc_now())
 
 
@@ -452,12 +641,67 @@ def select_rows(
     limit: int,
     now: datetime | None = None,
     surface: str = "all",
+    force_regenerate: bool = False,
+    candidate_urls: set[str] | None = None,
+    published_urls: set[str] | None = None,
+    published_candidate_ids: set[str] | None = None,
 ) -> list[dict[str, Any]]:
+    candidate_urls = set(candidate_urls or ())
+    published_urls = set(published_urls or ())
+    published_candidate_ids = set(published_candidate_ids or ())
     selected = [
-        row for row in rows if backfill_is_actionable(row, now=now, surface=surface)
+        row for row in rows
+        if backfill_is_actionable(
+            row, now=now, surface=surface, force_regenerate=force_regenerate
+        )
+        and (not candidate_urls or notify.canonical_post_url(row) in candidate_urls)
+        and notify.canonical_post_url(row) not in published_urls
+        and publication_candidate_id(row) not in published_candidate_ids
     ]
     selected.sort(key=lambda row: (
         str(row.get("sent_to_chat") or "").lower() == "true",
+        int(row.get("publication_rank") or 999999),
+        -float(row.get("publication_score") or row.get("publication_pre_score") or 0),
+        notify.canonical_post_url(row),
+    ))
+    return selected[: max(0, int(limit))]
+
+
+def select_media_materialization_rows(
+    rows: list[dict[str, Any]],
+    *,
+    limit: int,
+    surface: str = "all",
+    candidate_urls: set[str] | None = None,
+    published_urls: set[str] | None = None,
+    published_candidate_ids: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Select current accepted copy blocked solely by its media manifest."""
+
+    candidate_urls = set(candidate_urls or ())
+    published_urls = set(published_urls or ())
+    published_candidate_ids = set(published_candidate_ids or ())
+    selected: list[dict[str, Any]] = []
+    for row in rows:
+        url = notify.canonical_post_url(row)
+        row_lane = content_lane(row)
+        row_surface = "article" if row_lane == "article" else social_post_surface(url)
+        if (
+            not notify.is_confirmed_publication(row)
+            or str(row.get("publication_draft_prompt_version") or "") != EDITORIAL_WRITER_VERSION
+            or str(row.get("publication_draft_contract_version") or "") != EDITORIAL_OUTPUT_CONTRACT
+            or (
+                str(row.get("publication_draft_status") or "") != "media_materialization_pending"
+                and not (candidate_urls and url in candidate_urls)
+            )
+            or surface not in {"all", row_surface, row_lane}
+            or (candidate_urls and url not in candidate_urls)
+            or url in published_urls
+            or publication_candidate_id(row) in published_candidate_ids
+        ):
+            continue
+        selected.append(row)
+    selected.sort(key=lambda row: (
         int(row.get("publication_rank") or 999999),
         -float(row.get("publication_score") or row.get("publication_pre_score") or 0),
         notify.canonical_post_url(row),
@@ -558,11 +802,79 @@ async def fetch_exact_text(client: Any, row: dict[str, Any]) -> tuple[str, dict[
     if not text:
         raise RuntimeError("exact Telegram message has no text")
     date = getattr(message, "date", None)
-    return text, {
+    fields = {
         "handle": handle,
         "post_id": str(message_id),
         "post_date": date.isoformat() if date is not None else str(row.get("post_date") or ""),
     }
+    if getattr(message, "video", None) is not None:
+        fields["media_kind"] = "video"
+    elif getattr(message, "photo", None) is not None:
+        fields["media_kind"] = "image"
+    return text, fields
+
+
+def _vk_selected_media_materialization(
+    row: dict[str, Any], post: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Project a legacy VK visual selection onto durable direct refs.
+
+    Older ImageDiagnostic rows retained the reviewed media ids and content
+    hashes but predated the durable refetch locator.  ``wall.getById`` returns
+    the exact source attachments, so the draft/media backfill can repair that
+    transport evidence without repeating either the visual or editorial LLM.
+    """
+
+    photo_urls: list[str] = []
+    for attachment in post.get("attachments") or []:
+        photo = attachment.get("photo") if isinstance(attachment, dict) else None
+        if attachment.get("type") != "photo" or not isinstance(photo, dict):
+            continue
+        sizes = [item for item in (photo.get("sizes") or []) if isinstance(item, dict) and item.get("url")]
+        if sizes:
+            best = max(
+                sizes,
+                key=lambda item: int(item.get("width") or 0) * int(item.get("height") or 0),
+            )
+            photo_urls.append(str(best["url"]))
+
+    selected_ids = [
+        str(value) for value in _json_value(row.get("selected_media_ids"), []) if str(value)
+    ]
+    manifest = [
+        item for item in _json_value(row.get("media_manifest_items"), [])
+        if isinstance(item, dict)
+    ]
+    manifest_by_id = {str(item.get("media_id") or ""): item for item in manifest}
+    materialized: list[dict[str, Any]] = []
+    for output_ordinal, media_id in enumerate(selected_ids[:6], 1):
+        match = re.search(r"([0-9]+)$", media_id)
+        attachment_ordinal = int(match.group(1)) if match else output_ordinal
+        if not (1 <= attachment_ordinal <= len(photo_urls)):
+            continue
+        source_ref = photo_urls[attachment_ordinal - 1]
+        reviewed = str((manifest_by_id.get(media_id) or {}).get("content_sha256") or "")
+        locator = {
+            "method": "vk_wall_photo_attachment",
+            "post_url": _canonical_url(row),
+            "media_id": media_id,
+            "attachment_ordinal": attachment_ordinal,
+            "source_url": source_ref,
+        }
+        item = {
+            "media_id": media_id,
+            "ordinal": output_ordinal,
+            "kind": "image",
+            "source_ref": source_ref,
+            "refetch_locator": locator,
+        }
+        if reviewed:
+            item["reviewed_content_sha256"] = reviewed
+        item["materialization_fingerprint"] = hashlib.sha256(
+            json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        materialized.append(item)
+    return materialized
 
 
 def fetch_vk_text(row: dict[str, Any], posts: dict[str, dict[str, Any]], error: str) -> tuple[str, dict[str, Any]]:
@@ -579,7 +891,7 @@ def fetch_vk_text(row: dict[str, Any], posts: dict[str, dict[str, Any]], error: 
     if not text:
         raise RuntimeError("exact VK post has no text")
     timestamp = int(post.get("date") or 0)
-    return text, {
+    fields = {
         "platform": "vk",
         "post_id": str(post_id),
         "post_date": (
@@ -588,6 +900,15 @@ def fetch_vk_text(row: dict[str, Any], posts: dict[str, dict[str, Any]], error: 
             else str(row.get("post_date") or "")
         ),
     }
+    selected_materialization = _vk_selected_media_materialization(row, post)
+    if selected_materialization:
+        fields["selected_media_materialization_json"] = json.dumps(
+            selected_materialization, ensure_ascii=False, separators=(",", ":")
+        )
+        fields["selected_media_materialization_fingerprint"] = hashlib.sha256(
+            fields["selected_media_materialization_json"].encode("utf-8")
+        ).hexdigest()
+    return text, fields
 
 
 def retry_updates(row: dict[str, Any], *, transport: str, reason: str) -> dict[str, Any]:
@@ -703,11 +1024,11 @@ def publication_media_plan(row: dict[str, Any]) -> dict[str, Any]:
         row.get("publication_primary_image_url") or row.get("selected_image_url")
         or row.get("image_url_or_local_path") or row.get("associated_image_url") or ""
     ).strip()
-    if scalar_ref and not explicit_items:
-        explicit_items.append({"media_id": "hero:1", "ordinal": 1, "kind": "image", "ref": scalar_ref})
-    explicit_items.sort(key=lambda item: int(item.get("ordinal") or 0))
 
     if lane == "article":
+        if scalar_ref and not explicit_items:
+            explicit_items.append({"media_id": "hero:1", "ordinal": 1, "kind": "image", "ref": scalar_ref})
+        explicit_items.sort(key=lambda item: int(item.get("ordinal") or 0))
         items = explicit_items[:1]
         terminal_fallback = rt.is_external_link_article_candidate(row)
         if not items and terminal_fallback:
@@ -720,6 +1041,10 @@ def publication_media_plan(row: dict[str, Any]) -> dict[str, Any]:
             mode = "article_hero"
             status, reason = "ready", "associated_article_hero_has_exact_ref"
     elif media_kind == "video":
+        if scalar_ref and not explicit_items and not (
+            telegram_post_ref(post_url) and scalar_ref.startswith(post_url + "#")
+        ):
+            explicit_items.append({"media_id": "hero:1", "ordinal": 1, "kind": "video", "ref": scalar_ref})
         mode = "social_video"
         items = explicit_items[:1] or ([{"media_id": "source:video", "ordinal": 1, "kind": "video", "ref": post_url}] if telegram_post_ref(post_url) else [])
         status, reason = ("ready", "exact_source_video_ref") if items else ("pending", "source_video_not_materialized")
@@ -761,6 +1086,8 @@ def publication_media_plan(row: dict[str, Any]) -> dict[str, Any]:
                 else (("ready", "ordered_source_album_ref") if len(items) >= 3 else ("pending", "ordered_album_3_to_6_not_materialized"))
             )
         elif photo_led:
+            if scalar_ref and not explicit_items:
+                explicit_items.append({"media_id": "hero:1", "ordinal": 1, "kind": "image", "ref": scalar_ref})
             mode = "social_hero"
             items = explicit_items[:1] or ([{"media_id": selected_ids[0] if selected_ids else "source:hero", "ordinal": 1, "kind": "image", "ref": post_url}] if telegram_post_ref(post_url) else [])
             status, reason = ("ready", "exact_source_hero_ref") if items else ("pending", "source_hero_not_materialized")
@@ -784,6 +1111,7 @@ def _stage_prompt(stage: str, payload: dict[str, Any]) -> str:
         "language": "Russian only",
         "contract_version": EDITORIAL_WRITER_VERSION,
         "strict_grounding": "Every factual sentence must cite existing evidence_ids; never infer profession, origin, emotion or image details.",
+        "style_guard": "Do not build an adversative contrast from a negation particle followed later in the same sentence by an adversative conjunction. State the intended observation directly.",
     }
     if stage == "strategy":
         task = {
@@ -808,8 +1136,9 @@ def _stage_prompt(stage: str, payload: dict[str, Any]) -> str:
             "task": "Write exactly two editorial paragraphs and a sentence-level grounding map as JSON.",
             "output": {
                 "status": "draft_ready|insufficient_evidence|policy_conflict",
-                "public_copy": {"paragraph_1": "150-500 chars", "paragraph_2": "150-500 chars"},
+                "public_copy": {"paragraph_1": "260-420 chars", "paragraph_2": "260-420 chars"},
                 "grounding_map": [{
+                    "paragraph_index": "1|2",
                     "sentence_index": 1,
                     "sentence_text": "exact sentence",
                     "claim_type": "source_profile_fact|content_fact|source_impression|visual_observation|history_bridge",
@@ -818,11 +1147,14 @@ def _stage_prompt(stage: str, payload: dict[str, Any]) -> str:
                 }],
             },
             "rules": [
-                "Paragraph 1: source/author, proven non-regional optic and optional honest bridge.",
+                "Paragraph 1: source/author, proven non-regional optic and optional honest bridge. For an article lane, it must cover every required_publisher_evidence_id so the reader learns the outlet type, intended audience and distinctive value before the article lead.",
                 "Paragraph 2: 1-2 concrete observations from the material, strictly in third person, and a real reason to open the original.",
                 "Do not use first-person plural for another author's experience.",
                 "Warm observational editorial tone; no clickbait, PR jargon, dossier or exhaustive summary.",
-                "The two paragraphs together must leave room for attribution and URL in a 550-900 character media caption.",
+                "Express every positive observation directly; the negation-plus-adversative contrast template is forbidden even with punctuation, a dash or a line break between its parts.",
+                "Treat input.visible_caption_contract as a hard output schema. Count characters, including spaces and punctuation, and keep the exact rendered visible caption inside its min/max range.",
+                "Aim for 260-420 characters in each paragraph. Prefer grounded specifics already present in evidence over generic padding.",
+                "If input.length_repair exists, add at least required_added_editorial_chars across the two paragraphs while preserving every claim's evidence IDs. The retry must meet target_visible_min_chars, not merely the absolute lower boundary.",
                 "Mention photos/video only when visual_hook_evidence_ids is non-empty. Source media is intentionally reused with explicit attribution.",
             ],
         }
@@ -830,7 +1162,7 @@ def _stage_prompt(stage: str, payload: dict[str, Any]) -> str:
         task = {
             "task": "Critique the draft against evidence and strategy. Return JSON only.",
             "output": {"status": "pass|rewrite|reject", "reason_codes": ["string"], "feedback": "concise Russian rewrite instruction"},
-            "hard_fails": ["unsupported_claim", "voice_violation", "visual_hallucination", "forced_history_bridge", "wrong_language", "not_exactly_two_paragraphs"],
+            "hard_fails": ["unsupported_claim", "voice_violation", "visual_hallucination", "forced_history_bridge", "wrong_language", "not_exactly_two_paragraphs", "contrastive_not_a_cliche", "missing_publisher_reader_brief"],
             "pass_only_if": "Both paragraphs are grounded, distinct, editorial, specific and motivate opening the original without replacing it.",
         }
     return json.dumps({**common, **task, "input": payload}, ensure_ascii=False)
@@ -856,6 +1188,7 @@ def call_editorial_stage(
     prompt = _stage_prompt(stage, payload)
     try:
         client = rt.get_region_talk_llm_gateway(default_env)
+        pace_editorial_provider_call()
 
         async def invoke() -> tuple[str, Any]:
             return await client.generate_content_async(
@@ -872,7 +1205,8 @@ def call_editorial_stage(
         result.update({
             "_stage_status": "ok",
             "_stage": stage,
-            "_model": model,
+            "_model": str(getattr(_usage, "model", "") or model),
+            "_requested_model": model,
             "_request_fingerprint": stage_fingerprint,
             "_prompt_hash": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
             "_usage_input_tokens": getattr(_usage, "input_tokens", ""),
@@ -906,6 +1240,7 @@ def generate_editorial_draft(
     request_fp = hashlib.sha256(
         json.dumps({
             "version": EDITORIAL_WRITER_VERSION,
+            "stage_execution_version": EDITORIAL_STAGE_EXECUTION_VERSION,
             "candidate": evidence_pack.get("candidate"),
             "evidence_hash": evidence_hash,
             "history_hash": hashlib.sha256(history_raw.encode("utf-8")).hexdigest(),
@@ -931,6 +1266,9 @@ def generate_editorial_draft(
         }, calls)
 
     evidence_ids = {str(item.get("evidence_id")) for item in evidence_pack.get("evidence") or [] if isinstance(item, dict)}
+    required_publisher_ids = {
+        str(value) for value in (evidence_pack.get("required_publisher_evidence_ids") or []) if str(value)
+    }
     used_history = set(str(value) for value in (strategy.get("used_history_urls") or []))
     allowed_history = {str(item.get("candidate_url") or "") for item in history}
     if (
@@ -941,7 +1279,11 @@ def generate_editorial_draft(
         strategy["throughline_mode"] = "fresh_start"
         strategy["used_history_urls"] = []
 
-    writer_payload = {"editorial_plan": strategy, **evidence_pack}
+    writer_payload = {
+        "editorial_plan": strategy,
+        "visible_caption_contract": visible_caption_contract(row),
+        **evidence_pack,
+    }
     writer, called = call_editorial_stage(
         stage="writer", payload=writer_payload, request_fingerprint=request_fp + "|writer1",
         model=model, default_env=default_env, budget=budget,
@@ -958,10 +1300,21 @@ def generate_editorial_draft(
             "publication_draft_history_json": history_raw,
             "publication_draft_editorial_plan_json": json.dumps(strategy, ensure_ascii=False, separators=(",", ":")),
         }, calls)
-    violations = validate_editorial_output(writer, evidence_ids)
+    violations = validate_editorial_output(
+        writer, evidence_ids, required_publisher_evidence_ids=required_publisher_ids, row=row,
+    )
     attempts = 1
     if violations:
-        retry_payload = {**writer_payload, "previous_draft": writer, "deterministic_feedback": violations}
+        retry_payload = {
+            **writer_payload,
+            "previous_draft": writer,
+            "deterministic_feedback": violations,
+            "length_repair": (
+                caption_length_repair(row, writer)
+                if any(item.startswith("caption_visible_length:") for item in violations)
+                else None
+            ),
+        }
         writer, called = call_editorial_stage(
             stage="writer", payload=retry_payload, request_fingerprint=request_fp + "|writer2",
             model=model, default_env=default_env, budget=budget,
@@ -978,7 +1331,12 @@ def generate_editorial_draft(
                 "publication_draft_evidence_json": evidence_raw,
                 "publication_draft_history_json": history_raw,
             }, calls)
-        violations = validate_editorial_output(writer, evidence_ids) if writer.get("_stage_status") == "ok" else ["writer_retry_failed"]
+        violations = (
+            validate_editorial_output(
+                writer, evidence_ids, required_publisher_evidence_ids=required_publisher_ids, row=row,
+            )
+            if writer.get("_stage_status") == "ok" else ["writer_retry_failed"]
+        )
     if violations or writer.get("status") != "draft_ready":
         return ({
             "publication_draft_backfill_status": "needs_grounding_review",
@@ -988,6 +1346,8 @@ def generate_editorial_draft(
             "publication_draft_evidence_json": evidence_raw,
             "publication_draft_history_json": history_raw,
             "publication_draft_editorial_plan_json": json.dumps(strategy, ensure_ascii=False, separators=(",", ":")),
+            "publication_draft_grounding_map_json": json.dumps(writer.get("grounding_map") or [], ensure_ascii=False, separators=(",", ":")),
+            "publication_draft_stage_audit_json": json.dumps({"strategy": strategy, "writer": writer}, ensure_ascii=False, separators=(",", ":")),
             "publication_draft_generation_attempts": attempts,
         }, calls)
 
@@ -1027,7 +1387,9 @@ def generate_editorial_draft(
                 "publication_draft_evidence_json": evidence_raw,
                 "publication_draft_history_json": history_raw,
             }, calls)
-        violations = validate_editorial_output(writer, evidence_ids)
+        violations = validate_editorial_output(
+            writer, evidence_ids, required_publisher_evidence_ids=required_publisher_ids, row=row,
+        )
         if not violations:
             critic_payload["draft"] = writer
             critic, called = call_editorial_stage(
@@ -1045,7 +1407,13 @@ def generate_editorial_draft(
                     "publication_draft_evidence_json": evidence_raw,
                     "publication_draft_history_json": history_raw,
                 }, calls)
-    if critic.get("_stage_status") != "ok" or critic.get("status") != "pass" or validate_editorial_output(writer, evidence_ids):
+    if (
+        critic.get("_stage_status") != "ok"
+        or critic.get("status") != "pass"
+        or validate_editorial_output(
+            writer, evidence_ids, required_publisher_evidence_ids=required_publisher_ids, row=row,
+        )
+    ):
         return ({
             "publication_draft_backfill_status": "needs_grounding_review",
             "publication_draft_backfill_reason": str(critic.get("reason_codes") or critic.get("reason") or "critic_not_passed")[:500],
@@ -1066,6 +1434,14 @@ def generate_editorial_draft(
             "publication_draft_backfill_status": "needs_grounding_review",
             "publication_draft_backfill_reason": str(exc),
             "publication_draft_input_fingerprint": request_fp,
+            "publication_draft_evidence_hash": evidence_hash,
+            "publication_draft_evidence_json": evidence_raw,
+            "publication_draft_history_json": history_raw,
+            "publication_draft_editorial_plan_json": json.dumps(strategy, ensure_ascii=False, separators=(",", ":")),
+            "publication_draft_grounding_map_json": json.dumps(writer.get("grounding_map") or [], ensure_ascii=False, separators=(",", ":")),
+            "publication_draft_critic_json": json.dumps(critic, ensure_ascii=False, separators=(",", ":")),
+            "publication_draft_stage_audit_json": json.dumps({"strategy": strategy, "writer": writer, "critic": critic}, ensure_ascii=False, separators=(",", ":")),
+            "publication_draft_generation_attempts": attempts,
         }, calls)
     media = publication_media_plan(row)
     media_reviewable = media["status"] in {"ready", "fallback"}
@@ -1116,11 +1492,16 @@ def build_draft_updates(
     default_env: str,
     budget: DurableGeminiBudget,
 ) -> tuple[dict[str, Any], bool]:
+    generation_row = {**row, **{
+        field: fetched[field]
+        for field in MEDIA_EVIDENCE_FIELDS
+        if fetched.get(field) not in (None, "", [], {})
+    }}
     evidence_pack = build_editorial_evidence(
-        row, source_text=text, fetched=fetched, intake=intake,
+        generation_row, source_text=text, fetched=fetched, intake=intake,
     )
     verdict, provider_calls = generate_editorial_draft(
-        row,
+        generation_row,
         evidence_pack=evidence_pack,
         history=history,
         model=model,
@@ -1139,6 +1520,11 @@ def build_draft_updates(
         "publication_draft_backfill_provider_call_count": provider_calls,
         # The writer is a copy stage, not a second publication verdict.
         "publication_draft_backfill_llm_gate_status": "ok" if verdict.get("publication_draft_backfill_status") in {"ready", "needs_grounding_review", "media_materialization_pending"} else "deferred",
+        **{
+            field: fetched[field]
+            for field in MEDIA_EVIDENCE_FIELDS
+            if fetched.get(field) not in (None, "", [], {})
+        },
     }
     if (
         str(row.get("publication_draft_prompt_version") or "") != EDITORIAL_WRITER_VERSION
@@ -1165,13 +1551,61 @@ def build_draft_updates(
     return ({**base_updates, **verdict}, provider_calls > 0)
 
 
+def build_media_materialization_updates(
+    row: dict[str, Any], *, fetched: dict[str, Any]
+) -> dict[str, Any]:
+    """Repair only the exact media manifest while preserving accepted copy."""
+
+    media_fields = {
+        field: fetched[field]
+        for field in MEDIA_EVIDENCE_FIELDS
+        if fetched.get(field) not in (None, "", [], {})
+    }
+    media = publication_media_plan({**row, **media_fields})
+    reviewable = media["status"] in {"ready", "fallback"}
+    return {
+        **media_fields,
+        "publication_draft_status": (
+            "ready_for_operator_review" if reviewable else "media_materialization_pending"
+        ),
+        "publication_presentation_mode": media["mode"],
+        "publication_media_materialization_status": media["status"],
+        "publication_media_materialization_reason": media["reason"],
+        "publication_media_materialization_contract_version": MEDIA_MATERIALIZATION_CONTRACT_VERSION,
+        "publication_presentation_manifest_json": json.dumps(
+            media, ensure_ascii=False, separators=(",", ":")
+        ),
+        "publication_draft_backfill_status": (
+            "ready" if reviewable else "media_materialization_pending"
+        ),
+        "publication_draft_backfill_reason": (
+            "media_materialization_repaired" if reviewable else media["reason"]
+        ),
+        "publication_draft_backfill_next_attempt_after": (
+            "" if reviewable else (utc_now() + timedelta(hours=1)).isoformat()
+        ),
+        "publication_draft_backfill_provider_called": "false",
+        "publication_draft_backfill_provider_call_count": 0,
+    }
+
+
 async def execute(args: argparse.Namespace) -> dict[str, Any]:
+    global _EDITORIAL_PROVIDER_STAGE_DELAY_SECONDS
+    _EDITORIAL_PROVIDER_STAGE_DELAY_SECONDS = max(
+        0.0, float(getattr(args, "stage_delay_seconds", 0.0) or 0.0)
+    )
     ydb = driver = pool = table = None
     selected: list[dict[str, Any]] = []
     try:
         ydb, driver, pool, table, rows = notify.read_publication_rows(int(args.scan_limit))
         external_intakes = notify.read_kind_rows(
             pool, ydb, table, "external_publication_intake_item", int(args.scan_limit)
+        )
+        external_sources = notify.read_kind_rows(
+            pool, ydb, table, "external_publication_source_item", int(args.scan_limit)
+        )
+        onboarding_profiles = notify.read_kind_rows(
+            pool, ydb, table, "source_onboarding_profile_item", int(args.scan_limit)
         )
         image_rows = notify.read_kind_rows(
             pool, ydb, table, "image_queue_item", int(args.scan_limit)
@@ -1187,8 +1621,54 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
             pool, ydb, table, "region_talk_publication_log", int(args.history_limit)
         )
         history = publication_history([*schedules, *logs, *rows], limit=5)
+        published_rows = [
+            item for item in [*schedules, *logs, *rows] if has_published_status(item)
+        ]
+        published_urls = {
+            notify.canonical_post_url(item)
+            for item in published_rows
+            if notify.canonical_post_url(item)
+        }
+        published_candidate_ids = {
+            publication_candidate_id(item)
+            for item in published_rows
+            if publication_candidate_id(item)
+        }
         intakes = article_intake_index(external_intakes)
-        selected = select_rows(rows, limit=int(args.limit), surface=str(args.surface))
+        external_sources_by_key = {
+            finalizer.canonical_source_key_for_row(item): item
+            for item in external_sources
+            if finalizer.canonical_source_key_for_row(item)
+        }
+        onboarding_profiles_by_key = {
+            str(item.get("canonical_source_key") or "").strip().lower(): item
+            for item in onboarding_profiles
+            if str(item.get("canonical_source_key") or "").strip()
+        }
+        candidate_urls = {
+            notify.canonical_post_url({"post_url": value})
+            for value in (getattr(args, "candidate_url", None) or [])
+            if notify.canonical_post_url({"post_url": value})
+        }
+        if bool(getattr(args, "materialize_only", False)):
+            selected = select_media_materialization_rows(
+                rows,
+                limit=int(args.limit),
+                surface=str(args.surface),
+                candidate_urls=candidate_urls,
+                published_urls=published_urls,
+                published_candidate_ids=published_candidate_ids,
+            )
+        else:
+            selected = select_rows(
+                rows,
+                limit=int(args.limit),
+                surface=str(args.surface),
+                force_regenerate=bool(getattr(args, "force_regenerate", False)),
+                candidate_urls=candidate_urls,
+                published_urls=published_urls,
+                published_candidate_ids=published_candidate_ids,
+            )
         if args.dry_run or not selected:
             return {
                 "ok": True,
@@ -1201,7 +1681,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
                 "transport": str(args.transport),
             }
 
-        model = str(args.model or os.getenv("REGION_TALK_LLM_MODEL") or "gemini-3.1-flash-lite")
+        model = str(args.model or os.getenv("REGION_TALK_LLM_MODEL") or "gemini-3.5-flash-lite")
         default_env = str(
             args.default_env_var_name
             or os.getenv("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME")
@@ -1227,6 +1707,34 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
             url = notify.canonical_post_url(row)
             fetched_item = fetched_by_url.get(url)
             intake = intakes.get(str(row.get("external_publication_id") or "")) or intakes.get(url)
+            if bool(getattr(args, "materialize_only", False)):
+                if content_lane(row) == "article":
+                    fetched = {}
+                    source_transport = "retained_article_intake"
+                elif fetched_item is None:
+                    updates = {
+                        "publication_draft_backfill_status": "media_materialization_pending",
+                        "publication_draft_backfill_reason": fetch_errors.get(url) or "exact source media unavailable",
+                        "publication_draft_backfill_next_attempt_after": (utc_now() + timedelta(hours=1)).isoformat(),
+                        "publication_draft_backfill_provider_called": "false",
+                        "publication_draft_backfill_provider_call_count": 0,
+                    }
+                    upsert_publication_row(pool, ydb, table, row, updates)
+                    results.append({"post_url": url, "status": updates["publication_draft_backfill_status"], "provider_called": False})
+                    continue
+                else:
+                    _text, fetched, source_transport = fetched_item
+                updates = build_media_materialization_updates(row, fetched=fetched)
+                updates["publication_draft_backfill_transport"] = source_transport
+                upsert_publication_row(pool, ydb, table, row, updates)
+                results.append({
+                    "post_url": url,
+                    "status": updates["publication_draft_backfill_status"],
+                    "provider_called": False,
+                })
+                if index + 1 < len(selected):
+                    await asyncio.sleep(random.uniform(float(args.delay_min), float(args.delay_max)))
+                continue
             if content_lane(row) == "article":
                 if not intake:
                     updates = retry_updates(row, transport="retained_article_intake", reason="retained article evidence unavailable")
@@ -1234,6 +1742,58 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
                     results.append({"post_url": url, "status": updates["publication_draft_backfill_status"]})
                     continue
                 text, fetched, source_transport = "", {}, "retained_article_intake"
+                source_key = finalizer.canonical_source_key_for_row(row)
+                evidence_row = finalizer.build_source_onboarding_evidence(
+                    external_sources_by_key.get(source_key),
+                    [],
+                    row,
+                    external_intake=intake,
+                )
+                row["_source_onboarding_evidence"] = evidence_row
+                row["_source_onboarding_profile"] = onboarding_profiles_by_key.get(source_key, {})
+                enriched, profile_rows, _onboarding_stats = finalizer.enrich_accepted_rows_with_onboarding(
+                    [row],
+                    max_llm=2,
+                    model=model,
+                    default_env_var_name=default_env,
+                    durable_budget=budget,
+                )
+                row = enriched[0]
+                finalizer.write_source_onboarding_rows(
+                    pool,
+                    ydb,
+                    table,
+                    evidence_rows=[evidence_row],
+                    profile_rows=profile_rows,
+                    run_id=str(args.llm_budget_id),
+                )
+                for profile in profile_rows:
+                    profile_key = str(profile.get("canonical_source_key") or "").strip().lower()
+                    if profile_key:
+                        onboarding_profiles_by_key[profile_key] = profile
+                onboarding_updates = {
+                    field: row.get(field)
+                    for field in SOURCE_ONBOARDING_FIELDS
+                    if row.get(field) not in (None, "")
+                }
+                if not (
+                    str(row.get("source_onboarding_status") or "") == "ready"
+                    and str(row.get("source_onboarding_publisher_dimensions_status") or "") == "ready"
+                    and str(row.get("source_onboarding_summary_kind") or "") == notify.PUBLISHER_READER_BRIEF_KIND
+                ):
+                    updates = {
+                        **onboarding_updates,
+                        **retry_updates(
+                            row,
+                            transport=source_transport,
+                            reason="publisher_reader_brief_not_ready",
+                        ),
+                        "publication_draft_backfill_status": "needs_grounding_review",
+                        "publication_draft_backfill_next_attempt_after": "",
+                    }
+                    upsert_publication_row(pool, ydb, table, row, updates)
+                    results.append({"post_url": url, "status": updates["publication_draft_backfill_status"]})
+                    continue
             elif fetched_item is None:
                 source_transport = "vk_api" if social_post_surface(url) == "vk" else str(args.transport)
                 updates = retry_updates(
@@ -1257,6 +1817,8 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
                 default_env=default_env,
                 budget=budget,
             )
+            if content_lane(row) == "article":
+                updates = {**onboarding_updates, **updates}
             upsert_publication_row(pool, ydb, table, row, updates)
             results.append({
                 "post_url": url,
@@ -1296,13 +1858,25 @@ def main() -> int:
     parser.add_argument("--llm-budget-max", type=int, default=20)
     parser.add_argument("--delay-min", type=float, default=2.0)
     parser.add_argument("--delay-max", type=float, default=5.0)
+    parser.add_argument("--stage-delay-seconds", type=float, default=None)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--candidate-url", action="append", default=[], help="regenerate only this exact canonical candidate URL; repeatable")
+    parser.add_argument("--force-regenerate", action="store_true", help="regenerate a current-version draft; requires --candidate-url")
+    parser.add_argument("--materialize-only", action="store_true", help="repair pending exact media manifests without calling the editorial LLM")
     args = parser.parse_args()
     notify.load_env(args.env_file)
+    if args.stage_delay_seconds is None:
+        args.stage_delay_seconds = float(
+            os.getenv("REGION_TALK_DRAFT_BACKFILL_STAGE_DELAY_SECONDS") or "5.5"
+        )
     args.transport = args.transport or os.getenv("REGION_TALK_DRAFT_BACKFILL_TRANSPORT") or "telethon_discovery2"
     if args.transport not in notify.TELETHON_TRANSPORT_AUTH_ENVS:
         raise RuntimeError(f"unsupported REGION_TALK_DRAFT_BACKFILL_TRANSPORT: {args.transport}")
     args.limit = max(0, min(10, int(args.limit)))
+    if args.force_regenerate and not args.candidate_url:
+        raise RuntimeError("--force-regenerate requires at least one --candidate-url")
+    if args.force_regenerate and args.materialize_only:
+        raise RuntimeError("--force-regenerate and --materialize-only are mutually exclusive")
     args.llm_budget_id = args.llm_budget_id or os.getenv("REGION_TALK_DRAFT_BACKFILL_BUDGET_ID") or utc_now().strftime("region-talk-draft-backfill-%Y%m%d")
     payload = asyncio.run(execute(args))
     print(json.dumps(payload, ensure_ascii=False))

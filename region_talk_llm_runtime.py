@@ -14,6 +14,36 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 
+REGION_TALK_PRIMARY_TEXT_MODEL = "gemini-3.5-flash-lite"
+REGION_TALK_FALLBACK_TEXT_MODELS = ("gemini-3.1-flash-lite",)
+
+
+def region_talk_fallback_models(primary_model: str = "") -> list[str]:
+    """Return the explicit Region Talk model overflow chain."""
+
+    raw = str(os.getenv("REGION_TALK_LLM_FALLBACK_MODELS") or "").strip()
+    configured = [part.strip() for part in raw.split(",") if part.strip()]
+    candidates = configured or list(REGION_TALK_FALLBACK_TEXT_MODELS)
+    primary_key = str(primary_model or "").strip().lower()
+    result: list[str] = []
+    seen = {primary_key} if primary_key else set()
+    for model in candidates:
+        key = model.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(model)
+    return result
+
+
+def configure_region_talk_model_routing(client: Any, *, primary_model: str = "") -> Any:
+    """Pin the product chain and preserve its one-provider-send budget."""
+
+    client.fallback_models = region_talk_fallback_models(primary_model)
+    client.allow_provider_model_fallback = False
+    return client
+
+
 def _parse_time(value: Any) -> datetime | None:
     raw = str(value or "").strip()
     if not raw:
@@ -301,4 +331,7 @@ def build_google_ai_client(*, default_env_var_name: str, consumer: str) -> Any:
     client.allow_reserve_fallback = False
     client.allow_local_limiter_fallback = False
     client.allow_local_limiter_on_reserve_error = False
-    return client
+    return configure_region_talk_model_routing(
+        client,
+        primary_model=os.getenv("REGION_TALK_LLM_MODEL") or REGION_TALK_PRIMARY_TEXT_MODEL,
+    )

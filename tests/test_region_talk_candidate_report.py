@@ -39,6 +39,19 @@ def load_runner_module():
 
 
 class RegionTalkCandidateReportTests(unittest.TestCase):
+    def test_flash_lite_routing_prefers_35_and_overflows_to_31(self) -> None:
+        mod = load_module()
+        self.assertEqual(mod.REGION_TALK_PRIMARY_TEXT_MODEL, "gemini-3.5-flash-lite")
+        self.assertEqual(mod.REGION_TALK_FALLBACK_TEXT_MODELS, ("gemini-3.1-flash-lite",))
+        mod._REGION_TALK_GOOGLE_CLIENT = None
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_LLM_MODEL": "",
+            "REGION_TALK_LLM_FALLBACK_MODELS": "",
+        }, clear=False), mock.patch.object(mod, "build_region_talk_supabase_client", return_value=object()):
+            client = mod.get_region_talk_llm_gateway("GOOGLE_API_KEY3")
+        self.assertEqual(client.fallback_models, ["gemini-3.1-flash-lite"])
+        self.assertFalse(client.allow_provider_model_fallback)
+
     def test_required_kaggle_ydb_service_account_fails_before_metadata_fallback(self) -> None:
         mod = load_module()
         with mock.patch.dict(os.environ, {

@@ -118,7 +118,7 @@ def image_vlm_max_calls_per_run() -> int:
 
 
 def image_vlm_model() -> str:
-    return str(os.getenv("REGION_TALK_IMAGE_VLM_MODEL") or os.getenv("REGION_TALK_LLM_MODEL") or "gemini-3.1-flash-lite").strip()
+    return str(os.getenv("REGION_TALK_IMAGE_VLM_MODEL") or os.getenv("REGION_TALK_LLM_MODEL") or "gemini-3.5-flash-lite").strip()
 
 
 def _row_float(row: dict, *keys: str) -> float:

@@ -614,7 +614,7 @@ class EventCandidate:
     collection_semantic_decisions: dict[str, Any] | None = None
 
 
-STATIC_COLLECTION_FACTS_POLICY_VERSION = "static-collection-facts-v1"
+STATIC_COLLECTION_FACTS_POLICY_VERSION = "static-collection-facts-v2"
 STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION = "static-collection-adjudication-v1"
 
 _ADMISSION_VALUES = {"confirmed_free", "confirmed_paid", "unknown"}
@@ -739,6 +739,10 @@ def collection_adjudication_input_hash(candidate: EventCandidate) -> str:
 
     payload = {
         "schema_version": STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION,
+        # Prompt/meaning changes must invalidate source-hash cache entries.
+        # Schema shape alone is not enough: v2 deliberately tightened what
+        # counts as a children/family event.
+        "policy_version": STATIC_COLLECTION_FACTS_POLICY_VERSION,
         "source_type": str(candidate.source_type or "").strip(),
         "source_url": str(candidate.source_url or "").strip(),
         "title": str(candidate.title or "").strip(),
@@ -859,6 +863,57 @@ def _exact_collection_quote(quote: Any, corpus: str, *, required: bool) -> str |
     return clean if clean in corpus else None
 
 
+def _audience_quote_supports_value(value: str, quote: str, reason: str) -> bool:
+    """Narrow entailment guard for an already semantic audience verdict.
+
+    The LLM still owns audience meaning. This check only rejects a quoted
+    phrase whose grammatical role cannot support the selected value, e.g. the
+    children are authors of displayed work rather than invitees to the event.
+    """
+
+    normalized = " ".join(str(quote or "").casefold().replace("ё", "е").split())
+    if value == "unknown":
+        return not normalized and reason in {"insufficient_evidence", "conflicting_evidence"}
+    if value == "none":
+        return bool(normalized) and reason == "explicit_adult_only"
+    if value == "family":
+        if reason not in {"explicit_family_format", "explicit_target_audience"}:
+            return False
+        joint_family = bool(
+            re.search(r"\b(?:для\s+)?вс(?:ей|я|ю)\s+семь", normalized)
+            or re.search(r"\bродител\w*\s*[+и]\s*ребен", normalized)
+        )
+        child_and_adult = bool(
+            re.search(r"\b(?:дет|ребен|юных?)\w*", normalized)
+            and re.search(r"\b(?:взросл|родител)\w*", normalized)
+        )
+        explicit_family_format = bool(
+            re.search(
+                r"\bсемейн\w*\s+(?:шоу|мюзикл|мастер-класс|турнир|праздник|"
+                r"фестиваль|программ\w*|заняти\w*|спектакл\w*)\b",
+                normalized,
+            )
+            or re.search(
+                r"\b(?:шоу|мюзикл|мастер-класс|турнир|праздник|фестиваль|"
+                r"программ\w*|заняти\w*|спектакл\w*)[^.;:]{0,30}\bсемейн\w*",
+                normalized,
+            )
+        )
+        return joint_family or child_and_adult or explicit_family_format
+    if value == "kids":
+        if reason != "explicit_target_audience":
+            return False
+        return bool(
+            re.search(r"(?:/|\b)для[-_/\s]+дет", normalized)
+            or re.search(r"(?:/|\b)dlya[-_/]+dete", normalized)
+            or "театрдлядетей" in normalized
+            or re.search(r"\bдетск\w*(?:\s+[\w-]+){0,2}\s+(?:зон\w*|клуб\w*|"
+                         r"спектакл\w*|шоу|программ\w*|заняти\w*|мастер-класс\w*)\b", normalized)
+            or re.search(r"\b(?:маленьк\w*\s+зрител|помочь\s+ребен|для\s+ребен)", normalized)
+        )
+    return False
+
+
 def validate_collection_adjudication_output(
     payload: Any,
     *,
@@ -915,7 +970,7 @@ def validate_collection_adjudication_output(
     uquote = _exact_collection_quote(
         audience.get("evidence_quote"), source_corpus, required=uvalue != "unknown"
     )
-    if uquote is None:
+    if uquote is None or not _audience_quote_supports_value(uvalue, uquote, ureason):
         return None
 
     people = payload.get("people_appearances")
@@ -1136,8 +1191,12 @@ async def adjudicate_collection_candidate(candidate: EventCandidate) -> dict[str
         "Каждая непустая evidence_quote должна быть точной непрерывной цитатой из source_corpus.\n"
         "Admission: ticket_status, наличие продажи или ссылки без явной цены/платного входа не доказывает paid; "
         "необязательный донат может быть confirmed_free.\n"
-        "Audience: age_restriction, topics и BGE — только candidate signals, никогда не доказательство kids/family; "
-        "нужна прямая фраза о целевой аудитории/семейном формате, иначе unknown.\n"
+        "Audience: age_restriction, topics и BGE — только candidate signals, никогда не доказательство kids/family. "
+        "kids означает, что само событие/занятие прямо предназначено детям или детским зрителям/участникам. "
+        "family означает совместное участие или посещение детей и взрослых/родителей. Недостаточны слова "
+        "'семья', 'семейный', 'близкие', 'семейная атмосфера', тема семьи/беременности/соцподдержки, "
+        "а также популярность артиста у детей, если источник не приглашает детей на это событие. "
+        "Для таких случаев верни unknown; не расширяй смысл рекламной фразы.\n"
         "People: mentioned не равно confirmed; не выводи происхождение по имени. Для non-unknown origin_scope "
         "нужна отдельная точная origin_evidence_quote.\n"
         "При сомнении верни unknown/пустой список. Не пиши публичный текст.\n\n"

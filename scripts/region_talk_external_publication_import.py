@@ -655,6 +655,18 @@ def prepare_import(
         publication = row.get("publication") if isinstance(row.get("publication"), dict) else {}
         source_assessment = row.get("source_assessment") if isinstance(row.get("source_assessment"), dict) else {}
         quality = row.get("quality_assessment") if isinstance(row.get("quality_assessment"), dict) else {}
+        editorial_pack = row.get("editorial_pack") if isinstance(row.get("editorial_pack"), dict) else {}
+        publisher_refs = {
+            str(ref)
+            for support in (editorial_pack.get("copy_support") or [])
+            if isinstance(support, dict) and str(support.get("surface") or "") == "source_overview"
+            for ref in (support.get("evidence_refs") or [])
+            if str(ref)
+        }
+        publisher_evidence = [
+            item for item in (row.get("evidence") or [])
+            if isinstance(item, dict) and str(item.get("evidence_id") or "") in publisher_refs
+        ]
         domain = str(publication.get("source_domain") or "").strip().lower()
         if not domain:
             continue
@@ -675,6 +687,10 @@ def prepare_import(
             "fetch_status": "confirmed_external_publication_research",
             "source_externality_basis": source_assessment.get("externality_basis") or "",
             "externality_evidence_refs": source_assessment.get("externality_evidence_refs") or [],
+            "publisher_source_overview": editorial_pack.get("source_overview") or "",
+            "publisher_source_overview_evidence_refs_json": json.dumps(sorted(publisher_refs), ensure_ascii=False),
+            "publisher_profile_evidence_json": json.dumps(publisher_evidence, ensure_ascii=False, separators=(",", ":")),
+            "publisher_profile_seed_version": "region_talk_publisher_profile_seed_v1",
             "research_request_ids": [],
             "external_publication_ids": [],
             "updated_at": imported_at,

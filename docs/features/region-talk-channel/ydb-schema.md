@@ -85,10 +85,14 @@ The live KV table also contains two compact source-onboarding projections:
   status/version and fingerprint;
 - `source_onboarding_profile_item:<source_profile_id>` — reusable entity type,
   evidence-backed atomic claims/angles, conflicts/missing fields, prompt/model
-  version and profile fingerprint.
+  version and profile fingerprint. Publisher profiles additionally persist
+  `publisher_dimensions_json` with the grounded `outlet_identity`,
+  `intended_audience` and `distinctive_value` dimensions.
 
-The candidate-specific `source_onboarding_paragraph` and its claim/evidence
-references live on `publication_candidate_item`. Evidence/profile rows never
+The candidate-specific `source_onboarding_paragraph`,
+`source_onboarding_publisher_dimensions_json`, dimension status/summary kind
+and claim/evidence references live on `publication_candidate_item`.
+Evidence/profile rows never
 contain media bytes or an unbounded source archive.
 
 ## Table overview

@@ -143,14 +143,16 @@ bounded production recheck on 2026-08-01 returned the same `429` for both the
 `GOOGLE_API_KEY3` and separately reserved `GOOGLE_API_KEY4` lanes before any
 research result was generated. Therefore the switch remains off: enabling
 three guaranteed failures per day would be false autonomy. This is a
-Search-grounding project-quota blocker, not a model-capability or prompt/schema
-blocker. The worker defaults to `gemini-3.1-flash-lite` once a search-enabled
-provider project passes the bounded live smoke; this is a production discovery
-worker, not an external-consultant review. Flash/Lite output must never be
-represented as a Gemini Pro consultant verdict.
+Search-grounding project-quota blocker, independent from the model-capability
+and prompt/schema contracts. The worker now requests
+`gemini-3.5-flash-lite` first and uses `gemini-3.1-flash-lite` only after a
+model-scoped limiter block. It remains disabled until a search-enabled provider
+project passes the bounded live smoke. This is a production discovery worker;
+Flash/Lite output must never be represented as a Gemini Pro consultant verdict.
 
 Provider references: [Google Search grounding](https://ai.google.dev/gemini-api/docs/google-search),
 [structured outputs with tools](https://ai.google.dev/gemini-api/docs/structured-output),
+[Gemini 3.5 Flash-Lite capabilities](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite),
 and [Gemini 3.1 Flash-Lite capabilities](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite).
 
 ### CandidateReport handoff
@@ -274,7 +276,7 @@ agent fetched its registry snapshot.
 
 ## Operator chat and ranking
 
-Candidate messages now show the original link, source link, overall score, image score, postcardness, verifier reason, and `О публикации` for editorial/academic origin. Automatic confirmed-candidate delivery remains idempotent.
+Candidate revisions show the original link, source link, scores and verifier reason. Editorial/academic rows also pass a reusable publisher reader brief through the LLM-first source-profile stage. The brief must explain outlet type, intended audience and distinctive editorial value from copy-supported research evidence; the staged public-copy Writer incorporates it into paragraph one while paragraph two remains specific to the selected article. Automatic confirmed-candidate delivery remains fingerprint-idempotent.
 
 ### Article galleries and editorial image suitability
 

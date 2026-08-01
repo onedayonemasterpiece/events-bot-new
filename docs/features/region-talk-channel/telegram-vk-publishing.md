@@ -5,10 +5,14 @@ API publisher remains disabled. No channel/community creation or target-channel
 publishing is performed by the planner.
 
 The plan is publication-readiness gated: a terminal candidate without current
-v8 two-paragraph Russian copy, attribution, grounded support and an exact media
+v9 two-paragraph Russian copy, attribution, grounded support and an exact media
 materialization manifest cannot occupy a future public slot. Both articles and
 social posts pass the staged LLM-first writer; retained article intake is
 evidence, not a finished-copy projection.
+
+The target Telegram channel is [**«Калининград с первого
+взгляда»**](https://t.me/kalinigrad_visit) (`@kalinigrad_visit`). **«О
+Калининграде говорят»** remains the product/editorial working name.
 
 Operator-chat acknowledgement is bound to a fingerprint of the exact completed
 draft, not only to the candidate URL. Legacy rows marked `sent_to_chat` before
@@ -81,6 +85,15 @@ original order and deterministically takes at most the first six frames; fewer
 than three still fails closed. A single source-album locator therefore means
 “resolve this exact group and apply the bounded fallback”, not “publish a
 one-image album” or “send all ten platform frames”.
+Only `telegram:<message_id>` / legacy `tg:<message_id>` media IDs are treated
+as exact Telegram message identities. Generic manifest ordinals such as
+`hero:1` cannot redirect materialization to message 1. Likewise, a legacy
+`<post>#media` scalar is only a diagnostic sentinel; when the exact anchor is a
+video, zero-LLM media repair persists `media_kind=video` and the canonical
+source-post ref, leaving the accepted editorial copy unchanged.
+For `social_video` and `social_hero`, grouped-source resolution is bounded to
+one exact item; only `social_album` may expand the group to the ordered 3–6
+item presentation contract.
 External article source attestations participate in the same live-fingerprint
 merge as Telegram/VK sources so the autonomous orchestrator sees article
 backfill work instead of leaving it visible only to the notifier.
@@ -88,7 +101,12 @@ The v8 backfill also fills missing presentation fields from the newest exact-URL
 durable `image_queue_item`. This narrow evidence join carries either an already
 extracted publisher hero or the reviewed ordered social selection into the
 review manifest, but never overwrites an existing media selection, publication
-verdict or editorial copy.
+verdict or editorial copy. For legacy rows where a generic one-frame preview
+coexists with reviewed album IDs, album IDs take precedence. The bounded
+`region_talk_publication_draft_backfill.py --materialize-only` repair resolves
+Telegram message IDs from the source group and VK attachment ordinals from
+`wall.getById`; it writes only materialization/presentation state and performs
+zero editorial LLM calls.
 
 ### Product format priority
 
