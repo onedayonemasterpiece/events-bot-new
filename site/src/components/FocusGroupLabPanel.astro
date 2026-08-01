@@ -138,7 +138,7 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
     const sendFeedbackRecord = async (record: IdempotentOutboxRecord, accessToken: string) => {
       if (record.channel !== 'focus_feedback_v2') return 'skip' as const;
       try {
-        const response = await auth!.dataClient.idempotentReplay(
+        const response = await auth!.dataClient.request(
           `${auth!.config.supabaseUrl}/rest/v1/rpc/submit_focus_group_feedback_v2`,
           {
             method: 'POST',

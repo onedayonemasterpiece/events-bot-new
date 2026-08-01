@@ -353,6 +353,257 @@ This is not incident closure: separate live OTP code and magic-link E2E, an
 affected-phone `KE3` receipt, verified membership activation and delivery
 correlation remain mandatory.
 
+### Transport v3 target contract (NO-GO replacement, 2026-08-01)
+
+The v2 browser transport is **rejected for production rollout**. It chooses an
+origin after receiving response headers, stops its timeout before the response
+body is consumed, derives operation semantics mostly from the HTTP method and
+uses process-wide timestamps to reinterpret later Auth errors. The retained
+incident evidence proves why this is unsafe: `/auth/v1/otp` completed upstream
+with `200`, the browser did not complete the operation, and a second submit six
+seconds later reached Auth and received `429`.
+
+The replacement is one public `BackendClient`, not one global URL flag:
+
+```text
+UI / feature code
+    backend.execute(operationName, typedInput)
+                    |
+                    v
+BackendClient
+    OperationCatalog          operation semantics and response contract
+    RouteManager              capability-specific last-known-good route
+    FullResponseExecutor      bounded headers + body + decode lifecycle
+    ReceiptResolver           acknowledgement of ambiguous OTP issue
+    DurableCommandOutbox      ordered idempotent product writes only
+    TransportTelemetry        metadata only; no email/token/body/JWT
+                    |
+          direct/custom origin <-> stateless Yandex relay
+                    |
+        Supabase Auth / REST / RPC / Functions / Storage
+```
+
+Feature code must not select `direct`, `relay`, `safe-read`,
+`selected-once` or `idempotent-replay`. Every production operation is declared
+once in a closed `OperationCatalog`. An unknown method/path combination fails
+closed in development, tests and the production build gate.
+
+Required operation fields are:
+
+```ts
+type OperationDefinition = {
+  capability: 'auth' | 'data' | 'functions' | 'storage-small' | 'oauth-navigation';
+  semantics: 'safe_read' | 'selected_once' | 'idempotent_command' | 'disposable';
+  response: 'buffered_json' | 'empty' | 'bounded_binary' | 'navigation';
+  responseLimitBytes: number;
+  routeSupport: readonly ('direct' | 'relay')[];
+  receipt?: 'mail_attempt';
+  outbox?: { channel: string; coalesce: boolean };
+};
+```
+
+HTTP method alone never determines replay safety. In particular, Search is a
+read-like but cost-bearing `POST`, OTP issue/verify are selected-once commands,
+and saved-state/feedback writes are retryable only after their server RPC owns
+deduplication and ordering.
+
+#### Full response is the transport completion boundary
+
+For Auth, REST, RPC and small JSON Functions, success means:
+
+1. the selected request was dispatched;
+2. status and headers arrived;
+3. the complete body arrived before the same deadline;
+4. the body stayed within the operation-specific limit;
+5. the declared response protocol decoded successfully;
+6. a reconstructed `Response` can be returned to `supabase-js`.
+
+The abort deadline remains active through body consumption and decode. A
+headers-only `fetch()` resolution is not success. `204`/declared empty
+responses skip body decode. Streaming, large Storage bodies and NDJSON are not
+allowed through the buffered JSON executor and require an explicit separate
+capability.
+
+Each request produces its own typed outcome. Global timestamps such as
+`lastAmbiguousAt` and `lastNoHealthyAt` are forbidden:
+
+```ts
+type BackendResult<T> =
+  | { kind: 'success'; operationId: string; route: Route; status: number; value: T }
+  | { kind: 'definitive_failure'; operationId: string; route: Route; status: number; code: string }
+  | { kind: 'not_dispatched'; operationId: string; reason: 'no_route' | 'validation' }
+  | { kind: 'ambiguous'; operationId: string; route: Route;
+      phase: 'dispatch' | 'headers' | 'body' | 'decode'; possiblyCommitted: true };
+```
+
+For a non-idempotent command, a network/abort failure after dispatch is
+ambiguous: the browser cannot prove that the upstream side effect did not
+happen. An application `4xx` is a definitive application result and does not
+mark the route unhealthy. `429` opens an operation/user cooldown and honors
+`Retry-After`; it is not a reason to retry through the alternate origin.
+
+#### Capability-aware route selection without idle polling
+
+Route state is keyed by capability, not shared globally between Auth, Data,
+Functions and Storage. A probe is successful only after a small response body
+is read, decoded and verified. The command capability uses a no-side-effect RPC
+that echoes a random nonce and schema version; this proves request upload,
+CORS/preflight, POST forwarding, response download and decode.
+
+Route selection follows these rules:
+
+- a fresh last-known-good route is used without a probe;
+- on a cold capability, the preferred route starts first and the alternate is
+  staggered by roughly 200–250 ms; the first **fully verified** result wins and
+  the other probe is cancelled;
+- concurrent callers share one single-flight capability probe;
+- a recently successful real operation refreshes route health and is stronger
+  evidence than an artificial ping;
+- after the fresh window (initial target: 5 minutes), the next real use—not an
+  idle timer—revalidates the capability;
+- a stale last-known-good route may serve a safe read while revalidation runs;
+  a selected-once write requires fresh capability evidence;
+- `online`, visibility and connection-change events only mark evidence stale;
+  they do not themselves generate background traffic and never gate a request;
+- network/body/decode failure opens a per-route circuit breaker. Initial
+  quarantine targets are 30/60/120/300 seconds with one half-open probe;
+- compact last-known-good hints are persisted across pages with contract
+  version and expiry. They contain no PII, tokens, bodies or full URLs and are
+  hints, not proof for another browser/WebView context.
+
+There is no constant polling. This is a staggered, bounded first-use check plus
+passive learning from real traffic. It avoids both the former 12-second serial
+failure tax and two unconditional probes before every operation.
+
+#### Replay and outbox matrix
+
+| Class | Alternate after ambiguous result | Durable local outbox |
+|---|---:|---:|
+| safe read | one bounded retry | no |
+| selected-once Auth/search | never inside one attempt | no |
+| idempotent product command | yes, same operation id | yes where product state must survive |
+| disposable telemetry | may retry once or drop | bounded, optional |
+
+The outbox is not used for OTP issue/verify, token refresh or OAuth. Product
+commands carry `operation_id`, `device_id`, monotonic `device_sequence`, schema
+version, expiry and payload hash. The server atomically deduplicates the
+operation id, rejects the same id with a different payload and ignores an older
+sequence for the same reversible entity. Pending save/unsave and like/unlike
+items coalesce to the newest desired state. Flush is event-driven (next use,
+foreground, online hint, supported background sync), guarded by a cross-tab
+lease, and never a permanent timer. Local application storage is bounded by
+item count, byte budget and TTL; Supabase Auth session keys are outside its
+eviction namespace.
+
+#### OTP issue acknowledgement
+
+Supabase remains the only issuer/verifier of OTP, JWT and sessions. A browser
+request is sent once. Before it, the client creates a cryptographically random
+128-bit `attempt_id` and includes it in the allowed `emailRedirectTo`. The
+signed Supabase Send Email Hook payload includes `email_data.redirect_to`, the
+action type and the Supabase token, so the hook can correlate the attempt
+without moving Auth ownership.
+
+The hook is the transactional mail boundary. It verifies the Standard Webhooks
+signature, reserves the attempt in YDB, sends the message through the configured
+transactional provider and records only bounded states:
+
+```text
+reserved -> dispatching -> provider_accepted | provider_rejected
+                         -> provider_ambiguous
+```
+
+The receipt stores the opaque attempt id, state, provider identifier, a keyed
+hash of the provider message id, timestamps and short expiry. It stores no
+email, OTP, token hash, JWT or message body. Because the Postbox SendEmail API
+does not expose an idempotency key, a crash after provider acceptance cannot be
+made exactly-once: `dispatching`/`provider_ambiguous` must never cause an
+automatic second send. Provider fallback is allowed only after a definitive
+pre-acceptance rejection and remains a separate mail-routing policy, not a
+browser-transport fix.
+
+When the browser loses the `/otp` response, it performs a small bounded receipt
+lookup through the independent Yandex endpoint instead of repeating `/otp`:
+
+- `provider_accepted` opens code entry and says the message was accepted for
+  delivery;
+- `dispatching`/`provider_ambiguous` says the request may have been accepted,
+  keeps code entry available and blocks resend;
+- no receipt says confirmation is unavailable, asks the user to check mail and
+  still blocks resend until the Auth cooldown expires;
+- a full definitive Auth/provider rejection remains a visible failure.
+
+The UI has an in-memory single-flight guard in addition to a disabled button,
+so click, Enter and repeated form events cannot issue concurrent OTP requests.
+The resend timer follows the configured Supabase per-address window (currently
+60 seconds), not an arbitrary client timeout.
+
+Supabase's supported email OTP is six digits. The earlier request for a
+three/four-digit code cannot be implemented without replacing Supabase Auth and
+materially weakening the brute-force space; this transport contract therefore
+keeps the supported six-digit code and optimizes numeric keyboard/autosubmit
+instead.
+
+`verify` and refresh remain selected-once. If verification created a server
+session but the token response was lost, a stateless relay cannot reconstruct
+the client session. The client first checks its persisted session; otherwise it
+offers the magic link or a new issuance after cooldown. Claiming exactly-once
+session recovery would require a stateful BFF and is explicitly outside this
+thin-client design.
+
+#### Capability and security boundaries
+
+- The Yandex relay remains stateless, carries only the publishable key/user JWT,
+  has an exact method/path allowlist and never has `service_role`.
+- Relay URL is mandatory whenever production Auth/Data is enabled. Missing
+  relay fails the build unless a named, expiring emergency override is present.
+- Production output is checked for direct/relay origins, build id, repository
+  SHA, transport contract version and matching hashed asset manifest.
+- Auth `4xx`/`429` limits remain Supabase-owned. CAPTCHA/Turnstile is enabled
+  only together with its complete browser challenge UX and a canary; CORS alone
+  is never described as bot protection.
+- The shared relay-IP effect on `/verify` and `/token` must be measured in Auth
+  logs before group rollout. Supabase only honors `Sb-Forwarded-For` with a
+  secret key, which this public relay is intentionally forbidden to hold.
+- Storage is a separate capability. The current 5 MiB feedback screenshot
+  allowance is incompatible with API Gateway's 2.5 MiB request/response limit.
+  Before relay support, images must be deterministically compressed below a
+  safe envelope or uploads remain direct-only with honest retry UX.
+- A Supabase custom domain is the supported long-term OAuth hostname solution,
+  but it requires a paid Supabase project plus paid add-on. It is not silently
+  assumed by the immediate incident fix.
+
+#### CDN, PWA and release evidence
+
+Stable-root releases use revalidated HTML/release metadata and immutable hashed
+JS/CSS. The service worker keeps Auth/Data traffic network-only and does not
+cache runtime transport configuration. Diagnostics expose only `build_id`,
+`repo_sha`, `transport_contract_version`, origin hashes and service-worker
+version so a phone result can be tied to an exact artifact.
+
+PWA installation truth is a separate prerequisite. A localStorage marker is
+not proof that an app is installed. The onboarding may use
+`beforeinstallprompt`, `appinstalled`, standalone display mode and, on supported
+Android Chromium, `getInstalledRelatedApps()` after configuring the documented
+same-origin relationship. Unsupported browsers receive an honest
+install/open choice, never an immediate false “installed” claim.
+
+#### Mandatory gate before rollout
+
+The transport must be tested with a real fault-injection HTTP server, not only
+prebuilt mocked `Response` objects. Required cases include: headers then stalled
+body; partial JSON then socket close; short body against `Content-Length`;
+invalid JSON; healthy probe followed by failed real body; independent Auth/Data
+capability failures; `429` with cooldown; concurrent submissions; route change
+after quarantine; and an accepted OTP whose browser response is lost. The
+upstream request count for every selected-once test must equal one.
+
+Rollout order is fixed: isolated transport tests -> onboarding-only candidate
+-> real OTP code and magic-link E2E with provider/Auth/receipt correlation ->
+affected-phone canary -> idempotent NPS/save surfaces -> remaining pages.
+The existing v2 implementation must not be propagated further and the incident
+remains open until these gates pass.
+
 The deprecated API Gateway `rateLimit` extension is not part of v2 desired
 state. No reviewed Smart Web Security profile exists in the KenigEvents folder,
 and a low global relay limit would let one source starve unrelated users.

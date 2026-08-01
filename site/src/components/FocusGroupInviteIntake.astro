@@ -410,6 +410,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     let resendTimer = 0;
     let completed = participation.status === 'active';
     let completionInFlight = false;
+    let emailSending = false;
 
     const clearResendTimer = () => {
       if (resendTimer) window.clearInterval(resendTimer);
@@ -504,6 +505,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     };
 
     const sendEmail = async (email: string) => {
+      if (emailSending) return;
       if (!auth) {
         if (identityStatus) identityStatus.textContent = 'Сейчас письмо отправить не получилось. Выберите другой способ.';
         return;
@@ -511,6 +513,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       pendingEmail = email;
       selectedChoice = 'email_intent';
       if (storage) updateFocusParticipationIdentityChoice(storage, selectedChoice);
+      emailSending = true;
       setSending(true);
       if (identityStatus) identityStatus.textContent = 'Отправляем письмо…';
       let result = null;
@@ -525,6 +528,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
           message: 'Не удалось отправить письмо. Проверьте соединение и попробуйте ещё раз.',
         } as const;
       }
+      emailSending = false;
       setSending(false);
       if (result.accepted) {
         showEmailCode();

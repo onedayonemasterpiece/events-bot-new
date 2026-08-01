@@ -46,10 +46,12 @@
         "POST /rest/v1/rpc/submit_focus_group_feedback_v2",
         "POST /rest/v1/rpc/ingest_transport_experiment_event_v1",
         "POST /rest/v1/rpc/record_pwa_lifecycle_v1",
-        "POST /rest/v1/rpc/get_listing_personal_feed_v1"
+        "POST /rest/v1/rpc/get_listing_personal_feed_v1",
+        "POST /rest/v1/rpc/transport_probe_v1"
       ],
       "functions": [
-        "POST /functions/v1/event-search"
+        "POST /functions/v1/event-search",
+        "POST /functions/v1/transport-probe"
       ],
       "storage": [
         "POST /storage/v1/object/focus-feedback/{path+}",

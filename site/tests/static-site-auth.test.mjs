@@ -63,7 +63,7 @@ test('focus identity supports real email OTP and Yandex linking through the shar
   assert.match(auth, /token_hash:\s*tokenHash/u);
   assert.match(auth, /async registerFocusGroupParticipant/u);
   assert.match(auth, /p_communication_opt_in:/u);
-  assert.match(auth, /dataClient\.idempotentReplay[\s\S]*register_focus_group_participant_v1/u);
+  assert.match(auth, /dataClient\.request[\s\S]*register_focus_group_participant_v1/u);
   assert.match(auth, /async resetForOnboardingTest/u);
   assert.match(auth, /async linkYandexIdentity/u);
   assert.match(auth, /this\.client\.auth\.linkIdentity/u);

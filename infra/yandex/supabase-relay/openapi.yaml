@@ -713,6 +713,32 @@ paths:
         timeouts:
           connect: 3
           read: 20
+  /rest/v1/rpc/transport_probe_v1:
+    post:
+      operationId: transportDataProbe
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/rest/v1/rpc/transport_probe_v1
+        headers:
+          '*': '*'
+          Origin: https://kenigevents.ru
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 5
   /functions/v1/event-search:
     post:
       operationId: eventSearch
@@ -740,6 +766,32 @@ paths:
         timeouts:
           connect: 3
           read: 55
+  /functions/v1/transport-probe:
+    post:
+      operationId: transportFunctionProbe
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/functions/v1/transport-probe
+        headers:
+          '*': '*'
+          Origin: https://kenigevents.ru
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 5
   /storage/v1/object/focus-feedback/{path+}:
     post:
       operationId: uploadFocusFeedback

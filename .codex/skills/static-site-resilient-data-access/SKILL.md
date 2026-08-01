@@ -20,16 +20,35 @@ plane; do not turn Fly into the general application backend.
 ## Route browser operations
 
 1. Locate the shared clients in `site/src/lib/resilientDataClient.ts` and
-   `site/src/lib/resilientSupabaseTransport.ts`.
+   `site/src/lib/resilientSupabaseTransport.ts`. The current v2 implementation
+   is a rejected incident specimen until the v3 acceptance gates pass.
 2. Reject new ad-hoc Supabase `fetch` calls outside an explicit diagnostic.
-3. Classify the operation before retrying:
+3. Require a closed central operation catalog. Components name a product
+   operation; they never choose direct/relay or a retry policy. Classify:
    - **safe read**: one bounded alternate route is allowed;
    - **selected once**: do not replay OTP or a non-idempotent write after an
      ambiguous timeout;
    - **idempotent replay**: retry only with a stable idempotency key.
-4. Probe direct and stateless relay routes in parallel with short budgets,
-   cache the preferred route briefly, and invalidate it after a real failure.
-5. Keep the relay fixed-upstream and stateless. Permit only public credentials
+4. Treat a request as complete only after its bounded response body is fully
+   consumed and decoded. A resolved `fetch()` with unread body is not success.
+5. Keep route health per capability (`auth`, `data`, `functions`, small
+   storage), not as one global flag. Use a single-flight first-use probe with a
+   short staggered alternate, verified nonce/schema/body, compact last-known-
+   good state and a per-route circuit breaker.
+6. Use real traffic as passive health evidence. Revalidate on the next real use
+   after TTL/failure; do not run a permanent background poll. Browser online and
+   visibility signals are hints only.
+7. Every operation returns its own structured success, definitive failure,
+   not-dispatched or ambiguous result. Never infer one request from shared
+   timestamp flags.
+8. For ambiguous OTP issue, resolve an opaque Send Email Hook/provider receipt;
+   never send `/otp` again through the alternate route. OTP/auth/session actions
+   never enter the product outbox.
+9. Product writes may use an outbox only when their server RPC atomically owns
+   operation-id dedupe, payload consistency and device-sequence ordering.
+10. Probe and selected-once submissions are single-flight. A disabled button is
+   not sufficient protection against Enter/programmatic duplicate submits.
+11. Keep the relay fixed-upstream and stateless. Permit only public credentials
    and an exact endpoint allowlist; never expose a service-role key.
 
 ## Preserve safety and compactness
@@ -42,16 +61,21 @@ plane; do not turn Fly into the general application backend.
   of application eviction.
 - Keep generated public configuration minimal. A candidate that needs Auth
   must fail before publication when its public relay URL is missing.
+- Keep JSON response buffers and local route/outbox state bounded. Large and
+  streaming Storage traffic requires a separate declared capability; it cannot
+  silently pass through the small-JSON transport.
 - Measure egress before and after changes. Avoid duplicate catalog/vector reads
   and repeated full payloads.
 
 ## Verify without overclaiming
 
 Run focused unit tests, a non-root Astro candidate build and mobile Playwright.
-Exercise direct and relay paths, slow/failure shapes, and the real user action.
-For OTP, verify code and link journeys independently and prove that an
-ambiguous request was not duplicated. Record an interrupted prerequisite as a
-blocker, not a pass.
+Use a real fault-injection HTTP server for headers-then-stalled-body, partial
+body/socket reset, invalid JSON, 429 and capability split; a ready-made mocked
+`Response` is insufficient. For OTP, verify code and link journeys independently,
+correlate Auth/provider/receipt evidence and prove upstream issue count is one.
+Canary the actual affected-phone journey before any site-wide rollout. Record an
+interrupted prerequisite as a blocker, not a pass.
 
 Read `references/project-contract.md` for canonical documents, release gates
 and the current acceptance status.

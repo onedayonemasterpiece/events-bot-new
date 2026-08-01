@@ -18,8 +18,9 @@ method/path pair used by the static client:
 
 - Auth health/settings, OAuth authorize/callback, PKCE or refresh token
   exchange, OTP send/verify/resend, logout, current user and identity linking;
-- two narrow REST reads and eight named RPCs, including participant registration and idempotent focus feedback;
-- `POST /functions/v1/event-search`;
+- two narrow REST reads and nine named RPCs, including the side-effect-free
+  nonce capability probe, participant registration and idempotent focus feedback;
+- `POST /functions/v1/event-search` plus its separate lightweight nonce probe;
 - authenticated upload/delete only inside private bucket `focus-feedback`.
 
 All other Auth endpoints (especially `/auth/v1/admin/**`), unknown tables/RPCs,

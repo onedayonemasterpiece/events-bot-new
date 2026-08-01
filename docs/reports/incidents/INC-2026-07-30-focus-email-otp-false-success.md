@@ -198,6 +198,20 @@ after any failed transport result and therefore communicated a false success.
   duplicate. Adoption now verifies the exact remote result, removes only that
   replaceable duplicate, rechecks capacity, and downloads the authoritative
   output; fresh submissions remain gated before staging.
+- 2026-08-01 16:19:57 UTC — a phone OTP submit reached Supabase through the
+  selected route and completed upstream with HTTP `200` in 1161 ms. The browser
+  UI nevertheless reported failure. A second submit at 16:20:03 reached the
+  same endpoint and received `429`. Code review proved the v2 transport stopped
+  its deadline as soon as `fetch()` returned headers and left body consumption
+  to `supabase-js`, outside transport accounting. The exact phone-level loss
+  may be body-stream/CORS/abort related, but the architectural ambiguity defect
+  is independently proven.
+- 2026-08-01 — external code review and local verification assigned the current
+  transport `NO-GO`. The accepted replacement contract is Transport v3 in
+  `docs/features/unsigned-personalization/production-integration.md`: closed
+  operation catalog, capability-specific route health, full-response lifecycle,
+  per-operation typed outcomes, provider receipt for ambiguous OTP issue and
+  ordered idempotent outbox for product commands.
 
 ## Root Cause
 
@@ -236,6 +250,12 @@ after any failed transport result and therefore communicated a false success.
    `_static_site_build_kaggle_command()` never passed that argument and the
    authorized-candidate gate required only URL/key. A candidate could therefore
    pass while silently compiling out the entire accepted fallback route.
+8. `ResilientSupabaseTransport.rawRequest()` disposed its abort timer in a
+   `finally` immediately after `fetch()` produced a `Response`. It neither read
+   nor validated the response body. A later stream/decode failure was converted
+   by `supabase-js` after the transport had already recorded success. Shared
+   `lastAmbiguousAt`/`lastNoHealthyAt` timestamps could not reliably bind that
+   failure to the originating operation, especially under concurrency.
 
 ## Contributing Factors
 
@@ -276,6 +296,15 @@ after any failed transport result and therefore communicated a false success.
   email. Failure to clear storage is visible and cannot redirect as success.
 - Every authorized production candidate contains both direct and relay URLs;
   missing relay configuration fails the build before publication.
+- Transport success requires the complete bounded response body and declared
+  decode, not only HTTP headers. Headers-then-stall, partial-body close and
+  invalid-JSON fault injection are regression tests.
+- Operation semantics come from the closed central catalog. Feature code cannot
+  select a route or request `idempotentReplay` directly.
+- Auth/Data/Functions route state is capability-specific; one healthy Auth GET
+  does not certify a Data RPC or Function POST.
+- A selected-once operation produces one per-request typed result and exactly
+  one upstream attempt. No shared timestamp can change another request's result.
 - Network error, timeout and `429` remain on the address step with honest copy;
   none says or implies that a message was sent.
 - Six digits cause one in-flight verify request. An old/replayed code fails
@@ -356,6 +385,8 @@ after any failed transport result and therefore communicated a false success.
       routes reproduced direct Supabase loss while the Yandex control stayed
       available, including a participant affected by the missing-email issue.
 - [ ] P0 deploy the false-success fix to the focus onboarding itself.
+- [ ] P0 replace the rejected v2 transport with the Transport v3 full-response
+      executor, operation catalog and fault-injection acceptance suite.
 - [ ] P0 deploy and phone-verify unconditional clean reset plus relay-bearing
       participant registration on the current candidate.
 - [ ] P0 run affected-phone acceptance through the deployed stateless API

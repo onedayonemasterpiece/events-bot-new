@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
 import {
+  parseSupabaseTransportError,
   supabaseAuthStorageKey,
   type ResilientSupabaseTransport,
 } from './resilientSupabaseTransport';
@@ -479,7 +480,6 @@ class StaticSiteAuthController {
       callbackAttempted: false,
     });
     let error: unknown = null;
-    const requestStartedAt = Date.now();
     try {
       // The transport owns the only request timeout. A caller-side Promise.race
       // cannot cancel or disambiguate the underlying OTP POST and previously
@@ -505,8 +505,9 @@ class StaticSiteAuthController {
       return { status: 'accepted', accepted: true, message: 'Письмо отправлено. Откройте одноразовую ссылку в этом браузере.' };
     }
     const rawMessage = String((error as Error)?.message || error);
-    const ambiguous = this.transport.wasAmbiguousSince(requestStartedAt);
-    const noHealthyRoute = this.transport.hadNoHealthyRouteSince(requestStartedAt);
+    const transportError = parseSupabaseTransportError(error);
+    const ambiguous = transportError?.code === 'ambiguous';
+    const noHealthyRoute = transportError?.code === 'no_route';
     writeAuthIntent(ambiguous ? 'email_login_ambiguous' : 'email_login_failed', { reason: rawMessage.slice(0, 120) });
     const status: StaticSiteEmailOtpStatus = ambiguous
       ? 'ambiguous'
@@ -536,7 +537,6 @@ class StaticSiteAuthController {
     if (!normalizedEmail || !/^\d{6}$/u.test(normalizedToken)) {
       return { ok: false, status: 'invalid', message: 'Проверьте адрес и код из письма.' };
     }
-    const startedAt = Date.now();
     try {
       const { data, error } = await this.client.auth.verifyOtp({
         email: normalizedEmail,
@@ -554,7 +554,7 @@ class StaticSiteAuthController {
       });
       return { ok: true, status: 'verified', message: 'Код подтверждён.' };
     } catch (error) {
-      const ambiguous = this.transport.wasAmbiguousSince(startedAt);
+      const ambiguous = parseSupabaseTransportError(error)?.code === 'ambiguous';
       return ambiguous
         ? { ok: false, status: 'ambiguous', message: 'Ответ не получен. Не вводите код повторно сразу — сначала обновите страницу.' }
         : { ok: false, status: 'invalid', message: 'Код неверный, устарел или уже использован.' };
@@ -565,7 +565,7 @@ class StaticSiteAuthController {
     const session = await this.getSession();
     if (!session?.user || !session.access_token) return false;
     try {
-      const response = await this.dataClient.idempotentReplay(
+      const response = await this.dataClient.request(
         `${this.config.supabaseUrl}/rest/v1/rpc/register_focus_group_participant_v1`,
         {
           method: 'POST',

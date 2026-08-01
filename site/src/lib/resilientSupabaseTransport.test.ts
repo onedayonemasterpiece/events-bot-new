@@ -1,352 +1,375 @@
 import assert from 'node:assert/strict';
+import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import test from 'node:test';
 import {
   createResilientSupabaseTransport,
+  parseSupabaseTransportError,
   supabaseAuthStorageKey,
 } from './resilientSupabaseTransport.ts';
-import {
-  getResilientDataClient,
-  resetResilientDataClientRegistryForTests,
-} from './resilientDataClient.ts';
+import { classifyBackendOperation, policyForOperation } from './backendOperationCatalog.ts';
+import { getResilientDataClient, resetResilientDataClientRegistryForTests } from './resilientDataClient.ts';
 
 const direct = 'https://project.supabase.co';
 const relay = 'https://relay.example.test';
 const key = 'sb_publishable_test';
 
-test('keeps the historical Supabase auth storage key while transport origin changes', () => {
+async function probeResponse(input: RequestInfo | URL, init?: RequestInit): Promise<Response | null> {
+  const path = new URL(String(input)).pathname;
+  if (path === '/auth/v1/health') return Response.json({ version: 'test' });
+  if (path.endsWith('/rest/v1/rpc/transport_probe_v1')) {
+    const payload = JSON.parse(String(init?.body || '{}'));
+    return Response.json({ nonce: payload.p_nonce, schema: 1 });
+  }
+  if (path.endsWith('/functions/v1/transport-probe')) {
+    const payload = JSON.parse(String(init?.body || '{}'));
+    return Response.json({ nonce: payload.nonce, schema: 1 });
+  }
+  return null;
+}
+
+async function requestBody(request: IncomingMessage): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) chunks.push(Buffer.from(chunk));
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+async function startServer(handler: (request: IncomingMessage, response: ServerResponse) => void | Promise<void>) {
+  const server = http.createServer((request, response) => { void handler(request, response); });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('server_address_missing');
+  return {
+    origin: `http://127.0.0.1:${address.port}`,
+    close: async () => {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    },
+  };
+}
+
+function writeAuthProbe(request: IncomingMessage, response: ServerResponse): boolean {
+  if (request.url !== '/auth/v1/health') return false;
+  response.writeHead(200, { 'Content-Type': 'application/json' });
+  response.end('{"version":"test"}');
+  return true;
+}
+
+async function writeDataProbe(request: IncomingMessage, response: ServerResponse): Promise<boolean> {
+  if (request.url !== '/rest/v1/rpc/transport_probe_v1') return false;
+  const payload = JSON.parse(await requestBody(request));
+  response.writeHead(200, { 'Content-Type': 'application/json' });
+  response.end(JSON.stringify({ nonce: payload.p_nonce, schema: 1 }));
+  return true;
+}
+
+test('keeps the historical auth storage key', () => {
   assert.equal(supabaseAuthStorageKey(direct), 'sb-project-auth-token');
 });
 
-test('selects the healthy relay with safe parallel health probes', async () => {
-  const calls: Array<{ url: string; method: string }> = [];
-  const transport = createResilientSupabaseTransport({
-    directUrl: direct,
-    relayUrl: relay,
-    publishableKey: key,
-    sessionStorage: null,
-    fetchImpl: (async (input, init) => {
-      const url = String(input);
-      calls.push({ url, method: String(init?.method || 'GET') });
-      if (url.startsWith(direct)) throw new TypeError('blocked');
-      return new Response('{}', { status: 200 });
-    }) as typeof fetch,
-  });
-  const result = await transport.selectRoute();
-  assert.equal(result.route, 'relay');
-  assert.equal(result.probes.length, 2);
-  assert.equal(calls.filter((item) => item.url.endsWith('/auth/v1/health')).length, 2);
+test('operation catalog owns semantics and rejects unknown mutations', () => {
+  assert.equal(policyForOperation(classifyBackendOperation(`${direct}/auth/v1/otp`, { method: 'POST' })), 'selected-once');
+  assert.equal(policyForOperation(classifyBackendOperation(`${direct}/rest/v1/rpc/get_listing_personal_feed_v1`, { method: 'POST' })), 'safe-read');
+  assert.equal(policyForOperation(classifyBackendOperation(`${direct}/rest/v1/rpc/submit_focus_group_feedback_v2`, { method: 'POST' })), 'idempotent-replay');
+  assert.equal(classifyBackendOperation(`${direct}/functions/v1/event-search`, {
+    method: 'POST', headers: { Accept: 'application/x-ndjson' },
+  }).responseMode, 'stream');
+  assert.throws(() => classifyBackendOperation(`${direct}/rest/v1/rpc/unknown`, { method: 'POST' }), /unclassified/u);
 });
 
-test('does not wait for a hanging direct probe after the relay is healthy', async () => {
-  let releaseDirect: (() => void) | null = null;
-  const directPending = new Promise<void>((resolve) => { releaseDirect = resolve; });
+test('staggered probe reaches relay without waiting for hanging direct', async () => {
+  const calls: string[] = [];
   const transport = createResilientSupabaseTransport({
-    directUrl: direct,
-    relayUrl: relay,
-    publishableKey: key,
-    sessionStorage: null,
-    fetchImpl: (async (input) => {
-      const url = String(input);
-      if (url.startsWith(direct)) {
-        await directPending;
-        throw new TypeError('blocked');
-      }
-      return new Response('{}', { status: 200 });
+    directUrl: direct, relayUrl: relay, publishableKey: key, sessionStorage: null, probeStaggerMs: 25,
+    fetchImpl: (async (input, init) => {
+      calls.push(String(input));
+      if (String(input).startsWith(direct)) return new Promise<Response>(() => {});
+      return await probeResponse(input, init) || Response.json({});
     }) as typeof fetch,
   });
   const result = await Promise.race([
-    transport.selectRoute(),
-    new Promise<never>((_resolve, reject) => setTimeout(() => reject(new Error('selection_waited_for_direct')), 250)),
+    transport.selectRoute(false, 'auth'),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error('waited_for_direct')), 250)),
   ]);
   assert.equal(result.route, 'relay');
-  releaseDirect?.();
-});
-
-test('reuses the selected route and rechecks both paths only after the cache window', async () => {
-  let now = 1_000;
-  const calls: string[] = [];
-  const transport = createResilientSupabaseTransport({
-    directUrl: direct,
-    relayUrl: relay,
-    publishableKey: key,
-    cacheTtlMs: 5_000,
-    sessionStorage: null,
-    now: () => now,
-    fetchImpl: (async (input) => {
-      calls.push(String(input));
-      return new Response('{}', { status: 200 });
-    }) as typeof fetch,
-  });
-  await transport.fetch(`${direct}/rest/v1/first?select=id`);
-  await transport.fetch(`${direct}/rest/v1/second?select=id`);
   assert.equal(calls.filter((url) => url.endsWith('/auth/v1/health')).length, 2);
-  now += 5_001;
-  await transport.fetch(`${direct}/rest/v1/third?select=id`);
-  assert.equal(calls.filter((url) => url.endsWith('/auth/v1/health')).length, 4);
 });
 
-test('shares a recent diagnostic route choice with the next page in the same session', async () => {
+test('last-known-good is compact, cross-page and capability-specific', async () => {
   const values = new Map<string, string>();
   const storage = {
     getItem: (name: string) => values.get(name) || null,
     setItem: (name: string, value: string) => { values.set(name, value); },
     removeItem: (name: string) => { values.delete(name); },
   };
-  const diagnostic = createResilientSupabaseTransport({
-    directUrl: direct,
-    relayUrl: relay,
-    publishableKey: key,
-    sessionStorage: storage,
-    fetchImpl: (async (input) => {
+  const first = createResilientSupabaseTransport({
+    directUrl: direct, relayUrl: relay, publishableKey: key, sessionStorage: storage,
+    fetchImpl: (async (input, init) => {
       if (String(input).startsWith(direct)) throw new TypeError('blocked');
-      return new Response('{}', { status: 200 });
+      return await probeResponse(input, init) || Response.json([]);
     }) as typeof fetch,
   });
-  assert.equal((await diagnostic.selectRoute(true)).route, 'relay');
+  const firstRead = await first.fetch(`${direct}/rest/v1/personalization_event_reaction_counter?select=id`);
+  assert.equal(firstRead.headers.get('x-ke-transport-route'), 'relay');
 
   const calls: string[] = [];
-  const nextPage = createResilientSupabaseTransport({
-    directUrl: direct,
-    relayUrl: relay,
-    publishableKey: key,
-    sessionStorage: storage,
-    fetchImpl: (async (input) => {
+  const second = createResilientSupabaseTransport({
+    directUrl: direct, relayUrl: relay, publishableKey: key, sessionStorage: storage,
+    fetchImpl: (async (input, init) => {
       calls.push(String(input));
-      return new Response('{}', { status: 200 });
+      return await probeResponse(input, init) || Response.json([]);
     }) as typeof fetch,
   });
-  await nextPage.fetch(`${direct}/rest/v1/example?select=id`);
-  assert.deepEqual(calls, [`${relay}/rest/v1/example?select=id`]);
+  await second.fetch(`${direct}/rest/v1/personalization_event_reaction_counter?select=id`);
+  assert.deepEqual(calls, [`${relay}/rest/v1/personalization_event_reaction_counter?select=id`]);
+  assert.ok([...values.values()].every((value) => value.length < 100));
 });
 
-test('sends a non-idempotent OTP only once through the preselected route', async () => {
-  const calls: Array<{ url: string; method: string }> = [];
-  const transport = createResilientSupabaseTransport({
-    directUrl: direct,
-    relayUrl: relay,
-    publishableKey: key,
-    sessionStorage: null,
-    fetchImpl: (async (input, init) => {
-      const url = String(input);
-      const method = String(init?.method || 'GET').toUpperCase();
-      calls.push({ url, method });
-      if (url.endsWith('/auth/v1/health')) {
-        if (url.startsWith(direct)) throw new TypeError('blocked');
-        return new Response('{}', { status: 200 });
-      }
-      throw new TypeError('ambiguous otp failure');
-    }) as typeof fetch,
+test('200 headers followed by stalled OTP body is ambiguous and dispatched once', async () => {
+  let otpCount = 0;
+  const directServer = await startServer((request, response) => {
+    if (writeAuthProbe(request, response)) return;
+    if (request.url === '/auth/v1/otp') {
+      otpCount += 1;
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.write('{"accepted":');
+      return;
+    }
+    response.writeHead(404).end();
   });
-  await assert.rejects(() => transport.fetch(`${direct}/auth/v1/otp`, {
-    method: 'POST',
-    body: '{}',
-  }));
-  const otpCalls = calls.filter((item) => item.url.includes('/auth/v1/otp'));
-  assert.deepEqual(otpCalls, [{ url: `${relay}/auth/v1/otp`, method: 'POST' }]);
-});
-
-test('falls back once for a safe read and never duplicates it further', async () => {
-  const calls: string[] = [];
-  const transport = createResilientSupabaseTransport({
-    directUrl: direct,
-    relayUrl: relay,
-    publishableKey: key,
-    sessionStorage: null,
-    fetchImpl: (async (input) => {
-      const url = String(input);
-      calls.push(url);
-      if (url.endsWith('/auth/v1/health')) return new Response('{}', { status: 200 });
-      if (url.startsWith(direct)) return new Response('upstream', { status: 503 });
-      return new Response('ok', { status: 200 });
-    }) as typeof fetch,
+  const relayServer = await startServer((request, response) => {
+    if (writeAuthProbe(request, response)) return;
+    if (request.url === '/auth/v1/otp') {
+      otpCount += 1;
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end('{}');
+      return;
+    }
+    response.writeHead(404).end();
   });
-  const response = await transport.fetch(`${direct}/rest/v1/example?select=id`, { method: 'GET' });
-  assert.equal(response.status, 200);
-  assert.deepEqual(calls.filter((url) => url.includes('/rest/v1/example')), [
-    `${direct}/rest/v1/example?select=id`,
-    `${relay}/rest/v1/example?select=id`,
-  ]);
-  const second = await transport.fetch(`${direct}/rest/v1/second?select=id`, { method: 'GET' });
-  assert.equal(second.status, 200);
-  assert.deepEqual(calls.filter((url) => url.includes('/rest/v1/second')), [
-    `${relay}/rest/v1/second?select=id`,
-  ]);
-});
-
-test('gives a safe fallback its own time budget before the caller deadline', async () => {
-  const calls: string[] = [];
-  const transport = createResilientSupabaseTransport({
-    directUrl: direct,
-    relayUrl: relay,
-    publishableKey: key,
-    sessionStorage: null,
-    safeRequestTimeoutMs: 1_000,
-    fetchImpl: (async (input, init) => {
-      const url = String(input);
-      calls.push(url);
-      if (url.endsWith('/auth/v1/health')) {
-        if (url.startsWith(relay)) await new Promise((resolve) => setTimeout(resolve, 25));
-        return new Response('{}', { status: 200 });
-      }
-      if (url.startsWith(relay)) return new Response('recovered', { status: 200 });
-      return new Promise<Response>((_resolve, reject) => {
-        init?.signal?.addEventListener('abort', () => {
-          reject(new DOMException('primary timed out', 'AbortError'));
-        }, { once: true });
-      });
-    }) as typeof fetch,
-  });
-  const caller = new AbortController();
-  const callerTimer = setTimeout(() => caller.abort('caller_deadline'), 2_500);
-  try {
-    const response = await transport.fetch(`${direct}/rest/v1/flaky?select=id`, {
-      method: 'GET',
-      signal: caller.signal,
-    });
-    assert.equal(response.status, 200);
-    assert.equal(caller.signal.aborted, false);
-    assert.deepEqual(calls.filter((url) => url.includes('/rest/v1/flaky')), [
-      `${direct}/rest/v1/flaky?select=id`,
-      `${relay}/rest/v1/flaky?select=id`,
-    ]);
-  } finally {
-    clearTimeout(callerTimer);
-  }
-});
-
-test('does not rewrite unrelated requests', async () => {
-  let seen = '';
-  const transport = createResilientSupabaseTransport({
-    directUrl: direct,
-    relayUrl: relay,
-    publishableKey: key,
-    sessionStorage: null,
-    fetchImpl: (async (input) => {
-      seen = String(input);
-      return new Response('{}', { status: 200 });
-    }) as typeof fetch,
-  });
-  await transport.fetch('https://kenigevents.ru/data/events.json');
-  assert.equal(seen, 'https://kenigevents.ru/data/events.json');
-});
-
-test('browser-native fetch keeps the global receiver', async () => {
-  const originalFetch = globalThis.fetch;
-  const calls: string[] = [];
-  globalThis.fetch = function (this: typeof globalThis, input: RequestInfo | URL) {
-    assert.equal(this, globalThis);
-    calls.push(String(input));
-    return Promise.resolve(new Response('{}', { status: 200 }));
-  } as typeof fetch;
   try {
     const transport = createResilientSupabaseTransport({
-      directUrl: direct,
-      publishableKey: key,
-      sessionStorage: null,
+      directUrl: directServer.origin, relayUrl: relayServer.origin, publishableKey: key,
+      sessionStorage: null, probeStaggerMs: 100, selectedRequestTimeoutMs: 2_000,
     });
-    const probe = await transport.probe('direct');
-    assert.equal(probe.ok, true);
-    assert.deepEqual(calls, [`${direct}/auth/v1/health`]);
+    await assert.rejects(
+      () => transport.fetch(`${directServer.origin}/auth/v1/otp`, { method: 'POST', body: '{}' }),
+      (error) => parseSupabaseTransportError(error)?.phase === 'body',
+    );
+    assert.equal(otpCount, 1);
   } finally {
-    globalThis.fetch = originalFetch;
+    await Promise.all([directServer.close(), relayServer.close()]);
   }
 });
 
-test('exposes no healthy route and never emits a selected-once write after failed probes', async () => {
-  const calls: string[] = [];
+test('partial body socket close is body failure and not success', async () => {
+  let count = 0;
+  const server = await startServer((request, response) => {
+    if (writeAuthProbe(request, response)) return;
+    count += 1;
+    response.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': '20' });
+    response.write('{"ok":');
+    setTimeout(() => response.socket?.destroy(), 20);
+  });
+  try {
+    const transport = createResilientSupabaseTransport({ directUrl: server.origin, publishableKey: key, sessionStorage: null });
+    await assert.rejects(
+      () => transport.fetch(`${server.origin}/auth/v1/otp`, { method: 'POST', body: '{}' }),
+      (error) => parseSupabaseTransportError(error)?.phase === 'body',
+    );
+    assert.equal(count, 1);
+  } finally { await server.close(); }
+});
+
+test('safe read falls back after stalled body and caches alternate', async () => {
+  let directReads = 0;
+  let relayReads = 0;
+  const directServer = await startServer(async (request, response) => {
+    if (await writeDataProbe(request, response)) return;
+    directReads += 1;
+    response.writeHead(200, { 'Content-Type': 'application/json' });
+    response.write('{"rows":');
+  });
+  const relayServer = await startServer(async (request, response) => {
+    if (await writeDataProbe(request, response)) return;
+    relayReads += 1;
+    response.writeHead(200, { 'Content-Type': 'application/json' });
+    response.end('[]');
+  });
+  try {
+    const transport = createResilientSupabaseTransport({
+      directUrl: directServer.origin, relayUrl: relayServer.origin, publishableKey: key,
+      sessionStorage: null, safeRequestTimeoutMs: 1_000, probeStaggerMs: 100,
+    });
+    const first = await transport.fetch(`${directServer.origin}/rest/v1/example?select=id`);
+    assert.equal(first.headers.get('x-ke-transport-route'), 'relay');
+    const second = await transport.fetch(`${directServer.origin}/rest/v1/second?select=id`);
+    assert.equal(second.headers.get('x-ke-transport-route'), 'relay');
+    assert.equal(directReads, 1);
+    assert.equal(relayReads, 2);
+  } finally { await Promise.all([directServer.close(), relayServer.close()]); }
+});
+
+test('invalid JSON safe-read recovers but selected-once is ambiguous', async () => {
   const transport = createResilientSupabaseTransport({
-    directUrl: direct,
-    relayUrl: relay,
-    publishableKey: key,
-    sessionStorage: null,
-    fetchImpl: (async (input) => {
-      calls.push(String(input));
-      throw new TypeError('offline');
+    directUrl: direct, relayUrl: relay, publishableKey: key, sessionStorage: null,
+    fetchImpl: (async (input, init) => {
+      const probe = await probeResponse(input, init);
+      if (probe) return probe;
+      if (String(input).startsWith(direct)) return new Response('{broken', { status: 200 });
+      return Response.json({ ok: true });
     }) as typeof fetch,
   });
-  const selection = await transport.selectRoute();
-  assert.equal(selection.route, null);
+  const read = await transport.fetch(`${direct}/rest/v1/example?select=id`);
+  assert.equal(read.headers.get('x-ke-transport-route'), 'relay');
+
+  const auth = createResilientSupabaseTransport({
+    directUrl: direct, relayUrl: relay, publishableKey: key, sessionStorage: null,
+    fetchImpl: (async (input, init) => await probeResponse(input, init) || new Response('{broken', { status: 200 })) as typeof fetch,
+  });
   await assert.rejects(
-    () => transport.request(`${direct}/auth/v1/otp`, { method:'POST', body:'{}' }, { policy:'selected-once' }),
-    /supabase_transport_no_healthy_route/u,
+    () => auth.fetch(`${direct}/auth/v1/otp`, { method: 'POST', body: '{}' }),
+    (error) => parseSupabaseTransportError(error)?.phase === 'decode',
+  );
+});
+
+test('NDJSON stream keeps parent cancellation but is not cut by the JSON request deadline', async () => {
+  const transport = createResilientSupabaseTransport({
+    directUrl: direct, publishableKey: key, sessionStorage: null, selectedRequestTimeoutMs: 2_000,
+    fetchImpl: (async (input, init) => {
+      const probe = await probeResponse(input, init);
+      if (probe) return probe;
+      const signal = init?.signal;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          const timer = setTimeout(() => {
+            controller.enqueue(new TextEncoder().encode('{"type":"result","data":{"items":[]}}\n'));
+            controller.close();
+          }, 2_100);
+          signal?.addEventListener('abort', () => {
+            clearTimeout(timer);
+            controller.error(new DOMException('aborted', 'AbortError'));
+          }, { once: true });
+        },
+      });
+      return new Response(body, { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } });
+    }) as typeof fetch,
+  });
+  const response = await transport.fetch(`${direct}/functions/v1/event-search`, {
+    method: 'POST', headers: { Accept: 'application/x-ndjson' }, body: '{}',
+  });
+  assert.match(await response.text(), /"type":"result"/u);
+});
+
+test('NDJSON stream body failure stays attached to its selected-once operation', async () => {
+  const transport = createResilientSupabaseTransport({
+    directUrl: direct, publishableKey: key, sessionStorage: null,
+    fetchImpl: (async (input, init) => {
+      const probe = await probeResponse(input, init);
+      if (probe) return probe;
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"type":"progress"}\n'));
+          setTimeout(() => controller.error(new TypeError('stream lost')), 20);
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } });
+    }) as typeof fetch,
+  });
+  const response = await transport.fetch(`${direct}/functions/v1/event-search`, {
+    method: 'POST', headers: { Accept: 'application/x-ndjson' }, body: '{}',
+  });
+  await assert.rejects(
+    () => response.text(),
+    (error) => parseSupabaseTransportError(error)?.phase === 'body',
+  );
+});
+
+test('429 is definitive and is not replayed', async () => {
+  let count = 0;
+  const transport = createResilientSupabaseTransport({
+    directUrl: direct, relayUrl: relay, publishableKey: key, sessionStorage: null,
+    fetchImpl: (async (input, init) => {
+      const probe = await probeResponse(input, init);
+      if (probe) return probe;
+      count += 1;
+      return Response.json({ message: 'rate limit' }, { status: 429, headers: { 'Retry-After': '60' } });
+    }) as typeof fetch,
+  });
+  const response = await transport.fetch(`${direct}/auth/v1/otp`, { method: 'POST', body: '{}' });
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get('retry-after'), '60');
+  assert.equal(count, 1);
+});
+
+test('idempotent command may retry once and selected-once may not', async () => {
+  const calls: string[] = [];
+  const transport = createResilientSupabaseTransport({
+    directUrl: direct, relayUrl: relay, publishableKey: key, sessionStorage: null,
+    fetchImpl: (async (input, init) => {
+      calls.push(String(input));
+      const probe = await probeResponse(input, init);
+      if (probe) return probe;
+      if (String(input).startsWith(direct)) throw new TypeError('degraded');
+      return Response.json({ ok: true });
+    }) as typeof fetch,
+  });
+  assert.equal((await transport.fetch(`${direct}/rest/v1/rpc/register_focus_group_participant_v1`, {
+    method: 'POST', body: '{}',
+  })).ok, true);
+  assert.equal(calls.filter((url) => url.includes('register_focus_group_participant_v1')).length, 2);
+
+  let otpCount = 0;
+  const auth = createResilientSupabaseTransport({
+    directUrl: direct, relayUrl: relay, publishableKey: key, sessionStorage: null,
+    fetchImpl: (async (input, init) => {
+      const probe = await probeResponse(input, init);
+      if (probe) return probe;
+      otpCount += 1;
+      throw new TypeError('ambiguous');
+    }) as typeof fetch,
+  });
+  await assert.rejects(
+    () => auth.fetch(`${direct}/auth/v1/otp`, { method: 'POST', body: '{}' }),
+    (error) => parseSupabaseTransportError(error)?.code === 'ambiguous',
+  );
+  assert.equal(otpCount, 1);
+});
+
+test('no route prevents selected-once dispatch', async () => {
+  const calls: string[] = [];
+  const transport = createResilientSupabaseTransport({
+    directUrl: direct, relayUrl: relay, publishableKey: key, sessionStorage: null, probeStaggerMs: 0,
+    fetchImpl: (async (input) => { calls.push(String(input)); throw new TypeError('offline'); }) as typeof fetch,
+  });
+  await assert.rejects(
+    () => transport.fetch(`${direct}/auth/v1/otp`, { method: 'POST', body: '{}' }),
+    (error) => parseSupabaseTransportError(error)?.code === 'no_route',
   );
   assert.equal(calls.filter((url) => url.endsWith('/auth/v1/otp')).length, 0);
 });
 
-test('config-keyed data client singleton is shared without coupling it to Auth', () => {
+test('unrelated fetch bypasses the catalog and native fetch keeps its receiver', async () => {
+  let seen = '';
+  const transport = createResilientSupabaseTransport({
+    directUrl: direct, publishableKey: key, sessionStorage: null,
+    fetchImpl: (async (input) => { seen = String(input); return Response.json({}); }) as typeof fetch,
+  });
+  await transport.fetch('https://kenigevents.ru/data/events.json');
+  assert.equal(seen, 'https://kenigevents.ru/data/events.json');
+
+  const original = globalThis.fetch;
+  globalThis.fetch = function (this: typeof globalThis) {
+    assert.equal(this, globalThis);
+    return Promise.resolve(Response.json({ version: 'test' }));
+  } as typeof fetch;
+  try {
+    const native = createResilientSupabaseTransport({ directUrl: direct, publishableKey: key, sessionStorage: null });
+    assert.equal((await native.probe('direct', 'auth')).ok, true);
+  } finally { globalThis.fetch = original; }
+});
+
+test('data client singleton stays configuration-keyed', () => {
   resetResilientDataClientRegistryForTests();
-  const config = {
-    directUrl: direct,
-    relayUrl: relay,
-    publishableKey: key,
-    sessionStorage: null,
-    fetchImpl: (async () => new Response('{}', { status:200 })) as typeof fetch,
-  };
+  const config = { directUrl: direct, relayUrl: relay, publishableKey: key, sessionStorage: null };
   assert.equal(getResilientDataClient(config), getResilientDataClient(config));
-  assert.notEqual(getResilientDataClient(config), getResilientDataClient({ ...config, relayUrl:'https://other-relay.test' }));
-});
-
-test('selected-once does not retry while explicitly idempotent POST may recover once', async () => {
-  const calls: string[] = [];
-  const transport = createResilientSupabaseTransport({
-    directUrl: direct,
-    relayUrl: relay,
-    publishableKey: key,
-    sessionStorage: null,
-    fetchImpl: (async (input) => {
-      const url = String(input);
-      calls.push(url);
-      if (url.endsWith('/auth/v1/health')) return new Response('{}', { status:url.startsWith(direct) ? 200 : 204 });
-      if (url.startsWith(direct)) throw new TypeError('degraded');
-      return new Response('{}', { status:200 });
-    }) as typeof fetch,
-  });
-  await assert.rejects(
-    () => transport.request(`${direct}/functions/v1/search`, { method:'POST', body:'{}' }, { policy:'selected-once' }),
-    /supabase_transport_ambiguous_result/u,
-  );
-  assert.equal(calls.filter((url) => url.includes('/functions/v1/search')).length, 1);
-
-  const response = await transport.request(
-    `${direct}/rest/v1/rpc/idempotent_metric`,
-    { method:'POST', body:'{}' },
-    { policy:'idempotent-replay' },
-  );
-  assert.equal(response.ok, true);
-  assert.equal(calls.filter((url) => url.includes('/rest/v1/rpc/idempotent_metric')).length, 2);
-});
-
-test('idempotent participant registration gets a short primary budget and a fresh relay retry', async () => {
-  const calls: string[] = [];
-  const transport = createResilientSupabaseTransport({
-    directUrl: direct,
-    relayUrl: relay,
-    publishableKey: key,
-    sessionStorage: null,
-    safeRequestTimeoutMs: 1_000,
-    selectedRequestTimeoutMs: 8_000,
-    fetchImpl: (async (input, init) => {
-      const url = String(input);
-      calls.push(url);
-      if (url.endsWith('/auth/v1/health')) return new Response('{}', { status: 200 });
-      if (url.startsWith(relay)) return new Response('{}', { status: 200 });
-      return new Promise<Response>((_resolve, reject) => {
-        init?.signal?.addEventListener('abort', () => {
-          reject(new DOMException('primary timed out', 'AbortError'));
-        }, { once: true });
-      });
-    }) as typeof fetch,
-  });
-  const started = Date.now();
-  const response = await transport.request(
-    `${direct}/rest/v1/rpc/register_focus_group_participant_v1`,
-    { method: 'POST', body: '{}' },
-    { policy: 'idempotent-replay' },
-  );
-  assert.equal(response.ok, true);
-  assert.ok(Date.now() - started < 3_000, 'must not use the eight-second non-idempotent write budget');
-  assert.deepEqual(calls.filter((url) => url.includes('register_focus_group_participant_v1')), [
-    `${direct}/rest/v1/rpc/register_focus_group_participant_v1`,
-    `${relay}/rest/v1/rpc/register_focus_group_participant_v1`,
-  ]);
+  assert.notEqual(getResilientDataClient(config), getResilientDataClient({ ...config, relayUrl: 'https://other.test' }));
 });

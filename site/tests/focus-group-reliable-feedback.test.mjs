@@ -31,7 +31,7 @@ test('focus page rating is durable for a day and replays through an idempotent o
   assert.match(panel, /getIdempotentOutbox/u);
   assert.match(panel, /channel: 'focus_feedback_v2'/u);
   assert.match(panel, /submit_focus_group_feedback_v2/u);
-  assert.match(panel, /dataClient\.idempotentReplay/u);
+  assert.match(panel, /dataClient\.request/u);
   assert.match(panel, /return 'skip' as const/u);
   assert.match(panel, /window\.addEventListener\('online'/u);
   assert.match(state, /24 \* 60 \* 60 \* 1000/u);

@@ -74,6 +74,15 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Replaced the focus-group browser transport's header-only route switch with
+  the fail-closed Transport v3 boundary: one central operation catalogue now
+  owns retry semantics, last-known-good routes are capability-specific and
+  compact, small Auth/REST/Function responses are bounded and decoded before a
+  write is acknowledged, and selected-once OTP/Search requests never replay
+  after an ambiguous dispatch/body failure. Added stateless nonce probes for
+  Data and Functions plus real socket-stall/partial-body/stream regression
+  coverage; long NDJSON Search streams retain caller cancellation without
+  inheriting the short JSON response deadline.
 - Fixed Fly SQLite rollout for club evaluation history: `Database.init()` now upgrades the legacy pair-unique table to hash-versioned history with row-count preservation, rather than relying on an Alembic revision that production does not invoke.
 - Fixed static-selection scheduling and truth boundaries: Smart Update now uses a strict trailing 15-minute static-build debounce, club provider failures preserve accepted relations with durable retry, and the exporter no longer infers free admission from prose ticket status. Production-candidate semantic computation is independent from legacy Unusual publication flags.
 - Region Talk now hands every eligible external editorial/academic article to
