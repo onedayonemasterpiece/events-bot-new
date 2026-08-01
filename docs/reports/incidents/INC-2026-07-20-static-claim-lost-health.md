@@ -212,3 +212,45 @@ club/outbox/Smart Update tests plus `116` Kaggle status/handoff/outbox/unusual
 tests passed with no `MissingGreenlet`. No live deploy-overlap cycle or deploy
 was performed; the existing incident remains mitigated and its live closure gate
 is still pending.
+
+## Live deploy-overlap regression, 2026-08-01
+
+The previously missing live cycle occurred naturally during the static
+collections cold canary. Fly replaced the single machine while run
+`static-site:production-secret-20260801T203140-e0a6dfac:b6ad3a9c7fce` owned
+outbox job `46465`.
+
+- `/healthz` briefly timed out during replacement, then returned
+  `ok=true`, `ready=true`, all checks passing on Fly v1856;
+- the Kaggle callback heartbeat resumed on the new machine and the remote run
+  reached terminal `done`; no replacement notebook was pushed;
+- runtime recovery logged `STATIC_SITE_REMOTE_TERMINAL_RECOVERY`, re-armed the
+  exact owner, adopted/downloaded the existing 22 output entries and persisted
+  the semantic cache and collection batch;
+- runtime logs contain no `MissingGreenlet`; the outbox worker and `/healthz`
+  stayed healthy during terminal recovery;
+- the same live window contains `48` expected `STATIC_SITE_CLAIM_LOST` records
+  for the queued successor (`job_id=46465`, every record `deferred=True`) and
+  no `MissingGreenlet`, directly exercising the original rollback branch;
+- the next forced warm request was stored as exactly one pending successor
+  (`JobOutbox.id=46466`) rather than mutating the immutable running request.
+
+This closes the behavioural deploy-overlap check itself. Full incident closure
+still waits for the recovered candidate success receipt and the queued successor
+to leave no stuck active claim.
+
+The recovered cold candidate received its host success receipt at 20:26 UTC.
+The single forced successor
+`static-site:production-secret-20260801T222854-379b6264:f20575db9f54`
+subsequently reached remote terminal `done` at 21:30 UTC. Fly adopted the exact
+output rather than starting a duplicate; semantic evidence reports a full cache
+hit (`409/409` events and `75/75` prototypes reused, both encoded counts zero,
+provider calls zero). Incident closure now waits only for that downloaded
+candidate's host publication receipt to clear the active claim.
+
+A second real deploy overlap occurred at the warm terminal boundary: Fly v1857
+(`7db0d510d969341359f010b27ad2be91bd711d8e`) replaced v1856 at 21:28 UTC.
+The new process observed terminal `done`, removed only the abandoned locked
+runner staging tree, adopted all 22 exact output entries and persisted the
+semantic caches. `/healthz` is again `ok=true`, `ready=true`; no duplicate
+notebook or `MissingGreenlet` appeared.

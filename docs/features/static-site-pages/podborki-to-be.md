@@ -1,8 +1,8 @@
 # Подборки статического сайта: анализ извлечения и простой общий проект
 
-Статус: **анализ завершён; data-prep MVP слит в main, развёрнут и получил
-production backfill; real Kaggle cold canary запущен, но terminal cold/warm
-acceptance ещё не закрыт**, обновлён 2026-08-01.
+Статус: **анализ завершён; data-prep MVP слит в main, развёрнут, production
+backfill выполнен, real Kaggle cold и warm canary прошли; завершается host-side
+publication receipt финального warm candidate**, обновлён 2026-08-01.
 Исходные требования и последующие уточнения владельца сохранены в [`podborki.md`](./podborki.md).
 
 ## 0. Состояние реализации data-prep MVP
@@ -12,6 +12,26 @@ acceptance ещё не закрыт**, обновлён 2026-08-01.
 из main SHA `c5e3f6bc79e912992379280644515137917a414d` на Fly v1853. Это только граница данных:
 Astro routes, страницы, navigation, sitemap и публичное включение в этой ветке
 не делались. Киноисточники и фестивальный extraction/page track не менялись.
+
+### Где на самом деле обновляются клубы
+
+Коротко: **не в Kaggle**. Реестр идентичностей (`interest_club`) и решения о
+связи события с клубом (`interest_club_evaluation` + `interest_club_event`)
+живут в основном Fly SQLite и обновляются durable-задачей
+`interest_club_relation` в общем Fly outbox. Для нового/изменённого события
+Smart Update ставит эту задачу после импорта; разовый шестимесячный catch-up
+только добавляет в тот же outbox недостающие exact-identity кандидаты. Ошибка
+провайдера сохраняется как retryable evaluation и не удаляет последнюю accepted
+связь.
+
+Kaggle StaticSiteBuilder **ничего не решает про принадлежность к клубу**. Он
+один раз получает уже нужный для всего сайта immutable Fly SQLite snapshot и
+строит из принятых hash/policy-matched связей
+`interest-clubs-static-v2.json`. В projection попадают только `approved`
+идентичности, у которых есть хотя бы одна принятая активность в включительном
+окне шести календарных месяцев; `shadow`, dormant, неaccepted и неpublic строки
+остаются с exclusion receipts. Поэтому правило показа durable в core DB, а не
+зависит от памяти notebook или ручного Kaggle-запуска.
 
 Сделано:
 
@@ -67,8 +87,9 @@ Production execution 2026-08-01:
 - audience apply: `73` источника, `58` applied, `11` unchanged, `4` deferred;
   people apply: `38` источников, `29` applied, `1` unchanged, `8` deferred;
 - club catch-up поставил `80` exact known-identity кандидатов в durable outbox;
-  первая волна увеличила grounded relations с `19` до `34`, а provider-limited
-  хвост остаётся retryable вместо потери last-good;
+  `58` задач завершены, `22` provider-deferred остаются durable/retryable.
+  Приняты `43` grounded yes-решения; в реестре `45` relations, из них `43`
+  относятся к activity window, включая две непубличные shadow identities;
 - все 6 approved identities сейчас проходят шестимесячное правило; две shadow
   identities не публикуются и не approve-ятся автоматически;
 - cold StaticSiteBuilder run
@@ -76,16 +97,61 @@ Production execution 2026-08-01:
   стартовал на immutable snapshot `snapshot-20260801T171228-1202c99aa1`; после
   backfill поставлен один single-flight successor `JobOutbox.id=46465`.
 
+Последующее production-доведение того же data track:
+
+- audience был повторно adjudicated по semantic policy v2: `73` источника,
+  `26` applied, `40` unchanged, `7` provider-deferred; people v2: `39`
+  источников, `28` applied, `1` unchanged, `10` deferred;
+- production review убрал широкие false positives «с близкими», «семейная
+  атмосфера», социальная тема и популярность артиста у детей. У события `6595`
+  фраза про «юных художников» описывала авторов выставки, а не аудиторию:
+  decision заменён на `unknown` с сохранением предыдущей строки в audit history
+  и receipt
+  `/data/static_collection_backfill/event-6595-audience-role-guard-20260801.json`;
+- narrow role guard для новых/изменённых событий слит PR #187 и находится в
+  production main; текущий образ Fly v1857 содержит SHA
+  `7db0d510d969341359f010b27ad2be91bd711d8e`, для которого PR #187 является
+  ancestor;
+- второй real cold run
+  `static-site:production-secret-20260801T203140-e0a6dfac:b6ad3a9c7fce`
+  завершился `done`: `409` событий, `provider_calls=0`, BGE-M3
+  `BAAI/bge-m3@5617a9f…`, `float32`, batch из `15` heads, проверенные artifact,
+  cache, receipt и batch hashes. Egress receipt: core source
+  `fly_sqlite_snapshot`, `supabase_core_reads=0`,
+  `additional_external_requests=0`;
+- cold batch дал готовые shadow data sets: free `54`, kids `22`, exhibitions
+  `57`, performances `71`, popular `30`, science-pop `7`, theatre `67`,
+  foreign guests `1`, Russian guests `0`. Семантические heads unusual/science/
+  strong impressions/medieval и два BGE audience-recall heads вычислены, но
+  корректно остались `blocked`, а не были выданы за готовую выборку без owner
+  gold;
+- Fly deploy пересёкся с live cold run: `/healthz` восстановился ready через
+  штатную machine replacement, remote heartbeat продолжился, terminal owner
+  был re-armed и exact output adopted без второго notebook. В runtime log нет
+  `MissingGreenlet`; это live regression evidence для
+  `INC-2026-07-20-static-claim-lost-health`;
+- final warm request `JobOutbox.id=46466`, `force_rebuild=true`, поставлен как
+  единственный pending successor. Он берёт новый snapshot уже после коррекции
+  `6595`. Remote terminal — `done`: `409/409` event vectors и `75/75`
+  prototypes reused, `encoded_event_count=0`, `encoded_prototype_count=0`,
+  `cache_state=hit_reused`, `provider_calls=0`. Egress снова равен нулю;
+- exact `kids` после коррекции содержит `21` событие и не содержит `6595`;
+  остальные exact supplies не изменились. Прямой вызов той же v2 projection
+  над immutable warm snapshot подтвердил ровно `6` public approved-клубов, `0`
+  dormant identities и окно `2026-02-01..2026-08-01`; две shadow identities в
+  public список не попали. В этом же snapshot audience decision события `6595`
+  — `unknown` / `insufficient_evidence`.
+
 Не завершено и не должно маскироваться deploy/backfill evidence:
 
-1. дождаться terminal current-catalog real Kaggle CPU cold run и выполнить warm
-   run с нулём
-   re-encode unchanged events и `provider_calls=0`;
+1. дождаться только host-side success receipt уже terminal `done` warm run и
+   подтвердить отсутствие stuck claim;
 2. разметить owner gold для новых heads и заново откалибровать «Необычное» на
    evidence-only document;
-3. дождаться durable retry хвоста club provider deferrals и проверить terminal
-   relation/evaluation counts в post-backfill successor;
-4. после quality acceptance передать manifests в отдельную Astro/UI ветку.
+3. оставлять provider-deferred club хвост в штатном durable retry; он не
+   блокирует MVP, потому что все шесть approved identities уже имеют accepted
+   активность в шестимесячном окне и last-good relations не стираются;
+4. передать принятые manifests в отдельную Astro/UI ветку.
 
 Production-аудит, на котором основаны fixtures и contracts, выполнен read-only
 на Fly SQLite 2026-08-01 15:43 UTC (`PRAGMA integrity_check=ok`; DB mtime
