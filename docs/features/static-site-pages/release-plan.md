@@ -90,9 +90,10 @@ promotion and rollback remain open.
 | Astro routes/navigation/sitemap | Not started by design | belongs to the next UI integration window after data quality gates |
 | Production migration/backfill/deploy | Not started | no production writes, migrations, page promotion or public flag changes in this track |
 
-Integrated local evidence on the candidate: collection/semantic/release `123
-passed`; club/outbox/Smart Update `63 passed`; facts/DB/May-incident replay `85
-passed`; Kaggle status/handoff/unusual/outbox `116 passed`. Exact commands, lane
+Integrated local evidence on the candidate: post-merge collection/semantic/
+release `123 passed`; post-merge club/outbox/Smart Update/facts/DB `131 passed`;
+May-incident replay is included in the earlier `85 passed` focused facts run;
+Kaggle status/handoff/unusual/outbox `116 passed`. Exact commands, lane
 SHAs, merge reconciliation and final checks live in
 `.codex/integration/static-collections-data-prep-20260801-INTEGRATION_REPORT.md`.
 Local tests do not substitute for the real Kaggle gate.

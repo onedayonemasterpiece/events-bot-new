@@ -75,10 +75,10 @@ missing configuration.
 
 ## Verification
 
-- collection/semantic/export/release: `123 passed`;
-- club/outbox/Smart Update integration: `63 passed`;
-- facts/DB/ticket/participant/May-incident replay: `85 passed` (one unrelated
-  Pydantic deprecation warning);
+- post-merge collection/semantic/export/release: `123 passed`;
+- post-merge club/outbox/Smart Update/facts/DB/ticket/participant: `131 passed`
+  (one unrelated Pydantic deprecation warning);
+- earlier isolated facts/DB/ticket/participant/May-incident replay: `85 passed`;
 - Kaggle status/handoff/unusual/outbox incidents: `116 passed`;
 - post-lint registry/semantic/club smoke: `57 passed`;
 - lane registry tests: `26 passed`; lane facts tests: `77 passed`; lane semantic
