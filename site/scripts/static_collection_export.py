@@ -182,6 +182,7 @@ def build_exact_label_ids(
     *,
     collection_decisions_by_id: Mapping[int, Any],
     theatre_event_ids: Iterable[int],
+    facts_policy_version: str,
 ) -> dict[str, list[int]]:
     labels: dict[str, list[int]] = defaultdict(list)
     theatre_ids = {int(value) for value in theatre_event_ids}
@@ -207,10 +208,18 @@ def build_exact_label_ids(
 
         decisions = _decisions(collection_decisions_by_id.get(event_id))
         audience = decisions.get("audience_decision")
-        if isinstance(audience, Mapping) and audience.get("value") in {"kids", "family"}:
+        if (
+            isinstance(audience, Mapping)
+            and audience.get("policy_version") == facts_policy_version
+            and audience.get("value") in {"kids", "family"}
+        ):
             labels["kids"].append(event_id)
         for person in decisions.get("people_appearances") or []:
-            if not isinstance(person, Mapping) or person.get("appearance") != "confirmed":
+            if (
+                not isinstance(person, Mapping)
+                or person.get("policy_version") != facts_policy_version
+                or person.get("appearance") != "confirmed"
+            ):
                 continue
             if person.get("origin_scope") == "russia_nonlocal":
                 labels["guests_russia"].append(event_id)
@@ -354,6 +363,7 @@ def build_collection_batch_payload(
         events,
         collection_decisions_by_id=collection_decisions_by_id,
         theatre_event_ids=theatre_event_ids,
+        facts_policy_version=str(policy.get("facts_policy_version") or ""),
     )
     hashes = {
         "catalog_input_sha256": catalog_hash,

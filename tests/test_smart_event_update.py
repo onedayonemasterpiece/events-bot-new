@@ -6,9 +6,11 @@ import smart_event_update as sut
 from models import Event
 from smart_event_update import (
     STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION,
+    STATIC_COLLECTION_FACTS_POLICY_VERSION,
     EventCandidate,
     adjudicate_collection_candidate,
     build_collection_adjudication_request,
+    collection_adjudication_input_hash,
     route_collection_adjudication_reasons,
     validate_collection_adjudication_output,
 )
@@ -64,11 +66,19 @@ def test_candidate_only_router_is_explicit_hash_bound_and_keeps_signals_out_of_e
     request = build_collection_adjudication_request(candidate)
     assert request is not None
     assert request["input_hash"]
+    assert request["policy_version"] == STATIC_COLLECTION_FACTS_POLICY_VERSION
     assert request["candidate_signals_not_proof"]["age_restriction"] == "6+"
     assert "6+" not in request["source_corpus"]
     assert build_collection_adjudication_request(
         _candidate(collection_adjudication_reasons=[])
     ) is None
+
+
+def test_collection_input_hash_is_bound_to_semantic_policy(monkeypatch):
+    candidate = _candidate(collection_adjudication_reasons=["audience"])
+    current = collection_adjudication_input_hash(candidate)
+    monkeypatch.setattr(sut, "STATIC_COLLECTION_FACTS_POLICY_VERSION", "test-next-policy")
+    assert collection_adjudication_input_hash(candidate) != current
 
 
 def test_production_router_covers_corrections_and_signal_candidates_not_ticket_status_alone():
@@ -194,6 +204,22 @@ async def test_candidate_adjudication_seam_fails_closed_without_external_calls(m
     monkeypatch.setattr(sut, "_ask_gemma_json", provider_failure)
     assert await adjudicate_collection_candidate(candidate) is None
     assert candidate.collection_semantic_decisions is None
+
+
+@pytest.mark.asyncio
+async def test_audience_prompt_rejects_family_theme_and_child_popularity_as_proof(monkeypatch):
+    candidate = _candidate(collection_adjudication_reasons=["audience"])
+    captured = {}
+
+    async def provider(prompt, *_args, **_kwargs):
+        captured["prompt"] = prompt
+        return _payload()
+
+    monkeypatch.setattr(sut, "SMART_UPDATE_LLM_DISABLED", False)
+    monkeypatch.setattr(sut, "_ask_gemma_json", provider)
+    assert await adjudicate_collection_candidate(candidate) is not None
+    assert "совместное участие или посещение детей и взрослых" in captured["prompt"]
+    assert "популярность артиста у детей" in captured["prompt"]
 
 
 @pytest.mark.asyncio

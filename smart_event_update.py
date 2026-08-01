@@ -614,7 +614,7 @@ class EventCandidate:
     collection_semantic_decisions: dict[str, Any] | None = None
 
 
-STATIC_COLLECTION_FACTS_POLICY_VERSION = "static-collection-facts-v1"
+STATIC_COLLECTION_FACTS_POLICY_VERSION = "static-collection-facts-v2"
 STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION = "static-collection-adjudication-v1"
 
 _ADMISSION_VALUES = {"confirmed_free", "confirmed_paid", "unknown"}
@@ -739,6 +739,10 @@ def collection_adjudication_input_hash(candidate: EventCandidate) -> str:
 
     payload = {
         "schema_version": STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION,
+        # Prompt/meaning changes must invalidate source-hash cache entries.
+        # Schema shape alone is not enough: v2 deliberately tightened what
+        # counts as a children/family event.
+        "policy_version": STATIC_COLLECTION_FACTS_POLICY_VERSION,
         "source_type": str(candidate.source_type or "").strip(),
         "source_url": str(candidate.source_url or "").strip(),
         "title": str(candidate.title or "").strip(),
@@ -1136,8 +1140,12 @@ async def adjudicate_collection_candidate(candidate: EventCandidate) -> dict[str
         "Каждая непустая evidence_quote должна быть точной непрерывной цитатой из source_corpus.\n"
         "Admission: ticket_status, наличие продажи или ссылки без явной цены/платного входа не доказывает paid; "
         "необязательный донат может быть confirmed_free.\n"
-        "Audience: age_restriction, topics и BGE — только candidate signals, никогда не доказательство kids/family; "
-        "нужна прямая фраза о целевой аудитории/семейном формате, иначе unknown.\n"
+        "Audience: age_restriction, topics и BGE — только candidate signals, никогда не доказательство kids/family. "
+        "kids означает, что само событие/занятие прямо предназначено детям или детским зрителям/участникам. "
+        "family означает совместное участие или посещение детей и взрослых/родителей. Недостаточны слова "
+        "'семья', 'семейный', 'близкие', 'семейная атмосфера', тема семьи/беременности/соцподдержки, "
+        "а также популярность артиста у детей, если источник не приглашает детей на это событие. "
+        "Для таких случаев верни unknown; не расширяй смысл рекламной фразы.\n"
         "People: mentioned не равно confirmed; не выводи происхождение по имени. Для non-unknown origin_scope "
         "нужна отдельная точная origin_evidence_quote.\n"
         "При сомнении верни unknown/пустой список. Не пиши публичный текст.\n\n"

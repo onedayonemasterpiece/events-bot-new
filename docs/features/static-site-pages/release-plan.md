@@ -71,24 +71,74 @@ promotion and rollback remain open.
 только в исследовательском документе или side-ветке. Исходные требования
 неизменно хранятся в [`podborki.md`](podborki.md), полный анализ и product/data
 решения — в [`podborki-to-be.md`](podborki-to-be.md). Реализация подготовлена в
-`integration/static-collections-data-prep-20260801`; пока ветка не слита в
-`origin/main`, это кандидат, а не release truth.
+Изначальная implementation-ветка —
+`integration/static-collections-data-prep-20260801`. Код достиг
+`origin/main` через PR #182 (`6c870d178b6b22474b56743a36a4b65252c1daa5`) и
+развёрнут вместе с актуальным main
+`c5e3f6bc79e912992379280644515137917a414d` на Fly runtime v1853. Поэтому ниже
+разделены уже выполненные production data-prep шаги и ещё открытые UI/public
+gates.
 
 ### Что уже сделано в candidate branch
 
 | Gate | Статус | Evidence/граница |
 |---|---|---|
 | Production data audit | Done, read-only | Fly SQLite 2026-08-01; `integrity_check=ok`; 6 approved clubs/13 grounded relations, 8 theatre organizations, 6 venue pilots; runtime не хардкодит counts |
-| Club registry refresh | Done in code | durable `interest_club_relation` outbox, one successor, evaluation history, provider-deferred retry, shadow discovery, inclusive six-calendar-month v2 projection |
+| Club registry refresh | Live; catch-up draining | durable `interest_club_relation` outbox, one successor, evaluation history, provider-deferred retry, shadow discovery, inclusive six-calendar-month v2 projection; 80 exact six-month candidates поставлены в outbox, provider-deferred хвост остаётся durable и не стирает accepted relation |
 | Place/organization registry | Done in code | checked-in exact registry, separate theatre/venue roles, 8 official theatres, 6 venue candidates, structured membership reasons |
 | Admission/audience/people facts | Done in code | nullable source-bound `Event.collection_decisions`; candidate-only strict LLM schema; `unknown` preserves truth; `Event.is_free` remains compatible bool; no prose `ticket_status` free inference |
-| Shared collection BGE | Done in code, canary pending | evidence-only `collection_semantics_v1`, one float32 BGE-M3 cache, prototype-independent event reuse, one `collection-batch-v1.json`; mandatory compute independent of Unusual publication flag |
+| Shared collection BGE | Live cold canary running | evidence-only `collection_semantics_v1`, one float32 BGE-M3 cache, prototype-independent event reuse, one `collection-batch-v1.json`; compute обязателен для production-candidate независимо от Unusual publication flag; run указан ниже |
 | Static scheduling | Done in code | strict trailing `latest Smart Update + 15m`, one running + one pending successor; operator/calendar remain immediate |
 | Data handoff | Done in code | `collection-batch-v1.json`, `venue-pages-v1.json`, `interest-clubs-static-v2.json`; exact IDs/status/hashes only, Astro does not redefine membership |
 | Cinema/festivals boundary | Preserved | no cinema source additions/changes; no festival extraction/page changes |
 | Supabase egress | Preserved | core source is the already transferred Fly SQLite snapshot; `supabase_core_reads=0`, no second Kaggle notebook/snapshot |
 | Astro routes/navigation/sitemap | Not started by design | belongs to the next UI integration window after data quality gates |
-| Production migration/backfill/deploy | Tooling done; execution pending | runtime-safe SQLite constraint migration and bounded fact/club backfill commands are implemented; no production writes/deploy yet |
+| Production migration/backfill/deploy | Done for data-prep | Fly v1853, exact main SHA; `collection_decisions` live; 4608 legacy evaluation rows сохранены при переходе на history uniqueness; bounded admission/audience/people apply и club enqueue выполнены; финальный successor build поставлен после backfill |
+
+### Production data-prep evidence, 2026-08-01
+
+- pre-deploy online backup:
+  `/data/backups/pre-static-collections-20260801T165142Z.sqlite.gz`; source
+  SHA-256 `4b54324ae672db9c1f90967ce34b1cc295440dd6637582b2a9c1e8cb4e77ed61`;
+- deploy: Fly machine version `1853`, image repository marker and fingerprint
+  repository SHA
+  `c5e3f6bc79e912992379280644515137917a414d`; `/healthz` после deploy —
+  `ok=true`, `ready=true`, DB/schedulers/outbox worker healthy;
+- SQLite: `PRAGMA quick_check=ok`; `event.collection_decisions` существует;
+  `interest_club_evaluation` содержит `4608` сохранённых до catch-up rows сразу
+  после migration и unique history key
+  `(club_id,event_id,policy_version,input_hash)` вместо legacy pair key;
+- fact plan/apply artifacts сохранены на volume в
+  `/data/static_collection_backfill/`. Admission: `6` events/`9` sources,
+  `5` применённых решений, `4` source passes без изменения, `0` provider
+  deferrals. Audience: `73` sources, `58` применённых изменений, `11` без
+  изменения, `4` provider deferrals. People: `38` sources, `29` применённых,
+  `1` без изменения, `8` provider deferrals. Provider failure/abstention не
+  фабрикует decision и не снимает last-good;
+- после apply среди `433` current/future DB rows есть `55` source-bound
+  admission decisions (`16 confirmed_free`, `39 confirmed_paid`), `27`
+  audience decisions (`18 family`, `9 kids`) и `39` подтверждённых appearances
+  в `24` событиях. Это coverage evidence candidate set, а не обещание, что
+  каждый current event обязан иметь искусственно заполненный label;
+- club catch-up: `80` exact known-identity candidates поставлены в durable
+  outbox. После первой волны relations выросли `19 -> 34`; все шесть approved
+  identities имеют подтверждённую активность в окне 2026-02-01..2026-08-01
+  (`15, 3, 7, 2, 2, 1` active rows соответственно). Provider-limited jobs
+  остаются retryable outbox rows; две `shadow` identities не становятся
+  публичными автоматически;
+- cold production-candidate run:
+  `static-site:production-secret-20260801T191228-efb845fd:c1acf5c7d03b`,
+  snapshot `snapshot-20260801T171228-1202c99aa1`, input fingerprint
+  `caf3b9aa567ec7457e7241b8760b978b0a789dca323e73620d1740ad01186bc0`.
+  На момент записи run жив, status ledger получает heartbeat; terminal
+  artifact/hash/coverage ещё нельзя считать принятым;
+- post-backfill successor `JobOutbox.id=46465` поставлен immediate operator
+  request с correlation
+  `static-site:manual:static-collections-20260801`. Он обязан взять уже полный
+  fact/club state после освобождения single-flight owner.
+
+Astro routes/navigation/sitemap, cinema sources и festival extraction/pages
+этим production change не менялись. Public/root promotion также не выполнялся.
 
 Integrated local evidence on the candidate: post-merge collection/semantic/
 release `123 passed`; post-merge club/outbox/Smart Update/facts/DB `131 passed`;

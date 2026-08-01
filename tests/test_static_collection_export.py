@@ -132,10 +132,21 @@ def test_exact_labels_use_grounded_decisions_not_bge_candidates():
     ]
     decisions = {
         1: {
-            "audience_decision": {"value": "family"},
+            "audience_decision": {
+                "value": "family",
+                "policy_version": "static-collection-facts-v2",
+            },
             "people_appearances": [
-                {"appearance": "confirmed", "origin_scope": "foreign"},
-                {"appearance": "mentioned", "origin_scope": "russia_nonlocal"},
+                {
+                    "appearance": "confirmed",
+                    "origin_scope": "foreign",
+                    "policy_version": "static-collection-facts-v2",
+                },
+                {
+                    "appearance": "mentioned",
+                    "origin_scope": "russia_nonlocal",
+                    "policy_version": "static-collection-facts-v2",
+                },
             ],
         }
     }
@@ -144,6 +155,7 @@ def test_exact_labels_use_grounded_decisions_not_bge_candidates():
         events,
         collection_decisions_by_id=decisions,
         theatre_event_ids=[],
+        facts_policy_version="static-collection-facts-v2",
     )
 
     assert labels["free"] == [1]
@@ -151,6 +163,33 @@ def test_exact_labels_use_grounded_decisions_not_bge_candidates():
     assert labels["guests_foreign"] == [1]
     assert labels["guests_russia"] == []
     assert labels["exhibitions"] == [2]
+
+
+def test_exact_audience_and_people_ignore_stale_fact_policy():
+    events = [{"id": 1, "event_type": "лекция", "topics": [], "ticket": {}}]
+    decisions = {
+        1: {
+            "audience_decision": {
+                "value": "family",
+                "policy_version": "static-collection-facts-v1",
+            },
+            "people_appearances": [
+                {
+                    "appearance": "confirmed",
+                    "origin_scope": "foreign",
+                    "policy_version": "static-collection-facts-v1",
+                }
+            ],
+        }
+    }
+    labels = collections.build_exact_label_ids(
+        events,
+        collection_decisions_by_id=decisions,
+        theatre_event_ids=[],
+        facts_policy_version="static-collection-facts-v2",
+    )
+    assert labels["kids"] == []
+    assert labels["guests_foreign"] == []
 
 
 def test_semantic_candidates_remain_blocked_in_valid_batch():
