@@ -1,0 +1,186 @@
+name: Materialize Region Talk external research results
+
+on:
+  push:
+    branches:
+      - agent/region-talk-external-research-results-20260801
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DEST: docs/features/region-talk-channel
+    steps:
+      - name: Check out the target branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/region-talk-external-research-results-20260801
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Materialize and validate research files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$DEST"
+
+          fetch_blob_text() {
+            local sha="$1"
+            gh api "repos/${GITHUB_REPOSITORY}/git/blobs/${sha}" --jq '.content' \
+              | tr -d '\n' \
+              | base64 --decode
+          }
+
+          materialize() {
+            local output="$1"
+            shift
+            local packed="/tmp/$(basename "$output").b64"
+            : > "$packed"
+            local sha
+            for sha in "$@"; do
+              fetch_blob_text "$sha" >> "$packed"
+            done
+            base64 --decode "$packed" | gzip --decompress --stdout > "$output"
+          }
+
+          materialize "$DEST/region-talk-external-research-result-region-talk-external-2026-07-31-125052.json" \
+            2975f35e17c33f20311457c905a80ac2baf4ebbf \
+            e1ace286909f05741e9da9f17ba9dc6e66e0295b \
+            f04dd3fe6f82decf26cb721da23b8e9651d553b9 \
+            de79240d8b46a8dc835f902edb05c4f67013b130
+
+          materialize "$DEST/region-talk-external-research-result-region-talk-external-2026-07-31-174033.json" \
+            cd4bf115af31200c7ce7a1811d1c3b9a31244e84 \
+            74961a63a3742bed58f4b3eed4f498a72c026fab \
+            84b2b5e48f631d9cd756ea0a1ea153ec33bf7931
+
+          materialize "$DEST/region-talk-external-research-result-region-talk-external-2026-08-01-163142.json" \
+            0e5d415ad852dd4fb2461f11cf17d9eb5dcd9d93 \
+            bc629dd2af02dc0413d8cbfb68f19a6217dd19d7 \
+            62f8c63750a3b432a99c46048b81cbc11f236dd3 \
+            d64085637eba4b681e089b41da83c43af2311be0
+
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          dest = Path("docs/features/region-talk-channel")
+          expected = {
+              "region-talk-external-research-result-region-talk-external-2026-07-31-125052.json": {
+                  "sha256": "59b1d7cc43fff8eabe53f4f8b84b700d1c5ebc60f326b9f3f8c2d208999bc2cf",
+                  "candidates": 20,
+                  "excluded": 2,
+                  "unresolved": 2,
+                  "candidate_report": 14,
+                  "manual_review_required": 6,
+              },
+              "region-talk-external-research-result-region-talk-external-2026-07-31-174033.json": {
+                  "sha256": "c040269f09bd72f16cf74fe2f721d9b8375ede82bd3742ce989e406747384cb0",
+                  "candidates": 14,
+                  "excluded": 3,
+                  "unresolved": 4,
+                  "candidate_report": 10,
+                  "manual_review_required": 4,
+              },
+              "region-talk-external-research-result-region-talk-external-2026-08-01-163142.json": {
+                  "sha256": "e662b449811a0887dd2fa0ebe33903d8caffed3231323ee9e8fbfc55b027bad7",
+                  "candidates": 20,
+                  "excluded": 4,
+                  "unresolved": 1,
+                  "candidate_report": 10,
+                  "manual_review_required": 10,
+              },
+          }
+
+          for filename, checks in expected.items():
+              path = dest / filename
+              raw = path.read_bytes()
+              actual_sha = hashlib.sha256(raw).hexdigest()
+              if actual_sha != checks["sha256"]:
+                  raise SystemExit(f"SHA-256 mismatch for {filename}: {actual_sha}")
+              data = json.loads(raw)
+              for key in ("candidates", "excluded", "unresolved"):
+                  actual = len(data.get(key, []))
+                  if actual != checks[key]:
+                      raise SystemExit(f"Count mismatch for {filename} {key}: {actual}")
+              readiness = {}
+              for candidate in data["candidates"]:
+                  value = candidate.get("decision", {}).get("downstream_readiness")
+                  readiness[value] = readiness.get(value, 0) + 1
+              for key in ("candidate_report", "manual_review_required"):
+                  if readiness.get(key, 0) != checks[key]:
+                      raise SystemExit(
+                          f"Readiness mismatch for {filename} {key}: {readiness.get(key, 0)}"
+                      )
+              print(f"validated {filename}: {actual_sha}")
+          PY
+
+          cat > "$DEST/external-publication-research-results.md" <<'MARKDOWN'
+          # Region Talk: результаты внешнего поиска публикаций
+
+          Status: **research evidence / import queue**. Эти файлы являются результатами внешнего поиска по контракту `region_talk_external_research.v1`. Они не являются готовыми публикационными решениями: каждый файл должен пройти штатную валидацию, live-YDB duplicate guard и импорт в staging через `scripts/region_talk_external_publication_import.py`.
+
+          ## Файлы
+
+          Обрабатывать в хронологическом порядке — от самого раннего запуска к самому позднему. Так первый импорт обновит durable duplicate ledger до обработки следующего файла.
+
+          | Выполнено, UTC | JSON | Кандидаты | `candidate_report` | Ручная проверка | Исключено | Не разрешено | SHA-256 |
+          |---|---|---:|---:|---:|---:|---:|---|
+          | 2026-07-31 12:50:52 | [`region-talk-external-research-result-region-talk-external-2026-07-31-125052.json`](region-talk-external-research-result-region-talk-external-2026-07-31-125052.json) | 20 | 14 | 6 | 2 | 2 | `59b1d7cc43fff8eabe53f4f8b84b700d1c5ebc60f326b9f3f8c2d208999bc2cf` |
+          | 2026-07-31 17:40:33 | [`region-talk-external-research-result-region-talk-external-2026-07-31-174033.json`](region-talk-external-research-result-region-talk-external-2026-07-31-174033.json) | 14 | 10 | 4 | 3 | 4 | `c040269f09bd72f16cf74fe2f721d9b8375ede82bd3742ce989e406747384cb0` |
+          | 2026-08-01 16:31:42 | [`region-talk-external-research-result-region-talk-external-2026-08-01-163142.json`](region-talk-external-research-result-region-talk-external-2026-08-01-163142.json) | 20 | 10 | 10 | 4 | 1 | `e662b449811a0887dd2fa0ebe33903d8caffed3231323ee9e8fbfc55b027bad7` |
+
+          Итого в трёх исследовательских пакетах: **54 кандидата**, из них **34 `candidate_report`** и **20 `manual_review_required`**; отдельно сохранены **9 исключённых** и **7 неразрешённых** страниц.
+
+          ## Быстрая проверка и импорт
+
+          Из корня репозитория:
+
+          ```bash
+          RESULTS=(
+            docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-07-31-125052.json
+            docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-07-31-174033.json
+            docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-08-01-163142.json
+          )
+
+          mkdir -p artifacts/codex/region-talk-external-publications
+
+          for file in "${RESULTS[@]}"; do
+            name="$(basename "${file}" .json)"
+            python3 scripts/region_talk_external_publication_import.py "${file}" \
+              --report "artifacts/codex/region-talk-external-publications/${name}.dry-run.json"
+          done
+          ```
+
+          После проверки dry-run отчётов — явный staging-import, также по порядку:
+
+          ```bash
+          for file in "${RESULTS[@]}"; do
+            python3 scripts/region_talk_external_publication_import.py "${file}" --execute
+          done
+          ```
+
+          Импортёр повторно проверяет схему и текущий durable ledger, поэтому строки, уже ставшие известными после исследовательского запуска, должны быть отклонены как дубликаты, а не принудительно повторно импортированы.
+
+          ## Правило пополнения
+
+          Новый проверенный результат добавляется в эту же папку под исходным именем `region-talk-external-research-result-<request_id>.json`. В таблицу выше добавляется новая строка с UTC-временем, количеством строк по статусам и SHA-256 фактически закоммиченного файла. Старые JSON-файлы не редактируются задним числом; исправленный пакет получает новый `request_id`.
+          MARKDOWN
+
+          # Remove the connector probe and this one-shot workflow from the final commit.
+          rm -f "$DEST/.path-upload-probe.txt"
+          rm -f .github/workflows/materialize-region-talk-external-research-results.yml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Add Region Talk external research results"
+          git push origin HEAD:agent/region-talk-external-research-results-20260801
