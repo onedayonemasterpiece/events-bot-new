@@ -137,7 +137,7 @@ Unversioned drafts are stale and never satisfy readiness; unversioned/older
 terminal backfill rows are migration debt and become actionable under v9.
 Operators may target an exact URL
 with repeatable `--candidate-url`; `--force-regenerate` is allowed only together
-with that explicit selector.
+with that explicit selector and bypasses that row's terminal/retry cooldown.
 
 Operator delivery is fail-closed on one atomic revision: two paragraphs,
 source/original links, ordered media manifest and layout. An article requires
