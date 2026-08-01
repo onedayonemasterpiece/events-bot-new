@@ -26,6 +26,71 @@ def load_module():
 
 
 class RegionTalkOrchestratorTests(unittest.TestCase):
+    def test_browser_materialization_metrics_separate_due_retry_lease_and_terminal(self) -> None:
+        mod = load_module()
+        now = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
+        rows = [
+            {
+                "post_url": "https://example.org/due",
+                "image_queue_status": "needs_browser_materialization",
+                "browser_materialization_attempt_count": 0,
+            },
+            {
+                "post_url": "https://example.org/retry",
+                "image_queue_status": "needs_browser_materialization",
+                "browser_materialization_status": "retry_wait",
+                "browser_materialization_attempt_count": 1,
+                "browser_materialization_next_attempt_after": "2026-08-01T18:00:00+00:00",
+            },
+            {
+                "post_url": "https://example.org/leased",
+                "image_queue_status": "needs_browser_materialization",
+                "browser_materialization_lease_run_id": "another-run",
+                "browser_materialization_lease_expires_at": "2026-08-01T12:05:00+00:00",
+            },
+            {
+                "post_url": "https://example.org/exhausted",
+                "image_queue_status": "needs_browser_materialization",
+                "browser_materialization_attempt_count": 3,
+            },
+            {"browser_materialization_status": "materialized", "image_queue_status": "needs_actual_image_fetch"},
+            {"browser_materialization_status": "terminal_no_associated_images", "image_queue_status": "not_reviewable_no_media"},
+        ]
+        metrics = mod._image_browser_materialization_metrics(rows, now=now)
+        self.assertEqual(metrics["image_browser_materialization_waiting_total"], 4)
+        self.assertEqual(metrics["image_browser_materialization_due_total"], 1)
+        self.assertEqual(metrics["image_browser_materialization_leased_total"], 1)
+        self.assertEqual(metrics["image_browser_materialization_retry_wait_total"], 1)
+        self.assertEqual(metrics["image_browser_materialization_attempts_exhausted_total"], 1)
+        self.assertEqual(metrics["image_browser_materialized_total"], 1)
+        self.assertEqual(metrics["image_browser_materialization_terminal_total"], 1)
+
+    def test_due_browser_articles_launch_local_materializer_not_image_diagnostic(self) -> None:
+        mod = load_module()
+        actions = mod.build_decision_plan(
+            {
+                "image_browser_materialization_due_total": 2,
+                "image_actionable_work_total": 0,
+                "image_pending_total": 0,
+                "publication_confirmed_total": 0,
+                "publication_sent_total": 0,
+            },
+            target_confirmed=20,
+            bge_threshold=1,
+            image_threshold=1,
+        )
+        by_name = {action["action"]: action for action in actions}
+        self.assertIn("materialize_article_browser", by_name)
+        self.assertNotIn("launch_image_diagnostic", by_name)
+        browser = by_name["materialize_article_browser"]
+        self.assertEqual(browser["resource"], "local:region-talk-chromium")
+        self.assertEqual(browser["timeout_seconds"], 180)
+        self.assertEqual(browser["cmd"][-3:], ["--execute", "--limit", "3"])
+        prepared, run_id = mod.prepare_action_command(browser, env_file="/tmp/rt.env")
+        self.assertIn("--env-file", prepared)
+        self.assertIn("--run-id", prepared)
+        self.assertTrue(run_id.startswith("region-talk-orchestrator-materialize-article-browser-"))
+
     def test_image_contract_rescore_metric_survives_temporary_migration_terminal_status(self) -> None:
         mod = load_module()
         row = {

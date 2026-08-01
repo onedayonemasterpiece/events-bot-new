@@ -91,6 +91,15 @@ back to the native link preview without another browser loop. CandidateReport
 preserves these browser-owned lease, retry and evidence fields during its
 concurrent image-queue merge.
 
+The regular Region Talk orchestrator owns this bridge operationally. Its live
+YDB metrics separate `due`, active lease, retry wait, exhausted, materialized
+and terminal browser rows. When at least one row is due, the decision plan
+launches the local Chromium worker with `--execute --limit 3` after the bounded
+VK media prefetch and before ImageDiagnostic. A
+`needs_browser_materialization` row is deliberately excluded from ordinary
+ImageDiagnostic actionable work until the browser has produced direct,
+article-associated source references.
+
 ### Editorial gallery and visual-genre correction (v3)
 
 The Archi.ru article “Вся мудрость океана” exposed two distinct false-negative

@@ -18,8 +18,11 @@
 - Added a bounded Region Talk Playwright article materializer: it leases at
   most three JS-only pages per invocation, records rendered DOM/JSON-LD source
   image evidence, retries after 6h/24h with a finite terminal state, and feeds
-  the existing ImageDiagnostic VLM selection path. Public HTTP/DNS/redirect/
-  subresource guards and Chromium runtime installation are included.
+  the existing ImageDiagnostic VLM selection path. The regular orchestrator
+  now launches due rows automatically and reports due/retry/lease/materialized/
+  terminal counters without treating browser-wait rows as ordinary image work.
+  Public HTTP/DNS/redirect/subresource guards and Chromium runtime installation
+  are included.
 - Added the staged Region Talk editorial writer v8 and autonomous regeneration
   contour: bounded real history, separate Strategy/Writer/Critic requests
   through the controlled Google limiter and durable budget, strict two-Russian-

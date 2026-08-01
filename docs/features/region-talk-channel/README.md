@@ -18,6 +18,9 @@
 - [Publication queue](publication-queue.md) — queue, slots, idempotency, diversity caps, dry-run.
 - [Source onboarding profile](source-onboarding-profile.md) — доказательный профиль автора/канала и абзац `О блогере` для финального кандидата.
 - [External publications](external-publications.md) — broad-web prompt, JSON Schema, staging importer, public-interest contract и on-demand anti-vector queue для материалов изданий.
+- [Editorial onboarding writer prompt](editorial-onboarding-writer-gemini-review.prompt.md) — полный внешний review-пакет для двухабзацной русской редакционной подводки.
+- [Gemini Pro onboarding consultation](onboarding-prompt-consultation.md) — принятый внешний prompt-design review: Strategy → Grounded Writer → validators → Critic и свежий переход вместо натянутой сквозной связки.
+- [Editorial and visual product decision](editorial-visual-product.md) — benchmark похожих Telegram-каналов и целевой hero/album/video/link-preview формат.
 - [To-Be orchestration and vector queues](orchestration-to-be.md) — короткие queue-driven прогоны, отдельный BGE-M3 worker, YDB triggers, non-region geo bank и semantic anti-vector diversity.
 - [Telegram/VK publishing](telegram-vk-publishing.md) — future publishing contracts, VK carousel/card risk, Telegram Bot API modes.
 - [Future café/restaurant review vertical](../../backlog/features/region-talk-cafe-reviews/README.md) — отдельная to-be гипотеза для серийных неместных обзоров заведений; текущий Region Talk не меняется.

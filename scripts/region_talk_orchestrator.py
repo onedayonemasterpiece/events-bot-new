@@ -687,6 +687,17 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('video_manual_review_candidate_urls_total')}"
         ),
         (
+            "Статьи с JS-медиа — ждут браузера / готовы сейчас / заняты lease / ждут retry / "
+            "исчерпали попытки / изображения извлечены / terminal fallback: "
+            f"{value('image_browser_materialization_waiting_total')}/"
+            f"{value('image_browser_materialization_due_total')}/"
+            f"{value('image_browser_materialization_leased_total')}/"
+            f"{value('image_browser_materialization_retry_wait_total')}/"
+            f"{value('image_browser_materialization_attempts_exhausted_total')}/"
+            f"{value('image_browser_materialized_total')}/"
+            f"{value('image_browser_materialization_terminal_total')}"
+        ),
+        (
             "Публикационный отбор — исторических строк / сейчас подтверждены Gemini / "
             "когда-либо отмечены отправленными / подтверждены, но не отправлены / фактически доставлено сообщений: "
             f"{value('publication_candidate_total')}/"
@@ -1446,6 +1457,68 @@ def _parse_iso_datetime(value: Any) -> datetime | None:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
+
+
+def _image_browser_materialization_metrics(
+    images: list[dict[str, Any]], *, now: datetime | None = None
+) -> dict[str, int]:
+    """Expose the bounded browser bridge without mixing it into VLM backlog.
+
+    The predicate intentionally mirrors ``region_talk_article_browser_materialize``:
+    only a row whose finite retry window is due and whose lease is free can
+    launch Chromium.  Rows waiting for that bridge are not ordinary
+    ImageDiagnostic work because they do not have a fetchable media reference
+    yet.
+    """
+
+    current = now or datetime.now(timezone.utc)
+    terminal_statuses = {"terminal_no_associated_images", "terminal_fetch_failed"}
+    waiting = [
+        row for row in images
+        if str(row.get("image_queue_status") or "") == "needs_browser_materialization"
+    ]
+
+    def active_lease(row: dict[str, Any]) -> bool:
+        lease_until = _parse_iso_datetime(row.get("browser_materialization_lease_expires_at"))
+        return bool(
+            str(row.get("browser_materialization_lease_run_id") or "")
+            and lease_until
+            and lease_until > current
+        )
+
+    def is_due(row: dict[str, Any]) -> bool:
+        if str(row.get("browser_materialization_status") or "") in terminal_statuses:
+            return False
+        if _safe_int(row.get("browser_materialization_attempt_count")) >= 3:
+            return False
+        next_attempt = _parse_iso_datetime(row.get("browser_materialization_next_attempt_after"))
+        if next_attempt and next_attempt > current:
+            return False
+        return not active_lease(row) and bool(str(row.get("post_url") or "").strip())
+
+    return {
+        "image_browser_materialization_waiting_total": len(waiting),
+        "image_browser_materialization_due_total": sum(1 for row in waiting if is_due(row)),
+        "image_browser_materialization_leased_total": sum(1 for row in waiting if active_lease(row)),
+        "image_browser_materialization_retry_wait_total": sum(
+            1 for row in waiting
+            if str(row.get("browser_materialization_status") or "") == "retry_wait"
+            and not is_due(row)
+            and not active_lease(row)
+        ),
+        "image_browser_materialization_attempts_exhausted_total": sum(
+            1 for row in waiting
+            if _safe_int(row.get("browser_materialization_attempt_count")) >= 3
+        ),
+        "image_browser_materialized_total": sum(
+            1 for row in images
+            if str(row.get("browser_materialization_status") or "") == "materialized"
+        ),
+        "image_browser_materialization_terminal_total": sum(
+            1 for row in images
+            if str(row.get("browser_materialization_status") or "") in terminal_statuses
+        ),
+    }
 
 
 def _canonical_post_url(row_or_url: dict[str, Any] | str) -> str:
@@ -3205,6 +3278,7 @@ def _supports_arg(cmd: list[str], arg: str) -> bool:
             "kaggle/execute_region_talk_candidate_report.py",
             "scripts/region_talk_publication_finalizer.py",
             "scripts/region_talk_goal_notify.py",
+            "scripts/region_talk_article_browser_materialize.py",
         }
     if arg == "--run-id":
         return script in {
@@ -3212,6 +3286,7 @@ def _supports_arg(cmd: list[str], arg: str) -> bool:
             "kaggle/execute_region_talk_image_diagnostic.py",
             "kaggle/execute_region_talk_candidate_report.py",
             "scripts/region_talk_publication_finalizer.py",
+            "scripts/region_talk_article_browser_materialize.py",
         }
     return False
 
@@ -3844,6 +3919,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     image_vlm_error = [r for r in images if str(r.get("image_vlm_status") or "").lower() in {"error", "rate_limited", "budget_busy", "budget_exhausted"}]
     image_partial_acquisition = [r for r in images if str(r.get("image_acquisition_status") or "") == "partial"]
     image_contract_rescore = [row for row in images if _image_contract_rescore_candidate(row)]
+    image_browser_materialization_metrics = _image_browser_materialization_metrics(images)
     image_product_eligible = [
         r for r in images
         if str(r.get("publication_eligibility_decision") or "") == "accept"
@@ -4159,7 +4235,11 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "image_vlm_error_or_budget_deferred_total": len(image_vlm_error),
         "image_partial_album_acquisition_total": len(image_partial_acquisition),
         "image_contract_rescore_backlog_total": len(image_contract_rescore),
+        # Browser-wait rows are a separate local-Chromium queue.  They become
+        # ordinary ImageDiagnostic work only after materialization changes the
+        # queue status to ``needs_actual_image_fetch``.
         "image_actionable_work_total": len(image_pending) + len(image_scoring_retry) + len(image_contract_rescore) + len(image_vlm_backlog),
+        **image_browser_materialization_metrics,
         **image_terminal_metrics,
         "image_legacy_diagnostic_ge_0_66_total": len(strong_images_ge_066),
         "image_legacy_diagnostic_ge_0_70_total": len(strong_images),
@@ -4437,6 +4517,25 @@ def build_decision_plan(
             ],
             f"{int(metrics.get('image_pending_vk_without_url_total') or 0)} VK image rows need a server-side public CDN URL before Kaggle scoring",
             resource="local:vk-media-prefetch",
+            parallel_safe=True,
+            timeout_seconds=180,
+        ))
+
+    if int(metrics.get("image_browser_materialization_due_total") or 0) > 0:
+        actions.append(_action(
+            "materialize_article_browser",
+            [
+                "python3",
+                "scripts/region_talk_article_browser_materialize.py",
+                "--execute",
+                "--limit",
+                "3",
+            ],
+            (
+                f"{int(metrics.get('image_browser_materialization_due_total') or 0)} "
+                "JS-only article pages are due for bounded source-image materialization"
+            ),
+            resource="local:region-talk-chromium",
             parallel_safe=True,
             timeout_seconds=180,
         ))
