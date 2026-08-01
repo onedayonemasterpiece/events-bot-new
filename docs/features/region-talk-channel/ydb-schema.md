@@ -595,6 +595,16 @@ visibility.
   contract errors. One bad result remains auditable without discarding the
   valid part of the external research batch;
 
+The GitHub Actions importer is a protected, manual staging path: it dry-validates
+the exact allowlisted file from trusted `main` before any OIDC token exchange,
+then applies the same live-YDB duplicate guard at `--execute` time. Its four
+Yandex/YDB settings are non-secret GitHub variables and its short-lived IAM
+token comes only from GitHub OIDC federation. Immutable input bytes, validation
+and execute reports, receipt, and retained job evidence are the audit record;
+see [the guarded import runbook](external-publication-import-runbook.md).
+`external_publication_intake_item` is still staging only and cannot authorize
+immediate public posting.
+
 When an external intake reaches `publication_candidate_item`, its compact row
 retains `content_origin_type`, external publication/research identifiers and
 score, image-quality decision/reason, Region Talk scope, and
