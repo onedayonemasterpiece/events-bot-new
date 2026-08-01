@@ -216,6 +216,29 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "exact ordered materialization manifest"):
             mod.publication_delivery_mode(row)
 
+    def test_v8_candidate_message_does_not_count_long_hidden_href(self) -> None:
+        mod = load_module()
+        p1 = "Внешнее издание рассматривает регион через профессиональную оптику и объясняет, почему этот взгляд заслуживает отдельного внимания читателя. " * 2
+        p2 = "Материал раскрывает конкретные детали и оставляет полный ход аргументации в оригинале, поэтому ссылка ведёт не к формальному продолжению, а к основной фактуре публикации. " * 2
+        long_url = "https://publisher.example/article?" + "tracking=" + "x" * 240
+        manifest = {
+            "mode": "article_hero", "status": "ready",
+            "items": [{"media_id": "hero", "ordinal": 1, "kind": "image", "ref": "https://cdn.example.org/hero.jpg"}],
+        }
+        row = {
+            "post_url": long_url,
+            "source_url": "https://publisher.example",
+            "publication_draft_source_attribution": "Внешнее издание",
+            "publication_draft_telegram_text": f"{p1}\n\n{p2}",
+            "publication_draft_prompt_version": mod.EDITORIAL_WRITER_VERSION,
+            "publication_media_materialization_status": "ready",
+            "publication_presentation_mode": "article_hero",
+            "publication_presentation_manifest_json": json.dumps(manifest, ensure_ascii=False),
+        }
+        message = mod.candidate_message(row)
+        self.assertIn('<b><a href="https://publisher.example/article?', message)
+        self.assertIn(">Оригинал</a></b>", message)
+
     def test_reviewed_media_digest_is_verified_before_delivery(self) -> None:
         mod = load_module()
         data = b"exact-reviewed-source-media"

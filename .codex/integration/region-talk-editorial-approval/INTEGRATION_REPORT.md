@@ -37,6 +37,7 @@ Rebased base: `origin/main@d08ecf320d231e6b934715a5930b3d6d92c771ac`
 - Full Region Talk suite before final rebase: **678 passed**.
 - Full Region Talk suite after the final `origin/main` rebase: **678 passed in 45.91s**.
 - Final editorial/delivery focused suite: **83 passed in 1.50s**.
-- Final full Region Talk suite with checklist remediation: **682 passed in 38.22s**.
+- Final full Region Talk suite after independent-review remediation: **683 passed in 37.62s**.
+- Notifier regression subset, including long hidden article href: **28 passed in 0.75s**.
 - Region Talk scheduler selection: **4 passed, 37 deselected**.
 - Guide incident regression suite retained by the shared base: **85 passed in 32.97s**.

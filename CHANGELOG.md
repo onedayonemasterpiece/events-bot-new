@@ -74,6 +74,9 @@
   verifies materialized Telethon bytes, rejects stale approval fingerprints
   from writer history, forces a fresh opening after repeated transitions, and
   carries terminal article link-preview fallback through the media plan.
+- Region Talk v8 pre-send validation now measures the same linked-label caption
+  visible to the operator, so long article URLs hidden in HTML anchors cannot
+  abort an otherwise valid 550–900-character draft.
 - Guide Excursions generated Kaggle notebooks now embed the complete
   deterministic `google_ai` Python source tree instead of a stale four-module
   allowlist. Shared-limiter and future nested imports therefore survive the

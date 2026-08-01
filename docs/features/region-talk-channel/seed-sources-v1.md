@@ -6,7 +6,10 @@ Status: starter seed list for MVP-1 Candidate Report Only. This is **not** a fin
 
 - `initial_status=seed_monitor_candidate` means “safe enough to consider for the first probe”, not automatic publication.
 - `monitoring_enabled=true` only marks a small initial probe set; implementation may still cap/disable it through `REGION_TALK_MAX_SOURCES` and dry-run config.
-- `rights_policy=unknown` blocks media reuse and autopublish. MVP-1 report can still show links/thumbnails for review.
+- `rights_policy=unknown` is retained as legacy provenance metadata. It does not
+  select the publication format; native source media still requires exact
+  association, materialization integrity, prominent attribution and the
+  original link. MVP-1 report can show links/thumbnails for review.
 - Catalog/discovery-hub rows are discovery inputs; they are not direct post sources unless separately accepted.
 - Personal profiles remain out of MVP unless manually accepted later.
 

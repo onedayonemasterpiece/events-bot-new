@@ -999,7 +999,11 @@ async def materialize_telethon_media(client: Any, row: dict[str, Any]) -> list[A
 def candidate_message(row: dict[str, Any]) -> str:
     if str(row.get("publication_draft_prompt_version") or "") == EDITORIAL_WRITER_VERSION:
         publication_delivery_mode(row)
-        return public_caption(row, html_mode=False)
+        # The actual v8 delivery uses linked HTML labels. Validate and render
+        # that same visible surface here; counting a long hidden href as plain
+        # caption text would reject an otherwise valid operator draft before
+        # either Telethon or Bot API can send it.
+        return public_caption(row, html_mode=True)
     rank = row.get("publication_rank") or "?"
     publication = row.get("publication") if isinstance(row.get("publication"), dict) else {}
     editorial_pack = row.get("editorial_pack") if isinstance(row.get("editorial_pack"), dict) else {}
