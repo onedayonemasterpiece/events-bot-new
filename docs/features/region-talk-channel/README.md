@@ -20,6 +20,7 @@
 - [External publications](external-publications.md) — broad-web prompt, JSON Schema, staging importer, public-interest contract и on-demand anti-vector queue для материалов изданий.
 - [To-Be orchestration and vector queues](orchestration-to-be.md) — короткие queue-driven прогоны, отдельный BGE-M3 worker, YDB triggers, non-region geo bank и semantic anti-vector diversity.
 - [Telegram/VK publishing](telegram-vk-publishing.md) — future publishing contracts, VK carousel/card risk, Telegram Bot API modes.
+- [Future café/restaurant review vertical](../../backlog/features/region-talk-cafe-reviews/README.md) — отдельная to-be гипотеза для серийных неместных обзоров заведений; текущий Region Talk не меняется.
 - [Risk register](risk-register.md) — legal/media, VK token, Telegram read, autonomy, cost and reliability risks.
 - [Implementation plan](implementation-plan.md) — MVP-0 → MVP-5 phases and readiness checklist.
 - [MVP-1 test-run runbook](test-run-runbook.md) — bounded Candidate Report Only runbook.
