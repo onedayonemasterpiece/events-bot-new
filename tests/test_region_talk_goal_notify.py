@@ -255,6 +255,49 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertEqual(mod.manifest_item_message_id({"media_id": "tg:10"}), 10)
         self.assertIsNone(mod.manifest_item_message_id({"media_id": "frame:hero"}))
 
+    def test_source_album_locator_is_bounded_to_six_in_original_order(self) -> None:
+        mod = load_module()
+
+        class Message:
+            def __init__(self, message_id: int, grouped_id: int = 77):
+                self.id = message_id
+                self.grouped_id = grouped_id
+                self.media = object()
+
+        class Client:
+            async def get_messages(self, _handle, ids):
+                if isinstance(ids, int):
+                    return Message(ids)
+                return [Message(message_id) for message_id in ids]
+
+        result = asyncio.run(mod._telegram_source_media(
+            Client(),
+            "https://t.me/example/100",
+            [],
+            max_items=6,
+        ))
+        self.assertEqual([message.id for message in result], [90, 91, 92, 93, 94, 95])
+
+    def test_reviewed_album_ids_keep_their_selected_order(self) -> None:
+        mod = load_module()
+
+        class Message:
+            def __init__(self, message_id: int):
+                self.id = message_id
+                self.media = object()
+
+        class Client:
+            async def get_messages(self, _handle, ids):
+                return [Message(message_id) for message_id in ids]
+
+        result = asyncio.run(mod._telegram_source_media(
+            Client(),
+            "https://t.me/example/100",
+            ["telegram:100", "telegram:109", "telegram:102"],
+            max_items=6,
+        ))
+        self.assertEqual([message.id for message in result], [100, 109, 102])
+
     def test_source_fingerprint_changes_when_source_classification_changes(self) -> None:
         mod = load_module()
         external = {
@@ -637,6 +680,55 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertEqual(requests[0].random_id, 4242)
         self.assertFalse(requests[0].no_webpage)
         self.assertEqual([item[1]["status"] for item in persisted if item[0] == "delivery"], ["sending", "delivered"])
+
+    def test_editorial_media_failure_does_not_leave_ambiguous_sending_state(self) -> None:
+        mod = load_module()
+        args = argparse.Namespace(expected_chat_id="-100123", chat="", transport="telethon_discovery2")
+        persisted = []
+
+        class Client:
+            async def disconnect(self):
+                return None
+
+        async def fake_client_and_chat(_args):
+            return Client(), object(), "-100123", "55"
+
+        async def fail_materialization(_client, _row):
+            raise RuntimeError("source album unavailable")
+
+        mod._telethon_client_and_chat = fake_client_and_chat
+        mod.materialize_telethon_media = fail_materialization
+        mod.public_caption = lambda _row, html_mode=False: "validated caption"
+        mod.discovery_session_lease = lambda _transport: contextlib.nullcontext({})
+        mod.read_delivery = lambda *_args: {}
+        mod.upsert_delivery = lambda *_args: persisted.append(_args[-1])
+        row = {
+            "post_url": "https://t.me/example/100",
+            "publication_draft_prompt_version": mod.EDITORIAL_WRITER_VERSION,
+            "publication_presentation_mode": "social_album",
+            "publication_media_materialization_status": "ready",
+            "publication_presentation_manifest_json": json.dumps({
+                "mode": "social_album",
+                "status": "ready",
+                "items": [{
+                    "media_id": "source:album",
+                    "ordinal": 1,
+                    "kind": "image",
+                    "ref": "https://t.me/example/100",
+                }],
+            }),
+        }
+        with self.assertRaisesRegex(RuntimeError, "source album unavailable"):
+            asyncio.run(mod.send_rows_telethon(
+                args,
+                messages=["candidate"],
+                rows=[row],
+                ydb=object(),
+                driver=object(),
+                pool=object(),
+                table="table",
+            ))
+        self.assertEqual(persisted, [])
 
 
 if __name__ == "__main__":

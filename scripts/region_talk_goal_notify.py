@@ -907,7 +907,13 @@ def manifest_item_message_id(item: dict[str, Any]) -> int | None:
     return int(match.group(1)) if match else None
 
 
-async def _telegram_source_media(client: Any, ref: str, media_ids: list[str]) -> list[Any]:
+async def _telegram_source_media(
+    client: Any,
+    ref: str,
+    media_ids: list[str],
+    *,
+    max_items: int | None = None,
+) -> list[Any]:
     match = re.fullmatch(r"https://t\.me/([^/]+)/([0-9]+)", canonical_post_url({"post_url": ref}), re.I)
     if not match:
         return []
@@ -930,7 +936,13 @@ async def _telegram_source_media(client: Any, ref: str, media_ids: list[str]) ->
             messages.sort(key=lambda item: int(getattr(item, "id", 0) or 0))
         elif anchor is not None:
             messages = [anchor]
-    return [message for message in messages if getattr(message, "media", None) is not None]
+    materializable = [message for message in messages if getattr(message, "media", None) is not None]
+    # A Telegram source album may contain the platform maximum of ten items,
+    # while Region Talk deliberately presents a compact 3..6-frame carousel.
+    # Exact reviewed media ids, when present, already encode the visual
+    # selection/order.  A source-album locator without such ids uses the first
+    # six frames in original source order as a deterministic bounded fallback.
+    return materializable[:max_items] if max_items is not None else materializable
 
 
 async def materialize_telethon_media(client: Any, row: dict[str, Any]) -> list[Any]:
@@ -950,7 +962,12 @@ async def materialize_telethon_media(client: Any, row: dict[str, Any]) -> list[A
     files: list[Any] = []
     for ref, source_items in source_refs.items():
         media_ids = [str(item.get("media_id") or "") for item in source_items]
-        messages = await _telegram_source_media(client, ref, media_ids)
+        messages = await _telegram_source_media(
+            client,
+            ref,
+            media_ids,
+            max_items=6 if publication_delivery_mode(row) == "social_album" else None,
+        )
         for index, message in enumerate(messages):
             data = await client.download_media(message, file=bytes)
             if not isinstance(data, (bytes, bytearray)) or not data:
@@ -1321,9 +1338,16 @@ async def send_rows_telethon(
         try:
             for idx, text in enumerate(messages):
                 row = rows[idx] if idx < len(rows) else None
+                current_editorial = bool(
+                    row is not None
+                    and str(row.get("publication_draft_prompt_version") or "") == EDITORIAL_WRITER_VERSION
+                )
                 delivery_key = ""
                 existing: dict[str, Any] = {}
-                if row is not None and ydb is not None and pool is not None and table is not None:
+                persist_delivery = bool(
+                    row is not None and ydb is not None and pool is not None and table is not None
+                )
+                if persist_delivery and row is not None:
                     delivery_key = publication_delivery_key(row, chat_id)
                     existing = read_delivery(pool, ydb, table, delivery_key)
                     random_id = int(existing.get("random_id") or delivery_random_id(delivery_key))
@@ -1350,6 +1374,20 @@ async def send_rows_telethon(
                         raise RuntimeError(
                             f"unconfirmed prior Telethon media delivery requires operator reconciliation: {delivery_key}"
                         )
+                else:
+                    random_id = delivery_random_id(hashlib.sha256(f"{chat_id}|{text}".encode("utf-8")).hexdigest())
+
+                mode = publication_delivery_mode(row) if current_editorial and row is not None else "link_preview_fallback"
+                editorial_caption = public_caption(row, html_mode=True) if current_editorial and row is not None else ""
+                # Resolve/download and validate the exact reviewed media before
+                # persisting an ambiguous `sending` state.  No Telegram send
+                # has started yet, so a materialization failure remains safely
+                # retryable after its underlying evidence is repaired.
+                files: list[Any] = []
+                if current_editorial and row is not None and mode != "link_preview_fallback":
+                    files = await materialize_telethon_media(client, row)
+
+                if persist_delivery and row is not None:
                     upsert_delivery(pool, ydb, table, delivery_key, {
                         **existing,
                         **publication_delivery_review_fields(row),
@@ -1358,22 +1396,15 @@ async def send_rows_telethon(
                         "post_url": canonical_post_url(row),
                         "chat_id": chat_id,
                         "random_id": str(random_id),
+                        "delivery_stage": "telegram_send_started",
                         "sending_started_at": datetime.now(timezone.utc).isoformat(),
                     })
-                else:
-                    random_id = delivery_random_id(hashlib.sha256(f"{chat_id}|{text}".encode("utf-8")).hexdigest())
 
-                current_editorial = bool(row is not None and str(row.get("publication_draft_prompt_version") or "") == EDITORIAL_WRITER_VERSION)
-                if current_editorial:
-                    mode = publication_delivery_mode(row)
-                else:
-                    mode = "link_preview_fallback"
                 if current_editorial and row is not None and mode != "link_preview_fallback":
-                    files = await materialize_telethon_media(client, row)
                     result = await client.send_file(
                         peer,
                         files[0] if len(files) == 1 else files,
-                        caption=public_caption(row, html_mode=True),
+                        caption=editorial_caption,
                         parse_mode="html",
                         force_document=False,
                     )
@@ -1382,7 +1413,7 @@ async def send_rows_telethon(
                 elif current_editorial and row is not None:
                     result = await client.send_message(
                         peer,
-                        public_caption(row, html_mode=True),
+                        editorial_caption,
                         parse_mode="html",
                         link_preview=not getenv_bool("REGION_TALK_NOTIFY_DISABLE_WEB_PREVIEW", False),
                     )

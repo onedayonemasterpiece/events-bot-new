@@ -364,6 +364,29 @@ def test_media_plan_is_media_first_and_fails_article_without_hero() -> None:
     assert (fallback["mode"], fallback["status"]) == ("link_preview_fallback", "fallback")
 
 
+def test_social_media_selection_is_joined_from_image_diagnostic() -> None:
+    mod = load_module()
+    publications = [{
+        "post_url": "https://t.me/travel/100",
+        "content_origin_type": "social_post",
+        "expected_image_count": 10,
+    }]
+    images = [{
+        "post_url": "https://t.me/travel/100",
+        "updated_at": "2026-08-01T12:00:00Z",
+        "selected_media_ids": '["telegram:100","telegram:109","telegram:102"]',
+        "expected_image_count": 10,
+        "fetched_image_count": 10,
+    }]
+    mod.attach_latest_media_evidence(publications, images)
+    assert publications[0]["selected_media_ids"] == images[0]["selected_media_ids"]
+    plan = mod.publication_media_plan(publications[0])
+    assert plan["mode"] == "social_album"
+    assert [item["media_id"] for item in plan["items"]] == [
+        "telegram:100", "telegram:109", "telegram:102",
+    ]
+
+
 def test_legacy_review_is_archived_but_never_approves_v8_revision(monkeypatch) -> None:
     mod = load_module()
     generated = {

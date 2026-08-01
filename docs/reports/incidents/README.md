@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-01-region-talk-oversized-album-delivery.md`
+  - Scope: Region Talk social image-ledger join, bounded Telegram grouped-media
+    materialization and pre-send delivery state.
+  - Must not regress: reviewed album IDs retain their exact order; an
+    unexpanded source group is capped at six in source order; local
+    materialization failures never leave a false ambiguous `sending` state.
+
 - `INC-2026-08-01-region-talk-empty-reaction-sync.md`
   - Scope: Region Talk exact operator-reaction observation for reaction-less
     messages and last-reaction removal races.

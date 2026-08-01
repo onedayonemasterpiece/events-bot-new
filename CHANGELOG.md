@@ -70,6 +70,11 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Region Talk social draft backfill now carries the exact reviewed ordered
+  ImageDiagnostic selection into the publication manifest. Telegram source
+  albums without expanded selections are deterministically bounded to the
+  first six original-order frames, and media is materialized before the
+  notifier records an ambiguous external-send state.
 - Focus-group Android onboarding now registers a base-aware, network-only PWA
   worker and captures Chromium's one-shot install event before hydration. It no
   longer presents a plain `Добавить на главный экран` shortcut as equivalent

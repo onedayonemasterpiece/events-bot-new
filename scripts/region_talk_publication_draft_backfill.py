@@ -148,7 +148,7 @@ def _canonical_url(row: dict[str, Any]) -> str:
     })
 
 
-ARTICLE_MEDIA_EVIDENCE_FIELDS = (
+MEDIA_EVIDENCE_FIELDS = (
     "selected_media_materialization_json",
     "media_materialization_items_json",
     "publication_primary_image_url",
@@ -156,6 +156,8 @@ ARTICLE_MEDIA_EVIDENCE_FIELDS = (
     "image_url_or_local_path",
     "associated_image_url",
     "selected_media_ids",
+    "media_manifest_items",
+    "input_media_manifest_hash",
     "expected_image_count",
     "fetched_image_count",
     "browser_materialization_status",
@@ -167,17 +169,17 @@ ARTICLE_MEDIA_EVIDENCE_FIELDS = (
 )
 
 
-def attach_latest_article_media_evidence(
+def attach_latest_media_evidence(
     publications: list[dict[str, Any]],
     image_rows: list[dict[str, Any]],
 ) -> None:
-    """Fill missing article presentation evidence from the durable image ledger.
+    """Fill missing presentation evidence from the durable image ledger.
 
     ImageDiagnostic and the publication finalizer intentionally keep separate
-    audit rows.  A previously confirmed article may therefore predate the
-    media-first draft contract even though its associated publisher hero has
-    already been extracted and reviewed.  Copy only missing presentation
-    fields; never overwrite publication verdict/copy or newer explicit media.
+    audit rows.  A publication row may therefore predate the media-first draft
+    contract even though an article hero or a reviewed social-album selection
+    already exists.  Copy only missing presentation fields; never overwrite
+    publication verdict/copy or newer explicit media.
     """
 
     latest: dict[str, dict[str, Any]] = {}
@@ -189,14 +191,17 @@ def attach_latest_article_media_evidence(
         if previous is None or str(image_row.get("updated_at") or "") >= str(previous.get("updated_at") or ""):
             latest[url] = image_row
     for publication in publications:
-        if content_lane(publication) != "article":
-            continue
         image_row = latest.get(_canonical_url(publication))
         if not image_row:
             continue
-        for field in ARTICLE_MEDIA_EVIDENCE_FIELDS:
+        for field in MEDIA_EVIDENCE_FIELDS:
             if publication.get(field) in (None, "", [], {}) and image_row.get(field) not in (None, "", [], {}):
                 publication[field] = image_row[field]
+
+
+# Compatibility for callers/tests written while only article heroes were
+# joined.  The behavior is intentionally broader now.
+attach_latest_article_media_evidence = attach_latest_media_evidence
 
 
 def publication_history(rows: list[dict[str, Any]], *, limit: int = 5) -> list[dict[str, Any]]:
@@ -1171,7 +1176,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         image_rows = notify.read_kind_rows(
             pool, ydb, table, "image_queue_item", int(args.scan_limit)
         )
-        attach_latest_article_media_evidence(rows, image_rows)
+        attach_latest_media_evidence(rows, image_rows)
         schedules = notify.read_kind_rows(
             pool, ydb, table, "publication_schedule_item", int(args.history_limit)
         )

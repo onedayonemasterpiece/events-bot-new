@@ -74,16 +74,21 @@ the bytes Telegram will fetch.
 For a native Telegram album, the exact source-post URL is itself a valid
 materialization locator even when the upstream ledger has not expanded the
 group into individual message IDs. The notifier resolves the anchor
-`grouped_id`, keeps Telegram's original order and accepts delivery only when
-the materialized result contains 3–6 media items. A single source-album locator
-therefore means “resolve this exact group”, not “publish a one-image album”.
+`grouped_id`. A reviewed ordered `selected_media_ids` sequence is preferred
+and survives the image-ledger → publication-manifest boundary unchanged. If an
+older row has only a source-album locator, the notifier keeps Telegram's
+original order and deterministically takes at most the first six frames; fewer
+than three still fails closed. A single source-album locator therefore means
+“resolve this exact group and apply the bounded fallback”, not “publish a
+one-image album” or “send all ten platform frames”.
 External article source attestations participate in the same live-fingerprint
 merge as Telegram/VK sources so the autonomous orchestrator sees article
 backfill work instead of leaving it visible only to the notifier.
-The v8 backfill also fills missing article presentation fields from the newest
-durable `image_queue_item`. This is a narrow evidence join: it may carry an
-already extracted publisher hero into the review manifest, but it never
-overwrites an existing media selection, publication verdict or editorial copy.
+The v8 backfill also fills missing presentation fields from the newest exact-URL
+durable `image_queue_item`. This narrow evidence join carries either an already
+extracted publisher hero or the reviewed ordered social selection into the
+review manifest, but never overwrites an existing media selection, publication
+verdict or editorial copy.
 
 ### Product format priority
 
