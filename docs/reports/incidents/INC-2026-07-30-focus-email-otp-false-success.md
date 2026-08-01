@@ -212,6 +212,16 @@ after any failed transport result and therefore communicated a false success.
   operation catalog, capability-specific route health, full-response lifecycle,
   per-operation typed outcomes, provider receipt for ambiguous OTP issue and
   ordered idempotent outbox for product commands.
+- 2026-08-01 19:52–20:20 UTC — the onboarding-only Transport v3 candidate
+  confirmed email OTP, then reported participant persistence failure. Live
+  REST evidence found `transport_probe_v1` missing (`PGRST202`) even though the
+  browser bundle already required it; the committed migration and Function had
+  never been applied. The migration was applied and reconciled in remote
+  history, the nonce Function was deployed, and the exact gateway allowlist was
+  updated. Complete production probes now return HTTP 200 with the same nonce
+  through direct and relay Data and Function routes. The UI additionally
+  separates confirmed identity from pending membership persistence and offers
+  an explicit retry.
 
 ## Root Cause
 
@@ -256,6 +266,10 @@ after any failed transport result and therefore communicated a false success.
    by `supabase-js` after the transport had already recorded success. Shared
    `lastAmbiguousAt`/`lastNoHealthyAt` timestamps could not reliably bind that
    failure to the originating operation, especially under concurrency.
+9. Transport v3 frontend delivery was not atomically gated on its database,
+   Edge Function and API Gateway prerequisites. Tests passed against source
+   contracts while production still lacked the Data probe, so route selection
+   failed after Auth had already succeeded.
 
 ## Contributing Factors
 

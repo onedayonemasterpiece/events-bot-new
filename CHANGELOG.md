@@ -16,6 +16,9 @@
   reproducible Astro dependencies and generated site trees.
 
 ### Added
+- Added operator-issued, temporary external-agent focus testing through one
+  dedicated Supabase identity: the server-only tool returns a fresh six-digit
+  OTP and one-time link without email delivery or any public Auth bypass.
 - Added executable, bounded static-collection catch-up tooling: a source-bound admission/audience/people backfill and a six-month exact club-relation enqueue plan. Both default to planning, require explicit apply, and reuse production decision/outbox contracts.
 - Added the static-selection data-prep MVP: source-bound admission/audience/people decisions, exact theatre/venue registry, durable club relation evaluation, six-month club projection, evidence-only shared BGE cache, ID-only collection/venue manifests and production-control fixtures. New semantic labels remain blocked until owner gold and a real Kaggle cold/warm canary.
 - Added the canonical static-collection extraction/product plan: it distinguishes
@@ -74,6 +77,14 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Fixed the onboarding-only Transport v3 rollout gap by applying its Data nonce
+  RPC, deploying the Function nonce probe and updating the stateless relay
+  allowlist before browser delivery. Email OTP now uses six centred code cells,
+  numeric/autofill semantics, safe clipboard assistance and sixth-digit
+  autosubmit; a confirmed account with pending participant persistence is shown
+  as a retryable save state instead of a failed login. Android installation
+  copy now allows up to one minute for launcher settling rather than claiming
+  immediate completion.
 - Replaced the focus-group browser transport's header-only route switch with
   the fail-closed Transport v3 boundary: one central operation catalogue now
   owns retry semantics, last-known-good routes are capability-specific and

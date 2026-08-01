@@ -144,10 +144,19 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
           </p>
         </div>
         <form data-focus-email-otp-form>
-          <label for="focus-email-otp">
-            <span>Код из письма</span>
+          <label class="focus-intake__otp" for="focus-email-otp">
+            <span class="focus-intake__otp-label">Код из письма</span>
+            <span class="focus-intake__otp-boxes" data-focus-otp-boxes aria-hidden="true">
+              <span data-focus-otp-digit></span>
+              <span data-focus-otp-digit></span>
+              <span data-focus-otp-digit></span>
+              <span data-focus-otp-digit></span>
+              <span data-focus-otp-digit></span>
+              <span data-focus-otp-digit></span>
+            </span>
             <input
               id="focus-email-otp"
+              class="focus-intake__otp-input"
               name="otp"
               type="text"
               inputmode="numeric"
@@ -161,19 +170,16 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
             />
           </label>
           <p>После шестой цифры продолжим автоматически.</p>
-          <button class="ke-button ke-button--primary" type="submit" data-focus-email-otp-submit disabled>
+          <button type="submit" data-focus-email-otp-submit disabled hidden>
             Подтвердить
           </button>
         </form>
-        <button class="focus-intake__back" type="button" data-focus-email-resend disabled>
+        <button class="focus-intake__back" type="button" data-focus-email-resend hidden>
           Отправить ещё раз
         </button>
         <span class="focus-intake__resend" data-focus-email-resend-status aria-live="polite"></span>
         <button class="focus-intake__back" type="button" data-focus-email-change>
           Изменить адрес
-        </button>
-        <button class="focus-intake__back" type="button" data-focus-email-back>
-          Выбрать другой способ
         </button>
       </div>
     </div>
@@ -224,6 +230,9 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
 
   async function bootstrapFocusIntake(root: HTMLElement) {
     const initialUrl = new URL(window.location.href);
+    const agentTestEmail = initialUrl.searchParams.get('agent_test_email') === 'focus-agent-e2e@kenigevents.ru'
+      ? 'focus-agent-e2e@kenigevents.ru'
+      : '';
     const resetRequested = initialUrl.searchParams.get('focus_test_reset') === '1';
     const emailCallbackAttempted = initialUrl.searchParams.get('email_callback') === '1'
       || Boolean(initialUrl.searchParams.get('token_hash'));
@@ -278,7 +287,13 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       return;
     }
 
-    window.history.replaceState(window.history.state, '', intake.cleanHref);
+    const cleanIntakeUrl = new URL(intake.cleanHref, window.location.origin);
+    cleanIntakeUrl.searchParams.delete('agent_test_email');
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${cleanIntakeUrl.pathname}${cleanIntakeUrl.search}`,
+    );
 
     const showStage = (stage: 'install' | 'identity' | 'done') => {
       stages.forEach((node) => { node.hidden = node.dataset.intakeStage !== stage; });
@@ -319,6 +334,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     const emailDestination = root.querySelector<HTMLElement>('[data-focus-email-destination]');
     const otpForm = root.querySelector<HTMLFormElement>('[data-focus-email-otp-form]');
     const otpInput = root.querySelector<HTMLInputElement>('#focus-email-otp');
+    const otpDigits = Array.from(root.querySelectorAll<HTMLElement>('[data-focus-otp-digit]'));
     const otpSubmit = root.querySelector<HTMLButtonElement>('[data-focus-email-otp-submit]');
     const yandexButton = root.querySelector<HTMLButtonElement>('[data-focus-yandex]');
     const skipButton = root.querySelector<HTMLButtonElement>('[data-focus-skip]');
@@ -371,7 +387,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
         otpInput.value = '';
       }
       lastSubmittedOtp = '';
-      if (otpSubmit) otpSubmit.disabled = true;
+      renderOtp();
       window.setTimeout(() => otpInput?.focus(), 0);
     };
 
@@ -412,6 +428,32 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     let completionInFlight = false;
     let emailSending = false;
 
+    const renderOtp = () => {
+      if (!otpInput) return;
+      const token = normalizeEmailOtp(otpInput.value);
+      otpInput.value = token;
+      otpDigits.forEach((digit, index) => {
+        digit.textContent = token[index] || '';
+        digit.toggleAttribute('data-filled', index < token.length);
+        digit.toggleAttribute(
+          'data-active',
+          !otpInput.disabled && index === Math.min(token.length, EMAIL_OTP_LENGTH - 1),
+        );
+      });
+      if (otpSubmit) otpSubmit.disabled = token.length !== EMAIL_OTP_LENGTH || otpVerifying;
+    };
+
+    if (agentTestEmail && participation.status === 'joining') {
+      pendingEmail = agentTestEmail;
+      selectedChoice = 'email_intent';
+      if (storage) updateFocusParticipationIdentityChoice(storage, selectedChoice);
+      showStage('identity');
+      showEmailCode();
+      if (identityStatus) {
+        identityStatus.textContent = 'Введите временный код, выданный для проверки. Письмо не требуется.';
+      }
+    }
+
     const clearResendTimer = () => {
       if (resendTimer) window.clearInterval(resendTimer);
       resendTimer = 0;
@@ -424,9 +466,9 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
         if (resendStatus) {
           resendStatus.textContent = remaining > 0
             ? `Повторить можно через ${remaining} сек.`
-            : 'Можно отправить письмо ещё раз.';
+            : '';
         }
-        if (resendButton) resendButton.disabled = remaining > 0;
+        if (resendButton) resendButton.hidden = remaining > 0;
         if (remaining <= 0) {
           clearResendTimer();
           return;
@@ -470,12 +512,16 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
         });
         if (!saved) {
           completionInFlight = false;
+          if (accountContinue) accountContinue.textContent = 'Повторить сохранение';
           if (identityStatus) {
-            identityStatus.textContent = 'Не получилось сохранить участие. Проверьте соединение и нажмите «Продолжить» ещё раз.';
+            identityStatus.dataset.state = 'warning';
+            identityStatus.textContent = 'Вход подтверждён. Участие ещё не сохранилось — нажмите «Повторить сохранение».';
           }
           showIdentityView('signed_in');
           return;
         }
+        if (accountContinue) accountContinue.textContent = 'Продолжить с этим аккаунтом';
+        if (identityStatus) delete identityStatus.dataset.state;
         setFocusContinuingConsent(storage, contactConsent?.checked === true);
       }
       if (!completed) {
@@ -532,7 +578,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       setSending(false);
       if (result.accepted) {
         showEmailCode();
-        if (identityStatus) identityStatus.textContent = 'Письмо отправлено. Введите код или нажмите кнопку в письме.';
+        if (identityStatus) identityStatus.textContent = '';
         startResendTimer();
         return;
       }
@@ -582,6 +628,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       }
       const token = normalizeEmailOtp(otpInput.value);
       otpInput.value = token;
+      renderOtp();
       if (!canSubmitEmailOtp(token, { inFlight: otpVerifying, lastSubmitted: lastSubmittedOtp })) return;
       otpVerifying = true;
       lastSubmittedOtp = token;
@@ -594,16 +641,49 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
         otpInput.disabled = false;
         lastSubmittedOtp = '';
         otpInput.select();
-        if (otpSubmit) otpSubmit.disabled = false;
+        renderOtp();
         if (identityStatus) identityStatus.textContent = verified.message;
       }
     };
 
     otpInput?.addEventListener('input', () => {
-      const token = normalizeEmailOtp(otpInput.value);
-      otpInput.value = token;
-      if (otpSubmit) otpSubmit.disabled = token.length !== EMAIL_OTP_LENGTH || otpVerifying;
+      renderOtp();
+      const token = otpInput.value;
       if (token.length === EMAIL_OTP_LENGTH) void verifyOtp();
+    });
+    otpInput?.addEventListener('focus', renderOtp);
+    otpInput?.addEventListener('blur', renderOtp);
+
+    const useClipboardOtp = async (promptForPermission: boolean) => {
+      if (!otpInput || !navigator.clipboard?.readText || otpVerifying) return false;
+      if (!promptForPermission && navigator.permissions?.query) {
+        try {
+          const permission = await navigator.permissions.query({ name: 'clipboard-read' as PermissionName });
+          if (permission.state !== 'granted') return false;
+        } catch {
+          return false;
+        }
+      }
+      try {
+        const token = normalizeEmailOtp(await navigator.clipboard.readText());
+        if (token.length !== EMAIL_OTP_LENGTH) return false;
+        otpInput.value = token;
+        renderOtp();
+        void verifyOtp();
+        return true;
+      } catch {
+        if (promptForPermission && identityStatus) {
+          identityStatus.textContent = 'Не получилось прочитать код. Нажмите на первую ячейку и вставьте его вручную.';
+        }
+        return false;
+      }
+    };
+
+    window.addEventListener('focus', () => {
+      if (identityView === 'email_code') void useClipboardOtp(false);
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && identityView === 'email_code') void useClipboardOtp(false);
     });
     otpForm?.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -651,6 +731,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
 
     auth.subscribe((snapshot) => {
       if (snapshot.status === 'signed_in') {
+        if (signedInName) signedInName.textContent = staticAuthDisplayName(snapshot.user);
         const intendedChoice = selectedChoice !== 'skipped'
           ? selectedChoice
           : participation.identityChoice;
@@ -661,7 +742,6 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
           void finish(intendedChoice, true);
           return;
         }
-        if (signedInName) signedInName.textContent = staticAuthDisplayName(snapshot.user);
         showIdentityView('signed_in');
         if (identityStatus) identityStatus.textContent = '';
       } else if (snapshot.status === 'signed_out') {
@@ -842,6 +922,52 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     outline-offset: 2px;
   }
   .focus-intake__email form > .ke-button { width: 100%; }
+  .focus-intake__otp {
+    position: relative;
+    display: grid !important;
+    justify-items: center;
+    gap: .65rem !important;
+  }
+  .focus-intake__otp-label { justify-self: start; }
+  .focus-intake__otp-boxes {
+    display: grid;
+    grid-template-columns: repeat(6, clamp(2.55rem, 12vw, 3rem));
+    justify-content: center;
+    gap: clamp(.3rem, 1.6vw, .5rem);
+    width: 100%;
+  }
+  .focus-intake__otp-boxes > span {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1 / 1.18;
+    border: 1.5px solid #cdbfad;
+    border-radius: .8rem;
+    background: #fff;
+    color: #221a14;
+    font: 850 1.35rem/1 var(--ke-font-sans);
+    font-variant-numeric: tabular-nums;
+    transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+  }
+  .focus-intake__otp-boxes > span[data-filled] { background: #fffaf2; }
+  .focus-intake__otp-boxes > span[data-active] {
+    border-color: #0f766e;
+    box-shadow: 0 0 0 3px rgb(15 118 110 / 20%);
+  }
+  .focus-intake__otp-input {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: clamp(3.05rem, 14vw, 3.55rem);
+    min-height: 0 !important;
+    border: 0 !important;
+    padding: 0 !important;
+    opacity: .01;
+    color: transparent !important;
+    caret-color: transparent;
+    cursor: text;
+  }
+  .focus-intake__otp-input:focus-visible { outline: 0 !important; }
   .focus-intake__email form > p {
     margin: 0;
     color: #6d6259;
@@ -869,6 +995,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     font-size: .85rem !important;
     font-weight: 750;
   }
+  .focus-intake__status[data-state="warning"] { color: #7a4b00 !important; }
   .focus-intake__card--done { justify-items: center; text-align: center; }
   .focus-intake__check {
     width: 3.5rem;

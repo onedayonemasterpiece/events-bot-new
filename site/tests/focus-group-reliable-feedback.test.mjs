@@ -16,10 +16,36 @@ test('focus onboarding is sequential and offers link plus six-digit mobile OTP',
   assert.match(intake, /inputmode="numeric"/u);
   assert.match(intake, /autocomplete="one-time-code"/u);
   assert.match(intake, /pattern="\[0-9\]\{6\}"/u);
+  assert.equal((intake.match(/<span data-focus-otp-digit><\/span>/g) || []).length, 6);
+  assert.match(intake, /navigator\.clipboard\.readText/u);
+  assert.match(intake, /permission\.state !== 'granted'/u);
   assert.match(intake, /token\.length === EMAIL_OTP_LENGTH[\s\S]*void verifyOtp\(\)/u);
   assert.match(intake, /if \(result\.accepted\) \{[\s\S]*showEmailCode\(\)/u);
   assert.match(intake, /result\.status === 'ambiguous'[\s\S]*60_000/u);
   assert.match(helper, /EMAIL_OTP_LENGTH = 6/u);
+  assert.doesNotMatch(intake, /Вставить код/u);
+  assert.match(intake, /data-focus-email-resend hidden/u);
+});
+
+test('confirmed identity and participant persistence have separate recovery copy', async () => {
+  const intake = await read('../src/components/FocusGroupInviteIntake.astro');
+  assert.match(intake, /Вход подтверждён\. Участие ещё не сохранилось/u);
+  assert.match(intake, /Повторить сохранение/u);
+  assert.match(intake, /signedInName\.textContent = staticAuthDisplayName\(snapshot\.user\)[\s\S]*void finish/u);
+});
+
+test('external code testing uses a dedicated temporary Supabase identity without a public bypass', async () => {
+  const [intake, issuer] = await Promise.all([
+    read('../src/components/FocusGroupInviteIntake.astro'),
+    read('../scripts/issue-focus-agent-test-credentials.mjs'),
+  ]);
+  assert.match(intake, /agent_test_email/u);
+  assert.match(intake, /focus-agent-e2e@kenigevents\.ru/u);
+  assert.match(intake, /Письмо не требуется/u);
+  assert.match(issuer, /auth\.admin\.generateLink/u);
+  assert.match(issuer, /email_otp/u);
+  assert.match(issuer, /PERSONALIZATION_SUPABASE_(?:SECRET|SERVICE)_KEY/u);
+  assert.doesNotMatch(intake, /service[_-]?role|SECRET_KEY|SERVICE_KEY/iu);
 });
 
 test('focus page rating is durable for a day and replays through an idempotent outbox', async () => {

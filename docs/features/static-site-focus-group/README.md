@@ -646,10 +646,32 @@ only content-hashed assets are immutable. The invitation captures Chromium's
 one-shot `beforeinstallprompt` before hydrated UI starts, and the public copy
 must never describe `Добавить на главный экран` as equivalent to PWA install.
 After the user accepts the system prompt the CTA remains visible as
-`Устанавливается…`; `appinstalled` records the exact base-scoped app identity
-and changes it to `Открыть Анонсы`. A repeat visit reuses that successful
+`Устанавливается…` and explains that Android may need up to one minute;
+`appinstalled` records the exact base-scoped app identity and changes the CTA
+to `Открыть Анонсы` without claiming that the launcher icon must already be
+visible. A repeat visit reuses that successful
 marker, while a new `beforeinstallprompt` invalidates a stale marker after an
 uninstall.
+
+Email verification keeps one real `inputmode=numeric` input with
+`autocomplete=one-time-code` for the platform keyboard, paste, accessibility
+and OS autofill. Six centred visual cells mirror that input; the sixth digit
+submits automatically. Clipboard paste is available explicitly, while
+background clipboard reading is attempted only when the browser has already
+granted permission, so returning from the mail client never triggers a new
+permission dialog. Email Auth success and focus membership persistence are two
+separate UI states: if the idempotent registration RPC fails, the screen says
+that entry is confirmed and offers `Повторить сохранение` rather than reporting
+the whole login as failed.
+
+External code agents must not receive a permanent production bypass. An
+operator may run `site/scripts/issue-focus-agent-test-credentials.mjs` with the
+server-only Supabase key to issue a fresh six-digit OTP and one-time link for
+the dedicated `focus-agent-e2e@kenigevents.ru` identity. The hidden noindex
+entry mode accepts only that exact address, still verifies the real hosted Auth
+OTP, removes the address from the browser URL immediately and never embeds a
+service key or fixed valid code in static assets. Generated credentials are
+temporary secrets and must not be committed or pasted into public logs.
 
 For a clean operator retest on one device use:
 
@@ -673,3 +695,6 @@ before publication if URL/key exist but the resilient route is missing.
 Participant registration remains one authenticated idempotent RPC. It may
 retry once on the alternate route using the short recovery budget; OTP issue
 remains selected-once and is never duplicated after an ambiguous response.
+The Data nonce RPC and Function nonce endpoint are release-coupled prerequisites:
+the browser candidate must not be published until direct and relay production
+probes both return the caller nonce and schema version.

@@ -604,6 +604,16 @@ affected-phone canary -> idempotent NPS/save surfaces -> remaining pages.
 The existing v2 implementation must not be propagated further and the incident
 remains open until these gates pass.
 
+The onboarding candidate is also release-coupled to its production capability
+probes. `transport_probe_v1` must be present in the remote migration history,
+the `transport-probe` Edge Function must be deployed, and the fixed-upstream
+gateway specification must expose both exact paths before candidate upload.
+Acceptance calls the Data and Function probes through both direct and relay
+origins, reads their complete JSON bodies and requires the exact caller nonce
+plus `schema=1`. A frontend-only deployment is rejected: otherwise successful
+Auth can be followed by a false membership failure when the Data route selector
+cannot prove either route.
+
 The deprecated API Gateway `rateLimit` extension is not part of v2 desired
 state. No reviewed Smart Web Security profile exists in the KenigEvents folder,
 and a low global relay limit would let one source starve unrelated users.

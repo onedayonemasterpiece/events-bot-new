@@ -120,7 +120,7 @@ test('focus PWA has a network-only service worker instead of shortcut-only fallb
   assert.doesNotMatch(worker, /caches\./u);
 });
 
-test('focus install action preserves one-shot beforeinstallprompt and honest installed state', async () => {
+test('focus install action preserves one-shot beforeinstallprompt and honest settling state', async () => {
   const state = fixture();
   assert.equal(state.root.hidden, false);
   assert.equal(state.button.hidden, true);
@@ -147,7 +147,7 @@ test('focus install action preserves one-shot beforeinstallprompt and honest ins
   assert.equal(state.button.textContent, 'Открыть Анонсы');
   assert.equal(state.button.hidden, false);
   assert.equal(state.button.disabled, false);
-  assert.match(state.status.textContent, /Приложение установлено/u);
+  assert.match(state.status.textContent, /подождите до минуты/u);
 });
 
 test('repeat invite remembers a completed install and keeps an open-app button', () => {
