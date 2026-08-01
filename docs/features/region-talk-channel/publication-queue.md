@@ -306,6 +306,9 @@ selection plan with policy `region_talk_daily_pair_antivector_v1`:
   Telegram/VK draft, explicit attribution and one to three support points;
   legacy rows without that package are excluded from the public schedule
   instead of reaching a slot with no usable copy;
+- planner and operator-chat delivery use the same strict readiness predicate:
+  `publication_draft_fact_points_json` must decode to a non-empty list, not
+  merely contain a non-empty string such as `[]`;
 - the same selected content is intended for cross-posting to Telegram and VK;
   this is two content items per day, not four unrelated platform posts.
 

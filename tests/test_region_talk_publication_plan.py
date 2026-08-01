@@ -72,6 +72,19 @@ def ready_social(url: str) -> dict:
     }
 
 
+def test_planner_uses_same_strict_ready_contract_as_operator_delivery() -> None:
+    row = ready_social("https://t.me/source/strict")
+    assert plan.publication_draft_ready(row) is True
+
+    # A syntactically non-empty JSON string is not grounded evidence. This was
+    # previously enough for the planner even though the notifier rejected it.
+    row["publication_draft_fact_points_json"] = "[]"
+    assert plan.publication_draft_ready(row) is False
+
+    row["publication_draft_fact_points_json"] = "not-json"
+    assert plan.publication_draft_ready(row) is False
+
+
 def test_external_article_evidence_projection_is_complete_and_verbatim() -> None:
     publication, intake = external_article_fixture()
 

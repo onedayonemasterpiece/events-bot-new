@@ -16,6 +16,9 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Region Talk daily planning now shares the notifier's strict ready-draft
+  predicate, so empty or malformed grounded fact-point JSON cannot occupy a
+  publication slot that the operator chat correctly refuses to deliver.
 - Static-site candidate and atomic-root publication now expand checked archives
   on ephemeral process scratch instead of duplicating the generated tree on
   Fly's small persistent volume. Long create-only uploads no longer push

@@ -26,6 +26,7 @@ if str(ROOT) not in sys.path:
 from scripts.region_talk_goal_notify import (  # noqa: E402
     attach_latest_bge_vectors,
     is_confirmed_publication,
+    is_publication_draft_ready as publication_draft_ready,
     load_env,
     read_kind_rows,
     read_publication_rows,
@@ -42,19 +43,6 @@ DEFAULT_TIMEZONE = "Europe/Kaliningrad"
 DEFAULT_ARTICLE_TIME = "12:00"
 DEFAULT_SOCIAL_TIME = "18:00"
 EVIDENCE_PROJECTION_DRAFT_VERSION = "region_talk_external_evidence_projection_v1"
-
-
-def publication_draft_ready(row: dict[str, Any]) -> bool:
-    """Return true only for a complete operator-reviewable public draft."""
-
-    return bool(
-        str(row.get("publication_draft_status") or "") == "ready_for_operator_review"
-        and str(row.get("publication_draft_title") or "").strip()
-        and str(row.get("publication_draft_source_attribution") or "").strip()
-        and str(row.get("publication_draft_telegram_text") or "").strip()
-        and str(row.get("publication_draft_vk_text") or "").strip()
-        and str(row.get("publication_draft_fact_points_json") or "").strip()
-    )
 
 
 def evidence_projected_article_draft(
