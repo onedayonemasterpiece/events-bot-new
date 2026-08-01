@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import calendar
 import copy
 import hashlib
 import html
@@ -2518,6 +2519,7 @@ def build_event(
 
 
 INTEREST_CLUBS_SCHEMA_VERSION = "interest-clubs-static-v1"
+INTEREST_CLUBS_V2_SCHEMA_VERSION = "interest-clubs-static-v2"
 INTEREST_CLUB_REQUIRED_COLUMNS = {
     "id",
     "slug",
@@ -2526,6 +2528,14 @@ INTEREST_CLUB_REQUIRED_COLUMNS = {
     "public_status",
 }
 INTEREST_CLUB_EVENT_REQUIRED_COLUMNS = {"club_id", "event_id", "status"}
+INTEREST_CLUB_EVALUATION_REQUIRED_COLUMNS = {
+    "club_id",
+    "event_id",
+    "status",
+    "verdict",
+    "policy_version",
+    "input_hash",
+}
 INTEREST_CLUB_EVENT_SOURCE_COLUMNS = ("source_url", "url", "public_url")
 FESTIVAL_TIMELINE_SCHEMA_VERSION = "festival-timeline-static-v1"
 FESTIVAL_TIMELINE_REQUIRED_COLUMNS = {
@@ -2565,6 +2575,7 @@ def _sqlite_table_columns(con: sqlite3.Connection, table: str) -> set[str]:
     if table not in {
         "interest_club",
         "interest_club_event",
+        "interest_club_evaluation",
         "event",
         "event_source",
         "festival",
@@ -2650,10 +2661,12 @@ def build_interest_clubs_projection(
 
     club_columns = _sqlite_table_columns(con, "interest_club")
     relation_columns = _sqlite_table_columns(con, "interest_club_event")
+    evaluation_columns = _sqlite_table_columns(con, "interest_club_evaluation")
     event_columns = _sqlite_table_columns(con, "event")
     contract_available = (
         INTEREST_CLUB_REQUIRED_COLUMNS.issubset(club_columns)
         and INTEREST_CLUB_EVENT_REQUIRED_COLUMNS.issubset(relation_columns)
+        and INTEREST_CLUB_EVALUATION_REQUIRED_COLUMNS.issubset(evaluation_columns)
         and {"id", "title", "date"}.issubset(event_columns)
     )
     projection = {
@@ -2689,6 +2702,15 @@ def build_interest_clubs_projection(
             from interest_club_event ice
             join event e on e.id = ice.event_id
             where ice.club_id=? and ice.status='active'
+              and exists (
+                select 1 from interest_club_evaluation ie
+                where ie.club_id=ice.club_id
+                  and ie.event_id=ice.event_id
+                  and ie.status='accepted'
+                  and ie.verdict='yes'
+                  and ie.policy_version=ice.policy_version
+                  and ie.input_hash=ice.input_hash
+              )
             order by e.date asc, e.id asc
             """,
             (club_id,),
@@ -2751,6 +2773,233 @@ def build_interest_clubs_projection(
                 },
                 "future_meetings": future_meetings,
                 "updated_at": clean_text(row_get(club_row, "updated_at")) or None,
+            }
+        )
+    projection["clubs"] = clubs
+    return projection
+
+
+def _calendar_months_before(value: date, months: int) -> date:
+    ordinal = value.year * 12 + (value.month - 1) - int(months)
+    year, month0 = divmod(ordinal, 12)
+    month = month0 + 1
+    return date(year, month, min(value.day, calendar.monthrange(year, month)[1]))
+
+
+def _club_event_v2_exclusion_reason(row: sqlite3.Row) -> str | None:
+    reason = public_projection_gate_reason(row)
+    if reason:
+        return "event_public_gate"
+    if clean_text(row_get(row, "lifecycle_status") or "active").lower() != "active":
+        return "event_lifecycle"
+    if bool(row_get(row, "silent")):
+        return "event_silent"
+    return None
+
+
+def build_interest_clubs_projection_v2(
+    con: sqlite3.Connection,
+    *,
+    current_date: str,
+    generated_at: str,
+    exported_events: list[dict[str, Any]],
+    enabled: bool = False,
+) -> dict[str, Any]:
+    """Build the six-calendar-month club registry projection.
+
+    Relations remain semantic truth only when their exact hash/policy has an
+    accepted evaluation. Festival containment is not a negative publication
+    signal here: it neither creates nor invalidates a grounded relation.
+    """
+
+    receipt = {
+        "approved_identity_count": 0,
+        "invalid_identity_count": 0,
+        "non_active_relation_count": 0,
+        "unaccepted_relation_count": 0,
+        "event_public_gate_count": 0,
+        "event_lifecycle_count": 0,
+        "event_silent_count": 0,
+        "outside_six_month_window_count": 0,
+        "dormant_identity_count": 0,
+        "catalog_event_id_omitted_count": 0,
+        "festival_relation_allowed_count": 0,
+    }
+    projection: dict[str, Any] = {
+        "schema_version": INTEREST_CLUBS_V2_SCHEMA_VERSION,
+        "projection_version": 2,
+        "generated_at": generated_at,
+        "current_date": current_date,
+        "source": "disabled-by-build-gate",
+        "window": {},
+        "exclusion_receipts": receipt,
+        "clubs": [],
+    }
+    if not enabled:
+        return projection
+
+    club_columns = _sqlite_table_columns(con, "interest_club")
+    relation_columns = _sqlite_table_columns(con, "interest_club_event")
+    evaluation_columns = _sqlite_table_columns(con, "interest_club_evaluation")
+    event_columns = _sqlite_table_columns(con, "event")
+    contract_available = (
+        INTEREST_CLUB_REQUIRED_COLUMNS.issubset(club_columns)
+        and INTEREST_CLUB_EVENT_REQUIRED_COLUMNS.issubset(relation_columns)
+        and INTEREST_CLUB_EVALUATION_REQUIRED_COLUMNS.issubset(evaluation_columns)
+        and {"id", "title", "date"}.issubset(event_columns)
+    )
+    projection["source"] = (
+        "sqlite-interest-clubs-v2" if contract_available else "empty-contract-fallback"
+    )
+    if not contract_available:
+        return projection
+
+    current_day = date.fromisoformat(current_date)
+    cutoff_6m = _calendar_months_before(current_day, 6)
+    cutoff_12m = _calendar_months_before(current_day, 12)
+    projection["window"] = {
+        "six_months_start_inclusive": cutoff_6m.isoformat(),
+        "twelve_months_start_inclusive": cutoff_12m.isoformat(),
+        "as_of_inclusive": current_date,
+    }
+    exported_slug_by_id = {
+        int(item["id"]): str(item["slug"])
+        for item in exported_events
+        if str(item.get("id", "")).isdigit() and clean_text(item.get("slug"))
+    }
+    club_rows = con.execute(
+        "select * from interest_club where public_status='approved' "
+        "order by canonical_name collate nocase, id"
+    ).fetchall()
+    receipt["approved_identity_count"] = len(club_rows)
+    clubs: list[dict[str, Any]] = []
+    for club_row in club_rows:
+        club_id = int(row_get(club_row, "id"))
+        slug = clean_text(row_get(club_row, "slug"))
+        name = clean_text(row_get(club_row, "canonical_name"))
+        topic = clean_text(row_get(club_row, "topic"))
+        if not name or not topic or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug):
+            receipt["invalid_identity_count"] += 1
+            continue
+
+        receipt["non_active_relation_count"] += int(
+            con.execute(
+                "select count(*) from interest_club_event where club_id=? and status<>'active'",
+                (club_id,),
+            ).fetchone()[0]
+        )
+        relation_rows = con.execute(
+            """
+            select e.*,
+                   ice.input_hash as club_relation_input_hash,
+                   ice.policy_version as club_relation_policy_version,
+                   ice.updated_at as club_relation_updated_at,
+                   ie.id as accepted_evaluation_id,
+                   ie.updated_at as accepted_evaluation_updated_at
+            from interest_club_event ice
+            join event e on e.id=ice.event_id
+            left join interest_club_evaluation ie
+              on ie.club_id=ice.club_id
+             and ie.event_id=ice.event_id
+             and ie.status='accepted'
+             and ie.verdict='yes'
+             and ie.policy_version=ice.policy_version
+             and ie.input_hash=ice.input_hash
+            where ice.club_id=? and ice.status='active'
+            order by e.date,e.id
+            """,
+            (club_id,),
+        ).fetchall()
+        eligible_rows: list[sqlite3.Row] = []
+        history_rows_12m: list[sqlite3.Row] = []
+        for event_row in relation_rows:
+            if row_get(event_row, "accepted_evaluation_id") is None:
+                receipt["unaccepted_relation_count"] += 1
+                continue
+            exclusion = _club_event_v2_exclusion_reason(event_row)
+            if exclusion:
+                receipt[f"{exclusion}_count"] += 1
+                continue
+            if clean_text(row_get(event_row, "festival")):
+                receipt["festival_relation_allowed_count"] += 1
+            event_end = date.fromisoformat(
+                clean_text(row_get(event_row, "end_date"))
+                or clean_text(row_get(event_row, "date"))
+            )
+            if event_end >= cutoff_12m:
+                history_rows_12m.append(event_row)
+            if event_end < cutoff_6m:
+                receipt["outside_six_month_window_count"] += 1
+                continue
+            eligible_rows.append(event_row)
+
+        if not eligible_rows:
+            receipt["dormant_identity_count"] += 1
+            continue
+
+        dates = [date.fromisoformat(clean_text(row_get(row, "date"))) for row in eligible_rows]
+        historical_dates = [value for value in dates if value <= current_day]
+        future_dates = [value for value in dates if value >= current_day]
+        count_6m = sum(cutoff_6m <= value <= current_day for value in dates)
+        count_12m = sum(
+            cutoff_12m <= date.fromisoformat(clean_text(row_get(row, "date"))) <= current_day
+            for row in history_rows_12m
+        )
+        catalog_event_ids: list[int] = []
+        future_meetings: list[dict[str, Any]] = []
+        for event_row in eligible_rows:
+            event_id = int(row_get(event_row, "id"))
+            event_slug = exported_slug_by_id.get(event_id)
+            if event_slug:
+                catalog_event_ids.append(event_id)
+            else:
+                receipt["catalog_event_id_omitted_count"] += 1
+            start_date = clean_text(row_get(event_row, "date"))
+            if start_date < current_date or not event_slug:
+                continue
+            start_time, _, display_time = split_time(row_get(event_row, "time"))
+            city = clean_place(row_get(event_row, "city"))
+            venue = drop_city_only_venue(clean_place(row_get(event_row, "location_name")), city)
+            future_meetings.append(
+                {
+                    "event_id": event_id,
+                    "title": strip_emoji_prefix(row_get(event_row, "title")) or f"Событие {event_id}",
+                    "start_date": start_date,
+                    "start_time": start_time,
+                    "display_time": display_time,
+                    "city": city,
+                    "venue_name": venue,
+                    "event_path": f"/sobytiya/{event_slug}/",
+                    "source_url": _club_event_source_url(con, event_id, event_row, event_columns),
+                }
+            )
+        updated_candidates = [
+            clean_text(row_get(club_row, "updated_at")),
+            *[clean_text(row_get(row, "club_relation_updated_at")) for row in eligible_rows],
+            *[clean_text(row_get(row, "accepted_evaluation_updated_at")) for row in eligible_rows],
+            *[clean_text(row_get(row, "club_relation_updated_at")) for row in history_rows_12m],
+            *[clean_text(row_get(row, "accepted_evaluation_updated_at")) for row in history_rows_12m],
+        ]
+        clubs.append(
+            {
+                "id": club_id,
+                "slug": slug,
+                "name": name,
+                "topic": topic,
+                "description": clean_text(row_get(club_row, "description")) or None,
+                "city": clean_place(row_get(club_row, "city")),
+                "typical_venue": clean_place(row_get(club_row, "typical_place")),
+                "status": "active",
+                "activity": {
+                    "meeting_count_6m": count_6m,
+                    "meeting_count_12m": count_12m,
+                    "last_activity_date": max(historical_dates).isoformat() if historical_dates else None,
+                    "next_activity_date": min(future_dates).isoformat() if future_dates else None,
+                    "future_meeting_count": len(future_meetings),
+                },
+                "current_catalog_event_ids": sorted(set(catalog_event_ids)),
+                "future_meetings": future_meetings,
+                "data_updated_at": max(filter(None, updated_candidates), default=None),
             }
         )
     projection["clubs"] = clubs
@@ -5985,6 +6234,17 @@ def main() -> int:
     )
     (out_dir / "interest-clubs.json").write_text(
         json.dumps(clubs_projection, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    clubs_projection_v2 = build_interest_clubs_projection_v2(
+        con,
+        current_date=effective_date,
+        generated_at=generated_at,
+        exported_events=events,
+        enabled=os.getenv("ENABLE_INTEREST_CLUB_STATIC_PROJECTION", "").strip().lower() in {"1", "true", "yes", "on"},
+    )
+    (out_dir / "interest-clubs-static-v2.json").write_text(
+        json.dumps(clubs_projection_v2, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     festival_projection = build_festival_timeline_projection(

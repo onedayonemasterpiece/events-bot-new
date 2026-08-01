@@ -3132,7 +3132,7 @@ class Database:
                     attempts INTEGER NOT NULL DEFAULT 1,
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(club_id, event_id),
+                    UNIQUE(club_id, event_id, policy_version, input_hash),
                     FOREIGN KEY(club_id) REFERENCES interest_club(id) ON DELETE CASCADE,
                     FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE,
                     CHECK(status IN ('accepted','no_match','review','deferred','ineligible'))

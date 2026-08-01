@@ -18157,21 +18157,20 @@ async def _smart_event_update_impl(
             except Exception:
                 logger.warning("smart_update: schedule/update failed for event %s", new_event.id, exc_info=True)
 
-        # Interest-club relation verification is an optional shadow projection.
-        # It must never extend the Smart Update critical path or affect the
-        # canonical event transaction. The feature helper is a no-op unless its
-        # disabled-by-default flag is explicitly enabled.
+        # Interest-club verification is durable outbox work. Enqueueing remains
+        # outside the canonical event transaction, while provider/restart
+        # failures can no longer lose the relation evaluation.
         try:
             from interest_clubs import schedule_interest_club_evaluation
 
-            schedule_interest_club_evaluation(
+            await schedule_interest_club_evaluation(
                 db,
                 int(new_event.id or 0),
                 schedule_projection=schedule_tasks,
             )
         except Exception:
             logger.warning(
-                "smart_update: failed to launch interest-club evaluation event=%s",
+                "smart_update: failed to enqueue interest-club evaluation event=%s",
                 new_event.id,
                 exc_info=True,
             )
@@ -19705,14 +19704,14 @@ async def _smart_event_update_impl(
         try:
             from interest_clubs import schedule_interest_club_evaluation
 
-            schedule_interest_club_evaluation(
+            await schedule_interest_club_evaluation(
                 db,
                 int(existing.id or 0),
                 schedule_projection=schedule_tasks,
             )
         except Exception:
             logger.warning(
-                "smart_update: failed to launch interest-club evaluation event=%s",
+                "smart_update: failed to enqueue interest-club evaluation event=%s",
                 existing.id,
                 exc_info=True,
             )

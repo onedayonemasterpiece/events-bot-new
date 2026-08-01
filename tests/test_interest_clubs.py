@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import timezone
 from pathlib import Path
 
 import pytest
@@ -8,7 +9,16 @@ from sqlalchemy import select, text
 
 import interest_clubs as clubs
 from db import Database
-from models import Event, EventSource, InterestClub, InterestClubEvaluation, InterestClubEvent
+from models import (
+    Event,
+    EventSource,
+    InterestClub,
+    InterestClubEvaluation,
+    InterestClubEvent,
+    JobOutbox,
+    JobStatus,
+    JobTask,
+)
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -181,6 +191,7 @@ async def test_incremental_relation_is_idempotent_and_removes_stale_membership(t
                     select(InterestClubEvaluation).where(
                         InterestClubEvaluation.club_id == club_id,
                         InterestClubEvaluation.event_id == event_id,
+                        InterestClubEvaluation.status == "no_match",
                     )
                 )
             ).scalar_one()
@@ -211,7 +222,7 @@ async def test_provider_failure_defers_and_never_creates_active_relation(tmp_pat
                         InterestClubEvent.event_id == event_id,
                     )
                 )
-            ).scalar_one()
+            ).scalar_one_or_none()
             evaluation = (
                 await session.execute(
                     select(InterestClubEvaluation).where(
@@ -220,7 +231,7 @@ async def test_provider_failure_defers_and_never_creates_active_relation(tmp_pat
                     )
                 )
             ).scalar_one()
-        assert relation.status == "deferred"
+        assert relation is None
         assert evaluation.status == "deferred"
         assert evaluation.error_code == "ProviderError"
     finally:
@@ -228,7 +239,7 @@ async def test_provider_failure_defers_and_never_creates_active_relation(tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_source_lane_model_no_is_review_not_default_positive(tmp_path):
+async def test_source_lane_model_no_removes_relation_and_records_review(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     event_id, club_id = await _seed_event_and_club(db, anchor="cinemango_official")
@@ -261,8 +272,17 @@ async def test_source_lane_model_no_is_review_not_default_positive(tmp_path):
                         InterestClubEvent.event_id == event_id,
                     )
                 )
+            ).scalar_one_or_none()
+            evaluation = (
+                await session.execute(
+                    select(InterestClubEvaluation).where(
+                        InterestClubEvaluation.club_id == club_id,
+                        InterestClubEvaluation.event_id == event_id,
+                    )
+                )
             ).scalar_one()
-        assert relation.status == "review"
+        assert relation is None
+        assert (evaluation.status, evaluation.verdict) == ("review", "no")
     finally:
         await db.close()
 
@@ -317,3 +337,254 @@ def test_48_case_manifest_obeys_fail_closed_routing_contract():
 def test_feature_flag_is_disabled_by_default(monkeypatch):
     monkeypatch.delenv("ENABLE_INTEREST_CLUB_PIPELINE", raising=False)
     assert clubs.pipeline_enabled() is False
+
+
+@pytest.mark.asyncio
+async def test_provider_failure_on_new_hash_preserves_last_good_relation_history(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    event_id, club_id = await _seed_event_and_club(db)
+
+    async def accepted(_packet: clubs.EvidencePacket) -> clubs.VerificationResult:
+        return clubs.VerificationResult(
+            "yes", quote="СИНЕМАНГО организует обсуждение нового фильма"
+        )
+
+    async def failed(_packet: clubs.EvidencePacket) -> clubs.VerificationResult:
+        return clubs.VerificationResult("provider_error", error_code="ProviderTimeout")
+
+    try:
+        await clubs.evaluate_interest_clubs_for_event(
+            db, event_id, verifier=accepted, schedule_projection=False
+        )
+        async with db.get_session() as session:
+            original = (
+                await session.execute(
+                    select(InterestClubEvent).where(
+                        InterestClubEvent.club_id == club_id,
+                        InterestClubEvent.event_id == event_id,
+                    )
+                )
+            ).scalar_one()
+            original_hash = original.input_hash
+            event = await session.get(Event, event_id)
+            event.description += " Обновлённая программа."
+            session.add(event)
+            await session.commit()
+
+        assert not await clubs.evaluate_interest_clubs_for_event(
+            db, event_id, verifier=failed, schedule_projection=False
+        )
+        async with db.get_session() as session:
+            relation = (
+                await session.execute(
+                    select(InterestClubEvent).where(
+                        InterestClubEvent.club_id == club_id,
+                        InterestClubEvent.event_id == event_id,
+                    )
+                )
+            ).scalar_one()
+            evaluations = list(
+                (
+                    await session.execute(
+                        select(InterestClubEvaluation)
+                        .where(
+                            InterestClubEvaluation.club_id == club_id,
+                            InterestClubEvaluation.event_id == event_id,
+                        )
+                        .order_by(InterestClubEvaluation.id)
+                    )
+                ).scalars()
+            )
+        assert relation.status == "active"
+        assert relation.input_hash == original_hash
+        assert [(row.status, row.verdict) for row in evaluations] == [
+            ("accepted", "yes"),
+            ("deferred", "provider_error"),
+        ]
+        with pytest.raises(clubs.InterestClubProviderDeferred):
+            await clubs.evaluate_interest_clubs_for_event(
+                db,
+                event_id,
+                verifier=failed,
+                schedule_projection=False,
+                retry_provider_failures=True,
+            )
+        async with db.get_session() as session:
+            deferred = (
+                await session.execute(
+                    select(InterestClubEvaluation).where(
+                        InterestClubEvaluation.status == "deferred"
+                    )
+                )
+            ).scalar_one()
+        assert deferred.attempts == 2
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_durable_club_enqueue_requeues_done_and_keeps_one_running_successor(
+    tmp_path, monkeypatch
+):
+    import main
+
+    monkeypatch.setenv("ENABLE_INTEREST_CLUB_PIPELINE", "1")
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    event_id, _club_id = await _seed_event_and_club(db)
+    key = f"interest_club_relation:{event_id}"
+    try:
+        assert await clubs.schedule_interest_club_evaluation(db, event_id) == "new"
+        async with db.get_session() as session:
+            row = (
+                await session.execute(
+                    select(JobOutbox).where(JobOutbox.coalesce_key == key)
+                )
+            ).scalar_one()
+            assert row.task == JobTask.interest_club_relation
+            row.status = JobStatus.done
+            session.add(row)
+            await session.commit()
+        assert await clubs.schedule_interest_club_evaluation(db, event_id) == "requeued"
+        async with db.get_session() as session:
+            row = (
+                await session.execute(
+                    select(JobOutbox).where(JobOutbox.coalesce_key == key)
+                )
+            ).scalar_one()
+            row.status = JobStatus.running
+            row.payload = {"revision": "running"}
+            session.add(row)
+            await session.commit()
+
+        assert await main.enqueue_job(
+            db,
+            event_id,
+            JobTask.interest_club_relation,
+            payload={"revision": "next-1"},
+            coalesce_key=key,
+            requeue_done=True,
+        ) == "merged"
+        assert await main.enqueue_job(
+            db,
+            event_id,
+            JobTask.interest_club_relation,
+            payload={"revision": "next-2"},
+            coalesce_key=key,
+            requeue_done=True,
+        ) == "merged-rearmed"
+        async with db.get_session() as session:
+            rows = list(
+                (
+                    await session.execute(
+                        select(JobOutbox)
+                        .where(JobOutbox.coalesce_key == key)
+                        .order_by(JobOutbox.id)
+                    )
+                ).scalars()
+            )
+        assert [row.status for row in rows] == [JobStatus.running, JobStatus.pending]
+        assert rows[0].payload == {"revision": "running"}
+        assert rows[1].payload == {"revision": "next-2"}
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_shadow_discovery_is_default_off_bounded_and_never_public(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        async with db.get_session() as session:
+            for index in range(3):
+                session.add(
+                    InterestClub(
+                        slug=f"shadow-{index}",
+                        canonical_name=f"Shadow {index}",
+                        topic="review",
+                        public_status="shadow",
+                    )
+                )
+            session.add(
+                InterestClub(
+                    slug="approved-one",
+                    canonical_name="Approved",
+                    topic="public",
+                    public_status="approved",
+                )
+            )
+            await session.commit()
+        disabled = await clubs.build_shadow_identity_discovery_report(db)
+        assert disabled["enabled"] is False
+        assert disabled["candidates"] == []
+        enabled = await clubs.build_shadow_identity_discovery_report(
+            db, enabled=True, limit=2
+        )
+        assert len(enabled["candidates"]) == 2
+        assert {item["review_state"] for item in enabled["candidates"]} == {"shadow"}
+        assert all(item["slug"] != "approved-one" for item in enabled["candidates"])
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_provider_failure_job_remains_durable_for_backoff_retry(
+    tmp_path, monkeypatch
+):
+    import main
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    event_id, _club_id = await _seed_event_and_club(db)
+
+    async def deferred(_event_id, _db, _bot):
+        raise clubs.InterestClubProviderDeferred("provider_timeout")
+
+    monkeypatch.setitem(main.JOB_HANDLERS, "interest_club_relation", deferred)
+    try:
+        await main.enqueue_job(
+            db,
+            event_id,
+            JobTask.interest_club_relation,
+            coalesce_key=f"interest_club_relation:{event_id}",
+            requeue_done=True,
+        )
+        processed = await main._run_due_jobs_once(
+            db,
+            bot=None,
+            allowed_tasks={JobTask.interest_club_relation},
+        )
+        assert processed == 1
+        async with db.get_session() as session:
+            job = (
+                await session.execute(
+                    select(JobOutbox).where(
+                        JobOutbox.task == JobTask.interest_club_relation
+                    )
+                )
+            ).scalar_one()
+        assert job.status == JobStatus.error
+        assert job.attempts == 1
+        assert job.last_error == "provider_timeout"
+        job_id = int(job.id)
+        next_run_at = job.next_run_at
+        if next_run_at.tzinfo is None:
+            next_run_at = next_run_at.replace(tzinfo=timezone.utc)
+        assert next_run_at > clubs._utc_now()
+
+        async with db.get_session() as session:
+            job = await session.get(JobOutbox, job_id)
+            job.status = JobStatus.running
+            session.add(job)
+            await session.commit()
+        await main.reconcile_job_outbox(db)
+        async with db.get_session() as session:
+            restarted = await session.get(JobOutbox, job_id)
+        assert restarted.status == JobStatus.error
+        restarted_at = restarted.next_run_at
+        if restarted_at.tzinfo is None:
+            restarted_at = restarted_at.replace(tzinfo=timezone.utc)
+        assert restarted_at <= clubs._utc_now()
+    finally:
+        await db.close()

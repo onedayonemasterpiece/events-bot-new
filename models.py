@@ -1214,11 +1214,17 @@ class InterestClubEvent(SQLModel, table=True):
 
 
 class InterestClubEvaluation(SQLModel, table=True):
-    """Compact latest-decision ledger, including fail-closed non-relations."""
+    """Hash-versioned decision history, including fail-closed non-relations."""
 
     __tablename__ = "interest_club_evaluation"
     __table_args__ = (
-        UniqueConstraint("club_id", "event_id", name="ux_interest_club_evaluation_pair"),
+        UniqueConstraint(
+            "club_id",
+            "event_id",
+            "policy_version",
+            "input_hash",
+            name="ux_interest_club_evaluation_history",
+        ),
         Index("ix_interest_club_evaluation_status", "status", "updated_at"),
         Index("ix_interest_club_evaluation_event", "event_id"),
     )
@@ -2102,6 +2108,7 @@ class JobTask(str, Enum):
     static_site_build = "static_site_build"
     event_vector_sync = "event_vector_sync"
     event_age_bge_assessment = "event_age_bge_assessment"
+    interest_club_relation = "interest_club_relation"
     fest_nav_update_all = "fest_nav:update_all"
 
 

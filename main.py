@@ -15079,7 +15079,10 @@ async def enqueue_job(
                 updated = False
                 # Never change the immutable request currently being built. A
                 # later static effect belongs to exactly one pending follow-up.
-                if payload is not None and task != JobTask.static_site_build:
+                if payload is not None and task not in {
+                    JobTask.static_site_build,
+                    JobTask.interest_club_relation,
+                }:
                     job.payload = payload
                     updated = True
                 if depends_on:
@@ -15109,6 +15112,7 @@ async def enqueue_job(
                         JobTask.weekend_pages,
                         JobTask.event_vector_sync,
                         JobTask.event_age_bge_assessment,
+                        JobTask.interest_club_relation,
                         JobTask.static_site_build,
                     }
                     and (
@@ -15117,6 +15121,7 @@ async def enqueue_job(
                         in {
                             JobTask.event_vector_sync,
                             JobTask.event_age_bge_assessment,
+                            JobTask.interest_club_relation,
                             JobTask.static_site_build,
                         }
                     )
@@ -15136,6 +15141,8 @@ async def enqueue_job(
                                     ),
                                 )
                             )
+                        elif task == JobTask.interest_club_relation:
+                            delay = timedelta(seconds=1)
                         elif (
                             task == JobTask.static_site_build
                             and isinstance(payload, dict)
@@ -15150,7 +15157,10 @@ async def enqueue_job(
                         JobOutbox.coalesce_key == job.coalesce_key,
                         JobOutbox.status == JobStatus.pending,
                     )
-                    if task != JobTask.static_site_build:
+                    if task not in {
+                        JobTask.static_site_build,
+                        JobTask.interest_club_relation,
+                    }:
                         followup_stmt = followup_stmt.where(JobOutbox.next_run_at > now)
                     existing_followup = (
                         await session.execute(
@@ -15164,6 +15174,9 @@ async def enqueue_job(
                             existing_followup.payload = merge_static_site_request_payload(
                                 existing_followup.payload, payload
                             )
+                            follow_changed = True
+                        elif task == JobTask.interest_club_relation and payload is not None:
+                            existing_followup.payload = payload
                             follow_changed = True
                         if (
                             task == JobTask.static_site_build
@@ -18273,6 +18286,7 @@ TASK_LABELS = {
     "weekend_pages": "VK (выходные)",
     "festival_pages": "VK (фестиваль)",
     "event_age_bge_assessment": "Возрастная оценка BGE (Kaggle CPU)",
+    "interest_club_relation": "Связь с клубом по интересам",
     "fest_nav:update_all": "Навигация",
 }
 
@@ -18298,6 +18312,7 @@ JOB_TTL: dict[JobTask, int] = {
     JobTask.event_vector_sync: 10800,
     JobTask.static_site_build: 7200,
     JobTask.event_age_bge_assessment: 10800,
+    JobTask.interest_club_relation: 604800,
 }
 
 JOB_MAX_RUNTIME: dict[JobTask, int] = {
@@ -18313,6 +18328,7 @@ JOB_MAX_RUNTIME: dict[JobTask, int] = {
     JobTask.event_vector_sync: 7200,
     JobTask.static_site_build: 5400,
     JobTask.event_age_bge_assessment: 4200,
+    JobTask.interest_club_relation: 600,
 }
 
 DEFAULT_JOB_TTL = 3600
@@ -18326,6 +18342,7 @@ EVENT_PIPELINE_INDEPENDENT_TASKS: set[JobTask] = {
     JobTask.ics_publish,
     JobTask.tg_ics_post,
     JobTask.event_age_bge_assessment,
+    JobTask.interest_club_relation,
 }
 DEPENDENCY_RETRY_HORIZON = timedelta(days=7)
 
@@ -18774,6 +18791,7 @@ async def _run_due_jobs_once_locked(
         JobTask.week_pages: 1,
         JobTask.weekend_pages: 1,
         JobTask.festival_pages: 1,
+        JobTask.interest_club_relation: 2,
         JobTask.event_vector_sync: 2,
         JobTask.static_site_build: 3,
         JobTask.event_age_bge_assessment: 4,
@@ -24485,9 +24503,44 @@ async def job_event_age_bge_assessment(
     )
 
 
+async def job_interest_club_relation(
+    event_id: int,
+    db: Database,
+    bot: Bot | None,
+) -> bool:
+    """Evaluate one event; persisted provider deferrals retry via outbox."""
+
+    from interest_clubs import evaluate_interest_clubs_for_event
+
+    async with db.get_session() as session:
+        payload = (
+            await session.execute(
+                select(JobOutbox.payload)
+                .where(
+                    JobOutbox.event_id == int(event_id),
+                    JobOutbox.task == JobTask.interest_club_relation,
+                    JobOutbox.status == JobStatus.running,
+                )
+                .order_by(JobOutbox.id.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+    schedule_projection = not (
+        isinstance(payload, Mapping) and payload.get("schedule_projection") is False
+    )
+
+    return await evaluate_interest_clubs_for_event(
+        db,
+        int(event_id),
+        schedule_projection=schedule_projection,
+        retry_provider_failures=True,
+    )
+
+
 JOB_HANDLERS = {
     "event_media_review": job_event_media_review,
     "event_age_bge_assessment": job_event_age_bge_assessment,
+    "interest_club_relation": job_interest_club_relation,
     "telegraph_build": update_telegraph_event_page,
     "vk_sync": job_sync_vk_source_post,
     "tg_event_publish": job_publish_tg_event_post,
