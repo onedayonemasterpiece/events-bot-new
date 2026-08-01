@@ -23909,13 +23909,6 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     await _prune_static_site_terminal_outputs(db)
     await _prune_static_site_terminal_snapshots_for_capacity(db)
     await _prune_static_site_abandoned_scratch_for_capacity()
-    try:
-        await asyncio.to_thread(_static_site_storage_preflight)
-    except StaticSiteRetryableError as exc:
-        # Capacity is an environmental gate, not a failed immutable input.
-        # Keep the coalesced request pending without spending its finite build
-        # attempt budget; the next healthy probe can run the same payload.
-        raise StaticSiteSingleFlightDeferred(f"static_site_capacity_deferred:{exc}") from exc
     force_rebuild = bool(request_payload.get("force_rebuild"))
     if force_rebuild and request_payload.get("trigger") != "operator_request":
         raise StaticSitePermanentError("force_rebuild_requires_operator_request")
@@ -23948,6 +23941,15 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         if isinstance(handoff, Mapping) and handoff.get("build_id"):
             await _delete_terminal_static_site_output(str(handoff["build_id"]))
         return recovered_result if recovered_result is not None else True
+    try:
+        await asyncio.to_thread(_static_site_storage_preflight)
+    except StaticSiteRetryableError as exc:
+        # A recoverable remote handoff is reconciled above before this durable
+        # capacity gate. Its already-downloaded output may be the very object
+        # keeping /data below the next-build threshold, and successful
+        # reconciliation deletes it. Only a genuinely new build needs enough
+        # durable room for another immutable snapshot and runner handoff.
+        raise StaticSiteSingleFlightDeferred(f"static_site_capacity_deferred:{exc}") from exc
     request_payload, refreshed_revision_ids = (
         await _refresh_static_site_vector_barrier_payload(db, request_payload)
     )

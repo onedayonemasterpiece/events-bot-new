@@ -386,6 +386,13 @@ even during startup grace. The coalesced request is deferred without incrementin
 its finite attempt counter until cleanup or deploy restores capacity; it must
 not be bypassed by sending another Kaggle attempt.
 
+An exact recoverable remote handoff is adopted and reconciled before the
+durable free-space gate for a new build. The already-downloaded checked output
+may itself be the object keeping `/data` below that next-build threshold; after
+successful reconciliation it is deleted, and only then may a later request
+allocate a new snapshot. Active handoff output must not be removed blindly to
+make room.
+
 ### Smart Update debounce and historical 2026-07-15 data evidence
 
 Smart Update enqueues `static_site_build:prod` for 15 minutes after the latest
