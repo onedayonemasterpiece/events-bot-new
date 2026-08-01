@@ -1,0 +1,523 @@
+{
+  "schemaVersion": "static_place_organization_registry_v1",
+  "registryVersion": 1,
+  "reviewedAt": "2026-08-01",
+  "entities": [
+    {
+      "id": "dramteatr39",
+      "slug": "dramteatr39",
+      "kind": "mixed",
+      "status": "public",
+      "canonicalName": "Калининградский областной драматический театр",
+      "organizerAliases": [
+        "Калининградский областной драматический театр",
+        "Калининградский драматический театр",
+        "Драматический театр",
+        "Драмтеатр"
+      ],
+      "sourceBindings": {
+        "parserTypes": ["dramteatr"],
+        "telegramUsernames": ["dramteatr39"],
+        "vkScreenNames": ["dramteatr39"],
+        "vkGroupIds": [],
+        "domains": ["dramteatr39.ru"]
+      },
+      "canonicalVenue": {
+        "venueId": "dramteatr39",
+        "name": "Драматический театр",
+        "address": "Мира 4",
+        "city": "Калининград",
+        "approvedNameAliases": [
+          "Калининградский областной драматический театр",
+          "Калининградский драматический театр",
+          "Драмтеатр"
+        ],
+        "approvedLocationAliases": [
+          "Драматический театр, Мира 4, Калининград"
+        ],
+        "approvedTuples": []
+      },
+      "officialUrl": "https://dramteatr39.ru/",
+      "medallionSlug": "dramteatr39",
+      "medallionReview": null,
+      "flags": {
+        "official_theatre": true,
+        "venue_page_candidate": true,
+        "medieval_site": false
+      }
+    },
+    {
+      "id": "muzteatr39",
+      "slug": "muzteatr39",
+      "kind": "mixed",
+      "status": "public",
+      "canonicalName": "Калининградский областной музыкальный театр",
+      "organizerAliases": [
+        "Калининградский областной музыкальный театр",
+        "Калининградский музыкальный театр",
+        "Музыкальный театр"
+      ],
+      "sourceBindings": {
+        "parserTypes": ["muzteatr"],
+        "telegramUsernames": ["muztear39"],
+        "vkScreenNames": ["muzteatr39"],
+        "vkGroupIds": [],
+        "domains": ["muzteatr39.ru"]
+      },
+      "canonicalVenue": {
+        "venueId": "muzteatr39",
+        "name": "Музыкальный театр",
+        "address": "Мира 87",
+        "city": "Калининград",
+        "approvedNameAliases": [
+          "Калининградский областной музыкальный театр",
+          "Калининградский музыкальный театр"
+        ],
+        "approvedLocationAliases": [
+          "Музыкальный театр, Мира 87, Калининград"
+        ],
+        "approvedTuples": []
+      },
+      "officialUrl": "https://muzteatr39.ru/",
+      "medallionSlug": "muzteatr39",
+      "medallionReview": null,
+      "flags": {
+        "official_theatre": true,
+        "venue_page_candidate": true,
+        "medieval_site": false
+      }
+    },
+    {
+      "id": "kaliningrad-puppet-theatre",
+      "slug": "kaliningrad-puppet-theatre",
+      "kind": "mixed",
+      "status": "public",
+      "canonicalName": "Калининградский областной театр кукол",
+      "organizerAliases": [
+        "Калининградский областной театр кукол",
+        "Калининградский театр кукол",
+        "Театр кукол"
+      ],
+      "sourceBindings": {
+        "parserTypes": [],
+        "telegramUsernames": [],
+        "vkScreenNames": ["koenigkukol39"],
+        "vkGroupIds": ["20898960"],
+        "domains": []
+      },
+      "canonicalVenue": {
+        "venueId": "kaliningrad-puppet-theatre",
+        "name": "Театр кукол",
+        "address": "Победы 1А",
+        "city": "Калининград",
+        "approvedNameAliases": [
+          "Калининградский областной театр кукол",
+          "Калининградский театр кукол"
+        ],
+        "approvedLocationAliases": [
+          "Театр кукол, Победы 1А, Калининград"
+        ],
+        "approvedTuples": []
+      },
+      "officialUrl": "https://vk.com/koenigkukol39",
+      "medallionSlug": null,
+      "medallionReview": "No reviewed local medallion asset; use the text/initial fallback.",
+      "flags": {
+        "official_theatre": true,
+        "venue_page_candidate": false,
+        "medieval_site": false
+      }
+    },
+    {
+      "id": "dom-iskusstv",
+      "slug": "dom-iskusstv",
+      "kind": "mixed",
+      "status": "public",
+      "canonicalName": "Калининградский театр эстрады / Дом искусств",
+      "organizerAliases": [
+        "Калининградский театр эстрады / Дом искусств",
+        "Калининградский театр эстрады (Дом искусств)",
+        "Калининградский театр эстрады",
+        "Театр эстрады",
+        "Дом искусств"
+      ],
+      "sourceBindings": {
+        "parserTypes": ["estrada"],
+        "telegramUsernames": [],
+        "vkScreenNames": ["teatrestrady39"],
+        "vkGroupIds": [],
+        "domains": [
+          "domiskusstv.edinoepole.ru",
+          "театрэстрады39.рф",
+          "домискусств39.рф"
+        ]
+      },
+      "canonicalVenue": {
+        "venueId": "dom-iskusstv",
+        "name": "Калининградский театр эстрады (Дом искусств)",
+        "address": "Ленинский проспект 155",
+        "city": "Калининград",
+        "approvedNameAliases": [
+          "Калининградский театр эстрады / Дом искусств",
+          "Калининградский театр эстрады",
+          "Театр эстрады",
+          "Дом искусств"
+        ],
+        "approvedLocationAliases": [
+          "Калининградский театр эстрады (Дом искусств), Ленинский проспект 155, Калининград"
+        ],
+        "approvedTuples": []
+      },
+      "officialUrl": "https://театрэстрады39.рф/",
+      "medallionSlug": "dom-iskusstv",
+      "medallionReview": null,
+      "flags": {
+        "official_theatre": true,
+        "venue_page_candidate": true,
+        "medieval_site": false
+      }
+    },
+    {
+      "id": "third-floor-theatre",
+      "slug": "third-floor-theatre",
+      "kind": "mixed",
+      "status": "public",
+      "canonicalName": "Театр «Третий этаж»",
+      "organizerAliases": [
+        "Театр «Третий этаж»",
+        "Театр Третий этаж",
+        "Третий этаж"
+      ],
+      "sourceBindings": {
+        "parserTypes": [],
+        "telegramUsernames": [],
+        "vkScreenNames": ["tretazh"],
+        "vkGroupIds": [],
+        "domains": []
+      },
+      "canonicalVenue": {
+        "venueId": "third-floor-theatre",
+        "name": "Театр Третий этаж (сцена Чердак)",
+        "address": "Коммунальная 6",
+        "city": "Калининград",
+        "approvedNameAliases": [
+          "Театр «Третий этаж»",
+          "Театр Третий этаж",
+          "Третий этаж",
+          "Сцена Чердак"
+        ],
+        "approvedLocationAliases": [
+          "Театр Третий этаж (сцена Чердак), Коммунальная 6, Калининград"
+        ],
+        "approvedTuples": []
+      },
+      "officialUrl": "https://vk.com/tretazh",
+      "medallionSlug": null,
+      "medallionReview": "No reviewed local medallion asset; use the text/initial fallback.",
+      "flags": {
+        "official_theatre": true,
+        "venue_page_candidate": false,
+        "medieval_site": false
+      }
+    },
+    {
+      "id": "my-theatre-kaliningrad",
+      "slug": "my-theatre-kaliningrad",
+      "kind": "mixed",
+      "status": "public",
+      "canonicalName": "«Мой театр»",
+      "organizerAliases": [
+        "«Мой театр»",
+        "Мой театр"
+      ],
+      "sourceBindings": {
+        "parserTypes": [],
+        "telegramUsernames": [],
+        "vkScreenNames": ["moyteatr_kld"],
+        "vkGroupIds": [],
+        "domains": []
+      },
+      "canonicalVenue": {
+        "venueId": "my-theatre-kaliningrad",
+        "name": "Мой театр",
+        "address": "Больничная 24",
+        "city": "Калининград",
+        "approvedNameAliases": ["«Мой театр»"],
+        "approvedLocationAliases": [
+          "Мой театр, Больничная 24, Калининград"
+        ],
+        "approvedTuples": []
+      },
+      "officialUrl": "https://vk.com/moyteatr_kld",
+      "medallionSlug": null,
+      "medallionReview": "No reviewed local medallion asset; use the text/initial fallback.",
+      "flags": {
+        "official_theatre": true,
+        "venue_page_candidate": false,
+        "medieval_site": false
+      }
+    },
+    {
+      "id": "city-theatre-zheleznodorozhny",
+      "slug": "city-theatre-zheleznodorozhny",
+      "kind": "mixed",
+      "status": "public",
+      "canonicalName": "«Город-Театр», Железнодорожный",
+      "organizerAliases": [
+        "«Город-Театр», Железнодорожный",
+        "Город-Театр",
+        "Город Театр"
+      ],
+      "sourceBindings": {
+        "parserTypes": [],
+        "telegramUsernames": [],
+        "vkScreenNames": ["gorodteatr39"],
+        "vkGroupIds": [],
+        "domains": []
+      },
+      "canonicalVenue": {
+        "venueId": "city-theatre-zheleznodorozhny",
+        "name": "Город-Театр",
+        "address": "Черняховского 9",
+        "city": "Железнодорожный",
+        "approvedNameAliases": [
+          "«Город-Театр», Железнодорожный",
+          "Город Театр"
+        ],
+        "approvedLocationAliases": [
+          "Город-Театр, Черняховского 9, Железнодорожный"
+        ],
+        "approvedTuples": []
+      },
+      "officialUrl": "https://vk.com/gorodteatr39",
+      "medallionSlug": null,
+      "medallionReview": "No reviewed local medallion asset; use the text/initial fallback.",
+      "flags": {
+        "official_theatre": true,
+        "venue_page_candidate": false,
+        "medieval_site": false
+      }
+    },
+    {
+      "id": "act-opus",
+      "slug": "act-opus",
+      "kind": "organization",
+      "status": "public",
+      "canonicalName": "Театр современной драмы «Акт.Опус»",
+      "organizerAliases": [
+        "Театр современной драмы «Акт.Опус»",
+        "Театр «Акт Опус»",
+        "Театр Акт Опус",
+        "Акт.Опус",
+        "Акт Опус",
+        "Актопус",
+        "Act.Opus",
+        "Act Opus",
+        "ActOpus"
+      ],
+      "sourceBindings": {
+        "parserTypes": [],
+        "telegramUsernames": [],
+        "vkScreenNames": ["actopustheatre"],
+        "vkGroupIds": [],
+        "domains": ["actop.us"]
+      },
+      "canonicalVenue": null,
+      "officialUrl": "https://actop.us/",
+      "medallionSlug": "act-opus",
+      "medallionReview": null,
+      "flags": {
+        "official_theatre": true,
+        "venue_page_candidate": false,
+        "medieval_site": false
+      }
+    },
+    {
+      "id": "yantar-hall",
+      "slug": "yantar-hall",
+      "kind": "place",
+      "status": "public",
+      "canonicalName": "Янтарь холл",
+      "organizerAliases": [],
+      "sourceBindings": {
+        "parserTypes": ["yantarhall"],
+        "telegramUsernames": [],
+        "vkScreenNames": [],
+        "vkGroupIds": [],
+        "domains": ["янтарьхолл.рф"]
+      },
+      "canonicalVenue": {
+        "venueId": "yantar-hall",
+        "name": "Янтарь холл",
+        "address": "Ленина 11",
+        "city": "Светлогорск",
+        "approvedNameAliases": [
+          "Янтарь-холл",
+          "Янтарь Холл",
+          "Зал Янтарный",
+          "Театр эстрады Янтарь-холл",
+          "Театр эстрады Янтарь холл",
+          "Арт-пространство Янтарь-холл",
+          "Арт-пространство Янтарь холл"
+        ],
+        "approvedLocationAliases": [
+          "Янтарь холл, Ленина 11, Светлогорск"
+        ],
+        "approvedTuples": []
+      },
+      "officialUrl": "https://янтарьхолл.рф/",
+      "medallionSlug": "yantar-hall",
+      "medallionReview": null,
+      "flags": {
+        "official_theatre": false,
+        "venue_page_candidate": true,
+        "medieval_site": false
+      }
+    },
+    {
+      "id": "tretyakovka-kaliningrad",
+      "slug": "tretyakovka-kaliningrad",
+      "kind": "place",
+      "status": "public",
+      "canonicalName": "Филиал Третьяковской галереи",
+      "organizerAliases": [],
+      "sourceBindings": {
+        "parserTypes": ["tretyakov"],
+        "telegramUsernames": ["tretyakovka_kaliningrad"],
+        "vkScreenNames": [],
+        "vkGroupIds": [],
+        "domains": ["tretyakovgallery.ru"]
+      },
+      "canonicalVenue": {
+        "venueId": "tretyakovka-kaliningrad",
+        "name": "Филиал Третьяковской галереи",
+        "address": "Парадная наб. 3",
+        "city": "Калининград",
+        "approvedNameAliases": [
+          "Третьяковская галерея",
+          "Третьяковская галерея Калининград",
+          "Третьяковка",
+          "Кинозал Третьяковской галереи"
+        ],
+        "approvedLocationAliases": [
+          "Филиал Третьяковской галереи, Парадная наб. 3, Калининград"
+        ],
+        "approvedTuples": []
+      },
+      "officialUrl": "https://kaliningrad.tretyakovgallery.ru/",
+      "medallionSlug": "tretyakovka-kaliningrad",
+      "medallionReview": null,
+      "flags": {
+        "official_theatre": false,
+        "venue_page_candidate": true,
+        "medieval_site": false
+      }
+    },
+    {
+      "id": "kaliningrad-philharmonic",
+      "slug": "kaliningrad-philharmonic",
+      "kind": "place",
+      "status": "public",
+      "canonicalName": "Филармония им. Светланова",
+      "organizerAliases": [],
+      "sourceBindings": {
+        "parserTypes": ["philharmonia"],
+        "telegramUsernames": ["filarmonia_39"],
+        "vkScreenNames": ["filarmonia39"],
+        "vkGroupIds": [],
+        "domains": ["filarmonia39.ru"]
+      },
+      "canonicalVenue": {
+        "venueId": "kaliningrad-philharmonic",
+        "name": "Филармония им. Светланова",
+        "address": "Хмельницкого 61а",
+        "city": "Калининград",
+        "approvedNameAliases": [
+          "Калининградская филармония",
+          "Калининградская областная филармония",
+          "Филармония"
+        ],
+        "approvedLocationAliases": [
+          "Филармония им. Светланова, Хмельницкого 61а, Калининград"
+        ],
+        "approvedTuples": []
+      },
+      "officialUrl": "https://filarmonia39.ru/",
+      "medallionSlug": "kaliningrad-philharmonic",
+      "medallionReview": null,
+      "flags": {
+        "official_theatre": false,
+        "venue_page_candidate": true,
+        "medieval_site": false
+      }
+    }
+  ],
+  "reviewedExclusions": [
+    {
+      "id": "yantar-hall-theatre-organization",
+      "label": "Янтарь-холл как театральная организация",
+      "decision": "venue_only",
+      "reason": "A performing-arts venue is not evidence of a resident official theatre organization."
+    },
+    {
+      "id": "solyonaya-vorona",
+      "label": "Театральная гостиная «Солёная ворона»",
+      "decision": "excluded",
+      "reason": "Cafe with predominantly music/dining programming; not a verified official theatre."
+    },
+    {
+      "id": "nikolay-zakharov-actors-community",
+      "label": "Содружество актёров Николая Захарова",
+      "decision": "candidate_missing_source",
+      "reason": "Only ticket/location rows are available; no verified official binding."
+    },
+    {
+      "id": "theatre-slovo",
+      "label": "Театр Слово",
+      "decision": "candidate_missing_source",
+      "reason": "String/location evidence without a verified official binding."
+    },
+    {
+      "id": "theatre-school-217",
+      "label": "Театр-школа 217",
+      "decision": "candidate_missing_source",
+      "reason": "String/location evidence without a verified official binding."
+    },
+    {
+      "id": "skazki-kholmogorya",
+      "label": "Сказки Холмогорья",
+      "decision": "candidate_missing_source",
+      "reason": "String/location evidence without a verified official binding."
+    },
+    {
+      "id": "generic-theatre-sovetsk",
+      "label": "Театр, Советск",
+      "decision": "candidate_missing_source",
+      "reason": "Generic location text without a verified official binding."
+    },
+    {
+      "id": "tilzit-theatre",
+      "label": "Тильзит",
+      "decision": "candidate_missing_source",
+      "reason": "Not denied as an entity, but no verified project source binding is present for v1."
+    },
+    {
+      "id": "cinema-lexical-match",
+      "label": "Кинотеатр",
+      "decision": "excluded",
+      "reason": "Lexical false positive; cinema sources are outside this registry."
+    },
+    {
+      "id": "amphitheatre-lexical-match",
+      "label": "Амфитеатр",
+      "decision": "excluded",
+      "reason": "Lexical false positive without an approved registry entity."
+    },
+    {
+      "id": "festival-name-theatre-match",
+      "label": "Festival/title theatre wording",
+      "decision": "excluded",
+      "reason": "A title, topic or festival name never supplies entity membership."
+    }
+  ]
+}
