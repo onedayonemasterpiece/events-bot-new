@@ -778,20 +778,40 @@ def _kernel_ref_from_meta(kernel_path: Path) -> str:
 
 
 def _stage_google_ai_bundle(output_root: Path) -> Path:
-    if not GOOGLE_AI_PACKAGE_PATH.exists():
+    if not GOOGLE_AI_PACKAGE_PATH.is_dir():
         raise FileNotFoundError(f"Missing package: {GOOGLE_AI_PACKAGE_PATH}")
-    shutil.copytree(GOOGLE_AI_PACKAGE_PATH, output_root / "google_ai")
+    package_root = output_root / "google_ai"
+    package_root.mkdir(parents=True, exist_ok=False)
+    for relative_path, source in _embedded_google_ai_sources().items():
+        target = package_root / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(source, encoding="utf-8")
     return output_root
 
 
 def _embedded_google_ai_sources() -> dict[str, str]:
-    files = ("__init__.py", "client.py", "exceptions.py", "secrets.py")
+    """Return the complete deterministic Python import closure for Kaggle.
+
+    The generated notebook imports this embedded package before the auxiliary
+    kernel files.  A hand-maintained allowlist therefore turns every new
+    internal ``google_ai`` import into a remote-only failure.  Ship all Python
+    sources, including future nested modules, while excluding bytecode and
+    local artifacts.
+    """
+
+    if not GOOGLE_AI_PACKAGE_PATH.is_dir():
+        raise FileNotFoundError(f"Missing package: {GOOGLE_AI_PACKAGE_PATH}")
     payload: dict[str, str] = {}
-    for name in files:
-        path = GOOGLE_AI_PACKAGE_PATH / name
-        if not path.exists():
-            raise FileNotFoundError(f"Missing google_ai source for notebook embed: {path}")
-        payload[name] = path.read_text(encoding="utf-8")
+    for path in sorted(GOOGLE_AI_PACKAGE_PATH.rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        relative_path = path.relative_to(GOOGLE_AI_PACKAGE_PATH).as_posix()
+        payload[relative_path] = path.read_text(encoding="utf-8")
+    if "__init__.py" not in payload:
+        raise FileNotFoundError(
+            "Missing google_ai source for notebook embed: "
+            f"{GOOGLE_AI_PACKAGE_PATH / '__init__.py'}"
+        )
     return payload
 
 
@@ -820,7 +840,9 @@ def _build_notebook_payload_from_script(script_path: Path) -> dict[str, Any]:
             "_TG_EMBEDDED_PACKAGE = _TG_EMBEDDED_ROOT / 'google_ai'\n",
             "_TG_EMBEDDED_PACKAGE.mkdir(parents=True, exist_ok=True)\n",
             "for _tg_name, _tg_body in _TG_EMBEDDED_GOOGLE_AI.items():\n",
-            "    (_TG_EMBEDDED_PACKAGE / _tg_name).write_text(_tg_body, encoding='utf-8')\n",
+            "    _tg_target = _TG_EMBEDDED_PACKAGE / _tg_name\n",
+            "    _tg_target.parent.mkdir(parents=True, exist_ok=True)\n",
+            "    _tg_target.write_text(_tg_body, encoding='utf-8')\n",
             "if str(_TG_EMBEDDED_ROOT) not in _TgNotebookSys.path:\n",
             "    _TgNotebookSys.path.insert(0, str(_TG_EMBEDDED_ROOT))\n",
             "_TG_NOTEBOOK_ROOT = _TgNotebookPath.cwd().resolve()\n",
@@ -3182,8 +3204,10 @@ async def run_telegram_monitor(
         status = "error"
         report.errors.append("cancelled")
         raise
-    except Exception:
+    except Exception as exc:
         status = "error"
+        if not report.errors:
+            report.errors.append(f"{type(exc).__name__}: {exc}"[:1000])
         raise
     finally:
         duration_sec = float(time.monotonic() - started_ts)

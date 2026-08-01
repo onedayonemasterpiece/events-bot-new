@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -15,6 +17,70 @@ from source_parsing.telegram.service import (
     _format_event_block,
     _poll_kaggle_kernel,
 )
+
+
+def test_google_ai_bundle_contains_complete_deterministic_source_tree(tmp_path) -> None:
+    import source_parsing.telegram.service as tg_service
+
+    expected = sorted(
+        path.relative_to(tg_service.GOOGLE_AI_PACKAGE_PATH).as_posix()
+        for path in tg_service.GOOGLE_AI_PACKAGE_PATH.rglob("*.py")
+        if "__pycache__" not in path.parts
+    )
+
+    embedded = tg_service._embedded_google_ai_sources()
+
+    assert list(embedded) == expected
+    assert "__init__.py" in embedded
+    assert "limiter_supabase.py" in embedded
+    assert "interactions.py" in embedded
+
+    staged_root = tmp_path / "staged"
+    tg_service._stage_google_ai_bundle(staged_root)
+    staged = sorted(
+        path.relative_to(staged_root / "google_ai").as_posix()
+        for path in (staged_root / "google_ai").rglob("*")
+        if path.is_file()
+    )
+    assert staged == expected
+    assert not list(staged_root.rglob("*.pyc"))
+
+
+def test_generated_telegram_notebook_imports_complete_google_ai_package(tmp_path) -> None:
+    import source_parsing.telegram.service as tg_service
+
+    runner = tmp_path / "telegram_monitor.py"
+    runner.write_text(
+        """from __future__ import annotations
+
+from google_ai import AntigravityInteractionsClient, GoogleAIClient
+from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
+
+assert GoogleAIClient is not None
+assert AntigravityInteractionsClient is not None
+assert build_google_ai_limiter_supabase_client is not None
+print("tg-google-ai-import-closure-ok")
+""",
+        encoding="utf-8",
+    )
+    notebook = tg_service._build_notebook_payload_from_script(runner)
+    generated_runner = tmp_path / "generated_telegram_notebook.py"
+    generated_runner.write_text(
+        "".join(notebook["cells"][1]["source"]),
+        encoding="utf-8",
+    )
+
+    completed = subprocess.run(
+        [sys.executable, "-I", str(generated_runner)],
+        cwd=tmp_path,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "tg-google-ai-import-closure-ok" in completed.stdout
 
 
 @pytest.fixture(autouse=True)

@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-01-telegram-monitor-google-ai-package-closure.md`
+  - Scope: Telegram Monitoring Kaggle notebook generation, embedded `google_ai`
+    import closure, scheduled retry/catch-up and the role-scoped S22 lease.
+  - Must not regress: the isolated generated notebook imports the complete
+    current Python package; a failed daily slot is followed by a verified full
+    catch-up, without substituting another Telegram auth bundle.
+
 - `INC-2026-08-01-region-talk-article-image-handoff-gap.md`
   - Scope: external article intake without prefilled image URLs, CandidateReport
     image-queue admission and ImageDiagnostic page acquisition.
