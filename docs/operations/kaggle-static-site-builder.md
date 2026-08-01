@@ -359,6 +359,16 @@ fail-closed and never removed. Failed/nonterminal outputs remain available for
 explicit incident disposition rather than being mistaken for regenerable
 success artifacts.
 
+Downloaded immutable archives remain under the persistent artifact root until
+their terminal receipt is durable, but their expanded publication trees do
+not. Secret-candidate and optional atomic-root publishers extract into an
+isolated `TemporaryDirectory` on generic process scratch (`/tmp` by default,
+or `STATIC_SITE_PUBLICATION_SCRATCH_DIR`) and remove it on both success and
+failure. This prevents a roughly 600 MB generated tree from being duplicated
+on the 3 GB Fly volume during create-only upload and object verification. The
+publication call stays in `asyncio.to_thread`, so the API/event loop remains
+responsive while the storage client performs the bounded object walk.
+
 Capacity recovery runs before the durable-space probe. The Fly owner removes
 all complete snapshots except the exact paths named by a readable active
 handoff; an unreadable active handoff still fails closed. After acquiring the
