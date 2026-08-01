@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Added immutable Region Talk external-publication research inputs, semantic-validation status, and an OIDC-only guarded YDB staging runbook with audit evidence and no-publication boundary.
+
 - Fixed Region Talk Telegram source-media resolution: generic `hero:1` presentation ordinals are no longer misread as Telegram message id 1, `#media` sentinels no longer replace exact source-video refs, explicit zero-LLM media repair reclassifies the exact anchor as video when Telethon proves it, and a video/hero inside a mixed grouped post is bounded to one source item instead of failing the single-media contract with the whole group.
 - Fixed Region Talk operator delivery head-of-line blocking: a pre-send media materialization/hash failure is now persisted as `materialization_failed`, remains unsent for evidence repair, and no longer prevents later review revisions in the same bounded batch from reaching the chat.
 - Fixed Region Talk legacy album materialization during the v10 backfill: a one-image preview scalar no longer hides a reviewed 3–6-item Telegram selection, VK selections are projected onto exact `wall.getById` attachment refs with reviewed hashes, and `--materialize-only` repairs pending manifests without another editorial LLM call or copy change.
