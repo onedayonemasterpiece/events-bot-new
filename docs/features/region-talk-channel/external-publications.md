@@ -133,11 +133,16 @@ The production switch is `REGION_TALK_EXTERNAL_RESEARCH_ENABLED=1` and is
 Ordinary text-generation quota does not imply web-grounding quota. On
 2026-07-31 the configured redacted `GOOGLE_API_KEY3` lane returned provider
 `429 RESOURCE_EXHAUSTED` for both `gemini-3-flash-preview` and the stable
-`gemini-3.1-flash-lite` when `google_search` + `url_context` were enabled, so
-enabling three guaranteed failures per day would be false autonomy. The worker
-defaults to `gemini-3.1-flash-lite` once the provider gate is opened; this is a
-production discovery worker, not an external-consultant review. Flash/Lite
-output must never be represented as a Gemini Pro consultant verdict.
+`gemini-3.1-flash-lite` when `google_search` + `url_context` were enabled. A
+bounded production recheck on 2026-08-01 returned the same `429` for both the
+`GOOGLE_API_KEY3` and separately reserved `GOOGLE_API_KEY4` lanes before any
+research result was generated. Therefore the switch remains off: enabling
+three guaranteed failures per day would be false autonomy. This is a
+Search-grounding project-quota blocker, not a model-capability or prompt/schema
+blocker. The worker defaults to `gemini-3.1-flash-lite` once a search-enabled
+provider project passes the bounded live smoke; this is a production discovery
+worker, not an external-consultant review. Flash/Lite output must never be
+represented as a Gemini Pro consultant verdict.
 
 Provider references: [Google Search grounding](https://ai.google.dev/gemini-api/docs/google-search),
 [structured outputs with tools](https://ai.google.dev/gemini-api/docs/structured-output),
