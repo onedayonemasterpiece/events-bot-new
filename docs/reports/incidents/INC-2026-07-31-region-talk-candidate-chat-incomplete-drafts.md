@@ -1,6 +1,6 @@
 # INC-2026-07-31 Region Talk candidate chat suppressed completed drafts
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: Region Talk publication candidate preparation and operator-chat delivery
 Opened: 2026-07-31
@@ -48,6 +48,25 @@ rows, proving that the data existed but publication preparation had not run.
   text but failed closed before provider use because the local legacy Supabase
   limiter lacked the required atomic contract; two rows remain `retry_due` and
   no original verdict was overwritten.
+- 2026-08-01 04:20–05:51 UTC — the first natural 90-minute autonomous slot
+  completed as `ops_run=5029` (`success`, 25 cycles). It ran discovery,
+  ImageDiagnostic, finalization, draft repair, operator notification and daily
+  planning without an agent holding the chain open.
+- 2026-08-01 05:51 UTC — the durable pool reached 23 confirmed candidates:
+  four articles and 19 social posts. Grounded ready inventory reached four
+  articles and 15 social posts; four VK rows failed closed into the terminal
+  `needs_grounding_review` manual tail instead of retrying indefinitely.
+- 2026-08-01 10:11 UTC — the strict shared draft-readiness predicate and frozen
+  slot identity fix were deployed from exact `origin/main` SHA `1eb09808` as
+  Fly release `v1840`; `/healthz` was ready with Region Talk scheduler and
+  watchdog green.
+- 2026-08-01 10:17 UTC — the production 14-day plan rebuilt successfully with
+  18 occupied slots and 18 unique candidate URLs. The frozen 1 August Archi.ru
+  article was not reused on 2 August; that slot contains the next distinct
+  article.
+- 2026-08-01 10:19 UTC — the last newly ready article was delivered through
+  idle role-scoped `telethon_discovery2` as operator message `33776`; the
+  subsequent read-only notifier probe reported zero unsent ready candidates.
 
 ## Root Cause
 
@@ -57,6 +76,13 @@ rows, proving that the data existed but publication preparation had not run.
    so a pre-draft message was indistinguishable from the final actionable copy.
 3. Adding a readiness gate without versioning the old acknowledgement would
    prevent recovery of already flagged legacy rows.
+4. The planner originally checked only whether the serialized fact-point field
+   was a non-empty string, while the notifier decoded it and required a
+   non-empty JSON list. This allowed the literal `[]` to occupy a schedule slot
+   that could not be delivered.
+5. An elapsed frozen slot was preserved but its candidate identity remained in
+   the future selection pool, allowing the same item to be selected again on a
+   later day.
 
 ## Contributing Factors
 
@@ -125,23 +151,38 @@ retries duplicate messages.
 
 ## Follow-up Actions
 
-- [ ] Deploy the latest `origin/main` only after the current useful Region Talk
+- [x] Deploy the latest `origin/main` only after the current useful Region Talk
   session exits; do not intentionally crash it.
-- [ ] Run production backfill through the dedicated atomic limiter and verify
+- [x] Run production backfill through the dedicated atomic limiter and verify
   ready inventory growth.
-- [ ] Verify recovered completed cards in the operator chat and persist their
+- [x] Verify recovered completed cards in the operator chat and persist their
   draft fingerprints/message IDs.
-- [ ] Rebuild and inspect the 14-day one-article/one-social diversity plan.
+- [x] Rebuild and inspect the 14-day one-article/one-social diversity plan.
+- [ ] Observe the next post-deploy natural slot to completion; this is a
+  monitoring/closure check, not a blocker for the already active autonomous
+  discovery-to-operator pipeline.
 
 ## Release And Closure Evidence
 
-- implementation SHA: `cf618401b7460d528ced1f522c18d6dfe439de76`
-  (`origin/main` at implementation time)
-- deployed SHA: pending
-- deploy path: pending clean Fly release after active session completion
-- regression checks: `632 passed` for `tests/test_region_talk*.py`; focused
-  notifier/backfill/planner suite `32 passed`
-- post-deploy verification: pending
+- implementation SHAs: `cf618401b7460d528ced1f522c18d6dfe439de76`
+  (ready-draft delivery fingerprint), `68768037` (shared strict readiness
+  predicate), `1eb09808c04e4ee14f2b49c609ea272e8fb0514b` (frozen-slot candidate
+  identity consumption)
+- deployed SHA: `1eb09808c04e4ee14f2b49c609ea272e8fb0514b`, exact `origin/main` at deploy
+- deploy path: project-governed clean `scripts/deploy_fly_main.sh --remote-only`
+- Fly release: `v1840`, one machine started, one health check passing;
+  `/healthz` reported `ready=true`, `region_talk=ok`,
+  `region_talk_watchdog=ok`, next natural slot `2026-08-01T11:20:00Z`
+- regression checks: full `tests/test_region_talk*.py` suite `634 passed`;
+  post-rebase focused planner/notifier suite `39 passed`
+- autonomous production evidence: natural `ops_run=5029` finished `success`
+  after 25 cycles; confirmed inventory 23, ready inventory 19; four VK rows
+  are explicit manual review, not silent or infinite retry debt
+- delivery evidence: recovered candidate messages `33757`–`33776`, all via
+  role-scoped discovery transport; post-delivery unsent-ready count is zero
+- plan evidence: snapshot `rtdayplan_a2a35a30d4810151b649bc86`, four planned
+  articles, 14 planned social posts, ten vacant future article slots, zero
+  vacant social slots and no duplicate URL among 18 occupied slots
 
 ## Prevention
 
