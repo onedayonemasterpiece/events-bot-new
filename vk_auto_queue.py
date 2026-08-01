@@ -780,6 +780,27 @@ def _vk_auto_import_max_photos() -> int:
     return max(1, min(value, 32))
 
 
+def _vk_auto_import_schedule_max_photos() -> int:
+    raw = (os.getenv("VK_AUTO_IMPORT_SCHEDULE_MAX_PHOTOS") or "10").strip()
+    try:
+        value = int(raw)
+    except Exception:
+        value = 10
+    return max(_vk_auto_import_max_photos(), min(value, 32))
+
+
+def _vk_auto_import_photo_limit_for_text(text: str | None) -> int:
+    """Expand transport completeness only for explicit schedule-card posts."""
+
+    normalized = re.sub(r"\s+", " ", str(text or "").casefold().replace("ё", "е")).strip()
+    if re.search(
+        r"\b(?:расписание|места?\s+проведения|подробности)\b[^.!?\n]{0,80}\b(?:в|на)\s+карточках\b",
+        normalized,
+    ):
+        return _vk_auto_import_schedule_max_photos()
+    return _vk_auto_import_max_photos()
+
+
 def _render_progress_text(
     icon: str,
     *,
@@ -1151,7 +1172,7 @@ async def _prefetch_vk_inbox_row(
         post.post_id,
         db=db,
         bot=bot,
-        limit=_vk_auto_import_max_photos(),
+        limit=_vk_auto_import_photo_limit_for_text(getattr(post, "text", None)),
     )
     stage["vk_fetch_post"] = float(time.monotonic() - t0)
     allow_stale = _vk_auto_allow_stale_inbox_text()
@@ -1951,7 +1972,7 @@ async def _process_vk_inbox_row(
             post.post_id,
             db=db,
             bot=bot,
-            limit=_vk_auto_import_max_photos(),
+            limit=_vk_auto_import_photo_limit_for_text(getattr(post, "text", None)),
         )
         _tmark("vk_fetch_post", time.monotonic() - t0)
         allow_stale = _vk_auto_allow_stale_inbox_text()
