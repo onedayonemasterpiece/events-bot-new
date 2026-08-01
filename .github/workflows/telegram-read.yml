@@ -116,18 +116,16 @@ jobs:
             echo "request_path=requests/telegram-read.json" >> "${GITHUB_OUTPUT}"
           fi
 
-      - name: Verify role-scoped credentials are configured
+      - name: Verify role-scoped credentials are parseable
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -z "${TELEGRAM_AUTH_BUNDLE_GH_ACTIONS:-}" ]]; then
-            echo "TELEGRAM_AUTH_BUNDLE_GH_ACTIONS is not configured" >&2
-            exit 1
-          fi
-          if [[ -z "${TELEGRAM_API_ID:-}" || -z "${TELEGRAM_API_HASH:-}" ]]; then
-            echo "Telegram app credentials are not configured in the bundle or Actions secrets" >&2
-            exit 1
-          fi
+          python - <<'PY'
+          from scripts.telegram_read import load_auth_config
+
+          load_auth_config("TELEGRAM_AUTH_BUNDLE_GH_ACTIONS")
+          print("Role-scoped Telegram credentials parsed successfully")
+          PY
 
       - name: Read Telegram
         run: >-
