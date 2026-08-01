@@ -3,13 +3,18 @@
 ## Delivered
 
 - Added `.github/workflows/region-talk-external-publication-import.yml`.
-- The manual dispatcher is limited by both a `choice` input and a shell allowlist
-  to the three approved, committed Region Talk research-result JSON paths.
+- The manual dispatcher accepts a required string but runtime-validates it as one
+  regular (not symlinked) file under the reviewed main path
+  `docs/features/region-talk-channel/region-talk-external-research-result-*.json`.
+  Traversal, directory escapes, and every other path are rejected, so a new
+  reviewed JSON merged to `main` is dispatchable without editing the workflow.
 - The job checks out `main` only, with persisted credentials disabled; it never
   checks out a dispatcher-provided revision.
 - Permissions are minimized to `contents: read` and `id-token: write`; the
   YDB write job is gated by protected environment `region-talk-ydb-import`.
-- Validation runs before WIF authentication and before `--execute`. A SHA-256
+- Validation runs before WIF authentication and before `--execute`. The
+  execution uses `--no-publish-registry`, so this narrowly-scoped YDB service
+  account does not need static-site registry-publishing permissions. A SHA-256
   addressed receipt plus validation/execution reports are uploaded as an
   artifact.
 - Authentication uses the GitHub OIDC request endpoint and RFC 8693 exchange
@@ -24,6 +29,7 @@
   restricted federated credential.
 - `REGION_TALK_YDB_ENDPOINT`
 - `REGION_TALK_YDB_DATABASE`
+- `REGION_TALK_YDB_NAMESPACE`
 
 The federated credential must bind the exact GitHub OIDC `sub` for this
 repository and the protected `region-talk-ydb-import` environment. The service
@@ -31,6 +37,7 @@ account must receive only the YDB permissions required by the importer.
 
 ## Verification
 
-- YAML parsed with Ruby Psych.
-- Static grep confirms the workflow has no `contents: write`, no arbitrary
-  checkout expression/ref, and no service-account key JSON input.
+- YAML parsed with PyYAML; static assertions verify the input regex/path
+  guard, minimal permissions, fixed `main` checkout, WIF token exchange,
+  `--no-publish-registry`, and absence of a service-account key JSON input.
+- Every embedded Bash snippet passed `bash -n`; `git diff --check` passed.

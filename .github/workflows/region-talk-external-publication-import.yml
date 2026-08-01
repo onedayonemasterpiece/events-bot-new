@@ -6,11 +6,7 @@ on:
       research_result:
         description: Approved, committed Region Talk research-result JSON to validate and stage
         required: true
-        type: choice
-        options:
-          - docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-07-31-125052.json
-          - docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-07-31-174033.json
-          - docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-08-01-163142.json
+        type: string
 
 # This workflow only reads its trusted main checkout. The protected environment
 # is the approval boundary for the write-capable YDB import job.
@@ -36,6 +32,7 @@ jobs:
       YANDEX_WIF_SERVICE_ACCOUNT_ID: ${{ vars.YANDEX_WIF_SERVICE_ACCOUNT_ID }}
       REGION_TALK_YDB_ENDPOINT: ${{ vars.REGION_TALK_YDB_ENDPOINT }}
       REGION_TALK_YDB_DATABASE: ${{ vars.REGION_TALK_YDB_DATABASE }}
+      REGION_TALK_YDB_NAMESPACE: ${{ vars.REGION_TALK_YDB_NAMESPACE }}
       INPUT_PATH: ${{ inputs.research_result }}
 
     steps:
@@ -48,21 +45,29 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Reject any path outside the approved research-result set
+      - name: Reject any path outside the reviewed main result directory
         shell: bash
         run: |
           set -euo pipefail
-          case "$INPUT_PATH" in
-            docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-07-31-125052.json|\
-            docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-07-31-174033.json|\
-            docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-08-01-163142.json)
-              ;;
+          approved_dir="docs/features/region-talk-channel"
+          filename="${INPUT_PATH#"${approved_dir}/"}"
+          if [[ "$filename" == "$INPUT_PATH" \
+            || ! "$filename" =~ ^region-talk-external-research-result-[A-Za-z0-9][A-Za-z0-9._-]*\.json$ \
+            || "$filename" == *..* \
+            || -L "$INPUT_PATH" \
+            || ! -f "$INPUT_PATH" ]]; then
+            echo "Refusing non-approved research-result path" >&2
+            exit 1
+          fi
+          input_realpath="$(realpath -- "$INPUT_PATH")"
+          approved_realpath="$(realpath -- "$approved_dir")"
+          case "$input_realpath" in
+            "$approved_realpath"/region-talk-external-research-result-*.json) ;;
             *)
-              echo "Refusing non-approved research-result path: $INPUT_PATH" >&2
+              echo "Refusing research-result outside reviewed directory" >&2
               exit 1
               ;;
           esac
-          test -f "$INPUT_PATH"
           test "$(git rev-parse --verify HEAD)" = "$(git rev-parse --verify origin/main)"
 
       - name: Install importer dependencies
@@ -114,6 +119,7 @@ jobs:
           : "${YANDEX_WIF_SERVICE_ACCOUNT_ID:?Set protected-environment variable YANDEX_WIF_SERVICE_ACCOUNT_ID}"
           : "${REGION_TALK_YDB_ENDPOINT:?Set protected-environment variable REGION_TALK_YDB_ENDPOINT}"
           : "${REGION_TALK_YDB_DATABASE:?Set protected-environment variable REGION_TALK_YDB_DATABASE}"
+          : "${REGION_TALK_YDB_NAMESPACE:?Set protected-environment variable REGION_TALK_YDB_NAMESPACE}"
 
           github_oidc="$({
             curl --fail --silent --show-error \
@@ -140,6 +146,7 @@ jobs:
           set -euo pipefail
           python scripts/region_talk_external_publication_import.py "$INPUT_PATH" \
             --execute \
+            --no-publish-registry \
             --report "${{ steps.input.outputs.report_dir }}/execute.json"
 
       - name: Publish deterministic import receipt
