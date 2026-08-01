@@ -1,10 +1,10 @@
 # INC-2026-08-01 Region Talk oversized album delivery
 
-Status: open
+Status: closed
 Severity: sev2
 Service: Region Talk operator-review media delivery
 Opened: 2026-08-01
-Closed: —
+Closed: 2026-08-01
 Owners: events-bot / Region Talk
 Related incidents: `INC-2026-08-01-region-talk-draft-backfill-nameerror`, `INC-2026-07-31-region-talk-candidate-chat-incomplete-drafts`
 Related docs: `docs/features/region-talk-channel/telegram-vk-publishing.md`, `docs/features/region-talk-channel/editorial-visual-product.md`
@@ -45,6 +45,14 @@ publication row had no `selected_media_ids` and retained only
   failed delivery row.
 - 2026-08-01 15:18 UTC — code correction and focused regression tests were in
   progress.
+- 2026-08-01 15:27 UTC — exact `origin/main` SHA `59d5edd5` reached Fly as
+  version `1850`; health and immutable image SHA checks passed.
+- 2026-08-01 15:29 UTC — the publication manifest was repaired from the exact
+  ImageDiagnostic selection and the proven pre-send ledger row was reconciled.
+- 2026-08-01 15:30 UTC — Telethon delivered the corrected native three-photo
+  album as messages `33795`–`33797`.
+- 2026-08-01 15:31 UTC — direct Telegram inspection confirmed one grouped
+  album, caption/link contract and exact selected-frame order.
 
 ## Root Cause
 
@@ -115,16 +123,29 @@ safe retry.
 
 ## Follow-up Actions
 
-- [ ] deploy and complete the compensating operator delivery;
-- [ ] verify the autonomous backfill persists reviewed social selections for a
-  newly generated draft without manual repair.
+- [x] deploy and complete the compensating operator delivery;
+- [x] verify the autonomous backfill joins reviewed social selections in the
+  focused real-boundary regression and repairs the affected durable row.
+- [ ] observe that a newly generated autonomous social draft persists the
+  reviewed selection without manual repair; this is a monitoring check, not a
+  closure blocker because the exact production boundary has been replayed.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: focused tests `48 passed`; full suite pending
-- post-deploy verification: pending
+- deployed SHA: `59d5edd520bdd75f097832f5017ad6ea695b172d`, reachable
+  from `origin/main`, Fly version `1850`
+- deploy path: clean exact-`origin/main` `scripts/deploy_fly_main.sh`
+- regression checks: focused notifier/backfill tests `48 passed`; full Region
+  Talk suite `694 passed`; `/healthz ok=true, ready=true`; machine image SHA
+  exactly `59d5edd5…`
+- post-deploy verification: `https://t.me/zorkjy/3147` was delivered as native
+  Telegram album messages `33795`–`33797`, all sharing grouped ID
+  `14284785448176994`. Direct download comparison matched source IDs
+  `3147 → 3156 → 3149` in that order (each dHash distance `0` to its expected
+  source and much larger to the alternatives). The visible caption is 620
+  characters with exactly two paragraph breaks and linked source/original
+  entities. The old `sending` row is durably marked
+  `materialization_failed_pre_send` with no message ID.
 
 ## Prevention
 
