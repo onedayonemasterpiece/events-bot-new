@@ -1,7 +1,7 @@
 mode: serial_integrator
 repo: events-bot-new
 base_ref: origin/main
-base_sha: db894ac521d7d74928415ba94fdcea59f6a504d4
+base_sha: b5df4b261a582824058bba5458d57d4ba1b4a4f3
 integration_branch: agent/static-collections-review/curation
 global_constraints:
   - production queries read-only
@@ -26,4 +26,4 @@ lanes:
       - CHANGELOG.md
     expected_output: committed and pushed review branch
     verification_scope: targeted
-    status: in_progress
+    status: committed

@@ -1,7 +1,7 @@
 # Lane static-collections-review Results
 
 ## Status
-in_progress
+committed
 
 ## Requirement IDs
 - R01 — provisional overinclusive production seed
@@ -15,10 +15,16 @@ in_progress
 `/home/dev/.codex/worktrees/events-bot-new/static-collections-analyst-review-20260801`
 
 ## Base SHA
-`db894ac521d7d74928415ba94fdcea59f6a504d4`
+`b5df4b261a582824058bba5458d57d4ba1b4a4f3`
+
+## Implementation commit
+`eb8cec0812876f1638b3fb153e09ff9d347208b3`
 
 ## Files changed
-Pending final verification.
+- provisional five-label production review seed and regression test;
+- external analyst dossier;
+- corrected canonical project and release-plan evidence;
+- Unreleased changelog entry.
 
 ## Commands run
 - read-only Fly SQLite production queries
@@ -26,7 +32,9 @@ Pending final verification.
 - JSON fixture generation and validation
 
 ## Tests / verification
-Pending.
+- `python3 -m json.tool tests/fixtures/static_collections_gold_v1.json`
+- `PYTHONPATH=/tmp/events-bot-pytest python3 -m pytest --noconftest -q tests/test_static_collection_gold_seed.py tests/test_static_collection_export.py` — `10 passed`
+- `git diff --check`
 
 ## Risks
 - Seed is intentionally recall-oriented and must remain publication-blocked.
