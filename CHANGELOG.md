@@ -16,6 +16,10 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- StaticSiteBuilder now reconciles an exact completed remote handoff before
+  applying the free-space gate for a new build. A checked downloaded artifact
+  can therefore publish and clean itself even when that same artifact is what
+  temporarily leaves the Fly volume below the next-snapshot threshold.
 - Focus-group clean retest now removes the persisted Supabase session, chunked
   Auth fragments, PKCE verifier and Auth intent even when logout transport is
   blocked, and fails visibly instead of silently reusing the previous email.

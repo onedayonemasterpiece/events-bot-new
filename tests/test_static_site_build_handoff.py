@@ -782,6 +782,17 @@ def test_static_site_storage_capacity_defers_without_consuming_attempt_budget() 
     assert 'StaticSiteSingleFlightDeferred(f"static_site_capacity_deferred:{exc}")' in source
 
 
+def test_static_site_remote_recovery_precedes_new_build_capacity_gate() -> None:
+    import main
+
+    source = Path(main.__file__).read_text(encoding="utf-8")
+    recovery = source.index("recovered, recovered_result = await _recover_previous_static_site_attempt(")
+    recovered_return = source.index("return recovered_result if recovered_result is not None else True", recovery)
+    capacity = source.index("await asyncio.to_thread(_static_site_storage_preflight)", recovery)
+
+    assert recovery < recovered_return < capacity
+
+
 def test_runner_closes_status_database_after_config_creation() -> None:
     import asyncio
     from scripts.run_static_site_builder_kaggle import _create_status_config_and_close

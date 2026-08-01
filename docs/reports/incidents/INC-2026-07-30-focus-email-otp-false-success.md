@@ -188,6 +188,11 @@ after any failed transport result and therefore communicated a false success.
   argument, and Fly did not have the public relay environment value. Thus the
   phone exercised neither a clean identity state nor the accepted resilient
   registration route.
+- 2026-08-01 10:13 UTC — the corrective Smart Update request was initially
+  deferred at the volume capacity gate while an exact completed remote handoff
+  output was retained for host reconciliation. Recovery is now ordered before
+  the new-build capacity gate so that checked output can publish and remove
+  itself; blind deletion of active handoff evidence remains forbidden.
 
 ## Root Cause
 
