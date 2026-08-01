@@ -10,6 +10,11 @@
   reproducible Astro dependencies and generated site trees.
 
 ### Added
+- Added the canonical static-collection extraction/product plan: it distinguishes
+  ready exact-data pages from Smart Update and shared-BGE work, designs a small
+  indexable medallion venue pilot, records zero-added-Supabase-egress gates, and
+  opens `INC-2026-08-01-unusual-feed-disabled-by-config` for the expired Unusual
+  review surface and silent compute/publication coupling.
 - Registered operator-provided `GOOGLE_API_KEY6` as a separately accounted
   shared-limiter lane and added it to the gateway-owned normal rotation pool
   used by Smart Update, Antigravity festival research and other ordinary Google
