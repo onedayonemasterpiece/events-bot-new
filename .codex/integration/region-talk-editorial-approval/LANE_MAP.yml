@@ -1,0 +1,71 @@
+mode: worktree_worker
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/main@2e9996f4ba8fca9fd8cf436b0b1fbd8b319e8802
+base_branch: main
+integration_branch: integration/region-talk-editorial-approval
+global_constraints:
+  - Region Talk may use only TELEGRAM_AUTH_BUNDLE_DISCOVERY1/2.
+  - Never overlap a local discovery bundle with its mapped Kaggle kernel.
+  - Preserve exact source grounding and media rights; no heuristic semantic writer.
+  - Target-channel public publishing stays disabled during this task.
+verification_owner: /root
+stop_conditions:
+  - active discovery kernel owns a required Telegram session
+  - origin/main advances with conflicting Region Talk changes
+  - provider limiter or grounded source body is unavailable for regeneration
+lanes:
+  - id: prompt
+    role: worker
+    requirement_ids: [R04]
+    target: Gemini manual consultation prompt
+    execution_mode: parallel
+    branch: agent/region-talk-editorial/prompt
+    worktree: /home/dev/projects/events-bot-new-region-talk-editorial-prompt-20260801
+    writable_files: [docs/features/region-talk-channel/editorial-onboarding-writer-gemini-review.prompt.md]
+    status: merged
+  - id: cafe-tobe
+    role: worker
+    requirement_ids: [R07]
+    target: separate cafe-review product hypothesis
+    execution_mode: parallel
+    branch: agent/region-talk-editorial/cafe-tobe
+    worktree: /home/dev/projects/events-bot-new-region-talk-cafe-tobe-20260801
+    writable_files: [docs/backlog/features/region-talk-cafe-reviews]
+    status: merged
+  - id: runtime-code
+    role: worker
+    requirement_ids: [R01, R02]
+    target: source cursor, revisit quota, safe five-slot canary
+    execution_mode: parallel
+    branch: agent/region-talk-editorial/runtime-discovery
+    worktree: /home/dev/projects/events-bot-new-region-talk-runtime-discovery-20260801
+    writable_files: [kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py, scheduling.py, scripts/region_talk_scheduled_runner.py, fly.toml]
+    status: spawned
+  - id: reaction-code
+    role: worker
+    requirement_ids: [R03]
+    target: exact-draft Telegram reaction ledger
+    execution_mode: parallel
+    branch: agent/region-talk-editorial/reactions
+    worktree: /home/dev/projects/events-bot-new-region-talk-reactions-20260801
+    writable_files: [scripts/region_talk_reaction_sync.py, scripts/region_talk_goal_notify.py, scripts/region_talk_publication_plan.py]
+    status: spawned
+  - id: visual-code
+    role: worker
+    requirement_ids: [R05, R06]
+    target: article image extraction and association evidence
+    execution_mode: parallel
+    branch: agent/region-talk-editorial/visual-association
+    worktree: /home/dev/projects/events-bot-new-region-talk-visual-association-20260801
+    writable_files: [kaggle/RegionTalkImageDiagnostic/region_talk_image_diagnostic.py]
+    status: spawned
+  - id: writer-regeneration
+    role: planner
+    requirement_ids: [R04, R08]
+    target: history-aware two-paragraph composer and new operator deliveries
+    depends_on: [reaction-code, visual-code, Gemini manual review]
+    execution_mode: serial_after_dependency
+    branch: integration/region-talk-editorial-approval
+    worktree: /home/dev/projects/events-bot-new-region-talk-editorial-integration-20260801
+    writable_files: [scripts/region_talk_publication_finalizer.py, scripts/region_talk_publication_draft_backfill.py, kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py]
+    status: planned
