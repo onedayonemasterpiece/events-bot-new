@@ -34,12 +34,12 @@ from scripts import region_talk_goal_notify as notify  # noqa: E402
 from scripts.region_talk_vk_media_prefetch import local_vk_posts, parse_vk_post  # noqa: E402
 
 
-DRAFT_BACKFILL_VERSION = "region_talk_publication_draft_backfill_v2_editorial"
-EDITORIAL_WRITER_VERSION = "region_talk_editorial_onboarding_writer_v8_staged"
+DRAFT_BACKFILL_VERSION = "region_talk_publication_draft_backfill_v3_no_not_a_cliche"
+EDITORIAL_WRITER_VERSION = notify.EDITORIAL_WRITER_VERSION
 EDITORIAL_INPUT_CONTRACT = "region_talk_editorial_onboarding_input_v2"
-EDITORIAL_OUTPUT_CONTRACT = "region_talk_editorial_onboarding_output_v2"
+EDITORIAL_OUTPUT_CONTRACT = notify.EDITORIAL_OUTPUT_CONTRACT
 MEDIA_MATERIALIZATION_CONTRACT_VERSION = "region_talk_media_materialization_v1"
-LEGACY_REVIEW_MIGRATION_VERSION = "region_talk_legacy_review_to_v8_v1"
+LEGACY_REVIEW_MIGRATION_VERSION = "region_talk_legacy_review_to_v9_v2"
 DRAFT_FIELDS = (
     "publication_draft_status",
     "publication_draft_title",
@@ -375,8 +375,12 @@ def editorial_paragraphs(text: str) -> tuple[str, str]:
 def validate_editorial_output(output: dict[str, Any], evidence_ids: set[str]) -> list[str]:
     violations: list[str] = []
     public_copy = output.get("public_copy") if isinstance(output.get("public_copy"), dict) else {}
-    p1 = re.sub(r"\s+", " ", str(public_copy.get("paragraph_1") or "")).strip()
-    p2 = re.sub(r"\s+", " ", str(public_copy.get("paragraph_2") or "")).strip()
+    raw_p1 = str(public_copy.get("paragraph_1") or "").strip()
+    raw_p2 = str(public_copy.get("paragraph_2") or "").strip()
+    if any(notify.contains_contrastive_not_a_cliche(value) for value in (raw_p1, raw_p2)):
+        violations.append("contrastive_not_a_cliche")
+    p1 = re.sub(r"\s+", " ", raw_p1).strip()
+    p2 = re.sub(r"\s+", " ", raw_p2).strip()
     if not (150 <= len(p1) <= 500):
         violations.append("paragraph_1_length")
     if not (150 <= len(p2) <= 500):
@@ -386,6 +390,8 @@ def validate_editorial_output(output: dict[str, Any], evidence_ids: set[str]) ->
     combined = p1 + " " + p2
     if any(re.search(pattern, combined, re.I) for pattern in _BANNED_COPY_PATTERNS):
         violations.append("banned_lexeme")
+    if notify.contains_contrastive_not_a_cliche(combined):
+        violations.append("contrastive_not_a_cliche")
     if _FIRST_PERSON_OWNERSHIP.search(combined):
         violations.append("third_person_boundary")
     cyrillic = len(re.findall(r"[А-Яа-яЁё]", combined))
@@ -409,8 +415,14 @@ def validate_editorial_output(output: dict[str, Any], evidence_ids: set[str]) ->
 
 def render_public_copy(row: dict[str, Any], output: dict[str, Any]) -> tuple[str, str, str]:
     public_copy = output.get("public_copy") if isinstance(output.get("public_copy"), dict) else {}
-    p1 = re.sub(r"\s+", " ", str(public_copy.get("paragraph_1") or "")).strip()
-    p2 = re.sub(r"\s+", " ", str(public_copy.get("paragraph_2") or "")).strip()
+    raw_p1 = str(public_copy.get("paragraph_1") or "").strip()
+    raw_p2 = str(public_copy.get("paragraph_2") or "").strip()
+    if any(notify.contains_contrastive_not_a_cliche(value) for value in (raw_p1, raw_p2)):
+        raise ValueError("contrastive_not_a_cliche")
+    p1 = re.sub(r"\s+", " ", raw_p1).strip()
+    p2 = re.sub(r"\s+", " ", raw_p2).strip()
+    if notify.contains_contrastive_not_a_cliche(f"{p1}\n\n{p2}"):
+        raise ValueError("contrastive_not_a_cliche")
     source = _source_name(row)
     url = _canonical_url(row)
     source_url = str(row.get("source_url") or url).strip()
@@ -422,13 +434,35 @@ def render_public_copy(row: dict[str, Any], output: dict[str, Any]) -> tuple[str
     return plain, plain, links
 
 
+def publication_candidate_id(row: dict[str, Any]) -> str:
+    return str(
+        row.get("publication_candidate_id")
+        or row.get("external_publication_id")
+        or row.get("candidate_id")
+        or ""
+    ).strip()
+
+
+def has_published_status(row: dict[str, Any]) -> bool:
+    statuses = {
+        str(row.get("status") or "").strip().lower(),
+        str(row.get("plan_status") or "").strip().lower(),
+        str(row.get("target_publication_status") or "").strip().lower(),
+        str(row.get("public_publication_status") or "").strip().lower(),
+    }
+    return bool(statuses & {"published", "target_published", "completed"})
+
+
 def backfill_is_actionable(
     row: dict[str, Any],
     *,
     now: datetime | None = None,
     surface: str = "all",
+    force_regenerate: bool = False,
 ) -> bool:
-    if not notify.is_confirmed_publication(row) or current_editorial_draft(row):
+    if not notify.is_confirmed_publication(row):
+        return False
+    if current_editorial_draft(row) and not force_regenerate:
         return False
     row_surface = social_post_surface(str(row.get("post_url") or ""))
     row_lane = content_lane(row)
@@ -437,12 +471,25 @@ def backfill_is_actionable(
     if not row_surface or surface not in {"all", row_surface, row_lane}:
         return False
     status = str(row.get("publication_draft_backfill_status") or "").strip().lower()
+    row_backfill_version = str(row.get("publication_draft_backfill_version") or "").strip()
+    current_backfill = row_backfill_version == DRAFT_BACKFILL_VERSION
+    invalid_current_draft = bool(
+        current_backfill
+        and status == "ready"
+        and not notify.is_publication_draft_ready(row)
+    )
     if (
-        not str(row.get("publication_draft_prompt_version") or "")
-        or str(row.get("publication_draft_backfill_version") or "") == DRAFT_BACKFILL_VERSION
-    ) and status in TERMINAL_BACKFILL_STATUSES:
+        not force_regenerate
+        and not invalid_current_draft
+        and current_backfill
+        and status in TERMINAL_BACKFILL_STATUSES
+    ):
         return False
-    retry_at = parse_time(row.get("publication_draft_backfill_next_attempt_after"))
+    retry_at = (
+        parse_time(row.get("publication_draft_backfill_next_attempt_after"))
+        if current_backfill
+        else None
+    )
     return retry_at is None or retry_at <= (now or utc_now())
 
 
@@ -452,9 +499,22 @@ def select_rows(
     limit: int,
     now: datetime | None = None,
     surface: str = "all",
+    force_regenerate: bool = False,
+    candidate_urls: set[str] | None = None,
+    published_urls: set[str] | None = None,
+    published_candidate_ids: set[str] | None = None,
 ) -> list[dict[str, Any]]:
+    candidate_urls = set(candidate_urls or ())
+    published_urls = set(published_urls or ())
+    published_candidate_ids = set(published_candidate_ids or ())
     selected = [
-        row for row in rows if backfill_is_actionable(row, now=now, surface=surface)
+        row for row in rows
+        if backfill_is_actionable(
+            row, now=now, surface=surface, force_regenerate=force_regenerate
+        )
+        and (not candidate_urls or notify.canonical_post_url(row) in candidate_urls)
+        and notify.canonical_post_url(row) not in published_urls
+        and publication_candidate_id(row) not in published_candidate_ids
     ]
     selected.sort(key=lambda row: (
         str(row.get("sent_to_chat") or "").lower() == "true",
@@ -784,6 +844,7 @@ def _stage_prompt(stage: str, payload: dict[str, Any]) -> str:
         "language": "Russian only",
         "contract_version": EDITORIAL_WRITER_VERSION,
         "strict_grounding": "Every factual sentence must cite existing evidence_ids; never infer profession, origin, emotion or image details.",
+        "style_guard": "Do not build an adversative contrast from a negation particle followed later in the same sentence by an adversative conjunction. State the intended observation directly.",
     }
     if stage == "strategy":
         task = {
@@ -822,6 +883,7 @@ def _stage_prompt(stage: str, payload: dict[str, Any]) -> str:
                 "Paragraph 2: 1-2 concrete observations from the material, strictly in third person, and a real reason to open the original.",
                 "Do not use first-person plural for another author's experience.",
                 "Warm observational editorial tone; no clickbait, PR jargon, dossier or exhaustive summary.",
+                "Express every positive observation directly; the negation-plus-adversative contrast template is forbidden even with punctuation, a dash or a line break between its parts.",
                 "The two paragraphs together must leave room for attribution and URL in a 550-900 character media caption.",
                 "Mention photos/video only when visual_hook_evidence_ids is non-empty. Source media is intentionally reused with explicit attribution.",
             ],
@@ -830,7 +892,7 @@ def _stage_prompt(stage: str, payload: dict[str, Any]) -> str:
         task = {
             "task": "Critique the draft against evidence and strategy. Return JSON only.",
             "output": {"status": "pass|rewrite|reject", "reason_codes": ["string"], "feedback": "concise Russian rewrite instruction"},
-            "hard_fails": ["unsupported_claim", "voice_violation", "visual_hallucination", "forced_history_bridge", "wrong_language", "not_exactly_two_paragraphs"],
+            "hard_fails": ["unsupported_claim", "voice_violation", "visual_hallucination", "forced_history_bridge", "wrong_language", "not_exactly_two_paragraphs", "contrastive_not_a_cliche"],
             "pass_only_if": "Both paragraphs are grounded, distinct, editorial, specific and motivate opening the original without replacing it.",
         }
     return json.dumps({**common, **task, "input": payload}, ensure_ascii=False)
@@ -1187,8 +1249,33 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
             pool, ydb, table, "region_talk_publication_log", int(args.history_limit)
         )
         history = publication_history([*schedules, *logs, *rows], limit=5)
+        published_rows = [
+            item for item in [*schedules, *logs, *rows] if has_published_status(item)
+        ]
+        published_urls = {
+            notify.canonical_post_url(item)
+            for item in published_rows
+            if notify.canonical_post_url(item)
+        }
+        published_candidate_ids = {
+            publication_candidate_id(item)
+            for item in published_rows
+            if publication_candidate_id(item)
+        }
         intakes = article_intake_index(external_intakes)
-        selected = select_rows(rows, limit=int(args.limit), surface=str(args.surface))
+        selected = select_rows(
+            rows,
+            limit=int(args.limit),
+            surface=str(args.surface),
+            force_regenerate=bool(getattr(args, "force_regenerate", False)),
+            candidate_urls={
+                notify.canonical_post_url({"post_url": value})
+                for value in (getattr(args, "candidate_url", None) or [])
+                if notify.canonical_post_url({"post_url": value})
+            },
+            published_urls=published_urls,
+            published_candidate_ids=published_candidate_ids,
+        )
         if args.dry_run or not selected:
             return {
                 "ok": True,
@@ -1297,12 +1384,16 @@ def main() -> int:
     parser.add_argument("--delay-min", type=float, default=2.0)
     parser.add_argument("--delay-max", type=float, default=5.0)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--candidate-url", action="append", default=[], help="regenerate only this exact canonical candidate URL; repeatable")
+    parser.add_argument("--force-regenerate", action="store_true", help="regenerate a current-version draft; requires --candidate-url")
     args = parser.parse_args()
     notify.load_env(args.env_file)
     args.transport = args.transport or os.getenv("REGION_TALK_DRAFT_BACKFILL_TRANSPORT") or "telethon_discovery2"
     if args.transport not in notify.TELETHON_TRANSPORT_AUTH_ENVS:
         raise RuntimeError(f"unsupported REGION_TALK_DRAFT_BACKFILL_TRANSPORT: {args.transport}")
     args.limit = max(0, min(10, int(args.limit)))
+    if args.force_regenerate and not args.candidate_url:
+        raise RuntimeError("--force-regenerate requires at least one --candidate-url")
     args.llm_budget_id = args.llm_budget_id or os.getenv("REGION_TALK_DRAFT_BACKFILL_BUDGET_ID") or utc_now().strftime("region-talk-draft-backfill-%Y%m%d")
     payload = asyncio.run(execute(args))
     print(json.dumps(payload, ensure_ascii=False))

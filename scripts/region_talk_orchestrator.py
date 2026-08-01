@@ -2635,13 +2635,16 @@ def _publication_handoff_metrics(
         status = str(row.get("publication_draft_backfill_status") or "").lower()
         if (
             str(row.get("publication_draft_backfill_version") or "")
-            == "region_talk_publication_draft_backfill_v2_editorial"
+            == "region_talk_publication_draft_backfill_v3_no_not_a_cliche"
             and status in {
             "ready", "llm_not_accepted", "needs_grounding_review",
             "source_text_unavailable", "unsupported_surface",
             }
         ):
-            return False
+            # A v3 row marked ready can still be invalidated by a newer
+            # deterministic final-copy guard. It is already in
+            # draft_missing_confirmed_urls, so schedule one corrective pass.
+            return status == "ready"
         retry_at = _parse_iso_datetime(row.get("publication_draft_backfill_next_attempt_after"))
         return retry_at is None or retry_at <= now
 

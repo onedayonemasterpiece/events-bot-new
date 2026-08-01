@@ -58,6 +58,14 @@
     path without namespace errors and closure requires new current-fingerprint
     delivery evidence or a verified empty queue.
 
+- `INC-2026-08-01-region-talk-not-a-cliche.md`
+  - Scope: Region Talk staged final-copy style, versioned backfill, notifier
+    readiness and daily plan eligibility.
+  - Must not regress: `не …, а …` variants must receive one LLM-first rewrite
+    and then fail closed; stale/injected copies cannot be delivered or planned,
+    and closure requires a measured production backfill plus a zero-pattern
+    audit of current unpublished confirmed candidates.
+
 - `INC-2026-08-01-unusual-feed-disabled-by-config.md`
   - Scope: expired Unusual review candidate, absent public route, shared static
     BGE execution, cache/last-good durability and stable demonstration availability.

@@ -5,10 +5,14 @@ API publisher remains disabled. No channel/community creation or target-channel
 publishing is performed by the planner.
 
 The plan is publication-readiness gated: a terminal candidate without current
-v8 two-paragraph Russian copy, attribution, grounded support and an exact media
+v9 two-paragraph Russian copy, attribution, grounded support and an exact media
 materialization manifest cannot occupy a future public slot. Both articles and
 social posts pass the staged LLM-first writer; retained article intake is
 evidence, not a finished-copy projection.
+
+The target Telegram channel is [**«Калининград с первого
+взгляда»**](https://t.me/kalinigrad_visit) (`@kalinigrad_visit`). **«О
+Калининграде говорят»** remains the product/editorial working name.
 
 Operator-chat acknowledgement is bound to a fingerprint of the exact completed
 draft, not only to the candidate URL. Legacy rows marked `sent_to_chat` before

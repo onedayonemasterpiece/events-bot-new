@@ -87,11 +87,11 @@ notifier renders `О блогере: …` only when the deterministic support an
 300–600-character checks return `source_onboarding_status=ready`; otherwise the
 candidate remains reviewable without an invented biography.
 
-### Editorial onboarding writer v8
+### Editorial onboarding writer v9
 
 The final verifier remains the owner of the publication verdict. Accepted
 candidates are rewritten by a separate LLM-first copy pipeline,
-`region_talk_editorial_onboarding_writer_v8_staged`:
+`region_talk_editorial_onboarding_writer_v9_no_not_a_cliche`:
 
 1. **Strategy** chooses the external-source angle and an honest history mode
    from at most five actually published or exact-current `approved + clean`
@@ -101,7 +101,9 @@ candidates are rewritten by a separate LLM-first copy pipeline,
    in the third person and a reason to open the original.
 3. Deterministic validators check 150–500 characters per paragraph, the
    550–900-character visible caption target, Russian language, banned
-   clickbait/PR wording, third-person ownership and evidence-ID integrity.
+   clickbait/PR wording, third-person ownership and evidence-ID integrity. The
+   adversative AI-cliché family built as `не …, а …` is a named hard failure,
+   including punctuation/dash/line-break variants inside one sentence.
 4. **Critic** returns `pass|rewrite|reject`; at most one writer retry is
    allowed. A second failure becomes `needs_grounding_review`, never an
    invented fallback.
@@ -112,13 +114,30 @@ request and prompt fingerprints, usage, input evidence, bounded history,
 strategy, grounding map and critic result are stored without truncation. The
 writer never changes `llm_decision` or the original verifier verdict.
 
+The style rule is enforced at four boundaries: Writer instruction, Critic
+hard-fail, deterministic writer validation before/after the single retry, and
+the shared notifier/planner readiness predicate. `public_caption()` repeats the
+same check immediately before rendering. Regex only detects and rejects the
+style pattern; it never rewrites meaning. Semantic rewriting remains LLM-first.
+Two failed writer attempts become `needs_grounding_review` and cannot be sent
+to the operator chat or occupy a daily plan slot.
+
 Social evidence is restored from the exact Telegram/VK post using only the
 role-scoped discovery identities/API. Article evidence is read from the
 retained `external_publication_intake_item`; a teaser projection is no longer
 treated as finished public copy. The explicit v7 prompt version is stale.
-Backfill archives its old reaction projection once as `principle approved +
+The v9 rollout invalidates earlier v8 draft/cache fingerprints and runs a
+bounded copy backfill over unpublished confirmed candidates. Backfill archives
+its old reaction projection once as `principle approved +
 rewrite requested`, clears the current-review projection, and gives the new
 text-plus-media revision a new fingerprint that requires fresh reactions.
+Already target-published rows are excluded fail-closed by canonical URL and
+candidate ID, including publication status recorded directly on the candidate.
+Unversioned drafts are stale and never satisfy readiness; unversioned/older
+terminal backfill rows are migration debt and become actionable under v9.
+Operators may target an exact URL
+with repeatable `--candidate-url`; `--force-regenerate` is allowed only together
+with that explicit selector.
 
 Operator delivery is fail-closed on one atomic revision: two paragraphs,
 source/original links, ordered media manifest and layout. An article requires

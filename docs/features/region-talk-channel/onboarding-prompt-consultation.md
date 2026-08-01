@@ -91,3 +91,7 @@ RECOMMENDED_INPUT_CONTRACT=region_talk_editorial_onboarding_input_v2 (strict enu
 RECOMMENDED_OUTPUT_CONTRACT=region_talk_editorial_onboarding_output_v2 (grounding map mandatory)
 RECOMMENDED_STAGE_SPLIT=Strategy (Planner) -> Grounded Writer -> Verifier/Critic
 HARD_BLOCKERS_BEFORE_BACKFILL=Implement deterministic regex/length validators BEFORE LLM Critic stage.
+> **Архивный материал внешней консультации (v8/output-v2), superseded.** Текущий production-контракт —
+> `region_talk_editorial_onboarding_writer_v9_no_not_a_cliche` / output v3. Примеры ниже,
+> содержащие отрицание с последующим противопоставлением через союз «а», считаются
+> anti-pattern и не должны использоваться как хорошие примеры или переноситься в prompt.
