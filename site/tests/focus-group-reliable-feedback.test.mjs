@@ -20,7 +20,14 @@ test('focus onboarding is sequential and offers link plus six-digit mobile OTP',
   assert.match(intake, /navigator\.clipboard\.readText/u);
   assert.match(intake, /permission\.state !== 'granted'/u);
   assert.match(intake, /token\.length === EMAIL_OTP_LENGTH[\s\S]*void verifyOtp\(\)/u);
+  assert.match(intake, /addEventListener\('change', handleOtpMutation\)/u);
+  assert.match(intake, /data-focus-email-otp-status/u);
+  assert.match(intake, /otpStatus\.textContent = 'Проверяем код…'/u);
+  assert.match(intake, /try \{[\s\S]*auth\.verifyEmailOtp[\s\S]*await finish\('email_intent', true\)[\s\S]*catch[\s\S]*finally/u);
+  assert.match(intake, /otpInput\.removeAttribute\('aria-busy'\)/u);
+  assert.doesNotMatch(intake, /otpInput\.disabled = true/u);
   assert.match(intake, /if \(result\.accepted\) \{[\s\S]*showEmailCode\(\)/u);
+  assert.match(intake, /result\.status === 'ambiguous'[\s\S]*showEmailCode\(\)[\s\S]*startResendTimer\(\)/u);
   assert.match(intake, /result\.status === 'ambiguous'[\s\S]*60_000/u);
   assert.match(helper, /EMAIL_OTP_LENGTH = 6/u);
   assert.doesNotMatch(intake, /Вставить код/u);
@@ -45,6 +52,7 @@ test('external code testing uses a dedicated temporary Supabase identity without
   assert.match(issuer, /auth\.admin\.generateLink/u);
   assert.match(issuer, /email_otp/u);
   assert.match(issuer, /PERSONALIZATION_SUPABASE_(?:SECRET|SERVICE)_KEY/u);
+  assert.match(issuer, /export async function issueFocusAgentTestCredentials/u);
   assert.doesNotMatch(intake, /service[_-]?role|SECRET_KEY|SERVICE_KEY/iu);
 });
 

@@ -169,7 +169,12 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
               required
             />
           </label>
-          <p>После шестой цифры продолжим автоматически.</p>
+          <p
+            class="focus-intake__otp-status"
+            data-focus-email-otp-status
+            role="status"
+            aria-live="polite"
+          >После шестой цифры продолжим автоматически.</p>
           <button type="submit" data-focus-email-otp-submit disabled hidden>
             Подтвердить
           </button>
@@ -336,6 +341,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     const otpInput = root.querySelector<HTMLInputElement>('#focus-email-otp');
     const otpDigits = Array.from(root.querySelectorAll<HTMLElement>('[data-focus-otp-digit]'));
     const otpSubmit = root.querySelector<HTMLButtonElement>('[data-focus-email-otp-submit]');
+    const otpStatus = root.querySelector<HTMLElement>('[data-focus-email-otp-status]');
     const yandexButton = root.querySelector<HTMLButtonElement>('[data-focus-yandex]');
     const skipButton = root.querySelector<HTMLButtonElement>('[data-focus-skip]');
     const signedInPanel = root.querySelector<HTMLElement>('[data-focus-auth-signed-in]');
@@ -387,6 +393,10 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
         otpInput.value = '';
       }
       lastSubmittedOtp = '';
+      if (otpStatus) {
+        otpStatus.dataset.state = 'idle';
+        otpStatus.textContent = 'После шестой цифры продолжим автоматически.';
+      }
       renderOtp();
       window.setTimeout(() => otpInput?.focus(), 0);
     };
@@ -437,9 +447,10 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
         digit.toggleAttribute('data-filled', index < token.length);
         digit.toggleAttribute(
           'data-active',
-          !otpInput.disabled && index === Math.min(token.length, EMAIL_OTP_LENGTH - 1),
+          !otpVerifying && index === Math.min(token.length, EMAIL_OTP_LENGTH - 1),
         );
       });
+      root.toggleAttribute('data-otp-verifying', otpVerifying);
       if (otpSubmit) otpSubmit.disabled = token.length !== EMAIL_OTP_LENGTH || otpVerifying;
     };
 
@@ -582,9 +593,17 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
         startResendTimer();
         return;
       }
+      if (result.status === 'ambiguous') {
+        // The selected-once request may have been accepted before its response
+        // was lost. Let a delivered code finish the journey, but do not resend.
+        showEmailCode();
+        if (identityStatus) identityStatus.textContent = result.message;
+        startResendTimer();
+        return;
+      }
       showEmailAddress(false);
       if (identityStatus) identityStatus.textContent = result.message;
-      if (result.status === 'ambiguous' || result.status === 'rate_limited') {
+      if (result.status === 'rate_limited') {
         if (emailSend) emailSend.disabled = true;
         window.setTimeout(() => {
           if (emailSend) emailSend.disabled = false;
@@ -632,25 +651,59 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       if (!canSubmitEmailOtp(token, { inFlight: otpVerifying, lastSubmitted: lastSubmittedOtp })) return;
       otpVerifying = true;
       lastSubmittedOtp = token;
-      otpInput.disabled = true;
+      otpInput.setAttribute('aria-busy', 'true');
       if (otpSubmit) otpSubmit.disabled = true;
-      if (identityStatus) identityStatus.textContent = 'Проверяем код…';
-      const verified = await auth.verifyEmailOtp(pendingEmail, token);
-      otpVerifying = false;
-      if (!verified.ok) {
-        otpInput.disabled = false;
+      if (otpStatus) {
+        otpStatus.dataset.state = 'checking';
+        otpStatus.textContent = 'Проверяем код…';
+      }
+      if (identityStatus) identityStatus.textContent = '';
+      renderOtp();
+      try {
+        const verified = await auth.verifyEmailOtp(pendingEmail, token);
+        if (verified.ok) {
+          if (otpStatus) {
+            otpStatus.dataset.state = 'success';
+            otpStatus.textContent = 'Код подтверждён.';
+          }
+          otpInput.blur();
+          await finish('email_intent', true);
+          return;
+        }
         lastSubmittedOtp = '';
-        otpInput.select();
+        if (otpStatus) {
+          otpStatus.dataset.state = 'error';
+          otpStatus.textContent = verified.message;
+        }
+        if (identityStatus) identityStatus.textContent = '';
+      } catch {
+        lastSubmittedOtp = '';
+        const message = 'Не получилось проверить код. Проверьте соединение и повторите.';
+        if (otpStatus) {
+          otpStatus.dataset.state = 'error';
+          otpStatus.textContent = message;
+        }
+        if (identityStatus) identityStatus.textContent = '';
+      } finally {
+        otpVerifying = false;
+        otpInput.removeAttribute('aria-busy');
         renderOtp();
-        if (identityStatus) identityStatus.textContent = verified.message;
+        if (!completed && identityView === 'email_code') {
+          otpInput.select();
+          window.setTimeout(() => otpInput.focus(), 0);
+        }
       }
     };
 
-    otpInput?.addEventListener('input', () => {
+    const handleOtpMutation = () => {
       renderOtp();
-      const token = otpInput.value;
+      const token = otpInput?.value || '';
       if (token.length === EMAIL_OTP_LENGTH) void verifyOtp();
-    });
+    };
+    otpInput?.addEventListener('input', handleOtpMutation);
+    // Android autofill/password managers may commit the code with `change`
+    // rather than a final `input` event.
+    otpInput?.addEventListener('change', handleOtpMutation);
     otpInput?.addEventListener('focus', renderOtp);
     otpInput?.addEventListener('blur', renderOtp);
 
@@ -953,6 +1006,10 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     border-color: #0f766e;
     box-shadow: 0 0 0 3px rgb(15 118 110 / 20%);
   }
+  .focus-intake[data-otp-verifying] .focus-intake__otp-boxes > span {
+    border-color: #b79878;
+    background: #f8f2e9;
+  }
   .focus-intake__otp-input {
     position: absolute;
     left: 0;
@@ -975,6 +1032,9 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     line-height: 1.4;
     text-align: center;
   }
+  .focus-intake__otp-status[data-state="checking"] { color: #7a4b00; font-weight: 800; }
+  .focus-intake__otp-status[data-state="success"] { color: #0f6c3d; font-weight: 800; }
+  .focus-intake__otp-status[data-state="error"] { color: #98401f; font-weight: 800; }
   .focus-intake__resend {
     min-height: 1.2em;
     color: #6d6259;

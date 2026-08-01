@@ -2,6 +2,14 @@
 
 Канонический реестр E2E/BDD сценариев проекта.
 
+Focus email has two distinct gates. The fixed
+`focus-agent-e2e@kenigevents.ru` + fresh admin-issued OTP runner is an internal
+deployed Auth/membership integration check only. The external delivery E2E must
+run manually in a protected GitHub Environment, receive a random OTP through a
+controlled IMAPS mailbox, and must not use a service key, admin link or fixed
+OTP. An ambiguous selected-once issuance keeps code entry open while resend is
+cooling down.
+
 Правило обновления:
 - При добавлении нового `.feature` файла или существенном изменении набора сценариев сначала обновляй эту страницу.
 - Для сценариев с «живыми» внешними ссылками отмечай, насколько быстро они устаревают.

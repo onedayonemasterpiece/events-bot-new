@@ -222,6 +222,14 @@ after any failed transport result and therefore communicated a false success.
   through direct and relay Data and Function routes. The UI additionally
   separates confirmed identity from pending membership persistence and offers
   an explicit retry.
+- 2026-08-01 21:39 UTC — isolated one-page candidate `otp-r5` corrected the
+  sixth-digit state machine. Both ordinary input and Android-style change
+  commits trigger verification; progress is visible beside the six cells;
+  failed checks restore input; and success explicitly completes membership
+  instead of depending only on a separate Auth callback. A fresh hosted-Auth
+  OTP entered digit by digit without Enter returned verify `200`, membership
+  `200` and the confirmed final screen. This is internal Auth integration
+  evidence, not external mailbox-delivery E2E.
 
 ## Root Cause
 

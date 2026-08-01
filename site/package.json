@@ -21,6 +21,7 @@
     "check:desktop-cta-geometry": "bash scripts/check-desktop-cta-geometry-playwright.sh",
     "check:keyboard-event-navigation": "bash scripts/check-keyboard-event-navigation-playwright.sh",
     "check:browser-release": "node scripts/check-browser-release-gate.mjs",
+    "check:focus-onboarding-email-integration": "node scripts/check-focus-onboarding-email-integration.mjs",
     "check:listing-desktop-geometry": "bash scripts/check-listing-desktop-geometry-playwright.sh",
     "check:secret-candidate": "node scripts/check-secret-candidate.mjs",
     "deploy:preview": "node scripts/deploy-preview-yc.mjs",

@@ -673,6 +673,16 @@ OTP, removes the address from the browser URL immediately and never embeds a
 service key or fixed valid code in static assets. Generated credentials are
 temporary secrets and must not be committed or pasted into public logs.
 
+This operator-issued route is an **internal integration check**, not delivery
+E2E: it proves the deployed sixth-digit autosubmit, hosted Auth verify and
+participant RPC without spending an email. The browser keeps code entry
+available after an ambiguous selected-once issuance, shows verification beside
+the six cells and always restores input after failure.
+`site/scripts/check-focus-onboarding-email-integration.mjs` exercises the
+deployed page digit by digit without Enter. The external delivery gate remains
+a manual GitHub Environment workflow with a controlled IMAPS mailbox and a
+real provider-delivered random OTP; it must not use an admin-issued token.
+
 For a clean operator retest on one device use:
 
 `/fokus-gruppa/priglashenie/?focus_test_reset=1#invite=focus-group-2026-announcements`

@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Fixed focus-group email code entry on phones: the sixth digit visibly starts
+  verification, Android autofill/change commits are handled, failures return
+  control to the six-cell input, successful verification explicitly completes
+  membership, and an ambiguous email issuance keeps code entry available
+  without immediately sending a duplicate message. Added a fixed-identity,
+  fresh-OTP deployed integration check while retaining real mailbox delivery
+  as a separate external E2E gate.
+
 - Fixed three production event-quality regressions: historical interviews now enter the LLM eventness gate instead of becoming future events; explicit attendee-facing location markers outrank programme/club labels through semantic review; and VK schedule-card posts receive both a bounded complete attachment set and the matching complete OCR evidence set, so the LLM can split independent dates/venues rather than collapse a cover range into one aggregate event. The parser now budgets poster OCR against the raw source caption rather than its own appended policy text, and a semantic rejection of one independent card no longer discards valid siblings from the same bounded roundup.
 
 - Enabled the production Region Talk reaction gate: future article/social plan slots now require an exact-current ❤️/👍 approval with clean copy; pending, rejected, conflicting, rewrite-requested and stale revisions remain outside the public-content queue.
