@@ -84,16 +84,23 @@ gates.
 | Gate | Статус | Evidence/граница |
 |---|---|---|
 | Production data audit | Done, read-only | Fly SQLite 2026-08-01; `integrity_check=ok`; 6 approved clubs/13 grounded relations, 8 theatre organizations, 6 venue pilots; runtime не хардкодит counts |
-| Club registry refresh | Live; catch-up draining | durable `interest_club_relation` outbox, one successor, evaluation history, provider-deferred retry, shadow discovery, inclusive six-calendar-month v2 projection; 80 exact six-month candidates поставлены в outbox, provider-deferred хвост остаётся durable и не стирает accepted relation |
+| Club registry refresh | Done for MVP; retry tail durable | durable `interest_club_relation` outbox, evaluation history, provider-deferred retry, shadow discovery, inclusive six-calendar-month v2 projection; из 80 exact candidates 58 завершены, 22 provider-deferred остаются retryable и не стирают accepted relation; все 6 approved identities имеют accepted activity |
 | Place/organization registry | Done in code | checked-in exact registry, separate theatre/venue roles, 8 official theatres, 6 venue candidates, structured membership reasons |
 | Admission/audience/people facts | Done in code | nullable source-bound `Event.collection_decisions`; candidate-only strict LLM schema; `unknown` preserves truth; `Event.is_free` remains compatible bool; no prose `ticket_status` free inference |
-| Shared collection BGE | Live cold canary running | evidence-only `collection_semantics_v1`, one float32 BGE-M3 cache, prototype-independent event reuse, one `collection-batch-v1.json`; compute обязателен для production-candidate независимо от Unusual publication flag; run указан ниже |
+| Shared collection BGE | Cold accepted; warm remote accepted | evidence-only `collection_semantics_v1`, one float32 BGE-M3 cache, prototype-independent event reuse, one `collection-batch-v1.json`; real 409-event cold batch validated, warm reused 409/409 event vectors and 75/75 prototypes with zero provider/Supabase core calls; host success receipt pending |
 | Static scheduling | Done in code | strict trailing `latest Smart Update + 15m`, one running + one pending successor; operator/calendar remain immediate |
 | Data handoff | Done in code | `collection-batch-v1.json`, `venue-pages-v1.json`, `interest-clubs-static-v2.json`; exact IDs/status/hashes only, Astro does not redefine membership |
 | Cinema/festivals boundary | Preserved | no cinema source additions/changes; no festival extraction/page changes |
 | Supabase egress | Preserved | core source is the already transferred Fly SQLite snapshot; `supabase_core_reads=0`, no second Kaggle notebook/snapshot |
 | Astro routes/navigation/sitemap | Not started by design | belongs to the next UI integration window after data quality gates |
 | Production migration/backfill/deploy | Done for data-prep | Fly v1853, exact main SHA; `collection_decisions` live; 4608 legacy evaluation rows сохранены при переходе на history uniqueness; bounded admission/audience/people apply и club enqueue выполнены; финальный successor build поставлен после backfill |
+
+Club registry refresh выполняется **на Fly, не в Kaggle**: Smart Update и
+bounded catch-up ставят `interest_club_relation` в durable core outbox, а
+Kaggle лишь проецирует уже принятые relation/evaluation rows из того же SQLite
+snapshot в `interest-clubs-static-v2.json`. Шестимесячное правило является
+publication/lifecycle gate этой projection: approved identity с любой accepted
+активностью в включительном окне показывается, dormant и shadow не показываются.
 
 ### Production data-prep evidence, 2026-08-01
 
@@ -121,21 +128,58 @@ gates.
   в `24` событиях. Это coverage evidence candidate set, а не обещание, что
   каждый current event обязан иметь искусственно заполненный label;
 - club catch-up: `80` exact known-identity candidates поставлены в durable
-  outbox. После первой волны relations выросли `19 -> 34`; все шесть approved
-  identities имеют подтверждённую активность в окне 2026-02-01..2026-08-01
-  (`15, 3, 7, 2, 2, 1` active rows соответственно). Provider-limited jobs
-  остаются retryable outbox rows; две `shadow` identities не становятся
-  публичными автоматически;
-- cold production-candidate run:
-  `static-site:production-secret-20260801T191228-efb845fd:c1acf5c7d03b`,
-  snapshot `snapshot-20260801T171228-1202c99aa1`, input fingerprint
-  `caf3b9aa567ec7457e7241b8760b978b0a789dca323e73620d1740ad01186bc0`.
-  На момент записи run жив, status ledger получает heartbeat; terminal
-  artifact/hash/coverage ещё нельзя считать принятым;
+  outbox; `58` jobs завершены, `22` provider-deferred остаются retryable.
+  Приняты `43` yes-evaluations, а relation registry содержит `45` строк (`43`
+  active на момент проверки). Все шесть approved identities имеют
+  подтверждённую активность в окне 2026-02-01..2026-08-01; две `shadow`
+  identities также распознаны, но не становятся публичными автоматически;
+- первый production-candidate run
+  `static-site:production-secret-20260801T191228-efb845fd:c1acf5c7d03b`
+  завершился remote `done`, но его host publication был корректно superseded
+  более новым post-backfill current-catalog run; он не используется как
+  финальный candidate receipt;
 - post-backfill successor `JobOutbox.id=46465` поставлен immediate operator
   request с correlation
   `static-site:manual:static-collections-20260801`. Он обязан взять уже полный
   fact/club state после освобождения single-flight owner.
+
+Post-backfill continuation evidence:
+
+- audience v2: `73` source passes, `26` applied, `40` unchanged, `7`
+  provider-deferred; people v2: `39`, `28`, `1`, `10` соответственно;
+- production role review отменил неверный `kids` у event `6595`: цитата
+  относилась к юным авторам выставки, не к целевой аудитории. Before/after
+  сохранены в
+  `/data/static_collection_backfill/event-6595-audience-role-guard-20260801.json`;
+- narrow role guard достиг main через PR #187; он развёрнут как ancestor
+  текущего Fly v1857 image SHA
+  `7db0d510d969341359f010b27ad2be91bd711d8e`;
+- cold run
+  `static-site:production-secret-20260801T203140-e0a6dfac:b6ad3a9c7fce`
+  terminal `done`, `event_count=409`, semantic status `validated`,
+  `provider_calls=0`, `encoded_event_count=409`, `encoded_prototype_count=75`,
+  15-head collection batch validated. Egress receipt фиксирует
+  `fly_sqlite_snapshot`, `supabase_core_reads=0` и
+  `additional_external_requests=0`;
+- exact/shadow supply в cold batch: free `54`, kids `22`, exhibitions `57`,
+  performances `71`, popular `30`, science-pop `7`, theatre `67`, foreign
+  guests `1`, Russian guests `0`; semantic heads без owner gold остались
+  fail-closed `blocked`;
+- machine replacement во время run не запустил дубль: callback heartbeat
+  продолжился, terminal owner был re-armed, output adopted. `/healthz` снова
+  ready, в live log нет `MissingGreenlet`;
+- final warm successor `JobOutbox.id=46466` поставлен с
+  `force_rebuild=true`; remote run
+  `static-site:production-secret-20260801T222854-379b6264:f20575db9f54`
+  завершился `done`: `event_count=409`, semantic `validated`,
+  `cache_state=hit_reused`, `409/409` event vectors и `75/75` prototypes reused,
+  оба encoded counts `0`, `provider_calls=0`, `supabase_core_reads=0`;
+- exact kids supply стал `21`, event `6595` отсутствует. Тот же production v2
+  projector над immutable warm snapshot вернул `6` public clubs, `0` dormant
+  identities, inclusive window `2026-02-01..2026-08-01`; event `6595` в
+  snapshot имеет audience `unknown` / `insufficient_evidence`. Fly уже принял
+  exact remote output; до финального acceptance остаётся host publication
+  receipt и освобождение active claim.
 
 Astro routes/navigation/sitemap, cinema sources и festival extraction/pages
 этим production change не менялись. Public/root promotion также не выполнялся.
