@@ -249,6 +249,75 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                 ],
             )
 
+    def test_http_article_image_extraction_keeps_evidence_and_rejects_logo_related_assets(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            page = """
+                <head>
+                  <meta property="og:image" content="/assets/site-logo.jpg">
+                  <meta name="twitter:image" content="/media/coast-twitter.jpg">
+                  <script type="application/ld+json">
+                    {"@type":"NewsArticle","image":{"url":"/media/planet-ocean.jpg","width":1200,"height":800,"caption":"Музей Планета Океан"}}
+                  </script>
+                </head>
+                <main><article>
+                  <figure><img src="/media/facade.jpg" width="1000" height="700" alt="Фасад Планеты Океан">
+                    <figcaption>Новый корпус музея на набережной</figcaption>
+                  </figure>
+                  <img class="related recommendation" src="/related/other-story.jpg">
+                  <img src="/pixel.gif" width="1" height="1">
+                </article></main>
+            """
+
+            candidates = mod.extract_external_publication_image_candidates(
+                page,
+                base_url="https://publisher.example/story",
+                article_title="Планета Океан: новый корпус музея",
+                article_summary="Архитектурный разбор фасада и пространства на набережной.",
+            )
+
+            self.assertEqual(
+                [item["url"] for item in candidates],
+                [
+                    "https://publisher.example/media/planet-ocean.jpg",
+                    "https://publisher.example/media/facade.jpg",
+                    "https://publisher.example/media/coast-twitter.jpg",
+                ],
+            )
+            self.assertEqual(candidates[0]["role"], "jsonld_article_image")
+            self.assertEqual(candidates[1]["role"], "article_figure")
+            self.assertIn("набережной", candidates[1]["caption"])
+            self.assertEqual(candidates[1]["referrer"], "https://publisher.example/story")
+            self.assertEqual(candidates[1]["association_decision"], "accept")
+
+    def test_media_first_contract_falls_back_to_preview_without_selected_media(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            row = {"content_origin_type": "editorial_publication"}
+
+            mod.apply_media_first_presentation_contract(row)
+
+            self.assertEqual(row["presentation_recommendation"], "system_link_preview")
+            self.assertEqual(row["visual_asset_rights_status"], "not_independently_verified")
+            self.assertEqual(row["source_attribution_required"], "true")
+            self.assertEqual(row["presentation_max_assets"], 0)
+
+            selected = {
+                "content_origin_type": "editorial_publication",
+                "image_quality_decision": "vlm_visual_accept",
+                "image_vlm_article_association_supported": "true",
+                "selected_primary_media_id": "web_direct:2",
+                "fetched_image_count": 3,
+            }
+            mod.apply_media_first_presentation_contract(selected)
+            self.assertEqual(selected["presentation_recommendation"], "article_single_source_image")
+            self.assertEqual(selected["presentation_max_assets"], 1)
+
+            social_album = {"image_quality_decision": "vlm_visual_accept", "fetched_image_count": 14}
+            mod.apply_media_first_presentation_contract(social_album)
+            self.assertEqual(social_album["presentation_recommendation"], "source_media_carousel")
+            self.assertEqual(social_album["presentation_max_assets"], 6)
+
     def test_external_publication_fetches_intentional_article_gallery(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             mod = self._load_in_temp_output(td)
@@ -312,6 +381,48 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
             self.assertEqual(row["image_acquisition_status"], "complete")
             self.assertEqual(row["rights_policy"], "link_only")
             self.assertEqual(row["media_use_policy"], "score_only_no_reuse")
+            materialization = json.loads(row["media_materialization_items_json"])
+            self.assertEqual(materialization[0]["source_ref"], "https://publisher.example/gallery/1.jpg")
+            self.assertEqual(materialization[0]["refetch_locator"]["canonical_page_url"], "https://publisher.example/article")
+            self.assertEqual(materialization[0]["refetch_locator"]["method"], "article_page_image_evidence")
+            self.assertEqual(materialization[0]["refetch_locator"]["dom_role"], "article_lightbox")
+            self.assertTrue(materialization[0]["reviewed_content_sha256"])
+            self.assertTrue(materialization[0]["materialization_fingerprint"])
+
+    def test_js_only_article_requests_bounded_browser_materialization_instead_of_silent_preview(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+
+            class Headers:
+                def get(self, key, default=None):
+                    return "text/html; charset=utf-8" if key == "Content-Type" else default
+                def get_content_charset(self):
+                    return "utf-8"
+
+            class Response:
+                headers = Headers()
+                def __enter__(self): return self
+                def __exit__(self, *_args): return None
+                def read(self, _limit):
+                    return b'<main id="app"></main><script>renderArticleImages()</script>'
+
+            row = {
+                "image_queue_id": "js-only-article",
+                "post_url": "https://publisher.example/js-story",
+                "content_origin_type": "editorial_publication",
+            }
+            with mock.patch.object(mod, "urlopen", return_value=Response()):
+                mod.fetch_web_direct(row)
+            mod.apply_image_queue_status(row)
+
+            self.assertEqual(row["media_fetch_status"], "needs_browser_materialization")
+            self.assertEqual(row["image_queue_status"], "needs_browser_materialization")
+            self.assertEqual(row["presentation_recommendation"], "browser_materialization_pending")
+            request = json.loads(row["browser_materialization_request_json"])
+            self.assertEqual(request["canonical_page_url"], "https://publisher.example/js-story")
+            self.assertEqual(request["max_pages"], 1)
+            self.assertLessEqual(request["max_assets"], 20)
+            self.assertIn("article figure img", request["selectors"])
 
     def test_architecture_track_uses_editorial_prompts_not_scenic_only(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -351,6 +462,28 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                 "input_media_manifest_hash": "gallery-hash",
                 "overall_media_score": 0.52,
                 "shadow_best_frame_score": 0.55,
+            }
+            self.assertTrue(mod.image_row_needs_vlm_review(row))
+
+    def test_legacy_positive_external_article_still_gets_bounded_association_review(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            row = {
+                "content_origin_type": "editorial_publication",
+                "image_quality_decision": "legacy_auto_accept",
+                "image_quality_reason": "complete_album_anchor_passed_existing_quality_contract",
+                "publication_eligibility_decision": "accept",
+                "publication_eligibility_gate_version": "publication-gate-test-v1",
+                "vector_gate_status": "vector_accept_candidate",
+                "text_vector_fusion_status": "fused_e5_bge_m3",
+                "image_model_input_type": "actual_image",
+                "image_acquisition_status": "complete",
+                "expected_image_count": 1,
+                "fetched_image_count": 1,
+                "image_component_bundle_complete": "true",
+                "input_media_manifest_hash": "article-image",
+                "overall_media_score": 0.78,
+                "shadow_best_frame_score": 0.78,
             }
             self.assertTrue(mod.image_row_needs_vlm_review(row))
 
@@ -837,6 +970,57 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
             )
             self.assertEqual(rejected["image_quality_decision"], "needs_visual_review")
             self.assertEqual(rejected["image_quality_terminality"], "nonterminal")
+
+    def test_external_article_vlm_requires_association_and_honors_ranked_best_ordinal(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            base = {
+                "content_origin_type": "editorial_publication",
+                "post_url": "https://publisher.example/article",
+                "fetched_image_count": 3,
+                "input_media_manifest_hash": "article-images",
+                "media_manifest_items": [
+                    {"ordinal": 1, "media_id": "og:cover"},
+                    {"ordinal": 2, "media_id": "figure:facade"},
+                    {"ordinal": 3, "media_id": "figure:interior"},
+                ],
+                "media_materialization_items": [
+                    {"media_id": "og:cover", "materialization_fingerprint": "fp1", "refetch_locator": {"method": "article_page_image_evidence"}},
+                    {"media_id": "figure:facade", "materialization_fingerprint": "fp2", "refetch_locator": {"method": "article_page_image_evidence"}},
+                    {"media_id": "figure:interior", "materialization_fingerprint": "fp3", "refetch_locator": {"method": "article_page_image_evidence"}},
+                ],
+                "selected_media_ids": '["og:cover","figure:interior"]',
+            }
+            fingerprint = mod.image_vlm_request_fingerprint(base)
+            missing_association = mod.apply_image_vlm_result(
+                dict(base),
+                {
+                    "vlm_gate_status": "ok", "vlm_decision": "accept",
+                    "strong_publishable_image": True, "best_image_ordinal": 2,
+                    "ranked_image_ordinals": [2, 3, 1],
+                },
+                fingerprint=fingerprint,
+            )
+            self.assertEqual(missing_association["image_quality_decision"], "needs_visual_review")
+
+            accepted = mod.apply_image_vlm_result(
+                dict(base),
+                {
+                    "vlm_gate_status": "ok", "vlm_decision": "accept",
+                    "strong_publishable_image": True, "best_image_ordinal": 2,
+                    "ranked_image_ordinals": [2, 3, 1],
+                    "article_association_supported": True,
+                    "article_association_reason": "Фасад соответствует архитектурному разбору.",
+                },
+                fingerprint=fingerprint,
+            )
+            self.assertEqual(accepted["image_quality_decision"], "vlm_visual_accept")
+            self.assertEqual(accepted["selected_primary_image_ordinal"], 2)
+            self.assertEqual(accepted["selected_primary_media_id"], "figure:facade")
+            self.assertEqual(json.loads(accepted["selected_media_ids"]), ["figure:facade", "figure:interior", "og:cover"])
+            selected_materialization = json.loads(accepted["selected_media_materialization_json"])
+            self.assertEqual([item["media_id"] for item in selected_materialization], ["figure:facade", "figure:interior", "og:cover"])
+            self.assertTrue(accepted["selected_media_materialization_fingerprint"])
 
     def test_vlm_lane_excludes_partial_nondual_and_weak_rows(self) -> None:
         with tempfile.TemporaryDirectory() as td:

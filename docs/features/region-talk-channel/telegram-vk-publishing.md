@@ -24,15 +24,69 @@ content pair, not four independent selections.
 
 ## Rights and attribution policy
 
+The product default is **media-first**, not a bare link preview. A selected
+source image/album may be transported unchanged into the editorial
+recommendation when the original author/source is prominent and the original
+URL is present. This is an attribution-bound editorial-use policy, not a claim
+that Region Talk owns the file or that the asset has a reusable license.
+
 `rights_policy` values:
 
-- `unknown` — can appear in discovery/favorites report; autopublish with modified images blocked.
-- `link_only` — publish summary + original link only; do not reuse images as standalone assets.
+- `unknown` — unchanged selected source media may be transported with prominent
+  attribution; modified cards/Bento remain blocked.
+- `link_only` — publish summary + original link/native preview only; do not
+  transport the image as a standalone asset.
 - `forward_allowed` — use platform-native forward/repost when technically/policy allowed.
 - `media_reuse_allowed` — can render branded cards using source media.
 - `blocked` — do not publish.
 
-Every public post must include source attribution and original link. Unknown rights block autopublish with images.
+Every public post must include prominent source attribution and the original
+link. `blocked` and `link_only` remain hard transport constraints. Unknown
+asset rights are persisted honestly as `not_independently_verified`; that does
+not silently convert them into either an owned asset or a Bento input.
+
+## Media-first payload contract
+
+ImageDiagnostic persists the transport recommendation consumed by the future
+notifier/publisher:
+
+- `presentation_recommendation=article_single_source_image` — use exactly the
+  VLM-selected article-associated `selected_primary_media_id`;
+- `source_media_hero` — one accepted source image;
+- `source_media_carousel` — ordered `selected_media_ids`, capped by
+  `presentation_max_assets` (currently 6; prefer 3–6 when available);
+- `system_link_preview` — fallback when media is missing, unextractable,
+  unsafe, unaccepted or explicitly link-only;
+- `browser_materialization_pending` — do not publish yet: the article exposed
+  no safe static image evidence and its one-page bounded Playwright request is
+  still unresolved;
+- `source_attribution_required=true` and
+  `presentation_media_policy=editorial_source_media_with_prominent_attribution`
+  are mandatory checks, not display hints.
+
+For article rows the visual decision additionally carries
+`image_vlm_article_association_supported=true`, its reason, best ordinal and
+the HTTP/DOM evidence in `web_image_used_evidence_json`. The publisher must
+never substitute `scored[0]` when the VLM-ranked selection exists. Local
+Kaggle paths are ephemeral. `selected_media_materialization_json` supplies the
+ordered durable media ID, reviewed SHA-256, source ref and platform/page
+refetch locator; `selected_media_materialization_fingerprint` binds that exact
+selection. The notifier must reacquire the asset, verify the reviewed digest
+where the platform still provides identical bytes, and otherwise send it back
+through visual review rather than silently substitute another image.
+Implementing that resolver/notifier and the bounded Playwright request consumer
+is outside ImageDiagnostic ownership.
+
+### Product format priority
+
+1. **P0:** unchanged source hero/carousel with strong attribution and original
+   link. This minimizes reader friction and preserves the source's visual
+   evidence.
+2. **Fallback:** native system link preview, only if a suitable source asset
+   cannot be carried.
+3. **Later:** branded Bento/card when it adds comparison or narrative value
+   and the exact asset is cleared for transformation. Do not make a decorative
+   card merely to replace a stronger original photograph.
 
 ## Telegram target
 
@@ -42,7 +96,8 @@ Modes:
 
 1. `sendPhoto` — one selected strong image; caption carries summary.
 2. `sendMediaGroup` — 2–10 images as album; first media caption may carry main text.
-3. `sendMessage` fallback — source link only when `rights_policy=link_only` or media unsafe.
+3. `sendMessage` fallback — native source preview when `rights_policy=link_only`
+   or media is missing/unsafe/unconfirmed.
 
 Caption style:
 
@@ -74,7 +129,9 @@ not an enabled target-channel publisher.
 
 Target: future VK community for **«О Калининграде говорят»**.
 
-Preferred mode: carousel-like wall post with multiple prepared image cards.
+Preferred mode: unchanged selected source hero/carousel with prominent
+attribution. Prepared cards are a later, permission-sensitive format rather
+than the default.
 
 VK image/card requirements:
 

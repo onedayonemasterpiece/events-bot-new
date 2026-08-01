@@ -15,6 +15,19 @@
   indexable medallion venue pilot, records zero-added-Supabase-egress gates, and
   opens `INC-2026-08-01-unusual-feed-disabled-by-config` for the expired Unusual
   review surface and silent compute/publication coupling.
+- Region Talk ImageDiagnostic now extracts bounded article-image candidates
+  HTTP-first from JSON-LD, article/main DOM, lightboxes and preview metadata,
+  records association evidence, rejects obvious logos/ads/avatars/related
+  assets, and requires the VLM to bind its chosen article image to the article
+  context. VLM best/ranked ordinals now drive selected media IDs. The resulting
+  media-first contract recommends one associated article image or a bounded
+  source hero/carousel with prominent attribution, with native link preview as
+  the missing/unconfirmed-media fallback; it makes no independent rights claim
+  and leaves Bento transformation for separately cleared assets. Selected
+  media now carries durable platform/page refetch locators, reviewed hashes and
+  an ordered materialization fingerprint; JS-only pages enter a bounded
+  `needs_browser_materialization` handoff instead of a static-fetch hot loop or
+  an unrelated preview.
 - Added fail-closed Region Talk operator reaction synchronization through the
   role-scoped `DISCOVERY2` Telethon identity: exact allowlisted reactor
   pagination, reversible idempotent reaction revisions, two-axis

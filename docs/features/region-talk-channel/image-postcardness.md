@@ -1,6 +1,10 @@
 # Image postcardness scoring
 
-Status: **album/editorial-gallery-safe guardrails implemented; calibrated scorer remains under evaluation**. Goal: make MVP visibly useful by showing selected photos + model image report + why they work as a Region Talk illustration, without silently discarding a good album because its first frame, its OG preview or one unavailable model scored poorly.
+Status: **HTTP-first article association and album-safe guardrails implemented;
+calibrated scorer remains under evaluation**. Goal: make MVP visibly useful
+by carrying the best source media with prominent attribution, without silently
+discarding a good album because its first frame, its OG preview or one
+unavailable model scored poorly.
 
 > The 2026-07-14 live audit found at least four operator-confirmed false
 > rejects among 18 exact image-only rejects. The old runtime scored one anchor
@@ -12,9 +16,60 @@ Status: **album/editorial-gallery-safe guardrails implemented; calibrated scorer
 
 ## Deployed album-safe transition contract
 
-The current production-safe transition contract is
-`region_talk_image_editorial_gallery_guard_v3`; its publication attestation is
+The current transition contract is
+`region_talk_article_image_association_v4`; its publication attestation is
 `region_talk_publication_eligibility_v5`.
+
+### HTTP-first article association and media selection (v4)
+
+External article pages are fetched once with a 4 MiB HTML cap. The bounded
+extractor considers, in priority order, JSON-LD `Article`/`NewsArticle` images,
+images in `article`/`main` figures and pictures, author-declared lightboxes,
+`og:image`, `twitter:image` and `image_src`. Each candidate retains URL,
+referrer, DOM/metadata role, alt text, figure caption and declared dimensions.
+Obvious logos, avatars, ads, trackers, related-content thumbnails and declared
+tiny assets are rejected before download. The accepted evidence is stored in
+`web_image_candidates_json` and the exact ordered inputs in
+`web_image_used_evidence_json`.
+
+The selective VLM sees article title, summary and this HTTP/DOM evidence. For
+an external article, `accept` additionally requires
+`article_association_supported=true`; it returns a best ordinal and bounded
+ranking. ImageDiagnostic maps those ordinals back to the manifest and persists
+`selected_primary_image_ordinal`, `selected_primary_media_id` and ordered
+`selected_media_ids`. A downstream publisher must not fall back to frame 1 or
+the highest legacy raw score when a current VLM selection exists.
+
+Kaggle paths never form a delivery contract. Each reviewed frame also stores a
+durable `media_materialization_item`: media ID, reviewed content SHA-256,
+source ref, deterministic refetch locator and its fingerprint. Article
+locators bind the canonical page, HTTP/DOM role/evidence and source URL;
+Telegram locators bind the post and exact message ID; VK locators bind the wall
+post and attachment ordinal. The ordered publication subset is persisted in
+`selected_media_materialization_json` with
+`selected_media_materialization_fingerprint`, so a notifier can reacquire the
+same hero/album and verify it has not silently changed.
+
+The media-first presentation contract is:
+
+- article: one VLM-confirmed, article-associated source image;
+- visual social post: one hero image, or up to 10 selected source images as a
+  carousel when the complete album is visually accepted;
+- `system_link_preview`: fallback only while relevant media is missing,
+  unextractable or not yet accepted.
+
+Every transfer requires prominent source/author attribution and the original
+URL. `visual_asset_rights_status=not_independently_verified` is deliberately
+honest: the field records no license assertion. This editorial transport
+policy does not authorize unrelated reuse, stock-library use, removal of
+watermarks, or a modified Bento/card. If static HTML contains no image evidence
+or cannot be fetched and there is no direct ref, the row becomes
+`needs_browser_materialization` instead of silently publishing an unrelated
+preview. Its request fixes one canonical page, safe article selectors, timeout
+and asset cap. A separate local/orchestrated Playwright worker must resolve
+that request and return durable direct refs; ImageDiagnostic deliberately does
+not launch an unbounded browser per candidate and will not hot-loop the same
+static page while the browser request is pending.
 
 ### Editorial gallery and visual-genre correction (v3)
 
@@ -50,8 +105,9 @@ An operator may persist `approve_visual` only against a complete, decoded,
 safe gallery manifest. The attestation is bound to
 `input_media_manifest_hash`; any changed gallery invalidates it. This resolves
 visual suitability only: source, geography, text/vector, rights and final
-Gemini gates remain mandatory. Media rights stay `score_only_no_reuse` unless
-separately cleared.
+Gemini gates remain mandatory. Modified cards/Bento still require separate
+asset-specific permission; the media-first source transfer is always
+attribution-bound.
 
 ### Live editorial-gallery canary, 2026-07-20
 
