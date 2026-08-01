@@ -161,10 +161,16 @@ Post-backfill continuation evidence:
   15-head collection batch validated. Egress receipt фиксирует
   `fly_sqlite_snapshot`, `supabase_core_reads=0` и
   `additional_external_requests=0`;
-- exact/shadow supply в cold batch: free `54`, kids `22`, exhibitions `57`,
-  performances `71`, popular `30`, science-pop `7`, theatre `67`, foreign
-  guests `1`, Russian guests `0`; semantic heads без owner gold остались
-  fail-closed `blocked`;
+- exact/shadow mechanical projection в cold batch: free `54`, kids `22`,
+  exhibitions `57`, performance occurrences `71`, popular `30`, science-pop
+  `7`, theatre `67`, materialized foreign guest decisions `1`, materialized
+  Russian guest decisions `0`. Post-canary audit запрещает трактовать `1/0` как
+  supply: подтверждено минимум шесть будущих foreign events, а people routing
+  пропустил большинство концертных/гастрольных кандидатов. Из 71 performance
+  rows получается 61 mutual family; найдены type-coverage и link-integrity
+  дефекты. Подробный review и provisional seed:
+  [`podborki-analyst-review.md`](podborki-analyst-review.md). Semantic heads без
+  owner-reviewed gold остаются fail-closed `blocked`;
 - machine replacement во время run не запустил дубль: callback heartbeat
   продолжился, terminal owner был re-armed, output adopted. `/healthz` снова
   ready, в live log нет `MissingGreenlet`;

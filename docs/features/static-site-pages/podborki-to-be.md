@@ -5,6 +5,13 @@ backfill выполнен, real Kaggle cold и warm canary прошли; зав�
 publication receipt финального warm candidate**, обновлён 2026-08-01.
 Исходные требования и последующие уточнения владельца сохранены в [`podborki.md`](./podborki.md).
 
+Критическая перепроверка после canary, provisional редакционная выборка и
+пакет вопросов внешнему аналитику находятся в
+[`podborki-analyst-review.md`](./podborki-analyst-review.md). Этот review
+исправляет прежнюю ошибку интерпретации: counts materialized guest decisions
+`1/0` не являются реальным foreign/Russian guest supply, а `71` спектакль —
+это occurrence rows до family projection, не 71 независимая постановка.
+
 ## 0. Состояние реализации data-prep MVP
 
 Исходная реализация подготовлена в ветке
@@ -41,9 +48,10 @@ Kaggle StaticSiteBuilder **ничего не решает про принадл�
 - общий BGE-M3 event cache отделён от prototype banks, хранится в `float32`,
   проверяется физическим/self hash и допускает reuse event rows при изменении
   prototype; один batch пишет `collection-batch-v1.json`;
-- новые semantic heads остаются `blocked` до owner-approved gold; пустой starter
-  fixture не выдаётся за калибровку. Поэтому ветка fail-closed и пока не
-  восстанавливает public `/neobychnoe/`;
+- новые semantic heads остаются `blocked`: starter fixture теперь заполнен
+  recall-oriented provisional examples, но имеет
+  `provisional_agent_seed_not_owner_approved` и не выдаётся за калибровку.
+  Поэтому ветка fail-closed и пока не восстанавливает public `/neobychnoe/`;
 - exact projection для «Бесплатно», «События для детей», спектаклей, выставок,
   научпопа, театральных организаций и пилотных площадок; театр и место являются
   разными ролями общего checked-in registry;
@@ -119,12 +127,16 @@ Production execution 2026-08-01:
   cache, receipt и batch hashes. Egress receipt: core source
   `fly_sqlite_snapshot`, `supabase_core_reads=0`,
   `additional_external_requests=0`;
-- cold batch дал готовые shadow data sets: free `54`, kids `22`, exhibitions
-  `57`, performances `71`, popular `30`, science-pop `7`, theatre `67`,
-  foreign guests `1`, Russian guests `0`. Семантические heads unusual/science/
-  strong impressions/medieval и два BGE audience-recall heads вычислены, но
-  корректно остались `blocked`, а не были выданы за готовую выборку без owner
-  gold;
+- cold batch дал механические shadow projections: free `54`, kids `22`,
+  exhibitions `57`, performance occurrences `71`, popular `30`, science-pop
+  `7`, theatre `67`, materialized foreign guest decisions `1`, materialized
+  Russian guest decisions `0`. Последующая read-only проверка доказала, что
+  guest `1/0` — coverage extraction, а не product supply: уже есть минимум шесть
+  source-grounded будущих foreign events и много не adjudicated российских
+  гастрольных кандидатов. `71` performance rows дают `61` mutual explicit
+  families внутри batch, при этом найдены type-coverage и asymmetric-link
+  дефекты. Семантические heads unusual/science/strong impressions/medieval и два
+  BGE audience-recall heads вычислены, но корректно остались `blocked`;
 - Fly deploy пересёкся с live cold run: `/healthz` восстановился ready через
   штатную machine replacement, remote heartbeat продолжился, terminal owner
   был re-armed и exact output adopted без второго notebook. В runtime log нет
@@ -146,8 +158,9 @@ Production execution 2026-08-01:
 
 1. дождаться только host-side success receipt уже terminal `done` warm run и
    подтвердить отсутствие stuck claim;
-2. разметить owner gold для новых heads и заново откалибровать «Необычное» на
-   evidence-only document;
+2. владелец/редактор проверяет уже подготовленный немного избыточный
+   provisional seed, после чего thresholds пересчитываются на family-weighted
+   gold; «Необычное» отдельно перекалибруется на evidence-only document;
 3. оставлять provider-deferred club хвост в штатном durable retry; он не
    блокирует MVP, потому что все шесть approved identities уже имеют accepted
    активность в шестимесячном окне и last-good relations не стираются;

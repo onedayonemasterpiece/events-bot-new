@@ -1,0 +1,29 @@
+mode: serial_integrator
+repo: events-bot-new
+base_ref: origin/main
+base_sha: db894ac521d7d74928415ba94fdcea59f6a504d4
+integration_branch: agent/static-collections-review/curation
+global_constraints:
+  - production queries read-only
+  - provisional seed cannot authorize publication
+  - cinema sources and festival extraction/pages out of scope
+verification_owner: root
+stop_conditions:
+  - any semantic label becomes publication-ready without owner review
+lanes:
+  - id: static-collections-review
+    role: worker_and_integrator
+    requirement_ids: [R01, R02, R03]
+    target: provisional production seed and external analyst dossier
+    execution_mode: serial
+    branch: agent/static-collections-review/curation
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collections-analyst-review-20260801
+    writable_files:
+      - tests/fixtures/static_collections_gold_v1.json
+      - docs/features/static-site-pages/podborki-analyst-review.md
+      - docs/features/static-site-pages/podborki-to-be.md
+      - docs/features/static-site-pages/release-plan.md
+      - CHANGELOG.md
+    expected_output: committed and pushed review branch
+    verification_scope: targeted
+    status: in_progress
