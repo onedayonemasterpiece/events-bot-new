@@ -807,10 +807,6 @@ def read_live_rows(
                 "publication_presentation_mode", "publication_media_materialization_status",
                 "publication_media_materialization_reason", "publication_media_materialization_contract_version",
                 "publication_presentation_manifest_json",
-                "selected_media_ids", "selected_primary_media_id", "selected_primary_image_ordinal",
-                "selected_media_materialization_json", "selected_media_materialization_fingerprint",
-                "media_materialization_items_json", "input_media_manifest_hash",
-                "presentation_recommendation", "presentation_recommendation_reason", "presentation_max_assets",
                 "publication_draft_backfill_status", "publication_draft_backfill_reason",
                 "publication_draft_backfill_next_attempt_after", "publication_draft_backfill_version",
                 "legacy_review_migration_version", "legacy_review_migrated_at",
@@ -1422,6 +1418,32 @@ def _eligibility_only_tombstone_can_reopen(previous: dict[str, Any], verdict: st
     )
 
 
+def _presentation_evidence_changed(row: dict[str, Any], previous: dict[str, Any]) -> bool:
+    """Refresh accepted unsent rows when ImageDiagnostic selects new media.
+
+    This is a zero-provider projection: the publication verdict stays
+    terminal, while the staged writer gets the current exact association and
+    refetch locators needed to build one media-first review revision.
+    """
+
+    fields = (
+        "input_media_manifest_hash",
+        "selected_media_ids",
+        "selected_primary_media_id",
+        "selected_primary_image_ordinal",
+        "selected_media_materialization_json",
+        "selected_media_materialization_fingerprint",
+        "media_materialization_items_json",
+        "presentation_recommendation",
+        "presentation_recommendation_reason",
+        "presentation_max_assets",
+    )
+    return any(
+        str(row.get(field) or "") != str(previous.get(field) or "")
+        for field in fields
+    )
+
+
 def _retry_after(now_iso: str, gate_status: str) -> str:
     now = _parse_time(now_iso) or datetime.now(timezone.utc)
     env_name = (
@@ -1455,12 +1477,13 @@ def verify_rows(
         ):
             if verdict not in {"eligible", "review"} and _ineligible_state_is_current(row, verdict):
                 continue
+            presentation_changed = _presentation_evidence_changed(row, previous)
             if _reconcile_terminal_provider_decision(
                 row,
                 previous,
                 eligibility_verdict=verdict,
                 now_iso=now_iso,
-            ):
+            ) or presentation_changed:
                 results.append(row)
             continue
         if verdict == "review":

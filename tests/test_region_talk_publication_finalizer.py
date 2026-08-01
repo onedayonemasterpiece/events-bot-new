@@ -1169,6 +1169,31 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         fallback_mock.assert_not_called()
         llm_mock.assert_not_called()
 
+    def test_terminal_accept_refreshes_new_media_materialization_without_provider_call(self) -> None:
+        mod = self.mod
+        row = candidate_row(
+            selected_media_materialization_fingerprint="new-media",
+            selected_media_materialization_json='[{"media_id":"frame:1"}]',
+            _previous_publication={
+                "publication_status": "gemini_accept",
+                "publication_candidate_status": "llm_confirmed",
+                "llm_decision": "accept",
+                "selected_media_materialization_fingerprint": "old-media",
+            },
+        )
+        with (
+            mock.patch.object(mod, "_eligibility_fields", return_value=("eligible", {})),
+            mock.patch.object(mod.rt, "call_region_talk_semantic_llm") as llm_mock,
+        ):
+            result = mod.verify_rows(
+                [row], max_llm=1, model="gemini-test", default_env_var_name="KEY",
+                now_iso="2026-08-01T12:00:00+00:00",
+            )
+        self.assertEqual(result, [row])
+        self.assertEqual(row["publication_status"], "gemini_accept")
+        self.assertEqual(row["selected_media_materialization_fingerprint"], "new-media")
+        llm_mock.assert_not_called()
+
     def test_no_text_enters_exact_restore_queue_without_consuming_llm_budget(self) -> None:
         mod = self.mod
         first = candidate_row(text="", short_summary="")
