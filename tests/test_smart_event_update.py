@@ -137,6 +137,65 @@ def test_grounded_audience_requires_exact_source_quote():
     ) is None
 
 
+def test_audience_quote_role_guard_rejects_child_authors_and_vague_family_copy():
+    child_author = _payload(
+        audience_value="kids",
+        audience_quote="глазами юных художников",
+        audience_reason="explicit_target_audience",
+    )
+    assert validate_collection_adjudication_output(
+        child_author,
+        source_corpus="Выставка глазами юных художников.",
+    ) is None
+
+    vague_family = _payload(
+        audience_value="family",
+        audience_quote="семейная атмосфера",
+        audience_reason="explicit_family_format",
+    )
+    assert validate_collection_adjudication_output(
+        vague_family,
+        source_corpus="Вас ждёт семейная атмосфера.",
+    ) is None
+
+    explicit_joint = _payload(
+        audience_value="family",
+        audience_quote="интересно и детям, и взрослым",
+        audience_reason="explicit_family_format",
+    )
+    assert validate_collection_adjudication_output(
+        explicit_joint,
+        source_corpus="Будет интересно и детям, и взрослым.",
+    ) is not None
+
+    for quote in (
+        "#ТеатрДляДетей",
+        "https://example.test/spektakli/dlya-detej/show/",
+        "Детский кукольный спектакль",
+        "в Детском книжном клубе",
+    ):
+        direct_kids = _payload(
+            audience_value="kids",
+            audience_quote=quote,
+            audience_reason="explicit_target_audience",
+        )
+        assert validate_collection_adjudication_output(
+            direct_kids,
+            source_corpus=f"Приглашаем {quote}",
+        ) is not None
+
+    family_title = "Столярный мастер-класс «Человек – пиктограмма (семейный)»"
+    direct_family = _payload(
+        audience_value="family",
+        audience_quote=family_title,
+        audience_reason="explicit_family_format",
+    )
+    assert validate_collection_adjudication_output(
+        direct_family,
+        source_corpus=family_title,
+    ) is not None
+
+
 def test_ticket_sale_alone_is_not_confirmed_paid_but_optional_donation_can_be_free():
     sale = _payload(
         admission_value="confirmed_paid",
