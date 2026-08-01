@@ -428,6 +428,12 @@ class Event(SQLModel, table=True):
     telegraph_path: Optional[str] = None
     source_text: str
     source_texts: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    # Versioned, source-bound factual decisions used by exact static collections.
+    # Keep this nullable for old rows/snapshots; callers must reassign the whole
+    # mapping after a deep merge so SQLAlchemy observes JSON changes reliably.
+    collection_decisions: Optional[dict[str, Any]] = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
     # Source-grounded organizations responsible for this concrete event.
     # A publisher is not an organizer without an explicit curated source
     # binding or quoted event-local LLM evidence.
