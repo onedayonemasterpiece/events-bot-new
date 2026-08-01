@@ -213,6 +213,16 @@ def build_daily_publication_plan(
                 result.append(fixed_row)
                 selected_today[lane] = fixed_row
                 lane_references[lane].append(fixed_row)
+                fixed_url = canonical_url(fixed_row)
+                if fixed_url:
+                    # A frozen elapsed, locked or published slot has already
+                    # consumed this candidate identity. Keep it as diversity
+                    # history, but never select the same item again later in
+                    # the recalculated horizon.
+                    remaining[lane] = [
+                        row for row in remaining[lane]
+                        if canonical_url(row) != fixed_url
+                    ]
                 continue
 
             pool = remaining[lane]

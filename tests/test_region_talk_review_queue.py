@@ -169,6 +169,32 @@ def test_daily_plan_recalculates_unlocked_slots_but_preserves_published_slot() -
     assert planned[1]["post_url"] == "https://t.me/source/5"
 
 
+def test_daily_plan_never_reuses_candidate_consumed_by_fixed_slot() -> None:
+    mod = load_module()
+    fixed = {
+        **row("https://example.org/already-slotted", 1.0, [1.0, 0.0]),
+        "content_origin_type": "editorial_publication",
+        "plan_status": "locked",
+    }
+    alternative = {
+        **row("https://example.org/alternative", 0.8, [0.0, 1.0]),
+        "content_origin_type": "editorial_publication",
+    }
+
+    planned = mod.build_daily_publication_plan(
+        [fixed, alternative],
+        start_date=date(2026, 8, 1),
+        days=2,
+        locked_slots={("2026-08-01", "article"): fixed},
+    )
+
+    article_rows = [item for item in planned if item["content_lane"] == "article"]
+    assert [item.get("post_url") for item in article_rows] == [
+        "https://example.org/already-slotted",
+        "https://example.org/alternative",
+    ]
+
+
 def test_daily_plan_keeps_vacant_lane_visible() -> None:
     mod = load_module()
     planned = mod.build_daily_publication_plan(

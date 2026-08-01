@@ -25,7 +25,9 @@
   budget instead of waiting on the non-replayable Auth-write timeout.
 - Region Talk daily planning now shares the notifier's strict ready-draft
   predicate, so empty or malformed grounded fact-point JSON cannot occupy a
-  publication slot that the operator chat correctly refuses to deliver.
+  publication slot that the operator chat correctly refuses to deliver. Frozen
+  elapsed/locked/published slots now also remove their candidate identity from
+  the future pool instead of repeating the same article on the next day.
 - Static-site candidate and atomic-root publication now expand checked archives
   on ephemeral process scratch instead of duplicating the generated tree on
   Fly's small persistent volume. Long create-only uploads no longer push

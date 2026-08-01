@@ -299,7 +299,8 @@ selection plan with policy `region_talk_daily_pair_antivector_v1`:
   `locked`/`published` slots are immutable;
 - an elapsed planned slot is frozen, and a first-ever plan created after the
   first daily slot starts on the next day instead of manufacturing a past due
-  publication;
+  publication; the frozen slot also consumes its candidate identity, so that
+  same article/post cannot be selected again later in the recalculated horizon;
 - a missing lane is persisted as `vacant`, never silently filled with a second
   item from the other lane;
 - a confirmed row is not publication-ready until it has a complete grounded
