@@ -29,18 +29,6 @@ on:
       - "scripts/telegram_read.py"
       - "requests/telegram-read.json"
       - "tests/test_telegram_read.py"
-  pull_request:
-    branches:
-      - main
-    types:
-      - opened
-      - synchronize
-      - reopened
-    paths:
-      - ".github/workflows/telegram-read.yml"
-      - "scripts/telegram_read.py"
-      - "requests/telegram-read.json"
-      - "tests/test_telegram_read.py"
 
 permissions:
   contents: read
@@ -54,7 +42,9 @@ concurrency:
 jobs:
   read:
     name: Read selected Telegram messages
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # This repository is public. Only the owner may release the role-scoped
+    # Telegram secret into a runner. In particular, PR workflows never receive it.
+    if: github.actor == 'onedayonemasterpiece'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -115,17 +105,6 @@ jobs:
           else
             echo "request_path=requests/telegram-read.json" >> "${GITHUB_OUTPUT}"
           fi
-
-      - name: Verify role-scoped credentials are parseable
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          from scripts.telegram_read import load_auth_config
-
-          load_auth_config("TELEGRAM_AUTH_BUNDLE_GH_ACTIONS")
-          print("Role-scoped Telegram credentials parsed successfully")
-          PY
 
       - name: Read Telegram
         run: >-
