@@ -14631,36 +14631,53 @@ def _static_site_coalesced_next_run(
     *,
     old_next: datetime,
     requested: datetime,
-    merged_payload: Mapping[str, Any] | None,
+    incoming_payload: Mapping[str, Any] | None,
+    effect_payload: Mapping[str, Any] | None,
     now: datetime,
     incoming_immediate: bool,
 ) -> datetime:
-    """Apply trailing debounce without allowing continuous updates to starve a build."""
+    """Return the schedule caused by *this* incoming static-build request.
 
-    payload = merged_payload if isinstance(merged_payload, Mapping) else {}
-    merged_trigger = str(payload.get("trigger") or "").strip()
-    if incoming_immediate or merged_trigger in {
-        "operator_request",
-        "calendar_rollover",
-        "startup_catchup",
-    }:
+    Smart Update uses a strict trailing quiet window.  Historical trigger
+    evidence is deliberately ignored here: merging a previous operator or
+    calendar request into the payload must not make a later Smart Update
+    immediate.  Conversely, an incoming immediate override pulls the one
+    pending row forward.
+    """
+
+    payload = incoming_payload if isinstance(incoming_payload, Mapping) else {}
+    if incoming_immediate:
         return min(old_next, requested)
-    if old_next < now:
-        return now
-    target = max(old_next, requested)
-    first_effect = (
-        payload.get("first_effect_at")
-        or payload.get("latest_effect_at")
+    effect_evidence = (
+        effect_payload if isinstance(effect_payload, Mapping) else payload
     )
+    latest_effect = effect_evidence.get("latest_effect_at")
+    if not latest_effect:
+        return max(old_next, requested)
     try:
-        started = _sqlite_parse_datetime(first_effect)
+        effect_at = _sqlite_parse_datetime(latest_effect)
     except (TypeError, ValueError):
-        started = now
-    maximum = max(
-        15 * 60,
-        min(6 * 60 * 60, _env_int("STATIC_SITE_MAX_DEBOUNCE_SECONDS", 60 * 60)),
+        effect_at = now
+    return effect_at + timedelta(minutes=15)
+
+
+def _static_site_initial_next_run(
+    *,
+    payload: Mapping[str, Any] | None,
+    requested: datetime,
+    now: datetime,
+    incoming_immediate: bool,
+) -> datetime:
+    """Apply the same trigger-local contract when no pending row exists."""
+
+    return _static_site_coalesced_next_run(
+        old_next=requested,
+        requested=requested,
+        incoming_payload=payload,
+        effect_payload=payload,
+        now=now,
+        incoming_immediate=incoming_immediate,
     )
-    return min(target, started + timedelta(seconds=maximum))
 
 
 async def _enqueue_static_site_build_atomic(
@@ -14748,7 +14765,8 @@ async def _enqueue_static_site_build_atomic(
                 target = _static_site_coalesced_next_run(
                     old_next=old_next,
                     requested=requested,
-                    merged_payload=merged,
+                    incoming_payload=payload,
+                    effect_payload=merged,
                     now=now,
                     incoming_immediate=immediate,
                 )
@@ -14760,9 +14778,12 @@ async def _enqueue_static_site_build_atomic(
                     ),
                 )
             else:
-                deferred = requested
-                if deferred <= now and not immediate:
-                    deferred = now + timedelta(minutes=15)
+                deferred = _static_site_initial_next_run(
+                    payload=payload,
+                    requested=requested,
+                    now=now,
+                    incoming_immediate=immediate,
+                )
                 await connection.execute(
                     """
                     INSERT INTO joboutbox(event_id, task, payload, status, attempts, updated_at,
@@ -14783,7 +14804,8 @@ async def _enqueue_static_site_build_atomic(
             target = _static_site_coalesced_next_run(
                 old_next=old_next,
                 requested=requested,
-                merged_payload=merged,
+                incoming_payload=payload,
+                effect_payload=merged,
                 now=now,
                 incoming_immediate=immediate,
             )
@@ -14846,7 +14868,14 @@ async def _enqueue_static_site_build_atomic(
                 """,
                 (
                     event_id, requeued_payload, _sqlite_datetime(now),
-                    _sqlite_datetime(requested), int(prior["id"]),
+                    _sqlite_datetime(
+                        _static_site_initial_next_run(
+                            payload=payload,
+                            requested=requested,
+                            now=now,
+                            incoming_immediate=immediate,
+                        )
+                    ), int(prior["id"]),
                 ),
             )
             await connection.commit()
@@ -14859,7 +14888,14 @@ async def _enqueue_static_site_build_atomic(
             """,
             (
                 event_id, encoded_payload, _sqlite_datetime(now),
-                _sqlite_datetime(requested), coalesce_key,
+                _sqlite_datetime(
+                    _static_site_initial_next_run(
+                        payload=payload,
+                        requested=requested,
+                        now=now,
+                        incoming_immediate=immediate,
+                    )
+                ), coalesce_key,
             ),
         )
         await connection.commit()
@@ -23075,6 +23111,10 @@ def _static_site_build_kaggle_command(
         (os.getenv("STATIC_SITE_UNUSUAL_CACHE") or "/data/static_site_builder/unusual_events_cache.json").strip(),
         "--unusual-last-good",
         (os.getenv("STATIC_SITE_UNUSUAL_LAST_GOOD") or "/data/static_site_builder/unusual_events_last_good.json").strip(),
+        "--collection-batch",
+        (os.getenv("STATIC_SITE_COLLECTION_BATCH") or "/data/static_site_builder/collection-batch-v1.json").strip(),
+        "--collection-batch-last-good",
+        (os.getenv("STATIC_SITE_COLLECTION_LAST_GOOD") or "/data/static_site_builder/collection-batch-last-good.json").strip(),
         "--pgvector-embedding-model",
         (os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_MODEL") or "gemini-embedding-2").strip(),
         "--pgvector-embedding-key-env",
@@ -23112,6 +23152,11 @@ def _static_site_build_kaggle_command(
                 f"--candidate-token={candidate_token}",
             ]
         )
+        # Computation and validation are mandatory candidate evidence.  This is
+        # intentionally independent of related retrieval and per-page rollout.
+        cmd.append("--collection-semantic-compute")
+    elif _env_flag("STATIC_SITE_COLLECTION_SEMANTIC_COMPUTE"):
+        cmd.append("--collection-semantic-compute")
     if adopt_existing:
         if not expected_dataset_ref:
             raise ValueError("adoption requires the durable Kaggle input dataset identity")
@@ -24043,6 +24088,10 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         "bge_encoder_contract": "bge_m3_cpu_dense_fp32_l2_v1",
         "bge_document_kind": "related_v1",
         "bge_document_version": "event-related-doc-v1",
+        "collection_semantic_compute": True,
+        "collection_document_kind": "collection_semantics_v1",
+        "collection_document_version": "collection-semantics-doc-v1",
+        "collection_batch_schema": "collection-batch-v1",
         "unusual_enabled": _env_flag("STATIC_SITE_UNUSUAL_ENABLED"),
         "unusual_migration": _env_flag("STATIC_SITE_UNUSUAL_MIGRATION"),
         "unusual_cache_schema": "unusual-event-score-cache-v1",

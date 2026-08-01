@@ -323,7 +323,11 @@ def ensure_python_deps_for_gemma(config: dict) -> None:
 
 
 def ensure_python_deps_for_bge(config: dict) -> None:
-    if config.get('related_mode') != 'bge' and not config.get('unusual_enabled'):
+    if (
+        config.get('related_mode') != 'bge'
+        and not config.get('unusual_enabled')
+        and not config.get('collection_semantic_compute')
+    ):
         return
     probe = subprocess.run(
         [
@@ -407,6 +411,7 @@ def export_preview_data_if_configured(config: dict) -> None:
         'bge_vector_receipt_filename': 'static_event_bge_vectors.receipt.json',
         'unusual_cache_filename': 'unusual_events_cache.json',
         'unusual_last_good_filename': 'unusual_events_last_good.json',
+        'collection_batch_last_good_filename': 'collection-batch-last-good.json',
     }
     semantic_paths: dict[str, Path] = {}
     for config_key, default_name in cache_inputs.items():
@@ -475,6 +480,14 @@ def export_preview_data_if_configured(config: dict) -> None:
         cmd.append('--unusual-enabled')
     if config.get('unusual_migration'):
         cmd.append('--unusual-migration')
+    if config.get('collection_semantic_compute'):
+        cmd.extend([
+            '--collection-semantic-compute',
+            '--collection-batch-output',
+            str(SITE_DIR / 'src' / 'data' / 'collection-batch-v1.json'),
+            '--collection-batch-last-good',
+            str(semantic_paths['collection_batch_last_good_filename']),
+        ])
     if config.get('gemma_related_verify'):
         cmd.append('--gemma-related-verify')
     status_event('alive', phase='export', status='alive', progress={'phase': 'export', 'progress_percent': 18, 'progress_label': 'экспорт событий и related v2'})
@@ -490,6 +503,51 @@ def read_related_retrieval_receipt() -> dict:
     if not isinstance(receipt, dict):
         return {'status': 'legacy_manifest'}
     return {'status': 'recorded', **receipt}
+
+
+def read_collection_semantic_receipt(config: dict) -> dict:
+    """Validate the required ID-only batch before any Astro build runs."""
+
+    if not config.get('collection_semantic_compute'):
+        return {'status': 'not_required'}
+    batch_path = SITE_DIR / 'src' / 'data' / 'collection-batch-v1.json'
+    if not batch_path.is_file():
+        raise RuntimeError('required collection-batch-v1.json is missing')
+    scripts_dir = str(SITE_DIR / 'scripts')
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    from static_collection_batch import validate_collection_batch
+
+    batch = json.loads(batch_path.read_text(encoding='utf-8'))
+    catalog_path = SITE_DIR / 'src' / 'data' / 'production-catalog.json'
+    catalog_ids = None
+    if catalog_path.is_file():
+        catalog = json.loads(catalog_path.read_text(encoding='utf-8'))
+        rows = (
+            catalog.get('eligible') or catalog.get('events')
+            if isinstance(catalog, dict)
+            else None
+        )
+        if isinstance(rows, list):
+            catalog_ids = [row.get('id') for row in rows if isinstance(row, dict)]
+    validation = validate_collection_batch(
+        batch,
+        catalog_item_ids=catalog_ids,
+        require_compute=True,
+    )
+    if not validation.get('valid'):
+        raise RuntimeError(
+            'collection batch validation failed: '
+            + '; '.join(validation.get('errors') or [])
+        )
+    output_path = WORKING / 'collection-batch-v1.json'
+    shutil.copy2(batch_path, output_path)
+    return {
+        'status': 'validated',
+        'collection_batch_sha256': sha256_file(output_path),
+        'batch_contract_sha256': batch.get('batch_sha256'),
+        'label_count': len(batch.get('labels') or {}),
+    }
 
 
 def render_daily_service_share(config: dict, build_clock: dict) -> dict:
@@ -680,6 +738,11 @@ def main() -> int:
         # terminal report instead of leaving a misleading "running" ledger.
         init_status()
         config = read_config()
+        if (
+            config.get('profile') == 'production-candidate'
+            and not config.get('collection_semantic_compute')
+        ):
+            raise ValueError('production-candidate requires collection semantic compute')
         build_clock = validate_build_clock(config)
         build_id = config.get('build_id') or os.environ.get('PREVIEW_BUILD_ID') or 'preview-kaggle-static-site'
         status_event('alive', phase='preflight', status='alive', progress={'phase': 'preflight', 'progress_percent': 5, 'progress_label': 'распаковка сайта', 'build_id': build_id})
@@ -703,21 +766,40 @@ def main() -> int:
         ensure_python_deps_for_bge(config)
         export_preview_data_if_configured(config)
         related_retrieval = read_related_retrieval_receipt()
+        collection_semantic = read_collection_semantic_receipt(config)
         service_share_result = render_daily_service_share(config, build_clock)
         semantic_result_path = SITE_DIR / 'src' / 'data' / 'static-semantic-build-result.json'
-        if config.get('related_mode') == 'bge' or config.get('unusual_enabled'):
+        if (
+            config.get('collection_semantic_compute')
+            or config.get('related_mode') == 'bge'
+            or config.get('unusual_enabled')
+        ):
             if not semantic_result_path.is_file():
-                raise RuntimeError('shared BGE/unusual semantic result is missing')
+                raise RuntimeError('shared collection semantic result is missing')
             semantic_result = json.loads(semantic_result_path.read_text(encoding='utf-8'))
             if (
                 int(semantic_result.get('provider_calls', -1)) != 0
                 or int(semantic_result.get('event_count') or -1) <= 0
                 or not re.fullmatch(r'[0-9a-f]{64}', str(semantic_result.get('artifact_sha256') or ''))
-                or not re.fullmatch(r'[0-9a-f]{64}', str(semantic_result.get('manifest_sha256') or ''))
             ):
-                raise RuntimeError('shared BGE/unusual semantic result is partial or mismatched')
+                raise RuntimeError('shared collection semantic result is partial or mismatched')
+            if (
+                (config.get('related_mode') == 'bge' or config.get('unusual_enabled'))
+                and not re.fullmatch(
+                    r'[0-9a-f]{64}', str(semantic_result.get('manifest_sha256') or '')
+                )
+            ):
+                raise RuntimeError('shared BGE/unusual manifest metadata is mismatched')
         else:
             semantic_result = {'status': 'disabled', 'provider_calls': 0}
+        if config.get('collection_semantic_compute'):
+            # The exporter supplies model/artifact counts while the kernel adds
+            # its independent validation receipt for the ID-only batch.
+            semantic_result = {
+                **semantic_result,
+                **collection_semantic,
+                'status': 'validated',
+            }
         apply_public_authorized_search_env(env, config)
         apply_public_interest_clubs_env(env)
         apply_secret_candidate_research_env(env, config)

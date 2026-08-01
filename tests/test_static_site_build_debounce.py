@@ -767,3 +767,127 @@ async def test_startup_calendar_catchup_enqueues_without_smart_update(monkeypatc
     assert calls[0][0] is marker
     assert calls[0][1]["trigger"] == "startup_catchup"
     assert calls[0][1]["delay_seconds"] == 0
+
+@pytest.mark.asyncio
+async def test_smart_update_rearms_exactly_latest_effect_plus_fifteen_after_old_immediate(tmp_path):
+    db = Database(str(tmp_path / "mixed-trigger.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    operator = make_request_payload(
+        reason="operator", event_ids=[1], effect_at=now, trigger="operator_request"
+    )
+    await main.enqueue_job(
+        db,
+        1,
+        JobTask.static_site_build,
+        payload=operator,
+        coalesce_key="static_site_build:prod",
+        next_run_at=now,
+    )
+    latest = now + timedelta(seconds=3)
+    smart = make_request_payload(
+        reason="smart", event_ids=[2], effect_at=latest, trigger="smart_update"
+    )
+    action = await main.enqueue_job(
+        db,
+        2,
+        JobTask.static_site_build,
+        payload=smart,
+        coalesce_key="static_site_build:prod",
+        next_run_at=latest + timedelta(minutes=15),
+    )
+
+    assert action == "merged-rearmed"
+    async with db.get_session() as session:
+        row = (await session.execute(select(JobOutbox))).scalar_one()
+    assert _utc(row.next_run_at) == latest + timedelta(minutes=15)
+    # Evidence remains merged, but it no longer drives the scheduling decision.
+    assert row.payload["trigger"] == "operator_request"
+    assert row.payload["latest_effect_at"] == latest.isoformat().replace("+00:00", "Z")
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_smart_updates_keep_one_row_at_latest_effect_plus_fifteen(tmp_path):
+    db = Database(str(tmp_path / "concurrent-trailing.sqlite"))
+    await db.init()
+    base = datetime.now(timezone.utc)
+
+    async def enqueue(offset: int):
+        effect = base + timedelta(seconds=offset)
+        return await main.enqueue_job(
+            db,
+            offset + 1,
+            JobTask.static_site_build,
+            payload=make_request_payload(
+                reason=f"smart-{offset}",
+                event_ids=[offset + 1],
+                effect_at=effect,
+                trigger="smart_update",
+            ),
+            coalesce_key="static_site_build:prod",
+            next_run_at=effect + timedelta(minutes=15),
+        )
+
+    await asyncio.gather(*(enqueue(offset) for offset in range(8)))
+    async with db.get_session() as session:
+        rows = (await session.execute(select(JobOutbox))).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].status == JobStatus.pending
+    assert _utc(rows[0].next_run_at) == base + timedelta(seconds=7, minutes=15)
+    assert rows[0].payload["event_ids"] == list(range(1, 9))
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_immediate_override_pulls_running_followup_forward_then_smart_rearms(tmp_path):
+    db = Database(str(tmp_path / "running-mixed.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        session.add(
+            JobOutbox(
+                event_id=1,
+                task=JobTask.static_site_build,
+                payload=make_request_payload(reason="owner"),
+                status=JobStatus.running,
+                coalesce_key="static_site_build:prod",
+                updated_at=now,
+                next_run_at=now,
+            )
+        )
+        await session.commit()
+
+    effect = now + timedelta(seconds=2)
+    smart = make_request_payload(
+        reason="smart", event_ids=[2], effect_at=effect, trigger="smart_update"
+    )
+    await main.enqueue_job(
+        db, 2, JobTask.static_site_build, payload=smart,
+        coalesce_key="static_site_build:prod",
+        next_run_at=effect + timedelta(minutes=15),
+    )
+    immediate_at = now + timedelta(seconds=4)
+    operator = make_request_payload(
+        reason="operator", event_ids=[3], effect_at=immediate_at, trigger="operator_request"
+    )
+    await main.enqueue_job(
+        db, 3, JobTask.static_site_build, payload=operator,
+        coalesce_key="static_site_build:prod", next_run_at=immediate_at,
+    )
+    latest = now + timedelta(seconds=6)
+    final_smart = make_request_payload(
+        reason="smart-latest", event_ids=[4], effect_at=latest, trigger="smart_update"
+    )
+    await main.enqueue_job(
+        db, 4, JobTask.static_site_build, payload=final_smart,
+        coalesce_key="static_site_build:prod",
+        next_run_at=latest + timedelta(minutes=15),
+    )
+
+    async with db.get_session() as session:
+        rows = (await session.execute(select(JobOutbox).order_by(JobOutbox.id))).scalars().all()
+    assert [row.status for row in rows] == [JobStatus.running, JobStatus.pending]
+    assert _utc(rows[1].next_run_at) == latest + timedelta(minutes=15)
+    assert rows[1].payload["event_ids"] == [2, 3, 4]
+    await db.close()

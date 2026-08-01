@@ -1016,3 +1016,37 @@ def test_add_build_11_astro_asset_template_resolves_to_exact_build() -> None:
     ) == "https://static.kenigevents.ru/production-tested-1"
     with pytest.raises(ValueError, match="unresolved build template"):
         resolve_build_template("https://static.kenigevents.ru/{unknown}", "production-tested-1")
+
+
+def test_production_candidate_requires_collection_semantics_independent_of_related_and_unusual(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import main
+
+    monkeypatch.setenv("STATIC_SITE_RELATED_MODE", "pgvector")
+    monkeypatch.setenv("STATIC_SITE_UNUSUAL_ENABLED", "0")
+    cmd = main._static_site_build_kaggle_command(
+        db_path="/data/snapshot.sqlite",
+        status_db_path="/data/db.sqlite",
+        build_id="production-collection-contract",
+        limit=100,
+        current_date="2026-08-01",
+        current_datetime="2026-08-01T12:00:00+02:00",
+        input_fingerprint="a" * 64,
+        script_path="/repo/scripts/run_static_site_builder_kaggle.py",
+        status_callback_url="https://example.test/internal/kaggle/run-event",
+        snapshot_manifest_path="/data/snapshot.manifest.json",
+        repo_sha="b" * 40,
+        run_id="static-site:test",
+        candidate_token="c" * 43,
+        profile="production-candidate",
+        related_corpus_revision="d" * 64,
+    )
+
+    assert _arg_after(cmd, "--related-mode") == "pgvector"
+    assert "--unusual-enabled" not in cmd
+    assert "--collection-semantic-compute" in cmd
+    assert _arg_after(cmd, "--collection-batch").endswith("collection-batch-v1.json")
+    assert _arg_after(cmd, "--collection-batch-last-good").endswith(
+        "collection-batch-last-good.json"
+    )

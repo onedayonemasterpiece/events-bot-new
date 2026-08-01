@@ -13,8 +13,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import html
 import json
 import math
+import os
+import re
+import struct
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
@@ -24,6 +28,9 @@ EMBEDDING_DIM = 1024
 ENCODER_CONTRACT = "bge_m3_cpu_dense_fp32_l2_v1"
 DOCUMENT_VERSION = "event-related-doc-v1"
 ARTIFACT_SCHEMA_VERSION = "static-event-bge-v1"
+COLLECTION_DOCUMENT_KIND = "collection_semantics_v1"
+COLLECTION_DOCUMENT_VERSION = "collection-semantics-doc-v1"
+COLLECTION_ARTIFACT_SCHEMA_VERSION = "static-collection-bge-v1"
 VECTOR_NORMALIZATION = "l2"
 _ROOT = Path(__file__).resolve().parents[2]
 
@@ -91,6 +98,67 @@ def build_related_v1_documents(
     return rows
 
 
+def _evidence_text(value: Any) -> str:
+    """Compact source-facing text without generated tags or regex properties."""
+
+    if isinstance(value, (list, tuple)):
+        value = ", ".join(str(item) for item in value if str(item).strip())
+    clean = html.unescape(re.sub(r"<[^>]+>", " ", str(value or "")))
+    return " ".join(clean.split())
+
+
+def build_collection_semantics_v1_document(
+    event: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Build the evidence-only document shared by static collection heads.
+
+    Deliberately excluded fields include ``topics``, ``tags``, audience regex
+    properties and any precomputed related digest.  A classifier must therefore
+    evaluate event evidence rather than embedding its own generated hint.
+    """
+
+    event_id = int(event.get("id") or event.get("event_id") or 0)
+    if event_id <= 0:
+        raise ValueError("event id must be a positive integer")
+    sections = (
+        ("title", event.get("title")),
+        (
+            "description",
+            event.get("description")
+            or event.get("short_description")
+            or event.get("summary")
+            or event.get("description_html"),
+        ),
+        ("event_type", event.get("event_type")),
+        ("venue", event.get("venue_name") or event.get("location_name")),
+        ("city", event.get("city")),
+        ("organizers", event.get("organizer_names")),
+        ("participants", event.get("participants")),
+    )
+    body = " | ".join(
+        f"{name}: {clean}" for name, raw in sections if (clean := _evidence_text(raw))
+    )
+    text = f"collection-event: {body}"
+    return {
+        "event_id": event_id,
+        "document_kind": COLLECTION_DOCUMENT_KIND,
+        "document_version": COLLECTION_DOCUMENT_VERSION,
+        "text": text,
+        "text_hash": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+    }
+
+
+def build_collection_semantics_v1_documents(
+    events: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    rows = [build_collection_semantics_v1_document(event) for event in events]
+    rows.sort(key=lambda row: int(row["event_id"]))
+    ids = [int(row["event_id"]) for row in rows]
+    if len(ids) != len(set(ids)):
+        raise ValueError("events contain duplicate ids")
+    return rows
+
+
 def _prototype_rows(prototype_bank: Mapping[str, Any]) -> list[dict[str, str]]:
     prototypes = prototype_bank.get("prototypes")
     if not isinstance(prototypes, list) or not prototypes:
@@ -117,7 +185,9 @@ def _prototype_rows(prototype_bank: Mapping[str, Any]) -> list[dict[str, str]]:
     return rows
 
 
-def _normalise(vector: Sequence[float], *, expected_dim: int) -> list[float]:
+def _normalise(
+    vector: Sequence[float], *, expected_dim: int, float32: bool = False
+) -> list[float]:
     if len(vector) != expected_dim:
         raise ValueError(
             f"encoder returned dimension {len(vector)} instead of {expected_dim}"
@@ -128,7 +198,12 @@ def _normalise(vector: Sequence[float], *, expected_dim: int) -> list[float]:
     norm = math.sqrt(sum(value * value for value in values))
     if norm <= 1e-12:
         raise ValueError("encoder returned a zero vector")
-    return [round(value / norm, 9) for value in values]
+    normalised = [value / norm for value in values]
+    if float32:
+        # Keep the serialized cache contract honest even before the NPZ writer:
+        # every scalar is rounded by IEEE-754 binary32, not Python's float64.
+        return [struct.unpack("<f", struct.pack("<f", value))[0] for value in normalised]
+    return [round(value, 9) for value in normalised]
 
 
 def _default_encoder(
@@ -168,6 +243,11 @@ def build_shared_bge_vector_artifact(
     batch_size: int = 8,
     build_metadata: Mapping[str, Any] | None = None,
     previous_artifact: Mapping[str, Any] | None = None,
+    _documents: Sequence[Mapping[str, Any]] | None = None,
+    _document_kind: str = "related_v1",
+    _document_version: str = DOCUMENT_VERSION,
+    _artifact_schema_version: str = ARTIFACT_SCHEMA_VERSION,
+    _float32: bool = False,
 ) -> dict[str, Any]:
     """Encode only changed related documents/prototypes into one artifact.
 
@@ -181,33 +261,39 @@ def build_shared_bge_vector_artifact(
         raise ValueError(
             f"model_revision must equal the pinned revision {MODEL_REVISION}"
         )
-    documents = build_related_v1_documents(events)
+    documents = list(_documents) if _documents is not None else build_related_v1_documents(events)
     prototypes = _prototype_rows(prototype_bank)
     previous_metadata = (
         previous_artifact.get("metadata", {})
         if isinstance(previous_artifact, Mapping)
         else {}
     )
-    previous_compatible = bool(
+    previous_event_compatible = bool(
         isinstance(previous_artifact, Mapping)
-        and previous_artifact.get("schema_version") == ARTIFACT_SCHEMA_VERSION
+        and previous_artifact.get("schema_version") == _artifact_schema_version
         and isinstance(previous_metadata, Mapping)
         and previous_metadata.get("encoder_contract") == ENCODER_CONTRACT
         and previous_metadata.get("model_id") == MODEL_ID
         and previous_metadata.get("model_revision") == MODEL_REVISION
         and previous_metadata.get("embedding_dim") == EMBEDDING_DIM
-        and previous_metadata.get("document_version") == DOCUMENT_VERSION
+        and previous_metadata.get("document_kind", "related_v1") == _document_kind
+        and previous_metadata.get("document_version") == _document_version
         and previous_metadata.get("vector_normalization") == VECTOR_NORMALIZATION
+    )
+    # Prototype-bank/head churn must never invalidate unchanged event rows.
+    # Prototype reuse remains bound to the exact bank independently.
+    previous_prototype_compatible = bool(
+        previous_event_compatible
         and previous_metadata.get("prototype_bank_sha256") == stable_hash(prototype_bank)
     )
     previous_events = (
         previous_artifact.get("event_vectors", {})
-        if previous_compatible
+        if previous_event_compatible
         else {}
     )
     previous_prototypes = (
         previous_artifact.get("prototype_vectors", {})
-        if previous_compatible
+        if previous_prototype_compatible
         else {}
     )
     reusable_events: dict[str, dict[str, Any]] = {}
@@ -219,7 +305,11 @@ def build_shared_bge_vector_artifact(
         if isinstance(cached, Mapping) and cached.get("text_hash") == row["text_hash"]:
             reusable_events[key] = {
                 "text_hash": row["text_hash"],
-                "vector": _normalise(cached.get("vector", []), expected_dim=EMBEDDING_DIM),
+                "vector": _normalise(
+                    cached.get("vector", []),
+                    expected_dim=EMBEDDING_DIM,
+                    float32=_float32,
+                ),
             }
         else:
             pending.append(("event", key, row["text"], row["text_hash"]))
@@ -229,7 +319,11 @@ def build_shared_bge_vector_artifact(
         if isinstance(cached, Mapping) and cached.get("text_hash") == row["text_hash"]:
             reusable_prototypes[key] = {
                 "text_hash": row["text_hash"],
-                "vector": _normalise(cached.get("vector", []), expected_dim=EMBEDDING_DIM),
+                "vector": _normalise(
+                    cached.get("vector", []),
+                    expected_dim=EMBEDDING_DIM,
+                    float32=_float32,
+                ),
             }
         else:
             pending.append(("prototype", key, row["text"], row["text_hash"]))
@@ -245,7 +339,7 @@ def build_shared_bge_vector_artifact(
         if len(raw_vectors) != len(pending):
             raise ValueError("encoder result count does not match changed input count")
         encoded_rows = [
-            _normalise(vector, expected_dim=EMBEDDING_DIM)
+            _normalise(vector, expected_dim=EMBEDDING_DIM, float32=_float32)
             for vector in raw_vectors
         ]
     event_vectors = dict(reusable_events)
@@ -254,13 +348,26 @@ def build_shared_bge_vector_artifact(
         target = event_vectors if kind == "event" else prototype_vectors
         target[key] = {"text_hash": text_hash, "vector": vector}
     metadata = {
-        "schema_version": ARTIFACT_SCHEMA_VERSION,
+        "schema_version": _artifact_schema_version,
         "encoder_contract": ENCODER_CONTRACT,
         "model_id": MODEL_ID,
         "model_revision": MODEL_REVISION,
         "embedding_dim": EMBEDDING_DIM,
-        "document_version": DOCUMENT_VERSION,
+        "document_kind": _document_kind,
+        "document_version": _document_version,
         "vector_normalization": VECTOR_NORMALIZATION,
+        "event_cache_identity_sha256": stable_hash(
+            {
+                "encoder_contract": ENCODER_CONTRACT,
+                "model_id": MODEL_ID,
+                "model_revision": MODEL_REVISION,
+                "embedding_dim": EMBEDDING_DIM,
+                "document_kind": _document_kind,
+                "document_version": _document_version,
+                "vector_normalization": VECTOR_NORMALIZATION,
+                "dtype": "float32" if _float32 else "json-number",
+            }
+        ),
         "prototype_bank_schema_version": prototype_bank.get("schema_version"),
         "prototype_bank_sha256": stable_hash(prototype_bank),
         "classifier_sha256": stable_hash(classifier),
@@ -282,11 +389,43 @@ def build_shared_bge_vector_artifact(
     )
     metadata["artifact_sha256"] = payload_hash
     return {
-        "schema_version": ARTIFACT_SCHEMA_VERSION,
+        "schema_version": _artifact_schema_version,
         "metadata": metadata,
         "event_vectors": event_vectors,
         "prototype_vectors": prototype_vectors,
     }
+
+
+def build_collection_bge_vector_artifact(
+    events: Iterable[Mapping[str, Any]],
+    prototype_bank: Mapping[str, Any],
+    *,
+    model_revision: str,
+    classifier: Mapping[str, Any],
+    encoder: Callable[..., Sequence[Sequence[float]]] | None = None,
+    batch_size: int = 8,
+    build_metadata: Mapping[str, Any] | None = None,
+    previous_artifact: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build the collection semantic matrix with float32-bound values."""
+
+    event_rows = list(events)
+    documents = build_collection_semantics_v1_documents(event_rows)
+    return build_shared_bge_vector_artifact(
+        event_rows,
+        prototype_bank,
+        model_revision=model_revision,
+        classifier=classifier,
+        encoder=encoder,
+        batch_size=batch_size,
+        build_metadata=build_metadata,
+        previous_artifact=previous_artifact,
+        _documents=documents,
+        _document_kind=COLLECTION_DOCUMENT_KIND,
+        _document_version=COLLECTION_DOCUMENT_VERSION,
+        _artifact_schema_version=COLLECTION_ARTIFACT_SCHEMA_VERSION,
+        _float32=True,
+    )
 
 
 def validate_shared_bge_vector_artifact(
@@ -294,6 +433,10 @@ def validate_shared_bge_vector_artifact(
     *,
     prototype_bank: Mapping[str, Any],
     expected_classifier_sha256: str | None = None,
+    _document_kind: str = "related_v1",
+    _document_version: str = DOCUMENT_VERSION,
+    _artifact_schema_version: str = ARTIFACT_SCHEMA_VERSION,
+    _require_float32: bool = False,
 ) -> dict[str, Any]:
     """Validate exact vector-space and payload hashes at a consumer boundary."""
 
@@ -302,12 +445,13 @@ def validate_shared_bge_vector_artifact(
     if not isinstance(metadata, Mapping):
         return {"valid": False, "errors": ["missing vector metadata"]}
     expected = {
-        "schema_version": ARTIFACT_SCHEMA_VERSION,
+        "schema_version": _artifact_schema_version,
         "encoder_contract": ENCODER_CONTRACT,
         "model_id": MODEL_ID,
         "model_revision": MODEL_REVISION,
         "embedding_dim": EMBEDDING_DIM,
-        "document_version": DOCUMENT_VERSION,
+        "document_kind": _document_kind,
+        "document_version": _document_version,
         "vector_normalization": VECTOR_NORMALIZATION,
         "prototype_bank_sha256": stable_hash(prototype_bank),
     }
@@ -336,7 +480,17 @@ def validate_shared_bge_vector_artifact(
                 errors.append(f"{collection_name} vector {key} has invalid shape")
                 continue
             try:
-                _normalise(row["vector"], expected_dim=EMBEDDING_DIM)
+                _normalise(
+                    row["vector"],
+                    expected_dim=EMBEDDING_DIM,
+                    float32=_require_float32,
+                )
+                if _require_float32 and any(
+                    float(value)
+                    != struct.unpack("<f", struct.pack("<f", float(value)))[0]
+                    for value in row["vector"]
+                ):
+                    errors.append(f"{collection_name} vector {key} is not float32-bound")
             except (TypeError, ValueError) as exc:
                 errors.append(f"{collection_name} vector {key}: {exc}")
     declared_hash = metadata.get("artifact_sha256")
@@ -351,6 +505,117 @@ def validate_shared_bge_vector_artifact(
     )
     if declared_hash != actual_hash:
         errors.append("artifact_sha256 mismatch")
+    return {"valid": not errors, "errors": errors}
+
+
+def validate_collection_bge_vector_artifact(
+    artifact: Mapping[str, Any],
+    *,
+    prototype_bank: Mapping[str, Any],
+    expected_classifier_sha256: str | None = None,
+) -> dict[str, Any]:
+    return validate_shared_bge_vector_artifact(
+        artifact,
+        prototype_bank=prototype_bank,
+        expected_classifier_sha256=expected_classifier_sha256,
+        _document_kind=COLLECTION_DOCUMENT_KIND,
+        _document_version=COLLECTION_DOCUMENT_VERSION,
+        _artifact_schema_version=COLLECTION_ARTIFACT_SCHEMA_VERSION,
+        _require_float32=True,
+    )
+
+
+def write_collection_bge_cache(
+    artifact: Mapping[str, Any], *, npz_path: str | Path, receipt_path: str | Path
+) -> dict[str, Any]:
+    """Write the collection cache as float32 and return its hash receipt."""
+
+    import numpy as np  # type: ignore
+
+    metadata = artifact.get("metadata")
+    if not isinstance(metadata, Mapping):
+        raise ValueError("collection artifact metadata missing")
+    events = artifact.get("event_vectors")
+    prototypes = artifact.get("prototype_vectors")
+    if not isinstance(events, Mapping) or not isinstance(prototypes, Mapping):
+        raise ValueError("collection artifact vectors missing")
+    event_ids = sorted(events, key=int)
+    prototype_ids = sorted(prototypes)
+    target = Path(npz_path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+    with temporary.open("wb") as handle:
+        np.savez_compressed(
+            handle,
+            event_ids=np.asarray(event_ids),
+            event_vectors=np.asarray(
+                [events[event_id]["vector"] for event_id in event_ids], dtype=np.float32
+            ),
+            prototype_ids=np.asarray(prototype_ids),
+            prototype_vectors=np.asarray(
+                [prototypes[prototype_id]["vector"] for prototype_id in prototype_ids],
+                dtype=np.float32,
+            ),
+        )
+    os.replace(temporary, target)
+    receipt = {
+        "schema_version": "static-collection-bge-cache-receipt-v1",
+        "artifact_sha256": metadata.get("artifact_sha256"),
+        "event_cache_identity_sha256": metadata.get("event_cache_identity_sha256"),
+        "model_id": metadata.get("model_id"),
+        "model_revision": metadata.get("model_revision"),
+        "encoder_contract": metadata.get("encoder_contract"),
+        "document_kind": metadata.get("document_kind"),
+        "document_version": metadata.get("document_version"),
+        "embedding_dim": metadata.get("embedding_dim"),
+        "dtype": "float32",
+        "event_text_hashes": {
+            event_id: events[event_id]["text_hash"] for event_id in event_ids
+        },
+        "prototype_text_hashes": {
+            prototype_id: prototypes[prototype_id]["text_hash"]
+            for prototype_id in prototype_ids
+        },
+        "npz_sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
+    }
+    receipt_target = Path(receipt_path)
+    receipt_target.parent.mkdir(parents=True, exist_ok=True)
+    temporary_receipt = receipt_target.with_name(
+        f".{receipt_target.name}.{os.getpid()}.tmp"
+    )
+    temporary_receipt.write_text(
+        json.dumps(receipt, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    os.replace(temporary_receipt, receipt_target)
+    return receipt
+
+
+def validate_collection_bge_cache(
+    *, npz_path: str | Path, receipt: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Validate dimensions and the physical float32 dtype of a persisted cache."""
+
+    import numpy as np  # type: ignore
+
+    errors: list[str] = []
+    path = Path(npz_path)
+    if receipt.get("schema_version") != "static-collection-bge-cache-receipt-v1":
+        errors.append("cache receipt schema mismatch")
+    if receipt.get("dtype") != "float32":
+        errors.append("cache receipt dtype mismatch")
+    if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != receipt.get(
+        "npz_sha256"
+    ):
+        errors.append("cache file hash mismatch")
+        return {"valid": False, "errors": errors}
+    with np.load(path, allow_pickle=False) as stored:
+        for key in ("event_vectors", "prototype_vectors"):
+            matrix = stored[key]
+            if matrix.dtype != np.dtype("float32"):
+                errors.append(f"{key} dtype must be float32")
+            if matrix.ndim != 2 or matrix.shape[1] != EMBEDDING_DIM:
+                errors.append(f"{key} dimension mismatch")
     return {"valid": not errors, "errors": errors}
 
 
