@@ -466,8 +466,22 @@ def validate_editorial_output(
         violations.append("contrastive_not_a_cliche")
     if _FIRST_PERSON_OWNERSHIP.search(combined):
         violations.append("third_person_boundary")
-    cyrillic = len(re.findall(r"[А-Яа-яЁё]", combined))
-    letters = len(re.findall(r"[A-Za-zА-Яа-яЁё]", combined))
+    language_sample = combined
+    if row is not None:
+        # A Latin-script channel/outlet name is required attribution, not
+        # evidence that the surrounding Russian editorial copy changed
+        # language. Remove only exact source-owned labels plus @handles.
+        source_labels = {
+            _source_name(row),
+            str(row.get("source_title") or "").strip(),
+            str(row.get("source_name") or "").strip(),
+            str(row.get("source_username") or "").strip(),
+        }
+        for label in sorted((value for value in source_labels if value), key=len, reverse=True):
+            language_sample = re.sub(re.escape(label), "", language_sample, flags=re.I)
+        language_sample = re.sub(r"(?<!\w)@[A-Za-z0-9_]+", "", language_sample)
+    cyrillic = len(re.findall(r"[А-Яа-яЁё]", language_sample))
+    letters = len(re.findall(r"[A-Za-zА-Яа-яЁё]", language_sample))
     if letters and cyrillic / letters < 0.95:
         violations.append("russian_language")
     grounding = output.get("grounding_map") if isinstance(output.get("grounding_map"), list) else []

@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk's Russian-language guard for Latin-script outlet/channel names: exact source-owned labels and `@handles` are excluded from the letter-ratio calculation, while unrelated English prose remains a hard failure.
 - Fixed the daily Telegram Monitoring Kaggle launcher to embed the complete deterministic `google_ai` Python package instead of a stale four-file allowlist, added an isolated generated-notebook import-closure regression test, and preserved launcher failures in `ops_run` diagnostics for reliable watchdog and incident evidence.
 - Fixed Region Talk backfill completion after valid paragraph pairs produced a sub-550-character rendered caption: exact caption length now enters the single Writer retry before Critic, Writer receives the measured deficit and a hard 620-character safe target, failed retries retain their stage evidence, durable prompt execution is revisioned, and physical editorial calls are paced below the shared project RPM ceiling.
 - Added an evidence-grounded Region Talk publisher reader brief: external-article onboarding now uses reusable LLM profiles for outlet identity, intended audience and distinctive editorial value, requires all three dimensions in paragraph one, keeps the article summary separate, invalidates older draft fingerprints, and makes the compensating candidate backfill regenerate exact operator revisions.

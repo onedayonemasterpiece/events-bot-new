@@ -83,6 +83,12 @@ rows, proving that the data existed but publication preparation had not run.
   characters. The Writer contract is tightened with exact attribution
   overhead, measured deficit, a 620-character safe target and a revisioned
   durable stage fingerprint before further provider calls.
+- 2026-08-01 22:13–22:27 UTC — the expanded backfill reaches nine fully ready
+  candidates and four additional text-complete rows awaiting album
+  materialization. Four otherwise Russian drafts expose a narrow validator
+  false positive caused by required Latin-script source names; the guard is
+  changed to exclude exact source-owned labels while retaining rejection of
+  unrelated English prose.
 
 ## Root Cause
 

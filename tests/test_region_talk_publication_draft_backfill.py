@@ -318,6 +318,31 @@ def test_v8_validator_requires_at_least_95_percent_cyrillic() -> None:
     )
 
 
+def test_language_validator_exempts_only_exact_latin_source_labels() -> None:
+    mod = load_module()
+    output = _valid_writer_output(mod)
+    output["public_copy"]["paragraph_1"] = (
+        "Telegram-канал Sasha Meets Russia собирает личные путевые заметки о российских "
+        "городах и показывает регион через последовательный маршрут автора. Читателю "
+        "такой формат помогает заранее выбрать детали будущей прогулки и точки интереса."
+    )
+    row = {
+        "post_url": "https://t.me/sasha_meets_russia/530",
+        "source_title": "Sasha Meets Russia",
+        "source_username": "sasha_meets_russia",
+    }
+    violations = mod.validate_editorial_output(
+        output, {"source.name", "content.exact_text"}, row=row,
+    )
+    assert "russian_language" not in violations
+
+    output["public_copy"]["paragraph_2"] += " This unrelated sentence remains English."
+    violations = mod.validate_editorial_output(
+        output, {"source.name", "content.exact_text"}, row=row,
+    )
+    assert "russian_language" in violations
+
+
 def test_validator_checks_exact_rendered_caption_length_when_row_is_available() -> None:
     mod = load_module()
     output = _valid_writer_output(mod)
