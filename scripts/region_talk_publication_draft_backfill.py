@@ -148,6 +148,57 @@ def _canonical_url(row: dict[str, Any]) -> str:
     })
 
 
+ARTICLE_MEDIA_EVIDENCE_FIELDS = (
+    "selected_media_materialization_json",
+    "media_materialization_items_json",
+    "publication_primary_image_url",
+    "selected_image_url",
+    "image_url_or_local_path",
+    "associated_image_url",
+    "selected_media_ids",
+    "expected_image_count",
+    "fetched_image_count",
+    "browser_materialization_status",
+    "image_queue_status",
+    "presentation_recommendation",
+    "image_quality_terminality",
+    "image_vlm_article_association_supported",
+    "image_vlm_best_ordinal",
+)
+
+
+def attach_latest_article_media_evidence(
+    publications: list[dict[str, Any]],
+    image_rows: list[dict[str, Any]],
+) -> None:
+    """Fill missing article presentation evidence from the durable image ledger.
+
+    ImageDiagnostic and the publication finalizer intentionally keep separate
+    audit rows.  A previously confirmed article may therefore predate the
+    media-first draft contract even though its associated publisher hero has
+    already been extracted and reviewed.  Copy only missing presentation
+    fields; never overwrite publication verdict/copy or newer explicit media.
+    """
+
+    latest: dict[str, dict[str, Any]] = {}
+    for image_row in image_rows:
+        url = _canonical_url(image_row)
+        if not url:
+            continue
+        previous = latest.get(url)
+        if previous is None or str(image_row.get("updated_at") or "") >= str(previous.get("updated_at") or ""):
+            latest[url] = image_row
+    for publication in publications:
+        if content_lane(publication) != "article":
+            continue
+        image_row = latest.get(_canonical_url(publication))
+        if not image_row:
+            continue
+        for field in ARTICLE_MEDIA_EVIDENCE_FIELDS:
+            if publication.get(field) in (None, "", [], {}) and image_row.get(field) not in (None, "", [], {}):
+                publication[field] = image_row[field]
+
+
 def publication_history(rows: list[dict[str, Any]], *, limit: int = 5) -> list[dict[str, Any]]:
     """Return bounded real publication/approval history, never mere queue rows."""
 
@@ -1117,6 +1168,10 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         external_intakes = notify.read_kind_rows(
             pool, ydb, table, "external_publication_intake_item", int(args.scan_limit)
         )
+        image_rows = notify.read_kind_rows(
+            pool, ydb, table, "image_queue_item", int(args.scan_limit)
+        )
+        attach_latest_article_media_evidence(rows, image_rows)
         schedules = notify.read_kind_rows(
             pool, ydb, table, "publication_schedule_item", int(args.history_limit)
         )

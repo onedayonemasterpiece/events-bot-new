@@ -71,6 +71,10 @@
   v8 backfill. Exact native Telegram album anchors are recognized as durable
   materialization locators; delivery still resolves the group and fails closed
   unless 3–6 ordered source media items are actually obtained.
+- Region Talk v8 article backfill now joins missing presentation evidence from
+  the latest durable ImageDiagnostic row, allowing an already extracted and
+  reviewed publisher hero to reach operator delivery without re-scraping or
+  overwriting publication decisions.
 - External Region Talk articles no longer bypass source-image extraction merely
   because research provenance says `rights_policy=link_only`. An associated
   publisher hero is attempted and visually verified first; native link preview

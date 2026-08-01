@@ -99,10 +99,39 @@ def test_execute_reads_supporting_kinds_through_notifier_namespace() -> None:
     assert driver.stopped is True
     assert kinds == [
         "external_publication_intake_item",
+        "image_queue_item",
         "publication_schedule_item",
         "publication_log_item",
         "region_talk_publication_log",
     ]
+
+
+def test_article_media_evidence_is_filled_from_latest_image_ledger_row() -> None:
+    mod = load_module()
+    publication = {
+        "post_url": "https://archi.ru/russia/example",
+        "content_origin_type": "editorial_publication",
+    }
+    mod.attach_latest_article_media_evidence(
+        [publication],
+        [
+            {
+                "post_url": publication["post_url"],
+                "updated_at": "2026-07-01T10:00:00+00:00",
+                "image_url_or_local_path": "https://cdn.example.org/old.jpg",
+            },
+            {
+                "post_url": publication["post_url"],
+                "updated_at": "2026-07-01T11:00:00+00:00",
+                "image_url_or_local_path": "https://cdn.example.org/hero.jpg",
+                "selected_media_ids": '["web_direct:1"]',
+                "image_queue_status": "actual_scored",
+            },
+        ],
+    )
+    assert publication["image_url_or_local_path"].endswith("hero.jpg")
+    assert publication["selected_media_ids"] == '["web_direct:1"]'
+    assert mod.publication_media_plan(publication)["status"] == "ready"
 
 
 def test_request_fingerprint_changes_with_exact_source_text() -> None:

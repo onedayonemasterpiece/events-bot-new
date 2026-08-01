@@ -80,6 +80,10 @@ therefore means “resolve this exact group”, not “publish a one-image album
 External article source attestations participate in the same live-fingerprint
 merge as Telegram/VK sources so the autonomous orchestrator sees article
 backfill work instead of leaving it visible only to the notifier.
+The v8 backfill also fills missing article presentation fields from the newest
+durable `image_queue_item`. This is a narrow evidence join: it may carry an
+already extracted publisher hero into the review manifest, but it never
+overwrites an existing media selection, publication verdict or editorial copy.
 
 ### Product format priority
 
