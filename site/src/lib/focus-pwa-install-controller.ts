@@ -39,7 +39,11 @@ export function createFocusPwaInstallController({
     navigatorRef,
     // Reuse the incident-tested, one-shot presentation mode. This is a
     // synthetic controller flag, not a claim that installation is available.
-    locationRef: { search: '?install=presentation' },
+    locationRef: {
+      search: '?install=presentation',
+      assign(href: string) { windowRef.location.assign(href); },
+      set href(href: string) { windowRef.location.href = href; },
+    },
     root,
     button,
     status,
@@ -64,9 +68,6 @@ export function createFocusPwaInstallController({
 
   const onInstalled = () => {
     root.dataset.focusPwaInstalled = 'true';
-    if (status) {
-      status.textContent = 'Приложение установлено. Его запуск остаётся действием пользователя на главном экране.';
-    }
   };
   windowRef.addEventListener('appinstalled', onInstalled);
 

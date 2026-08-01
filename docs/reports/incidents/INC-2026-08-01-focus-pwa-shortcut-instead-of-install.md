@@ -62,6 +62,8 @@ the onboarding could not proceed to acceptance of later steps.
 - Captured `beforeinstallprompt` in the document head and handed it to the
   hydrated one-shot controller.
 - Removed shortcut-as-install copy from the Android path.
+- Kept a visible `Устанавливается…` state until `appinstalled`, then persisted
+  the exact app identity and exposed `Открыть Анонсы` on repeat visits.
 
 ## Release And Closure Evidence
 
