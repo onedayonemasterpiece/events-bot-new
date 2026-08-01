@@ -956,6 +956,13 @@ executable no-band Pianissimo canary follows upcoming event `5297` on
 `visual_only`, safe-crop geometry and focal point. A past one-off event is not
 used as a required source row: production export is allowed to remove expired
 dates, so an obsolete July 24 occurrence cannot break a later valid candidate.
+After `5297` itself leaves the generated catalog, the gate does not require the
+expired row to reappear. It instead checks a current generated date-rail
+`visual_only` specimen for the same `140×112` cover/no-band DOM and runs the
+rail resolver against the immutable two-photo `5297` geometry, including its
+`65% 35%` focal point. Thus both the current output and the exact historical
+regression remain executable without making catalog retention part of the UI
+contract.
 
 The same lifecycle rule applies to transport specimens. Romanovo event `6710`
 is historical acceptance evidence, not a permanent catalog fixture.

@@ -26,6 +26,17 @@ fixture tests.
 
 Kaggle must not be treated as an uncontrolled production publisher. Production trust belongs to the release protocol, not to the notebook itself.
 
+Generated-output canaries must follow catalog lifecycle. A historical event may
+remain an immutable focused resolver fixture, but `check:preview` must not
+require its expired public row or date route. The crop gate therefore combines
+a current generated visual-only rail specimen with the frozen Pianissimo
+geometry once the original route has left the active export.
+
+Shared progressive-enhancement controls outside a page's primary `main`
+landmark may be intentionally hidden until their browser capability is known.
+No-JavaScript content gates therefore inspect the product page's own landmark,
+not unrelated focus-group/PWA controls contributed by the shared layout.
+
 It is acceptable for the Kaggle API actor to be a dedicated personal Kaggle user/account, but only as an execution/publisher identity inside this protocol: least-privileged credentials, immutable snapshot input, status ledger, staging-prefix upload, checked manifest, promotion gate and rollback. The personal account must not become the only place where production release state is known.
 
 ## Production protocol

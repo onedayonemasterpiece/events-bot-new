@@ -9,6 +9,16 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- The generated mobile-rail crop release gate no longer blocks every build
+  after its historical Pianissimo date leaves the active catalog. While the
+  real row is current the gate still checks its generated DOM; afterwards it
+  requires both a current live visual-only `140×112` cover specimen and the
+  immutable two-photo Pianissimo resolver fixture with its accepted focal
+  point, so the no-letterbox contract remains executable without retaining
+  expired events.
+- The club-detail no-JavaScript release assertion now inspects the actual
+  `main` landmark instead of unrelated intentionally hidden focus-group and PWA
+  controls rendered by the shared layout.
 - Smart Update's trailing static-site debounce now has a production 30-minute
   maximum from the first coalesced change, so a continuous repair/import stream
   cannot postpone publication forever. Immediate operator, calendar-rollover

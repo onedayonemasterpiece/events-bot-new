@@ -6,6 +6,7 @@ import interestClubsData from '../src/data/interest-clubs.json' with { type: 'js
 import festivalTimelineData from '../src/data/festival-timeline.json' with { type: 'json' };
 import busData from '../src/data/busTransportSchedules.json' with { type: 'json' };
 import templateContract from '../src/data/eventTemplateContract.json' with { type: 'json' };
+import { resolveMobileListingRailMediaItems } from '../src/lib/mobileListingRailMedia.mjs';
 import { localPreviewRuntimePath } from './preview-asset-path.mjs';
 
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
@@ -187,20 +188,83 @@ if (existsSync(pianissimoRoutePath)) {
     if (!pianissimoRail.includes(marker)) throw new Error(`Pianissimo ${pianissimoEventId} rail crop regression: missing ${marker}`);
   }
 } else {
-  // A current-date preview intentionally does not generate expired date pages.
-  // Keep the accepted crop canary grounded in the immutable real event asset
-  // instead of making the release gate depend on a stale calendar window.
+  // A current-date preview intentionally excludes expired one-off events from
+  // both date routes and preview-events.json. Check the live record while it is
+  // still present; afterwards retain the exact accepted real-asset geometry as
+  // an immutable resolver fixture instead of making every future release depend
+  // on an event that can no longer be rendered.
   const pianissimo = eventsData.events.find((event) => event.id === pianissimoEventId);
-  const asset = pianissimo?.image_assets?.[0];
-  if (
-    pianissimo?.start_date !== '2026-07-30'
-    || pianissimo?.image_text_mode !== 'visual_only'
-    || asset?.image_text_mode !== 'visual_only'
-    || asset?.safe_crop !== true
-    || Number(asset?.width || 0) <= Number(asset?.height || 0)
-    || Math.abs(Number(asset?.focal_point?.x || 0) - 0.65) > 0.001
-  ) {
-    throw new Error(`Pianissimo ${pianissimoEventId} source crop regression`);
+  if (pianissimo) {
+    const asset = pianissimo.image_assets?.[0];
+    if (
+      pianissimo.start_date !== '2026-07-30'
+      || pianissimo.image_text_mode !== 'visual_only'
+      || asset?.image_text_mode !== 'visual_only'
+      || asset?.safe_crop !== true
+      || Number(asset?.width || 0) <= Number(asset?.height || 0)
+      || Math.abs(Number(asset?.focal_point?.x || 0) - 0.65) > 0.001
+    ) {
+      throw new Error(`Pianissimo ${pianissimoEventId} source crop regression`);
+    }
+  } else {
+    const currentVisualRail = readdirSync(root)
+      .filter((entry) => /^date-\d{4}-\d{2}-\d{2}$/u.test(entry))
+      .flatMap((entry) => {
+        const html = readFileSync(join(root, entry, 'index.html'), 'utf8');
+        return [...html.matchAll(/<article\b[\s\S]*?<\/article>/gu)].map((match) => match[0]);
+      })
+      .find((row) => (
+        /data-mobile-rail-media-reason="(?:single_)?safe_visual_landscape_5x4"/u.test(row)
+        && row.includes('--media-width:140px')
+        && row.includes('--rail-media-fit:cover')
+        && row.includes('data-image-text-mode="visual_only"')
+      ));
+    if (!currentVisualRail) {
+      throw new Error('Current generated catalog has no visual-only 140x112 cover rail canary');
+    }
+    const pianissimoAsset = {
+      src: 'https://static.kenigevents.ru/p/image/v2/d9/d967cb4dee7a1894ba02815d29f037a42c7fad0e09519a43f5b390df97ad0c44.webp',
+      width: 3072,
+      height: 1307,
+      image_text_mode: 'visual_only',
+      media_semantic_status: 'classified',
+      media_role: 'event_photo',
+      media_role_confidence: 0.95,
+      safe_crop: true,
+      focal_point: { x: 0.65, y: 0.35 },
+    };
+    const companionAsset = {
+      ...pianissimoAsset,
+      src: 'https://static.kenigevents.ru/p/image/v2/b5/b565fe1665115183405a733ccb76b418f33088a3997a451c57495f12aa834f76.webp',
+      width: 3072,
+      height: 1312,
+      focal_point: { x: 0.55, y: 0.5 },
+    };
+    const fixture = {
+      id: pianissimoEventId,
+      image_text_mode: 'visual_only',
+      image_assets: [pianissimoAsset, companionAsset],
+    };
+    const items = resolveMobileListingRailMediaItems(fixture, {
+      asset: pianissimoAsset,
+      src: pianissimoAsset.src,
+      ratio: pianissimoAsset.width / pianissimoAsset.height,
+      mode: 'visual-crop',
+      adaptiveCrop: true,
+      objectPosition: '65% 35%',
+    });
+    const first = items[0];
+    if (
+      items.length !== 2
+      || first?.fit !== 'cover'
+      || first?.ratio !== 5 / 4
+      || first?.width !== 140
+      || first?.reason !== 'safe_visual_landscape_5x4'
+      || first?.imageTextMode !== 'visual_only'
+      || first?.objectPosition !== '65% 35%'
+    ) {
+      throw new Error(`Pianissimo ${pianissimoEventId} immutable crop fixture regression`);
+    }
   }
 }
 const moreRail = mobileRailRow('date-2026-08-08', 4211);
@@ -408,7 +472,8 @@ for (const club of interestClubsData.clubs) {
   if (!detailHtml.includes('id="future-meetings-title"')) throw new Error(`Club ${club.slug} misses future-meetings section`);
   if (!detailHtml.includes('data-product-breadcrumbs') || !detailHtml.includes('data-product-parent-link') || !detailHtml.includes('aria-current="page"')) throw new Error(`Club ${club.slug} misses responsive semantic product breadcrumbs`);
   if (!detailHtml.includes('BreadcrumbList') || !detailHtml.includes('application/ld+json')) throw new Error(`Club ${club.slug} misses structured data`);
-  const clubPrimaryHtml = detailHtml.replace(/<section[^>]*data-pwa-install-root[^>]*>[\s\S]*?<\/section>/giu, '');
+  const clubPrimaryHtml = detailHtml.match(/<main\s+id="main"[^>]*>[\s\S]*?<\/main>/iu)?.[0] || '';
+  if (!clubPrimaryHtml) throw new Error(`Club ${club.slug} misses its primary main landmark`);
   if (/<main[^>]+hidden|<article[^>]+hidden|<section[^>]+hidden/iu.test(clubPrimaryHtml)) throw new Error(`Club ${club.slug} requires JavaScript to reveal primary content`);
 }
 
