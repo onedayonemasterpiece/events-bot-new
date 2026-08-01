@@ -363,7 +363,7 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                 "rights_policy": "link_only",
                 "media_use_policy": "score_only_no_reuse",
             }
-            with mock.patch.object(mod, "urlopen", return_value=Response()):
+            with mock.patch.object(mod, "_public_urlopen", return_value=Response()):
                 mod.fetch_web_direct(row)
 
             self.assertEqual(
@@ -411,7 +411,7 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                 "post_url": "https://publisher.example/js-story",
                 "content_origin_type": "editorial_publication",
             }
-            with mock.patch.object(mod, "urlopen", return_value=Response()):
+            with mock.patch.object(mod, "_public_urlopen", return_value=Response()):
                 mod.fetch_web_direct(row)
             mod.apply_image_queue_status(row)
 
@@ -441,6 +441,57 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
             self.assertIn("не требуй", prompt)
             self.assertIn("профессиональная архитектурная", prompt)
             self.assertIn("editorial_suitability_score", prompt)
+
+    def test_browser_materialized_refs_feed_existing_image_download_and_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            evidence = [{
+                "url": "https://cdn.example/rendered-hero.jpg",
+                "source_url": "https://cdn.example/rendered-hero.jpg",
+                "role": "article_figure",
+                "caption": "Фасад музея",
+                "association_decision": "accept",
+                "association_reason": "publisher_declared_role_with_textual_match",
+                "evidence_version": "region_talk_rendered_article_image_evidence_v1",
+            }]
+            row = {
+                "image_queue_id": "browser-ready",
+                "post_url": "https://publisher.example/js-story",
+                "content_origin_type": "editorial_publication",
+                "browser_materialization_status": "materialized",
+                "browser_materialized_image_urls": ["https://cdn.example/rendered-hero.jpg"],
+                "browser_materialization_evidence_json": json.dumps(evidence),
+            }
+
+            def fake_download(_url, path, **_kwargs):
+                Path(path).parent.mkdir(parents=True, exist_ok=True)
+                Path(path).write_bytes(b"rendered image bytes")
+                return str(path)
+
+            with (
+                mock.patch.object(mod, "_public_urlopen", side_effect=RuntimeError("static page blocked")),
+                mock.patch.object(mod, "_download_http_image", side_effect=fake_download),
+            ):
+                mod.fetch_web_direct(row)
+
+            self.assertEqual(row["media_fetch_status"], "downloaded_public_url")
+            used = json.loads(row["web_image_used_evidence_json"])
+            self.assertEqual(used[0]["role"], "article_figure")
+            materialization = json.loads(row["media_materialization_items_json"])
+            self.assertEqual(materialization[0]["source_ref"], "https://cdn.example/rendered-hero.jpg")
+            self.assertEqual(materialization[0]["refetch_locator"]["dom_role"], "article_figure")
+
+    def test_public_http_guard_rejects_private_or_mixed_dns_answers(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            public = [(None, None, None, None, ("93.184.216.34", 443))]
+            self.assertEqual(
+                mod._public_http_url("https://publisher.example/article", resolver=lambda *_a, **_k: public),
+                "https://publisher.example/article",
+            )
+            mixed = public + [(None, None, None, None, ("10.0.0.2", 443))]
+            with self.assertRaisesRegex(ValueError, "non-public"):
+                mod._public_http_url("https://publisher.example/article", resolver=lambda *_a, **_k: mixed)
 
     def test_complete_external_gallery_enters_selective_vlm_review(self) -> None:
         with tempfile.TemporaryDirectory() as td:

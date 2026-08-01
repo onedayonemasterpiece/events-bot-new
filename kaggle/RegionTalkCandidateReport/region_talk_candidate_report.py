@@ -2708,6 +2708,16 @@ IMAGE_QUEUE_STATE_FIELDS = [
     "image_model_input_type", "image_model_type", "media_acquisition_status", "media_fetch_status",
     "media_acquisition_error_type", "media_fetch_error", "image_url_or_local_path",
     "media_fetch_attempt_count", "media_fetch_last_attempt_at", "media_fetch_retry_exhausted",
+    "browser_materialization_status", "browser_materialization_contract_version",
+    "browser_materialization_evidence_version", "browser_materialization_request_json",
+    "browser_materialization_attempt_count", "browser_materialization_last_attempt_at",
+    "browser_materialization_last_run_id", "browser_materialization_last_error",
+    "browser_materialization_next_attempt_after", "browser_materialization_lease_run_id",
+    "browser_materialization_lease_at", "browser_materialization_lease_expires_at",
+    "browser_materialization_rendered_page_url", "browser_materialization_request_count",
+    "browser_materialization_evidence_json", "browser_materialized_image_urls",
+    "web_image_candidates_json", "web_image_used_evidence_json",
+    "web_gallery_discovered_count", "web_gallery_used_count", "web_gallery_discovery_status",
     "media_kind", "manual_media_review_required", "video_manual_review_eligible",
     "vk_media_photo_urls", "vk_media_prefetch_status", "vk_media_prefetch_source", "vk_media_prefetch_at",
     "has_media", "media_count", "primary_media_path", "full_text", "text_hash",
@@ -3882,6 +3892,19 @@ IMAGE_DIAGNOSTIC_OWNED_FIELDS = {
     "image_width", "image_height", "image_file_bytes", "image_decode_seconds",
     "cv_inference_seconds", "clip_inference_seconds", "laion_inference_seconds",
     "nima_inference_seconds", "total_inference_seconds",
+    # The local Chromium materializer and ImageDiagnostic form one media lane.
+    # CandidateReport must never replace a newer rendered-page lease, evidence
+    # bundle or retry state with its start-of-run image snapshot.
+    "browser_materialization_status", "browser_materialization_contract_version",
+    "browser_materialization_evidence_version", "browser_materialization_request_json",
+    "browser_materialization_attempt_count", "browser_materialization_last_attempt_at",
+    "browser_materialization_last_run_id", "browser_materialization_last_error",
+    "browser_materialization_next_attempt_after", "browser_materialization_lease_run_id",
+    "browser_materialization_lease_at", "browser_materialization_lease_expires_at",
+    "browser_materialization_rendered_page_url", "browser_materialization_request_count",
+    "browser_materialization_evidence_json", "browser_materialized_image_urls",
+    "web_image_candidates_json", "web_image_used_evidence_json",
+    "web_gallery_discovered_count", "web_gallery_used_count", "web_gallery_discovery_status",
 }
 
 
@@ -3908,6 +3931,7 @@ def merge_candidate_image_payload_with_latest(
     latest_has_diagnostic_evidence = bool(
         str(latest.get("last_image_diag_run_id") or "").strip()
         or str(latest.get("image_decision_contract_version") or "").strip()
+        or str(latest.get("browser_materialization_last_run_id") or "").strip()
         or int(_rt_float(latest.get("images_scored_actual_count"))) > 0
     )
     if not latest_has_diagnostic_evidence:

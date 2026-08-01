@@ -1,10 +1,10 @@
 from __future__ import annotations
-import asyncio, base64, hashlib, html, io, json, os, random, re, subprocess, sys, time, urllib.parse
+import asyncio, base64, hashlib, html, io, ipaddress, json, os, random, re, socket, subprocess, sys, time, urllib.parse
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 from statistics import mean, median, pstdev
-from urllib.request import Request, urlopen, urlretrieve
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen, urlretrieve
 
 RUN_STARTED = time.monotonic()
 RUN_ID = os.getenv("REGION_TALK_RUN_ID") or os.getenv("RT_IMAGE_DIAG_RUN_ID") or "region-talk-image-diagnostic"
@@ -393,13 +393,48 @@ def _row_direct_image_refs(row: dict) -> list[str]:
     refs: list[str] = []
     for key in (
         "image_urls", "media_photo_urls", "vk_media_photo_urls", "actual_media_urls",
-        "image_url_or_local_path", "primary_media_path",
+        "image_url_or_local_path", "primary_media_path", "browser_materialized_image_urls",
     ):
         for value in _media_ref_list(row.get(key)):
             ref = direct_image_url(value)
             if ref and ref not in refs:
                 refs.append(ref)
     return refs[:max_images_per_post()]
+
+
+def _public_http_url(value: str, *, resolver=socket.getaddrinfo) -> str:
+    """Validate public HTTP destinations before article/image acquisition."""
+    raw = str(value or "").strip()
+    if raw.startswith("//"):
+        raw = "https:" + raw
+    parsed = urllib.parse.urlsplit(raw)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
+        raise ValueError("only public http/https URLs without embedded credentials are allowed")
+    hostname = parsed.hostname.rstrip(".").lower()
+    if hostname == "localhost" or hostname.endswith((".localhost", ".local", ".internal")):
+        raise ValueError("local hostname is forbidden")
+    try:
+        answers = resolver(hostname, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)
+    except OSError as exc:
+        raise ValueError(f"hostname resolution failed: {type(exc).__name__}") from exc
+    addresses = {str(answer[4][0]).split("%", 1)[0] for answer in answers if len(answer) >= 5 and answer[4]}
+    if not addresses:
+        raise ValueError("hostname has no resolved addresses")
+    if any(not ipaddress.ip_address(address).is_global for address in addresses):
+        raise ValueError("non-public destination is forbidden")
+    return raw
+
+
+class _PublicOnlyRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return super().redirect_request(req, fp, code, msg, headers, _public_http_url(newurl))
+
+
+def _public_urlopen(request: Request, *, timeout: int):
+    _public_http_url(request.full_url)
+    response = build_opener(_PublicOnlyRedirectHandler()).open(request, timeout=timeout)
+    _public_http_url(str(response.geturl() or request.full_url))
+    return response
 
 
 _UNRELATED_IMAGE_TOKENS = {
@@ -692,6 +727,17 @@ def discover_external_publication_image_refs(row: dict) -> list[str]:
     """Discover a bounded article gallery, retaining direct research refs as fallback."""
     apply_media_first_presentation_contract(row)
     direct = _row_direct_image_refs(row)
+    try:
+        browser_evidence_raw = row.get("browser_materialization_evidence_json") or []
+        browser_evidence = json.loads(browser_evidence_raw) if isinstance(browser_evidence_raw, str) else browser_evidence_raw
+        browser_evidence = [item for item in browser_evidence if isinstance(item, dict)]
+    except Exception:
+        browser_evidence = []
+    browser_evidence_by_url = {
+        str(item.get("url") or item.get("source_url") or ""): item
+        for item in browser_evidence
+        if str(item.get("url") or item.get("source_url") or "")
+    }
     post_url = str(row.get("post_url") or "").strip()
     if not is_external_publication_row(row) or not post_url.startswith(("http://", "https://")):
         return direct
@@ -701,7 +747,7 @@ def discover_external_publication_image_refs(row: dict) -> list[str]:
             "User-Agent": "Mozilla/5.0 (compatible; RegionTalkEditorialImageReview/1.0)",
             "Accept": "text/html,application/xhtml+xml",
         })
-        with urlopen(request, timeout=timeout) as response:  # nosec B310 - public URL admitted by research contract
+        with _public_urlopen(request, timeout=timeout) as response:
             content_type = str(response.headers.get("Content-Type") or "").lower()
             if "html" not in content_type:
                 raise ValueError(f"article response is not HTML: {content_type[:80]}")
@@ -723,7 +769,10 @@ def discover_external_publication_image_refs(row: dict) -> list[str]:
         row["web_gallery_discovery_version"] = IMAGE_ACQUISITION_VERSION
         merged = gallery + [ref for ref in direct if ref not in gallery]
         used = merged[:max_images_per_post()]
-        evidence_by_url = {str(candidate["url"]): candidate for candidate in candidates}
+        evidence_by_url = {
+            **browser_evidence_by_url,
+            **{str(candidate["url"]): candidate for candidate in candidates},
+        }
         row["web_image_used_evidence_json"] = json.dumps([
             evidence_by_url.get(ref, {
                 "url": ref, "role": "research_direct_ref", "referrer": post_url,
@@ -735,7 +784,8 @@ def discover_external_publication_image_refs(row: dict) -> list[str]:
         if not used:
             _mark_browser_materialization_needed(row, reason="http_html_contains_no_article_image_evidence")
         else:
-            row["browser_materialization_status"] = "not_required_http_or_prefetched_media_found"
+            if not browser_evidence_by_url:
+                row["browser_materialization_status"] = "not_required_http_or_prefetched_media_found"
         return used
     except Exception as exc:
         row["web_gallery_discovery_status"] = "page_fetch_failed_fallback_direct"
@@ -744,8 +794,10 @@ def discover_external_publication_image_refs(row: dict) -> list[str]:
         row["web_gallery_discovered_count"] = 0
         row["web_gallery_used_count"] = len(direct)
         row["web_image_used_evidence_json"] = json.dumps([
-            {"url": ref, "role": "research_direct_ref", "referrer": post_url,
-             "association_decision": "review", "association_reason": "page_fetch_failed"}
+            browser_evidence_by_url.get(ref, {
+                "url": ref, "role": "research_direct_ref", "referrer": post_url,
+                "association_decision": "review", "association_reason": "page_fetch_failed",
+            })
             for ref in direct
         ], ensure_ascii=False, separators=(",", ":"))
         if not direct:
@@ -2371,7 +2423,7 @@ def _download_http_image(url: str, path: Path, *, timeout: int = 30) -> str:
     if url.startswith("//"):
         url = "https:" + url
     req = Request(url, headers={"User-Agent":"Mozilla/5.0 RegionTalkImageDiagnostic/1.0","Accept":"image/avif,image/webp,image/apng,image/*,*/*;q=0.8"})
-    with urlopen(req, timeout=timeout) as resp:  # nosec B310 - public image URL from public post HTML/YDB row
+    with _public_urlopen(req, timeout=timeout) as resp:
         content_type = str(resp.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
         if content_type and not (content_type.startswith("image/") or content_type == "application/octet-stream"):
             raise ValueError(f"public media URL returned non-image content-type: {content_type}")

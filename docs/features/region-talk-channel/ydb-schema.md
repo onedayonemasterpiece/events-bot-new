@@ -474,7 +474,16 @@ visibility.
   lease/status fields, actual-image consensus scores and the versioned upstream
   fields `publication_eligibility_decision`,
   `publication_eligibility_gate_version`, reason and evidence. ImageDiagnostic
-  leases only signed `accept` rows for the expected gate version;
+  leases only signed `accept` rows for the expected gate version. A JS-only
+  external article may additionally carry the browser-owned
+  `browser_materialization_*` lease/attempt/retry fields,
+  `browser_materialized_image_urls` and the durable rendered DOM/JSON-LD
+  `browser_materialization_evidence_json`. The bounded browser worker uses a
+  serializable read/update lease, at most three pages per invocation, retry
+  delays of 6h then 24h and a finite third-attempt terminal. Zero associated
+  rendered images is terminal media evidence rather than an infinite retry.
+  On success the same row returns to `needs_actual_image_fetch`, so the
+  existing ImageDiagnostic VLM association/ranking path remains authoritative;
 - kind `publication_candidate_item`, pk
   `publication_candidate_item:<publication_candidate_id|post_url>` — the ranked
   product shortlist row joined from text/source/vector evidence and
@@ -624,6 +633,16 @@ evidence: `actual_scored` is complete only together with
 `actual_scored` statuses must stay eligible for an actual-image retry.
 The two notebooks must run with different Telethon auth bundles and must not
 share one Telegram session concurrently.
+
+`scripts/region_talk_article_browser_materialize.py` is the server-side bridge
+between ImageDiagnostic's `needs_browser_materialization` state and its normal
+actual-image acquisition. It uses no Telegram auth bundle. Canonical page,
+redirect and subresource URLs must remain public HTTP(S); DNS answers containing
+private, reserved or link-local addresses fail closed. CandidateReport treats
+all `browser_materialization_*`, rendered-ref and rendered-evidence fields as
+media-worker-owned during a concurrent merge. The legacy rights fields are
+provenance metadata for this attributed source-media transport and are not a
+queue/admission gate.
 
 Publication finalization may run as a lightweight live-YDB consumer after
 ImageDiagnostic, without requiring the CandidateReport workbook/report tail. The

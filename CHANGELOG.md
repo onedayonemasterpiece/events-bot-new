@@ -15,6 +15,11 @@
   indexable medallion venue pilot, records zero-added-Supabase-egress gates, and
   opens `INC-2026-08-01-unusual-feed-disabled-by-config` for the expired Unusual
   review surface and silent compute/publication coupling.
+- Added a bounded Region Talk Playwright article materializer: it leases at
+  most three JS-only pages per invocation, records rendered DOM/JSON-LD source
+  image evidence, retries after 6h/24h with a finite terminal state, and feeds
+  the existing ImageDiagnostic VLM selection path. Public HTTP/DNS/redirect/
+  subresource guards and Chromium runtime installation are included.
 - Added the staged Region Talk editorial writer v8 and autonomous regeneration
   contour: bounded real history, separate Strategy/Writer/Critic requests
   through the controlled Google limiter and durable budget, strict two-Russian-
@@ -62,6 +67,9 @@
   deterministic `google_ai` Python source tree instead of a stale four-module
   allowlist. Shared-limiter and future nested imports therefore survive the
   isolated Kaggle bootstrap, with an executable import-closure regression test.
+- CandidateReport now preserves concurrent browser-materialization leases,
+  retries and evidence, while ImageDiagnostic consumes the rendered direct
+  refs and rejects private/reserved article and image destinations.
 - Region Talk source admission/cursor traversal now uses immutable `queue_seq`,
   can rewind a timestamped canonical cursor to repair a historical low-sequence
   gap, and no longer falls back to generic `TELEGRAM_SESSION`/`TG_SESSION` for

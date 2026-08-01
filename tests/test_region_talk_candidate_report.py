@@ -8876,6 +8876,33 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(merged["image_eligibility_status"], "")
         self.assertEqual(merged["image_eligibility_reason"], "")
 
+    def test_candidate_image_write_preserves_browser_materialization_evidence(self) -> None:
+        mod = load_module()
+        evidence = '[{"url":"https://cdn.example/hero.jpg","role":"article_figure"}]'
+        latest = {
+            "image_queue_status": "needs_actual_image_fetch",
+            "browser_materialization_status": "materialized",
+            "browser_materialization_last_run_id": "browser-run-1",
+            "browser_materialization_evidence_json": evidence,
+            "browser_materialized_image_urls": ["https://cdn.example/hero.jpg"],
+            "web_image_used_evidence_json": evidence,
+            "next_action": "region_talk_image_diagnostic_download_and_vlm_rank",
+        }
+        merged = mod.merge_candidate_image_payload_with_latest(
+            {
+                "image_queue_status": "needs_browser_materialization",
+                "browser_materialization_status": "needs_browser_materialization",
+                "next_action": "run_browser",
+                "run_id": "candidate-report-later",
+            },
+            latest,
+        )
+        self.assertEqual(merged["image_queue_status"], "needs_actual_image_fetch")
+        self.assertEqual(merged["browser_materialization_status"], "materialized")
+        self.assertEqual(merged["browser_materialization_evidence_json"], evidence)
+        self.assertEqual(merged["browser_materialized_image_urls"], ["https://cdn.example/hero.jpg"])
+        self.assertEqual(merged["next_action"], "region_talk_image_diagnostic_download_and_vlm_rank")
+
     def test_image_online_writer_merges_latest_diagnostic_row_before_bulk_upsert(self) -> None:
         mod = load_module()
         captured: dict[str, object] = {}

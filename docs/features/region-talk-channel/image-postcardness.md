@@ -58,18 +58,38 @@ The media-first presentation contract is:
 - `system_link_preview`: fallback only while relevant media is missing,
   unextractable or not yet accepted.
 
-Every transfer requires prominent source/author attribution and the original
-URL. `visual_asset_rights_status=not_independently_verified` is deliberately
-honest: the field records no license assertion. This editorial transport
-policy does not authorize unrelated reuse, stock-library use, removal of
-watermarks, or a modified Bento/card. If static HTML contains no image evidence
+Every transfer keeps prominent source/author attribution and the original URL.
+For the Region Talk product this source-media transfer does **not** require a
+separate rights gate: the image is carried as part of an attributed editorial
+recommendation of the exact linked source, not presented as our own work.
+Legacy `rights_policy`/`visual_asset_rights_status` fields remain provenance
+metadata and must not downgrade a relevant, associated source image to an
+inconvenient link-only post. This does not permit substituting unrelated stock
+media, removing watermarks or presenting a modified card as the source image.
+If static HTML contains no image evidence
 or cannot be fetched and there is no direct ref, the row becomes
 `needs_browser_materialization` instead of silently publishing an unrelated
-preview. Its request fixes one canonical page, safe article selectors, timeout
-and asset cap. A separate local/orchestrated Playwright worker must resolve
-that request and return durable direct refs; ImageDiagnostic deliberately does
-not launch an unbounded browser per candidate and will not hot-loop the same
-static page while the browser request is pending.
+preview.
+
+### Bounded browser materialization (v1)
+
+`scripts/region_talk_article_browser_materialize.py` resolves that state on
+the server with Playwright Chromium. One invocation leases and renders at most
+three canonical article pages. It records final page URL, JSON-LD/DOM role,
+selector/path, alt, caption, dimensions and the durable direct source URL in
+`browser_materialization_evidence_json`, then returns the row to the existing
+ImageDiagnostic download and selective-VLM association/ranking path. It does
+not use a Telegram session and does not publish.
+
+The browser accepts only public HTTP(S) destinations: canonical page, every
+redirect and every subresource are DNS-checked, and private/reserved/link-local
+addresses or credential-bearing URLs are aborted. Page/request/asset counts
+and timeouts are finite. A transient failure retries after 6 hours and then 24
+hours; the third failure is terminal. A successfully rendered page with zero
+article-associated images is also terminal for media acquisition and falls
+back to the native link preview without another browser loop. CandidateReport
+preserves these browser-owned lease, retry and evidence fields during its
+concurrent image-queue merge.
 
 ### Editorial gallery and visual-genre correction (v3)
 
@@ -104,10 +124,9 @@ Archi.ru exception:
 An operator may persist `approve_visual` only against a complete, decoded,
 safe gallery manifest. The attestation is bound to
 `input_media_manifest_hash`; any changed gallery invalidates it. This resolves
-visual suitability only: source, geography, text/vector, rights and final
-Gemini gates remain mandatory. Modified cards/Bento still require separate
-asset-specific permission; the media-first source transfer is always
-attribution-bound.
+visual suitability only: source, geography, text/vector and final Gemini gates
+remain mandatory. The media-first source transfer is always attribution-bound;
+it is not blocked by the legacy rights metadata.
 
 ### Live editorial-gallery canary, 2026-07-20
 
