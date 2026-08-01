@@ -83,6 +83,36 @@ original reservation; no request is left in progress. This is not quota
 exhaustion: each key consumed 1 of the safe 90 RPD and the provider message was
 explicitly permission-related.
 
+### Official SDK canary 2026-08-01
+
+After rechecking the current Google tutorial, one minimal foreground canary was
+run from the production `iad` machine with the installed official
+`google-genai==2.16.0` client, without the repository REST adapter:
+
+```python
+client.interactions.create(
+    agent="antigravity-preview-05-2026",
+    input="Return exactly: OK",
+    environment="remote",
+)
+```
+
+The call used `GOOGLE_API_KEY6` only after a shared-ledger reservation and
+returned `PermissionDeniedError: The caller does not have permission` in
+5.9 seconds. Request UID:
+`145cabe1-b29c-40c3-8cdd-22afdf72b3ab`. The ledger finalized the single
+physical attempt as `failed_provider`, `reserved_rpd=1`, `reserved_tpm=1000`;
+no retry or second background canary was sent. Evidence is retained on the
+production volume at
+`/data/festival-web-research/official-sdk-canary-20260801.json`.
+
+This removes the custom REST body, polling implementation, extra request
+headers and festival prompt as explanations for the current 403. It does not
+erase the 2026-07-29 evidence that earlier Antigravity interactions executed,
+used tokens and wrote sandbox artifacts; the current failure is therefore an
+access/backend regression or changed provider entitlement, not a demonstrated
+client-contract error.
+
 Migration 007 could not be applied with the available Management API token:
 the limiter project returned HTTP 403 insufficient database-write privileges.
 Strict production mode therefore remains fail-closed. The bounded canary used
