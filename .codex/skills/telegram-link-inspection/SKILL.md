@@ -1,61 +1,56 @@
 ---
 name: telegram-link-inspection
-description: Use whenever the user gives a Telegram t.me link/post/channel in events-bot and the task requires reading the actual message content, comparing Telegram posts, or verifying a public Telegram incident. Uses the local human Telethon session first; public HTML is fallback only.
+description: Read a small, explicit set of Telegram posts through the repository's role-scoped, read-only Telethon helpers. Use for t.me links, channel checks, wording review, and factual inspection of selected messages.
 ---
 
-# Telegram Link Inspection
+# Telegram link inspection
 
-Use this skill for `https://t.me/...` / `t.me/...` links in events-bot when you
-need the factual post text, caption, media, id, date, or adjacent messages.
+## Choose the narrowest reader
 
-## Non-negotiables
+- For one exact message during an already-authorized local E2E session, use `scripts/read_telegram_message.py`.
+- For multiple exact links or the latest bounded messages from one or more chats/channels, use `scripts/telegram_read.py`.
+- In GitHub Actions, use only `.github/workflows/telegram-read.yml` and the secret role `TELEGRAM_AUTH_BUNDLE_GH_ACTIONS`.
 
-- Read Telegram links through Telethon first, using the local human session:
-  `TELEGRAM_AUTH_BUNDLE_E2E` or `TELEGRAM_SESSION` plus
-  `TELEGRAM_API_ID`/`TELEGRAM_API_HASH` (or `TG_API_ID`/`TG_API_HASH`).
-- Public HTML (`https://t.me/s/...`) is only a fallback/quick heuristic. If you
-  use it, say explicitly that it is fallback evidence and do not present it as
-  the preferred Telegram read path.
-- Do not use `TELEGRAM_AUTH_BUNDLE_S22` for local inspection. It is reserved for
-  Kaggle/remote monitoring sessions.
-- Do not run the same Telethon session concurrently with a known active remote
-  Kaggle/monitoring job that uses the same auth bundle.
-- Do not print session strings, API hashes, bot tokens, or raw `.env` contents.
-- For incident work, combine Telethon evidence with production DB/runtime-log
-  evidence; Telethon answers "what is visible in Telegram", not "why it
-  happened".
+Never reuse `TELEGRAM_AUTH_BUNDLE_E2E`, `TELEGRAM_AUTH_BUNDLE_S22`, `TELEGRAM_SESSION`, publishing sessions, or monitoring sessions for the GitHub Actions reader.
 
-## Canon
+## Build a bounded request
 
-- Operational doc: `docs/operations/telegram-link-inspection.md`
-- Helper script: `scripts/read_telegram_message.py`
-- E2E/session contract: `docs/operations/e2e-testing.md`
-- Session isolation: `AGENTS.md` section `Session Boundaries`
+Use `requests/telegram-read.json`:
 
-## Workflow
+```json
+{
+  "schema_version": 1,
+  "mode": "latest",
+  "targets": ["https://t.me/lovekenig"],
+  "limit": 2
+}
+```
 
-1. Load local `.env` only into the current process/shell if needed:
-   `set -a; source .env; set +a`.
-2. Prefer the helper script for exact post reads:
+`latest` accepts a chat/channel URL or username. `messages` accepts exact public or `/c/` message links. Stay within 10 targets, 50 messages per target, and 100 messages total. Prefer exact links whenever the task names exact posts.
 
-   ```bash
-   python3 scripts/read_telegram_message.py https://t.me/kldevents/625 https://t.me/kldevents/626
-   ```
+## Run locally
 
-3. For private `/c/<channel>/<id>` links, the helper converts to the Telethon
-   `-100...` peer automatically when possible.
-4. Record only non-secret evidence: message id, chat title/username, date,
-   text/caption preview or exact relevant lines, grouped id, media type.
-5. If Telethon cannot access the chat/post, report the concrete failure and
-   then use fallback evidence in this order: production DB/source rows, runtime
-   logs, Bot API for bot-owned channel operations, public `t.me/s` HTML.
+```bash
+python scripts/telegram_read.py \
+  --request requests/telegram-read.json \
+  --auth-bundle-env TELEGRAM_AUTH_BUNDLE_GH_ACTIONS \
+  --output out/telegram-read.json
+```
 
-## Incident interpretation
+Do not print or inspect the secret value. Read only the output file.
 
-- If two `@kldevents` links point to the same event, inspect both exact
-  Telethon messages before deciding which public post to keep/delete.
-- Prefer keeping the message id already stored in production DB unless Telethon
-  evidence shows it is missing, edited incorrectly, or otherwise worse than the
-  duplicate.
-- For Telegram deletions, use Bot API only after Telethon/DB/log evidence shows
-  which message is the duplicate.
+## Run through GitHub Actions without an Issue
+
+After the workflow is present on the chosen ref, use `workflow_dispatch`. When the available GitHub integration cannot dispatch workflows, create/update a branch named `agent/telegram-read-*` with a narrowly scoped `requests/telegram-read.json`; the workflow's `push` trigger will run it.
+
+Read the short-lived `telegram-read-<run-id>` artifact, then analyze only the content needed for the user's task. Do not commit the output.
+
+## Behavioral and security rules
+
+The reader must remain passive. It uses randomized 4-12 second startup, 2-5 second inter-request, and 5-15 second inter-target pauses. It does not send typing indicators, read acknowledgements, reactions, or fabricated interaction, and it does not download media.
+
+Keep the GitHub Actions session role single-use through workflow concurrency. Never log authentication data, and never include session material in a request, artifact, issue, pull request, or chat response.
+
+The repository is public, so use the workflow only for public Telegram content unless storage and repository visibility have been deliberately changed.
+
+For full operations guidance, see `docs/operations/telegram-link-inspection.md`.
