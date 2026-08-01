@@ -72,6 +72,10 @@ def test_exact_pagination_ignores_nonbinding_reactors(monkeypatch) -> None:
     ]
 
     class Client:
+        async def get_messages(self, _peer, *, ids):
+            assert ids == 7
+            return SimpleNamespace(reactions=SimpleNamespace())
+
         async def __call__(self, _request):
             return pages.pop(0)
 
@@ -86,6 +90,9 @@ def test_pagination_failure_and_incomplete_count_fail_closed() -> None:
     class FailedSecondPage:
         calls = 0
 
+        async def get_messages(self, _peer, *, ids):
+            return SimpleNamespace(reactions=SimpleNamespace())
+
         async def __call__(self, _request):
             self.calls += 1
             if self.calls == 1:
@@ -98,6 +105,9 @@ def test_pagination_failure_and_incomplete_count_fail_closed() -> None:
         asyncio.run(sync.fetch_exact_reactions(FailedSecondPage(), object(), 7, {"10"}))
 
     class Truncated:
+        async def get_messages(self, _peer, *, ids):
+            return SimpleNamespace(reactions=SimpleNamespace())
+
         async def __call__(self, _request):
             return SimpleNamespace(count=2, next_offset=None, reactions=[
                 SimpleNamespace(peer_id=SimpleNamespace(user_id=10), reaction="👍")
@@ -105,6 +115,52 @@ def test_pagination_failure_and_incomplete_count_fail_closed() -> None:
 
     with pytest.raises(RuntimeError, match="incomplete exact reaction observation"):
         asyncio.run(sync.fetch_exact_reactions(Truncated(), object(), 7, {"10"}))
+
+
+def test_empty_reaction_snapshot_does_not_call_invalid_list_rpc() -> None:
+    class Empty:
+        async def get_messages(self, _peer, *, ids):
+            assert ids == 7
+            return SimpleNamespace(reactions=None)
+
+        async def __call__(self, _request):
+            raise AssertionError("list RPC must not be called without Message.reactions")
+
+    result = asyncio.run(sync.fetch_exact_reactions(Empty(), object(), 7, {"10"}))
+    assert result == {
+        "reactions_by_reviewer": {},
+        "binding_reactor_count": 0,
+        "ignored_reaction_count": 0,
+        "observed_reaction_count": 0,
+        "operator_review_decision": "pending",
+        "operator_review_rewrite_status": "clean",
+        "operator_review_positive": False,
+        "operator_review_negative": False,
+        "operator_review_rewrite_requested": False,
+    }
+
+
+def test_reaction_removal_race_rechecks_message_before_empty_result() -> None:
+    class MsgIdInvalidError(Exception):
+        pass
+
+    class RemovedDuringRead:
+        snapshots = 0
+
+        async def get_messages(self, _peer, *, ids):
+            self.snapshots += 1
+            return SimpleNamespace(
+                reactions=SimpleNamespace() if self.snapshots == 1 else None
+            )
+
+        async def __call__(self, _request):
+            raise MsgIdInvalidError("last reaction removed")
+
+    result = asyncio.run(
+        sync.fetch_exact_reactions(RemovedDuringRead(), object(), 7, {"10"})
+    )
+    assert result["reactions_by_reviewer"] == {}
+    assert result["operator_review_decision"] == "pending"
 
 
 def test_revision_is_idempotent_and_reaction_removal_is_a_new_revision() -> None:

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk reaction synchronization for valid review messages with no reactions: it now treats an absent Telegram `Message.reactions` field as a complete empty observation, safely rechecks the last-reaction removal race, and no longer lets Telegram's `MSG_ID_INVALID` response block all later approvals.
+
 - Fixed static-site Smart Update recovery after a Fly deploy: an exact remote
   owner whose Kaggle ledger is already terminal is re-armed immediately instead
   of blocking later coalesced builds for the full live-run timeout; abandoned

@@ -104,6 +104,32 @@ def classify_operator_reactions(reactions_by_reviewer: dict[str, list[str]]) -> 
     }
 
 
+def empty_reaction_observation() -> dict[str, Any]:
+    """Return a complete empty snapshot without calling Telegram's list RPC.
+
+    Telegram documents ``messages.getMessageReactionsList`` for messages whose
+    ``Message.reactions`` field is present.  On a valid message with no
+    reactions the list RPC can return ``MSG_ID_INVALID`` instead of an empty
+    vector, so the message snapshot is the authority for the empty case.
+    """
+
+    exact: dict[str, list[str]] = {}
+    return {
+        "reactions_by_reviewer": exact,
+        "binding_reactor_count": 0,
+        "ignored_reaction_count": 0,
+        "observed_reaction_count": 0,
+        **classify_operator_reactions(exact),
+    }
+
+
+async def _reaction_message_snapshot(client: Any, peer: Any, message_id: int) -> Any:
+    message = await client.get_messages(peer, ids=int(message_id))
+    if not message or type(message).__name__ == "MessageEmpty":
+        raise RuntimeError(f"review delivery message {message_id} is missing")
+    return message
+
+
 async def fetch_exact_reactions(
     client: Any,
     peer: Any,
@@ -116,18 +142,34 @@ async def fetch_exact_reactions(
 
     from telethon import functions  # type: ignore
 
+    message = await _reaction_message_snapshot(client, peer, message_id)
+    if getattr(message, "reactions", None) is None:
+        return empty_reaction_observation()
+
     offset: str | None = None
     seen_offsets: set[str] = set()
     all_rows: list[Any] = []
     expected_count: int | None = None
     while True:
-        result = await client(functions.messages.GetMessageReactionsListRequest(
-            peer=peer,
-            id=int(message_id),
-            reaction=None,
-            offset=offset,
-            limit=max(1, min(100, int(page_limit))),
-        ))
+        try:
+            result = await client(functions.messages.GetMessageReactionsListRequest(
+                peer=peer,
+                id=int(message_id),
+                reaction=None,
+                offset=offset,
+                limit=max(1, min(100, int(page_limit))),
+            ))
+        except Exception as exc:
+            # A last reaction may be removed between the message snapshot and
+            # the exact-list call.  Telegram then drops Message.reactions and
+            # may answer MSG_ID_INVALID.  Re-read once: only a still-existing
+            # message with no reactions is a complete empty observation.
+            if type(exc).__name__ != "MsgIdInvalidError":
+                raise
+            refreshed = await _reaction_message_snapshot(client, peer, message_id)
+            if getattr(refreshed, "reactions", None) is None:
+                return empty_reaction_observation()
+            raise
         if expected_count is None:
             expected_count = int(getattr(result, "count", 0) or 0)
         rows = list(getattr(result, "reactions", None) or [])

@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-01-region-talk-empty-reaction-sync.md`
+  - Scope: Region Talk exact operator-reaction observation for reaction-less
+    messages and last-reaction removal races.
+  - Must not regress: an existing message without `Message.reactions` becomes a
+    complete empty observation without an invalid list RPC; missing messages
+    and incomplete reactor pages still fail closed.
+
 - `INC-2026-08-01-region-talk-draft-backfill-nameerror.md`
   - Scope: Region Talk v8 backfill entrypoint, supporting YDB reads and
     Telegram/VK operator delivery catch-up.

@@ -360,8 +360,8 @@ The planner reads the actual target publication log/schedule, not operator-chat
 delivery, when reconstructing `publication_semantic_history_item`. Sending a
 candidate to the review chat therefore does not falsely mark it as publicly
 published. The scheduled runner executes the planner after each autonomous
-discovery/finalization session, so the next 14 days are recalculated three
-times per day as candidates arrive.
+discovery/finalization session, so the next 14 days are recalculated five
+times per day as candidates arrive under the current production cadence.
 
 The implemented on-demand operator view uses
 `scripts/region_talk_review_queue.py` policy
@@ -504,6 +504,14 @@ Telegram's aggregate emoji counts are never authority: the synchronizer uses
 reactors from that allowlist. A missing page, looping offset or count mismatch
 aborts before any revision is written. This is what makes a completely removed
 reaction reversible without mistaking a partial page for removal.
+For a valid delivery whose current Telegram `Message.reactions` field is absent
+([Telegram API contract](https://core.telegram.org/api/reactions)),
+the synchronizer records a complete empty observation without invoking
+`messages.getMessageReactionsList`: Telegram can return `MSG_ID_INVALID` for
+that list call even though the reaction-less message itself exists. If the
+last reaction disappears between the snapshot and list call, one fresh message
+read must confirm the absent reactions field before the empty revision is
+accepted; a missing message still fails closed.
 
 Review identity is
 `region_talk_operator_review_payload_v1`: canonical post URL, exact grounded
