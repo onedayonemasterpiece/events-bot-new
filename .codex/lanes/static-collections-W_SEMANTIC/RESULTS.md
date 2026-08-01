@@ -5,7 +5,7 @@
 - Lane: `W_SEMANTIC`
 - Requirements: `R03`, `R06`
 - Base SHA: `23c1702bb565f693f7022f3d7ac2e3455d6d412c`
-- Implementation head SHA: `14945d2257992cca2b20d2f046805684059be25a`
+- Implementation head SHA: `14945d2216018cf64490e368ac01135576e3738d`
 - Branch: `agent/static-collections-data-prep/W_SEMANTIC`
 - Push: not performed
 
