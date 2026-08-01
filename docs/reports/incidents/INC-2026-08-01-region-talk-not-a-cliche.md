@@ -63,6 +63,10 @@ exact pattern in the Telegram and VK fields of
   first ten social attempts reveal that exact caption length was enforced too
   late for the single Writer retry; a narrow hotfix moves that mechanical
   validation before Critic and adds stage-call pacing before catch-up resumes.
+- 2026-08-01 21:56–22:00 UTC — pacing prevents another quota failure, while
+  four of five social drafts remain shorter than the exact caption contract
+  after retry. Further calls pause until the retry prompt carries the numeric
+  deficit, a safe target and a new durable stage execution revision.
 
 ## Root Cause
 

@@ -376,6 +376,39 @@ def test_short_rendered_caption_gets_writer_retry_before_critic(monkeypatch) -> 
     assert calls_seen[2]["stage"] == "writer"
     feedback = calls_seen[2]["payload"]["deterministic_feedback"]
     assert "caption_visible_length:536" in feedback
+    repair = calls_seen[2]["payload"]["length_repair"]
+    assert repair["actual_visible_chars"] == 536
+    assert repair["target_visible_min_chars"] == 620
+    assert repair["required_added_editorial_chars"] == 84
+
+
+def test_second_short_writer_failure_preserves_stage_audit(monkeypatch) -> None:
+    mod = load_module()
+    short = _valid_writer_output(mod)
+    short["_stage_status"] = "ok"
+    strategy = {
+        "_stage_status": "ok", "status": "ready", "throughline_mode": "fresh_start",
+        "used_history_urls": [], "visual_hook_evidence_ids": [],
+    }
+    row = {
+        "post_url": "https://t.me/example/1", "source_title": "Внешнее издание",
+        "publication_primary_image_url": "https://cdn.example.org/hero.jpg",
+    }
+    evidence = mod.build_editorial_evidence(
+        row, source_text="Подробный текст о прогулке по Гусеву."
+    )
+    sequence = iter([(strategy, True), (short, True), (short, True)])
+    monkeypatch.setattr(mod, "call_editorial_stage", lambda **_kwargs: next(sequence))
+
+    updates, calls = mod.generate_editorial_draft(
+        row, evidence_pack=evidence, history=[], model="test", default_env="KEY", budget=object(),
+    )
+
+    assert calls == 3
+    assert updates["publication_draft_backfill_status"] == "needs_grounding_review"
+    audit = json.loads(updates["publication_draft_stage_audit_json"])
+    assert audit["strategy"]["status"] == "ready"
+    assert audit["writer"]["status"] == "draft_ready"
 
 
 def test_editorial_stage_pacing_waits_between_physical_provider_calls(monkeypatch) -> None:
@@ -489,6 +522,16 @@ def test_v9_prompts_tell_writer_and_critic_to_reject_the_style_family() -> None:
     critic = mod._stage_prompt("critic", {})
     assert "negation-plus-adversative contrast template is forbidden" in writer
     assert "contrastive_not_a_cliche" in critic
+
+
+def test_writer_prompt_uses_hard_numeric_caption_contract() -> None:
+    mod = load_module()
+    writer = json.loads(mod._stage_prompt("writer", {"visible_caption_contract": {"min_chars": 550}}))
+    assert writer["output"]["public_copy"] == {
+        "paragraph_1": "260-420 chars", "paragraph_2": "260-420 chars",
+    }
+    assert any("hard output schema" in rule for rule in writer["rules"])
+    assert any("required_added_editorial_chars" in rule for rule in writer["rules"])
 
 
 def test_line_break_variant_is_rejected_before_whitespace_normalization() -> None:

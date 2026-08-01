@@ -123,6 +123,15 @@ multi-stage candidate stays below the conservative 13 RPM project ledger;
 model-scoped overflow still prefers `gemini-3.5-flash-lite` and then
 `gemini-3.1-flash-lite`.
 
+Writer receives the exact attribution overhead plus a hard numeric caption
+contract. Its normal paragraph targets are 260–420 characters; a length retry
+also receives the measured visible length, a 620-character safe target and the
+minimum number of grounded editorial characters to add. The stage execution
+revision participates in the durable request fingerprint, so an older cached
+short response cannot satisfy a newer prompt contract. If the retry still
+misses, its Writer output and grounding map remain in the stage audit for
+diagnosis while the candidate stays outside delivery and planning.
+
 Every stage uses the existing controlled Google AI gateway, Supabase
 `google_ai_reserve` limiter and durable YDB request budget. Stage prompt/model,
 request and prompt fingerprints, usage, input evidence, bounded history,
