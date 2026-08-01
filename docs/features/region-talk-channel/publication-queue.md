@@ -167,6 +167,13 @@ terminal backfill rows are migration debt and become actionable under v10.
 Operators may target an exact URL
 with repeatable `--candidate-url`; `--force-regenerate` is allowed only together
 with that explicit selector and bypasses that row's terminal/retry cooldown.
+If the v10 copy is already current and only the legacy presentation manifest is
+pending, `--materialize-only` performs a zero-LLM repair. Telegram albums use
+the exact source post plus the reviewed message-ID order; VK albums resolve the
+reviewed attachment ordinals through exact `wall.getById` data and persist the
+direct refs, reviewed hashes and refetch locators. A scalar `#media`/preview URL
+cannot downgrade an existing 3–6-item selection to a one-item pseudo-album.
+This mode never changes editorial paragraphs or the publication verdict.
 
 Operator delivery is fail-closed on one atomic revision: two paragraphs,
 source/original links, ordered media manifest and layout. An article requires

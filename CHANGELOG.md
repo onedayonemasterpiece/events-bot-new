@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk legacy album materialization during the v10 backfill: a one-image preview scalar no longer hides a reviewed 3–6-item Telegram selection, VK selections are projected onto exact `wall.getById` attachment refs with reviewed hashes, and `--materialize-only` repairs pending manifests without another editorial LLM call or copy change.
 - Fixed Region Talk's Russian-language guard for Latin-script outlet/channel names: exact source-owned labels and `@handles` are excluded from the letter-ratio calculation, while unrelated English prose remains a hard failure.
 - Fixed the daily Telegram Monitoring Kaggle launcher to embed the complete deterministic `google_ai` Python package instead of a stale four-file allowlist, added an isolated generated-notebook import-closure regression test, and preserved launcher failures in `ops_run` diagnostics for reliable watchdog and incident evidence.
 - Fixed Region Talk backfill completion after valid paragraph pairs produced a sub-550-character rendered caption: exact caption length now enters the single Writer retry before Critic, Writer receives the measured deficit and a hard 620-character safe target, failed retries retain their stage evidence, durable prompt execution is revisioned, and physical editorial calls are paced below the shared project RPM ceiling.

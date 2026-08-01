@@ -92,7 +92,12 @@ The v8 backfill also fills missing presentation fields from the newest exact-URL
 durable `image_queue_item`. This narrow evidence join carries either an already
 extracted publisher hero or the reviewed ordered social selection into the
 review manifest, but never overwrites an existing media selection, publication
-verdict or editorial copy.
+verdict or editorial copy. For legacy rows where a generic one-frame preview
+coexists with reviewed album IDs, album IDs take precedence. The bounded
+`region_talk_publication_draft_backfill.py --materialize-only` repair resolves
+Telegram message IDs from the source group and VK attachment ordinals from
+`wall.getById`; it writes only materialization/presentation state and performs
+zero editorial LLM calls.
 
 ### Product format priority
 

@@ -191,6 +191,7 @@ def _canonical_url(row: dict[str, Any]) -> str:
 
 MEDIA_EVIDENCE_FIELDS = (
     "selected_media_materialization_json",
+    "selected_media_materialization_fingerprint",
     "media_materialization_items_json",
     "publication_primary_image_url",
     "selected_image_url",
@@ -665,6 +666,45 @@ def select_rows(
     return selected[: max(0, int(limit))]
 
 
+def select_media_materialization_rows(
+    rows: list[dict[str, Any]],
+    *,
+    limit: int,
+    surface: str = "all",
+    candidate_urls: set[str] | None = None,
+    published_urls: set[str] | None = None,
+    published_candidate_ids: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Select current accepted copy blocked solely by its media manifest."""
+
+    candidate_urls = set(candidate_urls or ())
+    published_urls = set(published_urls or ())
+    published_candidate_ids = set(published_candidate_ids or ())
+    selected: list[dict[str, Any]] = []
+    for row in rows:
+        url = notify.canonical_post_url(row)
+        row_lane = content_lane(row)
+        row_surface = "article" if row_lane == "article" else social_post_surface(url)
+        if (
+            not notify.is_confirmed_publication(row)
+            or str(row.get("publication_draft_prompt_version") or "") != EDITORIAL_WRITER_VERSION
+            or str(row.get("publication_draft_contract_version") or "") != EDITORIAL_OUTPUT_CONTRACT
+            or str(row.get("publication_draft_status") or "") != "media_materialization_pending"
+            or surface not in {"all", row_surface, row_lane}
+            or (candidate_urls and url not in candidate_urls)
+            or url in published_urls
+            or publication_candidate_id(row) in published_candidate_ids
+        ):
+            continue
+        selected.append(row)
+    selected.sort(key=lambda row: (
+        int(row.get("publication_rank") or 999999),
+        -float(row.get("publication_score") or row.get("publication_pre_score") or 0),
+        notify.canonical_post_url(row),
+    ))
+    return selected[: max(0, int(limit))]
+
+
 def draft_request_fingerprint(row: dict[str, Any], text: str, *, model: str) -> str:
     payload = {
         "version": DRAFT_BACKFILL_VERSION,
@@ -765,6 +805,69 @@ async def fetch_exact_text(client: Any, row: dict[str, Any]) -> tuple[str, dict[
     }
 
 
+def _vk_selected_media_materialization(
+    row: dict[str, Any], post: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Project a legacy VK visual selection onto durable direct refs.
+
+    Older ImageDiagnostic rows retained the reviewed media ids and content
+    hashes but predated the durable refetch locator.  ``wall.getById`` returns
+    the exact source attachments, so the draft/media backfill can repair that
+    transport evidence without repeating either the visual or editorial LLM.
+    """
+
+    photo_urls: list[str] = []
+    for attachment in post.get("attachments") or []:
+        photo = attachment.get("photo") if isinstance(attachment, dict) else None
+        if attachment.get("type") != "photo" or not isinstance(photo, dict):
+            continue
+        sizes = [item for item in (photo.get("sizes") or []) if isinstance(item, dict) and item.get("url")]
+        if sizes:
+            best = max(
+                sizes,
+                key=lambda item: int(item.get("width") or 0) * int(item.get("height") or 0),
+            )
+            photo_urls.append(str(best["url"]))
+
+    selected_ids = [
+        str(value) for value in _json_value(row.get("selected_media_ids"), []) if str(value)
+    ]
+    manifest = [
+        item for item in _json_value(row.get("media_manifest_items"), [])
+        if isinstance(item, dict)
+    ]
+    manifest_by_id = {str(item.get("media_id") or ""): item for item in manifest}
+    materialized: list[dict[str, Any]] = []
+    for output_ordinal, media_id in enumerate(selected_ids[:6], 1):
+        match = re.search(r"([0-9]+)$", media_id)
+        attachment_ordinal = int(match.group(1)) if match else output_ordinal
+        if not (1 <= attachment_ordinal <= len(photo_urls)):
+            continue
+        source_ref = photo_urls[attachment_ordinal - 1]
+        reviewed = str((manifest_by_id.get(media_id) or {}).get("content_sha256") or "")
+        locator = {
+            "method": "vk_wall_photo_attachment",
+            "post_url": _canonical_url(row),
+            "media_id": media_id,
+            "attachment_ordinal": attachment_ordinal,
+            "source_url": source_ref,
+        }
+        item = {
+            "media_id": media_id,
+            "ordinal": output_ordinal,
+            "kind": "image",
+            "source_ref": source_ref,
+            "refetch_locator": locator,
+        }
+        if reviewed:
+            item["reviewed_content_sha256"] = reviewed
+        item["materialization_fingerprint"] = hashlib.sha256(
+            json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        materialized.append(item)
+    return materialized
+
+
 def fetch_vk_text(row: dict[str, Any], posts: dict[str, dict[str, Any]], error: str) -> tuple[str, dict[str, Any]]:
     ref = parse_vk_post(str(row.get("post_url") or ""))
     if ref is None:
@@ -779,7 +882,7 @@ def fetch_vk_text(row: dict[str, Any], posts: dict[str, dict[str, Any]], error: 
     if not text:
         raise RuntimeError("exact VK post has no text")
     timestamp = int(post.get("date") or 0)
-    return text, {
+    fields = {
         "platform": "vk",
         "post_id": str(post_id),
         "post_date": (
@@ -788,6 +891,15 @@ def fetch_vk_text(row: dict[str, Any], posts: dict[str, dict[str, Any]], error: 
             else str(row.get("post_date") or "")
         ),
     }
+    selected_materialization = _vk_selected_media_materialization(row, post)
+    if selected_materialization:
+        fields["selected_media_materialization_json"] = json.dumps(
+            selected_materialization, ensure_ascii=False, separators=(",", ":")
+        )
+        fields["selected_media_materialization_fingerprint"] = hashlib.sha256(
+            fields["selected_media_materialization_json"].encode("utf-8")
+        ).hexdigest()
+    return text, fields
 
 
 def retry_updates(row: dict[str, Any], *, transport: str, reason: str) -> dict[str, Any]:
@@ -903,11 +1015,11 @@ def publication_media_plan(row: dict[str, Any]) -> dict[str, Any]:
         row.get("publication_primary_image_url") or row.get("selected_image_url")
         or row.get("image_url_or_local_path") or row.get("associated_image_url") or ""
     ).strip()
-    if scalar_ref and not explicit_items:
-        explicit_items.append({"media_id": "hero:1", "ordinal": 1, "kind": "image", "ref": scalar_ref})
-    explicit_items.sort(key=lambda item: int(item.get("ordinal") or 0))
 
     if lane == "article":
+        if scalar_ref and not explicit_items:
+            explicit_items.append({"media_id": "hero:1", "ordinal": 1, "kind": "image", "ref": scalar_ref})
+        explicit_items.sort(key=lambda item: int(item.get("ordinal") or 0))
         items = explicit_items[:1]
         terminal_fallback = rt.is_external_link_article_candidate(row)
         if not items and terminal_fallback:
@@ -920,6 +1032,8 @@ def publication_media_plan(row: dict[str, Any]) -> dict[str, Any]:
             mode = "article_hero"
             status, reason = "ready", "associated_article_hero_has_exact_ref"
     elif media_kind == "video":
+        if scalar_ref and not explicit_items:
+            explicit_items.append({"media_id": "hero:1", "ordinal": 1, "kind": "video", "ref": scalar_ref})
         mode = "social_video"
         items = explicit_items[:1] or ([{"media_id": "source:video", "ordinal": 1, "kind": "video", "ref": post_url}] if telegram_post_ref(post_url) else [])
         status, reason = ("ready", "exact_source_video_ref") if items else ("pending", "source_video_not_materialized")
@@ -961,6 +1075,8 @@ def publication_media_plan(row: dict[str, Any]) -> dict[str, Any]:
                 else (("ready", "ordered_source_album_ref") if len(items) >= 3 else ("pending", "ordered_album_3_to_6_not_materialized"))
             )
         elif photo_led:
+            if scalar_ref and not explicit_items:
+                explicit_items.append({"media_id": "hero:1", "ordinal": 1, "kind": "image", "ref": scalar_ref})
             mode = "social_hero"
             items = explicit_items[:1] or ([{"media_id": selected_ids[0] if selected_ids else "source:hero", "ordinal": 1, "kind": "image", "ref": post_url}] if telegram_post_ref(post_url) else [])
             status, reason = ("ready", "exact_source_hero_ref") if items else ("pending", "source_hero_not_materialized")
@@ -1365,11 +1481,16 @@ def build_draft_updates(
     default_env: str,
     budget: DurableGeminiBudget,
 ) -> tuple[dict[str, Any], bool]:
+    generation_row = {**row, **{
+        field: fetched[field]
+        for field in MEDIA_EVIDENCE_FIELDS
+        if fetched.get(field) not in (None, "", [], {})
+    }}
     evidence_pack = build_editorial_evidence(
-        row, source_text=text, fetched=fetched, intake=intake,
+        generation_row, source_text=text, fetched=fetched, intake=intake,
     )
     verdict, provider_calls = generate_editorial_draft(
-        row,
+        generation_row,
         evidence_pack=evidence_pack,
         history=history,
         model=model,
@@ -1388,6 +1509,11 @@ def build_draft_updates(
         "publication_draft_backfill_provider_call_count": provider_calls,
         # The writer is a copy stage, not a second publication verdict.
         "publication_draft_backfill_llm_gate_status": "ok" if verdict.get("publication_draft_backfill_status") in {"ready", "needs_grounding_review", "media_materialization_pending"} else "deferred",
+        **{
+            field: fetched[field]
+            for field in MEDIA_EVIDENCE_FIELDS
+            if fetched.get(field) not in (None, "", [], {})
+        },
     }
     if (
         str(row.get("publication_draft_prompt_version") or "") != EDITORIAL_WRITER_VERSION
@@ -1412,6 +1538,44 @@ def build_draft_updates(
             "operator_review_rewrite_requested": False,
         })
     return ({**base_updates, **verdict}, provider_calls > 0)
+
+
+def build_media_materialization_updates(
+    row: dict[str, Any], *, fetched: dict[str, Any]
+) -> dict[str, Any]:
+    """Repair only the exact media manifest while preserving accepted copy."""
+
+    media_fields = {
+        field: fetched[field]
+        for field in MEDIA_EVIDENCE_FIELDS
+        if fetched.get(field) not in (None, "", [], {})
+    }
+    media = publication_media_plan({**row, **media_fields})
+    reviewable = media["status"] in {"ready", "fallback"}
+    return {
+        **media_fields,
+        "publication_draft_status": (
+            "ready_for_operator_review" if reviewable else "media_materialization_pending"
+        ),
+        "publication_presentation_mode": media["mode"],
+        "publication_media_materialization_status": media["status"],
+        "publication_media_materialization_reason": media["reason"],
+        "publication_media_materialization_contract_version": MEDIA_MATERIALIZATION_CONTRACT_VERSION,
+        "publication_presentation_manifest_json": json.dumps(
+            media, ensure_ascii=False, separators=(",", ":")
+        ),
+        "publication_draft_backfill_status": (
+            "ready" if reviewable else "media_materialization_pending"
+        ),
+        "publication_draft_backfill_reason": (
+            "media_materialization_repaired" if reviewable else media["reason"]
+        ),
+        "publication_draft_backfill_next_attempt_after": (
+            "" if reviewable else (utc_now() + timedelta(hours=1)).isoformat()
+        ),
+        "publication_draft_backfill_provider_called": "false",
+        "publication_draft_backfill_provider_call_count": 0,
+    }
 
 
 async def execute(args: argparse.Namespace) -> dict[str, Any]:
@@ -1470,19 +1634,30 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
             for item in onboarding_profiles
             if str(item.get("canonical_source_key") or "").strip()
         }
-        selected = select_rows(
-            rows,
-            limit=int(args.limit),
-            surface=str(args.surface),
-            force_regenerate=bool(getattr(args, "force_regenerate", False)),
-            candidate_urls={
-                notify.canonical_post_url({"post_url": value})
-                for value in (getattr(args, "candidate_url", None) or [])
-                if notify.canonical_post_url({"post_url": value})
-            },
-            published_urls=published_urls,
-            published_candidate_ids=published_candidate_ids,
-        )
+        candidate_urls = {
+            notify.canonical_post_url({"post_url": value})
+            for value in (getattr(args, "candidate_url", None) or [])
+            if notify.canonical_post_url({"post_url": value})
+        }
+        if bool(getattr(args, "materialize_only", False)):
+            selected = select_media_materialization_rows(
+                rows,
+                limit=int(args.limit),
+                surface=str(args.surface),
+                candidate_urls=candidate_urls,
+                published_urls=published_urls,
+                published_candidate_ids=published_candidate_ids,
+            )
+        else:
+            selected = select_rows(
+                rows,
+                limit=int(args.limit),
+                surface=str(args.surface),
+                force_regenerate=bool(getattr(args, "force_regenerate", False)),
+                candidate_urls=candidate_urls,
+                published_urls=published_urls,
+                published_candidate_ids=published_candidate_ids,
+            )
         if args.dry_run or not selected:
             return {
                 "ok": True,
@@ -1521,6 +1696,34 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
             url = notify.canonical_post_url(row)
             fetched_item = fetched_by_url.get(url)
             intake = intakes.get(str(row.get("external_publication_id") or "")) or intakes.get(url)
+            if bool(getattr(args, "materialize_only", False)):
+                if content_lane(row) == "article":
+                    fetched = {}
+                    source_transport = "retained_article_intake"
+                elif fetched_item is None:
+                    updates = {
+                        "publication_draft_backfill_status": "media_materialization_pending",
+                        "publication_draft_backfill_reason": fetch_errors.get(url) or "exact source media unavailable",
+                        "publication_draft_backfill_next_attempt_after": (utc_now() + timedelta(hours=1)).isoformat(),
+                        "publication_draft_backfill_provider_called": "false",
+                        "publication_draft_backfill_provider_call_count": 0,
+                    }
+                    upsert_publication_row(pool, ydb, table, row, updates)
+                    results.append({"post_url": url, "status": updates["publication_draft_backfill_status"], "provider_called": False})
+                    continue
+                else:
+                    _text, fetched, source_transport = fetched_item
+                updates = build_media_materialization_updates(row, fetched=fetched)
+                updates["publication_draft_backfill_transport"] = source_transport
+                upsert_publication_row(pool, ydb, table, row, updates)
+                results.append({
+                    "post_url": url,
+                    "status": updates["publication_draft_backfill_status"],
+                    "provider_called": False,
+                })
+                if index + 1 < len(selected):
+                    await asyncio.sleep(random.uniform(float(args.delay_min), float(args.delay_max)))
+                continue
             if content_lane(row) == "article":
                 if not intake:
                     updates = retry_updates(row, transport="retained_article_intake", reason="retained article evidence unavailable")
@@ -1648,6 +1851,7 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--candidate-url", action="append", default=[], help="regenerate only this exact canonical candidate URL; repeatable")
     parser.add_argument("--force-regenerate", action="store_true", help="regenerate a current-version draft; requires --candidate-url")
+    parser.add_argument("--materialize-only", action="store_true", help="repair pending exact media manifests without calling the editorial LLM")
     args = parser.parse_args()
     notify.load_env(args.env_file)
     if args.stage_delay_seconds is None:
@@ -1660,6 +1864,8 @@ def main() -> int:
     args.limit = max(0, min(10, int(args.limit)))
     if args.force_regenerate and not args.candidate_url:
         raise RuntimeError("--force-regenerate requires at least one --candidate-url")
+    if args.force_regenerate and args.materialize_only:
+        raise RuntimeError("--force-regenerate and --materialize-only are mutually exclusive")
     args.llm_budget_id = args.llm_budget_id or os.getenv("REGION_TALK_DRAFT_BACKFILL_BUDGET_ID") or utc_now().strftime("region-talk-draft-backfill-%Y%m%d")
     payload = asyncio.run(execute(args))
     print(json.dumps(payload, ensure_ascii=False))
