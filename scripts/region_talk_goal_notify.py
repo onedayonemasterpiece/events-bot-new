@@ -965,6 +965,23 @@ def verify_reviewed_media_digest(data: bytes, item: dict[str, Any]) -> None:
         raise RuntimeError("materialized source media differs from reviewed_content_sha256")
 
 
+def download_reviewed_direct_media(ref: str, *, kind: str) -> bytes:
+    """Refetch direct media with the producer's content-negotiation contract."""
+
+    headers = {"User-Agent": "Mozilla/5.0 RegionTalkImageDiagnostic/1.0"}
+    if kind == "image":
+        # Several publisher CDNs serve WebP to ImageDiagnostic and JPEG to a
+        # bare urllib request at the same URL.  The reviewed digest covers the
+        # negotiated bytes, so delivery must reproduce that exact request.
+        headers["Accept"] = "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"
+    request = urllib.request.Request(ref, headers=headers)
+    with urllib.request.urlopen(request, timeout=25) as response:
+        payload = response.read(25 * 1024 * 1024 + 1)
+    if len(payload) > 25 * 1024 * 1024:
+        raise RuntimeError("Region Talk media exceeds 25 MiB materialization limit")
+    return payload
+
+
 def manifest_item_message_id(item: dict[str, Any]) -> int | None:
     """Return the exact Telegram message id encoded by a manifest media id."""
 
@@ -1064,13 +1081,7 @@ async def materialize_telethon_media(client: Any, row: dict[str, Any]) -> list[A
         if Path(ref).is_file():
             data = Path(ref).read_bytes()
         elif re.match(r"https?://", ref, re.I):
-            def download() -> bytes:
-                with urllib.request.urlopen(ref, timeout=25) as response:
-                    payload = response.read(25 * 1024 * 1024 + 1)
-                if len(payload) > 25 * 1024 * 1024:
-                    raise RuntimeError("Region Talk media exceeds 25 MiB materialization limit")
-                return payload
-            data = await asyncio.to_thread(download)
+            data = await asyncio.to_thread(download_reviewed_direct_media, ref, kind=kind)
         else:
             raise RuntimeError("media manifest item has no materializable URL/path/source post")
         verify_reviewed_media_digest(data, item)
