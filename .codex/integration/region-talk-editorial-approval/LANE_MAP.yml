@@ -1,6 +1,6 @@
 mode: worktree_worker
 repo: /home/dev/projects/events-bot-new
-base_ref: origin/main@2e9996f4ba8fca9fd8cf436b0b1fbd8b319e8802
+base_ref: origin/main@d08ecf320d231e6b934715a5930b3d6d92c771ac
 base_branch: main
 integration_branch: integration/region-talk-editorial-approval
 global_constraints:
@@ -40,7 +40,7 @@ lanes:
     branch: agent/region-talk-editorial/runtime-discovery
     worktree: /home/dev/projects/events-bot-new-region-talk-runtime-discovery-20260801
     writable_files: [kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py, scheduling.py, scripts/region_talk_scheduled_runner.py, fly.toml]
-    status: spawned
+    status: merged
   - id: reaction-code
     role: worker
     requirement_ids: [R03]
@@ -49,7 +49,7 @@ lanes:
     branch: agent/region-talk-editorial/reactions
     worktree: /home/dev/projects/events-bot-new-region-talk-reactions-20260801
     writable_files: [scripts/region_talk_reaction_sync.py, scripts/region_talk_goal_notify.py, scripts/region_talk_publication_plan.py]
-    status: spawned
+    status: merged
   - id: visual-code
     role: worker
     requirement_ids: [R05, R06]
@@ -58,14 +58,26 @@ lanes:
     branch: agent/region-talk-editorial/visual-association
     worktree: /home/dev/projects/events-bot-new-region-talk-visual-association-20260801
     writable_files: [kaggle/RegionTalkImageDiagnostic/region_talk_image_diagnostic.py]
-    status: spawned
+    status: merged
+  - id: browser-code
+    role: worker
+    requirement_ids: []
+    supports: [R05, R06]
+    target: bounded Playwright bridge for JS-only article source media
+    depends_on: [visual-code]
+    execution_mode: serial_after_dependency
+    branch: agent/region-talk-editorial/browser-materializer
+    worktree: /home/dev/projects/events-bot-new-region-talk-browser-materializer-20260801
+    writable_files: [scripts/region_talk_article_browser_materialize.py, Dockerfile]
+    status: merged
   - id: writer-regeneration
     role: planner
-    requirement_ids: [R04, R08]
+    requirement_ids: [R08]
+    supports: [R04]
     target: history-aware two-paragraph composer and new operator deliveries
     depends_on: [reaction-code, visual-code, Gemini manual review]
     execution_mode: serial_after_dependency
     branch: integration/region-talk-editorial-approval
     worktree: /home/dev/projects/events-bot-new-region-talk-editorial-integration-20260801
     writable_files: [scripts/region_talk_publication_finalizer.py, scripts/region_talk_publication_draft_backfill.py, kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py]
-    status: planned
+    status: merged
