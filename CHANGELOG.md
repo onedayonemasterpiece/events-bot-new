@@ -16,6 +16,10 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- The two unlinked focus-group connectivity diagnostics now use the same
+  release-aware robots and canonical contract as every other private focus
+  route. Production root builds no longer fail after rendering all pages,
+  while secret review candidates retain the stricter `nosnippet` policy.
 - The generated mobile-rail crop release gate no longer blocks every build
   after its historical Pianissimo date leaves the active catalog. While the
   real row is current the gate still checks its generated DOM; afterwards it

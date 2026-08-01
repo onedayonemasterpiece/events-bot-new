@@ -123,6 +123,8 @@ test('private focus routes add nosnippet only in secret-candidate mode', () => {
     '../src/pages/fokus-gruppa/priglashenie/index.astro',
     '../src/pages/fokus-gruppa/kollektsiya/index.astro',
     '../src/pages/fokus-gruppa/zavershenie/index.astro',
+    '../src/pages/fokus-gruppa/diagnostika/index.astro',
+    '../src/pages/fokus-gruppa/diagnostika-ustoychivost/index.astro',
     '../src/pages/zakrytaya-afisha/index.astro',
   ];
   for (const path of routes) {
@@ -147,11 +149,13 @@ test('private focus routes keep self-canonical URLs in root and candidate builds
     ['../src/pages/fokus-gruppa/priglashenie/index.astro', '/fokus-gruppa/priglashenie/'],
     ['../src/pages/fokus-gruppa/kollektsiya/index.astro', '/fokus-gruppa/kollektsiya/'],
     ['../src/pages/fokus-gruppa/zavershenie/index.astro', '/fokus-gruppa/zavershenie/'],
+    ['../src/pages/fokus-gruppa/diagnostika/index.astro', '/fokus-gruppa/diagnostika/'],
+    ['../src/pages/fokus-gruppa/diagnostika-ustoychivost/index.astro', '/fokus-gruppa/diagnostika-ustoychivost/'],
     ['../src/pages/zakrytaya-afisha/index.astro', '/zakrytaya-afisha/'],
   ];
   for (const [path, canonicalPath] of routes) {
     const source = readFileSync(new URL(path, import.meta.url), 'utf8');
-    assert.match(source, /import \{[^}]*absoluteUrl[^}]*withBase[^}]*\}/u);
+    assert.match(source, /import \{[^}]*absoluteUrl[^}]*\}/u);
     assert.ok(
       source.includes(`<link rel="canonical" href={absoluteUrl('${canonicalPath}')} />`),
       `${path} must self-canonicalize through the active build base`,
