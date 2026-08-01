@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Fixed static-site Smart Update recovery after a Fly deploy: an exact remote
+  owner whose Kaggle ledger is already terminal is re-armed immediately instead
+  of blocking later coalesced builds for the full live-run timeout; abandoned
+  runner staging is now reclaimed under the shared lock before the host
+  capacity probe can deadlock recovery. Fly deploy contexts now also exclude
+  reproducible Astro dependencies and generated site trees.
+
 ### Added
 - Registered operator-provided `GOOGLE_API_KEY6` as a separately accounted
   shared-limiter lane and added it to the gateway-owned normal rotation pool

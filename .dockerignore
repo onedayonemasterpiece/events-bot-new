@@ -21,5 +21,8 @@ tmp/
 tmp
 scripts/tmp_*
 tests/
+site/node_modules/
+site/dist/
+site/.preview-dist-*/
 *.sqlite
 *.zip

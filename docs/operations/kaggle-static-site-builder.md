@@ -95,6 +95,15 @@ Rules:
 - one private input dataset per run;
 - one immutable snapshot per build; new updates during a build queue a later build, they do not mutate the running build;
 - resource lease: `static_site:builder`; two production builds must not publish concurrently;
+- after a Fly restart, a matching terminal Kaggle ledger row immediately
+  re-arms its exact JobOutbox owner for adoption/failure reconciliation; later
+  Smart Updates do not wait for the live-run timeout behind completed work;
+- the Fly owner and runner share one non-blocking file lock for abandoned
+  staging cleanup, so a killed process cannot leave a large dataset that makes
+  the host capacity probe prevent the cleanup code itself from starting;
+- local Astro dependencies and generated `site/dist`/temporary preview trees
+  are excluded from the Fly Docker context; a deploy no longer uploads hundreds
+  of megabytes of reproducible frontend output before the remote image build;
 - the kernel releases every acquired builder lease before sending its final
   `report_written` callback, so an immediate worker teardown cannot strand an
   exclusive lease; resource-acquisition failures are inside the guarded
