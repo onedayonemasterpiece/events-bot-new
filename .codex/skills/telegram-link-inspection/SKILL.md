@@ -9,9 +9,11 @@ description: Read a small, explicit set of Telegram posts through the repository
 
 - For one exact message during an already-authorized local E2E session, use `scripts/read_telegram_message.py`.
 - For multiple exact links or the latest bounded messages from one or more chats/channels, use `scripts/telegram_read.py`.
-- In GitHub Actions, use only `.github/workflows/telegram-read.yml` and the secret role `TELEGRAM_AUTH_BUNDLE_GH_ACTIONS`.
+- In GitHub Actions, use only `.github/workflows/telegram-read.yml` and the session role `TELEGRAM_AUTH_BUNDLE_GH_ACTIONS`.
 
 Never reuse `TELEGRAM_AUTH_BUNDLE_E2E`, `TELEGRAM_AUTH_BUNDLE_S22`, `TELEGRAM_SESSION`, publishing sessions, or monitoring sessions for the GitHub Actions reader.
+
+A `StringSession` does not contain Telegram app credentials. Prefer `TELEGRAM_GH_ACTIONS_API_ID` and `TELEGRAM_GH_ACTIONS_API_HASH` Actions secrets when the bundle does not include `api_id` and `api_hash`. Existing shared app credentials may be reused by the workflow, but the user session must never fall back to another role.
 
 ## Build a bounded request
 
