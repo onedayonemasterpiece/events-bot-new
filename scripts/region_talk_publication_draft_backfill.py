@@ -31,15 +31,16 @@ if str(ROOT / "kaggle" / "RegionTalkCandidateReport") not in sys.path:
 import region_talk_candidate_report as rt  # type: ignore  # noqa: E402
 from region_talk_llm_runtime import DurableGeminiBudget  # noqa: E402
 from scripts import region_talk_goal_notify as notify  # noqa: E402
+from scripts import region_talk_publication_finalizer as finalizer  # noqa: E402
 from scripts.region_talk_vk_media_prefetch import local_vk_posts, parse_vk_post  # noqa: E402
 
 
-DRAFT_BACKFILL_VERSION = "region_talk_publication_draft_backfill_v3_no_not_a_cliche"
+DRAFT_BACKFILL_VERSION = "region_talk_publication_draft_backfill_v4_publisher_reader_brief"
 EDITORIAL_WRITER_VERSION = notify.EDITORIAL_WRITER_VERSION
 EDITORIAL_INPUT_CONTRACT = "region_talk_editorial_onboarding_input_v2"
 EDITORIAL_OUTPUT_CONTRACT = notify.EDITORIAL_OUTPUT_CONTRACT
 MEDIA_MATERIALIZATION_CONTRACT_VERSION = "region_talk_media_materialization_v1"
-LEGACY_REVIEW_MIGRATION_VERSION = "region_talk_legacy_review_to_v9_v2"
+LEGACY_REVIEW_MIGRATION_VERSION = "region_talk_legacy_review_to_v10_v3"
 DRAFT_FIELDS = (
     "publication_draft_status",
     "publication_draft_title",
@@ -63,6 +64,24 @@ DRAFT_FIELDS = (
     "publication_media_materialization_reason",
     "publication_media_materialization_contract_version",
     "publication_presentation_manifest_json",
+)
+SOURCE_ONBOARDING_FIELDS = (
+    "source_onboarding_status",
+    "source_onboarding_paragraph",
+    "source_onboarding_profile_id",
+    "source_onboarding_profile_fingerprint",
+    "source_onboarding_writer_fingerprint",
+    "source_onboarding_writer_prompt_version",
+    "source_onboarding_entity_type",
+    "source_onboarding_claim_ids_json",
+    "source_onboarding_evidence_ids_json",
+    "source_onboarding_selected_angle_id",
+    "source_onboarding_publisher_dimensions_json",
+    "source_onboarding_publisher_dimensions_status",
+    "source_onboarding_summary_kind",
+    "source_onboarding_llm_status",
+    "source_onboarding_llm_reason",
+    "source_onboarding_paragraph_chars",
 )
 TERMINAL_BACKFILL_STATUSES = {
     "ready",
@@ -309,6 +328,26 @@ def build_editorial_evidence(
     onboarding = str(row.get("source_onboarding_paragraph") or "").strip()
     if str(row.get("source_onboarding_status") or "") == "ready" and onboarding:
         evidence.append({"evidence_id": "source.profile", "kind": "source_profile_fact", "text": onboarding})
+    required_publisher_evidence_ids: list[str] = []
+    if content_lane(row) == "article":
+        try:
+            publisher_dimensions = json.loads(str(row.get("source_onboarding_publisher_dimensions_json") or "{}"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            publisher_dimensions = {}
+        if isinstance(publisher_dimensions, dict):
+            for key in ("outlet_identity", "intended_audience", "distinctive_value"):
+                value = publisher_dimensions.get(key) if isinstance(publisher_dimensions.get(key), dict) else {}
+                text = str(value.get("text") or "").strip()
+                if not text:
+                    continue
+                evidence_id = "source.publisher." + key
+                evidence.append({
+                    "evidence_id": evidence_id,
+                    "kind": "source_profile_fact",
+                    "text": text,
+                    "upstream_evidence_ids": [str(ref) for ref in (value.get("evidence_ids") or []) if str(ref)],
+                })
+                required_publisher_evidence_ids.append(evidence_id)
     if source_text.strip():
         evidence.append({
             "evidence_id": "content.exact_text",
@@ -360,6 +399,7 @@ def build_editorial_evidence(
         },
         "source_profile": {"name": source_name, "url": source_url},
         "evidence": list(unique.values()),
+        "required_publisher_evidence_ids": required_publisher_evidence_ids,
         "visual_hook_evidence_ids": visual_ids,
         "fetched": dict(fetched or {}),
     }
@@ -372,7 +412,12 @@ def editorial_paragraphs(text: str) -> tuple[str, str]:
     return (parts[0] if parts else "", parts[1] if len(parts) > 1 else "")
 
 
-def validate_editorial_output(output: dict[str, Any], evidence_ids: set[str]) -> list[str]:
+def validate_editorial_output(
+    output: dict[str, Any],
+    evidence_ids: set[str],
+    *,
+    required_publisher_evidence_ids: set[str] | None = None,
+) -> list[str]:
     violations: list[str] = []
     public_copy = output.get("public_copy") if isinstance(output.get("public_copy"), dict) else {}
     raw_p1 = str(public_copy.get("paragraph_1") or "").strip()
@@ -410,6 +455,17 @@ def validate_editorial_output(output: dict[str, Any], evidence_ids: set[str]) ->
             violations.append("unknown_or_empty_evidence_id")
         if item.get("third_person_maintained") is not True:
             violations.append("third_person_not_confirmed")
+    required_publisher_evidence_ids = set(required_publisher_evidence_ids or set())
+    if required_publisher_evidence_ids:
+        paragraph_one_refs = {
+            str(ref)
+            for item in grounding
+            if isinstance(item, dict) and str(item.get("paragraph_index") or "") == "1"
+            for ref in (item.get("evidence_ids") or [])
+            if str(ref)
+        }
+        if not required_publisher_evidence_ids.issubset(paragraph_one_refs):
+            violations.append("missing_publisher_reader_brief")
     return sorted(set(violations))
 
 
@@ -876,6 +932,7 @@ def _stage_prompt(stage: str, payload: dict[str, Any]) -> str:
                 "status": "draft_ready|insufficient_evidence|policy_conflict",
                 "public_copy": {"paragraph_1": "150-500 chars", "paragraph_2": "150-500 chars"},
                 "grounding_map": [{
+                    "paragraph_index": "1|2",
                     "sentence_index": 1,
                     "sentence_text": "exact sentence",
                     "claim_type": "source_profile_fact|content_fact|source_impression|visual_observation|history_bridge",
@@ -884,7 +941,7 @@ def _stage_prompt(stage: str, payload: dict[str, Any]) -> str:
                 }],
             },
             "rules": [
-                "Paragraph 1: source/author, proven non-regional optic and optional honest bridge.",
+                "Paragraph 1: source/author, proven non-regional optic and optional honest bridge. For an article lane, it must cover every required_publisher_evidence_id so the reader learns the outlet type, intended audience and distinctive value before the article lead.",
                 "Paragraph 2: 1-2 concrete observations from the material, strictly in third person, and a real reason to open the original.",
                 "Do not use first-person plural for another author's experience.",
                 "Warm observational editorial tone; no clickbait, PR jargon, dossier or exhaustive summary.",
@@ -897,7 +954,7 @@ def _stage_prompt(stage: str, payload: dict[str, Any]) -> str:
         task = {
             "task": "Critique the draft against evidence and strategy. Return JSON only.",
             "output": {"status": "pass|rewrite|reject", "reason_codes": ["string"], "feedback": "concise Russian rewrite instruction"},
-            "hard_fails": ["unsupported_claim", "voice_violation", "visual_hallucination", "forced_history_bridge", "wrong_language", "not_exactly_two_paragraphs", "contrastive_not_a_cliche"],
+            "hard_fails": ["unsupported_claim", "voice_violation", "visual_hallucination", "forced_history_bridge", "wrong_language", "not_exactly_two_paragraphs", "contrastive_not_a_cliche", "missing_publisher_reader_brief"],
             "pass_only_if": "Both paragraphs are grounded, distinct, editorial, specific and motivate opening the original without replacing it.",
         }
     return json.dumps({**common, **task, "input": payload}, ensure_ascii=False)
@@ -999,6 +1056,9 @@ def generate_editorial_draft(
         }, calls)
 
     evidence_ids = {str(item.get("evidence_id")) for item in evidence_pack.get("evidence") or [] if isinstance(item, dict)}
+    required_publisher_ids = {
+        str(value) for value in (evidence_pack.get("required_publisher_evidence_ids") or []) if str(value)
+    }
     used_history = set(str(value) for value in (strategy.get("used_history_urls") or []))
     allowed_history = {str(item.get("candidate_url") or "") for item in history}
     if (
@@ -1026,7 +1086,9 @@ def generate_editorial_draft(
             "publication_draft_history_json": history_raw,
             "publication_draft_editorial_plan_json": json.dumps(strategy, ensure_ascii=False, separators=(",", ":")),
         }, calls)
-    violations = validate_editorial_output(writer, evidence_ids)
+    violations = validate_editorial_output(
+        writer, evidence_ids, required_publisher_evidence_ids=required_publisher_ids,
+    )
     attempts = 1
     if violations:
         retry_payload = {**writer_payload, "previous_draft": writer, "deterministic_feedback": violations}
@@ -1046,7 +1108,12 @@ def generate_editorial_draft(
                 "publication_draft_evidence_json": evidence_raw,
                 "publication_draft_history_json": history_raw,
             }, calls)
-        violations = validate_editorial_output(writer, evidence_ids) if writer.get("_stage_status") == "ok" else ["writer_retry_failed"]
+        violations = (
+            validate_editorial_output(
+                writer, evidence_ids, required_publisher_evidence_ids=required_publisher_ids,
+            )
+            if writer.get("_stage_status") == "ok" else ["writer_retry_failed"]
+        )
     if violations or writer.get("status") != "draft_ready":
         return ({
             "publication_draft_backfill_status": "needs_grounding_review",
@@ -1095,7 +1162,9 @@ def generate_editorial_draft(
                 "publication_draft_evidence_json": evidence_raw,
                 "publication_draft_history_json": history_raw,
             }, calls)
-        violations = validate_editorial_output(writer, evidence_ids)
+        violations = validate_editorial_output(
+            writer, evidence_ids, required_publisher_evidence_ids=required_publisher_ids,
+        )
         if not violations:
             critic_payload["draft"] = writer
             critic, called = call_editorial_stage(
@@ -1113,7 +1182,13 @@ def generate_editorial_draft(
                     "publication_draft_evidence_json": evidence_raw,
                     "publication_draft_history_json": history_raw,
                 }, calls)
-    if critic.get("_stage_status") != "ok" or critic.get("status") != "pass" or validate_editorial_output(writer, evidence_ids):
+    if (
+        critic.get("_stage_status") != "ok"
+        or critic.get("status") != "pass"
+        or validate_editorial_output(
+            writer, evidence_ids, required_publisher_evidence_ids=required_publisher_ids,
+        )
+    ):
         return ({
             "publication_draft_backfill_status": "needs_grounding_review",
             "publication_draft_backfill_reason": str(critic.get("reason_codes") or critic.get("reason") or "critic_not_passed")[:500],
@@ -1241,6 +1316,12 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         external_intakes = notify.read_kind_rows(
             pool, ydb, table, "external_publication_intake_item", int(args.scan_limit)
         )
+        external_sources = notify.read_kind_rows(
+            pool, ydb, table, "external_publication_source_item", int(args.scan_limit)
+        )
+        onboarding_profiles = notify.read_kind_rows(
+            pool, ydb, table, "source_onboarding_profile_item", int(args.scan_limit)
+        )
         image_rows = notify.read_kind_rows(
             pool, ydb, table, "image_queue_item", int(args.scan_limit)
         )
@@ -1269,6 +1350,16 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
             if publication_candidate_id(item)
         }
         intakes = article_intake_index(external_intakes)
+        external_sources_by_key = {
+            finalizer.canonical_source_key_for_row(item): item
+            for item in external_sources
+            if finalizer.canonical_source_key_for_row(item)
+        }
+        onboarding_profiles_by_key = {
+            str(item.get("canonical_source_key") or "").strip().lower(): item
+            for item in onboarding_profiles
+            if str(item.get("canonical_source_key") or "").strip()
+        }
         selected = select_rows(
             rows,
             limit=int(args.limit),
@@ -1327,6 +1418,58 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
                     results.append({"post_url": url, "status": updates["publication_draft_backfill_status"]})
                     continue
                 text, fetched, source_transport = "", {}, "retained_article_intake"
+                source_key = finalizer.canonical_source_key_for_row(row)
+                evidence_row = finalizer.build_source_onboarding_evidence(
+                    external_sources_by_key.get(source_key),
+                    [],
+                    row,
+                    external_intake=intake,
+                )
+                row["_source_onboarding_evidence"] = evidence_row
+                row["_source_onboarding_profile"] = onboarding_profiles_by_key.get(source_key, {})
+                enriched, profile_rows, _onboarding_stats = finalizer.enrich_accepted_rows_with_onboarding(
+                    [row],
+                    max_llm=2,
+                    model=model,
+                    default_env_var_name=default_env,
+                    durable_budget=budget,
+                )
+                row = enriched[0]
+                finalizer.write_source_onboarding_rows(
+                    pool,
+                    ydb,
+                    table,
+                    evidence_rows=[evidence_row],
+                    profile_rows=profile_rows,
+                    run_id=str(args.llm_budget_id),
+                )
+                for profile in profile_rows:
+                    profile_key = str(profile.get("canonical_source_key") or "").strip().lower()
+                    if profile_key:
+                        onboarding_profiles_by_key[profile_key] = profile
+                onboarding_updates = {
+                    field: row.get(field)
+                    for field in SOURCE_ONBOARDING_FIELDS
+                    if row.get(field) not in (None, "")
+                }
+                if not (
+                    str(row.get("source_onboarding_status") or "") == "ready"
+                    and str(row.get("source_onboarding_publisher_dimensions_status") or "") == "ready"
+                    and str(row.get("source_onboarding_summary_kind") or "") == notify.PUBLISHER_READER_BRIEF_KIND
+                ):
+                    updates = {
+                        **onboarding_updates,
+                        **retry_updates(
+                            row,
+                            transport=source_transport,
+                            reason="publisher_reader_brief_not_ready",
+                        ),
+                        "publication_draft_backfill_status": "needs_grounding_review",
+                        "publication_draft_backfill_next_attempt_after": "",
+                    }
+                    upsert_publication_row(pool, ydb, table, row, updates)
+                    results.append({"post_url": url, "status": updates["publication_draft_backfill_status"]})
+                    continue
             elif fetched_item is None:
                 source_transport = "vk_api" if social_post_surface(url) == "vk" else str(args.transport)
                 updates = retry_updates(
@@ -1350,6 +1493,8 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
                 default_env=default_env,
                 budget=budget,
             )
+            if content_lane(row) == "article":
+                updates = {**onboarding_updates, **updates}
             upsert_publication_row(pool, ydb, table, row, updates)
             results.append({
                 "post_url": url,

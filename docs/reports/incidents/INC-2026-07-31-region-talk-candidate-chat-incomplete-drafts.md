@@ -67,6 +67,10 @@ rows, proving that the data existed but publication preparation had not run.
 - 2026-08-01 10:19 UTC — the last newly ready article was delivered through
   idle role-scoped `telethon_discovery2` as operator message `33776`; the
   subsequent read-only notifier probe reported zero unsent ready candidates.
+- 2026-08-01 — operator review of Archi.ru exposes a second completeness gap:
+  an external-publication draft can describe the current article without a
+  useful overview of the outlet. Writer v10 therefore requires a grounded
+  three-part publisher reader brief before an article can become ready.
 
 ## Root Cause
 
@@ -113,6 +117,9 @@ rows, proving that the data existed but publication preparation had not run.
 ### Mandatory checks before closure or deploy
 
 - incomplete drafts cannot be sent or occupy daily schedule slots;
+- external-publication drafts cannot become ready until the reader can identify
+  the outlet, its intended audience and its distinctive editorial value from
+  grounded source-level evidence;
 - Telegram and VK draft debt is measured and processed independently;
 - only an idle role-scoped discovery bundle may be used; E2E and generic
   Telegram sessions never enter the functional pipeline;
@@ -161,6 +168,8 @@ retries duplicate messages.
 - [ ] Observe the next post-deploy natural slot to completion; this is a
   monitoring/closure check, not a blocker for the already active autonomous
   discovery-to-operator pipeline.
+- [ ] Complete the writer-v10 catch-up for every confirmed candidate, deliver
+  the new exact revisions and rebuild the anti-vector plan.
 
 ## Release And Closure Evidence
 

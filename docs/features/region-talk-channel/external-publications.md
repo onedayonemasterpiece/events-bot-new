@@ -276,7 +276,7 @@ agent fetched its registry snapshot.
 
 ## Operator chat and ranking
 
-Candidate messages now show the original link, source link, overall score, image score, postcardness, verifier reason, and `О публикации` for editorial/academic origin. Automatic confirmed-candidate delivery remains idempotent.
+Candidate revisions show the original link, source link, scores and verifier reason. Editorial/academic rows also pass a reusable publisher reader brief through the LLM-first source-profile stage. The brief must explain outlet type, intended audience and distinctive editorial value from copy-supported research evidence; the staged public-copy Writer incorporates it into paragraph one while paragraph two remains specific to the selected article. Automatic confirmed-candidate delivery remains fingerprint-idempotent.
 
 ### Article galleries and editorial image suitability
 

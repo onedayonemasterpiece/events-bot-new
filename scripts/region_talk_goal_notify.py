@@ -37,9 +37,13 @@ if str(ROOT) not in sys.path:
 PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v5"
 AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v3"
 OPERATOR_REVIEW_PAYLOAD_VERSION = "region_talk_operator_review_payload_v1"
-EDITORIAL_WRITER_VERSION = "region_talk_editorial_onboarding_writer_v9_no_not_a_cliche"
-EDITORIAL_OUTPUT_CONTRACT = "region_talk_editorial_onboarding_output_v3"
+EDITORIAL_WRITER_VERSION = "region_talk_editorial_onboarding_writer_v10_publisher_reader_brief"
+EDITORIAL_OUTPUT_CONTRACT = "region_talk_editorial_onboarding_output_v4"
 MEDIA_MATERIALIZATION_CONTRACT_VERSION = "region_talk_media_materialization_v1"
+PUBLISHER_READER_BRIEF_KIND = "publisher_reader_brief_v1"
+PUBLISHER_READER_BRIEF_DIMENSIONS = {
+    "outlet_identity", "intended_audience", "distinctive_value",
+}
 
 _NOT_TOKEN = r"(?<![A-Za-zА-Яа-яЁё0-9_])[Нн][Ее](?![A-Za-zА-Яа-яЁё0-9_])"
 _A_TOKEN = r"[Аа](?![A-Za-zА-Яа-яЁё0-9_])"
@@ -551,6 +555,31 @@ def is_publication_draft_ready(row: dict[str, Any]) -> bool:
         "publication_draft_vk_text",
     )):
         return False
+    if str(row.get("content_origin_type") or "") in {
+        "editorial_publication", "academic_publication",
+    }:
+        if not (
+            str(row.get("source_onboarding_status") or "") == "ready"
+            and str(row.get("source_onboarding_paragraph") or "").strip()
+            and str(row.get("source_onboarding_publisher_dimensions_status") or "") == "ready"
+            and str(row.get("source_onboarding_summary_kind") or "") == PUBLISHER_READER_BRIEF_KIND
+        ):
+            return False
+        try:
+            dimensions = json.loads(str(row.get("source_onboarding_publisher_dimensions_json") or "{}"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return False
+        if not (
+            isinstance(dimensions, dict)
+            and set(dimensions) == PUBLISHER_READER_BRIEF_DIMENSIONS
+            and all(
+                isinstance(dimensions.get(key), dict)
+                and str(dimensions[key].get("text") or "").strip()
+                and bool(dimensions[key].get("evidence_ids"))
+                for key in PUBLISHER_READER_BRIEF_DIMENSIONS
+            )
+        ):
+            return False
     try:
         points = json.loads(str(row.get("publication_draft_fact_points_json") or "[]"))
     except (TypeError, ValueError, json.JSONDecodeError):

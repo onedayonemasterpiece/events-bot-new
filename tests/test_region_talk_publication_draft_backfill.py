@@ -119,6 +119,8 @@ def test_execute_reads_supporting_kinds_through_notifier_namespace() -> None:
     assert driver.stopped is True
     assert kinds == [
         "external_publication_intake_item",
+        "external_publication_source_item",
+        "source_onboarding_profile_item",
         "image_queue_item",
         "publication_schedule_item",
         "publication_log_item",
@@ -202,6 +204,25 @@ def test_execute_article_uses_retained_intake_without_social_fetch_unpack(monkey
     monkeypatch.setattr(mod, "DurableGeminiBudget", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(mod, "collect_source_texts", mock.AsyncMock(return_value=({}, {})))
     monkeypatch.setattr(
+        mod.finalizer,
+        "build_source_onboarding_evidence",
+        lambda *_args, **_kwargs: {"source_profile_id": "profile-1", "evidence_status": "sufficient"},
+    )
+    def enrich(rows, **_kwargs):
+        rows[0].update({
+            "source_onboarding_status": "ready",
+            "source_onboarding_paragraph": "Проверенная сводка об издании для читателя.",
+            "source_onboarding_publisher_dimensions_status": "ready",
+            "source_onboarding_publisher_dimensions_json": json.dumps({
+                key: {"text": key, "evidence_ids": ["E1"]}
+                for key in ("outlet_identity", "intended_audience", "distinctive_value")
+            }),
+            "source_onboarding_summary_kind": mod.notify.PUBLISHER_READER_BRIEF_KIND,
+        })
+        return rows, [], {}
+    monkeypatch.setattr(mod.finalizer, "enrich_accepted_rows_with_onboarding", enrich)
+    monkeypatch.setattr(mod.finalizer, "write_source_onboarding_rows", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(
         mod,
         "build_draft_updates",
         lambda _row, **kwargs: ({"publication_draft_backfill_status": "ready"}, False),
@@ -215,7 +236,8 @@ def test_execute_article_uses_retained_intake_without_social_fetch_unpack(monkey
     result = asyncio.run(mod.execute(args))
 
     assert result["ready_total"] == 1
-    assert written == [{"publication_draft_backfill_status": "ready"}]
+    assert written[0]["publication_draft_backfill_status"] == "ready"
+    assert written[0]["source_onboarding_publisher_dimensions_status"] == "ready"
 
 
 def test_request_fingerprint_changes_with_exact_source_text() -> None:
@@ -294,6 +316,26 @@ def test_v8_validator_requires_at_least_95_percent_cyrillic() -> None:
     assert "russian_language" in mod.validate_editorial_output(
         output, {"source.name", "content.exact_text"}
     )
+
+
+def test_article_writer_must_ground_all_publisher_reader_brief_dimensions_in_first_paragraph() -> None:
+    mod = load_module()
+    output = _valid_writer_output(mod)
+    required = {
+        "source.publisher.outlet_identity",
+        "source.publisher.intended_audience",
+        "source.publisher.distinctive_value",
+    }
+    evidence_ids = {"source.name", "content.exact_text", *required}
+    assert "missing_publisher_reader_brief" in mod.validate_editorial_output(
+        output, evidence_ids, required_publisher_evidence_ids=required,
+    )
+    output["grounding_map"][0]["paragraph_index"] = 1
+    output["grounding_map"][0]["evidence_ids"] = ["source.name", *sorted(required)]
+    output["grounding_map"][1]["paragraph_index"] = 2
+    assert mod.validate_editorial_output(
+        output, evidence_ids, required_publisher_evidence_ids=required,
+    ) == []
 
 
 def test_v9_validator_rejects_banned_not_a_construction() -> None:

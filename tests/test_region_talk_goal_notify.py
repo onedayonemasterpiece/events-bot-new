@@ -326,6 +326,48 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "contrastive_not_a_cliche"):
             mod.public_caption(row)
 
+    def test_article_readiness_requires_grounded_publisher_reader_brief(self) -> None:
+        mod = load_module()
+        p1 = (
+            "Профильное архитектурное издание публикует проектные разборы для архитекторов, "
+            "урбанистов и читателей, которые хотят понимать устройство современной среды. "
+            "Его материалы связывают профессиональные решения с опытом посетителя и города."
+        )
+        p2 = (
+            "В текущей статье автор прослеживает маршрут по музейному корпусу, устройство "
+            "аквариумов и работу навигации. Оригинал полезен подробными фотографиями, планами "
+            "и последовательным объяснением архитектурной концепции калининградского объекта. "
+            "Материал показывает логику проекта на конкретных пространственных решениях."
+        )
+        dimensions = {
+            key: {"text": key, "evidence_ids": ["E1"]}
+            for key in mod.PUBLISHER_READER_BRIEF_DIMENSIONS
+        }
+        row = {
+            "content_origin_type": "editorial_publication",
+            "post_url": "https://example.org/article",
+            "source_url": "https://example.org",
+            "source_title": "Архитектурное издание",
+            "publication_draft_status": "ready_for_operator_review",
+            "publication_draft_title": "Музейный маршрут",
+            "publication_draft_source_attribution": "Архитектурное издание",
+            "publication_draft_telegram_text": f"{p1}\n\n{p2}\n\nИсточник: Архитектурное издание\nОригинал: https://example.org/article",
+            "publication_draft_vk_text": f"{p1}\n\n{p2}\n\nИсточник: Архитектурное издание\nОригинал: https://example.org/article",
+            "publication_draft_fact_points_json": '[{"claim":"Факт","evidence_ids":["E1"]}]',
+            "publication_draft_prompt_version": mod.EDITORIAL_WRITER_VERSION,
+            "publication_draft_contract_version": mod.EDITORIAL_OUTPUT_CONTRACT,
+            "publication_media_materialization_status": "ready",
+            "publication_media_materialization_contract_version": mod.MEDIA_MATERIALIZATION_CONTRACT_VERSION,
+            "source_onboarding_status": "ready",
+            "source_onboarding_paragraph": "Краткая доказательная сводка об издании.",
+            "source_onboarding_publisher_dimensions_status": "ready",
+            "source_onboarding_publisher_dimensions_json": json.dumps(dimensions, ensure_ascii=False),
+            "source_onboarding_summary_kind": mod.PUBLISHER_READER_BRIEF_KIND,
+        }
+        self.assertTrue(mod.is_publication_draft_ready(row))
+        row.pop("source_onboarding_publisher_dimensions_json")
+        self.assertFalse(mod.is_publication_draft_ready(row))
+
     def test_reviewed_media_digest_is_verified_before_delivery(self) -> None:
         mod = load_module()
         data = b"exact-reviewed-source-media"

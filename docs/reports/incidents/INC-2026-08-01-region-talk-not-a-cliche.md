@@ -52,6 +52,13 @@ exact pattern in the Telegram and VK fields of
 - 2026-08-01 — all 23 confirmed candidates are selected for bounded backfill
   attempts. The post-write audit finds zero banned-pattern matches; provider
   RPD exhaustion leaves a documented retry/manual-review tail.
+- 2026-08-01 20:21 UTC — legacy operator message `33783` is repaired in place
+  from the verified current Archi.ru revision; a subsequent candidate-chat
+  scan finds zero style-pattern matches in candidate messages.
+- 2026-08-01 — the deferred tail is reopened under writer v10. External
+  publications also gain a fail-closed publisher reader brief covering outlet
+  identity, intended audience and distinctive editorial value from retained
+  research evidence before final-copy generation.
 
 ## Root Cause
 
@@ -92,6 +99,8 @@ exact pattern in the Telegram and VK fields of
   `needs_grounding_review`;
 - notifier readiness and `public_caption()` fail closed even for a directly
   injected current-version row;
+- external-publication readiness fails closed unless all three publisher brief
+  dimensions have grounded evidence and the final first paragraph cites them;
 - earlier and unversioned writer/backfill fingerprints become actionable,
   while already target-published URL/candidate-ID identities remain immutable;
 - focused tests and the full Region Talk suite pass;
@@ -130,6 +139,8 @@ drafts stale and actionable without changing the semantic publication verdict.
 - [x] verify zero banned patterns in current unpublished confirmed drafts;
 - [ ] finish the quota-deferred retry tail after Gemini RPD reset without
   lowering the model/grounding contract;
+- [ ] deploy writer v10 and finish the complete confirmed-candidate catch-up,
+  including fresh operator messages and a rebuilt anti-vector plan;
 - [ ] observe the next scheduled Region Talk cycle without regression.
 
 ## Release And Closure Evidence

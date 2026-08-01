@@ -684,16 +684,66 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             "source_topic_class": "editorial_publication",
             "source_queue_status": "confirmed_external_publication_research",
             "source_externality_basis": "Федеральное профессиональное издание.",
+            "publisher_source_overview": "Профессиональная платформа об архитектуре для архитекторов, урбанистов и читателей, которые следят за проектами и устройством городской среды.",
+            "publisher_source_overview_evidence_refs_json": '["publisher-about"]',
+            "publisher_profile_evidence_json": json.dumps([{
+                "evidence_id": "publisher-about",
+                "paraphrase": "Навигация и редакционное описание охватывают архитектурные проекты, практику и профессиональную критику.",
+                "url": "https://archi.ru/about",
+            }], ensure_ascii=False),
         }
         indexed = mod.authoritative_source_index({}, {}, {"external:archi": source})
         self.assertEqual(indexed["web:archi.ru"]["source_title"], "Архи.ру")
         evidence = mod.build_source_onboarding_evidence(source, [], {
             "canonical_source_key": "web:archi.ru",
             "post_url": "https://archi.ru/russia/101203/vsya-mudrost-okeana",
+            "content_origin_type": "editorial_publication",
         })
         evidence_pack = json.loads(evidence["evidence_pack_json"])
         self.assertTrue(any(row["kind"] == "external_publication_source" for row in evidence_pack))
         self.assertEqual(evidence["evidence_status"], "sufficient")
+        self.assertGreaterEqual(evidence["publisher_evidence_total"], 2)
+
+    def test_publisher_profile_requires_all_three_reader_brief_dimensions(self) -> None:
+        mod = self.mod
+        source = {
+            "canonical_source_key": "web:publisher.example",
+            "source_title": "Publisher",
+            "source_url": "https://publisher.example",
+            "source_topic_class": "editorial_publication",
+            "publisher_source_overview": "Профессиональное издание об архитектуре и городской среде.",
+            "publisher_source_overview_evidence_refs_json": '["about"]',
+            "publisher_profile_evidence_json": json.dumps([{
+                "evidence_id": "about", "paraphrase": "Издание публикует проектные разборы для архитекторов и интересующихся городской средой."
+            }], ensure_ascii=False),
+        }
+        evidence = mod.build_source_onboarding_evidence(
+            source, [], {"content_origin_type": "editorial_publication", "post_url": "https://publisher.example/a"},
+        )
+        evidence_ids = [item["evidence_id"] for item in json.loads(evidence["evidence_pack_json"])]
+        result = {
+            "llm_gate_status": "ok",
+            "data": {
+                "status": "ready", "entity_type": "media_brand", "profile_summary": "Профильное издание.",
+                "claims": [{"claim_id": "C1", "text": "Пишет об архитектуре", "evidence_ids": [evidence_ids[0]]}],
+                "candidate_angles": [],
+                "publisher_dimensions": {
+                    key: {"text": key, "basis": "editorial_inference", "evidence_ids": [evidence_ids[-1]]}
+                    for key in ("outlet_identity", "intended_audience", "distinctive_value")
+                },
+            },
+        }
+        profile = mod.normalize_source_onboarding_profile(
+            result, evidence, model="gemini-test", profile_fingerprint="fp",
+        )
+        self.assertEqual(profile["profile_status"], "ready")
+        dimensions = json.loads(profile["publisher_dimensions_json"])
+        self.assertEqual(set(dimensions), {"outlet_identity", "intended_audience", "distinctive_value"})
+        del result["data"]["publisher_dimensions"]["intended_audience"]
+        incomplete = mod.normalize_source_onboarding_profile(
+            result, evidence, model="gemini-test", profile_fingerprint="fp2",
+        )
+        self.assertEqual(incomplete["profile_status"], "needs_review")
 
     def test_external_publication_onboarding_prompt_uses_publisher_language(self) -> None:
         mod = self.mod
@@ -814,6 +864,24 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(ready["source_onboarding_status"], "ready")
         self.assertGreaterEqual(len(ready["source_onboarding_paragraph"]), 300)
 
+        cliched = mod.normalize_candidate_onboarding(
+            {"llm_gate_status": "ok", "data": {
+                "status": "ready",
+                "onboarding_paragraph": (
+                    "Автор тревел-канала представляет поездку не как перечень мест, а как личный "
+                    "маршрут по Калининградской области с наблюдениями о городах, побережье и дороге. "
+                    "Текст опирается на опубликованный опыт и помогает читателю понять авторский "
+                    "ракурс перед переходом к оригиналу. Дополнительный контекст раскрывает тему "
+                    "источника и его последовательный интерес к путешествиям."
+                ),
+                "claim_ids": ["C1"], "evidence_ids": ["E1"], "selected_angle_id": "A1",
+            }},
+            profile=good_profile,
+            evidence_row=evidence,
+            writer_fingerprint="writer-cliched-fp",
+        )
+        self.assertEqual(cliched["source_onboarding_status"], "needs_review")
+
     def test_onboarding_reuses_current_profile_and_spends_only_writer_call(self) -> None:
         mod = self.mod
         row = candidate_row(publication_status="gemini_accept", sent_to_chat="false")
@@ -835,7 +903,7 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         }
         row["_source_onboarding_evidence"] = evidence
         row["_source_onboarding_profile"] = profile
-        paragraph = "Тревел-канал публикует личные заметки о поездках и в этом посте показывает Калининградскую область через конкретные впечатления автора. Такой ракурс помогает заранее понять, что перед читателем не рекламная подборка, а опыт посещения с деталями маршрута, наблюдениями и собственным отношением к увиденному в регионе."
+        paragraph = "Тревел-канал публикует личные заметки о поездках и в этом посте показывает Калининградскую область через конкретные впечатления автора. Такой ракурс помогает заранее увидеть личный опыт посещения с деталями маршрута, наблюдениями и собственным отношением автора к увиденному в регионе. Профиль полезен читателю как контекст перед переходом к исходной публикации."
         with mock.patch.object(mod, "_call_structured_with_budget", return_value=({
             "llm_gate_status": "ok",
             "data": {"status": "ready", "onboarding_paragraph": paragraph, "claim_ids": ["C1"], "evidence_ids": ["E1"], "selected_angle_id": "A1"},

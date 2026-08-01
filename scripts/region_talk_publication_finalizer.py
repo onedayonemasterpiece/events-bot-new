@@ -49,9 +49,9 @@ POST_URL_NORMALIZATION_VERSION = "region_talk_post_url_v1"
 PUBLICATION_FINALIZER_STATE_VERSION = "region_talk_publication_finalizer_v4"
 PUBLICATION_ELIGIBILITY_EVIDENCE_STORAGE_MAX_CHARS = 700
 AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v3"
-SOURCE_ONBOARDING_EVIDENCE_VERSION = "region_talk_source_onboarding_evidence_v1"
-SOURCE_ONBOARDING_PROFILE_PROMPT_VERSION = "region_talk_source_onboarding_profile_v1"
-SOURCE_ONBOARDING_WRITER_PROMPT_VERSION = "region_talk_source_onboarding_writer_v1"
+SOURCE_ONBOARDING_EVIDENCE_VERSION = "region_talk_source_onboarding_evidence_v2_publisher_reader_brief"
+SOURCE_ONBOARDING_PROFILE_PROMPT_VERSION = "region_talk_source_onboarding_profile_v2_publisher_reader_brief"
+SOURCE_ONBOARDING_WRITER_PROMPT_VERSION = "region_talk_source_onboarding_writer_v2_publisher_reader_brief"
 SOURCE_ONBOARDING_ENTITY_TYPES = {"person", "collective", "thematic_channel", "media_brand", "unknown"}
 PUBLIC_TME_FALLBACK_ENV = "REGION_TALK_ALLOW_PUBLIC_TME_S_FALLBACK"
 TERMINAL_PUBLICATION_STATUSES = {
@@ -459,6 +459,7 @@ def build_source_onboarding_evidence(
     source: dict[str, Any] | None,
     source_memory_rows: list[dict[str, Any]],
     candidate: dict[str, Any],
+    external_intake: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a compact, public, auditable evidence pack for one source.
 
@@ -468,6 +469,7 @@ def build_source_onboarding_evidence(
     memory. Every future claim must cite one of the generated evidence ids.
     """
     source = dict(source or {})
+    external_intake = dict(external_intake or {})
     source_key = canonical_source_key_for_row(source or candidate)
     title = str(source.get("source_title") or source.get("resolved_title") or candidate.get("source_title") or "").strip()
     source_url = str(source.get("source_url") or source.get("canonical_url") or candidate.get("source_url") or "").strip()
@@ -497,6 +499,61 @@ def build_source_onboarding_evidence(
             + ". Внешний по отношению к Калининградской области источник. Основание: "
             + str(source.get("source_externality_basis") or "проверено внешним research-контрактом"),
             url=source_url,
+        )
+
+    # External-publication research already opens the primary page and keeps
+    # evidence-backed editorial copy.  Preserve the source-level slice as
+    # publisher evidence instead of asking the profile model to infer an
+    # outlet's audience or value from the current Kaliningrad article alone.
+    editorial_pack = (
+        external_intake.get("editorial_pack")
+        if isinstance(external_intake.get("editorial_pack"), dict)
+        else {}
+    )
+    source_assessment = (
+        external_intake.get("source_assessment")
+        if isinstance(external_intake.get("source_assessment"), dict)
+        else {}
+    )
+    publisher_overview = str(
+        source.get("publisher_source_overview")
+        or editorial_pack.get("source_overview")
+        or candidate.get("source_overview")
+        or ""
+    ).strip()
+    publisher_refs = {
+        str(value)
+        for value in _json_list(source.get("publisher_source_overview_evidence_refs_json"))
+        if str(value)
+    }
+    for support in editorial_pack.get("copy_support") or []:
+        if not isinstance(support, dict) or str(support.get("surface") or "") != "source_overview":
+            continue
+        publisher_refs.update(str(value) for value in (support.get("evidence_refs") or []) if str(value))
+    if publisher_overview:
+        add("publisher_source_overview", publisher_overview, url=source_url)
+    externality_basis = str(
+        source.get("source_externality_basis")
+        or source_assessment.get("externality_basis")
+        or ""
+    ).strip()
+    if externality_basis:
+        add("publisher_scope_attestation", externality_basis, url=source_url)
+    stored_publisher_evidence = _json_list(source.get("publisher_profile_evidence_json"))
+    intake_evidence = {
+        str(item.get("evidence_id") or ""): item
+        for item in [*stored_publisher_evidence, *(external_intake.get("evidence") or [])]
+        if isinstance(item, dict) and str(item.get("evidence_id") or "")
+    }
+    for evidence_id in sorted(publisher_refs):
+        item = intake_evidence.get(evidence_id)
+        if not item:
+            continue
+        add(
+            "publisher_page_evidence",
+            item.get("paraphrase") or item.get("quote_short") or item.get("text") or "",
+            url=str(item.get("url") or item.get("source_url") or source_url),
+            date=str(item.get("retrieved_at") or ""),
         )
 
     external_parts = []
@@ -569,7 +626,25 @@ def build_source_onboarding_evidence(
         1 for item in evidence
         if item["kind"] in {"external_open_source_registry", "external_publication_source"}
     )
-    status = "sufficient" if source_key and title and (authored_count >= 1 or external_count >= 1) else "insufficient"
+    publisher_lane = str(
+        candidate.get("content_origin_type")
+        or source.get("source_topic_class")
+        or ""
+    ) in {"editorial_publication", "academic_publication"}
+    publisher_evidence_total = sum(
+        1 for item in evidence
+        if item["kind"] in {"publisher_source_overview", "publisher_scope_attestation", "publisher_page_evidence"}
+    )
+    sufficient = bool(
+        source_key
+        and title
+        and (
+            publisher_evidence_total >= 2
+            if publisher_lane
+            else (authored_count >= 1 or external_count >= 1)
+        )
+    )
+    status = "sufficient" if sufficient else "insufficient"
     return {
         "source_profile_id": source_profile_id(source_key),
         "canonical_source_key": source_key,
@@ -582,6 +657,9 @@ def build_source_onboarding_evidence(
         "evidence_items_total": len(evidence),
         "authored_post_evidence_total": authored_count,
         "external_registry_evidence_total": external_count,
+        "publisher_evidence_total": publisher_evidence_total,
+        "publisher_lane": publisher_lane,
+        "source_topic_class": source.get("source_topic_class") or candidate.get("content_origin_type") or "",
         "candidate_post_url": candidate_url,
     }
 
@@ -820,6 +898,8 @@ def read_live_rows(
                 "source_onboarding_profile_fingerprint", "source_onboarding_writer_fingerprint",
                 "source_onboarding_entity_type", "source_onboarding_claim_ids_json",
                 "source_onboarding_evidence_ids_json", "source_onboarding_selected_angle_id",
+                "source_onboarding_writer_prompt_version", "source_onboarding_publisher_dimensions_json",
+                "source_onboarding_publisher_dimensions_status", "source_onboarding_summary_kind",
             ]:
                 if publication.get(key) not in (None, ""):
                     row[key] = publication.get(key)
@@ -1643,6 +1723,14 @@ def _json_list(value: Any) -> list[Any]:
     return list(parsed) if isinstance(parsed, list) else []
 
 
+def _json_dict(value: Any) -> dict[str, Any]:
+    try:
+        parsed = json.loads(value) if isinstance(value, str) else value
+    except (TypeError, ValueError, json.JSONDecodeError):
+        parsed = {}
+    return dict(parsed) if isinstance(parsed, dict) else {}
+
+
 def _structured_llm_call(
     prompt: str,
     *,
@@ -1720,8 +1808,9 @@ def _call_structured_with_budget(
 
 
 def _source_profile_prompt(evidence_row: dict[str, Any]) -> str:
-    return """Ты готовишь доказательный профиль автора/канала для редактора Region Talk.
+    return """Ты готовишь доказательный профиль публичного источника для редактора Region Talk.
 Используй ТОЛЬКО факты из evidence_pack. Не угадывай место жительства, профессию, популярность или мотивацию.
+Если publisher_lane=true, отделяй сведения об издании от содержания текущей статьи. Редактору нужны три коротких ответа: что это за издание, для какой аудитории оно полезно, чем отличается его редакционный ракурс. Аудиторию разрешено формулировать как осторожный editorial_inference по тематике/форматам; такая формулировка всё равно обязана иметь evidence_ids. При нехватке опоры верни needs_review.
 Верни только JSON:
 {
   "status": "ready|needs_review",
@@ -1729,6 +1818,11 @@ def _source_profile_prompt(evidence_row: dict[str, Any]) -> str:
   "profile_summary": "краткое нейтральное резюме",
   "claims": [{"claim_id":"C1","text":"один атомарный факт","evidence_ids":["E1"]}],
   "candidate_angles": [{"angle_id":"A1","text":"релевантный ракурс","claim_ids":["C1"],"evidence_ids":["E1"]}],
+  "publisher_dimensions": {
+    "outlet_identity": {"text":"тип, тематика и масштаб издания","basis":"explicit|editorial_inference","evidence_ids":["E1"]},
+    "intended_audience": {"text":"кому и для каких задач полезно читать","basis":"explicit|editorial_inference","evidence_ids":["E1"]},
+    "distinctive_value": {"text":"чем примечателен редакционный ракурс или формат","basis":"explicit|editorial_inference","evidence_ids":["E1"]}
+  },
   "conflicts": [],
   "missing_fields": []
 }
@@ -1739,6 +1833,7 @@ SOURCE:
         "canonical_source_key": evidence_row.get("canonical_source_key"),
         "source_title": evidence_row.get("source_title"),
         "source_url": evidence_row.get("source_url"),
+        "publisher_lane": bool(evidence_row.get("publisher_lane")),
         "evidence_pack": _evidence_items(evidence_row),
     }, ensure_ascii=False, indent=2)
 
@@ -1784,12 +1879,31 @@ def normalize_source_onboarding_profile(
     if entity_type not in SOURCE_ONBOARDING_ENTITY_TYPES:
         entity_type = "unknown"
     requested_status = str(data.get("status") or "needs_review").lower()
+    publisher_lane = bool(evidence_row.get("publisher_lane"))
+    publisher_dimensions: dict[str, dict[str, Any]] = {}
+    raw_dimensions = data.get("publisher_dimensions") if isinstance(data.get("publisher_dimensions"), dict) else {}
+    for key in ("outlet_identity", "intended_audience", "distinctive_value"):
+        raw = raw_dimensions.get(key) if isinstance(raw_dimensions.get(key), dict) else {}
+        text = _compact_evidence_text(raw.get("text"), 320)
+        refs = [str(ref) for ref in (raw.get("evidence_ids") or []) if str(ref)]
+        basis = str(raw.get("basis") or "editorial_inference")
+        if basis not in {"explicit", "editorial_inference"}:
+            invalid_refs.append("publisher_dimension_basis:" + key)
+            continue
+        if text and refs and set(refs).issubset(evidence_ids):
+            publisher_dimensions[key] = {"text": text, "basis": basis, "evidence_ids": refs}
+        elif publisher_lane:
+            invalid_refs.append("publisher_dimension:" + key)
+    publisher_dimensions_ready = set(publisher_dimensions) == {
+        "outlet_identity", "intended_audience", "distinctive_value",
+    }
     status = "ready" if (
         result.get("llm_gate_status") == "ok"
         and requested_status == "ready"
         and claims
         and not invalid_refs
         and evidence_row.get("evidence_status") == "sufficient"
+        and (not publisher_lane or publisher_dimensions_ready)
     ) else "needs_review"
     return {
         "source_profile_id": evidence_row.get("source_profile_id"),
@@ -1801,6 +1915,8 @@ def normalize_source_onboarding_profile(
         "profile_summary": _compact_evidence_text(data.get("profile_summary"), 600),
         "claims_json": json.dumps(claims, ensure_ascii=False, separators=(",", ":")),
         "candidate_angles_json": json.dumps(angles, ensure_ascii=False, separators=(",", ":")),
+        "publisher_dimensions_json": json.dumps(publisher_dimensions, ensure_ascii=False, separators=(",", ":")),
+        "publisher_dimensions_status": "ready" if publisher_dimensions_ready else "not_applicable" if not publisher_lane else "needs_review",
         "conflicts_json": json.dumps(data.get("conflicts") or [], ensure_ascii=False, separators=(",", ":")),
         "missing_fields_json": json.dumps(data.get("missing_fields") or [], ensure_ascii=False, separators=(",", ":")),
         "invalid_reference_ids_json": json.dumps(invalid_refs, ensure_ascii=False),
@@ -1820,15 +1936,16 @@ def _candidate_onboarding_prompt(row: dict[str, Any], profile: dict[str, Any], e
     }
     subject = "издании/журнале" if external_publication else "блогере/канале"
     purpose = (
-        "Абзац должен кратко представить тип и тематический ракурс издания, а затем объяснить, чем интересна эта публикация."
+        "Абзац обязан дать полезную сводку об издании: что это за площадка, кому полезно её читать и чем примечателен её редакционный ракурс. Текущую статью упомяни только последним коротким предложением: чем интересна эта публикация как конкретный пример работы издания."
         if external_publication
         else "Абзац должен объяснить, кто автор, его подтверждённый ракурс и почему именно этот пост интересен."
     )
     return "Напиши один доказательный вводный абзац о " + subject + " для редактора Region Talk.\n" + """Длина строго 300–600 знаков, русский язык, без рекламы и превосходных степеней.
 """ + purpose + """
 Используй ТОЛЬКО claims/angles профиля и evidence_pack. Не называй человека жителем региона без прямого доказательства.
+Формулируй наблюдения прямо. Запрещена конструкция с отрицательной частицей и последующим противопоставляющим союзом в одном предложении, включая варианты с запятой, тире или переносом строки.
 Верни только JSON:
-{"status":"ready|needs_review","onboarding_paragraph":"...","claim_ids":["C1"],"evidence_ids":["E1"],"selected_angle_id":"A1"}
+{"status":"ready|needs_review","onboarding_paragraph":"...","claim_ids":["C1"],"evidence_ids":["E1"],"selected_angle_id":"A1","covered_publisher_dimensions":["outlet_identity","intended_audience","distinctive_value"]}
 
 INPUT:
     """ + json.dumps({
@@ -1839,6 +1956,7 @@ INPUT:
         "profile_summary": profile.get("profile_summary"),
         "claims": _json_list(profile.get("claims_json")),
         "candidate_angles": _json_list(profile.get("candidate_angles_json")),
+        "publisher_dimensions": _json_dict(profile.get("publisher_dimensions_json")),
         "evidence_pack": _evidence_items(evidence_row),
     }, ensure_ascii=False, indent=2)
 
@@ -1850,6 +1968,8 @@ def normalize_candidate_onboarding(
     evidence_row: dict[str, Any],
     writer_fingerprint: str,
 ) -> dict[str, Any]:
+    from scripts import region_talk_goal_notify as goal_notify  # noqa: PLC0415
+
     data = result.get("data") if isinstance(result.get("data"), dict) else {}
     paragraph = re.sub(r"\s+", " ", str(data.get("onboarding_paragraph") or "")).strip()
     claims = _json_list(profile.get("claims_json"))
@@ -1860,6 +1980,11 @@ def normalize_candidate_onboarding(
     claim_refs = [str(value) for value in (data.get("claim_ids") or []) if str(value)]
     evidence_refs = [str(value) for value in (data.get("evidence_ids") or []) if str(value)]
     angle_id = str(data.get("selected_angle_id") or "")
+    publisher_lane = bool(evidence_row.get("publisher_lane"))
+    covered_dimensions = {
+        str(value) for value in (data.get("covered_publisher_dimensions") or []) if str(value)
+    }
+    required_dimensions = {"outlet_identity", "intended_audience", "distinctive_value"}
     refs_valid = bool(
         claim_refs
         and evidence_refs
@@ -1872,6 +1997,8 @@ def normalize_candidate_onboarding(
         and str(data.get("status") or "").lower() == "ready"
         and 300 <= len(paragraph) <= 600
         and refs_valid
+        and (not publisher_lane or covered_dimensions == required_dimensions)
+        and not goal_notify.contains_contrastive_not_a_cliche(paragraph)
     ) else "needs_review"
     return {
         "source_onboarding_status": status,
@@ -1884,6 +2011,9 @@ def normalize_candidate_onboarding(
         "source_onboarding_claim_ids_json": json.dumps(claim_refs, ensure_ascii=False),
         "source_onboarding_evidence_ids_json": json.dumps(evidence_refs, ensure_ascii=False),
         "source_onboarding_selected_angle_id": angle_id,
+        "source_onboarding_publisher_dimensions_json": str(profile.get("publisher_dimensions_json") or "{}"),
+        "source_onboarding_publisher_dimensions_status": str(profile.get("publisher_dimensions_status") or ""),
+        "source_onboarding_summary_kind": "publisher_reader_brief_v1" if publisher_lane else "source_reader_brief_v1",
         "source_onboarding_llm_status": result.get("llm_gate_status"),
         "source_onboarding_llm_reason": result.get("llm_reason", ""),
         "source_onboarding_paragraph_chars": len(paragraph),
@@ -1904,9 +2034,23 @@ def enrich_accepted_rows_with_onboarding(
     for row in rows:
         if str(row.get("publication_status") or "") != "gemini_accept":
             continue
-        if str(row.get("sent_to_chat") or "").lower() == "true":
-            continue
-        if str(row.get("source_onboarding_status") or "") == "ready" and row.get("source_onboarding_paragraph"):
+        publisher_lane = str(row.get("content_origin_type") or "") in {
+            "editorial_publication", "academic_publication",
+        }
+        current_onboarding = bool(
+            str(row.get("source_onboarding_status") or "") == "ready"
+            and row.get("source_onboarding_paragraph")
+            and str(row.get("source_onboarding_writer_prompt_version") or "")
+            == SOURCE_ONBOARDING_WRITER_PROMPT_VERSION
+            and (
+                not publisher_lane
+                or (
+                    str(row.get("source_onboarding_publisher_dimensions_status") or "") == "ready"
+                    and str(row.get("source_onboarding_summary_kind") or "") == "publisher_reader_brief_v1"
+                )
+            )
+        )
+        if current_onboarding:
             stats["paragraphs_ready"] += 1
             continue
         evidence_row = row.get("_source_onboarding_evidence") if isinstance(row.get("_source_onboarding_evidence"), dict) else {}
@@ -2093,7 +2237,8 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
         "source_onboarding_writer_prompt_version", "source_onboarding_entity_type",
         "source_onboarding_claim_ids_json", "source_onboarding_evidence_ids_json",
         "source_onboarding_selected_angle_id", "source_onboarding_llm_status",
-        "source_onboarding_llm_reason", "source_onboarding_paragraph_chars",
+        "source_onboarding_publisher_dimensions_json", "source_onboarding_publisher_dimensions_status",
+        "source_onboarding_summary_kind", "source_onboarding_llm_reason", "source_onboarding_paragraph_chars",
         "sent_to_chat", "sent_message_id", "sent_at", "sent_chat_id", "delivery_key", "delivery_random_id",
     ]
     items = []

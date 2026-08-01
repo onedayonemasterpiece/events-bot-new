@@ -18,7 +18,7 @@
 - [Publication queue](publication-queue.md) — queue, slots, idempotency, diversity caps, dry-run.
 - [Source onboarding profile](source-onboarding-profile.md) — доказательный профиль автора/канала и абзац `О блогере` для финального кандидата.
 - [External publications](external-publications.md) — broad-web prompt, JSON Schema, staging importer, public-interest contract и on-demand anti-vector queue для материалов изданий.
-- [Editorial onboarding writer prompt](editorial-onboarding-writer-gemini-review.prompt.md) — исторический review-пакет; актуальные production-ограничения и версия v9 описаны в каноническом контракте ниже.
+- [Editorial onboarding writer prompt](editorial-onboarding-writer-gemini-review.prompt.md) — исторический review-пакет; актуальные production-ограничения и версия v10 с publisher reader brief описаны в каноническом контракте ниже.
 - [Gemini Pro onboarding consultation](onboarding-prompt-consultation.md) — архивный prompt-design review v8/output-v2; архитектура Strategy → Grounded Writer → validators → Critic сохранена, примеры с запрещённым противопоставлением не являются production-образцами.
 - [Editorial and visual product decision](editorial-visual-product.md) — benchmark похожих Telegram-каналов и целевой hero/album/video/link-preview формат.
 - [To-Be orchestration and vector queues](orchestration-to-be.md) — короткие queue-driven прогоны, отдельный BGE-M3 worker, YDB triggers, non-region geo bank и semantic anti-vector diversity.
