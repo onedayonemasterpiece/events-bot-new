@@ -863,6 +863,57 @@ def _exact_collection_quote(quote: Any, corpus: str, *, required: bool) -> str |
     return clean if clean in corpus else None
 
 
+def _audience_quote_supports_value(value: str, quote: str, reason: str) -> bool:
+    """Narrow entailment guard for an already semantic audience verdict.
+
+    The LLM still owns audience meaning. This check only rejects a quoted
+    phrase whose grammatical role cannot support the selected value, e.g. the
+    children are authors of displayed work rather than invitees to the event.
+    """
+
+    normalized = " ".join(str(quote or "").casefold().replace("ё", "е").split())
+    if value == "unknown":
+        return not normalized and reason in {"insufficient_evidence", "conflicting_evidence"}
+    if value == "none":
+        return bool(normalized) and reason == "explicit_adult_only"
+    if value == "family":
+        if reason not in {"explicit_family_format", "explicit_target_audience"}:
+            return False
+        joint_family = bool(
+            re.search(r"\b(?:для\s+)?вс(?:ей|я|ю)\s+семь", normalized)
+            or re.search(r"\bродител\w*\s*[+и]\s*ребен", normalized)
+        )
+        child_and_adult = bool(
+            re.search(r"\b(?:дет|ребен|юных?)\w*", normalized)
+            and re.search(r"\b(?:взросл|родител)\w*", normalized)
+        )
+        explicit_family_format = bool(
+            re.search(
+                r"\bсемейн\w*\s+(?:шоу|мюзикл|мастер-класс|турнир|праздник|"
+                r"фестиваль|программ\w*|заняти\w*|спектакл\w*)\b",
+                normalized,
+            )
+            or re.search(
+                r"\b(?:шоу|мюзикл|мастер-класс|турнир|праздник|фестиваль|"
+                r"программ\w*|заняти\w*|спектакл\w*)[^.;:]{0,30}\bсемейн\w*",
+                normalized,
+            )
+        )
+        return joint_family or child_and_adult or explicit_family_format
+    if value == "kids":
+        if reason != "explicit_target_audience":
+            return False
+        return bool(
+            re.search(r"(?:/|\b)для[-_/\s]+дет", normalized)
+            or re.search(r"(?:/|\b)dlya[-_/]+dete", normalized)
+            or "театрдлядетей" in normalized
+            or re.search(r"\bдетск\w*(?:\s+[\w-]+){0,2}\s+(?:зон\w*|клуб\w*|"
+                         r"спектакл\w*|шоу|программ\w*|заняти\w*|мастер-класс\w*)\b", normalized)
+            or re.search(r"\b(?:маленьк\w*\s+зрител|помочь\s+ребен|для\s+ребен)", normalized)
+        )
+    return False
+
+
 def validate_collection_adjudication_output(
     payload: Any,
     *,
@@ -919,7 +970,7 @@ def validate_collection_adjudication_output(
     uquote = _exact_collection_quote(
         audience.get("evidence_quote"), source_corpus, required=uvalue != "unknown"
     )
-    if uquote is None:
+    if uquote is None or not _audience_quote_supports_value(uvalue, uquote, ureason):
         return None
 
     people = payload.get("people_appearances")
