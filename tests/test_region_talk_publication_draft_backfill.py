@@ -665,6 +665,15 @@ def test_media_plan_is_media_first_and_fails_article_without_hero() -> None:
     })
     assert album["mode"] == "social_album"
     assert len(album["items"]) == 4
+    legacy_album_with_scalar_preview = mod.publication_media_plan({
+        "post_url": "https://t.me/travel/300", "expected_image_count": 4,
+        "selected_media_ids": '["telegram:300","telegram:302","telegram:301"]',
+        "image_url_or_local_path": "https://t.me/travel/300#media",
+    })
+    assert legacy_album_with_scalar_preview["status"] == "ready"
+    assert [item["media_id"] for item in legacy_album_with_scalar_preview["items"]] == [
+        "telegram:300", "telegram:302", "telegram:301",
+    ]
     source_album = mod.publication_media_plan({
         "post_url": "https://t.me/travel/200", "expected_image_count": 5,
         "original_photo_evidence": "true",
@@ -719,6 +728,53 @@ def test_social_media_selection_is_joined_from_image_diagnostic() -> None:
     assert [item["media_id"] for item in plan["items"]] == [
         "telegram:100", "telegram:109", "telegram:102",
     ]
+
+
+def test_vk_legacy_selection_is_projected_to_exact_attachment_refs() -> None:
+    mod = load_module()
+    row = {
+        "post_url": "https://vk.com/wall-10_20",
+        "selected_media_ids": '["vk:-10_20:3","vk:-10_20:1","vk:-10_20:2"]',
+        "media_manifest_items": [
+            {"media_id": "vk:-10_20:1", "ordinal": 1, "content_sha256": "a" * 64},
+            {"media_id": "vk:-10_20:2", "ordinal": 2, "content_sha256": "b" * 64},
+            {"media_id": "vk:-10_20:3", "ordinal": 3, "content_sha256": "c" * 64},
+        ],
+    }
+    post = {
+        "owner_id": -10, "id": 20, "text": "Текст",
+        "attachments": [
+            {"type": "photo", "photo": {"sizes": [{"url": f"https://cdn.example/{i}.jpg", "width": 1000, "height": 1000}]}}
+            for i in range(1, 4)
+        ],
+    }
+    text, fields = mod.fetch_vk_text(row, {"-10_20": post}, "")
+    assert text == "Текст"
+    items = json.loads(fields["selected_media_materialization_json"])
+    assert [item["source_ref"] for item in items] == [
+        "https://cdn.example/3.jpg", "https://cdn.example/1.jpg", "https://cdn.example/2.jpg",
+    ]
+    assert items[0]["reviewed_content_sha256"] == "c" * 64
+    plan = mod.publication_media_plan({**row, **fields, "expected_image_count": 3})
+    assert plan["status"] == "ready"
+    assert len(plan["items"]) == 3
+
+
+def test_media_only_updates_preserve_copy_and_call_no_writer() -> None:
+    mod = load_module()
+    row = {
+        "post_url": "https://t.me/travel/400",
+        "publication_draft_status": "media_materialization_pending",
+        "publication_draft_telegram_text": "сохранить",
+        "expected_image_count": 3,
+        "selected_media_ids": '["telegram:400","telegram:401","telegram:402"]',
+        "image_url_or_local_path": "https://t.me/travel/400#media",
+    }
+    updates = mod.build_media_materialization_updates(row, fetched={})
+    assert updates["publication_draft_status"] == "ready_for_operator_review"
+    assert updates["publication_draft_backfill_status"] == "ready"
+    assert updates["publication_draft_backfill_provider_called"] == "false"
+    assert "publication_draft_telegram_text" not in updates
 
 
 def test_legacy_review_is_archived_but_never_approves_v8_revision(monkeypatch) -> None:
