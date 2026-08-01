@@ -70,19 +70,24 @@ lanes:
     effort: high
     requirement_ids: [R01]
     target: club relation reliability and projection
-    depends_on: []
-    execution_mode: parallel
+    depends_on: [W_REGISTRY, W_FACTS, W_SEMANTIC]
+    execution_mode: serial_after_dependency
     branch: agent/static-collections-data-prep/W_CLUBS
     worktree: /home/dev/.codex/worktrees/events-bot-new/static-collections-W_CLUBS
     writable_files:
       - interest_clubs.py
+      - models.py
+      - db.py
+      - main.py
+      - smart_event_update.py
+      - alembic/versions/*interest_club_evaluation_history*.py
       - static_site_release.py
       - site/scripts/export-production-preview-data.py
       - tests/test_interest_clubs.py
       - tests/test_static_site_release.py
       - tests/fixtures/interest_clubs_*
       - .codex/lanes/static-collections-W_CLUBS/RESULTS.md
-    forbidden_files: [main.py, models.py, db.py, smart_event_update.py, CHANGELOG.md, docs]
+    forbidden_files: [CHANGELOG.md, docs]
     expected_output: committed club lifecycle/reliability implementation and tests
     verification_scope: targeted
     status: planned
@@ -96,7 +101,7 @@ lanes:
     branch: agent/static-collections-data-prep/W_REGISTRY
     worktree: /home/dev/.codex/worktrees/events-bot-new/static-collections-W_REGISTRY
     writable_files:
-      - site/scripts/static_place_org_registry.v1.json
+      - site/src/data/placeOrganizationRegistry.json
       - site/scripts/static_place_org_registry.py
       - tests/test_static_place_org_registry.py
       - tests/fixtures/static_place_org_registry_*
