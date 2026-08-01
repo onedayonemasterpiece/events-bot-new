@@ -378,6 +378,36 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "invalid reviewed_content_sha256"):
             mod.verify_reviewed_media_digest(data, {"reviewed_content_sha256": "not-a-sha"})
 
+    def test_direct_image_refetch_reproduces_image_diagnostic_negotiation(self) -> None:
+        mod = load_module()
+
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return None
+
+            def read(self, _limit):
+                return b"reviewed-webp-bytes"
+
+        with mock.patch.object(mod.urllib.request, "urlopen", return_value=Response()) as urlopen:
+            result = mod.download_reviewed_direct_media(
+                "https://publisher.example/hero.jpg", kind="image"
+            )
+
+        self.assertEqual(result, b"reviewed-webp-bytes")
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.full_url, "https://publisher.example/hero.jpg")
+        self.assertEqual(
+            request.get_header("Accept"),
+            "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        )
+        self.assertEqual(
+            request.get_header("User-agent"),
+            "Mozilla/5.0 RegionTalkImageDiagnostic/1.0",
+        )
+
     def test_manifest_message_id_uses_exact_numeric_suffix(self) -> None:
         mod = load_module()
         self.assertEqual(mod.manifest_item_message_id({"media_id": "telegram:110"}), 110)
