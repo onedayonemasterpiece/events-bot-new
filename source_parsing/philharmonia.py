@@ -28,7 +28,8 @@ from source_parsing.handlers import (
     add_new_event_via_queue,
     update_event_ticket_status,
     update_linked_events,
-    event_has_parser_source,
+    attach_parser_source_to_exact_existing,
+    find_exact_parser_ticket_slot,
     unpack_add_event_result,
     classify_add_event_outcome,
     find_existing_event,
@@ -385,14 +386,16 @@ async def process_philharmonia_events(
         existing_id, _ = await find_existing_event(
             db, location_name, event.parsed_date, event.parsed_time or "00:00", event.title
         )
-        
+        if not existing_id:
+            existing_id = await find_exact_parser_ticket_slot(db, event)
+
         parser_source_present = False
         if existing_id:
-            parser_source_present = await event_has_parser_source(
+            parser_source_present = await attach_parser_source_to_exact_existing(
                 db,
                 existing_id,
                 event.source_type,
-                event.url,
+                event,
             )
 
         if existing_id and parser_source_present:

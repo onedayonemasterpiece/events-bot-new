@@ -4,6 +4,8 @@ import pytest
 from sqlmodel import select
 
 import source_parsing.handlers as handlers
+import source_parsing.philharmonia as philharmonia
+import source_parsing.qtickets as qtickets
 from db import Database
 from models import Event, EventSource
 from source_parsing.parser import TheatreEvent
@@ -231,6 +233,84 @@ async def test_unchanged_exact_ticket_replay_skips_page_rebuild_and_schedule(
     assert stats.ticket_updated == 0
     assert stats.already_exists == 1
     assert stats.failed == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("module", "processor", "source_type"),
+    [
+        (philharmonia, philharmonia.process_philharmonia_events, "philharmonia"),
+        (qtickets, qtickets.process_qtickets_events, "qtickets"),
+    ],
+)
+async def test_specialized_site_processor_uses_exact_ticket_slot_guard(
+    tmp_path,
+    monkeypatch,
+    module,
+    processor,
+    source_type,
+):
+    db = Database(str(tmp_path / f"{source_type}.sqlite"))
+    await db.init()
+    event_date = (date.today() + timedelta(days=7)).isoformat()
+    official_url = f"https://example.org/{source_type}/exact-slot"
+
+    async with db.get_session() as session:
+        stored = Event(
+            title="Расширенный presentation title",
+            description="Existing canonical description",
+            date=event_date,
+            time="19:00",
+            location_name="Филармония им. Светланова",
+            source_text="Existing source",
+            ticket_status="available",
+            ticket_link=official_url,
+        )
+        session.add(stored)
+        await session.commit()
+        await session.refresh(stored)
+        event_id = int(stored.id)
+
+    async def no_title_match(*_args, **_kwargs):
+        return None, False
+
+    async def no_result(*_args, **_kwargs):
+        return None
+
+    async def forbidden_llm(*_args, **_kwargs):
+        raise AssertionError("exact specialized replay must not call Smart Update")
+
+    monkeypatch.setattr(module, "find_existing_event", no_title_match)
+    monkeypatch.setattr(module, "update_linked_events", no_result)
+    monkeypatch.setattr(module, "add_new_event_via_queue", forbidden_llm)
+
+    candidate = TheatreEvent(
+        title="Короткий официальный title",
+        date_raw=f"{event_date} 19:00",
+        parsed_date=event_date,
+        parsed_time="19:00",
+        ticket_status="available",
+        url=official_url,
+        location="Филармония им. Светланова",
+        source_type=source_type,
+    )
+    stats = await processor(db, None, [candidate])
+
+    async with db.get_session() as session:
+        sources = list(
+            (
+                await session.execute(
+                    select(EventSource).where(EventSource.event_id == event_id)
+                )
+            ).scalars()
+        )
+    await db.engine.dispose()
+
+    assert stats.ticket_updated == 1
+    assert stats.failed == 0
+    assert [(row.source_type, row.source_url) for row in sources] == [
+        (f"parser:{source_type}", official_url)
+    ]
 
 
 @pytest.mark.asyncio

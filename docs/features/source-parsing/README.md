@@ -159,6 +159,10 @@ provenance freshness, но не перестраивает Telegraph и не с�
 страницы в очередь. Это исключает скрытый page-render LLM-вызов для каждого
 элемента компенсирующего повтора; реальное изменение билетов сохраняет прежний
 rebuild/scheduling contract.
+Специализированные processors `philharmonia` и `qtickets` обязаны использовать
+тот же exact-slot verifier до Smart Update; отдельный legacy
+`event_has_parser_source` shortcut для них не является допустимой границей
+identity/idempotency.
 После исключения same-parser explicit-time conflict последующие
 city-noise/copy-post rescue-проходы не имеют права вернуть исключённый event в
 shortlist: один performance/ticket URL не является доказательством одного

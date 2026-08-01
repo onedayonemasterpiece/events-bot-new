@@ -19,7 +19,9 @@
   LLM identity gate. An unchanged ticket status/link now also skips Telegraph
   rebuild and deferred page scheduling, so deploy-interrupted catch-ups no
   longer repay either the semantic merge or page-render LLM work for already
-  restored rows.
+  restored rows. The same exact-slot guard now covers the specialized
+  Philharmonia and Qtickets processors instead of only the generic theatre
+  handler.
 - StaticSiteBuilder now reclaims only unreferenced immutable snapshots and
   lock-protected `static-site-kaggle-*` scratch trees before its capacity
   probe. A killed Fly process can no longer leave one staged database copy that
