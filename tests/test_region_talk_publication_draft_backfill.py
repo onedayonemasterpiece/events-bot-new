@@ -318,6 +318,81 @@ def test_v8_validator_requires_at_least_95_percent_cyrillic() -> None:
     )
 
 
+def test_validator_checks_exact_rendered_caption_length_when_row_is_available() -> None:
+    mod = load_module()
+    output = _valid_writer_output(mod)
+    row = {"post_url": "https://t.me/example/1", "source_title": "Внешнее издание"}
+    violations = mod.validate_editorial_output(
+        output, {"source.name", "content.exact_text"}, row=row,
+    )
+    assert "caption_visible_length:536" in violations
+
+    output["public_copy"]["paragraph_2"] += (
+        " Автор также объясняет, как эти наблюдения складываются в цельный маршрут прогулки."
+    )
+    assert not any(
+        item.startswith("caption_visible_length:")
+        for item in mod.validate_editorial_output(
+            output, {"source.name", "content.exact_text"}, row=row,
+        )
+    )
+
+
+def test_short_rendered_caption_gets_writer_retry_before_critic(monkeypatch) -> None:
+    mod = load_module()
+    short = _valid_writer_output(mod)
+    short["_stage_status"] = "ok"
+    expanded = json.loads(json.dumps(short, ensure_ascii=False))
+    expanded["public_copy"]["paragraph_2"] += (
+        " Автор также объясняет, как эти наблюдения складываются в цельный маршрут прогулки."
+    )
+    strategy = {
+        "_stage_status": "ok", "status": "ready", "throughline_mode": "fresh_start",
+        "used_history_urls": [], "visual_hook_evidence_ids": [],
+    }
+    critic = {"_stage_status": "ok", "status": "pass", "reason_codes": []}
+    row = {
+        "post_url": "https://t.me/example/1", "source_title": "Внешнее издание",
+        "publication_primary_image_url": "https://cdn.example.org/hero.jpg",
+    }
+    evidence = mod.build_editorial_evidence(
+        row, source_text="Подробный текст о прогулке по Гусеву."
+    )
+    sequence = iter([(strategy, True), (short, True), (expanded, True), (critic, True)])
+    calls_seen = []
+
+    def fake_call(**kwargs):
+        calls_seen.append(kwargs)
+        return next(sequence)
+
+    monkeypatch.setattr(mod, "call_editorial_stage", fake_call)
+    updates, calls = mod.generate_editorial_draft(
+        row, evidence_pack=evidence, history=[], model="test", default_env="KEY", budget=object(),
+    )
+
+    assert calls == 4
+    assert updates["publication_draft_backfill_status"] == "ready"
+    assert updates["publication_draft_generation_attempts"] == 2
+    assert calls_seen[2]["stage"] == "writer"
+    feedback = calls_seen[2]["payload"]["deterministic_feedback"]
+    assert "caption_visible_length:536" in feedback
+
+
+def test_editorial_stage_pacing_waits_between_physical_provider_calls(monkeypatch) -> None:
+    mod = load_module()
+    monotonic_values = iter([100.0, 100.0, 101.0, 105.5])
+    sleeps = []
+    monkeypatch.setattr(mod.time, "monotonic", lambda: next(monotonic_values))
+    monkeypatch.setattr(mod.time, "sleep", sleeps.append)
+    mod._EDITORIAL_PROVIDER_STAGE_DELAY_SECONDS = 5.5
+    mod._EDITORIAL_PROVIDER_LAST_CALL = 0.0
+
+    mod.pace_editorial_provider_call()
+    mod.pace_editorial_provider_call()
+
+    assert sleeps == [4.5]
+
+
 def test_article_writer_must_ground_all_publisher_reader_brief_dimensions_in_first_paragraph() -> None:
     mod = load_module()
     output = _valid_writer_output(mod)
