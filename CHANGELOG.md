@@ -80,7 +80,9 @@
 - Focus-group Android onboarding now registers a base-aware, network-only PWA
   worker and captures Chromium's one-shot install event before hydration. It no
   longer presents a plain `Добавить на главный экран` shortcut as equivalent
-  to installing the `Анонсы` application.
+  to installing the `Анонсы` application. The CTA now stays visible while the
+  installation completes and becomes `Открыть Анонсы`; repeat visits remember
+  the exact installed candidate/root identity.
 - Region Talk orchestrator metrics now merge external publication source
   attestations, making imported article candidates autonomously actionable for
   v8 backfill. Exact native Telegram album anchors are recognized as durable

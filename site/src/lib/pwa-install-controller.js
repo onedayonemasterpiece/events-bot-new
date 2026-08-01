@@ -28,9 +28,25 @@ export function createPwaInstallController({
 
   let installPrompt = null;
   let prompting = false;
+  let installPoll = null;
   const android = isAndroidPlatform(navigatorRef);
   const standalone = isStandaloneDisplay(windowRef, navigatorRef);
   const presentation = isPresentationInstall(locationRef);
+  const installId = String(root.dataset.pwaInstallId || 'default').replace(/[^a-z0-9/_-]/giu, '').slice(0, 160) || 'default';
+  const installMarkerKey = `ke:pwa:installed:${installId}`;
+  const storage = (() => {
+    try { return windowRef.localStorage || null; } catch { return null; }
+  })();
+  const readInstalledMarker = () => {
+    try { return storage?.getItem(installMarkerKey) === '1'; } catch { return false; }
+  };
+  const writeInstalledMarker = (value) => {
+    try {
+      if (value) storage?.setItem(installMarkerKey, '1');
+      else storage?.removeItem(installMarkerKey);
+    } catch { /* storage is optional */ }
+  };
+  let installed = standalone || readInstalledMarker();
 
   if (presentation) root.dataset.pwaInstallPresentation = 'true';
 
@@ -47,6 +63,38 @@ export function createPwaInstallController({
     root.dataset.pwaInstallReady = 'false';
     if (guidance) guidance.hidden = false;
   };
+  const stopInstallPoll = () => {
+    if (installPoll !== null && typeof windowRef.clearInterval === 'function') {
+      windowRef.clearInterval(installPoll);
+    }
+    installPoll = null;
+  };
+  const showInstalled = () => {
+    stopInstallPoll();
+    installed = true;
+    writeInstalledMarker(true);
+    root.hidden = false;
+    button.hidden = false;
+    button.disabled = false;
+    button.textContent = 'Открыть Анонсы';
+    root.dataset.pwaInstallReady = 'installed';
+    if (status) status.textContent = 'Приложение установлено.';
+    if (guidance) guidance.hidden = true;
+  };
+  const showInstalling = () => {
+    root.hidden = false;
+    button.hidden = false;
+    button.disabled = true;
+    button.textContent = 'Устанавливается…';
+    root.dataset.pwaInstallReady = 'installing';
+    if (status) status.textContent = 'Ждём завершения установки.';
+    if (guidance) guidance.hidden = true;
+    if (installPoll === null && typeof windowRef.setInterval === 'function') {
+      installPoll = windowRef.setInterval(() => {
+        if (isStandaloneDisplay(windowRef, navigatorRef)) showInstalled();
+      }, 750);
+    }
+  };
   const reveal = () => {
     root.hidden = false;
     button.hidden = false;
@@ -54,6 +102,7 @@ export function createPwaInstallController({
     root.dataset.pwaInstallReady = 'true';
   };
   const clear = () => {
+    stopInstallPoll();
     installPrompt = null;
     prompting = false;
     hide();
@@ -62,6 +111,8 @@ export function createPwaInstallController({
   const onBeforeInstallPrompt = (event) => {
     if (!android || standalone) return;
     event.preventDefault();
+    installed = false;
+    writeInstalledMarker(false);
     if (windowRef.__kenigEventsPwaInstallPrompt === event) {
       windowRef.__kenigEventsPwaInstallPrompt = null;
     }
@@ -72,6 +123,12 @@ export function createPwaInstallController({
 
   const onClick = async (event) => {
     event.preventDefault();
+    if (installed) {
+      const openHref = String(root.dataset.pwaOpenHref || '');
+      if (openHref && typeof locationRef?.assign === 'function') locationRef.assign(openHref);
+      else if (openHref && locationRef) locationRef.href = openHref;
+      return;
+    }
     if (!installPrompt || prompting) return;
 
     // A BeforeInstallPromptEvent is one-shot. Clear and hide atomically before
@@ -87,11 +144,10 @@ export function createPwaInstallController({
     try {
       const result = await promptEvent.prompt();
       if (presentation) {
-        showPresentationWaiting();
-        if (status) {
-          status.textContent = result?.outcome === 'accepted'
-            ? 'Установка подтверждена.'
-            : 'Установка не завершена. Обновите страницу, когда захотите повторить.';
+        if (result?.outcome === 'accepted') showInstalling();
+        else {
+          showPresentationWaiting();
+          if (status) status.textContent = 'Установка не завершена. Обновите страницу, когда захотите повторить.';
         }
       }
     } catch {
@@ -101,7 +157,7 @@ export function createPwaInstallController({
       }
     } finally {
       prompting = false;
-      button.disabled = false;
+      if (root.dataset.pwaInstallReady !== 'installing') button.disabled = false;
       if (!presentation && status) status.textContent = 'Системное окно установки закрыто.';
     }
   };
@@ -111,22 +167,22 @@ export function createPwaInstallController({
     if (presentation) {
       installPrompt = null;
       prompting = false;
-      showPresentationWaiting();
-      if (guidance) guidance.hidden = true;
+      showInstalled();
     } else {
+      writeInstalledMarker(true);
       clear();
     }
   };
 
   if (presentation) {
-    showPresentationWaiting();
-    if (standalone) {
-      if (status) status.textContent = 'Приложение уже установлено.';
-      if (guidance) guidance.hidden = true;
+    if (installed) {
+      showInstalled();
     } else if (!android) {
+      showPresentationWaiting();
       if (status) status.textContent = 'Для установки откройте эту ссылку на Android-телефоне в Chrome.';
-    } else if (status) {
-      status.textContent = 'Подготавливаем установку. Если кнопка не появилась, откройте страницу в Chrome.';
+    } else {
+      showPresentationWaiting();
+      if (status) status.textContent = 'Подготавливаем установку. Если кнопка не появилась, откройте страницу в Chrome.';
     }
   } else {
     hide();
@@ -139,6 +195,7 @@ export function createPwaInstallController({
 
   return {
     destroy() {
+      stopInstallPoll();
       windowRef.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
       windowRef.removeEventListener('appinstalled', onAppInstalled);
       button.removeEventListener('click', onClick);

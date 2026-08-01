@@ -159,14 +159,17 @@ test('presentation QR flow explains the fallback immediately and upgrades to the
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(event.promptCalls, 1);
   assert.equal(state.root.hidden, false);
-  assert.equal(state.button.hidden, true);
-  assert.match(state.status.textContent, /Установка подтверждена/u);
+  assert.equal(state.button.hidden, false);
+  assert.equal(state.button.disabled, true);
+  assert.equal(state.button.textContent, 'Устанавливается…');
+  assert.match(state.status.textContent, /Ждём завершения/u);
 
   const installed = fixture({ standalone:true, locationRef:{ search:'?install=presentation' } });
   assert.equal(installed.root.hidden, false);
-  assert.equal(installed.button.hidden, true);
+  assert.equal(installed.button.hidden, false);
+  assert.equal(installed.button.textContent, 'Открыть Анонсы');
   assert.equal(installed.guidance.hidden, true);
-  assert.match(installed.status.textContent, /уже установлено/u);
+  assert.match(installed.status.textContent, /Приложение установлено/u);
 });
 
 test('presentation install never describes an Android shortcut as the installed app', async () => {

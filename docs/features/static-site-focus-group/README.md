@@ -645,6 +645,11 @@ HTML is revalidated within 60 seconds, the manifest within five minutes and
 only content-hashed assets are immutable. The invitation captures Chromium's
 one-shot `beforeinstallprompt` before hydrated UI starts, and the public copy
 must never describe `Добавить на главный экран` as equivalent to PWA install.
+After the user accepts the system prompt the CTA remains visible as
+`Устанавливается…`; `appinstalled` records the exact base-scoped app identity
+and changes it to `Открыть Анонсы`. A repeat visit reuses that successful
+marker, while a new `beforeinstallprompt` invalidates a stale marker after an
+uninstall.
 
 For a clean operator retest on one device use:
 
