@@ -168,3 +168,21 @@ Working hypotheses until replay confirms the exact source path:
 ## Prevention
 
 This record is the regression contract for May 9 public event-quality drift. Closure requires a production-bound replay through the actual import + Smart Update path, not only prompt diffs or manual SQL edits. Venue aliasing should become a small, source-grounded Gemma 4 native-schema stage so the main extraction prompt stays light while public venue spelling remains consistent.
+
+
+## Static collection admission regression — 2026-08-01
+
+The data-prep candidate adds source-bound `confirmed_free|confirmed_paid|unknown`
+provenance while retaining `Event.is_free`. Unknown/provider failure preserves
+accepted truth; a new decision applies only after the exact `EventSource` is
+attached to the same event, and manual lock/trust/recency conflicts are
+fail-closed. Static export no longer infers free admission from prose
+`ticket_status`. This addresses the reusable mechanism behind the current
+`5370` scope false positive and `7145/7244/7246/7247` false negatives, but this
+branch performs no production row repair. Event `7287` remains an adjudication
+case rather than proof that festival extraction belongs to this scope.
+
+Regression evidence: `85` Smart Update/DB/ticket/participant/May-replay tests
+and `123` collection/semantic/export tests passed. Targeted production
+backfill/review, public rebuild and post-deploy verification remain required;
+this evidence does not close the older incident.

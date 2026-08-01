@@ -129,8 +129,8 @@ current product demonstration. A fresh current-catalog canary is required.
 
 - [x] Prove flag/config and route/promotion history.
 - [x] Distinguish expired review candidate from public-root rollout.
-- [ ] Separate mandatory semantic compute/quality receipt from per-label
-  publication state.
+- [x] Separate mandatory semantic compute/quality receipt from per-label
+  publication state in the data-prep candidate; production deploy is pending.
 - [ ] Repair non-approved/empty last-good and migration validation.
 - [ ] Repair the stale JS source-contract assertion.
 - [ ] Run fresh production-snapshot BGE candidate and warm cache-reuse run.
@@ -139,7 +139,24 @@ current product demonstration. A fresh current-catalog canary is required.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending; this turn changed analysis/incident documentation only
+### Data-prep candidate 2026-08-01
+
+- branch: `integration/static-collections-data-prep-20260801`; not deployed and
+  not yet reachable from `origin/main`;
+- implementation: `production-candidate` requires collection compute regardless
+  of the legacy Unusual flag/pgvector related mode, validates full catalog
+  membership and the ID-only batch, uses evidence-only
+  `collection_semantics_v1`, persists validated float32 cache/receipts, keeps
+  semantic labels blocked without gold, and records `provider_calls=0`;
+- focused regression: collection semantic/export/release suite `123 passed`;
+  Kaggle status/handoff/unusual/outbox suite `116 passed`; py_compile and final
+  integration checks are recorded in the branch integration report;
+- deliberately pending: real current-catalog Kaggle cold/warm run, accepted
+  unusual gold/recalibration, compatible nonempty last-good promotion, stale JS
+  source-contract repair, stable route and owner approval. Therefore status
+  remains `open` and local tests are not closure evidence.
+
+- deployed SHA: pending
 - deploy path: pending
 - fresh BGE run/receipt: pending
 - stable route browser check: pending

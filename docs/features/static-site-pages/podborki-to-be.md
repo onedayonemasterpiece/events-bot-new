@@ -1,8 +1,73 @@
 # Подборки статического сайта: анализ извлечения и простой общий проект
 
-Статус: **анализ завершён, включая production-аудит клубов, театров,
-бесплатности и расписания BGE; реализация не начиналась**, обновлён 2026-08-01.
+Статус: **анализ завершён; data-prep MVP реализован в integration-ветке, но
+ещё не развёрнут и не принят real Kaggle canary**, обновлён 2026-08-01.
 Исходные требования и последующие уточнения владельца сохранены в [`podborki.md`](./podborki.md).
+
+## 0. Состояние реализации data-prep MVP
+
+Реализация подготовлена в ветке
+`integration/static-collections-data-prep-20260801`. Это только граница данных:
+Astro routes, страницы, navigation, sitemap и публичное включение в этой ветке
+не делались. Киноисточники и фестивальный extraction/page track не менялись.
+
+Сделано:
+
+- один обязательный `collection_semantics_v1` compute для
+  `production-candidate` внутри существующего StaticSiteBuilder; запуск получает
+  уже переданный Fly SQLite snapshot и не читает core events из Supabase;
+- общий BGE-M3 event cache отделён от prototype banks, хранится в `float32`,
+  проверяется физическим/self hash и допускает reuse event rows при изменении
+  prototype; один batch пишет `collection-batch-v1.json`;
+- новые semantic heads остаются `blocked` до owner-approved gold; пустой starter
+  fixture не выдаётся за калибровку. Поэтому ветка fail-closed и пока не
+  восстанавливает public `/neobychnoe/`;
+- exact projection для «Бесплатно», «События для детей», спектаклей, выставок,
+  научпопа, театральных организаций и пилотных площадок; театр и место являются
+  разными ролями общего checked-in registry;
+- `Event.collection_decisions` и компактный candidate-only grounded adjudicator
+  для admission/audience/people. `Event.is_free` сохранён как совместимый bool;
+  `unknown`/provider failure его не снимают, а exporter больше не выводит free из
+  prose `ticket_status`;
+- клубная evaluation стала durable outbox-задачей с одним successor, accepted
+  history по `(club,event,input_hash)`, retry без уничтожения last accepted
+  relation, shadow-only discovery и `interest-clubs-static-v2.json` с
+  включительным шестимесячным lifecycle; production-control fixture фиксирует
+  шесть approved identities и 13 подтверждённых relations;
+- strict trailing debounce: автоматическая сборка ждёт 15 минут после последнего
+  Smart Update; operator/calendar triggers остаются immediate; во время running
+  build накапливается один follow-up;
+- fingerprint включает collection decisions, source-bound evidence, club
+  relation/evaluation truth, semantic policy/manifest identity.
+
+Generated handoff для следующего окна:
+
+- `site/src/data/collection-batch-v1.json`;
+- `site/src/data/venue-pages-v1.json`;
+- `site/src/data/interest-clubs-static-v2.json`;
+- существующий `site/src/data/interest-clubs.json` сохранён для совместимости;
+- BGE NPZ/receipt, semantic receipt и unusual cache остаются builder artifacts,
+  а не источником смысла в Astro.
+
+Не завершено и не должно маскироваться локальными тестами:
+
+1. применить additive migrations на проверенной production copy, затем отдельно
+   в production change window;
+2. выполнить current-catalog real Kaggle CPU cold run и warm run с нулём
+   re-encode unchanged events и `provider_calls=0`;
+3. разметить owner gold для новых heads и заново откалибровать «Необычное» на
+   evidence-only document;
+4. выполнить targeted admission/audience/people backfill/review; production DB
+   этой веткой не исправлялась;
+5. после quality acceptance передать manifests в отдельную Astro/UI ветку.
+
+Production-аудит, на котором основаны fixtures и contracts, выполнен read-only
+на Fly SQLite 2026-08-01 15:43 UTC (`PRAGMA integrity_check=ok`; DB mtime
+15:33 UTC). Дополнительной полной выгрузки ради разработки не делалось. На этом
+срезе все 6 approved клубов имели подтверждённую активность в окне
+2026-02-01..2026-08-01; у шести пилотных площадок было соответственно 80, 29,
+23, 23, 20 и 14 current/future event rows. Эти числа — audit controls, не
+runtime hardcode.
 
 ## 1. Короткий ответ на уточнения
 

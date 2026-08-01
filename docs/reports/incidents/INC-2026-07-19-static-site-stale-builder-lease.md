@@ -291,3 +291,19 @@ The public root remains unchanged. Closure still requires the owner's visual
 acceptance of the immutable review candidate; an ordinary debounced Smart
 Update follow-up may publish a newer candidate later but cannot mutate this
 review URL.
+
+
+## Static collections data-prep regression — 2026-08-01
+
+The candidate branch `integration/static-collections-data-prep-20260801` adds
+mandatory collection artifacts to the existing immutable handoff; it does not
+create another notebook, lease, snapshot or publisher. The collection batch,
+BGE cache/receipt and semantic receipt are validated under the same exact
+run/snapshot/fingerprint before persistence. Incoming Smart Update effects while
+a build is running still create exactly one recoverable follow-up and do not
+replace `remote_handoff`.
+
+Regression evidence: `123` collection/semantic/release tests and `116` Kaggle
+status/handoff/unusual/outbox tests passed. No deploy/live lease exercise was
+performed, so the incident's existing production evidence is unchanged and the
+new branch still requires a real cold/warm candidate before release.

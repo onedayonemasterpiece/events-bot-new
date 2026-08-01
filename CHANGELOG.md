@@ -16,6 +16,7 @@
   reproducible Astro dependencies and generated site trees.
 
 ### Added
+- Added the static-selection data-prep MVP: source-bound admission/audience/people decisions, exact theatre/venue registry, durable club relation evaluation, six-month club projection, evidence-only shared BGE cache, ID-only collection/venue manifests and production-control fixtures. New semantic labels remain blocked until owner gold and a real Kaggle cold/warm canary.
 - Added the canonical static-collection extraction/product plan: it distinguishes
   ready exact-data pages from Smart Update and shared-BGE work, designs a small
   indexable medallion venue pilot, records zero-added-Supabase-egress gates, and
@@ -72,6 +73,7 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Fixed static-selection scheduling and truth boundaries: Smart Update now uses a strict trailing 15-minute static-build debounce, club provider failures preserve accepted relations with durable retry, and the exporter no longer infers free admission from prose ticket status. Production-candidate semantic computation is independent from legacy Unusual publication flags.
 - Region Talk social draft backfill now carries the exact reviewed ordered
   ImageDiagnostic selection into the publication manifest. Telegram source
   albums without expanded selections are deterministically bounded to the
