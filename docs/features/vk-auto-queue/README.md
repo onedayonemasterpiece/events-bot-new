@@ -62,6 +62,7 @@ VK_AUTO_IMPORT_ALLOW_STALE_INBOX_TEXT_ON_FETCH_FAIL=1
 - Маппинг "пост -> события": `vk_inbox_import_event` (`db.py`).
   - `vk_inbox.imported_event_id` хранит **первое** импортированное событие (для обратной совместимости UI),
   - `vk_inbox_import_event` хранит **все** события (если пост содержит несколько).
+- Для multi-event row `Smart Update invalid/no event_id` является terminal semantic verdict только для конкретного draft. Auto-import продолжает bounded список sibling drafts; строка становится `rejected`, только если отклонены все карточки, и `imported`, если хотя бы одна независимая карточка успешно сохранена. `deferred` остаётся для retryable rate-limit/технического partial failure, а не для повторения уже terminal semantic reject.
 
 ## Ручной запуск (для E2E)
 

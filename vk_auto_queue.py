@@ -2428,6 +2428,7 @@ async def _process_vk_inbox_row(
     added_posters_total = 0
     added_posters_by_event_id: dict[int, int] = {}
     partial_error: str | None = None
+    semantic_rejections: list[str] = []
     inline_jobs_enabled = (os.getenv("VK_AUTO_IMPORT_INLINE_JOBS", "1") or "").strip().lower() in {
         "1",
         "true",
@@ -2464,44 +2465,20 @@ async def _process_vk_inbox_row(
             exc_txt = str(exc)
             if "smart_update rejected:" in exc_txt:
                 report.errors.append(f"persist_rejected {source_url}: {exc_txt}")
-                if imported_event_ids:
-                    # A roundup is one queue row but several independent Smart
-                    # Update writes. Preserve/link successful children and let
-                    # a later batch retry the row idempotently; never discard the
-                    # already committed event ids by rejecting the whole row.
-                    partial_error = exc_txt
-                    ok = True
-                    break
-                report.inbox_rejected += 1
-                await vk_review.mark_rejected(db, post.id)
-                await _emit_progress(
-                    "⛔",
-                    [
-                        "Результат: Smart Update отклонил",
-                        f"Причина: {_shorten_reason(exc_txt) or '—'}",
-                        f"took_sec: {(time.monotonic() - start_ts):.1f}",
-                    ],
-                )
-                _log_row_timing(drafts_count=len(drafts or []), ok_value=False)
-                return
+                # A roundup is one queue row but its drafts are independent
+                # semantic candidates. One invalid/past/ungrounded card must not
+                # discard valid siblings that follow it. Structured output only
+                # guarantees shape, not semantic correctness, so Smart Update's
+                # rejection is a terminal per-draft validation result; continue
+                # through the bounded draft list and decide the row afterwards.
+                semantic_rejections.append(exc_txt)
+                ok = True
+                continue
             if "smart_update returned no event_id:" in exc_txt:
                 report.errors.append(f"persist_skipped {source_url}: {exc_txt}")
-                if imported_event_ids:
-                    partial_error = exc_txt
-                    ok = True
-                    break
-                report.inbox_rejected += 1
-                await vk_review.mark_rejected(db, post.id)
-                await _emit_progress(
-                    "⏭️",
-                    [
-                        "Результат: Smart Update пропустил (нет event_id)",
-                        f"Причина: {_shorten_reason(exc_txt) or '—'}",
-                        f"took_sec: {(time.monotonic() - start_ts):.1f}",
-                    ],
-                )
-                _log_row_timing(drafts_count=len(drafts or []), ok_value=False)
-                return
+                semantic_rejections.append(exc_txt)
+                ok = True
+                continue
 
             report.errors.append(f"persist_failed {source_url}: {exc_txt}")
             if not imported_event_ids:
@@ -2523,6 +2500,21 @@ async def _process_vk_inbox_row(
             break
     if drafts:
         _tmark("persist_total", persist_total_sec)
+
+    if semantic_rejections and not imported_event_ids:
+        report.inbox_rejected += 1
+        await vk_review.mark_rejected(db, post.id)
+        await _emit_progress(
+            "⏭️",
+            [
+                "Результат: Smart Update отклонил все события подборки",
+                f"Причина: {_shorten_reason(semantic_rejections[0]) or '—'}",
+                f"Отклонено карточек: {len(semantic_rejections)}",
+                f"took_sec: {(time.monotonic() - start_ts):.1f}",
+            ],
+        )
+        _log_row_timing(drafts_count=len(drafts or []), ok_value=False)
+        return
 
     if not ok:
         _log_row_timing(drafts_count=len(drafts or []), ok_value=False)
@@ -2573,6 +2565,8 @@ async def _process_vk_inbox_row(
         f"Иллюстрации: +{added_posters_total}",
         "Отчёт Smart Update: ⏳",
     ]
+    if semantic_rejections:
+        extra_lines.insert(0, f"⚠️ Отклонено независимых карточек: {len(semantic_rejections)}")
     if partial_error:
         retry_state = (
             f"повтор {partial_attempts}/{_partial_import_max_attempts()}"

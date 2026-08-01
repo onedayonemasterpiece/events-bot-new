@@ -37,6 +37,8 @@ Three user-reported production publications exposed adjacent event-quality failu
 - 2026-08-01 13:37–13:52 UTC — VK auto-import creates `7376`; Smart Update accepts `ДЕТСКИЙ КНИЖНЫЙ КЛУБ` and downstream jobs publish Telegram `3032` / managed VK `8544`.
 - 2026-08-01 13:47–14:13 UTC — VK auto-import parses `wall-179910542_14059` into two drafts. Smart Update keeps the false aggregate `7378` as `llm_single_event`, rejects the real 7 August child as `llm_scope_missing_target_city`, then publishes Telegram `3034` / managed VK `8545`.
 - 2026-08-01 15:00 UTC onward — user report, direct surface/source inspection and root-cause investigation begin.
+- 2026-08-01 15:49 UTC — first exact compensating replay fetches all eight images but exposes the remaining three-block parse-prompt OCR cap; no event is written.
+- 2026-08-01 16:11 UTC — second exact replay confirms all eight OCR blocks and seven independent drafts, then exposes row-level fail-fast: the first semantically invalid/past card prevents processing all later valid siblings; no event is written.
 
 ## Root Cause
 
@@ -46,6 +48,7 @@ Three user-reported production publications exposed adjacent event-quality failu
 4. `VK_AUTO_IMPORT_MAX_PHOTOS=4` protected RAM but truncated an explicit eight-card `расписание и места проведения — в карточках` source before OCR/LLM extraction, so later child events had no evidence available to the semantic parser.
 5. The 7 August child scoping response omitted the common `Калининград` lead line; the existing exact-city grounding rail then correctly failed closed, but the prompt did not explicitly require applicable common locality lines in `selected_excerpts`.
 6. The first post-deploy compensating replay exposed a second source-completeness cap: although transport fetched all eight images, `vk_intake_parse_llm` measured caption length after appending its own policy text, treated the source as long, and reduced eight OCR cards to three logistics-only fragments (29 characters total). Gemma consequently returned only the 7 August child; its scoped excerpt again lacked enough city evidence and correctly failed closed. The parse budget must use the raw caption and give explicit schedule-card sources their own bounded complete OCR lane.
+7. The second replay produced the expected seven independent drafts, but `_process_vk_inbox_row` treated `Smart Update invalid/no event_id` as a verdict for the whole queue row. Because the first card was a same-day/past basketball occurrence and failed occurrence evidence validation, later valid 2–9 August siblings were never attempted. Google documents that structured output guarantees JSON shape, not semantic correctness, and requires application validation; therefore the existing Smart Update validation remains authoritative per draft while the bounded importer must continue sibling drafts ([official structured-output guidance](https://ai.google.dev/gemini-api/docs/generate-content/structured-output)).
 
 ## Contributing Factors
 
@@ -100,6 +103,7 @@ Three user-reported production publications exposed adjacent event-quality failu
 - [x] Strengthen multi-event roundup extraction and occurrence-scope prompts.
 - [x] Add bounded adaptive photo intake for explicit schedule-card galleries.
 - [x] Preserve the matching bounded complete OCR-card evidence in the event-parse prompt and budget it against the raw source caption.
+- [x] Continue independent roundup siblings after a terminal per-draft Smart Update semantic rejection; reject the VK row only when all drafts are invalid.
 - [ ] Repair canonical rows and every already-published surface.
 - [ ] Deploy prevention from an `origin/main`-reachable SHA and run exact compensating roundup import.
 
