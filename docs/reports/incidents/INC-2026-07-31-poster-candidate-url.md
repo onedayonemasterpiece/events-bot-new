@@ -1,10 +1,10 @@
 # INC-2026-07-31-poster-candidate-url Smart Update падал на `PosterCandidate.url`
 
-Status: open
+Status: closed
 Severity: sev1
 Service: Smart Update / scheduled source parsing / VK auto-import / Telegram Monitoring
 Opened: 2026-07-31
-Closed: —
+Closed: 2026-08-01 00:21 UTC
 Owners: events-bot
 Related incidents: `INC-2026-07-31-false-kgd80-festival-link`, `INC-2026-07-27-future-event-source-coverage-drop`, `INC-2026-07-20-tg-monitor-stale-s22-lease`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/features/telegram-monitoring/video-quality.md`, `docs/features/source-parsing/README.md`, `docs/operations/incident-management.md`, `docs/operations/release-governance.md`
@@ -81,6 +81,17 @@ VK auto-import и live-проверку Telegram Monitoring с `@meowafisha`.
   Smart Update из-за presentation-title mismatch при точном official ticket
   URL/date/time. Подготовлен узкий idempotency fast path и opposite controls;
   общий/безвременной URL по-прежнему направляется в LLM identity gate.
+- 2026-07-31 23:22–23:31 UTC — releases 1830/1832 доставили exact ticket-slot
+  lookup и полную идемпотентность неизменившегося ticket replay: повтор больше
+  не перестраивает Telegraph и не ставит публичные страницы в очередь.
+- 2026-07-31 23:31–2026-08-01 00:15 UTC — семь последовательных cached
+  compensating runs (`5014`, `5015`, `5017`, `5018`, `5019`, `5021`, `5022`)
+  завершились успешно: 210 актуальных/пограничных кандидатов проверены, 208
+  восстановлены/обновлены, два уже прошедших события пропущены, failed/errors
+  отсутствуют.
+- 2026-08-01 00:05 UTC — release 1833 (`e39d536a`, exact `origin/main`)
+  распространил тот же exact-slot contract на специализированные Philharmonia
+  и Qtickets processors; final health ready.
 
 ## Root Cause
 
@@ -105,6 +116,13 @@ official ticket/date/time replay не проходил strict normalized-title f
 и заново оплачивал весь semantic merge. Fast path теперь принимает такой
 presentation mismatch только при точном canonical ticket URL и explicit slot;
 aggregate source URLs, другое время и `00:00` остаются за LLM gate.
+
+Контрольный replay обнаружил и третий mechanical no-op gap: лёгкий parser path
+безусловно перестраивал Telegraph и планировал public page jobs даже при
+неизменившихся `ticket_status` и `ticket_link`. Теперь такой повтор обновляет
+только freshness provenance; реальное изменение билетов сохраняет прежний
+rebuild contract. Philharmonia/Qtickets используют тот же exact verifier, а не
+собственный широкий legacy shortcut.
 
 Root cause механический (API/transport compatibility), а не semantic: fix не
 принимает смысловых решений и не заменяет LLM broad regex/keyword логикой.
@@ -194,22 +212,25 @@ Root cause механический (API/transport compatibility), а не seman
 
 ## Release And Closure Evidence
 
-- deployed SHA: `6775815d` (Fly release 1823; exact SHA в `origin/main`)
+- final deployed SHA: `e39d536a` (Fly release 1833; exact SHA в `origin/main`)
 - deploy path: clean integration release after main reconciliation; active
   machine `48e419df93e078`, `/healthz` ready
 - regression checks: canonical incident tests `3 passed` (включая exact
   Telegram replay); финальный Smart Update/VK/native-schema набор `107 passed`;
-  provider-path audit `822 files`, `allowlisted_debt=0`, `unapproved=0`
+  final source/Antigravity/gateway набор `148 passed`; provider-path audit
+  `824 files`, `allowlisted_debt=0`, `unapproved=0`
 - post-deploy VK verification: `11019`, `11022`, `11028`, `11033` восстановлены;
   финальный `ops_run.id=4993`, `inbox_imported=1`, `events_created=2`,
   `events_updated=2`, `errors=[]`; mapping `11033 -> 7355,7356,7357,7358`
-- runtime mirror after release 1823: новых `PosterCandidate.url` и native
-  GenAI schema `ValidationError` нет; exact roundup scope/bundle reviews прошли
-- remaining closure gate: source-by-source compensating replay из persistent
-  cached outputs для семи lanes, потерявших 122 строки в run 4932. Runs 4997,
-  5005 и 5007 были прерваны releases 1825/1827/1828; новый exact-ticket-slot
-  idempotency guard должен быть доставлен перед следующим replay, чтобы уже
-  восстановленные checkpoints не расходовали LLM quota повторно
+- runtime mirror from release 1823 activation (`2026-07-31 21:27 UTC`) through
+  closure: новых `PosterCandidate.url` и native GenAI schema `ValidationError`
+  нет; exact roundup scope/bundle reviews прошли
+- source catch-up: `5014 yantarhall 71/71`, `5015 dramteatr 21/21`, `5017
+  muzteatr 20/20`, `5018 sobor 30/30`, `5019 tretyakov 20 updated + 1 stale
+  skip`, `5021 philharmonia 14/14`, `5022 qtickets 32 updated + 1 stale skip`;
+  во всех семи final runs `failed_items=0`, `errors_count=0`
+- release health: machine `48e419df93e078`, release 1833, `/healthz`
+  `ok=true`, `ready=true`, SQLite and scheduler checks green
 
 ## Prevention
 

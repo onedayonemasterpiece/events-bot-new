@@ -102,6 +102,12 @@ no Antigravity limiter bypass was found.
   returned interaction/environment handles but polling returned 403; the
   foreground create returned the same 403. No limiter bypass or quota error
   was observed; further Antigravity retries were stopped.
+- 2026-07-31 23:31–2026-08-01 00:15 UTC — source catch-up ran strictly
+  sequentially through the shared gateway. Exact cached occurrences became
+  sub-second no-LLM updates; genuinely missing provenance alone reached Smart
+  Update. All observed calls contained consumer, key alias/env, quota scope,
+  reservation and terminal metadata; KEY6 participated as a gateway lane, not
+  as Smart Update-owned rotation.
 
 ## Root Cause
 
@@ -248,14 +254,16 @@ no Antigravity limiter bypass was found.
 ## Release And Closure Evidence
 
 - limiter deployed SHA: `6775815d` (introduced in Fly release 1823; included in
-  active release 1828 through current `origin/main` ancestry)
+  active release 1833 / SHA `e39d536a` through current `origin/main` ancestry)
 - deploy path: canonical Supabase schema applied; clean manual Fly deploy from
   a main-reconciled branch; Edge/provider-path cutover included in main
 - regression checks: targeted Python/Edge suites and offline static audit
   (`122` targeted Python tests plus the Region Talk secret-contract test,
   `13` Edge tests, TypeScript check; audit of `808` files with
   `allowlisted_debt=0`, `unapproved=0`)
-- post-deploy verification: not performed; external requests explicitly stopped
+- post-deploy verification: bounded production calls from the operator-approved
+  source catch-up were fully attributed by consumer/reservation/terminal
+  records; no successful direct/unreserved provider call was found
 - key6 pre-deploy verification: live atomic rollback probe completed in
   `46.39 ms`, required contract/scope present, persisted rows after rollback
   `0`; targeted gateway/Smart Update/festival tests `119 + 73 passed`, limiter
@@ -265,6 +273,10 @@ no Antigravity limiter bypass was found.
   to `tg_event_publish`, `smart_update`, `event_parse` and `event_topics`, with
   reservation and terminal ledger state; final audit scans `822` files with
   `allowlisted_debt=0`, `unapproved=0`
+- final regression gate: `148 passed`; offline provider-path audit scanned
+  `824` files with `allowlisted_debt=0`, `unapproved=0`, `unreadable_files=0`;
+  runtime mirror after 21:27 UTC contained no recurrence of the native schema
+  validation regression
 - Antigravity validation: A/B/foreground `3/3` physical attempts accounted as
   `festival_antigravity`; repeated provider result `403 permission_denied`
   across two registered projects/modes is an external eligibility blocker, not
