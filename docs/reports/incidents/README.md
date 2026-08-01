@@ -18,6 +18,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-01-guide-google-ai-package-closure.md`
+  - Scope: Guide Kaggle notebook generation, staged/embedded `google_ai`
+    package closure and scheduled LLM extraction.
+  - Must not regress: every Python module required by the current `google_ai`
+    package must reach the isolated generated notebook; a full catch-up is
+    required when a scheduled scan loses all prefiltered posts to one import
+    error class.
+
 - `INC-2026-07-31-region-talk-candidate-chat-incomplete-drafts.md`
   - Scope: Region Talk grounded-draft readiness and operator-chat delivery.
   - Must not regress: incomplete rows stay out of chat/queue; legacy sent flags

@@ -511,23 +511,46 @@ def _kernel_ref_from_meta(kernel_path: Path) -> str:
         return KERNEL_REF
 
 
-def stage_repo_bundle(output_root: Path) -> Path:
-    if not GOOGLE_AI_PACKAGE_PATH.exists():
-        raise FileNotFoundError(f"Missing package: {GOOGLE_AI_PACKAGE_PATH}")
-    output_root.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(GOOGLE_AI_PACKAGE_PATH, output_root / "google_ai")
-    return output_root
-
-
 def _embedded_google_ai_sources() -> dict[str, str]:
-    files = ("__init__.py", "client.py", "exceptions.py", "secrets.py")
+    """Return the complete deterministic Python source closure for ``google_ai``.
+
+    The generated Kaggle notebook must be self-contained: auxiliary files from
+    the kernel upload are not a reliable import boundary.  Keeping a hand-made
+    module allowlist here previously omitted newly introduced imports such as
+    ``limiter_supabase`` and ``interactions``.  Include every Python source in
+    the package, including future nested modules, while excluding bytecode and
+    other local artifacts.
+    """
+
+    if not GOOGLE_AI_PACKAGE_PATH.is_dir():
+        raise FileNotFoundError(f"Missing package: {GOOGLE_AI_PACKAGE_PATH}")
     payload: dict[str, str] = {}
-    for name in files:
-        path = GOOGLE_AI_PACKAGE_PATH / name
-        if not path.exists():
-            raise FileNotFoundError(f"Missing google_ai source for notebook embed: {path}")
-        payload[name] = path.read_text(encoding="utf-8")
+    for path in sorted(GOOGLE_AI_PACKAGE_PATH.rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        relative_path = path.relative_to(GOOGLE_AI_PACKAGE_PATH).as_posix()
+        payload[relative_path] = path.read_text(encoding="utf-8")
+    if "__init__.py" not in payload:
+        raise FileNotFoundError(
+            f"Missing google_ai source for notebook embed: {GOOGLE_AI_PACKAGE_PATH / '__init__.py'}"
+        )
     return payload
+
+
+def _write_google_ai_source_bundle(output_root: Path) -> Path:
+    package_root = output_root / "google_ai"
+    package_root.mkdir(parents=True, exist_ok=False)
+    for relative_path, source in _embedded_google_ai_sources().items():
+        target = package_root / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(source, encoding="utf-8")
+    return package_root
+
+
+def stage_repo_bundle(output_root: Path) -> Path:
+    output_root.mkdir(parents=True, exist_ok=True)
+    _write_google_ai_source_bundle(output_root)
+    return output_root
 
 
 def _build_notebook_payload_from_script(script_path: Path) -> dict[str, Any]:
@@ -555,7 +578,9 @@ def _build_notebook_payload_from_script(script_path: Path) -> dict[str, Any]:
             "_GUIDE_EMBEDDED_PACKAGE = _GUIDE_EMBEDDED_ROOT / 'google_ai'\n",
             "_GUIDE_EMBEDDED_PACKAGE.mkdir(parents=True, exist_ok=True)\n",
             "for _guide_name, _guide_body in _GUIDE_EMBEDDED_GOOGLE_AI.items():\n",
-            "    (_GUIDE_EMBEDDED_PACKAGE / _guide_name).write_text(_guide_body, encoding='utf-8')\n",
+            "    _guide_target = _GUIDE_EMBEDDED_PACKAGE / _guide_name\n",
+            "    _guide_target.parent.mkdir(parents=True, exist_ok=True)\n",
+            "    _guide_target.write_text(_guide_body, encoding='utf-8')\n",
             "if str(_GUIDE_EMBEDDED_ROOT) not in _GuideNotebookSys.path:\n",
             "    _GuideNotebookSys.path.insert(0, str(_GUIDE_EMBEDDED_ROOT))\n",
             "__file__ = str((_GuideNotebookPath.cwd() / 'guide_excursions_monitor.py').resolve())\n",

@@ -16,6 +16,10 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Guide Excursions generated Kaggle notebooks now embed the complete
+  deterministic `google_ai` Python source tree instead of a stale four-module
+  allowlist. Shared-limiter and future nested imports therefore survive the
+  isolated Kaggle bootstrap, with an executable import-closure regression test.
 - StaticSiteBuilder adoption now removes its stale local duplicate before the
   durable capacity probe and checks free space again before re-downloading the
   exact completed Kaggle output. Recovery can therefore free a volume that the

@@ -172,8 +172,9 @@ def _bootstrap_repo_bundle() -> None:
                 shutil.rmtree(WORK_REPO)
             package_root = WORK_REPO / "google_ai"
             package_root.mkdir(parents=True, exist_ok=True)
-            for name in ("__init__.py", "client.py", "exceptions.py", "secrets.py"):
-                shutil.copy2(flat_repo_root / name, package_root / name)
+            for source_path in sorted(flat_repo_root.glob("*.py")):
+                if source_path.is_file():
+                    shutil.copy2(source_path, package_root / source_path.name)
             sys.path.insert(0, str(WORK_REPO))
             print(f"Bootstrapped flat repo bundle from {flat_repo_root}", flush=True)
             return

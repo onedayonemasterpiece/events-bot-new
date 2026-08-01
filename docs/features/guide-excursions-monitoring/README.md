@@ -24,6 +24,12 @@
 Для guide-track LLM path должен быть только Gemma-only:
 
 - Kaggle extraction использует `GoogleAIClient` + Supabase-backed limiter с primary secret `GOOGLE_API_KEY2` и guide account label `GOOGLE_API_LOCALNAME2`;
+- generated Guide notebook является самостоятельной import-boundary: server
+  embed-ит детерминированно все `google_ai/**/*.py` с сохранением относительных
+  путей, а acceptance test запускает собранный notebook code с isolated Python.
+  Ручной allowlist модулей запрещён, потому что новый внутренний import
+  (`limiter_supabase`, `interactions` или будущий nested module) иначе превращает
+  все prefiltered posts в `llm_error:ModuleNotFoundError`;
 - default model split для первого production migration на `Gemma 4` такой:
   - `trail_scout.screen.v1` -> `models/gemma-4-31b-it` (канонический screen с `2026-04-20` eval; `26b-a4b-it` был признан нестабильным на длинных русскоязычных reportage-постах — non-deterministic hang ≥120s под structured output)
   - `trail_scout.announce_extract_tier1.v1` + `tier1_extract_block` rescue -> `models/gemini-3.1-flash-lite` (по аналогии со Smart Update facts_extract миграцией; extraction-полнота — известное bottleneck'о, а Lite RPD-бюджет `500/day` комфортно перекрывает текущие ~20-30 extract-вызовов/сутки на `GOOGLE_API_KEY2`)
