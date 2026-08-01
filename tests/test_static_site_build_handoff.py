@@ -269,6 +269,7 @@ def test_static_site_build_kaggle_command_includes_pgvector_handoff(monkeypatch:
     monkeypatch.setenv("STATIC_SITE_ICS_BASE_URL", "https://static.kenigevents.ru/ics")
     monkeypatch.setenv("PERSONALIZATION_SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setenv("PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test")
+    monkeypatch.setenv("PERSONALIZATION_SUPABASE_RELAY_URL", "https://relay.example.test")
     monkeypatch.setenv("STATIC_SITE_SECRET_CANDIDATE_ARTIFACT_RESEARCH", "1")
     monkeypatch.setenv("STATIC_SITE_SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH", "1")
 
@@ -299,6 +300,7 @@ def test_static_site_build_kaggle_command_includes_pgvector_handoff(monkeypatch:
     assert _arg_after(cmd, "--ics-base-url") == "https://static.kenigevents.ru/ics"
     assert _arg_after(cmd, "--public-personalization-supabase-url") == "https://example.supabase.co"
     assert _arg_after(cmd, "--public-personalization-supabase-publishable-key") == "sb_publishable_test"
+    assert _arg_after(cmd, "--public-personalization-supabase-relay-url") == "https://relay.example.test"
     assert _arg_after(cmd, "--public-yandex-auth-provider") == "custom:yandex"
     assert "--secret-candidate-artifact-research" in cmd
     assert "--secret-candidate-require-authorized-search" in cmd

@@ -99,9 +99,14 @@ export function loadPreviewPublicConfig(siteDir, runtimeEnv = process.env) {
     values.PUBLIC_PERSONALIZATION_SUPABASE_URL
     && values.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY,
   );
+  const resilientConfigured = Boolean(
+    configured
+    && values.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL,
+  );
   return {
     values,
     configured,
+    resilientConfigured,
     source: source ? 'dotenv' : 'process',
   };
 }
@@ -112,6 +117,13 @@ export function requirePreviewAuthorizedSearch(config, runtimeEnv = process.env)
     throw new Error(
       'Authorized Search is required for this preview, but no browser-safe Supabase URL/publishable key were found. '
       + 'Set PUBLIC_*, STATIC_SITE_PUBLIC_* or PERSONALIZATION_SUPABASE_URL/PUBLISHABLE_KEY in the explicit preview env file.',
+    );
+  }
+  if (required && !config.resilientConfigured) {
+    throw new Error(
+      'Authorized Search is required for this preview, but the browser-safe resilient relay URL is missing. '
+      + 'Set PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL, STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL '
+      + 'or PERSONALIZATION_SUPABASE_RELAY_URL.',
     );
   }
 }

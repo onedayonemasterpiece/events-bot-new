@@ -178,6 +178,16 @@ after any failed transport result and therefore communicated a false success.
   a successful 466-page Astro build. This delivers the data plane but does not
   close the incident: separate live code/link issuances and the root/current
   static release are still required.
+- 2026-08-01 08:39–08:47 UTC — operator clean-retest on the newly generated
+  immutable candidate still displayed the previous `lovekgd@mail.ru` session,
+  then participant registration waited and ended with “Не получилось сохранить
+  участие”. Candidate inspection proved that the reset treated local sign-out
+  as best effort and never verified removal of the persisted Auth key. The same
+  generated HTML contained the direct Supabase URL/key but no relay URL: the
+  Smart Update command builder did not forward the already-supported relay
+  argument, and Fly did not have the public relay environment value. Thus the
+  phone exercised neither a clean identity state nor the accepted resilient
+  registration route.
 
 ## Root Cause
 
@@ -208,6 +218,14 @@ after any failed transport result and therefore communicated a false success.
    caller abort fired first, and the alternate route received that aborted
    signal. The UI therefore described a fallback framework that could not
    actually fall back in this failure shape.
+6. `resetForOnboardingTest()` swallowed a failed local sign-out and immediately
+   claimed success. It did not unconditionally remove and verify the exact
+   Supabase storage key, chunked session fragments or PKCE verifier, so a
+   network failure could preserve the old account through the reload.
+7. The static builder runner supported a relay value, but
+   `_static_site_build_kaggle_command()` never passed that argument and the
+   authorized-candidate gate required only URL/key. A candidate could therefore
+   pass while silently compiling out the entire accepted fallback route.
 
 ## Contributing Factors
 
@@ -243,6 +261,11 @@ after any failed transport result and therefore communicated a false success.
 ### Mandatory checks before closure or deploy
 
 - An accepted `/otp` result alone opens the code step.
+- The clean-retest URL removes the persisted project Auth key, chunks, verifier
+  and intent before redirect; the next identity screen contains no former
+  email. Failure to clear storage is visible and cannot redirect as success.
+- Every authorized production candidate contains both direct and relay URLs;
+  missing relay configuration fails the build before publication.
 - Network error, timeout and `429` remain on the address step with honest copy;
   none says or implies that a message was sent.
 - Six digits cause one in-flight verify request. An old/replayed code fails
@@ -323,6 +346,8 @@ after any failed transport result and therefore communicated a false success.
       routes reproduced direct Supabase loss while the Yandex control stayed
       available, including a participant affected by the missing-email issue.
 - [ ] P0 deploy the false-success fix to the focus onboarding itself.
+- [ ] P0 deploy and phone-verify unconditional clean reset plus relay-bearing
+      participant registration on the current candidate.
 - [ ] P0 run affected-phone acceptance through the deployed stateless API
       Gateway relay without moving Auth state out of Supabase. The first real
       phone `KE3` exposed the fallback-budget defect; rerun after the corrected
