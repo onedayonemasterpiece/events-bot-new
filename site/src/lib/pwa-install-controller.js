@@ -62,6 +62,9 @@ export function createPwaInstallController({
   const onBeforeInstallPrompt = (event) => {
     if (!android || standalone) return;
     event.preventDefault();
+    if (windowRef.__kenigEventsPwaInstallPrompt === event) {
+      windowRef.__kenigEventsPwaInstallPrompt = null;
+    }
     installPrompt = event;
     if (status) status.textContent = 'Установка готова. Нажмите кнопку ниже.';
     reveal();
@@ -88,13 +91,13 @@ export function createPwaInstallController({
         if (status) {
           status.textContent = result?.outcome === 'accepted'
             ? 'Установка подтверждена.'
-            : 'Установка не завершена. Можно выбрать «Добавить на главный экран» в меню Chrome.';
+            : 'Установка не завершена. Обновите страницу, когда захотите повторить.';
         }
       }
     } catch {
       if (presentation) {
         showPresentationWaiting();
-        if (status) status.textContent = 'Не удалось открыть системное окно. Используйте меню Chrome: «Добавить на главный экран».';
+        if (status) status.textContent = 'Не удалось открыть системное окно. Откройте страницу в Chrome и обновите её.';
       }
     } finally {
       prompting = false;
@@ -131,6 +134,8 @@ export function createPwaInstallController({
   windowRef.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
   windowRef.addEventListener('appinstalled', onAppInstalled);
   button.addEventListener('click', onClick);
+  const capturedPrompt = windowRef.__kenigEventsPwaInstallPrompt;
+  if (capturedPrompt) onBeforeInstallPrompt(capturedPrompt);
 
   return {
     destroy() {

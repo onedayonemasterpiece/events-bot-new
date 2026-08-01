@@ -70,6 +70,10 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Focus-group Android onboarding now registers a base-aware, network-only PWA
+  worker and captures Chromium's one-shot install event before hydration. It no
+  longer presents a plain `Добавить на главный экран` shortcut as equivalent
+  to installing the `Анонсы` application.
 - Region Talk orchestrator metrics now merge external publication source
   attestations, making imported article candidates autonomously actionable for
   v8 backfill. Exact native Telegram album anchors are recognized as durable

@@ -83,6 +83,9 @@ test('mobile onboarding mounts the product identity and explicit no-confirmation
     read('src/components/FocusPwaInstallAction.astro'),
   ]);
   assert.match(page, /fokus-gruppa\/manifest\.webmanifest/u);
+  assert.match(page, /navigator\.serviceWorker\.register/u);
+  assert.match(page, /withBase\('\/pwa-sw\.js'\)/u);
+  assert.match(page, /__kenigEventsPwaInstallPrompt/u);
   assert.match(page, /apple-touch-icon[\s\S]*announcements-brand-v2-192\.png/u);
   assert.match(page, /apple-mobile-web-app-title" content="Анонсы"/u);
   assert.doesNotMatch(page, /Анонсы Lab|focus-group-icon\.png/u);
@@ -95,6 +98,17 @@ test('mobile onboarding mounts the product identity and explicit no-confirmation
   assert.match(action, /Приложение «Анонсы»/u);
   assert.match(action, /почти не занимает места/u);
   assert.match(action, /Android:[\s\S]*iPhone\/iPad:/u);
+  assert.doesNotMatch(action, /Добавить на главный экран/u);
+});
+
+test('focus PWA has a network-only service worker instead of shortcut-only fallback', async () => {
+  const worker = await read('src/pages/pwa-sw.js.ts');
+  assert.match(worker, /self\.skipWaiting\(\)/u);
+  assert.match(worker, /self\.clients\.claim\(\)/u);
+  assert.match(worker, /event\.respondWith\(fetch\(event\.request\)\)/u);
+  assert.match(worker, /application\/javascript/u);
+  assert.match(worker, /no-cache, no-store, must-revalidate/u);
+  assert.doesNotMatch(worker, /caches\./u);
 });
 
 test('focus install action preserves one-shot beforeinstallprompt and honest installed state', async () => {
@@ -122,6 +136,30 @@ test('focus install action preserves one-shot beforeinstallprompt and honest ins
   state.windowRef.dispatch('appinstalled');
   assert.equal(state.root.dataset.focusPwaInstalled, 'true');
   assert.match(state.status.textContent, /запуск остаётся действием пользователя/u);
+});
+
+test('focus install action consumes an early captured Chromium prompt', async () => {
+  const state = fixture();
+  state.controller.destroy();
+  const prompt = {
+    prevented: false,
+    preventDefault() { this.prevented = true; },
+    async prompt() { return { outcome: 'accepted' }; },
+  };
+  state.windowRef.__kenigEventsPwaInstallPrompt = prompt;
+  const controller = createFocusPwaInstallController({
+    windowRef: state.windowRef,
+    navigatorRef: { userAgent: 'Mozilla/5.0 (Linux; Android 15)', platform: '', maxTouchPoints: 0 },
+    root: state.root,
+    button: state.button,
+    status: state.status,
+    guidance: state.guidance,
+  });
+  assert.equal(prompt.prevented, true);
+  assert.equal(controller.ready, true);
+  assert.equal(state.button.hidden, false);
+  assert.equal(state.windowRef.__kenigEventsPwaInstallPrompt, null);
+  controller.destroy();
 });
 
 test('iOS guidance never claims that the page can open a system install prompt', () => {
