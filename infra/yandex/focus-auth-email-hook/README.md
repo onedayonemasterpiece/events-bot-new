@@ -83,8 +83,9 @@ The deterministic ZIP is written under ignored `artifacts/codex/`.
 - the Supabase Send Email Hook is intentionally **not enabled** yet, so the
   deployed boundary cannot receive Auth traffic;
 - NotiSend capacity is `routing_ready=false` until the current provider-period
-  used-recipient count and period end are reconciled; do not infer `0` from the
-  empty local admission set;
+  used-recipient count and period end are reconciled. `provider_reported`,
+  `occupied` and `available` are `null` before that first reconciliation; do not
+  infer `0` from the empty local admission set;
 - GitHub Environment `external-e2e` exists, requires review and allows only
   `main`. Its non-secret route/mail variables are set; a dedicated mailbox,
   `E2E_RECIPIENT_TEMPLATE` and the two IMAP secrets are still required for a
