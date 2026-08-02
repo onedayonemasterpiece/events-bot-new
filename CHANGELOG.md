@@ -12,7 +12,9 @@
   a product snapshot after each first/warm pass. It persists snapshot and
   quality JSON/Markdown evidence, requires identical normalized output, treats
   product `FAIL` as blocking, and records adapter exceptions as redacted hashes
-  without performing an automatic paid warm retry.
+  without performing an automatic paid warm retry. Any other failed first-pass
+  receipt (including a guard returning `invalid` without raising) now also
+  stops before warm, so an unrelated provider/guard failure is never retried.
 - Changed StaticSiteBuilder to run the existing static-collections product
   monitor immediately after generating its product snapshot and persist the
   quality JSON, Markdown and `qa-summary.json` through the existing Kaggle

@@ -961,9 +961,12 @@ async def run_manifest(
                             pass_receipt["errors"].append("product_quality_fail")
                             pass_receipt["status"] = "FAIL"
                     passes.append(pass_receipt)
-                    # Do not repeat a failed provider/guard path and accidentally
-                    # pay for or mutate the same partial ingestion a second time.
-                    if adapter_error is not None:
+                    # Do not repeat any failed first pass and accidentally pay for
+                    # or mutate the same partial ingestion a second time.  Adapter
+                    # guards can return an ordinary ``invalid`` result (rather than
+                    # raising), which is still visible here as a failed receipt
+                    # because the expected source/event binding was not created.
+                    if pass_receipt["status"] != "PASS":
                         break
                 if product_artifact_dir is not None:
                     if len(passes) == 2:

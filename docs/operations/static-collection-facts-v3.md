@@ -296,8 +296,10 @@ quote grounding, unique binding, SQLite `quick_check=ok`, then an identical warm
 replay with no Event or EventSource changes and zero collection calls/writes.
 With product arguments, each pass also emits snapshot + quality JSON/Markdown;
 PASS requires non-`FAIL` product status and equal first/warm normalized output.
-An adapter exception is redacted to type/message hash and stops before an
-automatic warm retry, preventing a second paid call.
+An adapter exception is redacted to type/message hash. More generally, any
+failed first-pass receipt stops before automatic warm replay: production guards
+can return a normal `invalid` result without raising, and that path must not be
+paid for or mutated a second time.
 This tool never publishes, deploys, enables routes, or substitutes a direct
 facts apply for normal ingestion.
 

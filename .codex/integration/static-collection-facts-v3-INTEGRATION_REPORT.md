@@ -323,8 +323,9 @@ Current source-faithful evidence:
 
 The replay CLI can now optionally emit a product snapshot and quality JSON/MD
 after each first/warm pass and fails if normalized output changes or monitor
-status is `FAIL`. Adapter exceptions are hashed/redacted and stop the warm retry,
-preventing an accidental second provider charge. No source-faithful path has a
+status is `FAIL`. Adapter exceptions are hashed/redacted, and every failed
+first-pass receipt stops the warm retry, preventing an accidental second
+provider charge. No source-faithful path has a
 complete first+warm PASS yet, so Gate E remains blocked and no release merge is
 allowed.
 

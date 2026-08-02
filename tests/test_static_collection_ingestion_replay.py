@@ -522,6 +522,72 @@ async def test_run_manifest_records_adapter_exception_without_warm_retry(
     assert "source material" not in json.dumps(first)
 
 
+@pytest.mark.asyncio
+async def test_run_manifest_does_not_warm_retry_failed_first_receipt(
+    tmp_path, monkeypatch
+):
+    fixture = tmp_path / "telegram.json"
+    fixture.write_text("{}", encoding="utf-8")
+    manifest_value = _manifest(fixture)
+    # The adapter returns normally, but an unavailable upstream guard can leave
+    # the expected binding absent.  That failed first receipt must not trigger a
+    # second provider-backed ingestion attempt.
+    manifest_value["cases"][0]["expected"].update(
+        first_collection_calls=0,
+        first_collection_write=False,
+    )
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest_value), encoding="utf-8")
+    cases = replay.validate_manifest(manifest_value, manifest_path=manifest_path)
+
+    db_path = tmp_path / "copy.sqlite"
+    db = Database(str(db_path))
+    await db.init()
+    async with db.get_session() as session:
+        session.add(
+            Event(
+                id=1,
+                title="Test",
+                description="Test event",
+                date="2026-08-08",
+                time="12:00",
+                location_name="Test venue",
+                city="Kaliningrad",
+                source_text="Source-bound fact.",
+            )
+        )
+        await session.commit()
+    await db.close()
+
+    calls = 0
+
+    async def guarded_invoke(_case, _db):
+        nonlocal calls
+        calls += 1
+        return {"status": "invalid", "reason": "unrelated_guard_unavailable"}
+
+    @contextlib.contextmanager
+    def no_side_effect_context():
+        yield
+
+    monkeypatch.setattr(replay, "publication_side_effect_guard", no_side_effect_context)
+    monkeypatch.setattr(replay, "invoke_adapter", guarded_invoke)
+
+    report = await replay.run_manifest(
+        db_path=db_path,
+        manifest_path=manifest_path,
+        cases=cases,
+    )
+
+    assert report["status"] == "FAIL"
+    assert calls == 1
+    assert len(report["cases"][0]["passes"]) == 1
+    assert report["cases"][0]["passes"][0]["errors"] == [
+        "source_binding_not_unique",
+        "source_id_mismatch",
+    ]
+
+
 def test_warm_receipt_fails_on_any_event_mutation():
     source = {
         "id": 1,
