@@ -4,11 +4,13 @@
 committed
 
 ## Requirement IDs
-- R01 move provisional seed and delete misleading legacy gold fixture
-- R02 ontology policy v2
-- R03 production source recheck for named defects
-- R04 source provenance and occurrence-family repair
-- R05 fail-closed contract CI; no public routes
+- R01 semantic rows 4648/6871 and festival parent/child/extraction scope
+- R02 role-specific repo SHAs, exact command/timestamps and snapshot serialization
+- R03 seed/index/receipt/required-set/source-ref validator invariants
+- R04 full/excerpt quote kind and explicit truncation metadata
+- R05 named semantic and validator regression tests
+- R06 PR-A-only boundary; no owner gold/scores/thresholds/Astro promotion
+- R07 review PASS with warnings; strict expected FAIL until PR B
 
 ## Branch
 `agent/static-collections-quality/pr-a-ontology`
@@ -17,29 +19,33 @@ committed
 `/home/dev/.codex/worktrees/events-bot-new/static-collections-analyst-review-20260801`
 
 ## Base SHA
-`0131dc384aadf364f81089e41aacd086d114e3a1` plus merge of current `origin/main@4d5a8f3592b2b4808b3885b8dd07ea4c31fbdc36`
+`f1a732fce6003dc24bcf38b012072951be85e5e6` (existing integrated PR-A draft)
 
 ## Head SHA
-`e2073976ef1d0f435ac3716a257e7bb4ab2e13d3`
+`6dec4628c3291e9433291ed13fdf9cb912b385a0`
 
 ## Files changed
-Review data/receipts, ontology v2, validator/workflow/tests, canonical docs,
-route-state contract and changelog. No Astro public route implementation.
+Review seed/receipts/index, deterministic source binder, validator/workflow,
+regression tests, canonical docs and changelog. No PR-B or Astro implementation.
 
 ## Commands run
 - read-only Fly SQLite schema and Event/EventSource probes
+- canonical 126-event/389-EventSource evidence export validation
 - `python3 scripts/validate_static_collections_quality.py --mode review ...`
-- three targeted unittest suites
+- expected-fail `--mode strict`
+- all `tests/test_static_collection_*.py`
 - Node E2E checker behavior tests
 
 ## Tests / verification
-Review gate PASS with zero errors. Short family supply and missing PR-B artifacts
-remain explicit warnings. Semantic publication stays blocked.
+Review gate PASS with zero errors and 11 warnings (six positive-supply
+shortfalls plus five pending PR-B bindings). Strict FAIL is expected because
+owner gold, scores, winners and frozen hashes do not exist. Semantic publication
+stays blocked.
 
 ## Risks
-Five labels remain below 15 independent positive families. Four source-review
-receipts still require canonical production follow-up. Owner gold, all-event
-scores, winning prototypes and browser candidate are deliberately absent.
+Six labels remain below 15 independent positive families. Five receipts have
+`needs_source_review` status. Owner gold, all-event scores, thresholds, winning
+prototypes and browser candidate are deliberately absent.
 
 ## Merge notes
 This is PR A only. Do not promote routes or weaken warnings in merge.

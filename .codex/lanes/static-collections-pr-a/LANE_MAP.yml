@@ -9,6 +9,7 @@ global_constraints:
   - semantic publication remains blocked
   - no cinema-source or festival-track work
   - production access is read-only
+  - draft PR 222 hardening only; do not start PR B
 verification_owner: /root
 stop_conditions:
   - owner gold or score artifacts would be required
@@ -16,7 +17,7 @@ stop_conditions:
 lanes:
   - id: map-quality-pr
     role: planner
-    requirement_ids: [R01, R05]
+    requirement_ids: [R03, R05, R06, R07]
     target: PR 207 validator/workflow and exact PR-A boundary
     depends_on: []
     execution_mode: parallel
@@ -44,7 +45,7 @@ lanes:
     status: committed
   - id: map-review-data
     role: planner
-    requirement_ids: [R01, R03, R04]
+    requirement_ids: [R01, R02, R04]
     target: provisional seed, provenance and occurrence-family map
     depends_on: []
     execution_mode: parallel
@@ -58,7 +59,7 @@ lanes:
     status: committed
   - id: static-collections-pr-a
     role: worker
-    requirement_ids: [R01, R02, R03, R04, R05]
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07]
     target: migrated review contract and source-bound review data
     depends_on: [map-quality-pr, map-ontology-code, map-review-data]
     execution_mode: serial_after_dependency
@@ -72,6 +73,7 @@ lanes:
       - site/scripts/static_collection_policy.v2.json
       - site/scripts/static-collections-e2e.contract.v1.json
       - scripts/validate_static_collections_quality.py
+      - scripts/build_static_collections_review_seed.py
       - tests/test_static_collection_*.py
       - tests/fixtures/static_collections_gold_v1.json
       - .github/workflows/static-collections-quality-e2e.yml
@@ -83,7 +85,7 @@ lanes:
       - smart_event_update.py
       - scripts/backfill_static_collection_facts.py
       - site/scripts/static_collection_prototypes.v1.json
-    expected_output: committed PR-A implementation with PASS review gate
+    expected_output: hardened source-bound provisional PR-A dataset with PASS review gate
     verification_scope: full_local
     effort: high
     status: committed
