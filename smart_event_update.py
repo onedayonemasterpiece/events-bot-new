@@ -1014,6 +1014,16 @@ def _collection_fact_quote_supports_value(
                 r"\bглазами\s+(?:юных|маленьких)\s+(?:автор|художник)\w*\b",
                 normalized,
             )
+            or re.search(
+                r"\b(?:рисунк\w*|работ\w*|картин\w*)\s+"
+                r"(?:учащих\w*|воспитанник\w*|школьник\w*|детей)\b",
+                normalized,
+            )
+            or re.search(
+                r"\bвыставк\w*\s+(?:творческ\w*\s+)?(?:работ\w*|рисунк\w*)\s+"
+                r"(?:воспитанник\w*|учащих\w*|школьник\w*|детей)\b",
+                normalized,
+            )
         ) and not re.search(
             r"\b(?:для\s+дет|приглаша\w*\s+дет|детям\s+и\s+взросл|"
             r"детей\s+и\s+родител|маленьк\w*\s+(?:зрител|участник))\w*",
@@ -1056,6 +1066,10 @@ def _collection_fact_quote_supports_value(
             or re.search(r"\b(?:общ\w*|совместн\w*)\s+(?:работ|задани|практик|маршрут)\w*\b", normalized)
             or (
                 re.search(r"\bсемейн\w*\s+команд\w*\b", normalized)
+                and adult_child
+            )
+            or (
+                re.search(r"\bпарн\w*\s+(?:упражнени|задани|практик)\w*\b", normalized)
                 and adult_child
             )
         )

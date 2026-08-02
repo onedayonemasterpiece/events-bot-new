@@ -201,6 +201,20 @@ def test_audience_quote_role_guard_rejects_child_authors_and_vague_family_copy()
         source_corpus="Выставка глазами юных художников.",
     ) is None
 
+    for quote in (
+        "16 рисунков учащихся",
+        "выставка творческих работ воспитанников Детской художественной школы",
+    ):
+        child_author = _payload(
+            child_value="confirmed",
+            child_quote=quote,
+            child_reason="explicit_child_participants",
+        )
+        assert validate_collection_adjudication_output(
+            child_author,
+            source_corpus=f"Работает {quote}.",
+        ) is None
+
     vague_family = _payload(
         family_value="confirmed",
         family_quote="семейная атмосфера",
@@ -329,6 +343,30 @@ def test_joint_parent_child_practice_requires_three_independent_grounded_facts()
             "joint_family_activity_decision",
         )
     } == {"confirmed"}
+
+
+def test_real_joint_parent_child_pair_exercises_are_valid_joint_evidence():
+    corpus = (
+        "Для детей от 7 лет — увлекательное путешествие в мир йоги. "
+        "Приглашаем провести утро всей семьей. "
+        "Парные упражнения — простые асаны и поддержки «родитель + ребенок»."
+    )
+    result = validate_collection_adjudication_output(
+        _payload(
+            child_value="confirmed",
+            child_quote="Для детей от 7 лет — увлекательное путешествие в мир йоги",
+            child_reason="explicit_child_audience",
+            family_value="confirmed",
+            family_quote="Приглашаем провести утро всей семьей",
+            family_reason="explicit_family_invitation",
+            joint_value="confirmed",
+            joint_quote="Парные упражнения — простые асаны и поддержки «родитель + ребенок»",
+            joint_reason="explicit_parent_child_team",
+        ),
+        source_corpus=corpus,
+    )
+    assert result is not None
+    assert result["joint_family_activity_decision"]["value"] == "confirmed"
 
 
 def test_parents_only_can_be_denied_only_from_explicit_negative_quote():
