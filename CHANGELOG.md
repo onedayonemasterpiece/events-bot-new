@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Recorded the live Static Site QA control-plane acceptance: canonical issue
+  `#253` launched protected browser run `30755922643`, received bot-authored
+  acceptance/terminal receipts and produced a redaction-safe PASS artifact with
+  exact SHA, one real message and one issue/verify/registration. The first OTP
+  gateway deliberately remains blocking-only until registry policy introduces
+  an advisory contract.
 - Fixed the published Static Site QA issue gateway after its first live control
   run: the reusable protected OTP workflow now receives the caller's allowed
   secrets before the called jobs apply the `external-e2e` Environment, and the

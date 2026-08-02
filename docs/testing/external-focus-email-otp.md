@@ -47,6 +47,12 @@ The immutable preview under test records repository SHA
 - Chromium: [run 30745526613](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30745526613),
   real delivery, `issue=1`, `verify=1`, `registration=1`, returning state and
   redaction gate PASS.
+- Canonical control issue browser smoke:
+  [run 30755922643](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30755922643),
+  launched by `/qa run` in
+  [issue #253](https://github.com/onedayonemasterpiece/events-bot-new/issues/253),
+  crossed Environment approval and independently repeated the same one-message,
+  `1/1/1`, registration `200`, returning-state and redaction PASS assertions.
 - Android 15 / Pixel 7 / real Chrome / UiAutomator2:
   [run 30747598046](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30747598046),
   email and numeric system-keyboard acceptance plus the same one-send and

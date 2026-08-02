@@ -231,6 +231,14 @@ after any failed transport result and therefore communicated a false success.
   `200` and the confirmed final screen. This is internal Auth integration
   evidence, not external mailbox-delivery E2E.
 
+- 2026-08-02 16:07–16:10 UTC — canonical QA control issue `#253` launched
+  browser run `30755922643` through the issue-comment gateway and the protected
+  `external-e2e` approval. The terminal artifact independently repeated exact
+  SHA matching, one real Mail Trigger message, issue/verify/registration
+  `1/1/1`, registration `200`, returning state and redaction PASS; bot-authored
+  `ACCEPTED` and `TERMINAL` receipts returned to the issue. The preceding wiring
+  probe `30755619798` failed closed before side effects because reusable secrets
+  had not been inherited, and directly produced the regression fix in PR `#254`.
 - 2026-08-02 — the external protected OTP code journey passed against immutable
   preview SHA `4a19fbe0b243d8a9a4652ff0c1e4fee9e895cf9c` in Chromium run
   `30745526613` and Android 15 / Pixel 7 / Chrome run `30747598046`. Each run
