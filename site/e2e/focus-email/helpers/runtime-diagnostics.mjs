@@ -12,11 +12,15 @@ export function summarizeRuntimeDiagnostics(entries = [], consoles = []) {
       && String(peer.method || 'GET') === String(entry.method || 'GET')));
   const clientOutcomeFailures = entries.filter((entry) => entry.path === CLIENT_OUTCOME_PATH
     && (entry.failure_class || Number(entry.status) >= 400));
+  const verificationTelemetryFailures = entries.filter((entry) => entry.path === TELEMETRY_PATH
+    && (entry.failure_class || Number(entry.status) >= 400));
   const unexpectedNetwork = entries.filter((entry) => entry.failure_class
-    && !expectedCancelled.includes(entry) && !clientOutcomeFailures.includes(entry));
+    && !expectedCancelled.includes(entry) && !clientOutcomeFailures.includes(entry)
+    && !verificationTelemetryFailures.includes(entry));
   const httpFailures = entries.filter((entry) => Number(entry.status) >= 400);
-  const telemetry403 = httpFailures.filter((entry) => entry.path === TELEMETRY_PATH && Number(entry.status) === 403);
-  const unexpectedHttp = httpFailures.filter((entry) => !telemetry403.includes(entry)
+  const telemetry403 = verificationTelemetryFailures.filter((entry) => Number(entry.status) === 403);
+  const telemetryUnavailable = verificationTelemetryFailures.filter((entry) => !telemetry403.includes(entry));
+  const unexpectedHttp = httpFailures.filter((entry) => !verificationTelemetryFailures.includes(entry)
     && !clientOutcomeFailures.includes(entry));
   const warnings = [];
   if (telemetry403.length) warnings.push({
@@ -24,6 +28,12 @@ export function summarizeRuntimeDiagnostics(entries = [], consoles = []) {
     operation: 'focus_auth_record_verification_v1',
     status: 403,
     count: telemetry403.length,
+    policy: 'warning',
+  });
+  if (telemetryUnavailable.length) warnings.push({
+    code: 'BEST_EFFORT_AUTH_TELEMETRY_UNAVAILABLE',
+    operation: 'focus_auth_record_verification_v1',
+    count: telemetryUnavailable.length,
     policy: 'warning',
   });
   if (clientOutcomeFailures.length) warnings.push({

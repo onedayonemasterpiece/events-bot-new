@@ -132,9 +132,11 @@ so that decoded header is canonical; a visible text/HTML body is used only when
 the matching Subject has no OTP. Raw multipart/MIME bodies may contain unrelated
 numeric fragments and are never combined with an already valid OTP Subject.
 This follows the documented [Yandex Mail Trigger message format](https://yandex.cloud/ru/docs/api-gateway/concepts/trigger/mail-trigger#format)
-and keeps raw mail out of evidence. Failures of the best-effort
-`focus_auth_record_client_outcome_v1` telemetry are retained as structured
-warnings; they never replace the blocking issue/verify/registration checks.
+and keeps raw mail out of evidence. Failures of the exact disposable telemetry
+RPCs `focus_auth_record_client_outcome_v1` and
+`focus_auth_record_verification_v1` are retained as structured warnings; they
+never replace the blocking issue/verify/registration checks. This exception is
+path-scoped: arbitrary network/HTTP/console failures remain blocking.
 
 ## Test identity policy
 
@@ -308,11 +310,14 @@ If the harness crashes before producing `.redaction-ok`, the workflow deletes
 the incomplete directory and emits a static safe `BLOCKED_INFRASTRUCTURE`
 receipt with side-effect counts `unknown`; it never starts the journey again.
 
-Sanitized runtime diagnostics treat only an aborted losing `/auth/v1/health`
-probe with a successful peer as expected cancellation. The exact best-effort
-`focus_auth_record_verification_v1` HTTP 403 is a structured
-`BEST_EFFORT_AUTH_TELEMETRY_403` warning; every other network/HTTP/console
-failure remains blocking.
+Sanitized runtime diagnostics treat only an aborted losing request with a
+successful same-method/path peer as expected cancellation. Transport/CORS/HTTP
+failures of the exact disposable `focus_auth_record_verification_v1` and
+`focus_auth_record_client_outcome_v1` RPCs are structured warnings. The legacy
+verification-only HTTP 403 keeps its
+`BEST_EFFORT_AUTH_TELEMETRY_403` code; other verification failures use
+`BEST_EFFORT_AUTH_TELEMETRY_UNAVAILABLE`. Every non-allowlisted
+network/HTTP/console failure remains blocking.
 
 A heavy Android/iOS advisory run may be started without waiting only when it is
 not the current release blocker. It must be reported as `STARTED_BACKGROUND`

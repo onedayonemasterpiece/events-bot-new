@@ -82,6 +82,12 @@ clean pre-navigation iOS startup artifact described above.
   but must never alter capability route health. If registration reports
   `no_route` after a relay probe passed, inspect the preceding disposable
   outcome for route-cache poisoning before sending another OTP.
+- In sanitized runtime diagnostics, allowlist failures only for the exact
+  disposable RPC paths `focus_auth_record_client_outcome_v1` and
+  `focus_auth_record_verification_v1`. Count their transport/CORS/HTTP failures
+  as structured warnings; do not let the same entries also increment blocking
+  network/HTTP counters. Replay a failed run's sanitized network JSONL through
+  the classifier before considering another real OTP send.
 - Retain only allowlisted host class, route, method, pathname class, status and
   fault result. Never retain query, body, headers, email, OTP or token.
 - With Yandex Mail Trigger, treat the exact allowlisted decoded Subject as the
