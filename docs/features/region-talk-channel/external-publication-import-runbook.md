@@ -10,10 +10,13 @@ publish editorial material.
 ## Preconditions and trust boundary
 
 The GitHub Actions workflow **Import trusted Region Talk external-publication
-research** is intentionally manual (`workflow_dispatch`) and has a fixed input
-allowlist. It checks out `main` itself and refuses a path or commit that is not
-reachable from that trusted checkout. A pull-request ref, a branch chosen by an
-operator, and an arbitrary uploaded JSON file are not accepted import inputs.
+research** is intentionally manual (`workflow_dispatch`) and accepts only a
+non-symlink file from its own `main` checkout whose path matches
+`docs/features/region-talk-channel/region-talk-external-research-result-*.json`.
+It refuses a path or commit that is not reachable from that trusted checkout.
+A pull-request ref, a branch chosen by an operator, an arbitrary uploaded JSON
+file, and any path outside that reviewed directory are not accepted import
+inputs.
 
 The protected environment `region-talk-ydb-import` is the approval boundary.
 The job has only `contents: read` and `id-token: write`; it does not read a
@@ -27,6 +30,7 @@ run:
 | `YANDEX_WIF_SERVICE_ACCOUNT_ID` | Yandex service account that receives the short-lived IAM token. |
 | `REGION_TALK_YDB_ENDPOINT` | Target YDB endpoint. |
 | `REGION_TALK_YDB_DATABASE` | Target YDB database path. |
+| `REGION_TALK_YDB_NAMESPACE` | Region Talk YDB namespace (`region_talk_compact`). |
 
 Yandex Workload Identity Federation must trust the GitHub OIDC audience and the
 protected environment's exact GitHub subject. The job exchanges its short-lived
@@ -49,9 +53,10 @@ schema and returns a non-zero result if any candidate row is rejected.
 | `region-talk-external-research-result-region-talk-external-2026-08-01-163142.json` | **Clean**: 20 valid, 0 rejected, 63 planned YDB rows in dry mode. | This is the only current historical input suitable for protected-environment dispatch, subject to live duplicate guard and environment approval. |
 
 A failed validation exits before YDB authentication and before any write. The
-fixed allowlist deliberately preserves the historical bytes for audit; a future
-corrected successor must be committed, documented with its SHA-256, reviewed,
-and explicitly added to the workflow allowlist in a separate reviewed change.
+historical bytes are deliberately preserved for audit. A corrected successor
+must use the permitted filename pattern, be committed to that same directory,
+documented with its SHA-256, reviewed, and merged to `main`; no workflow edit
+is required for a new reviewed result file.
 
 ## Procedure
 
@@ -76,9 +81,9 @@ and explicitly added to the workflow allowlist in a separate reviewed change.
 ### 2. Main: establish the reviewed input
 
 1. Merge the reviewed documentation and exact JSON to `main`; recheck that the
-   selected path is one of the workflow's choices and that its `sha256sum`
+   selected path matches the permitted filename pattern and that its `sha256sum`
    matches the documented value.
-2. Confirm that the protected environment and four OIDC/YDB variables above
+2. Confirm that the protected environment and five OIDC/YDB variables above
    are present. No application secret is needed or permitted for this path.
 3. Confirm the input is clean locally. At present this means selecting only the
    2026-08-01 historical file; the first two files are preserved evidence and
