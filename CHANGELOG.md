@@ -37,6 +37,11 @@
   browser/Android/iOS acceptance journeys and for sending/receiving controlled
   OTP mail through the existing Yandex Mail Trigger boundary without exposing
   mailbox credentials, raw messages or OTP evidence.
+- Fixed the static-site QA command gateway's cost guard: identical commands
+  posted while the prior accepted run is active are now recognized after the
+  per-issue queue drains, linked to that prior run and stopped before reusable
+  workflow dispatch; an intentional rerun after the terminal receipt remains
+  allowed.
 - Added the first real mobile focus OTP vertical slice: one platform-neutral
   journey now drives existing Chromium, Chrome Android/Appium UiAutomator2 and
   Mobile Safari/Appium XCUITest sequentially, checks native keyboard/viewport

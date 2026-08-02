@@ -111,6 +111,12 @@ Default command без явной platform запускает только `brow
 - duplicate command с тем же scenario/platform/target/SHA в активной concurrency
   группе возвращает ссылку на существующий run вместо второго запуска.
 
+Реализованный gateway сериализует комментарии по номеру control issue. Если
+идентичный command был опубликован между `ACCEPTED` и `TERMINAL` предыдущего
+run, queued обработчик отвечает `DEDUPLICATED` со ссылкой на тот run и не
+создаёт reusable OTP job. Идентичный command, опубликованный уже после
+`TERMINAL`, считается осознанным новым прогоном.
+
 ## 6. Ответы control plane
 
 После принятия команды workflow-комментарий должен содержать:

@@ -74,6 +74,10 @@ ChatGPT launch boundary from the control-plane document; a UI-only
   exact target allowlist and full SHA before checkout or side effects.
 - Never parse commands through `eval` or execute arbitrary refs/shell text.
 - Protected OTP still requires Environment approval and global concurrency.
+- Serialize commands per canonical issue and deduplicate an identical comment
+  posted inside the prior run's accepted-to-terminal time bracket. A queued
+  duplicate must link the prior run and create no new OTP job; the same command
+  posted after its terminal receipt remains an intentional rerun.
 - Report accepted requests with run URL/ID as `STARTED_BACKGROUND` or blocking
   start; report terminal PASS/FAIL/BLOCKED separately.
 
