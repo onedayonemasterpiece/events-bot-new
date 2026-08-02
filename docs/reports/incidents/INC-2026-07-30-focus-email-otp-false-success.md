@@ -231,6 +231,25 @@ after any failed transport result and therefore communicated a false success.
   `200` and the confirmed final screen. This is internal Auth integration
   evidence, not external mailbox-delivery E2E.
 
+- 2026-08-02 16:07–16:10 UTC — canonical QA control issue `#253` launched
+  browser run `30755922643` through the issue-comment gateway and the protected
+  `external-e2e` approval. The terminal artifact independently repeated exact
+  SHA matching, one real Mail Trigger message, issue/verify/registration
+  `1/1/1`, registration `200`, returning state and redaction PASS; bot-authored
+  `ACCEPTED` and `TERMINAL` receipts returned to the issue. The preceding wiring
+  probe `30755619798` failed closed before side effects because reusable secrets
+  had not been inherited, and directly produced the regression fix in PR `#254`.
+- 2026-08-02 — the external protected OTP code journey passed against immutable
+  preview SHA `4a19fbe0b243d8a9a4652ff0c1e4fee9e895cf9c` in Chromium run
+  `30745526613` and Android 15 / Pixel 7 / Chrome run `30747598046`. Each run
+  observed one real Yandex Mail Trigger delivery, exactly one OTP issue, one
+  verify, one participant registration, returning state and a passing redaction
+  audit. The iOS 18.5 / iPhone 16 / Mobile Safari adapter reached its native
+  email input in terminal run `30754894934`, but the hosted Simulator exposed no
+  `XCUIElementTypeKeyboard` after all bounded supported activation paths. It
+  failed closed as `FAIL_MOBILE_KEYBOARD` before entry with issue/verify/
+  registration `0/0/0`; iOS acceptance and the separate magic-link issuance
+  remain open.
 - 2026-08-01 22:52 UTC — implemented the server-side receipt boundary and
   provider routing in an isolated branch. A signed Send Email Hook now selects
   Postbox for a new first send and paid NotiSend `subscriber` for returning,
@@ -454,7 +473,11 @@ after any failed transport result and therefore communicated a false success.
 - regression checks: local focus suite, relay infra tests and Astro build pass;
   live production-origin CORS/Auth/Data/invalid-verify/invalid-refresh smoke pass
 - post-deploy verification: corrected root `KE3` passes all six checks in real
-  Chromium at mobile and desktop widths; affected-phone acceptance remains open
+  Chromium at mobile and desktop widths; external OTP code delivery now has
+  terminal Chromium and Android PASS receipts (`30745526613`, `30747598046`),
+  while iOS keyboard acceptance is a terminal FAIL (`30754894934`, zero side
+  effects). A separate magic-link issuance and remaining incident closure gates
+  are still open
 
 ## Prevention
 

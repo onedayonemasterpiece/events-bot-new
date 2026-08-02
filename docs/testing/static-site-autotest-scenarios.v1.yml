@@ -346,9 +346,9 @@ scenarios:
   focus.otp.browser_tab:
     title: Real focus-group email OTP in browser tab
     status:
-      browser: implemented_existing
-      android: planned_first_mobile_milestone
-      ios: planned_first_mobile_milestone
+      browser: implemented_terminal_live_acceptance
+      android: implemented_terminal_live_acceptance
+      ios: implemented_terminal_fail_mobile_keyboard
     layers: [L1, L2]
     platforms: [browser, android, ios]
     trigger_tags: [auth-otp, mobile-input, supabase-connectivity, yandex-relay]
@@ -358,6 +358,11 @@ scenarios:
     isolation: external-focus-email-otp
     execution: sequential_while_one_mailbox_is_shared
     evidence: restricted_no_video_no_trace_no_har
+    acceptance_receipts:
+      browser: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30745526613
+      browser_control_issue: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30755922643
+      android: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30747598046
+      ios_fail_mobile_keyboard: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30754894934
     blocking:
       pull_request: direct_contract_change_only
       release: true_for_auth_onboarding_or_mail_route_changes

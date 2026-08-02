@@ -145,6 +145,17 @@ request and prompt fingerprints, usage, input evidence, bounded history,
 strategy, grounding map and critic result are stored without truncation. The
 writer never changes `llm_decision` or the original verifier verdict.
 
+Draft recovery has its own product-run ceiling,
+`REGION_TALK_DRAFT_BACKFILL_LLM_BUDGET_MAX`. Production sets it to `100`, the
+hard maximum accepted by `DurableGeminiBudget`, so a legacy 20-request default
+cannot stop a larger recovery batch while provider capacity remains available.
+The same daily budget ID and request fingerprints are retained across retries,
+so raising the ceiling neither duplicates completed calls nor bypasses replay.
+This ceiling is subordinate to the shared Supabase RPM/TPM/RPD reservation and
+does not grant provider quota. Model routing remains
+`gemini-3.5-flash-lite` first and `gemini-3.1-flash-lite` only as the configured
+fallback.
+
 The style rule is enforced at four boundaries: Writer instruction, Critic
 hard-fail, deterministic writer validation before/after the single retry, and
 the shared notifier/planner readiness predicate. `public_caption()` repeats the

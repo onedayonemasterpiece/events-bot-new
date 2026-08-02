@@ -1,6 +1,6 @@
 # Запуск автотестов статического сайта из ChatGPT
 
-> **Статус:** стратегический, канонический companion к
+> **Статус:** реализован для `focus.otp.browser_tab`; канонический companion к
 > [`static-site-autotest-strategy.md`](static-site-autotest-strategy.md).
 > **Цель:** любой реализованный сценарий можно безопасно запустить и разобрать из
 > ChatGPT без запуска Codex и без изменения кода.
@@ -21,13 +21,23 @@ workflow само по себе не гарантирует, что текуща
 валидирует его и запускает тот же reusable scenario runner, что и ручной
 `workflow_dispatch`.
 
-До реализации command gateway текущий статус честный:
+Реализованный gateway:
 
-- ChatGPT может анализировать PR/runs/jobs и безопасные artifacts;
-- ChatGPT может комментировать issue/PR и, при наличии разрешения connector,
-  повторять failed jobs;
-- новый static-site QA run из ChatGPT **не считается подготовленным**, если для
-  него существует только GitHub UI `workflow_dispatch`.
+- `.github/workflows/static-site-qa-command.yml` принимает только exact
+  однострочную `/qa run` команду в каноническом labelled issue;
+- actor permission, scenario/platform, origin/path, blocking mode и существование
+  full SHA в trusted repository проверяются до protected runner;
+- команда вызывает тот же reusable `external-focus-email-otp.yml`, что и ручной
+  `workflow_dispatch`;
+- номер control issue фиксируется в Environment/repository variable
+  `STATIC_SITE_QA_CONTROL_ISSUE_NUMBER` после публикации listener в default
+  branch; до этого gateway fail-closed отклоняет комментарии.
+
+Каноническая рабочая точка: [Static Site QA Control #253](https://github.com/onedayonemasterpiece/events-bot-new/issues/253).
+Repository variable `STATIC_SITE_QA_CONTROL_ISSUE_NUMBER=253` привязывает
+listener только к ней. Reusable-вызов явно использует `secrets: inherit`, а
+terminal job всегда указывает `--repo`, поэтому protected Environment secrets и
+issue comment работают независимо от наличия checkout в конкретном job.
 
 ## 2. Целевая схема
 
@@ -54,18 +64,17 @@ ChatGPT or human
 /qa run scenario=focus.otp.browser_tab platform=android target_url=https://kenigevents.ru/... expected_repo_sha=<40-hex> mode=blocking
 ```
 
-Допустимые операции первой версии:
+Допустимая операция первой версии:
 
 ```text
-/qa run scenario=<registry-id> platform=browser|android|ios|all target_url=<https-url> expected_repo_sha=<40-hex> mode=blocking|advisory
-/qa status run_id=<github-run-id>
-/qa rerun-failed run_id=<github-run-id>
+/qa run scenario=<registry-id> platform=browser|android|ios|all target_url=<https-url> expected_repo_sha=<40-hex> mode=blocking
 ```
 
-`/qa rerun-failed` разрешён только для существующего run и сохраняет его exact
-scenario/target/SHA contract. Для real OTP он не должен автоматически повторять
-job после возможного side effect; повтор разрешается только если evidence
-однозначно доказывает, что OTP issue ещё не произошёл.
+`/qa status` и `/qa rerun-failed` пока не реализованы и не должны показываться
+как рабочие команды. Статус читается по run URL из bot receipt. Для real OTP
+автоматический rerun запрещён после возможного side effect; новый `/qa run`
+допустим только после terminal evidence либо с явно отдельным safe target
+contract.
 
 ## 4. Безопасность command gateway
 
@@ -101,11 +110,17 @@ Default command без явной platform запускает только `brow
 - `all` для дорогих L2 jobs требует release/blocking scenario либо явного
   owner-approved override;
 - full catalog на эмуляторах запрещён;
-- advisory run может завершать текущий диалог статусом `STARTED_BACKGROUND`, но
-  workflow обязан позднее опубликовать terminal result;
+- первый real-OTP gateway принимает только `mode=blocking`; advisory policy
+  появится лишь вместе со сценарием, где registry явно разрешает такой запуск;
 - real OTP не запускается schedule/nightly и использует fixed identity;
 - duplicate command с тем же scenario/platform/target/SHA в активной concurrency
   группе возвращает ссылку на существующий run вместо второго запуска.
+
+Реализованный gateway сериализует комментарии по номеру control issue. Если
+идентичный command был опубликован между `ACCEPTED` и `TERMINAL` предыдущего
+run, queued обработчик отвечает `DEDUPLICATED` со ссылкой на тот run и не
+создаёт reusable OTP job. Идентичный command, опубликованный уже после
+`TERMINAL`, считается осознанным новым прогоном.
 
 ## 6. Ответы control plane
 
@@ -169,16 +184,25 @@ qa control issue with fixed ID/label
 
 ## 9. Acceptance
 
+Live setup receipt: canonical
+[issue #253](https://github.com/onedayonemasterpiece/events-bot-new/issues/253),
+terminal protected browser
+[run 30755922643](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30755922643).
+The run crossed Environment approval, published bot-authored `ACCEPTED` and
+`TERMINAL` comments, matched the immutable SHA, received one real message,
+performed `issue/verify/registration=1/1/1`, returned registration `200`,
+restored returning state and passed redaction.
+
 Control plane считается готовым только если:
 
-- [ ] ChatGPT connector публикует safe `/qa run` comment без Codex;
-- [ ] authorised request создаёт один exact workflow run;
-- [ ] unauthorised/malformed request rejected до side effects;
-- [ ] browser smoke можно запустить и получить terminal artifact;
-- [ ] protected OTP request доходит до Environment approval, а не обходит его;
-- [ ] duplicate active request deduplicated;
-- [ ] run acknowledgement и terminal result возвращаются в control issue;
-- [ ] ChatGPT может по run ID найти jobs/artifact и сформировать независимый
+- [ ] конкретный ChatGPT GitHub connector публикует safe `/qa run` comment без Codex;
+- [x] authorised request создаёт один exact workflow run;
+- [ ] unauthorised/malformed request rejected live до side effects (parser tests есть);
+- [x] browser smoke можно запустить и получить terminal artifact;
+- [x] protected OTP request доходит до Environment approval, а не обходит его;
+- [ ] duplicate active request deduplicated live (детерминированный test есть);
+- [x] run acknowledgement и terminal result возвращаются в control issue;
+- [x] ChatGPT/agent может по run ID найти jobs/artifact и сформировать независимый
       отчёт;
-- [ ] docs/registry/agent instructions указывают этот control plane как
+- [x] docs/registry/agent instructions указывают этот control plane как
       обязательный способ connector-independent запуска.

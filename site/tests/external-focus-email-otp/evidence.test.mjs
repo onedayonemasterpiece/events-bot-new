@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { publicResult } from '../../e2e/focus-email/helpers/evidence.mjs';
+import { publicResult, qaSummary } from '../../e2e/focus-email/helpers/evidence.mjs';
 
 test('evidence result exposes the stable PII-free schema only', () => {
   const result = publicResult({
@@ -11,9 +11,12 @@ test('evidence result exposes the stable PII-free schema only', () => {
     mail: { matching_message_count: 1, otp_length: 6, message_id_hash: 'abcd' },
     redaction_audit_passed: true,
   });
-  assert.equal(result.schema_version, 1);
+  assert.equal(result.schema_version, 2);
   assert.equal(result.otp_issue_request_count, 1);
   assert.equal('email' in result, false);
   assert.equal('otp' in result, false);
   assert.equal('headers' in result, false);
+  const summary = qaSummary(result);
+  assert.equal(summary.scenario_id, 'focus.otp.browser_tab');
+  assert.equal(summary.evidence.native_ui, 'native-ui/');
 });

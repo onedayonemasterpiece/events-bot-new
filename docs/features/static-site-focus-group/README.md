@@ -680,7 +680,8 @@ available after an ambiguous selected-once issuance, shows verification beside
 the six cells and always restores input after failure.
 `site/scripts/check-focus-onboarding-email-integration.mjs` exercises the
 deployed page digit by digit without Enter. The external delivery gate remains
-a manual GitHub Environment workflow with a controlled IMAPS mailbox and a
+a manual protected GitHub Environment workflow with a dedicated no-persistence
+Yandex Mail Trigger WebSocket (or the retained controlled IMAPS adapter) and a
 real provider-delivered random OTP; it must not use an admin-issued token.
 
 The black-box mailbox implementation lives in
@@ -690,6 +691,27 @@ Its routine mode reuses one fixed synthetic identity so repeated acceptance runs
 do not inflate `auth.users`; unique aliases are allowed only for an explicitly
 requested fresh-user test. Workflow artifacts are PII-free and intended to be
 reviewable independently in ChatGPT.
+
+The same semantic browser-tab journey now has real Chrome Android/Appium
+UiAutomator2 and Mobile Safari/Appium XCUITest adapters. They validate the
+system keyboard, focused input and visual viewport before ordinary digit input;
+they do not substitute a desktop viewport or Playwright WebKit. PWA installation
+and Launcher/SpringBoard relaunch remain a separate milestone.
+
+The first terminal protected receipts for immutable SHA
+`4a19fbe0b243d8a9a4652ff0c1e4fee9e895cf9c` are Chromium
+[30745526613](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30745526613)
+and Android 15 / Pixel 7
+[30747598046](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30747598046).
+Both prove one provider-delivered message, one issue, one verify, one
+registration and returning membership; Android additionally proves the email
+and numeric system keyboards. iOS adapter execution has a separate terminal
+non-acceptance receipt
+[30754894934](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30754894934):
+Mobile Safari reached the active native email field, but the system keyboard was
+not observable after every bounded activation path, so it stopped with
+`FAIL_MOBILE_KEYBOARD`, zero OTP/verify/registration side effects and redaction
+PASS. iOS remains open until a terminal protected PASS.
 
 For a clean operator retest on one device use:
 

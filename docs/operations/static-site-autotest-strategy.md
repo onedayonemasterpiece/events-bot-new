@@ -45,20 +45,29 @@ Safari, Share Sheet или Home Screen.
 - component/browser contracts PWA install copy и lifecycle markers;
 - защищённый ручной workflow
   `.github/workflows/external-focus-email-otp.yml`;
-- реальный Chromium + Supabase Auth + IMAPS OTP journey в
-  `site/e2e/focus-email/run.mjs`;
+- единый Chromium/Android/iOS Supabase Auth OTP journey в
+  `site/e2e/focus-email/run.mjs`, включая Appium UiAutomator2/XCUITest adapters;
+- защищённый Yandex Mail Trigger → API Gateway WebSocket receipt без доступа CI
+  к человеческому ящику или приватному inbound bucket;
 - exact deployment SHA check, один OTP issue, один verify, одна idempotent
   participant registration, reload/returning state;
-- PII-free evidence с redaction gate, пригодный для отдельного анализа ChatGPT.
+- scenario registry, platform selector, GitHub issue `/qa run` gateway и единый
+  PII-free evidence index с redaction gate.
+
+Terminal live receipts для immutable SHA
+`4a19fbe0b243d8a9a4652ff0c1e4fee9e895cf9c`: Chromium
+[30745526613](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30745526613)
+и Android
+[30747598046](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30747598046)
+прошли весь путь. iOS adapter реализован, но terminal run
+[30754894934](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30754894934)
+честно завершился `FAIL_MOBILE_KEYBOARD` до side effects (`0/0/0`), поэтому iOS
+acceptance остаётся открытым.
 
 Не существует и не должно считаться готовым:
 
-- Android Emulator-вариант реального OTP;
-- iOS Simulator-вариант реального OTP;
+- принятый terminal iOS Simulator real-OTP PASS;
 - native install/relaunch PWA acceptance;
-- общий scenario registry и selector;
-- единая политика blocking/background/manual запусков;
-- общий evidence index для browser/Android/iOS;
 - автоматизация всех перечисленных ниже будущих page/data сценариев.
 
 Текущий service worker network-only. Пока продуктовый контракт не изменён,
@@ -277,7 +286,8 @@ Nightly не должен создавать новых пользователе
 6. фокусировать email input и проверить реальную email keyboard на L2;
 7. ввести fixed test identity;
 8. выполнить конкурирующие обычные gestures и доказать ровно один OTP issue;
-9. получить ровно одно подходящее IMAPS message после checkpoint;
+9. получить ровно одно подходящее real-mail message после checkpoint через
+   controlled IMAPS либо dedicated Yandex Mail Trigger WebSocket;
 10. фокусировать OTP input и проверить numeric/one-time-code keyboard на L2;
 11. ввести OTP посимвольно;
 12. доказать ровно один verify и одну participant registration;
@@ -508,11 +518,14 @@ NO-GO, если:
 
 ### M2 — Android browser-tab OTP
 
-Android Emulator + Chrome + UiAutomator2, реальная клавиатура, protected real mail.
+Завершено: Android Emulator + Chrome + UiAutomator2, реальная клавиатура и
+protected real mail приняты terminal run `30747598046`.
 
 ### M3 — iOS browser-tab OTP
 
-iOS Simulator + Mobile Safari + XCUITest, реальная клавиатура, protected real mail.
+Adapter и protected job реализованы. Terminal run `30754894934` доказал exact
+simulator/Safari/XCUITest path и отсутствие side effects, но не прошёл native
+keyboard gate (`FAIL_MOBILE_KEYBOARD`); milestone остаётся открытым до PASS.
 
 ### M4 — PWA install/relaunch
 
