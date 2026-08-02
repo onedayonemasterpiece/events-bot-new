@@ -32,6 +32,10 @@
   one mail and `1/1/1` issue/verify/registration over relay, active direct-host
   faults, registration `200`, returning membership and redaction PASS; the iOS
   receipt also closes Safari first-run and native keyboard acceptance.
+- Added the reciprocal relay-outage OTP route gate: under
+  `client_yandex_relay_unreachable`, issue, verify and registration must each
+  have exactly one direct outcome and no relay outcome. The assertion is shared
+  and unit-tested symmetrically with the existing direct-outage gate.
 
 - Changed iOS Safari OTP preflight to create a native-first Safari session,
   enable XCUITest `respectSystemAlerts`, close the bounded first-run sheet, and

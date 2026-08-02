@@ -47,11 +47,13 @@ its result must not mutate route health. The direct-unreachable acceptance
 specifically guards that failed telemetry cannot quarantine the relay selected
 by `transport_probe_v1` before participant registration.
 
-The profiles `client_yandex_relay_unreachable` and
-`both_client_routes_unreachable` are already reserved in the closed registry;
-their terminal product journeys follow after the direct-unreachable relay
-proof. A CONNECT proxy remains an independent canary and is not release truth
-until each installed mobile driver proves that it actually applied the proxy.
+The reciprocal `client_yandex_relay_unreachable` profile rejects only the
+Yandex Supabase relay host. Its acceptance requires exactly one direct outcome
+and zero relay outcomes for OTP issue, verify and participant registration.
+`both_client_routes_unreachable` remains a separate no-mail/degraded-UX cell;
+it must not reuse the ordinary journey's expectation of a delivered OTP. A
+CONNECT proxy remains an independent canary and is not release truth until each
+installed mobile driver proves that it actually applied the proxy.
 
 ## Strategic status and mobile boundary
 
