@@ -20,7 +20,15 @@ fresh-user aliases are explicit, non-routine coverage.
 Android Chrome/UiAutomator2 and iOS Safari/XCUITest jobs. Terminal receipts and
 the per-platform implementation boundary are recorded in the external runbook
 and scenario registry; a workflow skeleton or non-terminal mobile run is not
-acceptance.
+acceptance. Immutable SHA `4a19fbe0b243d8a9a4652ff0c1e4fee9e895cf9c`
+has terminal PASS receipts for Chromium
+[30745526613](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30745526613)
+and Android
+[30747598046](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30747598046).
+iOS terminal run
+[30754894934](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30754894934)
+is retained as `FAIL_MOBILE_KEYBOARD` with zero mail/Auth/membership side
+effects, not as acceptance.
 
 Правило обновления:
 - При добавлении нового `.feature` файла или существенном изменении набора сценариев сначала обновляй эту страницу.

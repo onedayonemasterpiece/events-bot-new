@@ -705,8 +705,13 @@ and Android 15 / Pixel 7
 [30747598046](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30747598046).
 Both prove one provider-delivered message, one issue, one verify, one
 registration and returning membership; Android additionally proves the email
-and numeric system keyboards. iOS is recorded here only after its own terminal
-protected PASS.
+and numeric system keyboards. iOS adapter execution has a separate terminal
+non-acceptance receipt
+[30754894934](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30754894934):
+Mobile Safari reached the active native email field, but the system keyboard was
+not observable after every bounded activation path, so it stopped with
+`FAIL_MOBILE_KEYBOARD`, zero OTP/verify/registration side effects and redaction
+PASS. iOS remains open until a terminal protected PASS.
 
 For a clean operator retest on one device use:
 

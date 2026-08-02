@@ -51,9 +51,15 @@ The immutable preview under test records repository SHA
   [run 30747598046](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30747598046),
   email and numeric system-keyboard acceptance plus the same one-send and
   returning-state assertions PASS.
-- iOS 18.5 / iPhone 16 / Mobile Safari / XCUITest: terminal receipt is recorded
-  in the scenario registry only after the protected run reaches PASS; a failed
-  or blocked attempt is not represented as acceptance.
+- iOS 18.5 / iPhone 16 / Mobile Safari / XCUITest:
+  [run 30754894934](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30754894934)
+  is the terminal **non-acceptance** receipt. The exact native email field was
+  active and visible, but XCUITest reported no `XCUIElementTypeKeyboard` after
+  the bounded physical tap, exact Simulator menu toggle, frontmost `Cmd-K` and
+  retap sequence. The run failed as `FAIL_MOBILE_KEYBOARD` before email entry,
+  with `issue=0`, `verify=0`, `registration=0` and redaction PASS. The iOS
+  adapter is implemented, but iOS product acceptance remains open; this receipt
+  must never be presented as PASS.
 
 The Ubuntu Android job explicitly enables and verifies `/dev/kvm` before
 booting API 35. Unaccelerated x86 emulation is a blocked infrastructure result,
