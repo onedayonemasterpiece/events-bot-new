@@ -60,18 +60,32 @@ test('non-empty preview base resolves the lab worker, scope and assets inside th
   assert.match(runtime.cacheName, /preview-pwa-capabilities-deadbeef/u);
 });
 
-test('Astro sources keep browser paths base-aware and deploy exact lab MIME metadata', async () => {
-  const [page, worker, manifest, browserRuntime, deploy] = await Promise.all([
+test('Astro sources keep install/runtime paths base-aware and deploy exact lab MIME metadata', async () => {
+  const [page, worker, manifest, browserRuntime, installAdapter, installController, deploy] = await Promise.all([
     read('src/pages/lab/pwa-capabilities/index.astro'),
     read('src/pages/lab/pwa-capabilities/sw.js.ts'),
     read('src/pages/lab/pwa-capabilities/manifest.webmanifest.ts'),
     read('src/lib/pwaCapabilitiesLab.js'),
+    read('src/lib/pwa-lab-install-controller.ts'),
+    read('src/lib/pwa-install-controller.js'),
     read('scripts/deploy-preview-yc.mjs'),
   ]);
 
   assert.match(page, /noindex,nofollow,noarchive/u);
   assert.match(page, /withBase\('\/lab\/pwa-capabilities\/manifest\.webmanifest'\)/u);
   assert.match(page, /<link rel="manifest" href=\{manifestUrl\}/u);
+  assert.match(page, /addEventListener\('beforeinstallprompt'/u);
+  assert.match(page, /event\.preventDefault\(\)/u);
+  assert.match(page, /__kenigEventsPwaInstallPrompt = event/u);
+  assert.match(page, /new URL\('\.\/sw\.js', window\.location\.href\)/u);
+  assert.match(page, /data-pwa-install-id=\{labInstallId\}/u);
+  assert.match(page, /data-pwa-open-href=\{labOpenHref\}/u);
+  assert.match(page, />Установить PWA Lab</u);
+  assert.match(installAdapter, /createPwaInstallController\(/u);
+  assert.match(installAdapter, /PWA Lab запущена с главного экрана/u);
+  assert.match(installAdapter, /display-mode: standalone/u);
+  assert.match(installAdapter, /Закройте вкладку и откройте PWA Lab через новую иконку/u);
+  assert.match(installController, /texts = \{\}/u);
   assert.doesNotMatch(browserRuntime, unprefixedRuntimePath);
   assert.match(browserRuntime, /new URL\('\.\/sw\.js', labUrl\)/u);
   assert.match(browserRuntime, /serviceWorker\.register\(workerUrl\.href\)/u);
@@ -107,6 +121,9 @@ test('built preview fixture contains no unprefixed lab runtime paths', async (co
 
   assert.match(page, /<meta name="robots" content="noindex,nofollow,noarchive"/u);
   assert.match(page, new RegExp(`href="/${buildId}/lab/pwa-capabilities/manifest\\.webmanifest"`, 'u'));
+  assert.match(page, new RegExp(`data-pwa-install-id="/${buildId}/lab/pwa-capabilities/"`, 'u'));
+  assert.match(page, new RegExp(`data-pwa-open-href="/${buildId}/lab/pwa-capabilities/"`, 'u'));
+  assert.match(page, /new URL\('\.\/sw\.js', window\.location\.href\)/u);
   assert.equal(manifest.id, expectedLabPath);
   assert.equal(manifest.start_url, expectedLabPath);
   assert.equal(manifest.scope, expectedLabPath);

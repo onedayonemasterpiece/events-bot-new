@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Added controlled installation to the versioned PWA capabilities lab by
+  reusing the shared focus-group install controller: early one-shot prompt
+  capture, immediate directory-scoped worker registration, Android/Custom Tab
+  guidance and explicit installed standalone diagnostics now distinguish a
+  launched PWA from an ordinary browser tab.
 - Changed the isolated PWA capabilities lab to be fully preview-base-aware:
   its page, assets, default event URL, directory-scoped worker, notification
   clicks/cache and dedicated lab manifest now remain inside a versioned preview

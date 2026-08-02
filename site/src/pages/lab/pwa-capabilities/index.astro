@@ -7,6 +7,8 @@ const canonicalUrl = absoluteUrl('/lab/pwa-capabilities/');
 const vapidPublicKey = import.meta.env.PUBLIC_PWA_LAB_VAPID_PUBLIC_KEY || '';
 const labUrl = withBase('/lab/pwa-capabilities/');
 const manifestUrl = withBase('/lab/pwa-capabilities/manifest.webmanifest');
+const labInstallId = labUrl;
+const labOpenHref = labUrl;
 const imageUrls = [
   withBase('/assets/pwa/announcements-192.png'),
   withBase('/assets/pwa/announcements-brand-192.png'),
@@ -24,9 +26,48 @@ const cacheName = `kenigevents-pwa-capabilities-lab-${encodeURIComponent(labUrl)
     <link rel="canonical" href={canonicalUrl} />
     <link rel="manifest" href={manifestUrl} />
     <title>{title}</title>
+    <script is:inline>
+      // Capture Chromium's one-shot event before hydrated modules run.
+      window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        window.__kenigEventsPwaInstallPrompt = event;
+      });
+      // The worker lives beside this page, so the browser's default directory
+      // scope cannot escape the versioned preview lab directory.
+      if ('serviceWorker' in navigator) {
+        const workerUrl = new URL('./sw.js', window.location.href);
+        window.__kenigEventsPwaLabWorkerRegistration = navigator.serviceWorker.register(workerUrl, {
+          updateViaCache: 'none',
+        }).catch(() => null);
+      }
+    </script>
   </head>
   <body>
     <main class="shell">
+      <section
+        class="panel install-panel"
+        data-pwa-lab-install
+        data-pwa-install-root
+        data-pwa-install-id={labInstallId}
+        data-pwa-open-href={labOpenHref}
+        data-pwa-install-ready="false"
+        aria-labelledby="pwa-install-title"
+      >
+        <p class="eyebrow">controlled install</p>
+        <h2 id="pwa-install-title">Установка PWA Lab</h2>
+        <p>Установите именно эту versioned лабораторию, затем запускайте её через новую иконку, а не из браузерной вкладки.</p>
+        <button type="button" data-pwa-install-button hidden>Установить PWA Lab</button>
+        <p class="install-status" data-pwa-install-status role="status" aria-live="polite">
+          Проверяем, предложит ли браузер установку PWA Lab.
+        </p>
+        <p class="standalone-status" data-pwa-install-standalone hidden></p>
+        <div class="install-guidance" data-pwa-install-guidance>
+          <strong>Если кнопка установки не появилась</strong>
+          <span>Chrome Custom Tab: откройте меню ⋮ → «Открыть в Chrome», затем обновите страницу.</span>
+          <span>Неподдерживаемый браузер: откройте эту же ссылку в актуальном Chrome на Android. Обычная вкладка не считается acceptance.</span>
+        </div>
+      </section>
+
       <header class="hero">
         <p class="eyebrow">noindex · isolated browser lab</p>
         <h1>PWA-возможности для анонсов</h1>
@@ -47,6 +88,7 @@ const cacheName = `kenigevents-pwa-capabilities-lab-${encodeURIComponent(labUrl)
               <tr><th>File Share</th><td data-diagnostic="fileShare">проверка…</td></tr>
               <tr><th>Service Worker</th><td data-diagnostic="serviceWorker">проверка…</td></tr>
               <tr><th>Lab worker scope</th><td data-diagnostic="workerScope">проверка…</td></tr>
+              <tr><th>Worker controlling page</th><td data-diagnostic="workerControlling">проверка…</td></tr>
               <tr><th>Notifications / permission</th><td data-diagnostic="notifications">проверка…</td></tr>
               <tr><th>PushManager</th><td data-diagnostic="push">проверка…</td></tr>
               <tr><th>IndexedDB</th><td data-diagnostic="indexedDb">проверка…</td></tr>
@@ -146,7 +188,9 @@ const cacheName = `kenigevents-pwa-capabilities-lab-${encodeURIComponent(labUrl)
       window.__PWA_LAB_CONFIG__ = { vapidPublicKey, labUrl, imageUrls, cacheName };
     </script>
     <script>
+      import { hydrateLabPwaInstallAction } from '../../../lib/pwa-lab-install-controller';
       import { initPwaCapabilitiesLab } from '../../../lib/pwaCapabilitiesLab.js';
+      hydrateLabPwaInstallAction();
       initPwaCapabilitiesLab(window.__PWA_LAB_CONFIG__ || {});
     </script>
   </body>
@@ -159,6 +203,12 @@ const cacheName = `kenigevents-pwa-capabilities-lab-${encodeURIComponent(labUrl)
   .shell { width:min(1080px, calc(100% - 28px)); margin:0 auto; padding:32px 0 80px; }
   .hero, .panel { background:var(--paper); border:1px solid var(--line); border-radius:18px; padding:clamp(18px, 3vw, 30px); box-shadow:0 12px 35px rgba(74,49,29,.07); }
   .panel { margin-top:18px; }
+  .install-panel { margin-top:0; border-color:#9d3f1c; background:linear-gradient(135deg, #fffdf8, #fff3e2); }
+  .install-panel + .hero { margin-top:18px; }
+  .install-panel > p:not(.eyebrow) { max-width:70ch; }
+  .install-status, .standalone-status { color:var(--accent); font-weight:800; }
+  .install-guidance { display:grid; gap:6px; margin-top:14px; border-radius:12px; padding:12px 14px; background:#fff7df; color:#725214; }
+  .install-guidance[hidden], [data-pwa-install-button][hidden], .standalone-status[hidden] { display:none; }
   h1, h2, h3 { line-height:1.15; margin-top:0; }
   h1 { font-size:clamp(2rem, 6vw, 4rem); max-width:14ch; margin-bottom:16px; }
   h2 { font-size:clamp(1.35rem, 3vw, 2rem); }

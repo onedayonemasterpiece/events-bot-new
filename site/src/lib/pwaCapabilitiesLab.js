@@ -329,6 +329,10 @@ export function initPwaCapabilitiesLab(config = {}) {
       fileShare,
       serviceWorker: 'serviceWorker' in navigator,
       workerScope: registration?.scope || 'не зарегистрирован',
+      workerControlling: Boolean(
+        navigator.serviceWorker?.controller
+        && new URL(navigator.serviceWorker.controller.scriptURL).href === workerUrl.href
+      ),
       notifications: 'Notification' in window ? Notification.permission : 'нет API',
       push: 'PushManager' in window,
       indexedDb: 'indexedDB' in window,
@@ -558,6 +562,10 @@ export function initPwaCapabilitiesLab(config = {}) {
   window.addEventListener('online', () => log('network', 'info', 'соединение восстановлено; можно обновить данные при открытии'));
 
   updateDiagnostics().catch((error) => log('diagnostics', 'error', error.message));
+  Promise.resolve(window.__kenigEventsPwaLabWorkerRegistration)
+    .then((registration) => registration && waitForActivation(registration))
+    .then(() => updateDiagnostics())
+    .catch((error) => log('Lab worker', 'error', error.message));
   readCards(false).catch(() => setStatus(offlineStatus, 'Сохранённых demo-карточек пока нет.', 'info'));
   log('Lab', 'ready', window.isSecureContext ? 'страница готова' : 'небезопасный origin: SW, notifications и clipboard могут быть недоступны');
 }

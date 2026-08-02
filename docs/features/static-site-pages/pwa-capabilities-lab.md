@@ -425,6 +425,9 @@ site/tests/pwa-capabilities-lab.test.mjs         # минимальный source
   стандартным directory scope фактического prefixed lab-каталога;
 - `site/src/pages/lab/pwa-capabilities/manifest.webmanifest.ts` — отдельная
   lab identity, `start_url` и scope; root manifest не используется;
+- `site/src/lib/pwa-lab-install-controller.ts` — lab-specific adapter поверх
+  общего `createPwaInstallController`: base-aware identity/open URL, controlled
+  Chromium prompt, Custom Tab guidance и standalone state;
 - `site/tests/pwa-capabilities-lab.test.mjs` — минимальный contract для ICS,
   Google Calendar URL, 30 demo-card DTO, noindex, manifest и base-aware
   lab-scoped worker.
@@ -434,6 +437,14 @@ site/tests/pwa-capabilities-lab.test.mjs         # минимальный source
 показывает notification icons, открывает notification click target и кэширует
 изображения только по URL с тем же preview prefix. Worker использует стандартный
 directory scope и не зависит от root-only `Service-Worker-Allowed`.
+
+Lab page захватывает одноразовый `beforeinstallprompt` в `<head>` до hydration,
+вызывает `preventDefault()` и сразу регистрирует только соседний `./sw.js`.
+Первый блок страницы переводит общий install controller через состояния
+ожидание → готовность → системный dialog → установленное приложение. После
+accepted пользователь получает инструкцию закрыть вкладку и открыть PWA Lab
+через новую иконку. В установленном окне явно показываются
+`PWA Lab запущена с главного экрана` и `display-mode: standalone`.
 
 Проверки из `site/`:
 
@@ -464,6 +475,11 @@ Deploy повторно выставляет для lab manifest
 
 Проверить минимум:
 
+- нажать `Установить PWA Lab` в обычном Chrome и подтвердить системный dialog;
+- убедиться, что отдельная иконка PWA Lab появилась в launcher/на главном экране;
+- закрыть browser tab и запустить лабораторию именно через новую иконку;
+- подтвердить отсутствие адресной строки, `Standalone display: да` и
+  `worker controlling page: да`; browser/mobile emulation это не заменяет;
 - Chrome tab и installed standalone PWA;
 - permission states `default`, `granted`, `denied`;
 - online, airplane mode и offline reload;

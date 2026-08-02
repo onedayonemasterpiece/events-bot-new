@@ -23,6 +23,7 @@ export function createPwaInstallController({
   button,
   status,
   guidance,
+  texts = {},
 }) {
   if (!windowRef || !navigatorRef || !root || !button) return null;
 
@@ -34,6 +35,21 @@ export function createPwaInstallController({
   const presentation = isPresentationInstall(locationRef);
   const installId = String(root.dataset.pwaInstallId || 'default').replace(/[^a-z0-9/_-]/giu, '').slice(0, 160) || 'default';
   const installMarkerKey = `ke:pwa:installed:${installId}`;
+  const copy = {
+    installedButton: 'Открыть Анонсы',
+    standaloneStatus: 'Приложение открыто.',
+    installedStatus: 'Если значок ещё не появился, подождите до минуты.',
+    installingButton: 'Устанавливается…',
+    installingStatus: 'Установка началась. Она завершится в течение минуты.',
+    readyStatus: 'Установка готова. Нажмите кнопку ниже.',
+    cancelledStatus: 'Установка не завершена. Обновите страницу, когда захотите повторить.',
+    promptErrorStatus: 'Не удалось открыть системное окно. Откройте страницу в Chrome и обновите её.',
+    dialogClosedStatus: 'Системное окно установки закрыто.',
+    appInstalledStatus: 'Приложение установлено.',
+    nonAndroidStatus: 'Для установки откройте эту ссылку на Android-телефоне в Chrome.',
+    waitingStatus: 'Подготавливаем установку. Если кнопка не появилась, откройте страницу в Chrome.',
+    ...texts,
+  };
   const storage = (() => {
     try { return windowRef.localStorage || null; } catch { return null; }
   })();
@@ -76,20 +92,18 @@ export function createPwaInstallController({
     root.hidden = false;
     button.hidden = false;
     button.disabled = false;
-    button.textContent = 'Открыть Анонсы';
+    button.textContent = copy.installedButton;
     root.dataset.pwaInstallReady = 'installed';
-    if (status) status.textContent = standalone
-      ? 'Приложение открыто.'
-      : 'Если значок ещё не появился, подождите до минуты.';
+    if (status) status.textContent = standalone ? copy.standaloneStatus : copy.installedStatus;
     if (guidance) guidance.hidden = true;
   };
   const showInstalling = () => {
     root.hidden = false;
     button.hidden = false;
     button.disabled = true;
-    button.textContent = 'Устанавливается…';
+    button.textContent = copy.installingButton;
     root.dataset.pwaInstallReady = 'installing';
-    if (status) status.textContent = 'Установка началась. Она завершится в течение минуты.';
+    if (status) status.textContent = copy.installingStatus;
     if (guidance) guidance.hidden = true;
     if (installPoll === null && typeof windowRef.setInterval === 'function') {
       installPoll = windowRef.setInterval(() => {
@@ -119,7 +133,7 @@ export function createPwaInstallController({
       windowRef.__kenigEventsPwaInstallPrompt = null;
     }
     installPrompt = event;
-    if (status) status.textContent = 'Установка готова. Нажмите кнопку ниже.';
+    if (status) status.textContent = copy.readyStatus;
     reveal();
   };
 
@@ -149,18 +163,18 @@ export function createPwaInstallController({
         if (result?.outcome === 'accepted') showInstalling();
         else {
           showPresentationWaiting();
-          if (status) status.textContent = 'Установка не завершена. Обновите страницу, когда захотите повторить.';
+          if (status) status.textContent = copy.cancelledStatus;
         }
       }
     } catch {
       if (presentation) {
         showPresentationWaiting();
-        if (status) status.textContent = 'Не удалось открыть системное окно. Откройте страницу в Chrome и обновите её.';
+        if (status) status.textContent = copy.promptErrorStatus;
       }
     } finally {
       prompting = false;
       if (root.dataset.pwaInstallReady !== 'installing') button.disabled = false;
-      if (!presentation && status) status.textContent = 'Системное окно установки закрыто.';
+      if (!presentation && status) status.textContent = copy.dialogClosedStatus;
     }
   };
 
@@ -170,7 +184,7 @@ export function createPwaInstallController({
       prompting = false;
       showInstalled();
     } else {
-      if (status) status.textContent = 'Приложение установлено.';
+      if (status) status.textContent = copy.appInstalledStatus;
       writeInstalledMarker(true);
       clear();
     }
@@ -181,10 +195,10 @@ export function createPwaInstallController({
       showInstalled();
     } else if (!android) {
       showPresentationWaiting();
-      if (status) status.textContent = 'Для установки откройте эту ссылку на Android-телефоне в Chrome.';
+      if (status) status.textContent = copy.nonAndroidStatus;
     } else {
       showPresentationWaiting();
-      if (status) status.textContent = 'Подготавливаем установку. Если кнопка не появилась, откройте страницу в Chrome.';
+      if (status) status.textContent = copy.waitingStatus;
     }
   } else {
     hide();
