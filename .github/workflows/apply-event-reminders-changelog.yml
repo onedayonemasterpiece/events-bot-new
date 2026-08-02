@@ -1,0 +1,49 @@
+name: Apply event reminders changelog entry
+
+on:
+  push:
+    branches: [feature/event-reminders-calendar-test-design-20260802]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: contains(github.event.head_commit.message, '[apply-reminders-changelog]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          ref: feature/event-reminders-calendar-test-design-20260802
+      - name: Add source-parity release-track changelog entry and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('CHANGELOG.md')
+          text = path.read_text(encoding='utf-8')
+          entry = '''- Added the source-parity event reminders/calendar release track: a simple
+  saved-event calendar view, T−24h plus mutually exclusive current-city T−1h
+  or other-city T−3h Push, per-type controls and anti-storm gates, retained ICS,
+  Postbox invitation research, thin Android connector gates, dynamic current-
+  event selection and Android/iOS test scaffolding. No production Push, email
+  invitation or APK behavior is enabled.
+'''
+          marker = '## [Unreleased]\n\n'
+          if entry not in text:
+              if marker not in text:
+                  raise SystemExit('Unreleased marker missing')
+              text = text.replace(marker, marker + entry, 1)
+              path.write_text(text, encoding='utf-8')
+          PY
+          git rm .github/workflows/apply-event-reminders-changelog.yml
+          git add CHANGELOG.md
+          git diff --cached --check
+          git commit -m "docs: record event reminder release track"
+          git push origin HEAD:feature/event-reminders-calendar-test-design-20260802
