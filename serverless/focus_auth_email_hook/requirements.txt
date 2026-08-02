@@ -1,0 +1,1 @@
+# Standard library only. Keep the 5-second Supabase hook path small and reproducible.

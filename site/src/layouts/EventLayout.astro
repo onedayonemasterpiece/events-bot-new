@@ -3593,7 +3593,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
                   p_limit: PERSONAL_FEED_LIMIT,
                   p_profile: compactProfileForRpc(profile),
                 }),
-              }, { policy: 'safe-read' });
+              });
               if (response.ok) payload = await response.json();
             }
           }

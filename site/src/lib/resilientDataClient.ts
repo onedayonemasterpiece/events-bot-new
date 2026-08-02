@@ -1,15 +1,10 @@
 import {
   createResilientSupabaseTransport,
-  type ResilientOperationPolicy,
   type ResilientSupabaseTransport,
   type ResilientSupabaseTransportConfig,
 } from './resilientSupabaseTransport.ts';
 
 export interface ResilientDataClientConfig extends ResilientSupabaseTransportConfig {}
-
-export interface ResilientDataRequestOptions {
-  policy: ResilientOperationPolicy;
-}
 
 const GLOBAL_REGISTRY_KEY = '__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__';
 
@@ -42,10 +37,6 @@ function registry(): Map<string, ResilientDataClient> {
   return owner[GLOBAL_REGISTRY_KEY];
 }
 
-function methodOf(input: RequestInfo | URL, init?: RequestInit): string {
-  return String(init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
-}
-
 export class ResilientDataClient {
   readonly transport: ResilientSupabaseTransport;
   readonly fetch: typeof fetch;
@@ -57,27 +48,14 @@ export class ResilientDataClient {
     this.fetch = this.fetchDefault.bind(this) as typeof fetch;
   }
 
-  request(input: RequestInfo | URL, init: RequestInit | undefined, options: ResilientDataRequestOptions) {
-    return this.transport.request(input, init, options);
-  }
-
-  safeRead(input: RequestInfo | URL, init: RequestInit = {}) {
-    return this.request(input, { ...init, method: init.method || 'GET' }, { policy: 'safe-read' });
-  }
-
-  selectedOnce(input: RequestInfo | URL, init: RequestInit) {
-    return this.request(input, init, { policy: 'selected-once' });
-  }
-
-  idempotentReplay(input: RequestInfo | URL, init: RequestInit) {
-    return this.request(input, init, { policy: 'idempotent-replay' });
+  request(input: RequestInfo | URL, init?: RequestInit) {
+    // Feature code supplies only the HTTP request. Retry, replay and route
+    // semantics are owned exclusively by backendOperationCatalog.
+    return this.transport.request(input, init);
   }
 
   private fetchDefault(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-    const method = methodOf(input, init);
-    return this.request(input, init, {
-      policy: method === 'GET' || method === 'HEAD' ? 'safe-read' : 'selected-once',
-    });
+    return this.request(input, init);
   }
 }
 

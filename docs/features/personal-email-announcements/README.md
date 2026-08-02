@@ -17,9 +17,14 @@ This is recommendation/marketing-like mail, not a transactional reminder. It req
 
 ## Launch admission cap
 
-The launch service is available to **at most 200 actively consented users**. This is a hard product and send-eligibility gate, not merely a UI label or a reliance on the provider returning an over-limit error.
+The launch service is available only inside the shared **200 unique NotiSend
+recipient** admission set. Recommendation consent is still an independent hard
+product and send-eligibility gate, not merely a UI label or a reliance on the
+provider returning an over-limit error.
 
-- Supabase must admit/activate a recommendation subscription transactionally only while the number of active, verified, purpose-consented recommendation users is below 200.
+- Supabase must admit/activate a recommendation subscription transactionally
+  only while both recommendation eligibility and the shared NotiSend unique-
+  recipient capacity permit it.
 - At capacity, a new user must not be marked subscribed, synchronized into a sendable NotiSend audience or sent a recommendation. A future waitlist, if introduced, is separate non-sendable state.
 - Every issue build and final send claim must recheck both the Supabase admission state and the `<= 200` ceiling. Paused, revoked or suppressed users are not sendable; any slot-reuse policy must preserve consent and suppression history.
 - The effective canary may be smaller than 200 when the current NotiSend plan needs capacity for seed/service contacts or imposes another lower limit. Neither a plan limit nor provider contact count permits more than 200 active consented users.

@@ -17,6 +17,7 @@ async function files(directory) {
 test('Supabase runtime endpoints are reachable only through the shared client or diagnostics', async () => {
   const allowRaw = new Set([
     path.normalize(new URL('../src/lib/resilientSupabaseTransport.ts', import.meta.url).pathname),
+    path.normalize(new URL('../src/lib/backendOperationCatalog.ts', import.meta.url).pathname),
     path.normalize(new URL('../src/components/FocusConnectivityDiagnostic.astro', import.meta.url).pathname),
   ]);
   const offenders = [];
@@ -24,8 +25,21 @@ test('Supabase runtime endpoints are reachable only through the shared client or
     if (!/\.(?:astro|[cm]?[jt]s)$/u.test(filename) || filename.includes('.test.')) continue;
     const source = await readFile(filename, 'utf8');
     if (!/(?:auth|rest|functions)\/v1/u.test(source) || allowRaw.has(path.normalize(filename))) continue;
-    const ownsSharedRoute = /getResilientDataClient|dataClient\.(?:request|safeRead|selectedOnce|idempotentReplay)|authController\?\.transport/u.test(source);
+    const ownsSharedRoute = /getResilientDataClient|dataClient\.request|authController\?\.transport/u.test(source);
     if (!ownsSharedRoute) offenders.push(path.relative(root.pathname, filename));
+  }
+  assert.deepEqual(offenders, []);
+});
+
+test('feature code cannot choose transport replay policy', async () => {
+  const offenders = [];
+  for (const filename of await files(root.pathname)) {
+    if (!/\.(?:astro|[cm]?[jt]s)$/u.test(filename) || filename.includes('.test.')) continue;
+    const source = await readFile(filename, 'utf8');
+    if (/\.(?:safeRead|selectedOnce|idempotentReplay)\s*\(/u.test(source)
+      || /policy\s*:\s*['"](?:safe-read|selected-once|idempotent-replay)['"]/u.test(source)) {
+      offenders.push(path.relative(root.pathname, filename));
+    }
   }
   assert.deepEqual(offenders, []);
 });

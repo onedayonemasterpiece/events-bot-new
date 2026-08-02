@@ -39,7 +39,7 @@ def test_relay_is_stateless_fixed_upstream_and_exact_origin() -> None:
     assert desired["security"]["forwards_browser_origin"] is False
     assert "origin: https://kenigevents.ru" in spec
     assert "origin: '*'" not in spec
-    assert spec.count("type: http") == 29
+    assert spec.count("type: http") == 35
     assert "type: cloud_functions" not in spec
     assert "type: cloud_ydb" not in spec
     assert "serviceAccount" not in spec
@@ -80,9 +80,15 @@ def test_relay_has_only_explicit_product_routes_and_methods() -> None:
     assert _methods_for_path(spec, "/auth/v1/user/identities/authorize") == {"get"}
     assert _methods_for_path(spec, "/rest/v1/my_saved_events_v1") == {"get", "head"}
     assert _methods_for_path(spec, "/rest/v1/rpc/set_saved_event_state_v1") == {"post"}
+    assert _methods_for_path(spec, "/rest/v1/rpc/focus_auth_get_delivery_receipt_v1") == {"post"}
+    assert _methods_for_path(spec, "/rest/v1/rpc/focus_auth_record_client_outcome_v1") == {"post"}
+    assert _methods_for_path(spec, "/rest/v1/rpc/focus_auth_record_verification_v1") == {"post"}
+    assert _methods_for_path(spec, "/rest/v1/rpc/focus_auth_record_method_attempt_v1") == {"post"}
     assert _methods_for_path(spec, "/rest/v1/rpc/register_focus_group_participant_v1") == {"post"}
     assert _methods_for_path(spec, "/rest/v1/rpc/submit_focus_group_feedback_v2") == {"post"}
+    assert _methods_for_path(spec, "/rest/v1/rpc/transport_probe_v1") == {"post"}
     assert _methods_for_path(spec, "/functions/v1/event-search") == {"post"}
+    assert _methods_for_path(spec, "/functions/v1/transport-probe") == {"post"}
     assert _methods_for_path(
         spec, "/storage/v1/object/focus-feedback/{path+}"
     ) == {"post", "delete"}
