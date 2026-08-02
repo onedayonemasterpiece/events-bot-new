@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk article visual-grounding prompt/audit alignment: each
+  second-paragraph sentence must carry concrete content evidence even when it
+  also discusses reviewed media, and a pre-Critic Writer failure now clears a
+  stale Critic pass from the current audit projection.
+- Fixed Region Talk article Writer evidence projection: imported publisher
+  string/list dimensions now use the same normalized, evidence-linked form in
+  both readiness and prompt construction, so all three reader-brief dimensions
+  are mandatory in the Writer grounding map instead of silently disappearing.
 - Added opt-in local documentation auto-push watcher for `docs/`, publishing saved text-document updates to `origin/main` while excluding media and the requested visitors reference.
 - Fixed Region Talk draft CAS for durable `_live_*` candidate projections:
   strong reread now excludes only explicit local runtime fields instead of all

@@ -870,6 +870,7 @@ def test_second_short_writer_failure_preserves_stage_audit(monkeypatch) -> None:
     audit = json.loads(updates["publication_draft_stage_audit_json"])
     assert audit["strategy"]["status"] == "ready"
     assert audit["writer"]["status"] == "draft_ready"
+    assert updates["publication_draft_critic_json"] == ""
 
 
 def test_editorial_stage_pacing_waits_between_physical_provider_calls(monkeypatch) -> None:
@@ -909,6 +910,70 @@ def test_article_writer_requires_all_publisher_reader_brief_dimensions_in_profil
     ) == []
 
 
+def test_article_evidence_pack_uses_normalized_imported_publisher_dimensions() -> None:
+    mod = load_module()
+    profile = {
+        "profile_status": "ready",
+        "profile_kind": "publisher",
+        "profile_fingerprint": "publisher-fp",
+        "profile_summary": "Профессиональное издание с доказательным профилем.",
+        "usable_without_profile_llm": True,
+        "scope": "external",
+        "public_copy_eligibility": "allowed",
+        "profile_dimensions": {
+            "outlet_identity": "Профессиональное издание об архитектуре.",
+            "intended_audience": [{
+                "label": "Архитекторы и читатели, изучающие городскую среду.",
+                "evidence_refs": ["publisher.about"],
+            }],
+            "distinctive_value": [{
+                "text": "Соединяет авторские обзоры с каталогом проектов.",
+                "evidence_refs": ["publisher.policy"],
+            }],
+        },
+        "evidence": [
+            {
+                "evidence_id": "publisher.about",
+                "supports": ["publisher.identity", "publisher.audience"],
+            },
+            {
+                "evidence_id": "publisher.policy",
+                "supports": ["publisher.distinctive_value"],
+            },
+        ],
+    }
+    row = _ready_profile_row(**{
+        "post_url": "https://example.org/article",
+        "content_origin_type": "editorial_publication",
+        "_live_source_profile_fingerprint": "publisher-fp",
+        "source_onboarding_profile_fingerprint": "publisher-fp",
+        "source_profile_fingerprint": "publisher-fp",
+        "_source_onboarding_profile": profile,
+    })
+
+    evidence = mod.build_editorial_evidence(
+        row, source_text="Подробный текст о новом музейном корпусе."
+    )
+
+    required = {
+        "source.publisher.outlet_identity",
+        "source.publisher.intended_audience",
+        "source.publisher.distinctive_value",
+    }
+    assert set(evidence["required_publisher_evidence_ids"]) == required
+    by_id = {item["evidence_id"]: item for item in evidence["evidence"]}
+    assert required.issubset(by_id)
+    assert by_id["source.publisher.outlet_identity"]["upstream_evidence_ids"] == [
+        "publisher.about"
+    ]
+    assert by_id["source.publisher.intended_audience"]["upstream_evidence_ids"] == [
+        "publisher.about"
+    ]
+    assert by_id["source.publisher.distinctive_value"]["upstream_evidence_ids"] == [
+        "publisher.policy"
+    ]
+
+
 def test_article_critic_must_semantically_attest_complete_publisher_reader_brief() -> None:
     mod = load_module()
     required = {
@@ -946,6 +1011,20 @@ def test_article_writer_and_critic_prompts_require_reader_decision_summary() -> 
     assert "what distinguishes its coverage" in writer_prompt
     assert "publisher_reader_brief_checks" in critic_prompt
     assert "useful_for_read_or_skip_decision" in critic_prompt
+
+
+def test_article_writer_prompt_aligns_visual_detail_with_content_grounding_gate() -> None:
+    mod = load_module()
+    writer = json.loads(mod._stage_prompt("writer", {}))
+    assert any(
+        "Every paragraph 2 sentence must cite at least one evidence ID whose kind is content_fact"
+        in rule
+        for rule in writer["rules"]
+    )
+    assert any(
+        "visual.original_media alone is invalid" in rule
+        for rule in writer["rules"]
+    )
 
 
 def test_v9_validator_rejects_banned_not_a_construction() -> None:

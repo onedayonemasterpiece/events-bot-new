@@ -41,7 +41,7 @@ DRAFT_BACKFILL_VERSION = "region_talk_publication_draft_backfill_v5_source_profi
 EDITORIAL_WRITER_VERSION = notify.EDITORIAL_WRITER_VERSION
 EDITORIAL_INPUT_CONTRACT = "region_talk_editorial_input_v3_source_profile"
 EDITORIAL_OUTPUT_CONTRACT = notify.EDITORIAL_OUTPUT_CONTRACT
-EDITORIAL_STAGE_EXECUTION_VERSION = "region_talk_writer_v12_publisher_reader_brief_v1"
+EDITORIAL_STAGE_EXECUTION_VERSION = "region_talk_writer_v12_publisher_reader_brief_v2"
 MEDIA_MATERIALIZATION_CONTRACT_VERSION = "region_talk_media_materialization_v1"
 LEGACY_REVIEW_MIGRATION_VERSION = "region_talk_legacy_review_to_v12_v5"
 DRAFT_FIELDS = (
@@ -631,11 +631,14 @@ def build_editorial_evidence(
     required_publisher_evidence_ids: list[str] = []
     if content_lane(row) == "article":
         profile = row.get("_source_onboarding_profile") if isinstance(row.get("_source_onboarding_profile"), dict) else {}
-        publisher_dimensions = _json_value(
-            profile.get("publisher_dimensions_json")
-            or profile.get("profile_dimensions")
-            or row.get("source_onboarding_publisher_dimensions_json"),
-            {},
+        # Use the exact same normalized projection as the readiness gate.  The
+        # imported publisher sidecar deliberately stores strings/lists while
+        # older profiles store {text, evidence_ids} objects.  Reading the raw
+        # form here allowed a profile to pass readiness but silently omitted
+        # its three required Writer evidence IDs.
+        publisher_dimensions = normalized_publisher_dimensions(
+            profile,
+            fallback_row=row,
         )
         if isinstance(publisher_dimensions, dict):
             for key in ("outlet_identity", "intended_audience", "distinctive_value"):
@@ -1761,6 +1764,7 @@ def _stage_prompt(stage: str, payload: dict[str, Any]) -> str:
                 "Paragraph 1 has exactly two sentences. Sentence 1 is a 45-110 character hook grounded only in content_fact evidence from this material; do not mention or praise the source there. Sentence 2 is a compact source-value statement grounded in source_profile_fact evidence.",
                 "For an article with non-empty required_publisher_evidence_ids, sentence 2 must concisely answer all three reader questions: what kind of outlet this is, who will find it useful, and what distinguishes its coverage. Cite every required_publisher_evidence_id on that sentence. A bare attribution such as 'the outlet published this review' is invalid.",
                 "Paragraph 2 has exactly 1-2 concrete observations from content_fact evidence, strictly in third person, without exhausting the original.",
+                "Every paragraph 2 sentence must cite at least one evidence ID whose kind is content_fact. It may additionally cite visual evidence, but visual.original_media alone is invalid; omit a purely visual sentence when no content_fact supports it.",
                 "Do not use first-person plural for another author's experience.",
                 "Warm observational editorial tone; no clickbait, PR jargon, dossier or exhaustive summary.",
                 "Write body only: no URL, link, CTA, source footer or metatext such as 'публикация позволяет', 'материал представляет ценность' or 'оригинал доступен'. The deterministic renderer owns the linked CTA and channel footer.",
@@ -1985,6 +1989,9 @@ def generate_editorial_draft(
             "publication_draft_history_json": history_raw,
             "publication_draft_editorial_plan_json": json.dumps(strategy, ensure_ascii=False, separators=(",", ":")),
             "publication_draft_grounding_map_json": json.dumps(writer.get("grounding_map") or [], ensure_ascii=False, separators=(",", ":")),
+            # Do not leave a previous generation's pass visible when the
+            # current run stopped before Critic.
+            "publication_draft_critic_json": "",
             "publication_draft_stage_audit_json": json.dumps({"strategy": strategy, "writer": writer}, ensure_ascii=False, separators=(",", ":")),
             "publication_draft_generation_attempts": attempts,
         }, calls)
