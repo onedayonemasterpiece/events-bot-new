@@ -21,7 +21,8 @@
   fresh simulator cannot intercept the physical input tap invisibly. Keyboard
   focus uses XCUITest's synthesized `mobile: tap` at the center of the exact
   XCTest-returned native field rect rather than an accessibility-only element
-  click or coordinates derived from the DOM.
+  click or coordinates derived from the DOM, and records keyboard presence at
+  that physical tap before returning to Safari's web-inspector context.
 - Added reusable project skill guidance for constructing protected static-site
   browser/Android/iOS acceptance journeys and for sending/receiving controlled
   OTP mail through the existing Yandex Mail Trigger boundary without exposing

@@ -129,6 +129,7 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
   let networkSequence = 0;
   let verifiedRepoSha = null;
   const keyboard = {};
+  const nativeKeyboardAtTap = {};
   const actualCaps = driver.capabilities || {};
   const device = { platform, device_name: config.deviceName, expected_platform_version: config.platformVersion,
     platform_version: String(actualCaps.platformVersion || config.platformVersion), browser_version: String(actualCaps.browserVersion || actualCaps.version || 'unreported'),
@@ -180,7 +181,7 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     const nativeContext = contexts.find((value) => String(value).toUpperCase() === 'NATIVE_APP');
     if (!nativeContext) throw new Error(`fail_browser_context:native_context_missing:${kind}`);
     await driver.switchContext(nativeContext);
-    const shown = await driver.isKeyboardShown().catch(() => false);
+    const shown = nativeKeyboardAtTap[kind] ?? await driver.isKeyboardShown().catch(() => false);
     await driver.switchContext(originalContext);
     const accepted = { ...classifyKeyboardAcceptance({ shown, ...dom }), native_context_observed: true };
     keyboard[kind] = accepted;
@@ -209,6 +210,7 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
       [SELECTORS.otp]: 'Код из письма',
     });
     const label = labels[selector];
+    const kind = selector === SELECTORS.email ? 'email' : selector === SELECTORS.otp ? 'otp' : null;
     if (!label) throw new Error(`fail_browser_context:unknown_native_input:${selector}`);
     const originalContext = await driver.getContext();
     const contexts = await driver.getContexts();
@@ -233,6 +235,7 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
         y: Math.round(rect.y + rect.height / 2),
       }]);
       await driver.pause(350);
+      nativeKeyboardAtTap[kind] = await driver.isKeyboardShown().catch(() => false);
     } finally {
       await driver.switchContext(originalContext);
     }
