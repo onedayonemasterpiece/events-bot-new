@@ -266,16 +266,24 @@ jobs:
           report_path = root / "report.json"
           product = json.loads(report_path.read_text(encoding="utf-8")) if report_path.exists() else {}
           status = product.get("status")
+          watch_is_blocking = "${{ steps.config.outputs.fail_on_watch }}" == "true"
+          outcome = (
+              "FAIL"
+              if status == "FAIL" or (status == "WATCH" and watch_is_blocking)
+              else "PASS"
+              if status in {"HEALTHY", "WATCH"}
+              else "BLOCKED"
+          )
           summary = {
               "schema": "static-site-qa-summary-v1",
               "scenario": "collections.product_quality",
               "platform": "artifact",
               "repo_sha": os.environ["GITHUB_SHA"],
               "target": "configured-product-snapshot",
-              "outcome": "FAIL" if status == "FAIL" else "PASS" if status in {"HEALTHY", "WATCH"} else "BLOCKED",
+              "outcome": outcome,
               "product_status": status,
               "live_product_evaluated": bool(product),
-              "watch_is_blocking": "${{ steps.config.outputs.fail_on_watch }}" == "true",
+              "watch_is_blocking": watch_is_blocking,
           }
           (root / "qa-summary.json").write_text(
               json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
