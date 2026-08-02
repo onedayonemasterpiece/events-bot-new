@@ -5242,13 +5242,15 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             mod.Seed("vk1", "vk", "VK1", "@places", "https://vk.com/places", "travel", "", 1, "", "", "", "", "", "", True, "unknown", ""),
             mod.Seed("vv1", "vkvideo", "VV1", "@rgoclub", "https://vk.com/rgoclub", "travel", "", 1, "", "", "", "", "", "", True, "unknown", ""),
         ]
-        os.environ["REGION_TALK_MAX_SOURCES"] = "4"
-        os.environ["REGION_TALK_FETCH_TELEGRAM"] = "0"
-        try:
+        # This is a fetch-disabled coverage contract.  Keep it hermetic from
+        # production/test-run REGION_TALK_* settings inherited by the pytest
+        # process; selection policy overrides must not silently remove one of
+        # the four coverage surfaces and make the full suite order-dependent.
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_MAX_SOURCES": "4",
+            "REGION_TALK_FETCH_TELEGRAM": "0",
+        }, clear=True):
             rows, posts = __import__("asyncio").run(mod.fetch_telegram_posts(seeds, mod.Status(), Path(tempfile.mkdtemp())))
-        finally:
-            os.environ.pop("REGION_TALK_MAX_SOURCES", None)
-            os.environ.pop("REGION_TALK_FETCH_TELEGRAM", None)
         self.assertFalse(posts)
         statuses = {r["source_seed_id"]: r["fetch_status"] for r in rows}
         self.assertEqual(statuses["tg1"], "skipped_fetch_disabled")
