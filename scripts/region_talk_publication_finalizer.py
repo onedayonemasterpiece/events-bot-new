@@ -49,10 +49,15 @@ POST_URL_NORMALIZATION_VERSION = "region_talk_post_url_v1"
 PUBLICATION_FINALIZER_STATE_VERSION = "region_talk_publication_finalizer_v4"
 PUBLICATION_ELIGIBILITY_EVIDENCE_STORAGE_MAX_CHARS = 700
 AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v3"
-SOURCE_ONBOARDING_EVIDENCE_VERSION = "region_talk_source_onboarding_evidence_v2_publisher_reader_brief"
-SOURCE_ONBOARDING_PROFILE_PROMPT_VERSION = "region_talk_source_onboarding_profile_v2_publisher_reader_brief"
-SOURCE_ONBOARDING_WRITER_PROMPT_VERSION = "region_talk_source_onboarding_writer_v2_publisher_reader_brief"
-SOURCE_ONBOARDING_ENTITY_TYPES = {"person", "collective", "thematic_channel", "media_brand", "unknown"}
+SOURCE_ONBOARDING_EVIDENCE_VERSION = "region_talk_source_onboarding_evidence_v3_bounded_capture"
+SOURCE_ONBOARDING_PROFILE_PROMPT_VERSION = "region_talk_source_onboarding_profile_v3_bounded_capture"
+SOURCE_ONBOARDING_WRITER_PROMPT_VERSION = "region_talk_source_onboarding_writer_v3_bounded_capture"
+SOURCE_PROFILE_MIN_AUTHORED_POSTS = 20
+SOURCE_PROFILE_MIN_REPRESENTATIVE_EXCERPTS = 8
+SOURCE_PROFILE_MIN_REPRESENTATIVE_TOPICS = 3
+SOURCE_ONBOARDING_ENTITY_TYPES = {
+    "person", "collective", "thematic_channel", "media_brand", "professional_platform", "journal", "unknown",
+}
 PUBLIC_TME_FALLBACK_ENV = "REGION_TALK_ALLOW_PUBLIC_TME_S_FALLBACK"
 
 
@@ -464,6 +469,8 @@ def build_source_onboarding_evidence(
     source_memory_rows: list[dict[str, Any]],
     candidate: dict[str, Any],
     external_intake: dict[str, Any] | None = None,
+    source_capture: dict[str, Any] | None = None,
+    publisher_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a compact, public, auditable evidence pack for one source.
 
@@ -474,25 +481,37 @@ def build_source_onboarding_evidence(
     """
     source = dict(source or {})
     external_intake = dict(external_intake or {})
+    source_capture = dict(source_capture or {})
+    publisher_profile = dict(publisher_profile or {})
     source_key = canonical_source_key_for_row(source or candidate)
     title = str(source.get("source_title") or source.get("resolved_title") or candidate.get("source_title") or "").strip()
     source_url = str(source.get("source_url") or source.get("canonical_url") or candidate.get("source_url") or "").strip()
     evidence: list[dict[str, Any]] = []
 
-    def add(kind: str, text: Any, *, url: str = "", date: str = "") -> None:
+    def add(
+        kind: str,
+        text: Any,
+        *,
+        url: str = "",
+        date: str = "",
+        source_evidence_id: str = "",
+    ) -> str:
         excerpt = _compact_evidence_text(text)
         if not excerpt:
-            return
+            return ""
         identity = (kind, excerpt.lower(), normalize_post_url(url) if url else "")
         if any((item["kind"], str(item["excerpt"]).lower(), str(item.get("url") or "")) == identity for item in evidence):
-            return
+            return ""
+        evidence_id = f"E{len(evidence) + 1}"
         evidence.append({
-            "evidence_id": f"E{len(evidence) + 1}",
+            "evidence_id": evidence_id,
             "kind": kind,
             "excerpt": excerpt,
             "url": normalize_post_url(url) if url else "",
             "date": str(date or "")[:40],
+            **({"source_evidence_id": str(source_evidence_id)} if source_evidence_id else {}),
         })
+        return evidence_id
 
     if title or source_url:
         add("authoritative_source_identity", f"Название: {title}. Публичный адрес: {source_url}.", url=source_url)
@@ -504,6 +523,30 @@ def build_source_onboarding_evidence(
             + str(source.get("source_externality_basis") or "проверено внешним research-контрактом"),
             url=source_url,
         )
+
+    if publisher_profile:
+        profile_payload = (
+            publisher_profile.get("profile_payload")
+            if isinstance(publisher_profile.get("profile_payload"), dict)
+            else {}
+        )
+        add(
+            "publisher_identity_summary",
+            profile_payload.get("identity_summary")
+            or publisher_profile.get("identity_summary")
+            or publisher_profile.get("profile_summary"),
+            url=str(profile_payload.get("canonical_url") or publisher_profile.get("canonical_url") or source_url),
+        )
+        for item in publisher_profile.get("evidence") or profile_payload.get("evidence") or []:
+            if not isinstance(item, dict):
+                continue
+            add(
+                "publisher_page_evidence",
+                item.get("paraphrase") or item.get("quote_short") or item.get("text"),
+                url=str(item.get("url") or item.get("source_url") or source_url),
+                date=str(item.get("retrieved_at") or ""),
+                source_evidence_id=str(item.get("evidence_id") or ""),
+            )
 
     # External-publication research already opens the primary page and keeps
     # evidence-backed editorial copy.  Preserve the source-level slice as
@@ -582,72 +625,140 @@ def build_source_onboarding_evidence(
     if external_parts:
         add("external_open_source_registry", "; ".join(external_parts), url=evidence_url)
 
-    ordered_memory = sorted(
-        [dict(row) for row in source_memory_rows if isinstance(row, dict)],
-        key=lambda row: str(row.get("post_date") or row.get("updated_at") or ""),
-        reverse=True,
-    )
     candidate_url = normalize_post_url(str(candidate.get("post_url") or ""))
-    if candidate_url:
-        # A compacted historical memory row may already own this URL but have
-        # no body. Always prefer the current finalizer candidate for that URL;
-        # it may contain text just restored by CandidateReport. This keeps the
-        # evidence pack auditable without inventing biography or using web
-        # fallback, and avoids treating a valid authored post as identity-only.
-        ordered_memory = [
-            candidate,
-            *[
-                row for row in ordered_memory
-                if normalize_post_url(str(row.get("post_url") or "")) != candidate_url
-            ],
-        ]
-    for row in ordered_memory:
-        if len(evidence) >= 8:
-            break
-        post_url = str(row.get("post_url") or "")
-        excerpt = (
-            row.get("full_text")
-            or row.get("text")
-            or row.get("text_excerpt")
-            or row.get("short_summary")
-            or row.get("why_keep_in_memory")
-            or ""
+    publisher_lane = str(
+        candidate.get("content_origin_type")
+        or source.get("source_topic_class")
+        or ""
+    ) in {"editorial_publication", "academic_publication"}
+    representatives: list[Any] = []
+
+    # Social profiles must be built from the dedicated bounded capture.  A
+    # current candidate or incidental memory excerpt remains useful content
+    # evidence, but it must never make a reusable source profile ready.
+    if not publisher_lane and source_capture:
+        description_evidence = (
+            source_capture.get("description_evidence")
+            if isinstance(source_capture.get("description_evidence"), dict)
+            else {}
         )
-        add("authored_post_excerpt", excerpt, url=post_url, date=str(row.get("post_date") or ""))
+        pinned_evidence = (
+            source_capture.get("pinned_evidence")
+            if isinstance(source_capture.get("pinned_evidence"), dict)
+            else {}
+        )
+        add(
+            "source_description",
+            source_capture.get("description")
+            or source_capture.get("public_description")
+            or source_capture.get("source_description")
+            or description_evidence.get("text"),
+            url=str(source_capture.get("description_url") or description_evidence.get("url") or source_url),
+            date=str(source_capture.get("captured_at") or source_capture.get("updated_at") or ""),
+        )
+        add(
+            "pinned_post_excerpt",
+            source_capture.get("pinned_excerpt")
+            or source_capture.get("pinned_post_excerpt")
+            or source_capture.get("pinned_text")
+            or pinned_evidence.get("text"),
+            url=str(
+                source_capture.get("pinned_url")
+                or source_capture.get("pinned_post_url")
+                or pinned_evidence.get("post_url")
+                or ""
+            ),
+            date=str(source_capture.get("pinned_published_at") or pinned_evidence.get("published_at") or ""),
+        )
+        representatives = _json_list(
+            source_capture.get("representative_excerpts_json")
+            or source_capture.get("representative_posts_json")
+            or source_capture.get("representative_excerpts")
+        )
+        for item in representatives[:16]:
+            if not isinstance(item, dict):
+                continue
+            add(
+                "authored_post_excerpt",
+                item.get("excerpt") or item.get("text") or item.get("text_excerpt"),
+                url=str(item.get("url") or item.get("post_url") or ""),
+                date=str(item.get("published_at") or item.get("post_date") or item.get("timestamp") or ""),
+            )
 
     fingerprint_payload = {
         "version": SOURCE_ONBOARDING_EVIDENCE_VERSION,
         "source_key": source_key,
         "title": title,
         "source_url": source_url,
+        "source_capture_fingerprint": str(source_capture.get("capture_fingerprint") or ""),
+        "publisher_profile_hash": str(publisher_profile.get("profile_hash") or ""),
+        "publisher_evidence_fingerprint": str(publisher_profile.get("evidence_fingerprint") or ""),
         "evidence": evidence,
     }
     fingerprint = hashlib.sha256(
         json.dumps(fingerprint_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
-    authored_count = sum(1 for item in evidence if item["kind"] == "authored_post_excerpt")
+    representative_count = sum(1 for item in evidence if item["kind"] == "authored_post_excerpt")
+    representative_topics = {
+        str(item.get("topic") or "").strip().lower()
+        for item in representatives
+        if isinstance(item, dict) and str(item.get("topic") or "").strip()
+    }
+    try:
+        captured_authored_count = int(
+            source_capture.get("authored_posts")
+            or source_capture.get("authored_posts_total")
+            or source_capture.get("authored_count")
+            or 0
+        )
+    except (TypeError, ValueError):
+        captured_authored_count = 0
     external_count = sum(
         1 for item in evidence
         if item["kind"] in {"external_open_source_registry", "external_publication_source"}
     )
-    publisher_lane = str(
-        candidate.get("content_origin_type")
-        or source.get("source_topic_class")
-        or ""
-    ) in {"editorial_publication", "academic_publication"}
     publisher_evidence_total = sum(
         1 for item in evidence
         if item["kind"] in {"publisher_source_overview", "publisher_scope_attestation", "publisher_page_evidence"}
     )
+    capture_status = str(source_capture.get("capture_status") or source_capture.get("status") or "").lower()
+    capture_ready = bool(
+        capture_status in {"ready", "sufficient", "complete"}
+        and source_capture.get("capture_fingerprint")
+        and captured_authored_count >= SOURCE_PROFILE_MIN_AUTHORED_POSTS
+        and representative_count >= SOURCE_PROFILE_MIN_REPRESENTATIVE_EXCERPTS
+        and len(representative_topics) >= SOURCE_PROFILE_MIN_REPRESENTATIVE_TOPICS
+    )
+    trusted_publisher_ready = bool(
+        publisher_profile
+        and publisher_profile.get("usable_without_profile_llm") is True
+        and str(publisher_profile.get("profile_status") or "") == "ready"
+        and str(publisher_profile.get("scope") or "") == "external"
+        and str(
+            publisher_profile.get("public_copy_eligibility")
+            or (publisher_profile.get("copy_projection") or {}).get("public_copy_eligibility")
+            or ""
+        ) == "allowed"
+    )
     sufficient = bool(
         source_key
         and title
-        and (
-            publisher_evidence_total >= 2
-            if publisher_lane
-            else (authored_count >= 1 or external_count >= 1)
-        )
+        and ((trusted_publisher_ready or publisher_evidence_total >= 2) if publisher_lane else capture_ready)
     )
+    if sufficient:
+        readiness_reason = "publisher_evidence_ready" if publisher_lane else "bounded_source_capture_ready"
+    elif publisher_lane:
+        readiness_reason = "publisher_profile_evidence_insufficient"
+    elif not source_capture:
+        readiness_reason = "source_capture_missing"
+    elif captured_authored_count < SOURCE_PROFILE_MIN_AUTHORED_POSTS:
+        readiness_reason = "authored_sample_below_minimum"
+    elif representative_count < SOURCE_PROFILE_MIN_REPRESENTATIVE_EXCERPTS:
+        readiness_reason = "representative_diversity_below_minimum"
+    elif len(representative_topics) < SOURCE_PROFILE_MIN_REPRESENTATIVE_TOPICS:
+        readiness_reason = "representative_topics_below_minimum"
+    else:
+        readiness_reason = "source_capture_not_ready"
     status = "sufficient" if sufficient else "insufficient"
     return {
         "source_profile_id": source_profile_id(source_key),
@@ -659,9 +770,19 @@ def build_source_onboarding_evidence(
         "evidence_fingerprint": fingerprint,
         "evidence_pack_json": json.dumps(evidence, ensure_ascii=False, separators=(",", ":")),
         "evidence_items_total": len(evidence),
-        "authored_post_evidence_total": authored_count,
+        "authored_post_evidence_total": representative_count,
+        "authored_posts_captured_total": captured_authored_count,
+        "representative_excerpts_total": representative_count,
+        "representative_topics_total": len(representative_topics),
+        "source_capture_status": capture_status,
+        "source_capture_version": str(source_capture.get("capture_version") or ""),
+        "source_capture_fingerprint": str(source_capture.get("capture_fingerprint") or ""),
+        "profile_readiness_reason": readiness_reason,
         "external_registry_evidence_total": external_count,
         "publisher_evidence_total": publisher_evidence_total,
+        "trusted_publisher_profile_ready": trusted_publisher_ready,
+        "publisher_profile_id": str(publisher_profile.get("publisher_profile_id") or ""),
+        "publisher_profile_hash": str(publisher_profile.get("profile_hash") or ""),
         "publisher_lane": publisher_lane,
         "source_topic_class": source.get("source_topic_class") or candidate.get("content_origin_type") or "",
         "candidate_post_url": candidate_url,
@@ -678,6 +799,152 @@ def _profile_index(rows: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]
         if previous is None or str(row.get("updated_at") or row.get("_ydb_updated_at") or "") >= str(previous.get("updated_at") or previous.get("_ydb_updated_at") or ""):
             out[key] = dict(row)
     return out
+
+
+def _capture_index(rows: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Index only the newest durable bounded capture for each source."""
+
+    out: dict[str, dict[str, Any]] = {}
+    for row in rows.values():
+        key = str(row.get("canonical_source_key") or "").strip().lower()
+        if not key:
+            continue
+        previous = out.get(key)
+        if previous is None or str(row.get("updated_at") or row.get("_ydb_updated_at") or "") >= str(
+            previous.get("updated_at") or previous.get("_ydb_updated_at") or ""
+        ):
+            out[key] = dict(row)
+    return out
+
+
+def _correction_index(rows: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for row in rows.values():
+        url = normalize_post_url(str(row.get("canonical_url") or row.get("post_url") or ""))
+        if not url:
+            continue
+        previous = out.get(url)
+        if previous is None or str(row.get("updated_at") or row.get("_ydb_updated_at") or "") >= str(
+            previous.get("updated_at") or previous.get("_ydb_updated_at") or ""
+        ):
+            out[url] = dict(row)
+    return out
+
+
+def trusted_publisher_profile_for_onboarding(
+    publisher_profile: dict[str, Any] | None,
+    evidence_row: dict[str, Any],
+) -> dict[str, Any]:
+    """Project a schema/hash-validated publisher dossier without another LLM.
+
+    The dedicated importer owns the trust decision.  This adapter only accepts
+    its explicit ready/external/allowed projection and binds it to the current
+    finalizer evidence fingerprint.  Mixed/local profiles therefore remain
+    unavailable to Writer even when the parent brand is prominent.
+    """
+
+    row = dict(publisher_profile or {})
+    copy_projection = row.get("copy_projection") if isinstance(row.get("copy_projection"), dict) else {}
+    if not (
+        row.get("usable_without_profile_llm") is True
+        and str(row.get("profile_status") or "") == "ready"
+        and str(row.get("scope") or "") == "external"
+        and str(row.get("public_copy_eligibility") or copy_projection.get("public_copy_eligibility") or "") == "allowed"
+        and str(row.get("canonical_source_key") or "") == str(evidence_row.get("canonical_source_key") or "")
+        and row.get("profile_hash")
+    ):
+        return {}
+    evidence_items = _evidence_items(evidence_row)
+    evidence_id_by_source_id = {
+        str(item.get("source_evidence_id") or ""): str(item.get("evidence_id") or "")
+        for item in evidence_items
+        if str(item.get("source_evidence_id") or "") and str(item.get("evidence_id") or "")
+    }
+    publisher_evidence_ids = [
+        str(item.get("evidence_id") or "")
+        for item in evidence_items
+        if str(item.get("kind") or "") in {"publisher_identity_summary", "publisher_page_evidence"}
+        and str(item.get("evidence_id") or "")
+    ]
+    if not publisher_evidence_ids:
+        return {}
+
+    dimensions = row.get("profile_dimensions") if isinstance(row.get("profile_dimensions"), dict) else {}
+
+    def compact_dimension(value: Any) -> tuple[str, list[str]]:
+        values = value if isinstance(value, list) else [value]
+        texts: list[str] = []
+        refs: list[str] = []
+        for item in values:
+            if isinstance(item, dict):
+                text = item.get("text") or item.get("label") or item.get("summary") or item.get("value")
+                texts.append(_compact_evidence_text(text, 220))
+                source_refs = item.get("evidence_refs") or item.get("evidence_ids") or []
+                refs.extend(evidence_id_by_source_id.get(str(ref), "") for ref in source_refs)
+            else:
+                texts.append(_compact_evidence_text(item, 220))
+        clean_texts = [text for text in texts if text]
+        clean_refs = list(dict.fromkeys(ref for ref in refs if ref))
+        return "; ".join(clean_texts[:3]), clean_refs or publisher_evidence_ids
+
+    dimension_payload: dict[str, dict[str, Any]] = {}
+    for key in ("outlet_identity", "intended_audience", "distinctive_value"):
+        text, refs = compact_dimension(dimensions.get(key))
+        if text and refs:
+            dimension_payload[key] = {
+                "text": text[:320].rstrip(),
+                "basis": "explicit" if key == "outlet_identity" else "editorial_inference",
+                "evidence_ids": refs,
+            }
+    if set(dimension_payload) != {"outlet_identity", "intended_audience", "distinctive_value"}:
+        return {}
+    claims = [
+        {
+            "claim_id": f"PC{index}",
+            "text": value["text"],
+            "evidence_ids": value["evidence_ids"],
+        }
+        for index, value in enumerate(dimension_payload.values(), start=1)
+    ]
+    brief = _compact_evidence_text(
+        copy_projection.get("short_reader_brief")
+        or row.get("profile_summary")
+        or dimensions.get("outlet_identity"),
+        600,
+    )
+    profile_hash = str(row.get("profile_hash") or "")
+    return {
+        "source_profile_id": evidence_row.get("source_profile_id"),
+        "publisher_profile_id": row.get("publisher_profile_id"),
+        "canonical_source_key": row.get("canonical_source_key"),
+        "source_title": row.get("source_name") or evidence_row.get("source_title"),
+        "source_url": row.get("canonical_url") or evidence_row.get("source_url"),
+        "profile_status": "ready",
+        "profile_origin": "publisher_profile_sidecar",
+        "usable_without_profile_llm": True,
+        "entity_type": row.get("entity_type") or "media_brand",
+        "profile_summary": brief,
+        "reader_brief": brief,
+        "claims_json": json.dumps(claims, ensure_ascii=False, separators=(",", ":")),
+        "candidate_angles_json": json.dumps([{
+            "angle_id": "PA1",
+            "text": brief,
+            "claim_ids": [claim["claim_id"] for claim in claims],
+            "evidence_ids": list(dict.fromkeys(ref for claim in claims for ref in claim["evidence_ids"])),
+        }], ensure_ascii=False, separators=(",", ":")),
+        "publisher_dimensions_json": json.dumps(dimension_payload, ensure_ascii=False, separators=(",", ":")),
+        "publisher_dimensions_status": "ready",
+        "copy_projection_json": json.dumps(copy_projection, ensure_ascii=False, separators=(",", ":")),
+        "source_cta_label": str(copy_projection.get("cta_label") or ""),
+        "do_not_say_json": json.dumps(copy_projection.get("do_not_say") or [], ensure_ascii=False, separators=(",", ":")),
+        "evidence_version": evidence_row.get("evidence_version"),
+        "evidence_fingerprint": evidence_row.get("evidence_fingerprint"),
+        "profile_prompt_version": "region_talk_publisher_profile_sidecar.v1",
+        "profile_fingerprint": profile_hash,
+        "profile_model": "guarded_sidecar_import",
+        "profile_llm_status": "not_called",
+        "profile_llm_reason": "trusted_publisher_profile_reuse",
+    }
 
 
 def _memory_rows_by_source(memory_rows: dict[str, dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
@@ -785,6 +1052,9 @@ def live_finalization_fingerprint(
     intake: dict[str, Any] | None,
     source: dict[str, Any] | None,
     publication: dict[str, Any] | None = None,
+    source_capture: dict[str, Any] | None = None,
+    publisher_profile: dict[str, Any] | None = None,
+    candidate_correction: dict[str, Any] | None = None,
 ) -> str:
     payload = {
         "image": _stable_live_payload(image),
@@ -792,6 +1062,9 @@ def live_finalization_fingerprint(
         "intake": _stable_live_payload(intake),
         "source": _stable_live_payload(source),
         "publication": _stable_live_payload(publication),
+        "source_capture": _stable_live_payload(source_capture),
+        "publisher_profile": _stable_live_payload(publisher_profile),
+        "candidate_correction": _stable_live_payload(candidate_correction),
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -817,6 +1090,9 @@ def read_live_rows(
         dict[str, dict[str, Any]],
         dict[str, dict[str, Any]],
         dict[str, dict[str, Any]],
+        dict[str, dict[str, Any]],
+        dict[str, dict[str, Any]],
+        dict[str, dict[str, Any]],
     ]:
         images = _current_complete_kind(session, ydb, table, "image_queue_item", limit_images)
         memory = _current_complete_kind(session, ydb, table, "candidate_memory_item", limit_memory)
@@ -831,7 +1107,16 @@ def read_live_rows(
             session, ydb, table, "external_publication_intake_item", limit_memory
         )
         onboarding_profiles = _current_complete_kind(session, ydb, table, "source_onboarding_profile_item", limit_memory)
-        return images, memory, publications, sources, source_statuses, online_sources, external_publication_sources, external_publication_intakes, onboarding_profiles
+        source_profile_captures = _current_complete_kind(
+            session, ydb, table, "source_profile_capture_item", limit_memory
+        )
+        publisher_profiles = _current_complete_kind(
+            session, ydb, table, "publisher_profile_item", limit_memory
+        )
+        publisher_corrections = _current_complete_kind(
+            session, ydb, table, "publisher_profile_candidate_correction_item", limit_memory
+        )
+        return images, memory, publications, sources, source_statuses, online_sources, external_publication_sources, external_publication_intakes, onboarding_profiles, source_profile_captures, publisher_profiles, publisher_corrections
 
     (
         images_by_pk,
@@ -843,6 +1128,9 @@ def read_live_rows(
         external_publication_source_items,
         external_publication_intake_items,
         onboarding_profile_items,
+        source_profile_capture_items,
+        publisher_profile_items,
+        publisher_correction_items,
     ) = pool.retry_operation_sync(op)
     memory_by_url = _publication_by_normalized_url(memory_by_pk)
     publication_by_url = _publication_by_normalized_url(publications_by_pk)
@@ -865,6 +1153,9 @@ def read_live_rows(
     )
     memory_by_source = _memory_rows_by_source(memory_by_pk)
     onboarding_profiles_by_source = _profile_index(onboarding_profile_items)
+    source_profile_captures_by_source = _capture_index(source_profile_capture_items)
+    publisher_profiles_by_source = _profile_index(publisher_profile_items)
+    publisher_corrections_by_url = _correction_index(publisher_correction_items)
     external_intake_by_id = {
         str(item.get("external_publication_id") or ""): item
         for item in external_publication_intake_items.values()
@@ -1018,6 +1309,9 @@ def read_live_rows(
                 "sent_to_chat", "sent_message_id", "sent_at", "sent_chat_id", "delivery_key", "delivery_random_id",
                 "source_onboarding_status", "source_onboarding_paragraph", "source_onboarding_profile_id",
                 "source_onboarding_profile_fingerprint", "source_onboarding_writer_fingerprint",
+                "source_profile_fingerprint", "source_profile_kind", "source_profile_entity_type",
+                "source_profile_origin", "source_profile_cta_label",
+                "source_profile_copy_projection_json", "source_profile_do_not_say_json",
                 "source_onboarding_entity_type", "source_onboarding_claim_ids_json",
                 "source_onboarding_evidence_ids_json", "source_onboarding_selected_angle_id",
                 "source_onboarding_writer_prompt_version", "source_onboarding_publisher_dimensions_json",
@@ -1046,15 +1340,40 @@ def read_live_rows(
             authoritative_source,
             memory_by_source.get(source_key, []),
             row,
+            external_intake=current_intake,
+            source_capture=source_profile_captures_by_source.get(source_key),
+            publisher_profile=publisher_profiles_by_source.get(source_key),
         )
         row["_source_onboarding_evidence"] = onboarding_evidence
         row["_source_onboarding_profile"] = onboarding_profiles_by_source.get(source_key, {})
+        row["_publisher_profile"] = publisher_profiles_by_source.get(source_key, {})
+        candidate_correction = publisher_corrections_by_url.get(post_url, {})
+        row["_publisher_profile_candidate_correction"] = candidate_correction
+        if candidate_correction:
+            row["candidate_correction_status"] = str(
+                candidate_correction.get("live_revalidation_status")
+                or candidate_correction.get("revalidation_status")
+                or candidate_correction.get("review_status")
+                or ""
+            )
+            row["candidate_correction_recommended_action"] = str(
+                candidate_correction.get("recommended_action") or ""
+            )
+            row["candidate_correction_reason_codes_json"] = json.dumps(
+                candidate_correction.get("reason_codes") or [], ensure_ascii=False, separators=(",", ":")
+            )
+            row["candidate_correction_regeneration_allowed"] = str(
+                bool(candidate_correction.get("regeneration_allowed"))
+            ).lower()
         row["_live_decision_fingerprint"] = live_finalization_fingerprint(
             image=image if str(image.get("_ydb_pk") or "") else None,
             memory=memory,
             intake=current_intake,
             source=authoritative_source,
             publication=publication,
+            source_capture=source_profile_captures_by_source.get(source_key),
+            publisher_profile=publisher_profiles_by_source.get(source_key),
+            candidate_correction=candidate_correction,
         )
         row["publication_pre_score"] = publication_pre_score(row)
         previous = rows_by_url.get(post_url)
@@ -1963,6 +2282,7 @@ def _source_profile_prompt(evidence_row: dict[str, Any]) -> str:
     return """Ты готовишь доказательный профиль публичного источника для редактора Region Talk.
 Используй ТОЛЬКО факты из evidence_pack. Не угадывай место жительства, профессию, популярность или мотивацию.
 Если publisher_lane=true, отделяй сведения об издании от содержания текущей статьи. Редактору нужны три коротких ответа: что это за издание, для какой аудитории оно полезно, чем отличается его редакционный ракурс. Аудиторию разрешено формулировать как осторожный editorial_inference по тематике/форматам; такая формулировка всё равно обязана иметь evidence_ids. При нехватке опоры верни needs_review.
+Если publisher_lane=false, синтезируй профиль по всей bounded capture, не по текущему кандидату. Верни устойчивые темы, повторяющиеся форматы, характер наблюдений, предполагаемую аудиторию, отличительную ценность, географический охват и короткий reader_brief. Каждое такое поле обязано ссылаться на evidence_ids; unsupported формулировки перечисли в do_not_say.
 Верни только JSON:
 {
   "status": "ready|needs_review",
@@ -1975,6 +2295,16 @@ def _source_profile_prompt(evidence_row: dict[str, Any]) -> str:
     "intended_audience": {"text":"кому и для каких задач полезно читать","basis":"explicit|editorial_inference","evidence_ids":["E1"]},
     "distinctive_value": {"text":"чем примечателен редакционный ракурс или формат","basis":"explicit|editorial_inference","evidence_ids":["E1"]}
   },
+  "social_dimensions": {
+    "stable_topics": [{"text":"устойчивая тема","evidence_ids":["E1"]}],
+    "recurring_formats": [{"text":"повторяющийся формат","evidence_ids":["E1"]}],
+    "voice_and_observation": {"text":"характер наблюдений","evidence_ids":["E1"]},
+    "intended_audience": {"text":"кому полезен источник","evidence_ids":["E1"]},
+    "distinctive_value": {"text":"чем отличается ракурс","evidence_ids":["E1"]},
+    "location_scope": {"text":"доказанный географический охват","evidence_ids":["E1"]},
+    "reader_brief": {"text":"одно компактное предложение о ценности источника","evidence_ids":["E1"]}
+  },
+  "do_not_say": ["неподтверждённая формулировка"],
   "conflicts": [],
   "missing_fields": []
 }
@@ -2049,6 +2379,34 @@ def normalize_source_onboarding_profile(
     publisher_dimensions_ready = set(publisher_dimensions) == {
         "outlet_identity", "intended_audience", "distinctive_value",
     }
+    social_dimensions: dict[str, Any] = {}
+    raw_social = data.get("social_dimensions") if isinstance(data.get("social_dimensions"), dict) else {}
+    for key in ("stable_topics", "recurring_formats"):
+        normalized: list[dict[str, Any]] = []
+        for index, raw in enumerate(raw_social.get(key) or [], start=1):
+            if not isinstance(raw, dict):
+                continue
+            text = _compact_evidence_text(raw.get("text"), 240)
+            refs = [str(ref) for ref in (raw.get("evidence_ids") or []) if str(ref)]
+            if text and refs and set(refs).issubset(evidence_ids):
+                normalized.append({"text": text, "evidence_ids": refs})
+            elif text:
+                invalid_refs.append(f"social_dimension:{key}:{index}")
+        if normalized:
+            social_dimensions[key] = normalized
+    for key in ("voice_and_observation", "intended_audience", "distinctive_value", "location_scope", "reader_brief"):
+        raw = raw_social.get(key) if isinstance(raw_social.get(key), dict) else {}
+        text = _compact_evidence_text(raw.get("text"), 320)
+        refs = [str(ref) for ref in (raw.get("evidence_ids") or []) if str(ref)]
+        if text and refs and set(refs).issubset(evidence_ids):
+            social_dimensions[key] = {"text": text, "evidence_ids": refs}
+        elif text:
+            invalid_refs.append("social_dimension:" + key)
+    social_dimensions_ready = bool(
+        social_dimensions.get("reader_brief")
+        and social_dimensions.get("intended_audience")
+        and social_dimensions.get("distinctive_value")
+    )
     status = "ready" if (
         result.get("llm_gate_status") == "ok"
         and requested_status == "ready"
@@ -2056,6 +2414,7 @@ def normalize_source_onboarding_profile(
         and not invalid_refs
         and evidence_row.get("evidence_status") == "sufficient"
         and (not publisher_lane or publisher_dimensions_ready)
+        and (publisher_lane or social_dimensions_ready)
     ) else "needs_review"
     return {
         "source_profile_id": evidence_row.get("source_profile_id"),
@@ -2069,6 +2428,10 @@ def normalize_source_onboarding_profile(
         "candidate_angles_json": json.dumps(angles, ensure_ascii=False, separators=(",", ":")),
         "publisher_dimensions_json": json.dumps(publisher_dimensions, ensure_ascii=False, separators=(",", ":")),
         "publisher_dimensions_status": "ready" if publisher_dimensions_ready else "not_applicable" if not publisher_lane else "needs_review",
+        "social_dimensions_json": json.dumps(social_dimensions, ensure_ascii=False, separators=(",", ":")),
+        "social_dimensions_status": "not_applicable" if publisher_lane else "ready" if social_dimensions_ready else "needs_review",
+        "reader_brief": str((social_dimensions.get("reader_brief") or {}).get("text") or ""),
+        "do_not_say_json": json.dumps(data.get("do_not_say") or [], ensure_ascii=False, separators=(",", ":")),
         "conflicts_json": json.dumps(data.get("conflicts") or [], ensure_ascii=False, separators=(",", ":")),
         "missing_fields_json": json.dumps(data.get("missing_fields") or [], ensure_ascii=False, separators=(",", ":")),
         "invalid_reference_ids_json": json.dumps(invalid_refs, ensure_ascii=False),
@@ -2109,6 +2472,9 @@ INPUT:
         "claims": _json_list(profile.get("claims_json")),
         "candidate_angles": _json_list(profile.get("candidate_angles_json")),
         "publisher_dimensions": _json_dict(profile.get("publisher_dimensions_json")),
+        "social_dimensions": _json_dict(profile.get("social_dimensions_json")),
+        "reader_brief": profile.get("reader_brief"),
+        "do_not_say": _json_list(profile.get("do_not_say_json")),
         "evidence_pack": _evidence_items(evidence_row),
     }, ensure_ascii=False, indent=2)
 
@@ -2157,6 +2523,13 @@ def normalize_candidate_onboarding(
         "source_onboarding_paragraph": paragraph if status == "ready" else "",
         "source_onboarding_profile_id": profile.get("source_profile_id"),
         "source_onboarding_profile_fingerprint": profile.get("profile_fingerprint"),
+        "source_profile_fingerprint": profile.get("profile_fingerprint"),
+        "source_profile_kind": "publisher" if publisher_lane else "social",
+        "source_profile_entity_type": profile.get("entity_type"),
+        "source_profile_origin": profile.get("profile_origin") or "llm_synthesis",
+        "source_profile_cta_label": profile.get("source_cta_label") or "",
+        "source_profile_copy_projection_json": profile.get("copy_projection_json") or "{}",
+        "source_profile_do_not_say_json": profile.get("do_not_say_json") or "[]",
         "source_onboarding_writer_fingerprint": writer_fingerprint,
         "source_onboarding_writer_prompt_version": SOURCE_ONBOARDING_WRITER_PROMPT_VERSION,
         "source_onboarding_entity_type": profile.get("entity_type"),
@@ -2176,12 +2549,15 @@ def enrich_accepted_rows_with_onboarding(
     rows: list[dict[str, Any]],
     *,
     max_llm: int,
+    max_profile_llm: int | None = None,
+    max_writer_llm: int | None = None,
     model: str,
     default_env_var_name: str,
     durable_budget: DurableGeminiBudget | None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
     profiles_to_write: dict[str, dict[str, Any]] = {}
-    calls = 0
+    profile_limit = max(0, int(max_llm if max_profile_llm is None else max_profile_llm))
+    writer_limit = max(0, int(max_llm if max_writer_llm is None else max_writer_llm))
     stats = {"profile_calls": 0, "writer_calls": 0, "profiles_reused": 0, "paragraphs_ready": 0, "needs_review": 0}
     for row in rows:
         if str(row.get("publication_status") or "") != "gemini_accept":
@@ -2189,11 +2565,20 @@ def enrich_accepted_rows_with_onboarding(
         publisher_lane = str(row.get("content_origin_type") or "") in {
             "editorial_publication", "academic_publication",
         }
+        evidence_row = row.get("_source_onboarding_evidence") if isinstance(row.get("_source_onboarding_evidence"), dict) else {}
+        stored_profile = row.get("_source_onboarding_profile") if isinstance(row.get("_source_onboarding_profile"), dict) else {}
+        imported_profile = row.get("_publisher_profile") if isinstance(row.get("_publisher_profile"), dict) else {}
+        expected_profile = trusted_publisher_profile_for_onboarding(imported_profile, evidence_row) or stored_profile
         current_onboarding = bool(
             str(row.get("source_onboarding_status") or "") == "ready"
             and row.get("source_onboarding_paragraph")
             and str(row.get("source_onboarding_writer_prompt_version") or "")
             == SOURCE_ONBOARDING_WRITER_PROMPT_VERSION
+            and expected_profile
+            and str(expected_profile.get("profile_fingerprint") or "")
+            == str(row.get("source_onboarding_profile_fingerprint") or "")
+            and str(expected_profile.get("evidence_fingerprint") or "")
+            == str(evidence_row.get("evidence_fingerprint") or "")
             and (
                 not publisher_lane
                 or (
@@ -2205,22 +2590,34 @@ def enrich_accepted_rows_with_onboarding(
         if current_onboarding:
             stats["paragraphs_ready"] += 1
             continue
-        evidence_row = row.get("_source_onboarding_evidence") if isinstance(row.get("_source_onboarding_evidence"), dict) else {}
         if evidence_row.get("evidence_status") != "sufficient":
-            row["source_onboarding_status"] = "needs_review"
-            row["source_onboarding_llm_reason"] = "insufficient_public_evidence"
+            row["source_onboarding_status"] = "needs_source_profile"
+            row["source_onboarding_llm_reason"] = str(
+                evidence_row.get("profile_readiness_reason") or "insufficient_public_evidence"
+            )
             stats["needs_review"] += 1
             continue
-        profile = row.get("_source_onboarding_profile") if isinstance(row.get("_source_onboarding_profile"), dict) else {}
+        publisher_profile = imported_profile
+        trusted_publisher_profile = trusted_publisher_profile_for_onboarding(publisher_profile, evidence_row)
+        profile = (
+            trusted_publisher_profile
+            or stored_profile
+        )
         profile_is_current = bool(
             profile
             and str(profile.get("profile_status") or "") == "ready"
             and str(profile.get("evidence_fingerprint") or "") == str(evidence_row.get("evidence_fingerprint") or "")
-            and str(profile.get("profile_prompt_version") or "") == SOURCE_ONBOARDING_PROFILE_PROMPT_VERSION
+            and (
+                str(profile.get("profile_prompt_version") or "") == SOURCE_ONBOARDING_PROFILE_PROMPT_VERSION
+                or (
+                    str(profile.get("profile_origin") or "") == "publisher_profile_sidecar"
+                    and profile.get("usable_without_profile_llm") is True
+                )
+            )
         )
         if profile_is_current:
             stats["profiles_reused"] += 1
-        elif calls < max_llm:
+        elif stats["profile_calls"] < profile_limit:
             profile_fingerprint = hashlib.sha256(json.dumps({
                 "kind": "source_onboarding_profile",
                 "evidence_fingerprint": evidence_row.get("evidence_fingerprint"),
@@ -2234,7 +2631,6 @@ def enrich_accepted_rows_with_onboarding(
                 default_env_var_name=default_env_var_name,
                 durable_budget=durable_budget,
             )
-            calls += int(attempted)
             stats["profile_calls"] += int(attempted)
             profile = normalize_source_onboarding_profile(
                 result, evidence_row, model=model, profile_fingerprint=profile_fingerprint,
@@ -2244,13 +2640,13 @@ def enrich_accepted_rows_with_onboarding(
             profile = {}
 
         if str(profile.get("profile_status") or "") != "ready":
-            row["source_onboarding_status"] = "needs_review"
+            row["source_onboarding_status"] = "needs_source_profile"
             row["source_onboarding_profile_id"] = evidence_row.get("source_profile_id")
             row["source_onboarding_llm_reason"] = "profile_not_ready_or_llm_budget_exhausted"
             stats["needs_review"] += 1
             continue
-        if calls >= max_llm:
-            row["source_onboarding_status"] = "needs_review"
+        if stats["writer_calls"] >= writer_limit:
+            row["source_onboarding_status"] = "needs_source_profile"
             row["source_onboarding_profile_id"] = profile.get("source_profile_id")
             row["source_onboarding_llm_reason"] = "writer_llm_budget_exhausted"
             stats["needs_review"] += 1
@@ -2269,7 +2665,6 @@ def enrich_accepted_rows_with_onboarding(
             default_env_var_name=default_env_var_name,
             durable_budget=durable_budget,
         )
-        calls += int(attempted)
         stats["writer_calls"] += int(attempted)
         row.update(normalize_candidate_onboarding(
             result,
@@ -2350,12 +2745,15 @@ def filter_rows_against_current_finalization_state(
             _current_complete_kind(session, ydb, table, "online_source_item", memory_limit),
             _current_complete_kind(session, ydb, table, "external_publication_source_item", memory_limit),
             _current_complete_kind(session, ydb, table, "external_publication_intake_item", image_limit),
+            _current_complete_kind(session, ydb, table, "source_profile_capture_item", memory_limit),
+            _current_complete_kind(session, ydb, table, "publisher_profile_item", memory_limit),
+            _current_complete_kind(session, ydb, table, "publisher_profile_candidate_correction_item", memory_limit),
         )
 
     try:
         (
             images, memories, publications, sources, statuses, online_sources,
-            external_sources, intakes,
+                external_sources, intakes, source_captures, publisher_profiles, publisher_corrections,
         ) = pool.retry_operation_sync(read)
     except Exception as exc:
         raise FinalDecisionRefreshError(
@@ -2375,6 +2773,9 @@ def filter_rows_against_current_finalization_state(
         for item in intakes.values()
         if str(item.get("external_publication_id") or "")
     }
+    source_captures_by_key = _capture_index(source_captures)
+    publisher_profiles_by_key = _profile_index(publisher_profiles)
+    publisher_corrections_by_url = _correction_index(publisher_corrections)
     safe: list[dict[str, Any]] = []
 
     def defer_changed(row: dict[str, Any], reason: str, current_fingerprint: str = "") -> None:
@@ -2462,6 +2863,9 @@ def filter_rows_against_current_finalization_state(
             intake=intake,
             source=source,
             publication=publication,
+            source_capture=source_captures_by_key.get(canonical_source_key_for_row(row)),
+            publisher_profile=publisher_profiles_by_key.get(canonical_source_key_for_row(row)),
+            candidate_correction=publisher_corrections_by_url.get(url),
         )
         if current != expected:
             print(
@@ -2550,6 +2954,11 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
         "source_onboarding_selected_angle_id", "source_onboarding_llm_status",
         "source_onboarding_publisher_dimensions_json", "source_onboarding_publisher_dimensions_status",
         "source_onboarding_summary_kind", "source_onboarding_llm_reason", "source_onboarding_paragraph_chars",
+        "source_profile_fingerprint", "source_profile_kind", "source_profile_entity_type",
+        "source_profile_origin", "source_profile_cta_label", "source_profile_copy_projection_json",
+        "source_profile_do_not_say_json",
+        "candidate_correction_status", "candidate_correction_recommended_action",
+        "candidate_correction_reason_codes_json", "candidate_correction_regeneration_allowed",
         "sent_to_chat", "sent_message_id", "sent_at", "sent_chat_id", "delivery_key", "delivery_random_id",
     ]
     items = []
@@ -2847,6 +3256,18 @@ def main() -> int:
     parser.add_argument("--run-id", default="")
     parser.add_argument("--max-llm", type=int, default=10)
     parser.add_argument(
+        "--max-profile-llm",
+        type=int,
+        default=None,
+        help="Separate cap for changed source-profile synthesis calls.",
+    )
+    parser.add_argument(
+        "--max-onboarding-writer-llm",
+        type=int,
+        default=None,
+        help="Separate cap for candidate-specific source reader-brief calls.",
+    )
+    parser.add_argument(
         "--llm-budget-id",
         default="",
     )
@@ -2872,6 +3293,14 @@ def main() -> int:
     orchestrator.ensure_child_ydb_env(allow_yc_fallback=True)
     args.llm_budget_id = args.llm_budget_id or os.getenv("REGION_TALK_LLM_BUDGET_ID") or datetime.now(timezone.utc).strftime("region-talk-debug-%Y%m%d")
     args.llm_budget_max = _env_int("REGION_TALK_LLM_BUDGET_MAX", 100) if args.llm_budget_max is None else args.llm_budget_max
+    args.max_profile_llm = (
+        _env_int("REGION_TALK_SOURCE_PROFILE_MAX_LLM", 10)
+        if args.max_profile_llm is None else args.max_profile_llm
+    )
+    args.max_onboarding_writer_llm = (
+        _env_int("REGION_TALK_SOURCE_ONBOARDING_WRITER_MAX_LLM", 10)
+        if args.max_onboarding_writer_llm is None else args.max_onboarding_writer_llm
+    )
     os.environ.setdefault("REGION_TALK_LLM_MODEL", args.model)
     os.environ.setdefault("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME", args.default_env_var_name)
     os.environ.setdefault("REGION_TALK_LLM_CALL_TIMEOUT_SECONDS", "45")
@@ -2931,7 +3360,9 @@ def main() -> int:
     if not args.dry_run and not args.prioritize_source_evidence_only:
         verified, onboarding_profile_rows, onboarding_stats = enrich_accepted_rows_with_onboarding(
             verified,
-            max_llm=max(0, min(100, int(args.max_llm)) - verifier_provider_calls),
+            max_llm=0,
+            max_profile_llm=min(100, max(0, int(args.max_profile_llm))),
+            max_writer_llm=min(100, max(0, int(args.max_onboarding_writer_llm))),
             model=args.model,
             default_env_var_name=args.default_env_var_name,
             durable_budget=durable_budget,
