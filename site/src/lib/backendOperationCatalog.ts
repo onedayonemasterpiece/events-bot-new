@@ -35,13 +35,16 @@ const READ_ONLY_RPCS = new Set([
 ]);
 
 const IDEMPOTENT_RPCS = new Set([
+  'register_focus_group_participant_v1',
+  'submit_focus_group_feedback_v2',
+]);
+
+const DISPOSABLE_RPCS = new Set([
   'focus_auth_record_client_outcome_v1',
   'focus_auth_record_verification_v1',
   'focus_auth_record_method_attempt_v1',
   'ingest_transport_experiment_event_v1',
   'record_pwa_lifecycle_v1',
-  'register_focus_group_participant_v1',
-  'submit_focus_group_feedback_v2',
 ]);
 
 const SELECTED_ONCE_RPCS = new Set([
@@ -129,6 +132,9 @@ export function classifyBackendOperation(
     if (IDEMPOTENT_RPCS.has(rpc)) {
       return definition(`rpc.${rpc}`, 'data', 'idempotent-replay', 'buffered-json', DATA_RESPONSE_LIMIT);
     }
+    if (DISPOSABLE_RPCS.has(rpc)) {
+      return definition(`rpc.${rpc}`, 'data', 'disposable', 'buffered-json', DATA_RESPONSE_LIMIT);
+    }
     if (SELECTED_ONCE_RPCS.has(rpc)) {
       return definition(`rpc.${rpc}`, 'data', 'selected-once', 'buffered-json', DATA_RESPONSE_LIMIT);
     }
@@ -193,5 +199,6 @@ export function policyForOperation(operation: BackendOperationDefinition):
 export const backendOperationCatalogSnapshot = Object.freeze({
   readOnlyRpcs: [...READ_ONLY_RPCS].sort(),
   idempotentRpcs: [...IDEMPOTENT_RPCS].sort(),
+  disposableRpcs: [...DISPOSABLE_RPCS].sort(),
   selectedOnceRpcs: [...SELECTED_ONCE_RPCS].sort(),
 });

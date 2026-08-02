@@ -778,6 +778,7 @@ export class ResilientSupabaseTransport {
     }
     initialRoute = selection.route;
     const replayable = expectedPolicy === 'safe-read' || expectedPolicy === 'idempotent-replay';
+    const affectsRouteHealth = operation.semantics !== 'disposable';
     const timeoutMs = replayable ? this.safeRequestTimeoutMs : this.selectedRequestTimeoutMs;
 
     try {
@@ -787,7 +788,7 @@ export class ResilientSupabaseTransport {
       }
       if (operation.responseMode === 'stream' && response.ok) return response;
       if (!replayable || response.status < 500) {
-        this.markRouteSuccess(operation.capability, selection.route);
+        if (affectsRouteHealth) this.markRouteSuccess(operation.capability, selection.route);
         record('definitive', selection.route, response.status);
         return response;
       }
@@ -797,7 +798,7 @@ export class ResilientSupabaseTransport {
         return response;
       }
       const recovered = await this.executeRoute(alternate, input, init, timeoutMs, operation, id);
-      if (recovered.status < 500) this.markRouteSuccess(operation.capability, alternate);
+      if (affectsRouteHealth && recovered.status < 500) this.markRouteSuccess(operation.capability, alternate);
       record('recovered', alternate, recovered.status);
       return recovered;
     } catch (error) {
@@ -806,17 +807,17 @@ export class ResilientSupabaseTransport {
         throw error;
       }
       const phase = (error as InternalPhaseError)?.transportPhase || 'dispatch';
-      this.markRouteFailure(operation.capability, selection.route);
+      if (affectsRouteHealth) this.markRouteFailure(operation.capability, selection.route);
       const alternate = replayable ? this.alternate(selection.route, operation) : null;
       if (alternate) {
         try {
           const recovered = await this.executeRoute(alternate, input, init, timeoutMs, operation, id);
-          if (recovered.status < 500) this.markRouteSuccess(operation.capability, alternate);
+          if (affectsRouteHealth && recovered.status < 500) this.markRouteSuccess(operation.capability, alternate);
           record('recovered', alternate, recovered.status);
           return recovered;
         } catch (alternateError) {
           const alternatePhase = (alternateError as InternalPhaseError)?.transportPhase || 'dispatch';
-          this.markRouteFailure(operation.capability, alternate);
+          if (affectsRouteHealth) this.markRouteFailure(operation.capability, alternate);
           if (expectedPolicy === 'idempotent-replay') {
             record('transport_failure', alternate, null, alternatePhase);
             throw alternateError;

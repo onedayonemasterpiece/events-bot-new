@@ -78,6 +78,10 @@ clean pre-navigation iOS startup artifact described above.
 - For `client_supabase_direct_unreachable`, fault the direct health probe so
   selected-once OTP is preselected to relay. Require direct OTP dispatch `0`,
   relay OTP dispatch `1`, mail `1`, verify `1`, registration durable effect `1`.
+- Treat best-effort client/auth telemetry as disposable: it may retry or drop,
+  but must never alter capability route health. If registration reports
+  `no_route` after a relay probe passed, inspect the preceding disposable
+  outcome for route-cache poisoning before sending another OTP.
 - Retain only allowlisted host class, route, method, pathname class, status and
   fault result. Never retain query, body, headers, email, OTP or token.
 - With Yandex Mail Trigger, treat the exact allowlisted decoded Subject as the

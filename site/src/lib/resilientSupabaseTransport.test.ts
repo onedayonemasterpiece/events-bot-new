@@ -73,6 +73,9 @@ test('operation catalog owns semantics and rejects unknown mutations', () => {
   assert.equal(policyForOperation(classifyBackendOperation(`${direct}/auth/v1/callback?code=x`, { method: 'GET' })), 'selected-once');
   assert.equal(policyForOperation(classifyBackendOperation(`${direct}/rest/v1/rpc/focus_auth_get_delivery_receipt_v1`, { method: 'POST' })), 'safe-read');
   assert.equal(policyForOperation(classifyBackendOperation(`${direct}/rest/v1/rpc/submit_focus_group_feedback_v2`, { method: 'POST' })), 'idempotent-replay');
+  const telemetry = classifyBackendOperation(`${direct}/rest/v1/rpc/focus_auth_record_client_outcome_v1`, { method: 'POST' });
+  assert.equal(telemetry.semantics, 'disposable');
+  assert.equal(policyForOperation(telemetry), 'idempotent-replay');
   assert.equal(classifyBackendOperation(`${direct}/functions/v1/event-search`, {
     method: 'POST', headers: { Accept: 'application/x-ndjson' },
   }).responseMode, 'stream');
@@ -348,6 +351,40 @@ test('idempotent command may retry once and selected-once may not', async () => 
   assert.equal(otpCount, 1);
   assert.equal(auth.latestOutcome('auth.otp')?.kind, 'ambiguous');
   assert.equal(auth.latestOutcome('auth.otp')?.finalRoute, 'direct');
+});
+
+test('failed disposable telemetry cannot quarantine the healthy data route needed by registration', async () => {
+  const calls: string[] = [];
+  const transport = createResilientSupabaseTransport({
+    directUrl: direct, relayUrl: relay, publishableKey: key, sessionStorage: null, probeStaggerMs: 0,
+    fetchImpl: (async (input, init) => {
+      const url = String(input);
+      calls.push(url);
+      if (url === `${direct}/rest/v1/rpc/transport_probe_v1`) throw new TypeError('direct unavailable');
+      const probe = await probeResponse(input, init);
+      if (probe) return probe;
+      if (url.includes('/focus_auth_record_client_outcome_v1')) throw new TypeError('best effort unavailable');
+      if (url === `${relay}/rest/v1/rpc/register_focus_group_participant_v1`) {
+        return Response.json({ participant_id: 'fixture' }, { status: 200 });
+      }
+      throw new TypeError('unexpected route');
+    }) as typeof fetch,
+  });
+
+  await assert.rejects(() => transport.fetch(`${direct}/rest/v1/rpc/focus_auth_record_client_outcome_v1`, {
+    method: 'POST', body: '{}',
+  }));
+  const telemetry = transport.latestOutcome('rpc.focus_auth_record_client_outcome_v1');
+  assert.equal(telemetry?.kind, 'transport_failure');
+
+  const registration = await transport.fetch(`${direct}/rest/v1/rpc/register_focus_group_participant_v1`, {
+    method: 'POST', body: '{}',
+  });
+  assert.equal(registration.status, 200);
+  assert.equal(registration.headers.get('x-ke-transport-route'), 'relay');
+  assert.equal(transport.latestOutcome('rpc.register_focus_group_participant_v1')?.kind, 'definitive');
+  assert.equal(transport.latestOutcome('rpc.register_focus_group_participant_v1')?.finalRoute, 'relay');
+  assert.equal(calls.filter((url) => url.includes('register_focus_group_participant_v1')).length, 1);
 });
 
 test('no route prevents selected-once dispatch', async () => {
