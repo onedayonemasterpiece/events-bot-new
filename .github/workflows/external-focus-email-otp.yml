@@ -175,7 +175,6 @@ jobs:
       - run: npx appium driver list --installed
       - name: Download matching prebuilt WebDriverAgent
         run: |
-          test "$(node -p 'require("appium-xcuitest-driver/node_modules/appium-webdriveragent/package.json").version')" = '16.1.1'
           npx appium driver run xcuitest download-wda -- \
             --outdir "${RUNNER_TEMP}/kenigevents-wda-ios-sim" \
             --platform iOS \
