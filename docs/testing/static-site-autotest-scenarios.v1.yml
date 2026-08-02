@@ -161,6 +161,20 @@ scenarios:
       pull_request: false_environment_diagnostic_only
       release: false_environment_diagnostic_only
 
+  event.saved_calendar_view:
+    title: Saved current event appears once in the simple date time event location calendar view
+    status: planned
+    layers: [L0, L1]
+    platforms: [browser]
+    trigger_tags: [static-data, static-route, event-reminder, personalization]
+    cost: medium
+    side_effects: idempotent_test_saved_event
+    target: selected_current_event_plus_frozen_grouping_fixtures
+    evidence: selected_event_row_sorting_lifecycle_and_no_duplicate_report
+    blocking:
+      pull_request: false_until_implemented
+      release: true_after_implementation
+
   event.ics.download_contract:
     title: Current event ICS is valid, downloadable and never reported as external calendar save
     status: partial
@@ -189,16 +203,30 @@ scenarios:
       pull_request: false_until_implemented
       release: true_after_implementation
 
+  event.reminder.preferences:
+    title: User can disable all reminders or independent time reminder types without losing the saved event
+    status: planned
+    layers: [L0, L1, L2]
+    platforms: [browser, android, ios]
+    trigger_tags: [pwa-system, event-reminder, personalization]
+    cost: medium
+    side_effects: idempotent_test_preference_updates
+    target: selected_current_event
+    evidence: preference_outbox_calendar_view_and_native_state
+    blocking:
+      pull_request: false_until_implemented
+      release: true_after_implementation
+
   event.reminder.push_delivery:
-    title: T-24h and T-1h reminder kinds deliver exactly once and open the selected event
+    title: T-24h plus exactly one current-city T-1h or other-city T-3h reminder delivers once
     status: planned
     layers: [L1, L2, L3]
     platforms: [android, ios]
     trigger_tags: [pwa-system, event-reminder]
     cost: high
     side_effects: protected_test_push_with_compressed_clock
-    target: selected_current_event_and_server_side_test_clock
-    evidence: provider_outbox_native_notification_click_and_l3_canary
+    target: selected_current_event_canonical_city_context_and_server_side_test_clock
+    evidence: city_branch_provider_outbox_native_notification_click_and_l3_canary
     blocking:
       pull_request: false_until_implemented
       release: true_after_implementation
@@ -392,5 +420,9 @@ policies:
   planned_scenario_blocks_release: false
   current_event_may_switch_after_first_side_effect: false
   browser_event_facts_are_authoritative: false
+  browser_current_city_is_authoritative: false
+  current_city_unknown_near_reminder_policy: fail_closed_until_owner_decision
+  current_city_and_other_city_near_kinds_may_coexist: false
+  saved_calendar_view_required_by_source_requirements: true
   calendar_download_implies_external_save: false
   emulator_environment_smoke_implies_push_or_calendar_pass: false
