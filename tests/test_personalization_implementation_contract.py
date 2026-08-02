@@ -170,3 +170,19 @@ def test_wave_zero_forbids_remote_or_product_behavior_changes() -> None:
     assert "DB migrations/RLS/RPC" in text
     assert "unknown surface → static/no-signal" in text
     assert "production behavior change=0" in text
+
+
+def run_contract_tests() -> list[str]:
+    tests = sorted(
+        (name, value)
+        for name, value in globals().items()
+        if name.startswith("test_") and callable(value)
+    )
+    for _, test_function in tests:
+        test_function()
+    return [name for name, _ in tests]
+
+
+if __name__ == "__main__":
+    completed = run_contract_tests()
+    print(json.dumps({"status": "PASS", "tests": completed}, ensure_ascii=False))
