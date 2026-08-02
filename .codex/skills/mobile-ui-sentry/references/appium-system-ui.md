@@ -68,6 +68,20 @@ only after the native blocker is proven absent.
 Unknown title, duplicate title/action, missing action, alert API disagreement or
 failure to disappear is `BLOCKED_SAFARI_FIRST_RUN_UI`. Never type through it.
 
+### Proven iOS 18.5 result
+
+GitHub Actions run `30767191144`, attempt 2, is the first valid live proof of
+this path. `browserName=Safari` was the wrong architecture because it required
+WebKit attachment while the system sheet was still blocking Safari. The
+working sequence created native `com.apple.mobilesafari`, enabled and reported
+`respectSystemAlerts=true`, accepted the exact current-alert label once,
+verified stable disappearance, and only then attached WebKit. It passed all
+three keyboard boundaries with side-effect counts `0/0/0`.
+
+Do not replace this with global/fuzzy `Продолжить`, an unlabelled alert accept,
+coordinates, or explicit SpringBoard activation. The XML diagnostic was added
+after this PASS and was not the cause of recovery.
+
 ## Privacy adaptation
 
 Generic mobile-testing playbooks often recommend saving page source, hierarchy,
