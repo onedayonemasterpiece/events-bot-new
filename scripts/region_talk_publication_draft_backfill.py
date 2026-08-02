@@ -105,6 +105,9 @@ ROW_RUNTIME_ONLY_FIELDS = {
     "_source_onboarding_profile",
     "_candidate_corrections",
     "_strong_read_expected_payload",
+    "_strong_live_source_expected_fingerprint",
+    "_strong_live_source_exact_pks",
+    "_strong_live_source_requires_external_scan",
 }
 
 
@@ -1269,6 +1272,66 @@ def strong_read_kind_rows_complete(
     return list(pool.retry_operation_sync(op) or [])
 
 
+def refresh_strong_live_source_fingerprint(
+    pool: Any,
+    ydb: Any,
+    table: str,
+    row: dict[str, Any],
+    *,
+    scan_limit: int,
+) -> None:
+    """Attach a current authoritative source projection before provider work.
+
+    ``publication_candidate_item`` stores the accepted source fingerprint, but
+    the matching *live* fingerprint is a read-time overlay.  A strong reread of
+    only the candidate therefore cannot be passed directly to
+    ``is_confirmed_publication``.  Read the exact social-source rows (and the
+    small external-publication source kind for articles), then retain the read
+    identities so the final candidate transaction can repeat the same gate.
+    """
+
+    source_key = finalizer.canonical_source_key_for_row(row).strip().lower()
+    if not source_key:
+        row["_live_authoritative_source_fingerprint"] = ""
+        row["_live_authoritative_source_found"] = "false"
+        row["_strong_live_source_expected_fingerprint"] = ""
+        row["_strong_live_source_exact_pks"] = []
+        row["_strong_live_source_requires_external_scan"] = False
+        return
+
+    exact_pks = [
+        f"{kind}:{source_key}"
+        for kind in ("source_queue_item", "source_status_item", "online_source_item")
+    ]
+    source_rows: list[dict[str, Any]] = []
+    for pk in exact_pks:
+        item = strong_read_row(pool, ydb, table, pk)
+        if item:
+            source_rows.append(item)
+
+    requires_external_scan = content_lane(row) == "article"
+    if requires_external_scan:
+        external_rows = strong_read_kind_rows_complete(
+            pool,
+            ydb,
+            table,
+            "external_publication_source_item",
+            int(scan_limit),
+        )
+        source_rows.extend(
+            item
+            for item in external_rows
+            if finalizer.canonical_source_key_for_row(item).strip().lower() == source_key
+        )
+
+    notify.attach_live_source_fingerprints([row], source_rows)
+    row["_strong_live_source_expected_fingerprint"] = str(
+        row.get("_live_authoritative_source_fingerprint") or ""
+    )
+    row["_strong_live_source_exact_pks"] = exact_pks
+    row["_strong_live_source_requires_external_scan"] = requires_external_scan
+
+
 def upsert_publication_row(
     pool: Any,
     ydb: Any,
@@ -1293,6 +1356,14 @@ def upsert_publication_row(
     candidate_query = f"DECLARE $pk AS Utf8; SELECT payload_json FROM `{table}` WHERE pk = $pk;"
     correction_prefix = "publisher_profile_candidate_correction_item:"
     correction_query = (
+        f"DECLARE $prefix AS Utf8; DECLARE $prefix_upper AS Utf8; "
+        f"SELECT pk, payload_json FROM `{table}` "
+        f"WHERE pk >= $prefix AND pk < $prefix_upper "
+        f"ORDER BY pk LIMIT {max(1, int(correction_limit)) + 1};"
+    )
+    source_query = f"DECLARE $pk AS Utf8; SELECT payload_json FROM `{table}` WHERE pk = $pk;"
+    external_source_prefix = "external_publication_source_item:"
+    external_source_query = (
         f"DECLARE $prefix AS Utf8; DECLARE $prefix_upper AS Utf8; "
         f"SELECT pk, payload_json FROM `{table}` "
         f"WHERE pk >= $prefix AND pk < $prefix_upper "
@@ -1326,6 +1397,59 @@ VALUES ($pk, $kind, $payload_json, $updated_at);
             raise RuntimeError("candidate_published_before_final_mutation")
         if current_raw != expected_raw:
             raise RuntimeError("candidate_changed_since_strong_reread")
+
+        expected_source_fingerprint = str(
+            row.get("_strong_live_source_expected_fingerprint") or ""
+        )
+        exact_source_pks = [
+            str(value)
+            for value in (row.get("_strong_live_source_exact_pks") or [])
+            if str(value)
+        ]
+        if exact_source_pks or row.get("_strong_live_source_requires_external_scan"):
+            live_source_rows: list[dict[str, Any]] = []
+            for source_pk in exact_source_pks:
+                source_result = transaction.execute(
+                    session.prepare(source_query), {"$pk": source_pk}, commit_tx=False
+                )
+                rows = source_result[0].rows if source_result else []
+                if rows:
+                    raw = rows[0].payload_json
+                    source = json.loads(raw) if isinstance(raw, str) else dict(raw or {})
+                    source["_ydb_pk"] = source_pk
+                    live_source_rows.append(source)
+            if row.get("_strong_live_source_requires_external_scan"):
+                source_result = transaction.execute(
+                    session.prepare(external_source_query),
+                    {
+                        "$prefix": external_source_prefix,
+                        "$prefix_upper": external_source_prefix[:-1] + ";",
+                    },
+                    commit_tx=False,
+                )
+                external_rows = source_result[0].rows if source_result else []
+                if len(external_rows) > max(1, int(correction_limit)):
+                    raise RuntimeError(
+                        "current external source kind read incomplete before final mutation"
+                    )
+                source_key = finalizer.canonical_source_key_for_row(current).strip().lower()
+                for item in external_rows:
+                    raw = item.payload_json
+                    source = json.loads(raw) if isinstance(raw, str) else dict(raw or {})
+                    source["_ydb_pk"] = str(item.pk)
+                    if finalizer.canonical_source_key_for_row(source).strip().lower() == source_key:
+                        live_source_rows.append(source)
+            live_candidate = dict(current)
+            notify.attach_live_source_fingerprints([live_candidate], live_source_rows)
+            current_source_fingerprint = str(
+                live_candidate.get("_live_authoritative_source_fingerprint") or ""
+            )
+            if (
+                not expected_source_fingerprint
+                or current_source_fingerprint != expected_source_fingerprint
+                or not notify.is_confirmed_publication(live_candidate)
+            ):
+                raise RuntimeError("candidate_source_changed_since_strong_reread")
 
         correction_result = transaction.execute(
             session.prepare(correction_query),
@@ -2414,6 +2538,13 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
                     pool, ydb, table, str(profile.get("_ydb_pk") or "")
                 )
             bind_source_profile(row, profile)
+            refresh_strong_live_source_fingerprint(
+                pool,
+                ydb,
+                table,
+                row,
+                scan_limit=int(args.scan_limit),
+            )
             # The initial scan is discovery only. Refresh the complete safety
             # kind now so a correction created after selection is observed
             # before any Writer provider stage. The final CAS repeats this
