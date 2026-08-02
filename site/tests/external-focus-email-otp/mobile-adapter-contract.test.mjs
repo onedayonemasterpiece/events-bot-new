@@ -26,4 +26,7 @@ test('protected workflow keeps the recipient secret and gates all platforms stri
   assert.match(source, /inputs\.platform == 'all' && needs\.android\.result == 'success'/u);
   assert.match(source, /sudo chmod 0666 \/dev\/kvm/u);
   assert.match(source, /test -r \/dev\/kvm && test -w \/dev\/kvm/u);
+  assert.equal((source.match(/node-version: '22\.22\.0'/gu) || []).length, 3);
+  assert.match(source, /working-directory: site/u);
+  assert.match(source, /--allow-insecure uiautomator2:chromedriver_autodownload/u);
 });
