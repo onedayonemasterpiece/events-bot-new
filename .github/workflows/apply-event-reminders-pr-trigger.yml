@@ -1,6 +1,8 @@
 name: Apply event reminders release integration from PR
 
 on:
+  push:
+    branches: [feature/event-reminders-calendar-test-design-20260802]
   pull_request:
     branches: [main]
     types: [synchronize]
@@ -10,7 +12,7 @@ permissions:
 
 jobs:
   apply:
-    if: github.event.pull_request.head.ref == 'feature/event-reminders-calendar-test-design-20260802'
+    if: github.event_name == 'push' || github.event.pull_request.head.ref == 'feature/event-reminders-calendar-test-design-20260802'
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
@@ -84,7 +86,8 @@ jobs:
           git rm -f \
             .github/workflows/apply-event-reminders-release-integration.yml \
             .github/workflows/apply-event-reminders-pr-trigger.yml \
-            .github/workflows/apply-event-reminders-pr-trigger-v2.yml
+            .github/workflows/apply-event-reminders-pr-trigger-v2.yml \
+            .github/event-reminders-integration-trigger.txt
 
           node --test site/tests/event-reminders/current-event-resolver.test.mjs
           git add \
