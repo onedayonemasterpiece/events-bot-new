@@ -1786,6 +1786,164 @@ async def _telethon_client_and_chat(args: argparse.Namespace) -> tuple[Any, Any,
         raise
 
 
+def telegram_message_text_urls(message: Any) -> list[str]:
+    return [
+        str(getattr(entity, "url", "") or "")
+        for entity in (getattr(message, "entities", None) or [])
+        if type(entity).__name__ == "MessageEntityTextUrl"
+    ]
+
+
+def telegram_message_matches_public_caption(message: Any, row: dict[str, Any]) -> bool:
+    p1, p2 = _draft_two_paragraphs(row)
+    expected_text = public_caption_visible_text(p1, p2, publication_source_cta(row)[0])
+    return bool(
+        message
+        and str(getattr(message, "message", "") or "") == expected_text
+        and telegram_message_text_urls(message) == [
+            canonical_post_url(row),
+            REGION_TALK_PUBLIC_CHANNEL_URL,
+        ]
+    )
+
+
+async def fetch_pending_revision_reactions(
+    client: Any, peer: Any, message_id: int,
+) -> dict[str, Any]:
+    # Import lazily: reaction_sync imports this notifier for shared review
+    # identity helpers.  At delivery time this module is fully initialized, so
+    # the lazy dependency cannot create an import cycle.
+    from scripts import region_talk_reaction_sync as reaction_sync  # noqa: PLC0415
+
+    reviewer_ids = reaction_sync.parse_reviewer_ids(
+        str(os.getenv("REGION_TALK_OPERATOR_REVIEWER_IDS") or "")
+    )
+    return await reaction_sync.fetch_exact_reactions(
+        client,
+        peer,
+        int(message_id),
+        reviewer_ids,
+        page_limit=max(
+            1,
+            min(100, int(os.getenv("REGION_TALK_REACTION_PAGE_LIMIT") or "100")),
+        ),
+    )
+
+
+async def edit_pending_revision_in_place(
+    *,
+    client: Any,
+    peer: Any,
+    chat_id: str,
+    row: dict[str, Any],
+    current_delivery_key: str,
+    current_random_id: int,
+    transport: str,
+    pool: Any,
+    ydb: Any,
+    table: str,
+) -> dict[str, Any]:
+    """Replace a still-pending review revision without another chat message.
+
+    The exact live reaction read is the final authority immediately before the
+    edit.  Any identity, media, ledger or reaction conflict fails closed and
+    suppresses a second automatic message for the same canonical post.
+    """
+
+    prior_message_id = int(row.get("sent_message_id") or 0)
+    if prior_message_id <= 0:
+        return {"status": "not_applicable"}
+    prior_chat_id = str(row.get("sent_chat_id") or "").strip()
+    if prior_chat_id and prior_chat_id != str(chat_id):
+        return {"status": "blocked", "reason": "prior_delivery_chat_mismatch"}
+    prior_delivery_key = str(row.get("delivery_key") or "").strip()
+    if not prior_delivery_key:
+        return {"status": "blocked", "reason": "prior_delivery_key_missing"}
+    if prior_delivery_key == current_delivery_key:
+        return {"status": "blocked", "reason": "current_delivery_not_replayable"}
+    prior_delivery = read_delivery(pool, ydb, table, prior_delivery_key)
+    if str(prior_delivery.get("status") or "") != "delivered":
+        return {"status": "blocked", "reason": "prior_delivery_not_confirmed"}
+    if int(prior_delivery.get("message_id") or 0) != prior_message_id:
+        return {"status": "blocked", "reason": "prior_delivery_message_mismatch"}
+    if canonical_post_url(prior_delivery) != canonical_post_url(row):
+        return {"status": "blocked", "reason": "prior_delivery_post_mismatch"}
+
+    current_review_fields = publication_delivery_review_fields(row)
+    if str(prior_delivery.get("operator_review_media_manifest_json") or "") != str(
+        current_review_fields["operator_review_media_manifest_json"]
+    ):
+        return {"status": "blocked", "reason": "pending_revision_media_changed"}
+
+    live = await fetch_pending_revision_reactions(client, peer, prior_message_id)
+    if (
+        str(live.get("operator_review_decision") or "") != "pending"
+        or str(live.get("operator_review_rewrite_status") or "") != "clean"
+    ):
+        return {
+            "status": "blocked",
+            "reason": "prior_revision_has_operator_signal",
+            "operator_review_decision": live.get("operator_review_decision"),
+            "operator_review_rewrite_status": live.get("operator_review_rewrite_status"),
+        }
+
+    caption = public_caption(row, html_mode=True)
+    mode = publication_delivery_mode(row)
+    await client.edit_message(
+        peer,
+        prior_message_id,
+        caption,
+        parse_mode="html",
+        link_preview=bool(
+            mode == "link_preview_fallback"
+            and not getenv_bool("REGION_TALK_NOTIFY_DISABLE_WEB_PREVIEW", False)
+        ),
+    )
+    verified = await client.get_messages(peer, ids=prior_message_id)
+    if not telegram_message_matches_public_caption(verified, row):
+        raise RuntimeError(
+            f"pending revision edit verification failed for message {prior_message_id}"
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+    upsert_delivery(pool, ydb, table, current_delivery_key, {
+        **current_review_fields,
+        "status": "delivered",
+        "transport": str(transport),
+        "post_url": canonical_post_url(row),
+        "chat_id": chat_id,
+        "random_id": str(current_random_id),
+        "message_id": str(prior_message_id),
+        "delivered_at": str(prior_delivery.get("delivered_at") or now),
+        "revision_edited_at": now,
+        "edited_from_delivery_key": prior_delivery_key,
+    })
+    upsert_delivery(pool, ydb, table, prior_delivery_key, {
+        **prior_delivery,
+        "status": "superseded",
+        "superseded_at": now,
+        "superseded_by_delivery_key": current_delivery_key,
+        "supersede_reason": "pending_revision_edited_in_place",
+    })
+    upsert_sent(
+        pool,
+        ydb,
+        table,
+        row,
+        prior_message_id,
+        chat_id=chat_id,
+        delivery_key=current_delivery_key,
+        random_id=current_random_id,
+    )
+    return {
+        "status": "edited",
+        "message_id": prior_message_id,
+        "post_url": canonical_post_url(row),
+        "delivery_key": current_delivery_key,
+        "edited_in_place": True,
+    }
+
+
 async def send_rows_telethon(
     args: argparse.Namespace,
     *,
@@ -1849,6 +2007,37 @@ async def send_rows_telethon(
 
                 mode = publication_delivery_mode(row) if current_editorial and row is not None else "link_preview_fallback"
                 editorial_caption = public_caption(row, html_mode=True) if current_editorial and row is not None else ""
+                if persist_delivery and current_editorial and row is not None:
+                    try:
+                        revision_edit = await edit_pending_revision_in_place(
+                            client=client,
+                            peer=peer,
+                            chat_id=chat_id,
+                            row=row,
+                            current_delivery_key=delivery_key,
+                            current_random_id=random_id,
+                            transport=str(args.transport),
+                            pool=pool,
+                            ydb=ydb,
+                            table=table,
+                        )
+                    except Exception as exc:
+                        failed.append({
+                            "post_url": canonical_post_url(row),
+                            "delivery_key": delivery_key,
+                            "reason": f"pending_revision_edit_failed: {type(exc).__name__}: {str(exc)[:400]}",
+                        })
+                        continue
+                    if revision_edit.get("status") == "edited":
+                        sent.append(revision_edit)
+                        continue
+                    if revision_edit.get("status") == "blocked":
+                        failed.append({
+                            "post_url": canonical_post_url(row),
+                            "delivery_key": delivery_key,
+                            "reason": str(revision_edit.get("reason") or "pending_revision_edit_blocked"),
+                        })
+                        continue
                 # Resolve/download and validate the exact reviewed media before
                 # persisting an ambiguous `sending` state.  No Telegram send
                 # has started yet, so a materialization failure remains safely
@@ -2018,6 +2207,17 @@ async def send_rows_bot_api(
                 # duplicate after an ambiguous crash; require reconciliation.
                 raise RuntimeError(
                     f"unconfirmed prior Bot API delivery requires operator reconciliation: {delivery_key}"
+                )
+            prior_message_id = int(row.get("sent_message_id") or 0)
+            prior_delivery_key = str(row.get("delivery_key") or "").strip()
+            if prior_message_id > 0 and prior_delivery_key != delivery_key:
+                # Exact historical reactions cannot be reconstructed through
+                # this Bot API send path. Production Telethon can safely edit a
+                # pending revision after a complete per-reactor read; Bot API
+                # must fail closed instead of adding another message.
+                raise RuntimeError(
+                    "Bot API cannot safely replace an existing operator-review revision; "
+                    "use telethon_discovery2"
                 )
             upsert_delivery(pool, ydb, table, delivery_key, {
                 **existing,

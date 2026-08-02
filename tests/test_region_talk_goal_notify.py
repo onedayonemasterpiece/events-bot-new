@@ -895,6 +895,46 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertEqual(calls[-1][1], {"chat_id": "-100123", "text": "candidate"})
         self.assertEqual([item[1]["status"] for item in persisted if item[0] == "delivery"], ["sending", "delivered"])
 
+    def test_bot_api_existing_review_revision_fails_closed_before_send(self) -> None:
+        mod = load_module()
+        args = argparse.Namespace(expected_chat_id="-100123", chat="", transport="bot_api")
+        calls = []
+
+        def fake_call(_token, method, payload):
+            calls.append((method, payload))
+            if method == "getMe":
+                return {"id": 99, "username": "region_bot"}
+            if method == "getChat":
+                return {"id": -100123, "title": "Region Talk"}
+            raise AssertionError("a revised existing candidate must not be sent again")
+
+        mod._bot_api_call = fake_call
+        mod.read_delivery = lambda *_args: {}
+        mod.upsert_delivery = lambda *_args: (_ for _ in ()).throw(
+            AssertionError("blocked revision must not create a delivery row")
+        )
+        row = {
+            "post_url": "https://t.me/example/1",
+            "sent_message_id": "777",
+            "sent_chat_id": "-100123",
+            "delivery_key": "prior-revision-key",
+        }
+        with (
+            mock.patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "token"}, clear=False),
+            self.assertRaisesRegex(RuntimeError, "cannot safely replace"),
+        ):
+            asyncio.run(mod.send_rows_bot_api(
+                args,
+                messages=["candidate"],
+                rows=[row],
+                ydb=object(),
+                driver=object(),
+                pool=object(),
+                table="table",
+            ))
+
+        self.assertEqual([method for method, _payload in calls], ["getMe", "getChat"])
+
     def test_telethon_delivery_reuses_stable_random_id_and_persists_candidate(self) -> None:
         mod = load_module()
         args = argparse.Namespace(expected_chat_id="-100123", chat="", transport="telethon_discovery2")
@@ -940,6 +980,93 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertEqual(requests[0].random_id, 4242)
         self.assertFalse(requests[0].no_webpage)
         self.assertEqual([item[1]["status"] for item in persisted if item[0] == "delivery"], ["sending", "delivered"])
+
+    def test_telethon_pending_editorial_revision_edits_prior_message_in_place(self) -> None:
+        mod = load_module()
+        args = argparse.Namespace(expected_chat_id="-100123", chat="", transport="telethon_discovery2")
+        persisted = []
+        edits = []
+        sent_over_network = []
+        row = {
+            "post_url": "https://example.org/article",
+            "publication_draft_prompt_version": mod.EDITORIAL_WRITER_VERSION,
+            "publication_draft_title": "Заголовок",
+            "publication_draft_source_attribution": "Издание",
+            "publication_draft_telegram_text": "Первый абзац.\n\nВторой абзац.",
+            "publication_draft_vk_text": "Первый абзац.\n\nВторой абзац.",
+            "publication_presentation_mode": "article_hero",
+            "publication_presentation_manifest_json": json.dumps({
+                "status": "ready", "mode": "article_hero", "items": [{"media_id": "hero:1"}],
+            }),
+            "sent_message_id": "321",
+            "sent_chat_id": "-100123",
+            "delivery_key": "prior-key",
+        }
+        current_manifest = mod.publication_delivery_review_fields(row)["operator_review_media_manifest_json"]
+
+        class Message:
+            message = "verified"
+            entities = []
+
+        class Client:
+            async def edit_message(self, _peer, message_id, caption, **kwargs):
+                edits.append((message_id, caption, kwargs))
+
+            async def get_messages(self, _peer, ids):
+                return Message()
+
+            async def __call__(self, request):
+                sent_over_network.append(request)
+                raise AssertionError("a pending revision must not create a new message")
+
+            async def disconnect(self):
+                return None
+
+        async def fake_client_and_chat(_args):
+            return Client(), object(), "-100123", "55"
+
+        async def fake_reactions(_client, _peer, _message_id):
+            return {
+                "operator_review_decision": "pending",
+                "operator_review_rewrite_status": "clean",
+            }
+
+        def fake_read_delivery(_pool, _ydb, _table, key):
+            if key == "prior-key":
+                return {
+                    "status": "delivered",
+                    "post_url": "https://example.org/article",
+                    "message_id": "321",
+                    "delivered_at": "2026-08-02T10:00:00+00:00",
+                    "operator_review_media_manifest_json": current_manifest,
+                }
+            return {}
+
+        mod._telethon_client_and_chat = fake_client_and_chat
+        mod.fetch_pending_revision_reactions = fake_reactions
+        mod.telegram_message_matches_public_caption = lambda _message, _row: True
+        mod.public_caption = lambda _row, html_mode=False: "current caption"
+        mod.discovery_session_lease = lambda _transport: contextlib.nullcontext({})
+        mod.read_delivery = fake_read_delivery
+        mod.upsert_delivery = lambda *_args: persisted.append(("delivery", _args[-2], _args[-1]))
+        mod.upsert_sent = lambda *_args, **kwargs: persisted.append(("sent", kwargs))
+
+        result = asyncio.run(mod.send_rows_telethon(
+            args,
+            messages=["unused"],
+            rows=[row],
+            ydb=object(),
+            driver=object(),
+            pool=object(),
+            table="table",
+        ))
+
+        self.assertEqual(result["sent_count"], 1)
+        self.assertTrue(result["sent"][0]["edited_in_place"])
+        self.assertEqual(result["sent"][0]["message_id"], 321)
+        self.assertEqual(len(edits), 1)
+        self.assertEqual(sent_over_network, [])
+        self.assertEqual([item[0] for item in persisted], ["delivery", "delivery", "sent"])
 
     def test_editorial_media_failure_is_recorded_and_later_rows_continue(self) -> None:
         mod = load_module()

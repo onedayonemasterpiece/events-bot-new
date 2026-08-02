@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk preproduction revision delivery: a new grounded draft for
+  an existing, still-pending message is now reaction-checked and edited in
+  place when its media manifest is unchanged; conflicts fail closed instead of
+  creating another operator-chat message.
 - Fixed the Region Talk source-profile handoff for archived accepted social
   rows: the finalizer now projects missing-profile capture requests after
   compact image/memory working rows are pruned, without reopening the provider
