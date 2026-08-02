@@ -249,6 +249,16 @@ Sidecar profile import:
 - profile upsert отдельно от candidate intake;
 - candidate corrections только как review queue, не как автоматическая блокировка без live re-read.
 
+Импортированный sidecar сохраняет собственную доказательную форму полей:
+`outlet_identity` может быть строкой, а `intended_audience` и
+`distinctive_value` — массивами evidence-linked утверждений. Перед Writer
+backfill детерминированно проецирует эту форму в общий контракт
+`{text, evidence_ids}`. Отсутствующие evidence refs добираются только из
+официальных evidence items того же профиля по `supports`; если полный набор из
+трёх измерений собрать нельзя, статья остаётся `needs_source_profile`.
+Свежий sidecar не должен затенять более старый Writer-ready профиль только из-за
+различия формы данных.
+
 ### 6.2. Не хранить лишнее
 
 Для долгой жизни достаточно:
