@@ -198,6 +198,53 @@ after any failed transport result and therefore communicated a false success.
   duplicate. Adoption now verifies the exact remote result, removes only that
   replaceable duplicate, rechecks capacity, and downloads the authoritative
   output; fresh submissions remain gated before staging.
+- 2026-08-01 16:19:57 UTC — a phone OTP submit reached Supabase through the
+  selected route and completed upstream with HTTP `200` in 1161 ms. The browser
+  UI nevertheless reported failure. A second submit at 16:20:03 reached the
+  same endpoint and received `429`. Code review proved the v2 transport stopped
+  its deadline as soon as `fetch()` returned headers and left body consumption
+  to `supabase-js`, outside transport accounting. The exact phone-level loss
+  may be body-stream/CORS/abort related, but the architectural ambiguity defect
+  is independently proven.
+- 2026-08-01 — external code review and local verification assigned the current
+  transport `NO-GO`. The accepted replacement contract is Transport v3 in
+  `docs/features/unsigned-personalization/production-integration.md`: closed
+  operation catalog, capability-specific route health, full-response lifecycle,
+  per-operation typed outcomes, provider receipt for ambiguous OTP issue and
+  ordered idempotent outbox for product commands.
+- 2026-08-01 19:52–20:20 UTC — the onboarding-only Transport v3 candidate
+  confirmed email OTP, then reported participant persistence failure. Live
+  REST evidence found `transport_probe_v1` missing (`PGRST202`) even though the
+  browser bundle already required it; the committed migration and Function had
+  never been applied. The migration was applied and reconciled in remote
+  history, the nonce Function was deployed, and the exact gateway allowlist was
+  updated. Complete production probes now return HTTP 200 with the same nonce
+  through direct and relay Data and Function routes. The UI additionally
+  separates confirmed identity from pending membership persistence and offers
+  an explicit retry.
+- 2026-08-01 21:39 UTC — isolated one-page candidate `otp-r5` corrected the
+  sixth-digit state machine. Both ordinary input and Android-style change
+  commits trigger verification; progress is visible beside the six cells;
+  failed checks restore input; and success explicitly completes membership
+  instead of depending only on a separate Auth callback. A fresh hosted-Auth
+  OTP entered digit by digit without Enter returned verify `200`, membership
+  `200` and the confirmed final screen. This is internal Auth integration
+  evidence, not external mailbox-delivery E2E.
+
+- 2026-08-01 22:52 UTC — implemented the server-side receipt boundary and
+  provider routing in an isolated branch. A signed Send Email Hook now selects
+  Postbox for a new first send and paid NotiSend `subscriber` for returning,
+  repeated and fixed test identities; accepted/ambiguous attempts never switch
+  provider or duplicate. Private PII-free ledgers correlate provider acceptance,
+  direct/relay OTP issue and verify, plus actual email/Yandex method attempts.
+  NotiSend candidates pass an atomic shared unique-recipient admission gate:
+  repeated users reuse a slot, while the 201st new provider recipient is
+  assigned to Postbox before dispatch. Email magic-link code exchange is also
+  classified as email rather than being miscounted as Yandex OAuth.
+  The client resolves a lost `/otp` response through an exact bounded receipt
+  RPC. Unit/infrastructure tests and a transactional remote SQL compile pass;
+  production hook activation and a real external-mailbox GitHub Action remain
+  release gates, so the incident stays open.
 
 ## Root Cause
 
@@ -236,6 +283,16 @@ after any failed transport result and therefore communicated a false success.
    `_static_site_build_kaggle_command()` never passed that argument and the
    authorized-candidate gate required only URL/key. A candidate could therefore
    pass while silently compiling out the entire accepted fallback route.
+8. `ResilientSupabaseTransport.rawRequest()` disposed its abort timer in a
+   `finally` immediately after `fetch()` produced a `Response`. It neither read
+   nor validated the response body. A later stream/decode failure was converted
+   by `supabase-js` after the transport had already recorded success. Shared
+   `lastAmbiguousAt`/`lastNoHealthyAt` timestamps could not reliably bind that
+   failure to the originating operation, especially under concurrency.
+9. Transport v3 frontend delivery was not atomically gated on its database,
+   Edge Function and API Gateway prerequisites. Tests passed against source
+   contracts while production still lacked the Data probe, so route selection
+   failed after Auth had already succeeded.
 
 ## Contributing Factors
 
@@ -276,6 +333,15 @@ after any failed transport result and therefore communicated a false success.
   email. Failure to clear storage is visible and cannot redirect as success.
 - Every authorized production candidate contains both direct and relay URLs;
   missing relay configuration fails the build before publication.
+- Transport success requires the complete bounded response body and declared
+  decode, not only HTTP headers. Headers-then-stall, partial-body close and
+  invalid-JSON fault injection are regression tests.
+- Operation semantics come from the closed central catalog. Feature code cannot
+  select a route or request `idempotentReplay` directly.
+- Auth/Data/Functions route state is capability-specific; one healthy Auth GET
+  does not certify a Data RPC or Function POST.
+- A selected-once operation produces one per-request typed result and exactly
+  one upstream attempt. No shared timestamp can change another request's result.
 - Network error, timeout and `429` remain on the address step with honest copy;
   none says or implies that a message was sent.
 - Six digits cause one in-flight verify request. An old/replayed code fails
@@ -356,6 +422,8 @@ after any failed transport result and therefore communicated a false success.
       routes reproduced direct Supabase loss while the Yandex control stayed
       available, including a participant affected by the missing-email issue.
 - [ ] P0 deploy the false-success fix to the focus onboarding itself.
+- [ ] P0 replace the rejected v2 transport with the Transport v3 full-response
+      executor, operation catalog and fault-injection acceptance suite.
 - [ ] P0 deploy and phone-verify unconditional clean reset plus relay-bearing
       participant registration on the current candidate.
 - [ ] P0 run affected-phone acceptance through the deployed stateless API

@@ -64,7 +64,8 @@ test('phone connectivity diagnostic is unlinked, noindex and compares direct wit
   assert.match(component, /'KE4'/u);
   assert.match(helper, /cache: 'no-store'/u);
   assert.match(helper, /credentials: 'omit'/u);
-  assert.match(transport, /isSafeMethod/u);
+  assert.match(transport, /classifyBackendOperation/u);
+  assert.match(transport, /operation\.capability/u);
   assert.match(transport, /selection\.route/u);
   assert.match(infra, /action: GetItem/u);
   assert.doesNotMatch(component, /type="email"|one-time-code|signInWithOtp|verifyOtp/u);

@@ -11,7 +11,13 @@ The static-site release uses four deliberately separate owners:
 
 Canonical decision: [personalization data ownership](personalization-data-ownership.md).
 
-Email edge services do not change that data boundary: SpaceWeb is the retained human/inbound mailbox, a read-only Yandex IMAP collector handles the production automation copy while Mail Trigger is direct-canary-only, Postbox transports transactional mail only, and NotiSend transports personal recommendations only (hard launch ceiling: 200 actively consented users). The operational contract is [email infrastructure and delivery](../operations/email-delivery.md).
+Email edge services do not change that data boundary: SpaceWeb is the retained
+human/inbound mailbox, a read-only Yandex IMAP collector handles the production
+automation copy while Mail Trigger is direct-canary-only, and Postbox is the
+transactional transport. NotiSend owns personal recommendations plus the narrow
+reviewed repeat/test Auth route; one Supabase admission set enforces its shared
+200-unique-recipient ceiling. The operational contract is [email infrastructure
+and delivery](../operations/email-delivery.md).
 
 The bot is built with **aiogram 3** and runs on Fly.io using a webhook.
 

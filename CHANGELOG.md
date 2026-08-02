@@ -3,6 +3,29 @@
 ## [Unreleased]
 
 - Hardened Region Talk for asynchronous external-publication intake: imports now start unreviewed with no publication permission, preserve exact-byte provenance, deduplicate canonical URL/DOI/exact normalized title+authors and replay idempotently with immutable observations/same-owner aliases, expose new intake IDs/counts, and fail closed on conflicts. Candidate selection, orchestration, finalization and anti-vector planning now refresh complete current YDB snapshots at their decision boundaries, keep manual-review rows out of automatic promotion, protect prepared publication slots from silent late-intake replacement, durably audit changed evidence on immutable published rows, and retain the LLM-first semantic funnel. Added an explicit idempotent legacy-row provenance attestation migration without inventing unavailable historical input SHAs.
+- Added deterministic focus Auth email routing and evidence: new first sends use
+  Postbox, while returning/repeated and fixed E2E/operator identities use paid
+  NotiSend subscriber capacity. One opaque attempt now correlates provider
+  receipt, direct/relay issue/verify outcome and actual email/Yandex login
+  method without storing OTP or browser identifiers; an ambiguous browser
+  response resolves through a bounded receipt RPC and never sends a duplicate.
+  NotiSend admission now counts unique users across Auth and recommendation
+  traffic under the real 200-recipient ceiling for the current provider billing
+  period. The operator-reconciled provider counter plus atomic admissions since
+  that snapshot is now the source of truth; repeated fixed identities reuse one
+  period slot, while missing/expired accounting and recipients above capacity
+  are assigned to Postbox before dispatch.
+- Added a protected, manual Chromium + real-IMAPS external E2E for focus-group
+  email OTP, with fixed test identities by default, exact deployment SHA checks,
+  six-digit auto-submit coverage and sanitized ChatGPT-readable evidence.
+
+- Fixed focus-group email code entry on phones: the sixth digit visibly starts
+  verification, Android autofill/change commits are handled, failures return
+  control to the six-cell input, successful verification explicitly completes
+  membership, and an ambiguous email issuance keeps code entry available
+  without immediately sending a duplicate message. Added a fixed-identity,
+  fresh-OTP deployed integration check while retaining real mailbox delivery
+  as a separate external E2E gate.
 - Added immutable Region Talk external-publication research inputs, semantic-validation status, and an OIDC-only guarded YDB staging runbook with audit evidence and no-publication boundary.
 - Completed the Region Talk writer-v10 compensating backfill: all 22 current confirmed candidates now have cliché-free grounded copy, exact ready/fallback media, current operator-chat delivery, reaction synchronization, and rebuilt anti-vector queue/daily-plan snapshots.
 - Fixed Region Talk reviewed article-image delivery on content-negotiating publisher CDNs: the notifier now reproduces ImageDiagnostic's image `Accept` and user-agent request contract before verifying the fail-closed content digest.
@@ -34,6 +57,9 @@
   reproducible Astro dependencies and generated site trees.
 
 ### Added
+- Added operator-issued, temporary external-agent focus testing through one
+  dedicated Supabase identity: the server-only tool returns a fresh six-digit
+  OTP and one-time link without email delivery or any public Auth bypass.
 - Added executable, bounded static-collection catch-up tooling: a source-bound admission/audience/people backfill and a six-month exact club-relation enqueue plan. Both default to planning, require explicit apply, and reuse production decision/outbox contracts.
 - Added the static-selection data-prep MVP: source-bound admission/audience/people decisions, exact theatre/venue registry, durable club relation evaluation, six-month club projection, evidence-only shared BGE cache, ID-only collection/venue manifests and production-control fixtures. New semantic labels remain blocked until owner gold and a real Kaggle cold/warm canary.
 - Added the canonical static-collection extraction/product plan: it distinguishes
@@ -92,6 +118,23 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Fixed the onboarding-only Transport v3 rollout gap by applying its Data nonce
+  RPC, deploying the Function nonce probe and updating the stateless relay
+  allowlist before browser delivery. Email OTP now uses six centred code cells,
+  numeric/autofill semantics, safe clipboard assistance and sixth-digit
+  autosubmit; a confirmed account with pending participant persistence is shown
+  as a retryable save state instead of a failed login. Android installation
+  copy now allows up to one minute for launcher settling rather than claiming
+  immediate completion.
+- Replaced the focus-group browser transport's header-only route switch with
+  the fail-closed Transport v3 boundary: one central operation catalogue now
+  owns retry semantics, last-known-good routes are capability-specific and
+  compact, small Auth/REST/Function responses are bounded and decoded before a
+  write is acknowledged, and selected-once OTP/Search requests never replay
+  after an ambiguous dispatch/body failure. Added stateless nonce probes for
+  Data and Functions plus real socket-stall/partial-body/stream regression
+  coverage; long NDJSON Search streams retain caller cancellation without
+  inheriting the short JSON response deadline.
 - Fixed Fly SQLite rollout for club evaluation history: `Database.init()` now upgrades the legacy pair-unique table to hash-versioned history with row-count preservation, rather than relying on an Alembic revision that production does not invoke.
 - Fixed static-selection scheduling and truth boundaries: Smart Update now uses a strict trailing 15-minute static-build debounce, club provider failures preserve accepted relations with durable retry, and the exporter no longer infers free admission from prose ticket status. Production-candidate semantic computation is independent from legacy Unusual publication flags.
 - Region Talk now hands every eligible external editorial/academic article to
