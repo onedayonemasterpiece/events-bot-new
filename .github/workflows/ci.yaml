@@ -25,6 +25,8 @@ jobs:
         run: npm run test:browser-release-gate
       - name: Run external focus OTP harness contracts
         run: npm run test:external-focus-email-otp
+      - name: Run deterministic transport fault contracts
+        run: npm run test:transport-faults && npm run test:resilient-client
       - name: Build real static event pages
         env:
           PREVIEW_BUILD_ID: preview-ci-browser-gate

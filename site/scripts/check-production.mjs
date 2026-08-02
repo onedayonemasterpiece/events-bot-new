@@ -10,6 +10,7 @@ import templateContract from '../src/data/eventTemplateContract.json' with { typ
 import {
   CHECK_CONTRACT_VERSION, RELEASE_MANIFEST_SCHEMA, fileInventory, sha256, treeHash, validateCatalogLedger,
 } from './release-contract.mjs';
+import { TRANSPORT_FAULT_SENTINEL } from './transport-fault-build-contract.mjs';
 
 const siteDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const root = join(siteDir, 'dist');
@@ -36,6 +37,12 @@ if (
 ) fail('accepted v11 template contract is not pinned in the checked manifest');
 
 const files = fileInventory(root, { exclude: ['static-release-manifest.json'] });
+for (const file of files) {
+  if (/\.(?:css|html|js|json|map|mjs)$/u.test(file.key)
+    && readFileSync(join(root, file.key), 'utf8').includes(TRANSPORT_FAULT_SENTINEL)) {
+    fail(`transport fault injector leaked into production artifact: ${file.key}`);
+  }
+}
 const manifestByKey = new Map(manifest.files.map((file) => [file.key, file]));
 if (files.length !== manifest.files.length || manifestByKey.size !== files.length) fail('tree/manifest file count mismatch');
 for (const file of files) {

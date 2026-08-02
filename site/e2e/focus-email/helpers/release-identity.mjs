@@ -3,7 +3,7 @@ export function previewBuildUrl(target) {
   return new URL(prefix?.startsWith('preview-') ? `/${prefix}/preview-build.json` : '/preview-build.json', target.origin);
 }
 
-export async function observedRepoSha(target, expected, fetchImpl = fetch) {
+export async function observedRepoSha(target, expected, fetchImpl = fetch, expectedFaultProfile = 'normal') {
   const response = await fetchImpl(previewBuildUrl(target), { signal: AbortSignal.timeout(15_000) });
   if (!response.ok) {
     if (expected) throw new Error(`release_evidence_metadata_status:${response.status}`);
@@ -17,5 +17,10 @@ export async function observedRepoSha(target, expected, fetchImpl = fetch) {
     return null;
   }
   if (expected && value !== expected) throw new Error('release_evidence_repo_sha_mismatch');
+  const observedFaultProfile = String(body?.transportFaultProfile || 'normal');
+  if (observedFaultProfile !== expectedFaultProfile) throw new Error('release_evidence_fault_profile_mismatch');
+  if (expectedFaultProfile !== 'normal' && !/^[0-9a-f]{64}$/u.test(String(body?.transportFaultRegistryDigest || ''))) {
+    throw new Error('release_evidence_fault_registry_digest_missing');
+  }
   return value;
 }

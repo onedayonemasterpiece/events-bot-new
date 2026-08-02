@@ -65,3 +65,21 @@ trace, video and unsanitized native hierarchy. Keep only platform versions,
 step outcomes, host classes, request paths/statuses, message count, latency,
 OTP length and hashed message identity. The sole hierarchy exception is the
 clean pre-navigation iOS startup artifact described above.
+
+## Transport-failure OTP
+
+- Use `docs/testing/transport-fault-profiles.v1.yml`; never invent a profile in
+  workflow input or query parameters.
+- Inject at the `ResilientSupabaseTransport` constructor `fetchImpl` boundary
+  before `ResilientDataClient` and Auth singletons. A post-navigation
+  `window.fetch` patch is evidence instrumentation only, never fault control.
+- Build one immutable profile per preview and bind route-cache namespace,
+  preview metadata and harness expectation to the profile plus registry digest.
+- For `client_supabase_direct_unreachable`, fault the direct health probe so
+  selected-once OTP is preselected to relay. Require direct OTP dispatch `0`,
+  relay OTP dispatch `1`, mail `1`, verify `1`, registration durable effect `1`.
+- Retain only allowlisted host class, route, method, pathname class, status and
+  fault result. Never retain query, body, headers, email, OTP or token.
+- Production and secret-candidate builds must reject activation variables and
+  scan emitted text assets for the injector sentinel. Runtime-disable alone is
+  not sufficient production exclusion.

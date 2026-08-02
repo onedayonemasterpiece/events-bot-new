@@ -23,6 +23,8 @@
 - Read-only duplicate-image audit: `docs/operations/event-image-duplicate-audit.md`
 - Email delivery/deliverability: `docs/operations/email-delivery.md`
 - External focus-group mailbox OTP E2E: `docs/testing/external-focus-email-otp.md`
+- Static-site deterministic direct/relay fault profiles:
+  `docs/testing/transport-fault-profiles.v1.yml`
 - **Стратегия автотестирования статического сайта и данных, Android/iOS gates,
   запуск из ChatGPT, scenario registry и Codex handoff:**
   `docs/operations/static-site-autotest-strategy.md`,

@@ -24,6 +24,13 @@ For focus-group OTP additionally open:
 - `.github/workflows/external-focus-email-otp.yml`;
 - `site/e2e/focus-email/run.mjs`.
 
+For direct/relay outage testing additionally open
+`docs/testing/transport-fault-profiles.v1.yml` and the transport-failure section
+of [`references/mobile-otp-acceptance.md`](references/mobile-otp-acceptance.md).
+Fault control must be build-bound at the resilient transport `fetchImpl`
+boundary before singleton construction; late `window.fetch` changes are only
+diagnostic instrumentation.
+
 For a new Android/iOS browser-tab implementation or an Appium failure, read
 [`references/mobile-otp-acceptance.md`](references/mobile-otp-acceptance.md).
 For any visible/stuck native overlay, browser first-run UI, chooser, permission

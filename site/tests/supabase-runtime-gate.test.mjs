@@ -18,6 +18,9 @@ test('Supabase runtime endpoints are reachable only through the shared client or
   const allowRaw = new Set([
     path.normalize(new URL('../src/lib/resilientSupabaseTransport.ts', import.meta.url).pathname),
     path.normalize(new URL('../src/lib/backendOperationCatalog.ts', import.meta.url).pathname),
+    // Build-aliased E2E-only wrapper classifies allowlisted paths for sanitized
+    // evidence; it cannot create a route and delegates only through fetchImpl.
+    path.normalize(new URL('../src/lib/transportFaultInjector.e2e.ts', import.meta.url).pathname),
     path.normalize(new URL('../src/components/FocusConnectivityDiagnostic.astro', import.meta.url).pathname),
   ]);
   const offenders = [];

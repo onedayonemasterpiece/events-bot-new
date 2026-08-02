@@ -7,6 +7,7 @@ import {
   sha256, treeHash, validateCatalogLedger,
 } from './release-contract.mjs';
 import { loadPreviewPublicConfig, requirePreviewAuthorizedSearch } from './preview-public-env.mjs';
+import { assertTransportFaultBuildDisabled, removeTransportFaultBuildEnv } from './transport-fault-build-contract.mjs';
 
 const siteDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const distDir = join(siteDir, 'dist');
@@ -16,6 +17,7 @@ const productionManifestPath = join(distDir, 'static-release-manifest.json');
 const token = safeCandidateToken(process.env.SECRET_CANDIDATE_TOKEN || '');
 const basePath = candidateBasePath(token);
 const candidateRoot = join(distDir, basePath.slice(1));
+assertTransportFaultBuildDisabled(process.env, 'secret-candidate');
 const siteOrigin = (process.env.PUBLIC_SITE_ORIGIN || 'https://kenigevents.ru').replace(/\/+$/u, '');
 const productionManifestBytes = readFileSync(productionManifestPath);
 const productionManifest = JSON.parse(productionManifestBytes);
@@ -61,6 +63,7 @@ const env = {
   // candidate to the empty-state merely because the shell omitted the flag.
   PUBLIC_INTEREST_CLUBS_ENABLED: process.env.PUBLIC_INTEREST_CLUBS_ENABLED || '1',
 };
+removeTransportFaultBuildEnv(env);
 const astro = spawnSync(process.platform === 'win32' ? 'astro.cmd' : 'astro', ['build'], { cwd: siteDir, env, stdio: 'inherit', shell: process.platform === 'win32' });
 if (astro.status !== 0) process.exit(astro.status || 1);
 rmSync(join(distDir, '__preview'), { recursive: true, force: true });

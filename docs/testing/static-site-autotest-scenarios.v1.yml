@@ -186,6 +186,25 @@ scenarios:
     isolation: external-focus-email-otp
     execution: sequential_while_one_mailbox_is_shared
     evidence: restricted_no_video_no_trace_no_har
+    transport_contract:
+      capabilities: [auth, data]
+      operations:
+        - name: auth.otp
+          semantics: selected-once
+          max_dispatches: 1
+          max_durable_effects: 1
+        - name: auth.verify
+          semantics: selected-once
+          max_dispatches: 1
+          max_durable_effects: 1
+        - name: rpc.register_focus_group_participant_v1
+          semantics: idempotent-replay
+          max_durable_effects: 1
+      required_profiles:
+        pr_browser: [client_supabase_direct_unreachable, client_yandex_relay_unreachable]
+        mobile_release: [normal, client_supabase_direct_unreachable, client_yandex_relay_unreachable]
+      both_routes_down_expectation:
+        selected_once_dispatches: 0
     acceptance_receipts:
       browser: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30745526613
       browser_control_issue: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30755922643

@@ -249,7 +249,7 @@ export async function inspectSafariNativeUiProtocol({ findElements, getAlertText
   };
 }
 
-export async function createAppiumUi({ platform, target, expectedRepoSha, evidenceRoot, directHost, relayHost, secrets = [], env = process.env }) {
+export async function createAppiumUi({ platform, target, expectedRepoSha, expectedFaultProfile = 'normal', evidenceRoot, directHost, relayHost, secrets = [], env = process.env }) {
   const config = validateMobileConfig(platform, env);
   const { remote } = await import('webdriverio');
   const caps = buildAppiumCapabilities(platform, config, env);
@@ -272,6 +272,13 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
   let pageEntriesSeen = 0;
   let networkSequence = 0;
   let verifiedRepoSha = null;
+  const faultEvents = [];
+  const transportEvents = [];
+  let faultReceipt = null;
+  let faultPageEventsSeen = 0;
+  let transportPageEventsSeen = 0;
+  const transportOutcomes = [];
+  const transportOutcomeIds = new Set();
   const keyboard = {};
   const keyboardPreflight = { status: 'not_run', controls: {}, product: {} };
   let safariStartup = { status: platform === 'ios' ? 'pending' : 'not_applicable' };
@@ -325,6 +332,30 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     const values = await driver.execute(() => Array.isArray(window.__keE2eNetwork) ? window.__keE2eNetwork : []);
     for (const entry of values.slice(pageEntriesSeen)) recorder.entries.push({ ...entry, sequence: ++networkSequence });
     pageEntriesSeen = values.length;
+  }
+
+  async function syncTransportFaultEvidence() {
+    const current = await driver.execute(() => ({
+      receipt: globalThis['KENIGEVENTS_E2E_TRANSPORT_FAULT_INJECTOR_V1:receipt'] || null,
+      faults: globalThis['KENIGEVENTS_E2E_TRANSPORT_FAULT_INJECTOR_V1:events'] || [],
+      transport: globalThis['KENIGEVENTS_E2E_TRANSPORT_FAULT_INJECTOR_V1:transport-events'] || [],
+    })).catch(() => ({ receipt: null, faults: [], transport: [] }));
+    faultReceipt ||= current.receipt;
+    faultEvents.push(...current.faults.slice(faultPageEventsSeen));
+    transportEvents.push(...current.transport.slice(transportPageEventsSeen));
+    faultPageEventsSeen = current.faults.length;
+    transportPageEventsSeen = current.transport.length;
+    const outcomes = await driver.execute(() => {
+      const clients = globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__;
+      if (!(clients instanceof Map)) return [];
+      return [...clients.values()].flatMap((client) => client?.transport?.outcomeHistory?.() || []);
+    }).catch(() => []);
+    for (const outcome of outcomes) {
+      if (!outcome?.operationId || transportOutcomeIds.has(outcome.operationId)) continue;
+      transportOutcomeIds.add(outcome.operationId);
+      transportOutcomes.push(outcome);
+    }
+    return { receipt: faultReceipt, fault_events: faultEvents, transport_events: transportEvents, transport_outcomes: transportOutcomes };
   }
 
   async function viewportSnapshot(selector) {
@@ -536,7 +567,7 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
       await syncNetwork();
     },
     async verifyReleaseIdentity() {
-      verifiedRepoSha = await observedRepoSha(target, expectedRepoSha);
+      verifiedRepoSha = await observedRepoSha(target, expectedRepoSha, fetch, expectedFaultProfile);
       return verifiedRepoSha;
     },
     async waitForInstallStage() { await (await driver.$(SELECTORS.install)).waitForDisplayed({ timeout: 20_000 }); },
@@ -596,12 +627,25 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     },
     async waitForMembershipConfirmed() { await waitText(driver, /Участие подтверждено/u); },
     async requestCounts() {
-      await syncNetwork();
-      return { issue: recorder.count('POST', '/auth/v1/otp'), verify: recorder.count('POST', '/auth/v1/verify'),
-        registration: recorder.count('POST', '/rpc/register_focus_group_participant_v1'),
-        registrationStatus: recorder.statuses('/rpc/register_focus_group_participant_v1').at(-1) ?? null };
+      await syncNetwork(); const internal = await syncTransportFaultEvidence();
+      const countOutcome = (operation) => internal.transport_outcomes.filter((item) => item.operation === operation).length;
+      const outcomeStatus = (operation) => internal.transport_outcomes.filter((item) => item.operation === operation).at(-1)?.status ?? null;
+      const issue = countOutcome('auth.otp'); const verify = countOutcome('auth.verify');
+      const registration = countOutcome('rpc.register_focus_group_participant_v1');
+      return {
+        issue: issue || recorder.count('POST', '/auth/v1/otp'),
+        verify: verify || recorder.count('POST', '/auth/v1/verify'),
+        registration: registration || recorder.count('POST', '/rpc/register_focus_group_participant_v1'),
+        registrationStatus: outcomeStatus('rpc.register_focus_group_participant_v1')
+          ?? recorder.statuses('/rpc/register_focus_group_participant_v1').at(-1) ?? null,
+      };
     },
-    async reloadOrReopen() { await syncNetwork(); await driver.refresh(); pageEntriesSeen = 0; await driver.pause(500); await driver.execute(networkBootstrap, directHost, relayHost); },
+    async reloadOrReopen() {
+      await syncNetwork(); await syncTransportFaultEvidence(); await driver.refresh();
+      pageEntriesSeen = 0; faultPageEventsSeen = 0; transportPageEventsSeen = 0;
+      await driver.pause(500); await driver.execute(networkBootstrap, directHost, relayHost);
+    },
+    async transportFaultEvidence() { return syncTransportFaultEvidence(); },
     async waitForReturningMember() { await waitText(driver, /Вы уже в фокус-группе|Участие подтверждено/u, 20_000); },
     async captureMaskedEvidence(name) {
       await driver.hideKeyboard().catch(() => undefined);

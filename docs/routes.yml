@@ -37,6 +37,7 @@ sections:
     e2e_testing: docs/operations/e2e-testing.md
     e2e_scenarios: docs/operations/e2e-scenarios.md
     external_focus_email_otp: docs/testing/external-focus-email-otp.md
+    static_site_transport_fault_profiles: docs/testing/transport-fault-profiles.v1.yml
     release_smoke_smart_update: docs/operations/release-smoke-smart-update.md
     kaggle_secrets: docs/operations/kaggle-secrets.md
     prod_data: docs/operations/prod-data.md

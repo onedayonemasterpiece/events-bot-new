@@ -36,6 +36,7 @@ export interface ResilientSupabaseTransportConfig {
   safeRequestTimeoutMs?: number;
   selectedRequestTimeoutMs?: number;
   fetchImpl?: typeof fetch;
+  routeCacheNamespace?: string;
   now?: () => number;
   persistentStorage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null;
   /** @deprecated Kept while callers migrate from the v2 config name. */
@@ -375,7 +376,7 @@ export class ResilientSupabaseTransport {
     this.probeStaggerMs = clamp(config.probeStaggerMs, DEFAULT_PROBE_STAGGER_MS, 0, 1_000);
     this.safeRequestTimeoutMs = clamp(config.safeRequestTimeoutMs, DEFAULT_SAFE_REQUEST_TIMEOUT_MS, 1_000, 20_000);
     this.selectedRequestTimeoutMs = clamp(config.selectedRequestTimeoutMs, DEFAULT_SELECTED_REQUEST_TIMEOUT_MS, 2_000, 30_000);
-    this.routeCachePrefix = `${ROUTE_CACHE_PREFIX}${compactHash(`${this.directUrl}|${this.relayUrl}`)}:`;
+    this.routeCachePrefix = `${ROUTE_CACHE_PREFIX}${compactHash(`${this.directUrl}|${this.relayUrl}|${config.routeCacheNamespace || 'normal'}`)}:`;
     this.fetch = this.fetchRequest.bind(this) as typeof fetch;
   }
 
@@ -435,6 +436,10 @@ export class ResilientSupabaseTransport {
       if (!operation || outcome.operation === operation) return { ...outcome };
     }
     return null;
+  }
+
+  outcomeHistory(startedAfter = 0): SupabaseTransportOutcome[] {
+    return this.outcomes.filter((outcome) => outcome.startedAt >= startedAfter).map((outcome) => ({ ...outcome }));
   }
 
   private recordOutcome(outcome: SupabaseTransportOutcome): void {
