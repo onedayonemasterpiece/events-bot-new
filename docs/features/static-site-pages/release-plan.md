@@ -1,6 +1,6 @@
 # План production-релиза статических страниц событий
 
-> **Срез:** 2026-08-01
+> **Срез:** 2026-08-02
 > **Решение:** `NO-GO` для переключения event pages на canonical root прямо сейчас.
 > **Scope:** production-контур статических страниц событий и переход event-detail
 > с Telegraph. Полный релиз всех F1–F17 персональных анонсов остаётся отдельным
@@ -17,6 +17,7 @@
 | Freshness/outbox | Partial | Coalesced build/outbox реализованы, но presentation-day freshness и failure drill отсутствуют |
 | Telegraph dual-run/public resolver | Missing | D0/D10 outward switch и запрет create/recreate после cutover не доказаны |
 | UI/product acceptance | Partial | Frozen public desktop/mobile passed; real OAuth/Edge owner-session smoke и product owner sign-off ещё нужны |
+| Personalization legal/recommendation gate | Design accepted; implementation pending | Core personalization may avoid upfront opt-in only after a meaningful activation event; passive use is not consent or acceptance. Full P0 contract: [RF personalization legal release gate](personalization-legal-release-gate-rf.md). |
 
 Текущий operational blocker: нормальный Fly → Kaggle запуск останавливается до
 старта kernel с `400 INVALID_ARGUMENT: Invalid token` при создании временного
@@ -33,6 +34,37 @@ noindex candidate на свежем production snapshot и read-only `plan` atom
 publisher против подготовленного inventory. `apply`, DNS и перенос текущих
 страниц на canonical root не разрешены.
 Исторические controlled runs ниже — regression evidence, а не текущий GO.
+
+## Юридический release-gate персонализации, 2026-08-02
+
+Общий статический сайт может быть выпущен без закрытия этого gate только при
+полностью выключенных server profile и personalization signal writes. Общая,
+редакционная и контекстная выдача при этом остаётся доступной.
+
+До включения персональной выдачи, долговременного anonymous/account profile или
+серверного учёта поведенческих сигналов обязателен P0-контракт:
+
+- предварительный переключатель «разрешить / запретить» для core personalization
+  не требуется;
+- функция запускается только понятным активным действием — выбором интересов,
+  первой отметкой «Нравится / Не интересно» или включением режима «Для меня»;
+- page view, scroll, dwell, закрытие cookie notice и формула «продолжая
+  пользоваться» не являются согласием, акцептом или activation event;
+- до activation event серверный профиль и очередь сигналов не создаются;
+- фиксируются action и версии Пользовательского соглашения, Политики и Правил
+  применения рекомендательных технологий;
+- вместо стартового on/off обязателен доступный reset профиля;
+- аналитика, рекламный трекинг, рассылки и специальные категории не наследуют
+  договорное основание core personalization и требуют отдельной оценки;
+- до production подтверждаются уведомление о рекомендательных технологиях,
+  локализация первичной базы, применимость уведомления Роскомнадзора и legal
+  sign-off по фактическому data flow.
+
+Канонический подробный contract, data model, migration для старого `consent_ok`,
+autotest checklist, NO-GO и rollback:
+[Юридический release-gate персонализации в РФ](personalization-legal-release-gate-rf.md).
+Старые prototype-допущения «простой ОК включает analytics/personalization» не
+являются production acceptance.
 
 ### R14 immutable review evidence, 2026-07-27
 
@@ -415,6 +447,12 @@ Production canary клубов по интересам от 2026-07-17 не ме
 6. **Acceptance evidence:** автоматизируемый RC subset из
    [test-scenarios.md](test-scenarios.md) прошёл на clean main-reachable SHA; native
    share/calendar/maps/unfurl проверки приложены вручную там, где mocks недостаточны.
+7. **Personalization legal gate — условный:** не блокирует неперсонализированный
+   root, но обязателен до первого server profile/signal write. Требуются meaningful
+   activation event, versioned contract receipt, zero writes before activation,
+   accessible reset, отдельные основания для analytics/marketing, опубликованные
+   Правила рекомендательных технологий, подтверждённая локализация и полный
+   acceptance из [RF legal gate](personalization-legal-release-gate-rf.md).
 
 Release owner фиксирует точные `T0` и `T0+10 days` в UTC и
 `Europe/Kaliningrad`, production SHA, snapshot id, build id, manifest hash и rollback
@@ -502,6 +540,10 @@ STATIC_SITE_CANARY_PERCENT=0..100
   имеет Behave step definitions;
 - atomic promotion/rollback, production-root browser/HTTP, 10-day cutover и native
   device flows ещё требуют реализации/evidence.
+
+До включения персонализации дополнительно обязателен automation checklist из
+[юридического release-gate](personalization-legal-release-gate-rf.md); старый
+standalone demo не доказывает отсутствие profile/signal writes до activation.
 
 Полный F1–F17 readiness и release evidence pack остаются в
 [аудите 2026-07-11](../../reports/static-personal-announcements-release-readiness-2026-07-11.md);
