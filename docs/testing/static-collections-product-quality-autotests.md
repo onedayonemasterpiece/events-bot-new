@@ -145,7 +145,8 @@ Workflow содержит два фактических режима.
 
 ### `product`
 
-На schedule/manual/опциональном push использует пути:
+На ручном запуске или опциональном push после подключения adapter использует
+пути:
 
 ```text
 STATIC_COLLECTIONS_PRODUCT_SNAPSHOT_PATH
@@ -161,6 +162,11 @@ STATIC_COLLECTIONS_PRODUCT_QUALITY_REQUIRED=true
 ```
 
 `WATCH` остаётся успешным job с видимым отчётом. `FAIL` завершает job ошибкой.
+
+Ежедневный schedule намеренно **не включён в skeleton**: бессодержательный
+`NOT_IMPLEMENTED` run создавал бы только шум. Следующий агент добавляет schedule
+в том же PR, где подключает реальный product snapshot и baseline, и сразу
+прикладывает terminal scheduled evidence.
 
 Workflow пока имеет только GitHub UI `workflow_dispatch`. По общей стратегии это
 не является гарантированным запуском из ChatGPT. Поэтому scenario остаётся
@@ -179,7 +185,8 @@ product snapshot.
    baseline, не выдавая provisional seed за baseline.
 4. Заполнить living regression examples реальными известными positives и false
    positives.
-5. Настроить repository variables и выполнить terminal scheduled run.
+5. Настроить repository variables, добавить schedule и выполнить terminal
+   scheduled run только после появления реального product snapshot.
 6. Добавить scenario в канонический `/qa run` gateway; UI-only dispatch не
    закрывает ChatGPT launch boundary.
 7. Только после этого сделать workflow required для изменений, способных менять
