@@ -1,51 +1,31 @@
 # Region Talk: результаты внешнего поиска публикаций
 
-Status: **research evidence / import queue**. Эти файлы являются результатами внешнего поиска по контракту `region_talk_external_research.v1`. Они не являются готовыми публикационными решениями: каждый файл должен пройти штатную валидацию, live-YDB duplicate guard и импорт в staging через `scripts/region_talk_external_publication_import.py`.
+Status: **validated research evidence / automated YDB intake**. JSON-файлы соответствуют контракту `region_talk_external_research.v1`; чистые `candidate_report` поступают только в штатный Region Talk pipeline проверки и скоринга. `manual_review_required` остаётся непубликуемым и автоматически не повышается. Импорт в YDB не является разрешением на публикацию.
 
-## Файлы
+## Исторические неизменяемые пакеты
 
-**Текущий fail-closed статус (проверен importer из workflow commit `a9c9d43e`, 2026-08-01):** первые два исторических входа сейчас не проходят semantic validation (соответственно 5 и 1 строка); их нельзя dispatch-ить частично и нужно создать исправленные successors с новыми `request_id`. Третий вход чист: 20 valid / 0 rejected, 63 planned YDB rows в dry-run. Полные причины, PR → `main` → protected manual dispatch, OIDC variables и audit evidence описаны в [guarded import runbook](external-publication-import-runbook.md). JSON-пейлоады ниже остаются неизменяемым историческим evidence.
+| Выполнено, UTC | JSON | Кандидаты | Результат текущего importer | SHA-256 |
+|---|---|---:|---|---|
+| 2026-07-31 12:50:52 | [`region-talk-external-research-result-region-talk-external-2026-07-31-125052.json`](region-talk-external-research-result-region-talk-external-2026-07-31-125052.json) | 20 | 5 semantic rejections; заменён successor `region-talk-external-2026-08-02-063020`, исторический файл не импортировать | `59b1d7cc43fff8eabe53f4f8b84b700d1c5ebc60f326b9f3f8c2d208999bc2cf` |
+| 2026-07-31 17:40:33 | [`region-talk-external-research-result-region-talk-external-2026-07-31-174033.json`](region-talk-external-research-result-region-talk-external-2026-07-31-174033.json) | 14 | 1 semantic rejection; заменён successor `region-talk-external-2026-08-02-063021`, исторический файл не импортировать | `c040269f09bd72f16cf74fe2f721d9b8375ede82bd3742ce989e406747384cb0` |
+| 2026-08-01 16:31:42 | [`region-talk-external-research-result-region-talk-external-2026-08-01-163142.json`](region-talk-external-research-result-region-talk-external-2026-08-01-163142.json) | 20 | clean: 20 valid / 0 rejected; допускается идемпотентный импорт или replay | `e662b449811a0887dd2fa0ebe33903d8caffed3231323ee9e8fbfc55b027bad7` |
 
-Хронологический порядок сохраняется для **чистых** будущих входов: ранний успешный импорт обновляет durable duplicate ledger до обработки следующего файла.
+## Актуальные импортируемые пакеты
 
-| Выполнено, UTC | JSON | Кандидаты | `candidate_report` | Ручная проверка | Исключено | Не разрешено | SHA-256 |
-|---|---|---:|---:|---:|---:|---:|---|
-| 2026-07-31 12:50:52 | [`region-talk-external-research-result-region-talk-external-2026-07-31-125052.json`](region-talk-external-research-result-region-talk-external-2026-07-31-125052.json) | 20 | 14 | 6 | 2 | 2 | `59b1d7cc43fff8eabe53f4f8b84b700d1c5ebc60f326b9f3f8c2d208999bc2cf` |
-| 2026-07-31 17:40:33 | [`region-talk-external-research-result-region-talk-external-2026-07-31-174033.json`](region-talk-external-research-result-region-talk-external-2026-07-31-174033.json) | 14 | 10 | 4 | 3 | 4 | `c040269f09bd72f16cf74fe2f721d9b8375ede82bd3742ce989e406747384cb0` |
-| 2026-08-01 16:31:42 | [`region-talk-external-research-result-region-talk-external-2026-08-01-163142.json`](region-talk-external-research-result-region-talk-external-2026-08-01-163142.json) | 20 | 10 | 10 | 4 | 1 | `e662b449811a0887dd2fa0ebe33903d8caffed3231323ee9e8fbfc55b027bad7` |
+| Request ID / выполнено UTC | JSON | Кандидаты | `candidate_report` | `manual_review_required` | Исключено | Unresolved | Проверка | SHA-256 |
+|---|---|---:|---:|---:|---:|---:|---|---|
+| `region-talk-external-2026-08-02-063020` / 2026-08-02 06:30:20 | [`region-talk-external-research-result-region-talk-external-2026-08-02-063020.json`](region-talk-external-research-result-region-talk-external-2026-08-02-063020.json) | 20 | 12 | 8 | 2 | 2 | strict schema + importer semantic validation: clean; successor of `region-talk-external-2026-07-31-125052` | `2862d6bb2537c03376c8d347bdd07040496a597c365e5481f1059cd24183553e` |
+| `region-talk-external-2026-08-02-063021` / 2026-08-02 06:30:21 | [`region-talk-external-research-result-region-talk-external-2026-08-02-063021.json`](region-talk-external-research-result-region-talk-external-2026-08-02-063021.json) | 14 | 10 | 4 | 3 | 4 | strict schema + importer semantic validation: clean; successor of `region-talk-external-2026-07-31-174033` | `2f6f4f4c3e1ef63c426332edf182dc6b6851544d0d5ca9c5cefa5ac4c9c300de` |
+| `region-talk-external-2026-08-01-163142` / 2026-08-01 16:31:42 | [`region-talk-external-research-result-region-talk-external-2026-08-01-163142.json`](region-talk-external-research-result-region-talk-external-2026-08-01-163142.json) | 20 | 10 | 10 | 4 | 1 | strict schema + importer semantic validation: clean | `e662b449811a0887dd2fa0ebe33903d8caffed3231323ee9e8fbfc55b027bad7` |
 
-Итого в трёх исследовательских пакетах: **54 кандидата**, из них **34 `candidate_report`** и **20 `manual_review_required`**; отдельно сохранены **9 исключённых** и **7 неразрешённых** страниц.
+Successor-пакеты заменяют два ошибочных исторических входа и не увеличивают число уникально найденных публикаций. Перед каждым `--execute` importer перечитывает live YDB, применяет canonical URL / DOI / normalized title+authors identity guard и выполняет запись атомарно. Повторный запуск становится replay/no-op и не создаёт дубликатов.
 
-## Быстрая проверка и импорт
+## Автоматический импорт
 
-Из корня репозитория:
+После попадания чистого JSON в `main` используется workflow `Import trusted Region Talk external-publication research`. Он сначала выполняет dry validation точных committed bytes, затем через GitHub OIDC получает короткоживущий Yandex IAM token и запускает атомарный staging import. Результаты фиксируются в SHA-addressed Actions artifact с `new_intake_ids`, replay и conflict counters.
 
-```bash
-RESULTS=(
-  docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-07-31-125052.json
-  docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-07-31-174033.json
-  docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-08-01-163142.json
-)
-
-mkdir -p artifacts/codex/region-talk-external-publications
-
-for file in "${RESULTS[@]}"; do
-  name="$(basename "${file}" .json)"
-  python3 scripts/region_talk_external_publication_import.py "${file}" \
-    --report "artifacts/codex/region-talk-external-publications/${name}.dry-run.json"
-done
-```
-
-После проверки dry-run отчётов — явный staging-import, также по порядку:
-
-```bash
-for file in "${RESULTS[@]}"; do
-  python3 scripts/region_talk_external_publication_import.py "${file}" --execute
-done
-```
-
-Импортёр повторно проверяет схему и текущий durable ledger, поэтому строки, уже ставшие известными после исследовательского запуска, должны быть отклонены как дубликаты, а не принудительно повторно импортированы.
+Импорт не пишет `publication_candidate_item`, не выдаёт `publication_permission`, не вызывает Telegram/VK publishing и не повышает `manual_review_required`. Новая запись начинается как `unreviewed`; только `candidate_report` направляется в существующий LLM-first Region Talk pipeline.
 
 ## Правило пополнения
 
-Новый проверенный результат добавляется в эту же папку под исходным именем `region-talk-external-research-result-<request_id>.json`. В таблицу выше добавляется новая строка с UTC-временем, количеством строк по статусам и SHA-256 фактически закоммиченного файла. Старые JSON-файлы не редактируются задним числом; исправленный пакет получает новый `request_id`.
+Новый результат добавляется под исходным именем `region-talk-external-research-result-<request_id>.json`. Исторические JSON не редактируются: любая правка выпускается отдельным successor с новым `request_id`, фактическим SHA-256 и кратким validation summary в этой странице.
