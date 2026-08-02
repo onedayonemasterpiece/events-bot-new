@@ -95,6 +95,26 @@ TERMINAL_BACKFILL_STATUSES = {
     "unsupported_surface",
 }
 
+# These fields exist only in the local row wrapper.  Durable YDB projections
+# may intentionally use other leading-underscore fields (for example the live
+# source/profile overlay written by the finalizer), and those fields must stay
+# inside the compare-and-swap snapshot.
+ROW_RUNTIME_ONLY_FIELDS = {
+    "_ydb_pk",
+    "_ydb_updated_at",
+    "_source_onboarding_profile",
+    "_candidate_corrections",
+    "_strong_read_expected_payload",
+}
+
+
+def durable_publication_payload(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in row.items()
+        if str(key) not in ROW_RUNTIME_ONLY_FIELDS
+    }
+
 _BANNED_COPY_PATTERNS = (
     r"\bуникальн\w*\b",
     r"\bневероятн\w*\b",
@@ -1263,9 +1283,7 @@ def upsert_publication_row(
         raise RuntimeError("publication row has no durable YDB primary key")
     expected_payload = row.get("_strong_read_expected_payload")
     if not isinstance(expected_payload, dict):
-        expected_payload = {
-            key: value for key, value in row.items() if not str(key).startswith("_")
-        }
+        expected_payload = durable_publication_payload(row)
     expected_raw = json.dumps(
         expected_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     )
@@ -2365,7 +2383,9 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         )
         for index, row in enumerate(selected):
             selected_ephemeral = {
-                key: value for key, value in row.items() if str(key).startswith("_")
+                key: value
+                for key, value in row.items()
+                if str(key) in ROW_RUNTIME_ONLY_FIELDS
             }
             live_row = strong_read_row(
                 pool, ydb, table, str(row.get("_ydb_pk") or "")
@@ -2378,9 +2398,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
                 })
                 continue
             row = {**live_row, **selected_ephemeral, "_ydb_pk": live_row["_ydb_pk"]}
-            row["_strong_read_expected_payload"] = {
-                key: value for key, value in live_row.items() if not str(key).startswith("_")
-            }
+            row["_strong_read_expected_payload"] = durable_publication_payload(live_row)
             url = notify.canonical_post_url(row)
             source_key = finalizer.canonical_source_key_for_row(row).strip().lower()
             profile = profiles_by_key.get(source_key)

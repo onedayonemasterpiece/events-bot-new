@@ -552,6 +552,63 @@ def test_final_candidate_cas_rejects_concurrent_live_change() -> None:
         )
 
 
+def test_final_candidate_cas_keeps_durable_leading_underscore_fields() -> None:
+    mod = load_module()
+    expected = {
+        "post_url": "https://example.org/article",
+        "publication_status": "gemini_accept",
+        "_live_authoritative_source_found": True,
+        "_live_authoritative_source_fingerprint": "live-source-fp",
+        "_live_source_profile_checked": True,
+        "_live_source_profile_fingerprint": "live-profile-fp",
+    }
+    row = {
+        **expected,
+        "_ydb_pk": "publication_candidate_item:article",
+        "_source_onboarding_profile": {"profile_status": "ready"},
+    }
+    row["_strong_read_expected_payload"] = mod.durable_publication_payload(row)
+    assert row["_strong_read_expected_payload"] == expected
+
+    class Result:
+        def __init__(self, rows):
+            self.rows = rows
+
+    class Tx:
+        call_count = 0
+
+        def execute(self, _query, _params, *, commit_tx):  # noqa: ARG002
+            self.call_count += 1
+            if self.call_count == 1:
+                return [Result([type("Row", (), {"payload_json": json.dumps(expected)})()])]
+            if self.call_count == 2:
+                return [Result([])]
+            assert commit_tx is True
+            return []
+
+    class Session:
+        def __init__(self):
+            self.tx = Tx()
+
+        def prepare(self, query):
+            return query
+
+        def transaction(self, _mode):
+            return self.tx
+
+    class Pool:
+        def retry_operation_sync(self, op):
+            return op(Session())
+
+    class Ydb:
+        @staticmethod
+        def SerializableReadWrite():
+            return object()
+
+    updates = {"publication_draft_status": "ready_for_operator_review"}
+    assert mod.upsert_publication_row(Pool(), Ydb(), "table", row, updates) == updates
+
+
 def test_final_candidate_cas_catches_late_correction_and_writes_block() -> None:
     mod = load_module()
     expected = {

@@ -3,7 +3,10 @@
 ## [Unreleased]
 
 - Added opt-in local documentation auto-push watcher for `docs/`, publishing saved text-document updates to `origin/main` while excluding media and the requested visitors reference.
-
+- Fixed Region Talk draft CAS for durable `_live_*` candidate projections:
+  strong reread now excludes only explicit local runtime fields instead of all
+  leading-underscore keys. Genuine concurrent candidate changes still fail
+  closed, while an unchanged live-overlay row can accept its grounded draft.
 - Changed Region Talk article drafts to Writer v12: the first paragraph's
   publisher sentence must summarize the outlet identity, intended reader and
   distinctive editorial value from all three evidence-linked profile
