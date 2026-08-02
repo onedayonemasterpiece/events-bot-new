@@ -25,9 +25,10 @@ if str(ROOT) not in sys.path:
 
 from region_talk_llm_runtime import build_google_ai_client  # noqa: E402
 from scripts.region_talk_external_publication_import import (  # noqa: E402
+    ContractError,
     duplicate_guard_from_seen_publications,
+    execute_import,
     prepare_import,
-    write_ydb,
 )
 from scripts.region_talk_external_research_registry import publish_current_registry  # noqa: E402
 from scripts.region_talk_external_research_request import read_seen_from_ydb  # noqa: E402
@@ -124,7 +125,8 @@ async def run_autoresearch(
     usage_payload: dict[str, Any] = {}
     actual_model = model
     if input_path is not None:
-        raw = input_path.read_text(encoding="utf-8")
+        raw_bytes = input_path.read_bytes()
+        raw = raw_bytes.decode("utf-8")
     else:
         prompt = build_prompt(
             prompt_path=prompt_path,
@@ -157,22 +159,91 @@ async def run_autoresearch(
             "total_tokens": int(getattr(usage, "total_tokens", 0) or 0),
         }
         actual_model = str(getattr(usage, "model", "") or model)
+        raw_bytes = raw.encode("utf-8")
 
     stamp = started.strftime("%Y%m%dT%H%M%SZ")
     raw_path = output_dir / f"external-research-{stamp}.json"
     raw_path.parent.mkdir(parents=True, exist_ok=True)
-    raw_path.write_text(raw, encoding="utf-8")
+    raw_path.write_bytes(raw_bytes)
     os.chmod(raw_path, 0o600)
     payload = json.loads(raw)
+    input_sha256 = hashlib.sha256(raw_bytes).hexdigest()
 
     duplicate_guard = None
+    try:
+        if execute:
+            duplicate_guard = duplicate_guard_from_seen_publications(read_seen_from_ydb(20000))
+        prepared = prepare_import(
+            payload,
+            duplicate_guard=duplicate_guard,
+            input_json_sha256=input_sha256,
+        )
+    except ContractError as exc:
+        identity_conflict = "identity" in str(exc).lower() or "map" in str(exc).lower()
+        return {
+            "ok": False,
+            "stage": "external_research",
+            "status": (
+                "conflict_no_write" if execute and identity_conflict
+                else "validation_failed_no_write" if execute
+                else "validation_failed"
+            ),
+            "model": actual_model,
+            "requested_model": model,
+            "request_id": str((payload.get("run") or {}).get("request_id") or "") if isinstance(payload, dict) else "",
+            "raw_path": str(raw_path),
+            "input_json_sha256": input_sha256,
+            "raw_sha256": input_sha256,
+            "usage": usage_payload,
+            "candidate_rows_received": len(payload.get("candidates") or []) if isinstance(payload, dict) else 0,
+            "candidate_rows_valid": 0,
+            "candidate_rows_rejected": 0,
+            "written_ydb_rows": 0,
+            "new_intake_count": 0,
+            "new_intake_ids": [],
+            "replay_count": 0,
+            "replay_ids": [],
+            "conflict_count": 1 if execute and identity_conflict else 0,
+            "execution_error": str(exc),
+            "registry_seen_publication_count": 0,
+            "registry_publication_error": "",
+            "completed_at": utc_now().isoformat(),
+        }
+    execution = {
+        "status": "validated",
+        "written_ydb_rows": 0,
+        "new_intake_count": int(prepared["batch"].get("new_intake_count") or 0),
+        "new_intake_ids": list(prepared["batch"].get("new_intake_ids") or []),
+        "replay_count": int(prepared["batch"].get("replay_count") or 0),
+        "replay_ids": list(prepared["batch"].get("replay_ids") or []),
+        "conflict_count": int(prepared["batch"].get("identity_conflict_count") or 0),
+    }
+    execution_error = ""
     if execute:
-        duplicate_guard = duplicate_guard_from_seen_publications(read_seen_from_ydb(20000))
-    prepared = prepare_import(payload, duplicate_guard=duplicate_guard)
-    written = write_ydb(prepared["ydb_rows"]) if execute else 0
+        if prepared["batch"].get("execution_blocked"):
+            execution.update({
+                "status": "rejected_no_write",
+                "new_intake_count": 0,
+                "new_intake_ids": [],
+            })
+        else:
+            try:
+                execution = execute_import(prepared)
+            except ContractError as exc:
+                execution = {
+                    "status": "conflict_no_write",
+                    "written_ydb_rows": 0,
+                    "new_intake_count": 0,
+                    "new_intake_ids": [],
+                    "replay_count": int(prepared["batch"].get("replay_count") or 0),
+                    "replay_ids": list(prepared["batch"].get("replay_ids") or []),
+                    "conflict_count": max(1, int(prepared["batch"].get("identity_conflict_count") or 0)),
+                }
+                execution_error = str(exc)
     registry: dict[str, Any] | None = None
     registry_error = ""
-    if execute:
+    execution_succeeded = execution["status"] in {"committed", "identical_replay"}
+    if execute and execution_succeeded:
         try:
             registry = publish_current_registry(seen_limit=20000)
         except Exception as exc:  # imported rows remain durable and retryable
@@ -180,14 +251,15 @@ async def run_autoresearch(
 
     batch = prepared["batch"]
     result = {
-        "ok": True,
+        "ok": not execute or execution_succeeded,
         "stage": "external_research",
-        "status": "executed" if execute else "validated",
+        "status": execution["status"],
         "model": actual_model,
         "requested_model": model,
         "request_id": batch.get("request_id"),
         "raw_path": str(raw_path),
-        "raw_sha256": hashlib.sha256(raw.encode("utf-8")).hexdigest(),
+        "input_json_sha256": input_sha256,
+        "raw_sha256": input_sha256,
         "usage": usage_payload,
         "candidate_rows_received": int(batch.get("candidate_rows_received") or 0),
         "candidate_rows_valid": int(batch.get("candidate_rows_valid") or 0),
@@ -195,12 +267,18 @@ async def run_autoresearch(
         "ready_for_region_talk_scoring": int(batch.get("ready_for_region_talk_scoring") or 0),
         "manual_or_blocked": int(batch.get("manual_or_blocked") or 0),
         "seen_publication_rows_staged": int(batch.get("seen_publication_rows_staged") or 0),
-        "written_ydb_rows": int(written),
+        "written_ydb_rows": int(execution.get("written_ydb_rows") or 0),
+        "new_intake_count": int(execution.get("new_intake_count") or 0),
+        "new_intake_ids": sorted(execution.get("new_intake_ids") or []),
+        "replay_count": int(execution.get("replay_count") or 0),
+        "replay_ids": sorted(execution.get("replay_ids") or []),
+        "conflict_count": int(execution.get("conflict_count") or 0),
+        "execution_error": execution_error or None,
         "registry_seen_publication_count": int((registry or {}).get("seen_publication_count") or 0),
         "registry_publication_error": registry_error,
         "completed_at": utc_now().isoformat(),
     }
-    if execute:
+    if execute and execution_succeeded:
         _write_private_json(marker_path, result)
     return result
 
@@ -251,7 +329,7 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=False))
         return 1
     print(json.dumps(result, ensure_ascii=False))
-    return 0
+    return 0 if result.get("ok") else 1
 
 
 if __name__ == "__main__":

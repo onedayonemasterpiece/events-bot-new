@@ -26,6 +26,10 @@ def test_registry_is_schema_valid_and_points_to_stable_contract() -> None:
             "canonical_url": "https://archi.ru/russia/101203/vsya-mudrost-okeana",
             "doi": None,
             "title": "Вся мудрость океана",
+            "authors": ["И. Автор"],
+            "normalized_title": "вся мудрость океана",
+            "normalized_authors": ["и. автор"],
+            "external_publication_id": "extpub_1234567890abcdef12345678",
             "source_name": "Архи.ру",
             "disposition": "candidate",
         }],
@@ -37,6 +41,9 @@ def test_registry_is_schema_valid_and_points_to_stable_contract() -> None:
     assert payload["result_contract"]["schema_url"].endswith("/result.schema.json")
     assert len(payload["result_contract"]["sha256"]) == 64
     assert payload["duplicate_guard"]["seen_publication_count"] == 1
+    seen = payload["duplicate_guard"]["seen_publications"][0]
+    assert seen["authors"] == ["И. Автор"]
+    assert seen["external_publication_id"] == "extpub_1234567890abcdef12345678"
     assert json.loads(json.dumps(payload, ensure_ascii=False)) == payload
 
 

@@ -17,7 +17,13 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.region_talk_external_publication_import import canonicalize_http_url, normalize_doi  # noqa: E402
+from scripts.region_talk_external_publication_import import (  # noqa: E402
+    canonicalize_http_url,
+    normalize_doi,
+    normalize_title_authors,
+    publication_identity_keys,
+    stable_hash,
+)
 from scripts.region_talk_goal_notify import (  # noqa: E402
     ensure_ydb_module,
     load_env,
@@ -68,10 +74,20 @@ def _seen_projection(row: dict[str, Any], *, fallback_disposition: str) -> dict[
     }.get(raw_disposition, raw_disposition)
     if disposition not in {"candidate", "manual_review", "excluded", "unresolved"}:
         disposition = fallback_disposition
+    title = str(row.get("title") or publication.get("title") or row.get("title_guess") or "")[:500]
+    authors = row.get("authors") if isinstance(row.get("authors"), list) else publication.get("authors")
+    authors = [str(value).strip()[:240] for value in (authors if isinstance(authors, list) else []) if str(value).strip()]
+    normalized_title, normalized_authors = normalize_title_authors(title, authors)
+    identity = "doi:" + doi if doi else "url:" + url
+    external_id = str(row.get("external_publication_id") or "").strip() or "extpub_" + stable_hash(identity)
     return {
         "canonical_url": url or None,
         "doi": doi or None,
-        "title": str(row.get("title") or publication.get("title") or row.get("title_guess") or "")[:500],
+        "title": title,
+        "authors": authors,
+        "normalized_title": normalized_title,
+        "normalized_authors": normalized_authors,
+        "external_publication_id": external_id,
         "source_name": str(row.get("source_name") or publication.get("source_name") or "")[:300],
         "disposition": disposition,
     }
@@ -79,16 +95,45 @@ def _seen_projection(row: dict[str, Any], *, fallback_disposition: str) -> dict[
 
 def build_seen_publications(*, seen_rows: list[dict[str, Any]], intake_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Merge the v1 seen ledger with pre-ledger intake rows for backward compatibility."""
-    by_identity: dict[str, dict[str, Any]] = {}
+    items: list[dict[str, Any]] = []
+    identity_indexes: dict[str, int] = {}
     for row, fallback in [(row, "candidate") for row in intake_rows] + [(row, "unresolved") for row in seen_rows]:
         item = _seen_projection(row, fallback_disposition=fallback)
         if not item:
             continue
-        identity = "doi:" + str(item["doi"]) if item.get("doi") else "url:" + str(item["canonical_url"])
-        current = by_identity.get(identity)
-        if current is None or current.get("disposition") == "unresolved":
-            by_identity[identity] = item
-    return [by_identity[key] for key in sorted(by_identity)]
+        keys = publication_identity_keys(
+            canonical_url=item.get("canonical_url"),
+            doi=item.get("doi"),
+            title=item.get("title"),
+            authors=item.get("authors"),
+        )
+        matches = {identity_indexes[key] for key in keys if key in identity_indexes}
+        if len(matches) > 1:
+            external_ids = {str(items[index].get("external_publication_id") or "") for index in matches}
+            if len(external_ids) > 1:
+                raise ValueError("seen publication identity keys resolve to multiple external publications")
+        if matches:
+            index = min(matches)
+            current = items[index]
+            current_id = str(current.get("external_publication_id") or "")
+            item_id = str(item.get("external_publication_id") or "")
+            if current_id and item_id and current_id != item_id:
+                raise ValueError("seen publication identity key maps to multiple external publications")
+            if current.get("disposition") == "unresolved" and item.get("disposition") != "unresolved":
+                items[index] = item
+        else:
+            index = len(items)
+            items.append(item)
+        for key in keys:
+            identity_indexes[key] = index
+    return sorted(
+        items,
+        key=lambda item: (
+            str(item.get("external_publication_id") or ""),
+            str(item.get("doi") or ""),
+            str(item.get("canonical_url") or ""),
+        ),
+    )
 
 
 def build_request(

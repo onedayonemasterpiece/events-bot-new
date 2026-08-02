@@ -15,6 +15,7 @@ import ipaddress
 import json
 import re
 import sys
+import unicodedata
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,7 @@ SCHEMA_PATH = ROOT / "docs" / "features" / "region-talk-channel" / "external-pub
 REQUEST_SCHEMA_VERSION = "region_talk_external_research_request.v1"
 REQUEST_SCHEMA_PATH = ROOT / "docs" / "features" / "region-talk-channel" / "external-publication-research-request.schema.json"
 SEEN_GUARD_VERSION = "region_talk_external_seen_guard_v1"
+IDENTITY_LEDGER_VERSION = "region_talk_external_identity_v1"
 TRACKS = {"scholarly", "professional_editorial", "popular_editorial", "reference_or_project_catalog"}
 RESEARCH_DECISIONS = {"candidate", "needs_review", "exclude"}
 READINESS = {"candidate_report", "manual_review_required", "blocked"}
@@ -131,15 +133,62 @@ def canonicalize_http_url(value: Any) -> str:
     netloc = host.encode("idna").decode("ascii")
     if port and not ((parsed.scheme.lower() == "http" and port == 80) or (parsed.scheme.lower() == "https" and port == 443)):
         netloc += f":{port}"
-    query = [
+    query = sorted([
         (key, item)
         for key, item in parse_qsl(parsed.query, keep_blank_values=True)
         if not key.lower().startswith("utm_") and key.lower() not in TRACKING_QUERY_KEYS
-    ]
+    ])
     path = re.sub(r"/{2,}", "/", parsed.path or "/")
     if path != "/":
         path = path.rstrip("/")
     return urlunsplit((parsed.scheme.lower(), netloc, path, urlencode(query, doseq=True), ""))
+
+
+def canonical_url_identity(value: Any) -> str:
+    """Return the conservative publication identity for an already-public URL.
+
+    HTTP/HTTPS and a leading ``www.`` are transport aliases for this dedupe
+    ledger.  Path, non-tracking query names/values, and every other hostname
+    label remain exact; this is deliberately not fuzzy URL matching.
+    """
+    canonical = canonicalize_http_url(value)
+    parsed = urlsplit(canonical)
+    host = (parsed.hostname or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    return urlunsplit(("https", host, parsed.path, parsed.query, ""))
+
+
+def normalize_exact_text(value: Any) -> str:
+    return " ".join(unicodedata.normalize("NFKC", str(value or "")).casefold().split())
+
+
+def normalize_title_authors(title: Any, authors: Any) -> tuple[str, list[str]]:
+    normalized_title = normalize_exact_text(title)
+    normalized_authors = [
+        normalized
+        for value in (authors if isinstance(authors, list) else [])
+        if (normalized := normalize_exact_text(value))
+    ]
+    return normalized_title, normalized_authors
+
+
+def title_authors_identity(title: Any, authors: Any) -> str:
+    normalized_title, normalized_authors = normalize_title_authors(title, authors)
+    if not normalized_title or not normalized_authors:
+        return ""
+    return "title_authors:" + normalized_title + "\0" + "\0".join(normalized_authors)
+
+
+def publication_identity_keys(*, canonical_url: Any, doi: Any, title: Any, authors: Any) -> list[str]:
+    keys = ["url:" + canonical_url_identity(canonical_url)] if canonical_url else []
+    normalized_doi = normalize_doi(doi) if doi else ""
+    if normalized_doi:
+        keys.append("doi:" + normalized_doi)
+    title_key = title_authors_identity(title, authors)
+    if title_key:
+        keys.append(title_key)
+    return sorted(set(keys))
 
 
 def normalize_doi(value: Any) -> str:
@@ -169,12 +218,28 @@ def load_duplicate_guard(path: Path) -> dict[str, Any]:
         raise ContractError("request sidecar seen_publication_count mismatch")
     urls: set[str] = set()
     dois: set[str] = set()
+    titles_authors: set[str] = set()
+    identity_map: dict[str, str] = {}
     for item in canonical_seen:
         try:
             if item.get("canonical_url"):
-                urls.add(canonicalize_http_url(item.get("canonical_url")))
+                urls.add(canonical_url_identity(item.get("canonical_url")))
             if item.get("doi"):
                 dois.add(normalize_doi(item.get("doi")))
+            title_key = title_authors_identity(item.get("title"), item.get("authors") or item.get("normalized_authors"))
+            if title_key:
+                titles_authors.add(title_key)
+            external_id = str(item.get("external_publication_id") or "").strip()
+            for key in publication_identity_keys(
+                canonical_url=item.get("canonical_url"),
+                doi=item.get("doi"),
+                title=item.get("title") or item.get("normalized_title"),
+                authors=item.get("authors") or item.get("normalized_authors"),
+            ):
+                if external_id:
+                    current = identity_map.setdefault(key, external_id)
+                    if current != external_id:
+                        raise ContractError(f"request duplicate guard maps {key.split(':', 1)[0]} to multiple publications")
         except ContractError as exc:
             raise ContractError(f"invalid identity in request duplicate guard: {exc}") from exc
     return {
@@ -182,6 +247,8 @@ def load_duplicate_guard(path: Path) -> dict[str, Any]:
         "request": payload.get("request") or {},
         "urls": urls,
         "dois": dois,
+        "titles_authors": titles_authors,
+        "identity_map": identity_map,
     }
 
 
@@ -194,16 +261,34 @@ def duplicate_guard_from_seen_publications(seen_publications: list[dict[str, Any
     raw = json.dumps(canonical_seen, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     urls: set[str] = set()
     dois: set[str] = set()
+    titles_authors: set[str] = set()
+    identity_map: dict[str, str] = {}
     for item in canonical_seen:
         if item.get("canonical_url"):
-            urls.add(canonicalize_http_url(item.get("canonical_url")))
+            urls.add(canonical_url_identity(item.get("canonical_url")))
         if item.get("doi"):
             dois.add(normalize_doi(item.get("doi")))
+        title_key = title_authors_identity(item.get("title"), item.get("authors") or item.get("normalized_authors"))
+        if title_key:
+            titles_authors.add(title_key)
+        external_id = str(item.get("external_publication_id") or "").strip()
+        for key in publication_identity_keys(
+            canonical_url=item.get("canonical_url"),
+            doi=item.get("doi"),
+            title=item.get("title") or item.get("normalized_title"),
+            authors=item.get("authors") or item.get("normalized_authors"),
+        ):
+            if external_id:
+                current = identity_map.setdefault(key, external_id)
+                if current != external_id:
+                    raise ContractError(f"live duplicate guard maps {key.split(':', 1)[0]} to multiple publications")
     return {
         "snapshot_id": "rtseen_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24],
         "request": {},
         "urls": urls,
         "dois": dois,
+        "titles_authors": titles_authors,
+        "identity_map": identity_map,
     }
 
 
@@ -219,12 +304,21 @@ def merge_duplicate_guards(*guards: dict[str, Any] | None) -> dict[str, Any] | N
         ),
         {},
     )
-    return {
+    merged = {
         "snapshot_id": "+".join(str(guard.get("snapshot_id") or "unknown") for guard in present),
         "request": explicit_request,
         "urls": set().union(*(guard.get("urls", set()) for guard in present)),
         "dois": set().union(*(guard.get("dois", set()) for guard in present)),
+        "titles_authors": set().union(*(guard.get("titles_authors", set()) for guard in present)),
+        "identity_map": {},
     }
+
+    for guard in present:
+        for identity, external_id in (guard.get("identity_map") or {}).items():
+            current = merged["identity_map"].setdefault(identity, external_id)
+            if current != external_id:
+                raise ContractError(f"duplicate guards map {identity.split(':', 1)[0]} to multiple publications")
+    return merged
 
 
 def _require_mapping(value: Any, field: str, errors: list[str]) -> dict[str, Any]:
@@ -319,6 +413,8 @@ def validate_candidate(candidate: Any, run: dict[str, Any]) -> tuple[dict[str, A
     evidence = _evidence_index(candidate, errors)
 
     title = str(publication.get("title") or "").strip()
+    authors = [str(value).strip() for value in publication.get("authors") or [] if str(value).strip()]
+    normalized_title, normalized_authors = normalize_title_authors(title, authors)
     source_name = str(publication.get("source_name") or "").strip()
     if not title:
         errors.append("publication.title: required")
@@ -437,7 +533,13 @@ def validate_candidate(candidate: Any, run: dict[str, Any]) -> tuple[dict[str, A
 
     if errors:
         return None, errors
-    identity = "doi:" + doi if doi else "url:" + canonical_url
+    identity_keys = publication_identity_keys(
+        canonical_url=canonical_url,
+        doi=doi,
+        title=title,
+        authors=authors,
+    )
+    identity = "doi:" + doi if doi else "url:" + canonical_url_identity(canonical_url)
     candidate_id = "extpub_" + stable_hash(identity)
     quality_total = round(sum(normalized_scores.values()) / (4 * len(normalized_scores)), 3)
     status = (
@@ -453,7 +555,10 @@ def validate_candidate(candidate: Any, run: dict[str, Any]) -> tuple[dict[str, A
         "canonical_url": canonical_url,
         "doi": doi or None,
         "content_origin_type": "academic_publication" if track == "scholarly" else "editorial_publication",
-        "publication": {**publication, "title": title, "source_name": source_name},
+        "publication": {**publication, "title": title, "authors": authors, "source_name": source_name},
+        "normalized_title": normalized_title,
+        "normalized_authors": normalized_authors,
+        "identity_keys": identity_keys,
         "quality_assessment": {**quality, "normalized_score": quality_total},
         "media_and_rights": {
             **media,
@@ -464,6 +569,7 @@ def validate_candidate(candidate: Any, run: dict[str, Any]) -> tuple[dict[str, A
         },
         "decision": {**decision, "import_status": status},
         "evidence": list(evidence.values()),
+        "canonical_evidence_urls": sorted({str(item.get("url") or "") for item in evidence.values() if item.get("url")}),
         "import_contract_version": IMPORT_VERSION,
     }
     return normalized, []
@@ -474,10 +580,21 @@ def prepare_import(
     *,
     imported_at: str | None = None,
     duplicate_guard: dict[str, Any] | None = None,
+    input_json_sha256: str | None = None,
+    raw_input_sha256: str | None = None,
 ) -> dict[str, Any]:
     imported_at = imported_at or utc_now_iso()
     if not isinstance(payload, dict):
         raise ContractError("top-level JSON must be an object")
+    if input_json_sha256 and raw_input_sha256 and input_json_sha256 != raw_input_sha256:
+        raise ContractError("input_json_sha256 aliases disagree")
+    raw_input_sha256 = input_json_sha256 or raw_input_sha256
+    if raw_input_sha256 is None:
+        canonical_bytes = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        raw_input_sha256 = hashlib.sha256(canonical_bytes).hexdigest()
+    raw_input_sha256 = str(raw_input_sha256).strip().lower()
+    if not re.fullmatch(r"[a-f0-9]{64}", raw_input_sha256):
+        raise ContractError("raw_input_sha256 must be a lowercase SHA-256 hex digest")
     candidate_schema_errors = schema_errors_by_candidate(payload)
     if payload.get("schema_version") != SCHEMA_VERSION:
         raise ContractError(f"schema_version must be {SCHEMA_VERSION}")
@@ -518,7 +635,22 @@ def prepare_import(
         raise ContractError("candidates must be an array")
     valid: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
-    seen_identity: dict[str, str] = {}
+    replayed: list[dict[str, Any]] = []
+    conflicts: list[dict[str, Any]] = []
+    identity_owner: dict[str, str] = dict((duplicate_guard or {}).get("identity_map") or {})
+    anonymous_guard_keys: set[str] = set()
+    for url in (duplicate_guard or {}).get("urls", set()):
+        key = "url:" + canonical_url_identity(url)
+        if key not in identity_owner:
+            anonymous_guard_keys.add(key)
+    for doi in (duplicate_guard or {}).get("dois", set()):
+        key = "doi:" + normalize_doi(doi)
+        if key not in identity_owner:
+            anonymous_guard_keys.add(key)
+    for title_key in (duplicate_guard or {}).get("titles_authors", set()):
+        key = str(title_key)
+        if key and key not in identity_owner:
+            anonymous_guard_keys.add(key)
     duplicate_seen_count = 0
     for index, raw in enumerate(candidates):
         if candidate_schema_errors.get(index):
@@ -536,31 +668,52 @@ def prepare_import(
                 "errors": errors,
             })
             continue
-        identity = "doi:" + str(normalized.get("doi") or "") if normalized.get("doi") else "url:" + normalized["canonical_url"]
-        guard_urls = duplicate_guard.get("urls", set()) if duplicate_guard else set()
-        guard_dois = duplicate_guard.get("dois", set()) if duplicate_guard else set()
-        if normalized["canonical_url"] in guard_urls or (
-            normalized.get("doi") and str(normalized.get("doi")) in guard_dois
-        ):
-            duplicate_seen_count += 1
-            rejected.append({
+        identity_keys = list(normalized.get("identity_keys") or [])
+        matched_owners = {identity_owner[key] for key in identity_keys if key in identity_owner}
+        anonymous_matches = [key for key in identity_keys if key in anonymous_guard_keys]
+        if len(matched_owners) > 1 or (matched_owners and anonymous_matches) or len(anonymous_matches) > 1:
+            conflicts.append({
                 "index": index,
                 "canonical_url": normalized["canonical_url"],
-                "errors": [
-                    "already seen in duplicate guard snapshot "
-                    + str(duplicate_guard.get("snapshot_id") or "unknown")
-                ],
+                "identity_keys": identity_keys,
+                "external_publication_ids": sorted(matched_owners),
+                "errors": ["identity keys resolve to different or unverifiable existing publications"],
             })
             continue
-        if identity in seen_identity:
-            rejected.append({"index": index, "canonical_url": normalized["canonical_url"], "errors": [f"duplicate of {seen_identity[identity]}"]})
+        if matched_owners or anonymous_matches:
+            duplicate_seen_count += 1
+            external_id = next(iter(matched_owners), normalized["external_publication_id"])
+            replayed.append({
+                "index": index,
+                "canonical_url": normalized["canonical_url"],
+                "external_publication_id": external_id,
+                "matched_identity_keys": sorted(
+                    key for key in identity_keys if key in identity_owner or key in anonymous_guard_keys
+                ),
+                "reason": "already_seen",
+            })
+            for key in identity_keys:
+                identity_owner.setdefault(key, external_id)
+            existing = next((row for row in valid if row["external_publication_id"] == external_id), None)
+            if existing is not None:
+                existing["identity_keys"] = sorted(set(existing.get("identity_keys") or []).union(identity_keys))
             continue
-        seen_identity[identity] = normalized["external_publication_id"]
+        external_id = normalized["external_publication_id"]
+        for key in identity_keys:
+            identity_owner[key] = external_id
         normalized.update({
+            "request_id": request_id,
             "research_request_id": request_id,
+            "input_json_sha256": raw_input_sha256,
+            "raw_input_json_sha256": raw_input_sha256,
             "research_executed_at": run.get("executed_at") or "",
             "research_window_start": run.get("window_start"),
             "research_window_end": run.get("window_end"),
+            "intake_status": "new_intake",
+            "review_status": "unreviewed",
+            "publication_permission": "not_granted",
+            "intake_at": imported_at,
+            "intake_received_at": imported_at,
             "imported_at": imported_at,
             "updated_at": imported_at,
             "next_action": (
@@ -571,7 +724,7 @@ def prepare_import(
         })
         valid.append(normalized)
 
-    batch_id = "extpubrun_" + stable_hash(request_id, payload.get("schema_version"))
+    batch_id = "extpubrun_" + stable_hash(request_id)
     rows: list[tuple[str, str, dict[str, Any]]] = []
     for row in valid:
         rows.append((
@@ -579,6 +732,25 @@ def prepare_import(
             "external_publication_intake_item",
             row,
         ))
+        for identity_key in row.get("identity_keys") or []:
+            identity_sha256 = hashlib.sha256(identity_key.encode("utf-8")).hexdigest()
+            identity_row = {
+                "identity_key_sha256": identity_sha256,
+                "identity_type": identity_key.split(":", 1)[0],
+                "identity_value": identity_key.split(":", 1)[1],
+                "external_publication_id": row["external_publication_id"],
+                "request_id": request_id,
+                "input_json_sha256": raw_input_sha256,
+                "raw_input_json_sha256": raw_input_sha256,
+                "reserved_at": imported_at,
+                "identity_ledger_version": IDENTITY_LEDGER_VERSION,
+                "updated_at": imported_at,
+            }
+            rows.append((
+                "external_publication_identity_item:" + identity_sha256,
+                "external_publication_identity_item",
+                identity_row,
+            ))
     seen_rows: dict[str, dict[str, Any]] = {}
 
     def add_seen(
@@ -586,6 +758,7 @@ def prepare_import(
         canonical_url: Any,
         doi: Any = None,
         title: Any = "",
+        authors: Any = None,
         source_name: Any = "",
         disposition: str,
     ) -> None:
@@ -598,16 +771,23 @@ def prepare_import(
             return
         identity = "doi:" + normalized_doi if normalized_doi else "url:" + url
         seen_id = "extseen_" + stable_hash(identity)
+        normalized_title, normalized_authors = normalize_title_authors(title, authors)
         seen_rows.setdefault(seen_id, {
             "external_publication_seen_id": seen_id,
             "identity": identity,
             "canonical_url": url or None,
             "doi": normalized_doi or None,
             "title": str(title or "")[:500],
+            "authors": [str(value).strip()[:240] for value in (authors if isinstance(authors, list) else []) if str(value).strip()],
+            "normalized_title": normalized_title,
+            "normalized_authors": normalized_authors,
             "source_name": str(source_name or "")[:300],
+            "external_publication_id": "",
             "seen_disposition": disposition,
             "first_research_request_id": request_id,
             "latest_research_request_id": request_id,
+            "input_json_sha256": raw_input_sha256,
+            "raw_input_json_sha256": raw_input_sha256,
             "first_seen_at": imported_at,
             "last_seen_at": imported_at,
             "seen_guard_version": SEEN_GUARD_VERSION,
@@ -626,9 +806,15 @@ def prepare_import(
             canonical_url=row.get("canonical_url"),
             doi=row.get("doi"),
             title=publication.get("title"),
+            authors=publication.get("authors"),
             source_name=publication.get("source_name"),
             disposition=disposition,
         )
+        identity = "doi:" + str(row.get("doi") or "") if row.get("doi") else "url:" + str(row.get("canonical_url") or "")
+        seen_id = "extseen_" + stable_hash(identity)
+        if seen_id in seen_rows:
+            seen_rows[seen_id]["external_publication_id"] = row["external_publication_id"]
+            seen_rows[seen_id]["canonical_evidence_urls"] = list(row.get("canonical_evidence_urls") or [])
     for item in payload.get("excluded") or []:
         if isinstance(item, dict):
             add_seen(
@@ -712,18 +898,36 @@ def prepare_import(
             "external_publication_import_error_item",
             {**item, "batch_id": batch_id, "request_id": request_id, "imported_at": imported_at},
         ))
+    for item in conflicts:
+        error_id = stable_hash(batch_id, "conflict", item["index"], item.get("identity_keys"))
+        rows.append((
+            "external_publication_import_error_item:" + error_id,
+            "external_publication_import_error_item",
+            {**item, "batch_id": batch_id, "request_id": request_id, "imported_at": imported_at},
+        ))
+    new_intake_ids = sorted(row["external_publication_id"] for row in valid)
+    replay_ids = sorted({str(item.get("external_publication_id") or "") for item in replayed if item.get("external_publication_id")})
     batch = {
         "batch_id": batch_id,
         "request_id": request_id,
         "schema_version": payload.get("schema_version"),
         "import_version": IMPORT_VERSION,
+        "input_json_sha256": raw_input_sha256,
+        "raw_input_json_sha256": raw_input_sha256,
         "imported_at": imported_at,
         "candidate_rows_received": len(candidates),
         "candidate_rows_valid": len(valid),
         "candidate_rows_rejected": len(rejected),
+        "identity_conflict_count": len(conflicts),
+        "replay_count": len(replayed),
+        "replay_ids": replay_ids,
+        "new_intake_count": len(new_intake_ids),
+        "new_intake_ids": new_intake_ids,
+        "execution_blocked": bool(rejected or conflicts),
         "external_sources_staged": len(sources_by_key),
         "ready_for_region_talk_scoring": sum(1 for row in valid if row["decision"]["import_status"] == "ready_for_region_talk_scoring"),
         "manual_or_blocked": sum(1 for row in valid if row["decision"]["import_status"] != "ready_for_region_talk_scoring"),
+        "duplicate_seen_count": duplicate_seen_count,
         "duplicate_seen_rejected": duplicate_seen_count,
         "seen_publication_rows_staged": len(seen_rows),
         "seen_guard_snapshot_id": str(duplicate_guard.get("snapshot_id") or "") if duplicate_guard else "",
@@ -731,10 +935,18 @@ def prepare_import(
         "run_uncertainties": payload.get("run_uncertainties") if isinstance(payload.get("run_uncertainties"), list) else [],
     }
     rows.append(("external_publication_import_batch:" + batch_id, "external_publication_import_batch", batch))
-    return {"batch": batch, "valid": valid, "rejected": rejected, "ydb_rows": rows}
+    return {
+        "batch": batch,
+        "valid": valid,
+        "rejected": rejected,
+        "replayed": replayed,
+        "conflicts": conflicts,
+        "ydb_rows": rows,
+    }
 
 
 def write_ydb(rows: list[tuple[str, str, dict[str, Any]]]) -> int:
+    """Atomically write generic JSON rows (used by the separate review tool)."""
     ydb = ensure_ydb_module()
     endpoint, database = ydb_endpoint_database()
     driver = ydb.Driver(endpoint=endpoint, database=database, credentials=ydb_credentials(ydb))
@@ -749,8 +961,11 @@ VALUES ($pk, $kind, $payload_json, $updated_at);
 
     def op(session: Any) -> int:
         query = session.prepare(query_text)
-        for pk, kind, row in rows:
-            session.transaction(ydb.SerializableReadWrite()).execute(
+        if not rows:
+            return 0
+        tx = session.transaction(ydb.SerializableReadWrite())
+        for index, (pk, kind, row) in enumerate(rows):
+            tx.execute(
                 query,
                 {
                     "$pk": pk,
@@ -758,12 +973,123 @@ VALUES ($pk, $kind, $payload_json, $updated_at);
                     "$payload_json": json.dumps(row, ensure_ascii=False, separators=(",", ":")),
                     "$updated_at": str(row.get("updated_at") or row.get("imported_at") or utc_now_iso()),
                 },
-                commit_tx=True,
+                commit_tx=index == len(rows) - 1,
             )
         return len(rows)
 
     try:
         return int(pool.retry_operation_sync(op) or 0)
+    finally:
+        driver.stop(timeout=5)
+
+
+def _json_payload(value: Any) -> dict[str, Any]:
+    if isinstance(value, str):
+        parsed = json.loads(value)
+        return parsed if isinstance(parsed, dict) else {}
+    return dict(value or {})
+
+
+def execute_import(prepared: dict[str, Any]) -> dict[str, Any]:
+    """Commit one prepared intake batch with serializable reservations.
+
+    The request-id receipt and all exact identity reservations are read before
+    any mutation and every row is committed in the same transaction.  Thus a
+    rejected batch, byte conflict, identity race, or transaction failure cannot
+    leave a partial intake behind.
+    """
+    batch = prepared.get("batch") if isinstance(prepared.get("batch"), dict) else {}
+    if batch.get("execution_blocked"):
+        raise ContractError("execute blocked: batch contains rejected or conflicting candidates")
+    rows = list(prepared.get("ydb_rows") or [])
+    batch_pk = "external_publication_import_batch:" + str(batch.get("batch_id") or "")
+    raw_sha256 = str(batch.get("input_json_sha256") or batch.get("raw_input_json_sha256") or "")
+    identity_rows = [(pk, row) for pk, kind, row in rows if kind == "external_publication_identity_item"]
+
+    ydb = ensure_ydb_module()
+    endpoint, database = ydb_endpoint_database()
+    driver = ydb.Driver(endpoint=endpoint, database=database, credentials=ydb_credentials(ydb))
+    driver.wait(timeout=20, fail_fast=True)
+    pool = ydb.SessionPool(driver)
+    table = ydb_table_path(database)
+    select_text = f"DECLARE $pk AS Utf8; SELECT payload_json FROM `{table}` WHERE pk = $pk;"
+    upsert_text = f"""
+DECLARE $pk AS Utf8; DECLARE $kind AS Utf8; DECLARE $payload_json AS Json; DECLARE $updated_at AS Utf8;
+UPSERT INTO `{table}` (pk, kind, payload_json, updated_at)
+VALUES ($pk, $kind, $payload_json, $updated_at);
+"""
+
+    def op(session: Any) -> dict[str, Any]:
+        select = session.prepare(select_text)
+        upsert = session.prepare(upsert_text)
+        tx = session.transaction(ydb.SerializableReadWrite())
+
+        response = tx.execute(select, {"$pk": batch_pk}, commit_tx=False)
+        existing_rows = response[0].rows if response else []
+        if existing_rows:
+            existing = _json_payload(existing_rows[0].payload_json)
+            if str(existing.get("input_json_sha256") or existing.get("raw_input_json_sha256") or "") != raw_sha256:
+                tx.rollback()
+                raise ContractError(
+                    "request_id conflict: durable batch has different raw input SHA-256"
+                )
+            tx.rollback()
+            replay_ids = sorted({
+                str(value) for value in (existing.get("new_intake_ids") or [])
+                if str(value)
+            }.union(str(value) for value in (existing.get("replay_ids") or []) if str(value)))
+            return {
+                "status": "identical_replay",
+                "written_ydb_rows": 0,
+                "new_intake_count": 0,
+                "new_intake_ids": [],
+                "replay_count": len(replay_ids),
+                "replay_ids": replay_ids,
+                "conflict_count": 0,
+            }
+
+        for pk, intended in identity_rows:
+            response = tx.execute(select, {"$pk": pk}, commit_tx=False)
+            existing_rows = response[0].rows if response else []
+            if not existing_rows:
+                continue
+            existing = _json_payload(existing_rows[0].payload_json)
+            tx.rollback()
+            raise ContractError(
+                "identity reservation conflict: "
+                + str(intended.get("identity_type") or "unknown")
+                + " already belongs to "
+                + str(existing.get("external_publication_id") or "another publication")
+            )
+
+        if not rows:
+            tx.rollback()
+            raise ContractError("prepared import has no durable rows")
+        for index, (pk, kind, row) in enumerate(rows):
+            tx.execute(
+                upsert,
+                {
+                    "$pk": pk,
+                    "$kind": kind,
+                    "$payload_json": json.dumps(row, ensure_ascii=False, separators=(",", ":")),
+                    "$updated_at": str(row.get("updated_at") or row.get("imported_at") or utc_now_iso()),
+                },
+                commit_tx=index == len(rows) - 1,
+            )
+        new_ids = sorted(str(value) for value in (batch.get("new_intake_ids") or []) if str(value))
+        replay_ids = sorted(str(value) for value in (batch.get("replay_ids") or []) if str(value))
+        return {
+            "status": "committed",
+            "written_ydb_rows": len(rows),
+            "new_intake_count": len(new_ids),
+            "new_intake_ids": new_ids,
+            "replay_count": len(replay_ids),
+            "replay_ids": replay_ids,
+            "conflict_count": 0,
+        }
+
+    try:
+        return dict(pool.retry_operation_sync(op) or {})
     finally:
         driver.stop(timeout=5)
 
@@ -774,6 +1100,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--env-file", type=Path, default=ROOT / ".env")
     parser.add_argument("--report", type=Path, default=ROOT / "artifacts" / "codex" / "region-talk-external-publication-import.json")
     parser.add_argument("--request-input", type=Path, help="Legacy optional request sidecar; live YDB duplicate checking is always applied on --execute")
+    parser.add_argument(
+        "--expected-input-sha256",
+        help="Optional externally computed SHA-256 of the exact input bytes; mismatch fails before preparation",
+    )
     parser.add_argument("--execute", action="store_true", help="Write idempotent staging rows to YDB; default is validation/dry-run")
     parser.add_argument(
         "--no-publish-registry",
@@ -792,24 +1122,89 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     load_env(args.env_file)
-    duplicate_guard = load_duplicate_guard(args.request_input) if args.request_input else None
-    if args.execute:
-        # Import-time YDB state is authoritative.  This closes the race between
-        # an older research snapshot and a later import, and removes any need
-        # for the operator to prepare a sidecar before launching saved prompts.
-        from scripts.region_talk_external_research_request import read_seen_from_ydb
+    raw_bytes = args.input.read_bytes()
+    input_sha256 = hashlib.sha256(raw_bytes).hexdigest()
+    if args.expected_input_sha256 and str(args.expected_input_sha256).strip().lower() != input_sha256:
+        raise ContractError("exact input SHA-256 does not match --expected-input-sha256")
+    try:
+        duplicate_guard = load_duplicate_guard(args.request_input) if args.request_input else None
+        if args.execute:
+            # Import-time YDB state is authoritative.  This closes the race between
+            # an older research snapshot and a later import, and removes any need
+            # for the operator to prepare a sidecar before launching saved prompts.
+            from scripts.region_talk_external_research_request import read_seen_from_ydb
 
-        live_seen = read_seen_from_ydb(20000)
-        duplicate_guard = merge_duplicate_guards(
-            duplicate_guard,
-            duplicate_guard_from_seen_publications(live_seen),
-        )
-    payload = json.loads(args.input.read_text(encoding="utf-8"))
-    result = prepare_import(payload, duplicate_guard=duplicate_guard)
-    written = write_ydb(result["ydb_rows"]) if args.execute else 0
+            live_seen = read_seen_from_ydb(20000)
+            duplicate_guard = merge_duplicate_guards(
+                duplicate_guard,
+                duplicate_guard_from_seen_publications(live_seen),
+            )
+        payload = json.loads(raw_bytes.decode("utf-8"))
+        result = prepare_import(payload, duplicate_guard=duplicate_guard, input_json_sha256=input_sha256)
+    except ContractError as exc:
+        identity_conflict = "identity" in str(exc).lower() or "map" in str(exc).lower()
+        report = {
+            "input_json_sha256": input_sha256,
+            "executed": bool(args.execute),
+            "execution_status": (
+                "conflict_no_write" if args.execute and identity_conflict
+                else "validation_failed_no_write" if args.execute
+                else "validation_failed"
+            ),
+            "execution_error": str(exc),
+            "planned_ydb_rows": 0,
+            "written_ydb_rows": 0,
+            "new_intake_count": 0,
+            "new_intake_ids": [],
+            "replay_count": 0,
+            "replay_ids": [],
+            "conflict_count": 1 if args.execute and identity_conflict else 0,
+            "registry_publication_enabled": False,
+            "registry_publication": None,
+            "registry_publication_error": None,
+        }
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 4 if args.execute and identity_conflict else 2
+    execution = {
+        "status": "validated",
+        "written_ydb_rows": 0,
+        "new_intake_count": int(result["batch"].get("new_intake_count") or 0),
+        "new_intake_ids": list(result["batch"].get("new_intake_ids") or []),
+        "replay_count": int(result["batch"].get("replay_count") or 0),
+        "replay_ids": list(result["batch"].get("replay_ids") or []),
+        "conflict_count": int(result["batch"].get("identity_conflict_count") or 0),
+    }
+    exit_code = 0
+    execution_error = ""
+    if args.execute:
+        if result["batch"].get("execution_blocked"):
+            execution.update({
+                "status": "rejected_no_write",
+                "new_intake_count": 0,
+                "new_intake_ids": [],
+            })
+            exit_code = 2
+        else:
+            try:
+                execution = execute_import(result)
+            except ContractError as exc:
+                execution = {
+                    "status": "conflict_no_write",
+                    "written_ydb_rows": 0,
+                    "new_intake_count": 0,
+                    "new_intake_ids": [],
+                    "replay_count": int(result["batch"].get("replay_count") or 0),
+                    "replay_ids": list(result["batch"].get("replay_ids") or []),
+                    "conflict_count": max(1, int(result["batch"].get("identity_conflict_count") or 0)),
+                }
+                execution_error = str(exc)
+                exit_code = 4
     registry_publication: dict[str, Any] | None = None
     registry_error = ""
-    registry_publication_enabled = bool(args.execute and args.publish_registry)
+    execution_succeeded = execution["status"] in {"committed", "identical_replay"}
+    registry_publication_enabled = bool(args.execute and args.publish_registry and execution_succeeded)
     if registry_publication_enabled:
         try:
             from scripts.region_talk_external_research_registry import publish_current_registry
@@ -819,11 +1214,21 @@ def main() -> int:
             registry_error = f"{type(exc).__name__}: {exc}"
     report = {
         "batch": result["batch"],
-        "valid_ids": [row["external_publication_id"] for row in result["valid"]],
+        "input_json_sha256": input_sha256,
+        "valid_ids": sorted(row["external_publication_id"] for row in result["valid"]),
         "rejected": result["rejected"],
+        "replayed": result["replayed"],
+        "conflicts": result["conflicts"],
         "planned_ydb_rows": len(result["ydb_rows"]),
-        "written_ydb_rows": written,
+        "written_ydb_rows": int(execution.get("written_ydb_rows") or 0),
         "executed": bool(args.execute),
+        "execution_status": execution.get("status"),
+        "execution_error": execution_error or None,
+        "new_intake_count": int(execution.get("new_intake_count") or 0),
+        "new_intake_ids": sorted(execution.get("new_intake_ids") or []),
+        "replay_count": int(execution.get("replay_count") or 0),
+        "replay_ids": sorted(execution.get("replay_ids") or []),
+        "conflict_count": int(execution.get("conflict_count") or 0),
         "live_duplicate_guard_applied": bool(args.execute),
         "registry_publication_enabled": registry_publication_enabled,
         "registry_publication": registry_publication,
@@ -834,7 +1239,9 @@ def main() -> int:
     print(json.dumps(report, ensure_ascii=False, indent=2))
     if registry_error:
         return 3
-    return 0 if not result["rejected"] else 2
+    if exit_code:
+        return exit_code
+    return 0 if not result["rejected"] and not result["conflicts"] else 2
 
 
 if __name__ == "__main__":
