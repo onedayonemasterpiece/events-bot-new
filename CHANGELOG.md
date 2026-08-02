@@ -11,7 +11,9 @@
   concrete details, source-aware CTA and full rendered-copy revalidation. Old
   unpublished drafts/reactions are version-invalidated, while published rows,
   accepted verdicts and all manual/publication permission gates remain
-  monotonic.
+  monotonic. Correction review now requires a present matching live identity,
+  and an unchanged non-ready profile attempt cannot spend another LLM call
+  merely because the daily budget identity changed.
 - Added a reusable KenigEvents email roundtrip skill and read-only Yandex Mail
   Trigger helper. Automated OTP/canary receipt now reuses the already-live
   generated trigger address and private inbound envelope path instead of

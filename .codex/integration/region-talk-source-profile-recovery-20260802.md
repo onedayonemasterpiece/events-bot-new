@@ -17,7 +17,7 @@ Integration head before PR: `a6da5953e70237b2f60f73d3de0cfc916dce2d71`
 | R06 / Writer vNext | Done (code) | Writer v11: 45–110 content hook, grounded source sentence, material details, URL/metatext/prestige/incomplete/cliché guards, deterministic source-aware CTA and rendered-copy revalidation. |
 | R07 / supplied profiles and RG correction | Done (local validation) | All three exact sidecars validate; Archi/Peasant profiles are reusable; RG is mixed/needs-review and its exact `reg-szfo` correction remains fail closed. Explicit serializable correction review writes no candidate mutation. |
 | R08 / live backfill and operator delivery | Pending release phase | Must run only after PR merge/deploy: protected import/readback, social captures, explicit correction decisions, unpublished regeneration, new operator revisions, fresh reactions and plan rebuild. |
-| R09 / acceptance evidence | Partial | Local suite/schema/replay/conflict/zero-provider/workflow checks pass. The 20-message copy audit and zero-autopublish proof depend on R08 live output. |
+| R09 / acceptance evidence | Partial | Local suite/schema/replay/conflict/zero-provider/workflow checks pass, including unchanged non-ready profile attempts. The 20-message copy audit and zero-autopublish proof depend on R08 live output. |
 
 ## Integrated commits
 
@@ -31,7 +31,7 @@ Integration head before PR: `a6da5953e70237b2f60f73d3de0cfc916dce2d71`
 
 - `python -m py_compile` for all changed Region Talk runtime scripts: pass.
 - `git diff --check`: pass.
-- `pytest -q tests/test_region_talk*.py`: **807 passed in 37.29s**.
+- `pytest -q tests/test_region_talk*.py`: **810 passed in 31.26s**.
 - focused finalizer/orchestrator after integration version/capture request:
   **163 passed**.
 - focused publisher correction/import/finalizer/backfill/orchestrator:

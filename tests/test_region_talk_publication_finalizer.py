@@ -1206,6 +1206,41 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(stats["writer_calls"], 1)
         self.assertEqual(enriched[0]["source_onboarding_status"], "ready")
 
+    def test_unchanged_nonready_profile_spends_zero_profile_llm_calls(self) -> None:
+        mod = self.mod
+        row = candidate_row(publication_status="gemini_accept", sent_to_chat="false")
+        evidence = mod.build_source_onboarding_evidence(
+            row["_authoritative_source"],
+            [{"post_url": row["post_url"], "text": row["text"]}],
+            row,
+            source_capture=ready_social_capture(),
+        )
+        row["_source_onboarding_evidence"] = evidence
+        row["_source_onboarding_profile"] = {
+            "source_profile_id": evidence["source_profile_id"],
+            "profile_status": "needs_review",
+            "profile_reason": "insufficient_grounded_reader_brief",
+            "evidence_fingerprint": evidence["evidence_fingerprint"],
+            "profile_prompt_version": mod.SOURCE_ONBOARDING_PROFILE_PROMPT_VERSION,
+            "profile_fingerprint": "current-nonready-profile-attempt",
+        }
+
+        with mock.patch.object(
+            mod,
+            "_call_structured_with_budget",
+            side_effect=AssertionError("unchanged failed profile must not call provider again"),
+        ) as call:
+            enriched, profiles, stats = mod.enrich_accepted_rows_with_onboarding(
+                [row], max_llm=10, max_profile_llm=10, max_writer_llm=10,
+                model="gemini-test", default_env_var_name="KEY", durable_budget=None,
+            )
+
+        self.assertEqual(call.call_count, 0)
+        self.assertEqual(profiles, [])
+        self.assertEqual(stats["profile_calls"], 0)
+        self.assertEqual(stats["profiles_reused"], 1)
+        self.assertEqual(enriched[0]["source_onboarding_status"], "needs_source_profile")
+
     def test_eligibility_helper_receives_authoritative_source_and_fields_persist(self) -> None:
         mod = self.mod
         row = candidate_row()
@@ -2213,6 +2248,20 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(payload["source_onboarding_status"], "needs_source_profile")
         self.assertEqual(payload["final_decision_guard_status"], "blocked_candidate_correction_review")
         self.assertEqual(payload["candidate_correction_regeneration_allowed"], "false")
+
+    def test_explicit_fresh_evidence_override_resolves_re_adjudication_action(self) -> None:
+        correction = {
+            "recommended_action": "re_adjudicate_externality",
+            "reason_codes": ["regional_local_edition", "local_correspondent"],
+            "review_status": "retained_external",
+            "live_revalidation_status": "resolved_external",
+            "candidate_mutation_allowed": True,
+            "regeneration_allowed": True,
+            "review_id": "explicit-fresh-evidence-review",
+        }
+        self.assertFalse(self.mod.candidate_correction_requires_explicit_review(correction))
+        correction["regeneration_allowed"] = False
+        self.assertTrue(self.mod.candidate_correction_requires_explicit_review(correction))
 
 
 if __name__ == "__main__":

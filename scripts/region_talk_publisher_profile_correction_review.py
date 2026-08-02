@@ -242,10 +242,14 @@ VALUES ($pk, $kind, $payload_json, $updated_at);
 
         identity_pk = str(correction.get("live_identity_pk") or "")
         identity, _ = read(identity_pk)
-        external_id = str((identity or {}).get("external_publication_id") or correction.get("live_external_publication_id") or "")
+        external_id = str((identity or {}).get("external_publication_id") or "")
         if not external_id:
             tx.rollback()
             raise CorrectionReviewError("strong identity read did not resolve a live external publication intake")
+        snapshotted_external_id = str(correction.get("live_external_publication_id") or "")
+        if snapshotted_external_id and external_id != snapshotted_external_id:
+            tx.rollback()
+            raise CorrectionReviewError("live identity mapping changed since candidate correction import")
         intake_pk = "external_publication_intake_item:" + external_id
         intake, intake_hash = read(intake_pk)
         if not intake:

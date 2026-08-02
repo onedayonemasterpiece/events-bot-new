@@ -196,3 +196,27 @@ def test_changed_live_intake_fails_closed_with_zero_writes(monkeypatch) -> None:
     with pytest.raises(mod.CorrectionReviewError, match="live intake changed"):
         mod.execute_review(review_for(correction, "0" * 64, "block_regional"), execute=True)
     assert durable == before
+
+
+def test_missing_current_identity_cannot_fall_back_to_import_snapshot(monkeypatch) -> None:
+    mod = load(MODULE_PATH, "region_talk_publisher_profile_correction_review_identity_missing")
+    correction = prepared_correction("rg-ru")
+    external_id = "extpub_snapshot_only"
+    correction["live_external_publication_id"] = external_id
+    intake = json.dumps({
+        "external_publication_id": external_id,
+        "canonical_url": correction["canonical_url"],
+    }, separators=(",", ":"))
+    intake_hash = hashlib.sha256(intake.encode()).hexdigest()
+    durable = {
+        correction["pk"]: json.dumps(correction, ensure_ascii=False, separators=(",", ":")),
+        # The current identity row is intentionally absent. A stale
+        # import-time external id must never authorize explicit review.
+        "external_publication_intake_item:" + external_id: intake,
+    }
+    _install_fake_ydb(mod, monkeypatch, durable)
+    before = dict(durable)
+
+    with pytest.raises(mod.CorrectionReviewError, match="strong identity read"):
+        mod.execute_review(review_for(correction, intake_hash, "block_regional"), execute=True)
+    assert durable == before

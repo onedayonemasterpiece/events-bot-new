@@ -24,7 +24,9 @@ import/review commands and Writer vNext:
 3. The finalizer accepts only a complete `ready` capture. It persists the
    compact evidence pack as `source_onboarding_evidence_item` and makes one
    profile LLM request only when the capture/evidence fingerprint changes.
-   An unchanged reusable profile spends zero profile calls.
+   An unchanged reusable or non-ready profile attempt spends zero profile
+   calls; a failed attempt is retried only after evidence/prompt fingerprint
+   change, not because a new daily budget ID exists.
 4. A missing/stale social profile is projected back to the source queue as
    `source_profile_capture_requested=true` and `needs_source_profile=true`;
    this does not change the accepted candidate verdict or grant publication.

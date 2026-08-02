@@ -840,6 +840,19 @@ def candidate_correction_requires_explicit_review(row: dict[str, Any] | None) ->
         correction.get("live_revalidation_status") or correction.get("revalidation_status") or ""
     ).lower()
     action = str(correction.get("recommended_action") or "").lower()
+    regeneration_allowed = correction.get("regeneration_allowed") is True or str(
+        correction.get("regeneration_allowed") or ""
+    ).lower() == "true"
+    candidate_mutation_allowed = correction.get("candidate_mutation_allowed") is True or str(
+        correction.get("candidate_mutation_allowed") or ""
+    ).lower() == "true"
+    if (
+        status in {"approved_external", "resolved_external", "retained_external", "dismissed", "superseded"}
+        and revalidation in {"", "resolved_external", "approved_external", "retained_external"}
+        and regeneration_allowed
+        and candidate_mutation_allowed
+    ):
+        return False
     return bool(
         status in {"unreviewed", "pending", "queued", "needs_review", "requires_review"}
         or revalidation == "pending_live_revalidation"
@@ -2687,9 +2700,8 @@ def enrich_accepted_rows_with_onboarding(
             trusted_publisher_profile
             or stored_profile
         )
-        profile_is_current = bool(
+        profile_attempt_is_current = bool(
             profile
-            and str(profile.get("profile_status") or "") == "ready"
             and str(profile.get("evidence_fingerprint") or "") == str(evidence_row.get("evidence_fingerprint") or "")
             and (
                 str(profile.get("profile_prompt_version") or "") == SOURCE_ONBOARDING_PROFILE_PROMPT_VERSION
@@ -2699,7 +2711,18 @@ def enrich_accepted_rows_with_onboarding(
                 )
             )
         )
+        profile_is_current = bool(
+            profile_attempt_is_current
+            and str(profile.get("profile_status") or "") == "ready"
+        )
         if profile_is_current:
+            stats["profiles_reused"] += 1
+        elif profile_attempt_is_current:
+            # A current failed/needs-review synthesis is durable negative
+            # evidence for this exact capture fingerprint. Retrying it under a
+            # new daily budget id would violate the one-profile-call-per-
+            # changed-capture contract and cannot add evidence. Only a changed
+            # evidence fingerprint or prompt version makes it actionable.
             stats["profiles_reused"] += 1
         elif stats["profile_calls"] < profile_limit:
             profile_fingerprint = hashlib.sha256(json.dumps({
