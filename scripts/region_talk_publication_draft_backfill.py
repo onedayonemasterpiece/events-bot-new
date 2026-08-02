@@ -41,9 +41,9 @@ DRAFT_BACKFILL_VERSION = "region_talk_publication_draft_backfill_v5_source_profi
 EDITORIAL_WRITER_VERSION = notify.EDITORIAL_WRITER_VERSION
 EDITORIAL_INPUT_CONTRACT = "region_talk_editorial_input_v3_source_profile"
 EDITORIAL_OUTPUT_CONTRACT = notify.EDITORIAL_OUTPUT_CONTRACT
-EDITORIAL_STAGE_EXECUTION_VERSION = "region_talk_writer_v11_source_profile_hook_v1"
+EDITORIAL_STAGE_EXECUTION_VERSION = "region_talk_writer_v12_publisher_reader_brief_v1"
 MEDIA_MATERIALIZATION_CONTRACT_VERSION = "region_talk_media_materialization_v1"
-LEGACY_REVIEW_MIGRATION_VERSION = "region_talk_legacy_review_to_v11_v4"
+LEGACY_REVIEW_MIGRATION_VERSION = "region_talk_legacy_review_to_v12_v5"
 DRAFT_FIELDS = (
     "publication_draft_status",
     "publication_draft_title",
@@ -94,6 +94,26 @@ TERMINAL_BACKFILL_STATUSES = {
     "source_text_unavailable",
     "unsupported_surface",
 }
+
+# These fields exist only in the local row wrapper.  Durable YDB projections
+# may intentionally use other leading-underscore fields (for example the live
+# source/profile overlay written by the finalizer), and those fields must stay
+# inside the compare-and-swap snapshot.
+ROW_RUNTIME_ONLY_FIELDS = {
+    "_ydb_pk",
+    "_ydb_updated_at",
+    "_source_onboarding_profile",
+    "_candidate_corrections",
+    "_strong_read_expected_payload",
+}
+
+
+def durable_publication_payload(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in row.items()
+        if str(key) not in ROW_RUNTIME_ONLY_FIELDS
+    }
 
 _BANNED_COPY_PATTERNS = (
     r"\bуникальн\w*\b",
@@ -234,6 +254,87 @@ def source_profile_reader_brief(row: dict[str, Any]) -> str:
     ).strip()
 
 
+_PUBLISHER_DIMENSION_SUPPORTS = {
+    "outlet_identity": "publisher.identity",
+    "intended_audience": "publisher.audience",
+    "distinctive_value": "publisher.distinctive_value",
+}
+
+
+def normalized_publisher_dimensions(
+    profile: dict[str, Any],
+    *,
+    fallback_row: dict[str, Any] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Project imported sidecar dimensions into the Writer evidence schema.
+
+    Publisher sidecars deliberately store their source schema: identity is a
+    string while audience/value are evidence-linked arrays.  Older onboarding
+    profiles already store ``{text, evidence_ids}`` objects.  The article
+    Writer consumes the latter shape, so normalize both without an LLM call.
+    """
+
+    raw_dimensions = (
+        profile.get("publisher_dimensions_json")
+        or profile.get("profile_dimensions")
+        or (fallback_row or {}).get("source_onboarding_publisher_dimensions_json")
+        or {}
+    )
+    dimensions = _json_value(raw_dimensions, {})
+    if not isinstance(dimensions, dict):
+        return {}
+    evidence = _json_value(profile.get("evidence") or profile.get("evidence_json"), [])
+    evidence = evidence if isinstance(evidence, list) else []
+
+    normalized: dict[str, dict[str, Any]] = {}
+    for key in ("outlet_identity", "intended_audience", "distinctive_value"):
+        value = dimensions.get(key)
+        values = value if isinstance(value, list) else [value]
+        texts: list[str] = []
+        refs: list[str] = []
+        bases: list[str] = []
+        for item in values:
+            if isinstance(item, dict):
+                text = str(
+                    item.get("text")
+                    or item.get("label")
+                    or item.get("summary")
+                    or item.get("value")
+                    or ""
+                ).strip()
+                item_refs = item.get("evidence_ids") or item.get("evidence_refs") or []
+                if isinstance(item_refs, str):
+                    item_refs = [item_refs]
+                refs.extend(str(ref).strip() for ref in item_refs if str(ref).strip())
+                if str(item.get("basis") or "").strip():
+                    bases.append(str(item.get("basis") or "").strip())
+            else:
+                text = str(item or "").strip()
+            if text:
+                texts.append(re.sub(r"\s+", " ", text))
+        if not refs:
+            support = _PUBLISHER_DIMENSION_SUPPORTS.get(str(key), "")
+            for item in evidence:
+                if not isinstance(item, dict):
+                    continue
+                supports = item.get("supports") or []
+                if isinstance(supports, str):
+                    supports = [supports]
+                evidence_id = str(item.get("evidence_id") or "").strip()
+                if support in supports and evidence_id:
+                    refs.append(evidence_id)
+        clean_refs = list(dict.fromkeys(refs))
+        if texts and clean_refs:
+            normalized[str(key)] = {
+                "text": "; ".join(texts[:3])[:600].rstrip(),
+                "basis": bases[0] if bases else (
+                    "explicit" if key == "outlet_identity" else "editorial_inference"
+                ),
+                "evidence_ids": clean_refs[:12],
+            }
+    return normalized
+
+
 def source_profile_ready(row: dict[str, Any]) -> bool:
     profile = (
         row.get("_source_onboarding_profile")
@@ -269,13 +370,7 @@ def source_profile_ready(row: dict[str, Any]) -> bool:
     if profile_fp and profile_fp != fingerprint:
         return False
     if content_lane(row) == "article":
-        raw_dimensions = (
-            profile.get("publisher_dimensions_json")
-            or profile.get("profile_dimensions")
-            or row.get("source_onboarding_publisher_dimensions_json")
-            or "{}"
-        )
-        dimensions = _json_value(raw_dimensions, {})
+        dimensions = normalized_publisher_dimensions(profile, fallback_row=row)
         if not (
             isinstance(dimensions, dict)
             and set(notify.PUBLISHER_READER_BRIEF_DIMENSIONS).issubset(dimensions)
@@ -319,16 +414,7 @@ def bind_source_profile(row: dict[str, Any], profile: dict[str, Any] | None) -> 
         row["source_onboarding_status"] = "ready"
     dimensions = current.get("publisher_dimensions_json") or current.get("profile_dimensions")
     if dimensions not in (None, ""):
-        parsed = _json_value(dimensions, {})
-        normalized_dimensions: dict[str, Any] = {}
-        for key, value in parsed.items():
-            if not isinstance(value, dict):
-                continue
-            normalized_dimensions[str(key)] = {
-                **value,
-                "text": str(value.get("text") or value.get("value") or "").strip(),
-                "evidence_ids": list(value.get("evidence_ids") or value.get("evidence_refs") or []),
-            }
+        normalized_dimensions = normalized_publisher_dimensions(current, fallback_row=row)
         row["source_onboarding_publisher_dimensions_json"] = json.dumps(
             normalized_dimensions, ensure_ascii=False, separators=(",", ":")
         )
@@ -746,6 +832,11 @@ def validate_editorial_output(
         evidence_kinds.get(ref) == "source_profile_fact" for ref in source_refs
     ):
         violations.append("source_sentence_not_grounded_in_profile")
+    if required_publisher_evidence_ids and not set(required_publisher_evidence_ids).issubset(source_refs):
+        # This is a provenance guardrail rather than a keyword proxy for
+        # meaning: the Writer and Critic remain responsible for expressing the
+        # outlet identity, intended reader and distinctive value naturally.
+        violations.append("publisher_reader_brief_not_grounded_in_source_sentence")
     for sentence_index in range(1, len(paragraph_sentences[2]) + 1):
         detail = grounding_by_sentence.get((2, sentence_index), {})
         refs = {str(value) for value in (detail.get("evidence_ids") or []) if str(value)}
@@ -757,6 +848,37 @@ def validate_editorial_output(
     if required_publisher_evidence_ids and not set(required_publisher_evidence_ids).issubset(evidence_ids):
         violations.append("missing_publisher_reader_brief")
     return sorted(set(violations))
+
+
+def validate_critic_output(
+    critic: dict[str, Any],
+    *,
+    required_publisher_evidence_ids: set[str] | None = None,
+) -> list[str]:
+    """Require the LLM critic to attest all publisher-reader dimensions.
+
+    Deterministic code only checks the critic's typed decision contract.  The
+    semantic judgment itself stays with the LLM critic.
+    """
+
+    if not required_publisher_evidence_ids:
+        return []
+    checks = (
+        critic.get("publisher_reader_brief_checks")
+        if isinstance(critic.get("publisher_reader_brief_checks"), dict)
+        else {}
+    )
+    required_checks = (
+        "outlet_identity_covered",
+        "intended_audience_covered",
+        "distinctive_value_covered",
+        "useful_for_read_or_skip_decision",
+    )
+    return [
+        "publisher_reader_brief_critic_check_failed"
+        for _ in [0]
+        if any(checks.get(key) is not True for key in required_checks)
+    ]
 
 
 def _caption_visible_length(row: dict[str, Any], paragraph_1: str, paragraph_2: str) -> int:
@@ -1161,9 +1283,7 @@ def upsert_publication_row(
         raise RuntimeError("publication row has no durable YDB primary key")
     expected_payload = row.get("_strong_read_expected_payload")
     if not isinstance(expected_payload, dict):
-        expected_payload = {
-            key: value for key, value in row.items() if not str(key).startswith("_")
-        }
+        expected_payload = durable_publication_payload(row)
     expected_raw = json.dumps(
         expected_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     )
@@ -1615,7 +1735,7 @@ def _stage_prompt(stage: str, payload: dict[str, Any]) -> str:
             "rules": [
                 "Use a history bridge only when genuinely supported; fresh_start beats a forced transition.",
                 "Plan the first sentence as a 45-110 character content-fact hook from the current material; source name, profile or prestige must not pad that hook.",
-                "Plan the second sentence as one compact value statement grounded only in the ready reusable source profile.",
+                "Plan the second sentence as one compact value statement grounded only in the ready reusable source profile. When required_publisher_evidence_ids is non-empty, that one sentence must tell the reader what the outlet is, who it is useful for, and what distinguishes its editorial value.",
                 "Paragraph 2 must eventually sell the click through 1-2 specific details without exhausting the original.",
             ],
         }
@@ -1639,6 +1759,7 @@ def _stage_prompt(stage: str, payload: dict[str, Any]) -> str:
             },
             "rules": [
                 "Paragraph 1 has exactly two sentences. Sentence 1 is a 45-110 character hook grounded only in content_fact evidence from this material; do not mention or praise the source there. Sentence 2 is a compact source-value statement grounded in source_profile_fact evidence.",
+                "For an article with non-empty required_publisher_evidence_ids, sentence 2 must concisely answer all three reader questions: what kind of outlet this is, who will find it useful, and what distinguishes its coverage. Cite every required_publisher_evidence_id on that sentence. A bare attribution such as 'the outlet published this review' is invalid.",
                 "Paragraph 2 has exactly 1-2 concrete observations from content_fact evidence, strictly in third person, without exhausting the original.",
                 "Do not use first-person plural for another author's experience.",
                 "Warm observational editorial tone; no clickbait, PR jargon, dossier or exhaustive summary.",
@@ -1653,9 +1774,19 @@ def _stage_prompt(stage: str, payload: dict[str, Any]) -> str:
     else:
         task = {
             "task": "Critique the draft against evidence and strategy. Return JSON only.",
-            "output": {"status": "pass|rewrite|reject", "reason_codes": ["string"], "feedback": "concise Russian rewrite instruction"},
-            "hard_fails": ["unsupported_claim", "voice_violation", "visual_hallucination", "forced_history_bridge", "wrong_language", "not_exactly_two_paragraphs", "hook_not_content_grounded", "source_sentence_not_profile_grounded", "paragraph_url", "body_cta_or_metatext", "incomplete_sentence", "unsupported_prestige", "contrastive_not_a_cliche", "missing_publisher_reader_brief"],
-            "pass_only_if": "Both paragraphs are grounded, distinct, editorial, specific and motivate opening the original without replacing it.",
+            "output": {
+                "status": "pass|rewrite|reject",
+                "reason_codes": ["string"],
+                "feedback": "concise Russian rewrite instruction",
+                "publisher_reader_brief_checks": {
+                    "outlet_identity_covered": "boolean",
+                    "intended_audience_covered": "boolean",
+                    "distinctive_value_covered": "boolean",
+                    "useful_for_read_or_skip_decision": "boolean"
+                }
+            },
+            "hard_fails": ["unsupported_claim", "voice_violation", "visual_hallucination", "forced_history_bridge", "wrong_language", "not_exactly_two_paragraphs", "hook_not_content_grounded", "source_sentence_not_profile_grounded", "publisher_reader_brief_incomplete", "paragraph_url", "body_cta_or_metatext", "incomplete_sentence", "unsupported_prestige", "contrastive_not_a_cliche", "missing_publisher_reader_brief"],
+            "pass_only_if": "Both paragraphs are grounded, distinct, editorial, specific and motivate opening the original without replacing it. When required_publisher_evidence_ids is non-empty, pass only when paragraph 1 sentence 2 tells the reader what the outlet is, who it is useful for, and what distinguishes it; set all publisher_reader_brief_checks booleans explicitly.",
         }
     return json.dumps({**common, **task, "input": payload}, ensure_ascii=False)
 
@@ -1921,6 +2052,10 @@ def generate_editorial_draft(
         or validate_editorial_output(
             writer, evidence_ids, evidence_kinds=evidence_kinds,
             required_publisher_evidence_ids=required_publisher_ids, row=row,
+        )
+        or validate_critic_output(
+            critic,
+            required_publisher_evidence_ids=required_publisher_ids,
         )
     ):
         return ({
@@ -2248,7 +2383,9 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         )
         for index, row in enumerate(selected):
             selected_ephemeral = {
-                key: value for key, value in row.items() if str(key).startswith("_")
+                key: value
+                for key, value in row.items()
+                if str(key) in ROW_RUNTIME_ONLY_FIELDS
             }
             live_row = strong_read_row(
                 pool, ydb, table, str(row.get("_ydb_pk") or "")
@@ -2261,9 +2398,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
                 })
                 continue
             row = {**live_row, **selected_ephemeral, "_ydb_pk": live_row["_ydb_pk"]}
-            row["_strong_read_expected_payload"] = {
-                key: value for key, value in live_row.items() if not str(key).startswith("_")
-            }
+            row["_strong_read_expected_payload"] = durable_publication_payload(live_row)
             url = notify.canonical_post_url(row)
             source_key = finalizer.canonical_source_key_for_row(row).strip().lower()
             profile = profiles_by_key.get(source_key)

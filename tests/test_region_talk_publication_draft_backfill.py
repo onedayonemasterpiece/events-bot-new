@@ -269,6 +269,87 @@ def test_execute_article_uses_retained_intake_without_social_fetch_unpack(monkey
     assert written[0]["source_onboarding_publisher_dimensions_status"] == "ready"
 
 
+def test_imported_publisher_sidecar_dimensions_are_ready_for_article_writer() -> None:
+    """The importer stores the sidecar schema, not the Writer projection schema."""
+
+    mod = load_module()
+    row = {
+        "post_url": "https://archi.ru/russia/example",
+        "content_origin_type": "editorial_publication",
+        "canonical_source_key": "web:archi.ru",
+    }
+    profile = {
+        "publisher_profile_id": "archi",
+        "canonical_source_key": "web:archi.ru",
+        "profile_status": "ready",
+        "profile_hash": "profile-archi",
+        "usable_without_profile_llm": True,
+        "scope": "external",
+        "public_copy_eligibility": "allowed",
+        "copy_projection": {
+            "short_reader_brief": (
+                "Архи.ру объясняет архитектурные проекты через профессиональный "
+                "замысел и устройство среды."
+            ),
+        },
+        # Exact shape persisted by region_talk_publisher_profile_import.py.
+        "profile_dimensions": {
+            "outlet_identity": "Профессиональное издание об архитектуре и городской среде.",
+            "intended_audience": [{
+                "label": "архитекторы и читатели городской культуры",
+                "evidence_refs": ["archi.about"],
+            }],
+            "distinctive_value": [{
+                "text": "Соединяет авторские разборы с каталогом проектов.",
+                "evidence_refs": ["archi.about"],
+            }],
+        },
+        "evidence": [{
+            "evidence_id": "archi.about",
+            "supports": ["publisher.identity", "publisher.audience", "publisher.distinctive_value"],
+            "url": "https://archi.ru/about",
+        }],
+    }
+
+    mod.bind_source_profile(row, profile)
+
+    assert mod.source_profile_ready(row) is True
+    dimensions = json.loads(row["source_onboarding_publisher_dimensions_json"])
+    assert set(dimensions) == {"outlet_identity", "intended_audience", "distinctive_value"}
+    assert dimensions["outlet_identity"]["evidence_ids"] == ["archi.about"]
+    assert row["source_onboarding_publisher_dimensions_status"] == "ready"
+
+
+def test_imported_publisher_sidecar_dimension_without_matching_evidence_fails_closed() -> None:
+    mod = load_module()
+    row = {
+        "post_url": "https://example.org/article",
+        "content_origin_type": "editorial_publication",
+    }
+    profile = {
+        "publisher_profile_id": "publisher",
+        "profile_status": "ready",
+        "profile_hash": "profile-hash",
+        "usable_without_profile_llm": True,
+        "scope": "external",
+        "public_copy_eligibility": "allowed",
+        "copy_projection": {"short_reader_brief": "Краткое описание издания."},
+        "profile_dimensions": {
+            "outlet_identity": "Профессиональное издание.",
+            "intended_audience": [{"label": "профессионалы", "evidence_refs": ["E1"]}],
+            "distinctive_value": [{"text": "Подробные разборы", "evidence_refs": ["E1"]}],
+        },
+        # E1 does not support publisher.identity, so the bare identity string
+        # cannot borrow it merely because it belongs to the same profile.
+        "evidence": [{"evidence_id": "E1", "supports": ["publisher.audience"]}],
+    }
+
+    mod.bind_source_profile(row, profile)
+
+    assert mod.source_profile_ready(row) is False
+    assert row["source_onboarding_publisher_dimensions_status"] == "needs_review"
+
+
 def test_request_fingerprint_changes_with_exact_source_text() -> None:
     mod = load_module()
     row = {"post_url": "https://t.me/source/1", "llm_decision": "accept"}
@@ -469,6 +550,63 @@ def test_final_candidate_cas_rejects_concurrent_live_change() -> None:
         mod.upsert_publication_row(
             Pool(), Ydb(), "table", row, {"publication_draft_status": "ready"}
         )
+
+
+def test_final_candidate_cas_keeps_durable_leading_underscore_fields() -> None:
+    mod = load_module()
+    expected = {
+        "post_url": "https://example.org/article",
+        "publication_status": "gemini_accept",
+        "_live_authoritative_source_found": True,
+        "_live_authoritative_source_fingerprint": "live-source-fp",
+        "_live_source_profile_checked": True,
+        "_live_source_profile_fingerprint": "live-profile-fp",
+    }
+    row = {
+        **expected,
+        "_ydb_pk": "publication_candidate_item:article",
+        "_source_onboarding_profile": {"profile_status": "ready"},
+    }
+    row["_strong_read_expected_payload"] = mod.durable_publication_payload(row)
+    assert row["_strong_read_expected_payload"] == expected
+
+    class Result:
+        def __init__(self, rows):
+            self.rows = rows
+
+    class Tx:
+        call_count = 0
+
+        def execute(self, _query, _params, *, commit_tx):  # noqa: ARG002
+            self.call_count += 1
+            if self.call_count == 1:
+                return [Result([type("Row", (), {"payload_json": json.dumps(expected)})()])]
+            if self.call_count == 2:
+                return [Result([])]
+            assert commit_tx is True
+            return []
+
+    class Session:
+        def __init__(self):
+            self.tx = Tx()
+
+        def prepare(self, query):
+            return query
+
+        def transaction(self, _mode):
+            return self.tx
+
+    class Pool:
+        def retry_operation_sync(self, op):
+            return op(Session())
+
+    class Ydb:
+        @staticmethod
+        def SerializableReadWrite():
+            return object()
+
+    updates = {"publication_draft_status": "ready_for_operator_review"}
+    assert mod.upsert_publication_row(Pool(), Ydb(), "table", row, updates) == updates
 
 
 def test_final_candidate_cas_catches_late_correction_and_writes_block() -> None:
@@ -762,9 +900,52 @@ def test_article_writer_requires_all_publisher_reader_brief_dimensions_in_profil
         output, evidence_ids, required_publisher_evidence_ids=required,
     )
     evidence_ids.update(required)
+    assert "publisher_reader_brief_not_grounded_in_source_sentence" in mod.validate_editorial_output(
+        output, evidence_ids, required_publisher_evidence_ids=required,
+    )
+    output["grounding_map"][1]["evidence_ids"] = sorted(required)
     assert mod.validate_editorial_output(
         output, evidence_ids, required_publisher_evidence_ids=required,
     ) == []
+
+
+def test_article_critic_must_semantically_attest_complete_publisher_reader_brief() -> None:
+    mod = load_module()
+    required = {
+        "source.publisher.outlet_identity",
+        "source.publisher.intended_audience",
+        "source.publisher.distinctive_value",
+    }
+    assert mod.validate_critic_output(
+        {"status": "pass"}, required_publisher_evidence_ids=required,
+    ) == ["publisher_reader_brief_critic_check_failed"]
+    assert mod.validate_critic_output({
+        "status": "pass",
+        "publisher_reader_brief_checks": {
+            "outlet_identity_covered": True,
+            "intended_audience_covered": True,
+            "distinctive_value_covered": True,
+            "useful_for_read_or_skip_decision": True,
+        },
+    }, required_publisher_evidence_ids=required) == []
+
+
+def test_article_writer_and_critic_prompts_require_reader_decision_summary() -> None:
+    mod = load_module()
+    payload = {
+        "required_publisher_evidence_ids": [
+            "source.publisher.outlet_identity",
+            "source.publisher.intended_audience",
+            "source.publisher.distinctive_value",
+        ]
+    }
+    writer_prompt = mod._stage_prompt("writer", payload)
+    critic_prompt = mod._stage_prompt("critic", payload)
+    assert "what kind of outlet this is" in writer_prompt
+    assert "who will find it useful" in writer_prompt
+    assert "what distinguishes its coverage" in writer_prompt
+    assert "publisher_reader_brief_checks" in critic_prompt
+    assert "useful_for_read_or_skip_decision" in critic_prompt
 
 
 def test_v9_validator_rejects_banned_not_a_construction() -> None:
@@ -794,6 +975,11 @@ def test_v9_writer_gets_one_style_retry_then_fails_closed(monkeypatch) -> None:
     mod = load_module()
     clean = _valid_writer_output(mod)
     clean["_stage_status"] = "ok"
+    clean["grounding_map"][1]["evidence_ids"] = [
+        "source.publisher.outlet_identity",
+        "source.publisher.intended_audience",
+        "source.publisher.distinctive_value",
+    ]
     banned = json.loads(json.dumps(clean, ensure_ascii=False))
     banned["public_copy"]["paragraph_2"] = (
         "В публикации автор показывает музей не как цепочку отдельных залов, а как цельный "
@@ -804,7 +990,15 @@ def test_v9_writer_gets_one_style_retry_then_fails_closed(monkeypatch) -> None:
         "_stage_status": "ok", "status": "ready", "throughline_mode": "fresh_start",
         "used_history_urls": [], "visual_hook_evidence_ids": [],
     }
-    critic = {"_stage_status": "ok", "status": "pass", "reason_codes": []}
+    critic = {
+        "_stage_status": "ok", "status": "pass", "reason_codes": [],
+        "publisher_reader_brief_checks": {
+            "outlet_identity_covered": True,
+            "intended_audience_covered": True,
+            "distinctive_value_covered": True,
+            "useful_for_read_or_skip_decision": True,
+        },
+    }
     dimensions = {
         key: {"text": key, "evidence_ids": ["E1"]}
         for key in mod.notify.PUBLISHER_READER_BRIEF_DIMENSIONS

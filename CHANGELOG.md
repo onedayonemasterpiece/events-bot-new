@@ -2,11 +2,28 @@
 
 ## [Unreleased]
 
+- Added opt-in local documentation auto-push watcher for `docs/`, publishing saved text-document updates to `origin/main` while excluding media and the requested visitors reference.
+- Fixed Region Talk draft CAS for durable `_live_*` candidate projections:
+  strong reread now excludes only explicit local runtime fields instead of all
+  leading-underscore keys. Genuine concurrent candidate changes still fail
+  closed, while an unchanged live-overlay row can accept its grounded draft.
+- Changed Region Talk article drafts to Writer v12: the first paragraph's
+  publisher sentence must summarize the outlet identity, intended reader and
+  distinctive editorial value from all three evidence-linked profile
+  dimensions. A separate LLM Critic records explicit reader-brief checks, while
+  deterministic code only enforces their typed/provenance contract and fails
+  closed. Existing unpublished review copy is version-invalidated and requires
+  a fresh operator decision.
 - Fixed a Region Talk scheduled-orchestrator deadlock on oversized single-line
   cycle JSON: the wrapper now drains stdout in bounded chunks, uses a bounded
   larger asyncio transport buffer and preserves complete JSONL parsing, so the
   child loop can continue polling Kaggle/YDB instead of blocking in
   `pipe_write`.
+- Fixed Region Talk publisher-sidecar reuse in article backfill: the imported
+  string/list dimension schema is now deterministically projected to the
+  Writer's evidence-linked `{text, evidence_ids}` contract. Ready Archi.ru and
+  journal profiles therefore no longer shadow themselves as
+  `needs_source_profile`; incomplete evidence still fails closed.
 
 - Fixed Region Talk source-profile request lifecycle: a processed bounded
   capture now clears only the explicit acquisition request while a non-ready
