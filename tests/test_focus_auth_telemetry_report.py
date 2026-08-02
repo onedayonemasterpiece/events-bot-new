@@ -29,6 +29,11 @@ def test_report_contract_is_aggregate_only() -> None:
     assert "otp_issue_transport" in migration
     assert "otp_verify_transport" in migration
     assert "notisend_capacity" in migration
+    assert "provider_period_key" in migration
+    assert "provider_used_count" in migration
+    assert "admitted_after_reconcile" in migration
+    assert "routing_ready" in migration
+    assert "focus_auth_reconcile_notisend_capacity_v1" in migration
     for forbidden in ("normalized_email", "provider_message_id", "token_hash", "user_agent", "ip_address"):
         assert forbidden not in script
 
@@ -42,7 +47,15 @@ def test_report_writes_simple_chatgpt_bundle(tmp_path: Path) -> None:
         "login_method_outcomes": [],
         "otp_issue_transport": [],
         "otp_verify_transport": [],
-        "notisend_capacity": {"occupied": 1, "capacity": 200, "available": 199},
+        "notisend_capacity": {
+            "period_key": "2026-08",
+            "provider_reported": 1,
+            "admitted_after_reconcile": 0,
+            "occupied": 1,
+            "capacity": 200,
+            "available": 199,
+            "routing_ready": True,
+        },
     }
     output = tmp_path / "report"
     with patch.dict(module.os.environ, {
@@ -56,4 +69,6 @@ def test_report_writes_simple_chatgpt_bundle(tmp_path: Path) -> None:
     prompt = (output / "CHATGPT_PROMPT.txt").read_text()
     assert "email и Яндекс" in prompt
     assert "PASS/WARN/FAIL" in prompt
+    assert "routing_ready" in prompt
+    assert "provider_reported + admitted_after_reconcile" in prompt
     assert not any(value in prompt for value in ("secret", "example.supabase.co"))

@@ -11,11 +11,14 @@ Routing is deterministic before network dispatch:
 
 - a genuinely new user's first send → Yandex Cloud Postbox;
 - an existing user, the second/later send, an allowlisted fixed test user, or an
-  allowlisted fixed test mailbox → paid NotiSend with `payment=subscriber`;
-- NotiSend admission is counted by unique Supabase user across Auth and
-  recommendation sends; an already admitted user keeps using NotiSend, while a
-  new user above the shared 200-recipient ceiling is routed to Postbox before
-  any provider request;
+  allowlisted fixed test mailbox → NotiSend with `payment=subscriber`;
+- NotiSend admission is counted by unique Supabase user **within the current
+  provider billing period** across Auth and recommendation sends; an already
+  admitted user in that period keeps using NotiSend, while a new user above the
+  shared 200-recipient ceiling is routed to Postbox before any provider request;
+- until the operator reconciles the provider's real used-recipient counter and
+  period end, or after that period expires, every new NotiSend candidate is
+  routed to Postbox;
 - no provider switch after a timeout/ambiguous result;
 - the same accepted `attempt_id` returns success without another provider call;
 - a same-id `started`, rejected or ambiguous attempt is never automatically
@@ -35,9 +38,9 @@ Private Supabase tables:
 - `personalization.focus_auth_method_attempt`: actual email/Yandex attempt and
   completion counts.
 - `email_control.notisend_recipient_admission`: one PII-free row per unique
-  NotiSend recipient, shared with recommendation admission. The existing
-  `email_control.recommendation_capacity.external_reserved_count` value reserves
-  provider contacts not represented by a Supabase user.
+  NotiSend recipient and provider billing period, shared with recommendation
+  sends. `recommendation_capacity.provider_used_count` is the latest real
+  provider counter; admissions after that snapshot are added atomically.
 
 Public receipt lookup returns only `accepted`, `pending_or_ambiguous`, `rejected`
 or no row for a recent opaque UUID. It never returns email, OTP, token/hash, JWT,
@@ -65,30 +68,39 @@ The deterministic ZIP is written under ignored `artifacts/codex/`.
 5. Build and deploy the Python 3.12 Function with a five-second timeout.
 6. Render the exact Function/invoker IDs into `openapi.yaml` and deploy the
    one-path API Gateway.
-7. In Supabase Authentication → Hooks, enable **Send Email** HTTP Hook with that
+7. Reconcile the real NotiSend billing-period counter as described below.
+8. In Supabase Authentication → Hooks, enable **Send Email** HTTP Hook with that
    exact HTTPS endpoint and the same Standard Webhooks secret.
-8. Run the Standard Webhooks signed fixture, provider seed canaries and the real
+9. Run the Standard Webhooks signed fixture, provider seed canaries and the real
    external-mailbox GitHub Action before any wider onboarding rollout.
 
-Before the canary, reconcile the provider contact total with:
+Before the canary, read from the NotiSend account the current tariff-period end
+and the **actual number of unique recipients already used in that period**. Apply
+that aggregate through the service-role-only RPC (example values only):
 
 ```sql
-select
-  a.admitted_count + rc.external_reserved_count as occupied,
-  rc.capacity,
-  rc.capacity - a.admitted_count - rc.external_reserved_count as available
-from email_control.recommendation_capacity rc
-cross join (
-  select count(*)::integer as admitted_count
-  from email_control.notisend_recipient_admission
-) a
-where rc.capacity_key = 'launch'
-;
+select public.focus_auth_reconcile_notisend_capacity_v1(
+  'notisend-period-2026-08',
+  '2026-09-01T00:00:00Z'::timestamptz,
+  17
+);
 ```
 
-Set `external_reserved_count` to the number of seed/service contacts present in
-NotiSend but absent from the admission table. This keeps the effective count
-conservative without putting provider-list calls on the five-second Auth path.
+Do not guess zero. During the same period a later provider value must be at least
+the previous provider baseline plus all local admissions after it; a stale/lower
+dashboard value is rejected. Starting a new period is allowed only after the
+recorded old period ends, and a period key cannot be reused. Between
+reconciliations, Supabase adds each newly
+admitted user once. `focus_auth_operator_summary_v1` reports
+`provider_reported + admitted_after_reconcile = occupied`, `available`, period
+end, and `routing_ready`. This keeps provider-list/dashboard work off the
+five-second Auth path while preserving the real 200-user limit.
+
+An explicit provider rejection/configuration failure before acceptance releases
+only the new local reservation created by that attempt. A timeout or a 2xx
+response without a verifiable provider receipt remains ambiguous and keeps the
+slot reserved until the next provider-counter reconciliation; it is never
+retried through Postbox.
 
 For a PII-free operational bundle with actual email/Yandex outcomes,
 direct/relay issue and verification routes, provider acceptance and the shared
@@ -115,9 +127,11 @@ pre-created persona set only when personalization scenarios need distinct stable
 profiles. Unique addresses are reserved for an explicit fresh-user test and must
 have their disposable Auth identity cleaned by an operator; they are not the
 routine CI mode. Their PII-free NotiSend admission remains because deleting an
-Auth row cannot restore provider capacity already spent.
+Auth row cannot restore provider capacity already spent in that billing period.
 
 The exact fixed mailbox configured as `E2E_RECIPIENT_TEMPLATE` in the protected
 GitHub Environment must be included in `FOCUS_AUTH_NOTISEND_EMAILS`. Routine
 live runs consequently reuse one NotiSend recipient admission. A `{run_id}`
-recipient template is an explicit capacity-consuming fresh-user test.
+recipient template is an explicit capacity-consuming fresh-user test. In a new
+billing period the stable mailbox occupies one slot again on its first send,
+which matches the provider's accounting.

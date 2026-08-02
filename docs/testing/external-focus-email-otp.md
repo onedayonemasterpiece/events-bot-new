@@ -19,9 +19,11 @@ when separate stable personalization personas are genuinely needed.
 Every fixed mailbox must also be present in the deployed Auth hook's
 `FOCUS_AUTH_NOTISEND_EMAILS` allowlist. The first and all later CI messages then
 reuse the same NotiSend recipient admission instead of spending Postbox sends or
-another one of the 200 unique-recipient slots. The database capacity report is
-the source of truth for occupied/available slots. `{run_id}` mode consumes a new
-recipient admission and is therefore reserved for deliberate fresh-user tests.
+another one of the 200 unique-recipient slots **within the current billing
+period**. In a new period its first send occupies one slot again. The aggregate
+database report combines the latest real provider counter with admissions since
+that reconciliation. `{run_id}` mode consumes a new admission and is therefore
+reserved for deliberate fresh-user tests.
 
 `E2E_RECIPIENT_TEMPLATE` without `{run_id}` is reported as
 `returning_test_identity`. A template containing `{run_id}` is an explicit,
@@ -29,6 +31,12 @@ operator-approved fresh-user test and is reported as `fresh_unique_identity`.
 Do not use unique mode for routine CI. Removing its disposable Auth user does
 not release the unique-recipient slot already consumed at NotiSend; the private
 admission row deliberately remains for accurate capacity accounting.
+
+The protected E2E must not run while `notisend_capacity.routing_ready=false`.
+First reconcile the provider dashboard's actual used-recipient count and current
+period end through the service-only procedure in
+`infra/yandex/focus-auth-email-hook/README.md`. Never assume that an existing
+provider account has zero used recipients.
 
 ## GitHub Environment
 

@@ -1,23 +1,50 @@
 -- PII-free correlation ledger for focus-group Auth email delivery.
 -- Plain email, OTP, token hash and browser/network identifiers are forbidden.
 
--- NotiSend's subscriber tariff is a shared ceiling of 200 unique recipients,
--- not 200 messages. Keep one DB-owned admission set for Auth and future
--- recommendation traffic; repeated sends to an admitted user consume no new
--- slot. `external_reserved_count` covers provider contacts that are not yet
--- represented by a Supabase user (seed/operator contacts) and is maintained by
--- an operator reconciliation, never inferred in the five-second Auth hook.
+-- NotiSend's subscriber tariff is a shared ceiling of 200 unique recipients in
+-- the provider billing period, not 200 messages or 200 lifetime users. The
+-- provider-reported baseline is reconciled by an operator; new unique recipients
+-- admitted after that snapshot are counted atomically by Supabase. A repeat send
+-- to the same user in the same period consumes no additional slot.
 alter table email_control.recommendation_capacity
-  add column if not exists external_reserved_count integer not null default 0
-  check (external_reserved_count between 0 and capacity);
+  add column if not exists provider_period_key text;
+
+alter table email_control.recommendation_capacity
+  add column if not exists provider_period_ends_at timestamptz;
+
+alter table email_control.recommendation_capacity
+  add column if not exists provider_used_count integer not null default 0;
+
+alter table email_control.recommendation_capacity
+  add column if not exists provider_reconciled_at timestamptz;
+
+alter table email_control.recommendation_capacity
+  add constraint recommendation_capacity_provider_used_chk
+  check (provider_used_count between 0 and capacity);
+
+alter table email_control.recommendation_capacity
+  add constraint recommendation_capacity_provider_period_chk
+  check (
+    (provider_period_key is null and provider_period_ends_at is null and provider_reconciled_at is null)
+    or (
+      length(provider_period_key) between 1 and 80
+      and provider_period_ends_at is not null
+      and provider_reconciled_at is not null
+      and provider_reconciled_at < provider_period_ends_at
+    )
+  );
 
 create table email_control.notisend_recipient_admission (
   -- Intentionally no FK/cascade: deleting a disposable Auth identity does not
-  -- release a recipient already counted by the provider's tariff.
-  user_id uuid primary key,
+  -- release a recipient already counted in the current provider period.
+  period_key text not null,
+  user_id uuid not null,
   first_source text not null,
-  first_attempt_id uuid unique,
+  first_attempt_id uuid,
   admitted_at timestamptz not null default now(),
+  included_in_provider_snapshot boolean not null default false,
+  primary key (period_key, user_id),
+  unique (period_key, first_attempt_id),
   constraint notisend_recipient_source_chk check (first_source in ('auth', 'recommendation')),
   constraint notisend_recipient_attempt_chk check (
     (first_source = 'auth' and first_attempt_id is not null)
@@ -26,18 +53,11 @@ create table email_control.notisend_recipient_admission (
 );
 
 comment on table email_control.notisend_recipient_admission is
-  'Private PII-free unique-recipient admission set shared by NotiSend Auth and recommendation sends.';
+  'Private PII-free unique-recipient admission set per NotiSend billing period, shared by Auth and recommendation sends.';
 
 alter table email_control.notisend_recipient_admission enable row level security;
 revoke all on email_control.notisend_recipient_admission from public, anon, authenticated;
 grant select, insert, update, delete on email_control.notisend_recipient_admission to service_role;
-
-insert into email_control.notisend_recipient_admission (user_id, first_source)
-select c.user_id, 'recommendation'
-  from email_control.purpose_consent c
- where c.purpose = 'recommendation'
-   and c.state = 'active'
-on conflict (user_id) do nothing;
 
 create or replace function email_control.reserve_notisend_recipient_v1(
   p_user_id uuid,
@@ -55,8 +75,11 @@ set search_path = ''
 as $$
 declare
   v_capacity integer;
-  v_external_reserved integer;
-  v_count integer;
+  v_period_key text;
+  v_period_ends_at timestamptz;
+  v_provider_used integer;
+  v_reconciled_at timestamptz;
+  v_incremental_count integer;
 begin
   if p_user_id is null
      or p_source not in ('auth', 'recommendation')
@@ -67,8 +90,10 @@ begin
   perform pg_advisory_xact_lock(
     pg_catalog.hashtextextended('kenigevents:notisend-recipient-capacity', 0)
   );
-  select rc.capacity, rc.external_reserved_count
-    into v_capacity, v_external_reserved
+  select rc.capacity, rc.provider_period_key, rc.provider_period_ends_at,
+         rc.provider_used_count, rc.provider_reconciled_at
+    into v_capacity, v_period_key, v_period_ends_at,
+         v_provider_used, v_reconciled_at
     from email_control.recommendation_capacity rc
    where rc.capacity_key = 'launch'
    for update;
@@ -76,56 +101,124 @@ begin
     raise exception 'NotiSend capacity is not configured' using errcode = '55000';
   end if;
 
-  select count(*)::integer
-    into v_count
-    from email_control.notisend_recipient_admission;
-  if exists (
-    select 1 from email_control.notisend_recipient_admission a where a.user_id = p_user_id
-  ) then
-    return query select true, v_count + v_external_reserved, v_capacity;
+  if v_reconciled_at is null
+     or v_period_key is null
+     or v_period_ends_at is null
+     or v_period_ends_at <= now() then
+    return query select false, coalesce(v_provider_used, 0), v_capacity;
     return;
   end if;
-  if v_count + v_external_reserved >= v_capacity then
-    return query select false, v_count + v_external_reserved, v_capacity;
+
+  select count(*)::integer
+    into v_incremental_count
+    from email_control.notisend_recipient_admission a
+   where a.period_key = v_period_key
+     and not a.included_in_provider_snapshot;
+  if exists (
+    select 1
+      from email_control.notisend_recipient_admission a
+     where a.period_key = v_period_key and a.user_id = p_user_id
+  ) then
+    return query select true, v_provider_used + v_incremental_count, v_capacity;
+    return;
+  end if;
+  if v_provider_used + v_incremental_count >= v_capacity then
+    return query select false, v_provider_used + v_incremental_count, v_capacity;
     return;
   end if;
 
   insert into email_control.notisend_recipient_admission (
-    user_id, first_source, first_attempt_id
+    period_key, user_id, first_source, first_attempt_id
   ) values (
-    p_user_id, p_source, case when p_source = 'auth' then p_attempt_id else null end
+    v_period_key, p_user_id, p_source,
+    case when p_source = 'auth' then p_attempt_id else null end
   );
-  return query select true, v_count + v_external_reserved + 1, v_capacity;
+  return query select true, v_provider_used + v_incremental_count + 1, v_capacity;
 end;
 $$;
 
-create or replace function email_control.enforce_notisend_recommendation_capacity_v1()
-returns trigger
+create or replace function public.focus_auth_reconcile_notisend_capacity_v1(
+  p_period_key text,
+  p_period_ends_at timestamptz,
+  p_provider_used_count integer
+)
+returns jsonb
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
-  v_admitted boolean;
+  v_current_period text;
+  v_current_period_ends_at timestamptz;
+  v_current_provider_used integer;
+  v_unabsorbed_admissions integer;
+  v_result jsonb;
 begin
-  if new.purpose = 'recommendation'
-     and new.state = 'active'
-     and (tg_op = 'INSERT' or old.state is distinct from 'active') then
-    select r.admitted
-      into v_admitted
-      from email_control.reserve_notisend_recipient_v1(new.user_id, 'recommendation', null) r;
-    if not coalesce(v_admitted, false) then
-      raise exception 'notisend_capacity_full' using errcode = 'P0001';
-    end if;
+  if nullif(trim(coalesce(p_period_key, '')), '') is null
+     or length(trim(p_period_key)) > 80
+     or p_period_ends_at is null
+     or p_period_ends_at <= now()
+     or p_provider_used_count is null
+     or p_provider_used_count < 0 then
+    raise exception 'invalid NotiSend provider reconciliation' using errcode = '22023';
   end if;
-  return new;
+  perform pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('kenigevents:notisend-recipient-capacity', 0)
+  );
+  select rc.provider_period_key, rc.provider_period_ends_at, rc.provider_used_count
+    into v_current_period, v_current_period_ends_at, v_current_provider_used
+    from email_control.recommendation_capacity rc
+   where rc.capacity_key = 'launch'
+   for update;
+  if v_current_period is distinct from trim(p_period_key)
+     and v_current_period is not null
+     and v_current_period_ends_at > now() then
+    raise exception 'current NotiSend billing period is still active' using errcode = '55000';
+  end if;
+  if v_current_period is distinct from trim(p_period_key)
+     and exists (
+       select 1
+         from email_control.notisend_recipient_admission a
+        where a.period_key = trim(p_period_key)
+     ) then
+    raise exception 'NotiSend billing period key was already used' using errcode = '23505';
+  end if;
+  select count(*)::integer
+    into v_unabsorbed_admissions
+    from email_control.notisend_recipient_admission a
+   where a.period_key = trim(p_period_key)
+     and not a.included_in_provider_snapshot;
+  if v_current_period = trim(p_period_key)
+     and p_provider_used_count < v_current_provider_used + v_unabsorbed_admissions then
+    raise exception 'NotiSend provider count is behind local admissions' using errcode = '22023';
+  end if;
+  -- The provider dashboard count is the new baseline. Existing local
+  -- admissions in that same period are now represented by that snapshot;
+  -- only later admissions are added on top of it.
+  update email_control.notisend_recipient_admission
+     set included_in_provider_snapshot = true
+   where period_key = trim(p_period_key);
+  update email_control.recommendation_capacity rc
+     set provider_period_key = trim(p_period_key),
+         provider_period_ends_at = p_period_ends_at,
+         provider_used_count = p_provider_used_count,
+         provider_reconciled_at = now(),
+         updated_at = now()
+   where rc.capacity_key = 'launch'
+     and p_provider_used_count <= rc.capacity
+  returning pg_catalog.jsonb_build_object(
+    'period_key', provider_period_key,
+    'period_ends_at', provider_period_ends_at,
+    'provider_reported', provider_used_count,
+    'capacity', capacity,
+    'reconciled_at', provider_reconciled_at
+  ) into v_result;
+  if v_result is null then
+    raise exception 'NotiSend capacity reconciliation rejected' using errcode = '22023';
+  end if;
+  return v_result;
 end;
 $$;
-
-drop trigger if exists purpose_consent_notisend_capacity_v1 on email_control.purpose_consent;
-create trigger purpose_consent_notisend_capacity_v1
-before insert or update of state on email_control.purpose_consent
-for each row execute function email_control.enforce_notisend_recommendation_capacity_v1();
 
 create or replace function public.focus_auth_reserve_notisend_recipient_v1(
   p_user_id uuid,
@@ -145,8 +238,6 @@ as $$
 $$;
 
 revoke all on function email_control.reserve_notisend_recipient_v1(uuid, text, uuid)
-  from public, anon, authenticated;
-revoke all on function email_control.enforce_notisend_recommendation_capacity_v1()
   from public, anon, authenticated;
 revoke all on function public.focus_auth_reserve_notisend_recipient_v1(uuid, uuid)
   from public, anon, authenticated;
@@ -268,7 +359,11 @@ begin
      and a.action_type = p_action_type;
   if found then
     notisend_admitted := exists (
-      select 1 from email_control.notisend_recipient_admission n where n.user_id = p_user_id
+      select 1
+        from email_control.notisend_recipient_admission n
+        join email_control.recommendation_capacity rc
+          on rc.capacity_key = 'launch' and rc.provider_period_key = n.period_key
+       where n.user_id = p_user_id
     );
     return next;
     return;
@@ -319,6 +414,8 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  v_completed boolean;
 begin
   if p_provider not in ('postbox', 'notisend') then
     raise exception 'unsupported provider' using errcode = '22023';
@@ -337,7 +434,15 @@ begin
          provider_finished_at = now()
    where attempt_id = p_attempt_id
      and provider_outcome = 'started';
-  return found;
+  v_completed := found;
+  if v_completed
+     and p_provider = 'notisend'
+     and p_outcome in ('definitive_reject', 'configuration_error') then
+    delete from email_control.notisend_recipient_admission a
+     where a.first_attempt_id = p_attempt_id
+       and not a.included_in_provider_snapshot;
+  end if;
+  return v_completed;
 end;
 $$;
 
@@ -596,16 +701,23 @@ begin
     ), '[]'::jsonb),
     'notisend_capacity', (
       select pg_catalog.jsonb_build_object(
-        'admitted_users', a.admitted_count,
-        'external_reserved', rc.external_reserved_count,
-        'occupied', a.admitted_count + rc.external_reserved_count,
+        'period_key', rc.provider_period_key,
+        'period_ends_at', rc.provider_period_ends_at,
+        'provider_reported', rc.provider_used_count,
+        'admitted_after_reconcile', a.admitted_count,
+        'occupied', rc.provider_used_count + a.admitted_count,
         'capacity', rc.capacity,
-        'available', rc.capacity - a.admitted_count - rc.external_reserved_count
+        'available', greatest(0, rc.capacity - rc.provider_used_count - a.admitted_count),
+        'routing_ready', rc.provider_reconciled_at is not null
+          and rc.provider_period_ends_at > now(),
+        'reconciled_at', rc.provider_reconciled_at
       )
       from email_control.recommendation_capacity rc
-      cross join (
+      cross join lateral (
         select count(*)::integer as admitted_count
-          from email_control.notisend_recipient_admission
+         from email_control.notisend_recipient_admission
+         where period_key = rc.provider_period_key
+           and not included_in_provider_snapshot
       ) a
       where rc.capacity_key = 'launch'
     )
@@ -615,6 +727,7 @@ end;
 $$;
 
 revoke all on function public.focus_auth_begin_delivery_v1(uuid, uuid, text, boolean) from public, anon, authenticated;
+revoke all on function public.focus_auth_reconcile_notisend_capacity_v1(text, timestamptz, integer) from public, anon, authenticated;
 revoke all on function public.focus_auth_complete_delivery_v1(uuid, text, text, text) from public, anon, authenticated;
 revoke all on function public.focus_auth_get_delivery_receipt_v1(uuid) from public, anon, authenticated;
 revoke all on function public.focus_auth_record_client_outcome_v1(uuid, text, text, integer) from public, anon, authenticated;
@@ -623,6 +736,7 @@ revoke all on function public.focus_auth_record_method_attempt_v1(uuid, text, te
 revoke all on function public.focus_auth_operator_summary_v1(timestamptz) from public, anon, authenticated;
 
 grant execute on function public.focus_auth_begin_delivery_v1(uuid, uuid, text, boolean) to service_role;
+grant execute on function public.focus_auth_reconcile_notisend_capacity_v1(text, timestamptz, integer) to service_role;
 grant execute on function public.focus_auth_reserve_notisend_recipient_v1(uuid, uuid) to service_role;
 grant execute on function public.focus_auth_complete_delivery_v1(uuid, text, text, text) to service_role;
 grant execute on function public.focus_auth_get_delivery_receipt_v1(uuid) to anon, authenticated;

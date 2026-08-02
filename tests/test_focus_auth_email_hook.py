@@ -239,6 +239,24 @@ def test_provider_reject_is_recorded_and_no_cross_provider_retry():
     assert completion["p_outcome"] == "definitive_reject"
 
 
+def test_notisend_2xx_without_receipt_is_ambiguous_and_never_retried():
+    old = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    raw, headers = signed(payload(created_at=old))
+    transport = FakeTransport(provider_status=200, provider_body={"accepted": True})
+    with pytest.raises(hook.HookError, match="provider_receipt_invalid"):
+        hook.process(raw, headers, context=SimpleNamespace(token="iam-token"), env=env(), transport=transport)
+    provider_calls = [
+        call for call in transport.calls
+        if "postbox.cloud.yandex.net" in call[1] or call[1].endswith("/email/messages")
+    ]
+    assert len(provider_calls) == 1
+    completion = json.loads([
+        call[3] for call in transport.calls if call[1].endswith("focus_auth_complete_delivery_v1")
+    ][0])
+    assert completion["p_provider"] == "notisend"
+    assert completion["p_outcome"] == "ambiguous"
+
+
 def test_rendered_email_has_one_link_and_six_digit_code():
     subject, text, html_body = hook._render_message("654321", "https://example.test/verify")
     assert subject.startswith("Код 654321")

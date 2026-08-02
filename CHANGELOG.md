@@ -9,9 +9,11 @@
   method without storing OTP or browser identifiers; an ambiguous browser
   response resolves through a bounded receipt RPC and never sends a duplicate.
   NotiSend admission now counts unique users across Auth and recommendation
-  traffic under the real 200-recipient ceiling; repeated fixed identities reuse
-  one slot, while new Auth recipients above capacity are assigned to Postbox
-  before dispatch.
+  traffic under the real 200-recipient ceiling for the current provider billing
+  period. The operator-reconciled provider counter plus atomic admissions since
+  that snapshot is now the source of truth; repeated fixed identities reuse one
+  period slot, while missing/expired accounting and recipients above capacity
+  are assigned to Postbox before dispatch.
 - Added a protected, manual Chromium + real-IMAPS external E2E for focus-group
   email OTP, with fixed test identities by default, exact deployment SHA checks,
   six-digit auto-submit coverage and sanitized ChatGPT-readable evidence.

@@ -341,9 +341,12 @@ def _notisend_send(to_email: str, subject: str, text: str, html_body: str, attem
     try:
         message_id = str(json.loads(raw)["id"]).strip()
     except (KeyError, TypeError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise HookError("provider_receipt_invalid", status=503, provider_outcome="definitive_reject") from exc
+        # A 2xx without a usable receipt may already have consumed the provider
+        # request and recipient slot. Keep it ambiguous: never retry another
+        # provider and never release the capacity reservation automatically.
+        raise HookError("provider_receipt_invalid", status=503, provider_outcome="ambiguous") from exc
     if not message_id:
-        raise HookError("provider_receipt_invalid", status=503, provider_outcome="definitive_reject")
+        raise HookError("provider_receipt_invalid", status=503, provider_outcome="ambiguous")
     return message_id
 
 

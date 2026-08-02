@@ -46,16 +46,30 @@ def test_provider_policy_has_one_dispatch_and_shared_unique_recipient_cap() -> N
     assert desired["provider_policy"]["notisend_payment"] == "subscriber"
     assert desired["provider_policy"]["cross_provider_retry_after_ambiguous"] is False
     assert desired["provider_policy"]["unique_recipient_capacity"] == 200
+    assert desired["provider_policy"]["unique_recipient_capacity_scope"] == "provider_billing_period"
+    assert desired["provider_policy"]["requires_provider_counter_reconciliation"] is True
+    assert desired["provider_policy"]["auth_route_when_unreconciled_expired_or_full"] == "postbox"
     assert '"p_prefer_notisend": prefer_notisend' in source
     assert "focus_auth_reserve_notisend_recipient_v1" in migration
     assert 'provider = "notisend" if notisend_admitted else "postbox"' in source
     assert source.count("_notisend_send(") == 2  # definition + one dispatch site
     assert source.count("_postbox_send(") == 2  # definition + one dispatch site
     assert "email_control.notisend_recipient_admission" in migration
-    assert "external_reserved_count" in migration
+    assert "provider_period_key" in migration
+    assert "provider_period_ends_at" in migration
+    assert "provider_used_count" in migration
+    assert "provider_reconciled_at" in migration
+    assert "focus_auth_reconcile_notisend_capacity_v1" in migration
+    assert "included_in_provider_snapshot" in migration
+    assert "and not a.included_in_provider_snapshot" in migration
     assert "does not\n  -- release a recipient" in migration
     assert "references auth.users (id) on delete cascade" not in migration
-    assert "notisend_capacity_full" in migration
+    assert "current NotiSend billing period is still active" in migration
+    assert "NotiSend provider count is behind local admissions" in migration
+    assert "NotiSend billing period key was already used" in migration
+    assert "v_provider_used + v_incremental_count >= v_capacity" in migration
+    assert "p_outcome in ('definitive_reject', 'configuration_error')" in migration
+    assert "delete from email_control.notisend_recipient_admission" in migration
     assert "first_attempt_id" in migration
     assert "normalized_email" not in migration
 

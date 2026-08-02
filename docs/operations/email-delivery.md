@@ -20,7 +20,7 @@ Product content, consent purpose and cadence remain separate. DNS, secrets, deli
 | Human/inbound mailbox | SpaceWeb | MX target and durable mailbox for `info@kenigevents.ru`; manual webmail/IMAP/SMTP correspondence. |
 | Automated inbound copy | Read-only SpaceWeb IMAP collector → Yandex Functions/YMQ | Polls only new IMAP UIDs without setting `Seen` or changing the mailbox purpose; private normalized envelopes, bounded batches and processing DLQ. |
 | Direct inbound canary | Yandex Cloud Mail Trigger → intake Function | Keeps an isolated technical address for direct trigger/schema/DLQ canaries. It is not the SpaceWeb mailbox destination. |
-| Transactional outbound | Yandex Cloud Postbox + scoped NotiSend Auth-repeat route | Postbox handles first-time/new-user Auth and other critical lifecycle mail. Paid NotiSend `subscriber` handles only returning/repeated Auth and fixed E2E/operator identities so repeated tests do not consume Postbox capacity. |
+| Transactional outbound | Yandex Cloud Postbox + scoped NotiSend Auth-repeat route | Postbox handles first-time/new-user Auth and other critical lifecycle mail. NotiSend `subscriber` handles only returning/repeated Auth and fixed E2E/operator identities so repeated tests do not consume Postbox capacity. |
 | Recommendation outbound | NotiSend | Opt-in personal recommendations/announcements only; intended From `Kenig Events <events@news.kenigevents.ru>`, `Reply-To: info@kenigevents.ru`. |
 | Identity and send control | Personalization Supabase/Postgres | Verified email, purpose-specific consent/subscription, hard admission cap, preferences, suppression, outbox, send guard and provider evidence. |
 | Analytics projection | YDB | De-identified asynchronous delivery/product aggregates only; never send eligibility or outbox state. |
@@ -237,14 +237,21 @@ and later sends, and fixed test identities use NotiSend with
 `payment=subscriber`. The fixed mode reuses one/few Supabase users instead of
 creating a new database identity for every GitHub Actions run.
 
-The NotiSend tariff is counted by **unique recipients**, not by messages. One
-private PII-free admission row is therefore shared by Auth and recommendation
-traffic. Repeated sends to an already admitted user do not consume another
-slot. New Auth recipients use NotiSend only while the shared total plus the
-operator-maintained reserve for provider-only seed/service contacts is below
-200; above it, the route is assigned to Postbox before either provider is
-called. Recommendation admission uses the same atomic guard and still fails
-closed at capacity—it never spills recommendation mail into Postbox.
+The NotiSend tariff is counted by **unique recipients in its current billing
+period**, not by messages or lifetime accounts. A private PII-free admission row
+is therefore keyed by provider period and Supabase user and shared by Auth and
+recommendation sends. Repeated sends to an already admitted user in that period
+do not consume another slot. The operator periodically reconciles the actual
+provider-used count and period end; Supabase atomically adds unique admissions
+after that snapshot. If the snapshot is absent/expired or the combined count is
+200, a new Auth recipient is assigned to Postbox before either provider is
+called. A recommendation send instead fails closed at capacity and never spills
+into Postbox.
+
+A definitive NotiSend rejection before acceptance releases that attempt's new
+local slot. A timeout or a 2xx response without a usable provider receipt may
+already have consumed capacity, so it remains reserved/ambiguous until the next
+provider-counter reconciliation and never triggers a cross-provider resend.
 
 A provider timeout is `ambiguous`, not a reason to try the other provider. The
 same attempt never sends twice. Client receipt lookup exposes only a bounded
@@ -257,15 +264,19 @@ Canonical implementation: `infra/yandex/focus-auth-email-hook/README.md`.
 
 Each logical recommendation issue contains **exactly three email events**; a hero is one of the three, never a fourth. The linked personal page may contain a larger ranked set, but it must already be published and validated before the issue becomes sendable.
 
-The initial service has a hard ceiling of **200 unique NotiSend recipients in
-total**. Actively consented recommendation users are a subset of that shared
-admission set:
+The initial service has a hard ceiling of **200 unique NotiSend recipients per
+provider billing period**. Consent and actual provider usage are different
+facts:
 
-1. Supabase transactionally admits a new active recommendation subscription
-   only while the shared NotiSend set remains below 200.
-2. At capacity, fail closed: do not mark the user active, synchronize a sendable provider contact or enqueue a message.
-3. Before every build and final send claim, recheck verified identity, purpose-specific consent, active admission, suppression and the ceiling.
-4. The usable canary may be lower if the current NotiSend plan counts seed/service contacts or imposes a lower operational limit.
+1. Supabase keeps the separate 200-person recommendation-consent cap, but does
+   not count consent alone as provider usage.
+2. Immediately before the first NotiSend send to a user in a provider period,
+   atomically reserve that recipient against the reconciled provider counter.
+3. At provider capacity, fail closed: do not synchronize a sendable contact,
+   enqueue, or send that recommendation.
+4. Before every build and final send claim, recheck verified identity,
+   purpose-specific consent, provider-period admission, suppression and the
+   ceiling.
 5. Provider capacity/error responses are defense in depth, not the primary admission lock. Never change tariff or spill excess recipients to Postbox automatically.
 
 ## Mandatory production gates
