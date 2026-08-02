@@ -4,6 +4,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import test from 'node:test';
 
 import {
+  canShareFiles,
   createDemoCards,
   createGoogleCalendarUrl,
   createIcs,
@@ -45,6 +46,13 @@ test('PWA capabilities lab keeps its calendar/offline contract', () => {
   assert.equal(calendar.hostname, 'calendar.google.com');
   assert.equal(calendar.searchParams.get('dates'), '20260803T100000Z/20260803T113000Z');
   assert.equal(calendar.searchParams.get('ctz'), 'Europe/Kaliningrad');
+
+  const browserPolicy = {
+    share() {},
+    canShare: ({ files }) => files.every((file) => file.name.endsWith('.txt') && file.type === 'text/plain'),
+  };
+  assert.equal(canShareFiles(browserPolicy, [{ name: 'probe.txt', type: 'text/plain' }]), true);
+  assert.equal(canShareFiles(browserPolicy, [{ name: 'event.ics', type: 'text/calendar' }]), false);
 });
 
 test('non-empty preview base resolves the lab worker, scope and assets inside that preview', () => {
@@ -92,6 +100,9 @@ test('Astro sources keep install/runtime paths base-aware and deploy exact lab M
   assert.doesNotMatch(browserRuntime, unprefixedRuntimePath);
   assert.match(browserRuntime, /new URL\('\.\/sw\.js', labUrl\)/u);
   assert.match(browserRuntime, /serviceWorker\.register\(workerUrl\.href\)/u);
+  assert.match(browserRuntime, /icsFileShare/u);
+  assert.match(browserRuntime, /\.ics\/text\/calendar не разрешён этим браузером/u);
+  assert.match(page, /ICS \.ics\/text\/calendar Share/u);
   assert.doesNotMatch(browserRuntime, /scope:\s*['"`]?\//u);
 
   assert.match(worker, /withBase\('\/lab\/pwa-capabilities\/'\)/u);

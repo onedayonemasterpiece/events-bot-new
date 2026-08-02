@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fixed misleading PWA lab calendar diagnostics after real Android acceptance:
+  generic `.txt` File Share and `.ics`/`text/calendar` Share are now tested
+  separately, an unsupported ICS share visibly downloads the file with an
+  explicit manual-open fallback, and the UI no longer implies that browser
+  Web Share or `intent:` can reliably open the system calendar.
 - Added explicit PWA lab install diagnostics for the browser prompt and
   `appinstalled` phases after immutable focus/lab previews both degraded from
   WebAPK to browser shortcuts on the same Android device. The UI now states

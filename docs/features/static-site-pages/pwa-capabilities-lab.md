@@ -1,8 +1,8 @@
 # PWA-возможности для анонсов: календарь, уведомления, офлайн и системный Share
 
 > **Дата решения:** 2026-08-02  
-> **Статус:** минимальная лабораторная страница реализована; ручная Android-матрица ещё не пройдена
-> **Решение:** `GO_TO_LAB`, `NO-GO` для production rollout до ручной проверки на реальном Android  
+> **Статус:** лаборатория реализована; WebAPK-установка подтверждена на реальном Android, остальная Android-матрица пройдена частично
+> **Решение:** `PARTIAL_GO`: Google Calendar и ICS download; `NO-GO` для portable system-calendar insertion из browser PWA
 > **Ветка:** `feature/static-site-pwa-capabilities-lab-20260802`  
 > **Scope:** изолированная noindex-страница Astro; без изменения production-навигации, root service worker, Auth, Supabase и публикации canonical root
 
@@ -18,7 +18,7 @@
 |---|---|---|
 | Google Calendar template URL | `GO` | открытие заполненной формы без скачивания файла |
 | Скачать `.ics` | `GO` | универсальный fallback |
-| Передать `.ics` через системное меню Share | `GO_TO_LAB` | какие календари Android принимают файл без отдельного шага скачивания |
+| Передать `.ics` через системное меню Share | `NO` в проверенном Chrome | Chromium разрешает общий file share, но не включает `.ics`/`text/calendar` в permitted file types |
 | Android `intent:` из браузера | `LAB_ONLY` | фактическое поведение Chrome/прошивки; не считать переносимым контрактом |
 | Локальное уведомление через service worker | `GO_TO_LAB` | запрос разрешения и показ уведомления на Android |
 | Настоящая Web Push-подписка | `PARTIAL_LAB` | подписка возможна; доставка требует VAPID и sender/backend |
@@ -41,9 +41,11 @@
    календарём, зато не требует OAuth и не создаёт скачанный файл.
 2. **ICS download.** Самый переносимый fallback. Пользователь скачивает файл и выбирает
    приложение, которое умеет его импортировать.
-3. **ICS через Web Share.** PWA создаёт `File` в памяти и передаёт его в
-   `navigator.share({ files })`. Отдельного шага скачивания может не быть, но появление
-   календаря в системном меню и качество импорта зависят от установленного приложения.
+3. **ICS через Web Share.** Web API теоретически принимает `files`, но текущий Chromium
+   проверяет extension и MIME по allowlist, где нет `.ics` и `text/calendar`. Поэтому
+   `navigator.canShare({ files: [icsFile] })` возвращает `false` ещё до выбора target.
+   Лаборатория теперь отдельно показывает generic `.txt` File Share и именно ICS File Share;
+   при отрицательном результате она явно скачивает ICS и предлагает открыть его из «Загрузок».
 4. **Google Calendar API.** Позволяет создавать, обновлять и удалять события после OAuth.
    Это интеграция с Google-аккаунтом, а не доступ к локальному системному календарю.
    В лабораторию не входит.
@@ -469,6 +471,33 @@ WebAPK minting: при недоступности minting service Chrome док�
 `accepted` без launcher/Android Settings app, standalone launch и controlling
 worker не закрывает ручной Android acceptance.
 
+### 8.2. Фактический Android-результат 2026-08-02
+
+На preview `preview-pwa-capabilities-cde99453` установка со второй попытки завершилась
+реальным WebAPK, а не browser shortcut:
+
+- Android показал уведомления `Установка приложения "PWA Lab"` и `Приложение установлено`;
+- `chrome://webapks` показывает `KenigEvents PWA Capabilities Lab`, package
+  `org.chromium.webapk.ad5104c204ff1a34d_v2`, owning browser `com.android.chrome`,
+  точные versioned URI/scope/manifest/start URL и `Display Mode: standalone`;
+- Google Calendar сначала показал пустой loading view, затем открыл заполненную форму события
+  с названием, временем, часовым поясом, местом, описанием и versioned lab URL;
+- попытка `Поделиться ICS` не открыла добавление события в системный календарь.
+
+Последний результат объясняется не отсутствием общего Web Share: страница показывала File
+Share как доступный по `.txt` probe. В актуальном Chromium source `.ics` отсутствует в
+`PERMITTED_EXTENSIONS`, а `text/calendar` — в `PERMITTED_MIME_TYPES`. Следовательно, для
+проверенного Chrome это deterministic browser-policy fallback на download, а не проблема
+конкретного календарного target. Native `ACTION_INSERT` документирован Android, но Chrome
+может вызывать из `intent:` только Activity с категорией `BROWSABLE`; стандартный calendar
+insert contract гарантирует `DEFAULT`, а не `BROWSABLE`. Надёжного прямого открытия
+системной формы из browser-installed PWA поэтому нет.
+
+Скриншот `chrome://webapks` доказывает minting и установку WebAPK. Отдельные acceptance-пункты
+`запуск именно через launcher`, `отсутствие адресной строки`, фактические значения
+`Standalone display: да` и `Worker controlling page: да` в установленном окне пока не
+зафиксированы отдельным скриншотом и остаются ручными.
+
 Проверки из `site/`:
 
 ```bash
@@ -479,7 +508,7 @@ npm run build
 Обе команды прошли 2026-08-02. Build содержит
 `/lab/pwa-capabilities/index.html` и `/lab/pwa-capabilities/sw.js`. Root manifest,
 root service worker, sitemap, global navigation, Auth/Supabase и release gates не менялись.
-Ручная проверка Android/target-приложений остаётся отдельным acceptance-шагом из раздела 9.
+Оставшаяся ручная проверка Android/target-приложений остаётся отдельным acceptance-шагом из раздела 9.
 
 Для внешнего Android-теста используется только versioned preview-контур:
 
@@ -547,6 +576,7 @@ notification, simulated push payload, optional PushManager subscription, offline
 - Google Calendar event template: https://developers.google.com/workspace/calendar/api/concepts/inviting-attendees-to-events
 - Web Share API: https://w3c.github.io/web-share/
 - Web Share files: https://developer.mozilla.org/docs/Web/API/Navigator/share
+- Chromium Web Share permitted file types: https://chromium.googlesource.com/chromium/src/+/refs/heads/main/components/browser_ui/webshare/android/java/src/org/chromium/components/browser_ui/webshare/ShareServiceImpl.java
 - Notifications from a service worker: https://developer.mozilla.org/docs/Web/API/ServiceWorkerRegistration/showNotification
 - Push API: https://developer.mozilla.org/docs/Web/API/Push_API
 - Cache Storage: https://developer.mozilla.org/docs/Web/API/CacheStorage

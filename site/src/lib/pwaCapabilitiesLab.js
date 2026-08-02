@@ -99,6 +99,12 @@ export function createGoogleCalendarUrl(event) {
   return url.toString();
 }
 
+export function canShareFiles(navigatorLike, files) {
+  if (!navigatorLike?.share || !navigatorLike?.canShare) return false;
+  try { return Boolean(navigatorLike.canShare({ files })); }
+  catch { return false; }
+}
+
 function zonedLocalToDate(value, timeZone) {
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/u.exec(value);
   if (!match) throw new Error('Укажите дату и время.');
@@ -248,7 +254,14 @@ export function initPwaCapabilitiesLab(config = {}) {
 
   function icsFile() {
     const event = eventFromForm();
-    return { event, file: new File([createIcs(event, stableUid())], 'kenigevents-pwa-lab.ics', { type: 'text/calendar;charset=utf-8' }) };
+    return { event, file: new File([createIcs(event, stableUid())], 'kenigevents-pwa-lab.ics', { type: 'text/calendar' }) };
+  }
+
+  function downloadFile(file) {
+    const href = URL.createObjectURL(file);
+    const link = Object.assign(document.createElement('a'), { href, download: file.name });
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(href), 1_000);
   }
 
   async function registerLabWorker() {
@@ -318,8 +331,13 @@ export function initPwaCapabilitiesLab(config = {}) {
     let fileShare = false;
     try {
       const probe = new File(['probe'], 'probe.txt', { type: 'text/plain' });
-      fileShare = Boolean(navigator.canShare?.({ files: [probe] }));
+      fileShare = canShareFiles(navigator, [probe]);
     } catch { fileShare = false; }
+    let icsFileShare = false;
+    try {
+      const probe = new File(['BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n'], 'probe.ics', { type: 'text/calendar' });
+      icsFileShare = canShareFiles(navigator, [probe]);
+    } catch { icsFileShare = false; }
     const values = {
       secure: window.isSecureContext,
       android,
@@ -327,6 +345,7 @@ export function initPwaCapabilitiesLab(config = {}) {
       share: Boolean(navigator.share),
       canShare: Boolean(navigator.canShare),
       fileShare,
+      icsFileShare,
       serviceWorker: 'serviceWorker' in navigator,
       workerScope: registration?.scope || 'не зарегистрирован',
       workerControlling: Boolean(
@@ -365,30 +384,34 @@ export function initPwaCapabilitiesLab(config = {}) {
     const opened = window.open(url, '_blank');
     if (!opened) throw new Error('Popup заблокирован; разрешите открытие новой вкладки.');
     opened.opener = null;
+    setStatus(byId('calendar-status'), 'Google Calendar: заполненная web-форма открыта; сохранение подтверждает пользователь.', 'success');
     log('Google Calendar', 'success', 'открыта заполненная форма; сохранение подтверждает пользователь');
   });
 
   guard('download-ics', async () => {
     const { file } = icsFile();
-    const href = URL.createObjectURL(file);
-    const link = Object.assign(document.createElement('a'), { href, download: file.name });
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(href), 1_000);
+    downloadFile(file);
+    setStatus(byId('calendar-status'), 'ICS скачан. Откройте файл из «Загрузок» и выберите календарь вручную.', 'success');
     log('ICS download', 'success', 'файл передан браузеру для скачивания');
   });
 
   guard('share-ics', async () => {
     const { event, file } = icsFile();
-    if (!navigator.share || !navigator.canShare?.({ files: [file] })) {
-      byId('download-ics').click();
-      log('ICS Web Share', 'fallback', 'file share не поддерживается — запущено скачивание ICS');
+    if (!canShareFiles(navigator, [file])) {
+      downloadFile(file);
+      setStatus(byId('calendar-status'), 'ICS Web Share недоступен: браузер не разрешает .ics/text/calendar. Файл скачан; откройте его из «Загрузок».', 'fallback');
+      log('ICS Web Share', 'fallback', '.ics/text/calendar не разрешён этим браузером — файл скачан вместо Share');
       return;
     }
     try {
       await navigator.share({ title: event.title, text: 'Событие для календаря', files: [file] });
-      log('ICS Web Share', 'success', 'системное меню Share завершило операцию');
+      setStatus(byId('calendar-status'), 'Share sheet завершён, но это не доказывает импорт в календарь: результат подтверждается в target-приложении.', 'success');
+      log('ICS Web Share', 'success', 'системное меню Share завершило операцию; импорт календарём не подтверждён');
     } catch (error) {
-      if (error?.name === 'AbortError') log('ICS Web Share', 'cancel', 'пользователь закрыл меню');
+      if (error?.name === 'AbortError') {
+        setStatus(byId('calendar-status'), 'ICS Share отменён пользователем.', 'info');
+        log('ICS Web Share', 'cancel', 'пользователь закрыл меню');
+      }
       else throw error;
     }
   });
@@ -397,6 +420,7 @@ export function initPwaCapabilitiesLab(config = {}) {
     const event = eventFromForm();
     const fallback = createGoogleCalendarUrl(event);
     const intent = `intent://com.android.calendar/events#Intent;scheme=content;action=android.intent.action.INSERT;type=vnd.android.cursor.dir/event;S.title=${encodeURIComponent(event.title)};S.eventLocation=${encodeURIComponent(event.location)};l.beginTime=${event.start.getTime()};l.endTime=${event.end.getTime()};S.browser_fallback_url=${encodeURIComponent(fallback)};end`;
+    setStatus(byId('calendar-status'), 'Android intent передан Chrome. Системный календарь откроется только при наличии BROWSABLE Activity; иначе используйте Google Calendar или скачанный ICS.', 'fallback');
     log('Android intent', 'experiment', 'передан браузеру; факт открытия календаря нужно отметить вручную');
     window.location.href = intent;
   });

@@ -94,7 +94,8 @@ const cacheName = `kenigevents-pwa-capabilities-lab-${encodeURIComponent(labUrl)
               <tr><th>Standalone display</th><td data-diagnostic="standalone">проверка…</td></tr>
               <tr><th>navigator.share</th><td data-diagnostic="share">проверка…</td></tr>
               <tr><th>navigator.canShare</th><td data-diagnostic="canShare">проверка…</td></tr>
-              <tr><th>File Share</th><td data-diagnostic="fileShare">проверка…</td></tr>
+              <tr><th>Generic .txt File Share</th><td data-diagnostic="fileShare">проверка…</td></tr>
+              <tr><th>ICS .ics/text/calendar Share</th><td data-diagnostic="icsFileShare">проверка…</td></tr>
               <tr><th>Service Worker</th><td data-diagnostic="serviceWorker">проверка…</td></tr>
               <tr><th>Lab worker scope</th><td data-diagnostic="workerScope">проверка…</td></tr>
               <tr><th>Worker controlling page</th><td data-diagnostic="workerControlling">проверка…</td></tr>
@@ -126,7 +127,8 @@ const cacheName = `kenigevents-pwa-capabilities-lab-${encodeURIComponent(labUrl)
 
       <section class="panel" aria-labelledby="calendar-title">
         <h2 id="calendar-title">Calendar</h2>
-        <p class="hint">Google Calendar и ICS — рабочие web-fallbacks. Intent не является переносимым browser contract.</p>
+        <p class="hint">Google Calendar и скачивание ICS — рабочие web-fallbacks. Chromium может разрешать общий File Share, но запрещать именно <code>.ics</code>/<code>text/calendar</code>. Intent не является переносимым browser contract.</p>
+        <p id="calendar-status" class="status" aria-live="polite">Выберите способ. Результат появится здесь и в общем журнале.</p>
         <div class="actions">
           <button id="google-calendar" type="button">Открыть Google Calendar</button>
           <button id="download-ics" type="button">Скачать ICS</button>
@@ -134,7 +136,7 @@ const cacheName = `kenigevents-pwa-capabilities-lab-${encodeURIComponent(labUrl)
           <button id="android-intent" type="button">Android Intent — эксперимент</button>
           <button id="native-insert" type="button" disabled>Native bridge не обнаружен</button>
         </div>
-        <p class="fallback">Если файловый Share недоступен, кнопка ICS Share запускает обычное скачивание.</p>
+        <p class="fallback">Если именно ICS File Share недоступен, кнопка скачивает файл. Это не откроет календарь автоматически: затем откройте `.ics` из «Загрузок». Для прямой системной формы нужен native Android bridge, которого в PWA нет.</p>
       </section>
 
       <section class="panel" aria-labelledby="notification-title">
