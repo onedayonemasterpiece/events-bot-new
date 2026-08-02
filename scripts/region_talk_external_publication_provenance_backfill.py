@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.region_talk_external_publication_import import (  # noqa: E402
+    IDENTITY_LEDGER_VERSION,
     canonicalize_http_url,
     publication_identity_keys,
     stable_hash,
@@ -36,15 +37,6 @@ from scripts.region_talk_goal_notify import (  # noqa: E402
 )
 
 ATTESTATION_VERSION = "region_talk_legacy_external_provenance_v1"
-EXCLUDED_FROM_LEGACY_HASH = {
-    "_ydb_pk", "_ydb_updated_at", "updated_at",
-    "legacy_provenance_attestation", "provenance_attested_at",
-    "canonical_evidence_urls", "identity_keys", "request_id",
-    "intake_at", "intake_received_at", "review_status",
-    "publication_permission", "intake_status",
-}
-
-
 class BackfillError(ValueError):
     pass
 
@@ -56,7 +48,7 @@ def utc_now_iso() -> str:
 def legacy_source_sha256(row: dict[str, Any]) -> str:
     source = {
         key: value for key, value in row.items()
-        if key not in EXCLUDED_FROM_LEGACY_HASH and not str(key).startswith("_ydb_")
+        if not str(key).startswith("_ydb_")
     }
     raw = json.dumps(source, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -93,10 +85,11 @@ def prepare_attestation(row: dict[str, Any], *, attested_at: str) -> dict[str, A
         title=publication.get("title"),
         authors=publication.get("authors"),
     )
-    intake_at = str(
+    raw_intake_at = (
         row.get("intake_at") or row.get("intake_received_at")
-        or row.get("imported_at") or row.get("research_imported_at") or attested_at
-    ).strip()
+        or row.get("imported_at") or row.get("research_imported_at")
+    )
+    intake_at = str(raw_intake_at).strip() if raw_intake_at else ""
     if not evidence_urls or not identity_keys or not intake_at:
         raise BackfillError("legacy row lacks public evidence, exact identity or intake time")
     row_sha256 = legacy_source_sha256(row)
@@ -173,12 +166,12 @@ def build_backfill(
     }
 
 
-def execute_backfill(pool: Any, ydb: Any, table: str, prepared: dict[str, Any]) -> int:
+def execute_backfill(pool: Any, ydb: Any, table: str, prepared: dict[str, Any]) -> dict[str, int]:
     if prepared.get("execution_blocked"):
         raise BackfillError("legacy provenance backfill contains blocked rows")
     updates = list(prepared.get("updates") or [])
     if not updates:
-        return 0
+        return {"intake_updates": 0, "identity_reservations_written": 0, "written_ydb_rows": 0}
     select_text = f"DECLARE $pk AS Utf8; SELECT payload_json FROM `{table}` WHERE pk = $pk;"
     upsert_text = f"""
 DECLARE $pk AS Utf8; DECLARE $kind AS Utf8; DECLARE $payload_json AS Json; DECLARE $updated_at AS Utf8;
@@ -186,11 +179,12 @@ UPSERT INTO `{table}` (pk, kind, payload_json, updated_at)
 VALUES ($pk, $kind, $payload_json, $updated_at);
 """
 
-    def op(session: Any) -> int:
+    def op(session: Any) -> dict[str, int]:
         select = session.prepare(select_text)
         upsert = session.prepare(upsert_text)
         tx = session.transaction(ydb.SerializableReadWrite())
-        pending: list[tuple[str, dict[str, Any]]] = []
+        pending: list[tuple[str, str, dict[str, Any]]] = []
+        intended_identity_owners: dict[str, str] = {}
         for intended in updates:
             external_id = str(intended.get("external_publication_id") or "")
             pk = "external_publication_intake_item:" + external_id
@@ -205,21 +199,71 @@ VALUES ($pk, $kind, $payload_json, $updated_at);
             if legacy_source_sha256(current) != expected_sha:
                 tx.rollback()
                 raise BackfillError(f"intake changed before write: {external_id}")
-            pending.append((pk, intended))
-        for index, (pk, payload) in enumerate(pending):
+            pending.append((pk, "external_publication_intake_item", intended))
+            for identity_key in intended.get("identity_keys") or []:
+                identity_key = str(identity_key).strip()
+                if not identity_key:
+                    continue
+                identity_sha256 = hashlib.sha256(identity_key.encode("utf-8")).hexdigest()
+                identity_pk = "external_publication_identity_item:" + identity_sha256
+                owner = intended_identity_owners.setdefault(identity_pk, external_id)
+                if owner != external_id:
+                    tx.rollback()
+                    raise BackfillError("legacy identity resolves to multiple intake owners")
+
+        identity_reservations_written = 0
+        for identity_pk, external_id in sorted(intended_identity_owners.items()):
+            response = tx.execute(select, {"$pk": identity_pk}, commit_tx=False)
+            current_rows = response[0].rows if response else []
+            if current_rows:
+                raw = current_rows[0].payload_json
+                current = json.loads(raw) if isinstance(raw, str) else dict(raw or {})
+                if str(current.get("external_publication_id") or "") != external_id:
+                    tx.rollback()
+                    raise BackfillError(f"legacy identity owner conflict: {identity_pk}")
+                continue
+            intended = next(
+                row for row in updates
+                if str(row.get("external_publication_id") or "") == external_id
+            )
+            identity_key = next(
+                key for key in intended.get("identity_keys") or []
+                if hashlib.sha256(str(key).encode("utf-8")).hexdigest()
+                == identity_pk.rsplit(":", 1)[-1]
+            )
+            attestation = intended.get("legacy_provenance_attestation") or {}
+            pending.append((identity_pk, "external_publication_identity_item", {
+                "identity_key_sha256": identity_pk.rsplit(":", 1)[-1],
+                "identity_type": str(identity_key).split(":", 1)[0],
+                "identity_value": str(identity_key).split(":", 1)[1],
+                "external_publication_id": external_id,
+                "request_id": intended.get("request_id") or intended.get("research_request_id") or "",
+                "legacy_row_sha256": attestation.get("legacy_row_sha256") or "",
+                "reserved_at": prepared.get("attested_at") or utc_now_iso(),
+                "identity_ledger_version": IDENTITY_LEDGER_VERSION,
+                "reservation_mode": "legacy_provenance_backfill",
+                "updated_at": prepared.get("attested_at") or utc_now_iso(),
+            }))
+            identity_reservations_written += 1
+
+        for index, (pk, kind, payload) in enumerate(pending):
             tx.execute(
                 upsert,
                 {
                     "$pk": pk,
-                    "$kind": "external_publication_intake_item",
+                    "$kind": kind,
                     "$payload_json": json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
                     "$updated_at": str(payload.get("updated_at") or prepared.get("attested_at") or utc_now_iso()),
                 },
                 commit_tx=index == len(pending) - 1,
             )
-        return len(pending)
+        return {
+            "intake_updates": len(updates),
+            "identity_reservations_written": identity_reservations_written,
+            "written_ydb_rows": len(pending),
+        }
 
-    return int(pool.retry_operation_sync(op) or 0)
+    return dict(pool.retry_operation_sync(op) or {})
 
 
 def parse_args() -> argparse.Namespace:
@@ -250,17 +294,19 @@ def main() -> int:
             selected_ids=set(args.external_publication_id),
             attested_at=utc_now_iso(),
         )
-        written = 0
+        execution = {"intake_updates": 0, "identity_reservations_written": 0, "written_ydb_rows": 0}
         status = "dry_run"
         if args.execute:
-            written = execute_backfill(pool, ydb, table, prepared)
+            execution = execute_backfill(pool, ydb, table, prepared)
             status = "committed"
         report = {
             **{key: value for key, value in prepared.items() if key != "updates"},
             "status": status,
             "intake_rows_read": len(current),
             "planned_updates": len(prepared["updates"]),
-            "written_updates": written,
+            "written_updates": execution["intake_updates"],
+            "written_identity_reservations": execution["identity_reservations_written"],
+            "written_ydb_rows": execution["written_ydb_rows"],
         }
     finally:
         driver.stop(timeout=5)

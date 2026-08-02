@@ -1,11 +1,38 @@
 from __future__ import annotations
 
 import tomllib
+import importlib.util
 import json
+import sys
 from types import SimpleNamespace
 
 from scripts import region_talk_publication_plan as plan
 from scripts import region_talk_goal_notify as notify
+
+
+def load_candidate_report_module():
+    path = plan.ROOT / "kaggle" / "RegionTalkCandidateReport" / "region_talk_candidate_report.py"
+    spec = importlib.util.spec_from_file_location("region_talk_candidate_report_fingerprint_parity", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_external_intake_fingerprint_matches_candidate_report_legacy_contract() -> None:
+    report = load_candidate_report_module()
+    row = {
+        "external_publication_id": "extpub_legacy",
+        "canonical_url": "https://publisher.example/article",
+        "decision": {"import_status": "ready_for_region_talk_scoring"},
+        "legacy_provenance_attestation": {
+            "attestation_version": "region_talk_legacy_external_provenance_v1",
+            "legacy_row_sha256": "a" * 64,
+        },
+    }
+
+    assert plan.external_intake_fingerprint(row) == report.external_publication_intake_fingerprint(row)
 
 
 def test_production_enables_exact_current_reaction_gate() -> None:

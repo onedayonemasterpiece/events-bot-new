@@ -170,7 +170,9 @@ python3 scripts/region_talk_external_publication_provenance_backfill.py \
 ```
 
 The command performs a current complete read, compares each exact legacy-row
-SHA again inside the serializable write transaction, and is idempotent. Any
+SHA again inside the serializable write transaction, reserves every normalized
+identity in `external_publication_identity_item` in that same transaction, and
+is idempotent. Any
 missing request/evidence/identity or concurrent row change aborts the whole
 write. The migration retains the semantic decision, defaults absent review
 state to `unreviewed`, keeps `publication_permission=not_granted`, and therefore

@@ -131,6 +131,7 @@ def external_intake_fingerprint(row: dict[str, Any] | None) -> str:
             "operator_policy_override", "source_assessment", "publication",
             "region_relevance", "quality_assessment", "media_and_rights",
             "editorial_pack", "evidence", "provenance",
+            "legacy_provenance_attestation",
         )
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)

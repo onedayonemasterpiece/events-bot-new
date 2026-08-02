@@ -587,7 +587,9 @@ visibility.
   URLs and all normalized identity keys, and explicitly states that the original
   input JSON SHA is unavailable. It is created only by the idempotent
   `region_talk_external_publication_provenance_backfill.py` migration, never by
-  normal import, and does not change the research decision or grant publication;
+  normal import, and does not change the research decision or grant publication.
+  The migration compares the full current row before writing and reserves all
+  identity keys in the same serializable transaction;
 - kind `external_publication_intake_observation_item`, pk
   `external_publication_intake_observation_item:extpubobs_<stable-id>` — an
   immutable later observation of an already-known publication. It preserves
