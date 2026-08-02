@@ -2107,6 +2107,77 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(payload["post_url"], url)
         self.assertEqual(payload["previous_target_publication_status"], "published")
 
+    def test_pending_candidate_correction_blocks_copy_without_downgrading_acceptance(self) -> None:
+        mod = self.mod
+        url = "https://rg.ru/2025/09/16/reg-szfo/example.html"
+        source = {
+            **external_source("unused"),
+            "_ydb_pk": "external_publication_source_item:rg",
+            "canonical_source_key": "web:rg.ru",
+            "source_url": "https://rg.ru/",
+            "source_title": "Российская газета",
+        }
+        row = candidate_row(
+            url=url,
+            canonical_source_key="web:rg.ru",
+            content_origin_type="editorial_publication",
+            publication_status="gemini_accept",
+            publication_candidate_status="llm_confirmed",
+            _authoritative_source=source,
+            _previous_publication={},
+        )
+        row["_live_decision_fingerprint"] = mod.live_finalization_fingerprint(
+            image=None, memory=None, intake=None, source=source, publication=None,
+        )
+        correction = {
+            "_ydb_pk": "publisher_profile_candidate_correction_item:rg",
+            "canonical_url": url,
+            "recommended_action": "re_adjudicate_externality",
+            "reason_codes": ["regional_local_edition", "local_correspondent"],
+            "review_status": "unreviewed",
+            "live_revalidation_status": "pending_live_revalidation",
+            "candidate_mutation_allowed": False,
+            "regeneration_allowed": False,
+        }
+        kinds = {
+            "image_queue_item": {},
+            "candidate_memory_item": {},
+            "publication_candidate_item": {},
+            "source_queue_item": {},
+            "source_status_item": {},
+            "online_source_item": {},
+            "external_publication_source_item": {source["_ydb_pk"]: source},
+            "external_publication_intake_item": {},
+            "source_profile_capture_item": {},
+            "publisher_profile_item": {},
+            "publisher_profile_candidate_correction_item": {correction["_ydb_pk"]: correction},
+        }
+
+        class Pool:
+            def retry_operation_sync(self, operation):
+                return operation(object())
+
+        captured = {}
+
+        def upsert(_session, _ydb, _table, items, _now, **_kwargs):
+            captured["items"] = items
+            return len(items)
+
+        with (
+            mock.patch.object(mod, "_current_complete_kind", side_effect=lambda _s, _y, _t, kind, _limit: kinds[kind]),
+            mock.patch.object(mod.rt, "ensure_ydb_kv_table"),
+            mock.patch.object(mod.rt, "ydb_upsert_json_many", side_effect=upsert),
+        ):
+            written = mod.write_publication_rows(Pool(), object(), "table", [row], "run-correction")
+
+        self.assertEqual(written, 1)
+        _pk, kind, payload = captured["items"][0]
+        self.assertEqual(kind, "publication_candidate_item")
+        self.assertEqual(payload["publication_status"], "gemini_accept")
+        self.assertEqual(payload["source_onboarding_status"], "needs_source_profile")
+        self.assertEqual(payload["final_decision_guard_status"], "blocked_candidate_correction_review")
+        self.assertEqual(payload["candidate_correction_regeneration_allowed"], "false")
+
 
 if __name__ == "__main__":
     unittest.main()

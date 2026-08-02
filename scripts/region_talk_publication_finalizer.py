@@ -831,6 +831,26 @@ def _correction_index(rows: dict[str, dict[str, Any]]) -> dict[str, dict[str, An
     return out
 
 
+def candidate_correction_requires_explicit_review(row: dict[str, Any] | None) -> bool:
+    correction = dict(row or {})
+    if not correction:
+        return False
+    status = str(correction.get("review_status") or correction.get("status") or "").lower()
+    revalidation = str(
+        correction.get("live_revalidation_status") or correction.get("revalidation_status") or ""
+    ).lower()
+    action = str(correction.get("recommended_action") or "").lower()
+    return bool(
+        status in {"unreviewed", "pending", "queued", "needs_review", "requires_review"}
+        or revalidation == "pending_live_revalidation"
+        or action in {"re_adjudicate_externality", "manual_research_review", "block"}
+        or correction.get("regeneration_allowed") is False
+        or str(correction.get("regeneration_allowed") or "").lower() == "false"
+        or correction.get("candidate_mutation_allowed") is False
+        or str(correction.get("candidate_mutation_allowed") or "").lower() == "false"
+    )
+
+
 def trusted_publisher_profile_for_onboarding(
     publisher_profile: dict[str, Any] | None,
     evidence_row: dict[str, Any],
@@ -2867,6 +2887,39 @@ def filter_rows_against_current_finalization_state(
             publisher_profile=publisher_profiles_by_key.get(canonical_source_key_for_row(row)),
             candidate_correction=publisher_corrections_by_url.get(url),
         )
+        current_correction = publisher_corrections_by_url.get(url)
+        if candidate_correction_requires_explicit_review(current_correction):
+            previous = row.get("_previous_publication") if isinstance(row.get("_previous_publication"), dict) else {}
+            published_states = {
+                str(previous.get("target_publication_status") or row.get("target_publication_status") or "").lower(),
+                str(previous.get("public_publication_status") or row.get("public_publication_status") or "").lower(),
+                str(previous.get("plan_status") or row.get("plan_status") or "").lower(),
+            }
+            if published_states & {"published", "target_published", "completed"}:
+                defer_changed(row, "candidate_correction_requires_review_after_publication", current)
+                continue
+            # Candidate acceptance is monotonic.  The correction blocks only
+            # source-profile/public-copy preparation until an explicit review
+            # records a new externality decision.
+            row["source_onboarding_status"] = "needs_source_profile"
+            row["source_onboarding_llm_reason"] = "candidate_correction_requires_explicit_review"
+            row["candidate_correction_status"] = str(
+                current_correction.get("live_revalidation_status")
+                or current_correction.get("revalidation_status")
+                or current_correction.get("review_status")
+                or ""
+            )
+            row["candidate_correction_recommended_action"] = str(
+                current_correction.get("recommended_action") or ""
+            )
+            row["candidate_correction_reason_codes_json"] = json.dumps(
+                current_correction.get("reason_codes") or [], ensure_ascii=False, separators=(",", ":")
+            )
+            row["candidate_correction_regeneration_allowed"] = "false"
+            row["final_decision_guard_status"] = "blocked_candidate_correction_review"
+            row["final_decision_guard_fingerprint"] = current
+            safe.append(row)
+            continue
         if current != expected:
             print(
                 f"[region-talk-finalizer] final decision deferred: live fingerprint changed {url}",

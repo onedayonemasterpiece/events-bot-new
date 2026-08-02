@@ -67,7 +67,7 @@ lanes:
       - CHANGELOG.md
     expected_output: committed importer/merge/workflow/tests and RESULTS
     verification_scope: targeted
-    status: in_progress
+    status: completed
   - id: WRITER
     role: worker
     requirement_ids: [R06]
