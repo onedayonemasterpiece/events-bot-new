@@ -436,6 +436,40 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual([seed.canonical_url for seed in selected], [capture.canonical_url])
         self.assertEqual(mod.source_queue_priority_bucket(queue["telegram:capturefirst"]), -3)
 
+    def test_stale_source_profile_capture_lane_is_not_an_active_request(self) -> None:
+        mod = load_module()
+        stale = self._seed(mod, "@stalecapture", seed_id="stale_capture")
+        pending = self._seed(mod, "@pendingfirst", seed_id="pending")
+        queue = {
+            "telegram:stalecapture": {
+                "canonical_source_key": "telegram:stalecapture",
+                "platform": "telegram",
+                "handle": stale.handle,
+                "source_url": stale.canonical_url,
+                "source_queue_status": "processed_no_ko",
+                "queue_order": 1,
+                "posts_scanned": 50,
+                "last_history_fetch_at": mod.utc_now_iso(),
+                "source_profile_capture_requested": "false",
+                "needs_source_profile": "false",
+                "priority_lane": "source_profile_capture",
+            },
+            "telegram:pendingfirst": {
+                "canonical_source_key": "telegram:pendingfirst",
+                "platform": "telegram",
+                "handle": pending.handle,
+                "source_url": pending.canonical_url,
+                "source_queue_status": "pending_scan",
+                "queue_order": 2,
+            },
+        }
+        previous = {"unified_source_queue_cursor_position": 0, "unified_source_queue": queue}
+
+        selected = mod.selected_sources_for_run([stale, pending], 1, previous_state=previous)
+
+        self.assertEqual([seed.canonical_url for seed in selected], [pending.canonical_url])
+        self.assertNotEqual(mod.source_queue_priority_bucket(queue["telegram:stalecapture"]), -3)
+
     def test_confirmed_blogger_history_slots_are_balanced_between_telegram_and_vk(self) -> None:
         mod = load_module()
         tg = self._seed(mod, "@evidencetg", seed_id="evidence_tg")

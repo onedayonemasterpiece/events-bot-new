@@ -1611,7 +1611,6 @@ def source_queue_priority_bucket(queue_row: dict[str, Any] | None = None) -> int
     if (
         _rt_bool(row.get("source_profile_capture_requested"))
         or _rt_bool(row.get("needs_source_profile"))
-        or str(row.get("priority_lane") or "").strip().lower() == "source_profile_capture"
     ):
         return -3
     if (

@@ -33,7 +33,9 @@ import/review commands and Writer vNext:
    Explicit capture requests own the bounded source-history slots ahead of
    ordinary discovery/rescan rows, including when the source itself was scanned
    recently; otherwise a small `REGION_TALK_MAX_SOURCES` run could repeatedly
-   miss the requested source before reaching the capture stage.
+   miss the requested source before reaching the capture stage. The durable
+   request booleans are authoritative; a leftover `priority_lane` label after
+   request completion cannot reopen or reprioritize capture by itself.
 5. Editorial/academic sources use separately imported
    `publisher_profile_item` rows. A reusable publisher profile must be
    `ready`, external, public-copy-eligible and contain grounded
