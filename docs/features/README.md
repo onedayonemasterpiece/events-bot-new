@@ -60,6 +60,7 @@
 - `docs/features/unusual-events/README.md` — R15 implementation candidate:
   `/neobychnoe/`, 15-family taxonomy, one shared BGE vector contract,
   concept-level unread state and fail-closed Kaggle rollout
+- `docs/features/editorial-collections/README.md` — продуктовое исследование редакционных подборок, frozen real-event pilot «Необычное», benchmark-контент, reusable prompts и noindex Astro-lab с шестью сравнимыми композициями
 
 ## Как добавлять новую фичу
 
