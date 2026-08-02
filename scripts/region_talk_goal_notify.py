@@ -40,6 +40,9 @@ OPERATOR_REVIEW_PAYLOAD_VERSION = "region_talk_operator_review_payload_v1"
 EDITORIAL_WRITER_VERSION = "region_talk_editorial_onboarding_writer_v10_publisher_reader_brief"
 EDITORIAL_OUTPUT_CONTRACT = "region_talk_editorial_onboarding_output_v4"
 MEDIA_MATERIALIZATION_CONTRACT_VERSION = "region_talk_media_materialization_v1"
+REGION_TALK_PUBLIC_CHANNEL_URL = "https://t.me/kalinigrad_visit"
+PUBLICATION_SOURCE_LINK_LABEL = "Источник публикации"
+REGION_TALK_PUBLIC_CHANNEL_LABEL = "О Калининграде говорят"
 PUBLISHER_READER_BRIEF_KIND = "publisher_reader_brief_v1"
 PUBLISHER_READER_BRIEF_DIMENSIONS = {
     "outlet_identity", "intended_audience", "distinctive_value",
@@ -587,10 +590,14 @@ def is_publication_draft_ready(row: dict[str, Any]) -> bool:
     if not (isinstance(points, list) and points):
         return False
     draft = str(row.get("publication_draft_telegram_text") or "").strip()
-    editorial = re.split(r"\n(?:Источник|Оригинал):", draft, maxsplit=1, flags=re.I)[0].strip()
-    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", editorial) if part.strip()]
-    source_name = str(row.get("publication_draft_source_attribution") or row.get("source_title") or "Источник").strip()
-    visible_caption = f"{paragraphs[0]}\n\n{paragraphs[1]}\n\nИсточник: {source_name}\nОригинал" if len(paragraphs) == 2 else ""
+    try:
+        paragraphs = publication_editorial_paragraphs(draft)
+    except RuntimeError:
+        paragraphs = ()
+    visible_caption = (
+        public_caption_visible_text(paragraphs[0], paragraphs[1])
+        if len(paragraphs) == 2 else ""
+    )
     if len(paragraphs) != 2 or not (550 <= len(visible_caption) <= 900):
         return False
     media_status = str(row.get("publication_media_materialization_status") or "")
@@ -903,35 +910,65 @@ def publication_presentation_manifest(row: dict[str, Any]) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _draft_two_paragraphs(row: dict[str, Any]) -> tuple[str, str]:
-    draft = str(row.get("publication_draft_telegram_text") or "").strip()
-    editorial = re.split(r"\n(?:Источник|Оригинал):", draft, maxsplit=1, flags=re.I)[0].strip()
+def publication_editorial_paragraphs(draft: str) -> tuple[str, str]:
+    editorial = re.split(
+        r"\n\s*\n(?:Источник(?: публикации)?|Оригинал|О Калининграде говорят)(?::|\n|$)",
+        str(draft or "").strip(),
+        maxsplit=1,
+        flags=re.I,
+    )[0].strip()
     parts = [part.strip() for part in re.split(r"\n\s*\n", editorial) if part.strip()]
     if len(parts) != 2:
         raise RuntimeError("current Region Talk draft is not exactly two editorial paragraphs")
     return parts[0], parts[1]
 
 
+def _draft_two_paragraphs(row: dict[str, Any]) -> tuple[str, str]:
+    return publication_editorial_paragraphs(
+        str(row.get("publication_draft_telegram_text") or "")
+    )
+
+
+def publication_footer_plain(original_url: str) -> str:
+    original = str(original_url or "").strip()
+    if not original:
+        raise RuntimeError("original URL is required for Region Talk footer")
+    return (
+        f"{PUBLICATION_SOURCE_LINK_LABEL}: {original}\n\n"
+        f"{REGION_TALK_PUBLIC_CHANNEL_LABEL}: {REGION_TALK_PUBLIC_CHANNEL_URL}"
+    )
+
+
+def public_caption_visible_text(paragraph_1: str, paragraph_2: str) -> str:
+    return (
+        f"{paragraph_1}\n\n{paragraph_2}\n\n"
+        f"{PUBLICATION_SOURCE_LINK_LABEL}\n\n{REGION_TALK_PUBLIC_CHANNEL_LABEL}"
+    )
+
+
+def replace_publication_draft_footer(draft: str, original_url: str) -> str:
+    p1, p2 = publication_editorial_paragraphs(draft)
+    return f"{p1}\n\n{p2}\n\n{publication_footer_plain(original_url)}"
+
+
 def public_caption(row: dict[str, Any], *, html_mode: bool = False) -> str:
-    """Render the atomic public/review caption with visible attribution."""
+    """Render one original link and the canonical Region Talk channel footer."""
 
     p1, p2 = _draft_two_paragraphs(row)
     if contains_contrastive_not_a_cliche(f"{p1}\n\n{p2}"):
         raise RuntimeError("Region Talk caption contains banned contrastive_not_a_cliche")
     original = str(row.get("post_url") or row.get("canonical_url") or "").strip()
-    source_url = str(row.get("source_url") or original).strip()
-    source_name = str(row.get("publication_draft_source_attribution") or row.get("source_title") or "Источник").strip()
-    if not original or not source_url:
-        raise RuntimeError("source/original URL is required for Region Talk caption")
+    if not original:
+        raise RuntimeError("original URL is required for Region Talk caption")
     if html_mode:
         caption = (
             f"{html.escape(p1)}\n\n{html.escape(p2)}\n\n"
-            f'<b><a href="{html.escape(source_url, quote=True)}">Источник: {html.escape(source_name)}</a></b>\n'
-            f'<b><a href="{html.escape(original, quote=True)}">Оригинал</a></b>'
+            f'<b><a href="{html.escape(original, quote=True)}">{PUBLICATION_SOURCE_LINK_LABEL}</a></b>\n\n'
+            f'<b><a href="{REGION_TALK_PUBLIC_CHANNEL_URL}">{REGION_TALK_PUBLIC_CHANNEL_LABEL}</a></b>'
         )
-        visible = f"{p1}\n\n{p2}\n\nИсточник: {source_name}\nОригинал"
+        visible = public_caption_visible_text(p1, p2)
     else:
-        caption = f"{p1}\n\n{p2}\n\nИсточник: {source_name}\nОригинал: {original}"
+        caption = f"{p1}\n\n{p2}\n\n{publication_footer_plain(original)}"
         visible = caption
     if not (550 <= len(visible) <= 900):
         raise RuntimeError(f"Region Talk caption must be 550..900 visible chars, got {len(visible)}")

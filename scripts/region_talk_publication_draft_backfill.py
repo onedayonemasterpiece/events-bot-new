@@ -513,9 +513,8 @@ def validate_editorial_output(
 
 
 def _caption_visible_length(row: dict[str, Any], paragraph_1: str, paragraph_2: str) -> int:
-    source = _source_name(row)
-    visible = f"{paragraph_1}\n\n{paragraph_2}\n\nИсточник: {source}\nОригинал"
-    return len(visible)
+    del row
+    return len(notify.public_caption_visible_text(paragraph_1, paragraph_2))
 
 
 def visible_caption_contract(row: dict[str, Any]) -> dict[str, int]:
@@ -560,10 +559,10 @@ def render_public_copy(row: dict[str, Any], output: dict[str, Any]) -> tuple[str
     p2 = re.sub(r"\s+", " ", raw_p2).strip()
     if notify.contains_contrastive_not_a_cliche(f"{p1}\n\n{p2}"):
         raise ValueError("contrastive_not_a_cliche")
-    source = _source_name(row)
     url = _canonical_url(row)
     source_url = str(row.get("source_url") or url).strip()
-    plain = f"{p1}\n\n{p2}\n\nИсточник: {source}\nОригинал: {url}"
+    source = _source_name(row)
+    plain = f"{p1}\n\n{p2}\n\n{notify.publication_footer_plain(url)}"
     visible_length = _caption_visible_length(row, p1, p2)
     if not (550 <= visible_length <= 900):
         raise ValueError(f"caption_visible_length:{visible_length}")

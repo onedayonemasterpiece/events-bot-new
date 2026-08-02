@@ -195,10 +195,11 @@ Example text style:
 — [positive смысл];
 — [neutral/useful смысл];
 — [optional concern].
-
-Источник: [source title]
-Оригинал: [link]
 Это наше краткое summary публикации.
+
+Источник публикации: [direct post/article link]
+
+О Калининграде говорят: https://t.me/kalinigrad_visit
 ```
 
 ## VK API validation risk

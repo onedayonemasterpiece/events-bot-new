@@ -176,7 +176,8 @@ cannot downgrade an existing 3–6-item selection to a one-item pseudo-album.
 This mode never changes editorial paragraphs or the publication verdict.
 
 Operator delivery is fail-closed on one atomic revision: two paragraphs,
-source/original links, ordered media manifest and layout. An article requires
+one direct original-post/article link, the canonical channel footer, ordered
+media manifest and layout. An article requires
 one associated hero; a photo-led social post uses one hero or an ordered 3–6
 frame album; a video-led post uses its source video. Only a material explicitly
 diagnosed as having no usable media takes `link_preview_fallback`. Source media
@@ -188,6 +189,30 @@ Video is not treated as a weak image and is never assigned a fabricated visual
 score. Gemini verifies only the text/product criteria. The notifier sends a
 Gemini-confirmed video link to the same operator chat, where the operator makes
 the visual/video-quality decision manually.
+
+The final Telegram/review renderer owns one footer contract for article and
+social lanes:
+
+```text
+{paragraph 1}
+
+{paragraph 2}
+
+Источник публикации  -> точный URL поста/материала
+
+О Калининграде говорят -> https://t.me/kalinigrad_visit
+```
+
+The actual labels are Russian: `Источник публикации` and
+`О Калининграде говорят`. Both labels are links; the first URL is always
+the canonical concrete post/material URL. Outlet homepages and a second
+`Оригинал` link are forbidden on this surface. The blank line between the
+links is mandatory. `scripts/region_talk_preproduction_footer_repair.py`
+synchronizes reactions first, re-reads live YDB, checks exact reactions again
+immediately before each edit, edits only still-pending current revisions in
+place, verifies the two exact Telegram text-link entities and rotates the
+draft/review/delivery fingerprints idempotently. Approved, rejected,
+rewrite-requested, conflicting and stale revisions remain untouched.
 
 Actual-media acquisition is bounded by
 `REGION_TALK_IMAGE_MAX_MEDIA_FETCH_ATTEMPTS` (default `3`). A post that returns

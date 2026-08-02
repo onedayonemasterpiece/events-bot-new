@@ -214,8 +214,17 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         }
         self.assertTrue(mod.is_publication_draft_ready(row))
         caption = mod.public_caption(row, html_mode=True)
-        self.assertEqual(caption.count("\n\n"), 2)
-        self.assertIn("<b><a href=", caption)
+        self.assertEqual(caption.count("\n\n"), 3)
+        self.assertIn(
+            '<b><a href="https://example.org/article">Источник публикации</a></b>',
+            caption,
+        )
+        self.assertIn(
+            '<b><a href="https://t.me/kalinigrad_visit">О Калининграде говорят</a></b>',
+            caption,
+        )
+        self.assertNotIn("\nОригинал", caption)
+        self.assertNotIn("https://example.org\"", caption)
         original = mod.publication_operator_review_fingerprint(row)
         changed_media = {**manifest, "items": [{**manifest["items"][0], "ref": "https://cdn.example.org/other.jpg"}]}
         self.assertNotEqual(original, mod.publication_operator_review_fingerprint({
@@ -266,7 +275,24 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         }
         message = mod.candidate_message(row)
         self.assertIn('<b><a href="https://publisher.example/article?', message)
-        self.assertIn(">Оригинал</a></b>", message)
+        self.assertIn(">Источник публикации</a></b>", message)
+        self.assertIn('href="https://t.me/kalinigrad_visit"', message)
+        self.assertNotIn("https://publisher.example\">", message)
+
+    def test_footer_replacement_keeps_two_paragraphs_and_one_original_link(self) -> None:
+        mod = load_module()
+        old = (
+            "Первый смысловой абзац.\n\nВторой смысловой абзац.\n\n"
+            "Источник: Авторский канал\nОригинал: https://t.me/a/1"
+        )
+        repaired = mod.replace_publication_draft_footer(old, "https://t.me/a/1")
+        self.assertEqual(repaired.count("https://t.me/a/1"), 1)
+        self.assertNotIn("Авторский канал", repaired)
+        self.assertNotIn("Оригинал", repaired)
+        self.assertTrue(repaired.endswith(
+            "Источник публикации: https://t.me/a/1\n\n"
+            "О Калининграде говорят: https://t.me/kalinigrad_visit"
+        ))
 
     def test_v9_style_guard_detects_not_a_family_without_crossing_sentences(self) -> None:
         mod = load_module()

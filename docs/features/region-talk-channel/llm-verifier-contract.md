@@ -124,8 +124,11 @@ The durable YDB projection uses flat fields
 `publication_draft_fact_points_json` and
 `publication_draft_prompt_version`. `fact_points` contains one to three
 `claim → support_excerpt` pairs derived from the supplied source text. The
-deterministic normalizer always appends explicit `Источник:` and `Оригинал:`
-lines and the canonical URL; it does not invent missing body text. A complete
+deterministic normalizer appends one `Источник публикации` link to the
+canonical concrete post/material URL, then a blank line and the single
+`О Калининграде говорят` link to `https://t.me/kalinigrad_visit`; it
+does not add an outlet-homepage link, duplicate `Оригинал` link or invent missing
+body text. A complete
 result is `ready_for_operator_review`, never `ready_for_autopublish`.
 
 Rejected/review rows store no draft. A partial accept response becomes
