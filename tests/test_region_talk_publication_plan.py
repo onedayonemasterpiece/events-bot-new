@@ -308,6 +308,66 @@ def test_late_candidate_cannot_replace_prepared_future_slot(monkeypatch) -> None
     ]
 
 
+def test_strong_publication_refresh_reapplies_live_source_fingerprint(monkeypatch) -> None:
+    publication = ready_social("https://t.me/source/strong-refresh")
+    publication.update({
+        "platform": "telegram",
+        "canonical_source_key": "telegram:source",
+        "source_id": "telegram:source",
+        "publication_eligibility_verdict": "eligible",
+        "publication_eligibility_gate_version": notify.PUBLICATION_ELIGIBILITY_GATE_VERSION,
+        "authoritative_source_fingerprint_version": notify.AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
+    })
+    source = {
+        "_ydb_pk": "source_queue_item:telegram:source",
+        "platform": "telegram",
+        "canonical_source_key": "telegram:source",
+        "source_id": "telegram:source",
+        "source_title": "Source",
+        "source_url": "https://t.me/source",
+        "source_geo_class": "nonlocal_russia",
+        "source_topic_class": "travel_blogger",
+        "source_quick_class": "candidate_keep",
+        "source_queue_status": "ready",
+    }
+    publication["authoritative_source_fingerprint"] = notify.authoritative_source_fingerprint(source)
+
+    class Driver:
+        def stop(self, timeout=5):  # noqa: ARG002
+            return None
+
+    class Ydb:
+        @staticmethod
+        def SnapshotReadOnly():
+            return object()
+
+    monkeypatch.setattr(
+        plan, "read_publication_rows",
+        lambda _limit: (Ydb(), Driver(), object(), "/db/table", []),
+    )
+
+    def current(_pool, _ydb, _table, kind, _limit):
+        if kind == "publication_candidate_item":
+            return [dict(publication)]
+        if kind == "source_queue_item":
+            return [source]
+        return []
+
+    monkeypatch.setattr(plan, "_read_current_kind_rows_complete", current)
+    monkeypatch.setattr(plan, "attach_latest_bge_vectors", lambda *_args: None)
+    args = SimpleNamespace(
+        scan_limit=5000, vector_scan_limit=5000, history_limit=5000,
+        timezone="Europe/Kaliningrad", article_time="12:00", social_time="18:00",
+        start_date="2026-08-05", days=1, diversity_weight=0.35,
+        pair_similarity_threshold=0.82, execute=False,
+    )
+
+    result = plan.build_plan(args)
+
+    assert result["counts"]["confirmed_social"] == 1
+    assert result["counts"]["eligible_social"] == 1
+
+
 def test_changed_prepared_external_revision_is_preserved_and_opened_for_review(monkeypatch) -> None:
     publication, intake = external_article_fixture()
     # Mark the external article as prepared under an older intake fingerprint.

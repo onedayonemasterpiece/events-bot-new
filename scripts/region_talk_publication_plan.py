@@ -25,6 +25,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.region_talk_goal_notify import (  # noqa: E402
+    attach_live_source_fingerprints,
     attach_latest_bge_vectors,
     getenv_bool,
     is_confirmed_publication,
@@ -157,6 +158,7 @@ def _plan_decision_snapshot_fingerprint(
     publications: list[dict[str, Any]],
     schedule: list[dict[str, Any]],
     intakes: list[dict[str, Any]],
+    sources: list[dict[str, Any]] | None = None,
 ) -> str:
     def compact(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return sorted(
@@ -167,7 +169,12 @@ def _plan_decision_snapshot_fingerprint(
             key=lambda row: str(row.get("_ydb_pk") or row.get("post_url") or row.get("external_publication_id") or ""),
         )
     raw = json.dumps(
-        {"publications": compact(publications), "schedule": compact(schedule), "intakes": compact(intakes)},
+        {
+            "publications": compact(publications),
+            "schedule": compact(schedule),
+            "intakes": compact(intakes),
+            "sources": compact(sources or []),
+        },
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -481,10 +488,25 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         external_intakes = _read_current_kind_rows_complete(
             pool, ydb, table, "external_publication_intake_item", args.history_limit
         )
+        source_limit = max(5000, int(os.getenv("REGION_TALK_NOTIFY_SOURCE_SCAN_LIMIT") or "20000"))
+        current_sources: list[dict[str, Any]] = []
+        for source_kind in (
+            "source_queue_item",
+            "source_status_item",
+            "online_source_item",
+            "external_publication_source_item",
+        ):
+            current_sources.extend(
+                _read_current_kind_rows_complete(pool, ydb, table, source_kind, source_limit)
+            )
+        # Replacing the notifier's stale publication read must not discard its
+        # live authoritative-source join: `is_confirmed_publication()` requires
+        # the current source fingerprint on every candidate.
+        attach_live_source_fingerprints(publications, current_sources)
         logs = _read_current_kind_rows_complete(pool, ydb, table, "publication_log_item", args.history_limit)
         logs += _read_current_kind_rows_complete(pool, ydb, table, "region_talk_publication_log", args.history_limit)
         decision_snapshot_fingerprint = _plan_decision_snapshot_fingerprint(
-            publications, schedule, external_intakes
+            publications, schedule, external_intakes, current_sources
         )
         attach_latest_bge_vectors(publications, vectors)
         attach_latest_bge_vectors(schedule, vectors)
@@ -760,8 +782,19 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
             current_intakes = _read_current_kind_rows_complete(
                 pool, ydb, table, "external_publication_intake_item", args.history_limit
             )
+            final_sources: list[dict[str, Any]] = []
+            for source_kind in (
+                "source_queue_item",
+                "source_status_item",
+                "online_source_item",
+                "external_publication_source_item",
+            ):
+                final_sources.extend(
+                    _read_current_kind_rows_complete(pool, ydb, table, source_kind, source_limit)
+                )
+            attach_live_source_fingerprints(current_publications, final_sources)
             final_fingerprint = _plan_decision_snapshot_fingerprint(
-                current_publications, current_schedule, current_intakes
+                current_publications, current_schedule, current_intakes, final_sources
             )
             if final_fingerprint != decision_snapshot_fingerprint:
                 return {
