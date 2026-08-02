@@ -24,10 +24,11 @@ test('Appium capability builder pins real mobile browsers and iOS keyboard owner
   assert.equal(android['appium:automationName'], 'UiAutomator2');
 });
 
-test('adapter confines transient native source inspection before sensitive input and excludes unsafe persistence', async () => {
+test('adapter confines diagnostic native source capture before candidate navigation and sensitive input', async () => {
   const source = await readFile(new URL('../../e2e/focus-email/adapters/appium-ui.mjs', import.meta.url), 'utf8');
-  assert.doesNotMatch(source, /writeFile[^\n]+(?:pageSource|nativeSource)|input\.value\s*=\s*value|osascript|Cmd-K|Toggle Software Keyboard/u);
-  assert.match(source, /summarizeKnownSafariNativeSource\(await driver\.getPageSource\(\)\)/u);
+  assert.doesNotMatch(source, /input\.value\s*=\s*value|osascript|Cmd-K|Toggle Software Keyboard/u);
+  assert.match(source, /const source = await driver\.getPageSource\(\)/u);
+  assert.match(source, /ios-startup\.raw\.xml/u);
   assert.match(source, /00-safari-launch\.png/u);
   const openInvite = source.slice(source.indexOf('async openInvite()'), source.indexOf('async verifyReleaseIdentity()'));
   assert.ok(openInvite.indexOf('ensureSafariSystemUiStable()') < openInvite.indexOf('switchToSafariWebContext()'));

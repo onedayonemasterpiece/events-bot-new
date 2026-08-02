@@ -59,10 +59,11 @@ For the Russian Safari first-run dialog:
 7. capture a safe post-transition screenshot before product input.
 
 For a clean, side-effect-free simulator preflight only, a native source may be
-read transiently before any identity input and immediately reduced to
-allowlisted application/alert/sheet and known title/button type counts. Never
-log or upload the raw XML. Attach the Safari web context only after the native
-blocker is proven absent.
+captured before candidate navigation or identity input, retained as the
+short-lived diagnostic artifact `native-ui/ios-startup.raw.xml`, and reduced
+to allowlisted application/alert/sheet and known title/button type counts.
+Never capture hierarchy after identity/OTP entry. Attach the Safari web context
+only after the native blocker is proven absent.
 
 Unknown title, duplicate title/action, missing action, alert API disagreement or
 failure to disappear is `BLOCKED_SAFARI_FIRST_RUN_UI`. Never type through it.

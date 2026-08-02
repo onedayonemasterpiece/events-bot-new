@@ -206,8 +206,10 @@ than attaching WebKit during session creation. XCUITest
 system sheet. Only after the bounded handler proves the sheet absent does the
 harness attach a Safari web context, with a 60-second CI discovery bound, and
 navigate to the candidate. Before any identity or OTP input, one transient
-native source may be reduced in memory to known title/button/container counts;
-the raw XML is neither logged nor written to evidence.
+native source is captured before candidate navigation or identity input, saved
+as `native-ui/ios-startup.raw.xml` for the bounded clean-simulator diagnosis,
+and also reduced to known title/button/container counts. No hierarchy is
+captured after email/OTP entry.
 The mobile sentry captures a safe screenshot immediately after Safari launch
 and repeats observation after at most 20 seconds without the expected marker.
 Every native action must produce a verified state transition. Two unchanged

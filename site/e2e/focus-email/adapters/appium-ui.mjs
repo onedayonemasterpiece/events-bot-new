@@ -348,9 +348,14 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
       getAlertText: () => driver.getAlertText(),
       getAlertButtons: () => driver.executeScript('mobile: alert', [{ action: 'getButtons' }]),
       getActiveAppInfo: () => driver.executeScript('mobile: activeAppInfo', []),
-      // Raw native XML exists only for this awaited expression before any
-      // identity/OTP input. Only the allowlisted summary is returned.
-      getNativeSourceSummary: async () => summarizeKnownSafariNativeSource(await driver.getPageSource()),
+      // This runs before candidate navigation and before any identity/OTP
+      // input. Retain the complete clean-simulator tree for the bounded system
+      // UI diagnosis requested by the operator, then also derive stable counts.
+      getNativeSourceSummary: async () => {
+        const source = await driver.getPageSource();
+        await writeFile(join(evidenceRoot, 'native-ui', 'ios-startup.raw.xml'), source);
+        return summarizeKnownSafariNativeSource(source);
+      },
     });
   }
 
