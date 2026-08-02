@@ -775,6 +775,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--report", type=Path, default=ROOT / "artifacts" / "codex" / "region-talk-external-publication-import.json")
     parser.add_argument("--request-input", type=Path, help="Legacy optional request sidecar; live YDB duplicate checking is always applied on --execute")
     parser.add_argument("--execute", action="store_true", help="Write idempotent staging rows to YDB; default is validation/dry-run")
+    parser.add_argument(
+        "--no-publish-registry",
+        dest="publish_registry",
+        action="store_false",
+        default=True,
+        help=(
+            "Skip the post-import Object Storage registry publish. Use this with a "
+            "YDB-only service account; YDB staging remains durable and the registry "
+            "can be published separately."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -798,7 +809,8 @@ def main() -> int:
     written = write_ydb(result["ydb_rows"]) if args.execute else 0
     registry_publication: dict[str, Any] | None = None
     registry_error = ""
-    if args.execute:
+    registry_publication_enabled = bool(args.execute and args.publish_registry)
+    if registry_publication_enabled:
         try:
             from scripts.region_talk_external_research_registry import publish_current_registry
 
@@ -813,6 +825,7 @@ def main() -> int:
         "written_ydb_rows": written,
         "executed": bool(args.execute),
         "live_duplicate_guard_applied": bool(args.execute),
+        "registry_publication_enabled": registry_publication_enabled,
         "registry_publication": registry_publication,
         "registry_publication_error": registry_error or None,
     }

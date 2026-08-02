@@ -230,6 +230,8 @@ features:
     orchestration: docs/features/region-talk-channel/orchestration-to-be.md
     publication_queue: docs/features/region-talk-channel/publication-queue.md
     ydb_schema: docs/features/region-talk-channel/ydb-schema.md
+    external_publications: docs/features/region-talk-channel/external-publications.md
+    external_publication_import: docs/features/region-talk-channel/external-publication-import-runbook.md
     cron: docs/operations/cron.md
     entrypoints:
       - scripts/region_talk_scheduled_runner.py
