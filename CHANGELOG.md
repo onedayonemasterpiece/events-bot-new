@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Added opt-in local documentation auto-push watcher for `docs/`, publishing saved text-document updates to `origin/main` while excluding media and the requested visitors reference.
+
 - Changed Region Talk article drafts to Writer v12: the first paragraph's
   publisher sentence must summarize the outlet identity, intended reader and
   distinctive editorial value from all three evidence-linked profile
