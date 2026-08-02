@@ -22,9 +22,15 @@ Materialization-проверка выполнена GitHub Actions run `30736788
 
 Successor-пакеты заменяют два ошибочных исторических входа и не увеличивают число уникально найденных публикаций. Перед каждым `--execute` importer перечитывает live YDB, применяет canonical URL / DOI / normalized title+authors identity guard и выполняет запись атомарно. Повторный запуск становится replay/no-op и не создаёт дубликатов.
 
+## Последний YDB import receipt
+
+GitHub Actions run `30737423882` последовательно обработал три актуальных пакета: **54** валидных candidate rows, **20** новых intake, **34** replay, **0** конфликтов. Подробности: [`docs/reports/region-talk-external-publication-ydb-import-receipt-2026-08-02.md`](../../reports/region-talk-external-publication-ydb-import-receipt-2026-08-02.md) и [машиночитаемый receipt](../../reports/region-talk-external-publication-ydb-import-receipt-2026-08-02.json).
+
 ## Автоматический импорт
 
-После попадания чистого JSON в `main` используется workflow `Import trusted Region Talk external-publication research`. Он сначала выполняет dry validation точных committed bytes, затем через GitHub OIDC получает короткоживущий Yandex IAM token и запускает атомарный staging import. Результаты фиксируются в SHA-addressed Actions artifact с `new_intake_ids`, replay и conflict counters.
+Нормальный путь не требует ручного `workflow_dispatch` или операторского review-gate. После merge нового либо successor research-result JSON в `main` workflow [`Auto-import Region Talk external-publication research`](../../../.github/workflows/region-talk-external-publication-auto-import.yml) автоматически выбирает только добавленные/изменённые файлы из разрешённой папки, проверяет exact committed bytes и полный schema/importer semantic contract до получения YDB-доступа, затем через GitHub OIDC получает короткоживущий Yandex IAM token и последовательно выполняет атомарный staging import.
+
+Каждый execute заново читает live YDB identity ledger. Повторные canonical URL / DOI / normalized title+authors становятся replay, а не дубликатами; identity conflict завершает workflow ошибкой. SHA-addressed validation/execute receipts сохраняются в GitHub Actions artifacts.
 
 Импорт не пишет `publication_candidate_item`, не выдаёт `publication_permission`, не вызывает Telegram/VK publishing и не повышает `manual_review_required`. Новая запись начинается как `unreviewed`; только `candidate_report` направляется в существующий LLM-first Region Talk pipeline.
 
