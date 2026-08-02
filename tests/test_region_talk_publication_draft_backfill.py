@@ -31,6 +31,24 @@ def test_backfill_source_never_mentions_local_e2e_sessions() -> None:
     assert "TELEGRAM_SESSION" not in source
 
 
+def test_draft_llm_budget_max_prefers_cli_then_env_and_clamps(monkeypatch) -> None:
+    mod = load_module()
+
+    monkeypatch.setenv("REGION_TALK_DRAFT_BACKFILL_LLM_BUDGET_MAX", "100")
+    assert mod.resolve_llm_budget_max(None) == 100
+    assert mod.resolve_llm_budget_max(37) == 37
+    assert mod.resolve_llm_budget_max(101) == 100
+    assert mod.resolve_llm_budget_max(-1) == 0
+
+
+def test_draft_llm_budget_max_rejects_invalid_env(monkeypatch) -> None:
+    mod = load_module()
+
+    monkeypatch.setenv("REGION_TALK_DRAFT_BACKFILL_LLM_BUDGET_MAX", "many")
+    with pytest.raises(RuntimeError, match="must be an integer"):
+        mod.resolve_llm_budget_max(None)
+
+
 def test_telegram_post_ref_is_exact_and_public() -> None:
     mod = load_module()
     assert mod.telegram_post_ref("https://t.me/s/TravelCase/123?single=1") == ("travelcase", 123)
@@ -125,6 +143,7 @@ def test_execute_reads_supporting_kinds_through_notifier_namespace() -> None:
         surface="all",
         transport="telethon_discovery2",
         dry_run=True,
+        llm_budget_max=100,
     )
     with (
         mock.patch.object(
@@ -137,6 +156,7 @@ def test_execute_reads_supporting_kinds_through_notifier_namespace() -> None:
         result = asyncio.run(mod.execute(args))
 
     assert result["selected_total"] == 0
+    assert result["llm_budget_max"] == 100
     assert driver.stopped is True
     assert kinds == [
         "external_publication_intake_item",

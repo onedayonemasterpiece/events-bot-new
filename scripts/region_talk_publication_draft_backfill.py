@@ -111,6 +111,26 @@ ROW_RUNTIME_ONLY_FIELDS = {
 }
 
 
+def resolve_llm_budget_max(cli_value: int | None) -> int:
+    """Resolve the draft worker's independent durable request ceiling.
+
+    The shared Google AI limiter remains authoritative for RPM/TPM/RPD. This
+    value only bounds physical draft-stage sends recorded in the YDB product
+    ledger, whose implementation has a hard 100-request ceiling.
+    """
+
+    raw_value: Any = cli_value
+    if raw_value is None:
+        raw_value = os.getenv("REGION_TALK_DRAFT_BACKFILL_LLM_BUDGET_MAX") or "20"
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(
+            "REGION_TALK_DRAFT_BACKFILL_LLM_BUDGET_MAX must be an integer"
+        ) from exc
+    return min(100, max(0, value))
+
+
 def durable_publication_payload(row: dict[str, Any]) -> dict[str, Any]:
     return {
         key: value
@@ -2474,6 +2494,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
                 "ready_total": 0,
                 "failed_total": 0,
                 "transport": str(args.transport),
+                "llm_budget_max": int(args.llm_budget_max),
                 "blocked_corrections": sum(
                     1 for row in selected
                     if candidate_correction_requires_re_adjudication(
@@ -2672,6 +2693,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
             "transport": str(args.transport),
             "surface": str(args.surface),
             "llm_budget_id": str(args.llm_budget_id),
+            "llm_budget_max": int(args.llm_budget_max),
             "results": results,
         }
     finally:
@@ -2690,7 +2712,7 @@ def main() -> int:
     parser.add_argument("--model", default="")
     parser.add_argument("--default-env-var-name", default="")
     parser.add_argument("--llm-budget-id", default="")
-    parser.add_argument("--llm-budget-max", type=int, default=20)
+    parser.add_argument("--llm-budget-max", type=int, default=None)
     parser.add_argument("--delay-min", type=float, default=2.0)
     parser.add_argument("--delay-max", type=float, default=5.0)
     parser.add_argument("--stage-delay-seconds", type=float, default=None)
@@ -2708,6 +2730,7 @@ def main() -> int:
     if args.transport not in notify.TELETHON_TRANSPORT_AUTH_ENVS:
         raise RuntimeError(f"unsupported REGION_TALK_DRAFT_BACKFILL_TRANSPORT: {args.transport}")
     args.limit = max(0, min(10, int(args.limit)))
+    args.llm_budget_max = resolve_llm_budget_max(args.llm_budget_max)
     if args.force_regenerate and not args.candidate_url:
         raise RuntimeError("--force-regenerate requires at least one --candidate-url")
     if args.force_regenerate and args.materialize_only:
