@@ -16,6 +16,7 @@
     "check:rail-directory": "node scripts/check-rail-transport-directory.mjs",
     "check:preview": "node scripts/check-preview.mjs",
     "check:unified-prototype": "node scripts/check-unified-prototype.mjs",
+    "check:editorial-collections-lab": "node scripts/check-editorial-collections-lab.mjs",
     "check:production": "node scripts/check-production.mjs",
     "check:production-desktop": "node scripts/check-production-desktop-contract.mjs",
     "check:desktop-cta-geometry": "bash scripts/check-desktop-cta-geometry-playwright.sh",
