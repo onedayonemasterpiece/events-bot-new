@@ -1837,24 +1837,34 @@ thresholds, scores, schedule, Astro routes, navigation или sitemap.
 
 После correction PR A полный 50-source primary-only Gate B прошёл: exact
 quotes/source bindings 100%, false confirmed hard negatives 0, recall
-child/family/joint — 11/12, 8/9 и 1/1. На свежей production-копии effective
-20-source warm дал `provider_calls=0`, `writes=0`, `changed_events=0`, но это
-пока PARTIAL Gate D: в initial apply одна строка была deferred и заменена, а
-сохранённой exact-cohort цепочки `plan → evaluate → apply → identical warm` нет.
+child/family/joint — 11/12, 8/9 и 1/1. Затем Gate D был повторён на новой
+production-копии с fixed cohort из 20 strict-valid bindings: 6797 исключён до
+plan, replacement 6521 присутствовал в исходном списке, first apply применил
+20/20, identical warm дал нулевые provider calls, physical sends, writes и
+changed event/source IDs. Повторный evaluate не оплачивался: его evidence уже
+даёт Gate B. Gate D теперь PASS.
 
 Локальный product snapshot после first apply и warm имеет одинаковые
 `input_fingerprint=330d57ea…` и
 `normalized_output_sha256=fc4fe807…`. Monitor: child 11 HEALTHY, family 7
 HEALTHY, kids-union 15 HEALTHY, joint 0 WATCH; дополнительные WATCH — только
 отсутствующий owner-accepted baseline и пустая непубличная joint-выборка.
-Это PARTIAL product evidence: GitHub live-product job и post-ingestion snapshot
-ещё отсутствуют.
+StaticSiteBuilder теперь сразу после snapshot запускает тот же monitor и
+сохраняет `static-collections-product-quality.json`, Markdown и
+`qa-summary.json`; `WATCH` не блокирует, `FAIL` сохраняется и блокирует build.
+GitHub live-product job намеренно остаётся выключенным, пока workflow не получает
+реальный builder artifact. Поэтому product evidence остаётся PARTIAL до
+реального builder canary и post-ingestion first/warm pair.
 
-Сквозной ordinary-ingestion gate пока не принят: Fly SQLite сохраняет
-Event/EventSource, но не исходные Telegram extraction packets, VK `EventDraft`
-и parser `TheatreEvent`. Реконструированные probes не являются source-faithful:
-Telegram остановился на pre-existing location-grounding guard до audience
-stage, parser распознал existing event и Smart Update не вызвал. Поэтому
-post-ingestion snapshot, clean main integration и Fly canary честно BLOCKED;
-публикация по-прежнему BLOCKED. Канонические hashes/receipts:
+Для будущих прогонов добавлен маленький manual capture-only seam с закрытым
+`static-collection-upstream-capture-v1`: один sanitized packet, production
+handler, repo SHA, actual timestamp, source binding и canonical payload SHA;
+никаких таблиц, массового аудита, production mutation или публикации. Уже
+получены настоящие VK `EventDraft` и Yantar Hall `TheatreEvent`. Parser first
+PASS, но warm обновляет `EventSource.imported_at`; VK replay дошёл до
+occurrence review и fail-closed остановился на shared RPD без DB mutation.
+Текущий Telegram Kaggle run ещё выполняется, второй run не запускался. Эти
+adjacent/external blockers не обходятся prompt/model/identity патчами в #233.
+Поэтому post-ingestion snapshots, clean main integration и Fly canary честно
+BLOCKED; публикация по-прежнему BLOCKED. Канонические hashes/receipts:
 [integration report](../../../.codex/integration/static-collection-facts-v3-INTEGRATION_REPORT.md).

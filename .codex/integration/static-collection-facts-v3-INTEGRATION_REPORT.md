@@ -4,7 +4,7 @@ Date: 2026-08-02 UTC
 
 PR-A head: `d9112bd3a547bd8592d42bf3332b5bf69e0fe3e8` (draft PR #222)
 
-Verified extraction/product code SHA: `c625f1809ee60eaf62c16f079f701adb6a9847f1`
+Verified extraction/product code branch: `integration/static-collection-facts-v3`
 
 Acceptance-harness head before this report: `d5dce869f4a566f78322093bfc931dcfc8a78c26`
 
@@ -12,11 +12,11 @@ Integration branch / draft PR: `integration/static-collection-facts-v3` / #233.
 
 ## Executive result
 
-The corrected source truth and real primary-only Gate B are verified. Copy
-apply/warm, fallback and the product adapter have strong bounded evidence, but
-do not yet meet every mandatory acceptance contract. Ordinary ingestion is
-**BLOCKED**, so this stack is not ready for a clean main-based production branch
-or Fly canary.
+The corrected source truth and real primary-only Gate B are verified. Gate D
+now has the requested fixed-cohort `plan → apply → identical warm` evidence.
+The bounded capture contract and in-builder product monitor are implemented,
+but fresh ordinary ingestion is still **BLOCKED** by external/adjacent runtime
+conditions. This stack is therefore not ready for PR-stack merge or Fly canary.
 
 | Gate | Result | Evidence |
 |---|---|---|
@@ -25,9 +25,9 @@ or Fly canary.
 | Fresh production snapshot | PASS | 6,998 events, `quick_check=ok`, SHA below |
 | Full corrected Gate B | **PASS** | 50 real EventSource rows, 50 Gemma sends, no GPT-4o, no writes, exact binding/quotes; all recalls above 0.80 |
 | Fallback/failure drill | PARTIAL | committed offline 4/4 fail-closed drill plus 3 real valid-fallback cases, but the paid-driver is a volatile artifact and malformed/evidence mismatch were not repeated on real sources |
-| Production-copy apply/warm | PARTIAL | apply mechanics and an effective 20-source warm no-op are proven, but no exact-cohort copy `plan → evaluate → apply → identical warm` chain exists; one initial defer was replaced |
-| Product snapshot + #234 monitor | PARTIAL/WATCH | local copy snapshots after apply/warm have the same normalized output and no FAIL; GitHub live product job and post-ingestion snapshot are absent |
-| Ordinary Telegram/VK/parser ingestion | **BLOCKED** | production does not retain the original upstream packets; reconstructed Telegram is rejected before collection adjudication and existing parser replay mutates source metadata while skipping Smart Update |
+| Production-copy apply/warm | **PASS** | fresh snapshot; fixed 20 exact Event/EventSource bindings from plan onward; first apply 20/20 and identical warm has 0 provider calls/sends/writes and no changed event/source IDs |
+| Product snapshot + monitor | PARTIAL/WATCH | StaticSiteBuilder now runs the existing monitor immediately after snapshot generation and durably emits JSON/Markdown/qa-summary; focused tests pass. A completed source-faithful post-ingestion first/warm pair and real builder canary are still absent |
+| Ordinary Telegram/VK/parser ingestion | **BLOCKED WITH FRESH CAPTURES** | parser and VK source-faithful packets are captured. Parser first passes but warm rewrites `EventSource.imported_at`; VK replay is blocked before mutation by shared RPD exhaustion; current Telegram Kaggle run has not completed |
 | Clean main-based integration / Fly | BLOCKED | Gate E is not green; #207/#222/#233/#234 are open and verified SHA is not reachable from `origin/main` |
 | Semantic publication | BLOCKED | no owner gold, scores, thresholds, Astro routes, navigation, sitemap or public labels were added |
 
@@ -172,48 +172,35 @@ artifact, its report has no generator command/driver hash, and malformed and
 evidence-mismatch variants were not repeated against the real corpus. Gate C is
 therefore PARTIAL, not a release gate.
 
-## 5. Production-copy apply and warm — partial Gate D
+## 5. Production-copy apply and warm — Gate D PASS
 
-All mutations were confined to
-`artifacts/static-collection-product-loop/prod-copy-apply.sqlite`.
+The repeat used a newly downloaded production snapshot, never the previous
+mutated copy:
 
-Initial bounded command selected 20 current/future rows. It made 20 Gemma sends,
-applied 19 rows and deferred event 6797 at validation; only
-`Event.collection_decisions` changed and no EventSource or unrelated event did.
-Artifact `copy-apply-first.json` SHA-256:
-`69c0623841f7729e6f5148cc8ae3ddc9d9eeb84eb037aa14826410a4c3ee593f`.
+- SQLite: 317,116,416 bytes, 6,998 events, `quick_check=ok`;
+- snapshot SHA-256:
+  `22790cd3284ca507502be324b93c23812e71f631e2278dcb1f8d6c35d80afc99`;
+- fixed 20-event list SHA-256:
+  `7e85a72a00d41791b711ef59e8b3dd0c56b8655974c686b0974b945df1a081f5`;
+- fixed 20-source list SHA-256:
+  `ef5e911d5eda98d9dc243ddfb0503f151e94c33b792857c9e7a0a734ac4dbecd`.
 
-Because a deferred source cannot demonstrate a warm cache hit, event 6521 /
-source 7466597 was applied as a separately disclosed replacement. It made one
-Gemma send and one allowed write. Artifact `copy-apply-supplement.json`
-SHA-256:
-`0fc12fc9f1a7aad4e5df2f0864b40ad326ee80013ebe953416d6fd6b9427d4cb`.
+Event 6797 was excluded before plan and its strict-valid replacement 6521 was
+already in the immutable initial list. Gate B is the accepted read-only
+evaluate evidence, so no duplicate paid evaluate was run.
 
-The resulting effective 20-source cohort was repeated unchanged:
+Results:
 
-```bash
-/home/dev/.codex/venvs/events-bot-new/bin/python \
-  scripts/backfill_static_collection_facts.py \
-  --db artifacts/static-collection-product-loop/prod-copy-apply.sqlite \
-  --apply --primary-only --current-date 2026-08-02 --reason audience \
-  --event-id-file artifacts/static-collection-product-loop/copy-warm-event-ids.json \
-  --source-id-file artifacts/static-collection-product-loop/copy-warm-source-ids.json \
-  --max-sources-per-event 1 \
-  --output artifacts/static-collection-product-loop/copy-apply-warm.json
-```
+| Step | Artifact SHA-256 | Result |
+|---|---|---|
+| plan | `806fb00e77d21b2c8706824d6f5959769b55d0bf5b3032e7a41a51e1a87c8ce6` | 20 resolved, 0 unresolved, no diff, DB hashes equal |
+| first apply | `ed80f5aeddfc0fe3bf590484ffefcb69f85c99598b0949c4ffcd8bbb852d1c83` | 20 attempts/sends/applies/writes; only selected `Event.collection_decisions`; no EventSource changes |
+| identical warm | `2c28ec36139ba8d59917d31683f5838e620dd25586df9c16d95e4344103f38f8` | 20 cached; provider calls 0; physical sends 0; writes 0; changed event/source IDs empty |
 
-Warm result: 20 cached sources, provider calls 0, physical sends 0, writes 0,
-changed event/source IDs empty, logical database SHA unchanged. Artifact
-SHA-256:
-`1ef04216ea0bfd695039dbf2a1288cea8bdeb46529861c11bb684398e90705cf`.
+The warm logical SHA is unchanged before/after. This is the deliberately
+shortened Gate-D contract requested for this iteration and is **PASS**.
 
-This proves bounded apply semantics and a warm no-op for the **effective**
-cohort. It does not prove the mandatory exact-cohort sequence
-`plan → evaluate → apply → identical warm`: no separate copy-plan/copy-evaluate
-artifacts were saved, and the warm cohort substitutes 6521 for the initially
-deferred 6797. Gate D is therefore PARTIAL even though the warm mechanics pass.
-
-## 6. Product snapshot and #234 monitor — local PARTIAL/WATCH
+## 6. Product snapshot and in-builder monitor — PARTIAL/WATCH
 
 One provider-free adapter was added at the existing static exporter /
 StaticSiteBuilder boundary. It reads current/future facts-v3 decisions and
@@ -245,10 +232,21 @@ The exact WATCH signals are `accepted_baseline_missing` and
 `nonpublic_collection_empty` for joint activity. The snapshot stays
 `shadow|experimental`; publication stays blocked.
 
-This is local production-copy evidence. In GitHub the live `product` job is
-still skipped and only the skeleton/gate jobs are green; no post-ingestion
-snapshot exists. The product connection is therefore PARTIAL, not end-to-end
-acceptance.
+StaticSiteBuilder now invokes the existing product-quality checker immediately
+after validating/copying its generated snapshot. It writes beside the durable
+snapshot:
+
+- `static-collections-product-quality.json`;
+- `static-collections-product-quality.md`;
+- `qa-summary.json`.
+
+`WATCH` is non-blocking; `FAIL` is written as evidence and then blocks the
+build. The outer Kaggle runner hash-validates and persists all three artifacts.
+Combined capture/replay/builder focused verification currently passes 52
+builder tests and 22 capture/replay tests. The GitHub live-product job remains
+off on PR/schedule because it still does not receive a generated builder
+artifact; the skeleton is not claimed as live monitoring. A real builder run
+and completed post-ingestion first/warm pair remain required.
 
 Artifacts:
 
@@ -258,65 +256,59 @@ Artifacts:
 - snapshot file SHA-256 differs only because `generated_at` is part of the full
   artifact, while the normalized product SHA above is identical by contract.
 
-## 7. Ordinary-ingestion Gate E — honest blocker
+## 7. Ordinary-ingestion Gate E — fresh capture implemented, replay blocked
 
-The committed replay harness crosses the actual production entry points:
+The replay harness crosses the actual production entry points:
 
 - Telegram: `process_telegram_results`;
 - VK: `persist_event_and_pages`;
 - official parser: `process_source_events`.
 
-It explicitly disables publication/network-media/Telegraph/task side effects,
-never calls `apply_collection_decisions` directly, records redacted provider,
-write, receipt and quote evidence, and requires an identical warm pass.
+It disables publication/network enrichment/Telegraph/task side effects, never
+calls `apply_collection_decisions` directly, records redacted provider/write/
+receipt/quote evidence and requires an identical warm pass. A new manual pure
+capture helper adds the missing source-faithful boundary without a table or
+service. Its closed `static-collection-upstream-capture-v1` contract stores one
+packet, exact production handler, repo SHA, actual capture time, public source
+binding, canonical payload SHA and sanitized binary omissions. It refuses
+credentials, `/data`, overwrite and cross-message Telegram dependencies.
 
-### Why the requested full matrix cannot yet be reproduced
+Current source-faithful evidence:
 
-Production SQLite retains normalized Event/EventSource evidence, but not the
-original Telegram extraction packet, VK `EventDraft` or parser
-`TheatreEvent`. A read-only Fly `/data` inspection and current Kaggle output
-history found no retained historical packets for the target corpus. Rebuilding
-those objects from EventSource is not an exact replay of ordinary ingestion and
-must not be reported as one.
+1. **Official parser captured.** A live Yantar Hall catalog fetch produced the
+   exact `TheatreEvent` for event 7127 / 2026-08-03. Capture artifact SHA-256:
+   `61dc05ecba82c367346b788dadb20a92d24d34550451d1af57b70c2784c29192`.
+   The first ordinary `process_source_events` pass is PASS with zero collection
+   calls/writes. The identical warm pass is FAIL only because the existing
+   exact-parser refresh rewrites source 9573658 `imported_at`; changed event IDs
+   stay empty and collection calls/writes stay zero. All 65 Yantar Hall, 22
+   Estrada and current theatre/philharmonia/Qtickets future packets matched
+   existing rows, so no naturally new official occurrence was available.
+   Reproducible blocker artifact SHA-256:
+   `87dca826b765f28c48312b15d34911b47f715eb7ece40dd8006d230362074e4a`.
+2. **VK captured.** A current pending production inbox post was fetched through
+   `_process_vk_inbox_row`, OCR/extracted on a disposable copy and captured at
+   the exact pre-`persist_event_and_pages` boundary. Source:
+   `https://vk.com/wall-149955604_23881`; capture artifact SHA-256:
+   `8fc494822c12c77b24224c36ad312c3d8a96797b214126a042d20a66e0b3551c`.
+   Replay reached the existing occurrence-scope review, but the shared limiter
+   returned `Rate limit exceeded: rpd`; Smart Update failed closed with
+   `occurrence_scope_review:llm_unavailable`. Event/EventSource counts and the
+   full logical DB SHA remained identical. No bypass/model/prompt change or
+   second paid retry was made. Blocker artifact SHA-256:
+   `064d22d0782a9b61fc75585a31c5c3ad3f30f5b88411f2fa78937cf5e96827ca`.
+3. **Telegram pending.** The authoritative kernel ref is
+   `zigomaro/telegram-monitor-bot`; it is still `RUNNING`. No competing run was
+   started and the S22 remote auth boundary was not touched. Capture waits for
+   the latest completed genuine schema-v2 output; `run_tg_monitor.py` is not
+   used because it mutates/imports.
 
-Two bounded reconstructed probes were still run to test the harness:
-
-1. Reconstructed Telegram event 6562 reaches the production handler but the
-   captured run is rejected before collection adjudication by the existing
-   location-grounding guard. The handler has normalized the source-grounded
-   `Ленинский пр-кт 83` to `Музей Изобразительных искусств / Ленинский проспект
-   83` without carrying the reference-match basis into Smart Update. Two
-   semantic guard calls occur; collection calls/writes remain 0. The report's
-   exact suffix `invalid:location_grounding_review:llm_keep` is itself not
-   reproducible from committed `d5dce869` (a failed keep should be
-   `llm_keep_not_grounded`), so it is also a runtime/import-provenance warning,
-   not a production-code verdict. Artifact
-   `ingestion-smoke-6562-report.json` is FAIL, SHA-256
-   `fd289b5e9083ca07eeeace5994d1b3865af70653db2e52778a9c829653e71d20`.
-2. Existing official-parser event 6822 is recognized as already existing and
-   therefore never enters Smart Update/collection adjudication. Reprocessing
-   also changes EventSource bookkeeping, so it is not warm-idempotent under the
-   gate. Artifact `ingestion-parser-6822-report.json` is FAIL, SHA-256
-   `fef57e056b13aee10790361c67443965f1a7992b1558c1738b417fe332e1bb46`.
-
-After two similar location-review attempts, further prompt guessing was stopped
-under the external-tool research gate. Provider documentation confirms that
-schema-constrained output cannot guarantee a semantically correct verdict; a
-local provenance contract is required. No broad regex, third retry or
-production semantic bypass was added to make this acceptance green.
-
-Gate E needs either freshly captured pre-import packets from Telegram/VK/parser
-or an explicitly designed, reviewed capture/replay contract. The historical
-Telegram source points to ops run `3212`, run id
-`5a1f05a2ea9045d0aad6af976b45ab92`; its original packet was not present in DB,
-Fly `/data` or the available Kaggle output history. A future, separately
-reviewed location fix may carry a handler-owned attestation only for a unique
-exact-address/curated-alias match, while preserving the ICAE, island and
-programme-label regressions. A broad known-venue bypass or feature flag is not
-acceptable, and changing that adjacent semantic guard in this PR would be
-scope-unsafe.
-
-Because Gate E is red, no post-ingestion product snapshot is claimed.
+The replay CLI can now optionally emit a product snapshot and quality JSON/MD
+after each first/warm pass and fails if normalized output changes or monitor
+status is `FAIL`. Adapter exceptions are hashed/redacted and stop the warm retry,
+preventing an accidental second provider charge. No source-faithful path has a
+complete first+warm PASS yet, so Gate E remains blocked and no release merge is
+allowed.
 
 ## 8. Release boundary and next action
 
@@ -335,10 +327,11 @@ repository has many unrelated dirty/stale worktrees and nine remote
 `hotfix/*` branches ahead of main, so any later production integration must use
 a new clean isolated worktree and repeat the release-governance branch audit.
 
-The smallest next step is not PR B and not Astro. Capture one fresh packet per
-real Telegram, VK and official-parser path before normalization/persistence,
-run it through the committed harness on a fresh production copy, then expand to
-the required child/family/joint/boundary matrix. Only after that gate is PASS:
+The smallest next step is not PR B and not Astro. Finish/download the current
+Telegram output, capture one valid message, replay it, retry the immutable VK
+capture only after the shared RPD window is available, and retry the parser
+capture when a naturally new official occurrence exists. Only after all three
+first+warm paths pass:
 
 1. merge #207;
 2. rebase/retarget and merge corrected #222;
@@ -352,10 +345,10 @@ Until then the precise overall verdict is:
 FACTS_V3_CODE              PASS
 PRIMARY_REAL_DATA          PASS
 FALLBACK_FAILURE_DRILL     PARTIAL
-PRODUCTION_COPY_APPLY      PARTIAL
-PRODUCTION_COPY_WARM       PARTIAL (mechanics pass; exact sequence absent)
+PRODUCTION_COPY_APPLY      PASS
+PRODUCTION_COPY_WARM       PASS
 PRODUCT_SNAPSHOT_MONITOR   PARTIAL_WITH_WATCH
-REAL_POST_SMART_UPDATE     BLOCKED
+REAL_POST_SMART_UPDATE     BLOCKED_WITH_FRESH_CAPTURES
 BOUNDED_LIVE_FLY           BLOCKED
 PUBLICATION                BLOCKED
 ```

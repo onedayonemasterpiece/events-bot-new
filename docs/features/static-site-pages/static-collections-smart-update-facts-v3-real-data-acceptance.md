@@ -1,6 +1,6 @@
 # Smart Update facts v3: приёмка на реальных данных и реальных постах
 
-Статус: **mandatory acceptance gate; частично пройден**.
+Статус: **mandatory acceptance gate; Gate D PASS, Gate E blocked**.
 
 Фактический прогон 2026-08-02 после исправления provisional PR A:
 
@@ -9,16 +9,15 @@
 - Gate C PARTIAL: offline fail-closed drill и три real GPT-4o valid-fallback
   cases пройдены, но real driver/report пока не имеют durable generator/hash
   binding, а malformed/evidence mismatch на real corpus не повторены;
-- Gate D PARTIAL: эффективный cohort из 20 sources дал warm
-  `provider_calls=0`, `writes=0`, `changed_events=0`, но нет сохранённой
-  exact-cohort цепочки `plan → evaluate → apply → identical warm`; initial defer
-  6797 был заменён на 6521;
-- local product snapshot / #234 PARTIAL WITH WATCH: нормализованный fingerprint
-  после first apply и warm совпадает, но GitHub live-product job и
-  post-ingestion snapshot отсутствуют;
-- Gate E **BLOCKED**: исходные pre-import Telegram/VK/parser packets в
-  production DB не сохраняются, а reconstructed smoke нельзя выдавать за
-  source-faithful штатный replay;
+- Gate D PASS: на новой production-копии fixed cohort из 20 strict-valid
+  source bindings прошёл `plan → apply → identical warm`; 6797 был исключён до
+  plan, cohort не менялся, warm дал нулевые calls/sends/writes/diffs;
+- product monitor PARTIAL WITH WATCH: он встроен в существующий
+  StaticSiteBuilder и сохраняет JSON/MD/qa-summary, но реальный builder canary и
+  завершённые post-ingestion first/warm snapshots ещё отсутствуют;
+- Gate E **BLOCKED WITH FRESH CAPTURES**: добавлен bounded capture contract,
+  получены настоящие VK и parser packets; parser warm меняет `imported_at`, VK
+  упёрся в shared RPD до DB mutation, Telegram Kaggle run ещё выполняется;
 - Gate F и semantic publication **BLOCKED**.
 
 На Gate B exact-quote и source/event binding равны 100%, ложных confirmed hard
@@ -291,7 +290,7 @@ sqlite3 copy.sqlite 'PRAGMA quick_check;'
 
 ### 6.2. Bounded cohort
 
-Минимум 20 current/future events:
+Для сокращённого shadow-gate фиксируется ровно 20 current/future events:
 
 - 5 child-directed positives;
 - 5 family-suitable positives;
@@ -333,6 +332,9 @@ posters/links
 любые невыбранные events
 ```
 
+`Gate B` уже является оплаченной read-only evaluate evidence. Второй полный
+evaluate только ради формальной последовательности не запускается.
+
 ### 6.4. Warm identical apply
 
 Повторить точную команду.
@@ -347,29 +349,26 @@ all requested sources = cached/no-op
 DB file logical row diff = 0
 ```
 
+Фактический repeat 2026-08-02: fresh snapshot SHA
+`22790cd3284ca507502be324b93c23812e71f631e2278dcb1f8d6c35d80afc99`,
+plan/apply/warm report SHA соответственно `806fb00e…`, `ed80f5ae…`,
+`2c28ec36…`. First применил 20/20; warm: provider calls 0, physical sends 0,
+writes 0, changed event/source IDs пусты. Gate D закрыт.
+
 ## 7. Gate E — штатный Smart Update на реальных постах в production-копии
 
 Это обязательный тест именно ingestion path, а не backfill-only.
 
-Подобрать минимум 12 реальных постов, ещё не превращённых в synthetic fixtures:
+Для текущей итерации семантическую точность уже покрывает 50-source Gate B.
+Gate E проверяет только механику трёх production ingestion paths: ровно один
+свежий source-faithful packet Telegram, VK и official parser, каждый first +
+identical warm. Желательно естественно покрыть positive audience и
+negative/unknown, но joint-family специально искать не требуется.
 
-```text
-3 direct child events
-3 explicit family events
-2 explicit parent+child joint activities
-1 parents-only event
-1 age-rating-only event
-1 vague family-atmosphere event
-1 ordinary adult event
-```
-
-Источники:
-
-```text
-минимум 4 Telegram
-минимум 4 VK
-минимум 2 official parser records
-```
+Packet захватывается только вручную непосредственно перед production entrypoint
+в `static-collection-upstream-capture-v1`: один объект, handler, repo SHA,
+capture time, public source binding, canonical payload SHA, без credentials и
+production DB mutation/publication. Массовое долговечное хранение не создаётся.
 
 Каждый пост прогнать через тот же entry point, который использует штатный
 Telegram/VK/parser Smart Update. Запрещено напрямую создавать provider payload
@@ -385,8 +384,18 @@ Telegram/VK/parser Smart Update. Запрещено напрямую созда�
 - повторная обработка того же поста не создаёт duplicate event/source;
 - повторная обработка имеет provider_calls=0 для same hash;
 - event prose/identity merge остаются корректными.
+- после first и warm построен product snapshot и запущен product monitor;
+- `normalized_output_sha256` first == warm;
+- product status не `FAIL` (`WATCH` допустим).
 
 Сохранить redacted LLM trace и per-post receipt.
+
+Если unrelated location/identity/parser guard блокирует source, сохранить
+reproducible blocker и выбрать другой свежий source. Не исправлять guard,
+prompt/model или retries в этом PR. На 2026-08-02 source-faithful parser first
+PASS, но warm меняет только `EventSource.imported_at`; VK capture получен, но
+replay fail-closed на shared RPD; Telegram output ещё `RUNNING`. Поэтому Gate E
+остаётся blocked.
 
 ## 8. Gate F — bounded live Fly canary
 

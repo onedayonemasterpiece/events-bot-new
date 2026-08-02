@@ -341,6 +341,8 @@ async def test_run_manifest_records_first_write_and_identical_warm_noop(tmp_path
         db_path=db_path,
         manifest_path=manifest_path,
         cases=cases,
+        product_artifact_dir=tmp_path / "product",
+        current_date="2026-08-02",
     )
 
     assert report["status"] == "PASS"
@@ -351,6 +353,173 @@ async def test_run_manifest_records_first_write_and_identical_warm_noop(tmp_path
     assert warm["writes"]["collection_decisions"] == 0
     assert warm["writes"]["changed_event_source_ids"] == []
     assert warm["evidence"]["source_grounding_errors"] == []
+    assert first["product_quality"]["status"] == "WATCH"
+    assert warm["product_quality"]["status"] == "WATCH"
+    assert first["product_quality"]["provider_calls"] == 0
+    assert (
+        first["product_quality"]["normalized_output_sha256"]
+        == warm["product_quality"]["normalized_output_sha256"]
+    )
+    for pass_name in ("first", "warm"):
+        assert (
+            tmp_path
+            / "product"
+            / f"telegram-one-{pass_name}-product-snapshot.json"
+        ).is_file()
+        assert (
+            tmp_path
+            / "product"
+            / f"telegram-one-{pass_name}-product-quality.json"
+        ).is_file()
+        assert (
+            tmp_path
+            / "product"
+            / f"telegram-one-{pass_name}-product-quality.md"
+        ).is_file()
+
+
+@pytest.mark.asyncio
+async def test_run_manifest_fails_when_product_output_changes_between_passes(
+    tmp_path, monkeypatch
+):
+    fixture = tmp_path / "telegram.json"
+    fixture.write_text("{}", encoding="utf-8")
+    manifest_value = _manifest(fixture)
+    manifest_value["cases"][0]["expected"].update(
+        first_collection_calls=0,
+        first_collection_write=False,
+    )
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest_value), encoding="utf-8")
+    cases = replay.validate_manifest(manifest_value, manifest_path=manifest_path)
+
+    db_path = tmp_path / "copy.sqlite"
+    db = Database(str(db_path))
+    await db.init()
+    async with db.get_session() as session:
+        session.add(
+            Event(
+                id=1,
+                title="Test",
+                description="Test event",
+                date="2026-08-08",
+                time="12:00",
+                location_name="Test venue",
+                city="Kaliningrad",
+                source_text="Source-bound fact.",
+            )
+        )
+        session.add(
+            EventSource(
+                id=1,
+                event_id=1,
+                source_type="telegram",
+                source_url="https://t.me/real_source/44",
+                source_text="Source-bound fact.",
+            )
+        )
+        await session.commit()
+    await db.close()
+
+    async def fake_invoke(_case, _db):
+        return {"status": "noop"}
+
+    fingerprints = iter(("a" * 64, "b" * 64))
+
+    def fake_product(**_kwargs):
+        return {"status": "WATCH", "normalized_output_sha256": next(fingerprints)}
+
+    @contextlib.contextmanager
+    def no_side_effect_context():
+        yield
+
+    monkeypatch.setattr(replay, "publication_side_effect_guard", no_side_effect_context)
+    monkeypatch.setattr(replay, "invoke_adapter", fake_invoke)
+    monkeypatch.setattr(replay, "build_product_quality_artifacts", fake_product)
+
+    report = await replay.run_manifest(
+        db_path=db_path,
+        manifest_path=manifest_path,
+        cases=cases,
+        product_artifact_dir=tmp_path / "product",
+        current_date="2026-08-02",
+    )
+
+    assert report["status"] == "FAIL"
+    warm = report["cases"][0]["passes"][1]
+    assert "product_normalized_output_changed" in warm["errors"]
+
+
+@pytest.mark.asyncio
+async def test_run_manifest_records_adapter_exception_without_warm_retry(
+    tmp_path, monkeypatch
+):
+    fixture = tmp_path / "telegram.json"
+    fixture.write_text("{}", encoding="utf-8")
+    manifest_value = _manifest(fixture)
+    manifest_value["cases"][0]["expected"].update(
+        first_collection_calls=0,
+        first_collection_write=False,
+    )
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest_value), encoding="utf-8")
+    cases = replay.validate_manifest(manifest_value, manifest_path=manifest_path)
+
+    db_path = tmp_path / "copy.sqlite"
+    db = Database(str(db_path))
+    await db.init()
+    async with db.get_session() as session:
+        session.add(
+            Event(
+                id=1,
+                title="Test",
+                description="Test event",
+                date="2026-08-08",
+                time="12:00",
+                location_name="Test venue",
+                city="Kaliningrad",
+                source_text="Source-bound fact.",
+            )
+        )
+        session.add(
+            EventSource(
+                id=1,
+                event_id=1,
+                source_type="telegram",
+                source_url="https://t.me/real_source/44",
+                source_text="Source-bound fact.",
+            )
+        )
+        await session.commit()
+    await db.close()
+
+    calls = 0
+
+    async def failing_invoke(_case, _db):
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("source material must not be copied to the report")
+
+    @contextlib.contextmanager
+    def no_side_effect_context():
+        yield
+
+    monkeypatch.setattr(replay, "publication_side_effect_guard", no_side_effect_context)
+    monkeypatch.setattr(replay, "invoke_adapter", failing_invoke)
+
+    report = await replay.run_manifest(
+        db_path=db_path,
+        manifest_path=manifest_path,
+        cases=cases,
+    )
+
+    assert report["status"] == "FAIL"
+    assert calls == 1
+    assert len(report["cases"][0]["passes"]) == 1
+    first = report["cases"][0]["passes"][0]
+    assert first["errors"] == ["adapter_exception"]
+    assert first["adapter_result"]["exception_type"] == "RuntimeError"
+    assert "source material" not in json.dumps(first)
 
 
 def test_warm_receipt_fails_on_any_event_mutation():

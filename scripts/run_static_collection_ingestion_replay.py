@@ -18,6 +18,7 @@ import hashlib
 import importlib
 import json
 import os
+import re
 import shlex
 import sqlite3
 import sys
@@ -104,6 +105,96 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _artifact_component(value: str) -> str:
+    component = re.sub(r"[^a-zA-Z0-9._-]+", "-", str(value).strip()).strip("-.")
+    if not component:
+        raise ValueError("product artifact component is empty")
+    return component[:120]
+
+
+def build_product_quality_artifacts(
+    *,
+    db_path: Path,
+    output_dir: Path,
+    run_id: str,
+    case_id: str,
+    pass_name: str,
+    current_date: str,
+) -> dict[str, Any]:
+    """Project and monitor the exact post-pass DB state without provider calls."""
+
+    product_scripts = ROOT / "site" / "scripts"
+    if str(product_scripts) not in sys.path:
+        sys.path.insert(0, str(product_scripts))
+    snapshot_module = importlib.import_module("static_collection_product_snapshot")
+    quality_module = importlib.import_module(
+        "scripts.check_static_collections_product_quality"
+    )
+    current = date.fromisoformat(current_date)
+    generated_at = _utc_now()
+    uri = f"file:{db_path.resolve().as_posix()}?mode=ro"
+    with sqlite3.connect(uri, uri=True) as connection:
+        events, decisions, sources = snapshot_module.load_snapshot_inputs(
+            connection,
+            current_date=current.isoformat(),
+        )
+    source_scope = (
+        f"ingestion-replay:{_artifact_component(run_id)}:"
+        f"{_artifact_component(case_id)}:{pass_name}"
+    )
+    snapshot = snapshot_module.build_product_snapshot(
+        events,
+        collection_decisions_by_id=decisions,
+        source_records_by_event=sources,
+        current_date=current.isoformat(),
+        generated_at=generated_at,
+        source_scope=source_scope,
+        evidence_trust_scope="all",
+    )
+    validation = snapshot_module.validate_product_snapshot(snapshot)
+    if not validation.get("valid"):
+        raise ValueError(
+            "post-pass product snapshot is invalid: "
+            + "; ".join(validation.get("errors") or [])
+        )
+    stem = f"{_artifact_component(case_id)}-{pass_name}"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    snapshot_path = output_dir / f"{stem}-product-snapshot.json"
+    quality_json_path = output_dir / f"{stem}-product-quality.json"
+    quality_markdown_path = output_dir / f"{stem}-product-quality.md"
+    snapshot_module.write_product_snapshot(snapshot_path, snapshot)
+    evaluated_at = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+    report = quality_module.evaluate_snapshot(
+        snapshot,
+        baseline={},
+        regression={},
+        today=current,
+        now=evaluated_at,
+    )
+    quality_json_path.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    quality_markdown_path.write_text(
+        quality_module.render_markdown(report),
+        encoding="utf-8",
+    )
+    return {
+        "status": report.get("status"),
+        "snapshot_path": str(snapshot_path),
+        "snapshot_file_sha256": _sha256_file(snapshot_path),
+        "snapshot_contract_sha256": snapshot.get("snapshot_sha256"),
+        "input_fingerprint": snapshot.get("input_fingerprint"),
+        "normalized_output_sha256": report.get("normalized_output_sha256"),
+        "provider_calls": snapshot.get("provider_calls"),
+        "quality_json_path": str(quality_json_path),
+        "quality_json_sha256": _sha256_file(quality_json_path),
+        "quality_markdown_path": str(quality_markdown_path),
+        "quality_markdown_sha256": _sha256_file(quality_markdown_path),
+        "issue_count": len(report.get("issues") or []),
+    }
 
 
 def _jsonable(value: Any) -> Any:
@@ -804,6 +895,8 @@ async def run_manifest(
     db_path: Path,
     manifest_path: Path,
     cases: Sequence[Mapping[str, Any]],
+    product_artifact_dir: Path | None = None,
+    current_date: str | None = None,
 ) -> dict[str, Any]:
     import smart_event_update as collection_core
 
@@ -825,19 +918,62 @@ async def run_manifest(
                 for pass_name in ("first", "warm"):
                     before = capture_db_state(db_path)
                     collection_core.reset_smart_update_llm_trace()
-                    result = await invoke_adapter(case, db)
+                    adapter_error: Exception | None = None
+                    try:
+                        result = await invoke_adapter(case, db)
+                    except Exception as exc:
+                        adapter_error = exc
+                        result = {
+                            "status": "adapter_exception",
+                            "exception_type": type(exc).__name__,
+                            "message_sha256": hashlib.sha256(
+                                str(exc).encode("utf-8")
+                            ).hexdigest(),
+                        }
                     trace = collection_core.get_smart_update_llm_trace()
                     after = capture_db_state(db_path)
-                    passes.append(
-                        _pass_receipt(
-                            case=case,
-                            pass_name=pass_name,
-                            result=result,
-                            trace=trace,
-                            before=before,
-                            after=after,
-                        )
+                    pass_receipt = _pass_receipt(
+                        case=case,
+                        pass_name=pass_name,
+                        result=result,
+                        trace=trace,
+                        before=before,
+                        after=after,
                     )
+                    if adapter_error is not None:
+                        pass_receipt["errors"].append("adapter_exception")
+                        pass_receipt["status"] = "FAIL"
+                    if product_artifact_dir is not None:
+                        if current_date is None:
+                            raise ValueError(
+                                "current_date is required with product_artifact_dir"
+                            )
+                        product = build_product_quality_artifacts(
+                            db_path=db_path,
+                            output_dir=product_artifact_dir,
+                            run_id=str(manifest.get("run_id") or manifest_path.stem),
+                            case_id=str(case["case_id"]),
+                            pass_name=pass_name,
+                            current_date=current_date,
+                        )
+                        pass_receipt["product_quality"] = product
+                        if product.get("status") == "FAIL":
+                            pass_receipt["errors"].append("product_quality_fail")
+                            pass_receipt["status"] = "FAIL"
+                    passes.append(pass_receipt)
+                    # Do not repeat a failed provider/guard path and accidentally
+                    # pay for or mutate the same partial ingestion a second time.
+                    if adapter_error is not None:
+                        break
+                if product_artifact_dir is not None:
+                    if len(passes) == 2:
+                        first_product = passes[0].get("product_quality") or {}
+                        warm_product = passes[1].get("product_quality") or {}
+                        if first_product.get("normalized_output_sha256") != warm_product.get(
+                            "normalized_output_sha256"
+                        ):
+                            passes[1]["errors"].append("product_normalized_output_changed")
+                            passes[1]["status"] = "FAIL"
                 case_reports.append(
                     {
                         "case_id": case["case_id"],
@@ -901,6 +1037,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
+        "--product-artifact-dir",
+        type=Path,
+        help="Write a product snapshot and quality JSON/Markdown after first and warm.",
+    )
+    parser.add_argument(
+        "--current-date",
+        help="Frozen YYYY-MM-DD product horizon; required with --product-artifact-dir.",
+    )
+    parser.add_argument(
         "--allow-mutable-copy",
         action="store_true",
         help="Required acknowledgement that --db-copy may be mutated.",
@@ -918,10 +1063,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise SystemExit("refusing to run ingestion acceptance against /data; use a DB copy")
     if not db_path.is_file() or not manifest_path.is_file():
         raise SystemExit("DB copy and manifest must exist")
+    if bool(args.product_artifact_dir) != bool(args.current_date):
+        raise SystemExit(
+            "--product-artifact-dir and --current-date must be supplied together"
+        )
     manifest = _load_object(manifest_path)
     cases = validate_manifest(manifest, manifest_path=manifest_path)
     result = asyncio.run(
-        run_manifest(db_path=db_path, manifest_path=manifest_path, cases=cases)
+        run_manifest(
+            db_path=db_path,
+            manifest_path=manifest_path,
+            cases=cases,
+            product_artifact_dir=(
+                args.product_artifact_dir.expanduser().resolve()
+                if args.product_artifact_dir
+                else None
+            ),
+            current_date=args.current_date,
+        )
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     encoded = json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n"

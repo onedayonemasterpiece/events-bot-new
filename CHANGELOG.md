@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+- Added a manual, single-packet `static-collection-upstream-capture-v1`
+  contract for Telegram, VK and official-parser acceptance. It preserves the
+  exact production-handler input and canonical payload hash, rejects secrets,
+  `/data`, overwrite and unresolved Telegram dependencies, omits VK binary
+  bytes with verified hashes, and is consumable by the existing disposable-copy
+  replay harness without changing production ingestion semantics.
+- Changed the ordinary-ingestion replay harness to optionally build and monitor
+  a product snapshot after each first/warm pass. It persists snapshot and
+  quality JSON/Markdown evidence, requires identical normalized output, treats
+  product `FAIL` as blocking, and records adapter exceptions as redacted hashes
+  without performing an automatic paid warm retry.
+- Changed StaticSiteBuilder to run the existing static-collections product
+  monitor immediately after generating its product snapshot and persist the
+  quality JSON, Markdown and `qa-summary.json` through the existing Kaggle
+  runner. `WATCH` stays non-blocking and `FAIL` is preserved before the build
+  stops; the GitHub live job remains off until it receives this real artifact.
 - Added a bounded ordinary-ingestion facts-v3 replay harness for disposable
   SQLite copies. Source-bound Telegram, VK and parser fixtures now cross their
   production handlers with publication/network enrichment disabled, emit
@@ -42,14 +58,13 @@
   After correcting provisional truth, a fresh 50-source production-snapshot
   replay passed Gate B with one Gemma send per source, zero writes, exact
   quotes/bindings, no confirmed hard negatives and child/family/joint recall of
-  11/12, 8/9 and 1/1. An effective 20-source production-copy warm proved zero
-  calls/writes/diff and the local product snapshot stayed semantically stable,
-  but Gate D remains partial because one initial defer was replaced and no
-  exact-cohort plan/evaluate/apply/warm chain was saved. Real fallback evidence
-  is also partial until its driver/report are durably generator-bound.
-  Source-faithful ordinary ingestion and Fly remain blocked because historical
-  pre-import packets are not retained; reconstructed probes are recorded as
-  failures, not acceptance evidence.
+  11/12, 8/9 and 1/1. A later fresh-copy fixed 20-source plan/apply/warm closed
+  Gate D: 20/20 first writes and an identical warm with zero calls, sends,
+  writes or Event/EventSource diffs. Real fallback evidence remains partial.
+  Source-faithful VK and parser packets are now captured, but parser warm
+  timestamp churn, shared VK replay RPD exhaustion and the still-running
+  Telegram producer keep ordinary ingestion and Fly blocked without broad
+  adjacent-system fixes.
 - Added static-collection PR-A quality contracts: ontology v2 separates child,
   family, joint-family, science-pop and research-in-action meanings; the
   provisional seed moved out of the misleading gold fixture into source-bound

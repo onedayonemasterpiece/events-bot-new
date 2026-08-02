@@ -31,7 +31,7 @@ lanes:
     forbidden_files: [/data/db.sqlite, production database]
     expected_output: fixed-cohort plan/apply/warm receipts with zero-call/zero-write warm
     verification_scope: full_local
-    status: planned
+    status: completed
   - id: capture-map
     role: planner
     effort: high
@@ -45,7 +45,7 @@ lanes:
     forbidden_files: [all]
     expected_output: bounded implementation map and safe acquisition commands
     verification_scope: inspection_only
-    status: planned
+    status: completed
   - id: capture-implementation
     role: worker
     effort: high
@@ -72,7 +72,7 @@ lanes:
       - site/src/pages
     expected_output: committed capture seam with redaction, one-packet limits and no-side-effect tests
     verification_scope: full_local
-    status: planned
+    status: completed
   - id: builder-monitor
     role: worker
     effort: high
@@ -99,7 +99,7 @@ lanes:
       - owner baseline fixtures
     expected_output: committed single-pipeline builder integration and focused tests
     verification_scope: full_local
-    status: planned
+    status: completed
   - id: fresh-real-replay
     role: planner
     effort: max
@@ -113,7 +113,7 @@ lanes:
     forbidden_files: [production database, publication]
     expected_output: three source-faithful first/warm receipts and stable non-FAIL product output
     verification_scope: full_local
-    status: planned
+    status: blocked_external_or_adjacent
   - id: release-stack
     role: merge_reviewer
     effort: max
@@ -127,4 +127,4 @@ lanes:
     forbidden_files: [PR-B, owner gold, public routes, mobile]
     expected_output: exact main-reachable SHA and Fly PASS, or external blocker with evidence
     verification_scope: full_local
-    status: planned
+    status: blocked_by_fresh-real-replay
