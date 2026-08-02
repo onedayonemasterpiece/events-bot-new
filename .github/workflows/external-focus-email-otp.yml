@@ -59,7 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with: { node-version: '22.12.0', cache: npm, cache-dependency-path: site/package-lock.json }
+        with: { node-version: '22.22.0', cache: npm, cache-dependency-path: site/package-lock.json }
       - run: npm ci --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
       - name: Run Chromium compatibility journey
@@ -104,7 +104,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with: { node-version: '22.12.0', cache: npm, cache-dependency-path: site/package-lock.json }
+        with: { node-version: '22.22.0', cache: npm, cache-dependency-path: site/package-lock.json }
       - run: npm ci --no-audit --no-fund
       - run: npx appium driver list --installed
       - name: Enable KVM for the Android emulator
@@ -170,7 +170,7 @@ jobs:
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.6.0
         with: { xcode-version: '16.4' }
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with: { node-version: '22.12.0', cache: npm, cache-dependency-path: site/package-lock.json }
+        with: { node-version: '22.22.0', cache: npm, cache-dependency-path: site/package-lock.json }
       - run: npm ci --no-audit --no-fund
       - run: npx appium driver list --installed
       - name: Boot exact iPhone 16 / iOS 18.5 Simulator
