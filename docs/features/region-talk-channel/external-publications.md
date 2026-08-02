@@ -249,7 +249,10 @@ product-policy match, no hard exclusion, sufficient quality scores and, for
 scholarly work, peer review plus checked correction/funding/conflict status.
 The command updates the intake and seen ledger and writes a separate
 `external_publication_review_item`; it never writes a publication candidate or
-publishes. `--execute` is required for any YDB change.
+publishes. The intake becomes `review_status=reviewed` with an auditable
+`review_decision`, while `publication_permission` stays `not_granted`: an
+approval only releases the row into the normal scoring funnel. `--execute` is
+required for any YDB change.
 
 The E5 and BGE-M3 semantic bank contains separate
 `ko_editorial_publication` and `ko_academic_publication` positive classes. The
