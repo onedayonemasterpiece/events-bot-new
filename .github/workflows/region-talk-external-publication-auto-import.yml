@@ -1,0 +1,290 @@
+name: Auto-import Region Talk external-publication research
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/features/region-talk-channel/region-talk-external-research-result-*.json'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: region-talk-ydb-import
+  cancel-in-progress: false
+
+jobs:
+  validate-and-import:
+    name: Validate changed research JSON and stage YDB intake
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: region-talk-ydb-import
+    env:
+      YANDEX_WIF_OIDC_AUDIENCE: ${{ vars.YANDEX_WIF_OIDC_AUDIENCE }}
+      YANDEX_WIF_SERVICE_ACCOUNT_ID: ${{ vars.YANDEX_WIF_SERVICE_ACCOUNT_ID }}
+      REGION_TALK_YDB_ENDPOINT: ${{ vars.REGION_TALK_YDB_ENDPOINT }}
+      REGION_TALK_YDB_DATABASE: ${{ vars.REGION_TALK_YDB_DATABASE }}
+      REGION_TALK_YDB_NAMESPACE: ${{ vars.REGION_TALK_YDB_NAMESPACE }}
+      REPORT_ROOT: artifacts/github-actions/region-talk-external-publication-auto-import
+
+    steps:
+      - name: Check out exact trusted main commit
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Discover only added or modified research-result JSON files
+        id: inputs
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$AFTER_SHA"
+          test "$(git rev-parse --verify HEAD)" = "$(git rev-parse --verify origin/main)"
+          mkdir -p "$REPORT_ROOT"
+
+          python - "$BEFORE_SHA" "$AFTER_SHA" "$REPORT_ROOT/inputs.txt" <<'PY'
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          before, after, output = sys.argv[1:]
+          approved = re.compile(
+              r"^docs/features/region-talk-channel/"
+              r"region-talk-external-research-result-[A-Za-z0-9][A-Za-z0-9._-]*\.json$"
+          )
+          if not re.fullmatch(r"[0-9a-f]{40}", before or ""):
+              raise SystemExit(f"invalid push before SHA: {before!r}")
+          if not re.fullmatch(r"[0-9a-f]{40}", after or ""):
+              raise SystemExit(f"invalid push after SHA: {after!r}")
+
+          diff = subprocess.run(
+              ["git", "diff", "--diff-filter=AM", "--name-only", before, after, "--"],
+              check=True,
+              text=True,
+              capture_output=True,
+          ).stdout.splitlines()
+          selected: list[str] = []
+          for raw in diff:
+              path = raw.strip()
+              if not approved.fullmatch(path):
+                  continue
+              candidate = Path(path)
+              if candidate.is_symlink() or not candidate.is_file():
+                  raise SystemExit(f"refusing non-regular research result: {path}")
+              resolved = candidate.resolve()
+              root = Path("docs/features/region-talk-channel").resolve()
+              if resolved.parent != root:
+                  raise SystemExit(f"refusing research result outside approved directory: {path}")
+              selected.append(path)
+
+          selected = sorted(set(selected))
+          if not selected:
+              raise SystemExit("push matched result paths but no added/modified approved JSON was found")
+          Path(output).write_text("\n".join(selected) + "\n", encoding="utf-8")
+          print("\n".join(selected))
+          PY
+
+          count="$(grep -c . "$REPORT_ROOT/inputs.txt")"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Region Talk automatic intake"
+            echo
+            echo "- trusted main commit: \`$AFTER_SHA\`"
+            echo "- changed research-result files: $count"
+            sed 's/^/- `/' "$REPORT_ROOT/inputs.txt" | sed 's/$/`/'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install pinned runtime dependencies
+        shell: bash
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+
+      - name: Validate every changed JSON before YDB authentication
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > "$REPORT_ROOT/manifest.ndjson"
+          while IFS= read -r input_path; do
+            sha256="$(sha256sum "$input_path" | awk '{print $1}')"
+            report_dir="$REPORT_ROOT/$sha256"
+            mkdir -p "$report_dir"
+            printf '%s  %s\n' "$sha256" "$input_path" > "$report_dir/input.sha256"
+
+            python scripts/region_talk_external_publication_import.py "$input_path" \
+              --expected-input-sha256 "$sha256" \
+              --report "$report_dir/validation.json"
+
+            python - "$input_path" "$sha256" "$report_dir/validation.json" \
+              >> "$REPORT_ROOT/manifest.ndjson" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          input_path, expected_sha, report_path = sys.argv[1:]
+          payload = json.loads(Path(report_path).read_text(encoding="utf-8"))
+          batch = payload.get("batch") or {}
+          if payload.get("executed") is not False:
+              raise SystemExit(f"validation unexpectedly executed for {input_path}")
+          if payload.get("execution_status") != "validated":
+              raise SystemExit(f"validation status is not clean for {input_path}")
+          if payload.get("rejected") or payload.get("conflicts"):
+              raise SystemExit(f"semantic rejection or conflict in {input_path}")
+          if payload.get("input_json_sha256") != expected_sha:
+              raise SystemExit(f"validation SHA mismatch for {input_path}")
+          received = int(batch.get("candidate_rows_received") or 0)
+          valid = len(payload.get("valid_ids") or [])
+          if received != valid:
+              raise SystemExit(f"not every candidate row is valid for {input_path}: {valid}/{received}")
+          print(json.dumps({
+              "input_path": input_path,
+              "input_sha256": expected_sha,
+              "request_id": batch.get("request_id"),
+              "candidate_rows_valid": valid,
+              "ready_for_region_talk_scoring": batch.get("ready_for_region_talk_scoring"),
+              "manual_or_blocked": batch.get("manual_or_blocked"),
+          }, ensure_ascii=False, separators=(",", ":")))
+          PY
+          done < "$REPORT_ROOT/inputs.txt"
+
+          python - "$REPORT_ROOT/manifest.ndjson" "$REPORT_ROOT/validation-manifest.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          source, destination = map(Path, sys.argv[1:])
+          rows = [json.loads(line) for line in source.read_text(encoding="utf-8").splitlines() if line]
+          destination.write_text(json.dumps({"inputs": rows}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Exchange GitHub OIDC token for short-lived Yandex IAM token
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${ACTIONS_ID_TOKEN_REQUEST_URL:?GitHub OIDC request URL is required}"
+          : "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:?GitHub OIDC request token is required}"
+          : "${YANDEX_WIF_OIDC_AUDIENCE:?Set environment variable YANDEX_WIF_OIDC_AUDIENCE}"
+          : "${YANDEX_WIF_SERVICE_ACCOUNT_ID:?Set environment variable YANDEX_WIF_SERVICE_ACCOUNT_ID}"
+          : "${REGION_TALK_YDB_ENDPOINT:?Set environment variable REGION_TALK_YDB_ENDPOINT}"
+          : "${REGION_TALK_YDB_DATABASE:?Set environment variable REGION_TALK_YDB_DATABASE}"
+          : "${REGION_TALK_YDB_NAMESPACE:?Set environment variable REGION_TALK_YDB_NAMESPACE}"
+
+          github_oidc="$({
+            curl --fail --silent --show-error \
+              --header "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+              --get --data-urlencode "audience=${YANDEX_WIF_OIDC_AUDIENCE}" \
+              "$ACTIONS_ID_TOKEN_REQUEST_URL"
+          } | jq --exit-status --raw-output '.value | strings | select(length > 100)')"
+
+          iam_response="$(curl --fail --silent --show-error \
+            --request POST 'https://auth.yandex.cloud/oauth/token' \
+            --header 'Content-Type: application/x-www-form-urlencoded' \
+            --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+            --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+            --data-urlencode "audience=${YANDEX_WIF_SERVICE_ACCOUNT_ID}" \
+            --data-urlencode "subject_token=${github_oidc}" \
+            --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')"
+          iam_token="$(printf '%s' "$iam_response" | jq --exit-status --raw-output '.access_token | strings | select(length > 20)')"
+          echo "::add-mask::$iam_token"
+          echo "REGION_TALK_YDB_IAM_TOKEN=$iam_token" >> "$GITHUB_ENV"
+
+      - name: Import validated files sequentially with live YDB identity guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > "$REPORT_ROOT/execute-summary.ndjson"
+          while IFS= read -r input_path; do
+            sha256="$(sha256sum "$input_path" | awk '{print $1}')"
+            report_dir="$REPORT_ROOT/$sha256"
+
+            python scripts/region_talk_external_publication_import.py "$input_path" \
+              --execute \
+              --no-publish-registry \
+              --expected-input-sha256 "$sha256" \
+              --report "$report_dir/execute.json"
+
+            python - "$input_path" "$sha256" "$report_dir/execute.json" \
+              >> "$REPORT_ROOT/execute-summary.ndjson" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          input_path, expected_sha, report_path = sys.argv[1:]
+          payload = json.loads(Path(report_path).read_text(encoding="utf-8"))
+          batch = payload.get("batch") or {}
+          if payload.get("executed") is not True:
+              raise SystemExit(f"YDB import did not execute for {input_path}")
+          if payload.get("execution_error") is not None:
+              raise SystemExit(f"YDB import reported an error for {input_path}")
+          if payload.get("conflict_count") not in (0, None) or payload.get("conflicts"):
+              raise SystemExit(f"YDB identity conflict for {input_path}")
+          if payload.get("live_duplicate_guard_applied") is not True:
+              raise SystemExit(f"live YDB duplicate guard was not applied for {input_path}")
+          if payload.get("input_json_sha256") != expected_sha:
+              raise SystemExit(f"execute SHA mismatch for {input_path}")
+          print(json.dumps({
+              "input_path": input_path,
+              "input_sha256": expected_sha,
+              "request_id": batch.get("request_id"),
+              "execution_status": payload.get("execution_status"),
+              "new_intake_count": payload.get("new_intake_count"),
+              "new_intake_ids": sorted(payload.get("new_intake_ids") or []),
+              "replay_count": payload.get("replay_count"),
+              "replay_ids": sorted(payload.get("replay_ids") or []),
+              "conflict_count": payload.get("conflict_count"),
+              "written_ydb_rows": payload.get("written_ydb_rows"),
+          }, ensure_ascii=False, separators=(",", ":")))
+          PY
+          done < "$REPORT_ROOT/inputs.txt"
+
+          python - "$REPORT_ROOT/execute-summary.ndjson" "$REPORT_ROOT/receipt.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          source, destination = map(Path, sys.argv[1:])
+          rows = [json.loads(line) for line in source.read_text(encoding="utf-8").splitlines() if line]
+          receipt = {
+              "main_commit": "${{ github.sha }}",
+              "workflow_run_id": "${{ github.run_id }}",
+              "imports": rows,
+              "new_intake_total": sum(int(row.get("new_intake_count") or 0) for row in rows),
+              "replay_total": sum(int(row.get("replay_count") or 0) for row in rows),
+              "conflict_total": sum(int(row.get("conflict_count") or 0) for row in rows),
+          }
+          destination.write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          PY
+
+          {
+            echo
+            echo "### YDB import receipt"
+            echo
+            jq -r '
+              "- new intake total: \(.new_intake_total)\n" +
+              "- replay total: \(.replay_total)\n" +
+              "- conflicts: \(.conflict_total)\n" +
+              (.imports[] | "- `\(.request_id)`: new=\(.new_intake_count // 0), replay=\(.replay_count // 0), conflicts=\(.conflict_count // 0)")
+            ' "$REPORT_ROOT/receipt.json"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload SHA-addressed validation and import receipts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: region-talk-external-publication-auto-import-${{ github.sha }}-${{ github.run_id }}
+          path: ${{ env.REPORT_ROOT }}
+          if-no-files-found: error
+          retention-days: 30
