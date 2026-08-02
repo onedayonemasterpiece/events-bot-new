@@ -33,6 +33,12 @@ workflow само по себе не гарантирует, что текуща
   `STATIC_SITE_QA_CONTROL_ISSUE_NUMBER` после публикации listener в default
   branch; до этого gateway fail-closed отклоняет комментарии.
 
+Каноническая рабочая точка: [Static Site QA Control #253](https://github.com/onedayonemasterpiece/events-bot-new/issues/253).
+Repository variable `STATIC_SITE_QA_CONTROL_ISSUE_NUMBER=253` привязывает
+listener только к ней. Reusable-вызов явно использует `secrets: inherit`, а
+terminal job всегда указывает `--repo`, поэтому protected Environment secrets и
+issue comment работают независимо от наличия checkout в конкретном job.
+
 ## 2. Целевая схема
 
 ```text

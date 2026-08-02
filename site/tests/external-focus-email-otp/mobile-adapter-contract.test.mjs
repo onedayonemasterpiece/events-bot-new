@@ -81,3 +81,10 @@ test('protected workflow keeps the recipient secret and gates all platforms stri
   assert.match(source, /result\.otp_verify_request_count === 0/u);
   assert.match(source, /result\.participant_registration_request_count === 0/u);
 });
+
+
+test('QA issue gateway forwards protected secrets and posts terminal receipts without checkout', async () => {
+  const source = await readFile(new URL('../../../.github/workflows/static-site-qa-command.yml', import.meta.url), 'utf8');
+  assert.match(source, /uses: \.\/\.github\/workflows\/external-focus-email-otp\.yml[\s\S]*?secrets: inherit/u);
+  assert.match(source, /gh issue comment "\$ISSUE" --repo "\$GITHUB_REPOSITORY" --body "TERMINAL/u);
+});
