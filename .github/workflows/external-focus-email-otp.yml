@@ -36,6 +36,25 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: { name: external-e2e }
+    env:
+      E2E_PLATFORM: browser
+      E2E_TARGET_URL: ${{ inputs.target_url }}
+      E2E_EXPECTED_REPO_SHA: ${{ inputs.expected_repo_sha }}
+      E2E_RUN_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_EVIDENCE_DIR: artifacts/external-focus-email-otp-evidence-browser-${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_MAIL_ADAPTER: ${{ vars.E2E_MAIL_ADAPTER }}
+      E2E_YANDEX_MAIL_WS_URL: ${{ secrets.E2E_YANDEX_MAIL_WS_URL }}
+      E2E_IMAP_USERNAME: ${{ secrets.E2E_IMAP_USERNAME }}
+      E2E_IMAP_PASSWORD: ${{ secrets.E2E_IMAP_PASSWORD }}
+      E2E_IMAP_HOST: ${{ vars.E2E_IMAP_HOST }}
+      E2E_IMAP_PORT: ${{ vars.E2E_IMAP_PORT }}
+      E2E_IMAP_SECURE: ${{ vars.E2E_IMAP_SECURE }}
+      E2E_RECIPIENT_TEMPLATE: ${{ vars.E2E_RECIPIENT_TEMPLATE }}
+      E2E_EXPECTED_FROM_PATTERN: ${{ vars.E2E_EXPECTED_FROM_PATTERN }}
+      E2E_EXPECTED_SUBJECT_PATTERN: ${{ vars.E2E_EXPECTED_SUBJECT_PATTERN }}
+      E2E_MAIL_TIMEOUT_MS: ${{ vars.E2E_MAIL_TIMEOUT_MS }}
+      E2E_SUPABASE_HOST: ${{ vars.E2E_SUPABASE_HOST }}
+      E2E_RELAY_HOST: ${{ vars.E2E_RELAY_HOST }}
     defaults: { run: { working-directory: site } }
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -44,25 +63,6 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
       - name: Run Chromium compatibility journey
-        env: &e2e_env
-          E2E_PLATFORM: browser
-          E2E_TARGET_URL: ${{ inputs.target_url }}
-          E2E_EXPECTED_REPO_SHA: ${{ inputs.expected_repo_sha }}
-          E2E_RUN_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
-          E2E_EVIDENCE_DIR: artifacts/external-focus-email-otp-evidence-browser-${{ github.run_id }}-${{ github.run_attempt }}
-          E2E_MAIL_ADAPTER: ${{ vars.E2E_MAIL_ADAPTER }}
-          E2E_YANDEX_MAIL_WS_URL: ${{ secrets.E2E_YANDEX_MAIL_WS_URL }}
-          E2E_IMAP_USERNAME: ${{ secrets.E2E_IMAP_USERNAME }}
-          E2E_IMAP_PASSWORD: ${{ secrets.E2E_IMAP_PASSWORD }}
-          E2E_IMAP_HOST: ${{ vars.E2E_IMAP_HOST }}
-          E2E_IMAP_PORT: ${{ vars.E2E_IMAP_PORT }}
-          E2E_IMAP_SECURE: ${{ vars.E2E_IMAP_SECURE }}
-          E2E_RECIPIENT_TEMPLATE: ${{ vars.E2E_RECIPIENT_TEMPLATE }}
-          E2E_EXPECTED_FROM_PATTERN: ${{ vars.E2E_EXPECTED_FROM_PATTERN }}
-          E2E_EXPECTED_SUBJECT_PATTERN: ${{ vars.E2E_EXPECTED_SUBJECT_PATTERN }}
-          E2E_MAIL_TIMEOUT_MS: ${{ vars.E2E_MAIL_TIMEOUT_MS }}
-          E2E_SUPABASE_HOST: ${{ vars.E2E_SUPABASE_HOST }}
-          E2E_RELAY_HOST: ${{ vars.E2E_RELAY_HOST }}
         run: npm run e2e:external-focus-email-otp
       - name: Upload sanitized browser evidence
         if: ${{ always() && hashFiles('site/artifacts/external-focus-email-otp-evidence-browser-*/.redaction-ok') != '' }}
@@ -79,6 +79,25 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     environment: { name: external-e2e }
+    env:
+      E2E_PLATFORM: android
+      E2E_TARGET_URL: ${{ inputs.target_url }}
+      E2E_EXPECTED_REPO_SHA: ${{ inputs.expected_repo_sha }}
+      E2E_RUN_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_EVIDENCE_DIR: artifacts/external-focus-email-otp-evidence-android-${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_MAIL_ADAPTER: ${{ vars.E2E_MAIL_ADAPTER }}
+      E2E_YANDEX_MAIL_WS_URL: ${{ secrets.E2E_YANDEX_MAIL_WS_URL }}
+      E2E_IMAP_USERNAME: ${{ secrets.E2E_IMAP_USERNAME }}
+      E2E_IMAP_PASSWORD: ${{ secrets.E2E_IMAP_PASSWORD }}
+      E2E_IMAP_HOST: ${{ vars.E2E_IMAP_HOST }}
+      E2E_IMAP_PORT: ${{ vars.E2E_IMAP_PORT }}
+      E2E_IMAP_SECURE: ${{ vars.E2E_IMAP_SECURE }}
+      E2E_RECIPIENT_TEMPLATE: ${{ vars.E2E_RECIPIENT_TEMPLATE }}
+      E2E_EXPECTED_FROM_PATTERN: ${{ vars.E2E_EXPECTED_FROM_PATTERN }}
+      E2E_EXPECTED_SUBJECT_PATTERN: ${{ vars.E2E_EXPECTED_SUBJECT_PATTERN }}
+      E2E_MAIL_TIMEOUT_MS: ${{ vars.E2E_MAIL_TIMEOUT_MS }}
+      E2E_SUPABASE_HOST: ${{ vars.E2E_SUPABASE_HOST }}
+      E2E_RELAY_HOST: ${{ vars.E2E_RELAY_HOST }}
     defaults: { run: { working-directory: site } }
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -103,16 +122,8 @@ jobs:
             npx appium --base-path /wd/hub --port 4723 > "${RUNNER_TEMP}/appium-android.log" 2>&1 &
             for n in {1..45}; do curl -fsS http://127.0.0.1:4723/wd/hub/status >/dev/null && break; sleep 1; done
             npm run e2e:external-focus-email-otp
-        env:
-          <<: *e2e_env
-          E2E_PLATFORM: android
-          E2E_EVIDENCE_DIR: artifacts/external-focus-email-otp-evidence-android-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Emit safe BLOCKED artifact when emulator failed before harness
         if: ${{ always() }}
-        env:
-          <<: *e2e_env
-          E2E_PLATFORM: android
-          E2E_EVIDENCE_DIR: artifacts/external-focus-email-otp-evidence-android-${{ github.run_id }}-${{ github.run_attempt }}
         run: test -f "$E2E_EVIDENCE_DIR/.redaction-ok" || npm run e2e:external-focus-email-otp || true
       - name: Upload sanitized Android evidence
         if: ${{ always() && hashFiles('site/artifacts/external-focus-email-otp-evidence-android-*/.redaction-ok') != '' }}
@@ -129,6 +140,25 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 40
     environment: { name: external-e2e }
+    env:
+      E2E_PLATFORM: ios
+      E2E_TARGET_URL: ${{ inputs.target_url }}
+      E2E_EXPECTED_REPO_SHA: ${{ inputs.expected_repo_sha }}
+      E2E_RUN_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_EVIDENCE_DIR: artifacts/external-focus-email-otp-evidence-ios-${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_MAIL_ADAPTER: ${{ vars.E2E_MAIL_ADAPTER }}
+      E2E_YANDEX_MAIL_WS_URL: ${{ secrets.E2E_YANDEX_MAIL_WS_URL }}
+      E2E_IMAP_USERNAME: ${{ secrets.E2E_IMAP_USERNAME }}
+      E2E_IMAP_PASSWORD: ${{ secrets.E2E_IMAP_PASSWORD }}
+      E2E_IMAP_HOST: ${{ vars.E2E_IMAP_HOST }}
+      E2E_IMAP_PORT: ${{ vars.E2E_IMAP_PORT }}
+      E2E_IMAP_SECURE: ${{ vars.E2E_IMAP_SECURE }}
+      E2E_RECIPIENT_TEMPLATE: ${{ vars.E2E_RECIPIENT_TEMPLATE }}
+      E2E_EXPECTED_FROM_PATTERN: ${{ vars.E2E_EXPECTED_FROM_PATTERN }}
+      E2E_EXPECTED_SUBJECT_PATTERN: ${{ vars.E2E_EXPECTED_SUBJECT_PATTERN }}
+      E2E_MAIL_TIMEOUT_MS: ${{ vars.E2E_MAIL_TIMEOUT_MS }}
+      E2E_SUPABASE_HOST: ${{ vars.E2E_SUPABASE_HOST }}
+      E2E_RELAY_HOST: ${{ vars.E2E_RELAY_HOST }}
     defaults: { run: { working-directory: site } }
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -152,8 +182,6 @@ jobs:
           xcrun simctl bootstatus "$udid" -b
       - name: Run Mobile Safari / XCUITest
         env:
-          <<: *e2e_env
-          E2E_PLATFORM: ios
           E2E_DEVICE_NAME: iPhone 16
           E2E_PLATFORM_VERSION: '18.5'
           E2E_DEVICE_UDID: ${{ steps.simulator.outputs.udid }}
@@ -169,10 +197,6 @@ jobs:
           npm run e2e:external-focus-email-otp
       - name: Emit safe BLOCKED artifact when simulator failed before harness
         if: ${{ always() }}
-        env:
-          <<: *e2e_env
-          E2E_PLATFORM: ios
-          E2E_EVIDENCE_DIR: artifacts/external-focus-email-otp-evidence-ios-${{ github.run_id }}-${{ github.run_attempt }}
         run: test -f "$E2E_EVIDENCE_DIR/.redaction-ok" || npm run e2e:external-focus-email-otp || true
       - name: Delete simulator
         if: ${{ always() && steps.simulator.outputs.udid != '' }}
