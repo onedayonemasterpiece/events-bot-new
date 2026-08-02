@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk source-profile request lifecycle: a processed bounded
+  capture now clears only the explicit acquisition request while a non-ready
+  profile remains fail closed. CandidateReport treats that explicit flag as
+  authoritative, preventing unchanged `needs_review` archives from consuming
+  the same history slots on every recovery cycle.
 - Fixed Region Talk social-profile recovery routing: explicit
   `source_profile_capture` requests now own the bounded source-history slots
   ahead of ordinary discovery and rescans, so a small capture-only run reaches

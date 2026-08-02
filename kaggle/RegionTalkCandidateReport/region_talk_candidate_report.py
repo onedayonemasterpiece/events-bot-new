@@ -986,9 +986,16 @@ def source_profile_capture_requested(source_row: dict[str, Any] | None) -> bool:
     if not getenv_bool("REGION_TALK_SOURCE_PROFILE_CAPTURE_ENABLED", True):
         return False
     row = source_row if isinstance(source_row, dict) else {}
+    # Once the finalizer has written the explicit acquisition flag it is the
+    # authoritative request state.  `needs_source_profile` describes editorial
+    # readiness and may legitimately remain true after a bounded capture was
+    # processed into a fail-closed `needs_review` profile.  Treating that
+    # readiness flag as another acquisition request caused the same archive to
+    # be fetched on every run without creating any new evidence.
+    capture_requested_raw = row.get("source_profile_capture_requested")
+    if capture_requested_raw not in (None, ""):
+        return _rt_bool(capture_requested_raw)
     if str(row.get("needs_source_profile") or "").strip().lower() in {"1", "true", "yes", "on"}:
-        return True
-    if str(row.get("source_profile_capture_requested") or "").strip().lower() in {"1", "true", "yes", "on"}:
         return True
     evidence_status = str(
         row.get("external_blogger_evidence_status")
@@ -1608,9 +1615,10 @@ def _seed_scan_due_state(seed: Seed, previous_state: dict[str, Any] | None = Non
 
 def source_queue_priority_bucket(queue_row: dict[str, Any] | None = None) -> int:
     row = queue_row if isinstance(queue_row, dict) else {}
-    if (
-        _rt_bool(row.get("source_profile_capture_requested"))
-        or _rt_bool(row.get("needs_source_profile"))
+    capture_requested_raw = row.get("source_profile_capture_requested")
+    if _rt_bool(capture_requested_raw) or (
+        capture_requested_raw in (None, "")
+        and _rt_bool(row.get("needs_source_profile"))
     ):
         return -3
     if (

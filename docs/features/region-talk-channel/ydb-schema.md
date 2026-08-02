@@ -265,8 +265,11 @@ compact KV table. None grants publication permission:
 An accepted social candidate with no current reusable profile sets
 `source_profile_capture_requested=true` and `needs_source_profile=true` on its
 authoritative `source_queue_item`. CandidateReport consumes this bounded work
-flag through its existing source loop; clearing it means a current reusable
-profile exists, not that the candidate was approved for publication.
+flag through its existing source loop. The explicit capture flag is the
+authoritative acquisition state: after a current bounded capture has been
+processed it is cleared even if synthesis remains fail-closed `needs_review`.
+`needs_source_profile` then stays true as the independent Writer-readiness
+state. Clearing either flag never approves the candidate or grants publication.
 
 ## Live product funnel contract
 
