@@ -5,12 +5,16 @@ on:
     branches: [feature/event-reminders-calendar-test-design-20260802]
     paths:
       - .github/workflows/sync-main-event-reminders.yml
+  pull_request:
+    branches: [main]
+    types: [synchronize]
 
 permissions:
   contents: write
 
 jobs:
   sync:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
