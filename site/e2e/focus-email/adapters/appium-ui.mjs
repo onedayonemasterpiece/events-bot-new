@@ -224,13 +224,13 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
       if (!elementId) throw new Error(`fail_browser_context:native_input_id_missing:${selector}`);
       const rect = await driver.getElementRect(elementId);
       if (!(rect.width > 0 && rect.height > 0)) throw new Error(`fail_browser_context:native_input_rect_invalid:${selector}`);
-      // XCUITest mobile:tap synthesizes an actual touch input event. With an
-      // element id, x/y are relative to its native rect, so no WebView-to-screen
-      // coordinate translation or guessed Safari offset is involved.
+      // XCUITest mobile:tap synthesizes an actual touch input event. Use the
+      // absolute centre of the rect returned by XCTest itself; this selects the
+      // screen-level gesture route rather than the element accessibility tap,
+      // without any WebView-to-screen translation or guessed Safari offset.
       await driver.executeScript('mobile: tap', [{
-        elementId,
-        x: Math.round(rect.width / 2),
-        y: Math.round(rect.height / 2),
+        x: Math.round(rect.x + rect.width / 2),
+        y: Math.round(rect.y + rect.height / 2),
       }]);
       await driver.pause(350);
     } finally {

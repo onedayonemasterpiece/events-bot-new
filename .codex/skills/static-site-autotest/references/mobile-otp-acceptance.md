@@ -39,9 +39,9 @@ instead of copying it.
 - Before a keyboard-critical tap, scroll the HTML input to the center, switch
   to `NATIVE_APP`, locate exactly one visible `XCUIElementTypeTextField` by the
   input's accessible label using `-ios predicate string`, and synthesize
-  `mobile: tap` at the center of that element's native rect. Then restore the
-  web context. This uses coordinates relative to the native element, not a
-  guessed WebView-to-screen transform.
+  a screen-level `mobile: tap` at the absolute center of the rect returned by
+  XCTest itself. Then restore the web context. This is not a guessed
+  WebView-to-screen transform and must not be derived from DOM coordinates.
 - Do not use a synthetic WebKit click as keyboard proof. Do not use global
   `nativeWebTap`, `nativeWebTapStrict`, coordinate translation calibration or a
   guessed screen offset. Do not persist native hierarchy or field values.
