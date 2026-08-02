@@ -1956,16 +1956,24 @@ async def edit_pending_revision_in_place(
 
     caption = public_caption(row, html_mode=True)
     mode = publication_delivery_mode(row)
-    await client.edit_message(
-        peer,
-        prior_message_id,
-        caption,
-        parse_mode="html",
-        link_preview=bool(
-            mode == "link_preview_fallback"
-            and not getenv_bool("REGION_TALK_NOTIFY_DISABLE_WEB_PREVIEW", False)
-        ),
-    )
+    try:
+        await client.edit_message(
+            peer,
+            prior_message_id,
+            caption,
+            parse_mode="html",
+            link_preview=bool(
+                mode == "link_preview_fallback"
+                and not getenv_bool("REGION_TALK_NOTIFY_DISABLE_WEB_PREVIEW", False)
+            ),
+        )
+    except Exception as exc:
+        # A review-contract/version migration can change the durable identity
+        # while the visible caption is already exact. Telegram reports that as
+        # an error, but it is safe to rebind only after the same strict visible
+        # text + ordered URL verification below succeeds.
+        if type(exc).__name__ != "MessageNotModifiedError":
+            raise
     verified = await client.get_messages(peer, ids=prior_message_id)
     if not telegram_message_matches_public_caption(verified, row):
         raise RuntimeError(

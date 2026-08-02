@@ -1019,9 +1019,13 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
             message = "verified"
             entities = []
 
+        class MessageNotModifiedError(Exception):
+            pass
+
         class Client:
             async def edit_message(self, _peer, message_id, caption, **kwargs):
                 edits.append((message_id, caption, kwargs))
+                raise MessageNotModifiedError("already exact")
 
             async def get_messages(self, _peer, ids):
                 return Message()

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk contract-only review rebinding: Telegram's
+  `MessageNotModified` response is now accepted only after exact live caption
+  and ordered-link verification, so an already-current pending message no
+  longer stalls autonomous delivery reconciliation.
 - Fixed Region Talk review-media identity drift after YDB compaction: operator
   fingerprints and pending-revision comparisons now bind to the exact ordered
   presentation while ignoring prunable acquisition/cache evidence, allowing a
