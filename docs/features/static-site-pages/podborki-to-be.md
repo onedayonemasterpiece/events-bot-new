@@ -1837,15 +1837,18 @@ thresholds, scores, schedule, Astro routes, navigation или sitemap.
 
 После correction PR A полный 50-source primary-only Gate B прошёл: exact
 quotes/source bindings 100%, false confirmed hard negatives 0, recall
-child/family/joint — 11/12, 8/9 и 1/1. На свежей production-копии эффективный
-20-source bounded apply записал только `collection_decisions`, а identical warm
-дал `provider_calls=0`, `writes=0`, `changed_events=0`.
+child/family/joint — 11/12, 8/9 и 1/1. На свежей production-копии effective
+20-source warm дал `provider_calls=0`, `writes=0`, `changed_events=0`, но это
+пока PARTIAL Gate D: в initial apply одна строка была deferred и заменена, а
+сохранённой exact-cohort цепочки `plan → evaluate → apply → identical warm` нет.
 
-Product snapshot после first apply и warm имеет одинаковые
+Локальный product snapshot после first apply и warm имеет одинаковые
 `input_fingerprint=330d57ea…` и
 `normalized_output_sha256=fc4fe807…`. Monitor: child 11 HEALTHY, family 7
 HEALTHY, kids-union 15 HEALTHY, joint 0 WATCH; дополнительные WATCH — только
 отсутствующий owner-accepted baseline и пустая непубличная joint-выборка.
+Это PARTIAL product evidence: GitHub live-product job и post-ingestion snapshot
+ещё отсутствуют.
 
 Сквозной ordinary-ingestion gate пока не принят: Fly SQLite сохраняет
 Event/EventSource, но не исходные Telegram extraction packets, VK `EventDraft`

@@ -6,11 +6,16 @@
 
 - Gate A PASS;
 - полный Gate B PASS на 50 real EventSource;
-- Gate C PASS: offline fail-closed drill и три real GPT-4o fallback cases;
-- Gate D PASS на production-копии: эффективный cohort из 20 sources и warm
-  `provider_calls=0`, `writes=0`, `changed_events=0`;
-- product snapshot / #234 PASS WITH WATCH, нормализованный fingerprint после
-  first apply и warm совпадает;
+- Gate C PARTIAL: offline fail-closed drill и три real GPT-4o valid-fallback
+  cases пройдены, но real driver/report пока не имеют durable generator/hash
+  binding, а malformed/evidence mismatch на real corpus не повторены;
+- Gate D PARTIAL: эффективный cohort из 20 sources дал warm
+  `provider_calls=0`, `writes=0`, `changed_events=0`, но нет сохранённой
+  exact-cohort цепочки `plan → evaluate → apply → identical warm`; initial defer
+  6797 был заменён на 6521;
+- local product snapshot / #234 PARTIAL WITH WATCH: нормализованный fingerprint
+  после first apply и warm совпадает, но GitHub live-product job и
+  post-ingestion snapshot отсутствуют;
 - Gate E **BLOCKED**: исходные pre-import Telegram/VK/parser packets в
   production DB не сохраняются, а reconstructed smoke нельзя выдавать за
   source-faithful штатный replay;
@@ -531,10 +536,10 @@ PUBLICATION                BLOCKED
 ```text
 FACTS_V3_CODE              PASS
 PRIMARY_REAL_DATA          PASS
-FALLBACK_FAILURE_DRILL     PASS
-PRODUCTION_COPY APPLY      PASS
-PRODUCTION COPY WARM       PASS
-PRODUCT SNAPSHOT/MONITOR   PASS WITH WATCH
+FALLBACK_FAILURE_DRILL     PARTIAL
+PRODUCTION_COPY APPLY      PARTIAL
+PRODUCTION COPY WARM       PARTIAL (warm mechanics pass)
+PRODUCT SNAPSHOT/MONITOR   PARTIAL WITH WATCH
 REAL POST SMART UPDATE     BLOCKED (нет source-faithful pre-import packets)
 BOUNDED LIVE APPLY         BLOCKED
 BOUNDED LIVE WARM          BLOCKED

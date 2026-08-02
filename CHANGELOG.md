@@ -42,11 +42,14 @@
   After correcting provisional truth, a fresh 50-source production-snapshot
   replay passed Gate B with one Gemma send per source, zero writes, exact
   quotes/bindings, no confirmed hard negatives and child/family/joint recall of
-  11/12, 8/9 and 1/1. An effective 20-source production-copy apply and warm
-  no-op passed; the product snapshot stayed byte-semantically stable and #234
-  reported only expected WATCH signals. Source-faithful ordinary ingestion and
-  Fly remain blocked because historical pre-import packets are not retained;
-  reconstructed probes are recorded as failures, not acceptance evidence.
+  11/12, 8/9 and 1/1. An effective 20-source production-copy warm proved zero
+  calls/writes/diff and the local product snapshot stayed semantically stable,
+  but Gate D remains partial because one initial defer was replaced and no
+  exact-cohort plan/evaluate/apply/warm chain was saved. Real fallback evidence
+  is also partial until its driver/report are durably generator-bound.
+  Source-faithful ordinary ingestion and Fly remain blocked because historical
+  pre-import packets are not retained; reconstructed probes are recorded as
+  failures, not acceptance evidence.
 - Added static-collection PR-A quality contracts: ontology v2 separates child,
   family, joint-family, science-pop and research-in-action meanings; the
   provisional seed moved out of the misleading gold fixture into source-bound

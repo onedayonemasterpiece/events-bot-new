@@ -12,10 +12,11 @@ Integration branch / draft PR: `integration/static-collection-facts-v3` / #233.
 
 ## Executive result
 
-The corrected source truth, real primary-only Gate B, production-copy apply,
-warm no-op and source-bound product snapshot now form a verified chain. The
-remaining mandatory ordinary-ingestion gate is **BLOCKED**, so this stack is
-not ready for a clean main-based production branch or Fly canary.
+The corrected source truth and real primary-only Gate B are verified. Copy
+apply/warm, fallback and the product adapter have strong bounded evidence, but
+do not yet meet every mandatory acceptance contract. Ordinary ingestion is
+**BLOCKED**, so this stack is not ready for a clean main-based production branch
+or Fly canary.
 
 | Gate | Result | Evidence |
 |---|---|---|
@@ -23,10 +24,9 @@ not ready for a clean main-based production branch or Fly canary.
 | Facts-v3 deterministic suite | PASS | 202 focused tests on the integrated worktree; GitHub facts-v3 and product workflows green on `c625f180` |
 | Fresh production snapshot | PASS | 6,998 events, `quick_check=ok`, SHA below |
 | Full corrected Gate B | **PASS** | 50 real EventSource rows, 50 Gemma sends, no GPT-4o, no writes, exact binding/quotes; all recalls above 0.80 |
-| Fallback/failure drill | PASS | 4/4 offline fail-closed scenarios and 3 real GPT-4o fallback cases, max one primary plus one fallback send |
-| Production-copy apply | PASS with one disclosed replacement | 19/20 initial rows applied; one validator-deferred row was replaced by one separately applied row, yielding 20 cached sources |
-| Production-copy warm | **PASS** | 20 cached sources, provider calls 0, writes 0, changed events 0 |
-| Product snapshot + #234 monitor | PASS/WATCH | exact same normalized output after apply and warm; no FAIL; only missing accepted baseline and empty non-public joint collection |
+| Fallback/failure drill | PARTIAL | committed offline 4/4 fail-closed drill plus 3 real valid-fallback cases, but the paid-driver is a volatile artifact and malformed/evidence mismatch were not repeated on real sources |
+| Production-copy apply/warm | PARTIAL | apply mechanics and an effective 20-source warm no-op are proven, but no exact-cohort copy `plan → evaluate → apply → identical warm` chain exists; one initial defer was replaced |
+| Product snapshot + #234 monitor | PARTIAL/WATCH | local copy snapshots after apply/warm have the same normalized output and no FAIL; GitHub live product job and post-ingestion snapshot are absent |
 | Ordinary Telegram/VK/parser ingestion | **BLOCKED** | production does not retain the original upstream packets; reconstructed Telegram is rejected before collection adjudication and existing parser replay mutates source metadata while skipping Smart Update |
 | Clean main-based integration / Fly | BLOCKED | Gate E is not green; #207/#222/#233/#234 are open and verified SHA is not reachable from `origin/main` |
 | Semantic publication | BLOCKED | no owner gold, scores, thresholds, Astro routes, navigation, sitemap or public labels were added |
@@ -139,7 +139,7 @@ Gate status is PASS, `copy_gates_allowed=true`, errors 0. Seven warnings remain:
 six excluded borderline families and one non-blocking 7176 family boundary
 disagreement. Publication remains blocked.
 
-## 4. Fallback and failure evidence
+## 4. Fallback and failure evidence — partial Gate C
 
 The committed provider-free drill
 `scripts/run_static_collection_facts_v3_fallback_drill.py` covers:
@@ -166,9 +166,13 @@ bound sources (events 6562, 6689 and 4648):
 - apply was in memory only and DB writes were 0.
 
 The offline cases, rather than extra paid calls, cover malformed output and
-complete unavailability.
+complete unavailability. This is useful bounded evidence, but not a fully
+reproducible Gate-C PASS: the real-provider driver remains an ignored local
+artifact, its report has no generator command/driver hash, and malformed and
+evidence-mismatch variants were not repeated against the real corpus. Gate C is
+therefore PARTIAL, not a release gate.
 
-## 5. Production-copy apply and warm
+## 5. Production-copy apply and warm — partial Gate D
 
 All mutations were confined to
 `artifacts/static-collection-product-loop/prod-copy-apply.sqlite`.
@@ -203,7 +207,13 @@ changed event/source IDs empty, logical database SHA unchanged. Artifact
 SHA-256:
 `1ef04216ea0bfd695039dbf2a1288cea8bdeb46529861c11bb684398e90705cf`.
 
-## 6. Product snapshot and #234 monitor
+This proves bounded apply semantics and a warm no-op for the **effective**
+cohort. It does not prove the mandatory exact-cohort sequence
+`plan → evaluate → apply → identical warm`: no separate copy-plan/copy-evaluate
+artifacts were saved, and the warm cohort substitutes 6521 for the initially
+deferred 6797. Gate D is therefore PARTIAL even though the warm mechanics pass.
+
+## 6. Product snapshot and #234 monitor — local PARTIAL/WATCH
 
 One provider-free adapter was added at the existing static exporter /
 StaticSiteBuilder boundary. It reads current/future facts-v3 decisions and
@@ -234,6 +244,11 @@ Current bounded-copy counts:
 The exact WATCH signals are `accepted_baseline_missing` and
 `nonpublic_collection_empty` for joint activity. The snapshot stays
 `shadow|experimental`; publication stays blocked.
+
+This is local production-copy evidence. In GitHub the live `product` job is
+still skipped and only the skeleton/gate jobs are green; no post-ingestion
+snapshot exists. The product connection is therefore PARTIAL, not end-to-end
+acceptance.
 
 Artifacts:
 
@@ -308,11 +323,17 @@ Because Gate E is red, no post-ingestion product snapshot is claimed.
 No production migration, backfill or deploy was run. As of this report:
 
 - #207, #222, #233 and #234 are open;
-- `origin/main` is `9369744c…` and does not contain verified code SHA
-  `c625f180…`;
+- at the final fetch `origin/main` was `a2b0fa92…`; this branch was 114 commits
+  behind and 41 ahead, and does not contain verified code SHA `c625f180…` in
+  main history;
 - release governance forbids Fly mutation/deploy from this side branch;
 - the requested clean main-based integration branch is intentionally deferred
   until Gate E has real packets and passes.
+
+The integration worktree and relevant task lanes are clean. The wider local
+repository has many unrelated dirty/stale worktrees and nine remote
+`hotfix/*` branches ahead of main, so any later production integration must use
+a new clean isolated worktree and repeat the release-governance branch audit.
 
 The smallest next step is not PR B and not Astro. Capture one fresh packet per
 real Telegram, VK and official-parser path before normalization/persistence,
@@ -330,10 +351,10 @@ Until then the precise overall verdict is:
 ```text
 FACTS_V3_CODE              PASS
 PRIMARY_REAL_DATA          PASS
-FALLBACK_FAILURE_DRILL     PASS
-PRODUCTION_COPY_APPLY      PASS
-PRODUCTION_COPY_WARM       PASS
-PRODUCT_SNAPSHOT_MONITOR   PASS_WITH_WATCH
+FALLBACK_FAILURE_DRILL     PARTIAL
+PRODUCTION_COPY_APPLY      PARTIAL
+PRODUCTION_COPY_WARM       PARTIAL (mechanics pass; exact sequence absent)
+PRODUCT_SNAPSHOT_MONITOR   PARTIAL_WITH_WATCH
 REAL_POST_SMART_UPDATE     BLOCKED
 BOUNDED_LIVE_FLY           BLOCKED
 PUBLICATION                BLOCKED
