@@ -908,6 +908,14 @@ def read_live_rows(
         normalize_post_url(str(item.get("post_url") or ""))
         for item in finalizer_inputs.values()
         if normalize_post_url(str(item.get("post_url") or ""))
+        and (
+            (
+                item.get("image_queue_status") == "actual_scored"
+                and item.get("image_model_input_type") == "actual_image"
+            )
+            or rt.is_video_media_candidate(item)
+            or rt.uses_external_link_article_lane(item)
+        )
     }
     for publication_pk, publication in publications_by_pk.items():
         post_url = normalize_post_url(str(publication.get("post_url") or ""))
