@@ -21,6 +21,9 @@ new mailbox until the route decision below proves that a mailbox is necessary.
 4. **GitHub Actions OTP E2E:** use a dedicated Mail Trigger/bucket or a narrowly
    signed one-time read boundary. Never give CI read access to the shared
    production inbound bucket.
+5. **Focus onboarding OTP:** request the message only through the deployed
+   product UI, then receive it through the protected no-persistence Mail Trigger
+   WebSocket adapter. Do not send a separate canary in the same run.
 
 Read [references/architecture.md](references/architecture.md) before changing
 resources, IAM, trigger destinations, retention, or the external OTP harness.
@@ -70,6 +73,13 @@ In GitHub Actions add the mask before any later output:
 Prefer passing the OTP directly to the browser process rather than writing it
 to disk. Evidence may retain only code length, latency, count, and hashed IDs.
 
+For the protected focus test, reuse
+`site/e2e/focus-email/adapters/yandex-websocket.mjs`; do not grant the workflow a
+Yandex Cloud key or reimplement bucket polling. Open the WSS connection before
+the UI issues OTP, require exactly one matching message after that checkpoint,
+accept only the configured sender and anchored current/hook subject contract,
+mask the OTP immediately, and keep it in memory until ordinary digit input.
+
 ## Send and receive a canary
 
 1. Run `status`; require the Mail Trigger and processing trigger to be `ACTIVE`,
@@ -94,6 +104,11 @@ to disk. Evidence may retain only code length, latency, count, and hashed IDs.
   the private Object Storage envelope owns the normalized body.
 - Need raw MIME: Mail Trigger does not provide it. Use controlled IMAP with
   `BODY.PEEK[]`; do not pretend the trigger envelope is raw MIME.
+- Sender/subject mismatch: retain only stage counters and a stable error class;
+  update the anchored template contract only after comparing it with the actual
+  configured provider template.
+- WebSocket connected but no match: inspect Mail Trigger/Function status and
+  safe stage counters before attempting another product send.
 
 ## Safety
 

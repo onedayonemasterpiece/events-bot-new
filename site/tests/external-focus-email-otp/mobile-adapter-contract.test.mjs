@@ -20,7 +20,7 @@ test('Appium adapter uses real browser capabilities and ordinary digit input wit
   assert.match(source, /'appium:usePreinstalledWDA': true/u);
   assert.match(source, /'appium:prebuiltWDAPath': env\.E2E_PREBUILT_WDA_PATH/u);
   assert.equal((source.match(/'wdio:enforceWebDriverClassic': true/gu) || []).length, 2);
-  assert.match(source, /connectionRetryTimeout: platform === 'ios' \? 360_000 : 120_000/u);
+  assert.match(source, /connectionRetryTimeout: platform === 'ios' \? 180_000 : 120_000/u);
   assert.match(source, /connectionRetryCount: 0/u);
   assert.match(source, /for \(const digit of value\).*addValue\(digit\)/su);
   assert.doesNotMatch(source, /getPageSource|pageSource|input\.value\s*=\s*value/u);
@@ -59,4 +59,9 @@ test('protected workflow keeps the recipient secret and gates all platforms stri
   assert.match(source, /--allow-insecure uiautomator2:chromedriver_autodownload/u);
   assert.match(source, /download-wda --/u);
   assert.match(source, /WebDriverAgentRunner-Runner\.app/u);
+  assert.match(source, /for attempt in 1 2/u);
+  assert.match(source, /result\.status === 'BLOCKED'/u);
+  assert.match(source, /result\.otp_issue_request_count === 0/u);
+  assert.match(source, /result\.otp_verify_request_count === 0/u);
+  assert.match(source, /result\.participant_registration_request_count === 0/u);
 });

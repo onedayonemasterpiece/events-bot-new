@@ -14,7 +14,13 @@
   `/dev/kvm` node and does not depend on retriggering udev inside the VM.
   Mobile Safari input focus now uses the exact labelled XCTest text field,
   avoiding WebKit-only focus and unreliable Safari coordinate calibration while
-  keeping native field values and hierarchy out of test evidence.
+  keeping native field values and hierarchy out of test evidence. The iOS gate
+  also restarts Appium/WDA once, and only once, when sanitized evidence proves
+  the failed session created no OTP, verification or registration side effect.
+- Added reusable project skill guidance for constructing protected static-site
+  browser/Android/iOS acceptance journeys and for sending/receiving controlled
+  OTP mail through the existing Yandex Mail Trigger boundary without exposing
+  mailbox credentials, raw messages or OTP evidence.
 - Added the first real mobile focus OTP vertical slice: one platform-neutral
   journey now drives existing Chromium, Chrome Android/Appium UiAutomator2 and
   Mobile Safari/Appium XCUITest sequentially, checks native keyboard/viewport

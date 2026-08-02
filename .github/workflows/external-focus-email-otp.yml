@@ -203,12 +203,40 @@ jobs:
           APPIUM_PORT: '4723'
         shell: bash
         run: |
+          set -euo pipefail
           export E2E_HOST_OS_VERSION="$(sw_vers -productVersion)"
           export E2E_XCODE_VERSION="$(xcodebuild -version | tr '\n' ' ')"
-          npx appium --base-path /wd/hub --port 4723 > "${RUNNER_TEMP}/appium-ios.log" 2>&1 &
-          ready=0; for n in $(seq 1 120); do if curl --max-time 2 -fsS http://127.0.0.1:4723/wd/hub/status >/dev/null; then ready=1; break; fi; sleep 1; done; test "$ready" = 1
-          status=0
-          npm run e2e:external-focus-email-otp || status=$?
+          start_appium() {
+            npx appium --base-path /wd/hub --port 4723 > "${RUNNER_TEMP}/appium-ios.log" 2>&1 &
+            appium_pid=$!
+            ready=0
+            for n in $(seq 1 120); do
+              if curl --max-time 2 -fsS http://127.0.0.1:4723/wd/hub/status >/dev/null; then ready=1; break; fi
+              sleep 1
+            done
+            test "$ready" = 1
+          }
+          status=1
+          for attempt in 1 2; do
+            start_appium
+            status=0
+            npm run e2e:external-focus-email-otp || status=$?
+            if [ "$status" -eq 0 ]; then break; fi
+            retryable=0
+            node - "$E2E_EVIDENCE_DIR/result.json" <<'NODE' && retryable=1 || true
+          const { readFileSync } = require('node:fs');
+          const result = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          process.exit(result.status === 'BLOCKED'
+            && result.otp_issue_request_count === 0
+            && result.otp_verify_request_count === 0
+            && result.participant_registration_request_count === 0 ? 0 : 1);
+          NODE
+            if [ "$attempt" -eq 2 ] || [ "$retryable" -ne 1 ]; then break; fi
+            echo 'Retrying one pre-side-effect Appium/WDA infrastructure startup'
+            kill "$appium_pid" || true
+            wait "$appium_pid" || true
+            find "$E2E_EVIDENCE_DIR" -mindepth 1 -delete
+          done
           if [ "$status" -ne 0 ]; then tail -n 400 "${RUNNER_TEMP}/appium-ios.log"; fi
           exit "$status"
       - name: Emit safe BLOCKED artifact when simulator failed before harness

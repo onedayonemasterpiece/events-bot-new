@@ -24,6 +24,9 @@ For focus-group OTP additionally open:
 - `.github/workflows/external-focus-email-otp.yml`;
 - `site/e2e/focus-email/run.mjs`.
 
+For a new Android/iOS browser-tab implementation or an Appium failure, read
+[`references/mobile-otp-acceptance.md`](references/mobile-otp-acceptance.md).
+
 The implementation handoff for the first Android/iOS milestone is
 `docs/testing/static-site-autotest-codex-prompt.md`. It must also close the
 ChatGPT launch boundary from the control-plane document; a UI-only
@@ -85,6 +88,14 @@ ChatGPT launch boundary from the control-plane document; a UI-only
 - Upload only after fail-closed redaction audit.
 - Android/iOS are not complete until a real emulator/simulator run reaches a
   terminal result; a workflow skeleton is not evidence.
+- Drive one semantic journey through platform adapters. Do not duplicate the
+  business assertions in three test files.
+- On Android require working KVM before boot; do not accept slow software
+  emulation as equivalent evidence.
+- On iOS use the XCUITest-driver-matched prebuilt WebDriverAgent. Keep ordinary
+  navigation in WebKit, but focus keyboard-critical Safari inputs through their
+  exact labelled XCTest text fields. Do not use blanket `nativeWebTap`, Safari
+  coordinate calibration, raw hierarchy dumps or JS value assignment.
 
 ## Release blockers
 
