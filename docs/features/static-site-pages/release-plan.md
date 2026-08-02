@@ -520,35 +520,68 @@ review. Материальный приз и social-share multiplier не нас
 требуют отдельного legal/anti-abuse решения. Полный contract:
 [static-site easter eggs](../static-site-easter-eggs/README.md).
 
-## Separate Stage 14 — «Не пропустить»: push, email invitation и Android connector
+## Separate Stage 14 — «Не пропустить»: saved calendar, Push, email invitation и Android connector
 
-Этот track реализуется отдельно от canonical-root promotion и не меняет текущий
-Top-5. Неизменяемый источник пользовательских требований:
-`docs/features/static-site-pages/schedule-user-requirements.md`; полный
-product/architecture/research contract:
-[calendar-reminder-strategy.md](calendar-reminder-strategy.md).
+Этот track является частью общего static-site release plan, но реализуется
+независимо от canonical-root promotion и не меняет текущий Top-5. Его
+production capabilities остаются fail-closed, пока каждый channel не пройдёт
+свои gates.
 
-Принятая последовательность:
+Канонические документы:
 
-1. production Web Push за сутки и за час, а также lifecycle push при переносе или
-   отмене;
-2. существующий ICS download сохраняется как честный ручной fallback;
-3. NotiSend calendar invitation проходит isolated SMTP/MIME/client lab и не
-   меняет текущий Postbox provider routing до отдельного owner decision;
-4. тонкий Android connector проходит signed APK, verified App Links и
-   `ACTION_INSERT` prototype/device acceptance;
-5. Google Calendar OAuth, subscription calendars, browser `intent:` и ICS Web
-   Share не входят в production scope этого этапа.
+- неизменяемые пользовательские требования:
+  [`schedule-user-requirements.md`](schedule-user-requirements.md);
+- product/architecture/research contract:
+  [`event-reminders-calendar-strategy.md`](event-reminders-calendar-strategy.md);
+- release evidence и Android/iOS сценарии:
+  [`release-autotest-gates.md`](release-autotest-gates.md) и
+  [`../../testing/event-reminders-calendar-e2e.md`](../../testing/event-reminders-calendar-e2e.md).
 
-До закрытия отдельных gates production/root обязан fail-closed:
+### Scope и последовательность
 
-- push sender/scheduler выключен без server-side event revalidation,
-  idempotency и Android+iOS installed-PWA evidence;
-- NotiSend используется только для controlled research recipients, не как
-  transactional fallback и не через recommendation consent;
-- Android connector не рекламируется без stable signing key, verified
-  `assetlinks.json`, signed payload boundary и real-device form acceptance;
-- UI не говорит «Добавлено в календарь» на основании download, share или
-  открытия системной формы;
-- сбой любого нового канала сохраняет работающий ICS fallback и saved-event
-  state.
+1. Простой календарный вид «Избранного»: группировка по дате и строка
+   `время–время | мероприятие | локация`, idempotent save, no duplicate,
+   lifecycle и typed fallback.
+2. Web Push T−24h и ровно один ближний kind:
+   - T−1h, если event city совпадает с server-owned текущим городом пользователя;
+   - T−3h, если событие в другом городе.
+   Near kinds взаимоисключающие; unknown city остаётся typed fail-closed до
+   отдельного owner/data решения.
+3. Управление всеми Push, отдельными временными типами и конкретным событием;
+   anti-storm/idempotency являются release contract.
+4. Существующий ICS download сохраняется как честный ручной fallback и не
+   считается доказанным внешним calendar save.
+5. Postbox calendar invitation проходит строгий Raw MIME builder,
+   REQUEST/update/CANCEL roundtrip и Gmail/Apple Mail/Outlook matrix.
+   NotiSend остаётся comparison-only и не является hidden fallback.
+6. Тонкий Android connector проходит stable signing identity, verified App
+   Links, first-party payload boundary и native `ACTION_INSERT` editor
+   acceptance без calendar/storage permissions.
+7. Google Calendar OAuth/web template, subscription calendars, browser
+   `intent:` и ICS Web Share не входят в production scope этого этапа.
+
+### Release gates
+
+- production-like тесты выбирают актуальное событие динамически из exact
+  deployed build и adjacent ICS; hardcoded event URL запрещён;
+- selected event revalidates до первого side effect и не может тихо смениться
+  после Push/email отправки;
+- browser не задаёт authoritative event time, revision или current city;
+- Push requires durable preferences/outbox, exact-once kinds, lifecycle
+  invalidation, Android/iOS L2 и bounded real-device/device-farm L3 canary;
+- Postbox provider acceptance не считается calendar-client recognition;
+- Android/iOS environment smoke не считается product PASS;
+- UI не говорит «Добавлено в календарь» по download, email acceptance или
+  открытию системной формы.
+
+### NO-GO и rollback
+
+NO-GO, если одновременно существуют T−1h-current-city и T−3h-other-city jobs,
+выключенный тип продолжает отправляться, возможен duplicate/notification storm,
+calendar view выдумывает time/location, email compatibility не доказана или
+connector не прошёл native/App-Link acceptance.
+
+Rollback независим по channel: Push producer/sender выключается и pending jobs
+инвалидируются; email experiment выключается без ambiguous resend; connector
+CTA возвращается к web fallback. Saved-event state, простой календарный вид и
+ICS остаются доступны.
