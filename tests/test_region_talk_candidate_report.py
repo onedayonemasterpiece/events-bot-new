@@ -5799,6 +5799,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
     def test_vk_wall_retries_resolved_signed_owner_after_domain_error(self) -> None:
         mod = load_module()
         wall_domains = []
+        profile_metadata_calls = []
 
         class Response:
             def __init__(self, payload):
@@ -5816,6 +5817,9 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             params = urllib.parse.parse_qs(parsed.query)
             if "utils.resolveScreenName" in parsed.path:
                 return Response({"response": {"object_id": 321, "type": "group"}})
+            if "groups.getById" in parsed.path:
+                profile_metadata_calls.append(params)
+                return Response({"response": {"groups": [{"id": 321, "name": "Travel", "description": "Авторские поездки"}]}})
             wall_domains.append(params.get("domain", [""])[0])
             if len(wall_domains) == 1:
                 return Response({"error": {"error_code": 100, "error_msg": "domain not domain"}})
@@ -5831,6 +5835,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             source, posts = mod.fetch_vk_wall_for_seed(seed, Path(td), 10, source_row={"external_blogger_evidence_status": "confirmed_external"})
 
         self.assertEqual(wall_domains, ["renamedvk", "-321"])
+        self.assertEqual(len(profile_metadata_calls), 1)
         self.assertEqual(source["fetch_status"], "ok")
         self.assertEqual(source["vk_wall_resolve_status"], "group")
         self.assertEqual(posts[0]["post_url"], "https://vk.com/wall-321_7")
