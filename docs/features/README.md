@@ -46,6 +46,7 @@
 
 - `docs/features/static-personal-announcements/README.md` — umbrella release map для static-site персональных анонсов: F1–F17, owners, stages, global decisions и канонические feature homes
 - `docs/features/static-site-pages/README.md` — static-first event pages на `kenigevents.ru`; production promotion пока blocked, текущий план и 10-дневный Telegraph cutover — `release-plan.md`, acceptance inventory — `test-scenarios.md`
+- `docs/features/static-site-pages/event-reminders-calendar-strategy.md` — производная от неизменяемых `schedule-user-requirements.md` стратегия Push T−24/T−1, retained ICS, Postbox calendar-email research и thin Android connector; test design — `docs/testing/event-reminders-calendar-e2e.md`
 - `docs/features/event-people/README.md` — отдельный mobile/desktop блок участников, fail-closed static export и person-like contract
 - `docs/features/unsigned-personalization/README.md` — mixed personalization family: local anonymous preview, pgvector related/search canary, remote telemetry/profile pending
 - `docs/features/site-user-identity/README.md` — Yandex/verified-email identity, sessions and anonymous→authenticated profile linking; post-release VK message-code extension: `docs/features/site-user-identity/vk-message-link.md`
@@ -56,7 +57,7 @@
 - `docs/features/event-comment-feedback/README.md` — aggregated discussion signals from public source comments
 - `docs/features/event-issue-reporting/README.md` — admin event-problem report and ArtKodex repair/history workflow
 - `docs/features/info-partners/README.md` — страница информационных партнёров на static-first сайте: логотипы организаций, nofollow-ссылки и связь со статусом/промо-кампаниями
-- `docs/features/static-site-easter-eggs/README.md` — post-release discovery механики региональных коллекционных пасхалок: promo activity, автоматическая режиссура, обратная связь/partner intake, аналитика и release gates без production implementation
+- `docs/features/static-site-easter-eggs/README.md` — post-release discovery механик региональных коллекционных пасхалок: promo activity, автоматическая режиссура, обратная связь/partner intake, аналитика и release gates без production implementation
 - `docs/features/unusual-events/README.md` — R15 implementation candidate:
   `/neobychnoe/`, 15-family taxonomy, one shared BGE vector contract,
   concept-level unread state and fail-closed Kaggle rollout
