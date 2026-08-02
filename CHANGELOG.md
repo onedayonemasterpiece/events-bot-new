@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Changed Region Talk article drafts to Writer v12: the first paragraph's
+  publisher sentence must summarize the outlet identity, intended reader and
+  distinctive editorial value from all three evidence-linked profile
+  dimensions. A separate LLM Critic records explicit reader-brief checks, while
+  deterministic code only enforces their typed/provenance contract and fails
+  closed. Existing unpublished review copy is version-invalidated and requires
+  a fresh operator decision.
 - Fixed a Region Talk scheduled-orchestrator deadlock on oversized single-line
   cycle JSON: the wrapper now drains stdout in bounded chunks, uses a bounded
   larger asyncio transport buffer and preserves complete JSONL parsing, so the
