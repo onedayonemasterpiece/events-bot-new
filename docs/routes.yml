@@ -132,7 +132,7 @@ sections:
     incident_tg_monitor_stale_s22_lease_2026_07_20: docs/reports/incidents/INC-2026-07-20-tg-monitor-stale-s22-lease.md
     incident_image_geometry_pixel_drift_2026_07_20: docs/reports/incidents/INC-2026-07-20-image-geometry-pixel-drift.md
     incident_static_event_keyboard_visual_regressions_2026_07_20: docs/reports/incidents/INC-2026-07-20-static-event-keyboard-visual-regressions.md
-    incident_static_site_stale_builder_lease_2026_07_19: docs/reports/incidents/INC-2026-07-19-static-site-stale-builder-lease.md
+    incident_static_site_stale_builder_lease_2026_07_19: docs/reports/incidents/INC-2026-07-19-static-builder-lease.md
     incident_meow_source_medallion_telegram_2026_07_17: docs/reports/incidents/INC-2026-07-17-meow-source-medallion-telegram.md
     incident_event_vector_sidecar_sync_stalled_2026_07_11: docs/reports/incidents/INC-2026-07-11-event-vector-sidecar-sync-stalled.md
     incident_future_event_semantic_audit_2026_07_10: docs/reports/incidents/INC-2026-07-10-future-event-semantic-audit.md
@@ -367,6 +367,7 @@ features:
   static_site_pages:
     status: secret_candidate_pipeline_root_promotion_blocked
     docs: docs/features/static-site-pages/README.md
+    calendar_reminder_strategy: docs/features/static-site-pages/calendar-reminder-strategy.md
     collections_original_requirements: docs/features/static-site-pages/podborki.md
     collections_extraction_and_product_plan: docs/features/static-site-pages/podborki-to-be.md
     release_plan: docs/features/static-site-pages/release-plan.md
