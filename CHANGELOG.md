@@ -65,10 +65,11 @@
   11/12, 8/9 and 1/1. A later fresh-copy fixed 20-source plan/apply/warm closed
   Gate D: 20/20 first writes and an identical warm with zero calls, sends,
   writes or Event/EventSource diffs. Real fallback evidence remains partial.
-  Source-faithful VK and parser packets are now captured, but parser warm
-  timestamp churn, shared VK replay RPD exhaustion and the still-running
-  Telegram producer keep ordinary ingestion and Fly blocked without broad
-  adjacent-system fixes.
+  Source-faithful Telegram, VK and parser packets are now captured. Parser warm
+  timestamp churn, shared VK replay RPD exhaustion and the existing Telegram
+  create-bundle grounding guard's shared Flash-Lite RPD keep ordinary ingestion
+  and Fly blocked without broad adjacent-system fixes; failed first receipts no
+  longer trigger a warm retry.
 - Added static-collection PR-A quality contracts: ontology v2 separates child,
   family, joint-family, science-pop and research-in-action meanings; the
   provisional seed moved out of the misleading gold fixture into source-bound

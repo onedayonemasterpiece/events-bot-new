@@ -15,10 +15,13 @@
 - product monitor PARTIAL WITH WATCH: он встроен в существующий
   StaticSiteBuilder; реальный Kaggle preview сохранил snapshot + JSON/MD +
   qa-summary с product WATCH/QA PASS/0 FAIL, после чего общий preview остановил
-  unrelated mobile-rail canary; post-ingestion first/warm snapshots отсутствуют;
+  unrelated mobile-rail canary; завершённая post-ingestion first/warm пара
+  отсутствует;
 - Gate E **BLOCKED WITH FRESH CAPTURES**: добавлен bounded capture contract,
-  получены настоящие VK и parser packets; parser warm меняет `imported_at`, VK
-  упёрся в shared RPD до DB mutation, Telegram Kaggle run ещё выполняется;
+  получены настоящие Telegram, VK и parser packets; parser warm меняет
+  `imported_at`, VK упёрся в shared RPD до DB mutation, а выбранный fresh
+  Telegram create fail-closed остановлен existing `create_bundle_grounding`
+  guard на shared Flash-Lite RPD без DB mutation и без warm retry;
 - Gate F и semantic publication **BLOCKED**.
 
 На Gate B exact-quote и source/event binding равны 100%, ложных confirmed hard
@@ -395,8 +398,12 @@ Telegram/VK/parser Smart Update. Запрещено напрямую созда�
 reproducible blocker и выбрать другой свежий source. Не исправлять guard,
 prompt/model или retries в этом PR. На 2026-08-02 source-faithful parser first
 PASS, но warm меняет только `EventSource.imported_at`; VK capture получен, но
-replay fail-closed на shared RPD; Telegram output ещё `RUNNING`. Поэтому Gate E
-остаётся blocked.
+replay fail-closed на shared RPD. Telegram Monitoring run
+`421ae9b207064666911271958e591f5f` завершён, selected capture
+`kulturnaya_chaika/8140` source-faithful; first pass дошёл до существующего
+`create_bundle_grounding`, который вернул `llm_unavailable` из-за shared
+Flash-Lite RPD. Event/EventSource diff нулевой, product monitor `WATCH`, warm
+не запускался после failed first receipt. Поэтому Gate E остаётся blocked.
 
 ## 8. Gate F — bounded live Fly canary
 
@@ -547,10 +554,10 @@ PUBLICATION                BLOCKED
 FACTS_V3_CODE              PASS
 PRIMARY_REAL_DATA          PASS
 FALLBACK_FAILURE_DRILL     PARTIAL
-PRODUCTION_COPY APPLY      PARTIAL
-PRODUCTION COPY WARM       PARTIAL (warm mechanics pass)
+PRODUCTION_COPY APPLY      PASS
+PRODUCTION COPY WARM       PASS
 PRODUCT SNAPSHOT/MONITOR   PARTIAL WITH WATCH
-REAL POST SMART UPDATE     BLOCKED (нет source-faithful pre-import packets)
+REAL POST SMART UPDATE     BLOCKED (fresh packets есть; adjacent/external guards)
 BOUNDED LIVE APPLY         BLOCKED
 BOUNDED LIVE WARM          BLOCKED
 PUBLICATION                BLOCKED

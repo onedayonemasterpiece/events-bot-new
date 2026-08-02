@@ -6,7 +6,7 @@ PR-A head: `d9112bd3a547bd8592d42bf3332b5bf69e0fe3e8` (draft PR #222)
 
 Verified extraction/product code branch: `integration/static-collection-facts-v3`
 
-Acceptance-harness head before this report: `d5dce869f4a566f78322093bfc931dcfc8a78c26`
+Acceptance-harness head: `e5a63021cdc4f6660798a2c4c1fad744095590fd`
 
 Integration branch / draft PR: `integration/static-collection-facts-v3` / #233.
 
@@ -26,8 +26,8 @@ conditions. This stack is therefore not ready for PR-stack merge or Fly canary.
 | Full corrected Gate B | **PASS** | 50 real EventSource rows, 50 Gemma sends, no GPT-4o, no writes, exact binding/quotes; all recalls above 0.80 |
 | Fallback/failure drill | PARTIAL | committed offline 4/4 fail-closed drill plus 3 real valid-fallback cases, but the paid-driver is a volatile artifact and malformed/evidence mismatch were not repeated on real sources |
 | Production-copy apply/warm | **PASS** | fresh snapshot; fixed 20 exact Event/EventSource bindings from plan onward; first apply 20/20 and identical warm has 0 provider calls/sends/writes and no changed event/source IDs |
-| Product snapshot + monitor | PARTIAL/WATCH | StaticSiteBuilder now runs the existing monitor immediately after snapshot generation and durably emits JSON/Markdown/qa-summary; focused tests pass. A completed source-faithful post-ingestion first/warm pair and real builder canary are still absent |
-| Ordinary Telegram/VK/parser ingestion | **BLOCKED WITH FRESH CAPTURES** | parser and VK source-faithful packets are captured. Parser first passes but warm rewrites `EventSource.imported_at`; VK replay is blocked before mutation by shared RPD exhaustion; current Telegram Kaggle run has not completed |
+| Product snapshot + monitor | PARTIAL/WATCH | StaticSiteBuilder now runs the existing monitor immediately after snapshot generation and durably emits JSON/Markdown/qa-summary; the real bounded Kaggle preview produced product WATCH / QA PASS / 0 FAIL. A completed source-faithful post-ingestion first/warm pair is still absent |
+| Ordinary Telegram/VK/parser ingestion | **BLOCKED WITH FRESH CAPTURES** | all three source-faithful packet types are captured. Parser first passes but warm rewrites `EventSource.imported_at`; VK is blocked before mutation by shared RPD exhaustion; fresh Telegram merge warm mutates prose and a fresh create is blocked before mutation by the existing Flash-Lite grounding guard's shared RPD |
 | Clean main-based integration / Fly | BLOCKED | Gate E is not green; #207/#222/#233/#234 are open and verified SHA is not reachable from `origin/main` |
 | Semantic publication | BLOCKED | no owner gold, scores, thresholds, Astro routes, navigation, sitemap or public labels were added |
 
@@ -243,7 +243,7 @@ snapshot:
 `WATCH` is non-blocking; `FAIL` is written as evidence and then blocks the
 build. The outer Kaggle runner hash-validates and persists all three artifacts.
 Combined capture/replay/builder focused verification passes 53 builder tests
-and 22 capture/replay tests. A real Kaggle preview at repo SHA
+and 23 capture/replay tests. A real Kaggle preview at repo SHA
 `6365395ebe6d085aa76dc776f7d91324ee851a9a` then proved the in-builder
 connection before an unrelated later check:
 
@@ -315,11 +315,38 @@ Current source-faithful evidence:
    full logical DB SHA remained identical. No bypass/model/prompt change or
    second paid retry was made. Blocker artifact SHA-256:
    `064d22d0782a9b61fc75585a31c5c3ad3f30f5b88411f2fa78937cf5e96827ca`.
-3. **Telegram pending.** The authoritative kernel ref is
-   `zigomaro/telegram-monitor-bot`; it is still `RUNNING`. No competing run was
-   started and the S22 remote auth boundary was not touched. Capture waits for
-   the latest completed genuine schema-v2 output; `run_tg_monitor.py` is not
-   used because it mutates/imports.
+3. **Telegram captured and source-faithful, but blocked.** The authoritative
+   `zigomaro/telegram-monitor-bot` run completed with run id
+   `421ae9b207064666911271958e591f5f`: 57 sources, 77 scanned messages and 91
+   extracted events. `telegram_results.json` SHA-256 is
+   `1a96c06e5e9f2387efc6503176d4f30e6fd4050e3fbdadd952b7a3171cd2b6d8`.
+   No competing run was started, `run_tg_monitor.py` was not used and the S22
+   remote-auth boundary was not touched.
+
+   The selected source-faithful capture is current post
+   `kulturnaya_chaika/8140`, a naturally new 2026-08-20 event. Capture SHA-256
+   is `3e193d80146ba381714ff394b33a614749c0e9722aeaa8fb3e277ab0da0ac841`
+   and canonical payload SHA-256 is
+   `1191c69280c577f2258cf7d04f41b846cc6cff7729c337e18f488ec3ada03fd2`.
+   The first production-entrypoint pass completed `eventness_review` and
+   `create_bundle`, then the existing `create_bundle_grounding` guard failed
+   closed because `gemini-3.1-flash-lite` returned `Rate limit exceeded: rpd`.
+   No Event/EventSource or collection decision changed; the product monitor
+   emitted `WATCH` with normalized SHA `0ac8638e…`. The hardened harness did
+   not run warm after this failed first receipt. Replay report SHA-256:
+   `b98ce7571fdbc352bba040a34d7a319ba2768d64110a85f45c07bf2ee4beac26`;
+   blocker SHA-256:
+   `245353746cb4649c95f3a2c12ede2da953ead1c11916c74a6daa97f7a13003c6`.
+
+   Two bounded selection probes were also stopped without adjacent fixes: the
+   Yantar Hall merge first pass was valid but its identical warm rewrote
+   generic `description/search_digest/source_text` (blocker
+   `d8d48433a690fd3f4a7f216cf69fffebab6c35b51437ba2e0a8779aef3c37e0f`), and
+   the Barn create candidate hit the unrelated location-grounding Flash-Lite
+   RPD guard (blocker
+   `71cb86e149501d61a2c25aa0c465780f5bcd65fc3df079a632aedb3e711895ef`).
+   After the second similar external RPD outcome no further source
+   guessing/retry was performed.
 
 The replay CLI can now optionally emit a product snapshot and quality JSON/MD
 after each first/warm pass and fails if normalized output changes or monitor
@@ -346,10 +373,10 @@ repository has many unrelated dirty/stale worktrees and nine remote
 `hotfix/*` branches ahead of main, so any later production integration must use
 a new clean isolated worktree and repeat the release-governance branch audit.
 
-The smallest next step is not PR B and not Astro. Finish/download the current
-Telegram output, capture one valid message, replay it, retry the immutable VK
-capture only after the shared RPD window is available, and retry the parser
-capture when a naturally new official occurrence exists. Only after all three
+The smallest next step is not PR B and not Astro. Retry the immutable selected
+Telegram/VK captures only after the shared RPD window is available, and retry
+the parser capture when a naturally new official occurrence exists. The
+Telegram producer/capture step itself is complete. Only after all three
 first+warm paths pass:
 
 1. merge #207;

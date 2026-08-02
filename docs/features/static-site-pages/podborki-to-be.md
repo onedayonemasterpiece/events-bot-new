@@ -1869,8 +1869,12 @@ handler, repo SHA, actual timestamp, source binding и canonical payload SHA;
 получены настоящие VK `EventDraft` и Yantar Hall `TheatreEvent`. Parser first
 PASS, но warm обновляет `EventSource.imported_at`; VK replay дошёл до
 occurrence review и fail-closed остановился на shared RPD без DB mutation.
-Текущий Telegram Kaggle run ещё выполняется, второй run не запускался. Эти
-adjacent/external blockers не обходятся prompt/model/identity патчами в #233.
+Telegram Monitoring run завершён без конкурирующего S22 запуска; selected
+source-faithful capture `kulturnaya_chaika/8140` прошёл eventness/create bundle,
+но existing `create_bundle_grounding` fail-closed остановился на shared
+Flash-Lite RPD без DB mutation. Failed first receipt теперь не запускает warm.
+Эти adjacent/external blockers не обходятся prompt/model/identity патчами в
+#233.
 Поэтому post-ingestion snapshots, clean main integration и Fly canary честно
 BLOCKED; публикация по-прежнему BLOCKED. Канонические hashes/receipts:
 [integration report](../../../.codex/integration/static-collection-facts-v3-INTEGRATION_REPORT.md).
