@@ -909,6 +909,70 @@ def test_article_writer_requires_all_publisher_reader_brief_dimensions_in_profil
     ) == []
 
 
+def test_article_evidence_pack_uses_normalized_imported_publisher_dimensions() -> None:
+    mod = load_module()
+    profile = {
+        "profile_status": "ready",
+        "profile_kind": "publisher",
+        "profile_fingerprint": "publisher-fp",
+        "profile_summary": "Профессиональное издание с доказательным профилем.",
+        "usable_without_profile_llm": True,
+        "scope": "external",
+        "public_copy_eligibility": "allowed",
+        "profile_dimensions": {
+            "outlet_identity": "Профессиональное издание об архитектуре.",
+            "intended_audience": [{
+                "label": "Архитекторы и читатели, изучающие городскую среду.",
+                "evidence_refs": ["publisher.about"],
+            }],
+            "distinctive_value": [{
+                "text": "Соединяет авторские обзоры с каталогом проектов.",
+                "evidence_refs": ["publisher.policy"],
+            }],
+        },
+        "evidence": [
+            {
+                "evidence_id": "publisher.about",
+                "supports": ["publisher.identity", "publisher.audience"],
+            },
+            {
+                "evidence_id": "publisher.policy",
+                "supports": ["publisher.distinctive_value"],
+            },
+        ],
+    }
+    row = _ready_profile_row(**{
+        "post_url": "https://example.org/article",
+        "content_origin_type": "editorial_publication",
+        "_live_source_profile_fingerprint": "publisher-fp",
+        "source_onboarding_profile_fingerprint": "publisher-fp",
+        "source_profile_fingerprint": "publisher-fp",
+        "_source_onboarding_profile": profile,
+    })
+
+    evidence = mod.build_editorial_evidence(
+        row, source_text="Подробный текст о новом музейном корпусе."
+    )
+
+    required = {
+        "source.publisher.outlet_identity",
+        "source.publisher.intended_audience",
+        "source.publisher.distinctive_value",
+    }
+    assert set(evidence["required_publisher_evidence_ids"]) == required
+    by_id = {item["evidence_id"]: item for item in evidence["evidence"]}
+    assert required.issubset(by_id)
+    assert by_id["source.publisher.outlet_identity"]["upstream_evidence_ids"] == [
+        "publisher.about"
+    ]
+    assert by_id["source.publisher.intended_audience"]["upstream_evidence_ids"] == [
+        "publisher.about"
+    ]
+    assert by_id["source.publisher.distinctive_value"]["upstream_evidence_ids"] == [
+        "publisher.policy"
+    ]
+
+
 def test_article_critic_must_semantically_attest_complete_publisher_reader_brief() -> None:
     mod = load_module()
     required = {
