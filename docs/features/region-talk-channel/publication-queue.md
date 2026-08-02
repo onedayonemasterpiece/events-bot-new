@@ -665,6 +665,10 @@ message. A still-pending clean revision is edited in place and rebound to the
 new review identity, so the operator chat keeps one live candidate message per
 canonical post. Any reaction, missing delivery evidence, chat/message mismatch
 or media change fails closed and suppresses another automatic message.
+If Telegram returns `MessageNotModified` during a contract-only identity
+migration, the notifier accepts it solely after re-reading the message and
+verifying the exact visible caption and both ordered links; it then rebinds the
+unchanged message to the current review identity.
 The Bot API transport has no equivalent complete historical per-reactor read
 inside this send path, so it blocks an existing-message revision and directs
 production to `telethon_discovery2` rather than risking a duplicate.
