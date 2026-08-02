@@ -1,0 +1,105 @@
+name: Apply event reminders release integration v2
+
+on:
+  pull_request:
+    branches: [main]
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.ref == 'feature/event-reminders-calendar-test-design-20260802'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          ref: feature/event-reminders-calendar-test-design-20260802
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '22.22.0' }
+      - name: Merge main, reconcile source requirements and bind to release plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git fetch origin main
+          git merge --no-edit origin/main
+
+          awk '
+            /^          python3 <<.PY.$/ { capture=1; next }
+            capture && /^          PY$/ { capture=0; exit }
+            capture { sub(/^          /, ""); print }
+          ' .github/workflows/apply-event-reminders-release-integration.yml > /tmp/apply_event_reminders.py
+          test -s /tmp/apply_event_reminders.py
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('/tmp/apply_event_reminders.py')
+          text = path.read_text(encoding='utf-8')
+          old = '''def replace_once(text, old, new, label):
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f'{label}: expected one match, found {count}')
+    return text.replace(old, new, 1)
+'''
+          new = '''def replace_once(text, old, new, label):
+    count = text.count(old)
+    if label == 'test release no-go' and count == 0:
+        return text
+    if count != 1:
+        raise SystemExit(f'{label}: expected one match, found {count}')
+    return text.replace(old, new, 1)
+'''
+          if old not in text:
+              raise SystemExit('replace_once function not found in extracted patch')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+
+          python3 /tmp/apply_event_reminders.py
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('docs/testing/event-reminders-calendar-e2e.md')
+          text = path.read_text(encoding='utf-8')
+          additions = (
+              '- city classification взята из browser payload либо одновременно созданы T−1h и T−3h;\n'
+              '- календарный вид «Избранного» не соответствует простому date/time/event/location contract;\n'
+          )
+          marker = '- evidence не прошло redaction.'
+          if additions not in text:
+              if marker not in text:
+                  raise SystemExit('release-policy marker not found')
+              text = text.replace(marker, additions + marker, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          # The source requirements are immutable and must match current main byte-for-byte.
+          git diff --exit-code origin/main -- docs/features/static-site-pages/schedule-user-requirements.md
+
+          # Helper workflows are execution scaffolding only; do not retain them in the product branch.
+          git rm -f \
+            .github/workflows/apply-event-reminders-release-integration.yml \
+            .github/workflows/apply-event-reminders-pr-trigger.yml \
+            .github/workflows/apply-event-reminders-pr-trigger-v2.yml
+
+          node --test site/tests/event-reminders/current-event-resolver.test.mjs
+          git add \
+            CHANGELOG.md \
+            docs/README.md \
+            docs/features/README.md \
+            docs/features/static-site-pages/README.md \
+            docs/features/static-site-pages/event-reminders-calendar-strategy.md \
+            docs/features/static-site-pages/release-autotest-gates.md \
+            docs/features/static-site-pages/release-plan.md \
+            docs/routes.yml \
+            docs/testing/event-reminders-calendar-e2e.md \
+            docs/testing/static-site-autotest-scenarios.v1.yml
+          git diff --cached --check
+          git commit -m "docs: tie event reminders to static-site release plan"
+          git push origin HEAD:feature/event-reminders-calendar-test-design-20260802
