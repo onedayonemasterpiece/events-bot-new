@@ -1,4 +1,4 @@
-mode: serial_integrator_after_parallel_mapping
+mode: parallel_discovery_and_disjoint_implementation_then_serial_integration
 repo: onedayonemasterpiece/events-bot-new
 base_ref: origin/agent/static-collections-quality/pr-a-ontology@3164e984d04208fcff5618c49271a4633d304eab
 base_branch: agent/static-collections-quality/pr-a-ontology
@@ -33,7 +33,7 @@ lanes:
     expected_output: exact call graph and minimal safe code change map
     verification_scope: inspection_only
     effort: high
-    status: planned
+    status: completed
   - id: map-backfill-tests
     role: planner
     requirement_ids: [R04, R05]
@@ -46,8 +46,8 @@ lanes:
     forbidden_files: ['**/*']
     expected_output: CLI/data contract and regression test map
     verification_scope: inspection_only
-    effort: medium
-    status: planned
+    effort: high
+    status: completed
   - id: map-real-data-runtime
     role: planner
     requirement_ids: [R06, R07, R08, R09, R10]
@@ -61,18 +61,65 @@ lanes:
     expected_output: executable staged verification plan with safety gates
     verification_scope: inspection_only
     effort: high
-    status: planned
+    status: completed
+  - id: facts-v3-core
+    role: worker
+    requirement_ids: [R01, R02, R03, R05]
+    target: facts-v3 schema, prompt, strict validation, single-send provider path, receipts, independent merge and legacy projection
+    depends_on: [map-core-contract]
+    execution_mode: parallel_disjoint_worktree
+    branch: agent/static-collection-facts-v3/core
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collection-facts-v3-core
+    writable_files:
+      - smart_event_update.py
+      - google_ai/client.py
+      - tests/test_smart_event_update.py
+      - tests/test_event_update_merge.py
+      - tests/test_google_ai_client.py
+      - docs/features/smart-event-update/README.md
+      - .codex/lanes/static-collection-facts-v3-core/RESULTS.md
+    forbidden_files:
+      - scripts/backfill_static_collection_facts.py
+      - site/src/**
+      - cinema sources
+      - festival extraction/pages
+    expected_output: committed core implementation with focused tests and reconciliation notes
+    verification_scope: focused_unit
+    effort: high
+    status: in_progress
+  - id: facts-v3-backfill
+    role: worker
+    requirement_ids: [R04]
+    target: bounded plan/evaluate/apply CLI, read-only modes, versioned reports, diff allowlist and warm replay
+    depends_on: [map-backfill-tests]
+    execution_mode: parallel_disjoint_worktree
+    branch: agent/static-collection-facts-v3/backfill
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collection-facts-v3-backfill
+    writable_files:
+      - scripts/backfill_static_collection_facts.py
+      - docs/review-data/static_collection_facts_v3_real_data_report.schema.json
+      - tests/test_static_collection_backfills.py
+      - tests/test_static_collection_facts_backfill_report.py
+      - .codex/lanes/static-collection-facts-v3-backfill/RESULTS.md
+    forbidden_files:
+      - smart_event_update.py
+      - google_ai/client.py
+      - site/src/**
+      - cinema sources
+      - festival extraction/pages
+    expected_output: committed backfill/report implementation with focused tests and documented core API assumptions
+    verification_scope: focused_unit
+    effort: high
+    status: in_progress
   - id: facts-v3-integrator
     role: worker
-    requirement_ids: [R11, R12]
-    target: coupled facts-v3 implementation, integration, evidence and release closure
-    depends_on: [map-core-contract, map-backfill-tests, map-real-data-runtime]
+    requirement_ids: [R06, R07, R08, R09, R10, R11, R12]
+    target: worker integration, acceptance tooling, real-data evidence, documentation and release closure
+    depends_on: [facts-v3-core, facts-v3-backfill, map-real-data-runtime]
     execution_mode: serial_after_dependency
     branch: integration/static-collection-facts-v3
     worktree: /home/dev/.codex/worktrees/events-bot-new/static-collection-facts-v3
     writable_files:
-      - smart_event_update.py
-      - scripts/backfill_static_collection_facts.py
       - scripts/**static_collection_facts_v3**
       - tests/**static_collection_facts**
       - docs/features/static-site-pages/**facts-v3**
@@ -90,4 +137,4 @@ lanes:
     expected_output: separate stacked implementation PR with staged real-data and canary evidence
     verification_scope: full_local
     effort: high
-    status: planned
+    status: pending
