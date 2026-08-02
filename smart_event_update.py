@@ -993,18 +993,33 @@ def _collection_fact_quote_supports_value(
             "explicit_child_participants",
         }:
             return False
-        return bool(
-            re.search(r"(?:/|\b)для[-_/\s]+дет", normalized)
-            or re.search(r"(?:/|\b)dlya[-_/]+dete", normalized)
-            or "театрдлядетей" in normalized
-            or re.search(r"\b(?:приглаша\w*|ждем|ждут)\s+(?:всех\s+)?(?:детей|ребят|школьников)\b", normalized)
-            or re.search(r"\b(?:маленьк\w*|юных?)\s+(?:зрител|участник)\w*\b", normalized)
-            or re.search(
-                r"\bдетск\w*(?:\s+[\w-]+){0,2}\s+(?:спектакл\w*|шоу|заняти\w*|"
-                r"мастер-класс\w*|программ\w*|праздник\w*|клуб\w*)\b",
+        # Meaning remains LLM-owned.  These are only narrow guards for known
+        # non-entailing routing signals; requiring one of a small keyword list
+        # here would incorrectly reject valid wording such as «интересно и
+        # детям, и взрослым».
+        age_only = bool(
+            re.fullmatch(
+                r"(?:(?:возрастн\w*\s+(?:ограничени\w*|ценз)\s*[:\-]?\s*)?"
+                r"(?:0|3|6|12|16|18)\s*\+|от\s+\d{1,2}\s+лет)",
                 normalized,
             )
         )
+        child_author_only = bool(
+            re.search(
+                r"\b(?:работ\w*|картин\w*|рисунк\w*|произведени\w*)\s+"
+                r"(?:юных|детск\w*|детей|школьник\w*)\s+(?:автор|художник)\w*\b",
+                normalized,
+            )
+            or re.search(
+                r"\bглазами\s+(?:юных|маленьких)\s+(?:автор|художник)\w*\b",
+                normalized,
+            )
+        ) and not re.search(
+            r"\b(?:для\s+дет|приглаша\w*\s+дет|детям\s+и\s+взросл|"
+            r"детей\s+и\s+родител|маленьк\w*\s+(?:зрител|участник))\w*",
+            normalized,
+        )
+        return bool(normalized) and not age_only and not child_author_only
     if fact_key == "family_suitable_decision":
         if reason not in {
             "explicit_family_invitation",
@@ -1012,24 +1027,15 @@ def _collection_fact_quote_supports_value(
             "explicit_family_format",
         }:
             return False
-        return bool(
-            re.search(r"\b(?:для\s+)?вс(?:ей|я|ю)\s+семь", normalized)
-            or re.search(r"\b(?:приходите|ждем|приглаша\w*)\s+всей\s+семь", normalized)
-            or (
-                re.search(r"\b(?:дет|ребен)\w*", normalized)
-                and re.search(r"\b(?:взросл|родител)\w*", normalized)
-            )
-            or re.search(
-                r"\bсемейн\w*\s+(?:формат|шоу|мюзикл|мастер-класс|праздник|"
-                r"фестиваль|программ\w*|заняти\w*|спектакл\w*)\b",
+        vague_family_only = bool(
+            re.fullmatch(
+                r"(?:уютн\w*\s+)?семейн\w*\s+(?:атмосфер\w*|тематик\w*)[.!]?",
                 normalized,
             )
-            or re.search(
-                r"\b(?:шоу|мюзикл|мастер-класс|праздник|фестиваль|"
-                r"программ\w*|заняти\w*|спектакл\w*)[^.;:]{0,80}\bсемейн\w*",
-                normalized,
-            )
+            or re.fullmatch(r"семейн\w*\s+турнир\w*[.!]?", normalized)
         )
+        parents_only = bool(re.search(r"\bтолько\s+для\s+родителей\b", normalized))
+        return bool(normalized) and not vague_family_only and not parents_only
     if fact_key == "joint_family_activity_decision":
         if reason not in {
             "explicit_joint_task",
@@ -1599,6 +1605,10 @@ async def adjudicate_collection_candidate(candidate: EventCandidate) -> dict[str
         "Не расширяй смысл рекламной фразы.\n"
         "People: mentioned не равно confirmed; не выводи происхождение по имени. Для non-unknown origin_scope "
         "нужна отдельная точная origin_evidence_quote.\n"
+        "candidate_reasons задаёт область проверки. Если admission отсутствует, верни admission unknown; "
+        "если audience отсутствует, верни все три audience facts unknown; если people отсутствует, верни "
+        "people_appearances=[]. Служебные backfill/changed/conflict сами по себе не расширяют область. "
+        "Ответ должен быть компактным: не перечисляй людей вне reason=people.\n"
         "При сомнении верни unknown/пустой список. Не пиши публичный текст.\n\n"
         f"Данные:\n{json.dumps(request, ensure_ascii=False)}"
     )
@@ -1606,7 +1616,7 @@ async def adjudicate_collection_candidate(candidate: EventCandidate) -> dict[str
         raw = await _ask_gemma_json(
             prompt,
             COLLECTION_ADJUDICATION_JSON_SCHEMA,
-            max_tokens=1000,
+            max_tokens=1100,
             label="collection_candidate_adjudication",
         )
     except Exception:

@@ -279,6 +279,28 @@ def test_explicit_family_invitation_confirms_family_independently():
     assert result["child_directed_decision"]["value"] == "unknown"
 
 
+def test_real_7326_family_wording_is_not_rejected_by_a_second_keyword_classifier():
+    corpus = "Приходите всей семьёй — будет интересно и детям, и взрослым! Вход свободный."
+    result = validate_collection_adjudication_output(
+        _payload(
+            admission_value="confirmed_free",
+            admission_quote="Вход свободный.",
+            admission_reason="explicit_free_admission",
+            child_value="confirmed",
+            child_quote="будет интересно и детям, и взрослым!",
+            child_reason="explicit_child_audience",
+            family_value="confirmed",
+            family_quote="Приходите всей семьёй — будет интересно и детям, и взрослым!",
+            family_reason="explicit_family_invitation",
+        ),
+        source_corpus=corpus,
+    )
+    assert result is not None
+    assert result["child_directed_decision"]["value"] == "confirmed"
+    assert result["family_suitable_decision"]["value"] == "confirmed"
+    assert result["joint_family_activity_decision"]["value"] == "unknown"
+
+
 def test_joint_parent_child_practice_requires_three_independent_grounded_facts():
     corpus = (
         "Мастер-класс для детей и родителей. "
@@ -352,6 +374,16 @@ def test_family_tournament_does_not_prove_joint_activity():
     assert validate_collection_adjudication_output(
         payload,
         source_corpus="Семейный турнир для детей.",
+    ) is None
+
+    bare_family_claim = _payload(
+        family_value="confirmed",
+        family_quote="Семейный турнир",
+        family_reason="explicit_family_format",
+    )
+    assert validate_collection_adjudication_output(
+        bare_family_claim,
+        source_corpus="Семейный турнир.",
     ) is None
 
 
@@ -454,8 +486,9 @@ async def test_audience_prompt_rejects_family_theme_and_child_popularity_as_proo
     candidate = _candidate(collection_adjudication_reasons=["audience"])
     captured = {}
 
-    async def provider(prompt, *_args, **_kwargs):
+    async def provider(prompt, *_args, **kwargs):
         captured["prompt"] = prompt
+        captured["max_tokens"] = kwargs.get("max_tokens")
         return _payload()
 
     monkeypatch.setattr(sut, "SMART_UPDATE_LLM_DISABLED", False)
@@ -464,6 +497,8 @@ async def test_audience_prompt_rejects_family_theme_and_child_popularity_as_proo
     assert "дети и взрослые/родители прямо приглашены вместе" in captured["prompt"]
     assert "популярность артиста у детей" in captured["prompt"]
     assert "отсутствие положительного доказательства всегда unknown, не denied" in captured["prompt"]
+    assert "candidate_reasons задаёт область проверки" in captured["prompt"]
+    assert captured["max_tokens"] == 1100
 
 
 @pytest.mark.asyncio
