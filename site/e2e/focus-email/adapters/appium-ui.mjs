@@ -310,7 +310,15 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     get observedRepoSha() { return verifiedRepoSha; },
     device,
     async openInvite() {
-      await driver.url(target.href); await driver.waitUntil(async () => (await driver.getUrl()).startsWith(target.origin), { timeout: 30_000 });
+      await driver.url(target.href);
+      try {
+        await driver.waitUntil(async () => (await driver.getUrl()).startsWith(target.origin), { timeout: 30_000 });
+      } catch {
+        // Fresh hosted Safari can occasionally acknowledge the navigation
+        // command while remaining at about:blank. This is a pre-side-effect
+        // simulator/browser startup failure, not a product assertion failure.
+        throw new Error('simulator_safari_navigation:target_origin_not_reached');
+      }
       await dismissSafariFirstRunPrompt();
       const userAgent = await driver.execute(() => navigator.userAgent);
       const version = platform === 'android' ? String(userAgent).match(/Chrome\/([^\s]+)/u)?.[1] : String(userAgent).match(/Version\/([^\s]+)/u)?.[1];

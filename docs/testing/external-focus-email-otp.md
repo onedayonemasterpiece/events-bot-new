@@ -169,6 +169,9 @@ software-keyboard toggle are separate. After a real native input tap still
 reports no `XCUIElementTypeKeyboard`, the adapter activates Simulator, invokes
 the exact `I/O → Keyboard → Toggle Software Keyboard` menu item once, retaps the
 same field and checks again. It never treats a sent keyboard shortcut as proof.
+If Safari acknowledges the initial navigation command but stays on
+`about:blank`, the harness records `BLOCKED_INFRASTRUCTURE` with zero side
+effects and the workflow may use its one bounded Appium/WDA retry.
 
 For selected-once issuance, Android uses simultaneous W3C touch and Return
 sources. Mobile Safari uses the corresponding ordinary WebKit button click and

@@ -25,6 +25,7 @@ test('Appium adapter uses real browser capabilities and ordinary digit input wit
   assert.match(source, /if \(platform === 'ios'\) await driver\.pause\(200\)/u);
   assert.match(source, /XCUIElementTypeTextField/u);
   assert.match(source, /dismissSafariFirstRunPrompt/u);
+  assert.match(source, /simulator_safari_navigation:target_origin_not_reached/u);
   assert.match(source, /XCUIElementTypeButton.*Продолжить/u);
   assert.doesNotMatch(source, /calibrateWebToRealCoordinatesTranslation|nativeWebTapStrict/u);
   assert.match(source, /scrollIntoView/u);

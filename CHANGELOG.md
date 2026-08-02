@@ -33,6 +33,10 @@
   WebKit; iOS screenshot capture also waits for the native text overlay to
   repaint after destructive masking; the sensitive field is blurred first so
   Safari cannot retain its prior native editing overlay in the screenshot.
+  A hosted Safari session that acknowledges navigation but remains on
+  `about:blank` is now classified as a pre-side-effect simulator startup block,
+  allowing the existing single bounded Appium retry instead of reporting a
+  product failure.
 - Added reusable project skill guidance for constructing protected static-site
   browser/Android/iOS acceptance journeys and for sending/receiving controlled
   OTP mail through the existing Yandex Mail Trigger boundary without exposing

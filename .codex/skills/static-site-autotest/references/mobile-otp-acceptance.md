@@ -41,6 +41,10 @@ instead of copying it.
 - On a fresh Simulator, detect and close only the exact allowlisted Safari
   first-run prompt before journey interaction. Do not use a generic alert
   accepter: unrelated permission/security dialogs must still fail visibly.
+- If a fresh Safari session acknowledges navigation but remains at
+  `about:blank`, classify it as a pre-side-effect simulator/browser startup
+  block. The workflow may consume its one bounded Appium restart; do not label
+  it as a product failure or add an in-journey navigation retry.
 - Keep navigation clicks in the Safari web context.
 - Before a keyboard-critical tap, scroll the HTML input to the center, switch
   to `NATIVE_APP`, locate exactly one visible `XCUIElementTypeTextField` by the
