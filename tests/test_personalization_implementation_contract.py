@@ -78,7 +78,7 @@ def test_target_research_precedence_and_legacy_quarantine_are_explicit() -> None
     assert "site/src/lib/personalization/scorer.ts" in wave_zero
     assert "В Wave 0 **не создавать**" in wave_zero
     assert "переименование `legacy/scorer-v1.ts` в `scorer.ts`" in compact_wave_zero
-    assert "не является target quality" in wave_zero
+    assert "`not target quality`" in wave_zero
     assert "research-delta review" in wave_zero
     assert "не выводи продуктовую истину из EventLayout" in compact_wave_zero
 
