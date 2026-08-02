@@ -171,6 +171,40 @@ scenarios:
       pull_request: false_until_implemented
       release: false_until_implemented
 
+  collections.product_quality:
+    title: Collection supply, semantic examples and visible-result stability
+    status:
+      runner: skeleton_implemented
+      live_product_adapter: planned
+      accepted_baseline: planned
+      chatgpt_launch: not_implemented
+    layers: [L0]
+    platforms: []
+    trigger_tags: [static-data, static-route]
+    cost: low
+    side_effects: none
+    subchecks: [health, semantic_sample, stability]
+    selection: affected_runner_on_pr_full_product_snapshot_on_schedule_or_release
+    evidence: qa_summary_product_scorecard_json_and_markdown
+    watch_policy: visible_non_blocking_by_default
+    blocking:
+      pull_request: runner_regressions_only_until_live_adapter
+      release: false_until_live_adapter_baseline_and_chatgpt_launch
+
+  collections.product_page_smoke:
+    title: Published collection pages match the accepted product result
+    status: planned_after_astro_routes
+    layers: [L0, L1]
+    platforms: [browser]
+    trigger_tags: [static-data, static-route, visual-layout]
+    cost: medium
+    side_effects: none
+    selection: affected_collection_routes_on_pr_full_public_set_on_release
+    evidence: product_scorecard_route_report_and_failure_screenshots
+    blocking:
+      pull_request: false_until_implemented
+      release: false_until_implemented
+
   focus.otp.browser_tab:
     title: Real focus-group email OTP in browser tab
     status:
