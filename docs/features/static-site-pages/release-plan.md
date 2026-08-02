@@ -519,3 +519,36 @@ owner decisions → clickable accessible prototype → first-class egg/progress 
 review. Материальный приз и social-share multiplier не наследуют этот релиз и
 требуют отдельного legal/anti-abuse решения. Полный contract:
 [static-site easter eggs](../static-site-easter-eggs/README.md).
+
+## Separate Stage 14 — «Не пропустить»: push, email invitation и Android connector
+
+Этот track реализуется отдельно от canonical-root promotion и не меняет текущий
+Top-5. Неизменяемый источник пользовательских требований:
+`docs/features/static-site-pages/schedule-user-requirements.md`; полный
+product/architecture/research contract:
+[calendar-reminder-strategy.md](calendar-reminder-strategy.md).
+
+Принятая последовательность:
+
+1. production Web Push за сутки и за час, а также lifecycle push при переносе или
+   отмене;
+2. существующий ICS download сохраняется как честный ручной fallback;
+3. NotiSend calendar invitation проходит isolated SMTP/MIME/client lab и не
+   меняет текущий Postbox provider routing до отдельного owner decision;
+4. тонкий Android connector проходит signed APK, verified App Links и
+   `ACTION_INSERT` prototype/device acceptance;
+5. Google Calendar OAuth, subscription calendars, browser `intent:` и ICS Web
+   Share не входят в production scope этого этапа.
+
+До закрытия отдельных gates production/root обязан fail-closed:
+
+- push sender/scheduler выключен без server-side event revalidation,
+  idempotency и Android+iOS installed-PWA evidence;
+- NotiSend используется только для controlled research recipients, не как
+  transactional fallback и не через recommendation consent;
+- Android connector не рекламируется без stable signing key, verified
+  `assetlinks.json`, signed payload boundary и real-device form acceptance;
+- UI не говорит «Добавлено в календарь» на основании download, share или
+  открытия системной формы;
+- сбой любого нового канала сохраняет работающий ICS fallback и saved-event
+  state.
