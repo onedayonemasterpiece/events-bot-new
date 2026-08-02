@@ -35,6 +35,9 @@ background run не закрывают release gate.
 | Focus onboarding/Auth/OTP | existing browser OTP + Android browser-tab OTP + iOS browser-tab OTP |
 | Supabase/Yandex route change | direct/relay contracts + affected browser/mobile journey |
 | Personalization/personal pages | no-leak/data contract + authenticated browser journey; mobile sample when UI/input changes |
+| Event Push subscription/reminder scheduler | L0 outbox/idempotency + L1 + Android/iOS L2; L3 background canary before enablement |
+| Postbox calendar invitation | L0 MIME/UID/SEQUENCE + protected Postbox/mailbox roundtrip + client matrix before product enablement |
+| Android Calendar Connector | L0 manifest/App Links/permissions + L1 fallback + Android native editor L2 + bounded L3 OEM canary |
 | Data-only copy/facts update | no mandatory emulator unless it changes a mobile-critical component |
 
 ## 3. Blocking, background и manual
@@ -47,6 +50,7 @@ background run не закрывают release gate.
 - changed feature browser smoke;
 - Android/iOS при прямом изменении mobile-system contract;
 - protected real OTP при promotion Auth/onboarding/mail-routing change;
+- protected calendar-email roundtrip при изменении активного invitation route;
 - evidence redaction gate.
 
 ### Background advisory
@@ -65,6 +69,7 @@ signals должны иметь terminal result и disposition.
 ### Protected manual
 
 - real mailbox OTP;
+- calendar invitation REQUEST/update/CANCEL sequence;
 - fresh-user identity;
 - production write probe;
 - paid device-cloud L3.
@@ -130,7 +135,12 @@ Release blocked, если:
 - full catalog имеет unexplained empty/broken route;
 - simulator run подменён desktop mobile viewport/WebKit;
 - planned test представлен как passed implementation;
-- один fixed mailbox используется параллельно несколькими real OTP jobs.
+- один fixed mailbox используется параллельно несколькими real OTP jobs;
+- hardcoded event URL устарел и scenario не использовал current-event resolver;
+- selected event переключился после первого Push/email side effect;
+- emulator environment smoke выдан за Push/calendar PASS;
+- Postbox provider acceptance выдан за calendar-client recognition;
+- ICS download выдан за внешнее calendar save.
 
 ## 8. Экономический guardrail
 
@@ -138,6 +148,60 @@ Release blocked, если:
 - не открывать весь каталог на эмуляторах;
 - сначала L0/L1, затем L2;
 - screenshots/video only-on-failure или для selected specimens;
-- real OTP только явно и последовательно;
+- real OTP и calendar-email sequence только явно и последовательно;
 - один bounded retry только для инфраструктурного flake;
 - deterministic gates решают release, AI visual review помогает triage.
+
+## 9. Event reminders and calendar delivery
+
+Канонический test design:
+[`../../testing/event-reminders-calendar-e2e.md`](../../testing/event-reminders-calendar-e2e.md).
+
+### Dynamic current-event prerequisite
+
+Каждый production-like reminder/calendar run сначала выполняет
+`event.current_event.selection`:
+
+- exact deployed HTTPS target и full repo SHA;
+- current listing routes того же build prefix;
+- adjacent `event.ics`;
+- timed future event с UID/title/location;
+- immutable `selected-event.json` для downstream jobs;
+- revalidation до первого side effect.
+
+После первого Push/email side effect event нельзя тихо заменить новым.
+
+### Push
+
+После реализации channel release требует:
+
+- `event.reminder.push_subscription`;
+- `event.reminder.push_delivery`;
+- `event.reminder.lifecycle`;
+- exact-once kinds T−24h/T−1h;
+- server-side test clock для CI, не browser-supplied time;
+- L2 notification permission/UI/click-through;
+- L3 Android OEM и real-iPhone background canary до общего enablement.
+
+### Calendar email
+
+Postbox Raw transport проверяется отдельно от mail-client interpretation:
+
+1. `event.calendar_email.postbox_mime` — deterministic MIME/UID/SEQUENCE;
+2. `event.calendar_email.postbox_roundtrip` — one protected REQUEST/update/CANCEL sequence;
+3. `event.calendar_email.client_action` — Gmail/Apple Mail/Outlook matrix.
+
+NotiSend не становится hidden fallback от Postbox и не входит в release gate без
+отдельного architecture decision.
+
+### Android connector
+
+`event.calendar_connector.android` требует:
+
+- signed stable package;
+- verified App Links;
+- no calendar/storage permissions;
+- current event payload from allowlisted first-party endpoint;
+- native `ACTION_INSERT` editor field assertions;
+- web fallback when connector absent;
+- real-device/OEM canary before public distribution.
