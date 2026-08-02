@@ -470,6 +470,17 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual([seed.canonical_url for seed in selected], [pending.canonical_url])
         self.assertNotEqual(mod.source_queue_priority_bucket(queue["telegram:stalecapture"]), -3)
 
+    def test_explicit_cleared_capture_request_overrides_nonready_profile_flag(self) -> None:
+        mod = load_module()
+        row = {
+            "source_profile_capture_requested": "false",
+            "needs_source_profile": "true",
+            "external_blogger_evidence_status": "confirmed_external",
+        }
+
+        self.assertFalse(mod.source_profile_capture_requested(row))
+        self.assertNotEqual(mod.source_queue_priority_bucket(row), -3)
+
     def test_capture_only_run_stops_before_semantic_report(self) -> None:
         mod = load_module()
         seed = self._seed(mod, "@captureonly", seed_id="capture_only")

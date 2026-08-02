@@ -40,6 +40,12 @@ import/review commands and Writer vNext:
    miss the requested source before reaching the capture stage. The durable
    request booleans are authoritative; a leftover `priority_lane` label after
    request completion cannot reopen or reprioritize capture by itself.
+   Acquisition and editorial readiness are separate after the bounded read:
+   once a current capture has been processed, the finalizer clears
+   `source_profile_capture_requested` even when the evidence-backed profile
+   remains fail-closed `needs_review`. In that state `needs_source_profile`
+   stays true and the source is routed to profile review; the unchanged archive
+   is not fetched again merely because the public-copy Writer is still blocked.
 5. Editorial/academic sources use separately imported
    `publisher_profile_item` rows. A reusable publisher profile must be
    `ready`, external, public-copy-eligible and contain grounded

@@ -1719,10 +1719,25 @@ def source_profile_capture_request_updates(
             str(row.get("source_onboarding_status") or "") == "ready"
             and row.get("source_onboarding_profile_fingerprint")
         )
-        requested = not ready
+        onboarding_evidence = (
+            row.get("_source_onboarding_evidence")
+            if isinstance(row.get("_source_onboarding_evidence"), dict)
+            else {}
+        )
+        capture_processed = bool(
+            str(onboarding_evidence.get("source_capture_fingerprint") or "").strip()
+            or str(onboarding_evidence.get("source_capture_status") or "").strip()
+        )
+        # Acquisition and editorial readiness are separate states.  A current
+        # bounded capture can yield a fail-closed `needs_review` profile; the
+        # archive must not then be acquired again unchanged.  Keep
+        # `needs_source_profile` true for the candidate while clearing only the
+        # explicit capture request.
+        requested = bool(not ready and not capture_processed)
+        needs_source_profile = not ready
         if (
             rt._rt_bool(source.get("source_profile_capture_requested")) == requested
-            and rt._rt_bool(source.get("needs_source_profile")) == requested
+            and rt._rt_bool(source.get("needs_source_profile")) == needs_source_profile
         ):
             continue
         current_priority_lane = str(source.get("priority_lane") or "")
@@ -1730,13 +1745,16 @@ def source_profile_capture_request_updates(
         by_key[key] = {
             **source,
             "source_profile_capture_requested": str(requested).lower(),
-            "needs_source_profile": str(requested).lower(),
+            "needs_source_profile": str(needs_source_profile).lower(),
             "source_profile_capture_request_post_url": (
                 normalize_post_url(str(row.get("post_url") or "")) if requested else ""
             ),
             "source_profile_capture_request_reason": (
                 str(row.get("source_onboarding_llm_reason") or "source_profile_missing_or_stale")
-                if requested else "current_reusable_profile_ready"
+                if requested else (
+                    "current_reusable_profile_ready"
+                    if ready else "current_bounded_capture_already_processed_fail_closed"
+                )
             ),
             "source_profile_capture_requested_at": now_iso if requested else "",
             "source_profile_capture_request_cleared_at": "" if requested else now_iso,
@@ -1753,7 +1771,12 @@ def source_profile_capture_request_updates(
                 )
             ),
             "priority_updated_at": now_iso,
-            "next_action": "capture_bounded_source_profile" if requested else "normal_queue_policy",
+            "next_action": (
+                "capture_bounded_source_profile"
+                if requested else (
+                    "normal_queue_policy" if ready else "review_nonready_source_profile"
+                )
+            ),
             "queue_item_updated_at": now_iso,
         }
     return list(by_key.values())

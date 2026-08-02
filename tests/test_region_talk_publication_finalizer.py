@@ -1170,6 +1170,37 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(cleared[0]["priority_lane"], "")
         self.assertEqual(cleared[0]["priority_reason"], "")
 
+    def test_processed_nonready_capture_clears_only_acquisition_request(self) -> None:
+        mod = self.mod
+        source = external_source("travelcase") | {
+            "_ydb_pk": "source_queue_item:telegram:travelcase",
+            "source_profile_capture_requested": "true",
+            "needs_source_profile": "true",
+            "priority_lane": "source_profile_capture",
+            "priority_reason": "accepted_candidate_needs_source_profile",
+        }
+        row = candidate_row(
+            publication_status="gemini_accept",
+            source_onboarding_status="needs_source_profile",
+            source_onboarding_llm_reason="insufficient_grounded_reader_brief",
+            _authoritative_source=source,
+        )
+        row["_source_onboarding_evidence"] = {
+            "source_capture_status": "ready",
+            "source_capture_fingerprint": "capture-fp",
+        }
+
+        updates = mod.source_profile_capture_request_updates(
+            [row], now_iso="2026-08-02T12:00:00+00:00",
+        )
+
+        self.assertEqual(len(updates), 1)
+        self.assertEqual(updates[0]["source_profile_capture_requested"], "false")
+        self.assertEqual(updates[0]["needs_source_profile"], "true")
+        self.assertEqual(updates[0]["priority_lane"], "")
+        self.assertEqual(updates[0]["priority_reason"], "")
+        self.assertEqual(updates[0]["next_action"], "review_nonready_source_profile")
+
     def test_onboarding_reuses_current_profile_and_spends_only_writer_call(self) -> None:
         mod = self.mod
         row = candidate_row(publication_status="gemini_accept", sent_to_chat="false")
