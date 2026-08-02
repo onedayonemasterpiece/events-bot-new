@@ -319,6 +319,7 @@ async def test_scheduled_run_writes_cycle_log_and_returns_metrics(monkeypatch, t
 
     async def fake_subprocess(*args, **kwargs):
         assert "--env-file" not in args
+        assert kwargs["limit"] >= 256 * 1024
         assert kwargs["env"]["REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL"] == "1"
         assert kwargs["env"]["REGION_TALK_NOTIFY_TRANSPORT"] == "telethon_discovery2"
         assert "TELEGRAM_AUTH_BUNDLE_E2E" not in kwargs["env"]
@@ -337,6 +338,37 @@ async def test_scheduled_run_writes_cycle_log_and_returns_metrics(monkeypatch, t
     output_path = Path(result["output_path"])
     assert output_path.is_file()
     assert output_path.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.asyncio
+async def test_scheduled_run_drains_orchestrator_json_line_larger_than_asyncio_default(
+    monkeypatch, tmp_path: Path
+) -> None:
+    env = complete_env(tmp_path)
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    command = [
+        sys.executable,
+        "-c",
+        (
+            "import json; "
+            "print(json.dumps({'ok': True, 'cycle': 1, "
+            "'selected_actions': ['launch_candidate_report'], "
+            "'metrics': {'publication_candidate_total': 130}, "
+            "'padding': 'x' * 300000}))"
+        ),
+    ]
+    monkeypatch.setattr(runner, "build_orchestrator_command", lambda: command)
+
+    result = await asyncio.wait_for(
+        runner.run_region_talk_scheduled(None, scheduler_run_id="oversized-cycle-line"),
+        timeout=10,
+    )
+
+    assert result["ok"] is True
+    assert result["metrics"]["publication_candidate_total"] == 130
+    output_path = Path(result["output_path"])
+    assert output_path.stat().st_size > 300_000
 
 
 @pytest.mark.asyncio

@@ -408,6 +408,15 @@ not put this job behind the legacy global heavy-operation lock: its Telegram
 sessions are role-scoped (`DISCOVERY1`/`DISCOVERY2`), Kaggle kernels are guarded
 individually, and the wrapper supplies a process-wide Region Talk lock. This
 prevents unrelated multi-hour render/monitoring work from starving every slot.
+The scheduled wrapper must drain the orchestrator stdout in bounded byte chunks,
+then assemble and parse newline-delimited JSON. It must not call
+`StreamReader.readline()` with asyncio's default 64 KiB line limit: one complete
+cycle intentionally contains live YDB metrics and selection snapshots and can
+be hundreds of kilobytes. The subprocess transport additionally uses
+`REGION_TALK_SCHEDULED_STDOUT_LIMIT_BYTES` (default 8 MiB, bounded 256 KiB–64
+MiB), but chunked consumption is the primary deadlock guard. A long cycle line
+must reach the runtime JSONL and update the wrapper's last-cycle metrics without
+blocking the orchestrator's later Kaggle-status/YDB-heartbeat polling cycles.
 For an operator-controlled production diagnostic, run the same wrapper (not a
 hand-built partial chain):
 

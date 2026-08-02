@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed a Region Talk scheduled-orchestrator deadlock on oversized single-line
+  cycle JSON: the wrapper now drains stdout in bounded chunks, uses a bounded
+  larger asyncio transport buffer and preserves complete JSONL parsing, so the
+  child loop can continue polling Kaggle/YDB instead of blocking in
+  `pipe_write`.
+
 - Fixed Region Talk source-profile request lifecycle: a processed bounded
   capture now clears only the explicit acquisition request while a non-ready
   profile remains fail closed. CandidateReport treats that explicit flag as

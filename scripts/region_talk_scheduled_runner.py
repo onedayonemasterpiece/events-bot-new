@@ -395,22 +395,34 @@ async def run_region_talk_scheduled(
                 env=child_env,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
+                # One orchestrator cycle is emitted as a single JSON line and
+                # can legitimately exceed asyncio's 64 KiB StreamReader
+                # default.  A larger transport buffer avoids pausing the child
+                # before the consumer gets a chance to drain that line.  The
+                # consumer below is chunk-based as the primary protection, so
+                # correctness does not depend on this limit alone.
+                limit=_env_int(
+                    "REGION_TALK_SCHEDULED_STDOUT_LIMIT_BYTES",
+                    8 * 1024 * 1024,
+                    minimum=256 * 1024,
+                    maximum=64 * 1024 * 1024,
+                ),
             )
 
             async def consume() -> None:
                 nonlocal last_payload
                 assert process.stdout is not None
-                while True:
-                    raw = await process.stdout.readline()
-                    if not raw:
-                        break
-                    line = raw.decode("utf-8", errors="replace").rstrip("\n")
+                pending = bytearray()
+
+                def consume_line(raw_line: bytes) -> None:
+                    nonlocal last_payload
+                    line = raw_line.decode("utf-8", errors="replace").rstrip("\r")
                     output.write(line + "\n")
                     output.flush()
                     try:
                         payload = json.loads(line)
                     except (TypeError, ValueError):
-                        continue
+                        return
                     if isinstance(payload, dict):
                         last_payload = payload
                         LOGGER.info(
@@ -419,6 +431,21 @@ async def run_region_talk_scheduled(
                             payload.get("selected_actions") or [],
                             _compact_metrics(payload),
                         )
+
+                while True:
+                    chunk = await process.stdout.read(64 * 1024)
+                    if not chunk:
+                        break
+                    pending.extend(chunk)
+                    while True:
+                        newline = pending.find(b"\n")
+                        if newline < 0:
+                            break
+                        raw_line = bytes(pending[:newline])
+                        del pending[: newline + 1]
+                        consume_line(raw_line)
+                if pending:
+                    consume_line(bytes(pending))
 
             consumer = asyncio.create_task(consume())
             timed_out = False
