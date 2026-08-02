@@ -103,6 +103,12 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     'appium:newCommandTimeout': 180, 'appium:language': 'ru', 'appium:locale': 'ru_RU',
     'appium:safariInitialUrl': 'about:blank', 'appium:includeSafariInWebviews': true,
     'appium:showSafariNetworkLog': true,
+    // A WebKit-remote synthetic click can focus an input without opening the
+    // simulator keyboard. Route web taps through XCTest and make the software
+    // keyboard preference explicit so the native-keyboard acceptance check is
+    // exercising what an iPhone user actually sees.
+    'appium:nativeWebTap': true, 'appium:connectHardwareKeyboard': false,
+    'appium:forceSimulatorSoftwareKeyboardPresence': true,
   };
   let driver;
   try {
