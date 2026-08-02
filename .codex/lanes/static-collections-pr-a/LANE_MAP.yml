@@ -86,4 +86,4 @@ lanes:
     expected_output: committed PR-A implementation with PASS review gate
     verification_scope: full_local
     effort: high
-    status: spawned
+    status: committed
