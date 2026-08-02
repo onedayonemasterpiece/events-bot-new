@@ -1,0 +1,318 @@
+name: Static collections product quality
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/static-collections-product-quality.yml"
+      - "scripts/check_static_collections_product_quality.py"
+      - "tests/test_static_collections_product_quality.py"
+      - "tests/fixtures/static_collections_product_quality/**"
+      - "docs/testing/static-collections-product-quality-autotests.md"
+      - "docs/testing/static-site-autotest-scenarios.v1.yml"
+      - "docs/features/static-site-pages/release-autotest-gates.md"
+      - "site/scripts/static_collection_*.py"
+      - "site/scripts/static_collection_*.json"
+      - "scripts/backfill_static_collection_facts.py"
+      - "smart_event_update.py"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/static-collections-product-quality.yml"
+      - "scripts/check_static_collections_product_quality.py"
+      - "tests/test_static_collections_product_quality.py"
+      - "tests/fixtures/static_collections_product_quality/**"
+      - "docs/testing/static-collections-product-quality-autotests.md"
+      - "docs/testing/static-site-autotest-scenarios.v1.yml"
+      - "docs/features/static-site-pages/release-autotest-gates.md"
+      - "site/scripts/static_collection_*.py"
+      - "site/scripts/static_collection_*.json"
+      - "scripts/backfill_static_collection_facts.py"
+      - "smart_event_update.py"
+  schedule:
+    - cron: "19 4 * * *"
+  workflow_dispatch:
+    inputs:
+      snapshot_path:
+        description: "Repo-relative or generated product-quality snapshot path"
+        required: false
+        type: string
+      baseline_path:
+        description: "Optional accepted product baseline path"
+        required: false
+        type: string
+      regression_path:
+        description: "Optional living product examples path"
+        required: false
+        type: string
+      fail_on_watch:
+        description: "Temporarily make WATCH blocking for an explicit investigation"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: static-collections-product-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  skeleton:
+    name: skeleton
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run product-monitor regressions
+        run: >-
+          python3 -m unittest discover -s tests
+          -p "test_static_collections_product_quality.py" -v
+
+      - name: Exercise actionable WATCH report on example data
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/static-collections-product-quality
+          python3 scripts/check_static_collections_product_quality.py \
+            --snapshot tests/fixtures/static_collections_product_quality/current.json \
+            --baseline tests/fixtures/static_collections_product_quality/baseline.json \
+            --regression tests/fixtures/static_collections_product_quality/regression.json \
+            --today 2026-08-02 \
+            --expect-status WATCH \
+            --json-report artifacts/static-collections-product-quality/selftest.json \
+            --markdown-report artifacts/static-collections-product-quality/selftest.md
+          {
+            echo "## Static collections product-quality skeleton"
+            echo
+            echo "This is a runner self-test on an example fixture, not live collection monitoring."
+            echo
+            cat artifacts/static-collections-product-quality/selftest.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Write canonical skeleton QA summary
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          root = Path("artifacts/static-collections-product-quality")
+          report = json.loads((root / "selftest.json").read_text(encoding="utf-8"))
+          summary = {
+              "schema": "static-site-qa-summary-v1",
+              "scenario": "collections.product_quality",
+              "platform": "artifact",
+              "repo_sha": os.environ["GITHUB_SHA"],
+              "target": "example-fixture",
+              "outcome": "PASS",
+              "product_status": report.get("status"),
+              "live_product_evaluated": False,
+              "evidence_scope": "runner_selftest_only",
+          }
+          (root / "qa-summary.json").write_text(
+              json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload skeleton evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-collections-product-quality-selftest-${{ github.run_id }}
+          path: artifacts/static-collections-product-quality/
+          if-no-files-found: error
+          retention-days: 14
+
+  product:
+    name: product
+    needs: [skeleton]
+    if: >-
+      ${{
+        github.event_name == 'schedule' ||
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'push' && vars.STATIC_COLLECTIONS_PRODUCT_QUALITY_ON_PUSH == 'true')
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      INPUT_SNAPSHOT_PATH: ${{ github.event_name == 'workflow_dispatch' && inputs.snapshot_path || '' }}
+      INPUT_BASELINE_PATH: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_path || '' }}
+      INPUT_REGRESSION_PATH: ${{ github.event_name == 'workflow_dispatch' && inputs.regression_path || '' }}
+      INPUT_FAIL_ON_WATCH: ${{ github.event_name == 'workflow_dispatch' && inputs.fail_on_watch || false }}
+      VAR_SNAPSHOT_PATH: ${{ vars.STATIC_COLLECTIONS_PRODUCT_SNAPSHOT_PATH }}
+      VAR_BASELINE_PATH: ${{ vars.STATIC_COLLECTIONS_PRODUCT_BASELINE_PATH }}
+      VAR_REGRESSION_PATH: ${{ vars.STATIC_COLLECTIONS_PRODUCT_REGRESSION_PATH }}
+      VAR_FAIL_ON_WATCH: ${{ vars.STATIC_COLLECTIONS_PRODUCT_FAIL_ON_WATCH || 'false' }}
+      REQUIRED: ${{ vars.STATIC_COLLECTIONS_PRODUCT_QUALITY_REQUIRED || 'false' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve product snapshot configuration
+        id: config
+        shell: bash
+        run: |
+          set -euo pipefail
+          snapshot="$INPUT_SNAPSHOT_PATH"
+          baseline="$INPUT_BASELINE_PATH"
+          regression="$INPUT_REGRESSION_PATH"
+          fail_on_watch="$(printf '%s' "$INPUT_FAIL_ON_WATCH" | tr '[:upper:]' '[:lower:]')"
+          if [[ -z "$snapshot" ]]; then snapshot="$VAR_SNAPSHOT_PATH"; fi
+          if [[ -z "$baseline" ]]; then baseline="$VAR_BASELINE_PATH"; fi
+          if [[ -z "$regression" ]]; then regression="$VAR_REGRESSION_PATH"; fi
+          if [[ "$fail_on_watch" != "true" ]]; then
+            fail_on_watch="$(printf '%s' "$VAR_FAIL_ON_WATCH" | tr '[:upper:]' '[:lower:]')"
+          fi
+          required="$(printf '%s' "$REQUIRED" | tr '[:upper:]' '[:lower:]')"
+          [[ "$required" == "true" ]] || required="false"
+          [[ "$fail_on_watch" == "true" ]] || fail_on_watch="false"
+
+          echo "required=$required" >> "$GITHUB_OUTPUT"
+          echo "fail_on_watch=$fail_on_watch" >> "$GITHUB_OUTPUT"
+          if [[ -n "$snapshot" && -f "$snapshot" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "snapshot=$snapshot" >> "$GITHUB_OUTPUT"
+            echo "baseline=$baseline" >> "$GITHUB_OUTPUT"
+            echo "regression=$regression" >> "$GITHUB_OUTPUT"
+            echo "Product snapshot configured: \`$snapshot\`." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Product snapshot is not configured or does not exist in this run." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Fail when live product monitoring is required but absent
+        if: steps.config.outputs.configured != 'true' && steps.config.outputs.required == 'true'
+        run: |
+          echo "::error::STATIC_COLLECTIONS_PRODUCT_SNAPSHOT_PATH is required but no snapshot was produced"
+          exit 1
+
+      - name: Record bootstrap boundary
+        if: steps.config.outputs.configured != 'true' && steps.config.outputs.required != 'true'
+        shell: bash
+        run: |
+          mkdir -p artifacts/static-collections-product-quality-live
+          echo "Outcome: **NOT_IMPLEMENTED**. The runner exists, but the live product adapter/baseline is not configured." >> "$GITHUB_STEP_SUMMARY"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          summary = {
+              "schema": "static-site-qa-summary-v1",
+              "scenario": "collections.product_quality",
+              "platform": "artifact",
+              "repo_sha": os.environ["GITHUB_SHA"],
+              "target": "live-product-snapshot",
+              "outcome": "NOT_IMPLEMENTED",
+              "product_status": None,
+              "live_product_evaluated": False,
+              "reason": "product_snapshot_adapter_or_path_not_configured",
+          }
+          Path("artifacts/static-collections-product-quality-live/qa-summary.json").write_text(
+              json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Evaluate product health, semantic examples and stability
+        if: steps.config.outputs.configured == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/static-collections-product-quality-live
+          args=(
+            --snapshot "${{ steps.config.outputs.snapshot }}"
+            --json-report artifacts/static-collections-product-quality-live/report.json
+            --markdown-report artifacts/static-collections-product-quality-live/report.md
+          )
+          baseline="${{ steps.config.outputs.baseline }}"
+          regression="${{ steps.config.outputs.regression }}"
+          if [[ -n "$baseline" && -f "$baseline" ]]; then args+=(--baseline "$baseline"); fi
+          if [[ -n "$regression" && -f "$regression" ]]; then args+=(--regression "$regression"); fi
+          if [[ "${{ steps.config.outputs.fail_on_watch }}" == "true" ]]; then args+=(--fail-on-watch); fi
+          python3 scripts/check_static_collections_product_quality.py "${args[@]}"
+
+      - name: Add product result to summary
+        if: always() && steps.config.outputs.configured == 'true'
+        run: |
+          if [[ -f artifacts/static-collections-product-quality-live/report.md ]]; then
+            cat artifacts/static-collections-product-quality-live/report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Product-quality report was not produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Write canonical live QA summary
+        if: always() && steps.config.outputs.configured == 'true'
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          root = Path("artifacts/static-collections-product-quality-live")
+          report_path = root / "report.json"
+          product = json.loads(report_path.read_text(encoding="utf-8")) if report_path.exists() else {}
+          status = product.get("status")
+          summary = {
+              "schema": "static-site-qa-summary-v1",
+              "scenario": "collections.product_quality",
+              "platform": "artifact",
+              "repo_sha": os.environ["GITHUB_SHA"],
+              "target": "configured-product-snapshot",
+              "outcome": "FAIL" if status == "FAIL" else "PASS" if status in {"HEALTHY", "WATCH"} else "BLOCKED",
+              "product_status": status,
+              "live_product_evaluated": bool(product),
+              "watch_is_blocking": "${{ steps.config.outputs.fail_on_watch }}" == "true",
+          }
+          (root / "qa-summary.json").write_text(
+              json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload live product evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-collections-product-quality-${{ github.run_id }}
+          path: artifacts/static-collections-product-quality-live/
+          if-no-files-found: warn
+          retention-days: 30
+
+  gate:
+    name: gate
+    if: always()
+    needs: [skeleton, product]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate minimal product-quality gate
+        shell: bash
+        env:
+          SKELETON_RESULT: ${{ needs.skeleton.result }}
+          PRODUCT_RESULT: ${{ needs.product.result }}
+        run: |
+          set -euo pipefail
+          echo "Skeleton result: $SKELETON_RESULT"
+          echo "Product result: $PRODUCT_RESULT"
+          if [[ "$SKELETON_RESULT" != "success" ]]; then
+            echo "::error::Product-quality runner regressions failed"
+            exit 1
+          fi
+          if [[ "$PRODUCT_RESULT" == "failure" || "$PRODUCT_RESULT" == "cancelled" ]]; then
+            echo "::error::Configured product-quality evaluation failed"
+            exit 1
+          fi
+          echo "Minimal product-quality gate passed."
