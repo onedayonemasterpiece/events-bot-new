@@ -559,10 +559,14 @@ visibility.
   or replacement model slot; the anti-vector is not E5-only;
 - kind `publication_schedule_item`, pk
   `publication_schedule_item:<YYYY-MM-DD>:<article|social>` — the current
-  deterministic daily slot. Future `planned`/`vacant` rows are recalculated as
-  candidates arrive; `locked`/`published` rows are immutable. The payload
-  stores lane, local scheduled time, candidate URL/id, both target platforms,
-  quality/diversity evidence and the same-day pair-similarity decision;
+  deterministic daily slot. An unprepared future `planned`/`vacant` row can be
+  recalculated as candidates arrive. A prepared/reviewed revision preserves its
+  exact candidate identity; `locked`/`published` rows are immutable. A late
+  intake is deferred to the next unprepared slot unless the current candidate
+  became invalid and an explicit audited reevaluation records both revisions.
+  The payload stores lane, local scheduled time, candidate URL/id, preparation
+  status, queue/intake revision, both target platforms, quality/diversity
+  evidence and the same-day pair-similarity decision;
 - kind `publication_schedule_snapshot`, pk
   `publication_schedule_snapshot:latest` — compact 14-day result of
   `region_talk_daily_pair_antivector_v1`, including lane/history/vacancy counts.
@@ -570,8 +574,13 @@ visibility.
   APIs;
 - kind `external_publication_intake_item`, pk
   `external_publication_intake_item:extpub_<stable-id>` — validated external
-  editorial/academic research staging. It is not a publication candidate and
-  cannot bypass the E5+BGE/image/final-verifier/operator gates;
+  editorial/academic research staging. It carries canonical URL, normalized
+  DOI and exact normalization-only title+authors identity keys; `request_id`,
+  exact-byte `input_json_sha256`, `external_publication_id`, canonical evidence
+  URLs and timezone-aware `intake_at`; and explicit
+  `review_status=unreviewed`, `publication_permission=not_granted`. It is not a
+  publication candidate and cannot bypass the E5+BGE/image/final-verifier/
+  operator gates;
 - kind `external_publication_source_item`, pk
   `external_publication_source_item:extpubsrc_<stable-id>` — compact external
   publisher identity and externality attestation, keyed in payload by
@@ -584,16 +593,21 @@ visibility.
   `external_publication_seen_item:extseen_<stable-doi-or-url-id>` — durable
   cross-run duplicate ledger for every valid candidate, explicit exclusion and
   unresolved lead. It stores normalized DOI/canonical URL, compact title/source,
-  disposition and request lineage. The read-only request generator merges this
+  disposition, all canonical identity keys and request/SHA lineage. The
+  read-only request generator merges this
   ledger with legacy intake rows and emits the complete immutable seen snapshot
   supplied to the next external research agent;
 - kind `external_publication_import_batch`, pk
   `external_publication_import_batch:extpubrun_<stable-id>` — idempotent input
-  batch counts, research request/window and bounded coverage evidence;
+  batch identity derived from request plus exact input SHA, new/replay/conflict
+  counts and sorted IDs, research window and bounded coverage evidence. An
+  identical replay is a no-op; request-ID/SHA disagreement writes nothing;
 - kind `external_publication_import_error_item`, pk
   `external_publication_import_error_item:<stable-error-id>` — row-level
-  contract errors. One bad result remains auditable without discarding the
-  valid part of the external research batch;
+  contract-error shape retained for audit compatibility. The current protected
+  importer exposes rejected/conflicting rows in its immutable report and writes
+  no YDB rows for that batch, so this kind is not used to justify a partial
+  intake commit;
 
 The GitHub Actions importer is a protected, manual staging path: it dry-validates
 the exact allowlisted file from trusted `main` before any OIDC token exchange,
@@ -604,6 +618,13 @@ and execute reports, receipt, and retained job evidence are the audit record;
 see [the guarded import runbook](external-publication-import-runbook.md).
 `external_publication_intake_item` is still staging only and cannot authorize
 immediate public posting.
+
+Decision-critical consumers use a strong YDB transaction for the narrow active
+intake prefix and request `limit + 1`; observing the extra row is an incomplete
+read and therefore blocks selection/write. CandidateReport records the intake
+revision used for scoring. The finalizer and planner reread immediately before
+their write and compare that revision/current eligibility, so a concurrent
+manual block or import cannot be hidden by an older snapshot.
 
 When an external intake reaches `publication_candidate_item`, its compact row
 retains `content_origin_type`, external publication/research identifiers and

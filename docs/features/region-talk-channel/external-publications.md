@@ -99,8 +99,15 @@ The importer:
 - validates the complete Draft 2020-12 JSON Schema with format checking; candidate-local schema failures enter the row error ledger, while invalid run/coverage metadata aborts the batch;
 - strips URL fragments and tracking parameters;
 - rejects non-HTTP schemes, private/local/reserved hosts, and non-web ports;
-- prefers normalized DOI identity, then canonical URL;
-- upserts stable IDs, so replay is idempotent;
+- resolves identity across normalized DOI, canonical URL and an exact
+  normalization-only `title + authors` key. If those keys point at different
+  durable rows, the batch is conflicting and fails closed; no fuzzy title or
+  author similarity is used;
+- hashes the exact input bytes and preserves `request_id`,
+  `input_json_sha256`, `external_publication_id`, canonical evidence URLs and
+  timezone-aware `intake_at` on the intake/audit rows;
+- treats an identical replay as an explicit no-op with zero new intake IDs;
+  reusing a `request_id` for different input bytes is a fail-closed conflict;
 - reads the current durable YDB ledger itself for every executing import and
   rejects already-known URL/DOI identities even if the external agent used an
   older registry snapshot;
@@ -108,13 +115,26 @@ The importer:
   `external_publication_seen_item`, then automatically republishes the stable
   public registry so future launches suppress both accepted work and
   previously checked noise;
-- reports invalid rows independently instead of aborting the valid batch;
+- reports invalid rows independently during dry validation. `--execute` is
+  all-or-nothing: any rejected or conflicting row prevents every YDB write;
 - requires every non-empty editorial-copy surface to have evidence-backed `copy_support`, and every referenced evidence ID to resolve;
 - forbids a clean candidate with regional/unknown source scope, out-of-window or snippet-only date, news/sales classification, hard exclusion, language mismatch, unverified product-policy match, non-full-text access, or unverified source externality;
 - requires a clean candidate to have `strong|credible` quality tier and at least `2/4` for regional centrality, broad public interest, and accessibility; scholarly rows additionally require verified peer review with no correction/retraction flag;
 - validates direct candidate media URLs as public HTTP(S) URLs before any future image handoff;
 - never fetches pages and therefore is not an SSRF-capable crawler;
-- writes `external_publication_intake_item`, a compact publisher attestation as `external_publication_source_item`, row errors as `external_publication_import_error_item`, and `external_publication_import_batch`;
+- prepares `external_publication_intake_item`, a compact publisher attestation
+  as `external_publication_source_item`, row-error evidence and
+  `external_publication_import_batch`. The protected execute path commits these
+  atomically only for a clean batch; rejected/conflicting validation remains in
+  the report and produces no partial YDB write;
+- marks every new row `review_status=unreviewed` and
+  `publication_permission=not_granted`. A clean candidate may be routed to the
+  normal CandidateReport scoring funnel; this intake state never means that a
+  publication was approved. `manual_review_required` remains outside the
+  automatic funnel until the explicit review command resolves it;
+- reports `new_intake_count` and sorted `new_intake_ids` separately from replay
+  and conflict IDs in the CLI result, batch audit, autonomous-run details and
+  protected Actions receipt;
 - does not itself write `candidate_memory_item`, `image_queue_item`, or `publication_candidate_item`: only CandidateReport may promote a strictly ready row through the normal gates.
 
 ### Autonomous server-side research stage
@@ -158,13 +178,22 @@ and [Gemini 3.1 Flash-Lite capabilities](https://ai.google.dev/gemini-api/docs/m
 ### CandidateReport handoff
 
 `RegionTalkCandidateReport` reads `external_publication_intake_item` beside the
-existing row-level Region Talk state. Its adapter is fail-closed and admits a
-row only when all of these remain true at read time:
+existing row-level Region Talk state. Immediately before each candidate
+selection it performs a strong, completeness-checked narrow reread of the live
+intake prefix instead of trusting the run-start snapshot. A read/authentication
+failure or a `limit + 1` result stops advancement. Its adapter is fail-closed
+and admits a row only when all of these remain true at that read:
 
 - `decision.import_status=ready_for_region_talk_scoring`;
 - `decision.downstream_readiness=candidate_report`;
 - `product_policy_match=true` and there is no hard exclusion;
 - no later operator override blocks the row.
+
+The explicit `unreviewed` state is retained on this projection and grants no
+publication permission. It only allows an otherwise clean candidate to enter
+the existing text, E5/BGE, image and Gemini checks. A row whose current status
+is `manual_review_required`, blocked, missing provenance or inconsistent with
+its earlier fingerprint is not projected.
 
 After the strict intake handoff, editorial and academic publications first use
 the media-first integrity path: ImageDiagnostic extracts publisher image
@@ -183,7 +212,8 @@ a picture was reviewed.
 
 The adapter creates a `platform=web` scoring projection, never a synthetic
 Telegram/VK post. It preserves `content_origin_type`, canonical publisher key,
-research quality, source overview, diversity topics and rights fields. Direct
+research quality, source overview, diversity topics, rights fields and the
+complete intake provenance/fingerprint. Direct
 article images are source-media candidates: ImageDiagnostic must prove their
 association and quality, while the public renderer carries prominent source
 and original links rather than using the research rights field as a format
@@ -355,3 +385,11 @@ Still required for each imported external-publication candidate to become confir
 - ongoing source-rights review if the teaser will use anything beyond a link and owned text.
 
 Import alone never makes a row confirmed. Manual-review/blocked rows remain staging evidence; strictly ready rows can advance only by satisfying every normal downstream gate above.
+
+Immediately before a finalizer persists a positive verdict it strongly
+rereads the current intake row and compares the exact eligibility/provenance
+fingerprint used for scoring. A late manual block, changed evidence, missing
+row, conflicting identity, incomplete read or provider failure produces a
+manual/deferred result and zero accepted-publication writes. Semantic
+acceptance remains an LLM decision; deterministic code only normalizes
+identity, detects conflicts and enforces these safety boundaries.

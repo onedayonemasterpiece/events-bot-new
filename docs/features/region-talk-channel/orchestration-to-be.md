@@ -276,6 +276,13 @@ mode is read-only/dry-run JSON (`metrics` + `actions`); `--execute` runs the
 first safe action, while the production/debug loop uses `--execute-ready` to run
 all non-conflicting ready work in one cycle.
 
+`--execute-ready` rereads live YDB metrics before selecting every next action.
+The action list from the beginning of a cycle is advisory only: a later GitHub
+Actions or autonomous JSON import can add intake while the cycle is running.
+Every successful refresh logs the count and sorted IDs of intake rows absent
+from the preceding refresh. Authentication/read failure or an incomplete
+bounded prefix stops further advancement fail-closed.
+
 The orchestrator must reuse the same durable control contour as CherryFlash,
 Telegram Monitoring and Guide monitoring:
 
@@ -893,12 +900,17 @@ CandidateReport therefore uses full row-level read floors (`posts=20000`,
 `vectors=20000`, `candidates=5000`, `sources=20000`) even when per-run scoring
 and discovery batches remain small. These read limits are state-integrity
 limits, not work-batch limits, and must not be reduced to shorten a run.
-CandidateReport loads this complete starting snapshot exactly once per run and
-passes it to exact-link selection, acquisition and report/state assembly. Exact
-selection must not issue an overlapping multi-kind scan, and the scoring tail
-must not reload the whole state after Telegram acquisition. The required
-heartbeat is one `state_load_completed`; a second full load or a post-fetch
-`RESOURCE_EXHAUSTED` is a failed canary, not a partial product success.
+CandidateReport loads this complete broad starting snapshot exactly once per run
+and passes it to exact-link selection, acquisition and report/state assembly.
+That optimization does not apply to the asynchronous
+`external_publication_intake_item` prefix: immediately before every candidate
+selection the worker performs a narrow strong-current read with `limit + 1`
+completeness detection and records a revision/fingerprint. The scoring tail
+does not reload the whole state after Telegram acquisition, yet it must never
+use the broad snapshot as authority for current intake eligibility. The
+required heartbeat remains one `state_load_completed`; narrow intake refreshes
+have their own count/new-ID/revision evidence. A failed or truncated refresh
+blocks selection instead of becoming a partial product success.
 The BGE worker independently scans at least 20,000 `text_vector_enrichment_item`
 rows. A 6,000-row prefix window is invalid once the shared E5+BGE kind exceeds
 that size: newer E5 PKs can otherwise remain invisible and actionable dual

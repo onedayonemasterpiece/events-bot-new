@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Hardened Region Talk for asynchronous external-publication intake: imports now start unreviewed with no publication permission, preserve exact-byte provenance, deduplicate canonical URL/DOI/exact normalized title+authors and replay idempotently, expose new intake IDs/counts, and fail closed on conflicts. Candidate selection, orchestration, finalization and anti-vector planning now refresh current YDB state at their decision boundaries, keep manual-review rows out of automatic promotion, and protect prepared publication slots from silent late-intake replacement while retaining the LLM-first semantic funnel.
 - Added immutable Region Talk external-publication research inputs, semantic-validation status, and an OIDC-only guarded YDB staging runbook with audit evidence and no-publication boundary.
 - Completed the Region Talk writer-v10 compensating backfill: all 22 current confirmed candidates now have cliché-free grounded copy, exact ready/fallback media, current operator-chat delivery, reaction synchronization, and rebuilt anti-vector queue/daily-plan snapshots.
 - Fixed Region Talk reviewed article-image delivery on content-negotiating publisher CDNs: the notifier now reproduces ImageDiagnostic's image `Accept` and user-agent request contract before verifying the fail-closed content digest.
