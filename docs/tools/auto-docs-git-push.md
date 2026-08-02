@@ -13,3 +13,5 @@
 systemctl --user status events-bot-docs-autopush.service
 journalctl --user -u events-bot-docs-autopush.service -f
 ```
+
+Текущая локальная установка запускается как user-level systemd service и включена для автозапуска.
