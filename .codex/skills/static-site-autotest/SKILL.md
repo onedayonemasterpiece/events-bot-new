@@ -1,6 +1,6 @@
 ---
 name: static-site-autotest
-description: "Use for any KenigEvents static-site QA, browser E2E, Android Emulator, iOS Simulator, PWA, focus OTP, Supabase/Yandex connectivity, page/data release gate, screenshot evidence or autotest analysis task. Selects only the risk-relevant scenarios and requires ChatGPT-readable sanitized evidence."
+description: "Use for any KenigEvents static-site QA, browser E2E, Android Emulator, iOS Simulator, PWA, focus OTP, Supabase/Yandex connectivity, page/data release gate, screenshot evidence or autotest analysis task. Selects only the risk-relevant scenarios and requires ChatGPT-launchable, ChatGPT-readable sanitized evidence."
 ---
 
 # Static Site Autotest
@@ -12,9 +12,10 @@ Open these before changing or running static-site tests:
 1. `docs/operations/static-site-autotest-strategy.md`;
 2. `docs/testing/static-site-autotest-scenarios.v1.yml`;
 3. `docs/features/static-site-pages/release-autotest-gates.md`;
-4. `docs/features/static-site-pages/release-plan.md`;
-5. `docs/operations/e2e-scenarios.md`;
-6. feature-specific docs and incident records for the affected surface.
+4. `docs/operations/static-site-qa-chatgpt-control-plane.md`;
+5. `docs/features/static-site-pages/release-plan.md`;
+6. `docs/operations/e2e-scenarios.md`;
+7. feature-specific docs and incident records for the affected surface.
 
 For focus-group OTP additionally open:
 
@@ -24,7 +25,9 @@ For focus-group OTP additionally open:
 - `site/e2e/focus-email/run.mjs`.
 
 The implementation handoff for the first Android/iOS milestone is
-`docs/testing/static-site-autotest-codex-prompt.md`.
+`docs/testing/static-site-autotest-codex-prompt.md`. It must also close the
+ChatGPT launch boundary from the control-plane document; a UI-only
+`workflow_dispatch` is not sufficient.
 
 ## Required workflow
 
@@ -41,9 +44,13 @@ The implementation handoff for the first Android/iOS milestone is
    in background only under the documented policy.
 6. A background run is reported as `STARTED_BACKGROUND` with run ID/URL, SHA,
    target and suite. Never call it PASS before terminal evidence.
-7. Produce or preserve the canonical sanitized evidence package and
+7. Every implemented scenario must retain a safe project-level launch path from
+   ChatGPT without Codex. Prefer the validated canonical issue-comment gateway
+   plus the same reusable workflow used by `workflow_dispatch`; never assume a
+   specific connector exposes workflow dispatch.
+8. Produce or preserve the canonical sanitized evidence package and
    `qa-summary.json` so ChatGPT can inspect the run without the code agent.
-8. Update scenario status, release companion, feature docs and changelog when an
+9. Update scenario status, release companion, feature docs and changelog when an
    implementation moves from planned/partial to implemented.
 
 ## Platform boundary
@@ -54,6 +61,18 @@ The implementation handoff for the first Android/iOS milestone is
 - Use Android/iOS for system keyboard, install UI, Launcher/SpringBoard,
   Share Sheet, standalone/lifecycle and selected mobile-critical journeys.
 - Pin/record runner, OS, browser, simulator/emulator, Appium and driver versions.
+
+## ChatGPT launch boundary
+
+- `workflow_dispatch` alone does not prove launchability from ChatGPT.
+- Use a strict allowlisted `/qa run` issue-comment command gateway when direct
+  connector dispatch cannot be guaranteed.
+- Validate canonical issue, actor permission, registry scenario/platform,
+  exact target allowlist and full SHA before checkout or side effects.
+- Never parse commands through `eval` or execute arbitrary refs/shell text.
+- Protected OTP still requires Environment approval and global concurrency.
+- Report accepted requests with run URL/ID as `STARTED_BACKGROUND` or blocking
+  start; report terminal PASS/FAIL/BLOCKED separately.
 
 ## Focus OTP boundary
 
@@ -75,6 +94,7 @@ The implementation handoff for the first Android/iOS milestone is
 - emulator substituted by desktop viewport;
 - planned scenario represented as implemented PASS;
 - background run silently ignored;
+- implemented scenario has no safe ChatGPT launch path;
 - unsafe evidence or failed redaction;
 - one mailbox used by parallel real OTP jobs;
 - full-catalog emulator scope without an explicit exceptional rationale.
