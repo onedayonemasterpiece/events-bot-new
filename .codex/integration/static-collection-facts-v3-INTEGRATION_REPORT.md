@@ -264,4 +264,8 @@ No lower-class model was presented as an external consultant review.
 ## GitHub
 
 The implementation is intentionally a separate stacked draft PR, not code in
-#226. PR/check links are added after the branch is pushed.
+#226:
+
+- draft implementation PR: https://github.com/onedayonemasterpiece/events-bot-new/pull/233;
+- stack base: `agent/static-collections-quality/pr-a-ontology` (PR #222);
+- GitHub Actions runs for the implementation branch: https://github.com/onedayonemasterpiece/events-bot-new/actions?query=branch%3Aintegration%2Fstatic-collection-facts-v3.
