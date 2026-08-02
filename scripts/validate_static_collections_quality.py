@@ -11,6 +11,7 @@ later evaluation contract and requires those PR-B artifacts.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import hashlib
 import json
 import math
@@ -47,8 +48,22 @@ LEGACY_ONTOLOGY_LABELS = frozenset(
     {"science", "audience_kids_candidate", "audience_family_candidate"}
 )
 REQUIRED_SOURCE_REVIEW_IDS = frozenset(
-    {5757, 5781, 6696, 6766, 6878, 7054, 7113, 7114, 7237, 7238, 7307, 7326, 7333, 7344, 7373, 7374}
+    {5757, 5781, 6696, 6766, 6871, 6878, 7054, 7113, 7114, 7237, 7238, 7307, 7326, 7333, 7344, 7373, 7374}
 )
+SOURCE_REF_HASH_FIELDS = (
+    "event_id",
+    "source_id",
+    "source_type",
+    "source_url",
+    "trust_level",
+    "source_chat_username",
+    "source_message_id",
+    "source_text_sha256",
+    "source_text_char_count",
+)
+SNAPSHOT_SCHEMA = "static-collections-evidence-snapshot-v1"
+SNAPSHOT_SERIALIZATION = "canonical-json-v1"
+SNAPSHOT_QUERY_CONTRACT = "event-review-source-v1"
 TARGET_FIELDS = (
     "family_id",
     "source_refs",
@@ -147,6 +162,32 @@ def number(value: Any) -> bool:
 
 def sha256(value: Any) -> bool:
     return isinstance(value, str) and bool(HEX_64.fullmatch(value))
+
+
+def canonical_json_sha256(value: Any) -> str:
+    return hashlib.sha256(
+        json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def utc_timestamp(value: Any) -> bool:
+    if not isinstance(value, str) or not value.endswith("Z"):
+        return False
+    try:
+        datetime.fromisoformat(value[:-1] + "+00:00")
+    except ValueError:
+        return False
+    return True
+
+
+def expected_source_ref_sha256(value: Mapping[str, Any]) -> str:
+    return canonical_json_sha256({field: value.get(field) for field in SOURCE_REF_HASH_FIELDS})
 
 
 def validate_policy(
@@ -301,7 +342,23 @@ def validate_source_refs(
                 label=label,
                 event_id=event_id,
             )
-        for field in ("source_text_sha256", "source_record_sha256"):
+        if item.get("event_id") != event_id:
+            issues.error(
+                "source_ref_event_mismatch",
+                f"source_refs[{index}].event_id must equal row/event evidence id",
+                label=label,
+                event_id=event_id,
+            )
+        if not isinstance(item.get("source_text_char_count"), int) or item.get(
+            "source_text_char_count", 0
+        ) <= 0:
+            issues.error(
+                "source_ref_text_length_invalid",
+                f"source_refs[{index}].source_text_char_count must be positive",
+                label=label,
+                event_id=event_id,
+            )
+        for field in ("source_text_sha256", "source_record_sha256", "source_ref_sha256"):
             if not sha256(item.get(field)):
                 issues.error(
                     "source_ref_hash_invalid",
@@ -309,6 +366,86 @@ def validate_source_refs(
                     label=label,
                     event_id=event_id,
                 )
+        if item.get("source_ref_sha256") != expected_source_ref_sha256(item):
+            issues.error(
+                "source_ref_hash_mismatch",
+                f"source_refs[{index}].source_ref_sha256 does not bind the canonical source ref",
+                label=label,
+                event_id=event_id,
+            )
+
+
+def validate_quote_metadata(
+    value: Mapping[str, Any],
+    *,
+    prefix: str,
+    source_ref: Mapping[str, Any] | None,
+    label: str,
+    event_id: int | None,
+    issues: Collector,
+) -> None:
+    quote_field = f"{prefix}quote"
+    kind_field = f"{prefix}quote_kind"
+    truncated_field = f"{prefix}quote_truncated"
+    start_field = f"{prefix}quote_start_char"
+    end_field = f"{prefix}quote_end_char"
+    count_field = f"{prefix}quote_char_count"
+    prefix_omitted_field = f"{prefix}quote_omitted_prefix_chars"
+    suffix_omitted_field = f"{prefix}quote_omitted_suffix_chars"
+    quote = value.get(quote_field)
+    if not text(quote):
+        return
+    kind = value.get(kind_field)
+    truncated = value.get(truncated_field)
+    start = value.get(start_field)
+    end = value.get(end_field)
+    count = value.get(count_field)
+    omitted_prefix = value.get(prefix_omitted_field)
+    omitted_suffix = value.get(suffix_omitted_field)
+    source_count = source_ref.get("source_text_char_count") if source_ref else None
+    valid_ints = all(
+        isinstance(item, int) and not isinstance(item, bool)
+        for item in (start, end, count, omitted_prefix, omitted_suffix, source_count)
+    )
+    if kind not in {"full", "excerpt"} or not isinstance(truncated, bool) or not valid_ints:
+        issues.error(
+            "source_quote_metadata_invalid",
+            f"{prefix}quote requires full/excerpt kind, truncation flag and character offsets",
+            label=label,
+            event_id=event_id,
+        )
+        return
+    if start < 0 or end < start or count != len(str(quote)) or end - start != count:
+        issues.error(
+            "source_quote_offsets_invalid",
+            f"{prefix}quote character offsets/count are inconsistent",
+            label=label,
+            event_id=event_id,
+        )
+    if omitted_prefix != start or omitted_suffix != source_count - end or end > source_count:
+        issues.error(
+            "source_quote_truncation_invalid",
+            f"{prefix}quote omitted-character metadata is inconsistent",
+            label=label,
+            event_id=event_id,
+        )
+    is_full = start == 0 and end == source_count
+    if (kind == "full") != is_full or truncated == is_full:
+        issues.error(
+            "source_quote_kind_invalid",
+            f"{prefix}quote kind/truncation does not match its bounds",
+            label=label,
+            event_id=event_id,
+        )
+    if is_full and source_ref and source_ref.get("source_text_sha256") != hashlib.sha256(
+        str(quote).encode("utf-8")
+    ).hexdigest():
+        issues.error(
+            "full_source_quote_hash_mismatch",
+            f"full {prefix}quote does not match source_text_sha256",
+            label=label,
+            event_id=event_id,
+        )
 
 
 def validate_row(
@@ -391,6 +528,37 @@ def validate_row(
                     event_id=event_id,
                 )
         validate_source_refs(row.get("source_refs"), label, event_id, issues)
+        first_source_ref = (
+            row["source_refs"][0]
+            if isinstance(row.get("source_refs"), list)
+            and row["source_refs"]
+            and isinstance(row["source_refs"][0], Mapping)
+            else None
+        )
+        validate_quote_metadata(
+            row,
+            prefix="source_",
+            source_ref=first_source_ref,
+            label=label,
+            event_id=event_id,
+            issues=issues,
+        )
+        festival_kind = row.get("festival_scope_kind")
+        if festival_kind is not None:
+            if festival_kind != "festival_child_event":
+                issues.error(
+                    "festival_row_scope_invalid",
+                    "review rows may contain only occurrence-specific festival child events",
+                    label=label,
+                    event_id=event_id,
+                )
+            if row.get("occurrence_specific_source") is not True:
+                issues.error(
+                    "festival_child_source_missing",
+                    "festival child row requires occurrence_specific_source=true",
+                    label=label,
+                    event_id=event_id,
+                )
         if not sha256(row.get("model_document_hash")):
             issues.error(
                 "model_document_hash_invalid",
@@ -441,7 +609,7 @@ def validate_label(
 ) -> dict[str, int]:
     if not text(payload.get("definition")):
         issues.add(
-            "warning" if starter and not strict else "error",
+            "warning" if not strict else "error",
             "label_definition_missing",
             "definition is required",
             label=label,
@@ -631,14 +799,18 @@ def validate_seed(
         if seed.get("ontology_version") != "static-collection-ontology-v2":
             issues.error("review_seed_ontology_invalid", "review seed must bind ontology v2")
         review_scope = seed.get("review_scope")
-        if not isinstance(review_scope, Mapping) or review_scope.get(
-            "cinema_events"
-        ) != "excluded_from_review_rows" or review_scope.get(
-            "festival_events"
-        ) != "excluded_from_review_rows":
+        if not isinstance(review_scope, Mapping) or any(
+            review_scope.get(field) != expected
+            for field, expected in {
+                "cinema_events": "excluded_from_review_rows",
+                "festival_parent_rows": "excluded_from_review_rows",
+                "festival_child_events": "allowed_with_occurrence_specific_source",
+                "festival_extraction_pages": "out_of_scope",
+            }.items()
+        ):
             issues.error(
                 "review_seed_scope_invalid",
-                "PR A review rows must exclude cinema and festival tracks",
+                "PR A must distinguish festival parents, child events and extraction/pages",
             )
     elif (
         seed.get("schema_version") == "static-collections-gold-v1"
@@ -729,10 +901,94 @@ def validate_seed(
                 "review_seed_legacy_labels",
                 "legacy review labels remain: " + ", ".join(legacy),
             )
+        positive_ids = {
+            label: {
+                row.get("event_id")
+                for row in payload.get("positives", [])
+                if isinstance(row, Mapping)
+            }
+            for label, payload in labels.items()
+            if isinstance(payload, Mapping)
+        }
+        if 4648 in positive_ids.get("science_pop", set()) or 4648 in positive_ids.get(
+            "family_suitable", set()
+        ):
+            issues.error(
+                "known_semantic_leak_4648",
+                "event 4648 is not a source-supported science_pop/family_suitable positive",
+            )
+        selected_ids = {
+            row.get("event_id")
+            for payload in labels.values()
+            if isinstance(payload, Mapping)
+            for side in ("positives", "hard_negatives")
+            for row in payload.get(side, [])
+            if isinstance(row, Mapping)
+        }
+        if 6871 in selected_ids:
+            issues.error(
+                "occurrence_source_review_leak_6871",
+                "event 6871 must stay out of semantic supply pending occurrence-specific review",
+            )
         source = seed.get("source") if isinstance(seed.get("source"), Mapping) else {}
-        repo_sha = source.get("generator_repo_sha")
-        if not isinstance(repo_sha, str) or not GIT_COMMIT.fullmatch(repo_sha):
-            issues.error("generator_repo_sha_invalid", "generator_repo_sha must be a 40/64 hex commit id")
+        if "generator_repo_sha" in source:
+            issues.error(
+                "generator_repo_sha_legacy",
+                "generator_repo_sha is ambiguous; use the three role-specific repo SHAs",
+            )
+        for field in (
+            "extraction_repo_sha",
+            "seed_builder_repo_sha",
+            "integration_repo_sha",
+        ):
+            repo_sha = source.get(field)
+            if not isinstance(repo_sha, str) or not GIT_COMMIT.fullmatch(repo_sha):
+                issues.error(
+                    "generator_provenance_invalid",
+                    f"source.{field} must be a 40/64 hex commit id",
+                )
+        command = source.get("generator_command")
+        if not text(command) or not str(command).startswith(
+            "python3 scripts/build_static_collections_review_seed.py "
+        ) or " --snapshot " not in str(command) or " --output " not in str(command):
+            issues.error(
+                "generator_provenance_invalid",
+                "generator_command must be the exact reproducible review-seed builder command",
+            )
+        if not utc_timestamp(source.get("extracted_at")) or not utc_timestamp(
+            source.get("reviewed_at")
+        ):
+            issues.error(
+                "generator_provenance_invalid",
+                "source.extracted_at and source.reviewed_at must be exact UTC timestamps",
+            )
+        snapshot_contract = seed.get("snapshot_contract")
+        if not isinstance(snapshot_contract, Mapping) or any(
+            snapshot_contract.get(field) != expected
+            for field, expected in {
+                "schema_version": SNAPSHOT_SCHEMA,
+                "serialization_contract": SNAPSHOT_SERIALIZATION,
+                "query_contract": SNAPSHOT_QUERY_CONTRACT,
+                "encoding": "utf-8",
+                "event_order": "id_ascending",
+                "event_source_order": "id_ascending_per_event",
+            }.items()
+        ) or snapshot_contract.get("json_options") != {
+            "allow_nan": False,
+            "ensure_ascii": False,
+            "separators": [",", ":"],
+            "sort_keys": True,
+            "trailing_newline": False,
+        }:
+            issues.error(
+                "snapshot_contract_invalid",
+                "canonical snapshot schema/serialization contract is missing or invalid",
+            )
+        if not sha256(seed.get("evidence_snapshot_sha256")):
+            issues.error(
+                "snapshot_contract_invalid",
+                "seed.evidence_snapshot_sha256 must be SHA-256",
+            )
     validate_hashes(
         seed, role="review seed", strict=strict, migrated=migrated, issues=issues
     )
@@ -751,16 +1007,57 @@ def validate_source_reviews(
     if not isinstance(receipt_rows, list) or not receipt_rows:
         issues.error("source_review_receipts_missing", "source-review receipts are required")
         return
+    required_ids = index.get("required_event_ids")
+    if required_ids != sorted(REQUIRED_SOURCE_REVIEW_IDS):
+        issues.error(
+            "source_review_required_ids_mismatch",
+            "index.required_event_ids must exactly equal the mandatory review set",
+        )
+    if not sha256(index.get("source_snapshot_sha256")):
+        issues.error(
+            "source_review_snapshot_invalid",
+            "index.source_snapshot_sha256 must be SHA-256",
+        )
     covered: set[int] = set()
+    receipt_ids: set[str] = set()
+    receipt_paths: set[str] = set()
     for entry in receipt_rows:
         if not isinstance(entry, Mapping) or not text(entry.get("path")):
             issues.error("source_review_entry_invalid", "receipt index entry is invalid")
+            continue
+        entry_receipt_id = entry.get("receipt_id")
+        entry_path = str(entry["path"])
+        if not text(entry_receipt_id) or str(entry_receipt_id) in receipt_ids:
+            issues.error("source_review_duplicate_receipt_id", "receipt_id must be unique")
+        else:
+            receipt_ids.add(str(entry_receipt_id))
+        if entry_path in receipt_paths:
+            issues.error("source_review_duplicate_path", "receipt path must be unique")
+        else:
+            receipt_paths.add(entry_path)
+        if Path(entry_path).name != entry_path:
+            issues.error("source_review_entry_path_invalid", "receipt path must be a safe basename")
             continue
         path = index_path.parent / str(entry["path"])
         receipt = load_json(path, "source_review_receipt", issues)
         if receipt.get("schema_version") != "static-collection-source-review-v1":
             issues.error("source_review_receipt_schema_invalid", f"invalid receipt schema: {path.name}")
             continue
+        if entry.get("receipt_id") != receipt.get("receipt_id"):
+            issues.error(
+                "source_review_entry_receipt_id_mismatch",
+                f"index receipt_id does not match {path.name}",
+            )
+        if entry.get("status") != receipt.get("status"):
+            issues.error(
+                "source_review_entry_status_mismatch",
+                f"index status does not match {path.name}",
+            )
+        if entry.get("event_ids") != receipt.get("event_ids"):
+            issues.error(
+                "source_review_entry_event_ids_mismatch",
+                f"index event_ids do not match {path.name}",
+            )
         status = receipt.get("status")
         if status not in {"pass", "needs_source_review", "corrected"}:
             issues.error("source_review_status_invalid", f"invalid status in {path.name}")
@@ -784,19 +1081,40 @@ def validate_source_reviews(
                     str(quote).encode("utf-8")
                 ).hexdigest():
                     issues.error("source_review_quote_hash_mismatch", f"raw quote hash mismatch in {path.name}")
+                evidence_event_id = item.get("event_id") if isinstance(item, Mapping) else None
+                if evidence_event_id not in ids:
+                    issues.error(
+                        "source_review_evidence_event_mismatch",
+                        f"evidence event_id is outside receipt.event_ids in {path.name}",
+                    )
+                source_ref = item.get("source_ref") if isinstance(item, Mapping) else None
+                validate_source_refs(
+                    [source_ref] if isinstance(source_ref, Mapping) else source_ref,
+                    f"receipt:{receipt.get('receipt_id')}",
+                    evidence_event_id if isinstance(evidence_event_id, int) else None,
+                    issues,
+                )
+                validate_quote_metadata(
+                    item,
+                    prefix="raw_source_",
+                    source_ref=source_ref if isinstance(source_ref, Mapping) else None,
+                    label=f"receipt:{receipt.get('receipt_id')}",
+                    event_id=evidence_event_id if isinstance(evidence_event_id, int) else None,
+                    issues=issues,
+                )
         expected_hash = receipt.get("receipt_sha256")
         unhashed = dict(receipt)
         unhashed.pop("receipt_sha256", None)
-        calculated = hashlib.sha256(
-            json.dumps(
-                unhashed, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-            ).encode("utf-8")
-        ).hexdigest()
+        calculated = canonical_json_sha256(unhashed)
         if expected_hash != calculated or entry.get("receipt_sha256") != calculated:
             issues.error("source_review_receipt_hash_mismatch", f"receipt hash mismatch in {path.name}")
-    missing = sorted(REQUIRED_SOURCE_REVIEW_IDS - covered)
-    if missing:
-        issues.error("source_review_ids_missing", f"required source-review IDs missing: {missing}")
+    if covered != REQUIRED_SOURCE_REVIEW_IDS:
+        issues.error(
+            "source_review_ids_mismatch",
+            "receipt coverage must exactly equal mandatory source-review IDs; "
+            f"missing={sorted(REQUIRED_SOURCE_REVIEW_IDS - covered)}, "
+            f"extra={sorted(covered - REQUIRED_SOURCE_REVIEW_IDS)}",
+        )
 
 
 def validate_owner_gold(
@@ -919,6 +1237,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 issues.error(
                     "review_seed_source_index_hash_mismatch",
                     "review seed does not bind the selected source-review index",
+                )
+            if seed.get("evidence_snapshot_sha256") != source_review_index.get(
+                "source_snapshot_sha256"
+            ):
+                issues.error(
+                    "source_review_snapshot_mismatch",
+                    "seed.evidence_snapshot_sha256 must equal index.source_snapshot_sha256",
                 )
     semantic = (
         validate_policy(policy, migrated=migrated, issues=issues) if policy else set()
