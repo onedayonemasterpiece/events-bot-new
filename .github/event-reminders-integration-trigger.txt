@@ -1,1 +1,0 @@
-Trigger the one-shot source-parity and static-site release-plan integration workflow.
