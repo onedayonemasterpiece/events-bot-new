@@ -140,6 +140,31 @@ Boundary expectations never enter recall:
 The JSON/Markdown result reports boundary matches, hard failures and watch
 disagreements separately.
 
+### Offline fallback/failure harness
+
+Before any real Gate-C provider run, exercise the unchanged production
+Gemma-to-GPT-4o boundary, validator and apply function with injected local
+adapters:
+
+```bash
+python3 scripts/run_static_collection_facts_v3_fallback_drill.py \
+  --output artifacts/static-collection-facts-v3/fallback-drill-offline.json
+```
+
+The harness cannot call a provider: it injects a primary adapter that records
+one physical Gemma send and fails, then injects the existing `ask_4o` boundary
+with four deterministic outcomes. It proves that there is at most one fallback
+send, records the actual provider/model path from the production trace, sends a
+valid fallback payload through the production strict validator and apply
+function, rejects malformed/evidence-mismatched payloads before apply, and
+preserves accepted truth when both providers are unavailable.
+
+Require `status=pass`, `real_provider_calls=0`, maximum primary/fallback sends
+of `1/1`, and `publication_status=blocked`. This artifact is intentionally
+marked `offline_harness_only_real_gate_c_not_claimed`: it is a reproducible code
+gate, not a substitute for the later 3–5 real-source Gate-C run described in the
+acceptance document. No provider secret is needed or read.
+
 ## 4. Apply and warm replay
 
 Run only after primary replay and the separate fallback drill pass. Work on a

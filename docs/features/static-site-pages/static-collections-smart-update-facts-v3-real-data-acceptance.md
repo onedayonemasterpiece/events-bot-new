@@ -209,6 +209,20 @@ and never change the hard recall denominator.
 
 Выполнить отдельно от primary quality run.
 
+Сначала запустить provider-free regression harness, который использует
+production adjudicator/validator/apply, но заменяет обе provider boundaries
+локальными adapters:
+
+```bash
+python3 scripts/run_static_collection_facts_v3_fallback_drill.py \
+  --output artifacts/static-collection-facts-v3/fallback-drill-offline.json
+```
+
+Его `PASS` доказывает fail-closed механику и лимит sends, но **не считается
+реальным Gate C**: report явно содержит `real_provider_calls=0` и
+`gate_claim=offline_harness_only_real_gate_c_not_claimed`. После зелёного Gate
+B всё ещё обязателен отдельный запуск ниже на 3–5 реальных source cases.
+
 ### 5.1. Primary failure + существующий fallback
 
 На 3–5 real source cases искусственно сделать primary недоступным на уровне

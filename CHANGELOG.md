@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Added a provider-free, reproducible facts-v3 fallback/failure drill harness.
+  It forces one primary Gemma failure through the unchanged production path,
+  permits at most one injected existing GPT-4o fallback send, records the
+  provider/model trace, reuses the strict validator/apply function, and proves
+  malformed or unavailable fallback results cannot erase accepted truth. The
+  report explicitly does not claim the later real-source Gate C.
 - Added a pure offline facts-v3 Gate-B evaluator and versioned result schema:
   corrected seed, source-review receipts, immutable SQLite and exact git/report
   cohorts are hash-bound before occurrence-family recall is calculated. The
