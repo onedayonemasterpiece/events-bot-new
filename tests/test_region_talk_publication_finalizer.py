@@ -555,6 +555,78 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(rows[0]["_authoritative_source"], source)
         self.assertGreater(rows[0]["publication_pre_score"], 0.8)
 
+    def test_read_live_rows_projects_archived_external_publication_for_attestation_refresh(self) -> None:
+        mod = self.mod
+        post_url = "https://publisher.example/archived-article"
+        intake = {
+            "external_publication_id": "extpub-archived",
+            "intake_status": "new_intake",
+            "review_status": "unreviewed",
+            "publication_permission": "none",
+            "intake_revision": "legacy-attestation-v1",
+            "legacy_provenance_attestation": {"status": "attested"},
+        }
+        publication = {
+            "post_url": post_url,
+            "external_publication_id": "extpub-archived",
+            "content_origin_type": "editorial_publication",
+            "canonical_source_key": "web:publisher.example",
+            "publication_status": "gemini_accept",
+            "publication_candidate_status": "sent_to_chat",
+            "sent_to_chat": "true",
+            "publication_eligibility_verdict": "eligible",
+            "publication_eligibility_gate_version": mod.rt.PUBLICATION_ELIGIBILITY_GATE_VERSION,
+        }
+        kinds = {
+            "image_queue_item": {},
+            "candidate_memory_item": {},
+            "publication_candidate_item": {"publication:archived": publication},
+            "source_queue_item": {},
+            "source_status_item": {},
+            "online_source_item": {},
+            "external_publication_source_item": {
+                "source:publisher": {
+                    "canonical_source_key": "web:publisher.example",
+                    "source_url": "https://publisher.example",
+                    "source_title": "Publisher Example",
+                    "source_scope": "external",
+                    "source_geo_class": "nonlocal_russia",
+                    "source_queue_status": "confirmed_external_publication_research",
+                }
+            },
+            "external_publication_intake_item": {"intake:archived": intake},
+            "source_onboarding_profile_item": {},
+        }
+
+        class Pool:
+            def retry_operation_sync(self, operation):
+                return operation(object())
+
+        class Ydb:
+            def SessionPool(self, _driver):
+                return Pool()
+
+        with (
+            mock.patch.object(mod.rt, "ydb_connect", return_value=(Ydb(), object(), object())),
+            mock.patch.object(mod.rt, "ydb_kv_table_path", return_value="table"),
+            mock.patch.object(
+                mod.rt,
+                "ydb_select_kind_items",
+                side_effect=lambda _s, _y, _t, kind, limit, **_kwargs: kinds.get(kind, {}),
+            ),
+            mock.patch.object(mod.rt, "utc_now_iso", return_value="2026-08-02T02:00:00+00:00"),
+        ):
+            _ydb, _driver, _pool, _table, rows, _strict_priority = mod.read_live_rows(100, 100)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["post_url"], post_url)
+        self.assertEqual(rows[0]["_image_ydb_pk"], "")
+        self.assertEqual(rows[0]["_previous_publication"], publication)
+        self.assertEqual(
+            rows[0]["external_intake_fingerprint"],
+            mod.rt.external_publication_intake_fingerprint(intake),
+        )
+
     def test_read_live_rows_prefers_current_memory_text_reject_over_stale_image_snapshot(self) -> None:
         mod = self.mod
         source = external_source("kseniacalm")
