@@ -10,6 +10,43 @@ const SELECTORS = Object.freeze({
   code: '[data-focus-email-code-step]:not([hidden])', otp: '#focus-email-otp', done: '[data-focus-done-title]',
 });
 
+export function extractDriverNetworkEvents(logs) {
+  const events = [];
+  const fingerprints = new Set();
+  const visited = new WeakSet();
+  const emit = (type, requestId, rawUrl, method, status) => {
+    try {
+      const url = new URL(String(rawUrl));
+      const event = { type, request_id: String(requestId || ''), method: String(method || 'GET').toUpperCase(),
+        hostname: url.hostname, path: url.pathname, status: status != null && Number.isFinite(Number(status)) ? Number(status) : null };
+      const fingerprint = JSON.stringify(event);
+      if (!fingerprints.has(fingerprint)) { fingerprints.add(fingerprint); events.push(event); }
+    } catch { /* malformed and relative driver log URLs are ignored */ }
+  };
+  const visit = (value, depth = 0) => {
+    if (depth > 10 || value == null) return;
+    if (typeof value === 'string') {
+      const text = value.trim();
+      if (!text.startsWith('{') && !text.startsWith('[')) return;
+      try { visit(JSON.parse(text), depth + 1); } catch { /* not a serialized protocol event */ }
+      return;
+    }
+    if (typeof value !== 'object' || visited.has(value)) return;
+    visited.add(value);
+    if (Array.isArray(value)) { value.forEach((item) => visit(item, depth + 1)); return; }
+    const eventMethod = String(value.method || '');
+    const params = value.params && typeof value.params === 'object' ? value.params : {};
+    if (eventMethod === 'Network.requestWillBeSent') {
+      emit('request', params.requestId, params.request?.url, params.request?.method, null);
+    } else if (eventMethod === 'Network.responseReceived') {
+      emit('response', params.requestId, params.response?.url, null, params.response?.status);
+    }
+    Object.values(value).forEach((item) => visit(item, depth + 1));
+  };
+  visit(logs);
+  return events;
+}
+
 function networkBootstrap(directHost, relayHost) {
   if (window.__keE2eNetwork) return;
   const entries = [];
@@ -54,6 +91,7 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
   const caps = platform === 'android' ? {
     platformName: 'Android', browserName: 'Chrome',
     'wdio:enforceWebDriverClassic': true,
+    'goog:loggingPrefs': { performance: 'ALL' },
     'appium:automationName': 'UiAutomator2', 'appium:deviceName': config.deviceName,
     'appium:platformVersion': config.platformVersion, 'appium:newCommandTimeout': 180,
     'appium:language': 'ru', 'appium:locale': 'RU',
@@ -64,6 +102,7 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     'appium:platformVersion': config.platformVersion, 'appium:udid': config.udid,
     'appium:newCommandTimeout': 180, 'appium:language': 'ru', 'appium:locale': 'ru_RU',
     'appium:safariInitialUrl': 'about:blank', 'appium:includeSafariInWebviews': true,
+    'appium:showSafariNetworkLog': true,
   };
   let driver;
   try {
@@ -77,13 +116,45 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     statuses(suffix) { return this.entries.filter((x) => x.path.endsWith(suffix)).map((x) => x.status); },
   };
   let pageEntriesSeen = 0;
+  let networkSequence = 0;
   let verifiedRepoSha = null;
   const keyboard = {};
   const actualCaps = driver.capabilities || {};
+  const device = { platform, device_name: config.deviceName, expected_platform_version: config.platformVersion,
+    platform_version: String(actualCaps.platformVersion || config.platformVersion), browser_version: String(actualCaps.browserVersion || actualCaps.version || 'unreported'),
+    os_version: String(env.E2E_HOST_OS_VERSION || 'unreported'), xcode_version: platform === 'ios' ? String(env.E2E_XCODE_VERSION || 'unreported') : null,
+    udid_hash_recorded: Boolean(config.udid), automation_name: caps['appium:automationName'], browser_name: caps.browserName, appium_server: '3.6.0',
+    driver_version: platform === 'android' ? '8.2.2' : '12.1.4', timezone: 'UTC', locale: platform === 'android' ? 'ru-RU' : 'ru_RU' };
+  const driverRequestIndexes = new Map();
+  const driverRequestIds = new Set();
+
+  const classifyHost = (hostname) => hostname === directHost ? 'supabase_direct'
+    : hostname === relayHost ? 'relay' : hostname === 'kenigevents.ru' ? 'kenigevents' : 'other';
+
+  async function syncDriverNetwork() {
+    const logType = platform === 'android' ? 'performance' : 'safariNetwork';
+    const logs = await driver.getLogs(logType).catch(() => null);
+    if (!Array.isArray(logs)) return false;
+    for (const event of extractDriverNetworkEvents(logs)) {
+      if (event.type === 'request') {
+        const identity = event.request_id || `${event.method}:${event.hostname}${event.path}:${networkSequence + 1}`;
+        if (driverRequestIds.has(identity)) continue;
+        driverRequestIds.add(identity);
+        const entry = { sequence: ++networkSequence, method: event.method, host_class: classifyHost(event.hostname),
+          path: event.path, status: null, duration_ms: null, failure_class: null };
+        driverRequestIndexes.set(identity, recorder.entries.length);
+        recorder.entries.push(entry);
+      } else if (event.request_id && driverRequestIndexes.has(event.request_id)) {
+        recorder.entries[driverRequestIndexes.get(event.request_id)].status = event.status;
+      }
+    }
+    return true;
+  }
 
   async function syncNetwork() {
+    if (await syncDriverNetwork()) return;
     const values = await driver.execute(() => Array.isArray(window.__keE2eNetwork) ? window.__keE2eNetwork : []);
-    recorder.entries.push(...values.slice(pageEntriesSeen));
+    for (const entry of values.slice(pageEntriesSeen)) recorder.entries.push({ ...entry, sequence: ++networkSequence });
     pageEntriesSeen = values.length;
   }
 
@@ -122,14 +193,14 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
   return {
     kind: platform, recorder, consoles: [], keyboard,
     get observedRepoSha() { return verifiedRepoSha; },
-    device: { platform, device_name: config.deviceName, expected_platform_version: config.platformVersion,
-      platform_version: String(actualCaps.platformVersion || config.platformVersion), browser_version: String(actualCaps.browserVersion || actualCaps.version || 'unreported'),
-      os_version: String(env.E2E_HOST_OS_VERSION || 'unreported'), xcode_version: platform === 'ios' ? String(env.E2E_XCODE_VERSION || 'unreported') : null,
-      udid_hash_recorded: Boolean(config.udid), automation_name: caps['appium:automationName'], browser_name: caps.browserName, appium_server: '3.6.0',
-      driver_version: platform === 'android' ? '8.2.2' : '12.1.4', timezone: 'UTC', locale: platform === 'android' ? 'ru-RU' : 'ru_RU' },
+    device,
     async openInvite() {
       await driver.url(target.href); await driver.waitUntil(async () => (await driver.getUrl()).startsWith(target.origin), { timeout: 30_000 });
+      const userAgent = await driver.execute(() => navigator.userAgent);
+      const version = platform === 'android' ? String(userAgent).match(/Chrome\/([^\s]+)/u)?.[1] : String(userAgent).match(/Version\/([^\s]+)/u)?.[1];
+      if (version) device.browser_version = version;
       await driver.execute(networkBootstrap, directHost, relayHost);
+      await syncNetwork();
     },
     async verifyReleaseIdentity() {
       verifiedRepoSha = await observedRepoSha(target, expectedRepoSha);

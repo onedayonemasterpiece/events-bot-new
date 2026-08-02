@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import { extractDriverNetworkEvents } from '../../e2e/focus-email/adapters/appium-ui.mjs';
+
 test('Appium adapter uses real browser capabilities and ordinary digit input without raw native hierarchy', async () => {
   const source = await readFile(new URL('../../e2e/focus-email/adapters/appium-ui.mjs', import.meta.url), 'utf8');
   assert.match(source, /browserName: 'Chrome'/u);
@@ -17,6 +19,20 @@ test('immutable preview metadata records the full repository SHA used by the E2E
   const source = await readFile(new URL('../../scripts/build-preview.mjs', import.meta.url), 'utf8');
   assert.match(source, /repo_sha: gitFullSha\(\)/u);
   assert.match(source, /git.*rev-parse.*HEAD/su);
+});
+
+test('Appium network logs retain only request identity, host, path and status', () => {
+  const logs = [
+    { message: JSON.stringify({ message: { method: 'Network.requestWillBeSent', params: { requestId: 'otp-1',
+      request: { method: 'POST', url: 'https://example.supabase.co/auth/v1/otp?email=secret@example.test' } } } }) },
+    { message: JSON.stringify({ method: 'Network.responseReceived', params: { requestId: 'otp-1',
+      response: { status: 200, url: 'https://example.supabase.co/auth/v1/otp?email=secret@example.test' } } }) },
+  ];
+  assert.deepEqual(extractDriverNetworkEvents(logs), [
+    { type: 'request', request_id: 'otp-1', method: 'POST', hostname: 'example.supabase.co', path: '/auth/v1/otp', status: null },
+    { type: 'response', request_id: 'otp-1', method: 'GET', hostname: 'example.supabase.co', path: '/auth/v1/otp', status: 200 },
+  ]);
+  assert.doesNotMatch(JSON.stringify(extractDriverNetworkEvents(logs)), /secret|@/u);
 });
 
 test('protected workflow keeps the recipient secret and gates all platforms strictly in sequence', async () => {
