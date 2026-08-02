@@ -141,3 +141,42 @@ Release blocked, если:
 - real OTP только явно и последовательно;
 - один bounded retry только для инфраструктурного flake;
 - deterministic gates решают release, AI visual review помогает triage.
+
+## 9. Продуктовое качество статических подборок
+
+Канонический сценарий `collections.product_quality` не проверяет внутренние
+версии схем как самостоятельную release-цель. Он формирует один продуктовый
+scorecard из трёх секций:
+
+- `health` — наполняемость, актуальность, дубли, source/review blockers и
+  концентрация выдачи;
+- `semantic_sample` — живые известные positives и грубые false positives;
+- `stability` — деградация относительно owner-accepted baseline и сохранение
+  last-good.
+
+Каркас runner/workflow описан в
+[`../../testing/static-collections-product-quality-autotests.md`](../../testing/static-collections-product-quality-autotests.md).
+До подключения production adapter, baseline, безопасного ChatGPT launch и
+terminal live run scenario остаётся `partial`: PR блокируют только regressions
+самого runner, а не качество example fixture.
+
+После активации live adapter:
+
+- `FAIL` блокирует promotion: неожиданно пустая public-подборка, duplicate
+  family/event, завершившийся или source-blocked public result, возврат
+  известного грубого false positive, невоспроизводимый результат на одинаковом
+  входе либо потеря last-good;
+- `WATCH` не блокирует по умолчанию: низкий supply, падение относительно
+  baseline, высокая концентрация, churn, отсутствие known positive, stale
+  snapshot;
+- абсолютный минимум задаётся только для подборки с принятым продуктовым
+  ожиданием; seasonal/experimental не наполняются искусственно ради зелёного CI;
+- изменения внутреннего storage/schema обслуживаются одним adapter, а не
+  переписыванием всех продуктовых проверок;
+- real LLM corpus не запускается на каждый commit, а только при изменении
+  prompt/model/router/семантики и по отдельному фактическому gate;
+- Android/iOS для data-only подборок не применяются.
+
+`collections.product_page_smoke` становится отдельным L1 gate только после
+появления Astro routes. Он подключается к существующему collection Playwright
+checker и не создаёт второй browser framework.
