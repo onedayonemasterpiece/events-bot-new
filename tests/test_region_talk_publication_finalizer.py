@@ -1473,6 +1473,40 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(result[0]["llm_attempted_this_run"], "false")
         llm_mock.assert_not_called()
 
+    def test_sent_row_refreshes_changed_external_intake_attestation_without_llm(self) -> None:
+        mod = self.mod
+        previous = {
+            "publication_status": "gemini_accept",
+            "publication_candidate_status": "sent_to_chat",
+            "sent_to_chat": "true",
+            "llm_decision": "accept",
+            "finalization_status": "terminal",
+            "llm_attempted_this_run": "false",
+            "external_intake_fingerprint": "",
+            "external_intake_revision": "",
+            "external_intake_status": "new_intake",
+            "external_intake_review_status": "unreviewed",
+            "external_intake_publication_permission": "none",
+            "external_intake_manual_review_required": "false",
+        }
+        row = {
+            **previous,
+            "external_intake_fingerprint": "current-intake-fingerprint",
+            "external_intake_revision": "legacy-attestation-v1",
+        }
+
+        changed = mod._reconcile_terminal_provider_decision(
+            row,
+            previous,
+            eligibility_verdict="eligible",
+            now_iso="2026-08-02T02:00:00+00:00",
+        )
+
+        self.assertTrue(changed)
+        self.assertEqual(row["publication_candidate_status"], "sent_to_chat")
+        self.assertEqual(row["external_intake_fingerprint"], "current-intake-fingerprint")
+        self.assertEqual(row["llm_attempted_this_run"], "false")
+
     def test_existing_unsent_accept_finishes_onboarding_without_repeating_gemini(self) -> None:
         mod = self.mod
         source = external_source()

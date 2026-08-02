@@ -536,6 +536,13 @@ authority. The Region Talk ledger is an extra product-run ceiling. Internal
 provider retries are set to one attempt; retryable rows are retried by the
 durable finalizer state instead.
 
+Terminal accepted/rejected rows also refresh the complete external-intake
+attestation projection without another provider call. The refresh includes the
+current intake fingerprint, revision, intake/review status, publication
+permission and manual-review flag. This prevents an otherwise unchanged
+eligibility/source attestation from leaving a legacy candidate outside the
+planner merely because its intake fingerprint was added later.
+
 All Region Talk Gemini consumers (final verifier/onboarding, visual
 adjudicator and optional grounded external research) disable direct reserve and
 process-local limiter fallbacks. If Supabase, `google_ai_reserve`, the

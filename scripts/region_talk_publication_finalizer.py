@@ -1475,6 +1475,10 @@ def _reconcile_terminal_provider_decision(
         "publication_eligibility_evidence_fingerprint", "publication_eligibility_gate_version",
         "authoritative_source_fingerprint", "authoritative_source_fingerprint_version",
         "authoritative_source_found",
+        "external_intake_fingerprint", "external_intake_revision",
+        "external_intake_status", "external_intake_review_status",
+        "external_intake_publication_permission",
+        "external_intake_manual_review_required",
     )
     attestation_changed_from_previous = any(
         str(previous.get(key) or "") != str(row.get(key) or "")
