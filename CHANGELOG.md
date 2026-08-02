@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Corrected the event-reminders product contract: `Избранное` now renders a
+  compact calendar agenda first and large liked-event cards below, with
+  independent once-per-zone state; Web Push is also designed as a separate
+  consented `promo_activity` with its own campaign lifecycle; and the first
+  acceptance lane is linked to the static-site focus group without pressuring
+  notification grants, positive feedback or prize scoring. No production Push
+  or promo activity is enabled.
 - Recorded the live Static Site QA control-plane acceptance: canonical issue
   `#253` launched protected browser run `30755922643`, received bot-authored
   acceptance/terminal receipts and produced a redaction-safe PASS artifact with

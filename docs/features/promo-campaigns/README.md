@@ -596,3 +596,38 @@ on the local date (`Europe/Kaliningrad`). The surface records
 - `/promo` now sends an inline management keyboard with report, seed80,
   pause/start/archive and priority buttons. The same menu is reachable from
   `/v` through `✨ Промо-кампании`.
+
+## Planned Web Push activity — not implemented
+
+Web Push is a valid future `promo_activity` surface:
+
+```text
+promo_activity.surface = web_push
+```
+
+It is intentionally absent from the implemented MVP surface list above. Before
+activation it requires a separate implementation/release decision.
+
+Boundary:
+
+- campaign target remains a grounded future event/festival;
+- activity runs only while the campaign is `active`;
+- recipient needs explicit `promo_push` consent; saved-event reminder opt-in and
+  browser Notification permission alone are insufficient;
+- config owns audience selector, local send window, per-user/per-campaign caps,
+  disclosure/profile key and dedup policy;
+- producer/outbox idempotency includes campaign + activity + recipient + target
+  revision;
+- pause/archive invalidates pending campaign jobs without changing utility
+  reminder preferences or saved events;
+- `promo_exposure` may keep bounded campaign/activity outcomes, but never raw
+  Push endpoint or encryption keys;
+- provider acceptance, visible display and click/open are distinct outcomes.
+
+The first allowed canary is one editorial activity in the active static-site
+focus cohort, one explicit opt-in and one send per participant in the canary
+sequence. Public frequency caps, commercial/partner disclosure and general
+audience targeting remain owner decisions.
+
+Acceptance companion:
+[`../static-site-focus-group/event-reminders-acceptance.md`](../static-site-focus-group/event-reminders-acceptance.md).

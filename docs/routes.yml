@@ -367,7 +367,11 @@ features:
   static_site_pages:
     status: secret_candidate_pipeline_root_promotion_blocked
     docs: docs/features/static-site-pages/README.md
+    event_reminders_calendar_strategy: docs/features/static-site-pages/event-reminders-calendar-strategy.md
     calendar_reminder_strategy: docs/features/static-site-pages/calendar-reminder-strategy.md
+    event_reminders_calendar_test_design: docs/testing/event-reminders-calendar-e2e.md
+    focus_group_event_reminders_acceptance: docs/features/static-site-focus-group/event-reminders-acceptance.md
+    related_promo_campaigns: docs/features/promo-campaigns/README.md
     collections_original_requirements: docs/features/static-site-pages/podborki.md
     collections_extraction_and_product_plan: docs/features/static-site-pages/podborki-to-be.md
     release_plan: docs/features/static-site-pages/release-plan.md

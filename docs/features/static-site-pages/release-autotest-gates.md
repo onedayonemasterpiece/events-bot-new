@@ -35,8 +35,10 @@ background run не закрывают release gate.
 | Focus onboarding/Auth/OTP | browser OTP + Android browser-tab OTP + iOS browser-tab OTP |
 | Supabase/Yandex route change | direct/relay contracts + affected browser/mobile journey |
 | Personalization/personal pages | no-leak/data contract + authenticated browser journey |
-| Saved-event simple calendar view | L0 grouping/sort/lifecycle + L1 selected-current-event row and duplicate prevention |
+| Favorites two-zone surface | L0 independent calendar/like state + L1 compact agenda above large liked cards; once per zone |
 | Event Push subscription/preferences/scheduler | L0 preferences/outbox/idempotency + L1 + Android/iOS L2; L3 background canary before enablement |
+| Promo campaign Web Push activity | L0 campaign/consent/caps + L1 + Android/iOS L2; focus canary and L3 before public enablement |
+| Focus event-delivery orientation | two-zone Favorites + permission-neutral reminder/promo journeys + ordinary feedback path |
 | Postbox calendar invitation | L0 MIME/UID/SEQUENCE + protected Postbox/mailbox roundtrip + client matrix before enablement |
 | Android Calendar Connector | L0 manifest/App Links/permissions + L1 fallback + Android native editor L2 + bounded L3 OEM canary |
 | Data-only copy/facts update | no mandatory emulator unless it changes a mobile-critical component |
@@ -150,19 +152,21 @@ Test design:
 
 После первого Push/email side effect event нельзя заменить новым.
 
-### 7.2. Календарный вид «Избранного»
+### 7.2. Двухзонное «Избранное»
 
 После реализации обязательны:
 
 - `event.saved_calendar_view`;
-- selected current event в правильной date group;
-- строка `время–время | мероприятие | локация`;
-- no duplicate при repeat save и favorite/calendar sources;
-- сортировка frozen fixtures;
-- reschedule/cancel/unknown-field/empty-state fixtures;
-- Push off не удаляет saved row.
+- compact `Мой календарь` расположен первым;
+- строка `время–время | мероприятие | локация` находится в правильной date group;
+- ниже начинаются крупные canonical event cards `Понравилось`;
+- same event may appear once per zone when both independent states are true;
+- repeat save/like не создаёт duplicate внутри зоны;
+- снятие одного состояния не снимает другое;
+- reschedule/cancel/unknown-field/independent-empty-state fixtures;
+- Push off не удаляет ни calendar row, ни liked card.
 
-### 7.3. Push
+### 7.3. Utility reminder Push
 
 После реализации обязательны:
 
@@ -179,7 +183,27 @@ Test design:
 - native permission/UI/click-through L2;
 - L3 Android OEM + real-iPhone background canary.
 
-### 7.4. Calendar email
+### 7.4. Promo campaign Web Push
+
+После реализации `promo.web_push.activity` требует:
+
+- active `promo_campaign` + grounded future target;
+- explicit `promo_push` consent, independent from reminder consent;
+- separate campaign/activity outbox and idempotency;
+- send window/caps/disclosure;
+- campaign pause/archive invalidates only promo jobs;
+- provider accepted/displayed/opened are separate states;
+- first bounded focus canary before any public enablement.
+
+### 7.5. Focus-group acceptance
+
+`focus.event_delivery.orientation` runs only after focus onboarding/PWA
+continuity is healthy. It verifies the two Favorites zones, permission-neutral
+utility reminder journey, optional separate promo opt-in and the ordinary focus
+feedback path. Deny/skip is a valid outcome and does not affect programme or
+prize scoring. Focus PASS is product evidence, not automatic public enablement.
+
+### 7.6. Calendar email
 
 Postbox Raw transport проверяется отдельно от client interpretation:
 
@@ -190,7 +214,7 @@ Postbox Raw transport проверяется отдельно от client interp
 NotiSend остаётся comparison-only и не становится hidden fallback без отдельного
 architecture decision.
 
-### 7.5. Android connector
+### 7.7. Android connector
 
 `event.calendar_connector.android` требует:
 
@@ -219,7 +243,11 @@ Release blocked, если:
 - browser supplied authoritative event time/revision/current city;
 - T−1h и T−3h near kinds созданы одновременно;
 - выключенный reminder type продолжает создавать jobs;
-- calendar view нарушает date/time/event/location contract;
+- Favorites не содержит compact calendar сверху и large liked cards ниже;
+- cross-zone reuse ошибочно дедуплицирован либо внутри зоны есть duplicate;
+- reminder consent использован как promo consent;
+- paused/archived campaign продолжает слать promo Push;
+- focus mission требует permission grant/положительную оценку или влияет на prize;
 - environment smoke выдан за Push/calendar PASS;
 - Postbox acceptance выдан за client recognition;
 - ICS download выдан за external calendar save.

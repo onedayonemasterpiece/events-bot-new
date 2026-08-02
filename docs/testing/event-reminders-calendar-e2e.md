@@ -100,12 +100,14 @@ Frozen fixtures сохраняют deterministic coverage, когда редак
 |---|---|---|---|
 | `event.current_event.selection` | scaffold implemented | L0/L1 browser | none |
 | `event.current_event.mobile_environment` | scaffold implemented | L2 Android/iOS | none |
-| `event.saved_calendar_view` | planned | L0/L1 browser | idempotent saved-event fixture |
+| `event.saved_calendar_view` | planned | L0/L1 browser | independent calendar-save and like fixture |
 | `event.ics.download_contract` | partial existing | L0/L1 browser | download only |
 | `event.reminder.push_subscription` | planned | L1/L2 Android/iOS | test subscription |
 | `event.reminder.preferences` | planned | L0/L1/L2 | preference updates |
 | `event.reminder.push_delivery` | planned | L1/L2 + L3 | protected Push |
 | `event.reminder.lifecycle` | planned | L0/L1/L2 | revision overlay + Push |
+| `promo.web_push.activity` | planned | L0/L1/L2/L3 | protected campaign Push |
+| `focus.event_delivery.orientation` | planned | L1/L2 Android/iOS | idempotent saved-state + bounded Push canaries |
 | `event.calendar_email.postbox_mime` | planned | L0 | none |
 | `event.calendar_email.postbox_roundtrip` | planned | server/mailbox | protected REQUEST/update/CANCEL |
 | `event.calendar_email.client_action` | planned | L1/L2/L3 | controlled invitation |
@@ -141,29 +143,32 @@ FAIL_EVENT_ALREADY_STARTED
 
 ### Dynamic integration
 
-1. Resolver выбирает актуальное событие.
-2. Сценарий сохраняет его idempotent test identity.
-3. Открывает календарный вид «Избранного».
-4. Проверяет правильную date group.
-5. Проверяет строку:
+Один выбранный актуальный event достаточно использовать для проверки
+независимых состояний:
 
-```text
-HH:MM–HH:MM | Мероприятие | локация
-```
-
-6. Повторный save не создаёт duplicate.
-7. Отключение Push не удаляет строку.
+1. Установить `calendar_saved=true`, `favorite_saved=false`.
+2. Открыть «Избранное».
+3. Доказать, что event находится один раз в верхнем compact agenda и отсутствует
+   среди крупных liked cards.
+4. Установить `favorite_saved=true` для того же event.
+5. Доказать, что agenda row сохранился, а ниже появилась одна крупная event card.
+   Такое появление в двух разных зонах ожидаемо и не считается duplicate.
+6. Повторить обе операции — количество элементов не меняется.
+7. Выключить calendar save — compact row исчезает, liked card остаётся.
+8. Вернуть calendar save и выключить Push — обе saved-state зоны остаются.
 
 ### Frozen contracts
 
-- несколько дат;
-- несколько событий в один день;
-- хронологическая сортировка;
-- favorite + calendar source без duplicate;
+- несколько дат и несколько событий в один день;
+- хронологическая сортировка agenda;
+- calendar-save duplicate внутри верхней зоны отсутствует;
+- like duplicate внутри нижней зоны отсутствует;
+- same event once per zone when both signals are true;
+- крупная карточка использует canonical event-card family, а не compact row;
 - unknown end/location typed fallback;
-- reschedule перемещает строку;
+- reschedule перемещает agenda row;
 - cancellation видима;
-- честный empty state.
+- честные independent empty states для каждого блока.
 
 Live current event обеспечивает актуальный integration input, а сложные
 группировки не зависят от редакционного каталога конкретного дня.
@@ -293,6 +298,28 @@ Assertions:
 - click открывает lifecycle state;
 - overlay очищается.
 
+### 7.5. `promo.web_push.activity`
+
+Это отдельный purpose от `event.reminder.*`.
+
+Protected focus-cohort sequence:
+
+1. Создать isolated active promo campaign/activity для selected current event.
+2. У test participant есть Web Push subscription и utility reminder opt-in, но
+   нет `promo_push` consent.
+3. Доказать отсутствие campaign job.
+4. Получить отдельный explicit promo opt-in.
+5. Создать ровно один promo job с campaign/activity idempotency и disclosure.
+6. Pause до claim инвалидирует pending promo job, но не reminder jobs.
+7. Resume + compressed clock доставляет один promo Push; click открывает exact
+   event URL.
+8. Replay scheduler не создаёт duplicate.
+9. Archive прекращает новые campaign jobs.
+10. Revoke promo consent не меняет calendar/like/reminder preferences.
+
+Первый canary использует ровно одну editorial campaign activity и одну отправку
+на участника. Provider acceptance, display и open хранятся как разные states.
+
 ## 8. Postbox calendar email
 
 ### 8.1. `event.calendar_email.postbox_mime`
@@ -390,7 +417,25 @@ Evidence исключает raw recipient/body/token/account. Screenshots — п
 
 Final OEM handler matrix remains L3.
 
-## 10. GitHub Actions scaffold
+## 10. Focus-group acceptance lane
+
+Канонический companion:
+[`../features/static-site-focus-group/event-reminders-acceptance.md`](../features/static-site-focus-group/event-reminders-acceptance.md).
+
+Journey выполняется после focus onboarding и PWA/browser continuity gates:
+
+1. resolver выбирает актуальное событие;
+2. участник ставит like и calendar save, затем проверяет две зоны «Избранного»;
+3. участник может grant или deny Notification permission — оба исхода валидны;
+4. при grant проверяется utility reminder preference + compressed-clock push;
+5. promo Push предлагается отдельным opt-in и отдельной campaign activity;
+6. campaign pause не влияет на saved reminders;
+7. участник оставляет обычный focus usefulness/problem feedback.
+
+Миссия измеряет понятность и надёжность, но не требует положительной оценки,
+permission grant или promo consent и не влияет на prize scoring.
+
+## 11. GitHub Actions scaffold
 
 Workflow inputs:
 
@@ -421,7 +466,7 @@ BLOCKED          emulator/runtime/target problem
 
 Environment boot/open is not Push/calendar PASS.
 
-## 11. Evidence
+## 12. Evidence
 
 ```text
 evidence/
@@ -444,12 +489,15 @@ Metadata:
 - selected event URL, ICS hash, UID hash;
 - platform/OS/browser/device;
 - scenario ID;
+- saved-state zone and consent purpose where relevant;
+- campaign/activity identity hash and lifecycle state for promo Push;
+- focus membership/canary cohort reference without direct identity;
 - city branch and server-owned city decision reference where relevant;
 - side-effect checkpoint;
 - terminal status/failure domain;
 - redaction result.
 
-## 12. Release policy
+## 13. Release policy
 
 NO-GO после реализации соответствующего channel, если:
 
@@ -458,7 +506,11 @@ NO-GO после реализации соответствующего channel, 
 - selected event изменился после first side effect;
 - browser supplies authoritative event time/revision/current city;
 - T−1h and T−3h near jobs coexist;
-- saved calendar view violates date/time/event/location contract;
+- Favorites does not render compact calendar above large liked cards;
+- same event cannot appear once per zone when both independent signals are true;
+- reminder opt-in is treated as promo consent;
+- paused/archived campaign still creates promo jobs;
+- focus mission requires grant/positive feedback or changes prize scoring;
 - disabled reminder type still creates job;
 - duplicate/stale-revision Push;
 - Postbox acceptance declared client recognition;

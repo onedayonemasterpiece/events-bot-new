@@ -520,7 +520,7 @@ review. Материальный приз и social-share multiplier не нас
 требуют отдельного legal/anti-abuse решения. Полный contract:
 [static-site easter eggs](../static-site-easter-eggs/README.md).
 
-## Separate Stage 14 — «Не пропустить»: saved calendar, Push, email invitation и Android connector
+## Separate Stage 14 — «Не пропустить»: Favorites, utility Push, promo Push, email invitation и Android connector
 
 Этот track является частью общего static-site release plan, но реализуется
 независимо от canonical-root promotion и не меняет текущий Top-5. Его
@@ -533,42 +533,72 @@ production capabilities остаются fail-closed, пока каждый chan
   [`schedule-user-requirements.md`](schedule-user-requirements.md);
 - product/architecture/research contract:
   [`event-reminders-calendar-strategy.md`](event-reminders-calendar-strategy.md);
+- saved-state contract:
+  [`../event-favorites-calendar/README.md`](../event-favorites-calendar/README.md);
+- promo campaign contract:
+  [`../promo-campaigns/README.md`](../promo-campaigns/README.md);
+- focus acceptance companion:
+  [`../static-site-focus-group/event-reminders-acceptance.md`](../static-site-focus-group/event-reminders-acceptance.md);
 - release evidence и Android/iOS сценарии:
   [`release-autotest-gates.md`](release-autotest-gates.md) и
   [`../../testing/event-reminders-calendar-e2e.md`](../../testing/event-reminders-calendar-e2e.md).
 
 ### Scope и последовательность
 
-1. Простой календарный вид «Избранного»: группировка по дате и строка
-   `время–время | мероприятие | локация`, idempotent save, no duplicate,
-   lifecycle и typed fallback.
-2. Web Push T−24h и ровно один ближний kind:
-   - T−1h, если event city совпадает с server-owned текущим городом пользователя;
+1. «Избранное» имеет две зоны:
+   - сверху compact `Мой календарь` с группировкой по дате и строкой
+     `время–время | мероприятие | локация` только для calendar saves;
+   - ниже крупные ordinary event cards `Понравилось` только для likes.
+   Same event может появиться один раз в каждой зоне, если пользователь сделал
+   оба независимых действия; duplicate запрещён внутри зоны.
+2. Utility Web Push T−24h и ровно один ближний kind:
+   - T−1h, если event city совпадает с server-owned текущим городом;
    - T−3h, если событие в другом городе.
-   Near kinds взаимоисключающие; unknown city остаётся typed fail-closed до
-   отдельного owner/data решения.
-3. Управление всеми Push, отдельными временными типами и конкретным событием;
-   anti-storm/idempotency являются release contract.
-4. Существующий ICS download сохраняется как честный ручной fallback и не
+3. Управление всеми utility Push, отдельными временными типами и конкретным
+   событием; anti-storm/idempotency являются release contract.
+4. Web Push может быть отдельной planned активностью промо-кампании
+   `promo_activity.surface=web_push`, но только с отдельным `promo_push`
+   consent, campaign/activity outbox, caps/disclosure и independent rollback.
+   Reminder opt-in не является promotional consent.
+5. Существующий ICS download сохраняется как честный ручной fallback и не
    считается доказанным внешним calendar save.
-5. Postbox calendar invitation проходит строгий Raw MIME builder,
+6. Postbox calendar invitation проходит strict Raw MIME builder,
    REQUEST/update/CANCEL roundtrip и Gmail/Apple Mail/Outlook matrix.
    NotiSend остаётся comparison-only и не является hidden fallback.
-6. Тонкий Android connector проходит stable signing identity, verified App
+7. Тонкий Android connector проходит stable signing identity, verified App
    Links, first-party payload boundary и native `ACTION_INSERT` editor
    acceptance без calendar/storage permissions.
-7. Google Calendar OAuth/web template, subscription calendars, browser
+8. Google Calendar OAuth/web template, subscription calendars, browser
    `intent:` и ICS Web Share не входят в production scope этого этапа.
+
+### Фокус-группа
+
+Фокус-группа является первой acceptance lane, а не отдельным backend или
+release truth. После здорового onboarding/PWA continuity участник:
+
+- лайкает и calendar-saves актуальное событие;
+- проверяет compact calendar сверху и large liked card ниже;
+- может grant или deny Notification permission без штрафа;
+- при grant проверяет utility reminder preference/canary;
+- отдельно может opt in в одну bounded editorial promo campaign Push activity;
+- оставляет обычный focus usefulness/problem feedback.
+
+Permission grant, promo opt-in и положительная оценка не являются условиями
+участия и не влияют на prize scoring. Focus PASS не включает public Push
+автоматически.
 
 ### Release gates
 
 - production-like тесты выбирают актуальное событие динамически из exact
   deployed build и adjacent ICS; hardcoded event URL запрещён;
-- selected event revalidates до первого side effect и не может тихо смениться
-  после Push/email отправки;
+- selected event revalidates до первого side effect и не может смениться после
+  Push/email отправки;
 - browser не задаёт authoritative event time, revision или current city;
-- Push requires durable preferences/outbox, exact-once kinds, lifecycle
-  invalidation, Android/iOS L2 и bounded real-device/device-farm L3 canary;
+- Favorites доказывает порядок зон и independent saved-state behavior;
+- utility Push requires durable preferences/outbox, exact-once kinds,
+  lifecycle invalidation, Android/iOS L2 и bounded L3 canary;
+- promo Push requires campaign lifecycle, separate consent/caps/disclosure,
+  focus canary и independent kill switch;
 - Postbox provider acceptance не считается calendar-client recognition;
 - Android/iOS environment smoke не считается product PASS;
 - UI не говорит «Добавлено в календарь» по download, email acceptance или
@@ -576,12 +606,15 @@ production capabilities остаются fail-closed, пока каждый chan
 
 ### NO-GO и rollback
 
-NO-GO, если одновременно существуют T−1h-current-city и T−3h-other-city jobs,
-выключенный тип продолжает отправляться, возможен duplicate/notification storm,
-calendar view выдумывает time/location, email compatibility не доказана или
+NO-GO, если compact calendar не находится сверху, liked cards не находятся
+ниже, independent signals ошибочно слиты, одновременно существуют T−1h и T−3h
+jobs, выключенный type продолжает отправляться, возможен notification storm,
+reminder consent используется для promo, paused campaign продолжает отправку,
+focus mission давит на permission/оценку, email compatibility не доказана или
 connector не прошёл native/App-Link acceptance.
 
-Rollback независим по channel: Push producer/sender выключается и pending jobs
-инвалидируются; email experiment выключается без ambiguous resend; connector
-CTA возвращается к web fallback. Saved-event state, простой календарный вид и
-ICS остаются доступны.
+Rollback независим по channel: utility Push producer/sender выключается и
+pending reminder jobs инвалидируются; promo activity выключается и pending
+campaign jobs инвалидируются без изменения saved reminders; email experiment
+выключается без ambiguous resend; connector CTA возвращается к web fallback.
+Favorites и ICS остаются доступны.

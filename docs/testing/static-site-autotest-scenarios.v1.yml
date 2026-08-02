@@ -162,15 +162,15 @@ scenarios:
       release: false_environment_diagnostic_only
 
   event.saved_calendar_view:
-    title: Saved current event appears once in the simple date time event location calendar view
+    title: Favorites renders a compact calendar first and large liked-event cards below
     status: planned
     layers: [L0, L1]
     platforms: [browser]
     trigger_tags: [static-data, static-route, event-reminder, personalization]
     cost: medium
-    side_effects: idempotent_test_saved_event
-    target: selected_current_event_plus_frozen_grouping_fixtures
-    evidence: selected_event_row_sorting_lifecycle_and_no_duplicate_report
+    side_effects: idempotent_calendar_save_and_like_updates
+    target: selected_current_event_plus_frozen_two_zone_fixtures
+    evidence: agenda_sorting_large_card_independent_state_and_once_per_zone_report
     blocking:
       pull_request: false_until_implemented
       release: true_after_implementation
@@ -244,6 +244,20 @@ scenarios:
     blocking:
       pull_request: false_until_implemented
       release: true_after_implementation
+
+  promo.web_push.activity:
+    title: Active promo campaign sends one consented Web Push without borrowing reminder consent
+    status: planned
+    layers: [L0, L1, L2, L3]
+    platforms: [browser, android, ios]
+    trigger_tags: [promo-campaigns, pwa-system, mobile-input, static-route]
+    cost: high
+    side_effects: protected_focus_cohort_promo_push
+    target: selected_current_event_active_campaign_and_explicit_promo_push_consent
+    evidence: campaign_activity_consent_outbox_delivery_click_pause_and_archive_report
+    blocking:
+      pull_request: false_until_implemented
+      release: true_for_web_push_promo_activity_after_implementation
 
   event.calendar_email.postbox_mime:
     title: Server-side iTIP MIME survives Postbox Raw serialization
@@ -343,6 +357,20 @@ scenarios:
       pull_request: false_until_implemented
       release: false_until_implemented
 
+  focus.event_delivery.orientation:
+    title: Focus participant validates Favorites zones and separate utility and promo Push purposes
+    status: planned
+    layers: [L1, L2]
+    platforms: [browser, android, ios]
+    trigger_tags: [focus-group, pwa-system, event-reminder, promo-campaigns, personalization]
+    cost: high
+    side_effects: idempotent_saved_state_and_bounded_push_canaries
+    target: active_focus_membership_and_selected_current_event
+    evidence: two_zone_ui_consent_separation_native_notification_feedback_and_no_prize_pressure
+    blocking:
+      pull_request: false_until_implemented
+      release: focus_cohort_acceptance_after_implementation
+
   focus.otp.browser_tab:
     title: Real focus-group email OTP in browser tab
     status:
@@ -429,5 +457,11 @@ policies:
   current_city_unknown_near_reminder_policy: fail_closed_until_owner_decision
   current_city_and_other_city_near_kinds_may_coexist: false
   saved_calendar_view_required_by_source_requirements: true
+  saved_favorites_surface_zones: calendar_compact_top_liked_cards_below
+  same_event_may_appear_once_per_zone_when_both_signals_true: true
+  reminder_consent_implies_promo_push_consent: false
+  promo_campaign_pause_changes_saved_event_reminders: false
+  focus_orientation_requires_notification_grant: false
+  focus_orientation_affects_prize_scoring: false
   calendar_download_implies_external_save: false
   emulator_environment_smoke_implies_push_or_calendar_pass: false

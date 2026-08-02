@@ -40,24 +40,48 @@ Supabase/Postgres owns favorite/follow state with RLS by user identity. Local an
 - export/delete/account purge;
 - offline/static fallback that never blocks event navigation.
 
-## R15 saved-events page and event-aware calendar
+## R15 saved-events page: compact calendar above liked cards
 
 The saved-events route is an authenticated **noindex** utility surface. It
 renders a stable static shell/skeleton first, then hydrates through the shared
 origin-scoped Supabase auth runtime; it does not expose tokens in DOM state and
 does not invent an anonymous server profile.
 
-Within the future set, order is calendar-first:
+The page is not one merged list. It has two consecutive product zones:
 
-1. events explicitly added through the calendar/save action;
-2. then liked/favorited events not already represented above.
+### Zone 1 — `Мой календарь`
 
-The same event/occurrence cannot appear twice merely because both actions were
-used. Within a source tier the current implementation prefers the latest
-recorded save action, then stable input order and an event-ID fallback; it does
-not pretend that this is chronological event ordering. Past, cancelled, merged
-or inaccessible rows follow the lifecycle policy above rather than being
-silently mixed into the future list. Empty, signed-out and
+The top of the page is a compact chronological agenda containing only rows with
+`calendar_saved=true`:
+
+```text
+Дата
+HH:MM–HH:MM | Мероприятие | локация
+```
+
+Dates and rows are sorted by event time. Reschedule moves the row; cancellation
+is visible; unknown end time or location uses a typed fallback. This compact
+section ends before the visual liked-event collection begins.
+
+### Zone 2 — `Понравилось`
+
+Below the calendar, events with `favorite_saved=true` render as the ordinary
+large event cards used by the public/personalized site. This is the visual
+collection of what the user liked, not a continuation of the compact agenda.
+
+`calendar_saved` and `favorite_saved` are independent signals:
+
+- the same event may appear once in the compact calendar **and** once as a large
+  liked card when both states are true; that cross-zone reuse is intentional,
+  not a duplicate bug;
+- within either zone, one event/occurrence appears at most once;
+- turning off calendar save removes only the agenda row;
+- removing the like removes only the large card;
+- turning Push off removes neither zone;
+- repeating either action is idempotent.
+
+Past, cancelled, merged or inaccessible rows follow the lifecycle policy above
+rather than being silently mixed into the future surface. Empty, signed-out and
 backend-unavailable states remain honest and retain navigation.
 
 Durable storage is `public.user_saved_event`, introduced by
@@ -80,11 +104,11 @@ tabs per owner, preserves idempotent repeats and enforces at most 500 active
 saved-event rows per user. It accepts no caller-supplied `user_id` and never
 uses `user_metadata` for authorization.
 
-The date calendar itself is event-aware: navigation extends through the
-furthest month that contains a public event in the generated availability
-manifest. Dates without events are not ordinary active targets—pointer events
-and keyboard activation must not accidentally select them—while month
-navigation, focus order and an explicit return path remain available.
+Optional date navigation remains event-aware: it extends through the furthest
+month containing a public event in the generated availability manifest. Dates
+without events are not ordinary active targets, while month navigation, focus
+order and an explicit return path remain available. The month navigator does
+not replace the compact agenda or the liked-card zone.
 
 ## Public aggregate semantics
 
