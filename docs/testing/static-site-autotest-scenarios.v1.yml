@@ -132,6 +132,150 @@ scenarios:
       pull_request: false_until_implemented
       release: false_until_implemented
 
+  event.current_event.selection:
+    title: Resolve one current complete event from the exact deployed build
+    status: implemented_scaffold
+    layers: [L0, L1]
+    platforms: [browser]
+    trigger_tags: [static-data, static-route, event-reminder, calendar-email]
+    cost: low
+    side_effects: none
+    target: deployed_https_exact_repo_sha
+    selection: dynamic_from_current_listings_and_adjacent_ics
+    evidence: selected_event_snapshot_and_browser_report
+    blocking:
+      pull_request: affected_scope
+      release: prerequisite_for_event_delivery_scenarios
+
+  event.current_event.mobile_environment:
+    title: Open the dynamically selected current event in Android and iOS system browsers
+    status: implemented_scaffold
+    layers: [L2]
+    platforms: [android, ios]
+    trigger_tags: [mobile-input, pwa-system, event-reminder]
+    cost: high
+    side_effects: none
+    target: deployed_https_exact_repo_sha
+    evidence: device_metadata_native_screenshot_and_not_implemented_disposition
+    blocking:
+      pull_request: false_environment_diagnostic_only
+      release: false_environment_diagnostic_only
+
+  event.ics.download_contract:
+    title: Current event ICS is valid, downloadable and never reported as external calendar save
+    status: partial
+    layers: [L0, L1]
+    platforms: [browser]
+    trigger_tags: [static-data, static-route, event-reminder]
+    cost: low
+    side_effects: browser_download_only
+    target: selected_current_event
+    evidence: ics_hash_fields_and_download_report
+    blocking:
+      pull_request: affected_scope_for_ics_changes
+      release: true_for_ics_changes
+
+  event.reminder.push_subscription:
+    title: Explicit user gesture creates one device-bound Push subscription
+    status: planned
+    layers: [L1, L2]
+    platforms: [browser, android, ios]
+    trigger_tags: [pwa-system, event-reminder, mobile-input]
+    cost: high
+    side_effects: protected_test_subscription
+    target: selected_current_event
+    evidence: sanitized_subscription_and_native_permission_state
+    blocking:
+      pull_request: false_until_implemented
+      release: true_after_implementation
+
+  event.reminder.push_delivery:
+    title: T-24h and T-1h reminder kinds deliver exactly once and open the selected event
+    status: planned
+    layers: [L1, L2, L3]
+    platforms: [android, ios]
+    trigger_tags: [pwa-system, event-reminder]
+    cost: high
+    side_effects: protected_test_push_with_compressed_clock
+    target: selected_current_event_and_server_side_test_clock
+    evidence: provider_outbox_native_notification_click_and_l3_canary
+    blocking:
+      pull_request: false_until_implemented
+      release: true_after_implementation
+
+  event.reminder.lifecycle:
+    title: Reschedule and cancellation invalidate stale reminders without duplicates
+    status: planned
+    layers: [L0, L1, L2]
+    platforms: [browser, android, ios]
+    trigger_tags: [static-data, pwa-system, event-reminder]
+    cost: high
+    side_effects: isolated_test_revision_overlay_and_push
+    target: selected_current_event_snapshot_without_mutating_editorial_event
+    evidence: revision_outbox_and_mobile_notification_report
+    blocking:
+      pull_request: false_until_implemented
+      release: true_after_implementation
+
+  event.calendar_email.postbox_mime:
+    title: Server-side iTIP MIME survives Postbox Raw serialization
+    status: planned
+    layers: [L0]
+    platforms: []
+    trigger_tags: [calendar-email, static-data]
+    cost: low
+    side_effects: none
+    target: frozen_fixture_plus_selected_current_event
+    evidence: redacted_mime_structure_hashes_uid_and_sequence
+    blocking:
+      pull_request: true_after_mime_builder_implementation
+      release: true_after_mime_builder_implementation
+
+  event.calendar_email.postbox_roundtrip:
+    title: Postbox delivers one REQUEST update and cancel sequence to a controlled mailbox
+    status: planned
+    layers: [L1]
+    platforms: [browser]
+    trigger_tags: [calendar-email]
+    cost: high
+    side_effects: protected_real_email_sequence
+    target: selected_current_event
+    isolation: event-calendar-email-e2e
+    execution: sequential_per_recipient_and_uid
+    evidence: restricted_redacted_received_mime_and_provider_feedback
+    blocking:
+      pull_request: false_until_implemented
+      release: protected_research_or_route_change_gate
+
+  event.calendar_email.client_action:
+    title: Gmail Apple Mail and Outlook recognize the invitation and calendar lifecycle
+    status: planned
+    layers: [L2, L3]
+    platforms: [android, ios]
+    trigger_tags: [calendar-email, mobile-input]
+    cost: very_high
+    side_effects: controlled_mailbox_and_calendar_account
+    target: selected_current_event
+    execution: sequential_until_platform_mailboxes_are_independent
+    evidence: masked_native_ui_provider_matrix_and_real_device_canary
+    blocking:
+      pull_request: false_until_implemented
+      release: research_acceptance_before_product_enablement
+
+  event.calendar_connector.android:
+    title: Verified App Link opens ACTION_INSERT with current event fields and no calendar permission
+    status: planned
+    layers: [L0, L1, L2, L3]
+    platforms: [android]
+    trigger_tags: [android-connector, mobile-input, static-route]
+    cost: very_high
+    side_effects: simulator_or_test_device_calendar_editor
+    target: selected_current_event_and_signed_test_apk
+    evidence: manifest_assetlinks_native_editor_fields_and_l3_oem_canary
+    blocking:
+      pull_request: false_until_implemented
+      release: true_for_connector_release_after_implementation
+
   personal.for_me_page:
     title: Authenticated pre-generated personal page is available without data leakage
     status: planned
@@ -246,3 +390,7 @@ policies:
   background_outcome_may_be_reported_as_pass: false
   mandatory_background_must_be_terminal_before_release: true
   planned_scenario_blocks_release: false
+  current_event_may_switch_after_first_side_effect: false
+  browser_event_facts_are_authoritative: false
+  calendar_download_implies_external_save: false
+  emulator_environment_smoke_implies_push_or_calendar_pass: false
