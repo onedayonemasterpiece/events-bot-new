@@ -30,6 +30,12 @@
   `docs/operations/static-site-qa-chatgpt-control-plane.md`,
   `docs/testing/static-site-autotest-scenarios.v1.yml`,
   `docs/testing/static-site-autotest-codex-prompt.md`
+- **Напоминания и календарная доставка:** исходные требования
+  `docs/features/static-site-pages/schedule-user-requirements.md`, производная
+  стратегия `docs/features/static-site-pages/event-reminders-calendar-strategy.md`,
+  dynamic-current-event и Android/iOS test design
+  `docs/testing/event-reminders-calendar-e2e.md`; rollout и blocking status —
+  Stage 14 общего `docs/features/static-site-pages/release-plan.md`.
 - Kaggle static-site builder / publisher protocol: `docs/operations/kaggle-static-site-builder.md`
 - Default-off two-bucket/ALB atomic root publisher and setup/rollback runbook:
   `docs/operations/static-site-atomic-root.md`

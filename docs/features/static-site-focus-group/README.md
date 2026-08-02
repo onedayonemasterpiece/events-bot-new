@@ -14,6 +14,7 @@
 > **Инцидент:**
 > [INC-2026-07-30-focus-email-otp-false-success](../../reports/incidents/INC-2026-07-30-focus-email-otp-false-success.md).
 > **E2E:** [docs/operations/e2e-scenarios.md](../../operations/e2e-scenarios.md).
+> **Favorites/Push acceptance:** [event-reminders-acceptance.md](event-reminders-acceptance.md).
 
 ## 0. Реализованный и восстанавливаемый контур
 
