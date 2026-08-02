@@ -17,6 +17,12 @@ hashes и считает family-weighted recall только по high/keep/suff
 распознаёт нормализованную фразу `всей семьей` (включая исходное `ё`), но
 `приходите` и возрастной рейтинг сами по себе остаются unrouted.
 
+Для обязательных named boundaries вне corrected seed evaluator принимает
+опциональный hash-bound boundary manifest. Это не второй truth dataset и не
+calibration: его bindings только расширяют точный replay cohort, hard
+`not_confirmed` блокирует ложное подтверждение, а `watch`/`confirmed_watch`
+расхождения остаются видимыми неблокирующими предупреждениями.
+
 Stack base: `agent/static-collections-quality/pr-a-ontology` @
 `3164e984d04208fcff5618c49271a4633d304eab`.
 

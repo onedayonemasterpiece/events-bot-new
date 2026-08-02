@@ -1,5 +1,10 @@
 # Lane results: static-collection-product-loop-facts
 
+Follow-up: the exact-cohort contract is extended by the optional hash-bound
+boundary manifest documented in
+`../static-collection-product-loop-facts-boundary-manifest/RESULTS.md`; seed-only
+behavior remains unchanged.
+
 ## Identity
 
 - Lane ID: `static-collection-product-loop-facts`

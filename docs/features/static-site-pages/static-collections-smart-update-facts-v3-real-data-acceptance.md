@@ -196,6 +196,15 @@ diff и не более одного logical/physical send без fallback. `4/5
 confirmed hard negative блокирует их. Даже PASS всегда возвращает
 `publication_status=blocked`.
 
+Named corrected/removed boundary rows that no longer belong to semantic seed
+supply are replayed through the optional versioned boundary manifest rather
+than being reintroduced into positives/hard-negative calibration rows. The
+manifest is bound to the exact seed SHA and exact event/source/source-text hash.
+Gate-B accepts exactly the union of seed and manifest source bindings and rejects
+every unlisted extra or missing execution row. `not_confirmed` is a hard safety
+expectation; `watch` and `confirmed_watch` disagreements are explicit warnings
+and never change the hard recall denominator.
+
 ## 5. Gate C — fallback/failure drill
 
 Выполнить отдельно от primary quality run.

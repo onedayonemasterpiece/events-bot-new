@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenigevents.ru/schemas/static-collection-facts-v3-boundary-manifest-v1.json",
+  "title": "Static collection facts v3 corrected boundary replay manifest",
+  "type": "object",
+  "required": ["schema_version", "seed_sha256", "boundaries"],
+  "properties": {
+    "schema_version": {"const": "static-collection-facts-v3-boundary-manifest-v1"},
+    "seed_sha256": {"$ref": "#/$defs/sha256"},
+    "boundaries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/boundary"}
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "boundary": {
+      "type": "object",
+      "required": [
+        "boundary_id",
+        "event_id",
+        "source_id",
+        "source_text_sha256",
+        "label",
+        "expectation"
+      ],
+      "properties": {
+        "boundary_id": {"type": "string", "minLength": 1},
+        "event_id": {"type": "integer", "minimum": 1},
+        "source_id": {"type": "integer", "minimum": 1},
+        "source_text_sha256": {"$ref": "#/$defs/sha256"},
+        "label": {
+          "enum": ["child_directed", "family_suitable", "joint_family_activity"]
+        },
+        "expectation": {"enum": ["not_confirmed", "watch", "confirmed_watch"]},
+        "note": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

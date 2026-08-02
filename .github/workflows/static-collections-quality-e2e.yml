@@ -97,6 +97,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m json.tool docs/review-data/static_collection_facts_v3_gate_b_report.schema.json >/dev/null
+          python -m json.tool docs/review-data/static_collection_facts_v3_boundary_manifest.schema.json >/dev/null
           python -m py_compile scripts/evaluate_static_collection_facts_v3_gate_b.py
           python -m pytest -q \
             tests/test_smart_event_update.py \

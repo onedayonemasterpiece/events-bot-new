@@ -174,3 +174,35 @@ lanes:
     effort: high
     status: completed
     acceptance_status: copy_gate_evaluator_ready_real_replay_not_claimed_publication_blocked
+  - id: static-collection-product-loop-facts-boundary-manifest
+    role: worker
+    requirement_ids: [R3-followup]
+    target: hash-bound named boundary replay outside corrected semantic seed supply
+    depends_on: [static-collection-product-loop-facts]
+    execution_mode: serial_isolated_worktree
+    branch: agent/static-collection-product-loop/facts-gate-ci-router
+    base_sha: 9cc8fbaa9da9c2c769c938e186f96c5b0b7ac2c1
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collection-facts-v3-core
+    writable_files:
+      - scripts/evaluate_static_collection_facts_v3_gate_b.py
+      - docs/review-data/static_collection_facts_v3_gate_b_report.schema.json
+      - docs/review-data/static_collection_facts_v3_boundary_manifest.schema.json
+      - tests/test_static_collection_facts_backfill_report.py
+      - .github/workflows/static-collections-quality-e2e.yml
+      - docs/features/static-site-pages/**facts-v3**
+      - docs/operations/static-collection-facts-v3.md
+      - CHANGELOG.md
+      - .codex/lanes/static-collection-facts-v3/LANE_MAP.yml
+      - .codex/lanes/static-collection-product-loop-facts/RESULTS.md
+      - .codex/lanes/static-collection-product-loop-facts-boundary-manifest/RESULTS.md
+    forbidden_files:
+      - facts-v3 prompt or semantic inference contract
+      - site/src/**
+      - scoring/calibration/publication
+      - cinema sources
+      - festival extraction/pages
+    expected_output: optional exact boundary manifest without weakening seed recall
+    verification_scope: full_focused_offline
+    effort: high
+    status: completed
+    acceptance_status: boundary_manifest_contract_ready_real_replay_not_claimed

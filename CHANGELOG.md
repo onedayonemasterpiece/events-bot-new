@@ -16,6 +16,11 @@
   hashes, keeps malformed confirmed facts visibly blocked, carries existing
   venue/organizer data, deduplicates only mutual occurrence families and keeps
   all semantic publication blocked pending owner baseline/live evidence.
+- Extended the facts-v3 Gate-B evaluator with an optional corrected-seed-bound
+  boundary manifest. Named rows outside semantic supply can now join the exact
+  replay cohort without weakening recall: hard `not_confirmed` confirmations
+  block, while `watch`/`confirmed_watch` disagreements remain categorized,
+  non-blocking warnings.
 - Added the stacked Smart Update static-collection facts-v3 implementation:
   the existing single Gemma adjudication call now returns independent
   child-directed, family-suitable and joint-family facts with exact persisted

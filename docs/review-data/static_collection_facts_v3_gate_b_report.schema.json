@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://kenigevents.ru/schemas/static-collection-facts-v3-gate-b-report-v1.json",
+  "$id": "https://kenigevents.ru/schemas/static-collection-facts-v3-gate-b-report-v2.json",
   "title": "Static collection facts v3 Gate-B evaluation",
   "type": "object",
   "required": [
@@ -14,11 +14,12 @@
     "db_quick_check",
     "cohort",
     "labels",
+    "boundaries",
     "errors",
     "warnings"
   ],
   "properties": {
-    "schema_version": {"const": "static-collection-facts-v3-gate-b-report-v1"},
+    "schema_version": {"const": "static-collection-facts-v3-gate-b-report-v2"},
     "generated_at": {"type": "string", "format": "date-time"},
     "status": {"enum": ["pass", "blocked"]},
     "copy_gates_allowed": {"type": "boolean"},
@@ -30,6 +31,7 @@
         "report_file_sha256",
         "seed_file_sha256",
         "source_review_index_file_sha256",
+        "boundary_manifest_file_sha256",
         "db_file_sha256",
         "report_repo_sha",
         "expected_repo_sha",
@@ -43,6 +45,9 @@
         "report_file_sha256": {"$ref": "#/$defs/sha256"},
         "seed_file_sha256": {"$ref": "#/$defs/sha256"},
         "source_review_index_file_sha256": {"$ref": "#/$defs/sha256"},
+        "boundary_manifest_file_sha256": {
+          "oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
+        },
         "db_file_sha256": {"$ref": "#/$defs/sha256"},
         "report_repo_sha": {"type": "string"},
         "expected_repo_sha": {"$ref": "#/$defs/gitSha"},
@@ -85,6 +90,7 @@
       },
       "additionalProperties": false
     },
+    "boundaries": {"$ref": "#/$defs/boundaryEvaluation"},
     "errors": {"$ref": "#/$defs/findingArray"},
     "warnings": {"$ref": "#/$defs/findingArray"}
   },
@@ -142,6 +148,57 @@
         "families": {
           "type": "array",
           "items": {"$ref": "#/$defs/familyEvaluation"}
+        }
+      },
+      "additionalProperties": false
+    },
+    "boundaryEvaluation": {
+      "type": "object",
+      "required": [
+        "manifest_supplied",
+        "total",
+        "hard_failures",
+        "watch_disagreements",
+        "classifications",
+        "rows"
+      ],
+      "properties": {
+        "manifest_supplied": {"type": "boolean"},
+        "total": {"type": "integer", "minimum": 0},
+        "hard_failures": {"type": "integer", "minimum": 0},
+        "watch_disagreements": {"type": "integer", "minimum": 0},
+        "classifications": {"$ref": "#/$defs/countMap"},
+        "rows": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/boundaryRow"}
+        }
+      },
+      "additionalProperties": false
+    },
+    "boundaryRow": {
+      "type": "object",
+      "required": [
+        "boundary_id",
+        "event_id",
+        "source_id",
+        "label",
+        "expectation",
+        "runtime_outcome",
+        "classification"
+      ],
+      "properties": {
+        "boundary_id": {"type": "string", "minLength": 1},
+        "event_id": {"type": "integer", "minimum": 1},
+        "source_id": {"type": "integer", "minimum": 1},
+        "label": {
+          "enum": ["child_directed", "family_suitable", "joint_family_activity"]
+        },
+        "expectation": {"enum": ["not_confirmed", "watch", "confirmed_watch"]},
+        "runtime_outcome": {
+          "enum": ["confirmed", "unknown", "denied", "provider_deferred", "validator_reject"]
+        },
+        "classification": {
+          "enum": ["match", "watch_disagreement", "hard_negative_confirmed"]
         }
       },
       "additionalProperties": false

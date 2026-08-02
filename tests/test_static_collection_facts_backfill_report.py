@@ -422,8 +422,122 @@ def _evaluate(paths):
         seed_path=paths["seed"],
         source_review_index_path=paths["index"],
         db_path=paths["db"],
+        boundary_manifest_path=paths.get("boundary_manifest"),
         expected_repo_sha=paths["repo_sha"],
     )
+
+
+def _add_boundary(
+    paths,
+    *,
+    expectation="not_confirmed",
+    runtime_outcome="denied",
+    bind=True,
+):
+    event_id = 2000
+    source_id = 9900
+    text = "Граничный реальный источник с точной цитатой."
+    connection = sqlite3.connect(paths["db"])
+    connection.execute("INSERT INTO event(id) VALUES (?)", (event_id,))
+    connection.execute(
+        """INSERT INTO event_source(
+            id,event_id,source_type,source_url,trust_level,
+            source_chat_username,source_message_id,source_text
+        ) VALUES (?,?,?,?,?,?,?,?)""",
+        (
+            source_id,
+            event_id,
+            "fixture",
+            "https://example.test/boundary",
+            "high",
+            None,
+            None,
+            text,
+        ),
+    )
+    connection.commit()
+    connection.close()
+    report = json.loads(paths["report"].read_text(encoding="utf-8"))
+    db_hash = gate_b._sha256_file(paths["db"])
+    report["db_snapshot"].update(sha256_before=db_hash, sha256_after=db_hash)
+    report["selection"]["requested_event_ids"].append(event_id)
+    report["selection"]["resolved_event_ids"].append(event_id)
+    report["selection"]["requested_source_ids"].append(source_id)
+    report["selection"]["requested_source_bindings"].append(
+        {"event_id": event_id, "source_id": source_id}
+    )
+    report["selection"]["eligible_event_count"] += 1
+    report["selection"]["selected_event_count"] += 1
+    report["plan"].append(
+        {
+            "event_id": event_id,
+            "reasons": ["audience"],
+            "source_ids": [source_id],
+            "unselected_source_ids": [],
+        }
+    )
+    decisions = {
+        key: {"value": "denied", "evidence_quote": text}
+        for key in gate_b.TARGET_LABELS.values()
+    }
+    decisions["child_directed_decision"] = {"value": runtime_outcome}
+    if runtime_outcome in {"confirmed", "denied"}:
+        decisions["child_directed_decision"]["evidence_quote"] = text
+    report["execution"]["events"].append(
+        {
+            "event_id": event_id,
+            "reasons": ["audience"],
+            "selected_source_ids": [source_id],
+            "unselected_source_ids": [],
+            "sources": [
+                {
+                    "source_id": source_id,
+                    "input_hash": "d" * 64,
+                    "provider_called": True,
+                    "write_status": "not_requested",
+                    "changed_keys": [],
+                    "status": "evaluated",
+                    "trace": {
+                        "logical_calls": 1,
+                        "physical_sends": 1,
+                        "requested_model": "gemma-4-31b-it",
+                        "actual_model_path": "gemma-4-31b-it",
+                        "fallback_used": False,
+                        "attempts": 1,
+                        "rate_limit_waits": 0,
+                        "input_tokens": 20,
+                        "output_tokens": 10,
+                        "latency_sec": 0.1,
+                        "statuses": ["ok"],
+                    },
+                    "validated_outcomes": decisions,
+                    "legacy_projection": {},
+                }
+            ],
+        }
+    )
+    for key in ("attempted_sources", "provider_calls", "physical_sends", "evaluated_sources"):
+        report["execution"][key] += 1
+    _write_json(paths["report"], report)
+    if bind:
+        manifest = {
+            "schema_version": "static-collection-facts-v3-boundary-manifest-v1",
+            "seed_sha256": gate_b._sha256_file(paths["seed"]),
+            "boundaries": [
+                {
+                    "boundary_id": "named-2000-child",
+                    "event_id": event_id,
+                    "source_id": source_id,
+                    "source_text_sha256": hashlib.sha256(text.encode()).hexdigest(),
+                    "label": "child_directed",
+                    "expectation": expectation,
+                }
+            ],
+        }
+        manifest_path = paths["report"].parent / "boundary-manifest.json"
+        _write_json(manifest_path, manifest)
+        paths["boundary_manifest"] = manifest_path
+    return paths
 
 
 def _mutate_json(path: Path, mutate) -> None:
@@ -652,3 +766,69 @@ def test_gate_b_rejects_index_receipt_source_ref_and_text_hashes(
     result = _evaluate(paths)
     assert result["status"] == "blocked"
     assert expected in {error["code"] for error in result["errors"]}
+
+
+def test_gate_b_accepts_exact_seed_plus_bound_boundary_cohort(tmp_path):
+    paths = _add_boundary(_gate_fixture(tmp_path), runtime_outcome="denied")
+    result = _evaluate(paths)
+    assert result["status"] == "pass"
+    assert result["boundaries"] == {
+        "manifest_supplied": True,
+        "total": 1,
+        "hard_failures": 0,
+        "watch_disagreements": 0,
+        "classifications": {"match": 1},
+        "rows": [
+            {
+                "boundary_id": "named-2000-child",
+                "event_id": 2000,
+                "source_id": 9900,
+                "label": "child_directed",
+                "expectation": "not_confirmed",
+                "runtime_outcome": "denied",
+                "classification": "match",
+            }
+        ],
+    }
+    assert result["hashes"]["boundary_manifest_file_sha256"] == gate_b._sha256_file(
+        paths["boundary_manifest"]
+    )
+    assert result["labels"]["child_directed"]["eligible_positive_families"] == 5
+
+
+def test_gate_b_rejects_unbound_extra_runtime_row(tmp_path):
+    result = _evaluate(_add_boundary(_gate_fixture(tmp_path), bind=False))
+    assert result["status"] == "blocked"
+    codes = {error["code"] for error in result["errors"]}
+    assert "stale_seed_cohort" in codes
+    assert "execution_cohort_mismatch" in codes
+
+
+def test_gate_b_blocks_confirmed_hard_boundary(tmp_path):
+    paths = _add_boundary(
+        _gate_fixture(tmp_path), expectation="not_confirmed", runtime_outcome="confirmed"
+    )
+    result = _evaluate(paths)
+    assert result["status"] == "blocked"
+    assert result["boundaries"]["hard_failures"] == 1
+    assert result["boundaries"]["rows"][0]["classification"] == (
+        "hard_negative_confirmed"
+    )
+    assert "boundary_hard_negative_confirmed" in {
+        error["code"] for error in result["errors"]
+    }
+
+
+def test_gate_b_watch_disagreement_is_warning_not_recall_or_copy_block(tmp_path):
+    paths = _add_boundary(
+        _gate_fixture(tmp_path), expectation="confirmed_watch", runtime_outcome="unknown"
+    )
+    result = _evaluate(paths)
+    assert result["status"] == "pass"
+    assert result["copy_gates_allowed"] is True
+    assert result["boundaries"]["watch_disagreements"] == 1
+    assert result["boundaries"]["rows"][0]["classification"] == "watch_disagreement"
+    assert "boundary_watch_disagreement" in {
+        warning["code"] for warning in result["warnings"]
+    }
+    assert result["labels"]["child_directed"]["eligible_positive_families"] == 5

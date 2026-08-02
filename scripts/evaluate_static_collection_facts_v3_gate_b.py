@@ -25,7 +25,8 @@ from typing import Any, Iterable, Mapping, Sequence
 ROOT = Path(__file__).resolve().parents[1]
 REPORT_SCHEMA = ROOT / "docs/review-data/static_collection_facts_v3_real_data_report.schema.json"
 OUTPUT_SCHEMA = ROOT / "docs/review-data/static_collection_facts_v3_gate_b_report.schema.json"
-OUTPUT_SCHEMA_VERSION = "static-collection-facts-v3-gate-b-report-v1"
+BOUNDARY_SCHEMA = ROOT / "docs/review-data/static_collection_facts_v3_boundary_manifest.schema.json"
+OUTPUT_SCHEMA_VERSION = "static-collection-facts-v3-gate-b-report-v2"
 TARGET_LABELS = {
     "child_directed": "child_directed_decision",
     "family_suitable": "family_suitable_decision",
@@ -490,6 +491,101 @@ def _cohort(seed: Mapping[str, Any]) -> tuple[set[int], set[tuple[int, int]], se
     return event_ids, bindings, source_ids
 
 
+def _boundary_cohort(
+    manifest: Mapping[str, Any] | None,
+) -> tuple[set[tuple[int, int]], set[int]]:
+    bindings: set[tuple[int, int]] = set()
+    source_ids: set[int] = set()
+    if manifest is None:
+        return bindings, source_ids
+    for row in manifest.get("boundaries") or []:
+        if not isinstance(row, Mapping):
+            continue
+        event_id = row.get("event_id")
+        source_id = row.get("source_id")
+        if isinstance(event_id, int) and isinstance(source_id, int):
+            bindings.add((event_id, source_id))
+            source_ids.add(source_id)
+    return bindings, source_ids
+
+
+def _verify_boundary_manifest(
+    manifest: Mapping[str, Any] | None,
+    *,
+    seed_sha256: str,
+    sources: Mapping[int, Mapping[str, Any]],
+    event_ids: set[int],
+    findings: Findings,
+) -> None:
+    if manifest is None:
+        return
+    if manifest.get("seed_sha256") != seed_sha256:
+        findings.error(
+            "boundary_seed_hash_mismatch",
+            "boundary manifest does not bind the supplied corrected seed bytes",
+        )
+    seen_ids: set[str] = set()
+    seen_targets: set[tuple[int, int, str]] = set()
+    for position, row in enumerate(manifest.get("boundaries") or []):
+        if not isinstance(row, Mapping):
+            continue
+        boundary_id = str(row.get("boundary_id") or "")
+        target = (
+            int(row.get("event_id") or 0),
+            int(row.get("source_id") or 0),
+            str(row.get("label") or ""),
+        )
+        if boundary_id in seen_ids or target in seen_targets:
+            findings.error(
+                "boundary_duplicate",
+                "boundary manifest contains a duplicate id or event/source/label target",
+                boundary_id=boundary_id,
+            )
+        seen_ids.add(boundary_id)
+        seen_targets.add(target)
+        event_id = row.get("event_id")
+        source_id = row.get("source_id")
+        context = f"boundary:{row.get('boundary_id')}:{position}"
+        if not isinstance(event_id, int) or event_id not in event_ids:
+            findings.error(
+                "boundary_event_missing",
+                "boundary event is absent from SQLite",
+                context=context,
+                event_id=event_id,
+            )
+            continue
+        source = sources.get(int(source_id or 0)) if isinstance(source_id, int) else None
+        if source is None:
+            findings.error(
+                "boundary_source_missing",
+                "boundary EventSource is absent from SQLite",
+                context=context,
+                source_id=source_id,
+            )
+            continue
+        if int(source.get("event_id") or 0) != event_id:
+            findings.error(
+                "boundary_source_event_mismatch",
+                "boundary EventSource belongs to another event",
+                context=context,
+                event_id=event_id,
+                source_id=source_id,
+            )
+        source_text = source.get("source_text")
+        actual_hash = (
+            _sha256_bytes(source_text.encode("utf-8"))
+            if isinstance(source_text, str)
+            else None
+        )
+        if row.get("source_text_sha256") != actual_hash:
+            findings.error(
+                "boundary_source_text_hash_mismatch",
+                "boundary source_text SHA-256 differs from SQLite",
+                context=context,
+                source_id=source_id,
+            )
+
+
 def _validate_report_safety(
     report: Mapping[str, Any],
     *,
@@ -789,12 +885,85 @@ def _evaluate_labels(
     return labels_out
 
 
+def _evaluate_boundaries(
+    manifest: Mapping[str, Any] | None,
+    *,
+    runtime_rows: Mapping[tuple[int, int], Mapping[str, Any]],
+    findings: Findings,
+) -> dict[str, Any]:
+    results: list[dict[str, Any]] = []
+    if manifest is None:
+        return {
+            "manifest_supplied": False,
+            "total": 0,
+            "hard_failures": 0,
+            "watch_disagreements": 0,
+            "classifications": {},
+            "rows": [],
+        }
+    for row in manifest.get("boundaries") or []:
+        if not isinstance(row, Mapping):
+            continue
+        label = str(row.get("label") or "")
+        expectation = str(row.get("expectation") or "")
+        binding = (int(row.get("event_id") or 0), int(row.get("source_id") or 0))
+        outcome = _runtime_outcome(runtime_rows.get(binding), TARGET_LABELS[label])
+        if expectation == "not_confirmed" and outcome == "confirmed":
+            classification = "hard_negative_confirmed"
+            findings.error(
+                "boundary_hard_negative_confirmed",
+                "hard not_confirmed boundary was confirmed",
+                boundary_id=row.get("boundary_id"),
+                label=label,
+                event_id=binding[0],
+                source_id=binding[1],
+            )
+        elif (
+            expectation == "watch" and outcome == "confirmed"
+        ) or (
+            expectation == "confirmed_watch" and outcome != "confirmed"
+        ):
+            classification = "watch_disagreement"
+            findings.warning(
+                "boundary_watch_disagreement",
+                "non-blocking boundary observation disagrees with its watch expectation",
+                boundary_id=row.get("boundary_id"),
+                label=label,
+                event_id=binding[0],
+                source_id=binding[1],
+                runtime_outcome=outcome,
+            )
+        else:
+            classification = "match"
+        results.append(
+            {
+                "boundary_id": str(row.get("boundary_id") or ""),
+                "event_id": binding[0],
+                "source_id": binding[1],
+                "label": label,
+                "expectation": expectation,
+                "runtime_outcome": outcome,
+                "classification": classification,
+            }
+        )
+    counts = Counter(row["classification"] for row in results)
+    return {
+        "manifest_supplied": True,
+        "total": len(results),
+        "hard_failures": counts["hard_negative_confirmed"],
+        "watch_disagreements": counts["watch_disagreement"],
+        "classifications": dict(sorted(counts.items())),
+        "rows": results,
+    }
+
+
 def evaluate_gate_b(
     *,
     report_path: Path,
     seed_path: Path,
     source_review_index_path: Path,
     db_path: Path,
+    boundary_manifest_path: Path | None = None,
     minimum_recall: float = 0.80,
     expected_repo_sha: str,
     repo_root: Path = ROOT,
@@ -804,12 +973,20 @@ def evaluate_gate_b(
     report = _load_object(report_path)
     seed = _load_object(seed_path)
     index = _load_object(source_review_index_path)
+    boundary_manifest = (
+        _load_object(boundary_manifest_path) if boundary_manifest_path is not None else None
+    )
     _validate_json_schema(report, REPORT_SCHEMA)
+    if boundary_manifest is not None:
+        _validate_json_schema(boundary_manifest, BOUNDARY_SCHEMA)
     findings = Findings()
     current_repo_sha = _repo_sha(repo_root)
     report_hash = _sha256_file(report_path)
     seed_hash = _sha256_file(seed_path)
     index_file_hash = _sha256_file(source_review_index_path)
+    boundary_manifest_hash = (
+        _sha256_file(boundary_manifest_path) if boundary_manifest_path is not None else None
+    )
     db_hash = _sha256_file(db_path)
 
     if seed.get("publication_eligible") is not False:
@@ -825,7 +1002,9 @@ def evaluate_gate_b(
     if seed_index_hash != index.get("index_sha256"):
         findings.error("seed_index_hash_mismatch", "seed does not bind the supplied source-review index")
 
-    cohort_event_ids, cohort_bindings, seed_source_ids = _cohort(seed)
+    cohort_event_ids, seed_bindings, seed_source_ids = _cohort(seed)
+    boundary_bindings, boundary_source_ids = _boundary_cohort(boundary_manifest)
+    cohort_bindings = seed_bindings | boundary_bindings
     receipts = _load_index_receipts(index, source_review_index_path, findings=findings)
     index_source_ids = {
         int(evidence["source_ref"]["source_id"])
@@ -837,7 +1016,7 @@ def evaluate_gate_b(
     }
     sources, db_event_ids, quick_check = _read_db_sources(
         db_path,
-        seed_source_ids | index_source_ids,
+        seed_source_ids | index_source_ids | boundary_source_ids,
         findings=findings,
     )
     for label, side, row in _iter_target_rows(seed):
@@ -863,6 +1042,13 @@ def evaluate_gate_b(
         receipts=receipts,
         findings=findings,
     )
+    _verify_boundary_manifest(
+        boundary_manifest,
+        seed_sha256=seed_hash,
+        sources=sources,
+        event_ids=db_event_ids,
+        findings=findings,
+    )
 
     runtime_rows = _source_execution_rows(report)
     _validate_report_safety(
@@ -882,6 +1068,11 @@ def evaluate_gate_b(
         minimum_recall=minimum_recall,
         findings=findings,
     )
+    boundaries = _evaluate_boundaries(
+        boundary_manifest,
+        runtime_rows=runtime_rows,
+        findings=findings,
+    )
     result = {
         "schema_version": OUTPUT_SCHEMA_VERSION,
         "generated_at": _stamp(),
@@ -893,6 +1084,7 @@ def evaluate_gate_b(
             "report_file_sha256": report_hash,
             "seed_file_sha256": seed_hash,
             "source_review_index_file_sha256": index_file_hash,
+            "boundary_manifest_file_sha256": boundary_manifest_hash,
             "db_file_sha256": db_hash,
             "report_repo_sha": str(report.get("repo_sha") or ""),
             "expected_repo_sha": expected_repo_sha,
@@ -911,6 +1103,7 @@ def evaluate_gate_b(
             ],
         },
         "labels": labels,
+        "boundaries": boundaries,
         "errors": findings.errors,
         "warnings": findings.warnings,
     }
@@ -928,6 +1121,9 @@ def render_markdown(result: Mapping[str, Any]) -> str:
         f"- Minimum hard-positive family recall: `{float(result.get('minimum_recall') or 0):.2f}`",
         f"- Errors: `{len(result.get('errors') or [])}`",
         f"- Warnings: `{len(result.get('warnings') or [])}`",
+        f"- Boundary rows: `{int((result.get('boundaries') or {}).get('total') or 0)}`",
+        f"- Boundary hard failures: `{int((result.get('boundaries') or {}).get('hard_failures') or 0)}`",
+        f"- Boundary WATCH disagreements: `{int((result.get('boundaries') or {}).get('watch_disagreements') or 0)}`",
         "",
         "## Labels",
         "",
@@ -943,9 +1139,30 @@ def render_markdown(result: Mapping[str, Any]) -> str:
             f"{payload.get('confirmed_hard_negative_families')} | "
             f"{'PASS' if payload.get('threshold_pass') else 'BLOCKED'} |"
         )
+    boundary_rows = (result.get("boundaries") or {}).get("rows") or []
+    if boundary_rows:
+        lines.extend(
+            [
+                "",
+                "## Named boundaries",
+                "",
+                "| Boundary | Label | Expectation | Runtime | Classification |",
+                "|---|---|---|---|---|",
+            ]
+        )
+        for row in boundary_rows:
+            lines.append(
+                f"| `{row.get('boundary_id')}` | `{row.get('label')}` | "
+                f"`{row.get('expectation')}` | `{row.get('runtime_outcome')}` | "
+                f"`{row.get('classification')}` |"
+            )
     if result.get("errors"):
         lines.extend(["", "## Errors", ""])
         for issue in result["errors"]:
+            lines.append(f"- `{issue.get('code')}` — {issue.get('message')}")
+    if result.get("warnings"):
+        lines.extend(["", "## Warnings", ""])
+        for issue in result["warnings"]:
             lines.append(f"- `{issue.get('code')}` — {issue.get('message')}")
     lines.append("")
     return "\n".join(lines)
@@ -956,6 +1173,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--seed", type=Path, required=True)
     parser.add_argument("--source-review-index", type=Path, required=True)
+    parser.add_argument("--boundary-manifest", type=Path)
     parser.add_argument("--db", type=Path, required=True)
     parser.add_argument("--minimum-recall", type=float, default=0.80)
     parser.add_argument("--expected-repo-sha", required=True)
@@ -970,6 +1188,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         report_path=args.report,
         seed_path=args.seed,
         source_review_index_path=args.source_review_index,
+        boundary_manifest_path=args.boundary_manifest,
         db_path=args.db,
         minimum_recall=args.minimum_recall,
         expected_repo_sha=args.expected_repo_sha,

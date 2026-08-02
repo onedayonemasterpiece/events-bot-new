@@ -100,6 +100,7 @@ python3 scripts/evaluate_static_collection_facts_v3_gate_b.py \
   --report "$PRIMARY_REPORT" \
   --seed docs/review-data/static_collections_review_seed_v1.json \
   --source-review-index docs/review-data/static-collections-source-reviews-v1/index.json \
+  --boundary-manifest "$BOUNDARY_MANIFEST" \
   --db "$DB" \
   --minimum-recall 0.80 \
   --expected-repo-sha "$SHA" \
@@ -119,6 +120,25 @@ Borderline and source-insufficient rows are WATCH-only and excluded from the
 denominator. Every audience label must reach `0.80`; `4/5` passes and `3/5`
 blocks. A pass opens only the production-copy gates below. Semantic publication
 remains blocked.
+
+`--boundary-manifest` is optional. Use its versioned contract
+`docs/review-data/static_collection_facts_v3_boundary_manifest.schema.json`
+when the corrected real replay must retain named/removed boundaries outside the
+seed supply (including 4648, 6871, 7103, 7307, 7326 and corrected
+6562/6898/7102/7172/7176/7258/7290). The manifest binds the exact corrected seed
+file SHA and every extra `event_id`/`source_id`/`source_text_sha256`. With it,
+the only valid report cohort is exactly `seed bindings + manifest bindings`;
+without it, any extra report row is stale and blocks.
+
+Boundary expectations never enter recall:
+
+- `not_confirmed` is hard: runtime `confirmed` is NO-GO;
+- `watch` expects no confirmation, but a confirmation is only a categorized
+  WATCH warning;
+- `confirmed_watch` expects confirmation, but any disagreement is only WATCH.
+
+The JSON/Markdown result reports boundary matches, hard failures and watch
+disagreements separately.
 
 ## 4. Apply and warm replay
 
