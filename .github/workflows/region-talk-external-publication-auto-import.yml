@@ -1,0 +1,465 @@
+name: Auto-import Region Talk external-publication research
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/features/region-talk-channel/region-talk-external-research-result-*.json'
+      - '.github/workflows/region-talk-external-publication-auto-import.yml'
+      - 'scripts/region_talk_external_research_registry.py'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: region-talk-ydb-import
+  cancel-in-progress: false
+
+jobs:
+  validate-import-and-publish-registry:
+    name: Validate research JSON, stage YDB intake, publish live registry
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: region-talk-ydb-import
+    env:
+      YANDEX_WIF_OIDC_AUDIENCE: ${{ vars.YANDEX_WIF_OIDC_AUDIENCE }}
+      YANDEX_WIF_SERVICE_ACCOUNT_ID: ${{ vars.YANDEX_WIF_SERVICE_ACCOUNT_ID }}
+      REGION_TALK_YDB_ENDPOINT: ${{ vars.REGION_TALK_YDB_ENDPOINT }}
+      REGION_TALK_YDB_DATABASE: ${{ vars.REGION_TALK_YDB_DATABASE }}
+      REGION_TALK_YDB_NAMESPACE: ${{ vars.REGION_TALK_YDB_NAMESPACE }}
+      REGION_TALK_EXTERNAL_RESEARCH_BUCKET: ${{ vars.REGION_TALK_EXTERNAL_RESEARCH_BUCKET }}
+      REGION_TALK_EXTERNAL_RESEARCH_PUBLIC_BASE_URL: ${{ vars.REGION_TALK_EXTERNAL_RESEARCH_PUBLIC_BASE_URL }}
+      YC_SA_BOT_STORAGE: ${{ secrets.YC_SA_BOT_STORAGE }}
+      YC_SA_BOT_STORAGE_KEY: ${{ secrets.YC_SA_BOT_STORAGE_KEY }}
+      YC_SA_ML_DEV: ${{ secrets.YC_SA_ML_DEV }}
+      YC_SA_ML_DEV_KEY: ${{ secrets.YC_SA_ML_DEV_KEY }}
+      REPORT_ROOT: artifacts/github-actions/region-talk-external-publication-auto-import
+
+    steps:
+      - name: Check out exact trusted main commit
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Discover changed research-result JSON files
+        id: inputs
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$AFTER_SHA"
+          test "$(git rev-parse --verify HEAD)" = "$(git rev-parse --verify origin/main)"
+          mkdir -p "$REPORT_ROOT"
+
+          python - "$BEFORE_SHA" "$AFTER_SHA" "$REPORT_ROOT/inputs.txt" "$GITHUB_OUTPUT" <<'PY'
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          before, after, output, github_output = sys.argv[1:]
+          approved = re.compile(
+              r"^docs/features/region-talk-channel/"
+              r"region-talk-external-research-result-[A-Za-z0-9][A-Za-z0-9._-]*\.json$"
+          )
+          control_paths = {
+              ".github/workflows/region-talk-external-publication-auto-import.yml",
+              "scripts/region_talk_external_research_registry.py",
+          }
+          if not re.fullmatch(r"[0-9a-f]{40}", before or ""):
+              raise SystemExit(f"invalid push before SHA: {before!r}")
+          if not re.fullmatch(r"[0-9a-f]{40}", after or ""):
+              raise SystemExit(f"invalid push after SHA: {after!r}")
+
+          changed = {
+              line.strip()
+              for line in subprocess.run(
+                  ["git", "diff", "--diff-filter=AM", "--name-only", before, after, "--"],
+                  check=True,
+                  text=True,
+                  capture_output=True,
+              ).stdout.splitlines()
+              if line.strip()
+          }
+          selected: list[str] = []
+          root = Path("docs/features/region-talk-channel").resolve()
+          for path in sorted(changed):
+              if not approved.fullmatch(path):
+                  continue
+              candidate = Path(path)
+              if candidate.is_symlink() or not candidate.is_file():
+                  raise SystemExit(f"refusing non-regular research result: {path}")
+              if candidate.resolve().parent != root:
+                  raise SystemExit(f"refusing research result outside approved directory: {path}")
+              selected.append(path)
+
+          registry_only = not selected and bool(changed & control_paths)
+          if not selected and not registry_only:
+              raise SystemExit(
+                  "triggered push contains neither approved research JSON nor registry control change"
+              )
+          Path(output).write_text("".join(f"{path}\n" for path in selected), encoding="utf-8")
+          with Path(github_output).open("a", encoding="utf-8") as handle:
+              handle.write(f"count={len(selected)}\n")
+              handle.write(f"registry_only={'true' if registry_only else 'false'}\n")
+          PY
+
+          count="$(awk 'NF {count++} END {print count + 0}' "$REPORT_ROOT/inputs.txt")"
+          {
+            echo "### Region Talk automatic intake"
+            echo
+            echo "- trusted main commit: \`$AFTER_SHA\`"
+            echo "- changed research-result files: $count"
+            if [ "$count" -gt 0 ]; then
+              sed 's/^/- `/' "$REPORT_ROOT/inputs.txt" | sed 's/$/`/'
+            else
+              echo "- mode: registry-only refresh after control-plane change"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install pinned runtime dependencies
+        shell: bash
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+
+      - name: Validate every changed JSON before YDB authentication
+        if: steps.inputs.outputs.count != '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > "$REPORT_ROOT/validation-summary.ndjson"
+          while IFS= read -r input_path; do
+            input_sha="$(sha256sum "$input_path" | awk '{print $1}')"
+            report_dir="$REPORT_ROOT/$input_sha"
+            mkdir -p "$report_dir"
+            printf '%s  %s\n' "$input_sha" "$input_path" > "$report_dir/input.sha256"
+
+            python scripts/region_talk_external_publication_import.py "$input_path" \
+              --expected-input-sha256 "$input_sha" \
+              --report "$report_dir/validation.json"
+
+            python - "$input_path" "$input_sha" "$report_dir/validation.json" \
+              >> "$REPORT_ROOT/validation-summary.ndjson" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          input_path, expected_sha, report_path = sys.argv[1:]
+          payload = json.loads(Path(report_path).read_text(encoding="utf-8"))
+          batch = payload.get("batch") or {}
+          received = int(batch.get("candidate_rows_received") or 0)
+          valid = len(payload.get("valid_ids") or [])
+          if payload.get("executed") is not False:
+              raise SystemExit(f"validation unexpectedly executed for {input_path}")
+          if payload.get("execution_status") != "validated":
+              raise SystemExit(f"validation status is not clean for {input_path}")
+          if payload.get("rejected") or payload.get("conflicts"):
+              raise SystemExit(f"semantic rejection or conflict in {input_path}")
+          if payload.get("input_json_sha256") != expected_sha:
+              raise SystemExit(f"validation SHA mismatch for {input_path}")
+          if received != valid:
+              raise SystemExit(f"not every candidate row is valid for {input_path}: {valid}/{received}")
+          print(json.dumps({
+              "input_path": input_path,
+              "input_sha256": expected_sha,
+              "request_id": batch.get("request_id"),
+              "candidate_rows_valid": valid,
+              "ready_for_region_talk_scoring": int(batch.get("ready_for_region_talk_scoring") or 0),
+              "manual_or_blocked": int(batch.get("manual_or_blocked") or 0),
+          }, ensure_ascii=False, separators=(",", ":")))
+          PY
+          done < "$REPORT_ROOT/inputs.txt"
+
+          python - "$REPORT_ROOT/validation-summary.ndjson" "$REPORT_ROOT/validation-manifest.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          source, destination = map(Path, sys.argv[1:])
+          rows = [json.loads(line) for line in source.read_text(encoding="utf-8").splitlines() if line]
+          destination.write_text(
+              json.dumps({"inputs": rows}, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Exchange GitHub OIDC token for short-lived Yandex IAM token
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${ACTIONS_ID_TOKEN_REQUEST_URL:?GitHub OIDC request URL is required}"
+          : "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:?GitHub OIDC request token is required}"
+          : "${YANDEX_WIF_OIDC_AUDIENCE:?Set environment variable YANDEX_WIF_OIDC_AUDIENCE}"
+          : "${YANDEX_WIF_SERVICE_ACCOUNT_ID:?Set environment variable YANDEX_WIF_SERVICE_ACCOUNT_ID}"
+          : "${REGION_TALK_YDB_ENDPOINT:?Set environment variable REGION_TALK_YDB_ENDPOINT}"
+          : "${REGION_TALK_YDB_DATABASE:?Set environment variable REGION_TALK_YDB_DATABASE}"
+          : "${REGION_TALK_YDB_NAMESPACE:?Set environment variable REGION_TALK_YDB_NAMESPACE}"
+
+          github_oidc="$({
+            curl --fail --silent --show-error \
+              --header "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+              --get --data-urlencode "audience=${YANDEX_WIF_OIDC_AUDIENCE}" \
+              "$ACTIONS_ID_TOKEN_REQUEST_URL"
+          } | jq --exit-status --raw-output '.value | strings | select(length > 100)')"
+
+          iam_response="$(curl --fail --silent --show-error \
+            --request POST 'https://auth.yandex.cloud/oauth/token' \
+            --header 'Content-Type: application/x-www-form-urlencoded' \
+            --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+            --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+            --data-urlencode "audience=${YANDEX_WIF_SERVICE_ACCOUNT_ID}" \
+            --data-urlencode "subject_token=${github_oidc}" \
+            --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')"
+          iam_token="$(printf '%s' "$iam_response" | jq --exit-status --raw-output '.access_token | strings | select(length > 20)')"
+          echo "::add-mask::$iam_token"
+          echo "REGION_TALK_YDB_IAM_TOKEN=$iam_token" >> "$GITHUB_ENV"
+
+      - name: Import validated files sequentially with live YDB identity guard
+        if: steps.inputs.outputs.count != '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > "$REPORT_ROOT/execute-summary.ndjson"
+          while IFS= read -r input_path; do
+            input_sha="$(sha256sum "$input_path" | awk '{print $1}')"
+            report_dir="$REPORT_ROOT/$input_sha"
+
+            python scripts/region_talk_external_publication_import.py "$input_path" \
+              --execute \
+              --no-publish-registry \
+              --expected-input-sha256 "$input_sha" \
+              --report "$report_dir/execute.json"
+
+            python - "$input_path" "$input_sha" "$report_dir/execute.json" \
+              >> "$REPORT_ROOT/execute-summary.ndjson" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          input_path, expected_sha, report_path = sys.argv[1:]
+          payload = json.loads(Path(report_path).read_text(encoding="utf-8"))
+          batch = payload.get("batch") or {}
+          if payload.get("executed") is not True:
+              raise SystemExit(f"YDB import did not execute for {input_path}")
+          if payload.get("execution_error") is not None:
+              raise SystemExit(f"YDB import reported an error for {input_path}")
+          if int(payload.get("conflict_count") or 0) != 0 or payload.get("conflicts"):
+              raise SystemExit(f"YDB identity conflict for {input_path}")
+          if payload.get("live_duplicate_guard_applied") is not True:
+              raise SystemExit(f"live YDB duplicate guard was not applied for {input_path}")
+          if payload.get("input_json_sha256") != expected_sha:
+              raise SystemExit(f"execute SHA mismatch for {input_path}")
+          print(json.dumps({
+              "input_path": input_path,
+              "input_sha256": expected_sha,
+              "request_id": batch.get("request_id"),
+              "execution_status": payload.get("execution_status"),
+              "new_intake_count": int(payload.get("new_intake_count") or 0),
+              "new_intake_ids": sorted(payload.get("new_intake_ids") or []),
+              "replay_count": int(payload.get("replay_count") or 0),
+              "replay_ids": sorted(payload.get("replay_ids") or []),
+              "conflict_count": int(payload.get("conflict_count") or 0),
+              "written_ydb_rows": int(payload.get("written_ydb_rows") or 0),
+          }, ensure_ascii=False, separators=(",", ":")))
+          PY
+          done < "$REPORT_ROOT/inputs.txt"
+
+          python - "$REPORT_ROOT/execute-summary.ndjson" "$REPORT_ROOT/receipt.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          source, destination = map(Path, sys.argv[1:])
+          rows = [json.loads(line) for line in source.read_text(encoding="utf-8").splitlines() if line]
+          receipt = {
+              "main_commit": "${{ github.sha }}",
+              "workflow_run_id": "${{ github.run_id }}",
+              "imports": rows,
+              "new_intake_total": sum(row["new_intake_count"] for row in rows),
+              "replay_total": sum(row["replay_count"] for row in rows),
+              "conflict_total": sum(row["conflict_count"] for row in rows),
+          }
+          destination.write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          PY
+
+          {
+            echo
+            echo "### YDB import receipt"
+            echo
+            jq -r '
+              "- new intake total: \(.new_intake_total)\n" +
+              "- replay total: \(.replay_total)\n" +
+              "- conflicts: \(.conflict_total)\n" +
+              (.imports[] | "- `\(.request_id)`: new=\(.new_intake_count), replay=\(.replay_count), conflicts=\(.conflict_count)")
+            ' "$REPORT_ROOT/receipt.json"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build and publish current registry from live YDB
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/region_talk_external_research_registry.py \
+            --output "$REPORT_ROOT/research-registry.json" \
+            > "$REPORT_ROOT/registry-build.json"
+
+          if python - "$REPORT_ROOT/research-registry.json" > "$REPORT_ROOT/registry-publish.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          from scripts.region_talk_external_research_registry import publish_registry
+
+          payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          print(json.dumps(publish_registry(payload), ensure_ascii=False, indent=2))
+          PY
+          then
+            :
+          else
+            python - "$REPORT_ROOT/research-registry.json" > "$REPORT_ROOT/registry-publish.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          from scripts.region_talk_external_research_registry import (
+              PROMPT_OBJECT_PATH,
+              PROMPT_PATH,
+              REGISTRY_OBJECT_PATH,
+              REGISTRY_SCHEMA_OBJECT_PATH,
+              REGISTRY_SCHEMA_PATH,
+              RESULT_SCHEMA_OBJECT_PATH,
+              RESULT_SCHEMA_PATH,
+              _bucket,
+              _url,
+          )
+          from yandex_storage import get_yandex_storage_client, upload_yandex_public_bytes
+
+          payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          client = get_yandex_storage_client()
+          if client is None:
+              raise SystemExit("IAM registry PUT failed and static Object Storage fallback is unavailable")
+          bucket = _bucket()
+          objects = {
+              REGISTRY_OBJECT_PATH: (json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
+              REGISTRY_SCHEMA_OBJECT_PATH: REGISTRY_SCHEMA_PATH.read_bytes(),
+              RESULT_SCHEMA_OBJECT_PATH: RESULT_SCHEMA_PATH.read_bytes(),
+              PROMPT_OBJECT_PATH: PROMPT_PATH.read_bytes(),
+          }
+          for object_path, data in objects.items():
+              content_type = (
+                  "application/json; charset=utf-8"
+                  if object_path.endswith(".json")
+                  else "text/plain; charset=utf-8"
+              )
+              uploaded = upload_yandex_public_bytes(
+                  data,
+                  object_path=object_path,
+                  content_type=content_type,
+                  bucket=bucket,
+                  cache_control="public, no-cache, no-store, must-revalidate, max-age=0",
+                  client=client,
+              )
+              if not uploaded:
+                  raise SystemExit(f"static fallback failed for {object_path}")
+          print(json.dumps({
+              "bucket": bucket,
+              "auth_mode": "static_access_key_fallback",
+              "snapshot_id": payload["duplicate_guard"]["snapshot_id"],
+              "seen_publication_count": payload["duplicate_guard"]["seen_publication_count"],
+              "urls": {path: _url(path) for path in objects},
+          }, ensure_ascii=False, indent=2))
+          PY
+          fi
+
+      - name: Verify exact public registry contract without cache-busting URLs
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_snapshot="$(jq -er '.snapshot_id' "$REPORT_ROOT/registry-publish.json")"
+          expected_count="$(jq -er '.seen_publication_count' "$REPORT_ROOT/registry-publish.json")"
+          expected_auth="$(jq -er '.auth_mode' "$REPORT_ROOT/registry-publish.json")"
+          test "$expected_count" -ge 54
+
+          registry_url="https://static.kenigevents.ru/region-talk/external-publications/research-registry.json"
+          registry_schema_url="https://static.kenigevents.ru/region-talk/external-publications/research-registry.schema.json"
+          result_schema_url="https://static.kenigevents.ru/region-talk/external-publications/result.schema.json"
+          prompt_url="https://static.kenigevents.ru/region-talk/external-publications/research.prompt.txt"
+
+          verified=0
+          for attempt in $(seq 1 24); do
+            curl --fail --silent --show-error -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+              "$registry_url" > "$REPORT_ROOT/live-research-registry.json" || true
+            curl --fail --silent --show-error -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+              "$registry_schema_url" > "$REPORT_ROOT/live-research-registry.schema.json" || true
+            curl --fail --silent --show-error -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+              "$result_schema_url" > "$REPORT_ROOT/live-result.schema.json" || true
+            curl --fail --silent --show-error -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+              "$prompt_url" > "$REPORT_ROOT/live-research.prompt.txt" || true
+
+            if jq -e --arg snapshot "$expected_snapshot" --argjson count "$expected_count" \
+                '.schema_version == "region_talk_external_research_registry.v1" and
+                 .duplicate_guard.snapshot_id == $snapshot and
+                 .duplicate_guard.seen_publication_count == $count' \
+                "$REPORT_ROOT/live-research-registry.json" >/dev/null 2>&1 \
+              && cmp -s docs/features/region-talk-channel/external-publication-research-registry.schema.json \
+                "$REPORT_ROOT/live-research-registry.schema.json" \
+              && cmp -s docs/features/region-talk-channel/external-publication-research.schema.json \
+                "$REPORT_ROOT/live-result.schema.json" \
+              && cmp -s docs/features/region-talk-channel/external-publication-research.prompt.txt \
+                "$REPORT_ROOT/live-research.prompt.txt"; then
+              verified=1
+              break
+            fi
+            sleep 5
+          done
+          test "$verified" -eq 1
+
+          local_schema_sha="$(sha256sum docs/features/region-talk-channel/external-publication-research.schema.json | awk '{print $1}')"
+          live_contract_sha="$(jq -er '.result_contract.sha256' "$REPORT_ROOT/live-research-registry.json")"
+          test "$local_schema_sha" = "$live_contract_sha"
+
+          jq -n \
+            --arg main_commit "${{ github.sha }}" \
+            --arg workflow_run_id "${{ github.run_id }}" \
+            --arg snapshot_id "$expected_snapshot" \
+            --argjson seen_publication_count "$expected_count" \
+            --arg auth_mode "$expected_auth" \
+            --arg result_schema_sha256 "$local_schema_sha" \
+            '{
+              main_commit: $main_commit,
+              workflow_run_id: $workflow_run_id,
+              snapshot_id: $snapshot_id,
+              seen_publication_count: $seen_publication_count,
+              auth_mode: $auth_mode,
+              result_schema_sha256: $result_schema_sha256,
+              exact_public_urls_verified: true
+            }' > "$REPORT_ROOT/registry-receipt.json"
+
+          {
+            echo
+            echo "### Live registry publication"
+            echo
+            echo "- snapshot: \`$expected_snapshot\`"
+            echo "- seen publications: $expected_count"
+            echo "- auth: \`$expected_auth\`"
+            echo "- exact public URLs verified: yes"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload SHA-addressed validation, import and registry receipts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: region-talk-external-publication-auto-import-${{ github.sha }}-${{ github.run_id }}
+          path: ${{ env.REPORT_ROOT }}
+          if-no-files-found: error
+          retention-days: 30
