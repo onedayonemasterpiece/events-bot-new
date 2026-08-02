@@ -11,11 +11,23 @@ function headers(message) {
 }
 
 function messageOtp(message, subject) {
-  // Mail Trigger may expose a MIME/transfer-encoded body while the provider's
-  // already-decoded Subject still carries the same one-time code. Parse both
-  // sources together: the Set-based parser accepts the repeated same code and
-  // rejects conflicting codes as ambiguous.
-  return extractSingleOtp({ text: `${subject}\n${String(message?.message || '')}` });
+  // Yandex Mail Trigger exposes Subject headers and the message body as
+  // separate fields. The protected provider contract puts the OTP in the
+  // already-decoded Subject, so it is the canonical source. Multipart/raw MIME
+  // bodies may contain unrelated six-digit fragments and must not make that
+  // exact subject ambiguous. Body parsing is a fallback for subject-less
+  // provider contracts only.
+  try {
+    return extractSingleOtp({ text: subject });
+  } catch (error) {
+    if (error?.message !== 'otp_missing') throw error;
+  }
+  const map = headers(message);
+  const contentType = (map.get('content-type') || []).join(' ').toLowerCase();
+  const body = String(message?.message || '');
+  return contentType.includes('text/html')
+    ? extractSingleOtp({ html: body })
+    : extractSingleOtp({ text: body });
 }
 
 export class YandexMailTriggerSocket {
