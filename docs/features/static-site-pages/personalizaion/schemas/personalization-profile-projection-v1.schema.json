@@ -1,0 +1,261 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenigevents.ru/schemas/personalization-profile-projection-v1.schema.json",
+  "title": "KenigEvents browser-safe personalization profile projection v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "revision",
+    "etag",
+    "generated_at",
+    "expires_at",
+    "refresh_after",
+    "compatibility",
+    "horizons",
+    "explicit_authoritative",
+    "sensitive_facets_present"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "personalization-profile-projection-v1"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "etag": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 96
+    },
+    "generated_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "expires_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "refresh_after": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "compatibility": {
+      "$ref": "#/$defs/compatibility"
+    },
+    "horizons": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["short", "mid", "long"],
+      "properties": {
+        "short": { "$ref": "#/$defs/horizon" },
+        "mid": { "$ref": "#/$defs/horizon" },
+        "long": { "$ref": "#/$defs/horizon" }
+      }
+    },
+    "personas": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "$ref": "#/$defs/facet"
+      }
+    },
+    "preferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "prefer_free": {
+          "type": "boolean"
+        },
+        "city_codes": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/code24"
+          }
+        },
+        "time_codes": {
+          "type": "array",
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/code24"
+          }
+        },
+        "price_band_codes": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/code24"
+          }
+        }
+      }
+    },
+    "explicit_authoritative": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "states"],
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "states": {
+          "type": "array",
+          "maxItems": 384,
+          "items": {
+            "$ref": "#/$defs/explicitState"
+          }
+        }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "blocked_city_codes": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/code24"
+          }
+        },
+        "max_price_band": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/code24" }
+          ]
+        },
+        "accessibility_codes": {
+          "type": "array",
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/code24"
+          }
+        }
+      }
+    },
+    "sensitive_facets_present": {
+      "const": false
+    },
+    "checksum": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 96
+    }
+  },
+  "$defs": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "maxLength": 40
+    },
+    "shortVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[A-Za-z0-9._:@/-]+$"
+    },
+    "code24": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 24,
+      "pattern": "^[a-z0-9._:-]+$"
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_version",
+        "feature_schema_version",
+        "taxonomy_version",
+        "surface_policy_version"
+      ],
+      "properties": {
+        "model_version": {
+          "$ref": "#/$defs/shortVersion"
+        },
+        "feature_schema_version": {
+          "$ref": "#/$defs/shortVersion"
+        },
+        "taxonomy_version": {
+          "$ref": "#/$defs/shortVersion"
+        },
+        "surface_policy_version": {
+          "$ref": "#/$defs/shortVersion"
+        }
+      }
+    },
+    "facet": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 3,
+      "prefixItems": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[a-z0-9._:-]+$"
+        },
+        {
+          "type": "integer",
+          "minimum": -1000,
+          "maximum": 1000
+        },
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        }
+      ],
+      "items": false
+    },
+    "horizon": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["facets"],
+      "properties": {
+        "facets": {
+          "type": "array",
+          "maxItems": 48,
+          "items": {
+            "$ref": "#/$defs/facet"
+          }
+        },
+        "updated_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "explicitState": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        {
+          "enum": ["h", "l", "s"]
+        },
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      ],
+      "items": false
+    }
+  }
+}
