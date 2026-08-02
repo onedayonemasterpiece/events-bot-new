@@ -42,14 +42,18 @@ jobs:
           if len(scripts) != 5:
               raise SystemExit(f'unexpected materializer run-step count: {len(scripts)}')
 
-          old_assert = 'len(report.get("valid") or [])'
-          new_assert = 'len(report.get("valid_ids") or [])'
-          replacement_count = sum(script.count(old_assert) for script in scripts)
-          if replacement_count != 1:
-              raise SystemExit(
-                  f'unexpected importer-report assertion count: {replacement_count}'
-              )
-          scripts = [script.replace(old_assert, new_assert) for script in scripts]
+          replacements = {
+              'len(report.get("valid") or [])': 'len(report.get("valid_ids") or [])',
+              'report.get("ready_for_region_talk_scoring")': '(report.get("batch") or {}).get("ready_for_region_talk_scoring")',
+              'report.get("manual_or_blocked")': '(report.get("batch") or {}).get("manual_or_blocked")',
+          }
+          for old, new in replacements.items():
+              replacement_count = sum(script.count(old) for script in scripts)
+              if replacement_count != 1:
+                  raise SystemExit(
+                      f'unexpected importer-report assertion count for {old}: {replacement_count}'
+                  )
+              scripts = [script.replace(old, new) for script in scripts]
 
           for index, script in enumerate(scripts, start=1):
               print(f'::group::materializer run step {index}')
