@@ -26,27 +26,45 @@ test('adapter excludes unsafe hierarchy reads, JS value injection and desktop ke
   assert.doesNotMatch(source, /getPageSource|pageSource|input\.value\s*=\s*value|osascript|Cmd-K|Toggle Software Keyboard/u);
 });
 
-test('Safari native inspection consumes raw protocol arrays and scopes the exact action to its modal', async () => {
+test('Safari native inspection uses exact predicate title and same-alert button contract', async () => {
   const calls = [];
-  const state = await inspectSafariNativeUiProtocol(async (using, xpath) => {
-    calls.push({ using, xpath });
-    if (xpath.includes('/ancestor::')) return [{ 'element-6066-11e4-a52e-4f735466cecf': 'continue-in-exact-modal' }];
-    if (xpath.includes('XCUIElementTypeAlert') && xpath.includes('.//XCUIElementTypeStaticText')) return [{ ELEMENT: 'known-alert' }];
-    if (xpath.includes('XCUIElementTypeAlert')) return [{ ELEMENT: 'known-alert' }];
-    return [{ ELEMENT: 'exact-title' }];
+  const state = await inspectSafariNativeUiProtocol({
+    findElements: async (using, predicate) => {
+      calls.push({ using, predicate });
+      return [{ ELEMENT: 'exact-title' }];
+    },
+    getAlertText: async () => 'Выбор поисковой системы\nSafe body text',
+    getAlertButtons: async () => ['Настройки', 'Продолжить'],
   });
-  assert.equal(calls.length, 4);
-  assert.ok(calls.every(({ using }) => using === 'xpath'));
-  assert.match(calls.find(({ xpath }) => xpath.includes('/ancestor::')).xpath,
-    /ancestor::\*.*\[1\]\/\/XCUIElementTypeButton/u);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].using, '-ios predicate string');
+  assert.match(calls[0].predicate, /name == 'Выбор поисковой системы'/u);
   assert.deepEqual(state, { known_dialog_count: 1, continue_button_count: 1,
     blocking_dialog_count: 1, unknown_blocking_dialog_count: 0,
-    action_token: 'continue-in-exact-modal' });
+    action_token: 'Продолжить' });
+});
+
+test('same-named action in a different current alert remains unknown and non-actionable', async () => {
+  const state = await inspectSafariNativeUiProtocol({
+    findElements: async () => [{ ELEMENT: 'exact-title-behind-alert' }],
+    getAlertText: async () => 'Неизвестное системное окно\nBody',
+    getAlertButtons: async () => ['Продолжить'],
+  });
+  assert.equal(state.known_dialog_count, 1);
+  assert.equal(state.continue_button_count, 0);
+  assert.equal(state.unknown_blocking_dialog_count, 1);
+  assert.equal(state.action_token, null);
 });
 
 test('Safari native inspection fails closed when a driver violates the element-array contract', async () => {
-  await assert.rejects(() => inspectSafariNativeUiProtocol(async () => ({ ELEMENT: 'not-an-array' })),
+  await assert.rejects(() => inspectSafariNativeUiProtocol({
+    findElements: async () => ({ ELEMENT: 'not-an-array' }), getAlertText: async () => '', getAlertButtons: async () => [],
+  }),
     /safari_native_find_elements_non_array/u);
+  await assert.rejects(() => inspectSafariNativeUiProtocol({
+    findElements: async () => [{ ELEMENT: 'title' }],
+    getAlertText: async () => 'Выбор поисковой системы', getAlertButtons: async () => ({ not: 'an array' }),
+  }), /safari_native_alert_buttons_non_array/u);
 });
 
 test('immutable preview metadata records the full repository SHA used by the E2E gate', async () => {

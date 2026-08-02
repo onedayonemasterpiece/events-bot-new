@@ -122,37 +122,46 @@ export function buildAppiumCapabilities(platform, config, env = process.env) {
   };
 }
 
-const W3C_ELEMENT_ID = 'element-6066-11e4-a52e-4f735466cecf';
-
-const elementId = (reference) => reference?.[W3C_ELEMENT_ID] || reference?.ELEMENT || null;
-
 /**
- * Inspect only the bounded Safari first-run modal through raw WebDriver
- * protocol arrays. WebdriverIO's enhanced `$$` result is deliberately not
- * used here: native XCUITest protocol responses are plain element references,
- * and treating a non-array enhanced result as iterable can hide the actual
- * blocking modal behind a harness TypeError.
+ * Inspect only the current bounded Safari first-run alert through native
+ * XCTest predicate lookup plus WDA's alert API. The first non-empty alert-text
+ * line must equal the expected title, and the requested button must occur
+ * exactly once in that same current alert. No XPath hierarchy snapshot or
+ * unscoped same-named button is accepted.
  */
-export async function inspectSafariNativeUiProtocol(findElements) {
-  if (typeof findElements !== 'function') throw new TypeError('safari_native_find_elements_missing');
-  const exactTitle = `//XCUIElementTypeStaticText[@visible="true" and (@name="Выбор поисковой системы" or @label="Выбор поисковой системы")]`;
-  const modalAncestor = `ancestor::*[(self::XCUIElementTypeAlert or self::XCUIElementTypeSheet or self::XCUIElementTypeOther) and .//XCUIElementTypeButton[@visible="true" and (@name="Продолжить" or @label="Продолжить")]][1]`;
-  const exactAction = `//XCUIElementTypeButton[@visible="true" and (@name="Продолжить" or @label="Продолжить")]`;
-  const query = async (xpath) => {
-    const result = await findElements('xpath', xpath);
+export async function inspectSafariNativeUiProtocol({ findElements, getAlertText, getAlertButtons }) {
+  if (typeof findElements !== 'function' || typeof getAlertText !== 'function' || typeof getAlertButtons !== 'function') {
+    throw new TypeError('safari_native_alert_adapter_missing');
+  }
+  const title = 'Выбор поисковой системы';
+  const action = 'Продолжить';
+  const titlePredicate = `type == 'XCUIElementTypeStaticText' AND visible == 1 AND (name == '${title}' OR label == '${title}')`;
+  const query = async () => {
+    const result = await findElements('-ios predicate string', titlePredicate);
     if (!Array.isArray(result)) throw new TypeError('safari_native_find_elements_non_array');
     return result;
   };
-
-  const [titles, actions, topLevel, knownTopLevel] = await Promise.all([
-    query(exactTitle),
-    query(`${exactTitle}/${modalAncestor}${exactAction}`),
-    query('//XCUIElementTypeAlert[@visible="true"] | //XCUIElementTypeSheet[@visible="true"]'),
-    query(`//XCUIElementTypeAlert[@visible="true" and .${exactTitle}] | //XCUIElementTypeSheet[@visible="true" and .${exactTitle}]`),
-  ]);
-  const scopedActions = [...new Set(actions.map(elementId).filter(Boolean))];
+  const titles = await query();
+  let alertText = null;
+  let buttons = [];
+  try {
+    alertText = String(await getAlertText());
+    const result = await getAlertButtons();
+    if (!Array.isArray(result)) throw new TypeError('safari_native_alert_buttons_non_array');
+    buttons = result.map(String);
+  } catch (error) {
+    if (/safari_native_alert_buttons_non_array/iu.test(String(error?.message || error))) throw error;
+    // No current WDA alert is distinct from an exact title with no actionable
+    // alert ancestor; the classifier below blocks the latter as action-missing.
+    alertText = null;
+    buttons = [];
+  }
+  const firstLine = alertText?.split(/\r?\n/u).map((line) => line.trim()).find(Boolean) || null;
+  const currentAlertCount = alertText == null ? 0 : 1;
+  const titleBelongsToCurrentAlert = titles.length === 1 && firstLine === title;
+  const scopedActions = titleBelongsToCurrentAlert ? buttons.filter((label) => label === action) : [];
   return classifySafariInspection({ titleCount: titles.length, scopedActions,
-    topLevelCount: topLevel.length, knownTopLevelCount: knownTopLevel.length });
+    topLevelCount: currentAlertCount, knownTopLevelCount: titleBelongsToCurrentAlert ? 1 : 0 });
 }
 
 export async function createAppiumUi({ platform, target, expectedRepoSha, evidenceRoot, directHost, relayHost, secrets = [], env = process.env }) {
@@ -242,9 +251,11 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
 
   async function inspectSafariNativeUi() {
     if (platform !== 'ios') return classifySafariInspection();
-    // Bind the action to the nearest native modal ancestor of the exact title.
-    // A same-named button elsewhere in Safari is never eligible.
-    return inspectSafariNativeUiProtocol((using, value) => driver.findElements(using, value));
+    return inspectSafariNativeUiProtocol({
+      findElements: (using, value) => driver.findElements(using, value),
+      getAlertText: () => driver.getAlertText(),
+      getAlertButtons: () => driver.executeScript('mobile: alert', [{ action: 'getButtons' }]),
+    });
   }
 
   async function withNativeContext(fn) {
@@ -260,7 +271,8 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     if (platform !== 'ios') return;
     try {
       const detail = await withNativeContext(() => stabilizeSafariSystemUi({
-        inspect: inspectSafariNativeUi, dismissKnownDialog: async (elementId) => driver.elementClick(elementId),
+        inspect: inspectSafariNativeUi,
+        dismissKnownDialog: async (buttonLabel) => driver.executeScript('mobile: alert', [{ action: 'accept', buttonLabel }]),
       }));
       safariStartup = { status: 'passed', ...detail };
     } catch (error) {

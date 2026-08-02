@@ -3,11 +3,14 @@
 ## [Unreleased]
 
 - Fixed the iOS Safari first-run inspector after protected preflight
-  `30763157336`: native XPath lookups now consume raw WebDriver element arrays
-  and bind the exact `Продолжить` action to the nearest modal containing the
-  exact search-engine-choice title. This removes the WebdriverIO enhanced-`$$`
-  iterable mismatch that hid a visible known modal; the failed run preserved
-  side-effect counts `0/0/0` and was not promoted to acceptance evidence.
+  `30763157336` and correction run `30764460049`: the native boundary no longer
+  uses WebdriverIO enhanced `$$` collections or XPath hierarchy snapshots.
+  XCTest's exact title predicate is paired with WDA's current-alert text/button
+  API, and the exact-label accept action is allowed only when the first alert
+  line is the exact search-engine-choice title and `Продолжить` occurs exactly
+  once in that same alert. This fixes both the iterable mismatch and the XPath
+  false absence visible in the second run's screenshot. Both failed runs
+  preserved side-effect counts `0/0/0` and were not promoted to acceptance.
 - Fixed Region Talk contract-only review rebinding: Telegram's
   `MessageNotModified` response is now accepted only after exact live caption
   and ordered-link verification, so an already-current pending message no
