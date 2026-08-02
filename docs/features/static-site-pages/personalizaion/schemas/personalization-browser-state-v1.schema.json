@@ -1,0 +1,352 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenigevents.ru/schemas/personalization-browser-state-v1.schema.json",
+  "title": "KenigEvents compact browser personalization state v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "state_version",
+    "write_seq",
+    "activation",
+    "compatibility",
+    "explicit",
+    "overlay",
+    "meta"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "personalization-browser-state-v1"
+    },
+    "state_version": {
+      "const": 1
+    },
+    "write_seq": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "activation": {
+      "$ref": "#/$defs/activation"
+    },
+    "compatibility": {
+      "$ref": "#/$defs/compatibility"
+    },
+    "projection": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/projection" }
+      ]
+    },
+    "explicit": {
+      "type": "array",
+      "maxItems": 384,
+      "items": {
+        "$ref": "#/$defs/explicitState"
+      }
+    },
+    "overlay": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/overlayState"
+      }
+    },
+    "meta": {
+      "$ref": "#/$defs/meta"
+    }
+  },
+  "$defs": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "maxLength": 40
+    },
+    "shortVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[A-Za-z0-9._:@/-]+$"
+    },
+    "activation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "epoch"],
+      "properties": {
+        "state": {
+          "enum": ["not_started", "active", "reset"]
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "started_at": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/timestamp" }
+          ]
+        },
+        "activation_action": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "enum": [
+                "interest_profile_change",
+                "like_set",
+                "hide_commit",
+                "personal_mode_enabled",
+                "save_set"
+              ]
+            }
+          ]
+        },
+        "terms_version": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/shortVersion" }
+          ]
+        },
+        "privacy_version": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/shortVersion" }
+          ]
+        },
+        "recommendation_rules_version": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/shortVersion" }
+          ]
+        }
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_version",
+        "feature_schema_version",
+        "taxonomy_version",
+        "surface_policy_version"
+      ],
+      "properties": {
+        "model_version": {
+          "$ref": "#/$defs/shortVersion"
+        },
+        "feature_schema_version": {
+          "$ref": "#/$defs/shortVersion"
+        },
+        "taxonomy_version": {
+          "$ref": "#/$defs/shortVersion"
+        },
+        "surface_policy_version": {
+          "$ref": "#/$defs/shortVersion"
+        }
+      }
+    },
+    "explicitState": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        {
+          "enum": ["h", "l", "s"]
+        },
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      ],
+      "items": false
+    },
+    "overlayState": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "prefixItems": [
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        {
+          "enum": ["h", "l", "s", "u"]
+        },
+        {
+          "enum": ["set", "unset", "pending"]
+        },
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      ],
+      "items": false
+    },
+    "facet": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[a-z0-9._:-]+$"
+        },
+        {
+          "type": "integer",
+          "minimum": -1000,
+          "maximum": 1000
+        }
+      ],
+      "items": false
+    },
+    "horizon": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["facets"],
+      "properties": {
+        "facets": {
+          "type": "array",
+          "maxItems": 48,
+          "items": {
+            "$ref": "#/$defs/facet"
+          }
+        }
+      }
+    },
+    "projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "etag",
+        "generated_at",
+        "expires_at",
+        "refresh_after",
+        "horizons",
+        "sensitive_facets_present"
+      ],
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "etag": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 96
+        },
+        "generated_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "expires_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "refresh_after": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "horizons": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["short", "mid", "long"],
+          "properties": {
+            "short": { "$ref": "#/$defs/horizon" },
+            "mid": { "$ref": "#/$defs/horizon" },
+            "long": { "$ref": "#/$defs/horizon" }
+          }
+        },
+        "personas": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "$ref": "#/$defs/facet"
+          }
+        },
+        "preferences": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "prefer_free": { "type": "boolean" },
+            "city_codes": {
+              "type": "array",
+              "maxItems": 16,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 24,
+                "pattern": "^[a-z0-9._:-]+$"
+              }
+            },
+            "time_codes": {
+              "type": "array",
+              "maxItems": 12,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 24,
+                "pattern": "^[a-z0-9._:-]+$"
+              }
+            }
+          }
+        },
+        "sensitive_facets_present": {
+          "const": false
+        },
+        "checksum": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 96
+        }
+      }
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "last_access_at",
+        "last_compacted_at",
+        "last_migration_id"
+      ],
+      "properties": {
+        "last_access_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "last_compacted_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "last_migration_id": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[A-Za-z0-9._:@/-]*$"
+        },
+        "last_server_ack_seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    }
+  }
+}

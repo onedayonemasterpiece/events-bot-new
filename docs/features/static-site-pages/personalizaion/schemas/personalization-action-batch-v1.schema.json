@@ -1,0 +1,339 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenigevents.ru/schemas/personalization-action-batch-v1.schema.json",
+  "title": "KenigEvents personalization action batch v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "batch_id",
+    "build_version",
+    "client_instance_id",
+    "activation_epoch",
+    "base_profile_revision",
+    "sequence",
+    "compatibility",
+    "actions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "personalization-action-batch-v1"
+    },
+    "batch_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "build_version": {
+      "$ref": "#/$defs/shortVersion"
+    },
+    "client_instance_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "activation_epoch": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2147483647
+    },
+    "base_profile_revision": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "sequence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "to": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_version",
+        "feature_schema_version",
+        "taxonomy_version",
+        "surface_policy_version"
+      ],
+      "properties": {
+        "model_version": {
+          "$ref": "#/$defs/shortVersion"
+        },
+        "feature_schema_version": {
+          "$ref": "#/$defs/shortVersion"
+        },
+        "taxonomy_version": {
+          "$ref": "#/$defs/shortVersion"
+        },
+        "surface_policy_version": {
+          "$ref": "#/$defs/shortVersion"
+        }
+      }
+    },
+    "activation_evidence": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/activationEvidence" }
+      ]
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "$ref": "#/$defs/action"
+      }
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid",
+      "maxLength": 36
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "maxLength": 40
+    },
+    "shortVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[A-Za-z0-9._:@/-]+$"
+    },
+    "activationEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "activation_action",
+        "started_at",
+        "terms_version",
+        "privacy_version",
+        "recommendation_rules_version"
+      ],
+      "properties": {
+        "activation_action": {
+          "enum": [
+            "interest_profile_change",
+            "like_set",
+            "hide_commit",
+            "personal_mode_enabled",
+            "save_set"
+          ]
+        },
+        "started_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "terms_version": {
+          "$ref": "#/$defs/shortVersion"
+        },
+        "privacy_version": {
+          "$ref": "#/$defs/shortVersion"
+        },
+        "recommendation_rules_version": {
+          "$ref": "#/$defs/shortVersion"
+        },
+        "activation_surface": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 48,
+          "pattern": "^[a-z0-9._:-]+$"
+        }
+      }
+    },
+    "servedEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["list_hash", "rank", "algorithm_id"],
+      "properties": {
+        "list_hash": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 96,
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "rank": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999
+        },
+        "algorithm_id": {
+          "$ref": "#/$defs/shortVersion"
+        },
+        "neighbour_ids": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        }
+      }
+    },
+    "profileDelta": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "facet_codes": {
+          "type": "array",
+          "maxItems": 24,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[a-z0-9._:-]+$"
+          }
+        },
+        "city_codes": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 24,
+            "pattern": "^[a-z0-9._:-]+$"
+          }
+        },
+        "prefer_free": {
+          "type": "boolean"
+        }
+      },
+      "minProperties": 1
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "seq",
+        "type",
+        "surface",
+        "occurred_at"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "enum": [
+            "like_set",
+            "like_unset",
+            "hide_commit",
+            "hide_restore",
+            "save_set",
+            "save_unset",
+            "share_success",
+            "cta_ticket",
+            "cta_registration",
+            "attendance_confirmed",
+            "repeat_attendance_confirmed",
+            "interest_profile_change",
+            "personal_mode_enabled"
+          ]
+        },
+        "event_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "event_family_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "surface": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 48,
+          "pattern": "^[a-z0-9._:-]+$"
+        },
+        "occurred_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "served": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/servedEvidence" }
+          ]
+        },
+        "profile_delta": {
+          "$ref": "#/$defs/profileDelta"
+        },
+        "context_flags": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "campaign",
+              "easter_egg",
+              "focus_test",
+              "reduced_motion",
+              "offline",
+              "legacy_import"
+            ]
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "like_set",
+                  "like_unset",
+                  "hide_commit",
+                  "hide_restore",
+                  "save_set",
+                  "save_unset",
+                  "share_success",
+                  "cta_ticket",
+                  "cta_registration",
+                  "attendance_confirmed",
+                  "repeat_attendance_confirmed"
+                ]
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["event_id"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "interest_profile_change"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["profile_delta"]
+          }
+        }
+      ]
+    }
+  }
+}

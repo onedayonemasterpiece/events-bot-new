@@ -1,0 +1,144 @@
+schema_version: personalization-implementation-status-v1
+updated_at: '2026-08-02T00:00:00Z'
+repository: onedayonemasterpiece/events-bot-new
+baseline:
+  branch: main
+  sha: 079a9dc7a6830925456116770f54b82a5fe59fb0
+  state: local_prototype_not_production_loop
+canonical:
+  requirements: docs/features/static-site-pages/personalizaion/requirements.md
+  target: docs/features/static-site-pages/personalizaion/personalization-to-be.md
+  implementation_contract: docs/features/static-site-pages/personalizaion/personalization-implementation-contract.md
+  current_audit: docs/features/static-site-pages/personalizaion/personalization-current-runtime-audit-2026-08-02.md
+legal_dependencies:
+  - id: personalization-legal-release-gate-rf
+    pull_request: 266
+    state: open_unmerged_at_snapshot
+    blocks:
+      - remote_profile_writes
+      - server_signal_writes
+      - production_personalized_ranking
+      - cross_device_sync
+architecture_decisions:
+  cross_page_runtime: accepted
+  unknown_surface: fail_static
+  calendar_primary_policy: exact_hide_only
+  thematic_policy: weak_invisible_tail
+  for_me_policy: strong_with_diversity
+  browser_state: one_atomic_localstorage_envelope
+  outbox: indexeddb_with_bounded_localstorage_fallback
+  durable_api: same_origin_only
+  primary_store: pending_localization_gate
+  raw_impression_rows_in_primary_store: forbidden
+  ordinary_local_rerank_network_requests: 0
+budgets:
+  browser_steady_target_kib: 24
+  browser_forced_compaction_kib: 32
+  browser_hard_state_kib: 48
+  kenigevents_aggregate_emergency_kib: 64
+  outbox_max_actions: 16
+  outbox_max_kib: 12
+  outbox_ttl_hours: 24
+  outbox_max_attempts: 5
+  database_current_payload_p95_kib: 1.5
+  database_current_relations_and_indexes_target_kib_per_active_subject: 3
+  database_capacity_free_reserve_percent: 20
+waves:
+  - id: P13N-00
+    name: characterization_and_extraction
+    state: ready_for_implementation
+    production_effect: none
+    remote_writes: false
+    hard_gates:
+      - current_behavior_characterized
+      - shared_modules_created
+      - route_surface_inventory_generated
+      - unknown_surface_fails_closed
+      - no_new_personalization_logic_in_giant_inline_script
+  - id: P13N-01
+    name: activation_and_compact_local_state
+    state: blocked_by_P13N-00
+    production_effect: local_only_behind_flag
+    remote_writes: false
+    hard_gates:
+      - consent_ok_removed_from_activation
+      - atomic_state_schema_validated
+      - session_rotates_in_sessionstorage
+      - aggregate_storage_budget_enforced
+      - exact_hide_pending_undo_and_hidden_collection
+  - id: P13N-02
+    name: canonical_surface_runtime
+    state: blocked_by_P13N-01
+    production_effect: local_shadow_then_local_on
+    remote_writes: false
+    hard_gates:
+      - one_pure_scorer
+      - calendar_primary_order_unchanged
+      - visible_focused_acted_cards_never_move
+      - thematic_rerank_zero_network
+      - search_popular_related_invariants
+  - id: P13N-03
+    name: durable_transport
+    state: blocked_by_P13N-02_and_legal_boundary
+    production_effect: staging_only
+    remote_writes: staging_only
+    hard_gates:
+      - bounded_indexeddb_outbox
+      - idempotent_batch_ack_reconcile
+      - direct_supabase_down_relay_up
+      - relay_down_direct_up
+      - both_down_local_fallback
+      - ambiguous_write_reconcile
+      - no_false_202_ack
+  - id: P13N-04
+    name: compact_primary_store
+    state: blocked_by_P13N-03_and_localization_decision
+    production_effect: staging_only
+    remote_writes: staging_only
+    hard_gates:
+      - private_schema_and_rls
+      - fixture_capacity_1k_10k_100k
+      - no_per_impression_rows
+      - retention_and_compaction
+      - reset_purge_and_identity_link
+  - id: P13N-05
+    name: materializer_and_projection
+    state: blocked_by_P13N-04
+    production_effect: sync_shadow
+    remote_writes: focus_cohort_only
+    hard_gates:
+      - coalesced_materialization
+      - etag_304_and_single_flight
+      - immediate_overlay_reconciles
+      - invalid_projection_fails_last_good
+      - offline_replay_quality_gate
+  - id: P13N-06
+    name: controlled_rollout
+    state: blocked_by_P13N-05_legal_ops_product_signoff
+    production_effect: staged_rollout
+    remote_writes: cohort_then_general
+    hard_gates:
+      - focus_group_pass
+      - desktop_android_ios_critical_pass
+      - storage_and_database_capacity_pass
+      - zero_critical_personalization_defects
+      - rollback_proven
+      - owner_ui_product_signoff
+current_p0_findings:
+  - legacy_consent_dialog_and_consent_ok
+  - browser_profile_sent_to_public_supabase_rpc
+  - no_durable_action_outbox_ack_reconcile
+  - exact_hide_conflated_with_semantic_negative_interest
+  - no_pending_undo_commit_window
+  - local_only_reset
+  - multiple_inline_rankers
+  - no_generated_cross_route_surface_proof
+required_evidence_per_pr:
+  - immutable_repository_sha
+  - changed_surface_inventory
+  - tests_and_real_build
+  - storage_bytes_before_after
+  - sanitized_network_trace
+  - fault_matrix_results_when_transport_touched
+  - explicit_not_run_or_blocked_items
+  - rollback_or_no_production_effect_statement
