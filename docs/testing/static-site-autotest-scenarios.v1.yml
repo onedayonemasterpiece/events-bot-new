@@ -188,6 +188,7 @@ scenarios:
     evidence: restricted_no_video_no_trace_no_har
     acceptance_receipts:
       browser: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30745526613
+      browser_control_issue: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30755922643
       android: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30747598046
       ios_fail_mobile_keyboard: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30754894934
     blocking:
