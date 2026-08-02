@@ -1,0 +1,35 @@
+{
+  "generated_at": "2026-08-01T04:00:00Z",
+  "source_scope": "accepted-example-baseline",
+  "input_fingerprint": "catalog-and-policy-v1",
+  "stale_after_hours": 96,
+  "collections": {
+    "kids": {
+      "mode": "public",
+      "state": "ready",
+      "items": [
+        {"event_id": 101, "family_id": "family:kids-1", "start_date": "2026-08-04", "venue": "Театр кукол", "organizer": "Театр кукол", "event_type": "спектакль", "source_status": "grounded", "review_status": "accepted"},
+        {"event_id": 102, "family_id": "family:kids-2", "start_date": "2026-08-08", "venue": "Музыкальный театр", "organizer": "Музыкальный театр", "event_type": "спектакль", "source_status": "grounded", "review_status": "accepted"},
+        {"event_id": 103, "family_id": "family:kids-3", "start_date": "2026-08-12", "venue": "Библиотека", "organizer": "Библиотека", "event_type": "занятие", "source_status": "grounded", "review_status": "accepted"},
+        {"event_id": 104, "family_id": "family:kids-4", "start_date": "2026-08-18", "venue": "Сигнал", "organizer": "Сигнал", "event_type": "мастер-класс", "source_status": "grounded", "review_status": "accepted"}
+      ]
+    },
+    "science_pop": {
+      "mode": "shadow",
+      "state": "ready",
+      "watch_below_families": 3,
+      "items": [
+        {"event_id": 201, "family_id": "family:science-1", "start_date": "2026-08-05", "venue": "ИЦАЭ", "organizer": "ИЦАЭ", "event_type": "лекция", "source_status": "grounded", "review_status": "accepted"},
+        {"event_id": 202, "family_id": "family:science-2", "start_date": "2026-08-11", "venue": "Музей", "organizer": "Музей", "event_type": "лекция", "source_status": "grounded", "review_status": "accepted"},
+        {"event_id": 203, "family_id": "family:science-3", "start_date": "2026-08-20", "venue": "Библиотека", "organizer": "Библиотека", "event_type": "лекция", "source_status": "grounded", "review_status": "accepted"}
+      ]
+    },
+    "medieval": {
+      "mode": "seasonal",
+      "state": "ready",
+      "items": [
+        {"event_id": 301, "family_id": "family:medieval-1", "start_date": "2026-08-15", "venue": "Кауп", "organizer": "Кауп", "event_type": "реконструкция", "source_status": "grounded", "review_status": "accepted"}
+      ]
+    }
+  }
+}
