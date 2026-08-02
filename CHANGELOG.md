@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk terminal-candidate refresh after legacy intake provenance
+  attestation: the zero-LLM finalizer now persists changed external-intake
+  fingerprint/status/permission fields even when source and eligibility
+  evidence are otherwise unchanged, so current clean articles are not silently
+  omitted from anti-vector planning.
 - Hardened Region Talk for asynchronous external-publication intake: imports now start unreviewed with no publication permission, preserve exact-byte provenance, deduplicate canonical URL/DOI/exact normalized title+authors and replay idempotently with immutable observations/same-owner aliases, expose new intake IDs/counts, and fail closed on conflicts. Candidate selection, orchestration, finalization and anti-vector planning now refresh complete current YDB snapshots at their decision boundaries, keep manual-review rows out of automatic promotion, protect prepared publication slots from silent late-intake replacement, durably audit changed evidence on immutable published rows, and retain the LLM-first semantic funnel. Added an explicit idempotent legacy-row provenance attestation migration without inventing unavailable historical input SHAs.
 - Added deterministic focus Auth email routing and evidence: new first sends use
   Postbox, while returning/repeated and fixed E2E/operator identities use paid
