@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk social draft recovery after a strong candidate reread:
+  the backfill now rebuilds the current authoritative source fingerprint from
+  exact live source rows before Writer and verifies it again inside the final
+  serializable draft mutation. A changed/missing overlay remains fail closed;
+  an unchanged confirmed candidate no longer becomes a false
+  `skipped_after_strong_reread` without calling the provider.
 - Fixed Region Talk article visual-grounding prompt/audit alignment: each
   second-paragraph sentence must carry concrete content evidence even when it
   also discusses reviewed media, and a pre-Critic Writer failure now clears a

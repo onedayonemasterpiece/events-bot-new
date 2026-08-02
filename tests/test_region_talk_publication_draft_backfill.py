@@ -552,6 +552,134 @@ def test_final_candidate_cas_rejects_concurrent_live_change() -> None:
         )
 
 
+def test_strong_reread_reattaches_live_source_fingerprint(monkeypatch) -> None:
+    mod = load_module()
+    source = {
+        "_ydb_pk": "source_queue_item:telegram:zorkjy",
+        "canonical_source_key": "telegram:zorkjy",
+        "source_queue_status": "scanned",
+        "source_scope": "external",
+        "source_geo_class": "external_source",
+        "source_topic_class": "travel",
+        "source_quick_class": "external_nonlocal",
+        "updated_at": "2026-08-02T15:00:00+00:00",
+    }
+    source_fingerprint = mod.finalizer.authoritative_source_fingerprint(source)
+    row = {
+        "post_url": "https://t.me/zorkjy/3147",
+        "canonical_source_key": "telegram:zorkjy",
+        "publication_candidate_status": "llm_confirmed",
+        "publication_eligibility_verdict": "eligible",
+        "publication_eligibility_gate_version": mod.notify.PUBLICATION_ELIGIBILITY_GATE_VERSION,
+        "authoritative_source_fingerprint_version": mod.notify.AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
+        "authoritative_source_fingerprint": source_fingerprint,
+    }
+    reads: list[str] = []
+
+    def fake_strong_read(_pool, _ydb, _table, pk):
+        reads.append(pk)
+        return dict(source) if pk == source["_ydb_pk"] else {}
+
+    monkeypatch.setattr(mod, "strong_read_row", fake_strong_read)
+    monkeypatch.setattr(
+        mod,
+        "strong_read_kind_rows_complete",
+        lambda *_args, **_kwargs: pytest.fail("social source must use exact-row rereads"),
+    )
+
+    assert mod.notify.is_confirmed_publication(row) is False
+    mod.refresh_strong_live_source_fingerprint(
+        object(), object(), "table", row, scan_limit=5000
+    )
+
+    assert mod.notify.is_confirmed_publication(row) is True
+    assert reads == [
+        "source_queue_item:telegram:zorkjy",
+        "source_status_item:telegram:zorkjy",
+        "online_source_item:telegram:zorkjy",
+    ]
+    assert row["_strong_live_source_expected_fingerprint"] == source_fingerprint
+
+
+def test_final_candidate_cas_rejects_late_source_overlay_change() -> None:
+    mod = load_module()
+    source_before = {
+        "canonical_source_key": "telegram:zorkjy",
+        "source_queue_status": "scanned",
+        "source_scope": "external",
+        "source_geo_class": "external_source",
+        "source_topic_class": "travel",
+        "source_quick_class": "external_nonlocal",
+        "updated_at": "2026-08-02T15:00:00+00:00",
+    }
+    source_after = {
+        **source_before,
+        "source_queue_status": "needs_review",
+        "updated_at": "2026-08-02T15:01:00+00:00",
+    }
+    expected_source_fingerprint = mod.finalizer.authoritative_source_fingerprint(source_before)
+    expected = {
+        "post_url": "https://t.me/zorkjy/3147",
+        "canonical_source_key": "telegram:zorkjy",
+        "publication_candidate_status": "llm_confirmed",
+        "publication_eligibility_verdict": "eligible",
+        "publication_eligibility_gate_version": mod.notify.PUBLICATION_ELIGIBILITY_GATE_VERSION,
+        "authoritative_source_fingerprint_version": mod.notify.AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
+        "authoritative_source_fingerprint": expected_source_fingerprint,
+    }
+    row = {
+        **expected,
+        "_ydb_pk": "publication_candidate_item:zorkjy",
+        "_strong_read_expected_payload": dict(expected),
+        "_strong_live_source_expected_fingerprint": expected_source_fingerprint,
+        "_strong_live_source_exact_pks": [
+            "source_queue_item:telegram:zorkjy",
+            "source_status_item:telegram:zorkjy",
+            "online_source_item:telegram:zorkjy",
+        ],
+        "_strong_live_source_requires_external_scan": False,
+    }
+
+    class Result:
+        def __init__(self, rows):
+            self.rows = rows
+
+    class Tx:
+        calls = 0
+
+        def execute(self, _query, _params, *, commit_tx):  # noqa: ARG002
+            self.calls += 1
+            if self.calls == 1:
+                return [Result([type("Row", (), {"payload_json": json.dumps(expected)})()])]
+            if self.calls == 2:
+                return [Result([type("Row", (), {"payload_json": json.dumps(source_after)})()])]
+            return [Result([])]
+
+    class Session:
+        def __init__(self):
+            self.tx = Tx()
+
+        def prepare(self, query):
+            return query
+
+        def transaction(self, _mode):
+            return self.tx
+
+    class Pool:
+        def retry_operation_sync(self, op):
+            return op(Session())
+
+    class Ydb:
+        @staticmethod
+        def SerializableReadWrite():
+            return object()
+
+    with pytest.raises(RuntimeError, match="candidate_source_changed_since_strong_reread"):
+        mod.upsert_publication_row(
+            Pool(), Ydb(), "table", row, {"publication_draft_status": "ready"}
+        )
+
+
 def test_final_candidate_cas_keeps_durable_leading_underscore_fields() -> None:
     mod = load_module()
     expected = {
