@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fixed the published Static Site QA issue gateway after its first live control
+  run: the reusable protected OTP workflow now receives the caller's allowed
+  secrets before the called jobs apply the `external-e2e` Environment, and the
+  checkout-free terminal job passes the repository explicitly when publishing
+  its issue receipt. Added a source contract test for both boundaries.
 - Fixed the protected focus OTP acceptance workflow after its first live run:
   the generated Mail Trigger recipient is now a secret, browser failure cannot
   accidentally unlock Android/iOS, failed evidence retains the verified preview

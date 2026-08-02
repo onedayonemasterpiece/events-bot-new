@@ -78,6 +78,7 @@ jobs:
       target_url: ${{ needs.prepare.outputs.target_url }}
       expected_repo_sha: ${{ needs.prepare.outputs.expected_repo_sha }}
       platform: ${{ needs.prepare.outputs.platform }}
+    secrets: inherit
 
   terminal:
     if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.duplicate != 'true' }}
@@ -91,4 +92,4 @@ jobs:
           RESULT: ${{ needs.run.result }}
           PLATFORM: ${{ needs.prepare.outputs.platform }}
         run: |
-          gh issue comment "$ISSUE" --body "TERMINAL · focus.otp.browser_tab · ${PLATFORM} · workflow=${RESULT} · sanitized artifacts (7 days): ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "TERMINAL · focus.otp.browser_tab · ${PLATFORM} · workflow=${RESULT} · sanitized artifacts (7 days): ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
