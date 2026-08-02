@@ -171,6 +171,135 @@ scenarios:
       pull_request: false_until_implemented
       release: false_until_implemented
 
+  search.anonymous_auth_gate:
+    title: Anonymous Search is visible but never dispatched before explicit authentication
+    status: planned_contract_current_runtime_nonconforming
+    contract: docs/features/static-site-pages/smart-vector-search/README.md
+    layers: [L0, L1]
+    platforms: [browser]
+    trigger_tags: [smart-search, auth-otp, static-route, mobile-input]
+    cost: low
+    side_effects: none_search_post_count_must_remain_zero
+    evidence: network_counter_and_ui_assertions
+    blocking:
+      pull_request: false_until_implemented
+      release: false_until_implemented
+
+  search.authenticated_contract:
+    title: Authenticated Search submits once and renders the versioned result contract
+    status: partial_existing_mocked_no_live_backend_acceptance
+    contract: docs/features/static-site-pages/smart-vector-search/README.md
+    layers: [L0, L1]
+    platforms: [browser]
+    trigger_tags: [smart-search, auth-otp, supabase-connectivity, static-route]
+    cost: medium
+    side_effects: fake_provider_or_fixed_test_identity
+    evidence: schema_network_cards_feedback_and_cleanup
+    blocking:
+      pull_request: affected_scope_after_contract_activation
+      release: true_after_live_acceptance_implementation
+
+  search.live_cached_journey:
+    title: Protected live Search reaches Auth, Edge, pgvector, cache and real EventCards
+    status: planned
+    contract: docs/features/static-site-pages/smart-vector-search/README.md
+    layers: [L1]
+    platforms: [browser]
+    trigger_tags: [smart-search, supabase-connectivity, yandex-relay, auth-otp]
+    cost: medium
+    side_effects: protected_fixed_identity_cached_query
+    target: deployed_https_exact_repo_sha
+    evidence: restricted_request_stage_and_render_summary
+    blocking:
+      pull_request: false_until_implemented
+      release: true_after_implementation
+
+  search.live_cold_journey:
+    title: Protected cold Search proves embedding, vector and verifier-or-degraded behavior
+    status: planned
+    contract: docs/features/static-site-pages/smart-vector-search/README.md
+    layers: [L1]
+    platforms: [browser]
+    trigger_tags: [smart-search, supabase-connectivity, yandex-relay]
+    cost: high
+    side_effects: bounded_provider_calls_and_cold_quota
+    target: deployed_https_exact_repo_sha
+    evidence: restricted_provider_vector_policy_receipt
+    blocking:
+      pull_request: protected_manual_or_release_only
+      release: true_after_implementation
+
+  search.cache_provider_zero:
+    title: Repeated compatible Search is a true result-cache hit with zero provider and cold-quota delta
+    status: planned
+    contract: docs/features/static-site-pages/smart-vector-search/README.md
+    layers: [L0, L1]
+    platforms: [browser]
+    trigger_tags: [smart-search, static-data, supabase-connectivity]
+    cost: medium
+    side_effects: idempotent_test_identity
+    evidence: cache_provider_vector_and_quota_counters
+    blocking:
+      pull_request: false_until_implemented
+      release: true_after_implementation
+
+  search.vector_corpus_freshness:
+    title: Search documents and embeddings exactly cover the eligible current catalog
+    status: planned
+    contract: docs/features/static-site-pages/smart-vector-search/README.md
+    layers: [L0]
+    platforms: []
+    trigger_tags: [smart-search, static-data, release-publisher]
+    cost: low
+    side_effects: read_only
+    evidence: corpus_revision_coverage_and_age_receipt
+    blocking:
+      pull_request: affected_scope_after_implementation
+      release: true_after_implementation
+
+  search.transport_route_matrix:
+    title: Cost-bearing Search preselects one healthy direct or relay route without duplicate dispatch
+    status: planned
+    contract: docs/features/static-site-pages/smart-vector-search/README.md
+    layers: [L0, L1, L2]
+    platforms: [browser, android, ios]
+    trigger_tags: [smart-search, supabase-connectivity, yandex-relay, mobile-input]
+    cost: high
+    side_effects: fake_provider_or_cached_query_only
+    selection: browser_full_matrix_mobile_representative
+    evidence: sanitized_route_and_post_count_summary
+    blocking:
+      pull_request: direct_transport_contract_change_after_implementation
+      release: true_after_implementation
+
+  search.quota_abuse_contract:
+    title: Rolling user quotas, idempotency, concurrency and global admission contain automated abuse
+    status: partial_existing_fixed_bucket_and_sql_idempotency_only
+    contract: docs/features/static-site-pages/smart-vector-search/README.md
+    layers: [L0, L1]
+    platforms: [browser]
+    trigger_tags: [smart-search, supabase-connectivity]
+    cost: medium
+    side_effects: transactional_fixture_or_staging_load_only
+    evidence: quota_concurrency_retry_after_and_circuit_report
+    blocking:
+      pull_request: affected_scope_after_contract_activation
+      release: true_after_implementation
+
+  search.relevance_golden:
+    title: Russian event-intent golden set prevents retrieval regressions and compares BGE shadow
+    status: planned
+    contract: docs/features/static-site-pages/smart-vector-search/README.md
+    layers: [L0]
+    platforms: []
+    trigger_tags: [smart-search, static-data]
+    cost: medium
+    side_effects: offline_only
+    evidence: versioned_recall_ndcg_segment_and_hard_negative_report
+    blocking:
+      pull_request: embedding_or_ranking_changes_after_implementation
+      release: true_for_embedding_or_ranking_changes_after_implementation
+
   focus.otp.browser_tab:
     title: Real focus-group email OTP in browser tab
     status:
