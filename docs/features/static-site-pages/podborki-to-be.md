@@ -1832,3 +1832,26 @@ product-quality runner fail-closed обнаруживает source-grounding д�
 сохраняет тот же visible-view hash); `snapshot_sha256` может
 отличаться из-за `generated_at`. Эта реализация не добавляет owner gold,
 thresholds, scores, schedule, Astro routes, navigation или sitemap.
+
+### Фактическая приёмка 2026-08-02
+
+После correction PR A полный 50-source primary-only Gate B прошёл: exact
+quotes/source bindings 100%, false confirmed hard negatives 0, recall
+child/family/joint — 11/12, 8/9 и 1/1. На свежей production-копии эффективный
+20-source bounded apply записал только `collection_decisions`, а identical warm
+дал `provider_calls=0`, `writes=0`, `changed_events=0`.
+
+Product snapshot после first apply и warm имеет одинаковые
+`input_fingerprint=330d57ea…` и
+`normalized_output_sha256=fc4fe807…`. Monitor: child 11 HEALTHY, family 7
+HEALTHY, kids-union 15 HEALTHY, joint 0 WATCH; дополнительные WATCH — только
+отсутствующий owner-accepted baseline и пустая непубличная joint-выборка.
+
+Сквозной ordinary-ingestion gate пока не принят: Fly SQLite сохраняет
+Event/EventSource, но не исходные Telegram extraction packets, VK `EventDraft`
+и parser `TheatreEvent`. Реконструированные probes не являются source-faithful:
+Telegram остановился на pre-existing location-grounding guard до audience
+stage, parser распознал existing event и Smart Update не вызвал. Поэтому
+post-ingestion snapshot, clean main integration и Fly canary честно BLOCKED;
+публикация по-прежнему BLOCKED. Канонические hashes/receipts:
+[integration report](../../../.codex/integration/static-collection-facts-v3-INTEGRATION_REPORT.md).

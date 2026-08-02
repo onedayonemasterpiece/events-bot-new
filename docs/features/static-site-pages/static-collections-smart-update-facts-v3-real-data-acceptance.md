@@ -1,15 +1,25 @@
 # Smart Update facts v3: приёмка на реальных данных и реальных постах
 
-Статус: **mandatory acceptance gate**.
+Статус: **mandatory acceptance gate; частично пройден**.
 
-Фактический прогон 2026-08-02: **Gate A PASS, Gate B NO-GO; Gates C–F не
-запускались по stop-condition**. На свежем production snapshot все 50
-event/source bindings были точными, каждый routed source получил ровно один
-primary Gemma send, writes остались нулевыми и exact-quote rate составил 100%,
-но provisional recall не достиг gate и обнаружились противоречащие ontology v2
-review rows (в частности 6562/7102/7258/7290). Полные команды, hashes и
-непредъявленные claims: [integration report](../../../.codex/integration/static-collection-facts-v3-INTEGRATION_REPORT.md).
-Semantic publication и production apply остаются **BLOCKED**.
+Фактический прогон 2026-08-02 после исправления provisional PR A:
+
+- Gate A PASS;
+- полный Gate B PASS на 50 real EventSource;
+- Gate C PASS: offline fail-closed drill и три real GPT-4o fallback cases;
+- Gate D PASS на production-копии: эффективный cohort из 20 sources и warm
+  `provider_calls=0`, `writes=0`, `changed_events=0`;
+- product snapshot / #234 PASS WITH WATCH, нормализованный fingerprint после
+  first apply и warm совпадает;
+- Gate E **BLOCKED**: исходные pre-import Telegram/VK/parser packets в
+  production DB не сохраняются, а reconstructed smoke нельзя выдавать за
+  source-faithful штатный replay;
+- Gate F и semantic publication **BLOCKED**.
+
+На Gate B exact-quote и source/event binding равны 100%, ложных confirmed hard
+negatives нет; recall child/family/joint равен соответственно 11/12, 8/9 и
+1/1. Полные команды, hashes, apply/warm receipts и честный ingestion blocker:
+[integration report](../../../.codex/integration/static-collection-facts-v3-INTEGRATION_REPORT.md).
 
 Этот документ проверяет не только functions и fixtures, а фактическую цепочку:
 
@@ -515,3 +525,18 @@ PUBLICATION                BLOCKED
 ```
 
 До этого `Smart Update facts v3 implemented` заявлять нельзя.
+
+Фактическое состояние 2026-08-02:
+
+```text
+FACTS_V3_CODE              PASS
+PRIMARY_REAL_DATA          PASS
+FALLBACK_FAILURE_DRILL     PASS
+PRODUCTION_COPY APPLY      PASS
+PRODUCTION COPY WARM       PASS
+PRODUCT SNAPSHOT/MONITOR   PASS WITH WATCH
+REAL POST SMART UPDATE     BLOCKED (нет source-faithful pre-import packets)
+BOUNDED LIVE APPLY         BLOCKED
+BOUNDED LIVE WARM          BLOCKED
+PUBLICATION                BLOCKED
+```

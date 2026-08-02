@@ -39,10 +39,14 @@
   receipts, independent merge and deterministic legacy projection. The bounded
   backfill now has read-only plan/evaluate, explicit event+source allowlists,
   primary-only mode, logical diff enforcement and a versioned report schema.
-  A fresh 50-source production-snapshot replay proved one Gemma send per source,
-  zero writes and 100% quote validity but failed semantic recall/provisional-data
-  consistency; production apply, ingestion replay, Fly canary and publication
-  remain blocked rather than being claimed.
+  After correcting provisional truth, a fresh 50-source production-snapshot
+  replay passed Gate B with one Gemma send per source, zero writes, exact
+  quotes/bindings, no confirmed hard negatives and child/family/joint recall of
+  11/12, 8/9 and 1/1. An effective 20-source production-copy apply and warm
+  no-op passed; the product snapshot stayed byte-semantically stable and #234
+  reported only expected WATCH signals. Source-faithful ordinary ingestion and
+  Fly remain blocked because historical pre-import packets are not retained;
+  reconstructed probes are recorded as failures, not acceptance evidence.
 - Added static-collection PR-A quality contracts: ontology v2 separates child,
   family, joint-family, science-pop and research-in-action meanings; the
   provisional seed moved out of the misleading gold fixture into source-bound
