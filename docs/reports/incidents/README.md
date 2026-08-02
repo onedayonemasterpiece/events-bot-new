@@ -18,6 +18,21 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-29-mtproto-proxy-desktop-disconnect.md`
+  - Scope: host-level `vpn-server` MTProto container, TCP `1443`, Telegram DC connectivity, persistent application-log mount and bounded retention.
+  - Must not regress: current-day proxy logs must survive container recreation; old rotations must stay bounded; closure requires a live listener, fresh Telegram DC handshake evidence, downstream connections and disk-usage evidence.
+
+- `INC-2026-07-03-current-import-vector-vk-publication.md`
+  - Scope: VK auto-import current-batch row failures, Smart Update vector identity-gate evidence, and managed VK postponed publication idempotency for updated/imported events.
+  - Must not regress: `vk_auto_import` must not hide event-like row failures behind a green run; create-path vector identity decisions must stay auditable in `event_identity_decision_log`; updating an existing canonical event must not leave duplicate managed postponed VK posts; a VK `214 already scheduled for this time` collision must be reconciled or retried instead of leaving a fresh event without managed VK coverage.
+
+- `INC-2026-06-29-kgd80-ticket-location-drift.md`
+  - Scope: Telegram Monitoring hidden TextUrl/button registration-link handling, KGD80/«80 историй о главном» ticket-link specificity, chat-author fallback, current official KGD80 address verification, and production repair for events 4417/5077/5656. Must not regress: posts with both generic `kgd80.ru` and specific `kgd80.ru/sobytiya/.../?register=1` links must choose the specific registration link; generic festival-domain ticket links must yield to event-specific registration URLs; chat-author Telegram handles must not be used when a source post carries a hidden official registration URL; KGD80 future-event announcements require source/offical-page DB verification.
+
+- `INC-2026-06-25-outbox-ics-publication-backlog.md`
+  - Scope: event publication outbox, Supabase Storage ICS upload, `tg_ics_post`/`tg_event_publish` dependencies, and catch-up for events added/imported while ICS publication is failing. Must not regress: ICS uploads must use the Storage API path, repeated `ics_publish` failures must not silently park eligible Telegram event posts years in the future, and same-day publication gaps require catch-up plus public-surface verification.
+
+
 - `INC-2026-08-02-region-talk-orchestrator-stdout-deadlock.md`
   - Scope: Region Talk scheduled-wrapper stdout transport, loop progress and
     Kaggle/YDB polling continuity.
