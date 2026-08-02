@@ -80,6 +80,23 @@ export async function stabilizeSafariSystemUi({
         exact_continue_button_count: Number(probe.exact_continue_button_count || 0),
         exact_settings_button_count: Number(probe.exact_settings_button_count || 0),
       };
+      if (Object.hasOwn(probe, 'active_app_owner')) {
+        evidence.last_inspection.contract_probe.active_app_owner = ['springboard', 'safari', 'other'].includes(probe.active_app_owner) ? probe.active_app_owner : 'unknown';
+      }
+      if (Object.hasOwn(probe, 'native_source')) {
+        evidence.last_inspection.contract_probe.native_source = probe.native_source?.source_inspected === true ? {
+          source_inspected: true,
+          application_container_count: Number(probe.native_source.application_container_count || 0),
+          alert_container_count: Number(probe.native_source.alert_container_count || 0),
+          sheet_container_count: Number(probe.native_source.sheet_container_count || 0),
+          title_match_count: Number(probe.native_source.title_match_count || 0),
+          continue_match_count: Number(probe.native_source.continue_match_count || 0),
+          settings_match_count: Number(probe.native_source.settings_match_count || 0),
+          matched_static_text_count: Number(probe.native_source.matched_static_text_count || 0),
+          matched_button_count: Number(probe.native_source.matched_button_count || 0),
+          matched_other_type_count: Number(probe.native_source.matched_other_type_count || 0),
+        } : { source_inspected: false };
+      }
     }
   };
 

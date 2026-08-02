@@ -60,6 +60,15 @@ The immutable preview under test records repository SHA
 - iOS 18.5 / iPhone 16 / Mobile Safari / XCUITest:
   [run 30754894934](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30754894934)
   is the terminal **non-acceptance** receipt. Its screenshot visibly contains Safari's first-run «Выбор поисковой системы» dialog over the product page, so the corrected classification is `BLOCKED_SAFARI_FIRST_RUN_UI`, with `issue=0`, `verify=0`, `registration=0` and redaction PASS. It contains no valid email/OTP keyboard verdict and must never be presented as a product or keyboard failure.
+- iOS native-first recovery proof:
+  [run 30767191144, attempt 2](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30767191144)
+  is the first valid side-effect-free preflight PASS. With harness SHA
+  `893812c1391e205039b1c0378572a699065559bd`, Appium started Safari as native
+  `com.apple.mobilesafari`, reported `respectSystemAlerts=true`, observed the
+  exact current search-choice alert, dispatched one exact-label `Продолжить`,
+  proved stable disappearance, attached WebKit only afterwards, and passed
+  control email, numeric and product-email keyboard checks with exact `0/0/0`.
+  The startup and cleared screenshots independently show the transition.
 
 The Ubuntu Android job explicitly enables and verifies `/dev/kvm` before
 booting API 35. Unaccelerated x86 emulation is a blocked infrastructure result,
@@ -197,9 +206,39 @@ When XCTest predicate results disagree with a visible Safari alert, the same
 evidence includes a fail-closed `contract_probe`: numeric result counts for
 exact-visible, exact, containing and any-element title predicates; alert text
 length/line/exact-title/substring counters; and exact known-button counters.
-The probe never retains the alert text, button labels or native hierarchy and
-never changes which dialog is actionable. It exists to choose the next single
-fix from runner evidence instead of retrying locator guesses.
+The probe never retains alert text/button labels in its JSON and never changes
+which dialog is actionable. It exists to choose the next single fix from
+runner evidence instead of retrying locator guesses. The separately authorized
+clean-simulator XML exception is described below.
+The iOS session starts with native Safari (`com.apple.mobilesafari`) rather
+than attaching WebKit during session creation. XCUITest
+`respectSystemAlerts=true` allows WDA to report SpringBoard while it owns a
+system sheet. Only after the bounded handler proves the sheet absent does the
+harness attach a Safari web context, with a 60-second CI discovery bound, and
+navigate to the candidate. Before any identity or OTP input, one transient
+native source is captured before candidate navigation or identity input, saved
+as `native-ui/ios-startup.raw.xml` for the bounded clean-simulator diagnosis,
+and also reduced to known title/button/container counts. No hierarchy is
+captured after email/OTP entry.
+
+The decisive correction was **native-first ownership**, not a fuzzy locator or
+the later XML dump. `browserName=Safari` made WebKit attachment part of session
+creation while the iOS system sheet still covered Safari; this produced long
+session/remote-debugger failures and left native lookup attached to the wrong
+active-app boundary. The accepted sequence is:
+
+1. create XCUITest with `appium:bundleId=com.apple.mobilesafari` and no
+   `browserName`;
+2. set `appium:settings[respectSystemAlerts]=true` and confirm the runtime
+   setting;
+3. remain in `NATIVE_APP`, require the exact current-alert title/button
+   contract and accept only exact label `Продолжить` once;
+4. require three obstruction-free native samples and a cleared screenshot;
+5. discover/attach the Safari WebView with a 60-second CI bound;
+6. navigate to the immutable candidate and run keyboard/product assertions.
+
+Do not regress to global/fuzzy `Продолжить`, coordinate taps, unlabelled
+`mobile: alert accept`, or WebKit-first session creation.
 The mobile sentry captures a safe screenshot immediately after Safari launch
 and repeats observation after at most 20 seconds without the expected marker.
 Every native action must produce a verified state transition. Two unchanged

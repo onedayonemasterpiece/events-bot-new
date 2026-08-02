@@ -16,7 +16,7 @@ and its operating contract is [`docs/testing/external-focus-email-otp.md`](../te
 Routine runs reuse one fixed mailbox and therefore do not create a new Auth user;
 fresh-user aliases are explicit, non-routine coverage.
 
-`focus.otp.ios_keyboard_preflight` is the side-effect-free iOS control scenario: it stabilizes only the exact allowlisted Safari first-run dialog, proves empty control email/numeric keyboards, then the empty product email keyboard, and requires issue/verify/registration `0/0/0`. Three terminal preflight passes are required immediately before one full iOS OTP run.
+`focus.otp.ios_keyboard_preflight` is the side-effect-free iOS control scenario: it stabilizes only the exact allowlisted Safari first-run dialog, proves empty control email/numeric keyboards, then the empty product email keyboard, and requires issue/verify/registration `0/0/0`. The first valid native-first receipt is [run 30767191144, attempt 2](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30767191144): exact dialog observed/dismissed once, stable absence and all three keyboard checks PASS, `0/0/0`. The proven control path is native `com.apple.mobilesafari` + `respectSystemAlerts=true`, exact current-alert action, then WebKit attachment; WebKit-first and fuzzy/global-button handlers are forbidden. Three terminal preflight passes are required immediately before one full iOS OTP run.
 
 `focus.otp.browser_tab` uses one semantic journey across protected Chromium,
 Android Chrome/UiAutomator2 and iOS Safari/XCUITest jobs. Terminal receipts and

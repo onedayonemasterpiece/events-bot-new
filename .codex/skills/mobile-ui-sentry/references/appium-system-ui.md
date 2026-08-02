@@ -47,7 +47,9 @@ alert; require exactly one allowed label before exact-label acceptance.
 
 For the Russian Safari first-run dialog:
 
-1. switch to `NATIVE_APP`;
+1. create a native-first Safari session with `com.apple.mobilesafari`, set
+   `respectSystemAlerts=true`, and stay in `NATIVE_APP` until system UI is
+   clear; do not make WebKit attachment part of initial session creation;
 2. query exactly one visible StaticText named/labelled
    `Выбор поисковой системы` through XCTest predicate;
 3. call current-alert text and button APIs;
@@ -56,8 +58,29 @@ For the Russian Safari first-run dialog:
 6. poll native inspection until three consecutive obstruction-free samples;
 7. capture a safe post-transition screenshot before product input.
 
+For a clean, side-effect-free simulator preflight only, a native source may be
+captured before candidate navigation or identity input, retained as the
+short-lived diagnostic artifact `native-ui/ios-startup.raw.xml`, and reduced
+to allowlisted application/alert/sheet and known title/button type counts.
+Never capture hierarchy after identity/OTP entry. Attach the Safari web context
+only after the native blocker is proven absent.
+
 Unknown title, duplicate title/action, missing action, alert API disagreement or
 failure to disappear is `BLOCKED_SAFARI_FIRST_RUN_UI`. Never type through it.
+
+### Proven iOS 18.5 result
+
+GitHub Actions run `30767191144`, attempt 2, is the first valid live proof of
+this path. `browserName=Safari` was the wrong architecture because it required
+WebKit attachment while the system sheet was still blocking Safari. The
+working sequence created native `com.apple.mobilesafari`, enabled and reported
+`respectSystemAlerts=true`, accepted the exact current-alert label once,
+verified stable disappearance, and only then attached WebKit. It passed all
+three keyboard boundaries with side-effect counts `0/0/0`.
+
+Do not replace this with global/fuzzy `Продолжить`, an unlabelled alert accept,
+coordinates, or explicit SpringBoard activation. The XML diagnostic was added
+after this PASS and was not the cause of recovery.
 
 ## Privacy adaptation
 
