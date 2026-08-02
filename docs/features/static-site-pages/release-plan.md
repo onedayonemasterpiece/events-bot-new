@@ -84,7 +84,7 @@ gates.
 | Gate | Статус | Evidence/граница |
 |---|---|---|
 | Production data audit | Done, read-only | Fly SQLite 2026-08-01; `integrity_check=ok`; 6 approved clubs/13 grounded relations, 8 theatre organizations, 6 venue pilots; runtime не хардкодит counts |
-| Quality PR A | Done, fail-closed | ontology v2; provisional seed отделён от owner gold; EventSource quotes, receipt hashes и occurrence families проверяются `--mode review`; 4 receipt groups остаются `needs_source_review`, 5 semantic labels ниже minimum independent-family supply |
+| Quality PR A | Done in draft PR #222, fail-closed | ontology v2; provisional seed отделён от owner gold; EventSource quotes, receipt/index/snapshot parity и occurrence families проверяются `--mode review`; 4648/6871/7103 удалены из неподтверждённых positives; 6871 имеет occurrence receipt; supply shortfalls остаются warnings |
 | Club registry refresh | Live; catch-up draining | durable `interest_club_relation` outbox, one successor, evaluation history, provider-deferred retry, shadow discovery, inclusive six-calendar-month v2 projection; 80 exact six-month candidates поставлены в outbox, provider-deferred хвост остаётся durable и не стирает accepted relation |
 | Place/organization registry | Done in code | checked-in exact registry, separate theatre/venue roles, 8 official theatres, 6 venue candidates, structured membership reasons |
 | Admission/audience/people facts | Done in code | nullable source-bound `Event.collection_decisions`; candidate-only strict LLM schema; `unknown` preserves truth; `Event.is_free` remains compatible bool; no prose `ticket_status` free inference |
@@ -150,6 +150,14 @@ SHAs, merge reconciliation and final checks live in
 Local tests do not substitute for the real Kaggle gate.
 
 ### Обязательная последовательность до UI и public rollout
+
+Для stacked quality PR действует более узкий merge-order: завершить/слить PR
+#207; rebase или retarget PR #222 на свежий `main`; проверить PR-A-only diff и
+повторить contract/основной CI; слить #222; только после этого открывать PR B.
+PR B не начинается с thresholds: provisional seed → independent owner review →
+owner gold → frozen calibration/temporal holdout → all-event scores/prototype
+winners → family-weighted metrics → strict gate. До этих artifacts strict
+ожидаемо FAIL, публикация semantic pages остаётся blocked.
 
 1. Merge candidate into a fresh main-based integration only after the final diff
    audit; retain the generated-manifest boundary and both additive migrations.

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
 import tempfile
 import unittest
 import sys
+import shutil
 from pathlib import Path
 
 
@@ -118,6 +120,56 @@ class StaticCollectionsQualityValidatorTests(unittest.TestCase):
             report = json.loads(report_path.read_text(encoding="utf-8"))
             return result, report
 
+    def _run_repository_mutation(
+        self,
+        *,
+        seed_mutator=None,
+        index_mutator=None,
+    ) -> tuple[int, dict]:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            seed_path = root / "static_collections_review_seed_v1.json"
+            review_dir = root / "static-collections-source-reviews-v1"
+            shutil.copy2(quality.DEFAULT_SEED, seed_path)
+            shutil.copytree(quality.DEFAULT_SOURCE_REVIEW_INDEX.parent, review_dir)
+            index_path = review_dir / "index.json"
+            seed = json.loads(seed_path.read_text(encoding="utf-8"))
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            if seed_mutator:
+                seed_mutator(seed)
+            if index_mutator:
+                index_mutator(index)
+                unhashed = dict(index)
+                unhashed.pop("index_sha256", None)
+                index["index_sha256"] = hashlib.sha256(
+                    json.dumps(
+                        unhashed,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ).encode("utf-8")
+                ).hexdigest()
+                seed["source"]["source_review_index_sha256"] = index["index_sha256"]
+            seed_path.write_text(json.dumps(seed, ensure_ascii=False), encoding="utf-8")
+            index_path.write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
+            report_path = root / "report.json"
+            with contextlib.redirect_stdout(io.StringIO()):
+                result = quality.main(
+                    [
+                        "--mode",
+                        "review",
+                        "--policy",
+                        str(quality.DEFAULT_POLICY),
+                        "--seed",
+                        str(seed_path),
+                        "--source-review-index",
+                        str(index_path),
+                        "--json-report",
+                        str(report_path),
+                    ]
+                )
+            return result, json.loads(report_path.read_text(encoding="utf-8"))
+
     def test_baseline_accepts_legacy_seed_only_as_fail_closed_review_data(self) -> None:
         result, report = self._run(policy=_policy(), seed=_legacy_seed())
         self.assertEqual(result, 0)
@@ -184,6 +236,59 @@ class StaticCollectionsQualityValidatorTests(unittest.TestCase):
         self.assertFalse(
             (ROOT / "tests" / "fixtures" / "static_collections_gold_v1.json").exists()
         )
+
+    def test_seed_and_index_snapshot_mismatch_fails(self) -> None:
+        result, report = self._run_repository_mutation(
+            seed_mutator=lambda seed: seed.__setitem__("evidence_snapshot_sha256", "0" * 64)
+        )
+        self.assertEqual(result, 1)
+        self.assertIn(
+            "source_review_snapshot_mismatch",
+            {issue["code"] for issue in report["issues"]},
+        )
+
+    def test_index_status_or_event_ids_mismatch_receipt_fails(self) -> None:
+        for field, value, expected_code in (
+            ("status", "pass", "source_review_entry_status_mismatch"),
+            ("event_ids", [5757, 999999], "source_review_entry_event_ids_mismatch"),
+        ):
+            with self.subTest(field=field):
+                def mutate(index, field=field, value=value):
+                    index["receipts"][0][field] = value
+
+                result, report = self._run_repository_mutation(index_mutator=mutate)
+                self.assertEqual(result, 1)
+                self.assertIn(expected_code, {issue["code"] for issue in report["issues"]})
+
+    def test_missing_or_invalid_generator_provenance_fails(self) -> None:
+        mutations = (
+            lambda seed: seed["source"].pop("extraction_repo_sha"),
+            lambda seed: seed["source"].__setitem__("seed_builder_repo_sha", "not-a-sha"),
+            lambda seed: seed["source"].__setitem__("generator_command", "manual edit"),
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                result, report = self._run_repository_mutation(seed_mutator=mutation)
+                self.assertEqual(result, 1)
+                self.assertIn(
+                    "generator_provenance_invalid",
+                    {issue["code"] for issue in report["issues"]},
+                )
+
+    def test_repository_strict_contract_expectedly_fails_without_pr_b_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory) / "strict-report.json"
+            with contextlib.redirect_stdout(io.StringIO()):
+                result = quality.main(
+                    ["--mode", "strict", "--json-report", str(report_path)]
+                )
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual(result, 1)
+        codes = {issue["code"] for issue in report["issues"]}
+        self.assertIn("owner_gold_missing", codes)
+        self.assertIn("score_missing", codes)
+        self.assertIn("winning_prototype_missing", codes)
+        self.assertIn("hash_binding_missing", codes)
 
 
 if __name__ == "__main__":

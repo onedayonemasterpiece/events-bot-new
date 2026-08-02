@@ -1,7 +1,7 @@
 {
   "schema_version": "static-collection-source-review-v1",
   "receipt_id": "6696-6766",
-  "reviewed_at": "2026-08-02",
+  "reviewed_at": "2026-08-02T09:18:31.733493Z",
   "status": "corrected",
   "event_ids": [
     6696,
@@ -50,11 +50,21 @@
         "source_chat_username": "gusmuseum",
         "source_message_id": 4546,
         "source_text_sha256": "ab7f363bebfd2c239dfe5063ff09dd5ecc04cbde153fc649e885258bb8860f47",
-        "source_record_sha256": "c4dd3c6c035ef87a9127343732d83bc6afafaf2ebd8115246b1af39f39a2bf2e"
+        "source_record_sha256": "c4dd3c6c035ef87a9127343732d83bc6afafaf2ebd8115246b1af39f39a2bf2e",
+        "event_id": 6696,
+        "source_text_char_count": 894,
+        "source_ref_sha256": "bf81f93a64fca82406c370181b58e55f606c950f1f68aecb927e4d3fdaada557"
       },
       "raw_source_quote": "Завтра, 7 июля, в 17:30 в кафе «АРТеФАКТ39» открывается выставка, аналогов которой у нас ещё не было.\nАвтор - Борис Андреев, гусевский фотограф, который увлёкся не просто искусством, а самой технологией создания изображения. Он сам сконструировал фотоаппарат, сам экспериментировал с материалами, сам искал свет, который потом ложится на плёнку. Результатом стала серия пинхол-снимков, посвящённых Гусеву и 80-летию Калининградской области.\n\nДля справки: пинхол - это камера без объектива, где роль линзы играет крошечное отверстие. Это почти магия, которая возвращает фотографию к её истокам, к чистой оптике.\nНа открытии Борис расскажет обо всех тонкостях: как он создавал аппарат, почему выбрал именно эту технику и что скрыто за каждым кадром. Будет интересно и тем, кто далёк от фотографии, и знатокам.\nЖдём вас завтра в кафе. Вход свободный.\n#гусев #гусевскиймузей #пинхол #80летиеобласти",
       "raw_source_quote_sha256": "ab7f363bebfd2c239dfe5063ff09dd5ecc04cbde153fc649e885258bb8860f47",
-      "canonical_sha256": "47baae89c650d3230a0d64d5b3704eef4cbe6980c04eab77c9d3ca67d46672e9"
+      "canonical_sha256": "47baae89c650d3230a0d64d5b3704eef4cbe6980c04eab77c9d3ca67d46672e9",
+      "raw_source_quote_kind": "full",
+      "raw_source_quote_truncated": false,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 894,
+      "raw_source_quote_char_count": 894,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 0
     },
     {
       "event_id": 6766,
@@ -66,11 +76,21 @@
         "source_chat_username": "gusmuseum",
         "source_message_id": 4549,
         "source_text_sha256": "056b6823df8e9bbac71f15285b25185ccd6bd86f9d9da2a133d9ee5c792b35f2",
-        "source_record_sha256": "a0ab67dc6beaa06951648dd3761bb1b3b967401c2f55ddc62b3e87e07d9ae50e"
+        "source_record_sha256": "a0ab67dc6beaa06951648dd3761bb1b3b967401c2f55ddc62b3e87e07d9ae50e",
+        "event_id": 6766,
+        "source_text_char_count": 1127,
+        "source_ref_sha256": "bf92ff7b75db6eafc4eb9e454f954c25aed8c56b46379176c5e2676331a09f72"
       },
       "raw_source_quote": "Вчера в кафе «АРТеФАКТ39» состоялось открытие выставки и, наверное, это был скорее дружеский разговор о природе фотографии. «Пинхол. Гусев» - это не про техническое совершенство, а про возвращение к истокам, к тому моменту, когда изображение рождалось из крошечного отверстия, света и терпения, а не из сложной оптики.\nБорис Андреев продемонстрировал свой инструмент - фотоаппарат, который сконструировал собственноручно. Именно на него были сделаны все снимки, представленные на выставке. Он рассказывал о том, как рассчитывает параметры для каждого кадра, как ищет точку съёмки и почему в эпоху цифровых технологий выбирает одну из самых древних и «несовершенных» техник.\nГости спрашивали: зачем в мире, где можно получить идеально чёткое изображение, возвращаться к чёрно-белой зернистости, к почти ручной работе? Борис отвечал просто: пинхол - это про ощущение. Про то, как изображение рождается медленно, почти таинственно, и каким-то образом оказывается более честным, чем любой современный кад",
       "raw_source_quote_sha256": "3e89170d78d84cd77fbbb42451ba1ea45691f113b9e2bb8b16951613d1acdacb",
-      "canonical_sha256": "ade9b16726d3f49a37fb9c1f5675afa6e72a0a9375def1eb345af23036e7ebfc"
+      "canonical_sha256": "ade9b16726d3f49a37fb9c1f5675afa6e72a0a9375def1eb345af23036e7ebfc",
+      "raw_source_quote_kind": "excerpt",
+      "raw_source_quote_truncated": true,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 1000,
+      "raw_source_quote_char_count": 1000,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 127
     }
   ],
   "family_decision": {
@@ -82,5 +102,5 @@
     ]
   },
   "scope_note": "Receipt repairs review/calibration inputs only; canonical production changes require the normal Smart Update/data-integrity path.",
-  "receipt_sha256": "c46cf06e6c2a8ce0101726ffb22c2bc72fe376700111fcf568fc24b60dfc574c"
+  "receipt_sha256": "d21ca404d74e360598d997756170937cc3526c0689632e485461f49e16940a2c"
 }

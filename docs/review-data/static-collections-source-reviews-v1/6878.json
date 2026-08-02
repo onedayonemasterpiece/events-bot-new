@@ -1,7 +1,7 @@
 {
   "schema_version": "static-collection-source-review-v1",
   "receipt_id": "6878",
-  "reviewed_at": "2026-08-02",
+  "reviewed_at": "2026-08-02T09:18:31.733493Z",
   "status": "needs_source_review",
   "event_ids": [
     6878
@@ -35,11 +35,21 @@
         "source_chat_username": "ecodvor39",
         "source_message_id": 931,
         "source_text_sha256": "d240def24d60d9f8bc9779578e40d702d1b256564fef8f85cb19923a56a4fdc9",
-        "source_record_sha256": "2a4833cd884242a696b37736bb4e18fbc50a018445cfd7210cd99355a52f071b"
+        "source_record_sha256": "2a4833cd884242a696b37736bb4e18fbc50a018445cfd7210cd99355a52f071b",
+        "event_id": 6878,
+        "source_text_char_count": 1123,
+        "source_ref_sha256": "c364c059440afe76f89a5620f3bd26f87ae50e5948636b18cf15339b2ccddd58"
       },
       "raw_source_quote": "📖 Чем заняться на Летнем Экодворе\n\nПриглашаем на мастер-класс \"Джанкбук: блокнот из случайных сокровищ\". Превратите старые билеты, вырезки из журналов, обрывки карт и красивые упаковки в уникальную книгу!\n\n📖 На мастер-классе вы соберёте собственный джанкбук – творческий блокнот-хаос. Вы научитесь сшивать страницы без клея и сложных инструментов, а затем создадите фактурную обложку в технике коллажа. Никаких правил и строгих рамок – только ваша фантазия, смешение фактур и игра с цветом. Примеры таких блокнотов вы найдёте в комментариях к посту.\n\nЧто будем делать:\n🤩 Собирать внутренний блок (переплет) вручную;\n🤩 Декорировать обложку яркими фрагментами бумаги, ткани и декоративного скотча.\n\nЧто принести с собой:\n🧺 Можно взять памятные вам билетики или записки, кусочки кружев или лент – словом то, что вы хотите добавить в ваш джанкбук.\n\nВедущая мастер-класса: Анна Кабирова\nПродолжительность: около часа\n\n👉 Время начала уточняется. Программа Экодвора пока формируется.\n\n✂️🍀🌷🎨🪰🫖🖼️\n\nЛетний Экод",
       "raw_source_quote_sha256": "7d95f7fe87955fa9560d465c0b538e5b1a1258da7d9ea516f26bddbb5909c552",
-      "canonical_sha256": "acb1c10dd4e9cb0f388afbf008d564929bf4539a3f1d8aa439bdb6930165fffb"
+      "canonical_sha256": "acb1c10dd4e9cb0f388afbf008d564929bf4539a3f1d8aa439bdb6930165fffb",
+      "raw_source_quote_kind": "excerpt",
+      "raw_source_quote_truncated": true,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 1000,
+      "raw_source_quote_char_count": 1000,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 123
     },
     {
       "event_id": 6878,
@@ -51,11 +61,21 @@
         "source_chat_username": "ecodvor39",
         "source_message_id": 960,
         "source_text_sha256": "ec6b40c0b975d96170d4b4d2c6cd6c29a4c3560f604e0136c5cd1f9db2d56081",
-        "source_record_sha256": "ffdb57c097f5b6bde067f5bcd2e36fb323130ffdd659b8f6dd02ea88aa7cc674"
+        "source_record_sha256": "ffdb57c097f5b6bde067f5bcd2e36fb323130ffdd659b8f6dd02ea88aa7cc674",
+        "event_id": 6878,
+        "source_text_char_count": 739,
+        "source_ref_sha256": "d000600d16bb7b2b5c7434f11151114cd278f4d4d4e70603363fa8ab6d5029e5"
       },
       "raw_source_quote": "🌿Что ещё будет на Экодворе\n\nПомните, мы просили вас выбрать тему лекции? Большинством голосов в ТГ и ВК вы выбрали мастер-класс об экологичном травничестве. Проведёт его Виктория Чеховская, магистр лесного дела, специалист Центра защиты леса Калининградской области. 🍎\n\n🌲 Лес – это не только древесина. Помимо прочего, это ещё и источник дикоросов и лекарственных трав. Виктория расскажет, как экологично и безопасно собирать травы и дикоросы, какие есть тонкости определения растений и их заготовки.\n\nЕсли вы выбрали другую тему, не расстраивайтесь, потому что... А впрочем, следите за анонсами!\n\n🌟🌿💐🍎🌸🌸\n\nЛетний Экодвор пройдёт 8 августа с 14:00 до 17:00 в Железнодорожных воротах. Не переключайтесь!\n\n🏡 Экодвор в ВК\n\n💝 Поддержать Экодвор",
       "raw_source_quote_sha256": "ec6b40c0b975d96170d4b4d2c6cd6c29a4c3560f604e0136c5cd1f9db2d56081",
-      "canonical_sha256": "acb1c10dd4e9cb0f388afbf008d564929bf4539a3f1d8aa439bdb6930165fffb"
+      "canonical_sha256": "acb1c10dd4e9cb0f388afbf008d564929bf4539a3f1d8aa439bdb6930165fffb",
+      "raw_source_quote_kind": "full",
+      "raw_source_quote_truncated": false,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 739,
+      "raw_source_quote_char_count": 739,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 0
     }
   ],
   "family_decision": {
@@ -63,5 +83,5 @@
     "family_id": "event:6878"
   },
   "scope_note": "Receipt repairs review/calibration inputs only; canonical production changes require the normal Smart Update/data-integrity path.",
-  "receipt_sha256": "117dd073c6878580426b0ba4c85af52e723dff90b4fd476d5493b7a1884d2df1"
+  "receipt_sha256": "6f60f25a50c9c017537c740aab1c42473590c31c60a7a546c09668935dd6c981"
 }

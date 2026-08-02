@@ -1,7 +1,7 @@
 {
   "schema_version": "static-collection-source-review-v1",
   "receipt_id": "5757",
-  "reviewed_at": "2026-08-02",
+  "reviewed_at": "2026-08-02T09:18:31.733493Z",
   "status": "needs_source_review",
   "event_ids": [
     5757
@@ -35,11 +35,21 @@
         "source_chat_username": null,
         "source_message_id": null,
         "source_text_sha256": "00a4382b7cb1853f72a5da625ef277171d7ad5273ce1f64c0a5bc4322b1d2f63",
-        "source_record_sha256": "fab18049fe0fab5678c951de1c9d7664eb470e7656607c4f5f371f7051a4fa24"
+        "source_record_sha256": "fab18049fe0fab5678c951de1c9d7664eb470e7656607c4f5f371f7051a4fa24",
+        "event_id": 5757,
+        "source_text_char_count": 972,
+        "source_ref_sha256": "3eb950f0752af50533e476b855a6f077140da103f387c610d4bde18bd5dbdd30"
       },
       "raw_source_quote": "Название: Собачье сердце\nДата: 2026-08-29\nВремя: 18:00\nПлощадка: Драматический театр\nСтатус билетов: доступны\nСсылка: https://dramteatr39.ru/spektakli/sobache-serdce\n\nОписание:\nО спектакле\nПрофессор Преображенский решается на немыслимый и рискованный эксперимент: пересадить человеческий гипофиз бездомному псу Шарику. Но вместо научного триумфа его ждёт потрясение — созданный им Шариков переворачивает привычный уклад жизни профессора, проявляя самые низкие стороны человеческой натуры.\nРежиссер Евгений Маленчев, балансируя в спектакле между смехом и ужасом, создаёт русскую версию «Франкенштейна». При этом он не только сохраняет сюжет булгаковской повести, но и авторское определение жанра – чудовищная история. Вечные вопросы о природе человека, ответственности науки и цене социальных экспериментов делают произведение Булгакова по-прежнему актуальным.\nПремьера спектакля состоялась 9 августа 2025 года\nФото - Геннадий Филиппович, Александр Матвеев\n\nСцена: Основная",
       "raw_source_quote_sha256": "00a4382b7cb1853f72a5da625ef277171d7ad5273ce1f64c0a5bc4322b1d2f63",
-      "canonical_sha256": "798e0621d360d0dea4e80916474c99f2e4168f93dd9c5b6c4c6fc8b5b38b766c"
+      "canonical_sha256": "798e0621d360d0dea4e80916474c99f2e4168f93dd9c5b6c4c6fc8b5b38b766c",
+      "raw_source_quote_kind": "full",
+      "raw_source_quote_truncated": false,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 972,
+      "raw_source_quote_char_count": 972,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 0
     },
     {
       "event_id": 5757,
@@ -51,11 +61,21 @@
         "source_chat_username": null,
         "source_message_id": null,
         "source_text_sha256": "7cbeb8bd27c08da57d5c6278dc7e9645c0055a7f3e4817d2a4246ce3912471c0",
-        "source_record_sha256": "dff5e27e8394218f11128e3731965416826f4f8df6e4265a96e1146c04fb757f"
+        "source_record_sha256": "dff5e27e8394218f11128e3731965416826f4f8df6e4265a96e1146c04fb757f",
+        "event_id": 5757,
+        "source_text_char_count": 995,
+        "source_ref_sha256": "2e384283c1c3e48fe2f5b1dedb4a18b3c3611285b900d26d63a68e43445d673b"
       },
       "raw_source_quote": "Название: Экскурсия \"Закулисье театра\"\nДата: 2026-08-29\nВремя: 14:30\nПлощадка: Драматический театр\nСтатус билетов: распродано\nСсылка: https://dramteatr39.ru/spektakli/ekskursiya-\"zakulise-teatra\"\n\nОписание:\nО спектакле\nПриглашаем вас на экскурсию, которая позволит увидеть театр за пределами зрительного зала.\nВо время экскурсии вы выйдете на сцену, посетите закулисные помещения и гримёрные артистов, познакомитесь с особенностями театрального грима и узнаете о процессе создания спектаклей. Вы побываете в костюмерной, где хранятся сценические образы разных лет, и в цехе, где изготавливаются декорации для будущих постановок. Экскурсия познакомит вас с работой различных театральных служб и с тем, как создаётся спектакль вне поля зрения зрителя.\nВ завершение программы гостей ждёт неформальный разговор об истории, традициях и современной жизни театра.\nГрупповые заявки можно высылать на почту:\nzakylisie_teatra26@mail.ru\nГруппа по индивидуальным заявкам - ровно 20 человек.\n\nСцена: Основная",
       "raw_source_quote_sha256": "7cbeb8bd27c08da57d5c6278dc7e9645c0055a7f3e4817d2a4246ce3912471c0",
-      "canonical_sha256": "798e0621d360d0dea4e80916474c99f2e4168f93dd9c5b6c4c6fc8b5b38b766c"
+      "canonical_sha256": "798e0621d360d0dea4e80916474c99f2e4168f93dd9c5b6c4c6fc8b5b38b766c",
+      "raw_source_quote_kind": "full",
+      "raw_source_quote_truncated": false,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 995,
+      "raw_source_quote_char_count": 995,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 0
     }
   ],
   "family_decision": {
@@ -63,5 +83,5 @@
     "family_id": "event:5757"
   },
   "scope_note": "Receipt repairs review/calibration inputs only; canonical production changes require the normal Smart Update/data-integrity path.",
-  "receipt_sha256": "4cfdd7b225c474e13c2b177952149993b3184aea5e24bdef6b56632ef5c5516a"
+  "receipt_sha256": "7277ee334862fe222e81e7eb233bf93ce975dd72e82fc66cb69cb0c20a283b8b"
 }

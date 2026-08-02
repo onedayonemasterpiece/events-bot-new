@@ -1,7 +1,7 @@
 {
   "schema_version": "static-collection-source-review-v1",
   "receipt_id": "7054-7237",
-  "reviewed_at": "2026-08-02",
+  "reviewed_at": "2026-08-02T09:18:31.733493Z",
   "status": "corrected",
   "event_ids": [
     7054,
@@ -50,11 +50,21 @@
         "source_chat_username": null,
         "source_message_id": null,
         "source_text_sha256": "fca2373cbcacce58d422d40cf5506ccc0fb17f59e27c08df1373f4deced68782",
-        "source_record_sha256": "7e0d3bbaad61fd5448a0bcc5870b70842131f75753b1dff8c286dd05394cec01"
+        "source_record_sha256": "7e0d3bbaad61fd5448a0bcc5870b70842131f75753b1dff8c286dd05394cec01",
+        "event_id": 7054,
+        "source_text_char_count": 85,
+        "source_ref_sha256": "6f36707929c52ea04f2ea8ba2d53a9837aaf6a18127b7e5d2142569463205c53"
       },
       "raw_source_quote": "Детский кукольный спектакль в Арт-пространстве. Билеты от 750руб. Воз. ограничение 6+",
       "raw_source_quote_sha256": "fca2373cbcacce58d422d40cf5506ccc0fb17f59e27c08df1373f4deced68782",
-      "canonical_sha256": "e068919dab55e6e520ee37672289578cc40fb713c262251207a93ed58dceedc2"
+      "canonical_sha256": "e068919dab55e6e520ee37672289578cc40fb713c262251207a93ed58dceedc2",
+      "raw_source_quote_kind": "full",
+      "raw_source_quote_truncated": false,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 85,
+      "raw_source_quote_char_count": 85,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 0
     },
     {
       "event_id": 7237,
@@ -66,11 +76,21 @@
         "source_chat_username": null,
         "source_message_id": null,
         "source_text_sha256": "fb4c42d376d8165c38436c185538c4881434252994f2908266b8466d17681d27",
-        "source_record_sha256": "9ceab1c644d90e9e7e14d235a1abc917c9683e9210bc59c381ccae5a6d9a669c"
+        "source_record_sha256": "9ceab1c644d90e9e7e14d235a1abc917c9683e9210bc59c381ccae5a6d9a669c",
+        "event_id": 7237,
+        "source_text_char_count": 412,
+        "source_ref_sha256": "8a4444834308bbaf483a362c35285fce219e3b4b788b657b59d004841e82c624"
       },
       "raw_source_quote": "Название: Балет \"Щелкунчик\"\nДата: 2026-12-19\nВремя: 17:00\nПлощадка: Янтарь холл, Ленина 11, Светлогорск\nАдрес: Ленина 11, Светлогорск\nВозраст: 6+\nСтатус билетов: доступны\nЦена: от 2000 RUB\nСсылка: https://янтарьхолл.рф/afisha/balet-shchelkunchik-teatr-russkiy-balet-v-soprovozhdenii-orkestra-17-00-26/\n\nОписание:\nТеатр \"Русский балет\" в сопровождении оркестра. Билеты от 2000руб. Воз. ограничение 6+\n\nВозраст: 6+",
       "raw_source_quote_sha256": "fb4c42d376d8165c38436c185538c4881434252994f2908266b8466d17681d27",
-      "canonical_sha256": "4df82f68f57cb71085ced10b69185f80dcfe16bd133ab164fa4cce21dd0ee971"
+      "canonical_sha256": "4df82f68f57cb71085ced10b69185f80dcfe16bd133ab164fa4cce21dd0ee971",
+      "raw_source_quote_kind": "full",
+      "raw_source_quote_truncated": false,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 412,
+      "raw_source_quote_char_count": 412,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 0
     }
   ],
   "family_decision": {
@@ -82,5 +102,5 @@
     "db_followup": "remove_asymmetric_7054_to_7237"
   },
   "scope_note": "Receipt repairs review/calibration inputs only; canonical production changes require the normal Smart Update/data-integrity path.",
-  "receipt_sha256": "a2fc34ec02311cac535af3f437a0ed2ed520fa865d13bd9dd9667b634677c488"
+  "receipt_sha256": "bb1c125c4709fe83865b523d8f008e1a3762ad9540f5c7d093a271a073f61064"
 }

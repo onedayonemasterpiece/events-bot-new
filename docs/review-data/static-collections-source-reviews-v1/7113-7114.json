@@ -1,7 +1,7 @@
 {
   "schema_version": "static-collection-source-review-v1",
   "receipt_id": "7113-7114",
-  "reviewed_at": "2026-08-02",
+  "reviewed_at": "2026-08-02T09:18:31.733493Z",
   "status": "needs_source_review",
   "event_ids": [
     7113,
@@ -50,11 +50,21 @@
         "source_chat_username": null,
         "source_message_id": null,
         "source_text_sha256": "46a24b58ebd8fc78ae88143a7d3c37159832e894106d00c880fe8ef98d57b534",
-        "source_record_sha256": "81403f6e6ab82080272d2254054358d6fa7f17f2d5c6b7a47c3a3ecd1513c977"
+        "source_record_sha256": "81403f6e6ab82080272d2254054358d6fa7f17f2d5c6b7a47c3a3ecd1513c977",
+        "event_id": 7113,
+        "source_text_char_count": 1058,
+        "source_ref_sha256": "6a5e11d58aaaea111934c23029c96e24888c490c8a0957054e884a82a754f519"
       },
       "raw_source_quote": "Название: Девчата\nДата: 2026-10-09\nВремя: 19:00\nПлощадка: Музыкальный театр\nСтатус билетов: доступны\nСсылка: https://muzteatr39.ru/spektakli/muzykalnye/devchata/\n\nОписание:\nМюзикл «Девчата» создан по мотивам повести Бориса Бедного, положенной в основу одноименной культовой комедии советского кино. Легкий, добрый и искренний, он рассказывает о жизни молодых работниц лесоповала, их мечтах, любви и дружбе. В сибирский поселок приезжает юная повариха Тося Кислицына — открытая, веселая и наивная девушка. Она сует свой нос во все дела, не стесняется отпускать колкие шуточки и умеет за себя постоять. Местный красавец-бригадир Илья Ковригин спорит, что влюбит в себя дерзкую девчонку. Найдет ли эксцентричная Тося с детдомовским прошлым и компанейским характером верных подруг и настоящую любовь? В спектакле используется сценический дым и снег. При наличии аллергии воздержитесь от покупки билетов на 1-3 рядах. Курение на сцене имитируется с использованием безопасного реквизита. Сигареты, использу",
       "raw_source_quote_sha256": "8ac967b02d09e4016854a18f675d9ca06b3545e3afab317b70fe0a6728d8e197",
-      "canonical_sha256": "c55e830575e3a708e7800522431cc4beef0bdc49823d8783ef77c97ae0424095"
+      "canonical_sha256": "c55e830575e3a708e7800522431cc4beef0bdc49823d8783ef77c97ae0424095",
+      "raw_source_quote_kind": "excerpt",
+      "raw_source_quote_truncated": true,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 1000,
+      "raw_source_quote_char_count": 1000,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 58
     },
     {
       "event_id": 7114,
@@ -66,11 +76,21 @@
         "source_chat_username": null,
         "source_message_id": null,
         "source_text_sha256": "d7afbb9c6d31af30b2dd1dc1f7eb435b5a43233a58e056d2d85719822ff0cd62",
-        "source_record_sha256": "65a46be8131d925fd15fe4fea2fa8c21a732ab76861000d16903c1ff34897188"
+        "source_record_sha256": "65a46be8131d925fd15fe4fea2fa8c21a732ab76861000d16903c1ff34897188",
+        "event_id": 7114,
+        "source_text_char_count": 1085,
+        "source_ref_sha256": "e1031c04cc1afb0b02531ff6707ac53a95c1e1145a5040242f4c294f1e00bdd5"
       },
       "raw_source_quote": "Название: Девчата\nДата: 2026-10-10\nВремя: 17:00\nПлощадка: Музыкальный театр\nВозраст: 12+\nСтатус билетов: доступны\nСсылка: https://muzteatr39.ru/spektakli/muzykalnye/devchata/\n\nОписание:\nМюзикл «Девчата» создан по мотивам повести Бориса Бедного, положенной в основу одноименной культовой комедии советского кино. Легкий, добрый и искренний, он рассказывает о жизни молодых работниц лесоповала, их мечтах, любви и дружбе. В сибирский поселок приезжает юная повариха Тося Кислицына — открытая, веселая и наивная девушка. Она сует свой нос во все дела, не стесняется отпускать колкие шуточки и умеет за себя постоять. Местный красавец-бригадир Илья Ковригин спорит, что влюбит в себя дерзкую девчонку. Найдет ли эксцентричная Тося с детдомовским прошлым и компанейским характером верных подруг и настоящую любовь? В спектакле используется сценический дым и снег. При наличии аллергии воздержитесь от покупки билетов на 1-3 рядах. Курение на сцене имитируется с использованием безопасного реквизита. Сигар",
       "raw_source_quote_sha256": "e768c7805b5c68663f760488f2dd0faf3a09ad35bf436c374bf71c2148062394",
-      "canonical_sha256": "9150046547eb967f8d7a323da7ac073fd62672c8e817af0d920e33e1cb980093"
+      "canonical_sha256": "9150046547eb967f8d7a323da7ac073fd62672c8e817af0d920e33e1cb980093",
+      "raw_source_quote_kind": "excerpt",
+      "raw_source_quote_truncated": true,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 1000,
+      "raw_source_quote_char_count": 1000,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 85
     }
   ],
   "family_decision": {
@@ -83,5 +103,5 @@
     "db_followup": "correct_event_type_7114_via_normal_data_integrity_path"
   },
   "scope_note": "Receipt repairs review/calibration inputs only; canonical production changes require the normal Smart Update/data-integrity path.",
-  "receipt_sha256": "3b554a28fc5fb8ded771d898ec05497ed1bf43d967a75379f796eda2eccb7f2f"
+  "receipt_sha256": "0fa5eee923a8b0314fe3375760424bd895854fabf583bfcf6278cb5482952b3c"
 }

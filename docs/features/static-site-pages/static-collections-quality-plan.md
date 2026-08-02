@@ -15,6 +15,13 @@ scores (PR B), grounded adjudicator/manifests (PR C), browser candidate (PR D)
 и публичное включение (PR E) не выполнены. Optional `active_experiences` не
 добавлен без отдельного owner product decision.
 
+Hardening draft PR #222 также выполнен: ошибочные positives 4648/6871/7103
+удалены, festival parent/child/extraction scope разделён, receipt 6871 привязан
+к показу 2026-08-08, а seed/index/receipts получили взаимные hash/identity gates,
+точные timestamps, role-specific repo SHA и явный full/excerpt quote contract.
+Review gate остаётся `PASS, 0 errors`; недостаток supply — warning; strict
+ожидаемо не проходит без PR-B artifacts.
+
 ## 1. Цель следующей итерации
 
 Нужно довести контур подборок до состояния, в котором:
@@ -282,9 +289,17 @@ policy_sha256
 prototype_bank_sha256
 vector_artifact_sha256
 score_artifact_sha256
-generator_repo_sha
+extraction_repo_sha
+seed_builder_repo_sha
+integration_repo_sha
 generator_command
 ```
+
+`generator_command` — исполняемая точная команда, а не описание ручной работы.
+Canonical evidence snapshot сериализуется UTF-8 JSON с `sort_keys=true`,
+`ensure_ascii=false`, `separators=(",", ":")`, `allow_nan=false`, без trailing
+newline; events и EventSource rows имеют стабильный ascending-id order. Quote
+обязан указывать `full|excerpt`, offsets и факт усечения.
 
 `source_quote` должен происходить из raw/source-bound evidence, а не только из
 LLM-generated canonical description.
@@ -484,6 +499,15 @@ data-collection-state="ready|empty|last-good|blocked|degraded"
 7. Не менять public routes.
 
 **Gate:** contract CI green, semantic labels blocked.
+
+Stacked merge после принятия PR A: сначала завершить и слить PR #207, затем
+rebase/retarget draft PR #222 на свежий `main`, убедиться, что diff содержит
+только PR A, повторить contract/CI и слить #222. PR B начинается только после
+этого и в порядке: provisional seed → independent owner review → owner gold →
+frozen calibration/temporal holdout → all-event scores/prototype winners →
+family-weighted metrics → strict gate. Scheduled/PR contract после появления
+PR-B artifacts обязан перейти с review на strict; strict не остаётся навсегда
+только ручным workflow.
 
 ### PR B — scorer and evaluation
 

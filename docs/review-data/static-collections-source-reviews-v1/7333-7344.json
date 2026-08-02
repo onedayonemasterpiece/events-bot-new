@@ -1,7 +1,7 @@
 {
   "schema_version": "static-collection-source-review-v1",
   "receipt_id": "7333-7344",
-  "reviewed_at": "2026-08-02",
+  "reviewed_at": "2026-08-02T09:18:31.733493Z",
   "status": "corrected",
   "event_ids": [
     7333,
@@ -50,11 +50,21 @@
         "source_chat_username": null,
         "source_message_id": 8000,
         "source_text_sha256": "4b552e3955c76ac40f533d3889439b6abcb1d9a15d82ad2271076832732aaa5a",
-        "source_record_sha256": "6a2ac868ac3d51593da72444040773e51f819e95c3107fa2854f4e1a67a72949"
+        "source_record_sha256": "6a2ac868ac3d51593da72444040773e51f819e95c3107fa2854f4e1a67a72949",
+        "event_id": 7333,
+        "source_text_char_count": 1786,
+        "source_ref_sha256": "90f3a5ef18a6aaf5fe658bd63aa07fbe4faced1bda45bc23e986820f5cc5d29c"
       },
       "raw_source_quote": "научных экспериментов, сумасшедшего профессора😜👍\nПриглашаем юных гениев и их родителей на уникальный фестиваль \"Чудеса науки! Научные эксперименты пронесутся по всему Холмогорью (в волшебном лесу, на игровой поляне, на сцене, на берегу озера) 🎉\n\nВас ждут:\n-Шоу-программа «Огонь и Вода, Физика и Химия».\nСумасшедший профессор устроит взрывное шоу с жидким азотом и сухим льдом — и всё это под аккомпанемент его безумного смеха!🔥\n-Баба Яга будет чудить с цветным огнём в своей резиденции и самым любопытным, возможно, она раскроет секрет этого чуда.\n💧 Кикимора проведет мастер-класс по «Болотной гидродинамике» и покажет, что простая вода — это самый загадочный элемент во Вселенной!\n\nКак поджечь воду?\nКак сделать огонь ручным и послушным?\nПоказываем по-сказочному и отвечаем по-научному\n\n🧪 Опыты для всей семьи — каждый сможет попробовать себя в роли ученого-волшебника.\n\nВсе эксперименты безопасны и проводятся под чутким руководством сертифицированного профессионала.\n\nДорогие родители - это чудес",
       "raw_source_quote_sha256": "9d9c411ca0b3665035c6feaa2fed2ee1c7ac89c7b034e79055f59a1275658dec",
-      "canonical_sha256": "5ab877c8db4a86e7c2ea94e542283ff506a71bf5950613ffb693484bdff83dcb"
+      "canonical_sha256": "5ab877c8db4a86e7c2ea94e542283ff506a71bf5950613ffb693484bdff83dcb",
+      "raw_source_quote_kind": "excerpt",
+      "raw_source_quote_truncated": true,
+      "raw_source_quote_start_char": 351,
+      "raw_source_quote_end_char": 1350,
+      "raw_source_quote_char_count": 999,
+      "raw_source_quote_omitted_prefix_chars": 351,
+      "raw_source_quote_omitted_suffix_chars": 436
     },
     {
       "event_id": 7344,
@@ -66,11 +76,21 @@
         "source_chat_username": "kldevents",
         "source_message_id": 2987,
         "source_text_sha256": "76cd0e272c07467db75b7441b9306508bcd176ecfc79c0c107f3f72f2cfd50cf",
-        "source_record_sha256": "069efaf7b43c2e52504c076b3ed6bc0275ef6d5bc1d9cb0113fd39f08eca8b20"
+        "source_record_sha256": "069efaf7b43c2e52504c076b3ed6bc0275ef6d5bc1d9cb0113fd39f08eca8b20",
+        "event_id": 7344,
+        "source_text_char_count": 703,
+        "source_ref_sha256": "9b827339266f26cf40c2aa62b3a4afe06558280e80c8ddc5218b966cb0d695e0"
       },
       "raw_source_quote": "🧪 Фестиваль «Чудеса науки!»\n🎟 15 августа 11:00..16:00\n📍 Сказочное Холмогорье, #Романово\n🎫 по регистрации: +79316122979\n\nНа фестивале «Чудеса науки!» сумасшедший профессор проведет взрывное шоу с жидким азотом и сухим льдом. Посетителей ждут мастер-класс по «Болотной гидродинамике» от Кикиморы и демонстрация цветного огня в резиденции Бабы Яги. Все эксперименты безопасны и позволяют каждому участнику попробовать себя в роли ученого-волшебника под руководством сертифицированного профессионала.\n\n#15августа #15_августа #афишароманово #показ #мастеркласс #фестиваль #Чудесанауки\n\n🔎 Подробнее Max · Вконтакте\n\n🧪 Фестиваль «Чудеса науки!»\nПодробнее\n15 августа 11:00..16:00 Сказочное Холмогорье, #Романово",
       "raw_source_quote_sha256": "76cd0e272c07467db75b7441b9306508bcd176ecfc79c0c107f3f72f2cfd50cf",
-      "canonical_sha256": "1c7bf2d57cc8ca916e740ab96d96f3cf8a3139f05435b113574a9003f2ac7d61"
+      "canonical_sha256": "1c7bf2d57cc8ca916e740ab96d96f3cf8a3139f05435b113574a9003f2ac7d61",
+      "raw_source_quote_kind": "full",
+      "raw_source_quote_truncated": false,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 703,
+      "raw_source_quote_char_count": 703,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 0
     }
   ],
   "family_decision": {
@@ -82,5 +102,5 @@
     ]
   },
   "scope_note": "Receipt repairs review/calibration inputs only; canonical production changes require the normal Smart Update/data-integrity path.",
-  "receipt_sha256": "b151d1d8ebc5e7d905dd62c52d66ab5c315401aea81ebfac1918f519e82109f8"
+  "receipt_sha256": "e49e0c16ef46bd8c2a37ef8f04c2c828e6fc297b371022a941594da960621731"
 }

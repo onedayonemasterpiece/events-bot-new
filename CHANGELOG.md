@@ -5,9 +5,14 @@
 - Added static-collection PR-A quality contracts: ontology v2 separates child,
   family, joint-family, science-pop and research-in-action meanings; the
   provisional seed moved out of the misleading gold fixture into source-bound
-  review data with occurrence families and ten hashed defect receipts; normal
+  review data with occurrence families and eleven hashed defect receipts; normal
   CI now runs the intermediate review gate while owner gold, scores, Astro
   routes, cinema sources, festivals and semantic publication remain blocked.
+- Hardened draft PR #222 review data without starting PR B: removed unsupported
+  4648/6871/7103 semantic positives, split festival parent/child/page scope,
+  added the occurrence-specific 6871 receipt, role-specific generator SHAs and
+  reproducible command, canonical snapshot/quote truncation contracts, and
+  fail-closed seed/index/receipt/source-ref parity validation with regressions.
 - Fixed Region Talk article/social review footers: final captions now contain
   one link to the exact source post/material, a blank line and one
   `О Калининграде говорят` link to `@kalinigrad_visit`, with no

@@ -955,6 +955,11 @@ def validate_seed(
                 "generator_provenance_invalid",
                 "generator_command must be the exact reproducible review-seed builder command",
             )
+        if not (ROOT / "scripts" / "build_static_collections_review_seed.py").is_file():
+            issues.error(
+                "generator_provenance_invalid",
+                "generator_command references a missing review-seed builder",
+            )
         if not utc_timestamp(source.get("extracted_at")) or not utc_timestamp(
             source.get("reviewed_at")
         ):
@@ -979,7 +984,15 @@ def validate_seed(
             "separators": [",", ":"],
             "sort_keys": True,
             "trailing_newline": False,
-        }:
+        } or snapshot_contract.get("artifact_path") != (
+            "artifacts/codex/static-collections-pr-a/"
+            "static-collections-evidence-snapshot-v1.json"
+        ) or any(
+            not isinstance(snapshot_contract.get(field), int)
+            or isinstance(snapshot_contract.get(field), bool)
+            or snapshot_contract.get(field) <= 0
+            for field in ("event_count", "event_source_count")
+        ) or not utc_timestamp(snapshot_contract.get("db_file_mtime")):
             issues.error(
                 "snapshot_contract_invalid",
                 "canonical snapshot schema/serialization contract is missing or invalid",

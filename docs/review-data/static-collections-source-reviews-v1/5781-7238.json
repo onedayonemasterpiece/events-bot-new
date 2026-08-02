@@ -1,7 +1,7 @@
 {
   "schema_version": "static-collection-source-review-v1",
   "receipt_id": "5781-7238",
-  "reviewed_at": "2026-08-02",
+  "reviewed_at": "2026-08-02T09:18:31.733493Z",
   "status": "corrected",
   "event_ids": [
     5781,
@@ -50,11 +50,21 @@
         "source_chat_username": null,
         "source_message_id": null,
         "source_text_sha256": "7d69818d8f33c27acae68c8e9b4810f67a458599debb1475d64b0327e2684836",
-        "source_record_sha256": "a6b498c10307138e79c2bf62f6af06b0cdf88ae6fd715e7282e6e1d2ca82f106"
+        "source_record_sha256": "a6b498c10307138e79c2bf62f6af06b0cdf88ae6fd715e7282e6e1d2ca82f106",
+        "event_id": 5781,
+        "source_text_char_count": 788,
+        "source_ref_sha256": "184649a31787769a9b9ee75399a10b2072756b162628b8e4fe2d1288fa92ba48"
       },
       "raw_source_quote": "О спектакле\nПриглашаем вас на экскурсию, которая позволит увидеть театр за пределами зрительного зала.\nВо время экскурсии вы выйдете на сцену, посетите закулисные помещения и гримёрные артистов, познакомитесь с особенностями театрального грима и узнаете о процессе создания спектаклей. Вы побываете в костюмерной, где хранятся сценические образы разных лет, и в цехе, где изготавливаются декорации для будущих постановок. Экскурсия познакомит вас с работой различных театральных служб и с тем, как создаётся спектакль вне поля зрения зрителя.\nВ завершение программы гостей ждёт неформальный разговор об истории, традициях и современной жизни театра.\nГрупповые заявки можно высылать на почту:\nzakylisie_teatra26@mail.ru\nГруппа по индивидуальным заявкам - ровно 20 человек.\n\nСцена: Основная",
       "raw_source_quote_sha256": "7d69818d8f33c27acae68c8e9b4810f67a458599debb1475d64b0327e2684836",
-      "canonical_sha256": "ef7a002e9a291b8682290e916e165b21b45916458bb01f8768dd8444568dc030"
+      "canonical_sha256": "ef7a002e9a291b8682290e916e165b21b45916458bb01f8768dd8444568dc030",
+      "raw_source_quote_kind": "full",
+      "raw_source_quote_truncated": false,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 788,
+      "raw_source_quote_char_count": 788,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 0
     },
     {
       "event_id": 7238,
@@ -66,11 +76,21 @@
         "source_chat_username": null,
         "source_message_id": null,
         "source_text_sha256": "589ec56b599d95a9d52ed3d9a2767e9ce14f3fcc7849170326d72fcd5db5f463",
-        "source_record_sha256": "3c71b476e5e85331800957f6ca4e37176feece7c0824d192070830c397376ddc"
+        "source_record_sha256": "3c71b476e5e85331800957f6ca4e37176feece7c0824d192070830c397376ddc",
+        "event_id": 7238,
+        "source_text_char_count": 995,
+        "source_ref_sha256": "8eee14d31aad1ff9336ec2ff954e0954b3cdb06dd67af2188eaf06f80bb140a4"
       },
       "raw_source_quote": "Название: Экскурсия \"Закулисье театра\"\nДата: 2026-08-02\nВремя: 14:30\nПлощадка: Драматический театр\nСтатус билетов: распродано\nСсылка: https://dramteatr39.ru/spektakli/ekskursiya-\"zakulise-teatra\"\n\nОписание:\nО спектакле\nПриглашаем вас на экскурсию, которая позволит увидеть театр за пределами зрительного зала.\nВо время экскурсии вы выйдете на сцену, посетите закулисные помещения и гримёрные артистов, познакомитесь с особенностями театрального грима и узнаете о процессе создания спектаклей. Вы побываете в костюмерной, где хранятся сценические образы разных лет, и в цехе, где изготавливаются декорации для будущих постановок. Экскурсия познакомит вас с работой различных театральных служб и с тем, как создаётся спектакль вне поля зрения зрителя.\nВ завершение программы гостей ждёт неформальный разговор об истории, традициях и современной жизни театра.\nГрупповые заявки можно высылать на почту:\nzakylisie_teatra26@mail.ru\nГруппа по индивидуальным заявкам - ровно 20 человек.\n\nСцена: Основная",
       "raw_source_quote_sha256": "589ec56b599d95a9d52ed3d9a2767e9ce14f3fcc7849170326d72fcd5db5f463",
-      "canonical_sha256": "1ffa72d376b1acd5a20ddb9fcdcf03e1df6c993ef76398eeced97d2fcd55784a"
+      "canonical_sha256": "1ffa72d376b1acd5a20ddb9fcdcf03e1df6c993ef76398eeced97d2fcd55784a",
+      "raw_source_quote_kind": "full",
+      "raw_source_quote_truncated": false,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 995,
+      "raw_source_quote_char_count": 995,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 0
     }
   ],
   "family_decision": {
@@ -94,5 +114,5 @@
     ]
   },
   "scope_note": "Receipt repairs review/calibration inputs only; canonical production changes require the normal Smart Update/data-integrity path.",
-  "receipt_sha256": "0d3132526de8e5957b25df2b1dc69a9fad6d2eac2194ed4c68e77b4b364e21ac"
+  "receipt_sha256": "68ce061537244879724af8b17de0c4080e0dce8c6f596f683922aee235bd78d7"
 }

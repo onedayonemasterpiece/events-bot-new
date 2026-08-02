@@ -26,6 +26,18 @@ raw quote и hash model document. Известные дефекты 5757, 6696/6
 будущие PR-B owner gold, scores и winning prototypes. Публичные routes,
 navigation/sitemap, киноисточники и фестивальный track не менялись.
 
+После критического review draft PR #222 данные ужесточены без перехода к PR B.
+4648 удалён из `science_pop` и `family_suitable` positives; 6871 удалён из
+semantic supply и привязан отдельным receipt к occurrence source на 2026-08-08;
+7103 удалён из `strong_impressions`, потому что raw source не обещает участнику
+интенсивную практику. Festival parent rows исключены, самостоятельные child
+events допускаются только с occurrence-specific evidence, а festival
+extraction/pages остаются вне scope. Seed/index snapshot hash, index/receipt
+identity, обязательный receipt set, source-ref hashes и full/excerpt truncation
+metadata теперь fail-closed проверяются. `--mode review` проходит с 0 errors;
+supply остаётся warning, а `--mode strict` ожидаемо не проходит без PR-B owner
+gold/scores/prototypes.
+
 Исходная реализация подготовлена в ветке
 `integration/static-collections-data-prep-20260801`, слита PR #182 и развёрнута
 из main SHA `c5e3f6bc79e912992379280644515137917a414d` на Fly v1853. Это только граница данных:
