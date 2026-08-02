@@ -1,5 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 import { observedRepoSha } from '../helpers/release-identity.mjs';
 import { classifyKeyboardAcceptance, validateMobileConfig } from '../helpers/platform.mjs';
@@ -9,6 +11,7 @@ const SELECTORS = Object.freeze({
   emailOpen: '[data-focus-email-open]', email: '#focus-email', send: '[data-focus-email-send]',
   code: '[data-focus-email-code-step]:not([hidden])', otp: '#focus-email-otp', done: '[data-focus-done-title]',
 });
+const execFileAsync = promisify(execFile);
 
 export function extractDriverNetworkEvents(logs) {
   const events = [];
@@ -236,6 +239,18 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
       }]);
       await driver.pause(350);
       nativeKeyboardAtTap[kind] = await driver.isKeyboardShown().catch(() => false);
+      if (!nativeKeyboardAtTap[kind] && env.E2E_HOST_OS_VERSION) {
+        // Simulator has a separate "Toggle Software Keyboard" state from the
+        // hardware-keyboard connection preference. Cmd-K is Apple's documented
+        // user action for showing it; invoke it only after a real tap proved the
+        // fresh hosted runner left that UI state off.
+        await execFileAsync('osascript', [
+          '-e', 'tell application "Simulator" to activate',
+          '-e', 'tell application "System Events" to keystroke "k" using command down',
+        ], { timeout: 10_000 });
+        await driver.pause(500);
+        nativeKeyboardAtTap[kind] = await driver.isKeyboardShown().catch(() => false);
+      }
     } finally {
       await driver.switchContext(originalContext);
     }

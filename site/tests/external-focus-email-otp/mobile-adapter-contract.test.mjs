@@ -17,6 +17,8 @@ test('Appium adapter uses real browser capabilities and ordinary digit input wit
   assert.match(source, /executeScript\('mobile: tap'/u);
   assert.match(source, /rect\.x \+ rect\.width \/ 2/u);
   assert.match(source, /nativeKeyboardAtTap\[kind\] = await driver\.isKeyboardShown/u);
+  assert.match(source, /execFileAsync\('osascript'/u);
+  assert.match(source, /keystroke "k" using command down/u);
   assert.match(source, /XCUIElementTypeTextField/u);
   assert.match(source, /dismissSafariFirstRunPrompt/u);
   assert.match(source, /XCUIElementTypeButton.*Продолжить/u);

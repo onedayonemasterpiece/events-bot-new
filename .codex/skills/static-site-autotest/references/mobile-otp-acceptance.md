@@ -32,6 +32,10 @@ instead of copying it.
   `usePreinstalledWDA` and `prebuiltWDAPath`. Treat WDA startup failure as
   infrastructure failure before OTP issuance.
 - Disable the hardware keyboard and require the simulator software keyboard.
+- Treat Simulator's software-keyboard visibility toggle as distinct from its
+  hardware-keyboard connection preference. If a verified physical input tap
+  still reports no native keyboard on a hosted macOS runner, send the documented
+  Simulator `Cmd-K` action once and recheck; never assume the toggle succeeded.
 - On a fresh Simulator, detect and close only the exact allowlisted Safari
   first-run prompt before journey interaction. Do not use a generic alert
   accepter: unrelated permission/security dialogs must still fail visibly.

@@ -698,6 +698,16 @@ system keyboard, focused input and visual viewport before ordinary digit input;
 they do not substitute a desktop viewport or Playwright WebKit. PWA installation
 and Launcher/SpringBoard relaunch remain a separate milestone.
 
+The first terminal protected receipts for immutable SHA
+`4a19fbe0b243d8a9a4652ff0c1e4fee9e895cf9c` are Chromium
+[30745526613](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30745526613)
+and Android 15 / Pixel 7
+[30747598046](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30747598046).
+Both prove one provider-delivered message, one issue, one verify, one
+registration and returning membership; Android additionally proves the email
+and numeric system keyboards. iOS is recorded here only after its own terminal
+protected PASS.
+
 For a clean operator retest on one device use:
 
 `/fokus-gruppa/priglashenie/?focus_test_reset=1#invite=focus-group-2026-announcements`

@@ -5,15 +5,22 @@
 Focus email has two distinct gates. The fixed
 `focus-agent-e2e@kenigevents.ru` + fresh admin-issued OTP runner is an internal
 deployed Auth/membership integration check only. The external delivery E2E must
-run manually in a protected GitHub Environment, receive a random OTP through a
-controlled IMAPS mailbox, and must not use a service key, admin link or fixed
-OTP. An ambiguous selected-once issuance keeps code entry open while resend is
-cooling down.
+run manually in a protected GitHub Environment, receive a random OTP through
+the dedicated no-persistence Yandex Mail Trigger → API Gateway WebSocket (or
+the optional controlled read-only IMAPS adapter), and must not use a service
+key, admin link or fixed OTP. An ambiguous selected-once issuance keeps code
+entry open while resend is cooling down.
 
 The implemented external gate is `.github/workflows/external-focus-email-otp.yml`
 and its operating contract is [`docs/testing/external-focus-email-otp.md`](../testing/external-focus-email-otp.md).
 Routine runs reuse one fixed mailbox and therefore do not create a new Auth user;
 fresh-user aliases are explicit, non-routine coverage.
+
+`focus.otp.browser_tab` uses one semantic journey across protected Chromium,
+Android Chrome/UiAutomator2 and iOS Safari/XCUITest jobs. Terminal receipts and
+the per-platform implementation boundary are recorded in the external runbook
+and scenario registry; a workflow skeleton or non-terminal mobile run is not
+acceptance.
 
 Правило обновления:
 - При добавлении нового `.feature` файла или существенном изменении набора сценариев сначала обновляй эту страницу.

@@ -39,6 +39,22 @@ A desktop mobile viewport or Playwright WebKit does not close these mobile
 gates. A workflow skeleton without a terminal emulator/simulator run also does
 not count as acceptance.
 
+### Live acceptance receipts (2026-08-02)
+
+The immutable preview under test records repository SHA
+`4a19fbe0b243d8a9a4652ff0c1e4fee9e895cf9c`.
+
+- Chromium: [run 30745526613](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30745526613),
+  real delivery, `issue=1`, `verify=1`, `registration=1`, returning state and
+  redaction gate PASS.
+- Android 15 / Pixel 7 / real Chrome / UiAutomator2:
+  [run 30747598046](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30747598046),
+  email and numeric system-keyboard acceptance plus the same one-send and
+  returning-state assertions PASS.
+- iOS 18.5 / iPhone 16 / Mobile Safari / XCUITest: terminal receipt is recorded
+  in the scenario registry only after the protected run reaches PASS; a failed
+  or blocked attempt is not represented as acceptance.
+
 The Ubuntu Android job explicitly enables and verifies `/dev/kvm` before
 booting API 35. Unaccelerated x86 emulation is a blocked infrastructure result,
 not a substitute for the Android acceptance run.
