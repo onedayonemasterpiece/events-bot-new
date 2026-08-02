@@ -1,7 +1,7 @@
 # PWA-возможности для анонсов: календарь, уведомления, офлайн и системный Share
 
 > **Дата решения:** 2026-08-02  
-> **Статус:** research и implementation handoff готовы; лабораторная страница ещё не реализована  
+> **Статус:** минимальная лабораторная страница реализована; ручная Android-матрица ещё не пройдена
 > **Решение:** `GO_TO_LAB`, `NO-GO` для production rollout до ручной проверки на реальном Android  
 > **Ветка:** `feature/static-site-pwa-capabilities-lab-20260802`  
 > **Scope:** изолированная noindex-страница Astro; без изменения production-навигации, root service worker, Auth, Supabase и публикации canonical root
@@ -412,6 +412,31 @@ site/tests/pwa-capabilities-lab.test.mjs         # минимальный source
 9. Plain share и rich clipboard можно проверить независимо.
 10. Root manifest и root service worker не изменены по поведению.
 11. Добавлен один минимальный test/contract и записаны команды проверки.
+
+### 8.1. Реализация 2026-08-02
+
+Лаборатория реализована изолированно:
+
+- `site/src/pages/lab/pwa-capabilities/index.astro` — noindex UI без ссылки из
+  production-навигации;
+- `site/src/lib/pwaCapabilitiesLab.js` — calendar/ICS, notification/push probes,
+  IndexedDB/Cache Storage, Web Share/Clipboard, diagnostics и единый журнал;
+- `site/src/pages/lab/pwa-capabilities/sw.js.ts` — отдельный worker со scope
+  `/lab/pwa-capabilities/`;
+- `site/tests/pwa-capabilities-lab.test.mjs` — минимальный contract для ICS,
+  Google Calendar URL, 30 demo-card DTO, noindex и lab-scoped worker.
+
+Проверки из `site/`:
+
+```bash
+npm run test:pwa-capabilities-lab
+npm run build
+```
+
+Обе команды прошли 2026-08-02. Build содержит
+`/lab/pwa-capabilities/index.html` и `/lab/pwa-capabilities/sw.js`. Root manifest,
+root service worker, sitemap, global navigation, Auth/Supabase и release gates не менялись.
+Ручная проверка Android/target-приложений остаётся отдельным acceptance-шагом из раздела 9.
 
 ## 9. Ручная Android-матрица
 

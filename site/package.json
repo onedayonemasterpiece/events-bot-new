@@ -37,7 +37,8 @@
     "test:external-focus-email-otp": "node --test tests/external-focus-email-otp/*.test.mjs",
     "e2e:external-focus-email-otp": "node e2e/focus-email/run.mjs",
     "astro": "astro",
-    "test:resilient-client": "node --experimental-strip-types --test src/lib/resilientSupabaseTransport.test.ts tests/resilient-data-storage.test.mjs tests/supabase-runtime-gate.test.mjs && node --test tests/search-recovery.test.mjs tests/static-site-auth.test.mjs tests/pwa-install.test.mjs"
+    "test:resilient-client": "node --experimental-strip-types --test src/lib/resilientSupabaseTransport.test.ts tests/resilient-data-storage.test.mjs tests/supabase-runtime-gate.test.mjs && node --test tests/search-recovery.test.mjs tests/static-site-auth.test.mjs tests/pwa-install.test.mjs",
+    "test:pwa-capabilities-lab": "node --test tests/pwa-capabilities-lab.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.108.2",

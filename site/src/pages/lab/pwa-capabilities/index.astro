@@ -1,0 +1,191 @@
+---
+import { absoluteUrl, SITE_NAME } from '../../../lib/events';
+
+const title = `PWA capabilities lab | ${SITE_NAME}`;
+const description = 'Изолированная лаборатория web-возможностей календаря, уведомлений, offline storage, Share и Clipboard.';
+const canonicalUrl = absoluteUrl('/lab/pwa-capabilities/');
+const vapidPublicKey = import.meta.env.PUBLIC_PWA_LAB_VAPID_PUBLIC_KEY || '';
+---
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalUrl} />
+    <title>{title}</title>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <p class="eyebrow">noindex · isolated browser lab</p>
+        <h1>PWA-возможности для анонсов</h1>
+        <p>Календарь, уведомления, offline 30, системный Share и Clipboard. Это диагностический стенд, а не production-интеграция.</p>
+        <p class="warning">Лучший результат — на HTTPS или localhost. Экспериментальный Android intent и успешность Share проверяются вручную на устройстве.</p>
+      </header>
+
+      <section class="panel" aria-labelledby="diagnostics-title">
+        <h2 id="diagnostics-title">Capability diagnostics</h2>
+        <div class="table-wrap">
+          <table>
+            <tbody>
+              <tr><th>Secure context</th><td data-diagnostic="secure">проверка…</td></tr>
+              <tr><th>Android</th><td data-diagnostic="android">проверка…</td></tr>
+              <tr><th>Standalone display</th><td data-diagnostic="standalone">проверка…</td></tr>
+              <tr><th>navigator.share</th><td data-diagnostic="share">проверка…</td></tr>
+              <tr><th>navigator.canShare</th><td data-diagnostic="canShare">проверка…</td></tr>
+              <tr><th>File Share</th><td data-diagnostic="fileShare">проверка…</td></tr>
+              <tr><th>Service Worker</th><td data-diagnostic="serviceWorker">проверка…</td></tr>
+              <tr><th>Lab worker scope</th><td data-diagnostic="workerScope">проверка…</td></tr>
+              <tr><th>Notifications / permission</th><td data-diagnostic="notifications">проверка…</td></tr>
+              <tr><th>PushManager</th><td data-diagnostic="push">проверка…</td></tr>
+              <tr><th>IndexedDB</th><td data-diagnostic="indexedDb">проверка…</td></tr>
+              <tr><th>Cache Storage</th><td data-diagnostic="cacheStorage">проверка…</td></tr>
+              <tr><th>Periodic Background Sync</th><td data-diagnostic="periodicSync">проверка…</td></tr>
+              <tr><th>Clipboard</th><td data-diagnostic="clipboard">проверка…</td></tr>
+              <tr><th>ClipboardItem</th><td data-diagnostic="clipboardItem">проверка…</td></tr>
+              <tr><th>Native calendar bridge</th><td data-diagnostic="nativeBridge">проверка…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="event-title">
+        <h2 id="event-title">Тестовое событие</h2>
+        <form id="lab-event-form" class="form-grid">
+          <label class="wide">Название<input name="title" required value="Лабораторный вечер KenigEvents" /></label>
+          <label>Начало<input id="event-start" name="start" type="datetime-local" required /></label>
+          <label>Окончание<input id="event-end" name="end" type="datetime-local" required /></label>
+          <label>Timezone<input name="timezone" required value="Europe/Kaliningrad" /></label>
+          <label>Место<input name="location" required value="Калининград, остров Канта" /></label>
+          <label class="wide">Описание<textarea name="description" rows="3">Проверяем web-календарь, уведомления, offline и Share.</textarea></label>
+          <label class="wide">Absolute URL<input id="event-url" name="url" type="url" required /></label>
+        </form>
+      </section>
+
+      <section class="panel" aria-labelledby="calendar-title">
+        <h2 id="calendar-title">Calendar</h2>
+        <p class="hint">Google Calendar и ICS — рабочие web-fallbacks. Intent не является переносимым browser contract.</p>
+        <div class="actions">
+          <button id="google-calendar" type="button">Открыть Google Calendar</button>
+          <button id="download-ics" type="button">Скачать ICS</button>
+          <button id="share-ics" type="button">Поделиться ICS</button>
+          <button id="android-intent" type="button">Android Intent — эксперимент</button>
+          <button id="native-insert" type="button" disabled>Native bridge не обнаружен</button>
+        </div>
+        <p class="fallback">Если файловый Share недоступен, кнопка ICS Share запускает обычное скачивание.</p>
+      </section>
+
+      <section class="panel" aria-labelledby="notification-title">
+        <h2 id="notification-title">Notifications / Push</h2>
+        <p id="notification-status" class="status" aria-live="polite">Проверка permission…</p>
+        <div class="actions">
+          <button id="local-notification" type="button">Разрешить и показать уведомление</button>
+          <button id="simulate-push" type="button">Симулировать push payload</button>
+          <button id="push-subscribe" type="button" hidden>Создать PushSubscription</button>
+          <button id="clear-worker" type="button" class="secondary">Unregister lab worker</button>
+        </div>
+        <p class="fallback">Simulation использует <code>postMessage</code>, а не remote push. Настоящая доставка требует VAPID sender/backend. При <code>denied</code> измените разрешение в настройках сайта/Android.</p>
+        <textarea id="push-subscription-output" class="output" rows="7" readonly aria-label="Sanitized PushSubscription JSON" placeholder="Sanitized subscription появится здесь и будет скопирована."></textarea>
+      </section>
+
+      <section class="panel" aria-labelledby="offline-title">
+        <h2 id="offline-title">Offline 30</h2>
+        <p id="offline-status" class="status" aria-live="polite">Проверка сохранённых demo-карточек…</p>
+        <div class="actions">
+          <button id="save-cards" type="button">Сохранить 30 карточек</button>
+          <button id="read-cards" type="button">Прочитать из IndexedDB</button>
+          <button id="warm-images" type="button">Прогреть изображения</button>
+          <button id="periodic-sync" type="button">Зарегистрировать periodic sync</button>
+          <button id="clear-offline" type="button" class="secondary">Очистить lab data и cache</button>
+        </div>
+        <p class="fallback">Periodic sync — best effort, не cron. Стенд хранит только bounded demo DTO и отдельный lab cache, production personal API не вызывается.</p>
+        <div id="offline-cards" class="card-grid" hidden aria-live="polite"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="share-title">
+        <h2 id="share-title">Share / Clipboard</h2>
+        <div class="actions">
+          <button id="share-plain" type="button">Поделиться текстом и ссылкой</button>
+          <button id="share-image" type="button">Поделиться картинкой + текстом + ссылкой</button>
+          <button id="copy-rich" type="button">Скопировать rich post</button>
+          <button id="copy-plain" type="button">Скопировать plain fallback</button>
+          <button id="share-html-file" type="button" class="secondary">Поделиться HTML как файлом</button>
+        </div>
+        <p class="fallback">Web Share не передаёт HTML body. HTML-кнопка отправляет attachment; rich Clipboard всегда содержит также plain fallback.</p>
+        <h3>Ручная матрица target-приложений</h3>
+        <div class="table-wrap">
+          <table class="manual-matrix">
+            <thead><tr><th>Target</th><th>text</th><th>URL</th><th>image/file</th><th>formatting</th><th>заметка</th></tr></thead>
+            <tbody>
+              {['Telegram', 'VK', 'WhatsApp', 'Email', 'Calendar apps'].map((target) => (
+                <tr><th>{target}</th><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel log-panel" aria-labelledby="log-title">
+        <div class="log-heading"><h2 id="log-title">Журнал результатов</h2><button type="button" class="secondary" onclick="document.getElementById('result-log').replaceChildren()">Очистить журнал</button></div>
+        <ol id="result-log" aria-live="polite" aria-relevant="additions"></ol>
+      </section>
+    </main>
+
+    <script define:vars={{ vapidPublicKey }}>
+      window.__PWA_LAB_CONFIG__ = { vapidPublicKey };
+    </script>
+    <script>
+      import { initPwaCapabilitiesLab } from '../../../lib/pwaCapabilitiesLab.js';
+      initPwaCapabilitiesLab(window.__PWA_LAB_CONFIG__ || {});
+    </script>
+  </body>
+</html>
+
+<style>
+  :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, sans-serif; --ink:#211b17; --muted:#6b625b; --line:#ddcfc0; --paper:#fffdf8; --accent:#9d3f1c; --ok:#166534; --warn:#9a6700; }
+  * { box-sizing: border-box; }
+  body { margin:0; color:var(--ink); background:#f5ede1; line-height:1.5; }
+  .shell { width:min(1080px, calc(100% - 28px)); margin:0 auto; padding:32px 0 80px; }
+  .hero, .panel { background:var(--paper); border:1px solid var(--line); border-radius:18px; padding:clamp(18px, 3vw, 30px); box-shadow:0 12px 35px rgba(74,49,29,.07); }
+  .panel { margin-top:18px; }
+  h1, h2, h3 { line-height:1.15; margin-top:0; }
+  h1 { font-size:clamp(2rem, 6vw, 4rem); max-width:14ch; margin-bottom:16px; }
+  h2 { font-size:clamp(1.35rem, 3vw, 2rem); }
+  h3 { margin-top:28px; }
+  .eyebrow { color:var(--accent); font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+  .warning, .fallback { border-left:4px solid #d59c2f; background:#fff7df; padding:10px 14px; }
+  .hint, .status { color:var(--muted); }
+  .form-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:14px; }
+  label { display:grid; gap:6px; font-weight:700; }
+  .wide { grid-column:1 / -1; }
+  input, textarea { width:100%; border:1px solid #b9aa9b; border-radius:10px; background:#fff; color:inherit; padding:11px 12px; font:inherit; }
+  textarea { resize:vertical; }
+  .actions { display:flex; flex-wrap:wrap; gap:10px; }
+  button { appearance:none; border:0; border-radius:999px; background:var(--accent); color:#fff; cursor:pointer; font:700 .95rem/1.2 inherit; padding:12px 17px; }
+  button.secondary { color:var(--ink); background:#ece2d5; }
+  button:disabled { cursor:not-allowed; opacity:.45; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, [contenteditable]:focus-visible { outline:3px solid #2463eb; outline-offset:2px; }
+  .table-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { padding:9px 10px; border:1px solid var(--line); text-align:left; vertical-align:top; }
+  th { background:#f7efe4; }
+  td[data-diagnostic] { font-family:ui-monospace, monospace; overflow-wrap:anywhere; }
+  .manual-matrix td { min-width:80px; height:42px; background:#fff; }
+  .output { margin-top:14px; font-family:ui-monospace, monospace; }
+  .card-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:10px; margin-top:18px; }
+  .demo-card { display:flex; gap:10px; align-items:center; min-width:0; border:1px solid var(--line); border-radius:12px; padding:9px; background:#fff; }
+  .demo-card img { width:48px; height:48px; object-fit:cover; border-radius:9px; }
+  .demo-card div { display:grid; min-width:0; }
+  .demo-card strong, .demo-card small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .demo-card small { color:var(--muted); }
+  .log-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+  #result-log { max-height:420px; overflow:auto; padding-left:28px; font-family:ui-monospace, monospace; font-size:.88rem; }
+  #result-log li { padding:7px; border-bottom:1px dashed var(--line); overflow-wrap:anywhere; }
+  #result-log li[data-status="error"], [data-status="denied"] { color:#a11; }
+  #result-log li[data-status="success"] { color:var(--ok); }
+  #result-log li[data-status="fallback"], #result-log li[data-status="best-effort"], #result-log li[data-status="experiment"] { color:var(--warn); }
+  code { font-size:.9em; }
+  @media (max-width:640px) { .form-grid { grid-template-columns:1fr; } .wide { grid-column:auto; } .actions button { width:100%; } .log-heading { align-items:flex-start; flex-direction:column; } }
+</style>
