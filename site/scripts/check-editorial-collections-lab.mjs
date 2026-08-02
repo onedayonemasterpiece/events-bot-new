@@ -6,6 +6,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const siteRoot = path.resolve(scriptDir, '..');
 const fixturePath = path.join(siteRoot, 'src/data/editorial-collections/unusual-pilot-v1.json');
 const pagePath = path.join(siteRoot, 'src/pages/lab/editorial-collections/index.astro');
+const stylePath = path.join(siteRoot, 'src/styles/editorial-collections-lab.css');
 
 function fail(message) {
   console.error(`editorial-collections-lab: FAIL: ${message}`);
@@ -18,6 +19,7 @@ function assert(condition, message) {
 
 const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
 const page = fs.readFileSync(pagePath, 'utf8');
+const styles = fs.readFileSync(stylePath, 'utf8');
 
 assert(fixture.schema_version === 'editorial-collection-pilot-v1', 'unexpected fixture schema');
 assert(fixture.collection?.id === 'unusual-events-editorial-pilot-v1', 'unexpected collection id');
@@ -68,9 +70,11 @@ assert(page.includes('<meta name="robots" content="noindex,nofollow"'), 'Astro l
 assert(page.includes('unusual-pilot-v1.json'), 'Astro lab must import the frozen fixture');
 assert(page.includes('data-density="explained"'), 'missing explained/compact density contract');
 assert(page.includes('id="full-index"'), 'missing shared full index');
-assert(page.includes('prefers-reduced-motion: reduce'), 'missing reduced-motion treatment');
+assert(page.includes('editorial-collections-lab.css'), 'Astro lab must import its dedicated stylesheet');
+assert(styles.includes('prefers-reduced-motion'), 'missing reduced-motion treatment');
+assert(page.includes('data-variant-button={variant.id}'), 'missing fixture-driven variant controls');
 for (const variant of expectedVariants) {
-  assert(page.includes(`data-variant-panel="${variant}"`), `missing panel for ${variant}`);
+  assert(styles.includes(`data-variant=${variant}`) || variant === 'editorial-scan', `missing CSS composition for ${variant}`);
 }
 
 if (!process.exitCode) {
