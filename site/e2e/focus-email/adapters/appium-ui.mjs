@@ -53,11 +53,13 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
   const { remote } = await import('webdriverio');
   const caps = platform === 'android' ? {
     platformName: 'Android', browserName: 'Chrome',
+    'wdio:enforceWebDriverClassic': true,
     'appium:automationName': 'UiAutomator2', 'appium:deviceName': config.deviceName,
     'appium:platformVersion': config.platformVersion, 'appium:newCommandTimeout': 180,
     'appium:language': 'ru', 'appium:locale': 'RU',
   } : {
     platformName: 'iOS', browserName: 'Safari',
+    'wdio:enforceWebDriverClassic': true,
     'appium:automationName': 'XCUITest', 'appium:deviceName': config.deviceName,
     'appium:platformVersion': config.platformVersion, 'appium:udid': config.udid,
     'appium:newCommandTimeout': 180, 'appium:language': 'ru', 'appium:locale': 'ru_RU',
