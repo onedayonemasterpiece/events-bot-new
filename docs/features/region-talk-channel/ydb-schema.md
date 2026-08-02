@@ -270,6 +270,9 @@ authoritative acquisition state: after a current bounded capture has been
 processed it is cleared even if synthesis remains fail-closed `needs_review`.
 `needs_source_profile` then stays true as the independent Writer-readiness
 state. Clearing either flag never approves the candidate or grants publication.
+CandidateReport writes this capture-completion transition together with the
+updated source row; the finalizer repeats it idempotently for historical rows
+whose request predates the completion rule.
 
 ## Live product funnel contract
 

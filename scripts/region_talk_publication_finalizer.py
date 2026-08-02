@@ -1707,8 +1707,6 @@ def source_profile_capture_request_updates(
 
     by_key: dict[str, dict[str, Any]] = {}
     for row in rows:
-        if str(row.get("publication_status") or "") != "gemini_accept":
-            continue
         if str(row.get("content_origin_type") or "") in {"editorial_publication", "academic_publication"}:
             continue
         source = row.get("_authoritative_source") if isinstance(row.get("_authoritative_source"), dict) else {}
@@ -1728,12 +1726,20 @@ def source_profile_capture_request_updates(
             str(onboarding_evidence.get("source_capture_fingerprint") or "").strip()
             or str(onboarding_evidence.get("source_capture_status") or "").strip()
         )
+        accepted = str(row.get("publication_status") or "") == "gemini_accept"
+        # A live capture completion is queue maintenance, so it must survive a
+        # candidate being deferred by an independent final-decision fence.  New
+        # acquisition requests are still projected only from accepted rows.
+        if not accepted and not (
+            capture_processed and rt._rt_bool(source.get("source_profile_capture_requested"))
+        ):
+            continue
         # Acquisition and editorial readiness are separate states.  A current
         # bounded capture can yield a fail-closed `needs_review` profile; the
         # archive must not then be acquired again unchanged.  Keep
         # `needs_source_profile` true for the candidate while clearing only the
         # explicit capture request.
-        requested = bool(not ready and not capture_processed)
+        requested = bool(accepted and not ready and not capture_processed)
         needs_source_profile = not ready
         if (
             rt._rt_bool(source.get("source_profile_capture_requested")) == requested

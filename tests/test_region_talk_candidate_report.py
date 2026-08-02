@@ -481,6 +481,21 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertFalse(mod.source_profile_capture_requested(row))
         self.assertNotEqual(mod.source_queue_priority_bucket(row), -3)
 
+    def test_durable_capture_completion_clears_only_acquisition_state(self) -> None:
+        mod = load_module()
+        fields = mod.source_profile_capture_completion_queue_fields({
+            "priority_lane": "source_profile_capture",
+            "priority_reason": "accepted_candidate_needs_source_profile",
+        }, "written")
+
+        self.assertEqual(fields["source_profile_capture_requested"], "false")
+        self.assertEqual(fields["needs_source_profile"], "true")
+        self.assertEqual(fields["priority_lane"], "")
+        self.assertEqual(fields["next_action"], "synthesize_or_review_current_source_profile")
+        self.assertEqual(
+            mod.source_profile_capture_completion_queue_fields({}, "conflict_no_write"), {}
+        )
+
     def test_capture_only_run_stops_before_semantic_report(self) -> None:
         mod = load_module()
         seed = self._seed(mod, "@captureonly", seed_id="capture_only")
