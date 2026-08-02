@@ -653,6 +653,15 @@ draft fingerprint, and the ordered media/presentation manifest. Carousel order
 is semantic. Any changed Telegram/VK copy, selected image, carousel order or
 presentation mode gets another delivery identity and requires fresh reactions;
 the earlier event remains historical and cannot approve the new revision.
+When only the review revision changes and the same media manifest is still
+current, the notifier first reads exact live reactions for the existing
+message. A still-pending clean revision is edited in place and rebound to the
+new review identity, so the operator chat keeps one live candidate message per
+canonical post. Any reaction, missing delivery evidence, chat/message mismatch
+or media change fails closed and suppresses another automatic message.
+The Bot API transport has no equivalent complete historical per-reactor read
+inside this send path, so it blocks an existing-message revision and directs
+production to `telethon_discovery2` rather than risking a duplicate.
 
 The synchronizer defaults to dry-run. `--execute` writes an idempotent current
 state, an immutable observation-revision event when exact reactions changed,
@@ -677,10 +686,10 @@ Telethon connects, the notifier rechecks the mapped Kaggle kernel and fails
 closed for active or unverified status. The selected account must already be a
 member of the numeric `REGION_TALK_NOTIFY_CHAT_ID`. The
 notifier sends only complete draft-ready unsent `llm_confirmed` candidates to
-the operator chat and deduplicates
-them by canonical post URL plus numeric chat id in
-`publication_delivery_item`. After Telegram acceptance it records chat and
-message ids and timestamps both in the delivery ledger and candidate row.
+the operator chat and deduplicates them by canonical post URL plus numeric chat
+id in `publication_delivery_item`; revised pending copy is edited in place as
+described above. After Telegram acceptance it records chat and message ids and
+timestamps both in the delivery ledger and candidate row.
 Finalizer/CandidateReport writers preserve these sent markers.
 
 Telethon delivery uses the durable ledger's stable `random_id`, allowing a
