@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - 'docs/features/region-talk-channel/region-talk-external-research-result-*.json'
+      - '.github/workflows/region-talk-external-publication-auto-import.yml'
+      - 'scripts/region_talk_external_research_registry.py'
 
 permissions:
   contents: read
@@ -16,10 +18,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  validate-and-import:
-    name: Validate changed research JSON and stage YDB intake
+  validate-import-and-publish-registry:
+    name: Validate research JSON, stage YDB intake, publish live registry
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     environment: region-talk-ydb-import
     env:
       YANDEX_WIF_OIDC_AUDIENCE: ${{ vars.YANDEX_WIF_OIDC_AUDIENCE }}
@@ -27,6 +29,12 @@ jobs:
       REGION_TALK_YDB_ENDPOINT: ${{ vars.REGION_TALK_YDB_ENDPOINT }}
       REGION_TALK_YDB_DATABASE: ${{ vars.REGION_TALK_YDB_DATABASE }}
       REGION_TALK_YDB_NAMESPACE: ${{ vars.REGION_TALK_YDB_NAMESPACE }}
+      REGION_TALK_EXTERNAL_RESEARCH_BUCKET: ${{ vars.REGION_TALK_EXTERNAL_RESEARCH_BUCKET }}
+      REGION_TALK_EXTERNAL_RESEARCH_PUBLIC_BASE_URL: ${{ vars.REGION_TALK_EXTERNAL_RESEARCH_PUBLIC_BASE_URL }}
+      YC_SA_BOT_STORAGE: ${{ secrets.YC_SA_BOT_STORAGE }}
+      YC_SA_BOT_STORAGE_KEY: ${{ secrets.YC_SA_BOT_STORAGE_KEY }}
+      YC_SA_ML_DEV: ${{ secrets.YC_SA_ML_DEV }}
+      YC_SA_ML_DEV_KEY: ${{ secrets.YC_SA_ML_DEV_KEY }}
       REPORT_ROOT: artifacts/github-actions/region-talk-external-publication-auto-import
 
     steps:
@@ -37,7 +45,7 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
 
-      - name: Discover only added or modified research-result JSON files
+      - name: Discover added or modified research-result JSON files
         id: inputs
         shell: bash
         env:
@@ -49,17 +57,21 @@ jobs:
           test "$(git rev-parse --verify HEAD)" = "$(git rev-parse --verify origin/main)"
           mkdir -p "$REPORT_ROOT"
 
-          python - "$BEFORE_SHA" "$AFTER_SHA" "$REPORT_ROOT/inputs.txt" <<'PY'
+          python - "$BEFORE_SHA" "$AFTER_SHA" "$REPORT_ROOT/inputs.txt" "$GITHUB_OUTPUT" <<'PY'
           import re
           import subprocess
           import sys
           from pathlib import Path
 
-          before, after, output = sys.argv[1:]
+          before, after, output, github_output = sys.argv[1:]
           approved = re.compile(
               r"^docs/features/region-talk-channel/"
               r"region-talk-external-research-result-[A-Za-z0-9][A-Za-z0-9._-]*\.json$"
           )
+          control_paths = {
+              ".github/workflows/region-talk-external-publication-auto-import.yml",
+              "scripts/region_talk_external_research_registry.py",
+          }
           if not re.fullmatch(r"[0-9a-f]{40}", before or ""):
               raise SystemExit(f"invalid push before SHA: {before!r}")
           if not re.fullmatch(r"[0-9a-f]{40}", after or ""):
@@ -71,9 +83,9 @@ jobs:
               text=True,
               capture_output=True,
           ).stdout.splitlines()
+          changed = {raw.strip() for raw in diff if raw.strip()}
           selected: list[str] = []
-          for raw in diff:
-              path = raw.strip()
+          for path in sorted(changed):
               if not approved.fullmatch(path):
                   continue
               candidate = Path(path)
@@ -85,21 +97,27 @@ jobs:
                   raise SystemExit(f"refusing research result outside approved directory: {path}")
               selected.append(path)
 
-          selected = sorted(set(selected))
-          if not selected:
-              raise SystemExit("push matched result paths but no added/modified approved JSON was found")
-          Path(output).write_text("\n".join(selected) + "\n", encoding="utf-8")
-          print("\n".join(selected))
+          registry_only = not selected and bool(changed & control_paths)
+          if not selected and not registry_only:
+              raise SystemExit("triggered push contains neither approved research JSON nor registry control change")
+          Path(output).write_text("".join(f"{path}\n" for path in selected), encoding="utf-8")
+          with Path(github_output).open("a", encoding="utf-8") as handle:
+              handle.write(f"count={len(selected)}\n")
+              handle.write(f"registry_only={'true' if registry_only else 'false'}\n")
+          print("\n".join(selected) if selected else "registry-only refresh")
           PY
 
-          count="$(grep -c . "$REPORT_ROOT/inputs.txt")"
-          echo "count=$count" >> "$GITHUB_OUTPUT"
+          count="${{ steps.inputs.outputs.count }}"
           {
             echo "### Region Talk automatic intake"
             echo
             echo "- trusted main commit: \`$AFTER_SHA\`"
             echo "- changed research-result files: $count"
-            sed 's/^/- `/' "$REPORT_ROOT/inputs.txt" | sed 's/$/`/'
+            if [ "$count" -gt 0 ]; then
+              sed 's/^/- `/' "$REPORT_ROOT/inputs.txt" | sed 's/$/`/'
+            else
+              echo "- mode: registry-only refresh after control-plane change"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set up Python
@@ -114,6 +132,7 @@ jobs:
         run: python -m pip install --disable-pip-version-check -r requirements.txt
 
       - name: Validate every changed JSON before YDB authentication
+        if: steps.inputs.outputs.count != '0'
         shell: bash
         run: |
           set -euo pipefail
@@ -202,6 +221,7 @@ jobs:
           echo "REGION_TALK_YDB_IAM_TOKEN=$iam_token" >> "$GITHUB_ENV"
 
       - name: Import validated files sequentially with live YDB identity guard
+        if: steps.inputs.outputs.count != '0'
         shell: bash
         run: |
           set -euo pipefail
@@ -229,7 +249,7 @@ jobs:
               raise SystemExit(f"YDB import did not execute for {input_path}")
           if payload.get("execution_error") is not None:
               raise SystemExit(f"YDB import reported an error for {input_path}")
-          if payload.get("conflict_count") not in (0, None) or payload.get("conflicts"):
+          if int(payload.get("conflict_count") or 0) != 0 or payload.get("conflicts"):
               raise SystemExit(f"YDB identity conflict for {input_path}")
           if payload.get("live_duplicate_guard_applied") is not True:
               raise SystemExit(f"live YDB duplicate guard was not applied for {input_path}")
@@ -240,12 +260,12 @@ jobs:
               "input_sha256": expected_sha,
               "request_id": batch.get("request_id"),
               "execution_status": payload.get("execution_status"),
-              "new_intake_count": payload.get("new_intake_count"),
+              "new_intake_count": int(payload.get("new_intake_count") or 0),
               "new_intake_ids": sorted(payload.get("new_intake_ids") or []),
-              "replay_count": payload.get("replay_count"),
+              "replay_count": int(payload.get("replay_count") or 0),
               "replay_ids": sorted(payload.get("replay_ids") or []),
-              "conflict_count": payload.get("conflict_count"),
-              "written_ydb_rows": payload.get("written_ydb_rows"),
+              "conflict_count": int(payload.get("conflict_count") or 0),
+              "written_ydb_rows": int(payload.get("written_ydb_rows") or 0),
           }, ensure_ascii=False, separators=(",", ":")))
           PY
           done < "$REPORT_ROOT/inputs.txt"
@@ -280,7 +300,93 @@ jobs:
             ' "$REPORT_ROOT/receipt.json"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload SHA-addressed validation and import receipts
+      - name: Publish current registry, schema and prompt from live YDB
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/region_talk_external_research_registry.py \
+            --publish \
+            --output "$REPORT_ROOT/research-registry.json" \
+            > "$REPORT_ROOT/registry-publish.json"
+
+          expected_snapshot="$(jq -er '.published.snapshot_id' "$REPORT_ROOT/registry-publish.json")"
+          expected_count="$(jq -er '.published.seen_publication_count' "$REPORT_ROOT/registry-publish.json")"
+          expected_auth="$(jq -er '.published.auth_mode' "$REPORT_ROOT/registry-publish.json")"
+          test "$expected_count" -ge 54
+
+          registry_url="https://static.kenigevents.ru/region-talk/external-publications/research-registry.json"
+          registry_schema_url="https://static.kenigevents.ru/region-talk/external-publications/research-registry.schema.json"
+          result_schema_url="https://static.kenigevents.ru/region-talk/external-publications/result.schema.json"
+          prompt_url="https://static.kenigevents.ru/region-talk/external-publications/research.prompt.txt"
+
+          verified=0
+          for attempt in $(seq 1 24); do
+            curl --fail --silent --show-error \
+              -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+              "$registry_url" > "$REPORT_ROOT/live-research-registry.json" || true
+            curl --fail --silent --show-error \
+              -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+              "$registry_schema_url" > "$REPORT_ROOT/live-research-registry.schema.json" || true
+            curl --fail --silent --show-error \
+              -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+              "$result_schema_url" > "$REPORT_ROOT/live-result.schema.json" || true
+            curl --fail --silent --show-error \
+              -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+              "$prompt_url" > "$REPORT_ROOT/live-research.prompt.txt" || true
+
+            if jq -e --arg snapshot "$expected_snapshot" --argjson count "$expected_count" \
+                '.schema_version == "region_talk_external_research_registry.v1" and
+                 .duplicate_guard.snapshot_id == $snapshot and
+                 .duplicate_guard.seen_publication_count == $count' \
+                "$REPORT_ROOT/live-research-registry.json" >/dev/null 2>&1 \
+              && cmp -s \
+                docs/features/region-talk-channel/external-publication-research-registry.schema.json \
+                "$REPORT_ROOT/live-research-registry.schema.json" \
+              && cmp -s \
+                docs/features/region-talk-channel/external-publication-research.schema.json \
+                "$REPORT_ROOT/live-result.schema.json" \
+              && cmp -s \
+                docs/features/region-talk-channel/external-publication-research.prompt.txt \
+                "$REPORT_ROOT/live-research.prompt.txt"; then
+              verified=1
+              break
+            fi
+            sleep 5
+          done
+          test "$verified" -eq 1
+
+          local_schema_sha="$(sha256sum docs/features/region-talk-channel/external-publication-research.schema.json | awk '{print $1}')"
+          live_contract_sha="$(jq -er '.result_contract.sha256' "$REPORT_ROOT/live-research-registry.json")"
+          test "$local_schema_sha" = "$live_contract_sha"
+
+          jq -n \
+            --arg main_commit "${{ github.sha }}" \
+            --arg workflow_run_id "${{ github.run_id }}" \
+            --arg snapshot_id "$expected_snapshot" \
+            --argjson seen_publication_count "$expected_count" \
+            --arg auth_mode "$expected_auth" \
+            --arg result_schema_sha256 "$local_schema_sha" \
+            '{
+              main_commit: $main_commit,
+              workflow_run_id: $workflow_run_id,
+              snapshot_id: $snapshot_id,
+              seen_publication_count: $seen_publication_count,
+              auth_mode: $auth_mode,
+              result_schema_sha256: $result_schema_sha256,
+              exact_public_urls_verified: true
+            }' > "$REPORT_ROOT/registry-receipt.json"
+
+          {
+            echo
+            echo "### Live registry publication"
+            echo
+            echo "- snapshot: \`$expected_snapshot\`"
+            echo "- seen publications: $expected_count"
+            echo "- auth: \`$expected_auth\`"
+            echo "- exact public URLs verified: yes"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload SHA-addressed validation, import and registry receipts
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
