@@ -1,11 +1,15 @@
 # Region Talk: guarded import of external-publication research
 
-Status: **operator runbook for staging only**. This is the canonical release
-path for the three immutable historical research results listed in
+Status: **operator runbook for candidate-intake and publisher-profile staging
+only**. This is the canonical release path for the three immutable historical
+research results listed in
 [`external-publication-research-results.md`](external-publication-research-results.md).
 It operates the importer contract in
 [`external-publications.md`](external-publications.md); it does not approve or
 publish editorial material.
+
+Publisher-profile sidecars are a separate input family and must follow the
+dedicated procedure below. They must never be passed to the candidate importer.
 
 ## Preconditions and trust boundary
 
@@ -38,6 +42,56 @@ GitHub OIDC token only after dry validation succeeds, masks the returned IAM
 token, and places it in the job environment only for the staging command. Do
 not add a Yandex API key, service-account key, long-lived IAM token, or other
 credential to GitHub Secrets to make this workflow run.
+
+## Dedicated publisher-profile import and correction review
+
+Only exact committed files matching
+`docs/features/region-talk-channel/region-talk-publisher-profile-enrichment-*.json`
+may be passed to `scripts/region_talk_publisher_profile_import.py`. The guarded
+workflow is **Import trusted Region Talk publisher profiles**
+(`.github/workflows/region-talk-publisher-profile-import.yml`). It checks out
+and verifies exact trusted `main`, validates every selected byte stream before
+OIDC exchange, imports sequentially and uploads a seven-day sanitized receipt.
+It never invokes CandidateReport, finalizer, notifier or a publishing API.
+
+Local validation remains dry by default:
+
+```bash
+python3 scripts/region_talk_publisher_profile_import.py \
+  docs/features/region-talk-channel/region-talk-publisher-profile-enrichment-archi-ru-2026-08-02.json \
+  --expected-input-sha256 f8440fd7d6430386624936c3181bac11936e64da0d26f7641b7c763f3c906666 \
+  --report artifacts/codex/region-talk-source-profile-recovery/archi.dry.json
+```
+
+After protected import, perform a current exact YDB readback for every
+`publisher_profile_item`, correction, batch and receipt row. Exact replay must
+report zero writes. A source-key/profile-hash conflict, incomplete batch pair or
+incomplete strong read is a fail-closed result.
+
+Each `candidate_corrections` entry remains unreviewed and blocks regeneration
+until the explicit review path runs. Prepare a review document using
+`region_talk_publisher_profile_candidate_correction_review.v1`, including the
+exact `correction_hash`, canonical URL and SHA-256 of the currently reviewed
+live intake payload. Then validate against live state before executing:
+
+```bash
+python3 scripts/region_talk_publisher_profile_correction_review.py \
+  artifacts/codex/region-talk-source-profile-recovery/rg-review.json \
+  --report artifacts/codex/region-talk-source-profile-recovery/rg-review.dry.json
+
+python3 scripts/region_talk_publisher_profile_correction_review.py \
+  artifacts/codex/region-talk-source-profile-recovery/rg-review.json \
+  --execute \
+  --report artifacts/codex/region-talk-source-profile-recovery/rg-review.execute.json
+```
+
+The command rereads correction, identity and intake in one serializable
+transaction and aborts if the exact intake payload changed. It writes only the
+reviewed correction plus immutable review attestation. It does not mutate the
+intake/publication candidate, does not grant publication permission and does
+not send operator/public messages. `block_regional` remains non-regenerable.
+Reversing hard locality to `retain_external` additionally requires explicit
+fresh evidence marked `externality_override`; otherwise validation fails.
 
 ## Historical input status — do not dispatch the invalid files
 

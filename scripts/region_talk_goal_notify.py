@@ -36,17 +36,37 @@ if str(ROOT) not in sys.path:
 
 PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v5"
 AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v3"
-OPERATOR_REVIEW_PAYLOAD_VERSION = "region_talk_operator_review_payload_v1"
-EDITORIAL_WRITER_VERSION = "region_talk_editorial_onboarding_writer_v10_publisher_reader_brief"
-EDITORIAL_OUTPUT_CONTRACT = "region_talk_editorial_onboarding_output_v4"
+OPERATOR_REVIEW_PAYLOAD_VERSION = "region_talk_operator_review_payload_v2_source_profile"
+EDITORIAL_WRITER_VERSION = "region_talk_editorial_writer_v11_source_profile_hook"
+EDITORIAL_OUTPUT_CONTRACT = "region_talk_editorial_output_v5_source_profile_hook"
 MEDIA_MATERIALIZATION_CONTRACT_VERSION = "region_talk_media_materialization_v1"
 REGION_TALK_PUBLIC_CHANNEL_URL = "https://t.me/kalinigrad_visit"
-PUBLICATION_SOURCE_LINK_LABEL = "Источник публикации"
+PUBLICATION_SOURCE_LINK_LABEL = "Подробнее — в оригинальной публикации"
 REGION_TALK_PUBLIC_CHANNEL_LABEL = "О Калининграде говорят"
 PUBLISHER_READER_BRIEF_KIND = "publisher_reader_brief_v1"
 PUBLISHER_READER_BRIEF_DIMENSIONS = {
     "outlet_identity", "intended_audience", "distinctive_value",
 }
+PUBLIC_CAPTION_MIN_VISIBLE_CHARS = 220
+PUBLIC_CAPTION_MAX_VISIBLE_CHARS = 900
+
+_BODY_URL_RE = re.compile(
+    r"(?:https?://|www\.|(?<![\w.])t\.me/|(?<![\w.])vk\.com/)", re.I
+)
+_BODY_METATEXT_RE = re.compile(
+    r"\b(?:подробнее|читайте|смотрите|переходите|по\s+ссылке|"
+    r"источник\s+публикации|оригинал(?:\s+доступен)?|"
+    r"материал\s+представляет\s+ценность|публикация\s+позволяет)\b",
+    re.I,
+)
+_UNSUPPORTED_PRESTIGE_RE = re.compile(
+    r"\b(?:известн\w*|ведущ\w*|главн\w*|крупнейш\w*|обязательн\w*)\b",
+    re.I,
+)
+_ABBREVIATIONS_FOR_SENTENCE_SPLIT_RE = re.compile(
+    r"(?<![A-Za-zА-Яа-яЁё0-9_])(?:г|ул|д|просп|пер|пос|обл|р-н|им|оз|ст)\.",
+    re.I,
+)
 
 _NOT_TOKEN = r"(?<![A-Za-zА-Яа-яЁё0-9_])[Нн][Ее](?![A-Za-zА-Яа-яЁё0-9_])"
 _A_TOKEN = r"[Аа](?![A-Za-zА-Яа-яЁё0-9_])"
@@ -80,6 +100,190 @@ def contains_contrastive_not_a_cliche(value: Any) -> bool:
         lambda match: match.group(0)[:-1] + "\ue000", text
     )
     return bool(_CONTRASTIVE_NOT_A_CLICHE_RE.search(text))
+
+
+def editorial_sentences(value: Any) -> list[str]:
+    """Split the compact public body without treating common abbreviations as stops."""
+
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if not text:
+        return []
+    protected = _ABBREVIATIONS_FOR_SENTENCE_SPLIT_RE.sub(
+        lambda match: match.group(0)[:-1] + "\ue000", text
+    )
+    sentences = [
+        part.replace("\ue000", ".").strip()
+        for part in re.split(r"(?<=[.!?])\s+(?=[«\"'„(\[]*[A-ZА-ЯЁ0-9])", protected)
+        if part.strip()
+    ]
+    return sentences
+
+
+def sentence_is_complete(value: Any) -> bool:
+    text = str(value or "").strip()
+    if not text or text.endswith(("...", "…")):
+        return False
+    return bool(re.search(r"[.!?][»”\"')\]]*$", text))
+
+
+def validate_publication_body(
+    paragraph_1: Any,
+    paragraph_2: Any,
+    *,
+    row: dict[str, Any] | None = None,
+) -> list[str]:
+    """Validate the post-normalization vNext body; never rewrite its meaning."""
+
+    p1 = re.sub(r"\s+", " ", str(paragraph_1 or "")).strip()
+    p2 = re.sub(r"\s+", " ", str(paragraph_2 or "")).strip()
+    violations: list[str] = []
+    p1_sentences = editorial_sentences(p1)
+    p2_sentences = editorial_sentences(p2)
+    if len(p1_sentences) != 2:
+        violations.append("paragraph_1_not_exactly_two_sentences")
+    if len(p2_sentences) not in {1, 2}:
+        violations.append("paragraph_2_not_one_or_two_sentences")
+    if p1_sentences and not (45 <= len(p1_sentences[0]) <= 110):
+        violations.append("hook_length")
+    if any(_BODY_URL_RE.search(value) for value in (p1, p2)):
+        violations.append("paragraph_url")
+    combined = f"{p1} {p2}".strip()
+    if _BODY_METATEXT_RE.search(combined):
+        violations.append("cta_or_metatext_in_body")
+    if _UNSUPPORTED_PRESTIGE_RE.search(combined):
+        violations.append("unsupported_prestige_claim")
+    if contains_contrastive_not_a_cliche(combined):
+        violations.append("contrastive_not_a_cliche")
+    if not sentence_is_complete(p1) or not sentence_is_complete(p2):
+        violations.append("incomplete_final_sentence")
+    if row and p1_sentences:
+        source_labels = {
+            str(row.get(field) or "").strip()
+            for field in (
+                "publication_draft_source_attribution", "source_title", "source_name",
+            )
+        } - {""}
+        if any(
+            len(label) >= 3 and re.search(re.escape(label), p1_sentences[0], re.I)
+            for label in source_labels
+        ):
+            violations.append("source_name_padding_in_hook")
+    return sorted(set(violations))
+
+
+def candidate_has_pending_correction(row: dict[str, Any]) -> bool:
+    """Fail closed when candidate-level evidence still requires adjudication."""
+
+    states = {
+        str(row.get(field) or "").strip().lower()
+        for field in (
+            "externality_re_adjudication_status",
+            "candidate_correction_status",
+            "publisher_profile_candidate_correction_status",
+            "source_profile_correction_status",
+        )
+    } - {""}
+    regeneration_allowed = row.get("candidate_correction_regeneration_allowed") is True or str(
+        row.get("candidate_correction_regeneration_allowed") or ""
+    ).strip().lower() == "true"
+    mutation_allowed = row.get("candidate_correction_mutation_allowed") is True or str(
+        row.get("candidate_correction_mutation_allowed") or ""
+    ).strip().lower() == "true"
+    if states & {
+        "pending", "queued", "needs_review", "requires_review", "re_adjudicate_externality",
+        "blocked", "block",
+    }:
+        return True
+    if (
+        states & {"approved_external", "resolved_external", "retained_external", "dismissed", "superseded"}
+        and regeneration_allowed
+        and mutation_allowed
+    ):
+        return False
+    action = str(row.get("candidate_correction_recommended_action") or "").strip().lower()
+    return action in {"re_adjudicate_externality", "manual_research_review", "block"}
+
+
+def _source_display_name(row: dict[str, Any]) -> str:
+    return str(
+        row.get("publication_draft_source_attribution")
+        or row.get("source_title")
+        or row.get("source_name")
+        or ""
+    ).strip()[:220]
+
+
+def _quoted_source_name(value: str) -> str:
+    name = str(value or "").strip()
+    if not name:
+        return ""
+    if (name.startswith("«") and name.endswith("»")) or (
+        name.startswith('"') and name.endswith('"')
+    ):
+        return name
+    return f"«{name}»"
+
+
+def _author_genitive(value: str) -> str:
+    """Small display-only inflector; unknown/brand-shaped names remain unchanged."""
+
+    name = str(value or "").strip()
+    if not re.fullmatch(r"[А-ЯЁ][А-Яа-яЁё-]+", name):
+        return name
+    if name.endswith("ия"):
+        return name[:-1] + "и"
+    if name.endswith("я"):
+        return name[:-1] + "и"
+    if name.endswith("а"):
+        replacement = "и" if len(name) > 1 and name[-2].lower() in "гкхжчшщ" else "ы"
+        return name[:-1] + replacement
+    if name.endswith("й"):
+        return name[:-1] + "я"
+    if name[-1].lower() in "бвгджзклмнпрстфхцчшщ":
+        return name + "а"
+    return name
+
+
+def publication_source_cta(row: dict[str, Any]) -> tuple[str, str, str]:
+    """Return one deterministic source-aware CTA linked to the exact original."""
+
+    original = canonical_post_url(row)
+    if not original:
+        raise RuntimeError("original URL is required for Region Talk CTA")
+    name = _source_display_name(row)
+    entity_type = str(
+        row.get("source_onboarding_entity_type")
+        or row.get("source_profile_entity_type")
+        or row.get("publisher_entity_type")
+        or ""
+    ).strip().lower()
+    profile_kind = str(row.get("source_profile_kind") or "").strip().lower()
+    origin = str(row.get("content_origin_type") or "").strip().lower()
+    if origin == "academic_publication" or entity_type == "journal":
+        label = (
+            f"Подробнее — в статье журнала {_quoted_source_name(name)}"
+            if name else PUBLICATION_SOURCE_LINK_LABEL
+        )
+        return label, original, "journal"
+    if origin == "editorial_publication" or entity_type in {
+        "media_brand", "professional_platform", "cultural_platform",
+    }:
+        label = f"Подробнее — в статье на {name}" if name else PUBLICATION_SOURCE_LINK_LABEL
+        return label, original, "outlet"
+    if profile_kind in {"blog", "author_blog", "travel_blog"}:
+        label = f"Подробнее — в блоге {name}" if name else PUBLICATION_SOURCE_LINK_LABEL
+        return label, original, "blog"
+    if entity_type == "person":
+        author = _author_genitive(name)
+        label = f"Подробнее — у автора {author}" if author else PUBLICATION_SOURCE_LINK_LABEL
+        return label, original, "author"
+    if entity_type in {"collective", "thematic_channel", "channel"}:
+        label = (
+            f"Подробнее — в канале {_quoted_source_name(name)}"
+            if name else PUBLICATION_SOURCE_LINK_LABEL
+        )
+        return label, original, "channel"
+    return PUBLICATION_SOURCE_LINK_LABEL, original, "fallback"
 
 from scripts.region_talk_review_queue import (  # noqa: E402
     queue_messages,
@@ -384,6 +588,86 @@ def attach_live_source_fingerprints(publications: list[dict[str, Any]], source_r
         row["_live_authoritative_source_found"] = str(bool(source)).lower()
 
 
+def _profile_source_keys(row: dict[str, Any]) -> set[str]:
+    key = canonical_source_key_for_row(row)
+    keys = {key} if key else set()
+    for value in list(keys):
+        if value.startswith("domain:"):
+            keys.add("web:" + value.split(":", 1)[1])
+        elif value.startswith("web:"):
+            keys.add("domain:" + value.split(":", 1)[1])
+    domain = str(row.get("source_domain") or row.get("domain") or "").strip().lower()
+    if domain:
+        keys.update({"domain:" + domain, "web:" + domain})
+    return keys
+
+
+def attach_live_profile_and_corrections(
+    publications: list[dict[str, Any]],
+    profile_rows: list[dict[str, Any]],
+    correction_rows: list[dict[str, Any]],
+) -> None:
+    profiles: dict[str, dict[str, Any]] = {}
+    for profile in profile_rows:
+        for key in _profile_source_keys(profile):
+            previous = profiles.get(key)
+            if previous is None or str(profile.get("updated_at") or "") >= str(previous.get("updated_at") or ""):
+                profiles[key] = profile
+    corrections: dict[str, list[dict[str, Any]]] = {}
+    for correction in correction_rows:
+        url = canonical_post_url({
+            "post_url": correction.get("canonical_url")
+            or correction.get("candidate_post_url")
+            or correction.get("post_url")
+        })
+        if url:
+            corrections.setdefault(url, []).append(correction)
+    for row in publications:
+        profile = next((profiles[key] for key in _profile_source_keys(row) if key in profiles), None)
+        live_fingerprint = str(
+            (profile or {}).get("profile_fingerprint")
+            or (profile or {}).get("source_profile_fingerprint")
+            or (profile or {}).get("profile_hash")
+            or ""
+        ).strip()
+        row["_live_source_profile_checked"] = "true"
+        row["_live_source_profile_fingerprint"] = live_fingerprint
+        for correction in corrections.get(canonical_post_url(row), []):
+            status = str(correction.get("review_status") or "unreviewed").lower()
+            revalidation = str(
+                correction.get("live_revalidation_status")
+                or correction.get("revalidation_status")
+                or ""
+            ).lower()
+            if (
+                status in {"unreviewed", "pending", "queued", "needs_review"}
+                or revalidation == "pending_live_revalidation"
+                or correction.get("regeneration_allowed") is False
+                or str(correction.get("regeneration_allowed") or "").lower() == "false"
+            ):
+                row["publisher_profile_candidate_correction_status"] = status
+                row["externality_re_adjudication_status"] = "pending"
+                row["candidate_correction_recommended_action"] = str(
+                    correction.get("recommended_action") or ""
+                )
+                row["candidate_correction_regeneration_allowed"] = "false"
+                row["candidate_correction_mutation_allowed"] = "false"
+                break
+            row["publisher_profile_candidate_correction_status"] = revalidation or status
+            row["candidate_correction_status"] = revalidation or status
+            row["externality_re_adjudication_status"] = revalidation or status
+            row["candidate_correction_recommended_action"] = str(
+                correction.get("recommended_action") or ""
+            )
+            row["candidate_correction_regeneration_allowed"] = str(
+                bool(correction.get("regeneration_allowed"))
+            ).lower()
+            row["candidate_correction_mutation_allowed"] = str(
+                bool(correction.get("candidate_mutation_allowed"))
+            ).lower()
+            break
+
+
 def publication_scan_limit(send_limit: int) -> int:
     """Scan the ledger before applying the much smaller delivery batch limit.
 
@@ -412,6 +696,12 @@ def read_publication_rows(limit: int) -> tuple[Any, Any, Any, str, list[dict[str
     # still participate in the same live fingerprint check before delivery.
     source_rows += read_kind_rows(pool, ydb, table, "external_publication_source_item", source_limit)
     attach_live_source_fingerprints(out, source_rows)
+    profiles = read_kind_rows(pool, ydb, table, "source_onboarding_profile_item", source_limit)
+    profiles += read_kind_rows(pool, ydb, table, "publisher_profile_item", source_limit)
+    corrections = read_kind_rows(
+        pool, ydb, table, "publisher_profile_candidate_correction_item", source_limit
+    )
+    attach_live_profile_and_corrections(out, profiles, corrections)
     out.sort(key=lambda r: (int(r.get("publication_rank") or 999999), -float(r.get("publication_score") or 0)))
     return ydb, driver, pool, table, out
 
@@ -539,6 +829,8 @@ def is_unsent_confirmed_publication(row: dict[str, Any]) -> bool:
 def is_publication_draft_ready(row: dict[str, Any]) -> bool:
     """Require complete operator copy before chat delivery."""
 
+    if candidate_has_pending_correction(row):
+        return False
     if str(row.get("publication_draft_status") or "") != "ready_for_operator_review":
         return False
     prompt_version = str(row.get("publication_draft_prompt_version") or "")
@@ -557,6 +849,26 @@ def is_publication_draft_ready(row: dict[str, Any]) -> bool:
         "publication_draft_telegram_text",
         "publication_draft_vk_text",
     )):
+        return False
+    source_profile_fingerprint = str(row.get("source_profile_fingerprint") or "").strip()
+    onboarding_profile_fingerprint = str(
+        row.get("source_onboarding_profile_fingerprint") or ""
+    ).strip()
+    if not source_profile_fingerprint or (
+        onboarding_profile_fingerprint
+        and source_profile_fingerprint != onboarding_profile_fingerprint
+    ):
+        return False
+    if str(row.get("_live_source_profile_checked") or "").lower() == "true" and (
+        not str(row.get("_live_source_profile_fingerprint") or "").strip()
+        or source_profile_fingerprint
+        != str(row.get("_live_source_profile_fingerprint") or "").strip()
+    ):
+        return False
+    if not (
+        str(row.get("source_onboarding_status") or "") == "ready"
+        and str(row.get("source_onboarding_paragraph") or "").strip()
+    ):
         return False
     if str(row.get("content_origin_type") or "") in {
         "editorial_publication", "academic_publication",
@@ -577,8 +889,8 @@ def is_publication_draft_ready(row: dict[str, Any]) -> bool:
             and set(dimensions) == PUBLISHER_READER_BRIEF_DIMENSIONS
             and all(
                 isinstance(dimensions.get(key), dict)
-                and str(dimensions[key].get("text") or "").strip()
-                and bool(dimensions[key].get("evidence_ids"))
+                and str(dimensions[key].get("text") or dimensions[key].get("value") or "").strip()
+                and bool(dimensions[key].get("evidence_ids") or dimensions[key].get("evidence_refs"))
                 for key in PUBLISHER_READER_BRIEF_DIMENSIONS
             )
         ):
@@ -595,10 +907,16 @@ def is_publication_draft_ready(row: dict[str, Any]) -> bool:
     except RuntimeError:
         paragraphs = ()
     visible_caption = (
-        public_caption_visible_text(paragraphs[0], paragraphs[1])
+        public_caption_visible_text(
+            paragraphs[0], paragraphs[1], publication_source_cta(row)[0]
+        )
         if len(paragraphs) == 2 else ""
     )
-    if len(paragraphs) != 2 or not (550 <= len(visible_caption) <= 900):
+    if (
+        len(paragraphs) != 2
+        or validate_publication_body(paragraphs[0], paragraphs[1], row=row)
+        or not (PUBLIC_CAPTION_MIN_VISIBLE_CHARS <= len(visible_caption) <= PUBLIC_CAPTION_MAX_VISIBLE_CHARS)
+    ):
         return False
     media_status = str(row.get("publication_media_materialization_status") or "")
     media_contract = str(row.get("publication_media_materialization_contract_version") or "")
@@ -624,6 +942,15 @@ def publication_draft_fingerprint(row: dict[str, Any]) -> str:
         ).strip(),
         "prompt_version": str(
             row.get("publication_draft_prompt_version") or ""
+        ).strip(),
+        "contract_version": str(
+            row.get("publication_draft_contract_version") or ""
+        ).strip(),
+        "source_profile_fingerprint": str(
+            row.get("source_profile_fingerprint") or ""
+        ).strip(),
+        "link_metadata_json": str(
+            row.get("publication_draft_link_metadata_json") or ""
         ).strip(),
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -912,7 +1239,10 @@ def publication_presentation_manifest(row: dict[str, Any]) -> dict[str, Any]:
 
 def publication_editorial_paragraphs(draft: str) -> tuple[str, str]:
     editorial = re.split(
-        r"\n\s*\n(?:Источник(?: публикации)?|Оригинал|О Калининграде говорят)(?::|\n|$)",
+        r"\n\s*\n(?:"
+        r"(?:Источник(?: публикации)?|Оригинал|О Калининграде говорят)(?::|\n|$)"
+        r"|Подробнее\s+—[^\n]*:\s*https?://"
+        r")",
         str(draft or "").strip(),
         maxsplit=1,
         flags=re.I,
@@ -929,49 +1259,68 @@ def _draft_two_paragraphs(row: dict[str, Any]) -> tuple[str, str]:
     )
 
 
-def publication_footer_plain(original_url: str) -> str:
-    original = str(original_url or "").strip()
-    if not original:
-        raise RuntimeError("original URL is required for Region Talk footer")
+def publication_footer_plain(row_or_url: dict[str, Any] | str) -> str:
+    row = (
+        dict(row_or_url)
+        if isinstance(row_or_url, dict)
+        else {"post_url": str(row_or_url or "")}
+    )
+    label, original, _kind = publication_source_cta(row)
     return (
-        f"{PUBLICATION_SOURCE_LINK_LABEL}: {original}\n\n"
+        f"{label}: {original}\n\n"
         f"{REGION_TALK_PUBLIC_CHANNEL_LABEL}: {REGION_TALK_PUBLIC_CHANNEL_URL}"
     )
 
 
-def public_caption_visible_text(paragraph_1: str, paragraph_2: str) -> str:
+def public_caption_visible_text(
+    paragraph_1: str,
+    paragraph_2: str,
+    source_link_label: str = PUBLICATION_SOURCE_LINK_LABEL,
+) -> str:
     return (
         f"{paragraph_1}\n\n{paragraph_2}\n\n"
-        f"{PUBLICATION_SOURCE_LINK_LABEL}\n\n{REGION_TALK_PUBLIC_CHANNEL_LABEL}"
+        f"{source_link_label}\n\n{REGION_TALK_PUBLIC_CHANNEL_LABEL}"
     )
 
 
-def replace_publication_draft_footer(draft: str, original_url: str) -> str:
+def replace_publication_draft_footer(
+    draft: str,
+    original_url: str,
+    *,
+    row: dict[str, Any] | None = None,
+) -> str:
     p1, p2 = publication_editorial_paragraphs(draft)
-    return f"{p1}\n\n{p2}\n\n{publication_footer_plain(original_url)}"
+    render_row = {**dict(row or {}), "post_url": original_url}
+    violations = validate_publication_body(p1, p2, row=render_row)
+    if violations:
+        raise RuntimeError("Region Talk draft body failed footer revalidation: " + ",".join(violations))
+    return f"{p1}\n\n{p2}\n\n{publication_footer_plain(render_row)}"
 
 
 def public_caption(row: dict[str, Any], *, html_mode: bool = False) -> str:
     """Render one original link and the canonical Region Talk channel footer."""
 
     p1, p2 = _draft_two_paragraphs(row)
-    if contains_contrastive_not_a_cliche(f"{p1}\n\n{p2}"):
-        raise RuntimeError("Region Talk caption contains banned contrastive_not_a_cliche")
-    original = str(row.get("post_url") or row.get("canonical_url") or "").strip()
-    if not original:
-        raise RuntimeError("original URL is required for Region Talk caption")
+    violations = validate_publication_body(p1, p2, row=row)
+    if violations:
+        raise RuntimeError("Region Talk caption body invalid: " + ",".join(violations))
+    cta_label, original, _cta_kind = publication_source_cta(row)
     if html_mode:
         caption = (
             f"{html.escape(p1)}\n\n{html.escape(p2)}\n\n"
-            f'<b><a href="{html.escape(original, quote=True)}">{PUBLICATION_SOURCE_LINK_LABEL}</a></b>\n\n'
+            f'<b><a href="{html.escape(original, quote=True)}">{html.escape(cta_label)}</a></b>\n\n'
             f'<b><a href="{REGION_TALK_PUBLIC_CHANNEL_URL}">{REGION_TALK_PUBLIC_CHANNEL_LABEL}</a></b>'
         )
-        visible = public_caption_visible_text(p1, p2)
+        visible = public_caption_visible_text(p1, p2, cta_label)
     else:
-        caption = f"{p1}\n\n{p2}\n\n{publication_footer_plain(original)}"
+        caption = f"{p1}\n\n{p2}\n\n{publication_footer_plain(row)}"
         visible = caption
-    if not (550 <= len(visible) <= 900):
-        raise RuntimeError(f"Region Talk caption must be 550..900 visible chars, got {len(visible)}")
+    if not (PUBLIC_CAPTION_MIN_VISIBLE_CHARS <= len(visible) <= PUBLIC_CAPTION_MAX_VISIBLE_CHARS):
+        raise RuntimeError(
+            "Region Talk caption must be "
+            f"{PUBLIC_CAPTION_MIN_VISIBLE_CHARS}..{PUBLIC_CAPTION_MAX_VISIBLE_CHARS} "
+            f"visible chars, got {len(visible)}"
+        )
     return caption
 
 

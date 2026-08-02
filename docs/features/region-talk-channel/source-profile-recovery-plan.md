@@ -1,14 +1,39 @@
 # Region Talk: восстановление профилей источников и входных данных Writer
 
 Дата среза: 2026-08-02  
-Статус: **implementation-ready, без production effect**  
-Решение: **GO_TO_BOUNDED_RECOVERY**
+Статус: **реализовано в integration; live import/capture/backfill закрываются
+release evidence после merge/deploy**
+Решение: **BOUNDED_RECOVERY_IMPLEMENTED_FAIL_CLOSED**
 
-## 1. Что сломано фактически
+## 0. Карта реализации
+
+- social capture: `scripts/region_talk_source_profile_capture.py` и существующие
+  role-scoped adapters CandidateReport;
+- capture/profile ordering and budgets:
+  `scripts/region_talk_publication_finalizer.py`;
+- publisher profile projection/import:
+  `scripts/region_talk_publisher_profile.py` и
+  `scripts/region_talk_publisher_profile_import.py`;
+- explicit correction review:
+  `scripts/region_talk_publisher_profile_correction_review.py`;
+- Writer vNext/backfill/operator revision:
+  `scripts/region_talk_publication_draft_backfill.py`,
+  `scripts/region_talk_goal_notify.py` и
+  `scripts/region_talk_preproduction_footer_repair.py`;
+- guarded protected import:
+  `.github/workflows/region-talk-publisher-profile-import.yml`.
+
+Реализация не включает автопубликацию. Три publisher sidecar-файла получают
+production effect только после protected import из точного `main`; социальные
+captures требуют свободной штатной Telegram/VK role session. Фактические
+receipt, readback, новые operator message IDs и 20-message audit не следует
+подменять результатами unit-тестов: они фиксируются при live closure.
+
+## 1. Что было сломано до recovery
 
 Механизм `source onboarding` уже существует, но production-путь существенно уже исходного продуктового замысла.
 
-Текущий `scripts/region_talk_publication_finalizer.py`:
+До этой реализации `scripts/region_talk_publication_finalizer.py`:
 
 1. собирает доказательства только из уже имеющейся authoritative source row, внешнего реестра и `source_memory_rows`;
 2. ограничивает пакет примерно восемью фрагментами;
@@ -106,7 +131,8 @@ LLM получает description + pinned + pre-digest + representative excerpts
 
 Профиль social-источника `ready`, когда:
 
-- есть описание/закреп или минимум 20 пригодных authored posts;
+- есть минимум 20 пригодных authored posts; доступные описание и закреп
+  сохраняются как дополнительные evidence surfaces;
 - общий capture содержит минимум 30 просмотренных постов, если архив это позволяет;
 - минимум три тематически различные representative excerpts;
 - каждое утверждение reader brief связано с evidence ID;

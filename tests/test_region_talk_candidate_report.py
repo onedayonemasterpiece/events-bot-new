@@ -5242,13 +5242,15 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             mod.Seed("vk1", "vk", "VK1", "@places", "https://vk.com/places", "travel", "", 1, "", "", "", "", "", "", True, "unknown", ""),
             mod.Seed("vv1", "vkvideo", "VV1", "@rgoclub", "https://vk.com/rgoclub", "travel", "", 1, "", "", "", "", "", "", True, "unknown", ""),
         ]
-        os.environ["REGION_TALK_MAX_SOURCES"] = "4"
-        os.environ["REGION_TALK_FETCH_TELEGRAM"] = "0"
-        try:
+        # This is a fetch-disabled coverage contract.  Keep it hermetic from
+        # production/test-run REGION_TALK_* settings inherited by the pytest
+        # process; selection policy overrides must not silently remove one of
+        # the four coverage surfaces and make the full suite order-dependent.
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_MAX_SOURCES": "4",
+            "REGION_TALK_FETCH_TELEGRAM": "0",
+        }, clear=True):
             rows, posts = __import__("asyncio").run(mod.fetch_telegram_posts(seeds, mod.Status(), Path(tempfile.mkdtemp())))
-        finally:
-            os.environ.pop("REGION_TALK_MAX_SOURCES", None)
-            os.environ.pop("REGION_TALK_FETCH_TELEGRAM", None)
         self.assertFalse(posts)
         statuses = {r["source_seed_id"]: r["fetch_status"] for r in rows}
         self.assertEqual(statuses["tg1"], "skipped_fetch_disabled")
@@ -5799,6 +5801,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
     def test_vk_wall_retries_resolved_signed_owner_after_domain_error(self) -> None:
         mod = load_module()
         wall_domains = []
+        profile_metadata_calls = []
 
         class Response:
             def __init__(self, payload):
@@ -5816,6 +5819,9 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             params = urllib.parse.parse_qs(parsed.query)
             if "utils.resolveScreenName" in parsed.path:
                 return Response({"response": {"object_id": 321, "type": "group"}})
+            if "groups.getById" in parsed.path:
+                profile_metadata_calls.append(params)
+                return Response({"response": {"groups": [{"id": 321, "name": "Travel", "description": "Авторские поездки"}]}})
             wall_domains.append(params.get("domain", [""])[0])
             if len(wall_domains) == 1:
                 return Response({"error": {"error_code": 100, "error_msg": "domain not domain"}})
@@ -5831,6 +5837,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             source, posts = mod.fetch_vk_wall_for_seed(seed, Path(td), 10, source_row={"external_blogger_evidence_status": "confirmed_external"})
 
         self.assertEqual(wall_domains, ["renamedvk", "-321"])
+        self.assertEqual(len(profile_metadata_calls), 1)
         self.assertEqual(source["fetch_status"], "ok")
         self.assertEqual(source["vk_wall_resolve_status"], "group")
         self.assertEqual(posts[0]["post_url"], "https://vk.com/wall-321_7")

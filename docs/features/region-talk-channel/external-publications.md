@@ -1,6 +1,12 @@
 # Внешние издания и научные публикации
 
-Status: **contract + importer + guarded CandidateReport consumer + diversified queue implemented**. Only intake rows explicitly marked `ready_for_region_talk_scoring` can enter the existing E5/BGE/image/final-verifier funnel; manual-review and blocked research rows remain outside it. This is an extension of **Region Talk**, not a separate channel or crawler.
+Status: **candidate intake, guarded CandidateReport consumer, durable publisher
+profiles and diversified queue implemented**. Only intake rows explicitly
+marked `ready_for_region_talk_scoring` can enter the existing
+E5/BGE/image/final-verifier funnel; manual-review and blocked research rows
+remain outside it. Publisher profile readiness is a separate prerequisite for
+public-copy Writer. This is an extension of **Region Talk**, not a separate
+channel or crawler.
 
 ## Product decision
 
@@ -76,6 +82,32 @@ Region Talk additionally prioritizes materials that form an **evidence-based pos
   replaces a source image while pretending to be source media.
 
 ## Machine contract and importer
+
+Candidate research and publisher research have different durable identities
+and importers:
+
+- `region-talk-external-research-result-*.json` describes article candidates
+  and is consumed only by `region_talk_external_publication_import.py`;
+- `region-talk-publisher-profile-enrichment-*.json` describes reusable
+  outlet/journal profiles plus candidate-specific corrections and is consumed
+  only by `region_talk_publisher_profile_import.py` or its exact-main guarded
+  Action.
+
+Publisher profiles are keyed by canonical `web:<domain>` independently of
+article identity. The importer retains exact input/profile/evidence hashes and
+writes `publisher_profile_item` separately from external intake. Future normal
+candidate research may enrich the same profile monotonically by evidence
+fingerprint; an article cannot replace a richer official dossier, a
+scope/locality conflict writes nothing, and profile enrichment alone never
+reopens or publishes a candidate.
+
+Candidate corrections are durable
+`publisher_profile_candidate_correction_item` rows. Pending corrections block
+Writer and regeneration without changing the accepted verdict. Explicit review
+uses `region_talk_publisher_profile_correction_review.py`, a serializable exact
+correction/identity/intake reread and immutable attestation; the command itself
+never mutates a candidate. See
+[`external-publication-import-runbook.md`](external-publication-import-runbook.md).
 
 Canonical JSON Schema: [`external-publication-research.schema.json`](external-publication-research.schema.json), version `region_talk_external_research.v1`. Importer version: `region_talk_external_publication_import.v1`.
 
