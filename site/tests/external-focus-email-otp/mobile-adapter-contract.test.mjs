@@ -4,7 +4,8 @@ import test from 'node:test';
 import { parse } from 'yaml';
 
 import { buildAppiumCapabilities, classifyActiveIosApp, extractDriverNetworkEvents,
-  inspectSafariNativeUiProtocol, summarizeKnownSafariNativeSource } from '../../e2e/focus-email/adapters/appium-ui.mjs';
+  inspectSafariNativeUiProtocol, observeNativeKeyboard,
+  summarizeKnownSafariNativeSource } from '../../e2e/focus-email/adapters/appium-ui.mjs';
 
 test('Appium capability builder pins real mobile browsers and iOS keyboard ownership', () => {
   const ios = buildAppiumCapabilities('ios', { deviceName: 'iPhone 16', platformVersion: '18.5', udid: 'opaque' },
@@ -22,6 +23,20 @@ test('Appium capability builder pins real mobile browsers and iOS keyboard owner
   const android = buildAppiumCapabilities('android', { deviceName: 'Pixel 7', platformVersion: '15' }, {});
   assert.equal(android.browserName, 'Chrome');
   assert.equal(android['appium:automationName'], 'UiAutomator2');
+});
+
+test('native keyboard observation waits through a delayed Android IME report', async () => {
+  let observations = 0;
+  const driver = {
+    isKeyboardShown: async () => ++observations >= 2,
+    waitUntil: async (predicate) => {
+      if (await predicate()) return true;
+      if (await predicate()) return true;
+      throw new Error('timeout');
+    },
+  };
+  assert.equal(await observeNativeKeyboard(driver), true);
+  assert.equal(observations, 2);
 });
 
 test('adapter confines diagnostic native source capture before candidate navigation and sensitive input', async () => {
