@@ -74,6 +74,25 @@ The deterministic ZIP is written under ignored `artifacts/codex/`.
 9. Run the Standard Webhooks signed fixture, provider seed canaries and the real
    external-mailbox GitHub Action before any wider onboarding rollout.
 
+### Current production staging state (2026-08-02)
+
+- migration `20260801222242` is present in the hosted migration history;
+- Function `d4euk47p8gv7qmgrtib4` and API Gateway
+  `d5d17smc4tutrt316fjo` are active, with request logging disabled and an
+  invalid-signature smoke returning `401`;
+- the Supabase Send Email Hook is intentionally **not enabled** yet, so the
+  deployed boundary cannot receive Auth traffic;
+- NotiSend capacity is `routing_ready=false` until the current provider-period
+  used-recipient count and period end are reconciled; do not infer `0` from the
+  empty local admission set;
+- GitHub Environment `external-e2e` exists, requires review and allows only
+  `main`. Its non-secret route/mail variables are set; a dedicated mailbox,
+  `E2E_RECIPIENT_TEMPLATE` and the two IMAP secrets are still required for a
+  real live run.
+
+This is an inactive staging state, not rollout evidence. Do not enable the Auth
+hook merely because the Function and Gateway exist.
+
 Before the canary, read from the NotiSend account the current tariff-period end
 and the **actual number of unique recipients already used in that period**. Apply
 that aggregate through the service-role-only RPC (example values only):
