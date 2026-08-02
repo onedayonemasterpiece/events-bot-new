@@ -18,6 +18,8 @@ Status: **validated research evidence / automated YDB intake**. JSON-файлы 
 | `region-talk-external-2026-08-02-063021` / 2026-08-02 06:30:21 | [`region-talk-external-research-result-region-talk-external-2026-08-02-063021.json`](region-talk-external-research-result-region-talk-external-2026-08-02-063021.json) | 14 | 10 | 4 | 3 | 4 | strict schema + importer semantic validation: clean; successor of `region-talk-external-2026-07-31-174033` | `2f6f4f4c3e1ef63c426332edf182dc6b6851544d0d5ca9c5cefa5ac4c9c300de` |
 | `region-talk-external-2026-08-01-163142` / 2026-08-01 16:31:42 | [`region-talk-external-research-result-region-talk-external-2026-08-01-163142.json`](region-talk-external-research-result-region-talk-external-2026-08-01-163142.json) | 20 | 10 | 10 | 4 | 1 | strict schema + importer semantic validation: clean | `e662b449811a0887dd2fa0ebe33903d8caffed3231323ee9e8fbfc55b027bad7` |
 
+Materialization-проверка выполнена GitHub Actions run `30736788175`: оба successor-файла собраны из неизменённых historical inputs, exact SHA-256 совпали, importer принял **34/34** candidate rows; `rejected=0`, `conflicts=0`, распределение readiness — **22 `candidate_report` / 12 `manual_review_required`**.
+
 Successor-пакеты заменяют два ошибочных исторических входа и не увеличивают число уникально найденных публикаций. Перед каждым `--execute` importer перечитывает live YDB, применяет canonical URL / DOI / normalized title+authors identity guard и выполняет запись атомарно. Повторный запуск становится replay/no-op и не создаёт дубликатов.
 
 ## Автоматический импорт
