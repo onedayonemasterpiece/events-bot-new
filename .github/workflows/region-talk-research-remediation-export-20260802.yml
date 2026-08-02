@@ -24,7 +24,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p export/docs/features/region-talk-channel export/scripts export/tests export/.github/workflows
+          mkdir -p export/docs/features/region-talk-channel export/scripts export/tests export/.github/workflows export/kaggle/RegionTalkCandidateReport
           cp docs/features/region-talk-channel/external-publication-research.prompt.txt export/docs/features/region-talk-channel/
           cp docs/features/region-talk-channel/external-publication-research.schema.json export/docs/features/region-talk-channel/
           cp docs/features/region-talk-channel/external-publication-research-results.md export/docs/features/region-talk-channel/
@@ -35,6 +35,10 @@ jobs:
           cp scripts/region_talk_external_publication_review.py export/scripts/
           cp scripts/region_talk_orchestrator.py export/scripts/
           cp scripts/region_talk_scheduled_runner.py export/scripts/
+          cp scripts/region_talk_publication_finalizer.py export/scripts/
+          cp scripts/region_talk_publication_plan.py export/scripts/
+          cp scripts/region_talk_goal_notify.py export/scripts/
+          cp kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py export/kaggle/RegionTalkCandidateReport/
           cp tests/test_region_talk_external_publication_import.py export/tests/
           cp .github/workflows/region-talk-external-publication-auto-import.yml export/.github/workflows/
           find export -type f -print0 | sort -z | xargs -0 sha256sum > export/SHA256SUMS
