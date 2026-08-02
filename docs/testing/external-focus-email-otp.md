@@ -110,6 +110,24 @@ The immutable preview under test records repository SHA
   proved stable disappearance, attached WebKit only afterwards, and passed
   control email, numeric and product-email keyboard checks with exact `0/0/0`.
   The startup and cleared screenshots independently show the transition.
+- Direct-Supabase-outage Android acceptance:
+  [run 30772062840](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30772062840)
+  against preview SHA `3e892bd510818c07b2e14b708db7d5f39e2ae845` is terminal PASS:
+  one matching message, exact `issue/verify/registration=1/1/1`, registration
+  `200`, all three mandatory outcomes on relay, four direct fault hits,
+  membership-confirmed + returning-member and redaction PASS.
+- Direct-Supabase-outage iOS acceptance:
+  [run 30772233868](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30772233868)
+  against the same preview SHA is terminal PASS: the first-run dialog was
+  observed, dismissed once and verified absent; control email/numeric and
+  product email/OTP keyboards all passed; mail and side effects are exact
+  `1/1/1`, registration is `200`, every mandatory final route is relay, eight
+  direct fault hits were observed, returning state and redaction passed.
+
+The Android/iOS pair closes the first mobile transport-failure release cell.
+It proves client-path fallback when direct Supabase is unavailable; it does not
+claim Supabase-upstream outage survival or the relay-unavailable/both-down
+profiles, which remain separate cells.
 
 The Ubuntu Android job explicitly enables and verifies `/dev/kvm` before
 booting API 35. Unaccelerated x86 emulation is a blocked infrastructure result,
