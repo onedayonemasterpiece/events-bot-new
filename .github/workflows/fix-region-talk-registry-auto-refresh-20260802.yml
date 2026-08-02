@@ -31,7 +31,7 @@ jobs:
 
           path = Path('.github/workflows/region-talk-external-publication-auto-import.yml')
           text = path.read_text(encoding='utf-8')
-          old = '          count="${{ steps.inputs.outputs.count }}"\n'
+          old = '          count="' + '$' + '{{ steps.inputs.outputs.count }}"\n'
           new = '          count="$(awk \'NF {count++} END {print count + 0}\' "$REPORT_ROOT/inputs.txt")"\n'
           if text.count(old) != 1:
               raise SystemExit(f'unexpected replacement count: {text.count(old)}')
