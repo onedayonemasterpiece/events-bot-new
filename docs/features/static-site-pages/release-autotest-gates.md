@@ -11,7 +11,7 @@ Release truth остаётся `origin/main` + exact immutable candidate identit
 Локальный checkout, side branch, mobile viewport screenshot и незавершённый
 background run не закрывают release gate.
 
-Каждый release evidence record должен содержать:
+Каждый release evidence record содержит:
 
 - full repository SHA;
 - build/snapshot/tree identity;
@@ -21,7 +21,7 @@ background run не закрывают release gate.
 - PASS/FAIL/BLOCKED;
 - artifact/run link;
 - redaction result;
-- disposition для advisory/background signals.
+- disposition advisory/background signals.
 
 ## 2. Обязательные gates по типу изменения
 
@@ -32,11 +32,12 @@ background run не закрывают release gate.
 | Full catalog publication | full L0 catalog + sharded L1 route health |
 | Input/focus/keyboard | L1 + Android Emulator + iOS Simulator critical scenario |
 | PWA manifest/install/start URL/scope/SW | L0 + L1 + Android/iOS system integration |
-| Focus onboarding/Auth/OTP | existing browser OTP + Android browser-tab OTP + iOS browser-tab OTP |
+| Focus onboarding/Auth/OTP | browser OTP + Android browser-tab OTP + iOS browser-tab OTP |
 | Supabase/Yandex route change | direct/relay contracts + affected browser/mobile journey |
-| Personalization/personal pages | no-leak/data contract + authenticated browser journey; mobile sample when UI/input changes |
-| Event Push subscription/reminder scheduler | L0 outbox/idempotency + L1 + Android/iOS L2; L3 background canary before enablement |
-| Postbox calendar invitation | L0 MIME/UID/SEQUENCE + protected Postbox/mailbox roundtrip + client matrix before product enablement |
+| Personalization/personal pages | no-leak/data contract + authenticated browser journey |
+| Saved-event simple calendar view | L0 grouping/sort/lifecycle + L1 selected-current-event row and duplicate prevention |
+| Event Push subscription/preferences/scheduler | L0 preferences/outbox/idempotency + L1 + Android/iOS L2; L3 background canary before enablement |
+| Postbox calendar invitation | L0 MIME/UID/SEQUENCE + protected Postbox/mailbox roundtrip + client matrix before enablement |
 | Android Calendar Connector | L0 manifest/App Links/permissions + L1 fallback + Android native editor L2 + bounded L3 OEM canary |
 | Data-only copy/facts update | no mandatory emulator unless it changes a mobile-critical component |
 
@@ -57,14 +58,14 @@ background run не закрывают release gate.
 
 Можно запустить и не ждать в текущем PR:
 
-- full catalog crawl после локального affected pass;
+- full catalog crawl после affected pass;
 - expanded visual sample;
 - Android/iOS nightly при data-only изменении;
 - cross-browser extended matrix.
 
-Handoff обязан назвать run как `STARTED_BACKGROUND`, указать run ID/URL, SHA и
-scenario set. Такой run не является PASS. Перед release promotion все связанные
-signals должны иметь terminal result и disposition.
+Handoff обозначает такой run как `STARTED_BACKGROUND`, указывает run ID/URL,
+SHA и scenario set. До release promotion все обязательные background signals
+должны иметь terminal result и disposition.
 
 ### Protected manual
 
@@ -74,127 +75,122 @@ signals должны иметь terminal result и disposition.
 - production write probe;
 - paid device-cloud L3.
 
-Эти jobs используют защищённый Environment, bounded concurrency и отдельный
-side-effect contract. Secrets не передаются browser catalog или visual jobs.
+Эти jobs используют protected Environment, bounded concurrency и отдельный
+side-effect contract. Secrets не передаются catalog/visual jobs.
 
-## 4. Первый release milestone
+## 4. Первый mobile milestone
 
-Первый законченный mobile milestone — не общий framework всех страниц, а
-модификация существующего isolated focus-group OTP harness:
+Первый законченный mobile milestone — расширение существующего focus OTP harness:
 
-1. сохранить текущий Chromium + IMAPS baseline;
+1. сохранить Chromium + mailbox baseline;
 2. выделить shared semantic journey;
-3. добавить Android Emulator + Chrome + реальную keyboard acceptance;
-4. добавить iOS Simulator + Mobile Safari + реальную keyboard acceptance;
+3. добавить Android Emulator + Chrome + keyboard acceptance;
+4. добавить iOS Simulator + Mobile Safari + keyboard acceptance;
 5. выполнять real-mail variants последовательно;
 6. сохранить one issue / one verify / one participant registration;
-7. выпустить одинаковый sanitized evidence contract;
-8. не включать PWA install/relaunch в этот же первый PR.
+7. выпустить единый sanitized evidence contract;
+8. не смешивать PWA install/relaunch в тот же первый PR.
 
-До terminal PASS Android и iOS новый OTP transport нельзя объявлять доказанным
-для переноса на остальные authorized static pages.
+До terminal PASS Android/iOS OTP transport не считается доказанным для других
+authorized pages.
 
 ## 5. Отдельный PWA gate
 
-После browser-tab OTP добавляется `focus.otp.installed_pwa`:
+`focus.otp.installed_pwa`:
 
 - Android Chrome install UI → Launcher → standalone → relaunch;
 - iOS Safari Share Sheet → Add to Home Screen → SpringBoard → relaunch;
 - stable manifest `id`, `scope`, `start_url`;
 - persisted participant state;
-- честное network-only поведение service worker.
+- честное network-only service-worker поведение.
 
-Offline content availability не является текущим обязательством и не должна
-появляться как ложный release gate.
+Offline content availability не является текущим обязательством.
 
 ## 6. Page/data rollout
 
-Сценарии добавляются поступательно вместе с реализацией или аудитом surface:
+Сценарии добавляются поступательно:
 
 - route non-empty/content minimum;
 - transport blocks;
 - venue/source medallions;
-- people/headliner/celebrity cards;
-- authenticated pre-generated `Для меня` pages;
-- Supabase direct/relay и Yandex connectivity;
+- people/headliner cards;
+- authenticated personal pages;
+- Supabase direct/relay;
 - personalization ordering/feedback;
-- expected block content and typed empty states.
+- typed empty states.
 
 `planned` не превращается в blocking до появления product contract. При
-переходе в `implemented` одновременно обновляются machine-readable registry,
-реализующий test, release gate и evidence sample.
+переходе в `implemented` одновременно обновляются registry, реализующий test,
+release gate и evidence sample.
 
-## 7. NO-GO
+## 7. Stage 14: «Не пропустить»
 
-Release blocked, если:
+Этот раздел является evidence companion к Stage 14 общего
+[`release-plan.md`](release-plan.md), а не самостоятельным release plan.
 
-- mobile-sensitive code изменён, а required Android/iOS result отсутствует;
-- OTP result FAIL/BLOCKED либо target SHA не совпал;
-- mandatory background run ещё не terminal;
-- evidence содержит PII/OTP/token или не прошёл redaction;
-- full catalog имеет unexplained empty/broken route;
-- simulator run подменён desktop mobile viewport/WebKit;
-- planned test представлен как passed implementation;
-- один fixed mailbox используется параллельно несколькими real OTP jobs;
-- hardcoded event URL устарел и scenario не использовал current-event resolver;
-- selected event переключился после первого Push/email side effect;
-- emulator environment smoke выдан за Push/calendar PASS;
-- Postbox provider acceptance выдан за calendar-client recognition;
-- ICS download выдан за внешнее calendar save.
+Исходные требования:
+[`schedule-user-requirements.md`](schedule-user-requirements.md).
 
-## 8. Экономический guardrail
+Product strategy:
+[`event-reminders-calendar-strategy.md`](event-reminders-calendar-strategy.md).
 
-- не запускать iOS/macOS для data-only PR;
-- не открывать весь каталог на эмуляторах;
-- сначала L0/L1, затем L2;
-- screenshots/video only-on-failure или для selected specimens;
-- real OTP и calendar-email sequence только явно и последовательно;
-- один bounded retry только для инфраструктурного flake;
-- deterministic gates решают release, AI visual review помогает triage.
-
-## 9. Event reminders and calendar delivery
-
-Канонический test design:
+Test design:
 [`../../testing/event-reminders-calendar-e2e.md`](../../testing/event-reminders-calendar-e2e.md).
 
-### Dynamic current-event prerequisite
+### 7.1. Dynamic current-event prerequisite
 
-Каждый production-like reminder/calendar run сначала выполняет
-`event.current_event.selection`:
+Каждый production-like run начинает `event.current_event.selection`:
 
-- exact deployed HTTPS target и full repo SHA;
-- current listing routes того же build prefix;
-- adjacent `event.ics`;
+- exact deployed HTTPS target/full repo SHA;
+- current listings того же build prefix;
+- adjacent event ICS;
 - timed future event с UID/title/location;
-- immutable `selected-event.json` для downstream jobs;
+- immutable `selected-event.json`;
 - revalidation до первого side effect.
 
-После первого Push/email side effect event нельзя тихо заменить новым.
+После первого Push/email side effect event нельзя заменить новым.
 
-### Push
+### 7.2. Календарный вид «Избранного»
 
-После реализации channel release требует:
+После реализации обязательны:
+
+- `event.saved_calendar_view`;
+- selected current event в правильной date group;
+- строка `время–время | мероприятие | локация`;
+- no duplicate при repeat save и favorite/calendar sources;
+- сортировка frozen fixtures;
+- reschedule/cancel/unknown-field/empty-state fixtures;
+- Push off не удаляет saved row.
+
+### 7.3. Push
+
+После реализации обязательны:
 
 - `event.reminder.push_subscription`;
+- `event.reminder.preferences`;
 - `event.reminder.push_delivery`;
 - `event.reminder.lifecycle`;
-- exact-once kinds T−24h/T−1h;
-- server-side test clock для CI, не browser-supplied time;
-- L2 notification permission/UI/click-through;
-- L3 Android OEM и real-iPhone background canary до общего enablement.
+- exact-once T−24h + ровно один near kind:
+  - T−1h для текущего города;
+  - T−3h для другого города;
+- server-owned current-city source;
+- unknown city typed fail-closed до owner decision;
+- server-side test clock для CI;
+- native permission/UI/click-through L2;
+- L3 Android OEM + real-iPhone background canary.
 
-### Calendar email
+### 7.4. Calendar email
 
-Postbox Raw transport проверяется отдельно от mail-client interpretation:
+Postbox Raw transport проверяется отдельно от client interpretation:
 
 1. `event.calendar_email.postbox_mime` — deterministic MIME/UID/SEQUENCE;
 2. `event.calendar_email.postbox_roundtrip` — one protected REQUEST/update/CANCEL sequence;
 3. `event.calendar_email.client_action` — Gmail/Apple Mail/Outlook matrix.
 
-NotiSend не становится hidden fallback от Postbox и не входит в release gate без
-отдельного architecture decision.
+NotiSend остаётся comparison-only и не становится hidden fallback без отдельного
+architecture decision.
 
-### Android connector
+### 7.5. Android connector
 
 `event.calendar_connector.android` требует:
 
@@ -203,5 +199,37 @@ NotiSend не становится hidden fallback от Postbox и не вход
 - no calendar/storage permissions;
 - current event payload from allowlisted first-party endpoint;
 - native `ACTION_INSERT` editor field assertions;
-- web fallback when connector absent;
+- web fallback without connector;
 - real-device/OEM canary before public distribution.
+
+## 8. NO-GO
+
+Release blocked, если:
+
+- mobile-sensitive code изменён без required Android/iOS result;
+- OTP result FAIL/BLOCKED либо target SHA не совпал;
+- mandatory background run не terminal;
+- evidence содержит PII/OTP/token или не прошёл redaction;
+- full catalog имеет unexplained empty/broken route;
+- simulator подменён desktop viewport/WebKit;
+- planned test представлен как PASS;
+- один fixed mailbox используется параллельно;
+- hardcoded event URL заменил current-event resolver;
+- selected event переключился после side effect;
+- browser supplied authoritative event time/revision/current city;
+- T−1h и T−3h near kinds созданы одновременно;
+- выключенный reminder type продолжает создавать jobs;
+- calendar view нарушает date/time/event/location contract;
+- environment smoke выдан за Push/calendar PASS;
+- Postbox acceptance выдан за client recognition;
+- ICS download выдан за external calendar save.
+
+## 9. Экономический guardrail
+
+- не запускать iOS/macOS для data-only PR;
+- не открывать полный каталог на эмуляторах;
+- сначала L0/L1, затем L2;
+- screenshots/video only-on-failure или для specimens;
+- real OTP/calendar-email только явно и последовательно;
+- один bounded retry для infrastructure flake;
+- deterministic gates решают release, AI-review помогает triage.
