@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mobile UI Sentry"
+  short_description: "Detect and resolve native mobile UI blockers"
+  default_prompt: "Use $mobile-ui-sentry to observe, classify, and safely resolve Android or iOS system UI blockers with bounded retries and verified state changes."

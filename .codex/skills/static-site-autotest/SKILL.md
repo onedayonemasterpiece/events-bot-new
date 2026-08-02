@@ -26,6 +26,9 @@ For focus-group OTP additionally open:
 
 For a new Android/iOS browser-tab implementation or an Appium failure, read
 [`references/mobile-otp-acceptance.md`](references/mobile-otp-acceptance.md).
+For any visible/stuck native overlay, browser first-run UI, chooser, permission
+prompt or keyboard ambiguity, also use `$mobile-ui-sentry` before changing DOM
+locators or retrying gestures.
 
 The implementation handoff for the first Android/iOS milestone is
 `docs/testing/static-site-autotest-codex-prompt.md`. It must also close the
@@ -107,6 +110,10 @@ ChatGPT launch boundary from the control-plane document; a UI-only
 - Before an iOS real-mail run require the side-effect-free control email,
   control numeric and product email keyboard preflight. A visible Safari
   first-run dialog is `BLOCKED_SAFARI_FIRST_RUN_UI`, never a keyboard verdict.
+- Capture a safe device screenshot immediately after Safari launch and again
+  after at most 20 seconds without the expected marker. After every native
+  action, verify a real state transition; two unchanged actions stop blind
+  retries and enter the `$mobile-ui-sentry` blocker workflow.
 - Mask a derived recipient immediately. Mask/register an extracted OTP before
   the next WebDriver command; never upload or print a raw Appium log tail.
 

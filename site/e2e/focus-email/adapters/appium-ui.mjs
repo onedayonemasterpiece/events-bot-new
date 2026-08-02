@@ -407,6 +407,12 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
         // simulator/browser startup failure, not a product assertion failure.
         throw new Error('simulator_safari_navigation:target_origin_not_reached');
       }
+      // Observe the whole device before any native action or sensitive input.
+      // This makes a delayed/first-run Safari overlay visible in evidence even
+      // if an accessibility locator later disagrees with the screen.
+      if (platform === 'ios') {
+        await driver.saveScreenshot(join(evidenceRoot, 'screenshots', '00-safari-launch.png'));
+      }
       await ensureSafariSystemUiStable();
       const userAgent = await driver.execute(() => navigator.userAgent);
       const version = platform === 'android' ? String(userAgent).match(/Chrome\/([^\s]+)/u)?.[1] : String(userAgent).match(/Version\/([^\s]+)/u)?.[1];

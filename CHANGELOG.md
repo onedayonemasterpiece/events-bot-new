@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Added the project `mobile-ui-sentry` skill for Android/iOS system-layer
+  blockers: immediate safe startup observation, explicit UI-layer
+  classification, exact same-dialog actions, post-action transition checks,
+  a two-unchanged-action/20-second no-progress watchdog, privacy-safe evidence
+  and mandatory official-contract research before a third similar tool fix.
+  The static-site autotest skill now routes native overlays and keyboard
+  ambiguity through this sentry instead of retrying DOM/coordinate gestures.
 - Fixed the iOS Safari first-run inspector after protected preflight
   `30763157336` and correction run `30764460049`: the native boundary no longer
   uses WebdriverIO enhanced `$$` collections or XPath hierarchy snapshots.

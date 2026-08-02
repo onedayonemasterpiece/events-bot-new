@@ -193,6 +193,11 @@ preflights retained exact `0/0/0` side-effect counts and are not acceptance
 passes.
 Safari startup evidence also retains only the last inspection counts (known,
 action, blocking and unknown); it never retains native alert text.
+The mobile sentry captures a safe screenshot immediately after Safari launch
+and repeats observation after at most 20 seconds without the expected marker.
+Every native action must produce a verified state transition. Two unchanged
+actions stop blind retries and terminate through the classified system-UI
+blocker path; a dispatched click alone is never success.
 If Safari acknowledges the initial navigation command but stays on
 `about:blank`, the harness records `BLOCKED_INFRASTRUCTURE` with zero side
 effects and the workflow may use its one bounded Appium/WDA retry.
