@@ -4,9 +4,12 @@ import { fileURLToPath } from 'node:url';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const siteRoot = path.resolve(scriptDir, '..');
+const repoRoot = path.resolve(siteRoot, '..');
 const fixturePath = path.join(siteRoot, 'src/data/editorial-collections/unusual-pilot-v1.json');
 const pagePath = path.join(siteRoot, 'src/pages/lab/editorial-collections/index.astro');
 const stylePath = path.join(siteRoot, 'src/styles/editorial-collections-lab.css');
+const temporalEvidencePath = path.join(repoRoot, 'docs/features/editorial-collections/evidence/temporal-window-analysis-2026-08-02.json');
+const temporalResearchPath = path.join(repoRoot, 'docs/features/editorial-collections/temporal-editions.md');
 
 function fail(message) {
   console.error(`editorial-collections-lab: FAIL: ${message}`);
@@ -20,6 +23,8 @@ function assert(condition, message) {
 const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
 const page = fs.readFileSync(pagePath, 'utf8');
 const styles = fs.readFileSync(stylePath, 'utf8');
+const temporalEvidence = JSON.parse(fs.readFileSync(temporalEvidencePath, 'utf8'));
+const temporalResearch = fs.readFileSync(temporalResearchPath, 'utf8');
 
 assert(fixture.schema_version === 'editorial-collection-pilot-v1', 'unexpected fixture schema');
 assert(fixture.collection?.id === 'unusual-events-editorial-pilot-v1', 'unexpected collection id');
@@ -77,6 +82,17 @@ for (const variant of expectedVariants) {
   assert(styles.includes(`data-variant=${variant}`) || variant === 'editorial-scan', `missing CSS composition for ${variant}`);
 }
 
+assert(temporalEvidence.schema_version === 'editorial_collection_temporal_window_evidence_v1', 'unexpected temporal evidence schema');
+assert(temporalEvidence.source?.eligible_event_rows === 401, 'temporal evidence must bind 401 eligible rows');
+assert(temporalEvidence.grain_and_method?.explicit_concept_count === 363, 'temporal evidence must bind 363 explicit concepts');
+assert(temporalEvidence.overall_inventory?.rolling_concepts_from_as_of?.['7'] === 141, 'unexpected 7-day concept count');
+assert(temporalEvidence.overall_inventory?.rolling_concepts_from_as_of?.['30'] === 258, 'unexpected 30-day concept count');
+assert(temporalEvidence.category_inventory?.rolling_concepts_from_as_of?.['Гастро — ручной research review']?.['30'] === 5, 'unexpected gastro 30-day count');
+assert(temporalEvidence.category_inventory?.rolling_concepts_from_as_of?.['Средневековье — editorial anchors']?.['30'] === 4, 'unexpected medieval editorial-anchor count');
+assert(temporalEvidence.initial_product_thresholds?.full_edition?.independent_concepts_min === 6, 'unexpected full-edition minimum');
+assert(temporalResearch.includes('вечнозелёный тематический хаб + датированные редакционные выпуски + живой компактный список'), 'temporal architecture decision missing');
+assert(temporalResearch.includes('0–2 событиях'), 'temporal no-edition boundary missing');
+
 if (!process.exitCode) {
-  console.log(`editorial-collections-lab: PASS (${fixture.concepts.length} concepts, ${occurrences.length} occurrences, ${families.size} families, ${expectedVariants.length} variants)`);
+  console.log(`editorial-collections-lab: PASS (${fixture.concepts.length} concepts, ${occurrences.length} occurrences, ${families.size} families, ${expectedVariants.length} variants; temporal evidence 401 rows / 363 concepts)`);
 }
