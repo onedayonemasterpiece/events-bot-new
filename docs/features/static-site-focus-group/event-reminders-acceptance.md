@@ -2,6 +2,7 @@
 
 > **Статус:** cross-feature product/test companion; runtime не реализуется этим документом.
 > **Focus source:** [`README.md`](README.md) и [`product-prototype.md`](product-prototype.md).
+> **Release plan:** [`../static-site-pages/release-plan.md`](../static-site-pages/release-plan.md), Stage 14.
 > **Event-delivery strategy:** [`../static-site-pages/event-reminders-calendar-strategy.md`](../static-site-pages/event-reminders-calendar-strategy.md).
 > **Saved-state contract:** [`../event-favorites-calendar/README.md`](../event-favorites-calendar/README.md).
 > **Promo contract:** [`../promo-campaigns/README.md`](../promo-campaigns/README.md).
