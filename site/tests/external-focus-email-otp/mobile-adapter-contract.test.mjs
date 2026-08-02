@@ -13,7 +13,8 @@ test('Appium adapter uses real browser capabilities and ordinary digit input wit
   assert.match(source, /'appium:connectHardwareKeyboard': false/u);
   assert.match(source, /'appium:forceSimulatorSoftwareKeyboardPresence': true/u);
   assert.match(source, /findElements\('-ios predicate string', predicate\)/u);
-  assert.match(source, /elementClick\(elementId\)/u);
+  assert.match(source, /getElementRect\(elementId\)/u);
+  assert.match(source, /executeScript\('mobile: tap'/u);
   assert.match(source, /XCUIElementTypeTextField/u);
   assert.match(source, /dismissSafariFirstRunPrompt/u);
   assert.match(source, /XCUIElementTypeButton.*Продолжить/u);

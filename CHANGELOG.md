@@ -18,7 +18,9 @@
   also restarts Appium/WDA once, and only once, when sanitized evidence proves
   the failed session created no OTP, verification or registration side effect;
   it closes only Safari's exact allowlisted first-run search-choice prompt so a
-  fresh simulator cannot intercept the physical input tap invisibly.
+  fresh simulator cannot intercept the physical input tap invisibly. Keyboard
+  focus uses XCUITest's synthesized `mobile: tap` at the center of the exact
+  native accessibility field rather than an accessibility-only element click.
 - Added reusable project skill guidance for constructing protected static-site
   browser/Android/iOS acceptance journeys and for sending/receiving controlled
   OTP mail through the existing Yandex Mail Trigger boundary without exposing
