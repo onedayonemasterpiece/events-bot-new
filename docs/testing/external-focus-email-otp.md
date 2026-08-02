@@ -164,6 +164,12 @@ Android/iOS verify native keyboard presence, active input and usable
 viewport geometry before ordinary user input. Direct JS assignment of the email
 or OTP value does not satisfy the mobile scenario.
 
+On GitHub-hosted iOS, the hardware-keyboard preference and Simulator's visible
+software-keyboard toggle are separate. After a real native input tap still
+reports no `XCUIElementTypeKeyboard`, the adapter activates Simulator, invokes
+the exact `I/O → Keyboard → Toggle Software Keyboard` menu item once, retaps the
+same field and checks again. It never treats a sent keyboard shortcut as proof.
+
 For selected-once issuance, Android uses simultaneous W3C touch and Return
 sources. Mobile Safari uses the corresponding ordinary WebKit button click and
 focused-field Return commands as one competing batch: XCUITest may acknowledge

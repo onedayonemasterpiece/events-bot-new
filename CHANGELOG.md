@@ -24,13 +24,15 @@
   click or coordinates derived from the DOM, and records keyboard presence at
   that physical tap before returning to Safari's web-inspector context. A
   hosted Simulator that still has its independent software-keyboard toggle off
-  receives the documented `Cmd-K` action once and must then expose the native
-  keyboard after one repeated physical field tap before the journey can
-  continue. Mobile Safari now submits the selected-once OTP request with a
+  receives the exact Simulator `I/O → Keyboard → Toggle Software Keyboard`
+  menu action once and must then expose the native keyboard after one repeated
+  physical field tap before the journey can continue. Mobile Safari now submits
+  the selected-once OTP request with a
   competing real button click and focused-field Return input rather than an
   XCUITest web-context touch source that can be acknowledged without reaching
   WebKit; iOS screenshot capture also waits for the native text overlay to
-  repaint after destructive masking.
+  repaint after destructive masking; the sensitive field is blurred first so
+  Safari cannot retain its prior native editing overlay in the screenshot.
 - Added reusable project skill guidance for constructing protected static-site
   browser/Android/iOS acceptance journeys and for sending/receiving controlled
   OTP mail through the existing Yandex Mail Trigger boundary without exposing

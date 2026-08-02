@@ -34,8 +34,10 @@ instead of copying it.
 - Disable the hardware keyboard and require the simulator software keyboard.
 - Treat Simulator's software-keyboard visibility toggle as distinct from its
   hardware-keyboard connection preference. If a verified physical input tap
-  still reports no native keyboard on a hosted macOS runner, send the documented
-  Simulator `Cmd-K` action once and recheck; never assume the toggle succeeded.
+  still reports no native keyboard on a hosted macOS runner, activate Simulator
+  and click the exact `I/O → Keyboard → Toggle Software Keyboard` menu item once,
+  then retap and recheck; a best-effort shortcut can be delivered to the wrong
+  process, so never assume it succeeded.
 - On a fresh Simulator, detect and close only the exact allowlisted Safari
   first-run prompt before journey interaction. Do not use a generic alert
   accepter: unrelated permission/security dialogs must still fail visibly.
@@ -54,9 +56,10 @@ instead of copying it.
   web-context W3C touch source: it can acknowledge `performActions` without
   dispatching the pointer event to Safari. This batch is the sole issuance
   attempt, never a retry or fallback.
-- After destructive DOM masking, allow Mobile Safari's native text overlay one
-  paint frame before screenshot capture; a masked DOM alone does not prove the
-  screenshot stopped displaying the prior field value.
+- Before destructive DOM masking, blur an active sensitive input, then allow
+  Mobile Safari's native text overlay one paint frame before screenshot capture;
+  a masked DOM alone does not prove the screenshot stopped displaying the prior
+  field value.
 
 ## Evidence and failure rules
 

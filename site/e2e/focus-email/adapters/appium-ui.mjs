@@ -82,6 +82,22 @@ function networkBootstrap(directHost, relayHost) {
   window.__keE2eNetwork = entries;
 }
 
+async function showSimulatorSoftwareKeyboard() {
+  // The XCUITest capability reaches WDA's in-process keyboard preference, but
+  // WDA's own source notes that the older show-by-touch selector disappeared
+  // in Xcode 13. Drive the current Xcode 16 Simulator's exact allowlisted menu
+  // item instead of sending a best-effort shortcut to whichever app has focus.
+  const script = `
+tell application "Simulator" to activate
+tell application "System Events"
+  tell process "Simulator"
+    set frontmost to true
+    click menu item "Toggle Software Keyboard" of menu 1 of menu item "Keyboard" of menu 1 of menu bar item "I/O" of menu bar 1
+  end tell
+end tell`;
+  await execFileAsync('osascript', ['-e', script], { timeout: 10_000 });
+}
+
 async function waitText(driver, pattern, timeout = 30_000) {
   await driver.waitUntil(async () => pattern.test(await (await driver.$(SELECTORS.done)).getText()), {
     timeout, timeoutMsg: 'membership_state_timeout', interval: 350,
@@ -241,13 +257,9 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
       nativeKeyboardAtTap[kind] = await driver.isKeyboardShown().catch(() => false);
       if (!nativeKeyboardAtTap[kind] && env.E2E_HOST_OS_VERSION) {
         // Simulator has a separate "Toggle Software Keyboard" state from the
-        // hardware-keyboard connection preference. Cmd-K is Apple's documented
-        // user action for showing it; invoke it only after a real tap proved the
-        // fresh hosted runner left that UI state off.
-        await execFileAsync('osascript', [
-          '-e', 'tell application "Simulator" to activate',
-          '-e', 'tell application "System Events" to keystroke "k" using command down',
-        ], { timeout: 10_000 });
+        // hardware-keyboard connection preference. Invoke its exact menu item
+        // only after a real tap proved the fresh hosted runner left it off.
+        await showSimulatorSoftwareKeyboard();
         await driver.pause(300);
         await driver.executeScript('mobile: tap', [{
           x: Math.round(rect.x + rect.width / 2),
@@ -285,7 +297,9 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
 
   async function maskDom() {
     await driver.execute(() => {
-      document.querySelectorAll('input[type="email"], input[autocomplete="one-time-code"]').forEach((node) => { node.value = ''; node.setAttribute('data-e2e-masked', 'true'); });
+      const sensitiveInputs = Array.from(document.querySelectorAll('input[type="email"], input[autocomplete="one-time-code"]'));
+      if (sensitiveInputs.includes(document.activeElement)) document.activeElement.blur();
+      sensitiveInputs.forEach((node) => { node.value = ''; node.setAttribute('data-e2e-masked', 'true'); });
       document.querySelectorAll('[data-focus-email-destination], [data-static-auth-name]').forEach((node) => { node.textContent = 'f***@k***'; });
       document.querySelectorAll('[data-focus-otp-digit]').forEach((node) => { if (node.textContent) node.textContent = '•'; });
     });
