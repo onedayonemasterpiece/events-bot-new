@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk article/social review footers: final captions now contain
+  one link to the exact source post/material, a blank line and one
+  `О Калининграде говорят` link to `@kalinigrad_visit`, with no
+  outlet-homepage plus original-link duplication. Added a reaction-synchronized,
+  idempotent in-place repair for only current undecided preproduction messages.
 - Fixed Region Talk terminal-candidate refresh after legacy intake provenance
   attestation: the zero-LLM finalizer now persists changed external-intake
   fingerprint/status/permission fields even when source and eligibility
