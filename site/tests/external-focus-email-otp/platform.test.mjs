@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { assertSequentialMailboxPolicy, classifyKeyboardAcceptance, selectedPlatforms, validateMobileConfig, validatePlatform } from '../../e2e/focus-email/helpers/platform.mjs';
+import { assertSequentialMailboxPolicy, classifyKeyboardAcceptance, keyboardFailureClass, selectedPlatforms, validateMobileConfig, validatePlatform } from '../../e2e/focus-email/helpers/platform.mjs';
 
 test('platform selector is closed and all stays browser then Android then iOS', () => {
   assert.deepEqual(selectedPlatforms('all'), ['browser', 'android', 'ios']);
@@ -23,4 +23,6 @@ test('keyboard acceptance classifies native presence, focus, input path and view
   assert.equal(accepted.passed, true);
   assert.equal(classifyKeyboardAcceptance({ shown: false, active: true, visible: true, inputMode: 'email', viewport: { innerHeight: 400, elementBottom: 350 } }).passed, false);
   assert.equal(classifyKeyboardAcceptance({ shown: true, active: true, visible: true, inputMode: 'text', viewport: { innerHeight: 400, elementBottom: 350 } }).passed, false);
+  assert.equal(keyboardFailureClass({ passed: false, shown: true, input_visible_in_visual_viewport: false }), 'fail_mobile_viewport');
+  assert.equal(keyboardFailureClass({ passed: false, shown: false, input_visible_in_visual_viewport: true }), 'fail_mobile_keyboard');
 });

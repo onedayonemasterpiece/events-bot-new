@@ -27,8 +27,8 @@ export async function createEvidenceWriter({ root, secrets = [] }) {
 
 export function publicResult(input) {
   return {
-    schema_version: 2,
-    scenario_id: 'focus.otp.browser_tab',
+    schema_version: 3,
+    scenario_id: input.scenario_id || 'focus.otp.browser_tab',
     platform: input.platform || 'browser',
     status: input.status,
     failure_domain: input.failure_domain || null,
@@ -40,6 +40,8 @@ export function publicResult(input) {
     browser: input.browser || null,
     device: input.device || null,
     keyboard_acceptance: input.keyboard_acceptance || null,
+    keyboard_preflight: input.keyboard_preflight || null,
+    safari_startup: input.safari_startup || null,
     otp_issue_request_count: input.otp_issue_request_count,
     otp_verify_request_count: input.otp_verify_request_count,
     participant_registration_request_count: input.participant_registration_request_count,
@@ -49,19 +51,21 @@ export function publicResult(input) {
     reload_state: input.reload_state || null,
     console_error_count: input.console_error_count || 0,
     essential_failed_request_count: input.essential_failed_request_count || 0,
+    diagnostics: input.diagnostics || null,
     redaction_audit_passed: input.redaction_audit_passed === true,
+    first_failed_step: input.first_failed_step || null,
     failures: input.failures || [],
   };
 }
 
-export function qaSummary(result) {
+export function qaSummary(result, provenance = null) {
   return {
-    schema_version: 1,
+    schema_version: 2,
     scenario_id: result.scenario_id,
     platform: result.platform,
     status: result.status,
     failure_domain: result.failure_domain,
-    first_failed_step: result.failures?.[0] || null,
+    first_failed_step: result.first_failed_step,
     expected_repo_sha: result.expected_repo_sha,
     observed_repo_sha: result.observed_repo_sha,
     target_origin: result.target_origin,
@@ -71,14 +75,23 @@ export function qaSummary(result) {
       verify: result.otp_verify_request_count,
       registration: result.participant_registration_request_count,
     },
+    registration_status: result.participant_registration_status,
+    matching_mail_count: result.mail?.matching_message_count ?? null,
+    final_ui_state: result.final_ui_state,
+    reload_state: result.reload_state,
     keyboard_acceptance: result.keyboard_acceptance,
+    keyboard_preflight: result.keyboard_preflight,
+    safari_startup: result.safari_startup,
+    warnings: result.diagnostics?.warnings || [],
+    diagnostics: result.diagnostics,
     device: result.device,
+    provenance,
     redaction_status: result.redaction_audit_passed ? 'passed' : 'pending_or_failed',
     evidence: {
       result: 'result.json', steps: 'steps.json', scenarios: 'scenarios.jsonl', junit: 'junit.xml',
       device: 'device.json', network: 'network.sanitized.jsonl', console: 'console.sanitized.jsonl',
       mail: 'mail-delivery.sanitized.json', screenshots: 'screenshots/', native_ui: 'native-ui/',
-      redaction: 'redaction-audit.json',
+      diagnostics: 'runtime-diagnostics.json', redaction: 'redaction-audit.json',
     },
   };
 }
@@ -89,5 +102,5 @@ export function junitXml(result, elapsedSeconds = 0) {
   const body = failed
     ? `<failure type="${escape(result.failure_domain || result.status)}" message="${escape(result.failures?.[0] || result.status)}"/>`
     : '';
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="static-site-qa" tests="1" failures="${failed ? 1 : 0}" time="${Number(elapsedSeconds).toFixed(3)}"><testcase classname="${escape(result.platform)}" name="focus.otp.browser_tab" time="${Number(elapsedSeconds).toFixed(3)}">${body}</testcase></testsuite>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="static-site-qa" tests="1" failures="${failed ? 1 : 0}" time="${Number(elapsedSeconds).toFixed(3)}"><testcase classname="${escape(result.platform)}" name="${escape(result.scenario_id)}" time="${Number(elapsedSeconds).toFixed(3)}">${body}</testcase></testsuite>\n`;
 }

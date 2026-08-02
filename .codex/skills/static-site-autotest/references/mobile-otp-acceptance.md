@@ -27,50 +27,16 @@ instead of copying it.
 
 ## iOS gate
 
-- Pin macOS runner, Xcode, iPhone Simulator and iOS runtime.
-- Download the XCUITest driver's matching official prebuilt WDA and pass both
-  `usePreinstalledWDA` and `prebuiltWDAPath`. Treat WDA startup failure as
-  infrastructure failure before OTP issuance.
-- Disable the hardware keyboard and require the simulator software keyboard.
-- Treat Simulator's software-keyboard visibility toggle as distinct from its
-  hardware-keyboard connection preference. If a verified physical input tap
-  still reports no native keyboard on a hosted macOS runner, activate Simulator
-  and click the exact `I/O → Keyboard → Toggle Software Keyboard` menu item once,
-  then retap and recheck; a best-effort shortcut can be delivered to the wrong
-  process, so never assume it succeeded.
-- Poll keyboard presence through a bounded animation window after the physical
-  tap. A single early `false` can race the keyboard animation; immediately
-  toggling at that point may turn off the keyboard that was still appearing.
-- If an exact menu click plus physical retap still leaves no keyboard after the
-  second bounded check, the equivalent shortcut may be sent only after making
-  the Simulator process explicitly frontmost. Retap once and require native
-  keyboard evidence; never infer success from the shortcut itself.
-- On a fresh Simulator, detect and close only the exact allowlisted Safari
-  first-run prompt before journey interaction. Do not use a generic alert
-  accepter: unrelated permission/security dialogs must still fail visibly.
-- If a fresh Safari session acknowledges navigation but remains at
-  `about:blank`, classify it as a pre-side-effect simulator/browser startup
-  block. The workflow may consume its one bounded Appium restart; do not label
-  it as a product failure or add an in-journey navigation retry.
-- Keep navigation clicks in the Safari web context.
-- Before a keyboard-critical tap, scroll the HTML input to the center, switch
-  to `NATIVE_APP`, locate exactly one visible `XCUIElementTypeTextField` by the
-  input's accessible label using `-ios predicate string`, and synthesize
-  a screen-level `mobile: tap` at the absolute center of the rect returned by
-  XCTest itself. Then restore the web context. This is not a guessed
-  WebView-to-screen transform and must not be derived from DOM coordinates.
-- Do not use a synthetic WebKit click as keyboard proof. Do not use global
-  `nativeWebTap`, `nativeWebTapStrict`, coordinate translation calibration or a
-  guessed screen offset. Do not persist native hierarchy or field values.
-- For competing issuance gestures, prefer an ordinary WebKit element click and
-  focused-field Return command started in one batch. Do not rely on XCUITest's
-  web-context W3C touch source: it can acknowledge `performActions` without
-  dispatching the pointer event to Safari. This batch is the sole issuance
-  attempt, never a retry or fallback.
-- Before destructive DOM masking, blur an active sensitive input, then allow
-  Mobile Safari's native text overlay one paint frame before screenshot capture;
-  a masked DOM alone does not prove the screenshot stopped displaying the prior
-  field value.
+- Pin macOS, Xcode, iPhone Simulator and iOS runtime. Create the exact simulator in `Shutdown`, pass its UDID, and let XCUITest/Appium boot and shut it down. Do not add external `simctl boot`, `open -a Simulator`, or global `defaults` mutations.
+- Download the XCUITest driver's matching official prebuilt WDA; record Appium, driver, WDA and Xcode provenance.
+- Set `connectHardwareKeyboard=false` and `forceSimulatorSoftwareKeyboardPresence=true`; do not use Simulator menu or `Cmd-K` rescue gestures.
+- Before product input, run a side-effect-free preflight: empty injected email and numeric controls first, then the empty product email field. A control failure is `BLOCKED_IOS_SIMULATOR_KEYBOARD`; a passing control plus failing product field is a product/browser-context failure. Require three terminal preflight passes before one full real-mail iOS OTP run.
+- Stabilize Safari native UI through a bounded allowlist state machine. It may dismiss only one dialog containing the exact title `Выбор поисковой системы` and exact action `Продолжить`, then must observe stable disappearance. Unknown, ambiguous, missing-action or stuck dialogs are `BLOCKED_SAFARI_FIRST_RUN_UI`; never type through them and never use a generic alert accepter.
+- Poll keyboard presence through a bounded animation window after one exact physical tap. Record activation attempts plus baseline/focused `visualViewport` geometry and an empty-field screenshot; never infer success from a dispatched gesture.
+- Keep navigation in WebKit. For a keyboard-critical input, scroll it into view, switch to `NATIVE_APP`, locate exactly one labelled XCTest text field, and use `mobile: tap` at XCTest's own rect center. Never use JS value assignment, guessed coordinate transforms, blanket native web tap, raw hierarchy or a value-bearing screenshot.
+- Mask the derived recipient immediately at creation. After mailbox extraction, mask the OTP and register it with the UI adapter before any WebDriver command.
+- A navigation-at-`about:blank` startup block may consume one pre-side-effect Appium retry. Retry only allowlisted zero-side-effect startup/Safari states; never retry an OTP attempt.
+- Keep the sole competing issuance batch in the web context and still require exactly one issue.
 
 ## Evidence and failure rules
 

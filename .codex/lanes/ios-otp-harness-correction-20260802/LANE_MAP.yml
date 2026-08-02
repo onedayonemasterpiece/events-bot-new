@@ -1,0 +1,101 @@
+mode: read_only_parallel_then_serial_integrator
+repo: onedayonemasterpiece/events-bot-new
+base_ref: a2b0fa924d5cff4f149064d033af0c8fe1207a28
+base_branch: origin/main
+integration_branch: integration/ios-otp-harness-correction-20260802
+global_constraints:
+  - preserve Supabase as OTP issuer/verifier
+  - no fixed OTP or Auth bypass
+  - no raw Appium log, HAR, trace, video, mailbox body, email, OTP, JWT
+  - no live OTP until side-effect-free preflight passes three times
+  - incident remains open until required terminal evidence exists
+verification_owner: root integrator
+stop_conditions:
+  - any preflight produces OTP/Auth/registration side effect
+  - evidence redaction fails
+  - ambiguous OTP issuance
+lanes:
+  - id: ios_harness_map
+    role: planner
+    requirement_ids: [R01, R02, R03, R04, R05]
+    target: iOS adapter and workflow discovery
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: shared_read_only
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: evidence-backed implementation map
+    verification_scope: inspection_only
+    status: committed
+    effort: medium
+  - id: control_evidence_map
+    role: planner
+    requirement_ids: [R06, R07, R08]
+    target: control plane and evidence discovery
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: shared_read_only
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: schema/workflow/reporting map
+    verification_scope: inspection_only
+    status: committed
+    effort: medium
+  - id: docs_skill_map
+    role: planner
+    requirement_ids: [R09, R10]
+    target: canonical docs, skills and acceptance mapping
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: shared_read_only
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: exact correction inventory
+    verification_scope: inspection_only
+    status: committed
+    effort: medium
+  - id: serial_integrator
+    role: worker
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09, R10]
+    target: coupled implementation and live rollout
+    depends_on: [ios_harness_map, control_evidence_map, docs_skill_map]
+    execution_mode: serial_after_dependency
+    branch: integration/ios-otp-harness-correction-20260802
+    worktree: /home/dev/.codex/worktrees/events-bot-new/mobile-otp-autotest-20260802
+    writable_files:
+      - .github/workflows/external-focus-email-otp.yml
+      - .github/workflows/static-site-qa-command.yml
+      - .github/workflows/ci.yaml
+      - site/e2e/focus-email/**
+      - site/tests/external-focus-email-otp/**
+      - docs/**
+      - .codex/skills/static-site-autotest/**
+      - .codex/skills/kenigevents-email-roundtrip/**
+      - CHANGELOG.md
+      - .codex/lanes/ios-otp-harness-correction-20260802/**
+      - .codex/integration/ios-otp-harness-correction-20260802/**
+    forbidden_files:
+      - production secrets
+      - generated live artifacts
+    expected_output: committed integration branch, reviewed PR, terminal live receipts
+    verification_scope: full_local
+    status: spawned
+    effort: high
+
+  - id: ios_otp_checklist_review
+    role: reviewer
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09, R10]
+    target: final diff and closure audit
+    depends_on: [serial_integrator]
+    execution_mode: read_only_until_dependency
+    branch: null
+    worktree: shared_read_only
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: requirement-by-requirement defects and closure verdict
+    verification_scope: inspection_only
+    status: spawned
+    effort: high

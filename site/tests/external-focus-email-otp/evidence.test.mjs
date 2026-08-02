@@ -11,7 +11,7 @@ test('evidence result exposes the stable PII-free schema only', () => {
     mail: { matching_message_count: 1, otp_length: 6, message_id_hash: 'abcd' },
     redaction_audit_passed: true,
   });
-  assert.equal(result.schema_version, 2);
+  assert.equal(result.schema_version, 3);
   assert.equal(result.otp_issue_request_count, 1);
   assert.equal('email' in result, false);
   assert.equal('otp' in result, false);
@@ -19,4 +19,6 @@ test('evidence result exposes the stable PII-free schema only', () => {
   const summary = qaSummary(result);
   assert.equal(summary.scenario_id, 'focus.otp.browser_tab');
   assert.equal(summary.evidence.native_ui, 'native-ui/');
+  assert.equal(summary.schema_version, 2);
+  assert.equal(summary.evidence.diagnostics, 'runtime-diagnostics.json');
 });

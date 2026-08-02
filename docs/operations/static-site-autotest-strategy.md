@@ -61,8 +61,7 @@ Terminal live receipts для immutable SHA
 [30747598046](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30747598046)
 прошли весь путь. iOS adapter реализован, но terminal run
 [30754894934](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30754894934)
-честно завершился `FAIL_MOBILE_KEYBOARD` до side effects (`0/0/0`), поэтому iOS
-acceptance остаётся открытым.
+был ошибочно назван `FAIL_MOBILE_KEYBOARD`: screenshot показывает блокирующий Safari first-run dialog. Канонический результат — `BLOCKED_SAFARI_FIRST_RUN_UI`, `0/0/0`, без keyboard verdict; iOS acceptance остаётся открытым.
 
 Не существует и не должно считаться готовым:
 
@@ -82,6 +81,7 @@ lifecycle.
 Сценарий — одна бизнес-проверка со стабильным ID, например:
 
 - `focus.otp.browser_tab`;
+- `focus.otp.ios_keyboard_preflight` (iOS only, `0/0/0` side effects);
 - `focus.pwa.install_launch`;
 - `browser.route_health`;
 - `data.content_minimum`;
@@ -523,9 +523,7 @@ protected real mail приняты terminal run `30747598046`.
 
 ### M3 — iOS browser-tab OTP
 
-Adapter и protected job реализованы. Terminal run `30754894934` доказал exact
-simulator/Safari/XCUITest path и отсутствие side effects, но не прошёл native
-keyboard gate (`FAIL_MOBILE_KEYBOARD`); milestone остаётся открытым до PASS.
+Adapter и protected job реализованы. Historical run `30754894934` остановлен видимым Safari first-run search-engine dialog и переклассифицирован в `BLOCKED_SAFARI_FIRST_RUN_UI` с `0/0/0`; он ничего не доказывает о клавиатуре. Milestone остаётся открытым до трёх последовательных `focus.otp.ios_keyboard_preflight` PASS и следующего полного real-mail iOS PASS.
 
 ### M4 — PWA install/relaunch
 

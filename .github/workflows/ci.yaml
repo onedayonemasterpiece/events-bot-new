@@ -23,6 +23,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run browser gate receipt contracts
         run: npm run test:browser-release-gate
+      - name: Run external focus OTP harness contracts
+        run: npm run test:external-focus-email-otp
       - name: Build real static event pages
         env:
           PREVIEW_BUILD_ID: preview-ci-browser-gate

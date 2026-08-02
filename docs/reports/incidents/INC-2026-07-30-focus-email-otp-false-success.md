@@ -244,12 +244,7 @@ after any failed transport result and therefore communicated a false success.
   `30745526613` and Android 15 / Pixel 7 / Chrome run `30747598046`. Each run
   observed one real Yandex Mail Trigger delivery, exactly one OTP issue, one
   verify, one participant registration, returning state and a passing redaction
-  audit. The iOS 18.5 / iPhone 16 / Mobile Safari adapter reached its native
-  email input in terminal run `30754894934`, but the hosted Simulator exposed no
-  `XCUIElementTypeKeyboard` after all bounded supported activation paths. It
-  failed closed as `FAIL_MOBILE_KEYBOARD` before entry with issue/verify/
-  registration `0/0/0`; iOS acceptance and the separate magic-link issuance
-  remain open.
+  audit. The iOS 18.5 / iPhone 16 / Mobile Safari run `30754894934` is corrected after screenshot review: Safari's first-run «Выбор поисковой системы» dialog visibly obstructed the product page. Its canonical result is `BLOCKED_SAFARI_FIRST_RUN_UI`, issue/verify/registration `0/0/0`, and no valid keyboard verdict; iOS acceptance and the separate magic-link issuance remain open.
 - 2026-08-01 22:52 UTC — implemented the server-side receipt boundary and
   provider routing in an isolated branch. A signed Send Email Hook now selects
   Postbox for a new first send and paid NotiSend `subscriber` for returning,
@@ -475,8 +470,7 @@ after any failed transport result and therefore communicated a false success.
 - post-deploy verification: corrected root `KE3` passes all six checks in real
   Chromium at mobile and desktop widths; external OTP code delivery now has
   terminal Chromium and Android PASS receipts (`30745526613`, `30747598046`),
-  while iOS keyboard acceptance is a terminal FAIL (`30754894934`, zero side
-  effects). A separate magic-link issuance and remaining incident closure gates
+  while iOS run `30754894934` is a corrected `BLOCKED_SAFARI_FIRST_RUN_UI` receipt with zero side effects and no keyboard verdict. A separate magic-link issuance and remaining incident closure gates
   are still open
 
 ## Prevention
