@@ -14,6 +14,7 @@ if str(SCRIPTS) not in sys.path:
 
 import static_collection_batch as batch_module
 import static_event_bge as bge
+import static_collection_product_snapshot as product_snapshot_module
 
 
 def _encoder_calls(calls):
@@ -210,6 +211,10 @@ def test_kernel_requires_and_validates_collection_receipt_for_pgvector_without_u
         (SCRIPTS / "static_collection_batch.py").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
+    (scripts_dir / "static_collection_product_snapshot.py").write_text(
+        (SCRIPTS / "static_collection_product_snapshot.py").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
     batch = batch_module.build_collection_batch(
         catalog_hash=_sha("a"),
         labels={
@@ -225,6 +230,17 @@ def test_kernel_requires_and_validates_collection_receipt_for_pgvector_without_u
     batch_module.write_collection_batch(data_dir / "collection-batch-v1.json", batch)
     (data_dir / "production-catalog.json").write_text(
         json.dumps({"eligible": [{"event_id": 1}]}), encoding="utf-8"
+    )
+    product_snapshot = product_snapshot_module.build_product_snapshot(
+        [{"id": 1, "title": "Event", "start_date": "2026-08-10", "lifecycle_status": "active"}],
+        collection_decisions_by_id={},
+        source_records_by_event={},
+        current_date="2026-08-01",
+        generated_at="2026-08-01T12:00:00Z",
+    )
+    product_snapshot_module.write_product_snapshot(
+        data_dir / "static-collection-product-snapshot-v1.json",
+        product_snapshot,
     )
     working = tmp_path / "working"
     working.mkdir()
@@ -246,6 +262,14 @@ def test_kernel_requires_and_validates_collection_receipt_for_pgvector_without_u
         working / "collection-batch-v1.json"
     )
     assert receipt["batch_contract_sha256"] == batch["batch_sha256"]
+    assert receipt["collection_product_input_fingerprint"] == product_snapshot["input_fingerprint"]
+    assert receipt["collection_product_normalized_output_sha256"] == product_snapshot[
+        "normalized_output_sha256"
+    ]
+    assert receipt["collection_product_provider_calls"] == 0
+    assert receipt["collection_product_snapshot_sha256"] == builder.sha256_file(
+        working / "static-collection-product-snapshot-v1.json"
+    )
 
 
 def test_runner_persists_collection_receipt_without_requiring_unusual_outputs(
@@ -261,6 +285,7 @@ def test_runner_persists_collection_receipt_without_requiring_unusual_outputs(
         "static_event_bge_vectors.npz": b"npz",
         "static_event_bge_vectors.receipt.json": b"receipt",
         "collection-batch-v1.json": b"batch",
+        "static-collection-product-snapshot-v1.json": b"product",
     }.items():
         (out_dir / name).write_bytes(content)
     sha = runner.sha256_file
@@ -271,6 +296,9 @@ def test_runner_persists_collection_receipt_without_requiring_unusual_outputs(
                 out_dir / "static_event_bge_vectors.receipt.json"
             ),
             "collection_batch_sha256": sha(out_dir / "collection-batch-v1.json"),
+            "collection_product_snapshot_sha256": sha(
+                out_dir / "static-collection-product-snapshot-v1.json"
+            ),
         }
     }
     args = SimpleNamespace(
@@ -282,6 +310,9 @@ def test_runner_persists_collection_receipt_without_requiring_unusual_outputs(
         collection_batch_last_good=str(
             tmp_path / "durable" / "collection-batch-last-good.json"
         ),
+        collection_product_snapshot=str(
+            tmp_path / "durable" / "static-collection-product-snapshot-v1.json"
+        ),
         collection_semantic_compute=True,
         unusual_enabled=False,
     )
@@ -289,4 +320,5 @@ def test_runner_persists_collection_receipt_without_requiring_unusual_outputs(
     runner.persist_semantic_outputs(out_dir, args, result)
 
     assert Path(args.collection_batch).read_bytes() == b"batch"
+    assert Path(args.collection_product_snapshot).read_bytes() == b"product"
     assert not Path(args.unusual_cache).exists()

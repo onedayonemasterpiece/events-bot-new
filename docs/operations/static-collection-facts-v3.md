@@ -138,6 +138,34 @@ python3 scripts/backfill_static_collection_facts.py \
 Warm acceptance is exactly `provider_calls=0`, `writes=0`, no logical row
 changes. Any prohibited diff or failure erasing accepted truth is a stop.
 
+### Product snapshot after each stage
+
+After copy apply, warm replay and normal-ingestion replay, build a separate
+source-bound product snapshot from that exact database state. `source_scope` is
+an arbitrary provenance label for the stage; the optional evidence trust filter
+is a different argument and must not overwrite provenance:
+
+```bash
+python3 site/scripts/static_collection_product_snapshot.py \
+  --db /dev/shm/static-collection-facts-v3-work.sqlite \
+  --current-date 2026-08-02 \
+  --source-scope production-copy-after-apply \
+  --evidence-trust-scope all \
+  --output artifacts/static-collection-facts-v3/product-after-apply.json
+
+python3 scripts/check_static_collections_product_quality.py \
+  --snapshot artifacts/static-collection-facts-v3/product-after-apply.json \
+  --expect-status WATCH
+```
+
+Use correspondingly explicit scopes such as `production-copy-after-warm` and
+`normal-ingestion-replay`. Without owner-accepted baseline, `WATCH` is the
+expected honest result. Warm equality is the same `input_fingerprint` plus the
+PR #234 runner `normalized_output_sha256` (the adapter persists that same
+visible-view hash); `snapshot_sha256` may change with `generated_at`.
+The adapter does not call a model (`provider_calls=0`) and never unlocks
+publication.
+
 ## 5. Normal ingestion and live Fly
 
 Telegram, VK and parser replays through their normal adapters follow only after

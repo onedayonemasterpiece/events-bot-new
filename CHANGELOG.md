@@ -9,6 +9,13 @@
   semantic publication blocked. Facts-v3 CI now runs the exact five-file suite;
   Smart Update/backfill routing also recognizes normalized `всей семьей`
   without routing generic invitations or age-only copy.
+- Added a provider-free facts-v3 product snapshot at the existing static
+  exporter/StaticSiteBuilder boundary plus the PR #234 product-quality runner
+  and workflow. The snapshot preserves stage provenance separately from
+  evidence trust filtering, validates exact EventSource grounding and policy
+  hashes, keeps malformed confirmed facts visibly blocked, carries existing
+  venue/organizer data, deduplicates only mutual occurrence families and keeps
+  all semantic publication blocked pending owner baseline/live evidence.
 - Added the stacked Smart Update static-collection facts-v3 implementation:
   the existing single Gemma adjudication call now returns independent
   child-directed, family-suitable and joint-family facts with exact persisted

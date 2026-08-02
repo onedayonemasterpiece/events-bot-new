@@ -26,6 +26,7 @@ sections:
     kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
     static_site_atomic_root: docs/operations/static-site-atomic-root.md
     static_collection_facts_v3: docs/operations/static-collection-facts-v3.md
+    static_collections_product_quality: docs/testing/static-collections-product-quality-autotests.md
     event_quality_release_monitoring: docs/operations/event-quality-release-monitoring.md
     event_image_duplicate_audit: docs/operations/event-image-duplicate-audit.md
     email_delivery: docs/operations/email-delivery.md

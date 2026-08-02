@@ -487,6 +487,12 @@ def export_preview_data_if_configured(config: dict) -> None:
             str(SITE_DIR / 'src' / 'data' / 'collection-batch-v1.json'),
             '--collection-batch-last-good',
             str(semantic_paths['collection_batch_last_good_filename']),
+            '--collection-product-snapshot-output',
+            str(SITE_DIR / 'src' / 'data' / 'static-collection-product-snapshot-v1.json'),
+            '--collection-product-source-scope',
+            str(config.get('collection_product_source_scope') or 'static-site-builder-export'),
+            '--collection-product-evidence-trust-scope',
+            str(config.get('collection_product_evidence_trust_scope') or 'all'),
         ])
     if config.get('gemma_related_verify'):
         cmd.append('--gemma-related-verify')
@@ -517,6 +523,7 @@ def read_collection_semantic_receipt(config: dict) -> dict:
     if scripts_dir not in sys.path:
         sys.path.insert(0, scripts_dir)
     from static_collection_batch import validate_collection_batch
+    from static_collection_product_snapshot import validate_product_snapshot
 
     batch = json.loads(batch_path.read_text(encoding='utf-8'))
     catalog_path = SITE_DIR / 'src' / 'data' / 'production-catalog.json'
@@ -544,13 +551,30 @@ def read_collection_semantic_receipt(config: dict) -> dict:
             'collection batch validation failed: '
             + '; '.join(validation.get('errors') or [])
         )
+    product_path = SITE_DIR / 'src' / 'data' / 'static-collection-product-snapshot-v1.json'
+    if not product_path.is_file():
+        raise RuntimeError('required static-collection-product-snapshot-v1.json is missing')
+    product_snapshot = json.loads(product_path.read_text(encoding='utf-8'))
+    product_validation = validate_product_snapshot(product_snapshot)
+    if not product_validation.get('valid'):
+        raise RuntimeError(
+            'collection product snapshot validation failed: '
+            + '; '.join(product_validation.get('errors') or [])
+        )
     output_path = WORKING / 'collection-batch-v1.json'
     shutil.copy2(batch_path, output_path)
+    product_output_path = WORKING / 'static-collection-product-snapshot-v1.json'
+    shutil.copy2(product_path, product_output_path)
     return {
         'status': 'validated',
         'collection_batch_sha256': sha256_file(output_path),
         'batch_contract_sha256': batch.get('batch_sha256'),
         'label_count': len(batch.get('labels') or {}),
+        'collection_product_snapshot_sha256': sha256_file(product_output_path),
+        'collection_product_snapshot_contract_sha256': product_snapshot.get('snapshot_sha256'),
+        'collection_product_input_fingerprint': product_snapshot.get('input_fingerprint'),
+        'collection_product_normalized_output_sha256': product_snapshot.get('normalized_output_sha256'),
+        'collection_product_provider_calls': product_snapshot.get('provider_calls'),
     }
 
 
@@ -787,6 +811,22 @@ def main() -> int:
                 or not re.fullmatch(r'[0-9a-f]{64}', str(semantic_result.get('artifact_sha256') or ''))
             ):
                 raise RuntimeError('shared collection semantic result is partial or mismatched')
+            if config.get('collection_semantic_compute') and (
+                int(semantic_result.get('collection_product_provider_calls', -1)) != 0
+                or not re.fullmatch(
+                    r'[0-9a-f]{64}',
+                    str(semantic_result.get('collection_product_snapshot_sha256') or ''),
+                )
+                or not re.fullmatch(
+                    r'[0-9a-f]{64}',
+                    str(semantic_result.get('collection_product_input_fingerprint') or ''),
+                )
+                or not re.fullmatch(
+                    r'[0-9a-f]{64}',
+                    str(semantic_result.get('collection_product_normalized_output_sha256') or ''),
+                )
+            ):
+                raise RuntimeError('shared collection product snapshot metadata is mismatched')
             if (
                 (config.get('related_mode') == 'bge' or config.get('unusual_enabled'))
                 and not re.fullmatch(

@@ -23,6 +23,9 @@
 - Read-only duplicate-image audit: `docs/operations/event-image-duplicate-audit.md`
 - Email delivery/deliverability: `docs/operations/email-delivery.md`
 - External focus-group mailbox OTP E2E: `docs/testing/external-focus-email-otp.md`
+- Минимальный продуктовый мониторинг статических подборок — health,
+  living semantic examples и stability baseline:
+  `docs/testing/static-collections-product-quality-autotests.md`
 - Kaggle static-site builder / publisher protocol: `docs/operations/kaggle-static-site-builder.md`
 - Default-off two-bucket/ALB atomic root publisher and setup/rollback runbook:
   `docs/operations/static-site-atomic-root.md`

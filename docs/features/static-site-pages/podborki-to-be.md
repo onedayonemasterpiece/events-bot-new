@@ -1804,3 +1804,31 @@ LLM по всем историческим 6 969 строкам.
    клубов, без нового сервиса.
 
 Это даёт меньше разрозненных решений, повторное использование уже оплаченной исследовательской работы и fail-closed качество выборки.
+
+## 14. Facts-v3 product snapshot для pre-publication проверки
+
+В data-prep ветке реализован один adapter на уже существующей границе
+`export-production-preview-data.py` → `StaticSiteBuilder`. Он читает только
+сохранённые `Event.collection_decisions` facts-v3 и привязанные `EventSource`,
+не вызывает provider/BGE и не классифицирует события повторно. Результат
+`static-collection-product-snapshot-v1.json` содержит current/future events,
+mutual occurrence families, прямой organizer из `organizer_names`, exact-source
+provenance и отдельные `child_directed`, `family_suitable`,
+`joint_family_activity`, `kids` (`child OR family`). Legacy audience decision и
+перенос факта между связанными показами запрещены.
+
+Snapshot всегда остаётся `shadow|experimental` с
+`publication.status=blocked`. Верхний contract фиксирует
+`facts_policy_version=static-collection-facts-v3`, stage provenance
+`source_scope`, отдельный `evidence_trust_scope`, `input_fingerprint`,
+`normalized_output_sha256`, artifact hash и `provider_calls=0`. Malformed
+confirmed facts не скрываются, а помечаются blocked/needs-source-review, поэтому
+product-quality runner fail-closed обнаруживает source-grounding дефект.
+
+После apply, warm и normal-ingestion стадий строятся отдельные snapshot artifacts
+и запускается один и тот же product runner. Без owner-accepted baseline итог
+честно остаётся `WATCH`. Warm equivalence определяется по одинаковым
+`input_fingerprint` и PR #234 runner `normalized_output_sha256` (adapter
+сохраняет тот же visible-view hash); `snapshot_sha256` может
+отличаться из-за `generated_at`. Эта реализация не добавляет owner gold,
+thresholds, scores, schedule, Astro routes, navigation или sitemap.
