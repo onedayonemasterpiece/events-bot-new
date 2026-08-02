@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { parse } from 'yaml';
 
-import { buildAppiumCapabilities, extractDriverNetworkEvents } from '../../e2e/focus-email/adapters/appium-ui.mjs';
+import { buildAppiumCapabilities, extractDriverNetworkEvents,
+  inspectSafariNativeUiProtocol } from '../../e2e/focus-email/adapters/appium-ui.mjs';
 
 test('Appium capability builder pins real mobile browsers and iOS keyboard ownership', () => {
   const ios = buildAppiumCapabilities('ios', { deviceName: 'iPhone 16', platformVersion: '18.5', udid: 'opaque' },
@@ -23,6 +24,29 @@ test('Appium capability builder pins real mobile browsers and iOS keyboard owner
 test('adapter excludes unsafe hierarchy reads, JS value injection and desktop keyboard rescue', async () => {
   const source = await readFile(new URL('../../e2e/focus-email/adapters/appium-ui.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /getPageSource|pageSource|input\.value\s*=\s*value|osascript|Cmd-K|Toggle Software Keyboard/u);
+});
+
+test('Safari native inspection consumes raw protocol arrays and scopes the exact action to its modal', async () => {
+  const calls = [];
+  const state = await inspectSafariNativeUiProtocol(async (using, xpath) => {
+    calls.push({ using, xpath });
+    if (xpath.includes('/ancestor::')) return [{ 'element-6066-11e4-a52e-4f735466cecf': 'continue-in-exact-modal' }];
+    if (xpath.includes('XCUIElementTypeAlert') && xpath.includes('.//XCUIElementTypeStaticText')) return [{ ELEMENT: 'known-alert' }];
+    if (xpath.includes('XCUIElementTypeAlert')) return [{ ELEMENT: 'known-alert' }];
+    return [{ ELEMENT: 'exact-title' }];
+  });
+  assert.equal(calls.length, 4);
+  assert.ok(calls.every(({ using }) => using === 'xpath'));
+  assert.match(calls.find(({ xpath }) => xpath.includes('/ancestor::')).xpath,
+    /ancestor::\*.*\[1\]\/\/XCUIElementTypeButton/u);
+  assert.deepEqual(state, { known_dialog_count: 1, continue_button_count: 1,
+    blocking_dialog_count: 1, unknown_blocking_dialog_count: 0,
+    action_token: 'continue-in-exact-modal' });
+});
+
+test('Safari native inspection fails closed when a driver violates the element-array contract', async () => {
+  await assert.rejects(() => inspectSafariNativeUiProtocol(async () => ({ ELEMENT: 'not-an-array' })),
+    /safari_native_find_elements_non_array/u);
 });
 
 test('immutable preview metadata records the full repository SHA used by the E2E gate', async () => {

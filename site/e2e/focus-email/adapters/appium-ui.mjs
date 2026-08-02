@@ -122,6 +122,39 @@ export function buildAppiumCapabilities(platform, config, env = process.env) {
   };
 }
 
+const W3C_ELEMENT_ID = 'element-6066-11e4-a52e-4f735466cecf';
+
+const elementId = (reference) => reference?.[W3C_ELEMENT_ID] || reference?.ELEMENT || null;
+
+/**
+ * Inspect only the bounded Safari first-run modal through raw WebDriver
+ * protocol arrays. WebdriverIO's enhanced `$$` result is deliberately not
+ * used here: native XCUITest protocol responses are plain element references,
+ * and treating a non-array enhanced result as iterable can hide the actual
+ * blocking modal behind a harness TypeError.
+ */
+export async function inspectSafariNativeUiProtocol(findElements) {
+  if (typeof findElements !== 'function') throw new TypeError('safari_native_find_elements_missing');
+  const exactTitle = `//XCUIElementTypeStaticText[@visible="true" and (@name="Выбор поисковой системы" or @label="Выбор поисковой системы")]`;
+  const modalAncestor = `ancestor::*[(self::XCUIElementTypeAlert or self::XCUIElementTypeSheet or self::XCUIElementTypeOther) and .//XCUIElementTypeButton[@visible="true" and (@name="Продолжить" or @label="Продолжить")]][1]`;
+  const exactAction = `//XCUIElementTypeButton[@visible="true" and (@name="Продолжить" or @label="Продолжить")]`;
+  const query = async (xpath) => {
+    const result = await findElements('xpath', xpath);
+    if (!Array.isArray(result)) throw new TypeError('safari_native_find_elements_non_array');
+    return result;
+  };
+
+  const [titles, actions, topLevel, knownTopLevel] = await Promise.all([
+    query(exactTitle),
+    query(`${exactTitle}/${modalAncestor}${exactAction}`),
+    query('//XCUIElementTypeAlert[@visible="true"] | //XCUIElementTypeSheet[@visible="true"]'),
+    query(`//XCUIElementTypeAlert[@visible="true" and .${exactTitle}] | //XCUIElementTypeSheet[@visible="true" and .${exactTitle}]`),
+  ]);
+  const scopedActions = [...new Set(actions.map(elementId).filter(Boolean))];
+  return classifySafariInspection({ titleCount: titles.length, scopedActions,
+    topLevelCount: topLevel.length, knownTopLevelCount: knownTopLevel.length });
+}
+
 export async function createAppiumUi({ platform, target, expectedRepoSha, evidenceRoot, directHost, relayHost, secrets = [], env = process.env }) {
   const config = validateMobileConfig(platform, env);
   const { remote } = await import('webdriverio');
@@ -209,28 +242,9 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
 
   async function inspectSafariNativeUi() {
     if (platform !== 'ios') return classifySafariInspection();
-    const titlePredicate = "type == 'XCUIElementTypeStaticText' AND visible == 1 AND (name == 'Выбор поисковой системы' OR label == 'Выбор поисковой системы')";
-    const titles = await driver.findElements('-ios predicate string', titlePredicate);
-    // Bind the action to the nearest common native modal ancestor of the exact
-    // title. A same-named button elsewhere in Safari is never eligible.
-    const modalXpath = `//XCUIElementTypeStaticText[@visible="true" and (@name="Выбор поисковой системы" or @label="Выбор поисковой системы")]/ancestor::*[(self::XCUIElementTypeAlert or self::XCUIElementTypeSheet or self::XCUIElementTypeOther) and .//XCUIElementTypeButton[@visible="true" and (@name="Продолжить" or @label="Продолжить")]][1]`;
-    const candidates = await driver.$$(modalXpath);
-    const scopedActions = [];
-    for (const candidate of candidates) {
-      const exactTitles = await candidate.$$('.//XCUIElementTypeStaticText[@visible="true" and (@name="Выбор поисковой системы" or @label="Выбор поисковой системы")]');
-      const exactActions = await candidate.$$('.//XCUIElementTypeButton[@visible="true" and (@name="Продолжить" or @label="Продолжить")]');
-      if (exactTitles.length === 1 && exactActions.length === 1) {
-        const elementId = exactActions[0].elementId;
-        if (elementId) scopedActions.push(elementId);
-      } else if (exactTitles.length === 1) {
-        scopedActions.push(...exactActions.map((element) => element.elementId).filter(Boolean));
-      }
-    }
-    const topLevel = await driver.$$('//XCUIElementTypeAlert | //XCUIElementTypeSheet');
-    const knownTopLevel = await driver.$$('//XCUIElementTypeAlert[.//XCUIElementTypeStaticText[@visible="true" and (@name="Выбор поисковой системы" or @label="Выбор поисковой системы")]] | //XCUIElementTypeSheet[.//XCUIElementTypeStaticText[@visible="true" and (@name="Выбор поисковой системы" or @label="Выбор поисковой системы")]]');
-    const visibleCount = async (elements) => (await Promise.all(elements.map((element) => element.isDisplayed().catch(() => false)))).filter(Boolean).length;
-    return classifySafariInspection({ titleCount: titles.length, scopedActions,
-      topLevelCount: await visibleCount(topLevel), knownTopLevelCount: await visibleCount(knownTopLevel) });
+    // Bind the action to the nearest native modal ancestor of the exact title.
+    // A same-named button elsewhere in Safari is never eligible.
+    return inspectSafariNativeUiProtocol((using, value) => driver.findElements(using, value));
   }
 
   async function withNativeContext(fn) {
