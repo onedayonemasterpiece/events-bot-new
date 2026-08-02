@@ -65,6 +65,11 @@
   of requiring a human mailbox, and a strict canonical-issue `/qa run` gateway
   routes ChatGPT requests to the same reusable workflow. Preview metadata now
   records the full repository SHA required by this release gate.
+- Changed the Region Talk draft-recovery product budget to a configurable
+  production ceiling of 100 durable physical sends per daily ledger. Completed
+  request fingerprints remain replayable and the shared Google AI RPM/TPM/RPD
+  limiter remains authoritative; routing still prefers Gemini 3.5 Flash Lite
+  before Gemini 3.1 Flash Lite.
 - Fixed Region Talk social draft recovery after a strong candidate reread:
   the backfill now rebuilds the current authoritative source fingerprint from
   exact live source rows before Writer and verifies it again inside the final
