@@ -30,7 +30,7 @@
     "extracted_at": "2026-08-02T09:10:18.144847Z",
     "extraction_repo_sha": "f1a732fce6003dc24bcf38b012072951be85e5e6",
     "seed_builder_repo_sha": "86bda03782a270637d3e0a1f683e729eba3d0d7f",
-    "integration_repo_sha": "86bda03782a270637d3e0a1f683e729eba3d0d7f",
+    "integration_repo_sha": "08ca743839ea86866b51869164c4c254b876368f",
     "source_record_count": 389
   },
   "acceptance": {
