@@ -248,6 +248,11 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
           '-e', 'tell application "Simulator" to activate',
           '-e', 'tell application "System Events" to keystroke "k" using command down',
         ], { timeout: 10_000 });
+        await driver.pause(300);
+        await driver.executeScript('mobile: tap', [{
+          x: Math.round(rect.x + rect.width / 2),
+          y: Math.round(rect.y + rect.height / 2),
+        }]);
         await driver.pause(500);
         nativeKeyboardAtTap[kind] = await driver.isKeyboardShown().catch(() => false);
       }

@@ -25,7 +25,8 @@
   that physical tap before returning to Safari's web-inspector context. A
   hosted Simulator that still has its independent software-keyboard toggle off
   receives the documented `Cmd-K` action once and must then expose the native
-  keyboard before the journey can continue.
+  keyboard after one repeated physical field tap before the journey can
+  continue.
 - Added reusable project skill guidance for constructing protected static-site
   browser/Android/iOS acceptance journeys and for sending/receiving controlled
   OTP mail through the existing Yandex Mail Trigger boundary without exposing
