@@ -1,6 +1,11 @@
 name: External focus email OTP
 
 on:
+  workflow_call:
+    inputs:
+      target_url: { required: true, type: string }
+      expected_repo_sha: { required: true, type: string }
+      platform: { required: true, type: string }
   workflow_dispatch:
     inputs:
       target_url:
@@ -8,9 +13,15 @@ on:
         required: true
         type: string
       expected_repo_sha:
-        description: Exact full repository SHA recorded by the deployed preview metadata
+        description: Exact full repository SHA recorded by deployed preview metadata
         required: true
         type: string
+      platform:
+        description: Sequential real-mail platform selection
+        required: true
+        default: all
+        type: choice
+        options: [browser, android, ios, all]
 
 permissions:
   contents: read
@@ -20,48 +31,225 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  live-email-otp:
-    runs-on: ubuntu-latest
-    timeout-minutes: 12
-    environment:
-      name: external-e2e
-    defaults:
-      run:
-        working-directory: site
+  browser:
+    if: ${{ inputs.platform == 'browser' || inputs.platform == 'all' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: { name: external-e2e }
+    env:
+      E2E_PLATFORM: browser
+      E2E_TARGET_URL: ${{ inputs.target_url }}
+      E2E_EXPECTED_REPO_SHA: ${{ inputs.expected_repo_sha }}
+      E2E_RUN_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_EVIDENCE_DIR: artifacts/external-focus-email-otp-evidence-browser-${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_MAIL_ADAPTER: ${{ vars.E2E_MAIL_ADAPTER }}
+      E2E_YANDEX_MAIL_WS_URL: ${{ secrets.E2E_YANDEX_MAIL_WS_URL }}
+      E2E_IMAP_USERNAME: ${{ secrets.E2E_IMAP_USERNAME }}
+      E2E_IMAP_PASSWORD: ${{ secrets.E2E_IMAP_PASSWORD }}
+      E2E_IMAP_HOST: ${{ vars.E2E_IMAP_HOST }}
+      E2E_IMAP_PORT: ${{ vars.E2E_IMAP_PORT }}
+      E2E_IMAP_SECURE: ${{ vars.E2E_IMAP_SECURE }}
+      E2E_RECIPIENT_TEMPLATE: ${{ secrets.E2E_RECIPIENT_TEMPLATE }}
+      E2E_EXPECTED_FROM_PATTERN: ${{ vars.E2E_EXPECTED_FROM_PATTERN }}
+      E2E_EXPECTED_SUBJECT_PATTERN: ${{ vars.E2E_EXPECTED_SUBJECT_PATTERN }}
+      E2E_MAIL_TIMEOUT_MS: ${{ vars.E2E_MAIL_TIMEOUT_MS }}
+      E2E_SUPABASE_HOST: ${{ vars.E2E_SUPABASE_HOST }}
+      E2E_RELAY_HOST: ${{ vars.E2E_RELAY_HOST }}
+    defaults: { run: { working-directory: site } }
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: '22.12.0'
-          cache: npm
-          cache-dependency-path: site/package-lock.json
-      - name: Install pinned dependencies
-        run: npm ci --no-audit --no-fund
-      - name: Install pinned Chromium
-        run: npx playwright install --with-deps chromium
-      - name: Run external email OTP journey
-        env:
-          E2E_TARGET_URL: ${{ inputs.target_url }}
-          E2E_EXPECTED_REPO_SHA: ${{ inputs.expected_repo_sha }}
-          E2E_RUN_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
-          E2E_EVIDENCE_DIR: artifacts/external-focus-email-otp-evidence-gh-${{ github.run_id }}-${{ github.run_attempt }}
-          E2E_IMAP_USERNAME: ${{ secrets.E2E_IMAP_USERNAME }}
-          E2E_IMAP_PASSWORD: ${{ secrets.E2E_IMAP_PASSWORD }}
-          E2E_IMAP_HOST: ${{ vars.E2E_IMAP_HOST }}
-          E2E_IMAP_PORT: ${{ vars.E2E_IMAP_PORT }}
-          E2E_IMAP_SECURE: ${{ vars.E2E_IMAP_SECURE }}
-          E2E_RECIPIENT_TEMPLATE: ${{ vars.E2E_RECIPIENT_TEMPLATE }}
-          E2E_EXPECTED_FROM_PATTERN: ${{ vars.E2E_EXPECTED_FROM_PATTERN }}
-          E2E_EXPECTED_SUBJECT_PATTERN: ${{ vars.E2E_EXPECTED_SUBJECT_PATTERN }}
-          E2E_MAIL_TIMEOUT_MS: ${{ vars.E2E_MAIL_TIMEOUT_MS }}
-          E2E_SUPABASE_HOST: ${{ vars.E2E_SUPABASE_HOST }}
-          E2E_RELAY_HOST: ${{ vars.E2E_RELAY_HOST }}
+        with: { node-version: '22.22.0', cache: npm, cache-dependency-path: site/package-lock.json }
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Run Chromium compatibility journey
         run: npm run e2e:external-focus-email-otp
-      - name: Upload sanitized evidence
-        if: ${{ always() && hashFiles('site/artifacts/external-focus-email-otp-evidence-*/.redaction-ok') != '' }}
+      - name: Upload sanitized browser evidence
+        if: ${{ always() && hashFiles('site/artifacts/external-focus-email-otp-evidence-browser-*/.redaction-ok') != '' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: external-focus-email-otp-evidence-${{ github.run_id }}-${{ github.run_attempt }}
-          path: site/artifacts/external-focus-email-otp-evidence-*
+          name: static-site-qa-focus-otp-browser-${{ github.run_id }}-${{ github.run_attempt }}
+          path: site/artifacts/external-focus-email-otp-evidence-browser-*
+          if-no-files-found: error
+          retention-days: 7
+
+  android:
+    needs: browser
+    if: ${{ always() && ((inputs.platform == 'android' && needs.browser.result == 'skipped') || (inputs.platform == 'all' && needs.browser.result == 'success')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    environment: { name: external-e2e }
+    env:
+      E2E_PLATFORM: android
+      E2E_DEVICE_NAME: Pixel 7
+      E2E_PLATFORM_VERSION: '15'
+      E2E_TARGET_URL: ${{ inputs.target_url }}
+      E2E_EXPECTED_REPO_SHA: ${{ inputs.expected_repo_sha }}
+      E2E_RUN_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_EVIDENCE_DIR: artifacts/external-focus-email-otp-evidence-android-${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_MAIL_ADAPTER: ${{ vars.E2E_MAIL_ADAPTER }}
+      E2E_YANDEX_MAIL_WS_URL: ${{ secrets.E2E_YANDEX_MAIL_WS_URL }}
+      E2E_IMAP_USERNAME: ${{ secrets.E2E_IMAP_USERNAME }}
+      E2E_IMAP_PASSWORD: ${{ secrets.E2E_IMAP_PASSWORD }}
+      E2E_IMAP_HOST: ${{ vars.E2E_IMAP_HOST }}
+      E2E_IMAP_PORT: ${{ vars.E2E_IMAP_PORT }}
+      E2E_IMAP_SECURE: ${{ vars.E2E_IMAP_SECURE }}
+      E2E_RECIPIENT_TEMPLATE: ${{ secrets.E2E_RECIPIENT_TEMPLATE }}
+      E2E_EXPECTED_FROM_PATTERN: ${{ vars.E2E_EXPECTED_FROM_PATTERN }}
+      E2E_EXPECTED_SUBJECT_PATTERN: ${{ vars.E2E_EXPECTED_SUBJECT_PATTERN }}
+      E2E_MAIL_TIMEOUT_MS: ${{ vars.E2E_MAIL_TIMEOUT_MS }}
+      E2E_SUPABASE_HOST: ${{ vars.E2E_SUPABASE_HOST }}
+      E2E_RELAY_HOST: ${{ vars.E2E_RELAY_HOST }}
+    defaults: { run: { working-directory: site } }
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '22.22.0', cache: npm, cache-dependency-path: site/package-lock.json }
+      - run: npm ci --no-audit --no-fund
+      - run: npx appium driver list --installed
+      - name: Enable KVM for the Android emulator
+        run: |
+          test -c /dev/kvm
+          sudo chmod 0666 /dev/kvm
+          test -r /dev/kvm && test -w /dev/kvm
+      - name: Run Android 15 / Chrome / UiAutomator2
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.34.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          working-directory: site
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -timezone UTC
+          disable-animations: true
+          script: |
+            adb shell settings put secure show_ime_with_hard_keyboard 1
+            npx appium --base-path /wd/hub --port 4723 --allow-insecure uiautomator2:chromedriver_autodownload > "${RUNNER_TEMP}/appium-android.log" 2>&1 &
+            for n in $(seq 1 45); do curl -fsS http://127.0.0.1:4723/wd/hub/status >/dev/null && break; sleep 1; done
+            E2E_HOST_OS_VERSION="$(uname -sr)" npm run e2e:external-focus-email-otp
+      - name: Emit safe BLOCKED artifact when emulator failed before harness
+        if: ${{ always() }}
+        run: test -f "$E2E_EVIDENCE_DIR/.redaction-ok" || npm run e2e:external-focus-email-otp || true
+      - name: Upload sanitized Android evidence
+        if: ${{ always() && hashFiles('site/artifacts/external-focus-email-otp-evidence-android-*/.redaction-ok') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: static-site-qa-focus-otp-android-${{ github.run_id }}-${{ github.run_attempt }}
+          path: site/artifacts/external-focus-email-otp-evidence-android-*
+          if-no-files-found: error
+          retention-days: 7
+
+  ios:
+    needs: android
+    if: ${{ always() && ((inputs.platform == 'ios' && needs.android.result == 'skipped') || (inputs.platform == 'all' && needs.android.result == 'success')) }}
+    runs-on: macos-15
+    timeout-minutes: 40
+    environment: { name: external-e2e }
+    env:
+      E2E_PLATFORM: ios
+      E2E_TARGET_URL: ${{ inputs.target_url }}
+      E2E_EXPECTED_REPO_SHA: ${{ inputs.expected_repo_sha }}
+      E2E_RUN_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_EVIDENCE_DIR: artifacts/external-focus-email-otp-evidence-ios-${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_MAIL_ADAPTER: ${{ vars.E2E_MAIL_ADAPTER }}
+      E2E_YANDEX_MAIL_WS_URL: ${{ secrets.E2E_YANDEX_MAIL_WS_URL }}
+      E2E_IMAP_USERNAME: ${{ secrets.E2E_IMAP_USERNAME }}
+      E2E_IMAP_PASSWORD: ${{ secrets.E2E_IMAP_PASSWORD }}
+      E2E_IMAP_HOST: ${{ vars.E2E_IMAP_HOST }}
+      E2E_IMAP_PORT: ${{ vars.E2E_IMAP_PORT }}
+      E2E_IMAP_SECURE: ${{ vars.E2E_IMAP_SECURE }}
+      E2E_RECIPIENT_TEMPLATE: ${{ secrets.E2E_RECIPIENT_TEMPLATE }}
+      E2E_EXPECTED_FROM_PATTERN: ${{ vars.E2E_EXPECTED_FROM_PATTERN }}
+      E2E_EXPECTED_SUBJECT_PATTERN: ${{ vars.E2E_EXPECTED_SUBJECT_PATTERN }}
+      E2E_MAIL_TIMEOUT_MS: ${{ vars.E2E_MAIL_TIMEOUT_MS }}
+      E2E_SUPABASE_HOST: ${{ vars.E2E_SUPABASE_HOST }}
+      E2E_RELAY_HOST: ${{ vars.E2E_RELAY_HOST }}
+    defaults: { run: { working-directory: site } }
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.6.0
+        with: { xcode-version: '16.4' }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '22.22.0', cache: npm, cache-dependency-path: site/package-lock.json }
+      - run: npm ci --no-audit --no-fund
+      - run: npx appium driver list --installed
+      - name: Download matching prebuilt WebDriverAgent
+        run: |
+          npx appium driver run xcuitest download-wda -- \
+            --outdir "${RUNNER_TEMP}/kenigevents-wda-ios-sim" \
+            --platform iOS \
+            --kind sim
+          test -d "${RUNNER_TEMP}/kenigevents-wda-ios-sim/WebDriverAgentRunner-Runner.app"
+      - name: Boot exact iPhone 16 / iOS 18.5 Simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun simctl list runtimes | grep -F 'iOS 18.5'
+          defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
+          udid="$(xcrun simctl create 'KenigEvents OTP iPhone 16' 'com.apple.CoreSimulator.SimDeviceType.iPhone-16' 'com.apple.CoreSimulator.SimRuntime.iOS-18-5')"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$udid"
+          open -a Simulator
+          xcrun simctl bootstatus "$udid" -b
+      - name: Run Mobile Safari / XCUITest
+        env:
+          E2E_DEVICE_NAME: iPhone 16
+          E2E_PLATFORM_VERSION: '18.5'
+          E2E_DEVICE_UDID: ${{ steps.simulator.outputs.udid }}
+          E2E_PREBUILT_WDA_PATH: ${{ runner.temp }}/kenigevents-wda-ios-sim/WebDriverAgentRunner-Runner.app
+          E2E_EVIDENCE_DIR: artifacts/external-focus-email-otp-evidence-ios-${{ github.run_id }}-${{ github.run_attempt }}
+          APPIUM_BASE_PATH: /wd/hub
+          APPIUM_PORT: '4723'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export E2E_HOST_OS_VERSION="$(sw_vers -productVersion)"
+          export E2E_XCODE_VERSION="$(xcodebuild -version | tr '\n' ' ')"
+          start_appium() {
+            npx appium --base-path /wd/hub --port 4723 > "${RUNNER_TEMP}/appium-ios.log" 2>&1 &
+            appium_pid=$!
+            ready=0
+            for n in $(seq 1 120); do
+              if curl --max-time 2 -fsS http://127.0.0.1:4723/wd/hub/status >/dev/null; then ready=1; break; fi
+              sleep 1
+            done
+            test "$ready" = 1
+          }
+          status=1
+          for attempt in 1 2; do
+            start_appium
+            status=0
+            npm run e2e:external-focus-email-otp || status=$?
+            if [ "$status" -eq 0 ]; then break; fi
+            retryable=0
+            node - "$E2E_EVIDENCE_DIR/result.json" <<'NODE' && retryable=1 || true
+          const { readFileSync } = require('node:fs');
+          const result = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          process.exit(result.status === 'BLOCKED'
+            && result.otp_issue_request_count === 0
+            && result.otp_verify_request_count === 0
+            && result.participant_registration_request_count === 0 ? 0 : 1);
+          NODE
+            if [ "$attempt" -eq 2 ] || [ "$retryable" -ne 1 ]; then break; fi
+            echo 'Retrying one pre-side-effect Appium/WDA infrastructure startup'
+            kill "$appium_pid" || true
+            wait "$appium_pid" || true
+            find "$E2E_EVIDENCE_DIR" -mindepth 1 -delete
+          done
+          if [ "$status" -ne 0 ]; then tail -n 400 "${RUNNER_TEMP}/appium-ios.log"; fi
+          exit "$status"
+      - name: Emit safe BLOCKED artifact when simulator failed before harness
+        if: ${{ always() }}
+        run: test -f "$E2E_EVIDENCE_DIR/.redaction-ok" || npm run e2e:external-focus-email-otp || true
+      - name: Delete simulator
+        if: ${{ always() && steps.simulator.outputs.udid != '' }}
+        run: xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true; xcrun simctl delete '${{ steps.simulator.outputs.udid }}' || true
+      - name: Upload sanitized iOS evidence
+        if: ${{ always() && hashFiles('site/artifacts/external-focus-email-otp-evidence-ios-*/.redaction-ok') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: static-site-qa-focus-otp-ios-${{ github.run_id }}-${{ github.run_attempt }}
+          path: site/artifacts/external-focus-email-otp-evidence-ios-*
           if-no-files-found: error
           retention-days: 7

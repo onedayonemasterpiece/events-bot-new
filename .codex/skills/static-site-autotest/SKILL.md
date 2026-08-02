@@ -24,6 +24,9 @@ For focus-group OTP additionally open:
 - `.github/workflows/external-focus-email-otp.yml`;
 - `site/e2e/focus-email/run.mjs`.
 
+For a new Android/iOS browser-tab implementation or an Appium failure, read
+[`references/mobile-otp-acceptance.md`](references/mobile-otp-acceptance.md).
+
 The implementation handoff for the first Android/iOS milestone is
 `docs/testing/static-site-autotest-codex-prompt.md`. It must also close the
 ChatGPT launch boundary from the control-plane document; a UI-only
@@ -71,6 +74,10 @@ ChatGPT launch boundary from the control-plane document; a UI-only
   exact target allowlist and full SHA before checkout or side effects.
 - Never parse commands through `eval` or execute arbitrary refs/shell text.
 - Protected OTP still requires Environment approval and global concurrency.
+- Serialize commands per canonical issue and deduplicate an identical comment
+  posted inside the prior run's accepted-to-terminal time bracket. A queued
+  duplicate must link the prior run and create no new OTP job; the same command
+  posted after its terminal receipt remains an intentional rerun.
 - Report accepted requests with run URL/ID as `STARTED_BACKGROUND` or blocking
   start; report terminal PASS/FAIL/BLOCKED separately.
 
@@ -85,6 +92,14 @@ ChatGPT launch boundary from the control-plane document; a UI-only
 - Upload only after fail-closed redaction audit.
 - Android/iOS are not complete until a real emulator/simulator run reaches a
   terminal result; a workflow skeleton is not evidence.
+- Drive one semantic journey through platform adapters. Do not duplicate the
+  business assertions in three test files.
+- On Android require working KVM before boot; do not accept slow software
+  emulation as equivalent evidence.
+- On iOS use the XCUITest-driver-matched prebuilt WebDriverAgent. Keep ordinary
+  navigation in WebKit, but focus keyboard-critical Safari inputs through their
+  exact labelled XCTest text fields. Do not use blanket `nativeWebTap`, Safari
+  coordinate calibration, raw hierarchy dumps or JS value assignment.
 
 ## Release blockers
 

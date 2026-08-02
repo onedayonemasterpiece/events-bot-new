@@ -15,6 +15,13 @@ function gitShortSha() {
   return result.status === 0 ? result.stdout.trim() : 'nogit';
 }
 
+function gitFullSha() {
+  const result = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' });
+  const value = result.status === 0 ? result.stdout.trim().toLowerCase() : '';
+  if (!/^[0-9a-f]{40}$/u.test(value)) throw new Error('Cannot record full repo SHA in preview-build.json');
+  return value;
+}
+
 const now = new Date();
 function dateInKaliningrad(value) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -70,6 +77,7 @@ mkdirSync(join(distDir, buildId), { recursive: true });
 renameSync(stagedDistDir, join(distDir, buildId));
 writeFileSync(join(distDir, buildId, 'preview-build.json'), JSON.stringify({
   buildId,
+  repo_sha: gitFullSha(),
   generatedAt: now.toISOString(),
   basePath: `/${buildId}`,
   astroAssetBaseUrl: astroAssetBaseUrl || null,

@@ -1,0 +1,4 @@
+interface:
+  display_name: "KenigEvents Static Site Autotest"
+  short_description: "Build and run protected browser/mobile E2E"
+  default_prompt: "Use $static-site-autotest to select, implement, run, and document the risk-relevant KenigEvents static-site E2E scenarios with sanitized evidence."

@@ -73,6 +73,12 @@ Keep workflow concurrency at one. Correlate by a pre-request checkpoint, exact
 recipient, allowlisted sender/subject, and an opaque run/attempt identifier.
 Expire the object or receipt quickly and fail when zero or multiple codes match.
 
+The implemented protected boundary is the no-persistence WebSocket variant:
+`kenigevents-focus-otp-mail-trigger` broadcasts batches of one through
+`kenigevents-focus-otp-mail`. Its recipient and random path exist only in the
+GitHub `external-e2e` Environment. Canonical desired state and rotation rules:
+`infra/yandex/focus-otp-e2e/README.md`.
+
 The fixed generated recipient belongs in the Auth hook's fixed-test allowlist so
 repeated messages reuse the same NotiSend recipient admission for the current
 billing period.

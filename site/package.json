@@ -44,8 +44,13 @@
     "astro": "^6.0.5"
   },
   "devDependencies": {
+    "appium": "3.6.0",
+    "appium-uiautomator2-driver": "8.2.2",
+    "appium-xcuitest-driver": "12.1.4",
     "imapflow": "1.6.5",
     "mailparser": "3.9.14",
-    "playwright": "1.61.1"
+    "playwright": "1.61.1",
+    "webdriverio": "9.30.0",
+    "ws": "8.18.3"
   }
 }

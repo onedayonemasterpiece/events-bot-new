@@ -5,15 +5,30 @@
 Focus email has two distinct gates. The fixed
 `focus-agent-e2e@kenigevents.ru` + fresh admin-issued OTP runner is an internal
 deployed Auth/membership integration check only. The external delivery E2E must
-run manually in a protected GitHub Environment, receive a random OTP through a
-controlled IMAPS mailbox, and must not use a service key, admin link or fixed
-OTP. An ambiguous selected-once issuance keeps code entry open while resend is
-cooling down.
+run manually in a protected GitHub Environment, receive a random OTP through
+the dedicated no-persistence Yandex Mail Trigger → API Gateway WebSocket (or
+the optional controlled read-only IMAPS adapter), and must not use a service
+key, admin link or fixed OTP. An ambiguous selected-once issuance keeps code
+entry open while resend is cooling down.
 
 The implemented external gate is `.github/workflows/external-focus-email-otp.yml`
 and its operating contract is [`docs/testing/external-focus-email-otp.md`](../testing/external-focus-email-otp.md).
 Routine runs reuse one fixed mailbox and therefore do not create a new Auth user;
 fresh-user aliases are explicit, non-routine coverage.
+
+`focus.otp.browser_tab` uses one semantic journey across protected Chromium,
+Android Chrome/UiAutomator2 and iOS Safari/XCUITest jobs. Terminal receipts and
+the per-platform implementation boundary are recorded in the external runbook
+and scenario registry; a workflow skeleton or non-terminal mobile run is not
+acceptance. Immutable SHA `4a19fbe0b243d8a9a4652ff0c1e4fee9e895cf9c`
+has terminal PASS receipts for Chromium
+[30745526613](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30745526613)
+and Android
+[30747598046](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30747598046).
+iOS terminal run
+[30754894934](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30754894934)
+is retained as `FAIL_MOBILE_KEYBOARD` with zero mail/Auth/membership side
+effects, not as acceptance.
 
 Правило обновления:
 - При добавлении нового `.feature` файла или существенном изменении набора сценариев сначала обновляй эту страницу.
