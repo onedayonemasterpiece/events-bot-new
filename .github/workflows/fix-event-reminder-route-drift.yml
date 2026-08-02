@@ -1,0 +1,53 @@
+name: Fix event reminder route drift
+
+on:
+  push:
+    branches: [feature/event-reminders-calendar-test-design-20260802]
+    paths:
+      - .github/workflows/fix-event-reminder-route-drift.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          ref: feature/event-reminders-calendar-test-design-20260802
+      - name: Restore main route values and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('docs/routes.yml')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              'docs/reports/incidents/INC-2026-05-17-vk-retrospective-wrong-postponement.md':
+                  'docs/reports/incidents/INC-2026-05-17-vk-retrospective-reschedule-wrong-postponement.md',
+              'site/scripts/export-production_preview_data.py':
+                  'site/scripts/export-production-preview-data.py',
+          }
+          for old, new in replacements.items():
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected one route drift occurrence for {old!r}, found {count}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+          test -f docs/reports/incidents/INC-2026-05-17-vk-retrospective-reschedule-wrong-postponement.md
+          test -f site/scripts/export-production-preview-data.py
+          git rm .github/workflows/fix-event-reminder-route-drift.yml
+          git add docs/routes.yml
+          git diff --cached --check
+          git commit -m "docs: restore unrelated route values"
+          git fetch origin feature/event-reminders-calendar-test-design-20260802
+          git rebase origin/feature/event-reminders-calendar-test-design-20260802
+          git push origin HEAD:feature/event-reminders-calendar-test-design-20260802
