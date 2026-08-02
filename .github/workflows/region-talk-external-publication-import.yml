@@ -107,6 +107,7 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/region_talk_external_publication_import.py "$INPUT_PATH" \
+            --expected-input-sha256 "${{ steps.input.outputs.sha256 }}" \
             --report "${{ steps.input.outputs.report_dir }}/validation.json"
 
       - name: Exchange GitHub OIDC token for short-lived Yandex IAM token
@@ -147,6 +148,7 @@ jobs:
           python scripts/region_talk_external_publication_import.py "$INPUT_PATH" \
             --execute \
             --no-publish-registry \
+            --expected-input-sha256 "${{ steps.input.outputs.sha256 }}" \
             --report "${{ steps.input.outputs.report_dir }}/execute.json"
 
       - name: Publish deterministic import receipt
@@ -175,13 +177,31 @@ jobs:
                       payload = json.loads(path.read_text(encoding="utf-8"))
                       receipt[name.removesuffix(".json")] = {
                           key: payload.get(key)
-                          for key in ("executed", "planned_ydb_rows", "written_ydb_rows", "live_duplicate_guard_applied")
+                          for key in (
+                              "executed", "execution_status", "planned_ydb_rows", "written_ydb_rows",
+                              "new_intake_count", "new_intake_ids", "replay_count", "replay_ids",
+                              "conflict_count", "live_duplicate_guard_applied", "input_json_sha256",
+                          )
                       }
                   except json.JSONDecodeError:
                       receipt[name.removesuffix(".json")] = {"parse_error": True}
           (root / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
           PY
           cat "$report_dir/input.sha256" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo
+            echo "### Import receipt"
+            echo
+            jq -r '
+              (.execute // .validation) as $r |
+              "- status: `\($r.execution_status // "missing")`\n" +
+              "- new intake: \($r.new_intake_count // 0)\n" +
+              "- new intake IDs: `\(($r.new_intake_ids // []) | sort | join(","))`\n" +
+              "- replayed: \($r.replay_count // 0)\n" +
+              "- replay IDs: `\(($r.replay_ids // []) | sort | join(","))`\n" +
+              "- conflicts: \($r.conflict_count // 0)"
+            ' "$report_dir/receipt.json"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload immutable validation and import reports
         if: ${{ always() && steps.input.outcome == 'success' }}

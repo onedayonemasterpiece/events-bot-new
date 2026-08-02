@@ -183,7 +183,7 @@ async function ingest(root: HTMLElement, state: ClientState, eventKind: string, 
         directUrl: url,
         relayUrl,
         publishableKey: key,
-      }).idempotentReplay(`${url}/rest/v1/rpc/ingest_transport_experiment_event_v1`, {
+      }).request(`${url}/rest/v1/rpc/ingest_transport_experiment_event_v1`, {
       method: 'POST',
       headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ p_payload: nextPayload }),
@@ -210,7 +210,7 @@ async function flushTransportOutbox(root: HTMLElement): Promise<void> {
   await getIdempotentOutbox().flush(async (entry) => {
     if (entry.channel !== 'transport-experiment-v1') return 'skip';
     try {
-      const response = await client.idempotentReplay(`${url}/rest/v1/rpc/ingest_transport_experiment_event_v1`, {
+      const response = await client.request(`${url}/rest/v1/rpc/ingest_transport_experiment_event_v1`, {
         method:'POST',
         headers:{ apikey:key, Authorization:`Bearer ${key}`, 'Content-Type':'application/json' },
         body:JSON.stringify({ p_payload:entry.payload }),

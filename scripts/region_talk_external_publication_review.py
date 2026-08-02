@@ -221,6 +221,8 @@ def apply_review(row: dict[str, Any], review: dict[str, Any]) -> tuple[dict[str,
             "import_status": "ready_for_region_talk_scoring",
         }
         updated["next_action"] = "run_region_talk_text_vector_and_image_scoring"
+        updated["review_status"] = "reviewed"
+        updated["review_decision"] = "approved"
     else:
         updated["decision"] = {
             **current_decision,
@@ -231,6 +233,11 @@ def apply_review(row: dict[str, Any], review: dict[str, Any]) -> tuple[dict[str,
             "import_status": "research_only_blocked",
         }
         updated["next_action"] = "none_operator_blocked"
+        updated["review_status"] = "reviewed"
+        updated["review_decision"] = "blocked"
+    # This review resolves the intake routing question only. Publication still
+    # requires the ordinary text/vector/image/LLM/operator release gates.
+    updated["publication_permission"] = "not_granted"
     updated["operator_policy_override"] = attestation
     updated["updated_at"] = reviewed_at
     return updated, attestation

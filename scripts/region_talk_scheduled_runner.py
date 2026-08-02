@@ -506,7 +506,11 @@ async def run_region_talk_scheduled(
                         reaction_sync.get("candidate_projections_changed"),
                     )
 
-            if _env_bool("REGION_TALK_PUBLICATION_PLAN_ENABLED", True):
+            reaction_gate_current = (
+                not _env_bool("REGION_TALK_REACTION_SYNC_ENABLED", True)
+                or str(reaction_sync.get("status") or "") == "complete"
+            )
+            if _env_bool("REGION_TALK_PUBLICATION_PLAN_ENABLED", True) and reaction_gate_current:
                 plan_process = await asyncio.create_subprocess_exec(
                     *build_publication_plan_command(),
                     cwd=str(ROOT),
@@ -556,6 +560,19 @@ async def run_region_talk_scheduled(
                     publication_plan_exit_code,
                     publication_plan.get("counts") or {},
                 )
+            elif _env_bool("REGION_TALK_PUBLICATION_PLAN_ENABLED", True):
+                # Keep the last durable plan unchanged when operator reaction
+                # evidence could not be synchronized. Recalculating here could
+                # silently replace a prepared/reviewed identity using an older
+                # reaction revision.
+                publication_plan = {
+                    "ok": False,
+                    "stage": "publication_plan",
+                    "status": "deferred_reaction_sync_not_current",
+                    "reaction_sync_status": reaction_sync.get("status"),
+                    "written_ydb_rows": 0,
+                    "retry": "next_scheduled_slot",
+                }
 
         exit_code = int(process.returncode or 0)
         metrics = _compact_metrics(last_payload)
@@ -565,7 +582,21 @@ async def run_region_talk_scheduled(
             "reaction_sync_deferred": int(str(reaction_sync.get("status") or "").startswith("deferred")),
             "reaction_revisions_changed": int(reaction_sync.get("reaction_revisions_changed") or 0),
             "reaction_candidate_projections_changed": int(reaction_sync.get("candidate_projections_changed") or 0),
+            "external_publication_intake_new_count": int(
+                external_research.get("new_intake_count")
+                or external_research.get("external_publication_intake_new_count")
+                or external_research.get("imported_new")
+                or 0
+            ),
         })
+        external_intake_ids = external_research.get("new_intake_ids")
+        if not isinstance(external_intake_ids, list):
+            external_intake_ids = external_research.get("external_publication_intake_ids")
+        if not isinstance(external_intake_ids, list):
+            external_intake_ids = external_research.get("imported_external_publication_ids")
+        if not isinstance(external_intake_ids, list):
+            external_intake_ids = []
+        external_intake_ids = sorted({str(value) for value in external_intake_ids if str(value)})
         details = {
             **base_details,
             "output_path": str(output_path),
@@ -577,6 +608,8 @@ async def run_region_talk_scheduled(
             "external_research_ok": bool(external_research.get("ok")),
             "external_research_exit_code": external_research_exit_code,
             "external_research_ready": int(external_research.get("ready_for_region_talk_scoring") or 0),
+            "external_publication_intake_new_count": int(metrics.get("external_publication_intake_new_count") or 0),
+            "external_publication_intake_new_ids": external_intake_ids,
             "publication_plan_ok": bool(publication_plan.get("ok")),
             "publication_plan_status": publication_plan.get("status") or (
                 "complete" if publication_plan.get("ok") else "failed"

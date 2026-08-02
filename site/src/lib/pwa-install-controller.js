@@ -78,7 +78,9 @@ export function createPwaInstallController({
     button.disabled = false;
     button.textContent = 'Открыть Анонсы';
     root.dataset.pwaInstallReady = 'installed';
-    if (status) status.textContent = 'Приложение установлено.';
+    if (status) status.textContent = standalone
+      ? 'Приложение открыто.'
+      : 'Если значок ещё не появился, подождите до минуты.';
     if (guidance) guidance.hidden = true;
   };
   const showInstalling = () => {
@@ -87,7 +89,7 @@ export function createPwaInstallController({
     button.disabled = true;
     button.textContent = 'Устанавливается…';
     root.dataset.pwaInstallReady = 'installing';
-    if (status) status.textContent = 'Ждём завершения установки.';
+    if (status) status.textContent = 'Установка началась. Она завершится в течение минуты.';
     if (guidance) guidance.hidden = true;
     if (installPoll === null && typeof windowRef.setInterval === 'function') {
       installPoll = windowRef.setInterval(() => {
@@ -163,12 +165,12 @@ export function createPwaInstallController({
   };
 
   const onAppInstalled = () => {
-    if (status) status.textContent = 'Приложение установлено.';
     if (presentation) {
       installPrompt = null;
       prompting = false;
       showInstalled();
     } else {
+      if (status) status.textContent = 'Приложение установлено.';
       writeInstalledMarker(true);
       clear();
     }

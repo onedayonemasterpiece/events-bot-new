@@ -176,7 +176,8 @@ cannot downgrade an existing 3–6-item selection to a one-item pseudo-album.
 This mode never changes editorial paragraphs or the publication verdict.
 
 Operator delivery is fail-closed on one atomic revision: two paragraphs,
-source/original links, ordered media manifest and layout. An article requires
+one direct original-post/article link, the canonical channel footer, ordered
+media manifest and layout. An article requires
 one associated hero; a photo-led social post uses one hero or an ordered 3–6
 frame album; a video-led post uses its source video. Only a material explicitly
 diagnosed as having no usable media takes `link_preview_fallback`. Source media
@@ -188,6 +189,30 @@ Video is not treated as a weak image and is never assigned a fabricated visual
 score. Gemini verifies only the text/product criteria. The notifier sends a
 Gemini-confirmed video link to the same operator chat, where the operator makes
 the visual/video-quality decision manually.
+
+The final Telegram/review renderer owns one footer contract for article and
+social lanes:
+
+```text
+{paragraph 1}
+
+{paragraph 2}
+
+Источник публикации  -> точный URL поста/материала
+
+О Калининграде говорят -> https://t.me/kalinigrad_visit
+```
+
+The actual labels are Russian: `Источник публикации` and
+`О Калининграде говорят`. Both labels are links; the first URL is always
+the canonical concrete post/material URL. Outlet homepages and a second
+`Оригинал` link are forbidden on this surface. The blank line between the
+links is mandatory. `scripts/region_talk_preproduction_footer_repair.py`
+synchronizes reactions first, re-reads live YDB, checks exact reactions again
+immediately before each edit, edits only still-pending current revisions in
+place, verifies the two exact Telegram text-link entities and rotates the
+draft/review/delivery fingerprints idempotently. Approved, rejected,
+rewrite-requested, conflicting and stale revisions remain untouched.
 
 Actual-media acquisition is bounded by
 `REGION_TALK_IMAGE_MAX_MEDIA_FETCH_ATTEMPTS` (default `3`). A post that returns
@@ -393,8 +418,14 @@ selection plan with policy `region_talk_daily_pair_antivector_v1`:
 - the social choice is also compared with that day's article. An alternative
   below the pair-similarity threshold is preferred; unavoidable relaxation is
   explicit in `pair_diversity_relaxed`;
-- future `planned`/`vacant` slots are overwritten on every run. Only
-  `locked`/`published` slots are immutable;
+- an unprepared future `planned`/`vacant` slot can be recalculated. Once its
+  current candidate has a complete reviewed draft/presentation revision, the
+  slot is `prepared` and its candidate identity is preserved like a lock;
+- a late intake is evaluated for the next unprepared slot. It cannot silently
+  replace a prepared candidate. If the prepared candidate's current intake or
+  review revision became invalid, the planner may reopen the slot only with an
+  explicit audit reason plus previous/current queue revisions; `locked` and
+  `published` remain immutable;
 - an elapsed planned slot is frozen, and a first-ever plan created after the
   first daily slot starts on the next day instead of manufacturing a past due
   publication; the frozen slot also consumes its candidate identity, so that
@@ -414,9 +445,13 @@ selection plan with policy `region_talk_daily_pair_antivector_v1`:
 The planner reads the actual target publication log/schedule, not operator-chat
 delivery, when reconstructing `publication_semantic_history_item`. Sending a
 candidate to the review chat therefore does not falsely mark it as publicly
-published. The scheduled runner executes the planner after each autonomous
-discovery/finalization session, so the next 14 days are recalculated five
-times per day as candidates arrive under the current production cadence.
+published. The scheduled runner executes the planner only after a complete
+current intake refresh and successful reaction projection. Immediately before
+the plan write, the planner strongly rereads the intake prefix and compares its
+revision with the selection revision. A late change triggers a bounded
+recomputation or defers the affected row; refresh/read/truncation failure
+preserves the existing plan. Thus the unprepared part of the next 14 days can
+change five times per day while prepared decisions stay explicit and stable.
 
 The implemented on-demand operator view uses
 `scripts/region_talk_review_queue.py` policy
@@ -525,6 +560,17 @@ The shared Supabase `google_ai_reserve` remains the cross-service RPM/TPM/RPD
 authority. The Region Talk ledger is an extra product-run ceiling. Internal
 provider retries are set to one attempt; retryable rows are retried by the
 durable finalizer state instead.
+
+Terminal accepted/rejected rows also refresh the complete external-intake
+attestation projection without another provider call. The refresh includes the
+current intake fingerprint, revision, intake/review status, publication
+permission and manual-review flag. This prevents an otherwise unchanged
+eligibility/source attestation from leaving a legacy candidate outside the
+planner merely because its intake fingerprint was added later. The zero-LLM
+projection also covers terminal external-publication candidates whose compact
+image/memory working rows have already been pruned, or whose only remaining
+image row is non-actionable (for example `needs_visual_review`); it does not
+recreate media evidence or reopen the provider verdict.
 
 All Region Talk Gemini consumers (final verifier/onboarding, visual
 adjudicator and optional grounded external research) disable direct reserve and
@@ -722,14 +768,17 @@ python scripts/region_talk_goal_notify.py --message 'Region Talk: CandidateRepor
 - Cross-post each selected item to both Telegram and VK where possible and allowed.
 - Do not publish the same source more than once per day.
 - Max 1–2 posts per source per 7 days.
-- Recalculate unlocked future slots whenever new candidates arrive.
+- Recalculate only unprepared/unlocked future slots when new candidates arrive;
+  defer late intake past a prepared revision unless an audited invalidation
+  safely reopens it.
 - Use semantic anti-vector history separately for articles and social posts.
 - Keep the article/social pair and adjacent days semantically different.
 - Candidates can expire.
 - Dry-run mode is required.
 - Auto-publish is disabled by default until explicitly configured.
 
-Future publisher state machine: `pending → locked → published|failed|skipped|cancelled`.
+Future publisher state machine:
+`pending → prepared → locked → published|failed|skipped|cancelled`.
 
 Idempotency:
 

@@ -41,7 +41,8 @@
 - короткое собственное summary;
 - что именно в регионе отметил источник;
 - какие смыслы были позитивными, нейтрально-полезными или конструктивно-критичными;
-- ссылка на оригинальный источник;
+- одна ссылка на конкретный исходный пост или материал;
+- единый отделённый пустой строкой подвал `О Калининграде говорят` со ссылкой на `https://t.me/kalinigrad_visit`;
 - исходное hero/альбом/видео с явной ссылкой на источник и оригинал; визуальная
   диагностика подтверждает связь медиа с материалом и точный порядок ревизии.
 
@@ -334,10 +335,19 @@ state. См. [MVP candidate report](mvp-candidate-report.md).
   whether generic known-KO rescans are enabled. Registry records without a
   supported TG/VK source stay visible as unsupported coverage, not fake queue
   progress.
-- Finalizer YDB contract: kind reads are keyset-paginated and the successful
-  live snapshot is reused for pre-image source-attestation priority. Do not
-  repeat the complete candidate/source/status scan in the same finalizer run;
-  all finalizer writes remain bounded batch UPSERTs.
+- Live-intake contract: external research may appear asynchronously after a
+  cycle begins. CandidateReport performs a narrow strong-current intake reread
+  before selection; the orchestrator refreshes metrics before every next
+  action; and the finalizer/planner reread and compare the decision revision
+  immediately before writing. Bounded/incomplete or failed reads stop
+  advancement. New IDs/counts are operator-visible, clean intake enters only
+  the normal scoring funnel, and `manual_review_required` is never promoted.
+- Finalizer YDB contract: the broad kind reads are keyset-paginated and the
+  successful live snapshot is reused for pre-image source-attestation priority.
+  The single exception is the mandatory decision-critical reread immediately
+  before persistence; it proves completeness and compares the stable live
+  fingerprint so a concurrent intake/review change cannot inherit an older LLM
+  verdict. All finalizer writes remain bounded batch UPSERTs.
 - Orchestrator environment contract: an explicitly supplied `--env-file` must
   exist before any live action is planned or launched, and an existing relative
   path is normalized to an absolute path before it is passed to child launchers.

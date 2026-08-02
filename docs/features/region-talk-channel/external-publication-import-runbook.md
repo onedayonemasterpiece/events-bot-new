@@ -72,7 +72,8 @@ is required for a new reviewed result file.
      --report artifacts/codex/region-talk-external-publications/2026-08-01-163142.dry-run.json
    ```
 
-3. Inspect `rejected`, `planned_ydb_rows`, and `executed: false` in the report.
+3. Inspect `rejected`, `conflicts`, `planned_ydb_rows`, the exact
+   `input_json_sha256`, and `executed: false` in the report.
    A non-empty `rejected` list is a fail-closed result, not permission to stage
    only its valid subset. Correct the research in a successor instead.
 4. Do not invoke the Actions workflow from a PR: its trusted checkout is
@@ -95,11 +96,13 @@ is required for a new reviewed result file.
    research**, choose the approved clean JSON, and run it from `main`.
 2. Approve the `region-talk-ydb-import` protected-environment deployment only
    after checking the chosen filename and main commit in the job summary.
-3. The job hashes the exact input, dry-validates it **before** OIDC exchange,
+3. The job hashes the exact input bytes, passes that SHA-256 into the importer,
+   and dry-validates **before** OIDC exchange,
    obtains a short-lived Yandex IAM token through federation, then runs the
    same importer with `--execute`. The executing importer re-reads the live
-   YDB seen ledger; a page that became known after research is rejected rather
-   than forced through.
+   YDB identity ledger; canonical URL, DOI and exact normalized title+authors
+   are checked together. A page that became known after research or conflicting
+   identity keys are rejected rather than forced through.
 4. Never replace this flow with a local `--execute` command or a static token.
    If a failure is due to OIDC/environment configuration, fix the federation or
    non-secret variables and rerun the protected workflow rather than adding a
@@ -116,12 +119,20 @@ It contains:
 - `execute.json` — write result when execution was reached;
 - `receipt.json` — deterministic presence/summary receipt for both reports.
 
+The execute report, receipt and Actions step summary must show
+`new_intake_count` plus sorted `new_intake_ids`, with replay/conflict counts
+separate. This lets the operator see an asynchronous queue increase without
+mistaking old IDs for new work.
+
 Also retain the GitHub job URL, the main checkout SHA from the job summary, the
 selected input path, environment approval record, and outcome. A validation
 failure still has the hash and validation report; it must have no execute
 report. A successful execute is not fully closed until the report confirms
-`executed: true`, the expected nonzero/consistent `written_ydb_rows`, and
-`live_duplicate_guard_applied: true`.
+`executed: true`, consistent `written_ydb_rows`, the new/replay ID sets, and
+`live_duplicate_guard_applied: true`. An identical rerun is a successful
+idempotent no-op: `new_intake_count=0`, no error row and no changed batch
+identity. The same `request_id` with a different exact input SHA is a conflict,
+so it must write nothing and require operator investigation.
 
 ## What staging does **not** do
 
@@ -132,3 +143,37 @@ publishing API. A staged row must still pass CandidateReport, text/vector,
 image, final-verifier, and explicit operator gates before any later publication
 planning. Therefore an import is an auditable intake event, **not** immediate
 publication.
+
+Every new intake row starts with `review_status=unreviewed` and
+`publication_permission=not_granted`. A clean `candidate` is allowed to enter
+the normal checking/scoring funnel; a `manual_review_required` row stays held.
+Neither case authorizes public posting at intake time. If any input row is
+invalid, conflicting, lacks required proof or live YDB cannot be read
+completely, `--execute` is all-or-nothing and performs no staging writes.
+
+## One-time provenance migration for pre-ledger intake
+
+Rows imported before the exact-byte ledger cannot truthfully recover the
+original JSON SHA. Do not fill `input_json_sha256` with a reconstructed value.
+Use the dry-run-first migration, which hashes the immutable embedded YDB
+research row and preserves its public evidence and normalized identities in an
+explicit legacy attestation:
+
+```bash
+python3 scripts/region_talk_external_publication_provenance_backfill.py \
+  --env-file .env \
+  --report artifacts/codex/region-talk-legacy-provenance-backfill.dry.json
+
+python3 scripts/region_talk_external_publication_provenance_backfill.py \
+  --env-file .env --execute \
+  --report artifacts/codex/region-talk-legacy-provenance-backfill.execute.json
+```
+
+The command performs a current complete read, compares each exact legacy-row
+SHA again inside the serializable write transaction, reserves every normalized
+identity in `external_publication_identity_item` in that same transaction, and
+is idempotent. Any
+missing request/evidence/identity or concurrent row change aborts the whole
+write. The migration retains the semantic decision, defaults absent review
+state to `unreviewed`, keeps `publication_permission=not_granted`, and therefore
+only restores eligibility for the ordinary LLM-first scoring pipeline.

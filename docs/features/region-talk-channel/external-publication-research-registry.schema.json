@@ -126,6 +126,22 @@
                 "type": "string",
                 "maxLength": 500
               },
+              "authors": {
+                "type": "array",
+                "items": {"type": "string", "maxLength": 240}
+              },
+              "normalized_title": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "normalized_authors": {
+                "type": "array",
+                "items": {"type": "string", "maxLength": 240}
+              },
+              "external_publication_id": {
+                "type": "string",
+                "pattern": "^extpub_[a-f0-9]{24}$"
+              },
               "source_name": {
                 "type": "string",
                 "maxLength": 300

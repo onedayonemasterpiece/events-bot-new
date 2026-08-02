@@ -405,7 +405,7 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         with (
             mock.patch.object(mod.rt, "ydb_connect", return_value=(ydb, object(), object())),
             mock.patch.object(mod.rt, "ydb_kv_table_path", return_value="table"),
-            mock.patch.object(mod.rt, "ydb_select_kind_items", side_effect=lambda _s, _y, _t, kind, limit: kinds.get(kind, {})),
+            mock.patch.object(mod.rt, "ydb_select_kind_items", side_effect=lambda _s, _y, _t, kind, limit, **_kwargs: kinds.get(kind, {})),
             mock.patch.object(mod.rt, "utc_now_iso", return_value="2026-07-10T09:00:00+00:00"),
         ):
             _ydb, _driver, _pool, _table, rows, _strict_priority = mod.read_live_rows(100, 100)
@@ -457,7 +457,7 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         with (
             mock.patch.object(mod.rt, "ydb_connect", return_value=(Ydb(), object(), object())),
             mock.patch.object(mod.rt, "ydb_kv_table_path", return_value="table"),
-            mock.patch.object(mod.rt, "ydb_select_kind_items", side_effect=lambda _s, _y, _t, kind, limit: kinds.get(kind, {})),
+            mock.patch.object(mod.rt, "ydb_select_kind_items", side_effect=lambda _s, _y, _t, kind, limit, **_kwargs: kinds.get(kind, {})),
             mock.patch.object(mod.rt, "utc_now_iso", return_value="2026-07-10T09:00:00+00:00"),
         ):
             _ydb, _driver, _pool, _table, rows, _strict_priority = mod.read_live_rows(100, 100)
@@ -542,7 +542,7 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         with (
             mock.patch.object(mod.rt, "ydb_connect", return_value=(Ydb(), object(), object())),
             mock.patch.object(mod.rt, "ydb_kv_table_path", return_value="table"),
-            mock.patch.object(mod.rt, "ydb_select_kind_items", side_effect=lambda _s, _y, _t, kind, limit: kinds.get(kind, {})),
+            mock.patch.object(mod.rt, "ydb_select_kind_items", side_effect=lambda _s, _y, _t, kind, limit, **_kwargs: kinds.get(kind, {})),
             mock.patch.object(mod.rt, "utc_now_iso", return_value="2026-07-31T18:00:00+00:00"),
         ):
             _ydb, _driver, _pool, _table, rows, _strict_priority = mod.read_live_rows(100, 100)
@@ -554,6 +554,88 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(rows[0]["image_queue_status"], "not_reviewable_no_media")
         self.assertEqual(rows[0]["_authoritative_source"], source)
         self.assertGreater(rows[0]["publication_pre_score"], 0.8)
+
+    def test_read_live_rows_projects_archived_external_publication_for_attestation_refresh(self) -> None:
+        mod = self.mod
+        post_url = "https://publisher.example/archived-article"
+        intake = {
+            "external_publication_id": "extpub-archived",
+            "intake_status": "new_intake",
+            "review_status": "unreviewed",
+            "publication_permission": "none",
+            "intake_revision": "legacy-attestation-v1",
+            "legacy_provenance_attestation": {"status": "attested"},
+        }
+        publication = {
+            "post_url": post_url,
+            "external_publication_id": "extpub-archived",
+            "content_origin_type": "editorial_publication",
+            "canonical_source_key": "web:publisher.example",
+            "publication_status": "gemini_accept",
+            "publication_candidate_status": "sent_to_chat",
+            "sent_to_chat": "true",
+            "publication_eligibility_verdict": "eligible",
+            "publication_eligibility_gate_version": mod.rt.PUBLICATION_ELIGIBILITY_GATE_VERSION,
+        }
+        kinds = {
+            # A compact image row can remain after the media lane stopped at
+            # manual review. It must not mask the terminal publication row,
+            # because that stale image is not itself a finalizer input.
+            "image_queue_item": {
+                "image:archived-stale": {
+                    "post_url": post_url,
+                    "external_publication_id": "extpub-archived",
+                    "image_queue_status": "needs_visual_review",
+                    "image_model_input_type": "actual_image",
+                }
+            },
+            "candidate_memory_item": {},
+            "publication_candidate_item": {"publication:archived": publication},
+            "source_queue_item": {},
+            "source_status_item": {},
+            "online_source_item": {},
+            "external_publication_source_item": {
+                "source:publisher": {
+                    "canonical_source_key": "web:publisher.example",
+                    "source_url": "https://publisher.example",
+                    "source_title": "Publisher Example",
+                    "source_scope": "external",
+                    "source_geo_class": "nonlocal_russia",
+                    "source_queue_status": "confirmed_external_publication_research",
+                }
+            },
+            "external_publication_intake_item": {"intake:archived": intake},
+            "source_onboarding_profile_item": {},
+        }
+
+        class Pool:
+            def retry_operation_sync(self, operation):
+                return operation(object())
+
+        class Ydb:
+            def SessionPool(self, _driver):
+                return Pool()
+
+        with (
+            mock.patch.object(mod.rt, "ydb_connect", return_value=(Ydb(), object(), object())),
+            mock.patch.object(mod.rt, "ydb_kv_table_path", return_value="table"),
+            mock.patch.object(
+                mod.rt,
+                "ydb_select_kind_items",
+                side_effect=lambda _s, _y, _t, kind, limit, **_kwargs: kinds.get(kind, {}),
+            ),
+            mock.patch.object(mod.rt, "utc_now_iso", return_value="2026-08-02T02:00:00+00:00"),
+        ):
+            _ydb, _driver, _pool, _table, rows, _strict_priority = mod.read_live_rows(100, 100)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["post_url"], post_url)
+        self.assertEqual(rows[0]["_image_ydb_pk"], "")
+        self.assertEqual(rows[0]["_previous_publication"], publication)
+        self.assertEqual(
+            rows[0]["external_intake_fingerprint"],
+            mod.rt.external_publication_intake_fingerprint(intake),
+        )
 
     def test_read_live_rows_prefers_current_memory_text_reject_over_stale_image_snapshot(self) -> None:
         mod = self.mod
@@ -604,7 +686,7 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         with (
             mock.patch.object(mod.rt, "ydb_connect", return_value=(Ydb(), object(), object())),
             mock.patch.object(mod.rt, "ydb_kv_table_path", return_value="table"),
-            mock.patch.object(mod.rt, "ydb_select_kind_items", side_effect=lambda _s, _y, _t, kind, limit: kinds.get(kind, {})),
+            mock.patch.object(mod.rt, "ydb_select_kind_items", side_effect=lambda _s, _y, _t, kind, limit, **_kwargs: kinds.get(kind, {})),
             mock.patch.object(mod.rt, "utc_now_iso", return_value="2026-07-15T06:00:00+00:00"),
         ):
             _ydb, _driver, _pool, _table, rows, _strict_priority = mod.read_live_rows(100, 100)
@@ -655,7 +737,7 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             def SessionPool(self, _driver):
                 return Pool()
 
-        select_mock = mock.Mock(side_effect=lambda _s, _y, _t, kind, limit: kinds.get(kind, {}))
+        select_mock = mock.Mock(side_effect=lambda _s, _y, _t, kind, limit, **_kwargs: kinds.get(kind, {}))
         with (
             mock.patch.object(mod.rt, "ydb_connect", return_value=(Ydb(), object(), object())),
             mock.patch.object(mod.rt, "ydb_kv_table_path", return_value="table"),
@@ -670,7 +752,7 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         # One read per required kind. The removed post-snapshot pass used to
         # read candidate/source/status a second time and caused the live YDB
         # deadline failure.
-        self.assertEqual(select_mock.call_count, 8)
+        self.assertEqual(select_mock.call_count, 9)
 
     def test_external_publication_source_is_authoritative_by_web_key(self) -> None:
         mod = self.mod
@@ -1473,6 +1555,40 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(result[0]["llm_attempted_this_run"], "false")
         llm_mock.assert_not_called()
 
+    def test_sent_row_refreshes_changed_external_intake_attestation_without_llm(self) -> None:
+        mod = self.mod
+        previous = {
+            "publication_status": "gemini_accept",
+            "publication_candidate_status": "sent_to_chat",
+            "sent_to_chat": "true",
+            "llm_decision": "accept",
+            "finalization_status": "terminal",
+            "llm_attempted_this_run": "false",
+            "external_intake_fingerprint": "",
+            "external_intake_revision": "",
+            "external_intake_status": "new_intake",
+            "external_intake_review_status": "unreviewed",
+            "external_intake_publication_permission": "none",
+            "external_intake_manual_review_required": "false",
+        }
+        row = {
+            **previous,
+            "external_intake_fingerprint": "current-intake-fingerprint",
+            "external_intake_revision": "legacy-attestation-v1",
+        }
+
+        changed = mod._reconcile_terminal_provider_decision(
+            row,
+            previous,
+            eligibility_verdict="eligible",
+            now_iso="2026-08-02T02:00:00+00:00",
+        )
+
+        self.assertTrue(changed)
+        self.assertEqual(row["publication_candidate_status"], "sent_to_chat")
+        self.assertEqual(row["external_intake_fingerprint"], "current-intake-fingerprint")
+        self.assertEqual(row["llm_attempted_this_run"], "false")
+
     def test_existing_unsent_accept_finishes_onboarding_without_repeating_gemini(self) -> None:
         mod = self.mod
         source = external_source()
@@ -1645,6 +1761,174 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(result[0]["publication_candidate_status"], "llm_confirmed")
         self.assertEqual(result[0]["llm_attempted_this_run"], "false")
         llm_mock.assert_not_called()
+
+    def test_external_manual_review_intake_never_reaches_provider_or_confirmation(self) -> None:
+        mod = self.mod
+        intake = {
+            "external_publication_id": "extpub-manual",
+            "canonical_url": "https://publisher.example/manual",
+            "intake_status": "new_intake",
+            "review_status": "unreviewed",
+            "publication_permission": "not_granted",
+            "decision": {
+                "import_status": "manual_review_required",
+                "downstream_readiness": "manual_review_required",
+            },
+        }
+        row = candidate_row(
+            post_url=intake["canonical_url"],
+            external_publication_id="extpub-manual",
+            content_origin_type="editorial_publication",
+            _external_intake=intake,
+            external_intake_manual_review_required="true",
+        )
+        with mock.patch.object(mod.rt, "call_region_talk_semantic_llm") as llm_mock:
+            result = mod.verify_rows(
+                [row], max_llm=1, model="gemini-test", default_env_var_name="KEY",
+                now_iso="2026-08-02T10:00:00+00:00",
+            )
+        self.assertEqual(result[0]["publication_status"], "gemini_needs_review")
+        self.assertEqual(result[0]["publication_candidate_status"], "llm_needs_review")
+        self.assertNotEqual(result[0]["publication_candidate_status"], "llm_confirmed")
+        llm_mock.assert_not_called()
+
+    def test_state_change_during_mocked_llm_writes_zero_stale_accept_rows(self) -> None:
+        mod = self.mod
+        url = "https://t.me/travelcase/99"
+        source = external_source("travelcase") | {"_ydb_pk": "source_queue_item:telegram:travelcase"}
+        image = {
+            "_ydb_pk": "image_queue_item:99",
+            "post_url": url,
+            "image_queue_status": "actual_scored",
+            "image_model_input_type": "actual_image",
+            "overall_media_score": 0.8,
+        }
+        memory = {
+            "_ydb_pk": "candidate_memory_item:99",
+            "post_url": url,
+            "canonical_source_key": "telegram:travelcase",
+            "vector_gate_status": "vector_accept_candidate",
+            "text": "Проверенный рассказ о Калининградской области.",
+        }
+        row = candidate_row(
+            post_url=url,
+            _image_ydb_pk=image["_ydb_pk"],
+            _memory_ydb_pk=memory["_ydb_pk"],
+            _image_payload=image,
+            _memory_payload=memory,
+            _authoritative_source=source,
+        )
+        row["_live_decision_fingerprint"] = mod.live_finalization_fingerprint(
+            image=image, memory=memory, intake=None, source=source, publication=None
+        )
+        current_memory = dict(memory)
+
+        def provider(*_args, **_kwargs):
+            current_memory["vector_gate_status"] = "vector_reject_other_region"
+            return {"llm_gate_status": "ok", "llm_decision": "accept", "llm_reason": "accept"}
+
+        with (
+            mock.patch.object(mod, "_eligibility_fields", return_value=("eligible", {})),
+            mock.patch.object(mod.rt, "call_region_talk_semantic_llm", side_effect=provider),
+        ):
+            verified = mod.verify_rows(
+                [row], max_llm=1, model="gemini-test", default_env_var_name="KEY",
+                now_iso="2026-08-02T10:00:00+00:00",
+            )
+        self.assertEqual(verified[0]["publication_status"], "gemini_accept")
+
+        kinds = {
+            "image_queue_item": {image["_ydb_pk"]: image},
+            "candidate_memory_item": {memory["_ydb_pk"]: current_memory},
+            "publication_candidate_item": {},
+            "source_queue_item": {source["_ydb_pk"]: source},
+            "source_status_item": {},
+            "online_source_item": {},
+            "external_publication_source_item": {},
+            "external_publication_intake_item": {},
+        }
+
+        class Pool:
+            def retry_operation_sync(self, operation):
+                return operation(object())
+
+        captured = {}
+        def upsert(_session, _ydb, _table, items, _now, **_kwargs):
+            captured["items"] = items
+            return len(items)
+        with (
+            mock.patch.object(mod, "_current_complete_kind", side_effect=lambda _s, _y, _t, kind, _limit: kinds[kind]),
+            mock.patch.object(mod.rt, "ensure_ydb_kv_table"),
+            mock.patch.object(mod.rt, "ydb_upsert_json_many", side_effect=upsert),
+        ):
+            written = mod.write_publication_rows(Pool(), object(), "table", verified, "run-stale")
+        self.assertEqual(written, 1)
+        payload = captured["items"][0][2]
+        self.assertEqual(payload["publication_status"], "gemini_needs_review")
+        self.assertEqual(payload["publication_candidate_status"], "llm_needs_review")
+        self.assertEqual(payload["final_decision_guard_status"], "deferred_live_state_changed")
+        self.assertNotEqual(payload["publication_candidate_status"], "llm_confirmed")
+
+    def test_final_decision_refresh_failure_raises_and_writes_nothing(self) -> None:
+        mod = self.mod
+        row = candidate_row(_live_decision_fingerprint="expected")
+
+        class Pool:
+            def retry_operation_sync(self, operation):
+                return operation(object())
+
+        with (
+            mock.patch.object(mod, "_current_complete_kind", side_effect=RuntimeError("read timeout")),
+            mock.patch.object(mod.rt, "ydb_upsert_json_many") as upsert,
+        ):
+            with self.assertRaisesRegex(mod.FinalDecisionRefreshError, "failed closed"):
+                mod.write_publication_rows(Pool(), object(), "table", [row], "run-read-error")
+        upsert.assert_not_called()
+
+    def test_published_row_stays_immutable_and_writes_durable_conflict_audit(self) -> None:
+        mod = self.mod
+        url = "https://t.me/travelcase/100"
+        row = candidate_row(
+            post_url=url,
+            _live_decision_fingerprint="old-fingerprint",
+            _previous_publication={"target_publication_status": "published", "plan_status": "completed"},
+        )
+        kinds = {
+            "image_queue_item": {},
+            "candidate_memory_item": {},
+            "publication_candidate_item": {},
+            "source_queue_item": {},
+            "source_status_item": {},
+            "online_source_item": {},
+            "external_publication_source_item": {},
+            "external_publication_intake_item": {},
+        }
+
+        class Pool:
+            def retry_operation_sync(self, operation):
+                return operation(object())
+
+        captured = {}
+
+        def upsert(_session, _ydb, _table, items, _now, **_kwargs):
+            captured["items"] = items
+            return len(items)
+
+        with (
+            mock.patch.object(mod, "_current_complete_kind", side_effect=lambda _s, _y, _t, kind, _limit: kinds[kind]),
+            mock.patch.object(mod.rt, "ensure_ydb_kv_table"),
+            mock.patch.object(mod.rt, "ydb_upsert_json_many", side_effect=upsert),
+        ):
+            written = mod.write_publication_rows(Pool(), object(), "table", [row], "run-audit")
+
+        self.assertEqual(written, 1)
+        self.assertEqual(len(captured["items"]), 1)
+        pk, kind, payload = captured["items"][0]
+        self.assertTrue(pk.startswith("publication_final_decision_audit_item:rtfinalaudit_"))
+        self.assertEqual(kind, "publication_final_decision_audit_item")
+        self.assertEqual(payload["audit_status"], "manual_review_required")
+        self.assertEqual(payload["post_url"], url)
+        self.assertEqual(payload["previous_target_publication_status"], "published")
 
 
 if __name__ == "__main__":

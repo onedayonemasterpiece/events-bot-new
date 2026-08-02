@@ -30,7 +30,8 @@ def test_seen_snapshot_merges_new_ledger_and_preledger_intake() -> None:
         intake_rows=[{
             "canonical_url": "https://example.org/article#top",
             "doi": "doi:10.1234/ABC",
-            "publication": {"title": "Article", "source_name": "Journal"},
+            "external_publication_id": "extpub_1234567890abcdef12345678",
+            "publication": {"title": "Article", "authors": ["A. Author"], "source_name": "Journal"},
             "decision": {"import_status": "ready_for_region_talk_scoring"},
         }],
     )
@@ -38,6 +39,10 @@ def test_seen_snapshot_merges_new_ledger_and_preledger_intake() -> None:
     assert len(rows) == 2
     assert any(row["doi"] == "10.1234/abc" and row["disposition"] == "candidate" for row in rows)
     assert any(row["canonical_url"] == "https://example.org/excluded" for row in rows)
+    candidate = next(row for row in rows if row["doi"] == "10.1234/abc")
+    assert candidate["authors"] == ["A. Author"]
+    assert candidate["normalized_authors"] == ["a. author"]
+    assert candidate["external_publication_id"] == "extpub_1234567890abcdef12345678"
 
 
 def test_request_snapshot_is_deterministic_and_schema_valid() -> None:
@@ -56,6 +61,10 @@ def test_request_snapshot_is_deterministic_and_schema_valid() -> None:
             "canonical_url": "https://archi.ru/russia/101203/vsya-mudrost-okeana",
             "doi": None,
             "title": "Вся мудрость океана",
+            "authors": ["И. Автор"],
+            "normalized_title": "вся мудрость океана",
+            "normalized_authors": ["и. автор"],
+            "external_publication_id": "extpub_1234567890abcdef12345678",
             "source_name": "Архи.ру",
             "disposition": "candidate",
         }],
@@ -67,4 +76,30 @@ def test_request_snapshot_is_deterministic_and_schema_valid() -> None:
     assert first == second
     assert first["duplicate_guard"]["seen_publication_count"] == 1
     assert first["duplicate_guard"]["snapshot_id"].startswith("rtseen_")
+    seen = first["duplicate_guard"]["seen_publications"][0]
+    assert seen["normalized_authors"] == ["и. автор"]
+    assert seen["external_publication_id"] == "extpub_1234567890abcdef12345678"
     assert json.loads(json.dumps(first, ensure_ascii=False)) == first
+
+
+def test_seen_projection_deduplicates_exact_normalized_title_and_authors() -> None:
+    mod = load_module()
+    rows = mod.build_seen_publications(
+        seen_rows=[{
+            "canonical_url": "https://mirror.example.net/article",
+            "title": " ARTICLE  TITLE ",
+            "authors": ["a. AUTHOR"],
+            "seen_disposition": "candidate",
+            "external_publication_id": "extpub_1234567890abcdef12345678",
+        }],
+        intake_rows=[{
+            "canonical_url": "https://example.org/article",
+            "publication": {"title": "Article title", "authors": ["A. Author"], "source_name": "Journal"},
+            "decision": {"import_status": "ready_for_region_talk_scoring"},
+            "external_publication_id": "extpub_1234567890abcdef12345678",
+        }],
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["normalized_title"] == "article title"
+    assert rows[0]["normalized_authors"] == ["a. author"]

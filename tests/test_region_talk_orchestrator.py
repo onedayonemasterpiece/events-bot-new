@@ -156,7 +156,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             def retry_operation_sync(self, op):
                 return op(Session())
 
-        fake_ydb = SimpleNamespace(StaleReadOnly=lambda: object())
+        fake_ydb = SimpleNamespace(SnapshotReadOnly=lambda: object())
         rows = mod.read_text_vector_metric_rows(Pool(), fake_ydb, "/db/state", 10)
 
         self.assertEqual(len(rows), 1)
@@ -2497,6 +2497,45 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(mod._orchestrator_kind_limit("source_queue_item", 100), 20000)
         self.assertEqual(mod._orchestrator_kind_limit("source_candidate_item", 100), 20000)
         self.assertEqual(mod._orchestrator_kind_limit("processed_post_item", 100), 20000)
+
+    def test_only_incomplete_live_intake_fails_metric_selection_closed(self) -> None:
+        mod = load_module()
+        mod.ensure_decision_metric_reads_complete(["processed_post_item"])
+        with self.assertRaisesRegex(RuntimeError, "intake read truncated"):
+            mod.ensure_decision_metric_reads_complete(["external_publication_intake_item"])
+
+    def test_execution_rereads_metrics_before_each_action_and_reports_new_intake(self) -> None:
+        mod = load_module()
+        snapshots = [
+            {"external_publication_intake_ids": ["ext-a"], "bge_pending_sample_total": 1},
+            {"external_publication_intake_ids": ["ext-a", "ext-b"], "bge_pending_sample_total": 1},
+            {"external_publication_intake_ids": ["ext-a", "ext-b", "ext-c"], "bge_pending_sample_total": 1},
+        ]
+        args = argparse.Namespace(
+            execute=False, execute_ready=True, limit=20000, bge_sample_limit=100,
+            skip_kaggle_status=True, allow_unverified_kaggle_status=False,
+            target_confirmed=20, bge_threshold=1, image_threshold=1,
+            no_main=False, stats_message=False, max_actions_per_cycle=2,
+            env_file="",
+        )
+        with (
+            mock.patch.object(mod, "read_region_talk_queue_metrics", side_effect=snapshots) as read_metrics,
+            mock.patch.object(mod, "_run_cmd", return_value={"status": "ok"}),
+        ):
+            result = mod.run_orchestrator_cycle(
+                args, allow_yc_fallback=False, cycle_index=1
+            )
+
+        self.assertEqual(read_metrics.call_count, 3)
+        self.assertEqual(result["selected_actions"], ["launch_candidate_report", "launch_bge_m3"])
+        self.assertEqual(
+            result["selection_metric_snapshots"][0]["new_external_publication_intake_ids"],
+            ["ext-b"],
+        )
+        self.assertEqual(
+            result["selection_metric_snapshots"][1]["new_external_publication_intake_ids"],
+            ["ext-c"],
+        )
 
     def test_stats_message_is_rendered_from_same_metric_snapshot(self) -> None:
         mod = load_module()

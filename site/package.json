@@ -22,6 +22,7 @@
     "check:keyboard-event-navigation": "bash scripts/check-keyboard-event-navigation-playwright.sh",
     "check:browser-release": "node scripts/check-browser-release-gate.mjs",
     "check:static-collections-e2e": "node scripts/check-static-collections-e2e.mjs",
+    "check:focus-onboarding-email-integration": "node scripts/check-focus-onboarding-email-integration.mjs",
     "check:listing-desktop-geometry": "bash scripts/check-listing-desktop-geometry-playwright.sh",
     "check:secret-candidate": "node scripts/check-secret-candidate.mjs",
     "deploy:preview": "node scripts/deploy-preview-yc.mjs",
@@ -35,6 +36,8 @@
     "test:static-collections-e2e": "node --test scripts/static-collections-e2e.behavior.test.mjs",
     "test:occurrences": "node --experimental-strip-types --test tests/event-occurrences.test.mjs",
     "test:focus-group-product": "node --experimental-strip-types --test src/lib/focus-group-prototype.test.ts src/lib/focus-personalization.test.ts src/lib/focus-invite-qr.test.ts src/lib/connectivityDiagnostic.test.ts src/lib/resilientSupabaseTransport.test.ts src/lib/staticSiteAuth.test.ts src/lib/emailOtp.test.ts src/lib/focus-feedback-state.test.ts src/lib/focus-group-surface.test.ts scripts/preview-public-env.test.mjs tests/focus-group-product-surface.test.mjs tests/focus-pwa-membership.test.mjs tests/focus-easter-eggs.test.mjs tests/static-site-auth.test.mjs tests/focus-group-reliable-feedback.test.mjs",
+    "test:external-focus-email-otp": "node --test tests/external-focus-email-otp/*.test.mjs",
+    "e2e:external-focus-email-otp": "node e2e/focus-email/run.mjs",
     "astro": "astro",
     "test:resilient-client": "node --experimental-strip-types --test src/lib/resilientSupabaseTransport.test.ts tests/resilient-data-storage.test.mjs tests/supabase-runtime-gate.test.mjs && node --test tests/search-recovery.test.mjs tests/static-site-auth.test.mjs tests/pwa-install.test.mjs"
   },
@@ -43,6 +46,8 @@
     "astro": "^6.0.5"
   },
   "devDependencies": {
+    "imapflow": "1.6.5",
+    "mailparser": "3.9.14",
     "playwright": "1.61.1"
   }
 }

@@ -83,6 +83,9 @@ def test_apply_review_promotes_only_after_all_checks() -> None:
     updated, attestation = apply_review(original, _review())
     assert original["publication"]["published_at"] is None
     assert updated["decision"]["import_status"] == "ready_for_region_talk_scoring"
+    assert updated["review_status"] == "reviewed"
+    assert updated["review_decision"] == "approved"
+    assert updated["publication_permission"] == "not_granted"
     assert updated["publication"]["published_at"] == "2026-03-06"
     assert updated["operator_policy_override"]["decision"] == "approved"
     assert attestation["review_id"].startswith("extpubreview_")
@@ -108,5 +111,8 @@ def test_apply_review_block_is_auditable_without_field_updates() -> None:
     review["updates"] = {}
     updated, attestation = apply_review(_row(), review)
     assert updated["decision"]["import_status"] == "research_only_blocked"
+    assert updated["review_status"] == "reviewed"
+    assert updated["review_decision"] == "blocked"
+    assert updated["publication_permission"] == "not_granted"
     assert updated["operator_policy_override"]["decision"] == "blocked"
     assert attestation["evidence"]

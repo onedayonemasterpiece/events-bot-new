@@ -45,13 +45,13 @@ export function createPwaTelemetryController({
   if (!installationId || !sessionId) return null;
 
   const dataClient = dataClientRef || (fetchRef
-    ? { idempotentReplay: fetchRef }
+    ? { request: fetchRef }
     : getResilientDataClient({ directUrl:url, relayUrl:relayEndpoint, publishableKey:key }));
   const outbox = outboxRef || getIdempotentOutbox();
 
   const send = async (payload) => {
     try {
-      const response = await dataClient.idempotentReplay(`${url}/rest/v1/rpc/record_pwa_lifecycle_v1`, {
+      const response = await dataClient.request(`${url}/rest/v1/rpc/record_pwa_lifecycle_v1`, {
         method:'POST',
         headers:{
           apikey:key,

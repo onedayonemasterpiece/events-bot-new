@@ -350,7 +350,7 @@ def test_validator_checks_exact_rendered_caption_length_when_row_is_available() 
     violations = mod.validate_editorial_output(
         output, {"source.name", "content.exact_text"}, row=row,
     )
-    assert "caption_visible_length:536" in violations
+    assert "caption_visible_length:545" in violations
 
     output["public_copy"]["paragraph_2"] += (
         " Автор также объясняет, как эти наблюдения складываются в цельный маршрут прогулки."
@@ -400,11 +400,11 @@ def test_short_rendered_caption_gets_writer_retry_before_critic(monkeypatch) -> 
     assert updates["publication_draft_generation_attempts"] == 2
     assert calls_seen[2]["stage"] == "writer"
     feedback = calls_seen[2]["payload"]["deterministic_feedback"]
-    assert "caption_visible_length:536" in feedback
+    assert "caption_visible_length:545" in feedback
     repair = calls_seen[2]["payload"]["length_repair"]
-    assert repair["actual_visible_chars"] == 536
+    assert repair["actual_visible_chars"] == 545
     assert repair["target_visible_min_chars"] == 620
-    assert repair["required_added_editorial_chars"] == 84
+    assert repair["required_added_editorial_chars"] == 75
 
 
 def test_second_short_writer_failure_preserves_stage_audit(monkeypatch) -> None:

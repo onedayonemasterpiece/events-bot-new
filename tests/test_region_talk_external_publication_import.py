@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import importlib
 import importlib.util
 import json
@@ -154,12 +155,22 @@ def valid_payload() -> dict:
 
 def test_valid_candidate_is_normalized_to_fail_closed_staging_row() -> None:
     mod = load_module()
-    result = mod.prepare_import(valid_payload(), imported_at="2026-07-19T11:00:00+00:00")
+    result = mod.prepare_import(
+        valid_payload(),
+        imported_at="2026-07-19T11:00:00+00:00",
+        input_json_sha256="a" * 64,
+    )
     assert not result["rejected"]
     row = result["valid"][0]
     assert row["canonical_url"] == "https://example.org/articles/kaliningrad"
     assert row["content_origin_type"] == "academic_publication"
     assert row["decision"]["import_status"] == "ready_for_region_talk_scoring"
+    assert row["intake_status"] == "new_intake"
+    assert row["review_status"] == "unreviewed"
+    assert row["publication_permission"] == "not_granted"
+    assert row["input_json_sha256"] == "a" * 64
+    assert row["intake_at"] == "2026-07-19T11:00:00+00:00"
+    assert row["canonical_evidence_urls"] == ["https://example.org/articles/kaliningrad"]
     assert row["media_and_rights"]["media_use_policy"] == "score_only_no_reuse"
     assert row["next_action"] == "run_region_talk_text_vector_and_image_scoring"
     assert all(kind != "publication_candidate_item" for _, kind, _ in result["ydb_rows"])
@@ -213,7 +224,8 @@ def test_doi_identity_deduplicates_same_research_batch() -> None:
     result = mod.prepare_import(payload)
     assert len(result["valid"]) == 1
     assert result["valid"][0]["doi"] == "10.1234/abc.9"
-    assert result["rejected"][0]["errors"][0].startswith("duplicate of")
+    assert not result["rejected"]
+    assert result["replayed"][0]["external_publication_id"] == result["valid"][0]["external_publication_id"]
 
 
 def test_hard_exclusion_cannot_masquerade_as_candidate() -> None:
@@ -290,7 +302,7 @@ def test_wrong_schema_is_rejected_before_row_processing() -> None:
         mod.prepare_import(payload)
 
 
-def test_generated_duplicate_guard_rejects_seen_candidate_before_staging() -> None:
+def test_anonymous_duplicate_guard_fails_closed_without_staging() -> None:
     mod = load_module()
     payload = valid_payload()
     guard = {
@@ -302,12 +314,17 @@ def test_generated_duplicate_guard_rejects_seen_candidate_before_staging() -> No
     result = mod.prepare_import(payload, duplicate_guard=guard)
 
     assert not result["valid"]
-    assert result["batch"]["duplicate_seen_rejected"] == 1
-    assert "already seen" in " ".join(result["rejected"][0]["errors"])
+    assert result["batch"]["duplicate_seen_rejected"] == 0
+    assert not result["rejected"]
+    assert not result["replayed"]
+    assert result["batch"]["execution_blocked"] is True
+    assert result["conflicts"][0]["errors"] == [
+        "identity keys resolve to different or unverifiable existing publications"
+    ]
     assert all(kind != "external_publication_intake_item" for _, kind, _ in result["ydb_rows"])
 
 
-def test_live_seen_guard_needs_no_run_specific_request_sidecar() -> None:
+def test_live_seen_guard_without_owner_fails_closed() -> None:
     mod = load_module()
     payload = valid_payload()
     live = mod.duplicate_guard_from_seen_publications([{
@@ -321,7 +338,9 @@ def test_live_seen_guard_needs_no_run_specific_request_sidecar() -> None:
     result = mod.prepare_import(payload, duplicate_guard=live)
 
     assert not result["valid"]
-    assert result["batch"]["duplicate_seen_rejected"] == 1
+    assert result["batch"]["duplicate_seen_rejected"] == 0
+    assert result["batch"]["execution_blocked"] is True
+    assert len(result["conflicts"]) == 1
     assert live["request"] == {}
 
 
@@ -367,7 +386,15 @@ def test_execute_without_sidecar_uses_live_ydb_guard_and_refreshes_registry(
         "seen_limit": seen_limit,
     }
     monkeypatch.setattr(request_mod, "read_seen_from_ydb", lambda _limit: [])
-    monkeypatch.setattr(mod, "write_ydb", lambda rows: len(rows))
+    monkeypatch.setattr(mod, "execute_import", lambda prepared: {
+        "status": "committed",
+        "written_ydb_rows": len(prepared["ydb_rows"]),
+        "new_intake_count": 0,
+        "new_intake_ids": [],
+        "replay_count": 0,
+        "replay_ids": [],
+        "conflict_count": 0,
+    })
     monkeypatch.setitem(sys.modules, registry_mod.__name__, registry_mod)
     monkeypatch.setattr(
         sys,
@@ -408,7 +435,15 @@ def test_execute_can_skip_object_storage_registry_for_ydb_only_service_account(
 
     registry_mod.publish_current_registry = registry_publish_must_not_run
     monkeypatch.setattr(request_mod, "read_seen_from_ydb", lambda _limit: [])
-    monkeypatch.setattr(mod, "write_ydb", lambda rows: len(rows))
+    monkeypatch.setattr(mod, "execute_import", lambda prepared: {
+        "status": "committed",
+        "written_ydb_rows": len(prepared["ydb_rows"]),
+        "new_intake_count": 0,
+        "new_intake_ids": [],
+        "replay_count": 0,
+        "replay_ids": [],
+        "conflict_count": 0,
+    })
     monkeypatch.setitem(sys.modules, registry_mod.__name__, registry_mod)
     monkeypatch.setattr(
         sys,
@@ -471,3 +506,292 @@ def test_import_stages_seen_ledger_for_candidates_exclusions_and_unresolved() ->
     assert {row["seen_disposition"] for row in seen} == {"candidate", "excluded", "unresolved"}
     assert any(row["canonical_url"] == "https://example.net/local-story" for row in seen)
     assert any(row["canonical_url"] == "https://example.com/uncertain" for row in seen)
+
+
+def test_manual_review_required_is_not_promoted_on_arrival() -> None:
+    mod = load_module()
+    payload = valid_payload()
+    payload["candidates"][0]["decision"].update({
+        "research_decision": "needs_review",
+        "downstream_readiness": "manual_review_required",
+    })
+
+    row = mod.prepare_import(payload)["valid"][0]
+
+    assert row["decision"]["import_status"] == "manual_review_required"
+    assert row["review_status"] == "unreviewed"
+    assert row["publication_permission"] == "not_granted"
+    assert row["next_action"] == "operator_review_external_research"
+
+
+def test_url_transport_tracking_query_order_and_www_variants_dedupe() -> None:
+    mod = load_module()
+    payload = valid_payload()
+    payload["candidates"][0]["canonical_url"] = "https://example.org/articles/kaliningrad?a=1&b=2"
+    duplicate = copy.deepcopy(payload["candidates"][0])
+    duplicate["canonical_url"] = "http://www.example.org/articles//kaliningrad/?b=2&utm_source=x&a=1#top"
+    payload["candidates"].append(duplicate)
+
+    result = mod.prepare_import(payload)
+
+    assert len(result["valid"]) == 1
+    assert len(result["replayed"]) == 1
+
+
+def test_exact_normalized_title_authors_dedupe_but_different_authors_do_not() -> None:
+    mod = load_module()
+    payload = valid_payload()
+    duplicate = copy.deepcopy(payload["candidates"][0])
+    duplicate["canonical_url"] = "https://mirror.example.net/other-url"
+    duplicate["publication"]["title"] = "  ИССЛЕДОВАНИЕ   ПОБЕРЕЖЬЯ Калининградской области "
+    duplicate["publication"]["authors"] = [" и. автор "]
+    payload["candidates"].append(duplicate)
+
+    result = mod.prepare_import(payload)
+
+    assert len(result["valid"]) == 1
+    assert len(result["replayed"]) == 1
+
+    different = copy.deepcopy(duplicate)
+    different["canonical_url"] = "https://mirror.example.net/different-author"
+    different["publication"]["authors"] = ["Другой Автор"]
+    payload["candidates"] = [payload["candidates"][0], different]
+    result = mod.prepare_import(payload)
+    assert len(result["valid"]) == 2
+    assert not result["replayed"]
+
+
+def test_mixed_identity_keys_resolving_to_different_rows_fail_closed() -> None:
+    mod = load_module()
+    payload = valid_payload()
+    row = payload["candidates"][0]
+    title_key = mod.title_authors_identity(row["publication"]["title"], row["publication"]["authors"])
+    url_key = "url:" + mod.canonical_url_identity(row["canonical_url"])
+    guard = {
+        "snapshot_id": "rtseen_conflict",
+        "request": {},
+        "urls": set(),
+        "dois": set(),
+        "titles_authors": set(),
+        "identity_map": {url_key: "extpub_" + "a" * 24, title_key: "extpub_" + "b" * 24},
+    }
+
+    result = mod.prepare_import(payload, duplicate_guard=guard)
+
+    assert not result["valid"]
+    assert result["batch"]["execution_blocked"] is True
+    assert result["batch"]["identity_conflict_count"] == 1
+    assert result["conflicts"][0]["external_publication_ids"] == [
+        "extpub_" + "a" * 24,
+        "extpub_" + "b" * 24,
+    ]
+
+
+def _install_fake_ydb(mod, monkeypatch):
+    durable: dict[str, str] = {}
+
+    class Transaction:
+        def __init__(self) -> None:
+            self.staged: dict[str, str] = {}
+
+        def execute(self, query, params, commit_tx=False):
+            if "SELECT payload_json" in query:
+                value = self.staged.get(params["$pk"], durable.get(params["$pk"]))
+                rows = [] if value is None else [types.SimpleNamespace(payload_json=value)]
+                return [types.SimpleNamespace(rows=rows)]
+            assert "UPSERT INTO" in query
+            self.staged[params["$pk"]] = params["$payload_json"]
+            if commit_tx:
+                durable.update(self.staged)
+            return []
+
+        def rollback(self):
+            self.staged.clear()
+
+    class Session:
+        @staticmethod
+        def prepare(query):
+            return query
+
+        @staticmethod
+        def transaction(_mode):
+            return Transaction()
+
+    class Pool:
+        def __init__(self, _driver) -> None:
+            pass
+
+        @staticmethod
+        def retry_operation_sync(operation):
+            return operation(Session())
+
+    class Driver:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        @staticmethod
+        def wait(**_kwargs):
+            pass
+
+        @staticmethod
+        def stop(**_kwargs):
+            pass
+
+    fake_ydb = types.SimpleNamespace(
+        Driver=Driver,
+        SessionPool=Pool,
+        SerializableReadWrite=lambda: object(),
+    )
+    monkeypatch.setattr(mod, "ensure_ydb_module", lambda: fake_ydb)
+    monkeypatch.setattr(mod, "ydb_endpoint_database", lambda: ("grpc://example", "/db"))
+    monkeypatch.setattr(mod, "ydb_credentials", lambda _ydb: None)
+    monkeypatch.setattr(mod, "ydb_table_path", lambda _database: "/db/state")
+    return durable
+
+
+def test_atomic_execute_is_idempotent_and_request_sha_conflicts_write_nothing(monkeypatch) -> None:
+    mod = load_module()
+    durable = _install_fake_ydb(mod, monkeypatch)
+    first = mod.prepare_import(valid_payload(), raw_input_sha256="a" * 64)
+
+    committed = mod.execute_import(first)
+    durable_after_first = dict(durable)
+    replay = mod.execute_import(first)
+
+    assert committed["status"] == "committed"
+    assert committed["new_intake_count"] == 1
+    assert committed["new_intake_ids"] == sorted(committed["new_intake_ids"])
+    assert replay == {
+        "status": "identical_replay",
+        "written_ydb_rows": 0,
+        "new_intake_count": 0,
+        "new_intake_ids": [],
+        "replay_count": 1,
+        "replay_ids": committed["new_intake_ids"],
+        "conflict_count": 0,
+    }
+    assert durable == durable_after_first
+
+    changed = valid_payload()
+    changed["coverage"] = [{
+        "contour": "other", "queries": [], "domains_opened": [],
+        "verified_candidate_count": 1, "notes": "changed bytes",
+    }]
+    conflicting = mod.prepare_import(changed, raw_input_sha256="b" * 64)
+    with pytest.raises(mod.ContractError, match="different raw input SHA-256"):
+        mod.execute_import(conflicting)
+    assert durable == durable_after_first
+
+
+def test_identity_reservation_race_fails_closed_without_partial_write(monkeypatch) -> None:
+    mod = load_module()
+    durable = _install_fake_ydb(mod, monkeypatch)
+    first = mod.prepare_import(valid_payload(), raw_input_sha256="a" * 64)
+    mod.execute_import(first)
+    durable_after_first = dict(durable)
+    second_payload = valid_payload()
+    second_payload["run"]["request_id"] = "different-request"
+    second = mod.prepare_import(second_payload, raw_input_sha256="b" * 64)
+
+    with pytest.raises(mod.ContractError, match="identity reservation conflict"):
+        mod.execute_import(second)
+
+    assert durable == durable_after_first
+
+
+def test_later_replay_persists_observation_and_new_identity_alias(monkeypatch) -> None:
+    mod = load_module()
+    durable = _install_fake_ydb(mod, monkeypatch)
+    first = mod.prepare_import(valid_payload(), raw_input_sha256="a" * 64)
+    committed = mod.execute_import(first)
+    external_id = committed["new_intake_ids"][0]
+
+    second_payload = valid_payload()
+    second_payload["run"]["request_id"] = "later-observation"
+    second_payload["candidates"][0]["doi"] = "10.1234/KALININGRAD"
+    candidate = second_payload["candidates"][0]
+    guard = {
+        "snapshot_id": "rtseen_live",
+        "request": {},
+        "urls": {mod.canonical_url_identity(candidate["canonical_url"])},
+        "dois": set(),
+        "titles_authors": set(),
+        "identity_map": {
+            "url:" + mod.canonical_url_identity(candidate["canonical_url"]): external_id,
+            mod.title_authors_identity(
+                candidate["publication"]["title"], candidate["publication"]["authors"]
+            ): external_id,
+        },
+    }
+    second = mod.prepare_import(
+        second_payload,
+        duplicate_guard=guard,
+        raw_input_sha256="b" * 64,
+        imported_at="2026-08-02T12:00:00+00:00",
+    )
+
+    assert second["batch"]["new_intake_count"] == 0
+    assert second["batch"]["replay_count"] == 1
+    assert second["batch"]["replay_observation_rows_staged"] == 1
+    observation = second["replay_observations"][0]
+    assert observation["request_id"] == "later-observation"
+    assert observation["input_json_sha256"] == "b" * 64
+    assert observation["canonical_evidence_urls"]
+    assert "doi:10.1234/kaliningrad" in observation["identity_keys"]
+
+    result = mod.execute_import(second)
+
+    assert result["status"] == "committed"
+    assert result["new_intake_count"] == 0
+    assert result["replay_ids"] == [external_id]
+    doi_sha = hashlib.sha256("doi:10.1234/kaliningrad".encode()).hexdigest()
+    doi_pk = "external_publication_identity_item:" + doi_sha
+    assert json.loads(durable[doi_pk])["external_publication_id"] == external_id
+    observations = [pk for pk in durable if pk.startswith("external_publication_intake_observation_item:")]
+    assert len(observations) == 1
+    intake_pk = "external_publication_intake_item:" + external_id
+    enriched = json.loads(durable[intake_pk])
+    assert enriched["request_id"] == valid_payload()["run"]["request_id"]
+    assert enriched["input_json_sha256"] == "a" * 64
+    assert enriched["review_status"] == "unreviewed"
+    assert enriched["publication_permission"] == "not_granted"
+    assert "doi:10.1234/kaliningrad" in enriched["identity_keys"]
+    assert enriched["provenance_observations"][0]["external_publication_observation_id"].startswith("extpubobs_")
+    assert enriched["provenance_observations"][0]["input_json_sha256"] == "b" * 64
+
+
+def test_execute_with_rejected_row_does_not_call_writer_or_registry(tmp_path: Path, monkeypatch) -> None:
+    mod = load_module()
+    payload = valid_payload()
+    invalid = copy.deepcopy(payload["candidates"][0])
+    invalid["canonical_url"] = "http://127.0.0.1/private"
+    payload["candidates"].append(invalid)
+    input_path = tmp_path / "result.json"
+    report_path = tmp_path / "report.json"
+    input_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    request_mod = importlib.import_module("scripts.region_talk_external_research_request")
+    monkeypatch.setattr(request_mod, "read_seen_from_ydb", lambda _limit: [])
+    monkeypatch.setattr(mod, "execute_import", lambda _prepared: pytest.fail("writer must not run"))
+    monkeypatch.setattr(sys, "argv", [
+        str(MODULE_PATH), str(input_path), "--execute", "--report", str(report_path),
+    ])
+
+    assert mod.main() == 2
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["execution_status"] == "rejected_no_write"
+    assert report["written_ydb_rows"] == 0
+    assert report["registry_publication_enabled"] is False
+    assert report["new_intake_ids"] == []
+    assert report["batch"]["candidate_rows_valid"] == 1
+    assert report["batch"]["candidate_rows_rejected"] == 1
+
+
+def test_github_workflow_passes_exact_sha_and_publishes_intake_receipt_fields() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "region-talk-external-publication-import.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert workflow.count("--expected-input-sha256") == 2
+    for field in ("new_intake_count", "new_intake_ids", "replay_count", "replay_ids", "conflict_count"):
+        assert field in workflow
+    assert "### Import receipt" in workflow

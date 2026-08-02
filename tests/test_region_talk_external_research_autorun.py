@@ -121,3 +121,122 @@ async def test_fresh_marker_skips_without_calling_provider(tmp_path: Path) -> No
     )
 
     assert result["status"] == "skipped_cooldown"
+
+
+@pytest.mark.asyncio
+async def test_execute_receipt_exposes_sorted_new_replay_conflict_fields_and_exact_bytes(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    raw_bytes = (json.dumps(empty_result(), ensure_ascii=False, indent=2) + "\r\n").encode("utf-8")
+    input_path = tmp_path / "input.json"
+    input_path.write_bytes(raw_bytes)
+    monkeypatch.setattr(autorun, "read_seen_from_ydb", lambda _limit: [])
+    monkeypatch.setattr(autorun, "publish_current_registry", lambda *, seen_limit: {
+        "seen_publication_count": 0,
+        "seen_limit": seen_limit,
+    })
+    monkeypatch.setattr(autorun, "execute_import", lambda _prepared: {
+        "status": "committed",
+        "written_ydb_rows": 1,
+        "new_intake_count": 2,
+        "new_intake_ids": ["extpub_b", "extpub_a"],
+        "replay_count": 1,
+        "replay_ids": ["extpub_old"],
+        "conflict_count": 0,
+    })
+
+    result = await autorun.run_autoresearch(
+        execute=True,
+        force=True,
+        input_path=input_path,
+        prompt_path=tmp_path / "unused.txt",
+        output_dir=tmp_path / "out",
+        marker_path=tmp_path / "marker.json",
+        model="unused",
+        default_key_env="UNUSED",
+        maximum_candidates=5,
+        maximum_total_rows=15,
+        cooldown_hours=6,
+    )
+
+    import hashlib
+
+    assert result["input_json_sha256"] == hashlib.sha256(raw_bytes).hexdigest()
+    assert result["new_intake_count"] == 2
+    assert result["new_intake_ids"] == ["extpub_a", "extpub_b"]
+    assert result["replay_ids"] == ["extpub_old"]
+    assert result["conflict_count"] == 0
+    assert Path(result["raw_path"]).read_bytes() == raw_bytes
+
+
+@pytest.mark.asyncio
+async def test_rejected_execute_batch_is_not_success_and_writes_nothing(tmp_path: Path, monkeypatch) -> None:
+    payload = empty_result()
+    payload["candidates"] = [{}]
+    input_path = tmp_path / "invalid-row.json"
+    input_path.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(autorun, "read_seen_from_ydb", lambda _limit: [])
+    monkeypatch.setattr(autorun, "execute_import", lambda _prepared: pytest.fail("writer must not run"))
+    monkeypatch.setattr(
+        autorun,
+        "publish_current_registry",
+        lambda **_kwargs: pytest.fail("registry must not publish"),
+    )
+
+    result = await autorun.run_autoresearch(
+        execute=True,
+        force=True,
+        input_path=input_path,
+        prompt_path=tmp_path / "unused.txt",
+        output_dir=tmp_path / "out",
+        marker_path=tmp_path / "marker.json",
+        model="unused",
+        default_key_env="UNUSED",
+        maximum_candidates=5,
+        maximum_total_rows=15,
+        cooldown_hours=6,
+    )
+
+    assert result["ok"] is False
+    assert result["status"] == "rejected_no_write"
+    assert result["written_ydb_rows"] == 0
+    assert result["new_intake_count"] == 0
+    assert not (tmp_path / "marker.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_execute_identity_conflict_is_visible_and_not_marked_success(tmp_path: Path, monkeypatch) -> None:
+    input_path = tmp_path / "empty.json"
+    input_path.write_text(json.dumps(empty_result()), encoding="utf-8")
+    monkeypatch.setattr(autorun, "read_seen_from_ydb", lambda _limit: [])
+    monkeypatch.setattr(
+        autorun,
+        "execute_import",
+        lambda _prepared: (_ for _ in ()).throw(autorun.ContractError("identity reservation conflict")),
+    )
+    monkeypatch.setattr(
+        autorun,
+        "publish_current_registry",
+        lambda **_kwargs: pytest.fail("registry must not publish"),
+    )
+
+    result = await autorun.run_autoresearch(
+        execute=True,
+        force=True,
+        input_path=input_path,
+        prompt_path=tmp_path / "unused.txt",
+        output_dir=tmp_path / "out",
+        marker_path=tmp_path / "marker.json",
+        model="unused",
+        default_key_env="UNUSED",
+        maximum_candidates=5,
+        maximum_total_rows=15,
+        cooldown_hours=6,
+    )
+
+    assert result["ok"] is False
+    assert result["status"] == "conflict_no_write"
+    assert result["conflict_count"] == 1
+    assert "identity reservation conflict" in result["execution_error"]
+    assert result["written_ydb_rows"] == 0
