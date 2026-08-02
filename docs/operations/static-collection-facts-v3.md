@@ -211,12 +211,82 @@ visible-view hash); `snapshot_sha256` may change with `generated_at`.
 The adapter does not call a model (`provider_calls=0`) and never unlocks
 publication.
 
-## 5. Normal ingestion and live Fly
+## 5. Normal-ingestion copy replay
 
-Telegram, VK and parser replays through their normal adapters follow only after
-the copy apply/warm gate. A Fly canary follows only when the exact SHA is merged
-into `origin/main`; deploy exclusively through `scripts/deploy_fly_main.sh`.
-Never upload or execute an unmerged implementation in a production machine.
+Telegram, VK and parser evidence must cross the ordinary production entry
+points; calling `apply_collection_decisions` from a test is not acceptance.
+Use the bounded harness against a disposable mutable copy:
+
+```bash
+python3 scripts/run_static_collection_ingestion_replay.py \
+  --db-copy /dev/shm/static-collection-facts-v3-ingestion.sqlite \
+  --manifest artifacts/static-collection-facts-v3/ingestion-manifest.json \
+  --output artifacts/static-collection-facts-v3/ingestion-report.json \
+  --allow-mutable-copy
+```
+
+The manifest contract is
+`docs/review-data/static_collection_ingestion_replay_manifest.schema.json`.
+Freeze the case list and exact `event_id`/`source_id`/`source_url`/
+`source_type` bindings **before** looking at provider output. For an acceptance
+run, also set `db_logical_sha256_before` to the canonical Event + EventSource
+logical hash reported by a dry copy inspection; a mismatch stops the run.
+Every expected first-pass call/write count is explicit, and the warm expectation
+is always zero calls and no collection write.
+
+The acceptance manifest contains at least 12 artifact-backed cases and retains
+the frozen boundary mix from the acceptance design: 3 direct-child, 3 explicit
+family, 2 explicit joint-family, plus parents-only, age-only, vague-family and
+ordinary-adult negatives; use at least 4 Telegram, 4 VK and 2 parser cases.
+Festival extraction/pages and cinema sources are not cases in this run.
+
+Fixture shapes deliberately preserve upstream adapter contracts:
+
+- Telegram: the complete, unchanged `telegram_results.json` packet plus
+  `adapter_options.source_username` and `message_id`;
+- VK: `{source_post_url, draft, photos}` where `draft` is an `EventDraft` JSON
+  object and `photos` contains only reproducible URL strings; serialized
+  `poster_media` objects are rejected;
+- official parser: `{source, event}` where `event` contains only
+  `TheatreEvent` constructor fields.
+
+Acquire these inputs without another extraction run. Download an already
+completed Telegram Monitoring `telegram_results.json` from the recorded Kaggle
+kernel output and reduce a copy to the selected messages while retaining their
+matching `sources_meta` rows and recomputing the four `stats` counters. For
+official parsers, take the corresponding event object from an already completed
+parser kernel JSON and wrap it with its source name. A VK replay requires the
+actual pre-persist `EventDraft` captured by the intake run. The production DB
+does not retain original Telegram packets, parser objects, or VK drafts: an
+Event/EventSource-derived reconstruction is useful only as a smoke fixture and
+must not be labeled source-faithful acceptance. If the exact historical upstream
+artifact for a selected row is unavailable, replace that row with another
+preselected real binding whose artifact is available; do not invent the packet.
+
+The harness invokes `process_telegram_results`, `persist_event_and_pages` and
+`process_source_events` respectively. It keeps Smart Update and collection
+adjudication real, but forces `schedule_tasks=False`, disables Telegraph/VK job
+scheduling and live web/media fallback, and supplies `bot=None`. Telegram adds
+an `INSERT OR IGNORE` force-message control row on the disposable copy so the
+same real packet crosses the handler twice; that control write is intentionally
+outside the Event/EventSource semantic diff.
+
+The report binds the repository SHA, exact generator command, manifest/fixture
+hashes, initial/final DB hashes, redacted adapter receipts, safe provider trace,
+facts-v3 receipt hashes, exact source binding and Event/EventSource writes. Raw
+source copy, URLs, prompts, responses and credentials are not emitted. PASS
+requires the declared first-pass collection call/write behavior, exact persisted
+quote grounding, unique binding, SQLite `quick_check=ok`, then an identical warm
+replay with no Event or EventSource changes and zero collection calls/writes.
+This tool never publishes, deploys, enables routes, or substitutes a direct
+facts apply for normal ingestion.
+
+## 6. Live Fly
+
+A Fly canary follows the normal-ingestion copy replay only when the exact SHA is
+merged into `origin/main`; deploy exclusively through
+`scripts/deploy_fly_main.sh`. Never upload or execute an unmerged implementation
+in a production machine.
 
 The live sequence is read-only evaluate (at most 20 IDs), reviewed apply (at
 most 12), identical warm replay, then at least six preselected fresh real posts.

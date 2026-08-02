@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Added a bounded ordinary-ingestion facts-v3 replay harness for disposable
+  SQLite copies. Source-bound Telegram, VK and parser fixtures now cross their
+  production handlers with publication/network enrichment disabled, emit
+  redacted provider/write/receipt evidence, and must pass an identical warm
+  replay with zero collection calls or Event/EventSource changes.
 - Added a provider-free, reproducible facts-v3 fallback/failure drill harness.
   It forces one primary Gemma failure through the unchanged production path,
   permits at most one injected existing GPT-4o fallback send, records the
