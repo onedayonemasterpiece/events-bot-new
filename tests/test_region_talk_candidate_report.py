@@ -395,6 +395,47 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual([seed.canonical_url for seed in selected], [confirmed.canonical_url])
         self.assertTrue(mod._REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_priority_enabled"])
 
+    def test_explicit_source_profile_capture_request_owns_bounded_history_slot(self) -> None:
+        mod = load_module()
+        capture = self._seed(mod, "@capturefirst", seed_id="capture")
+        confirmed = self._seed(mod, "@confirmedfirst", seed_id="confirmed")
+        queue = {
+            "telegram:capturefirst": {
+                "canonical_source_key": "telegram:capturefirst",
+                "platform": "telegram",
+                "handle": capture.handle,
+                "source_url": capture.canonical_url,
+                "source_queue_status": "processed_no_ko",
+                "queue_order": 20,
+                "posts_scanned": 50,
+                "last_history_fetch_at": mod.utc_now_iso(),
+                "source_profile_capture_requested": "true",
+                "needs_source_profile": "true",
+                "priority_lane": "source_profile_capture",
+            },
+            "telegram:confirmedfirst": {
+                "canonical_source_key": "telegram:confirmedfirst",
+                "platform": "telegram",
+                "handle": confirmed.handle,
+                "source_url": confirmed.canonical_url,
+                "source_queue_status": "pending_scan",
+                "queue_order": 1,
+                "external_blogger_evidence_status": "confirmed_external",
+                "priority_lane": "confirmed_external_blogger",
+            },
+        }
+        previous = {"unified_source_queue_cursor_position": 0, "unified_source_queue": queue}
+
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_CONFIRMED_BLOGGER_PRIORITY_ENABLED": "1",
+            "REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN": "1",
+            "REGION_TALK_SOURCE_PROFILE_CAPTURE_MAX_SOURCES_PER_RUN": "1",
+        }, clear=False):
+            selected = mod.selected_sources_for_run([confirmed, capture], 1, previous_state=previous)
+
+        self.assertEqual([seed.canonical_url for seed in selected], [capture.canonical_url])
+        self.assertEqual(mod.source_queue_priority_bucket(queue["telegram:capturefirst"]), -3)
+
     def test_confirmed_blogger_history_slots_are_balanced_between_telegram_and_vk(self) -> None:
         mod = load_module()
         tg = self._seed(mod, "@evidencetg", seed_id="evidence_tg")

@@ -1609,6 +1609,12 @@ def _seed_scan_due_state(seed: Seed, previous_state: dict[str, Any] | None = Non
 def source_queue_priority_bucket(queue_row: dict[str, Any] | None = None) -> int:
     row = queue_row if isinstance(queue_row, dict) else {}
     if (
+        _rt_bool(row.get("source_profile_capture_requested"))
+        or _rt_bool(row.get("needs_source_profile"))
+        or str(row.get("priority_lane") or "").strip().lower() == "source_profile_capture"
+    ):
+        return -3
+    if (
         str(row.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
         or str(row.get("priority_lane") or "").strip().lower() == "confirmed_external_blogger"
     ):
@@ -1855,6 +1861,26 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
     confirmed_external_priority: list[Seed] = []
     confirmed_external_selected: list[Seed] = []
     confirmed_external_pairs: list[tuple[Seed, dict[str, Any]]] = []
+    capture_limit = min(
+        max(0, max_sources),
+        max(0, getenv_int("REGION_TALK_SOURCE_PROFILE_CAPTURE_MAX_SOURCES_PER_RUN", 2)),
+    )
+    capture_requested_pairs = [
+        (seed, due) for seed, due in annotated
+        if source_queue_priority_bucket(due.get("queue_row")) == -3
+        and not source_terminal_rejected_status(str(
+            (due.get("queue_row") or {}).get("source_queue_status")
+            or (due.get("queue_row") or {}).get("fetch_status")
+            or ""
+        ))
+    ]
+    capture_requested = [
+        seed for seed, _due in sorted(capture_requested_pairs, key=lambda item: (
+            source_selection_cache_bucket(item[0], previous_state),
+            source_admission_seq(_source_queue_row_for_seed(item[0], previous_state)) or 999999999,
+            item[0].canonical_url,
+        ))[:capture_limit]
+    ]
 
     # A permanently non-empty first-scan backlog must not starve sources that
     # already proved product value. Reserve a small, explicit share for due
@@ -1993,20 +2019,22 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
         # to publication than a generic known-KO source rescan. Finish its
         # bounded five-post source attestation first; the previous ordering
         # let four generic KO rescans consume the entire history budget.
-        selected = priority_revisit_selected + [
-            seed for seed in confirmed_external_selected if seed not in priority_revisit_selected
+        selected = capture_requested + [
+            seed for seed in priority_revisit_selected if seed not in capture_requested
         ] + [
-            seed for seed in publication_completion if seed not in confirmed_external_selected and seed not in priority_revisit_selected
+            seed for seed in confirmed_external_selected if seed not in priority_revisit_selected and seed not in capture_requested
         ] + [
-            seed for seed in high_yield_rescan if seed not in publication_completion and seed not in confirmed_external_selected and seed not in priority_revisit_selected
+            seed for seed in publication_completion if seed not in confirmed_external_selected and seed not in priority_revisit_selected and seed not in capture_requested
+        ] + [
+            seed for seed in high_yield_rescan if seed not in publication_completion and seed not in confirmed_external_selected and seed not in priority_revisit_selected and seed not in capture_requested
         ] + [
             seed for seed in primary_due
-            if seed not in publication_completion and seed not in high_yield_rescan and seed not in confirmed_external_selected and seed not in priority_revisit_selected
+            if seed not in publication_completion and seed not in high_yield_rescan and seed not in confirmed_external_selected and seed not in priority_revisit_selected and seed not in capture_requested
         ]
         if not selected and not global_primary_backlog_exists:
             selected = rescan_due
     else:
-        selected = priority_revisit_selected + [seed for seed in primary_due if seed not in priority_revisit_selected]
+        selected = capture_requested + [seed for seed in priority_revisit_selected if seed not in capture_requested] + [seed for seed in primary_due if seed not in priority_revisit_selected and seed not in capture_requested]
         if not selected and not global_primary_backlog_exists:
             selected = rescan_due
     if (
@@ -2026,6 +2054,8 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
     _REGION_TALK_TELEGRAM_RUNTIME["history_revisit_reserved_slots"] = revisit_slots
     _REGION_TALK_TELEGRAM_RUNTIME["history_revisit_eligible_total"] = len(priority_revisit_pairs)
     _REGION_TALK_TELEGRAM_RUNTIME["history_revisit_selected_total"] = len(priority_revisit_selected)
+    _REGION_TALK_TELEGRAM_RUNTIME["source_profile_capture_requested_total"] = len(capture_requested_pairs)
+    _REGION_TALK_TELEGRAM_RUNTIME["source_profile_capture_selected_total"] = len(capture_requested)
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_not_due_total"] = sum(1 for _seed, due in annotated if not bool(due.get("due")))
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_not_due_sample"] = [
         {"source_title": seed.source_title, "canonical_url": seed.canonical_url, "reason": str(due.get("reason") or "")}
