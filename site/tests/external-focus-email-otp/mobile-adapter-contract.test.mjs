@@ -33,7 +33,8 @@ test('Safari native inspection uses exact predicate title and same-alert button 
       calls.push({ using, predicate });
       return [{ ELEMENT: 'exact-title' }];
     },
-    getAlertText: async () => 'Выбор поисковой системы\nSafe body text',
+    // WDA descendant enumeration does not promise title-first ordering.
+    getAlertText: async () => 'Safe body text\nВыбор поисковой системы\nMore safe body text',
     getAlertButtons: async () => ['Настройки', 'Продолжить'],
   });
   assert.equal(calls.length, 1);

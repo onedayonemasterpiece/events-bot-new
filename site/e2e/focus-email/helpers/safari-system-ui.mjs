@@ -57,10 +57,19 @@ export async function stabilizeSafariSystemUi({
     finish(transition);
     throw new SafariFirstRunUiError(code, evidence);
   };
+  const recordInspection = (state) => {
+    evidence.last_inspection = {
+      known_dialog_count: Number(state?.known_dialog_count || 0),
+      continue_button_count: Number(state?.continue_button_count || 0),
+      blocking_dialog_count: Number(state?.blocking_dialog_count || 0),
+      unknown_blocking_dialog_count: Number(state?.unknown_blocking_dialog_count || 0),
+    };
+  };
 
   let known = null;
   while (now() - started <= discoveryTimeoutMs) {
     const state = await inspect();
+    recordInspection(state);
     if (Number(state?.unknown_blocking_dialog_count || 0) > 0) reject('unexpected_blocking_modal');
     if (Number(state?.known_dialog_count || 0) > 1 || Number(state?.continue_button_count || 0) > 1) {
       reject('ambiguous_search_choice_dialog');
@@ -89,6 +98,7 @@ export async function stabilizeSafariSystemUi({
   let absentSamples = 0;
   while (now() - dismissalStarted <= dismissalTimeoutMs) {
     const state = await inspect();
+    recordInspection(state);
     if (Number(state?.unknown_blocking_dialog_count || 0) > 0) reject('unexpected_blocking_modal_after_dismissal');
     if (Number(state?.known_dialog_count || 0) > 1 || Number(state?.continue_button_count || 0) > 1) {
       reject('ambiguous_search_choice_dialog_after_dismissal');
