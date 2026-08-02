@@ -45,7 +45,7 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
 
-      - name: Discover added or modified research-result JSON files
+      - name: Discover changed research-result JSON files
         id: inputs
         shell: bash
         env:
@@ -77,37 +77,40 @@ jobs:
           if not re.fullmatch(r"[0-9a-f]{40}", after or ""):
               raise SystemExit(f"invalid push after SHA: {after!r}")
 
-          diff = subprocess.run(
-              ["git", "diff", "--diff-filter=AM", "--name-only", before, after, "--"],
-              check=True,
-              text=True,
-              capture_output=True,
-          ).stdout.splitlines()
-          changed = {raw.strip() for raw in diff if raw.strip()}
+          changed = {
+              line.strip()
+              for line in subprocess.run(
+                  ["git", "diff", "--diff-filter=AM", "--name-only", before, after, "--"],
+                  check=True,
+                  text=True,
+                  capture_output=True,
+              ).stdout.splitlines()
+              if line.strip()
+          }
           selected: list[str] = []
+          root = Path("docs/features/region-talk-channel").resolve()
           for path in sorted(changed):
               if not approved.fullmatch(path):
                   continue
               candidate = Path(path)
               if candidate.is_symlink() or not candidate.is_file():
                   raise SystemExit(f"refusing non-regular research result: {path}")
-              resolved = candidate.resolve()
-              root = Path("docs/features/region-talk-channel").resolve()
-              if resolved.parent != root:
+              if candidate.resolve().parent != root:
                   raise SystemExit(f"refusing research result outside approved directory: {path}")
               selected.append(path)
 
           registry_only = not selected and bool(changed & control_paths)
           if not selected and not registry_only:
-              raise SystemExit("triggered push contains neither approved research JSON nor registry control change")
+              raise SystemExit(
+                  "triggered push contains neither approved research JSON nor registry control change"
+              )
           Path(output).write_text("".join(f"{path}\n" for path in selected), encoding="utf-8")
           with Path(github_output).open("a", encoding="utf-8") as handle:
               handle.write(f"count={len(selected)}\n")
               handle.write(f"registry_only={'true' if registry_only else 'false'}\n")
-          print("\n".join(selected) if selected else "registry-only refresh")
           PY
 
-          count="${{ steps.inputs.outputs.count }}"
+          count="$(awk 'NF {count++} END {print count + 0}' "$REPORT_ROOT/inputs.txt")"
           {
             echo "### Region Talk automatic intake"
             echo
@@ -136,19 +139,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          : > "$REPORT_ROOT/manifest.ndjson"
+          : > "$REPORT_ROOT/validation-summary.ndjson"
           while IFS= read -r input_path; do
-            sha256="$(sha256sum "$input_path" | awk '{print $1}')"
-            report_dir="$REPORT_ROOT/$sha256"
+            input_sha="$(sha256sum "$input_path" | awk '{print $1}')"
+            report_dir="$REPORT_ROOT/$input_sha"
             mkdir -p "$report_dir"
-            printf '%s  %s\n' "$sha256" "$input_path" > "$report_dir/input.sha256"
+            printf '%s  %s\n' "$input_sha" "$input_path" > "$report_dir/input.sha256"
 
             python scripts/region_talk_external_publication_import.py "$input_path" \
-              --expected-input-sha256 "$sha256" \
+              --expected-input-sha256 "$input_sha" \
               --report "$report_dir/validation.json"
 
-            python - "$input_path" "$sha256" "$report_dir/validation.json" \
-              >> "$REPORT_ROOT/manifest.ndjson" <<'PY'
+            python - "$input_path" "$input_sha" "$report_dir/validation.json" \
+              >> "$REPORT_ROOT/validation-summary.ndjson" <<'PY'
           import json
           import sys
           from pathlib import Path
@@ -156,6 +159,8 @@ jobs:
           input_path, expected_sha, report_path = sys.argv[1:]
           payload = json.loads(Path(report_path).read_text(encoding="utf-8"))
           batch = payload.get("batch") or {}
+          received = int(batch.get("candidate_rows_received") or 0)
+          valid = len(payload.get("valid_ids") or [])
           if payload.get("executed") is not False:
               raise SystemExit(f"validation unexpectedly executed for {input_path}")
           if payload.get("execution_status") != "validated":
@@ -164,8 +169,6 @@ jobs:
               raise SystemExit(f"semantic rejection or conflict in {input_path}")
           if payload.get("input_json_sha256") != expected_sha:
               raise SystemExit(f"validation SHA mismatch for {input_path}")
-          received = int(batch.get("candidate_rows_received") or 0)
-          valid = len(payload.get("valid_ids") or [])
           if received != valid:
               raise SystemExit(f"not every candidate row is valid for {input_path}: {valid}/{received}")
           print(json.dumps({
@@ -173,20 +176,23 @@ jobs:
               "input_sha256": expected_sha,
               "request_id": batch.get("request_id"),
               "candidate_rows_valid": valid,
-              "ready_for_region_talk_scoring": batch.get("ready_for_region_talk_scoring"),
-              "manual_or_blocked": batch.get("manual_or_blocked"),
+              "ready_for_region_talk_scoring": int(batch.get("ready_for_region_talk_scoring") or 0),
+              "manual_or_blocked": int(batch.get("manual_or_blocked") or 0),
           }, ensure_ascii=False, separators=(",", ":")))
           PY
           done < "$REPORT_ROOT/inputs.txt"
 
-          python - "$REPORT_ROOT/manifest.ndjson" "$REPORT_ROOT/validation-manifest.json" <<'PY'
+          python - "$REPORT_ROOT/validation-summary.ndjson" "$REPORT_ROOT/validation-manifest.json" <<'PY'
           import json
           import sys
           from pathlib import Path
 
           source, destination = map(Path, sys.argv[1:])
           rows = [json.loads(line) for line in source.read_text(encoding="utf-8").splitlines() if line]
-          destination.write_text(json.dumps({"inputs": rows}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          destination.write_text(
+              json.dumps({"inputs": rows}, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
           PY
 
       - name: Exchange GitHub OIDC token for short-lived Yandex IAM token
@@ -227,16 +233,16 @@ jobs:
           set -euo pipefail
           : > "$REPORT_ROOT/execute-summary.ndjson"
           while IFS= read -r input_path; do
-            sha256="$(sha256sum "$input_path" | awk '{print $1}')"
-            report_dir="$REPORT_ROOT/$sha256"
+            input_sha="$(sha256sum "$input_path" | awk '{print $1}')"
+            report_dir="$REPORT_ROOT/$input_sha"
 
             python scripts/region_talk_external_publication_import.py "$input_path" \
               --execute \
               --no-publish-registry \
-              --expected-input-sha256 "$sha256" \
+              --expected-input-sha256 "$input_sha" \
               --report "$report_dir/execute.json"
 
-            python - "$input_path" "$sha256" "$report_dir/execute.json" \
+            python - "$input_path" "$input_sha" "$report_dir/execute.json" \
               >> "$REPORT_ROOT/execute-summary.ndjson" <<'PY'
           import json
           import sys
@@ -281,9 +287,9 @@ jobs:
               "main_commit": "${{ github.sha }}",
               "workflow_run_id": "${{ github.run_id }}",
               "imports": rows,
-              "new_intake_total": sum(int(row.get("new_intake_count") or 0) for row in rows),
-              "replay_total": sum(int(row.get("replay_count") or 0) for row in rows),
-              "conflict_total": sum(int(row.get("conflict_count") or 0) for row in rows),
+              "new_intake_total": sum(row["new_intake_count"] for row in rows),
+              "replay_total": sum(row["replay_count"] for row in rows),
+              "conflict_total": sum(row["conflict_count"] for row in rows),
           }
           destination.write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
           PY
@@ -296,22 +302,92 @@ jobs:
               "- new intake total: \(.new_intake_total)\n" +
               "- replay total: \(.replay_total)\n" +
               "- conflicts: \(.conflict_total)\n" +
-              (.imports[] | "- `\(.request_id)`: new=\(.new_intake_count // 0), replay=\(.replay_count // 0), conflicts=\(.conflict_count // 0)")
+              (.imports[] | "- `\(.request_id)`: new=\(.new_intake_count), replay=\(.replay_count), conflicts=\(.conflict_count)")
             ' "$REPORT_ROOT/receipt.json"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Publish current registry, schema and prompt from live YDB
+      - name: Build and publish current registry from live YDB
         shell: bash
         run: |
           set -euo pipefail
           python scripts/region_talk_external_research_registry.py \
-            --publish \
             --output "$REPORT_ROOT/research-registry.json" \
-            > "$REPORT_ROOT/registry-publish.json"
+            > "$REPORT_ROOT/registry-build.json"
 
-          expected_snapshot="$(jq -er '.published.snapshot_id' "$REPORT_ROOT/registry-publish.json")"
-          expected_count="$(jq -er '.published.seen_publication_count' "$REPORT_ROOT/registry-publish.json")"
-          expected_auth="$(jq -er '.published.auth_mode' "$REPORT_ROOT/registry-publish.json")"
+          if python - "$REPORT_ROOT/research-registry.json" > "$REPORT_ROOT/registry-publish.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          from scripts.region_talk_external_research_registry import publish_registry
+
+          payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          print(json.dumps(publish_registry(payload), ensure_ascii=False, indent=2))
+          PY
+          then
+            :
+          else
+            python - "$REPORT_ROOT/research-registry.json" > "$REPORT_ROOT/registry-publish.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          from scripts.region_talk_external_research_registry import (
+              PROMPT_OBJECT_PATH,
+              PROMPT_PATH,
+              REGISTRY_OBJECT_PATH,
+              REGISTRY_SCHEMA_OBJECT_PATH,
+              REGISTRY_SCHEMA_PATH,
+              RESULT_SCHEMA_OBJECT_PATH,
+              RESULT_SCHEMA_PATH,
+              _bucket,
+              _url,
+          )
+          from yandex_storage import get_yandex_storage_client, upload_yandex_public_bytes
+
+          payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          client = get_yandex_storage_client()
+          if client is None:
+              raise SystemExit("IAM registry PUT failed and static Object Storage fallback is unavailable")
+          bucket = _bucket()
+          objects = {
+              REGISTRY_OBJECT_PATH: (json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
+              REGISTRY_SCHEMA_OBJECT_PATH: REGISTRY_SCHEMA_PATH.read_bytes(),
+              RESULT_SCHEMA_OBJECT_PATH: RESULT_SCHEMA_PATH.read_bytes(),
+              PROMPT_OBJECT_PATH: PROMPT_PATH.read_bytes(),
+          }
+          for object_path, data in objects.items():
+              content_type = (
+                  "application/json; charset=utf-8"
+                  if object_path.endswith(".json")
+                  else "text/plain; charset=utf-8"
+              )
+              uploaded = upload_yandex_public_bytes(
+                  data,
+                  object_path=object_path,
+                  content_type=content_type,
+                  bucket=bucket,
+                  cache_control="public, no-cache, no-store, must-revalidate, max-age=0",
+                  client=client,
+              )
+              if not uploaded:
+                  raise SystemExit(f"static fallback failed for {object_path}")
+          print(json.dumps({
+              "bucket": bucket,
+              "auth_mode": "static_access_key_fallback",
+              "snapshot_id": payload["duplicate_guard"]["snapshot_id"],
+              "seen_publication_count": payload["duplicate_guard"]["seen_publication_count"],
+              "urls": {path: _url(path) for path in objects},
+          }, ensure_ascii=False, indent=2))
+          PY
+          fi
+
+      - name: Verify exact public registry contract without cache-busting URLs
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_snapshot="$(jq -er '.snapshot_id' "$REPORT_ROOT/registry-publish.json")"
+          expected_count="$(jq -er '.seen_publication_count' "$REPORT_ROOT/registry-publish.json")"
+          expected_auth="$(jq -er '.auth_mode' "$REPORT_ROOT/registry-publish.json")"
           test "$expected_count" -ge 54
 
           registry_url="https://static.kenigevents.ru/region-talk/external-publications/research-registry.json"
@@ -321,17 +397,13 @@ jobs:
 
           verified=0
           for attempt in $(seq 1 24); do
-            curl --fail --silent --show-error \
-              -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+            curl --fail --silent --show-error -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
               "$registry_url" > "$REPORT_ROOT/live-research-registry.json" || true
-            curl --fail --silent --show-error \
-              -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+            curl --fail --silent --show-error -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
               "$registry_schema_url" > "$REPORT_ROOT/live-research-registry.schema.json" || true
-            curl --fail --silent --show-error \
-              -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+            curl --fail --silent --show-error -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
               "$result_schema_url" > "$REPORT_ROOT/live-result.schema.json" || true
-            curl --fail --silent --show-error \
-              -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+            curl --fail --silent --show-error -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
               "$prompt_url" > "$REPORT_ROOT/live-research.prompt.txt" || true
 
             if jq -e --arg snapshot "$expected_snapshot" --argjson count "$expected_count" \
@@ -339,14 +411,11 @@ jobs:
                  .duplicate_guard.snapshot_id == $snapshot and
                  .duplicate_guard.seen_publication_count == $count' \
                 "$REPORT_ROOT/live-research-registry.json" >/dev/null 2>&1 \
-              && cmp -s \
-                docs/features/region-talk-channel/external-publication-research-registry.schema.json \
+              && cmp -s docs/features/region-talk-channel/external-publication-research-registry.schema.json \
                 "$REPORT_ROOT/live-research-registry.schema.json" \
-              && cmp -s \
-                docs/features/region-talk-channel/external-publication-research.schema.json \
+              && cmp -s docs/features/region-talk-channel/external-publication-research.schema.json \
                 "$REPORT_ROOT/live-result.schema.json" \
-              && cmp -s \
-                docs/features/region-talk-channel/external-publication-research.prompt.txt \
+              && cmp -s docs/features/region-talk-channel/external-publication-research.prompt.txt \
                 "$REPORT_ROOT/live-research.prompt.txt"; then
               verified=1
               break
