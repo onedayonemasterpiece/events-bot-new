@@ -15,8 +15,8 @@ Supabase Auth / NotiSend
 The checked-in identifiers and stable resource names are in
 [`desired-state.json`](desired-state.json). The generated recipient and
 WebSocket path are secrets and are deliberately absent. The trigger stores no
-message or attachment. `external-e2e` contains the WSS URL as a secret and the
-fixed generated recipient as an Environment variable. The corresponding
+message or attachment. `external-e2e` contains both the WSS URL and the fixed
+generated recipient as Environment secrets. The corresponding
 Supabase Auth identity is pre-created once so ordinary sign-in is a returning
 identity and follows the NotiSend route without consuming a new recipient on
 every run.

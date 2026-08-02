@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed the protected focus OTP acceptance workflow after its first live run:
+  the generated Mail Trigger recipient is now a secret, browser failure cannot
+  accidentally unlock Android/iOS, failed evidence retains the verified preview
+  SHA, and PII-free mail-stage counters distinguish receipt, sender, subject and
+  OTP parsing failures. The live subject contract now covers both the current
+  Supabase custom SMTP/Postbox template and the staged Send Email Hook template.
 - Added the first real mobile focus OTP vertical slice: one platform-neutral
   journey now drives existing Chromium, Chrome Android/Appium UiAutomator2 and
   Mobile Safari/Appium XCUITest sequentially, checks native keyboard/viewport

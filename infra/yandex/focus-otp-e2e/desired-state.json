@@ -21,7 +21,7 @@
   },
   "github_environment": {
     "name": "external-e2e",
-    "secret": "E2E_YANDEX_MAIL_WS_URL",
-    "variables": ["E2E_MAIL_ADAPTER", "E2E_RECIPIENT_TEMPLATE"]
+    "secrets": ["E2E_YANDEX_MAIL_WS_URL", "E2E_RECIPIENT_TEMPLATE"],
+    "variables": ["E2E_MAIL_ADAPTER"]
   }
 }

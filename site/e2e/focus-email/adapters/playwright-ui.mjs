@@ -27,6 +27,7 @@ export async function createPlaywrightUi({ target, expectedRepoSha, evidenceRoot
   const page = await context.newPage();
   const consoles = [];
   let otp = '';
+  let verifiedRepoSha = null;
   page.on('console', (message) => {
     if (['error', 'warning'].includes(message.type())) {
       consoles.push({ type: message.type(), text: redactText(message.text(), [...secrets, otp]) });
@@ -35,13 +36,17 @@ export async function createPlaywrightUi({ target, expectedRepoSha, evidenceRoot
   const recorder = createSanitizedNetworkRecorder(page, { directHost, relayHost });
   return {
     kind: 'browser', consoles, recorder,
+    get observedRepoSha() { return verifiedRepoSha; },
     device: { platform: 'browser', browser_name: 'Chromium', browser_version: browser.version(), viewport },
     setOtpSecret(value) { otp = value; },
     async openInvite() {
       await page.goto(target.href, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       if (new URL(page.url()).origin !== target.origin) throw new Error('navigation_left_allowed_origin');
     },
-    verifyReleaseIdentity: () => observedRepoSha(target, expectedRepoSha),
+    async verifyReleaseIdentity() {
+      verifiedRepoSha = await observedRepoSha(target, expectedRepoSha);
+      return verifiedRepoSha;
+    },
     async waitForInstallStage() { await page.locator('[data-intake-stage="install"]:not([hidden])').waitFor({ timeout: 20_000 }); },
     async skipInstall() { await page.locator('[data-focus-install-skip]').click(); },
     async openEmailStep() { await page.locator('[data-focus-email-open]').click(); },

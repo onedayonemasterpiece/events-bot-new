@@ -59,8 +59,10 @@ when separate stable personalization personas are genuinely needed.
 
 Every fixed identity must be a returning Auth identity or be present in the
 deployed Auth hook's `FOCUS_AUTH_NOTISEND_EMAILS` allowlist. The dedicated Mail
-Trigger identity is pre-created once and tagged for E2E, so its ordinary sign-in
-uses NotiSend and later runs reuse the same recipient admission instead of
+Trigger identity is pre-created once and tagged for E2E. While the Send Email
+Hook is disabled, the journey verifies the project's currently configured
+custom SMTP/Postbox path. If the hook is enabled, the same identity follows the
+NotiSend route and later runs reuse the same recipient admission instead of
 spending another one of the 200 unique-recipient slots **within the current
 billing period**. In a new period its first send occupies one slot again. The aggregate
 database report combines the latest real provider counter with admissions since
@@ -74,11 +76,12 @@ Do not use unique mode for routine CI. Removing its disposable Auth user does
 not release the unique-recipient slot already consumed at NotiSend; the private
 admission row deliberately remains for accurate capacity accounting.
 
-The protected E2E must not run while `notisend_capacity.routing_ready=false`.
-First reconcile the provider dashboard's actual used-recipient count and current
-period end through the service-only procedure in
-`infra/yandex/focus-auth-email-hook/README.md`. Never assume that an existing
-provider account has zero used recipients.
+When the Send Email Hook is enabled, the protected E2E must not run while
+`notisend_capacity.routing_ready=false`. First reconcile the provider dashboard's
+actual used-recipient count and current period end through the service-only
+procedure in `infra/yandex/focus-auth-email-hook/README.md`. Never assume that an
+existing provider account has zero used recipients. This capacity gate does not
+apply while Auth is explicitly using its existing custom SMTP/Postbox path.
 
 While one fixed mailbox is shared, browser, Android and iOS real-mail variants
 must run sequentially or be explicitly selected one at a time. Parallel mobile
@@ -88,9 +91,9 @@ runs are allowed only after separate stable identities/mailboxes are assigned.
 
 The protected Environment `external-e2e` uses:
 
-- secret `E2E_YANDEX_MAIL_WS_URL` — WSS domain plus unguessable path;
+- secrets `E2E_YANDEX_MAIL_WS_URL` and `E2E_RECIPIENT_TEMPLATE` — WSS domain,
+  unguessable path and generated Mail Trigger recipient;
 - variable `E2E_MAIL_ADAPTER=yandex-websocket`;
-- variable `E2E_RECIPIENT_TEMPLATE` — fixed generated trigger recipient;
 - sender/subject/timeout and network host-class variables listed below.
 
 The environment may instead use controlled IMAP by setting
@@ -103,9 +106,11 @@ The environment may instead use controlled IMAP by setting
   - `E2E_IMAP_HOST=imap.spaceweb.ru`
   - `E2E_IMAP_PORT=993`
   - `E2E_IMAP_SECURE=true`
-  - `E2E_RECIPIENT_TEMPLATE=focus-e2e@kenigevents.ru`
+  - secret `E2E_RECIPIENT_TEMPLATE=focus-e2e@kenigevents.ru`
   - `E2E_EXPECTED_FROM_PATTERN` — escaped trusted sender/domain pattern
-  - `E2E_EXPECTED_SUBJECT_PATTERN` — stable OTP subject fragment
+  - `E2E_EXPECTED_SUBJECT_PATTERN` — anchored alternatives for the current SMTP
+    subject and the staged Send Email Hook subject; update this contract whenever
+    either provider template changes
   - `E2E_MAIL_TIMEOUT_MS=120000`
   - `E2E_SUPABASE_HOST` — direct host, used only for PII-free route labels
   - `E2E_RELAY_HOST` — relay host, used only for PII-free route labels

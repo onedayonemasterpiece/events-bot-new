@@ -75,6 +75,7 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     statuses(suffix) { return this.entries.filter((x) => x.path.endsWith(suffix)).map((x) => x.status); },
   };
   let pageEntriesSeen = 0;
+  let verifiedRepoSha = null;
   const keyboard = {};
   const actualCaps = driver.capabilities || {};
 
@@ -118,6 +119,7 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
 
   return {
     kind: platform, recorder, consoles: [], keyboard,
+    get observedRepoSha() { return verifiedRepoSha; },
     device: { platform, device_name: config.deviceName, expected_platform_version: config.platformVersion,
       platform_version: String(actualCaps.platformVersion || config.platformVersion), browser_version: String(actualCaps.browserVersion || actualCaps.version || 'unreported'),
       os_version: String(env.E2E_HOST_OS_VERSION || 'unreported'), xcode_version: platform === 'ios' ? String(env.E2E_XCODE_VERSION || 'unreported') : null,
@@ -127,7 +129,10 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
       await driver.url(target.href); await driver.waitUntil(async () => (await driver.getUrl()).startsWith(target.origin), { timeout: 30_000 });
       await driver.execute(networkBootstrap, directHost, relayHost);
     },
-    verifyReleaseIdentity: () => observedRepoSha(target, expectedRepoSha),
+    async verifyReleaseIdentity() {
+      verifiedRepoSha = await observedRepoSha(target, expectedRepoSha);
+      return verifiedRepoSha;
+    },
     async waitForInstallStage() { await (await driver.$(SELECTORS.install)).waitForDisplayed({ timeout: 20_000 }); },
     async skipInstall() { await (await driver.$(SELECTORS.skip)).click(); },
     async openEmailStep() { await (await driver.$(SELECTORS.emailOpen)).click(); },

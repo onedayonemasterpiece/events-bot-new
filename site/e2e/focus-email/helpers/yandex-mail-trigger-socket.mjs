@@ -34,7 +34,38 @@ export class YandexMailTriggerSocket {
     }).catch((error) => { throw new Error(`yandex_mail_websocket_connect:${String(error?.message || error).slice(0, 120)}`); });
   }
 
-  async checkpoint() { return this.connectedAt; }
+  async checkpoint() {
+    this.checkpointAt = this.connectedAt;
+    return this.checkpointAt;
+  }
+
+  safeDiagnostics({ checkpoint = this.checkpointAt, recipient } = {}) {
+    const diagnostics = {
+      matching_message_count: 0,
+      received_event_count: 0,
+      recipient_match_count: 0,
+      sender_match_count: 0,
+      subject_match_count: 0,
+      otp_parse_count: 0,
+    };
+    for (const event of this.events.filter((item) => item.arrivedAt >= Number(checkpoint || 0))) {
+      diagnostics.received_event_count += 1;
+      const map = headers(event.message);
+      const to = (map.get('to') || []).join(' ');
+      const from = (map.get('from') || []).join(' ');
+      const subject = (map.get('subject') || []).join(' ');
+      if (!to.toLowerCase().includes(String(recipient || '').toLowerCase())) continue;
+      diagnostics.recipient_match_count += 1;
+      if (this.expectedFrom && !this.expectedFrom.test(from)) continue;
+      diagnostics.sender_match_count += 1;
+      if (this.expectedSubject && !this.expectedSubject.test(subject)) continue;
+      diagnostics.subject_match_count += 1;
+      try { extractSingleOtp({ text: event.message?.message || '' }); } catch { continue; }
+      diagnostics.otp_parse_count += 1;
+    }
+    diagnostics.matching_message_count = diagnostics.otp_parse_count;
+    return diagnostics;
+  }
 
   matchingMessages({ checkpoint, recipient }) {
     const matches = [];

@@ -76,11 +76,13 @@ try {
   const domain = failureDomain(error);
   const message = redactText(String(error?.message || error), [...secrets, otp]);
   result = publicResult({ ...result, platform, status: domain === 'BLOCKED_INFRASTRUCTURE' ? 'BLOCKED' : 'FAIL', failure_domain: domain,
+    observed_repo_sha: ui?.observedRepoSha || result.observed_repo_sha || null,
     browser: platform === 'browser' ? ui?.device || null : null, device: ui?.device || null,
     keyboard_acceptance: platform === 'browser' ? null : ui?.keyboard || null,
     otp_issue_request_count: recorder.count('POST', '/auth/v1/otp'), otp_verify_request_count: recorder.count('POST', '/auth/v1/verify'),
     participant_registration_request_count: recorder.count('POST', '/rpc/register_focus_group_participant_v1'),
     participant_registration_status: recorder.statuses('/rpc/register_focus_group_participant_v1').at(-1) ?? null,
+    mail: mailbox?.safeDiagnostics?.({ recipient }) || result.mail || null,
     failures: [message] });
   step('journey_failed', 'failed');
 } finally {

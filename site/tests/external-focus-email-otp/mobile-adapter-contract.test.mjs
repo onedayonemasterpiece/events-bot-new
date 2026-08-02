@@ -17,3 +17,11 @@ test('immutable preview metadata records the full repository SHA used by the E2E
   assert.match(source, /repo_sha: gitFullSha\(\)/u);
   assert.match(source, /git.*rev-parse.*HEAD/su);
 });
+
+test('protected workflow keeps the recipient secret and gates all platforms strictly in sequence', async () => {
+  const source = await readFile(new URL('../../../.github/workflows/external-focus-email-otp.yml', import.meta.url), 'utf8');
+  assert.equal((source.match(/E2E_RECIPIENT_TEMPLATE: \$\{\{ secrets\.E2E_RECIPIENT_TEMPLATE \}\}/gu) || []).length, 3);
+  assert.doesNotMatch(source, /vars\.E2E_RECIPIENT_TEMPLATE/u);
+  assert.match(source, /inputs\.platform == 'all' && needs\.browser\.result == 'success'/u);
+  assert.match(source, /inputs\.platform == 'all' && needs\.android\.result == 'success'/u);
+});

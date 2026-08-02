@@ -87,9 +87,10 @@ The deterministic ZIP is written under ignored `artifacts/codex/`.
   `occupied` and `available` are `null` before that first reconciliation; do not
   infer `0` from the empty local admission set;
 - GitHub Environment `external-e2e` exists, requires review and allows only
-  `main`. Its non-secret route/mail variables are set; a dedicated mailbox,
-  `E2E_RECIPIENT_TEMPLATE` and the two IMAP secrets are still required for a
-  real live run.
+  `main` in steady state. Its dedicated no-persistence Yandex Mail Trigger,
+  WebSocket URL and fixed recipient secrets are configured. Until this hook is
+  enabled, that external E2E intentionally verifies the existing Supabase
+  custom SMTP/Postbox route rather than claiming NotiSend coverage.
 
 This is an inactive staging state, not rollout evidence. Do not enable the Auth
 hook merely because the Function and Gateway exist.
