@@ -196,6 +196,7 @@ content hook plan
   ↓
 Writer:
   paragraph 1 = grounded hook + compact source value
+    for publisher articles: outlet identity + intended reader + distinctive value
   paragraph 2 = concrete material details
   ↓
 Critic + deterministic validators
@@ -259,6 +260,13 @@ backfill детерминированно проецирует эту форму
 Свежий sidecar не должен затенять более старый Writer-ready профиль только из-за
 различия формы данных.
 
+Финальная запись draft выполняется compare-and-swap после сильного перечитывания
+кандидата. Из снимка исключаются только перечисленные локальные runtime-поля;
+durable live-overlay поля YDB с префиксом `_live_*` остаются частью CAS. Поэтому
+позднее реальное изменение кандидата по-прежнему останавливает запись, а само
+наличие актуальной live-проекции больше не создаёт ложный
+`candidate_changed_since_strong_reread`.
+
 ### 6.2. Не хранить лишнее
 
 Для долгой жизни достаточно:
@@ -279,6 +287,17 @@ backfill детерминированно проецирует эту форму
 
 1. **hook** из текущего материала, 45–110 знаков;
 2. одно компактное предложение о ценности источника.
+
+Для статьи из профессионального издания второе предложение работает как
+короткий reader brief: оно должно одновременно объяснять, что это за издание,
+кому оно полезно и чем отличается его редакционный ракурс. Writer получает все
+три evidence-linked измерения профиля и обязан сослаться на каждое из них в
+sentence-level grounding map. Отдельный LLM Critic выставляет четыре явных
+проверки (`outlet_identity`, `intended_audience`, `distinctive_value`,
+`useful_for_read_or_skip_decision`). Детерминированный gate проверяет только
+полноту evidence refs и typed-решения Critic; смысловую оценку не заменяет
+ключевыми словами. Неполная сводка fail-closed уходит на rewrite/review и не
+становится готовым текстом.
 
 Пример:
 

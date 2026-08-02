@@ -44,6 +44,26 @@
   of requiring a human mailbox, and a strict canonical-issue `/qa run` gateway
   routes ChatGPT requests to the same reusable workflow. Preview metadata now
   records the full repository SHA required by this release gate.
+- Fixed Region Talk article visual-grounding prompt/audit alignment: each
+  second-paragraph sentence must carry concrete content evidence even when it
+  also discusses reviewed media, and a pre-Critic Writer failure now clears a
+  stale Critic pass from the current audit projection.
+- Fixed Region Talk article Writer evidence projection: imported publisher
+  string/list dimensions now use the same normalized, evidence-linked form in
+  both readiness and prompt construction, so all three reader-brief dimensions
+  are mandatory in the Writer grounding map instead of silently disappearing.
+- Added opt-in local documentation auto-push watcher for `docs/`, publishing saved text-document updates to `origin/main` while excluding media and the requested visitors reference.
+- Fixed Region Talk draft CAS for durable `_live_*` candidate projections:
+  strong reread now excludes only explicit local runtime fields instead of all
+  leading-underscore keys. Genuine concurrent candidate changes still fail
+  closed, while an unchanged live-overlay row can accept its grounded draft.
+- Changed Region Talk article drafts to Writer v12: the first paragraph's
+  publisher sentence must summarize the outlet identity, intended reader and
+  distinctive editorial value from all three evidence-linked profile
+  dimensions. A separate LLM Critic records explicit reader-brief checks, while
+  deterministic code only enforces their typed/provenance contract and fails
+  closed. Existing unpublished review copy is version-invalidated and requires
+  a fresh operator decision.
 - Fixed a Region Talk scheduled-orchestrator deadlock on oversized single-line
   cycle JSON: the wrapper now drains stdout in bounded chunks, uses a bounded
   larger asyncio transport buffer and preserves complete JSONL parsing, so the

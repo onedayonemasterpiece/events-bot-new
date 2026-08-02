@@ -352,6 +352,22 @@ input JSON SHA; it never changes the LLM research decision.
 
 Candidate revisions show the original link, source link, scores and verifier reason. Editorial/academic rows also pass a reusable publisher reader brief through the LLM-first source-profile stage. The brief must explain outlet type, intended audience and distinctive editorial value from copy-supported research evidence; the staged public-copy Writer incorporates it into paragraph one while paragraph two remains specific to the selected article. Automatic confirmed-candidate delivery remains fingerprint-idempotent.
 
+Publisher sidecars may retain their native string/list dimension shape, while
+the readiness gate and Writer evidence pack consume one shared normalized
+`{text, evidence_ids}` projection. A ready article must therefore carry all
+three `source.publisher.*` evidence IDs into the Writer prompt and sentence
+grounding map; losing a dimension during projection fails closed rather than
+falling back to an unstructured profile summary.
+
+The article Writer may mention the reviewed visual row inside paragraph two
+only when the same sentence also carries a concrete `content_fact` evidence
+ID from the material. `visual.original_media` proves association, not the
+article detail itself; a purely visual sentence is omitted or rewritten by the
+LLM and never patched semantically by deterministic code. If Writer still
+violates this contract after its bounded retry, the row remains
+`needs_grounding_review`, and any Critic result from an older generation is
+cleared from the current audit projection.
+
 ### Article galleries and editorial image suitability
 
 External publications are not limited to a single OG preview. After the text

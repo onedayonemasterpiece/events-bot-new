@@ -552,6 +552,63 @@ def test_final_candidate_cas_rejects_concurrent_live_change() -> None:
         )
 
 
+def test_final_candidate_cas_keeps_durable_leading_underscore_fields() -> None:
+    mod = load_module()
+    expected = {
+        "post_url": "https://example.org/article",
+        "publication_status": "gemini_accept",
+        "_live_authoritative_source_found": True,
+        "_live_authoritative_source_fingerprint": "live-source-fp",
+        "_live_source_profile_checked": True,
+        "_live_source_profile_fingerprint": "live-profile-fp",
+    }
+    row = {
+        **expected,
+        "_ydb_pk": "publication_candidate_item:article",
+        "_source_onboarding_profile": {"profile_status": "ready"},
+    }
+    row["_strong_read_expected_payload"] = mod.durable_publication_payload(row)
+    assert row["_strong_read_expected_payload"] == expected
+
+    class Result:
+        def __init__(self, rows):
+            self.rows = rows
+
+    class Tx:
+        call_count = 0
+
+        def execute(self, _query, _params, *, commit_tx):  # noqa: ARG002
+            self.call_count += 1
+            if self.call_count == 1:
+                return [Result([type("Row", (), {"payload_json": json.dumps(expected)})()])]
+            if self.call_count == 2:
+                return [Result([])]
+            assert commit_tx is True
+            return []
+
+    class Session:
+        def __init__(self):
+            self.tx = Tx()
+
+        def prepare(self, query):
+            return query
+
+        def transaction(self, _mode):
+            return self.tx
+
+    class Pool:
+        def retry_operation_sync(self, op):
+            return op(Session())
+
+    class Ydb:
+        @staticmethod
+        def SerializableReadWrite():
+            return object()
+
+    updates = {"publication_draft_status": "ready_for_operator_review"}
+    assert mod.upsert_publication_row(Pool(), Ydb(), "table", row, updates) == updates
+
+
 def test_final_candidate_cas_catches_late_correction_and_writes_block() -> None:
     mod = load_module()
     expected = {
@@ -813,6 +870,7 @@ def test_second_short_writer_failure_preserves_stage_audit(monkeypatch) -> None:
     audit = json.loads(updates["publication_draft_stage_audit_json"])
     assert audit["strategy"]["status"] == "ready"
     assert audit["writer"]["status"] == "draft_ready"
+    assert updates["publication_draft_critic_json"] == ""
 
 
 def test_editorial_stage_pacing_waits_between_physical_provider_calls(monkeypatch) -> None:
@@ -843,9 +901,130 @@ def test_article_writer_requires_all_publisher_reader_brief_dimensions_in_profil
         output, evidence_ids, required_publisher_evidence_ids=required,
     )
     evidence_ids.update(required)
+    assert "publisher_reader_brief_not_grounded_in_source_sentence" in mod.validate_editorial_output(
+        output, evidence_ids, required_publisher_evidence_ids=required,
+    )
+    output["grounding_map"][1]["evidence_ids"] = sorted(required)
     assert mod.validate_editorial_output(
         output, evidence_ids, required_publisher_evidence_ids=required,
     ) == []
+
+
+def test_article_evidence_pack_uses_normalized_imported_publisher_dimensions() -> None:
+    mod = load_module()
+    profile = {
+        "profile_status": "ready",
+        "profile_kind": "publisher",
+        "profile_fingerprint": "publisher-fp",
+        "profile_summary": "Профессиональное издание с доказательным профилем.",
+        "usable_without_profile_llm": True,
+        "scope": "external",
+        "public_copy_eligibility": "allowed",
+        "profile_dimensions": {
+            "outlet_identity": "Профессиональное издание об архитектуре.",
+            "intended_audience": [{
+                "label": "Архитекторы и читатели, изучающие городскую среду.",
+                "evidence_refs": ["publisher.about"],
+            }],
+            "distinctive_value": [{
+                "text": "Соединяет авторские обзоры с каталогом проектов.",
+                "evidence_refs": ["publisher.policy"],
+            }],
+        },
+        "evidence": [
+            {
+                "evidence_id": "publisher.about",
+                "supports": ["publisher.identity", "publisher.audience"],
+            },
+            {
+                "evidence_id": "publisher.policy",
+                "supports": ["publisher.distinctive_value"],
+            },
+        ],
+    }
+    row = _ready_profile_row(**{
+        "post_url": "https://example.org/article",
+        "content_origin_type": "editorial_publication",
+        "_live_source_profile_fingerprint": "publisher-fp",
+        "source_onboarding_profile_fingerprint": "publisher-fp",
+        "source_profile_fingerprint": "publisher-fp",
+        "_source_onboarding_profile": profile,
+    })
+
+    evidence = mod.build_editorial_evidence(
+        row, source_text="Подробный текст о новом музейном корпусе."
+    )
+
+    required = {
+        "source.publisher.outlet_identity",
+        "source.publisher.intended_audience",
+        "source.publisher.distinctive_value",
+    }
+    assert set(evidence["required_publisher_evidence_ids"]) == required
+    by_id = {item["evidence_id"]: item for item in evidence["evidence"]}
+    assert required.issubset(by_id)
+    assert by_id["source.publisher.outlet_identity"]["upstream_evidence_ids"] == [
+        "publisher.about"
+    ]
+    assert by_id["source.publisher.intended_audience"]["upstream_evidence_ids"] == [
+        "publisher.about"
+    ]
+    assert by_id["source.publisher.distinctive_value"]["upstream_evidence_ids"] == [
+        "publisher.policy"
+    ]
+
+
+def test_article_critic_must_semantically_attest_complete_publisher_reader_brief() -> None:
+    mod = load_module()
+    required = {
+        "source.publisher.outlet_identity",
+        "source.publisher.intended_audience",
+        "source.publisher.distinctive_value",
+    }
+    assert mod.validate_critic_output(
+        {"status": "pass"}, required_publisher_evidence_ids=required,
+    ) == ["publisher_reader_brief_critic_check_failed"]
+    assert mod.validate_critic_output({
+        "status": "pass",
+        "publisher_reader_brief_checks": {
+            "outlet_identity_covered": True,
+            "intended_audience_covered": True,
+            "distinctive_value_covered": True,
+            "useful_for_read_or_skip_decision": True,
+        },
+    }, required_publisher_evidence_ids=required) == []
+
+
+def test_article_writer_and_critic_prompts_require_reader_decision_summary() -> None:
+    mod = load_module()
+    payload = {
+        "required_publisher_evidence_ids": [
+            "source.publisher.outlet_identity",
+            "source.publisher.intended_audience",
+            "source.publisher.distinctive_value",
+        ]
+    }
+    writer_prompt = mod._stage_prompt("writer", payload)
+    critic_prompt = mod._stage_prompt("critic", payload)
+    assert "what kind of outlet this is" in writer_prompt
+    assert "who will find it useful" in writer_prompt
+    assert "what distinguishes its coverage" in writer_prompt
+    assert "publisher_reader_brief_checks" in critic_prompt
+    assert "useful_for_read_or_skip_decision" in critic_prompt
+
+
+def test_article_writer_prompt_aligns_visual_detail_with_content_grounding_gate() -> None:
+    mod = load_module()
+    writer = json.loads(mod._stage_prompt("writer", {}))
+    assert any(
+        "Every paragraph 2 sentence must cite at least one evidence ID whose kind is content_fact"
+        in rule
+        for rule in writer["rules"]
+    )
+    assert any(
+        "visual.original_media alone is invalid" in rule
+        for rule in writer["rules"]
+    )
 
 
 def test_v9_validator_rejects_banned_not_a_construction() -> None:
@@ -875,6 +1054,11 @@ def test_v9_writer_gets_one_style_retry_then_fails_closed(monkeypatch) -> None:
     mod = load_module()
     clean = _valid_writer_output(mod)
     clean["_stage_status"] = "ok"
+    clean["grounding_map"][1]["evidence_ids"] = [
+        "source.publisher.outlet_identity",
+        "source.publisher.intended_audience",
+        "source.publisher.distinctive_value",
+    ]
     banned = json.loads(json.dumps(clean, ensure_ascii=False))
     banned["public_copy"]["paragraph_2"] = (
         "В публикации автор показывает музей не как цепочку отдельных залов, а как цельный "
@@ -885,7 +1069,15 @@ def test_v9_writer_gets_one_style_retry_then_fails_closed(monkeypatch) -> None:
         "_stage_status": "ok", "status": "ready", "throughline_mode": "fresh_start",
         "used_history_urls": [], "visual_hook_evidence_ids": [],
     }
-    critic = {"_stage_status": "ok", "status": "pass", "reason_codes": []}
+    critic = {
+        "_stage_status": "ok", "status": "pass", "reason_codes": [],
+        "publisher_reader_brief_checks": {
+            "outlet_identity_covered": True,
+            "intended_audience_covered": True,
+            "distinctive_value_covered": True,
+            "useful_for_read_or_skip_decision": True,
+        },
+    }
     dimensions = {
         key: {"text": key, "evidence_ids": ["E1"]}
         for key in mod.notify.PUBLISHER_READER_BRIEF_DIMENSIONS
