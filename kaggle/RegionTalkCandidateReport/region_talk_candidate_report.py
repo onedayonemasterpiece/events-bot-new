@@ -20928,6 +20928,59 @@ async def amain() -> int:
             state_meta=state_meta,
         )
     status.event('posts_fetched', phase='fetch', status='running', sources_scanned=len(source_rows), posts_fetched=len(posts))
+    if getenv_bool("REGION_TALK_SOURCE_PROFILE_CAPTURE_ONLY", False):
+        capture_rows = [
+            row for row in source_rows
+            if str(row.get("source_profile_capture_status") or "").strip()
+        ]
+        ready_rows = [
+            row for row in capture_rows
+            if str(row.get("source_profile_capture_status") or "").strip().lower() == "ready"
+        ]
+        error_rows = [
+            row for row in capture_rows
+            if str(row.get("source_profile_capture_status") or "").strip().lower() in {"capture_error", "error", "conflict"}
+            or str(row.get("source_profile_capture_persistence_status") or "").strip().lower() in {"error", "conflict"}
+        ]
+        terminal_status = "done" if capture_rows and not error_rows else "partial"
+        summary = {
+            "run_id": run_id,
+            "status": terminal_status,
+            "source_profile_capture_only": "true",
+            "sources_scanned": len(source_rows),
+            "posts_fetched": len(posts),
+            "posts_scored": 0,
+            "capture_attempted": len(capture_rows),
+            "capture_ready": len(ready_rows),
+            "capture_errors": len(error_rows),
+            "capture_source_keys": sorted({
+                str(row.get("canonical_source_key") or "")
+                for row in capture_rows
+                if str(row.get("canonical_source_key") or "")
+            }),
+            "provider_calls": 0,
+            "media_downloads": 0,
+            "publication_effect": "none",
+            "ydb_read_status": state_meta.get("ydb_read_status"),
+            "ydb_write_status": "error" if error_rows else "ok",
+            "partial_reason": "" if terminal_status == "done" else "no_ready_capture_or_capture_error",
+        }
+        result = {"ok": not error_rows, "status": terminal_status, "run_id": run_id, "summary": summary}
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "stage_status.json").write_text(
+            json.dumps({"run_id": run_id, "generated_at": utc_now_iso(), "status": terminal_status, "summary": summary}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        (Path.cwd() / "output.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        status.event(
+            "source_profile_capture_only_done",
+            phase="source_profile_capture",
+            status=terminal_status,
+            run_id=run_id,
+            **{key: value for key, value in summary.items() if key not in {"run_id", "status"}},
+        )
+        close_region_talk_runtime_clients(status)
+        return 0 if not error_rows else 1
     payload = build_report(
         seeds,
         source_rows,

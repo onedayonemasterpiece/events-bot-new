@@ -16,6 +16,10 @@ import/review commands and Writer vNext:
    explicitly requested social source it reads public description, pinned
    evidence and 30–80 recent rows (50 by default), without acknowledgement,
    reaction or media download.
+   Recovery operators may set `REGION_TALK_SOURCE_PROFILE_CAPTURE_ONLY=1` for
+   this bounded pass. After the online capture writes it emits a terminal
+   receipt and skips candidate scoring, embeddings, image queues and every
+   publication path; the normal scheduled report keeps the flag disabled.
 2. Deterministic safety preprocessing classifies
    `authored|repost|service|ad_like`, keeps at least 20 authored posts, selects
    8–16 diverse recent excerpts and stores a stable
