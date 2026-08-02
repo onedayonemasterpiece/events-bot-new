@@ -94,14 +94,12 @@ def external_article_fixture() -> tuple[dict, dict]:
 
 def ready_social(url: str) -> dict:
     p1 = (
-        "Петербургский автор внимательно исследует повседневный ритм города и собирает маршрут "
-        "из наблюдений за улицами, площадями и привычками жителей. Такой внешний взгляд помогает "
-        "увидеть знакомое пространство с новой точки и сохраняет авторскую интонацию источника."
+        "В Гусеве строгая геометрия улиц выводит прогулку к восстановленным фрескам. "
+        "Авторский канал собирает маршруты из личных наблюдений и точных деталей дороги."
     )
     p2 = (
-        "В публикации подробно описаны геометрия улиц, восстановленные фрески и последовательность "
-        "прогулки. Оригинал стоит открыть ради конкретных деталей и цельной фотосерии, которая "
-        "показывает обычную городскую жизнь далеко за пределами центральной площади и соседних районов."
+        "Автор связывает фрески с повседневным ритмом города и порядком остановок. "
+        "Маршрут продолжается за центральной площадью и сохраняет ясные ориентиры прогулки."
     )
     return {
         "_ydb_pk": "publication_candidate_item:" + url,
@@ -119,6 +117,12 @@ def ready_social(url: str) -> dict:
         "publication_draft_contract_version": notify.EDITORIAL_OUTPUT_CONTRACT,
         "publication_media_materialization_status": "fallback",
         "publication_media_materialization_contract_version": notify.MEDIA_MATERIALIZATION_CONTRACT_VERSION,
+        "source_profile_fingerprint": "profile-fp",
+        "source_onboarding_profile_fingerprint": "profile-fp",
+        "source_onboarding_status": "ready",
+        "source_onboarding_paragraph": (
+            "Авторский канал собирает маршруты из личных наблюдений и точных деталей дороги."
+        ),
     }
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 from scripts import region_talk_goal_notify as notify
@@ -7,16 +8,24 @@ from scripts import region_talk_preproduction_footer_repair as repair
 
 
 def _row() -> dict[str, object]:
+    p1 = (
+        "В Гусеве строгая геометрия улиц выводит прогулку к восстановленным фрескам. "
+        "Авторский канал собирает маршруты из личных наблюдений и точных деталей дороги."
+    )
+    p2 = (
+        "Автор связывает фрески с повседневным ритмом города и порядком остановок. "
+        "Маршрут продолжается за центральной площадью и сохраняет ясные ориентиры прогулки."
+    )
     row: dict[str, object] = {
         "_ydb_pk": "publication_candidate_item:https://t.me/a/1",
         "post_url": "https://t.me/a/1",
         "sent_message_id": "42",
         "publication_draft_telegram_text": (
-            "Первый смысловой абзац.\n\nВторой смысловой абзац.\n\n"
+            f"{p1}\n\n{p2}\n\n"
             "Источник: Канал\nОригинал: https://t.me/a/1"
         ),
         "publication_draft_vk_text": (
-            "Первый смысловой абзац.\n\nВторой смысловой абзац.\n\n"
+            f"{p1}\n\n{p2}\n\n"
             "Источник: Канал\nОригинал: https://t.me/a/1"
         ),
         "operator_review_decision": "pending",
@@ -81,3 +90,16 @@ def test_message_verifier_requires_exact_two_footer_links() -> None:
     assert repair.message_matches(message, updated) is True
     message.entities.append(type("MessageEntityTextUrl", (), {"url": "https://example.org"})())
     assert repair.message_matches(message, updated) is False
+
+
+def test_footer_repair_revalidates_body_and_uses_source_aware_cta(monkeypatch) -> None:
+    row = {
+        **_row(),
+        "source_title": "Море рядом",
+        "source_onboarding_entity_type": "thematic_channel",
+    }
+    monkeypatch.setattr(repair.notify, "validate_publication_body", lambda *_args, **_kwargs: [])
+    updated = repair.repaired_candidate(row, chat_id="-100")
+    metadata = json.loads(str(updated["publication_draft_link_metadata_json"]))
+    assert metadata["cta_label"] == "Подробнее — в канале «Море рядом»"
+    assert str(updated["publication_draft_telegram_text"]).count("https://t.me/a/1") == 1

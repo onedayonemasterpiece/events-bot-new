@@ -26,7 +26,7 @@ from scripts import region_talk_goal_notify as notify  # noqa: E402
 from scripts import region_talk_reaction_sync as reactions  # noqa: E402
 
 
-FOOTER_REPAIR_VERSION = "region_talk_preproduction_footer_repair_v1"
+FOOTER_REPAIR_VERSION = "region_talk_preproduction_footer_repair_v2_source_aware_cta"
 TRANSPORT = "telethon_discovery2"
 
 
@@ -60,14 +60,17 @@ def repaired_candidate(row: dict[str, Any], *, chat_id: str) -> dict[str, Any]:
         key: value for key, value in row.items() if not str(key).startswith("_")
     }
     updated["publication_draft_telegram_text"] = notify.replace_publication_draft_footer(
-        str(row.get("publication_draft_telegram_text") or ""), original
+        str(row.get("publication_draft_telegram_text") or ""), original, row=updated
     )
     updated["publication_draft_vk_text"] = notify.replace_publication_draft_footer(
-        str(row.get("publication_draft_vk_text") or ""), original
+        str(row.get("publication_draft_vk_text") or ""), original, row=updated
     )
+    cta_label, _cta_url, cta_kind = notify.publication_source_cta(updated)
     updated["publication_draft_link_metadata_json"] = json.dumps(
         {
             "original_url": original,
+            "cta_label": cta_label,
+            "cta_kind": cta_kind,
             "channel_label": notify.REGION_TALK_PUBLIC_CHANNEL_LABEL,
             "channel_url": notify.REGION_TALK_PUBLIC_CHANNEL_URL,
             "footer_repair_version": FOOTER_REPAIR_VERSION,
@@ -111,7 +114,9 @@ def message_text_urls(message: Any) -> list[str]:
 
 def message_matches(message: Any, row: dict[str, Any]) -> bool:
     p1, p2 = notify._draft_two_paragraphs(row)
-    expected_text = notify.public_caption_visible_text(p1, p2)
+    expected_text = notify.public_caption_visible_text(
+        p1, p2, notify.publication_source_cta(row)[0]
+    )
     expected_urls = [
         notify.canonical_post_url(row),
         notify.REGION_TALK_PUBLIC_CHANNEL_URL,

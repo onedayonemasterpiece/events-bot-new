@@ -119,8 +119,9 @@ def test_execute_reads_supporting_kinds_through_notifier_namespace() -> None:
     assert driver.stopped is True
     assert kinds == [
         "external_publication_intake_item",
-        "external_publication_source_item",
         "source_onboarding_profile_item",
+        "publisher_profile_item",
+        "publisher_profile_candidate_correction_item",
         "image_queue_item",
         "publication_schedule_item",
         "publication_log_item",
@@ -167,11 +168,29 @@ def test_execute_article_uses_retained_intake_without_social_fetch_unpack(monkey
         "_ydb_pk": "publication_candidate_item:article",
         "post_url": "https://archi.ru/russia/example",
         "content_origin_type": "editorial_publication",
+        "canonical_source_key": "web:archi.ru",
     }
     intake = {
         "external_publication_id": "ext-1",
         "canonical_url": row["post_url"],
         "article_text": "Сохранённый текст статьи",
+    }
+    profile = {
+        "_ydb_pk": "publisher_profile_item:archi",
+        "publisher_profile_id": "archi",
+        "canonical_source_key": "web:archi.ru",
+        "profile_kind": "publisher",
+        "profile_status": "ready",
+        "profile_hash": "profile-archi",
+        "usable_without_profile_llm": True,
+        "scope": "external",
+        "public_copy_eligibility": "allowed",
+        "copy_projection": {"short_reader_brief": "Профильное издание объясняет архитектуру через устройство проектов и городской опыт."},
+        "profile_dimensions": {
+            key: {"text": key, "evidence_refs": ["E1"]}
+            for key in ("outlet_identity", "intended_audience", "distinctive_value")
+        },
+        "entity_type": "media_brand",
     }
     row["external_publication_id"] = intake["external_publication_id"]
     args = argparse.Namespace(
@@ -197,31 +216,20 @@ def test_execute_article_uses_retained_intake_without_social_fetch_unpack(monkey
     monkeypatch.setattr(
         mod.notify,
         "read_kind_rows",
-        lambda _pool, _ydb, _table, kind, _limit: [intake] if kind == "external_publication_intake_item" else [],
+        lambda _pool, _ydb, _table, kind, _limit: (
+            [intake] if kind == "external_publication_intake_item"
+            else [profile] if kind == "publisher_profile_item" else []
+        ),
     )
     monkeypatch.setattr(mod.notify, "is_confirmed_publication", lambda _row: True)
     monkeypatch.setattr(mod.notify, "is_publication_draft_ready", lambda _row: False)
     monkeypatch.setattr(mod, "DurableGeminiBudget", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(mod, "collect_source_texts", mock.AsyncMock(return_value=({}, {})))
     monkeypatch.setattr(
-        mod.finalizer,
-        "build_source_onboarding_evidence",
-        lambda *_args, **_kwargs: {"source_profile_id": "profile-1", "evidence_status": "sufficient"},
+        mod, "strong_read_row",
+        lambda _pool, _ydb, _table, pk: dict(profile if pk == profile["_ydb_pk"] else row),
     )
-    def enrich(rows, **_kwargs):
-        rows[0].update({
-            "source_onboarding_status": "ready",
-            "source_onboarding_paragraph": "Проверенная сводка об издании для читателя.",
-            "source_onboarding_publisher_dimensions_status": "ready",
-            "source_onboarding_publisher_dimensions_json": json.dumps({
-                key: {"text": key, "evidence_ids": ["E1"]}
-                for key in ("outlet_identity", "intended_audience", "distinctive_value")
-            }),
-            "source_onboarding_summary_kind": mod.notify.PUBLISHER_READER_BRIEF_KIND,
-        })
-        return rows, [], {}
-    monkeypatch.setattr(mod.finalizer, "enrich_accepted_rows_with_onboarding", enrich)
-    monkeypatch.setattr(mod.finalizer, "write_source_onboarding_rows", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(mod, "strong_read_kind_rows_complete", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(
         mod,
         "build_draft_updates",
@@ -230,7 +238,7 @@ def test_execute_article_uses_retained_intake_without_social_fetch_unpack(monkey
     monkeypatch.setattr(
         mod,
         "upsert_publication_row",
-        lambda _pool, _ydb, _table, _row, updates: written.append(updates),
+        lambda _pool, _ydb, _table, _row, updates, **_kwargs: written.append(updates) or updates,
     )
 
     result = asyncio.run(mod.execute(args))
@@ -256,6 +264,263 @@ def test_request_fingerprint_changes_with_exact_source_text() -> None:
     assert first != second
 
 
+def test_vnext_request_fingerprint_and_currentness_bind_exact_source_profile() -> None:
+    mod = load_module()
+    base = {
+        "post_url": "https://t.me/source/1",
+        "llm_decision": "accept",
+        "source_profile_fingerprint": "profile-a",
+    }
+    first = mod.draft_request_fingerprint(base, "Точный текст", model="test-model")
+    second = mod.draft_request_fingerprint(
+        {**base, "source_profile_fingerprint": "profile-b"},
+        "Точный текст",
+        model="test-model",
+    )
+    assert first != second
+
+    current = {
+        **base,
+        "_live_source_profile_fingerprint": "profile-a",
+        "publication_draft_status": "ready_for_operator_review",
+        "publication_draft_prompt_version": mod.EDITORIAL_WRITER_VERSION,
+        "publication_draft_contract_version": mod.EDITORIAL_OUTPUT_CONTRACT,
+    }
+    with mock.patch.object(mod.notify, "is_publication_draft_ready", return_value=True):
+        assert mod.current_editorial_draft(current) is True
+        assert mod.current_editorial_draft({
+            **current, "_live_source_profile_fingerprint": "profile-new",
+        }) is False
+
+
+def test_vnext_writer_requires_ready_reusable_profile_before_any_stage(monkeypatch) -> None:
+    mod = load_module()
+    row = {
+        "post_url": "https://t.me/source/1",
+        "source_title": "Путевой канал",
+    }
+    monkeypatch.setattr(
+        mod,
+        "generate_editorial_draft",
+        lambda *_args, **_kwargs: pytest.fail("Writer must not start without a ready reusable profile"),
+    )
+    updates, provider_called = mod.build_draft_updates(
+        row,
+        text="В посте автор проходит от гавани к старому маяку.",
+        fetched={},
+        source_transport="telethon_discovery2",
+        intake=None,
+        history=[],
+        model="test-model",
+        default_env="KEY",
+        budget=object(),
+    )
+    assert provider_called is False
+    assert updates["publication_draft_backfill_status"] == "needs_source_profile"
+    assert updates["publication_draft_backfill_provider_call_count"] == 0
+
+
+def test_vnext_validator_enforces_hook_source_sentence_and_body_safety() -> None:
+    mod = load_module()
+    hook = "В Балтийске короткий путь к гавани превращается в прогулку вдоль старых молов."
+    source_value = "Путевой канал собирает маршруты из личных наблюдений и проверяемых деталей дороги."
+    details = (
+        "Автор отмечает красные башни гавани и советует свернуть к маяку перед закатом. "
+        "Маршрут занимает один вечер и остаётся понятным без полного пересказа поездки."
+    )
+    detail_sentences = [
+        "Автор отмечает красные башни гавани и советует свернуть к маяку перед закатом.",
+        "Маршрут занимает один вечер и остаётся понятным без полного пересказа поездки.",
+    ]
+    output = {
+        "status": "draft_ready",
+        "public_copy": {
+            "paragraph_1": f"{hook} {source_value}",
+            "paragraph_2": details,
+        },
+        "grounding_map": [
+            {"paragraph_index": 1, "sentence_index": 1, "sentence_text": hook, "claim_type": "content_fact", "evidence_ids": ["content.exact_text"], "third_person_maintained": True},
+            {"paragraph_index": 1, "sentence_index": 2, "sentence_text": source_value, "claim_type": "source_profile_fact", "evidence_ids": ["source.profile"], "third_person_maintained": True},
+            {"paragraph_index": 2, "sentence_index": 1, "sentence_text": detail_sentences[0], "claim_type": "content_fact", "evidence_ids": ["content.exact_text"], "third_person_maintained": True},
+            {"paragraph_index": 2, "sentence_index": 2, "sentence_text": detail_sentences[1], "claim_type": "content_fact", "evidence_ids": ["content.exact_text"], "third_person_maintained": True},
+        ],
+    }
+    evidence_kinds = {
+        "content.exact_text": "content_fact",
+        "source.profile": "source_profile_fact",
+    }
+    row = {
+        "post_url": "https://t.me/source/1",
+        "source_title": "Путевой канал",
+        "source_profile_fingerprint": "profile-fp",
+    }
+    assert mod.validate_editorial_output(
+        output, set(evidence_kinds), evidence_kinds=evidence_kinds, row=row,
+    ) == []
+
+    bad_hook = json.loads(json.dumps(output, ensure_ascii=False))
+    bad_hook["grounding_map"][0]["evidence_ids"] = ["source.profile"]
+    assert "hook_not_grounded_in_content" in mod.validate_editorial_output(
+        bad_hook, set(evidence_kinds), evidence_kinds=evidence_kinds, row=row,
+    )
+
+    for unsafe, expected in [
+        (details + " https://example.org/full", "paragraph_url"),
+        (details + " Оригинал доступен по ссылке.", "cta_or_metatext_in_body"),
+        (details[:-1], "incomplete_final_sentence"),
+        (details + " Это ведущий источник.", "unsupported_prestige_claim"),
+    ]:
+        changed = json.loads(json.dumps(output, ensure_ascii=False))
+        changed["public_copy"]["paragraph_2"] = unsafe
+        assert expected in mod.validate_editorial_output(
+            changed, set(evidence_kinds), evidence_kinds=evidence_kinds, row=row,
+        )
+
+
+def test_vnext_rg_correction_fails_closed_before_regeneration(monkeypatch) -> None:
+    mod = load_module()
+    row = {
+        "post_url": (
+            "https://rg.ru/2025/09/16/reg-szfo/"
+            "kak-segodnia-vosstanavlivaiut-istoricheskie-doma-i-pamiatniki-v-rossijskom-eksklave.html"
+        ),
+        "source_profile_fingerprint": "rg-profile",
+    }
+    correction = {
+        "canonical_url": row["post_url"],
+        "recommended_action": "re_adjudicate_externality",
+        "reason_codes": [
+            "regional_local_edition", "local_correspondent", "federal_brand_not_sufficient",
+        ],
+        "requires_live_ydb_revalidation": True,
+        "review_status": "pending",
+    }
+    assert mod.candidate_correction_requires_re_adjudication(row, [correction]) is True
+    monkeypatch.setattr(
+        mod,
+        "build_draft_updates",
+        lambda *_args, **_kwargs: pytest.fail("RG correction must never reach regeneration"),
+    )
+    blocked = mod.correction_block_updates(row, correction)
+    assert blocked["publication_draft_backfill_status"] == "needs_externality_re_adjudication"
+    assert blocked["publication_draft_backfill_provider_call_count"] == 0
+    assert "publication_eligibility_verdict" not in blocked
+
+
+def test_final_candidate_cas_rejects_concurrent_live_change() -> None:
+    mod = load_module()
+    expected = {
+        "post_url": "https://t.me/source/1",
+        "publication_status": "gemini_accept",
+    }
+    row = {
+        **expected,
+        "_ydb_pk": "publication_candidate_item:one",
+        "_strong_read_expected_payload": dict(expected),
+    }
+
+    class Result:
+        def __init__(self, rows):
+            self.rows = rows
+
+    class Tx:
+        def execute(self, _query, _params, *, commit_tx):  # noqa: ARG002
+            current = {**expected, "operator_review_decision": "approved"}
+            return [Result([type("Row", (), {"payload_json": json.dumps(current)})()])]
+
+    class Session:
+        def prepare(self, query):
+            return query
+
+        def transaction(self, _mode):
+            return Tx()
+
+    class Pool:
+        def retry_operation_sync(self, op):
+            return op(Session())
+
+    class Ydb:
+        @staticmethod
+        def SerializableReadWrite():
+            return object()
+
+    with pytest.raises(RuntimeError, match="candidate_changed_since_strong_reread"):
+        mod.upsert_publication_row(
+            Pool(), Ydb(), "table", row, {"publication_draft_status": "ready"}
+        )
+
+
+def test_final_candidate_cas_catches_late_correction_and_writes_block() -> None:
+    mod = load_module()
+    expected = {
+        "post_url": "https://example.org/article",
+        "publication_status": "gemini_accept",
+        "source_profile_fingerprint": "profile-fp",
+    }
+    row = {
+        **expected,
+        "_ydb_pk": "publication_candidate_item:article",
+        "_strong_read_expected_payload": dict(expected),
+    }
+    correction = {
+        "canonical_url": expected["post_url"],
+        "recommended_action": "re_adjudicate_externality",
+        "review_status": "unreviewed",
+        "live_revalidation_status": "pending_live_revalidation",
+        "candidate_mutation_allowed": False,
+        "regeneration_allowed": False,
+        "reason_codes": ["regional_local_edition", "local_correspondent"],
+    }
+    writes: list[dict] = []
+
+    class Result:
+        def __init__(self, rows):
+            self.rows = rows
+
+    class Tx:
+        calls = 0
+
+        def execute(self, _query, params, *, commit_tx):
+            self.calls += 1
+            if self.calls == 1:
+                return [Result([type("Row", (), {"payload_json": json.dumps(expected)})()])]
+            if self.calls == 2:
+                item = type("Row", (), {
+                    "pk": "publisher_profile_candidate_correction_item:late",
+                    "payload_json": json.dumps(correction),
+                })()
+                return [Result([item])]
+            writes.append(json.loads(params["$payload_json"]))
+            assert commit_tx is True
+            return []
+
+    tx = Tx()
+
+    class Session:
+        def prepare(self, query):
+            return query
+
+        def transaction(self, _mode):
+            return tx
+
+    class Pool:
+        def retry_operation_sync(self, op):
+            return op(Session())
+
+    class Ydb:
+        @staticmethod
+        def SerializableReadWrite():
+            return object()
+
+    effective = mod.upsert_publication_row(
+        Pool(), Ydb(), "table", row,
+        {"publication_draft_status": "ready_for_operator_review"},
+    )
+    assert effective["publication_draft_backfill_status"] == "needs_externality_re_adjudication"
+    assert writes[0]["publication_draft_status"] == "blocked_externality_re_adjudication"
+    assert writes[0]["publication_status"] == "gemini_accept"
+
+
 def test_vk_fetch_requires_the_exact_wall_identity() -> None:
     mod = load_module()
     row = {"post_url": "https://vk.com/wall-10_20"}
@@ -279,23 +544,39 @@ def test_vk_fetch_requires_the_exact_wall_identity() -> None:
 
 
 def _valid_writer_output(mod):
-    p1 = (
-        "Петербургский автор смотрит на восток Калининградской области без привычного набора "
-        "открыточных остановок: его интересует, как повседневный городской ритм считывается "
-        "человеком с другим опытом путешествий и наблюдений за малыми городами."
-    )
-    p2 = (
-        "В публикации автор отмечает строгую геометрию улиц и восстановленные фрески, которые "
-        "меняют впечатление от обычной прогулки по Гусеву. Оригинал стоит открыть ради конкретных "
-        "деталей маршрута и последовательного взгляда, не сводящего город к центральной площади."
-    )
+    hook = "В Гусеве строгая геометрия улиц выводит прогулку к восстановленным фрескам."
+    source_value = "Путевой канал собирает маршруты из личных наблюдений и проверяемых деталей дороги."
+    detail_1 = "Автор связывает фрески с повседневным ритмом малого города и порядком остановок."
+    detail_2 = "Маршрут продолжается за центральной площадью и сохраняет точные ориентиры прогулки."
+    p1 = f"{hook} {source_value}"
+    p2 = f"{detail_1} {detail_2}"
     return {
         "status": "draft_ready",
         "public_copy": {"paragraph_1": p1, "paragraph_2": p2},
         "grounding_map": [
-            {"sentence_index": 1, "sentence_text": p1, "claim_type": "source_profile_fact", "evidence_ids": ["source.name"], "third_person_maintained": True},
-            {"sentence_index": 2, "sentence_text": p2, "claim_type": "content_fact", "evidence_ids": ["content.exact_text"], "third_person_maintained": True},
+            {"paragraph_index": 1, "sentence_index": 1, "sentence_text": hook, "claim_type": "content_fact", "evidence_ids": ["content.exact_text"], "third_person_maintained": True},
+            {"paragraph_index": 1, "sentence_index": 2, "sentence_text": source_value, "claim_type": "source_profile_fact", "evidence_ids": ["source.name"], "third_person_maintained": True},
+            {"paragraph_index": 2, "sentence_index": 1, "sentence_text": detail_1, "claim_type": "content_fact", "evidence_ids": ["content.exact_text"], "third_person_maintained": True},
+            {"paragraph_index": 2, "sentence_index": 2, "sentence_text": detail_2, "claim_type": "content_fact", "evidence_ids": ["content.exact_text"], "third_person_maintained": True},
         ],
+    }
+
+
+def _ready_profile_row(**values):
+    paragraph = "Путевой канал собирает маршруты из личных наблюдений и проверяемых деталей дороги."
+    profile = {
+        "profile_status": "ready",
+        "profile_fingerprint": "profile-fp",
+        "profile_summary": paragraph,
+    }
+    return {
+        "source_onboarding_status": "ready",
+        "source_onboarding_paragraph": paragraph,
+        "source_onboarding_profile_fingerprint": "profile-fp",
+        "source_profile_fingerprint": "profile-fp",
+        "_live_source_profile_fingerprint": "profile-fp",
+        "_source_onboarding_profile": profile,
+        **values,
     }
 
 
@@ -350,36 +631,34 @@ def test_validator_checks_exact_rendered_caption_length_when_row_is_available() 
     violations = mod.validate_editorial_output(
         output, {"source.name", "content.exact_text"}, row=row,
     )
-    assert "caption_visible_length:545" in violations
-
-    output["public_copy"]["paragraph_2"] += (
-        " Автор также объясняет, как эти наблюдения складываются в цельный маршрут прогулки."
-    )
     assert not any(
         item.startswith("caption_visible_length:")
-        for item in mod.validate_editorial_output(
-            output, {"source.name", "content.exact_text"}, row=row,
-        )
+        for item in violations
     )
+    output["public_copy"]["paragraph_2"] += " " + ("Очень длинная деталь маршрута. " * 30)
+    long_violations = mod.validate_editorial_output(
+        output, {"source.name", "content.exact_text"}, row=row,
+    )
+    assert any(item.startswith("caption_visible_length:") for item in long_violations)
 
 
 def test_short_rendered_caption_gets_writer_retry_before_critic(monkeypatch) -> None:
     mod = load_module()
     short = _valid_writer_output(mod)
     short["_stage_status"] = "ok"
+    short["public_copy"]["paragraph_1"] = "Короткий хук. " + short["public_copy"]["paragraph_1"].split(". ", 1)[1]
     expanded = json.loads(json.dumps(short, ensure_ascii=False))
-    expanded["public_copy"]["paragraph_2"] += (
-        " Автор также объясняет, как эти наблюдения складываются в цельный маршрут прогулки."
-    )
+    expanded = _valid_writer_output(mod)
+    expanded["_stage_status"] = "ok"
     strategy = {
         "_stage_status": "ok", "status": "ready", "throughline_mode": "fresh_start",
         "used_history_urls": [], "visual_hook_evidence_ids": [],
     }
     critic = {"_stage_status": "ok", "status": "pass", "reason_codes": []}
-    row = {
+    row = _ready_profile_row(**{
         "post_url": "https://t.me/example/1", "source_title": "Внешнее издание",
         "publication_primary_image_url": "https://cdn.example.org/hero.jpg",
-    }
+    })
     evidence = mod.build_editorial_evidence(
         row, source_text="Подробный текст о прогулке по Гусеву."
     )
@@ -400,11 +679,8 @@ def test_short_rendered_caption_gets_writer_retry_before_critic(monkeypatch) -> 
     assert updates["publication_draft_generation_attempts"] == 2
     assert calls_seen[2]["stage"] == "writer"
     feedback = calls_seen[2]["payload"]["deterministic_feedback"]
-    assert "caption_visible_length:545" in feedback
-    repair = calls_seen[2]["payload"]["length_repair"]
-    assert repair["actual_visible_chars"] == 545
-    assert repair["target_visible_min_chars"] == 620
-    assert repair["required_added_editorial_chars"] == 75
+    assert "hook_length" in feedback
+    assert calls_seen[2]["payload"]["length_repair"] is None
 
 
 def test_second_short_writer_failure_preserves_stage_audit(monkeypatch) -> None:
@@ -415,10 +691,11 @@ def test_second_short_writer_failure_preserves_stage_audit(monkeypatch) -> None:
         "_stage_status": "ok", "status": "ready", "throughline_mode": "fresh_start",
         "used_history_urls": [], "visual_hook_evidence_ids": [],
     }
-    row = {
+    row = _ready_profile_row(**{
         "post_url": "https://t.me/example/1", "source_title": "Внешнее издание",
         "publication_primary_image_url": "https://cdn.example.org/hero.jpg",
-    }
+    })
+    short["public_copy"]["paragraph_1"] = "Короткий хук. " + short["public_copy"]["paragraph_1"].split(". ", 1)[1]
     evidence = mod.build_editorial_evidence(
         row, source_text="Подробный текст о прогулке по Гусеву."
     )
@@ -451,7 +728,7 @@ def test_editorial_stage_pacing_waits_between_physical_provider_calls(monkeypatc
     assert sleeps == [4.5]
 
 
-def test_article_writer_must_ground_all_publisher_reader_brief_dimensions_in_first_paragraph() -> None:
+def test_article_writer_requires_all_publisher_reader_brief_dimensions_in_profile_input() -> None:
     mod = load_module()
     output = _valid_writer_output(mod)
     required = {
@@ -459,13 +736,11 @@ def test_article_writer_must_ground_all_publisher_reader_brief_dimensions_in_fir
         "source.publisher.intended_audience",
         "source.publisher.distinctive_value",
     }
-    evidence_ids = {"source.name", "content.exact_text", *required}
+    evidence_ids = {"source.name", "content.exact_text"}
     assert "missing_publisher_reader_brief" in mod.validate_editorial_output(
         output, evidence_ids, required_publisher_evidence_ids=required,
     )
-    output["grounding_map"][0]["paragraph_index"] = 1
-    output["grounding_map"][0]["evidence_ids"] = ["source.name", *sorted(required)]
-    output["grounding_map"][1]["paragraph_index"] = 2
+    evidence_ids.update(required)
     assert mod.validate_editorial_output(
         output, evidence_ids, required_publisher_evidence_ids=required,
     ) == []
@@ -498,9 +773,6 @@ def test_v9_writer_gets_one_style_retry_then_fails_closed(monkeypatch) -> None:
     mod = load_module()
     clean = _valid_writer_output(mod)
     clean["_stage_status"] = "ok"
-    clean["public_copy"]["paragraph_2"] += (
-        " Также автор объясняет, какие детали связывают отдельные точки прогулки в общий маршрут."
-    )
     banned = json.loads(json.dumps(clean, ensure_ascii=False))
     banned["public_copy"]["paragraph_2"] = (
         "В публикации автор показывает музей не как цепочку отдельных залов, а как цельный "
@@ -512,11 +784,16 @@ def test_v9_writer_gets_one_style_retry_then_fails_closed(monkeypatch) -> None:
         "used_history_urls": [], "visual_hook_evidence_ids": [],
     }
     critic = {"_stage_status": "ok", "status": "pass", "reason_codes": []}
-    row = {
+    dimensions = {
+        key: {"text": key, "evidence_ids": ["E1"]}
+        for key in mod.notify.PUBLISHER_READER_BRIEF_DIMENSIONS
+    }
+    row = _ready_profile_row(**{
         "post_url": "https://example.org/article", "source_title": "Внешнее издание",
         "content_origin_type": "editorial_publication",
         "publication_primary_image_url": "https://cdn.example.org/hero.jpg",
-    }
+        "source_onboarding_publisher_dimensions_json": json.dumps(dimensions),
+    })
     evidence = mod.build_editorial_evidence(row, source_text="Подробный текст о музейном маршруте.")
 
     sequence = iter([(strategy, True), (banned, True), (clean, True), (critic, True)])
@@ -553,7 +830,8 @@ def test_writer_prompt_uses_hard_numeric_caption_contract() -> None:
     mod = load_module()
     writer = json.loads(mod._stage_prompt("writer", {"visible_caption_contract": {"min_chars": 550}}))
     assert writer["output"]["public_copy"] == {
-        "paragraph_1": "260-420 chars", "paragraph_2": "260-420 chars",
+        "paragraph_1": "exactly 2 sentences: 45-110 char content hook, then compact source value",
+        "paragraph_2": "1-2 concrete content-detail sentences",
     }
     assert any("hard output schema" in rule for rule in writer["rules"])
     assert any("required_added_editorial_chars" in rule for rule in writer["rules"])
@@ -813,11 +1091,11 @@ def test_legacy_review_is_archived_but_never_approves_v8_revision(monkeypatch) -
         "publication_draft_input_fingerprint": "new-v8",
     }
     monkeypatch.setattr(mod, "generate_editorial_draft", lambda *_args, **_kwargs: (generated, 0))
-    row = {
+    row = _ready_profile_row(**{
         "post_url": "https://t.me/a/1", "publication_draft_prompt_version": "region_talk_final_verifier_v7_grounded_draft",
         "operator_review_fingerprint": "old-fp", "operator_review_decision": "approved",
         "operator_review_rewrite_status": "rewrite_requested",
-    }
+    })
     updates, _called = mod.build_draft_updates(
         row, text="Исходный текст", fetched={}, source_transport="telethon_discovery2",
         intake=None, history=[], model="test", default_env="KEY", budget=object(),
@@ -853,12 +1131,13 @@ def test_provider_budget_exhaustion_defers_without_uncontrolled_call(monkeypatch
         "get_region_talk_llm_gateway",
         lambda *_args: (_ for _ in ()).throw(AssertionError("provider must not be called")),
     )
+    row = _ready_profile_row(post_url="https://t.me/a/1", source_title="Автор")
     evidence = mod.build_editorial_evidence(
-        {"post_url": "https://t.me/a/1", "source_title": "Автор"},
+        row,
         source_text="Автор подробно описывает прогулку по Гусеву.",
     )
     updates, calls = mod.generate_editorial_draft(
-        {"post_url": "https://t.me/a/1", "source_title": "Автор"},
+        row,
         evidence_pack=evidence,
         history=[],
         model="test-model",

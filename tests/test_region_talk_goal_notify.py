@@ -28,6 +28,26 @@ def load_module():
     return module
 
 
+def _vnext_paragraphs() -> tuple[str, str]:
+    return (
+        "В Гусеве строгая геометрия улиц выводит прогулку к восстановленным фрескам. "
+        "Авторский канал собирает маршруты из личных наблюдений и точных деталей дороги.",
+        "Автор связывает фрески с повседневным ритмом города и порядком остановок. "
+        "Маршрут продолжается за центральной площадью и сохраняет ясные ориентиры прогулки.",
+    )
+
+
+def _vnext_profile_fields() -> dict[str, object]:
+    return {
+        "source_profile_fingerprint": "profile-fp",
+        "source_onboarding_profile_fingerprint": "profile-fp",
+        "source_onboarding_status": "ready",
+        "source_onboarding_paragraph": (
+            "Авторский канал собирает маршруты из личных наблюдений и точных деталей дороги."
+        ),
+    }
+
+
 class RegionTalkGoalNotifyTests(unittest.TestCase):
     def test_functional_notifier_uses_only_role_scoped_discovery_sessions(self) -> None:
         mod = load_module()
@@ -106,16 +126,7 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
 
     def test_only_current_eligibility_attested_confirmed_rows_are_sendable(self) -> None:
         mod = load_module()
-        p1 = (
-            "Петербургский автор внимательно исследует повседневный ритм города и собирает маршрут "
-            "из наблюдений за улицами, площадями и привычками жителей. Такой внешний взгляд помогает "
-            "увидеть знакомое пространство с новой точки и сохраняет авторскую интонацию источника."
-        )
-        p2 = (
-            "В публикации подробно описаны геометрия улиц, восстановленные фрески и последовательность "
-            "прогулки. Оригинал стоит открыть ради конкретных деталей и цельной фотосерии, которая "
-            "показывает обычную городскую жизнь далеко за пределами центральной площади и соседних районов."
-        )
+        p1, p2 = _vnext_paragraphs()
         base = {
             "publication_candidate_status": "llm_confirmed",
             "publication_status": "gemini_accept",
@@ -138,6 +149,8 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
             "publication_draft_contract_version": mod.EDITORIAL_OUTPUT_CONTRACT,
             "publication_media_materialization_status": "fallback",
             "publication_media_materialization_contract_version": mod.MEDIA_MATERIALIZATION_CONTRACT_VERSION,
+            "post_url": "https://t.me/a/1",
+            **_vnext_profile_fields(),
         }
         self.assertTrue(mod.is_confirmed_publication(signed))
         self.assertTrue(mod.is_unsent_confirmed_publication(signed))
@@ -160,7 +173,7 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertTrue(mod.is_unsent_confirmed_publication({
             **acknowledged,
             "publication_draft_telegram_text": acknowledged["publication_draft_telegram_text"].replace(
-                "цельной фотосерии", "обновлённой цельной фотосерии"
+                "ясные ориентиры", "обновлённые ясные ориентиры"
             ),
         }))
         self.assertFalse(mod.is_unsent_confirmed_publication({**signed, "publication_draft_vk_text": ""}))
@@ -181,17 +194,7 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
 
     def test_v8_caption_and_media_are_one_exact_review_revision(self) -> None:
         mod = load_module()
-        p1 = (
-            "Петербургский автор смотрит на восток Калининградской области без привычного набора "
-            "открыточных остановок: его интересует повседневный ритм малого города и взгляд "
-            "человека с другим опытом путешествий по регионам России."
-        )
-        p2 = (
-            "В публикации автор отмечает строгую геометрию улиц и восстановленные фрески, которые "
-            "меняют впечатление от прогулки по Гусеву. Оригинал стоит открыть ради конкретных "
-            "наблюдений и цельной фотосерии, не сводящей город к одной центральной площади и "
-            "показывающей обычную жизнь далеко за её пределами."
-        )
+        p1, p2 = _vnext_paragraphs()
         manifest = {
             "contract_version": mod.MEDIA_MATERIALIZATION_CONTRACT_VERSION,
             "mode": "article_hero", "status": "ready", "reason": "associated",
@@ -211,14 +214,12 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
             "publication_media_materialization_contract_version": mod.MEDIA_MATERIALIZATION_CONTRACT_VERSION,
             "publication_presentation_mode": "article_hero",
             "publication_presentation_manifest_json": json.dumps(manifest, ensure_ascii=False),
+            **_vnext_profile_fields(),
         }
         self.assertTrue(mod.is_publication_draft_ready(row))
         caption = mod.public_caption(row, html_mode=True)
         self.assertEqual(caption.count("\n\n"), 3)
-        self.assertIn(
-            '<b><a href="https://example.org/article">Источник публикации</a></b>',
-            caption,
-        )
+        self.assertIn('<b><a href="https://example.org/article">Подробнее — в оригинальной публикации</a></b>', caption)
         self.assertIn(
             '<b><a href="https://t.me/kalinigrad_visit">О Калининграде говорят</a></b>',
             caption,
@@ -256,8 +257,7 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
 
     def test_v8_candidate_message_does_not_count_long_hidden_href(self) -> None:
         mod = load_module()
-        p1 = "Внешнее издание рассматривает регион через профессиональную оптику и объясняет, почему этот взгляд заслуживает отдельного внимания читателя. " * 2
-        p2 = "Материал раскрывает конкретные детали и оставляет полный ход аргументации в оригинале; ссылка ведёт к основной фактуре публикации и продолжению авторской мысли. " * 2
+        p1, p2 = _vnext_paragraphs()
         long_url = "https://publisher.example/article?" + "tracking=" + "x" * 240
         manifest = {
             "mode": "article_hero", "status": "ready",
@@ -274,25 +274,59 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
             "publication_presentation_manifest_json": json.dumps(manifest, ensure_ascii=False),
         }
         message = mod.candidate_message(row)
-        self.assertIn('<b><a href="https://publisher.example/article?', message)
-        self.assertIn(">Источник публикации</a></b>", message)
+        self.assertIn('<b><a href="https://publisher.example/article">', message)
+        self.assertIn(">Подробнее — в оригинальной публикации</a></b>", message)
         self.assertIn('href="https://t.me/kalinigrad_visit"', message)
         self.assertNotIn("https://publisher.example\">", message)
 
     def test_footer_replacement_keeps_two_paragraphs_and_one_original_link(self) -> None:
         mod = load_module()
+        p1, p2 = _vnext_paragraphs()
         old = (
-            "Первый смысловой абзац.\n\nВторой смысловой абзац.\n\n"
+            f"{p1}\n\n{p2}\n\n"
             "Источник: Авторский канал\nОригинал: https://t.me/a/1"
         )
         repaired = mod.replace_publication_draft_footer(old, "https://t.me/a/1")
         self.assertEqual(repaired.count("https://t.me/a/1"), 1)
-        self.assertNotIn("Авторский канал", repaired)
+        self.assertNotIn("Источник: Авторский канал", repaired)
         self.assertNotIn("Оригинал", repaired)
         self.assertTrue(repaired.endswith(
-            "Источник публикации: https://t.me/a/1\n\n"
+            "Подробнее — в оригинальной публикации: https://t.me/a/1\n\n"
             "О Калининграде говорят: https://t.me/kalinigrad_visit"
         ))
+
+    def test_vnext_renderer_selects_one_source_aware_cta_and_one_channel_footer(self) -> None:
+        mod = load_module()
+        cases = [
+            ({"content_origin_type": "social", "source_onboarding_entity_type": "person", "source_title": "Анна"}, "Подробнее — у автора Анны"),
+            ({"content_origin_type": "social", "source_onboarding_entity_type": "thematic_channel", "source_title": "Море рядом"}, "Подробнее — в канале «Море рядом»"),
+            ({"content_origin_type": "social", "source_profile_kind": "blog", "source_title": "Umka Blog"}, "Подробнее — в блоге Umka Blog"),
+            ({"content_origin_type": "editorial_publication", "source_onboarding_entity_type": "media_brand", "source_title": "Архи.ру"}, "Подробнее — в статье на Архи.ру"),
+            ({"content_origin_type": "academic_publication", "source_onboarding_entity_type": "journal", "source_title": "Крестьяноведение"}, "Подробнее — в статье журнала «Крестьяноведение»"),
+            ({"content_origin_type": "social", "source_title": ""}, "Подробнее — в оригинальной публикации"),
+        ]
+        for fields, expected in cases:
+            row = {"post_url": "https://example.org/original", **fields}
+            label, url, _kind = mod.publication_source_cta(row)
+            self.assertEqual(label, expected)
+            self.assertEqual(url, row["post_url"])
+            footer = mod.publication_footer_plain(row)
+            self.assertEqual(footer.count(row["post_url"]), 1)
+            self.assertEqual(footer.count(mod.REGION_TALK_PUBLIC_CHANNEL_URL), 1)
+            self.assertTrue(footer.startswith(expected + ": "))
+
+    def test_vnext_readiness_requires_profile_fingerprint_and_rejects_correction_block(self) -> None:
+        mod = load_module()
+        self.assertEqual(len(mod.editorial_sentences(
+            "В Балтийске гавань выводит прогулку к старому маяку и длинному молу. "
+            "Archi.ru объясняет архитектуру через устройство проектов."
+        )), 2)
+        self.assertTrue(mod.candidate_has_pending_correction({
+            "externality_re_adjudication_status": "pending",
+        }))
+        self.assertFalse(mod.candidate_has_pending_correction({
+            "externality_re_adjudication_status": "approved_external",
+        }))
 
     def test_v9_style_guard_detects_not_a_family_without_crossing_sentences(self) -> None:
         mod = load_module()
@@ -354,17 +388,7 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
 
     def test_article_readiness_requires_grounded_publisher_reader_brief(self) -> None:
         mod = load_module()
-        p1 = (
-            "Профильное архитектурное издание публикует проектные разборы для архитекторов, "
-            "урбанистов и читателей, которые хотят понимать устройство современной среды. "
-            "Его материалы связывают профессиональные решения с опытом посетителя и города."
-        )
-        p2 = (
-            "В текущей статье автор прослеживает маршрут по музейному корпусу, устройство "
-            "аквариумов и работу навигации. Оригинал полезен подробными фотографиями, планами "
-            "и последовательным объяснением архитектурной концепции калининградского объекта. "
-            "Материал показывает логику проекта на конкретных пространственных решениях."
-        )
+        p1, p2 = _vnext_paragraphs()
         dimensions = {
             key: {"text": key, "evidence_ids": ["E1"]}
             for key in mod.PUBLISHER_READER_BRIEF_DIMENSIONS
@@ -389,6 +413,8 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
             "source_onboarding_publisher_dimensions_status": "ready",
             "source_onboarding_publisher_dimensions_json": json.dumps(dimensions, ensure_ascii=False),
             "source_onboarding_summary_kind": mod.PUBLISHER_READER_BRIEF_KIND,
+            "source_profile_fingerprint": "profile-fp",
+            "source_onboarding_profile_fingerprint": "profile-fp",
         }
         self.assertTrue(mod.is_publication_draft_ready(row))
         row.pop("source_onboarding_publisher_dimensions_json")
