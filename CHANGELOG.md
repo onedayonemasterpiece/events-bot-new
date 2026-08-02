@@ -7,7 +7,9 @@
   cache by profile/digest and emit sanitized fault/route evidence; the focus OTP
   harness can now require direct-Supabase outage with exactly one relay
   issue/verify/registration. Production and secret-candidate builds reject the
-  fault flags and scan artifacts to keep the injector physically absent.
+  fault flags and scan artifacts to keep the injector physically absent. The
+  resilient-client CI command now enables Node type stripping for both test
+  groups so its TypeScript imports also work on the pinned Node 22 runner.
 
 - Changed iOS Safari OTP preflight to create a native-first Safari session,
   enable XCUITest `respectSystemAlerts`, close the bounded first-run sheet, and

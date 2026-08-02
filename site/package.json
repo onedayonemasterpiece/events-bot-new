@@ -37,7 +37,7 @@
     "test:external-focus-email-otp": "node --test tests/external-focus-email-otp/*.test.mjs",
     "e2e:external-focus-email-otp": "node e2e/focus-email/run.mjs",
     "astro": "astro",
-    "test:resilient-client": "node --experimental-strip-types --test src/lib/resilientSupabaseTransport.test.ts tests/resilient-data-storage.test.mjs tests/supabase-runtime-gate.test.mjs && node --test tests/search-recovery.test.mjs tests/static-site-auth.test.mjs tests/pwa-install.test.mjs",
+    "test:resilient-client": "node --experimental-strip-types --test src/lib/resilientSupabaseTransport.test.ts tests/resilient-data-storage.test.mjs tests/supabase-runtime-gate.test.mjs && node --experimental-strip-types --test tests/search-recovery.test.mjs tests/static-site-auth.test.mjs tests/pwa-install.test.mjs",
     "test:transport-faults": "node --experimental-strip-types --test src/lib/transportFaultInjector.test.ts && node --test scripts/transport-fault-build-contract.test.mjs"
   },
   "dependencies": {
