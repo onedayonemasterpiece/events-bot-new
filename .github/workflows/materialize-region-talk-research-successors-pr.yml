@@ -41,6 +41,16 @@ jobs:
           scripts = [step['run'] for step in steps if isinstance(step, dict) and step.get('run')]
           if len(scripts) != 5:
               raise SystemExit(f'unexpected materializer run-step count: {len(scripts)}')
+
+          old_assert = 'len(report.get("valid") or [])'
+          new_assert = 'len(report.get("valid_ids") or [])'
+          replacement_count = sum(script.count(old_assert) for script in scripts)
+          if replacement_count != 1:
+              raise SystemExit(
+                  f'unexpected importer-report assertion count: {replacement_count}'
+              )
+          scripts = [script.replace(old_assert, new_assert) for script in scripts]
+
           for index, script in enumerate(scripts, start=1):
               print(f'::group::materializer run step {index}')
               subprocess.run(script, shell=True, executable='/bin/bash', check=True)
