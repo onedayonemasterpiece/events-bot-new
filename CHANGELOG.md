@@ -8,6 +8,10 @@
   the requested source even when it was scanned recently. A stale priority-lane
   label without current request booleans cannot reopen the capture. This changes
   neither candidate review state nor publication permission.
+- Added an explicit Region Talk capture-only recovery mode that stops after
+  bounded role-scoped source capture and its YDB receipt, with zero semantic
+  scoring, embeddings, image-queue work or publication effect. Scheduled
+  CandidateReport runs retain the normal full-report default.
 - Added fail-closed Region Talk source-profile recovery before Writer: bounded
   Telegram/VK description+pinned+30–80-post capture with stable fingerprints,
   reusable social profiles and separate profile/writer budgets; exact-byte

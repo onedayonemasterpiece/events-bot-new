@@ -470,6 +470,47 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual([seed.canonical_url for seed in selected], [pending.canonical_url])
         self.assertNotEqual(mod.source_queue_priority_bucket(queue["telegram:stalecapture"]), -3)
 
+    def test_capture_only_run_stops_before_semantic_report(self) -> None:
+        mod = load_module()
+        seed = self._seed(mod, "@captureonly", seed_id="capture_only")
+        source_row = {
+            "canonical_source_key": "telegram:captureonly",
+            "source_profile_capture_status": "ready",
+            "source_profile_capture_persistence_status": "new",
+        }
+
+        with tempfile.TemporaryDirectory() as td, mock.patch.dict(os.environ, {
+            "REGION_TALK_SOURCE_PROFILE_CAPTURE_ONLY": "1",
+            "REGION_TALK_OUTPUT_DIR": td,
+            "REGION_TALK_DRY_RUN": "1",
+            "REGION_TALK_DISABLE_PUBLISH": "1",
+        }, clear=False), mock.patch.object(mod, "load_dotenv"), mock.patch.object(
+            mod, "load_split_runtime_from_kaggle_input", return_value={"run_id": "capture-only-test", "env": {}}
+        ), mock.patch.object(mod, "validate_required_ydb_runtime_credential"), mock.patch.object(
+            mod, "start_region_talk_stack_watchdog"
+        ), mock.patch.object(mod, "find_seed_file", return_value=Path(td) / "seeds.csv"), mock.patch.object(
+            mod, "load_seeds", return_value=[seed]
+        ), mock.patch.object(mod, "ydb_config_status", return_value={"missing": ""}), mock.patch.object(
+            mod, "load_region_talk_state", return_value=({}, {"ydb_read_status": "ok"})
+        ), mock.patch.object(
+            mod, "fetch_telegram_posts", new=mock.AsyncMock(return_value=([source_row], [{"post_url": "https://t.me/captureonly/1"}]))
+        ), mock.patch.object(mod, "build_report") as build_report, mock.patch.object(
+            mod, "close_region_talk_runtime_clients"
+        ):
+            old_cwd = Path.cwd()
+            try:
+                os.chdir(td)
+                rc = asyncio.run(mod.amain())
+                result = json.loads((Path(td) / "output.json").read_text(encoding="utf-8"))
+            finally:
+                os.chdir(old_cwd)
+
+        self.assertEqual(rc, 0)
+        build_report.assert_not_called()
+        self.assertEqual(result["summary"]["capture_ready"], 1)
+        self.assertEqual(result["summary"]["posts_scored"], 0)
+        self.assertEqual(result["summary"]["publication_effect"], "none")
+
     def test_confirmed_blogger_history_slots_are_balanced_between_telegram_and_vk(self) -> None:
         mod = load_module()
         tg = self._seed(mod, "@evidencetg", seed_id="evidence_tg")
