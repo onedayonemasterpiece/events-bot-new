@@ -900,6 +900,7 @@ def route_collection_adjudication_reasons(
     broad_audience_text_signal = bool(
         re.search(
             r"(?iu)(?:\bдля\s+(?:детей|ребят|школьников|всей\s+семьи)\b|"
+            r"\bвсей\s+семьей\b|"
             r"\bдетск\w*\s+(?:спектакл\w*|шоу|заняти\w*|мастер-класс\w*)\b|"
             r"\bдетям\s+и\s+взрослым\b|\bродител\w*\s+(?:и|с)\s+дет\w*\b|"
             r"\bсемейн\w*\s+команд\w*\b|\bвместе\s+с\s+ребенк\w*\b)",

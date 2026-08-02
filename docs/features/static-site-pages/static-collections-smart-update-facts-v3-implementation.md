@@ -9,6 +9,14 @@ Unit/contracts проходят, однако обязательный primary-o
 не выполнялись. Фактическая приёмка и выявленные provisional-data противоречия:
 [integration report](../../../.codex/integration/static-collection-facts-v3-INTEGRATION_REPORT.md).
 
+После коррекции PR-A seed добавлен отдельный offline Gate-B evaluator. Он не
+меняет prompt или model route, не вызывает LLM и не публикует labels: он
+fail-closed связывает primary-only report с точными seed/index/receipt/SQLite/git
+hashes и считает family-weighted recall только по high/keep/sufficient rows при
+минимуме `0.80`. В обычном Smart Update и backfill recall-router симметрично
+распознаёт нормализованную фразу `всей семьей` (включая исходное `ё`), но
+`приходите` и возрастной рейтинг сами по себе остаются unrouted.
+
 Stack base: `agent/static-collections-quality/pr-a-ontology` @
 `3164e984d04208fcff5618c49271a4633d304eab`.
 

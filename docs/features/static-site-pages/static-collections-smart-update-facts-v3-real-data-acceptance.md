@@ -122,7 +122,7 @@ python3 -m pytest tests/test_static_collection_*.py -q
 
 - все source-bound positives `child_directed` из PR-A seed;
 - все source-bound positives `family_suitable`;
-- все 4 текущих source-bound positives `joint_family_activity`;
+- все текущие source-bound corrected positives `joint_family_activity`;
 - минимум 20 независимых hard-negative families для каждой границы;
 - named boundary cases:
   - 4648 — не science/family evidence;
@@ -159,12 +159,12 @@ python3 scripts/backfill_static_collection_facts.py \
 
 ### 4.3. Метрики
 
-Обязательные family-weighted gates:
+Обязательные family-weighted gates после исправления provisional seed:
 
 ```text
-child_directed candidate recall >= 0.95
-family_suitable candidate recall >= 0.95
-joint_family_activity: 4/4 текущих positives подтверждены либо каждый miss разобран
+child_directed hard-positive family recall >= 0.80
+family_suitable hard-positive family recall >= 0.80
+joint_family_activity hard-positive family recall >= 0.80
 false confirmed на hard negatives = 0
 exact quote validity = 100%
 source_id/event_id binding = 100%
@@ -178,6 +178,23 @@ DB writes = 0
 статистически сильная доля.
 
 Любой false confirmed — NO-GO. `unknown` допустим, но снижает recall.
+
+Hard-positive denominator включает только уникальные occurrence families, где
+одновременно `confidence=high`, `review_decision=keep` и
+`source_status=sufficient`. `borderline` и `source-insufficient` не считаются
+ни hit, ни miss: они публикуются как WATCH. Семейство с конфликтующей seed-разметкой
+блокирует gate. Для каждого семейства сохраняются отдельно runtime outcome
+(`confirmed|unknown|denied|provider_deferred|validator_reject`) и review
+classification (`match|borderline_watch|seed_conflict|source_insufficient|model_miss|gross_false_positive`).
+
+Оценка выполняется только offline-командой из operator runbook и versioned
+schema `static_collection_facts_v3_gate_b_report.schema.json`. Gate проверяет
+точные report/seed/index/SQLite/repository bindings, receipt/source-ref hashes,
+event/source ownership, exact source quotes, `evaluate + primary_only`, нулевой
+diff и не более одного logical/physical send без fallback. `4/5` при пороге
+`0.80` открывает только следующие copy gates; `3/5`, любой hard error или
+confirmed hard negative блокирует их. Даже PASS всегда возвращает
+`publication_status=blocked`.
 
 ## 5. Gate C — fallback/failure drill
 

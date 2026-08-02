@@ -88,6 +88,38 @@ routed source, zero GPT-4o calls, exact quotes, zero hard-negative confirmations
 and the recall/count gates from the acceptance document. A provider-deferred
 row is not a positive hit.
 
+### Offline Gate-B evaluator
+
+The provider replay does not decide its own quality. Bind its immutable report
+to the corrected provisional seed, source-review index, repository revision and
+the exact SQLite bytes with the pure offline evaluator:
+
+```bash
+SHA="$(git rev-parse HEAD)"
+python3 scripts/evaluate_static_collection_facts_v3_gate_b.py \
+  --report "$PRIMARY_REPORT" \
+  --seed docs/review-data/static_collections_review_seed_v1.json \
+  --source-review-index docs/review-data/static-collections-source-reviews-v1/index.json \
+  --db "$DB" \
+  --minimum-recall 0.80 \
+  --expected-repo-sha "$SHA" \
+  --json-output "artifacts/static-collection-facts-v3/gate-b.json" \
+  --markdown-output "artifacts/static-collection-facts-v3/gate-b.md"
+```
+
+The evaluator opens SQLite as `mode=ro&immutable=1`, performs no provider call,
+and fails closed on stale cohorts, repository/DB/index/receipt/source hashes,
+source-to-event mismatches, non-exact quotes, fallback, more than one send,
+logical writes or a confirmed hard negative. Its output contract is
+`docs/review-data/static_collection_facts_v3_gate_b_report.schema.json`.
+
+Recall is occurrence-family weighted and uses only positive rows with all of:
+`confidence=high`, `review_decision=keep`, `source_status=sufficient`.
+Borderline and source-insufficient rows are WATCH-only and excluded from the
+denominator. Every audience label must reach `0.80`; `4/5` passes and `3/5`
+blocks. A pass opens only the production-copy gates below. Semantic publication
+remains blocked.
+
 ## 4. Apply and warm replay
 
 Run only after primary replay and the separate fallback drill pass. Work on a

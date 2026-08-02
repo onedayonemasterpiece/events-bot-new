@@ -139,3 +139,38 @@ lanes:
     effort: high
     status: completed
     acceptance_status: blocked_no_go_at_primary_real_data
+  - id: static-collection-product-loop-facts
+    role: worker
+    requirement_ids: [R3, R4, R5, R6]
+    target: corrected-seed Gate-B evaluator, router parity, focused CI and canonical handoff
+    depends_on: [facts-v3-integrator]
+    execution_mode: serial_isolated_worktree
+    branch: agent/static-collection-product-loop/facts-gate-ci-router
+    base_sha: dded795fe1dc87acf4f17fff1b4e3d67f093b000
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collection-facts-v3-core
+    writable_files:
+      - scripts/evaluate_static_collection_facts_v3_gate_b.py
+      - docs/review-data/static_collection_facts_v3_gate_b_report.schema.json
+      - tests/test_static_collection_facts_backfill_report.py
+      - smart_event_update.py
+      - scripts/backfill_static_collection_facts.py
+      - tests/test_smart_event_update.py
+      - tests/test_static_collection_backfills.py
+      - .github/workflows/static-collections-quality-e2e.yml
+      - docs/features/static-site-pages/**facts-v3**
+      - docs/operations/static-collection-facts-v3.md
+      - docs/operations/e2e-scenarios.md
+      - CHANGELOG.md
+      - .codex/lanes/static-collection-facts-v3/LANE_MAP.yml
+      - .codex/lanes/static-collection-product-loop-facts/RESULTS.md
+    forbidden_files:
+      - facts-v3 prompt or semantic inference contract
+      - site/src/**
+      - site/scripts/static_collection_prototypes.v1.json
+      - cinema sources
+      - festival extraction/pages
+    expected_output: committed pure offline Gate-B contract with exact five-file CI suite
+    verification_scope: full_focused_offline
+    effort: high
+    status: completed
+    acceptance_status: copy_gate_evaluator_ready_real_replay_not_claimed_publication_blocked

@@ -8,6 +8,15 @@ on:
       - "docs/review-data/**"
       - "scripts/validate_static_collections_quality.py"
       - "scripts/build_static_collections_review_seed.py"
+      - "scripts/backfill_static_collection_facts.py"
+      - "scripts/evaluate_static_collection_facts_v3_gate_b.py"
+      - "smart_event_update.py"
+      - "google_ai/client.py"
+      - "tests/test_smart_event_update.py"
+      - "tests/test_event_update_merge.py"
+      - "tests/test_google_ai_client.py"
+      - "tests/test_static_collection_backfills.py"
+      - "tests/test_static_collection_facts_backfill_report.py"
       - "site/scripts/static_collection_*.json"
       - "site/scripts/static_collection_*.py"
       - "site/scripts/static_event_bge.py"
@@ -25,6 +34,15 @@ on:
       - "docs/review-data/**"
       - "scripts/validate_static_collections_quality.py"
       - "scripts/build_static_collections_review_seed.py"
+      - "scripts/backfill_static_collection_facts.py"
+      - "scripts/evaluate_static_collection_facts_v3_gate_b.py"
+      - "smart_event_update.py"
+      - "google_ai/client.py"
+      - "tests/test_smart_event_update.py"
+      - "tests/test_event_update_merge.py"
+      - "tests/test_google_ai_client.py"
+      - "tests/test_static_collection_backfills.py"
+      - "tests/test_static_collection_facts_backfill_report.py"
       - "site/scripts/static_collection_*.json"
       - "site/scripts/static_collection_*.py"
       - "site/scripts/static_event_bge.py"
@@ -55,6 +73,38 @@ permissions:
   contents: read
 
 jobs:
+  facts-v3:
+    name: facts-v3 offline contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SMART_UPDATE_LLM_DISABLED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+
+      - name: Validate Gate-B schema and run exact facts-v3 suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m json.tool docs/review-data/static_collection_facts_v3_gate_b_report.schema.json >/dev/null
+          python -m py_compile scripts/evaluate_static_collection_facts_v3_gate_b.py
+          python -m pytest -q \
+            tests/test_smart_event_update.py \
+            tests/test_event_update_merge.py \
+            tests/test_google_ai_client.py \
+            tests/test_static_collection_backfills.py \
+            tests/test_static_collection_facts_backfill_report.py
+
   contract:
     name: contract
     runs-on: ubuntu-latest
@@ -265,6 +315,7 @@ jobs:
     name: gate
     if: always()
     needs:
+      - facts-v3
       - contract
       - browser
     runs-on: ubuntu-latest
@@ -273,11 +324,17 @@ jobs:
         shell: bash
         env:
           CONTRACT_RESULT: ${{ needs.contract.result }}
+          FACTS_V3_RESULT: ${{ needs.facts-v3.result }}
           BROWSER_RESULT: ${{ needs.browser.result }}
         run: |
           set -euo pipefail
           echo "Contract result: $CONTRACT_RESULT"
+          echo "Facts v3 result: $FACTS_V3_RESULT"
           echo "Browser result: $BROWSER_RESULT"
+          if [[ "$FACTS_V3_RESULT" != "success" ]]; then
+            echo "::error::Static collection facts-v3 offline contract failed"
+            exit 1
+          fi
           if [[ "$CONTRACT_RESULT" != "success" ]]; then
             echo "::error::Static collections contract validation failed"
             exit 1

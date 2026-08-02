@@ -129,6 +129,13 @@ def test_production_router_covers_corrections_and_signal_candidates_not_ticket_s
     assert route_collection_adjudication_reasons(
         _candidate(source_text="Родители и дети вместе создадут общую работу.")
     ) == ["audience"]
+    for spelling in ("Приходите всей семьёй", "Приходите всей семьей"):
+        assert route_collection_adjudication_reasons(
+            _candidate(source_text=spelling)
+        ) == ["audience"]
+    assert route_collection_adjudication_reasons(
+        _candidate(source_text="Приходите на концерт")
+    ) == []
 
     paid_correction_target = Event(
         id=7,

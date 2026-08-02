@@ -68,6 +68,15 @@ def test_fact_backfill_routes_only_current_high_recall_candidates():
         ),
         enabled_reasons={"audience"},
     ) == ("audience",)
+    for spelling in ("Приходите всей семьёй", "Приходите всей семьей"):
+        assert fact_backfill.route_backfill_reasons(
+            _event(id=9, topics=[], is_free=False, source_text=spelling),
+            enabled_reasons={"audience"},
+        ) == ("audience",)
+    assert fact_backfill.route_backfill_reasons(
+        _event(id=10, topics=[], is_free=False, source_text="Приходите"),
+        enabled_reasons={"audience"},
+    ) == ()
 
 
 def test_fact_backfill_prefers_trust_then_recency_and_builds_source_bound_candidate():

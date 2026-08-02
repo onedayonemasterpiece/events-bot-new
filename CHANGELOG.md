@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Added a pure offline facts-v3 Gate-B evaluator and versioned result schema:
+  corrected seed, source-review receipts, immutable SQLite and exact git/report
+  cohorts are hash-bound before occurrence-family recall is calculated. The
+  `0.80` high/keep/sufficient gate blocks hard-negative confirmations and keeps
+  semantic publication blocked. Facts-v3 CI now runs the exact five-file suite;
+  Smart Update/backfill routing also recognizes normalized `всей семьей`
+  without routing generic invitations or age-only copy.
 - Added the stacked Smart Update static-collection facts-v3 implementation:
   the existing single Gemma adjudication call now returns independent
   child-directed, family-suitable and joint-family facts with exact persisted

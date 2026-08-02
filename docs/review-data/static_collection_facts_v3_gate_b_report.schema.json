@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenigevents.ru/schemas/static-collection-facts-v3-gate-b-report-v1.json",
+  "title": "Static collection facts v3 Gate-B evaluation",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "generated_at",
+    "status",
+    "copy_gates_allowed",
+    "publication_status",
+    "minimum_recall",
+    "hashes",
+    "db_quick_check",
+    "cohort",
+    "labels",
+    "errors",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": {"const": "static-collection-facts-v3-gate-b-report-v1"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "status": {"enum": ["pass", "blocked"]},
+    "copy_gates_allowed": {"type": "boolean"},
+    "publication_status": {"const": "blocked"},
+    "minimum_recall": {"type": "number", "minimum": 0, "maximum": 1},
+    "hashes": {
+      "type": "object",
+      "required": [
+        "report_file_sha256",
+        "seed_file_sha256",
+        "source_review_index_file_sha256",
+        "db_file_sha256",
+        "report_repo_sha",
+        "expected_repo_sha",
+        "current_repo_sha",
+        "seed_source_review_index_sha256",
+        "index_sha256",
+        "seed_source_snapshot_sha256",
+        "index_source_snapshot_sha256"
+      ],
+      "properties": {
+        "report_file_sha256": {"$ref": "#/$defs/sha256"},
+        "seed_file_sha256": {"$ref": "#/$defs/sha256"},
+        "source_review_index_file_sha256": {"$ref": "#/$defs/sha256"},
+        "db_file_sha256": {"$ref": "#/$defs/sha256"},
+        "report_repo_sha": {"type": "string"},
+        "expected_repo_sha": {"$ref": "#/$defs/gitSha"},
+        "current_repo_sha": {"$ref": "#/$defs/gitSha"},
+        "seed_source_review_index_sha256": {"type": "string"},
+        "index_sha256": {"type": "string"},
+        "seed_source_snapshot_sha256": {"type": "string"},
+        "index_source_snapshot_sha256": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "db_quick_check": {"const": "ok"},
+    "cohort": {
+      "type": "object",
+      "required": ["event_ids", "source_bindings"],
+      "properties": {
+        "event_ids": {"$ref": "#/$defs/idArray"},
+        "source_bindings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["event_id", "source_id"],
+            "properties": {
+              "event_id": {"type": "integer", "minimum": 1},
+              "source_id": {"type": "integer", "minimum": 1}
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "labels": {
+      "type": "object",
+      "required": ["child_directed", "family_suitable", "joint_family_activity"],
+      "properties": {
+        "child_directed": {"$ref": "#/$defs/labelEvaluation"},
+        "family_suitable": {"$ref": "#/$defs/labelEvaluation"},
+        "joint_family_activity": {"$ref": "#/$defs/labelEvaluation"}
+      },
+      "additionalProperties": false
+    },
+    "errors": {"$ref": "#/$defs/findingArray"},
+    "warnings": {"$ref": "#/$defs/findingArray"}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gitSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "idArray": {
+      "type": "array",
+      "items": {"type": "integer", "minimum": 1},
+      "uniqueItems": true
+    },
+    "findingArray": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {"type": "string", "minLength": 1},
+          "message": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": true
+      }
+    },
+    "countMap": {
+      "type": "object",
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    },
+    "labelEvaluation": {
+      "type": "object",
+      "required": [
+        "decision_key",
+        "eligible_positive_families",
+        "confirmed_eligible_families",
+        "recall",
+        "minimum_recall",
+        "threshold_pass",
+        "hard_negative_families",
+        "confirmed_hard_negative_families",
+        "runtime_outcomes",
+        "review_classifications",
+        "families"
+      ],
+      "properties": {
+        "decision_key": {"type": "string", "minLength": 1},
+        "eligible_positive_families": {"type": "integer", "minimum": 0},
+        "confirmed_eligible_families": {"type": "integer", "minimum": 0},
+        "recall": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "minimum_recall": {"type": "number", "minimum": 0, "maximum": 1},
+        "threshold_pass": {"type": "boolean"},
+        "hard_negative_families": {"type": "integer", "minimum": 0},
+        "confirmed_hard_negative_families": {"type": "integer", "minimum": 0},
+        "runtime_outcomes": {"$ref": "#/$defs/countMap"},
+        "review_classifications": {"$ref": "#/$defs/countMap"},
+        "families": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/familyEvaluation"}
+        }
+      },
+      "additionalProperties": false
+    },
+    "familyEvaluation": {
+      "type": "object",
+      "required": [
+        "family_id",
+        "side",
+        "event_ids",
+        "source_ids",
+        "confidence",
+        "review_decision",
+        "source_status",
+        "eligible_hard_positive",
+        "runtime_outcome",
+        "review_classification"
+      ],
+      "properties": {
+        "family_id": {"type": "string", "minLength": 1},
+        "side": {"enum": ["positive", "hard_negative", "seed_conflict"]},
+        "event_ids": {"$ref": "#/$defs/idArray"},
+        "source_ids": {"$ref": "#/$defs/idArray"},
+        "confidence": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "review_decision": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "source_status": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "eligible_hard_positive": {"type": "boolean"},
+        "runtime_outcome": {
+          "enum": ["confirmed", "unknown", "denied", "provider_deferred", "validator_reject"]
+        },
+        "review_classification": {
+          "enum": ["match", "borderline_watch", "seed_conflict", "source_insufficient", "model_miss", "gross_false_positive"]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
