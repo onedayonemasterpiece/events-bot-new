@@ -631,11 +631,14 @@ def build_editorial_evidence(
     required_publisher_evidence_ids: list[str] = []
     if content_lane(row) == "article":
         profile = row.get("_source_onboarding_profile") if isinstance(row.get("_source_onboarding_profile"), dict) else {}
-        publisher_dimensions = _json_value(
-            profile.get("publisher_dimensions_json")
-            or profile.get("profile_dimensions")
-            or row.get("source_onboarding_publisher_dimensions_json"),
-            {},
+        # Use the exact same normalized projection as the readiness gate.  The
+        # imported publisher sidecar deliberately stores strings/lists while
+        # older profiles store {text, evidence_ids} objects.  Reading the raw
+        # form here allowed a profile to pass readiness but silently omitted
+        # its three required Writer evidence IDs.
+        publisher_dimensions = normalized_publisher_dimensions(
+            profile,
+            fallback_row=row,
         )
         if isinstance(publisher_dimensions, dict):
             for key in ("outlet_identity", "intended_audience", "distinctive_value"):
