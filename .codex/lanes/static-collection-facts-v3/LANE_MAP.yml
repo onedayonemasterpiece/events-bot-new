@@ -1,0 +1,93 @@
+mode: serial_integrator_after_parallel_mapping
+repo: onedayonemasterpiece/events-bot-new
+base_ref: origin/agent/static-collections-quality/pr-a-ontology@3164e984d04208fcff5618c49271a4633d304eab
+base_branch: agent/static-collections-quality/pr-a-ontology
+docs_handoff_ref: origin/agent/static-collections-quality/smart-update-facts-v3-handoff@88629c5fffa43ac46d37eeac8219cb8d81dd4d78
+integration_branch: integration/static-collection-facts-v3
+global_constraints:
+  - evolve the existing collection_candidate_adjudication; no new LLM call
+  - primary gemma-4-31b-it; existing GPT-4o fallback only
+  - no Gemini Lite, new provider client or quota system
+  - no PR-B scoring or thresholds
+  - no Astro routes, navigation, sitemap or semantic publication
+  - no cinema-source or festival extraction/page changes
+  - production-copy gates precede any bounded Fly apply/deploy
+verification_owner: /root
+stop_conditions:
+  - false confirmed on a hard negative
+  - more than one collection LLM call per routed source
+  - provider call or DB write on warm replay
+  - event prose, identity or EventSource mutation during audience-only backfill
+  - provider/schema/quote failure erases accepted truth
+lanes:
+  - id: map-core-contract
+    role: planner
+    requirement_ids: [R01, R02, R03]
+    target: existing adjudication schema, prompt, validation, merge and legacy projection
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: exact call graph and minimal safe code change map
+    verification_scope: inspection_only
+    effort: high
+    status: planned
+  - id: map-backfill-tests
+    role: planner
+    requirement_ids: [R04, R05]
+    target: bounded facts backfill and existing test harness
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: CLI/data contract and regression test map
+    verification_scope: inspection_only
+    effort: medium
+    status: planned
+  - id: map-real-data-runtime
+    role: planner
+    requirement_ids: [R06, R07, R08, R09, R10]
+    target: production snapshot, primary/fallback replay, normal Smart Update and Fly canary paths
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: executable staged verification plan with safety gates
+    verification_scope: inspection_only
+    effort: high
+    status: planned
+  - id: facts-v3-integrator
+    role: worker
+    requirement_ids: [R11, R12]
+    target: coupled facts-v3 implementation, integration, evidence and release closure
+    depends_on: [map-core-contract, map-backfill-tests, map-real-data-runtime]
+    execution_mode: serial_after_dependency
+    branch: integration/static-collection-facts-v3
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collection-facts-v3
+    writable_files:
+      - smart_event_update.py
+      - scripts/backfill_static_collection_facts.py
+      - scripts/**static_collection_facts_v3**
+      - tests/**static_collection_facts**
+      - docs/features/static-site-pages/**facts-v3**
+      - docs/features/smart-event-update/README.md
+      - docs/operations/**static-collection-facts-v3**
+      - docs/operations/e2e-scenarios.md
+      - CHANGELOG.md
+      - .codex/lanes/static-collection-facts-v3/**
+      - .codex/integration/static-collection-facts-v3-INTEGRATION_REPORT.md
+    forbidden_files:
+      - site/src/**
+      - site/scripts/static_collection_prototypes.v1.json
+      - cinema sources
+      - festival extraction/pages
+    expected_output: separate stacked implementation PR with staged real-data and canary evidence
+    verification_scope: full_local
+    effort: high
+    status: planned
