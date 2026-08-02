@@ -1,0 +1,4 @@
+interface:
+  display_name: "KenigEvents Email Roundtrip"
+  short_description: "Send and receive controlled test email"
+  default_prompt: "Use $kenigevents-email-roundtrip to run a safe email delivery roundtrip and collect redacted evidence."

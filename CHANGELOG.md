@@ -19,6 +19,11 @@
   Calendar/ICS/Android-intent probes, a lab-scoped notification and push service
   worker, optional VAPID subscription diagnostics, 30-card IndexedDB/Cache
   Storage checks, Web Share/Clipboard fallbacks and a visible result log.
+- Added a reusable KenigEvents email roundtrip skill and read-only Yandex Mail
+  Trigger helper. Automated OTP/canary receipt now reuses the already-live
+  generated trigger address and private inbound envelope path instead of
+  treating a newly provisioned human mailbox as mandatory; the workflow fails
+  closed on duplicate codes and forbids CI access to the shared inbound bucket.
 - Fixed Region Talk article/social review footers: final captions now contain
   one link to the exact source post/material, a blank line and one
   `О Калининграде говорят` link to `@kalinigrad_visit`, with no
