@@ -33,6 +33,9 @@ jobs:
           cp docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-08-01-163142.json export/docs/features/region-talk-channel/
           cp scripts/region_talk_external_publication_import.py export/scripts/
           cp scripts/region_talk_external_publication_review.py export/scripts/
+          cp scripts/region_talk_external_research_request.py export/scripts/
+          cp scripts/region_talk_external_research_registry.py export/scripts/
+          cp scripts/region_talk_publisher_profile.py export/scripts/
           cp scripts/region_talk_orchestrator.py export/scripts/
           cp scripts/region_talk_scheduled_runner.py export/scripts/
           cp scripts/region_talk_publication_finalizer.py export/scripts/
