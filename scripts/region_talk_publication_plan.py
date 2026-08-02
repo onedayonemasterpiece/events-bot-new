@@ -69,11 +69,11 @@ def _read_current_kind_rows_complete(
         raise ValueError(f"unsafe YDB kind: {kind!r}")
     prefix = kind + ":"
     prefix_upper = kind + ";"
-    after = prefix
-    out: list[dict[str, Any]] = []
     page_size = min(500, max_rows + 1)
+
     def op(session: Any) -> list[dict[str, Any]]:
-        local_after = after
+        out: list[dict[str, Any]] = []
+        local_after = prefix
         tx = session.transaction(ydb.SnapshotReadOnly())
         try:
             while len(out) < max_rows + 1:
@@ -111,7 +111,7 @@ def _read_current_kind_rows_complete(
                 pass
             raise
 
-    pool.retry_operation_sync(op)
+    out = list(pool.retry_operation_sync(op) or [])
     if len(out) > max_rows:
         raise RuntimeError(f"publication plan current read truncated: {kind}")
     return out

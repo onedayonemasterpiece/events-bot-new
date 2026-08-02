@@ -332,14 +332,14 @@ def read_kind_rows(pool: Any, ydb: Any, table: str, kind: str, limit: int) -> li
 
     if not re.fullmatch(r"[A-Za-z0-9_:-]+", kind):
         raise ValueError(f"unsafe YDB kind: {kind!r}")
-    out: list[dict[str, Any]] = []
     max_items = max(1, int(limit))
     page_size = max(1, min(500, _env_int("REGION_TALK_YDB_SELECT_PAGE_SIZE", 200), max_items))
     prefix = kind + ":"
     prefix_upper = kind + ";"
-    after = prefix
+
     def op(session: Any) -> list[dict[str, Any]]:
-        local_after = after
+        out: list[dict[str, Any]] = []
+        local_after = prefix
         tx = session.transaction(ydb.SnapshotReadOnly())
         try:
             while len(out) < max_items:
@@ -377,8 +377,7 @@ def read_kind_rows(pool: Any, ydb: Any, table: str, kind: str, limit: int) -> li
                 pass
             raise
 
-    pool.retry_operation_sync(op)
-    return out
+    return list(pool.retry_operation_sync(op) or [])
 
 
 def read_text_vector_metric_rows(pool: Any, ydb: Any, table: str, limit: int) -> list[dict[str, Any]]:
