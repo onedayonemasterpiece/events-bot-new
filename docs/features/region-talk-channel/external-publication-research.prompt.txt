@@ -16,6 +16,8 @@ At the beginning of every run, before any search, fetch these exact stable publi
 https://static.kenigevents.ru/region-talk/external-publications/research-registry.json
 https://static.kenigevents.ru/region-talk/external-publications/result.schema.json
 
+Open both exact URLs without adding query parameters.
+
 The registry must be a strict JSON object with schema_version=region_talk_external_research_registry.v1. Require:
 - result_contract.schema_url equals the exact schema URL above;
 - result_contract.schema_version equals region_talk_external_research.v1;
