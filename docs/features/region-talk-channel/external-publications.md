@@ -359,6 +359,15 @@ three `source.publisher.*` evidence IDs into the Writer prompt and sentence
 grounding map; losing a dimension during projection fails closed rather than
 falling back to an unstructured profile summary.
 
+The article Writer may mention the reviewed visual row inside paragraph two
+only when the same sentence also carries a concrete `content_fact` evidence
+ID from the material. `visual.original_media` proves association, not the
+article detail itself; a purely visual sentence is omitted or rewritten by the
+LLM and never patched semantically by deterministic code. If Writer still
+violates this contract after its bounded retry, the row remains
+`needs_grounding_review`, and any Critic result from an older generation is
+cleared from the current audit projection.
+
 ### Article galleries and editorial image suitability
 
 External publications are not limited to a single OG preview. After the text
