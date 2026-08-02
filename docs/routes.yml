@@ -147,7 +147,7 @@ sections:
     incident_cherryflash_missing_true3d_bundle_2026_07_18: docs/reports/incidents/INC-2026-07-18-cherryflash-missing-true3d-bundle.md
     incident_vk_story_forward_wall_first_2026_06_05: docs/reports/incidents/INC-2026-06-05-vk-story-forward-wall-first.md
     incident_vk_posts_personal_author_2026_05_19: docs/reports/incidents/INC-2026-05-19-vk-posts-personal-author.md
-    incident_vk_retrospective_reschedule_wrong_postponement_2026_05_17: docs/reports/incidents/INC-2026-05-17-vk-retrospective-reschedule-wrong-postponement.md
+    incident_vk_retrospective_reschedule_wrong_postponement_2026_05_17: docs/reports/incidents/INC-2026-05-17-vk-retrospective-wrong-postponement.md
     incident_konb_cherryflash_render_lock_empty_selection_2026_05_18: docs/reports/incidents/INC-2026-05-18-konb-cherryflash-render-lock-and-empty-selection.md
     incident_tg_location_prose_cityjazz_recurrence_2026_05_16: docs/reports/incidents/INC-2026-05-16-tg-location-prose-cityjazz-recurrence.md
     incident_future_event_quality_regressions_2026_05_17: docs/reports/incidents/INC-2026-05-17-future-event-quality-regressions.md
@@ -367,6 +367,7 @@ features:
   static_site_pages:
     status: secret_candidate_pipeline_root_promotion_blocked
     docs: docs/features/static-site-pages/README.md
+    calendar_reminder_strategy: docs/features/static-site-pages/calendar-reminder-strategy.md
     collections_original_requirements: docs/features/static-site-pages/podborki.md
     collections_extraction_and_product_plan: docs/features/static-site-pages/podborki-to-be.md
     release_plan: docs/features/static-site-pages/release-plan.md
@@ -705,7 +706,7 @@ features:
       - scripts/backfill_event_age_ratings.py
       - scripts/evaluate_event_age_golden.py
       - kaggle/EventAgeBgeAssessment/event_age_bge_assessment.py
-      - site/scripts/export-production-preview-data.py
+      - site/scripts/export-production_preview_data.py
   event_media:
     status: implemented
     docs: docs/features/event-media/README.md
