@@ -565,6 +565,10 @@ def read_collection_semantic_receipt(config: dict) -> dict:
     shutil.copy2(batch_path, output_path)
     product_output_path = WORKING / 'static-collection-product-snapshot-v1.json'
     shutil.copy2(product_path, product_output_path)
+    product_quality = run_collection_product_quality(
+        config,
+        snapshot_path=product_output_path,
+    )
     return {
         'status': 'validated',
         'collection_batch_sha256': sha256_file(output_path),
@@ -575,7 +579,81 @@ def read_collection_semantic_receipt(config: dict) -> dict:
         'collection_product_input_fingerprint': product_snapshot.get('input_fingerprint'),
         'collection_product_normalized_output_sha256': product_snapshot.get('normalized_output_sha256'),
         'collection_product_provider_calls': product_snapshot.get('provider_calls'),
+        **product_quality,
     }
+
+
+def run_collection_product_quality(config: dict, *, snapshot_path: Path) -> dict:
+    """Evaluate the generated product projection inside the builder pipeline.
+
+    The monitor remains the single contract implementation: the builder loads
+    the already-staged checker and invokes its normal CLI entry point in
+    process.  WATCH is deliberately non-blocking; FAIL still fails the build
+    after all three evidence files have been written.
+    """
+
+    checker_path = SITE_DIR / 'scripts' / 'check_static_collections_product_quality.py'
+    if not checker_path.is_file():
+        raise RuntimeError('static collections product-quality checker is missing')
+    module_name = 'events_bot_static_collections_product_quality'
+    spec = importlib.util.spec_from_file_location(module_name, checker_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError('static collections product-quality checker cannot be loaded')
+    checker = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = checker
+    try:
+        spec.loader.exec_module(checker)
+    finally:
+        sys.modules.pop(module_name, None)
+
+    json_path = WORKING / 'static-collections-product-quality.json'
+    markdown_path = WORKING / 'static-collections-product-quality.md'
+    qa_summary_path = WORKING / 'qa-summary.json'
+    clock = config.get('build_clock') if isinstance(config.get('build_clock'), dict) else {}
+    today = str(clock.get('effective_date') or config.get('current_date') or '').strip()
+    args = [
+        '--snapshot', str(snapshot_path),
+        '--json-report', str(json_path),
+        '--markdown-report', str(markdown_path),
+    ]
+    if today:
+        args.extend(['--today', today])
+    exit_code = int(checker.main(args))
+    if not json_path.is_file() or not markdown_path.is_file():
+        raise RuntimeError('static collections product-quality reports are missing')
+    report = json.loads(json_path.read_text(encoding='utf-8'))
+    status = str(report.get('status') or '')
+    if status not in {'HEALTHY', 'WATCH', 'FAIL'}:
+        raise RuntimeError('static collections product-quality status is invalid')
+    qa_summary = {
+        'schema': 'static-site-qa-summary-v1',
+        'scenario': 'collections.product_quality',
+        'platform': 'static-site-builder',
+        'repo_sha': str(config.get('repo_sha') or '') or None,
+        'target': snapshot_path.name,
+        'outcome': 'PASS' if status in {'HEALTHY', 'WATCH'} and exit_code == 0 else 'FAIL',
+        'product_status': status,
+        'live_product_evaluated': True,
+        'watch_is_blocking': False,
+        'evidence_scope': 'generated_static_site_builder_snapshot',
+        'snapshot_sha256': sha256_file(snapshot_path),
+        'normalized_output_sha256': report.get('normalized_output_sha256'),
+        'quality_report_sha256': sha256_file(json_path),
+        'quality_markdown_sha256': sha256_file(markdown_path),
+    }
+    qa_summary_path.write_text(
+        json.dumps(qa_summary, ensure_ascii=False, indent=2) + '\n',
+        encoding='utf-8',
+    )
+    result = {
+        'collection_product_quality_status': status,
+        'collection_product_quality_report_sha256': sha256_file(json_path),
+        'collection_product_quality_markdown_sha256': sha256_file(markdown_path),
+        'collection_product_quality_qa_summary_sha256': sha256_file(qa_summary_path),
+    }
+    if exit_code != 0:
+        raise RuntimeError(f'static collections product-quality monitor failed: {status}')
+    return result
 
 
 def render_daily_service_share(config: dict, build_clock: dict) -> dict:

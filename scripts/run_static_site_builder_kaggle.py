@@ -188,12 +188,28 @@ def persist_semantic_outputs(
             ('unusual_events_last_good.json', args.unusual_last_good, 'last_good_sha256'),
         ])
     if collection_semantic_compute_required(args):
+        product_parent = Path(args.collection_product_snapshot).parent
         outputs.extend([
             ('collection-batch-v1.json', args.collection_batch, 'collection_batch_sha256'),
             (
                 'static-collection-product-snapshot-v1.json',
                 args.collection_product_snapshot,
                 'collection_product_snapshot_sha256',
+            ),
+            (
+                'static-collections-product-quality.json',
+                str(product_parent / 'static-collections-product-quality.json'),
+                'collection_product_quality_report_sha256',
+            ),
+            (
+                'static-collections-product-quality.md',
+                str(product_parent / 'static-collections-product-quality.md'),
+                'collection_product_quality_markdown_sha256',
+            ),
+            (
+                'qa-summary.json',
+                str(product_parent / 'qa-summary.json'),
+                'collection_product_quality_qa_summary_sha256',
             ),
             (
                 'collection-batch-last-good.json',
@@ -277,8 +293,20 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
                 or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('collection_product_input_fingerprint') or ''))
                 or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('collection_product_normalized_output_sha256') or ''))
                 or int(semantic.get('collection_product_provider_calls', -1)) != 0
+                or semantic.get('collection_product_quality_status') not in {'HEALTHY', 'WATCH'}
+                or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('collection_product_quality_report_sha256') or ''))
+                or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('collection_product_quality_markdown_sha256') or ''))
+                or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('collection_product_quality_qa_summary_sha256') or ''))
             ):
                 raise RuntimeError('Kaggle collection semantic result metadata mismatch')
+            for filename, hash_key in (
+                ('static-collections-product-quality.json', 'collection_product_quality_report_sha256'),
+                ('static-collections-product-quality.md', 'collection_product_quality_markdown_sha256'),
+                ('qa-summary.json', 'collection_product_quality_qa_summary_sha256'),
+            ):
+                report_path = out_dir / filename
+                if not report_path.is_file() or sha256_file(report_path) != semantic.get(hash_key):
+                    raise RuntimeError(f'Kaggle collection product-quality output mismatch: {filename}')
         elif args.related_mode == 'bge' or getattr(args, 'unusual_enabled', False):
             semantic = result.get('semantic')
             if (
@@ -378,6 +406,13 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
             service_share_renderer,
             staged_site / 'scripts' / service_share_renderer.name,
         )
+    collection_product_quality = ROOT / 'scripts' / 'check_static_collections_product_quality.py'
+    if not collection_product_quality.is_file():
+        raise FileNotFoundError(collection_product_quality)
+    shutil.copy2(
+        collection_product_quality,
+        staged_site / 'scripts' / collection_product_quality.name,
+    )
     if args.db and not args.export_in_kaggle:
         exporter = staged_site / 'scripts' / 'export-production-preview-data.py'
         cmd = [
