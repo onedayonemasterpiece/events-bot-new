@@ -1,27 +1,35 @@
-const HEALTH_PATH = '/auth/v1/health';
 const TELEMETRY_PATH = '/rest/v1/rpc/focus_auth_record_verification_v1';
+const CLIENT_OUTCOME_PATH = '/rest/v1/rpc/focus_auth_record_client_outcome_v1';
 
 function cancellation(entry) {
   return entry?.failure_class === 'request_cancelled';
 }
 
 export function summarizeRuntimeDiagnostics(entries = [], consoles = []) {
-  const healthSuccesses = entries.filter((entry) => entry.path === HEALTH_PATH
-    && Number(entry.status) >= 200 && Number(entry.status) < 300);
-  const expectedCancelled = entries.filter((entry) => entry.path === HEALTH_PATH
-    && cancellation(entry) && healthSuccesses.some((peer) => peer !== entry
-      && peer.host_class && entry.host_class && peer.host_class !== entry.host_class));
+  const successes = entries.filter((entry) => Number(entry.status) >= 200 && Number(entry.status) < 300);
+  const expectedCancelled = entries.filter((entry) => cancellation(entry)
+    && successes.some((peer) => peer !== entry && peer.path === entry.path
+      && String(peer.method || 'GET') === String(entry.method || 'GET')));
+  const clientOutcomeFailures = entries.filter((entry) => entry.path === CLIENT_OUTCOME_PATH
+    && (entry.failure_class || Number(entry.status) >= 400));
   const unexpectedNetwork = entries.filter((entry) => entry.failure_class
-    && !expectedCancelled.includes(entry));
+    && !expectedCancelled.includes(entry) && !clientOutcomeFailures.includes(entry));
   const httpFailures = entries.filter((entry) => Number(entry.status) >= 400);
   const telemetry403 = httpFailures.filter((entry) => entry.path === TELEMETRY_PATH && Number(entry.status) === 403);
-  const unexpectedHttp = httpFailures.filter((entry) => !telemetry403.includes(entry));
+  const unexpectedHttp = httpFailures.filter((entry) => !telemetry403.includes(entry)
+    && !clientOutcomeFailures.includes(entry));
   const warnings = [];
   if (telemetry403.length) warnings.push({
     code: 'BEST_EFFORT_AUTH_TELEMETRY_403',
     operation: 'focus_auth_record_verification_v1',
     status: 403,
     count: telemetry403.length,
+    policy: 'warning',
+  });
+  if (clientOutcomeFailures.length) warnings.push({
+    code: 'BEST_EFFORT_CLIENT_OUTCOME_UNAVAILABLE',
+    operation: 'focus_auth_record_client_outcome_v1',
+    count: clientOutcomeFailures.length,
     policy: 'warning',
   });
   const generic403Console = consoles.filter((item) => item?.type === 'error'
