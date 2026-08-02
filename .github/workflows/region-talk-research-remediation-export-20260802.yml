@@ -1,0 +1,42 @@
+name: Region Talk research remediation export
+
+on:
+  push:
+    branches:
+      - agent/region-talk-research-terminal-remediation-20260802
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/region-talk-research-terminal-remediation-20260802
+          fetch-depth: 1
+      - name: Assemble exact remediation inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p export/docs/features/region-talk-channel export/scripts export/tests export/.github/workflows
+          cp docs/features/region-talk-channel/external-publication-research.prompt.txt export/docs/features/region-talk-channel/
+          cp docs/features/region-talk-channel/external-publication-research.schema.json export/docs/features/region-talk-channel/
+          cp docs/features/region-talk-channel/external-publication-research-results.md export/docs/features/region-talk-channel/
+          cp docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-08-02-063020.json export/docs/features/region-talk-channel/
+          cp docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-08-02-063021.json export/docs/features/region-talk-channel/
+          cp docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-08-01-163142.json export/docs/features/region-talk-channel/
+          cp scripts/region_talk_external_publication_import.py export/scripts/
+          cp scripts/region_talk_external_publication_review.py export/scripts/
+          cp scripts/region_talk_orchestrator.py export/scripts/
+          cp scripts/region_talk_scheduled_runner.py export/scripts/
+          cp tests/test_region_talk_external_publication_import.py export/tests/
+          cp .github/workflows/region-talk-external-publication-auto-import.yml export/.github/workflows/
+          find export -type f -print0 | sort -z | xargs -0 sha256sum > export/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: region-talk-research-remediation-inputs-${{ github.sha }}
+          path: export
+          if-no-files-found: error
+          retention-days: 2
