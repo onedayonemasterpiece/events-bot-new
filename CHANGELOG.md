@@ -8,6 +8,9 @@
   SHA, and PII-free mail-stage counters distinguish receipt, sender, subject and
   OTP parsing failures. The live subject contract now covers both the current
   Supabase custom SMTP/Postbox template and the staged Send Email Hook template.
+  Android now also enables and verifies GitHub-hosted runner KVM before starting
+  the API 35 emulator instead of silently falling back to unusable software
+  emulation.
 - Added the first real mobile focus OTP vertical slice: one platform-neutral
   journey now drives existing Chromium, Chrome Android/Appium UiAutomator2 and
   Mobile Safari/Appium XCUITest sequentially, checks native keyboard/viewport

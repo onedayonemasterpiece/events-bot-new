@@ -24,4 +24,6 @@ test('protected workflow keeps the recipient secret and gates all platforms stri
   assert.doesNotMatch(source, /vars\.E2E_RECIPIENT_TEMPLATE/u);
   assert.match(source, /inputs\.platform == 'all' && needs\.browser\.result == 'success'/u);
   assert.match(source, /inputs\.platform == 'all' && needs\.android\.result == 'success'/u);
+  assert.match(source, /99-kvm4all\.rules/u);
+  assert.match(source, /test -r \/dev\/kvm && test -w \/dev\/kvm/u);
 });

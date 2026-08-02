@@ -39,6 +39,10 @@ A desktop mobile viewport or Playwright WebKit does not close these mobile
 gates. A workflow skeleton without a terminal emulator/simulator run also does
 not count as acceptance.
 
+The Ubuntu Android job explicitly enables and verifies `/dev/kvm` before
+booting API 35. Unaccelerated x86 emulation is a blocked infrastructure result,
+not a substitute for the Android acceptance run.
+
 `focus.otp.installed_pwa` is a separate later scenario for Chrome install UI /
 Safari Share Sheet, Launcher/SpringBoard, standalone and relaunch. It must not be
 folded into the first browser-tab mobile PR.
