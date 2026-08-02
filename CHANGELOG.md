@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed the iOS Safari first-run inspector after protected preflight
+  `30763157336`: native XPath lookups now consume raw WebDriver element arrays
+  and bind the exact `Продолжить` action to the nearest modal containing the
+  exact search-engine-choice title. This removes the WebdriverIO enhanced-`$$`
+  iterable mismatch that hid a visible known modal; the failed run preserved
+  side-effect counts `0/0/0` and was not promoted to acceptance evidence.
 - Fixed Region Talk contract-only review rebinding: Telegram's
   `MessageNotModified` response is now accepted only after exact live caption
   and ordered-link verification, so an already-current pending message no
