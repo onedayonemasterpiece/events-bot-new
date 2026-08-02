@@ -34,6 +34,7 @@
 - Telegram link inspection через Telethon: `docs/operations/telegram-link-inspection.md`
 - LLM: `docs/llm/` (промпты, формат запросов, классификатор тем)
 - Справочники: `docs/reference/` (локации, праздники, шаблоны)
+- Редакционные review-наборы и source receipts: `docs/review-data/` (не production truth)
 - Пайплайны/парсеры (каноника): `docs/features/source-parsing/` (в `docs/pipelines/` остаются redirect‑stub’ы для старых ссылок)
 - Фичи: `docs/features/`
 - Interest clubs implementation RC, identity ADR and gated release plan: `docs/features/interest-clubs/README.md`

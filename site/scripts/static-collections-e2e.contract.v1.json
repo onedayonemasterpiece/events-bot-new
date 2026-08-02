@@ -20,7 +20,7 @@
     {
       "label": "kids",
       "path": "/detyam/",
-      "state": "shadow",
+      "state": "blocked",
       "navigation": false,
       "sitemap": false,
       "minimum_cards": 1,
@@ -40,7 +40,7 @@
     {
       "label": "science_pop",
       "path": "/nauchpop/",
-      "state": "shadow",
+      "state": "blocked",
       "navigation": false,
       "sitemap": false,
       "minimum_cards": 1,
@@ -57,7 +57,7 @@
       "enabled": true
     },
     {
-      "label": "science",
+      "label": "research_in_action",
       "path": "/nauka/",
       "state": "blocked",
       "navigation": false,

@@ -1,0 +1,86 @@
+{
+  "schema_version": "static-collection-source-review-v1",
+  "receipt_id": "7054-7237",
+  "reviewed_at": "2026-08-02",
+  "status": "corrected",
+  "event_ids": [
+    7054,
+    7237
+  ],
+  "issue": "The one-way link joins unrelated works with the same title: a child puppet show in August and a ballet in December.",
+  "canonical_before": [
+    {
+      "id": 7054,
+      "title": "Щелкунчик",
+      "description": "> Событие представляет собой детский кукольный спектакль «Щелкунчик».\n\nКамерный театр кукол «Морошка» представляет детский кукольный спектакль «Щелкунчик», созданный к 250-летию со дня рождения Эрнста Теодора Амадея Гофмана. Постановка длительностью 35 минут рассказывает историю от лица волшебника Дроссельмейера. 🎭\n\n### Сюжет и приключения\nВ центре повествования — девочка Мари, которая помогает разрушить колдовство злобной Мышильды. Зрителей ждут:\n- Волшебное превращение игрушки в героя-спасителя\n- Интригующие приключения в Стране сладостей\n- Эпические битвы с армией мышей\n\n### Музыкальное и историческое сопровождение\nМузыка к спектаклю написана композитором Андреем Степаненко. Постановка обращается к биографии Эрнста Теодора Амадея Гофмана, который родился в Кёнигсберге, и переносит его классический сюжет в формат кукольного театра. ✨",
+      "date": "2026-08-02",
+      "time": "11:00",
+      "location_name": "Янтарь холл",
+      "location_address": "Ленина 11",
+      "city": "Светлогорск",
+      "event_type": "спектакль",
+      "linked_event_ids": "[7237]",
+      "identity_status": "canonical",
+      "merged_into_event_id": null
+    },
+    {
+      "id": 7237,
+      "title": "Балет «Щелкунчик»",
+      "description": "Спектакль в исполнении театра «Русский балет». 🎭",
+      "date": "2026-12-19",
+      "time": "17:00",
+      "location_name": "Янтарь холл",
+      "location_address": "Ленина 11",
+      "city": "Светлогорск",
+      "event_type": "спектакль",
+      "linked_event_ids": "[7236]",
+      "identity_status": "canonical",
+      "merged_into_event_id": null
+    }
+  ],
+  "canonical_after": null,
+  "source_evidence": [
+    {
+      "event_id": 7054,
+      "source_ref": {
+        "source_id": 9573655,
+        "source_type": "parser:yantarhall",
+        "source_url": "https://янтарьхолл.рф/afisha/detskiy-kukolnyy-spektakl-shchelkunchik%202%2009%2026/",
+        "trust_level": "high",
+        "source_chat_username": null,
+        "source_message_id": null,
+        "source_text_sha256": "fca2373cbcacce58d422d40cf5506ccc0fb17f59e27c08df1373f4deced68782",
+        "source_record_sha256": "7e0d3bbaad61fd5448a0bcc5870b70842131f75753b1dff8c286dd05394cec01"
+      },
+      "raw_source_quote": "Детский кукольный спектакль в Арт-пространстве. Билеты от 750руб. Воз. ограничение 6+",
+      "raw_source_quote_sha256": "fca2373cbcacce58d422d40cf5506ccc0fb17f59e27c08df1373f4deced68782",
+      "canonical_sha256": "e068919dab55e6e520ee37672289578cc40fb713c262251207a93ed58dceedc2"
+    },
+    {
+      "event_id": 7237,
+      "source_ref": {
+        "source_id": 9573722,
+        "source_type": "parser:yantarhall",
+        "source_url": "https://янтарьхолл.рф/afisha/balet-shchelkunchik-teatr-russkiy-balet-v-soprovozhdenii-orkestra-17-00-26/",
+        "trust_level": "high",
+        "source_chat_username": null,
+        "source_message_id": null,
+        "source_text_sha256": "fb4c42d376d8165c38436c185538c4881434252994f2908266b8466d17681d27",
+        "source_record_sha256": "9ceab1c644d90e9e7e14d235a1abc917c9683e9210bc59c381ccae5a6d9a669c"
+      },
+      "raw_source_quote": "Название: Балет \"Щелкунчик\"\nДата: 2026-12-19\nВремя: 17:00\nПлощадка: Янтарь холл, Ленина 11, Светлогорск\nАдрес: Ленина 11, Светлогорск\nВозраст: 6+\nСтатус билетов: доступны\nЦена: от 2000 RUB\nСсылка: https://янтарьхолл.рф/afisha/balet-shchelkunchik-teatr-russkiy-balet-v-soprovozhdenii-orkestra-17-00-26/\n\nОписание:\nТеатр \"Русский балет\" в сопровождении оркестра. Билеты от 2000руб. Воз. ограничение 6+\n\nВозраст: 6+",
+      "raw_source_quote_sha256": "fb4c42d376d8165c38436c185538c4881434252994f2908266b8466d17681d27",
+      "canonical_sha256": "4df82f68f57cb71085ced10b69185f80dcfe16bd133ab164fa4cce21dd0ee971"
+    }
+  ],
+  "family_decision": {
+    "seed_action": "override_as_two_families",
+    "family_ids": {
+      "7054": "event:7054",
+      "7237": "linked:7236"
+    },
+    "db_followup": "remove_asymmetric_7054_to_7237"
+  },
+  "scope_note": "Receipt repairs review/calibration inputs only; canonical production changes require the normal Smart Update/data-integrity path.",
+  "receipt_sha256": "a2fc34ec02311cac535af3f437a0ed2ed520fa865d13bd9dd9667b634677c488"
+}

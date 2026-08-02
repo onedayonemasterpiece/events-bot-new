@@ -162,6 +162,29 @@ class StaticCollectionsQualityValidatorTests(unittest.TestCase):
         self.assertIn("source_quote_missing", codes)
         self.assertIn("owner_gold_missing", codes)
 
+    def test_repository_migrated_review_contract_passes_without_owner_gold(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory) / "review-report.json"
+            with contextlib.redirect_stdout(io.StringIO()):
+                result = quality.main(
+                    [
+                        "--mode",
+                        "review",
+                        "--json-report",
+                        str(report_path),
+                    ]
+                )
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual(result, 0)
+        self.assertTrue(report["ok"])
+        self.assertEqual(report["mode"], "review")
+        self.assertNotIn(
+            "owner_gold_missing", {issue["code"] for issue in report["issues"]}
+        )
+        self.assertFalse(
+            (ROOT / "tests" / "fixtures" / "static_collections_gold_v1.json").exists()
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

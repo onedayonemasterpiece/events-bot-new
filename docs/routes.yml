@@ -369,6 +369,9 @@ features:
     docs: docs/features/static-site-pages/README.md
     collections_original_requirements: docs/features/static-site-pages/podborki.md
     collections_extraction_and_product_plan: docs/features/static-site-pages/podborki-to-be.md
+    collections_quality_plan: docs/features/static-site-pages/static-collections-quality-plan.md
+    collections_e2e_runbook: docs/features/static-site-pages/static-collections-e2e-runbook.md
+    collections_review_data: docs/review-data/README.md
     release_plan: docs/features/static-site-pages/release-plan.md
     presentation_release_checklist: docs/features/static-site-pages/presentation-release-checklist.md
     test_scenarios: docs/features/static-site-pages/test-scenarios.md

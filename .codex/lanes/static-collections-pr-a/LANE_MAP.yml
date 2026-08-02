@@ -1,0 +1,89 @@
+mode: serial_integrator
+repo: onedayonemasterpiece/events-bot-new
+base_ref: origin/agent/static-collections-quality-e2e@0131dc384aadf364f81089e41aacd086d114e3a1
+base_branch: agent/static-collections-quality-e2e
+integration_branch: agent/static-collections-quality/pr-a-ontology
+global_constraints:
+  - PR A only; do not implement PR B-E
+  - no public routes, navigation or sitemap promotion
+  - semantic publication remains blocked
+  - no cinema-source or festival-track work
+  - production access is read-only
+verification_owner: /root
+stop_conditions:
+  - owner gold or score artifacts would be required
+  - canonical production mutation would be required
+lanes:
+  - id: map-quality-pr
+    role: planner
+    requirement_ids: [R01, R05]
+    target: PR 207 validator/workflow and exact PR-A boundary
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: read-only contract and stacking memo
+    verification_scope: inspection_only
+    effort: medium
+    status: committed
+  - id: map-ontology-code
+    role: planner
+    requirement_ids: [R02]
+    target: ontology/policy/runtime coupling map
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: read-only ontology dependency memo
+    verification_scope: inspection_only
+    effort: medium
+    status: committed
+  - id: map-review-data
+    role: planner
+    requirement_ids: [R01, R03, R04]
+    target: provisional seed, provenance and occurrence-family map
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: read-only data-quality memo
+    verification_scope: inspection_only
+    effort: medium
+    status: committed
+  - id: static-collections-pr-a
+    role: worker
+    requirement_ids: [R01, R02, R03, R04, R05]
+    target: migrated review contract and source-bound review data
+    depends_on: [map-quality-pr, map-ontology-code, map-review-data]
+    execution_mode: serial_after_dependency
+    branch: agent/static-collections-quality/pr-a-ontology
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collections-analyst-review-20260801
+    writable_files:
+      - docs/review-data/**
+      - docs/features/static-site-pages/**
+      - docs/README.md
+      - docs/routes.yml
+      - site/scripts/static_collection_policy.v2.json
+      - site/scripts/static-collections-e2e.contract.v1.json
+      - scripts/validate_static_collections_quality.py
+      - tests/test_static_collection_*.py
+      - tests/fixtures/static_collections_gold_v1.json
+      - .github/workflows/static-collections-quality-e2e.yml
+      - CHANGELOG.md
+      - .codex/lanes/static-collections-pr-a/**
+      - .codex/integration/static-collections-pr-a-INTEGRATION_REPORT.md
+    forbidden_files:
+      - site/src/**
+      - smart_event_update.py
+      - scripts/backfill_static_collection_facts.py
+      - site/scripts/static_collection_prototypes.v1.json
+    expected_output: committed PR-A implementation with PASS review gate
+    verification_scope: full_local
+    effort: high
+    status: spawned

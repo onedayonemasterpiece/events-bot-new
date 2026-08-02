@@ -40,7 +40,7 @@ on:
         required: false
         type: string
       strict:
-        description: "Require migrated review seed, owner gold, provenance, families and score hashes"
+        description: "PR B gate: additionally require owner gold, scores, winners and artifact hashes"
         required: false
         default: false
         type: boolean
@@ -74,7 +74,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.strict }}" == "true" ]]; then
             echo "mode=strict" >> "$GITHUB_OUTPUT"
           else
-            echo "mode=baseline" >> "$GITHUB_OUTPUT"
+            echo "mode=review" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Validate collection policy and review data
@@ -92,15 +92,20 @@ jobs:
               --markdown-report artifacts/static-collections-quality.md
           else
             python3 scripts/validate_static_collections_quality.py \
-              --mode baseline \
-              --policy site/scripts/static_collection_policy.v1.json \
-              --seed tests/fixtures/static_collections_gold_v1.json \
+              --mode review \
+              --policy site/scripts/static_collection_policy.v2.json \
+              --seed docs/review-data/static_collections_review_seed_v1.json \
+              --source-review-index docs/review-data/static-collections-source-reviews-v1/index.json \
               --json-report artifacts/static-collections-quality.json \
               --markdown-report artifacts/static-collections-quality.md
           fi
 
       - name: Test quality validator behavior
-        run: python3 -m unittest discover -s tests -p "test_static_collection_quality_validator.py"
+        shell: bash
+        run: |
+          python3 -m unittest discover -s tests -p "test_static_collection_quality_validator.py"
+          python3 -m unittest discover -s tests -p "test_static_collection_review_seed.py"
+          python3 -m unittest discover -s tests -p "test_static_collection_data_quality_reviews.py"
 
       - name: Add quality report to summary
         if: always()

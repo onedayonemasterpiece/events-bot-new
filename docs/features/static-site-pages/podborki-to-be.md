@@ -2,10 +2,29 @@
 
 Статус: **анализ завершён; data-prep MVP слит в main, развёрнут и получил
 production backfill; real Kaggle cold canary запущен, но terminal cold/warm
-acceptance ещё не закрыт**, обновлён 2026-08-01.
+acceptance ещё не закрыт; PR A ontology/source-review contract реализован
+fail-closed**, обновлён 2026-08-02.
 Исходные требования и последующие уточнения владельца сохранены в [`podborki.md`](./podborki.md).
 
 ## 0. Состояние реализации data-prep MVP
+
+### 0.1. Quality PR A (2026-08-02)
+
+Ошибочно названный provisional `gold` удалён из `tests/fixtures` и перенесён в
+`docs/review-data/static_collections_review_seed_v1.json`. Это по-прежнему не
+owner gold и не разрешение на публикацию. `static_collection_policy.v2.json`
+разделяет `child_directed`, `family_suitable`, `joint_family_activity`,
+`science_pop` и `research_in_action`, сохраняет строгие
+`strong_impressions`/`medieval` и оставляет все semantic heads `blocked`.
+
+Все строки seed получили `family_id`, `occurrence_date`, EventSource refs,
+raw quote и hash model document. Известные дефекты 5757, 6696/6766, 6878,
+7307, 7326 и повторные families зафиксированы отдельными hash-bound receipts.
+Неразрешённые строки исключены из supply; 7326 оставлен только как
+`family_suitable` по прямой исходной цитате. CI запускает промежуточный
+`--mode review`: он проверяет миграцию/provenance/families, но не требует
+будущие PR-B owner gold, scores и winning prototypes. Публичные routes,
+navigation/sitemap, киноисточники и фестивальный track не менялись.
 
 Исходная реализация подготовлена в ветке
 `integration/static-collections-data-prep-20260801`, слита PR #182 и развёрнута
@@ -1450,7 +1469,10 @@ grounded LLM decision. Gold ведётся отдельно для `KIDS_SCHOOL`
 только для родителей/педагогов, детское слово в названии места, generic family
 wording и взрослые вечерние форматы.
 
-Это не большая ML-платформа. Нужны один policy JSON, один общий gold JSON и один generated batch manifest. Особые тесты «Необычного», клубов, популярного и персонализации остаются своими, потому что проверяют другое поведение.
+Это не большая ML-платформа. Нужны один policy JSON, отдельные provisional
+review seed и owner-approved gold, а также один generated batch manifest.
+Особые тесты «Необычного», клубов, популярного и персонализации остаются
+своими, потому что проверяют другое поведение.
 
 ## 11. Эффективная очередь реализации
 
@@ -1466,12 +1488,14 @@ wording и взрослые вечерние форматы.
 
 Один компактный набор source contracts:
 
-- `site/scripts/static_collection_policy.v1.json` — стратегия, thresholds,
-  minimum supply и publication default всех labels;
+- `site/scripts/static_collection_policy.v2.json` — единые ontology-v2
+  definitions, стратегия, minimum supply и fail-closed publication state;
 - `site/scripts/static_collection_prototypes.v1.json` — namespaced prototypes и
   hard negatives для `unusual/science/strong_impressions/medieval`;
-- `tests/fixtures/static_collections_gold_v1.json` — gold и отдельный
-  high-recall audience gold;
+- `docs/review-data/static_collections_review_seed_v1.json` — provisional
+  source-bound review seed, не gold и не publication truth;
+- будущий `tests/fixtures/static_collections_owner_gold_v1.json` — отдельный
+  immutable owner-approved calibration input, создаваемый только после review;
 - `site/scripts/static_place_org_registry.v1.json` — общий stable ID/slug,
   `kind=place|organization`, exact aliases/facts/source bindings, medallion и
   flags `official_theatre`, `venue_page_candidate`, `medieval_site`; в первой

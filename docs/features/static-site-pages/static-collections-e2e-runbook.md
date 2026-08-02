@@ -16,8 +16,8 @@ E2E разделён на независимые planes.
 - label rows структурно полны, уникальны и не пересекаются внутри label;
 - declared counts совпадают с rows;
 - policy и review labels согласованы;
-- legacy `gold` naming, отсутствие family/provenance/raw scores отражаются как
-  warnings в baseline и как errors в strict mode;
+- migrated review mode требует ontology v2, family/provenance и hash-bound
+  source-review receipts; отсутствие PR-B scores остаётся явным warning;
 - browser contract/parser имеет собственные behavior tests.
 
 Этот plane не утверждает, что ручная редакционная разметка правильна. Он
@@ -46,6 +46,9 @@ E2E разделён на независимые planes.
 ```text
 .github/workflows/static-collections-quality-e2e.yml
 scripts/validate_static_collections_quality.py
+site/scripts/static_collection_policy.v2.json
+docs/review-data/static_collections_review_seed_v1.json
+docs/review-data/static-collections-source-reviews-v1/index.json
 site/scripts/check-static-collections-e2e.mjs
 site/scripts/static-collections-e2e.behavior.test.mjs
 site/scripts/static-collections-e2e.contract.v1.json
@@ -202,11 +205,12 @@ Navigation:
 Атрибуты являются regression contract. Они не должны зависеть от CSS class или
 визуального текста.
 
-## 7. Baseline и strict mode
+## 7. Baseline, review и strict mode
 
 ### Baseline
 
-Нужен, пока legacy provisional fixture ещё называется `gold`.
+Сохранён только для unit regression старого bootstrap-контракта PR #207.
+Workflow больше не читает legacy `gold` fixture.
 
 Baseline:
 
@@ -215,9 +219,25 @@ Baseline:
 - legacy naming, missing family/provenance/scores пишет как warning;
 - возвращает success при отсутствии hard contract errors.
 
-### Strict
+### Review (обычный PR-A CI)
 
-Включается одним PR после migration ontology/data contracts:
+Требует:
+
+- policy/ontology v2 и новые definition IDs;
+- `docs/review-data/static_collections_review_seed_v1.json` со статусом
+  provisional и `publication_eligible=false`;
+- `family_id`, `occurrence_date`, `review_decision`, raw source quote/refs и
+  `model_document_hash` у каждой учитываемой строки;
+- source-review receipts для известных дефектов и повторных families;
+- отсутствие family leakage и legacy ontology labels;
+- все semantic labels в `publication=blocked`.
+
+Supply ниже минимума и отсутствующие PR-B score/vector bindings видны как
+warnings, а не маскируются синтетическими примерами.
+
+### Strict (PR B)
+
+Включается после review migration отдельным PR B:
 
 - review-seed schema и path;
 - отдельный owner gold;
@@ -228,8 +248,8 @@ Baseline:
 - family disjointness;
 - owner gold minimum supply.
 
-Переключение workflow на strict без миграции запрещено; сохранение baseline
-после миграции также запрещено.
+Переключение workflow на strict до owner review/scoring запрещено. Обычный
+workflow уже использует review, не baseline.
 
 ## 8. Browser execution model
 
@@ -310,7 +330,7 @@ Contract:
 
 ```bash
 python3 scripts/validate_static_collections_quality.py \
-  --mode baseline \
+  --mode review \
   --json-report /tmp/static-collections-quality.json \
   --markdown-report /tmp/static-collections-quality.md
 ```
@@ -320,6 +340,10 @@ Behavior:
 ```bash
 python3 -m unittest discover -s tests \
   -p 'test_static_collection_quality_validator.py'
+python3 -m unittest discover -s tests \
+  -p 'test_static_collection_review_seed.py'
+python3 -m unittest discover -s tests \
+  -p 'test_static_collection_data_quality_reviews.py'
 node --test site/scripts/static-collections-e2e.behavior.test.mjs
 ```
 

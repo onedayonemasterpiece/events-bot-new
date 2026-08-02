@@ -1,0 +1,92 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+REVIEW_DIR = ROOT / "docs" / "review-data" / "static-collections-source-reviews-v1"
+REQUIRED_IDS = {
+    5757, 5781, 6696, 6766, 6878, 7054, 7113, 7114,
+    7237, 7238, 7307, 7326, 7333, 7344, 7373, 7374,
+}
+
+
+def stable_hash(value: object) -> str:
+    return hashlib.sha256(
+        json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+class StaticCollectionDataQualityReviewTests(unittest.TestCase):
+    def test_source_review_receipts_cover_known_defects_and_bind_raw_quotes(self) -> None:
+        index = json.loads((REVIEW_DIR / "index.json").read_text(encoding="utf-8"))
+        covered: set[int] = set()
+        for entry in index["receipts"]:
+            receipt = json.loads((REVIEW_DIR / entry["path"]).read_text(encoding="utf-8"))
+            covered.update(receipt["event_ids"])
+            unhashed = dict(receipt)
+            declared = unhashed.pop("receipt_sha256")
+            self.assertEqual(declared, stable_hash(unhashed))
+            self.assertEqual(declared, entry["receipt_sha256"])
+            self.assertIn(receipt["status"], {"pass", "needs_source_review", "corrected"})
+            self.assertTrue(receipt["source_evidence"])
+            for evidence in receipt["source_evidence"]:
+                quote = evidence["raw_source_quote"]
+                self.assertTrue(quote)
+                self.assertEqual(
+                    evidence["raw_source_quote_sha256"],
+                    hashlib.sha256(quote.encode("utf-8")).hexdigest(),
+                )
+                self.assertTrue(evidence["source_ref"]["source_url"])
+                self.assertEqual(len(evidence["source_ref"]["source_text_sha256"]), 64)
+        self.assertLessEqual(REQUIRED_IDS, covered)
+
+    def test_unresolved_rows_do_not_enter_review_supply(self) -> None:
+        seed = json.loads(
+            (ROOT / "docs" / "review-data" / "static_collections_review_seed_v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        selected = {
+            row["event_id"]
+            for payload in seed["labels"].values()
+            for side in ("positives", "hard_negatives")
+            for row in payload[side]
+        }
+        self.assertTrue(
+            {
+                5757, 6766, 6878, 7307, 7333, 7344,
+                6818, 6865, 7131, 5344,
+                7244, 7247, 7293,
+            }.isdisjoint(selected)
+        )
+        self.assertIn(
+            7326,
+            {row["event_id"] for row in seed["labels"]["family_suitable"]["positives"]},
+        )
+
+    def test_review_family_overrides_match_source_findings(self) -> None:
+        seed = json.loads(
+            (ROOT / "docs" / "review-data" / "static_collections_review_seed_v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        rows = {
+            row["event_id"]: row
+            for payload in seed["labels"].values()
+            for side in ("positives", "hard_negatives")
+            for row in payload[side]
+        }
+        self.assertEqual(
+            rows[6696]["family_id"], "reviewed-duplicate:pinhole-gusev-2026-07-07"
+        )
+        self.assertTrue(rows[5781]["family_id"].startswith("linked:"))
+        self.assertEqual(rows[7373]["family_id"], rows[7374]["family_id"])
+        self.assertEqual(rows[7054]["family_id"], "event:7054")
+
+
+if __name__ == "__main__":
+    unittest.main()

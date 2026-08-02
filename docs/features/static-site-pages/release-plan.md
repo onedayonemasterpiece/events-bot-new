@@ -70,8 +70,8 @@ promotion and rollback remain open.
 Этот track добавлен в общий release plan, чтобы реализация подборок не осталась
 только в исследовательском документе или side-ветке. Исходные требования
 неизменно хранятся в [`podborki.md`](podborki.md), полный анализ и product/data
-решения — в [`podborki-to-be.md`](podborki-to-be.md). Реализация подготовлена в
-Изначальная implementation-ветка —
+решения — в [`podborki-to-be.md`](podborki-to-be.md). Изначальная
+implementation-ветка —
 `integration/static-collections-data-prep-20260801`. Код достиг
 `origin/main` через PR #182 (`6c870d178b6b22474b56743a36a4b65252c1daa5`) и
 развёрнут вместе с актуальным main
@@ -84,6 +84,7 @@ gates.
 | Gate | Статус | Evidence/граница |
 |---|---|---|
 | Production data audit | Done, read-only | Fly SQLite 2026-08-01; `integrity_check=ok`; 6 approved clubs/13 grounded relations, 8 theatre organizations, 6 venue pilots; runtime не хардкодит counts |
+| Quality PR A | Done, fail-closed | ontology v2; provisional seed отделён от owner gold; EventSource quotes, receipt hashes и occurrence families проверяются `--mode review`; 4 receipt groups остаются `needs_source_review`, 5 semantic labels ниже minimum independent-family supply |
 | Club registry refresh | Live; catch-up draining | durable `interest_club_relation` outbox, one successor, evaluation history, provider-deferred retry, shadow discovery, inclusive six-calendar-month v2 projection; 80 exact six-month candidates поставлены в outbox, provider-deferred хвост остаётся durable и не стирает accepted relation |
 | Place/organization registry | Done in code | checked-in exact registry, separate theatre/venue roles, 8 official theatres, 6 venue candidates, structured membership reasons |
 | Admission/audience/people facts | Done in code | nullable source-bound `Event.collection_decisions`; candidate-only strict LLM schema; `unknown` preserves truth; `Event.is_free` remains compatible bool; no prose `ticket_status` free inference |
@@ -160,9 +161,10 @@ Local tests do not substitute for the real Kaggle gate.
    build. Require complete catalog coverage, `provider_calls=0`, unchanged event
    re-encode `0`, exact cache/receipt/batch hashes, no second notebook and no new
    Supabase core reads.
-4. Keep Unusual/science/strong-impressions/medieval heads blocked until
-   owner-approved gold and evidence-only recalibration. An old related-v1 canary
-   cannot approve the new document contract.
+4. Keep Unusual/science-pop/research-in-action/strong-impressions/medieval and
+   audience-v2 heads blocked. PR A review gate не заменяет PR-B owner gold,
+   all-event scores, temporal holdout и evidence-only recalibration; old
+   related-v1 canary не принимает новый document contract.
 5. Produce an immutable noindex secret candidate containing the exact manifests.
    Verify 8 theatres, all currently eligible approved clubs, the 6 venue pilots,
    admission corrections/review abstentions and per-label failure states.

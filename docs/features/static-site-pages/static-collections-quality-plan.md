@@ -1,12 +1,19 @@
 # Подборки статического сайта: план исправления качества и передачи кодовому агенту
 
-Статус: **implementation handoff / REQUEST CHANGES**, 2026-08-02.
+Статус: **PR A IMPLEMENTED / PR B–E REQUEST CHANGES**, 2026-08-02.
 Целевая ветка: `agent/static-collections-quality-e2e`.
 Исходный аналитический пакет: `agent/static-collections-review/curation` @
 `e1b854f032a4593e5b3603396e6d61358315ad23`.
 
 Этот документ является конкретным заданием следующему кодовому агенту. Он не
 разрешает публикацию semantic-подборок и не заменяет owner/editor review.
+
+PR A status (2026-08-02): **implemented; review contract PASS; publication
+blocked**. Provisional seed, ontology v2, source-bound receipts и occurrence
+families теперь проверяются промежуточным `review` mode. Owner gold/all-event
+scores (PR B), grounded adjudicator/manifests (PR C), browser candidate (PR D)
+и публичное включение (PR E) не выполнены. Optional `active_experiences` не
+добавлен без отдельного owner product decision.
 
 ## 1. Цель следующей итерации
 
@@ -60,7 +67,7 @@
 
 ### Q1. Разделить review seed и owner gold
 
-Текущий файл:
+Legacy-файл до PR A:
 
 ```text
 tests/fixtures/static_collections_gold_v1.json
@@ -88,8 +95,8 @@ publication_eligible = false
 калибровку. Publication разрешает отдельный quality receipt, связанный с hashes
 gold, score artifact, policy, prototypes и catalog snapshot.
 
-Legacy-файл удалить только после миграции всех импортов и тестов. Нельзя
-превращать provisional seed в gold заменой одного поля.
+Legacy-файл удалён после миграции workflow/imports/tests. Нельзя превращать
+provisional seed в gold заменой одного поля.
 
 **Acceptance**
 
@@ -589,22 +596,25 @@ data-collection-state="ready|empty|last-good|blocked|degraded"
 
 ## 7. Команды для локальной проверки
 
-До migration legacy seed:
+Bootstrap regression legacy seed (только unit fixture):
 
 ```bash
-python3 scripts/validate_static_collections_quality.py \
-  --mode baseline \
-  --policy site/scripts/static_collection_policy.v1.json \
-  --seed tests/fixtures/static_collections_gold_v1.json \
-  --json-report /tmp/static-collections-quality.json \
-  --markdown-report /tmp/static-collections-quality.md
-
 python3 -m unittest discover -s tests \
   -p 'test_static_collection_quality_validator.py'
 node --test site/scripts/static-collections-e2e.behavior.test.mjs
 ```
 
-После migration:
+После PR-A migration (обычный contract CI):
+
+```bash
+python3 scripts/validate_static_collections_quality.py \
+  --mode review \
+  --policy site/scripts/static_collection_policy.v2.json \
+  --seed docs/review-data/static_collections_review_seed_v1.json \
+  --source-review-index docs/review-data/static-collections-source-reviews-v1/index.json
+```
+
+После PR B:
 
 ```bash
 python3 scripts/validate_static_collections_quality.py \

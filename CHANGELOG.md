@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Added static-collection PR-A quality contracts: ontology v2 separates child,
+  family, joint-family, science-pop and research-in-action meanings; the
+  provisional seed moved out of the misleading gold fixture into source-bound
+  review data with occurrence families and ten hashed defect receipts; normal
+  CI now runs the intermediate review gate while owner gold, scores, Astro
+  routes, cinema sources, festivals and semantic publication remain blocked.
 - Fixed Region Talk article/social review footers: final captions now contain
   one link to the exact source post/material, a blank line and one
   `О Калининграде говорят` link to `@kalinigrad_visit`, with no

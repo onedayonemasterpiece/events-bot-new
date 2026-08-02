@@ -1,0 +1,122 @@
+{
+  "schema_version": "static-collection-source-review-index-v1",
+  "reviewed_at": "2026-08-02",
+  "source_snapshot_sha256": "034f692cc7f1167400a33f7b4f10ace3aba9a5d3e4ba41c139a47bc597f33654",
+  "required_event_ids": [
+    5757,
+    5781,
+    6696,
+    6766,
+    6878,
+    7054,
+    7113,
+    7114,
+    7237,
+    7238,
+    7307,
+    7326,
+    7333,
+    7344,
+    7373,
+    7374
+  ],
+  "receipts": [
+    {
+      "receipt_id": "5757",
+      "path": "5757.json",
+      "status": "needs_source_review",
+      "receipt_sha256": "4cfdd7b225c474e13c2b177952149993b3184aea5e24bdef6b56632ef5c5516a",
+      "event_ids": [
+        5757
+      ]
+    },
+    {
+      "receipt_id": "6696-6766",
+      "path": "6696-6766.json",
+      "status": "corrected",
+      "receipt_sha256": "c46cf06e6c2a8ce0101726ffb22c2bc72fe376700111fcf568fc24b60dfc574c",
+      "event_ids": [
+        6696,
+        6766
+      ]
+    },
+    {
+      "receipt_id": "6878",
+      "path": "6878.json",
+      "status": "needs_source_review",
+      "receipt_sha256": "117dd073c6878580426b0ba4c85af52e723dff90b4fd476d5493b7a1884d2df1",
+      "event_ids": [
+        6878
+      ]
+    },
+    {
+      "receipt_id": "7307",
+      "path": "7307.json",
+      "status": "needs_source_review",
+      "receipt_sha256": "1a9f183582b574f46fdb196cc58a24607b2324f1c7a832393061b1ab3c066246",
+      "event_ids": [
+        7307
+      ]
+    },
+    {
+      "receipt_id": "7326",
+      "path": "7326.json",
+      "status": "pass",
+      "receipt_sha256": "60ae30056216cfc6b3294fa6b0f874dfd4cfac812f73f72ebfca2b9bba83e7bf",
+      "event_ids": [
+        7326
+      ]
+    },
+    {
+      "receipt_id": "7333-7344",
+      "path": "7333-7344.json",
+      "status": "corrected",
+      "receipt_sha256": "b151d1d8ebc5e7d905dd62c52d66ab5c315401aea81ebfac1918f519e82109f8",
+      "event_ids": [
+        7333,
+        7344
+      ]
+    },
+    {
+      "receipt_id": "5781-7238",
+      "path": "5781-7238.json",
+      "status": "corrected",
+      "receipt_sha256": "0d3132526de8e5957b25df2b1dc69a9fad6d2eac2194ed4c68e77b4b364e21ac",
+      "event_ids": [
+        5781,
+        7238
+      ]
+    },
+    {
+      "receipt_id": "7373-7374",
+      "path": "7373-7374.json",
+      "status": "corrected",
+      "receipt_sha256": "89ba9d17cdb9169147c1c0fbd98079f8355c964b6e4fc349a4f14abc2e20d9b4",
+      "event_ids": [
+        7373,
+        7374
+      ]
+    },
+    {
+      "receipt_id": "7054-7237",
+      "path": "7054-7237.json",
+      "status": "corrected",
+      "receipt_sha256": "a2fc34ec02311cac535af3f437a0ed2ed520fa865d13bd9dd9667b634677c488",
+      "event_ids": [
+        7054,
+        7237
+      ]
+    },
+    {
+      "receipt_id": "7113-7114",
+      "path": "7113-7114.json",
+      "status": "needs_source_review",
+      "receipt_sha256": "3b554a28fc5fb8ded771d898ec05497ed1bf43d967a75379f796eda2eccb7f2f",
+      "event_ids": [
+        7113,
+        7114
+      ]
+    }
+  ],
+  "index_sha256": "6538ac61197ea1b71664220dd911dd5cfd576d8210b1a9a161f8084e762feab8"
+}
