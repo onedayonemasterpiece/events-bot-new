@@ -15,3 +15,8 @@ test('redacts email, OTP secret, JWT, bearer and token values', () => {
 test('unsafe scanner blocks raw secrets', () => {
   assert.ok(scanUnsafeText('focus-e2e@kenigevents.ru token_hash=abc', ['654321']).length >= 2);
 });
+
+test('native hierarchy-shaped fixtures are blocked when they contain identity or OTP', () => {
+  const fixture = '<XCUIElementTypeTextField value="focus-e2e@kenigevents.ru"/><node text="654321"/>';
+  assert.deepEqual(scanUnsafeText(fixture, ['654321']).sort(), ['email', 'exact_secret']);
+});

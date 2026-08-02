@@ -680,7 +680,8 @@ available after an ambiguous selected-once issuance, shows verification beside
 the six cells and always restores input after failure.
 `site/scripts/check-focus-onboarding-email-integration.mjs` exercises the
 deployed page digit by digit without Enter. The external delivery gate remains
-a manual GitHub Environment workflow with a controlled IMAPS mailbox and a
+a manual protected GitHub Environment workflow with a dedicated no-persistence
+Yandex Mail Trigger WebSocket (or the retained controlled IMAPS adapter) and a
 real provider-delivered random OTP; it must not use an admin-issued token.
 
 The black-box mailbox implementation lives in
@@ -690,6 +691,12 @@ Its routine mode reuses one fixed synthetic identity so repeated acceptance runs
 do not inflate `auth.users`; unique aliases are allowed only for an explicitly
 requested fresh-user test. Workflow artifacts are PII-free and intended to be
 reviewable independently in ChatGPT.
+
+The same semantic browser-tab journey now has real Chrome Android/Appium
+UiAutomator2 and Mobile Safari/Appium XCUITest adapters. They validate the
+system keyboard, focused input and visual viewport before ordinary digit input;
+they do not substitute a desktop viewport or Playwright WebKit. PWA installation
+and Launcher/SpringBoard relaunch remain a separate milestone.
 
 For a clean operator retest on one device use:
 

@@ -277,7 +277,8 @@ Nightly не должен создавать новых пользователе
 6. фокусировать email input и проверить реальную email keyboard на L2;
 7. ввести fixed test identity;
 8. выполнить конкурирующие обычные gestures и доказать ровно один OTP issue;
-9. получить ровно одно подходящее IMAPS message после checkpoint;
+9. получить ровно одно подходящее real-mail message после checkpoint через
+   controlled IMAPS либо dedicated Yandex Mail Trigger WebSocket;
 10. фокусировать OTP input и проверить numeric/one-time-code keyboard на L2;
 11. ввести OTP посимвольно;
 12. доказать ровно один verify и одну participant registration;

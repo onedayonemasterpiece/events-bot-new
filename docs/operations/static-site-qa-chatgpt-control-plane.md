@@ -1,6 +1,6 @@
 # Запуск автотестов статического сайта из ChatGPT
 
-> **Статус:** стратегический, канонический companion к
+> **Статус:** реализован для `focus.otp.browser_tab`; канонический companion к
 > [`static-site-autotest-strategy.md`](static-site-autotest-strategy.md).
 > **Цель:** любой реализованный сценарий можно безопасно запустить и разобрать из
 > ChatGPT без запуска Codex и без изменения кода.
@@ -21,13 +21,17 @@ workflow само по себе не гарантирует, что текуща
 валидирует его и запускает тот же reusable scenario runner, что и ручной
 `workflow_dispatch`.
 
-До реализации command gateway текущий статус честный:
+Реализованный gateway:
 
-- ChatGPT может анализировать PR/runs/jobs и безопасные artifacts;
-- ChatGPT может комментировать issue/PR и, при наличии разрешения connector,
-  повторять failed jobs;
-- новый static-site QA run из ChatGPT **не считается подготовленным**, если для
-  него существует только GitHub UI `workflow_dispatch`.
+- `.github/workflows/static-site-qa-command.yml` принимает только exact
+  однострочную `/qa run` команду в каноническом labelled issue;
+- actor permission, scenario/platform, origin/path, blocking mode и существование
+  full SHA в trusted repository проверяются до protected runner;
+- команда вызывает тот же reusable `external-focus-email-otp.yml`, что и ручной
+  `workflow_dispatch`;
+- номер control issue фиксируется в Environment/repository variable
+  `STATIC_SITE_QA_CONTROL_ISSUE_NUMBER` после публикации listener в default
+  branch; до этого gateway fail-closed отклоняет комментарии.
 
 ## 2. Целевая схема
 

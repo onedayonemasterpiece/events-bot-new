@@ -1,10 +1,12 @@
 # External focus-group email OTP E2E
 
 This is the black-box acceptance test for the real focus-group email journey.
-Its currently implemented platform is headless Chromium on a GitHub-hosted Linux
-runner. It opens the published onboarding page, requests an ordinary real
-Supabase Auth OTP through the product UI, reads the delivered message from a
-controlled IMAPS mailbox and types the code digit by digit without Enter.
+The shared journey supports headless Chromium, Chrome Android in an Android
+Emulator through Appium UiAutomator2, and Mobile Safari in an iOS Simulator
+through Appium XCUITest. It opens the published onboarding page, requests an
+ordinary real Supabase Auth OTP through the product UI, receives the delivered
+message through a controlled adapter and types the code digit by digit without
+Enter.
 
 The test never receives a service-role key, provider key, fixed OTP or Auth
 bypass. Local MIME fixtures verify only the parser and never count as delivery
@@ -12,10 +14,10 @@ evidence.
 
 ## Strategic status and mobile boundary
 
-The current Chromium workflow is a valid browser delivery E2E, but it is **not**
-Android Chrome or Mobile Safari evidence. Android Emulator and iOS Simulator
-variants are planned as the first mobile-autotest milestone and must extend this
-existing harness rather than create a competing OTP implementation.
+The adapters and protected jobs are implemented in the existing harness. Their
+registry status may be changed from planned only after each protected job has a
+terminal emulator/simulator artifact; configuration tests or a workflow file do
+not count as mobile acceptance.
 
 Canonical strategy and implementation handoff:
 
@@ -41,14 +43,12 @@ not count as acceptance.
 Safari Share Sheet, Launcher/SpringBoard, standalone and relaunch. It must not be
 folded into the first browser-tab mobile PR.
 
-The stable recipient does not have to be a provisioned human mailbox. The
-existing Yandex Cloud Mail Trigger proves the automated-receipt route and is
-operable through `.codex/skills/kenigevents-email-roundtrip/`. For unattended
-GitHub execution, use a dedicated trigger and short-retention bucket (or a
-narrowly signed one-time read endpoint); never give the workflow access to the
-shared private bucket that also contains the read-only `info@kenigevents.ru`
-copy. The current IMAP adapter remains supported for an independently controlled
-mailbox.
+The stable recipient is not a human mailbox. The protected workflow uses the
+dedicated no-persistence Yandex Mail Trigger → API Gateway WebSocket boundary in
+[`../../infra/yandex/focus-otp-e2e/README.md`](../../infra/yandex/focus-otp-e2e/README.md).
+The runner connects outbound before OTP issuance and retains only the selected
+code in memory. It has no access to the shared private inbound bucket. The IMAP
+adapter remains supported for an independently controlled mailbox.
 
 ## Test identity policy
 
@@ -57,11 +57,12 @@ The default is one fixed mailbox, for example
 membership without growing `auth.users` on every run. Keep a small fixed set only
 when separate stable personalization personas are genuinely needed.
 
-Every fixed mailbox must also be present in the deployed Auth hook's
-`FOCUS_AUTH_NOTISEND_EMAILS` allowlist. The first and all later CI messages then
-reuse the same NotiSend recipient admission instead of spending Postbox sends or
-another one of the 200 unique-recipient slots **within the current billing
-period**. In a new period its first send occupies one slot again. The aggregate
+Every fixed identity must be a returning Auth identity or be present in the
+deployed Auth hook's `FOCUS_AUTH_NOTISEND_EMAILS` allowlist. The dedicated Mail
+Trigger identity is pre-created once and tagged for E2E, so its ordinary sign-in
+uses NotiSend and later runs reuse the same recipient admission instead of
+spending another one of the 200 unique-recipient slots **within the current
+billing period**. In a new period its first send occupies one slot again. The aggregate
 database report combines the latest real provider counter with admissions since
 that reconciliation. `{run_id}` mode consumes a new admission and is therefore
 reserved for deliberate fresh-user tests.
@@ -85,9 +86,15 @@ runs are allowed only after separate stable identities/mailboxes are assigned.
 
 ## GitHub Environment
 
-Create the protected Environment `external-e2e`. Configure exactly one receive
-adapter: controlled IMAP, or the dedicated Yandex Mail Trigger boundary described
-above. For the current IMAP adapter:
+The protected Environment `external-e2e` uses:
+
+- secret `E2E_YANDEX_MAIL_WS_URL` — WSS domain plus unguessable path;
+- variable `E2E_MAIL_ADAPTER=yandex-websocket`;
+- variable `E2E_RECIPIENT_TEMPLATE` — fixed generated trigger recipient;
+- sender/subject/timeout and network host-class variables listed below.
+
+The environment may instead use controlled IMAP by setting
+`E2E_MAIL_ADAPTER=imap`. For IMAP:
 
 - require a reviewer;
 - allow deployment from the default branch only;
@@ -107,33 +114,28 @@ The mailbox password must be dedicated and must not be the hosting-panel
 password. The adapter opens `INBOX` read-only, uses `BODY.PEEK` through ImapFlow,
 starts from the pre-request `UIDNEXT` checkpoint and never retains raw mail.
 
-## Run: currently implemented browser platform
+## Run
 
 Open **Actions → External focus email OTP → Run workflow** on the trusted default
 branch. Supply:
 
 1. the exact published onboarding URL on `https://kenigevents.ru`;
 2. the full 40-character SHA recorded by that deployment's
-   `preview-build.json`.
+   `preview-build.json`;
+3. `platform=browser|android|ios|all`.
 
 Only one run can execute at a time. There is no automatic resend. Missing
 configuration produces a downloadable `BLOCKED_INFRASTRUCTURE` evidence bundle
 instead of a false test success.
 
-Until the mobile implementation PR is merged, the workflow does not provide a
-real `android` or `ios` platform option. Do not describe the current Chromium
-390×844 viewport as either platform.
-
-## Future mobile run contract
-
-The implementation must add an explicit `platform` selection:
+The platform selection is:
 
 - `browser`;
 - `android`;
 - `ios`;
 - `all` with sequential real-mail execution.
 
-Android/iOS must verify native keyboard presence, active input and usable
+Android/iOS verify native keyboard presence, active input and usable
 viewport geometry before ordinary user input. Direct JS assignment of the email
 or OTP value does not satisfy the mobile scenario.
 
@@ -144,9 +146,12 @@ exists. For an Auth/onboarding release, required mobile and OTP jobs are blockin
 
 ## Evidence contract
 
-The uploaded artifact is retained for seven days and contains:
+Each platform artifact is named
+`static-site-qa-focus-otp-<platform>-<run_id>-<attempt>`, is retained for seven
+days and contains:
 
-- `result.json` — open first; `PASS`, `FAIL` or `BLOCKED`;
+- `qa-summary.json` — open first; `PASS`, `FAIL` or `BLOCKED`;
+- `result.json`;
 - `steps.json`;
 - `network.sanitized.jsonl` — method, host class, path, status, duration and
   failure class only;
@@ -156,8 +161,8 @@ The uploaded artifact is retained for seven days and contains:
 - masked screenshots;
 - `redaction-audit.json` and `.redaction-ok`.
 
-The mobile implementation additionally adds `qa-summary.json`, `device.json`,
-`scenarios.jsonl`, `junit.xml` and safe native-keyboard/viewport evidence.
+- `device.json`, `scenarios.jsonl`, `junit.xml` and safe
+  `native-ui/*-keyboard.json` evidence.
 
 It never contains the address, OTP, message body, cookies, JWTs, authorization
 headers, HAR, trace or video. Upload is denied unless the redaction gate passes.

@@ -1,0 +1,27 @@
+{
+  "schema": "kenigevents.focus_otp_e2e.yc_desired_state.v1",
+  "folder_id": "b1g0v4ur96gis5kot6ku",
+  "service_account": {
+    "id": "ajeq296gp1ejg5gg8jp1",
+    "name": "kenigevents-focus-otp-websocket",
+    "role": "api-gateway.websocketBroadcaster"
+  },
+  "api_gateway": {
+    "id": "d5dl9aj1pi4l08s30c3n",
+    "name": "kenigevents-focus-otp-mail",
+    "websocket_path": "protected_environment_secret"
+  },
+  "mail_trigger": {
+    "id": "a1sa03t99oa787mg1vf0",
+    "name": "kenigevents-focus-otp-mail-trigger",
+    "batch_size": 1,
+    "batch_cutoff_seconds": 1,
+    "attachments_bucket": null,
+    "persistence": "none"
+  },
+  "github_environment": {
+    "name": "external-e2e",
+    "secret": "E2E_YANDEX_MAIL_WS_URL",
+    "variables": ["E2E_MAIL_ADAPTER", "E2E_RECIPIENT_TEMPLATE"]
+  }
+}

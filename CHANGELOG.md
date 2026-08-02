@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- Added the first real mobile focus OTP vertical slice: one platform-neutral
+  journey now drives existing Chromium, Chrome Android/Appium UiAutomator2 and
+  Mobile Safari/Appium XCUITest sequentially, checks native keyboard/viewport
+  acceptance, exact preview SHA and one issue/verify/registration, and emits the
+  same fail-closed PII-free ChatGPT artifact. Protected delivery now uses a
+  dedicated no-persistence Yandex Mail Trigger → API Gateway WebSocket instead
+  of requiring a human mailbox, and a strict canonical-issue `/qa run` gateway
+  routes ChatGPT requests to the same reusable workflow. Preview metadata now
+  records the full repository SHA required by this release gate.
 - Added a reusable KenigEvents email roundtrip skill and read-only Yandex Mail
   Trigger helper. Automated OTP/canary receipt now reuses the already-live
   generated trigger address and private inbound envelope path instead of
