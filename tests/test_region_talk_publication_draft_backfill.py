@@ -81,6 +81,27 @@ def test_current_v3_ready_with_unversioned_draft_is_corrective_actionable() -> N
         assert mod.backfill_is_actionable(row, surface="telegram") is True
 
 
+def test_reviewed_external_correction_unblocks_backfill_only_with_both_permissions() -> None:
+    mod = load_module()
+    row = {
+        "post_url": "https://t.me/source/5",
+        "candidate_correction_status": "resolved_external",
+        "externality_re_adjudication_status": "resolved_external",
+        # Preserve the immutable recommendation while the explicit review
+        # projection supplies the authority to continue regeneration.
+        "candidate_correction_recommended_action": "re_adjudicate_externality",
+        "candidate_correction_regeneration_allowed": "true",
+        "candidate_correction_mutation_allowed": "true",
+    }
+    with (
+        mock.patch.object(mod.notify, "is_confirmed_publication", return_value=True),
+        mock.patch.object(mod.notify, "is_publication_draft_ready", return_value=False),
+    ):
+        assert mod.backfill_is_actionable(row, surface="telegram") is True
+        row["candidate_correction_mutation_allowed"] = "false"
+        assert mod.backfill_is_actionable(row, surface="telegram") is False
+
+
 def test_execute_reads_supporting_kinds_through_notifier_namespace() -> None:
     mod = load_module()
 

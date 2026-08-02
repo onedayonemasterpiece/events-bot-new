@@ -183,11 +183,23 @@ def candidate_has_pending_correction(row: dict[str, Any]) -> bool:
             "source_profile_correction_status",
         )
     } - {""}
+    regeneration_allowed = row.get("candidate_correction_regeneration_allowed") is True or str(
+        row.get("candidate_correction_regeneration_allowed") or ""
+    ).strip().lower() == "true"
+    mutation_allowed = row.get("candidate_correction_mutation_allowed") is True or str(
+        row.get("candidate_correction_mutation_allowed") or ""
+    ).strip().lower() == "true"
     if states & {
         "pending", "queued", "needs_review", "requires_review", "re_adjudicate_externality",
         "blocked", "block",
     }:
         return True
+    if (
+        states & {"approved_external", "resolved_external", "retained_external", "dismissed", "superseded"}
+        and regeneration_allowed
+        and mutation_allowed
+    ):
+        return False
     action = str(row.get("candidate_correction_recommended_action") or "").strip().lower()
     return action in {"re_adjudicate_externality", "manual_research_review", "block"}
 
@@ -603,7 +615,11 @@ def attach_live_profile_and_corrections(
                 profiles[key] = profile
     corrections: dict[str, list[dict[str, Any]]] = {}
     for correction in correction_rows:
-        url = canonical_post_url(correction)
+        url = canonical_post_url({
+            "post_url": correction.get("canonical_url")
+            or correction.get("candidate_post_url")
+            or correction.get("post_url")
+        })
         if url:
             corrections.setdefault(url, []).append(correction)
     for row in publications:
@@ -634,7 +650,22 @@ def attach_live_profile_and_corrections(
                 row["candidate_correction_recommended_action"] = str(
                     correction.get("recommended_action") or ""
                 )
+                row["candidate_correction_regeneration_allowed"] = "false"
+                row["candidate_correction_mutation_allowed"] = "false"
                 break
+            row["publisher_profile_candidate_correction_status"] = revalidation or status
+            row["candidate_correction_status"] = revalidation or status
+            row["externality_re_adjudication_status"] = revalidation or status
+            row["candidate_correction_recommended_action"] = str(
+                correction.get("recommended_action") or ""
+            )
+            row["candidate_correction_regeneration_allowed"] = str(
+                bool(correction.get("regeneration_allowed"))
+            ).lower()
+            row["candidate_correction_mutation_allowed"] = str(
+                bool(correction.get("candidate_mutation_allowed"))
+            ).lower()
+            break
 
 
 def publication_scan_limit(send_limit: int) -> int:

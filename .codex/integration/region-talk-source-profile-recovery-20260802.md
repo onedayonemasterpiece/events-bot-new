@@ -31,7 +31,7 @@ Integration head before PR: `a6da5953e70237b2f60f73d3de0cfc916dce2d71`
 
 - `python -m py_compile` for all changed Region Talk runtime scripts: pass.
 - `git diff --check`: pass.
-- `pytest -q tests/test_region_talk*.py`: **810 passed in 31.26s**.
+- `pytest -q tests/test_region_talk*.py`: **811 passed in 31.57s**.
 - focused finalizer/orchestrator after integration version/capture request:
   **163 passed**.
 - focused publisher correction/import/finalizer/backfill/orchestrator:

@@ -13,7 +13,10 @@
   accepted verdicts and all manual/publication permission gates remain
   monotonic. Correction review now requires a present matching live identity,
   and an unchanged non-ready profile attempt cannot spend another LLM call
-  merely because the daily budget identity changed.
+  merely because the daily budget identity changed. A correction joined by its
+  canonical candidate URL clears the old re-adjudication action only after an
+  explicit resolved/retained review grants both regeneration and candidate
+  mutation; every other state remains fail closed.
 - Added a reusable KenigEvents email roundtrip skill and read-only Yandex Mail
   Trigger helper. Automated OTP/canary receipt now reuses the already-live
   generated trigger address and private inbound envelope path instead of

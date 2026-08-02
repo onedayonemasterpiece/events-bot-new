@@ -1398,6 +1398,15 @@ def read_live_rows(
             row["candidate_correction_regeneration_allowed"] = str(
                 bool(candidate_correction.get("regeneration_allowed"))
             ).lower()
+            row["candidate_correction_mutation_allowed"] = str(
+                bool(candidate_correction.get("candidate_mutation_allowed"))
+            ).lower()
+            row["externality_re_adjudication_status"] = str(
+                candidate_correction.get("live_revalidation_status")
+                or candidate_correction.get("revalidation_status")
+                or candidate_correction.get("review_status")
+                or "pending"
+            )
         row["_live_decision_fingerprint"] = live_finalization_fingerprint(
             image=image if str(image.get("_ydb_pk") or "") else None,
             memory=memory,
@@ -3099,6 +3108,7 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
         "source_profile_do_not_say_json",
         "candidate_correction_status", "candidate_correction_recommended_action",
         "candidate_correction_reason_codes_json", "candidate_correction_regeneration_allowed",
+        "candidate_correction_mutation_allowed", "externality_re_adjudication_status",
         "sent_to_chat", "sent_message_id", "sent_at", "sent_chat_id", "delivery_key", "delivery_random_id",
     ]
     items = []

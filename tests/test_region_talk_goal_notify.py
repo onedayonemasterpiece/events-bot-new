@@ -327,6 +327,34 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertFalse(mod.candidate_has_pending_correction({
             "externality_re_adjudication_status": "approved_external",
         }))
+        resolved = {
+            "externality_re_adjudication_status": "resolved_external",
+            "candidate_correction_status": "retained_external",
+            "candidate_correction_recommended_action": "re_adjudicate_externality",
+            "candidate_correction_regeneration_allowed": "true",
+            "candidate_correction_mutation_allowed": "true",
+        }
+        self.assertFalse(mod.candidate_has_pending_correction(resolved))
+
+        publication = {
+            "post_url": "https://rg.ru/region/example",
+            **resolved,
+            "externality_re_adjudication_status": "pending",
+        }
+        mod.attach_live_profile_and_corrections(
+            [publication],
+            [],
+            [{
+                "canonical_url": publication["post_url"],
+                "review_status": "retained_external",
+                "live_revalidation_status": "resolved_external",
+                "recommended_action": "re_adjudicate_externality",
+                "regeneration_allowed": True,
+                "candidate_mutation_allowed": True,
+            }],
+        )
+        self.assertEqual(publication["externality_re_adjudication_status"], "resolved_external")
+        self.assertFalse(mod.candidate_has_pending_correction(publication))
 
     def test_v9_style_guard_detects_not_a_family_without_crossing_sentences(self) -> None:
         mod = load_module()
