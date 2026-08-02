@@ -55,6 +55,33 @@ test('Safari startup accepts a bounded observation window with no modal', async 
   assert.equal(evidence.obstruction_free, true);
 });
 
+test('Safari startup retains only allowlisted numeric and boolean contract probes', async () => {
+  const time = clock();
+  const contractProbe = {
+    exact_visible_static_text_count: 0,
+    exact_static_text_count: 0,
+    containing_static_text_count: 1,
+    exact_any_element_count: 1,
+    current_alert_present: true,
+    alert_text_length: 35,
+    alert_text_line_count: 1,
+    exact_title_line_count: 0,
+    title_substring_count: 1,
+    alert_button_count: 2,
+    exact_continue_button_count: 1,
+    exact_settings_button_count: 1,
+  };
+  await assert.rejects(() => stabilizeSafariSystemUi({ ...time,
+    inspect: async () => ({ blocking_dialog_count: 1, unknown_blocking_dialog_count: 1,
+      known_dialog_count: 0, continue_button_count: 0, contract_probe: contractProbe }),
+    dismissKnownDialog: async () => {},
+  }), (error) => {
+    assert.deepEqual(error.evidence.last_inspection.contract_probe, contractProbe);
+    assert.doesNotMatch(JSON.stringify(error.evidence), /Выбор|Продолжить|Настройки/u);
+    return true;
+  });
+});
+
 for (const fixture of [
   { name: 'unknown modal', state: { blocking_dialog_count: 1, unknown_blocking_dialog_count: 1, known_dialog_count: 0, continue_button_count: 0 }, code: /unexpected_blocking_modal/u },
   { name: 'ambiguous dialog', state: { blocking_dialog_count: 2, known_dialog_count: 2, continue_button_count: 2 }, code: /ambiguous/u },

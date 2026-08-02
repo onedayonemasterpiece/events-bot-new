@@ -38,12 +38,57 @@ test('Safari native inspection uses exact predicate title and same-alert button 
     getAlertText: async () => 'Safe body text\nВыбор поисковой системы\nMore safe body text',
     getAlertButtons: async () => ['Настройки', 'Продолжить'],
   });
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].using, '-ios predicate string');
+  assert.equal(calls.length, 4);
+  assert.ok(calls.every((call) => call.using === '-ios predicate string'));
   assert.match(calls[0].predicate, /name == 'Выбор поисковой системы'/u);
+  assert.match(calls[0].predicate, /visible == 1/u);
+  assert.doesNotMatch(calls[1].predicate, /visible == 1/u);
+  assert.match(calls[2].predicate, / CONTAINS /u);
   assert.deepEqual(state, { known_dialog_count: 1, continue_button_count: 1,
     blocking_dialog_count: 1, unknown_blocking_dialog_count: 0,
-    action_token: 'Продолжить' });
+    action_token: 'Продолжить', contract_probe: {
+      exact_visible_static_text_count: 1,
+      exact_static_text_count: 1,
+      containing_static_text_count: 1,
+      exact_any_element_count: 1,
+      current_alert_present: true,
+      alert_text_length: 58,
+      alert_text_line_count: 3,
+      exact_title_line_count: 1,
+      title_substring_count: 1,
+      alert_button_count: 2,
+      exact_continue_button_count: 1,
+      exact_settings_button_count: 1,
+    } });
+});
+
+test('Safari native inspection emits safe contract probes when the visible exact predicate disagrees', async () => {
+  const state = await inspectSafariNativeUiProtocol({
+    findElements: async (_using, predicate) => {
+      if (/visible == 1/u.test(predicate)) return [];
+      if (/type == 'XCUIElementTypeStaticText'/u.test(predicate) && / CONTAINS /u.test(predicate)) return [{ ELEMENT: 'contains' }];
+      if (/type == 'XCUIElementTypeStaticText'/u.test(predicate)) return [];
+      return [{ ELEMENT: 'any-type' }];
+    },
+    getAlertText: async () => 'Выбор поисковой системы Safari body',
+    getAlertButtons: async () => ['Настройки', 'Продолжить'],
+  });
+  assert.deepEqual(state.contract_probe, {
+    exact_visible_static_text_count: 0,
+    exact_static_text_count: 0,
+    containing_static_text_count: 1,
+    exact_any_element_count: 1,
+    current_alert_present: true,
+    alert_text_length: 35,
+    alert_text_line_count: 1,
+    exact_title_line_count: 0,
+    title_substring_count: 1,
+    alert_button_count: 2,
+    exact_continue_button_count: 1,
+    exact_settings_button_count: 1,
+  });
+  assert.equal(state.unknown_blocking_dialog_count, 1);
+  assert.equal(state.action_token, null);
 });
 
 test('same-named action in a different current alert remains unknown and non-actionable', async () => {

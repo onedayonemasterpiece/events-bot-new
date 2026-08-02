@@ -64,6 +64,23 @@ export async function stabilizeSafariSystemUi({
       blocking_dialog_count: Number(state?.blocking_dialog_count || 0),
       unknown_blocking_dialog_count: Number(state?.unknown_blocking_dialog_count || 0),
     };
+    if (state?.contract_probe && typeof state.contract_probe === 'object') {
+      const probe = state.contract_probe;
+      evidence.last_inspection.contract_probe = {
+        exact_visible_static_text_count: Number(probe.exact_visible_static_text_count || 0),
+        exact_static_text_count: Number(probe.exact_static_text_count || 0),
+        containing_static_text_count: Number(probe.containing_static_text_count || 0),
+        exact_any_element_count: Number(probe.exact_any_element_count || 0),
+        current_alert_present: probe.current_alert_present === true,
+        alert_text_length: Number(probe.alert_text_length || 0),
+        alert_text_line_count: Number(probe.alert_text_line_count || 0),
+        exact_title_line_count: Number(probe.exact_title_line_count || 0),
+        title_substring_count: Number(probe.title_substring_count || 0),
+        alert_button_count: Number(probe.alert_button_count || 0),
+        exact_continue_button_count: Number(probe.exact_continue_button_count || 0),
+        exact_settings_button_count: Number(probe.exact_settings_button_count || 0),
+      };
+    }
   };
 
   let known = null;

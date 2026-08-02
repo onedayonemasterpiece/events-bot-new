@@ -193,6 +193,13 @@ preflights retained exact `0/0/0` side-effect counts and are not acceptance
 passes.
 Safari startup evidence also retains only the last inspection counts (known,
 action, blocking and unknown); it never retains native alert text.
+When XCTest predicate results disagree with a visible Safari alert, the same
+evidence includes a fail-closed `contract_probe`: numeric result counts for
+exact-visible, exact, containing and any-element title predicates; alert text
+length/line/exact-title/substring counters; and exact known-button counters.
+The probe never retains the alert text, button labels or native hierarchy and
+never changes which dialog is actionable. It exists to choose the next single
+fix from runner evidence instead of retrying locator guesses.
 The mobile sentry captures a safe screenshot immediately after Safari launch
 and repeats observation after at most 20 seconds without the expected marker.
 Every native action must produce a verified state transition. Two unchanged

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Added privacy-safe iOS Safari alert contract probes to preflight evidence:
+  predicate-result counts with and without `visible`, current-alert text
+  length/line/exact-title counters, and exact known-button counters. The probe
+  remains fail-closed and records no alert text or native hierarchy.
 - Added the project `mobile-ui-sentry` skill for Android/iOS system-layer
   blockers: immediate safe startup observation, explicit UI-layer
   classification, exact same-dialog actions, post-action transition checks,
