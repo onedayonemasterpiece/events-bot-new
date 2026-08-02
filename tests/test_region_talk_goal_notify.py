@@ -227,6 +227,17 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertNotIn("\nОригинал", caption)
         self.assertNotIn("https://example.org\"", caption)
         original = mod.publication_operator_review_fingerprint(row)
+        self.assertEqual(
+            original,
+            mod.publication_operator_review_fingerprint({
+                **row,
+                "media_manifest_items": [{
+                    "media_id": "raw-cache-only",
+                    "content_sha256": "a" * 64,
+                }],
+                "input_media_manifest_hash": "b" * 64,
+            }),
+        )
         changed_media = {**manifest, "items": [{**manifest["items"][0], "ref": "https://cdn.example.org/other.jpg"}]}
         self.assertNotEqual(original, mod.publication_operator_review_fingerprint({
             **row, "publication_presentation_manifest_json": json.dumps(changed_media, ensure_ascii=False)
@@ -1033,12 +1044,22 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
 
         def fake_read_delivery(_pool, _ydb, _table, key):
             if key == "prior-key":
+                legacy_manifest = json.loads(current_manifest)
+                legacy_manifest.update({
+                    "media_manifest_items": [{
+                        "media_id": "raw-cache-only",
+                        "content_sha256": "a" * 64,
+                    }],
+                    "input_media_manifest_hash": "b" * 64,
+                })
                 return {
                     "status": "delivered",
                     "post_url": "https://example.org/article",
                     "message_id": "321",
                     "delivered_at": "2026-08-02T10:00:00+00:00",
-                    "operator_review_media_manifest_json": current_manifest,
+                    "operator_review_media_manifest_json": json.dumps(
+                        legacy_manifest, sort_keys=True, separators=(",", ":")
+                    ),
                 }
             return {}
 
