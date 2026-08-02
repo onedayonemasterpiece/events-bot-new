@@ -54,6 +54,10 @@ SOURCE_ONBOARDING_PROFILE_PROMPT_VERSION = "region_talk_source_onboarding_profil
 SOURCE_ONBOARDING_WRITER_PROMPT_VERSION = "region_talk_source_onboarding_writer_v2_publisher_reader_brief"
 SOURCE_ONBOARDING_ENTITY_TYPES = {"person", "collective", "thematic_channel", "media_brand", "unknown"}
 PUBLIC_TME_FALLBACK_ENV = "REGION_TALK_ALLOW_PUBLIC_TME_S_FALLBACK"
+
+
+class FinalDecisionRefreshError(RuntimeError):
+    """The current final-decision fence could not be read completely."""
 TERMINAL_PUBLICATION_STATUSES = {
     "gemini_accept",
     "gemini_reject",
@@ -732,6 +736,67 @@ def merge_image_and_memory_for_finalizer(image: dict[str, Any], memory: dict[str
     return row
 
 
+def _current_complete_kind(
+    session: Any,
+    ydb: Any,
+    table: str,
+    kind: str,
+    limit: int,
+) -> dict[str, dict[str, Any]]:
+    """Strong current read with a limit+1 completeness proof."""
+
+    max_rows = max(1, int(limit))
+    rows = rt.ydb_select_kind_items(
+        session,
+        ydb,
+        table,
+        kind,
+        limit=max_rows + 1,
+        current=True,
+    )
+    if len(rows) > max_rows:
+        raise rt.DecisionCriticalYdbReadError(
+            f"finalizer decision read truncated: kind={kind} limit={max_rows}"
+        )
+    return rows
+
+
+_LIVE_DECISION_VOLATILE_FIELDS = {
+    "_ydb_updated_at", "updated_at", "last_seen_at", "last_seen_run_id",
+    "run_id", "online_update_stage", "attempt_count", "last_attempt_at",
+}
+
+
+def _stable_live_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    return {
+        str(key): value
+        for key, value in payload.items()
+        if str(key) not in _LIVE_DECISION_VOLATILE_FIELDS
+        and not str(key).startswith("_ydb_")
+    }
+
+
+def live_finalization_fingerprint(
+    *,
+    image: dict[str, Any] | None,
+    memory: dict[str, Any] | None,
+    intake: dict[str, Any] | None,
+    source: dict[str, Any] | None,
+    publication: dict[str, Any] | None = None,
+) -> str:
+    payload = {
+        "image": _stable_live_payload(image),
+        "memory": _stable_live_payload(memory),
+        "intake": _stable_live_payload(intake),
+        "source": _stable_live_payload(source),
+        "publication": _stable_live_payload(publication),
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def read_live_rows(
     limit_images: int,
     limit_memory: int,
@@ -751,18 +816,22 @@ def read_live_rows(
         dict[str, dict[str, Any]],
         dict[str, dict[str, Any]],
         dict[str, dict[str, Any]],
+        dict[str, dict[str, Any]],
     ]:
-        images = rt.ydb_select_kind_items(session, ydb, table, "image_queue_item", limit=limit_images)
-        memory = rt.ydb_select_kind_items(session, ydb, table, "candidate_memory_item", limit=limit_memory)
-        publications = rt.ydb_select_kind_items(session, ydb, table, "publication_candidate_item", limit=limit_images)
-        sources = rt.ydb_select_kind_items(session, ydb, table, "source_queue_item", limit=limit_memory)
-        source_statuses = rt.ydb_select_kind_items(session, ydb, table, "source_status_item", limit=limit_memory)
-        online_sources = rt.ydb_select_kind_items(session, ydb, table, "online_source_item", limit=limit_memory)
-        external_publication_sources = rt.ydb_select_kind_items(
-            session, ydb, table, "external_publication_source_item", limit=limit_memory
+        images = _current_complete_kind(session, ydb, table, "image_queue_item", limit_images)
+        memory = _current_complete_kind(session, ydb, table, "candidate_memory_item", limit_memory)
+        publications = _current_complete_kind(session, ydb, table, "publication_candidate_item", limit_images)
+        sources = _current_complete_kind(session, ydb, table, "source_queue_item", limit_memory)
+        source_statuses = _current_complete_kind(session, ydb, table, "source_status_item", limit_memory)
+        online_sources = _current_complete_kind(session, ydb, table, "online_source_item", limit_memory)
+        external_publication_sources = _current_complete_kind(
+            session, ydb, table, "external_publication_source_item", limit_memory
         )
-        onboarding_profiles = rt.ydb_select_kind_items(session, ydb, table, "source_onboarding_profile_item", limit=limit_memory)
-        return images, memory, publications, sources, source_statuses, online_sources, external_publication_sources, onboarding_profiles
+        external_publication_intakes = _current_complete_kind(
+            session, ydb, table, "external_publication_intake_item", limit_memory
+        )
+        onboarding_profiles = _current_complete_kind(session, ydb, table, "source_onboarding_profile_item", limit_memory)
+        return images, memory, publications, sources, source_statuses, online_sources, external_publication_sources, external_publication_intakes, onboarding_profiles
 
     (
         images_by_pk,
@@ -772,6 +841,7 @@ def read_live_rows(
         source_status_items,
         online_source_items,
         external_publication_source_items,
+        external_publication_intake_items,
         onboarding_profile_items,
     ) = pool.retry_operation_sync(op)
     memory_by_url = _publication_by_normalized_url(memory_by_pk)
@@ -795,6 +865,11 @@ def read_live_rows(
     )
     memory_by_source = _memory_rows_by_source(memory_by_pk)
     onboarding_profiles_by_source = _profile_index(onboarding_profile_items)
+    external_intake_by_id = {
+        str(item.get("external_publication_id") or ""): item
+        for item in external_publication_intake_items.values()
+        if str(item.get("external_publication_id") or "")
+    }
     now_iso = rt.utc_now_iso()
     rows_by_url: dict[str, dict[str, Any]] = {}
     finalizer_inputs = dict(images_by_pk)
@@ -845,6 +920,18 @@ def read_live_rows(
         row["_memory_ydb_pk"] = str(memory.get("_ydb_pk") or "")
         row["_image_payload"] = dict(image)
         row["_memory_payload"] = dict(memory)
+        external_id = str(row.get("external_publication_id") or "").strip()
+        current_intake = external_intake_by_id.get(external_id) if external_id else None
+        row["_external_intake"] = current_intake
+        row["_external_intake_ydb_pk"] = str((current_intake or {}).get("_ydb_pk") or "")
+        row["external_intake_fingerprint"] = rt.external_publication_intake_fingerprint(current_intake)
+        row["external_intake_revision"] = (current_intake or {}).get("intake_revision") or (current_intake or {}).get("revision") or ""
+        row["external_intake_status"] = (current_intake or {}).get("intake_status") or ""
+        row["external_intake_review_status"] = (current_intake or {}).get("review_status") or ""
+        row["external_intake_publication_permission"] = (current_intake or {}).get("publication_permission") or ""
+        row["external_intake_manual_review_required"] = str(
+            bool(external_id) and rt.external_publication_intake_requires_manual_review(current_intake)
+        ).lower()
         if video_manual_review:
             row["media_kind"] = "video"
             row["manual_media_review_required"] = "true"
@@ -927,6 +1014,13 @@ def read_live_rows(
         )
         row["_source_onboarding_evidence"] = onboarding_evidence
         row["_source_onboarding_profile"] = onboarding_profiles_by_source.get(source_key, {})
+        row["_live_decision_fingerprint"] = live_finalization_fingerprint(
+            image=image if str(image.get("_ydb_pk") or "") else None,
+            memory=memory,
+            intake=current_intake,
+            source=authoritative_source,
+            publication=publication,
+        )
         row["publication_pre_score"] = publication_pre_score(row)
         previous = rows_by_url.get(post_url)
         if previous is None or str(row.get("updated_at") or row.get("_ydb_updated_at") or "") >= str(previous.get("updated_at") or previous.get("_ydb_updated_at") or ""):
@@ -1548,6 +1642,25 @@ def verify_rows(
     results: list[dict[str, Any]] = []
     llm_calls = 0
     for row in rows:
+        external_id = str(row.get("external_publication_id") or "").strip()
+        if external_id and (
+            rt.external_publication_intake_to_post(row.get("_external_intake")) is None
+            or rt._rt_bool(row.get("external_intake_manual_review_required"))
+        ):
+            # The intake ledger grants routing into CandidateReport only.  A
+            # missing/changed/manual intake cannot reach the terminal Gemini
+            # decision, while a clean unreviewed intake still uses the normal
+            # scoring/final-verifier funnel below.
+            row["publication_eligibility_verdict"] = "review"
+            row["publication_eligibility_evidence"] = "external_intake_not_currently_eligible"
+            row["publication_eligibility_gate_version"] = "external_intake_current_fence_v1"
+            row["publication_status"] = "gemini_needs_review"
+            row["publication_candidate_status"] = "llm_needs_review"
+            row["finalization_status"] = "terminal"
+            row["llm_attempted_this_run"] = "false"
+            row["next_attempt_after"] = ""
+            results.append(row)
+            continue
         verdict, _raw_eligibility = _eligibility_fields(row)
         previous = row.get("_previous_publication") if isinstance(row.get("_previous_publication"), dict) else {}
         if (
@@ -2174,13 +2287,172 @@ def write_source_onboarding_rows(
     }
 
 
+def filter_rows_against_current_finalization_state(
+    pool: Any,
+    ydb: Any,
+    table: str,
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Reread final inputs and replace stale verdicts with safe review state."""
+
+    guarded = [row for row in rows if row.get("_live_decision_fingerprint")]
+    if not guarded:
+        return rows
+    image_limit = max(1, _env_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
+    memory_limit = max(image_limit, _env_int("REGION_TALK_YDB_MAX_POST_ROWS", 20000))
+
+    def read(session: Any) -> tuple[dict[str, dict[str, Any]], ...]:
+        return (
+            _current_complete_kind(session, ydb, table, "image_queue_item", image_limit),
+            _current_complete_kind(session, ydb, table, "candidate_memory_item", memory_limit),
+            _current_complete_kind(session, ydb, table, "publication_candidate_item", image_limit),
+            _current_complete_kind(session, ydb, table, "source_queue_item", memory_limit),
+            _current_complete_kind(session, ydb, table, "source_status_item", memory_limit),
+            _current_complete_kind(session, ydb, table, "online_source_item", memory_limit),
+            _current_complete_kind(session, ydb, table, "external_publication_source_item", memory_limit),
+            _current_complete_kind(session, ydb, table, "external_publication_intake_item", image_limit),
+        )
+
+    try:
+        (
+            images, memories, publications, sources, statuses, online_sources,
+            external_sources, intakes,
+        ) = pool.retry_operation_sync(read)
+    except Exception as exc:
+        raise FinalDecisionRefreshError(
+            "final decision refresh failed closed: "
+            f"{type(exc).__name__}: {str(exc)[:240]}"
+        ) from exc
+
+    memories_by_url = _publication_by_normalized_url(memories)
+    publications_by_url = _publication_by_normalized_url(publications)
+    sources_by_key = authoritative_source_index(
+        sources,
+        statuses,
+        {**online_sources, **external_sources},
+    )
+    intakes_by_id = {
+        str(item.get("external_publication_id") or ""): item
+        for item in intakes.values()
+        if str(item.get("external_publication_id") or "")
+    }
+    safe: list[dict[str, Any]] = []
+
+    def defer_changed(row: dict[str, Any], reason: str, current_fingerprint: str = "") -> None:
+        previous = row.get("_previous_publication") if isinstance(row.get("_previous_publication"), dict) else {}
+        published_states = {
+            str(previous.get("target_publication_status") or row.get("target_publication_status") or "").lower(),
+            str(previous.get("public_publication_status") or row.get("public_publication_status") or "").lower(),
+            str(previous.get("plan_status") or row.get("plan_status") or "").lower(),
+        }
+        already_published = bool(published_states & {"published", "target_published", "completed"})
+        if already_published:
+            # Delivered/public rows stay immutable, while the safety conflict
+            # itself is a durable operator-visible audit record.
+            print(
+                f"[region-talk-finalizer] immutable published row needs audit: {reason} "
+                f"{row.get('post_url')}",
+                flush=True,
+            )
+            expected_fingerprint = str(row.get("_live_decision_fingerprint") or "")
+            post_url = normalize_post_url(str(row.get("post_url") or ""))
+            external_id = str(row.get("external_publication_id") or "")
+            audit_id = "rtfinalaudit_" + rt.stable_hash(
+                post_url, external_id, reason, expected_fingerprint, current_fingerprint
+            )
+            safe.append({
+                "_final_decision_audit_only": True,
+                "final_decision_audit_id": audit_id,
+                "audit_status": "manual_review_required",
+                "audit_reason": reason,
+                "post_url": post_url,
+                "external_publication_id": external_id,
+                "expected_live_decision_fingerprint": expected_fingerprint,
+                "current_live_decision_fingerprint": current_fingerprint,
+                "previous_target_publication_status": previous.get("target_publication_status") or row.get("target_publication_status") or "",
+                "previous_public_publication_status": previous.get("public_publication_status") or row.get("public_publication_status") or "",
+                "previous_plan_status": previous.get("plan_status") or row.get("plan_status") or "",
+                "operator_action": "review_immutable_published_evidence_conflict",
+            })
+            return
+        row["publication_status"] = "gemini_needs_review"
+        row["publication_candidate_status"] = "llm_needs_review"
+        row["llm_gate_status"] = "stale_live_state"
+        row["llm_decision"] = "needs_review"
+        row["llm_reason"] = reason
+        row["publication_eligibility_verdict"] = "review"
+        row["publication_eligibility_evidence"] = reason
+        row["publication_eligibility_gate_version"] = "final_decision_current_fence_v1"
+        row["finalization_status"] = "terminal"
+        row["final_decision_guard_status"] = "deferred_live_state_changed"
+        row["final_decision_guard_fingerprint"] = ""
+        row["llm_attempted_this_run"] = "false"
+        row["next_attempt_after"] = ""
+        safe.append(row)
+
+    for row in rows:
+        expected = str(row.get("_live_decision_fingerprint") or "")
+        if not expected:
+            safe.append(row)
+            continue
+        url = normalize_post_url(str(row.get("post_url") or ""))
+        external_id = str(row.get("external_publication_id") or "").strip()
+        intake = intakes_by_id.get(external_id) if external_id else None
+        if external_id and rt.external_publication_intake_to_post(intake) is None:
+            print(
+                f"[region-talk-finalizer] final decision deferred: current intake ineligible {url}",
+                flush=True,
+            )
+            defer_changed(row, "current_external_intake_missing_manual_or_ineligible")
+            continue
+        image_pk = str(row.get("_image_ydb_pk") or "")
+        image = images.get(image_pk) if image_pk else None
+        if image_pk and not image:
+            defer_changed(row, "current_image_evidence_missing")
+            continue
+        memory_pk = str(row.get("_memory_ydb_pk") or "")
+        memory = memories.get(memory_pk) if memory_pk else memories_by_url.get(url)
+        if memory_pk and not memory:
+            defer_changed(row, "current_candidate_memory_missing")
+            continue
+        source = sources_by_key.get(canonical_source_key_for_row(row))
+        publication = publications_by_url.get(url)
+        current = live_finalization_fingerprint(
+            image=image,
+            memory=memory,
+            intake=intake,
+            source=source,
+            publication=publication,
+        )
+        if current != expected:
+            print(
+                f"[region-talk-finalizer] final decision deferred: live fingerprint changed {url}",
+                flush=True,
+            )
+            defer_changed(row, "live_eligibility_or_provenance_fingerprint_changed", current)
+            continue
+        row["final_decision_guard_status"] = "current_unchanged"
+        row["final_decision_guard_fingerprint"] = current
+        safe.append(row)
+    return safe
+
+
 def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str, Any]], run_id: str) -> int:
+    rows = filter_rows_against_current_finalization_state(pool, ydb, table, rows)
     now = rt.utc_now_iso()
     fields = [
         "run_id", "updated_at", "last_seen_run_id", "post_url", "original_post_url", "post_url_normalization_version",
         "canonical_source_key", "authoritative_source_found", "source_title", "source_url", "post_date",
         "content_origin_type", "publication_content_type", "publication_language", "external_publication_id",
-        "external_research_quality_score", "source_overview", "diversity_topics",
+        "external_research_quality_score", "request_id", "input_json_sha256", "raw_input_json_sha256",
+        "canonical_evidence_urls", "intake_at", "intake_received_at", "imported_at",
+        "normalized_title", "authors", "identity_keys", "source_overview", "diversity_topics",
+        "legacy_provenance_attestation_id", "legacy_provenance_source_sha256",
+        "legacy_provenance_attestation_json",
+        "external_intake_fingerprint", "external_intake_revision", "external_intake_status",
+        "external_intake_review_status", "external_intake_publication_permission",
+        "external_intake_manual_review_required", "final_decision_guard_status",
+        "final_decision_guard_fingerprint",
         "rights_policy", "media_use_policy", "media_reuse_allowed",
         "authoritative_source_fingerprint", "authoritative_source_fingerprint_version",
         "publication_rank", "publication_pre_score", "publication_status", "publication_candidate_status", "overall_media_score", "postcardness_score",
@@ -2243,6 +2515,26 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
     ]
     items = []
     for row in rows:
+        if row.get("_final_decision_audit_only"):
+            audit = {
+                key: value for key, value in row.items()
+                if not str(key).startswith("_final_decision_")
+            }
+            audit.update({
+                "final_decision_audit_id": row.get("final_decision_audit_id"),
+                "run_id": run_id,
+                "created_at": now,
+                "updated_at": now,
+                "audit_contract_version": "region_talk_final_decision_audit_v1",
+            })
+            audit_id = str(audit.get("final_decision_audit_id") or "")
+            if audit_id:
+                items.append((
+                    "publication_final_decision_audit_item:" + audit_id,
+                    "publication_final_decision_audit_item",
+                    audit,
+                ))
+            continue
         durable_row = dict(row)
         terminal_text = bool(
             str(row.get("sent_to_chat") or "").lower() == "true"
@@ -2283,6 +2575,7 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
             "publication_presentation_manifest_json",
             "selected_media_materialization_json",
             "media_materialization_items_json",
+            "legacy_provenance_attestation_json",
         ):
             if durable_row.get(lossless_field) not in (None, ""):
                 payload[lossless_field] = durable_row[lossless_field]
@@ -2294,7 +2587,9 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
 
     def op(session: Any) -> int:
         rt.ensure_ydb_kv_table(ydb, session, table)
-        return rt.ydb_upsert_json_many(session, ydb, table, items, now, chunk_size=20, timeout_seconds=8)
+        return rt.ydb_upsert_json_many(
+            session, ydb, table, items, now, chunk_size=max(1, len(items)), timeout_seconds=8
+        )
 
     return int(pool.retry_operation_sync(op) or 0)
 

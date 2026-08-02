@@ -393,8 +393,14 @@ selection plan with policy `region_talk_daily_pair_antivector_v1`:
 - the social choice is also compared with that day's article. An alternative
   below the pair-similarity threshold is preferred; unavoidable relaxation is
   explicit in `pair_diversity_relaxed`;
-- future `planned`/`vacant` slots are overwritten on every run. Only
-  `locked`/`published` slots are immutable;
+- an unprepared future `planned`/`vacant` slot can be recalculated. Once its
+  current candidate has a complete reviewed draft/presentation revision, the
+  slot is `prepared` and its candidate identity is preserved like a lock;
+- a late intake is evaluated for the next unprepared slot. It cannot silently
+  replace a prepared candidate. If the prepared candidate's current intake or
+  review revision became invalid, the planner may reopen the slot only with an
+  explicit audit reason plus previous/current queue revisions; `locked` and
+  `published` remain immutable;
 - an elapsed planned slot is frozen, and a first-ever plan created after the
   first daily slot starts on the next day instead of manufacturing a past due
   publication; the frozen slot also consumes its candidate identity, so that
@@ -414,9 +420,13 @@ selection plan with policy `region_talk_daily_pair_antivector_v1`:
 The planner reads the actual target publication log/schedule, not operator-chat
 delivery, when reconstructing `publication_semantic_history_item`. Sending a
 candidate to the review chat therefore does not falsely mark it as publicly
-published. The scheduled runner executes the planner after each autonomous
-discovery/finalization session, so the next 14 days are recalculated five
-times per day as candidates arrive under the current production cadence.
+published. The scheduled runner executes the planner only after a complete
+current intake refresh and successful reaction projection. Immediately before
+the plan write, the planner strongly rereads the intake prefix and compares its
+revision with the selection revision. A late change triggers a bounded
+recomputation or defers the affected row; refresh/read/truncation failure
+preserves the existing plan. Thus the unprepared part of the next 14 days can
+change five times per day while prepared decisions stay explicit and stable.
 
 The implemented on-demand operator view uses
 `scripts/region_talk_review_queue.py` policy
@@ -722,14 +732,17 @@ python scripts/region_talk_goal_notify.py --message 'Region Talk: CandidateRepor
 - Cross-post each selected item to both Telegram and VK where possible and allowed.
 - Do not publish the same source more than once per day.
 - Max 1–2 posts per source per 7 days.
-- Recalculate unlocked future slots whenever new candidates arrive.
+- Recalculate only unprepared/unlocked future slots when new candidates arrive;
+  defer late intake past a prepared revision unless an audited invalidation
+  safely reopens it.
 - Use semantic anti-vector history separately for articles and social posts.
 - Keep the article/social pair and adjacent days semantically different.
 - Candidates can expire.
 - Dry-run mode is required.
 - Auto-publish is disabled by default until explicitly configured.
 
-Future publisher state machine: `pending → locked → published|failed|skipped|cancelled`.
+Future publisher state machine:
+`pending → prepared → locked → published|failed|skipped|cancelled`.
 
 Idempotency:
 

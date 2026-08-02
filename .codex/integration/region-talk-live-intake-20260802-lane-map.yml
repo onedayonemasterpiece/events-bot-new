@@ -1,0 +1,54 @@
+mode: worktree_worker
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/main@e404e9fa754704d1f6c9e38946d6afa4a884329f
+base_branch: main
+integration_branch: integration/region-talk-live-intake-20260802
+global_constraints:
+  - preserve dirty root worktree; all writes isolated
+  - LLM-first semantic decisions; deterministic code only normalization, dedupe, and safety guards
+  - fail closed on uncertainty and preserve manual_review_required
+  - update canonical Region Talk docs and CHANGELOG
+verification_owner: root integrator
+stop_conditions:
+  - incompatible YDB schema contract without migration path
+  - inability to prove final-decision reread or idempotency
+lanes:
+  - id: intake-ledger
+    role: worker
+    requirement_ids: [R2, R4, R5, R8]
+    target: async research JSON intake, provenance, dedupe, idempotency, operator observability
+    depends_on: [map-intake-ledger]
+    execution_mode: parallel
+    branch: agent/region-talk-live-intake/intake-ledger
+    worktree: /home/dev/.codex/worktrees/events-bot-new/region-talk-live-intake-intake-ledger
+    writable_files: [.github/workflows/region-talk-external-publication-import.yml, scripts/region_talk_external_publication_import.py, scripts/region_talk_external_research_autorun.py, scripts/region_talk_external_research_request.py, docs/features/region-talk-channel/external-publication-research-request.schema.json, docs/features/region-talk-channel/external-publication-research-registry.schema.json, tests/test_region_talk_external_publication_import.py, tests/test_region_talk_external_research_request.py, tests/test_region_talk_external_research_registry.py, tests/test_region_talk_external_research_autorun.py, .codex/lanes/intake-ledger/RESULTS.md]
+    forbidden_files: [scripts/region_talk_orchestrator.py, scripts/region_talk_publication_finalizer.py, scripts/region_talk_publication_plan.py, scripts/region_talk_review_queue.py, scripts/region_talk_scheduled_runner.py, CHANGELOG.md, docs/features/region-talk-channel/external-publications.md, docs/features/region-talk-channel/orchestration-to-be.md, docs/features/region-talk-channel/publication-queue.md, docs/features/region-talk-channel/ydb-schema.md]
+    expected_output: committed importer/provenance/observability changes plus focused tests
+    verification_scope: targeted
+    status: planned
+  - id: live-decisions
+    role: worker
+    requirement_ids: [R1, R3, R6, R7, R9]
+    target: live rereads, normal pipeline admission, fail-closed finalization, stable prepared releases
+    depends_on: [map-live-decisions]
+    execution_mode: parallel
+    branch: agent/region-talk-live-intake/live-decisions
+    worktree: /home/dev/.codex/worktrees/events-bot-new/region-talk-live-intake-live-decisions
+    writable_files: [kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py, scripts/region_talk_orchestrator.py, scripts/region_talk_publication_finalizer.py, scripts/region_talk_publication_plan.py, scripts/region_talk_review_queue.py, scripts/region_talk_scheduled_runner.py, tests/test_region_talk_candidate_report.py, tests/test_region_talk_orchestrator.py, tests/test_region_talk_publication_finalizer.py, tests/test_region_talk_publication_plan.py, tests/test_region_talk_review_queue.py, tests/test_region_talk_scheduled_runner.py, .codex/lanes/live-decisions/RESULTS.md]
+    forbidden_files: [scripts/region_talk_external_publication_import.py, CHANGELOG.md, docs/]
+    expected_output: committed fresh-read/final-gate/late-intake safeguards plus focused tests
+    verification_scope: targeted
+    status: planned
+  - id: closure-review
+    role: reviewer
+    requirement_ids: []
+    target: independent R1-R9 closure audit after integration
+    depends_on: [intake-ledger, live-decisions]
+    execution_mode: serial_after_dependency
+    branch: integration/region-talk-live-intake-20260802
+    worktree: /home/dev/projects/events-bot-new-region-talk-caption-retry-20260801
+    writable_files: [.codex/lanes/closure-review/RESULTS.md]
+    forbidden_files: []
+    expected_output: requirement-by-requirement acceptance findings
+    verification_scope: inspection_only
+    status: planned
