@@ -31,6 +31,14 @@ iOS terminal run
 [30754894934](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30754894934)
 is retained as corrected `BLOCKED_SAFARI_FIRST_RUN_UI` with zero mail/Auth/membership side effects. The visible first-run search-engine dialog invalidates every keyboard conclusion from that run; it is not acceptance.
 
+The same scenario now has an explicit transport contract and immutable
+build-time fault profiles. The first faulted mobile release cell is
+`client_supabase_direct_unreachable`: direct Supabase probes are rejected
+before selected-once dispatch, while issue/verify/registration must each use
+the Yandex relay exactly once. Canonical evidence adds sanitized fault and
+transport event streams; workflow success without an activated matching fault
+receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
+
 Правило обновления:
 - При добавлении нового `.feature` файла или существенном изменении набора сценариев сначала обновляй эту страницу.
 - Для сценариев с «живыми» внешними ссылками отмечай, насколько быстро они устаревают.

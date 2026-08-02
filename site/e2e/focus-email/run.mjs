@@ -15,6 +15,7 @@ import { runFocusOtpBrowserTab, runIosKeyboardPreflight } from './journey.mjs';
 
 const FULL_SCENARIO = 'focus.otp.browser_tab';
 const PREFLIGHT_SCENARIO = 'focus.otp.ios_keyboard_preflight';
+const FAULT_PROFILES = new Set(['normal', 'client_supabase_direct_unreachable', 'client_yandex_relay_unreachable', 'both_client_routes_unreachable']);
 const startedAt = Date.now();
 const required = (name) => { const value = String(process.env[name] || '').trim(); if (!value) throw new Error(`missing_configuration:${name}`); return value; };
 const addMask = (value) => { if (value && process.env.GITHUB_ACTIONS === 'true') process.stdout.write(`::add-mask::${value}\n`); };
@@ -28,6 +29,8 @@ function expectedRepoSha() {
 const runId = sanitizedRunId(process.env.E2E_RUN_ID || `local-${Date.now()}`);
 const platform = validatePlatform(process.env.E2E_PLATFORM || 'browser');
 const scenario = String(process.env.E2E_SCENARIO_ID || FULL_SCENARIO).trim();
+const expectedFaultProfile = String(process.env.E2E_TRANSPORT_FAULT_PROFILE || 'normal').trim();
+if (!FAULT_PROFILES.has(expectedFaultProfile)) throw new Error(`configuration_invalid:fault_profile:${expectedFaultProfile}`);
 if (![FULL_SCENARIO, PREFLIGHT_SCENARIO].includes(scenario)) throw new Error(`scenario_invalid:${scenario}`);
 if (scenario === PREFLIGHT_SCENARIO && platform !== 'ios') throw new Error('scenario_platform_invalid:ios_keyboard_preflight');
 const timeoutMs = Math.min(180_000, Math.max(30_000, Number(process.env.E2E_MAIL_TIMEOUT_MS || 120_000)));
@@ -40,6 +43,9 @@ let target; let mailbox; let ui; let recipient = ''; let otp = ''; let coverage 
 const emptyRecorder = { entries: [], count: () => 0, statuses: () => [] };
 let recorder = emptyRecorder;
 let diagnostics = summarizeRuntimeDiagnostics([], []);
+let transportFaultEvidence = { receipt: null, fault_events: [], transport_events: [], transport_outcomes: [] };
+let transportFaultSummary = { expected_profile: expectedFaultProfile, active: expectedFaultProfile === 'normal' };
+let latestCounts = null;
 let result = publicResult({ scenario_id: scenario, platform, status: 'FAIL', coverage, target_origin: null, target_path: null,
   expected_repo_sha: null, observed_repo_sha: null, otp_issue_request_count: 0, otp_verify_request_count: 0,
   participant_registration_request_count: 0, failures: [] });
@@ -54,7 +60,7 @@ try {
     secrets.push(recipient);
     mailbox = createMailbox(process.env);
   }
-  const uiOptions = { platform, target, expectedRepoSha: expected, evidenceRoot, secrets,
+  const uiOptions = { platform, target, expectedRepoSha: expected, expectedFaultProfile, evidenceRoot, secrets,
     directHost: String(process.env.E2E_SUPABASE_HOST || '').trim(), relayHost: String(process.env.E2E_RELAY_HOST || '').trim() };
   ui = platform === 'browser' ? await createPlaywrightUi(uiOptions) : await createAppiumUi(uiOptions);
   recorder = ui.recorder;
@@ -62,12 +68,43 @@ try {
   const journey = scenario === PREFLIGHT_SCENARIO
     ? await runIosKeyboardPreflight({ ui, step })
     : await runFocusOtpBrowserTab({ ui, mailbox, recipient, timeoutMs, step, onSecret });
+  transportFaultEvidence = await ui.transportFaultEvidence?.() || transportFaultEvidence;
+  if (expectedFaultProfile !== 'normal') {
+    const receipt = transportFaultEvidence.receipt;
+    if (receipt?.profile_id !== expectedFaultProfile || !/^[0-9a-f]{64}$/u.test(String(receipt?.registry_digest || ''))) {
+      throw new Error('fault_not_active:receipt_missing_or_mismatched');
+    }
+    const expectedBlockedHost = expectedFaultProfile === 'client_supabase_direct_unreachable' ? 'supabase_direct'
+      : expectedFaultProfile === 'client_yandex_relay_unreachable' ? 'yandex_supabase_relay' : null;
+    const hits = transportFaultEvidence.fault_events.filter((event) => !expectedBlockedHost || event.host_class === expectedBlockedHost).length;
+    if (hits < 1) throw new Error('fault_not_active:no_matching_fault_hit');
+    if (expectedFaultProfile === 'client_supabase_direct_unreachable') {
+      for (const operation of ['auth.otp', 'auth.verify', 'rpc.register_focus_group_participant_v1']) {
+        const outcomes = transportFaultEvidence.transport_outcomes.filter((event) => event.operation === operation);
+        const relayOutcomes = outcomes.filter((event) => event.finalRoute === 'relay');
+        const directOutcomes = outcomes.filter((event) => event.finalRoute === 'direct');
+        if (relayOutcomes.length !== 1 || directOutcomes.length !== 0) {
+          throw new Error(`fault_route_selection:${operation}:${directOutcomes.length}:${relayOutcomes.length}`);
+        }
+      }
+    }
+    transportFaultSummary = {
+      expected_profile: expectedFaultProfile,
+      active: true,
+      registry_digest: receipt.registry_digest,
+      fault_hit_count: hits,
+      otp_issue_route: transportFaultEvidence.transport_outcomes.find((event) => event.operation === 'auth.otp')?.finalRoute || null,
+      otp_verify_route: transportFaultEvidence.transport_outcomes.find((event) => event.operation === 'auth.verify')?.finalRoute || null,
+      registration_route: transportFaultEvidence.transport_outcomes.find((event) => event.operation === 'rpc.register_focus_group_participant_v1')?.finalRoute || null,
+    };
+  }
   diagnostics = summarizeRuntimeDiagnostics(recorder.entries, ui.consoles);
   if (diagnostics.blocking_failure_count > 0) throw new Error(`runtime_diagnostics:blocking:${diagnostics.blocking_failure_count}`);
   result = publicResult({ ...result, coverage, status: 'PASS', failure_domain: null, observed_repo_sha: journey.observedRepoSha,
     browser: platform === 'browser' ? ui.device : null, device: ui.device,
     keyboard_acceptance: platform === 'browser' ? null : journey.keyboardAcceptance,
     keyboard_preflight: ui.keyboardPreflight || null, safari_startup: ui.safariStartup || null,
+    transport_fault: transportFaultSummary,
     otp_issue_request_count: journey.counts.issue, otp_verify_request_count: journey.counts.verify,
     participant_registration_request_count: journey.counts.registration,
     participant_registration_status: journey.counts.registrationStatus,
@@ -79,7 +116,8 @@ try {
     console_error_count: ui.consoles.filter((item) => item.type === 'error').length,
     essential_failed_request_count: diagnostics.blocking_failure_count, diagnostics, failures: [] });
 } catch (error) {
-  await ui?.requestCounts?.().catch(() => undefined);
+  latestCounts = await ui?.requestCounts?.().catch(() => null);
+  transportFaultEvidence = await ui?.transportFaultEvidence?.().catch(() => transportFaultEvidence) || transportFaultEvidence;
   diagnostics = summarizeRuntimeDiagnostics(recorder.entries, ui?.consoles || []);
   const domain = focusOtpFailureDomain(error);
   const message = redactText(String(error?.message || error), [...secrets, otp]);
@@ -89,9 +127,11 @@ try {
     browser: platform === 'browser' ? ui?.device || null : null, device: ui?.device || null,
     keyboard_acceptance: platform === 'browser' ? null : ui?.keyboard || null,
     keyboard_preflight: ui?.keyboardPreflight || null, safari_startup: ui?.safariStartup || null,
-    otp_issue_request_count: recorder.count('POST', '/auth/v1/otp'), otp_verify_request_count: recorder.count('POST', '/auth/v1/verify'),
-    participant_registration_request_count: recorder.count('POST', '/rpc/register_focus_group_participant_v1'),
-    participant_registration_status: recorder.statuses('/rpc/register_focus_group_participant_v1').at(-1) ?? null,
+    transport_fault: transportFaultSummary,
+    otp_issue_request_count: latestCounts?.issue ?? recorder.count('POST', '/auth/v1/otp'),
+    otp_verify_request_count: latestCounts?.verify ?? recorder.count('POST', '/auth/v1/verify'),
+    participant_registration_request_count: latestCounts?.registration ?? recorder.count('POST', '/rpc/register_focus_group_participant_v1'),
+    participant_registration_status: latestCounts?.registrationStatus ?? recorder.statuses('/rpc/register_focus_group_participant_v1').at(-1) ?? null,
     mail: mailbox?.safeDiagnostics?.({ recipient }) || result.mail || null, diagnostics,
     first_failed_step: failedStep, failures: [message] });
   step('journey_failed', 'failed');
@@ -129,6 +169,9 @@ await evidence.writeJsonl('scenarios.jsonl', [{ scenario_id: scenario, platform,
 await evidence.writeText('junit.xml', junitXml(result, (Date.now() - startedAt) / 1_000));
 await evidence.writeJson('device.json', result.device || { platform, status: 'unavailable' });
 await evidence.writeJsonl('network.sanitized.jsonl', recorder.entries);
+await evidence.writeJsonl('fault-events.sanitized.jsonl', transportFaultEvidence.fault_events || []);
+await evidence.writeJsonl('transport-events.sanitized.jsonl', transportFaultEvidence.transport_events || []);
+await evidence.writeJsonl('transport-outcomes.sanitized.jsonl', transportFaultEvidence.transport_outcomes || []);
 await evidence.writeJsonl('console.sanitized.jsonl', ui?.consoles || []);
 await evidence.writeJson('runtime-diagnostics.json', diagnostics);
 await evidence.writeJson('mail-delivery.sanitized.json', result.mail || { matching_message_count: 0 });

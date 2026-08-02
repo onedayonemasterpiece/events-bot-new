@@ -7,6 +7,7 @@ on:
       expected_repo_sha: { required: true, type: string }
       platform: { required: true, type: string }
       scenario: { required: false, type: string, default: focus.otp.browser_tab }
+      fault_profile: { required: false, type: string, default: normal }
   workflow_dispatch:
     inputs:
       target_url:
@@ -29,6 +30,12 @@ on:
         default: focus.otp.browser_tab
         type: choice
         options: [focus.otp.browser_tab, focus.otp.ios_keyboard_preflight]
+      fault_profile:
+        description: Immutable transport fault profile recorded by preview-build.json
+        required: true
+        default: normal
+        type: choice
+        options: [normal, client_supabase_direct_unreachable, client_yandex_relay_unreachable, both_client_routes_unreachable]
 
 permissions:
   contents: read
@@ -45,11 +52,19 @@ jobs:
         env:
           SCENARIO: ${{ inputs.scenario }}
           PLATFORM: ${{ inputs.platform }}
+          FAULT_PROFILE: ${{ inputs.fault_profile }}
         run: |
           case "${SCENARIO}:${PLATFORM}" in
             focus.otp.browser_tab:browser|focus.otp.browser_tab:android|focus.otp.browser_tab:ios|focus.otp.browser_tab:all|focus.otp.ios_keyboard_preflight:ios) ;;
             *) echo 'Unsupported scenario/platform pair' >&2; exit 1 ;;
           esac
+          case "$FAULT_PROFILE" in
+            normal|client_supabase_direct_unreachable|client_yandex_relay_unreachable|both_client_routes_unreachable) ;;
+            *) echo 'Unsupported fault profile' >&2; exit 1 ;;
+          esac
+          if [ "$SCENARIO" != focus.otp.browser_tab ] && [ "$FAULT_PROFILE" != normal ]; then
+            echo 'Fault profiles are only valid for the full OTP journey' >&2; exit 1
+          fi
 
   browser:
     needs: validate
@@ -60,6 +75,7 @@ jobs:
     env:
       E2E_PLATFORM: browser
       E2E_SCENARIO_ID: ${{ inputs.scenario }}
+      E2E_TRANSPORT_FAULT_PROFILE: ${{ inputs.fault_profile }}
       E2E_HARNESS_REPO_SHA: ${{ github.sha }}
       E2E_TARGET_URL: ${{ inputs.target_url }}
       E2E_EXPECTED_REPO_SHA: ${{ inputs.expected_repo_sha }}
@@ -105,6 +121,7 @@ jobs:
     env:
       E2E_PLATFORM: android
       E2E_SCENARIO_ID: ${{ inputs.scenario }}
+      E2E_TRANSPORT_FAULT_PROFILE: ${{ inputs.fault_profile }}
       E2E_HARNESS_REPO_SHA: ${{ github.sha }}
       E2E_DEVICE_NAME: Pixel 7
       E2E_PLATFORM_VERSION: '15'
@@ -173,6 +190,7 @@ jobs:
     env:
       E2E_PLATFORM: ios
       E2E_SCENARIO_ID: ${{ inputs.scenario }}
+      E2E_TRANSPORT_FAULT_PROFILE: ${{ inputs.fault_profile }}
       E2E_HARNESS_REPO_SHA: ${{ github.sha }}
       E2E_TARGET_URL: ${{ inputs.target_url }}
       E2E_EXPECTED_REPO_SHA: ${{ inputs.expected_repo_sha }}

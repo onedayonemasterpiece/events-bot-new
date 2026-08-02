@@ -9,6 +9,7 @@ import templateContract from '../src/data/eventTemplateContract.json' with { typ
 import {
   CANDIDATE_MANIFEST_SCHEMA, candidateBasePath, fileInventory, safeCandidateToken, sha256, treeHash,
 } from './release-contract.mjs';
+import { TRANSPORT_FAULT_SENTINEL } from './transport-fault-build-contract.mjs';
 
 const siteDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const token = safeCandidateToken(process.env.SECRET_CANDIDATE_TOKEN || '');
@@ -93,6 +94,12 @@ if (transportExperiment.config_hash !== 'sha256:bf9a8a80e35c8699a26993ae25ac8331
 if (transportExperiment.mode === 'qa' && transportExperiment.trusted_telemetry !== false) fail('QA experiment telemetry must be untrusted');
 if (transportExperiment.qa_route !== `/${transportQaRoute}/`) fail('transport QA route contract mismatch');
 const files = fileInventory(root, { exclude: ['secret-candidate-manifest.json'], secretCandidate: true });
+for (const file of files) {
+  if (/\.(?:css|html|js|json|map|mjs)$/u.test(file.key)
+    && readFileSync(join(root, file.key), 'utf8').includes(TRANSPORT_FAULT_SENTINEL)) {
+    fail(`transport fault injector leaked into secret-candidate artifact: ${file.key}`);
+  }
+}
 const byKey = new Map(manifest.files.map((file) => [file.key, file]));
 if (files.length !== byKey.size || manifest.counts.file_count !== files.length) fail('candidate file count mismatch');
 for (const file of files) {

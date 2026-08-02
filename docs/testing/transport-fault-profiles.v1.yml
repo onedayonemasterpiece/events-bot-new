@@ -1,0 +1,40 @@
+{
+  "schema": "static_site_transport_fault_profiles.v1",
+  "profiles": {
+    "normal": {
+      "description": "No client transport fault is injected.",
+      "rules": []
+    },
+    "client_supabase_direct_unreachable": {
+      "description": "The browser/device cannot reach the direct Supabase origin; Yandex relay remains available.",
+      "rules": [
+        {
+          "host_class": "supabase_direct",
+          "failure": "network_reject"
+        }
+      ]
+    },
+    "client_yandex_relay_unreachable": {
+      "description": "The browser/device cannot reach the Yandex Supabase relay; direct Supabase remains available.",
+      "rules": [
+        {
+          "host_class": "yandex_supabase_relay",
+          "failure": "network_reject"
+        }
+      ]
+    },
+    "both_client_routes_unreachable": {
+      "description": "Neither direct Supabase nor the Yandex Supabase relay is reachable from the client.",
+      "rules": [
+        {
+          "host_class": "supabase_direct",
+          "failure": "network_reject"
+        },
+        {
+          "host_class": "yandex_supabase_relay",
+          "failure": "network_reject"
+        }
+      ]
+    }
+  }
+}

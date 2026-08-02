@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { loadPreviewPublicConfig, requirePreviewAuthorizedSearch } from './preview-public-env.mjs';
+import { selectedTransportFaultProfile } from './transport-fault-build-contract.mjs';
 
 function safeBuildId(value) {
   if (!value || !/^preview-[a-zA-Z0-9._-]+$/.test(value) || value.includes('/')) {
@@ -46,6 +47,7 @@ const astroAssetBaseUrl = (process.env.PUBLIC_ASTRO_ASSET_BASE_URL || '')
   .replace(/\/+$/u, '');
 const publicSearchConfig = loadPreviewPublicConfig(siteDir, process.env);
 requirePreviewAuthorizedSearch(publicSearchConfig, process.env);
+const transportFault = selectedTransportFaultProfile(process.env);
 
 rmSync(distDir, { recursive: true, force: true });
 const env = {
@@ -84,6 +86,8 @@ writeFileSync(join(distDir, buildId, 'preview-build.json'), JSON.stringify({
   authorizedSearchConfigured: publicSearchConfig.configured,
   currentDate: effectiveCurrentDate,
   referenceIso: effectiveReferenceIso,
+  transportFaultProfile: transportFault.id,
+  transportFaultRegistryDigest: transportFault.registry_digest,
 }, null, 2));
 console.log(`Preview build ready: dist/${buildId}/`);
 console.log(`Preview URL: https://kenigevents.ru/${buildId}/__preview/`);

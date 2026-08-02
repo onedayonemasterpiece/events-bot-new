@@ -20,7 +20,7 @@ async function maskPage(page) {
   });
 }
 
-export async function createPlaywrightUi({ target, expectedRepoSha, evidenceRoot, secrets, directHost, relayHost }) {
+export async function createPlaywrightUi({ target, expectedRepoSha, expectedFaultProfile = 'normal', evidenceRoot, secrets, directHost, relayHost }) {
   const browser = await chromium.launch({ headless: true });
   const viewport = { width: 390, height: 844 };
   const context = await browser.newContext({ viewport });
@@ -28,6 +28,24 @@ export async function createPlaywrightUi({ target, expectedRepoSha, evidenceRoot
   const consoles = [];
   let otp = '';
   let verifiedRepoSha = null;
+  const faultEvents = [];
+  const transportEvents = [];
+  let faultReceipt = null;
+  let faultPageEventsSeen = 0;
+  let transportPageEventsSeen = 0;
+  async function syncTransportFaultEvidence() {
+    const current = await page.evaluate(() => ({
+      receipt: globalThis['KENIGEVENTS_E2E_TRANSPORT_FAULT_INJECTOR_V1:receipt'] || null,
+      faults: globalThis['KENIGEVENTS_E2E_TRANSPORT_FAULT_INJECTOR_V1:events'] || [],
+      transport: globalThis['KENIGEVENTS_E2E_TRANSPORT_FAULT_INJECTOR_V1:transport-events'] || [],
+    })).catch(() => ({ receipt: null, faults: [], transport: [] }));
+    faultReceipt ||= current.receipt;
+    faultEvents.push(...current.faults.slice(faultPageEventsSeen));
+    transportEvents.push(...current.transport.slice(transportPageEventsSeen));
+    faultPageEventsSeen = current.faults.length;
+    transportPageEventsSeen = current.transport.length;
+    return { receipt: faultReceipt, fault_events: faultEvents, transport_events: transportEvents, transport_outcomes: [] };
+  }
   page.on('console', (message) => {
     if (['error', 'warning'].includes(message.type())) {
       consoles.push({ type: message.type(), text: redactText(message.text(), [...secrets, otp]) });
@@ -44,7 +62,7 @@ export async function createPlaywrightUi({ target, expectedRepoSha, evidenceRoot
       if (new URL(page.url()).origin !== target.origin) throw new Error('navigation_left_allowed_origin');
     },
     async verifyReleaseIdentity() {
-      verifiedRepoSha = await observedRepoSha(target, expectedRepoSha);
+      verifiedRepoSha = await observedRepoSha(target, expectedRepoSha, fetch, expectedFaultProfile);
       return verifiedRepoSha;
     },
     async waitForInstallStage() { await page.locator('[data-intake-stage="install"]:not([hidden])').waitFor({ timeout: 20_000 }); },
@@ -71,7 +89,11 @@ export async function createPlaywrightUi({ target, expectedRepoSha, evidenceRoot
         registrationStatus: recorder.statuses('/rpc/register_focus_group_participant_v1').at(-1) ?? null,
       };
     },
-    async reloadOrReopen() { await page.reload({ waitUntil: 'domcontentloaded', timeout: 30_000 }); },
+    async reloadOrReopen() {
+      await syncTransportFaultEvidence(); await page.reload({ waitUntil: 'domcontentloaded', timeout: 30_000 });
+      faultPageEventsSeen = 0; transportPageEventsSeen = 0;
+    },
+    async transportFaultEvidence() { return syncTransportFaultEvidence(); },
     async waitForReturningMember() {
       await page.locator('[data-focus-done-title]').filter({ hasText: /Вы уже в фокус-группе|Участие подтверждено/u }).waitFor({ timeout: 20_000 });
     },

@@ -78,6 +78,21 @@ test('production and candidate builds forward only normalized browser-safe searc
   }
 });
 
+test('production and candidate builds reject and scan out transport fault injection', () => {
+  const production = readFileSync(new URL('./build-production.mjs', import.meta.url), 'utf8');
+  const candidate = readFileSync(new URL('./build-secret-candidate.mjs', import.meta.url), 'utf8');
+  const productionCheck = readFileSync(new URL('./check-production.mjs', import.meta.url), 'utf8');
+  const candidateCheck = readFileSync(new URL('./check-secret-candidate.mjs', import.meta.url), 'utf8');
+  for (const source of [production, candidate]) {
+    assert.match(source, /assertTransportFaultBuildDisabled/u);
+    assert.match(source, /removeTransportFaultBuildEnv/u);
+  }
+  for (const source of [productionCheck, candidateCheck]) {
+    assert.match(source, /TRANSPORT_FAULT_SENTINEL/u);
+    assert.match(source, /transport fault injector leaked/u);
+  }
+});
+
 test('production and candidate builds keep confirmed clubs unless rollback is explicit', () => {
   const production = readFileSync(new URL('./build-production.mjs', import.meta.url), 'utf8');
   const candidate = readFileSync(new URL('./build-secret-candidate.mjs', import.meta.url), 'utf8');

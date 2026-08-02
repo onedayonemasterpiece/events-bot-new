@@ -3,6 +3,10 @@ import {
   type ResilientSupabaseTransport,
   type ResilientSupabaseTransportConfig,
 } from './resilientSupabaseTransport.ts';
+import {
+  resolveTransportFaultInjection,
+  transportFaultProfileIdentity,
+} from './transportFaultInjector.ts';
 
 export interface ResilientDataClientConfig extends ResilientSupabaseTransportConfig {}
 
@@ -26,6 +30,7 @@ function configKey(config: ResilientDataClientConfig): string {
     normalizedOrigin(config.directUrl),
     normalizedOrigin(config.relayUrl),
     compactHash(String(config.publishableKey || '')),
+    transportFaultProfileIdentity(),
   ].join('|');
 }
 
@@ -44,7 +49,12 @@ export class ResilientDataClient {
 
   constructor(config: ResilientDataClientConfig) {
     this.key = configKey(config);
-    this.transport = createResilientSupabaseTransport(config);
+    const fault = resolveTransportFaultInjection(config);
+    this.transport = createResilientSupabaseTransport({
+      ...config,
+      fetchImpl: fault.fetchImpl,
+      routeCacheNamespace: fault.cacheNamespace,
+    });
     this.fetch = this.fetchDefault.bind(this) as typeof fetch;
   }
 

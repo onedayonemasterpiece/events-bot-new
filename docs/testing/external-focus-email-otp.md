@@ -12,6 +12,42 @@ The test never receives a service-role key, provider key, fixed OTP or Auth
 bypass. Local MIME fixtures verify only the parser and never count as delivery
 evidence.
 
+## Deterministic transport-failure gate
+
+Faulted OTP acceptance uses an immutable E2E preview and the checked-in
+[`transport-fault-profiles.v1.yml`](transport-fault-profiles.v1.yml). The
+injector is connected to the constructor-captured `fetchImpl` of
+`ResilientSupabaseTransport` before the shared client/Auth singleton exists;
+late replacement of `window.fetch` is not a valid fault mechanism.
+
+The first release profile is `client_supabase_direct_unreachable`. It rejects
+only requests to the exact configured direct Supabase origin, including the
+route probe. The Yandex Supabase relay, site origin, Yandex OAuth and the
+Yandex Mail Trigger stay available. A PASS requires all of the following in a
+single real journey:
+
+- immutable preview metadata records the expected fault profile and registry
+  digest;
+- `fault-events.sanitized.jsonl` proves at least one direct-host fault hit;
+- `transport-events.sanitized.jsonl` proves OTP issue, verify and participant
+  registration each received one relay response and no direct response;
+- exactly one message, one issue, one verify and one durable registration;
+- returning state after reload and redaction PASS.
+
+Route-cache keys include the fault profile/digest, so a cached healthy direct
+route from a normal preview cannot bypass faulted preselection. A fault profile
+is selected only at build time from the allowlist. Production and secret
+candidate builds reject both activation variables, and their artifact checks
+scan emitted text assets for the E2E injector sentinel. The profile is passed
+to the protected workflow as `fault_profile`; a mismatch between workflow and
+`preview-build.json` fails before email issuance.
+
+The profiles `client_yandex_relay_unreachable` and
+`both_client_routes_unreachable` are already reserved in the closed registry;
+their terminal product journeys follow after the direct-unreachable relay
+proof. A CONNECT proxy remains an independent canary and is not release truth
+until each installed mobile driver proves that it actually applied the proxy.
+
 ## Strategic status and mobile boundary
 
 The adapters and protected jobs are implemented in the existing harness. Their

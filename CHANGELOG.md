@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Added deterministic, build-bound static-site transport fault profiles at the
+  `ResilientSupabaseTransport` fetch boundary. Fault previews isolate route
+  cache by profile/digest and emit sanitized fault/route evidence; the focus OTP
+  harness can now require direct-Supabase outage with exactly one relay
+  issue/verify/registration. Production and secret-candidate builds reject the
+  fault flags and scan artifacts to keep the injector physically absent.
+
 - Changed iOS Safari OTP preflight to create a native-first Safari session,
   enable XCUITest `respectSystemAlerts`, close the bounded first-run sheet, and
   only then attach WebKit. Slow CI webview discovery now has a 60-second bound;

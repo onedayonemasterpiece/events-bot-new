@@ -7,6 +7,7 @@ import {
   safeBuildId, safeRunId, sha256, treeHash, validateCatalogLedger,
 } from './release-contract.mjs';
 import { loadPreviewPublicConfig, requirePreviewAuthorizedSearch } from './preview-public-env.mjs';
+import { assertTransportFaultBuildDisabled, removeTransportFaultBuildEnv } from './transport-fault-build-contract.mjs';
 
 const siteDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const repoRoot = resolve(siteDir, '..');
@@ -19,6 +20,7 @@ const festivalTimelinePath = join(siteDir, 'src/data/festival-timeline.json');
 const templateContractPath = join(siteDir, 'src/data/eventTemplateContract.json');
 const manifestPath = join(distDir, 'static-release-manifest.json');
 const buildPath = join(distDir, 'production-build.json');
+assertTransportFaultBuildDisabled(process.env, 'production');
 
 function gitSha() {
   const result = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot, encoding: 'utf8' });
@@ -68,6 +70,7 @@ const env = {
   // operators can still use the explicit `0` rollback value.
   PUBLIC_INTEREST_CLUBS_ENABLED: process.env.PUBLIC_INTEREST_CLUBS_ENABLED || '1',
 };
+removeTransportFaultBuildEnv(env);
 delete env.PUBLIC_PREVIEW_BUILD_ID;
 delete env.PUBLIC_ROOT_PREVIEW_HREF;
 const astro = spawnSync(process.platform === 'win32' ? 'astro.cmd' : 'astro', ['build'], { cwd: siteDir, env, stdio: 'inherit', shell: process.platform === 'win32' });
