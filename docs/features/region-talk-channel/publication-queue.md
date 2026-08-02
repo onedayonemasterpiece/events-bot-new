@@ -648,11 +648,17 @@ read must confirm the absent reactions field before the empty revision is
 accepted; a missing message still fails closed.
 
 Review identity is
-`region_talk_operator_review_payload_v1`: canonical post URL, exact grounded
-draft fingerprint, and the ordered media/presentation manifest. Carousel order
-is semantic. Any changed Telegram/VK copy, selected image, carousel order or
-presentation mode gets another delivery identity and requires fresh reactions;
-the earlier event remains historical and cannot approve the new revision.
+`region_talk_operator_review_payload_v3_stable_media`: canonical post URL,
+exact grounded draft fingerprint, and the ordered media/presentation surface
+shown to the operator. Carousel order is semantic. Raw acquisition and cache
+evidence such as `media_manifest_items`, input-manifest hashes and local
+materialization rows is deliberately excluded: compaction may prune that
+evidence after delivery without changing the selected media. Any changed
+Telegram/VK copy, selected image, carousel order or presentation mode still
+gets another delivery identity and requires fresh reactions; the earlier event
+remains historical and cannot approve the new revision. A pending-revision
+comparison projects legacy ledger manifests onto this same stable presentation
+surface, so evidence pruning alone cannot masquerade as a media change.
 When only the review revision changes and the same media manifest is still
 current, the notifier first reads exact live reactions for the existing
 message. A still-pending clean revision is edited in place and rebound to the

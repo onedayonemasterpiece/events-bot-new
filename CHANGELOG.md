@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk review-media identity drift after YDB compaction: operator
+  fingerprints and pending-revision comparisons now bind to the exact ordered
+  presentation while ignoring prunable acquisition/cache evidence, allowing a
+  reactionless unchanged carousel caption to be edited in place without a
+  duplicate.
 - Fixed Region Talk preproduction revision delivery: a new grounded draft for
   an existing, still-pending message is now reaction-checked and edited in
   place when its media manifest is unchanged; conflicts fail closed instead of

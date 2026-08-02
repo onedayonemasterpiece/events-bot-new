@@ -36,7 +36,7 @@ if str(ROOT) not in sys.path:
 
 PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v5"
 AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v3"
-OPERATOR_REVIEW_PAYLOAD_VERSION = "region_talk_operator_review_payload_v2_source_profile"
+OPERATOR_REVIEW_PAYLOAD_VERSION = "region_talk_operator_review_payload_v3_stable_media"
 EDITORIAL_WRITER_VERSION = "region_talk_editorial_writer_v12_publisher_reader_brief"
 EDITORIAL_OUTPUT_CONTRACT = "region_talk_editorial_output_v6_publisher_reader_brief"
 MEDIA_MATERIALIZATION_CONTRACT_VERSION = "region_talk_media_materialization_v1"
@@ -986,22 +986,21 @@ def operator_review_media_manifest(row: dict[str, Any]) -> dict[str, Any]:
     decision even when it contains the same assets.
     """
 
+    # Bind the operator decision to the presentation that Telegram actually
+    # shows, not to transient materialization/cache evidence.  In particular,
+    # ``media_manifest_items`` may be pruned after delivery while the selected
+    # ordered media remains unchanged; including that field made the same
+    # presentation look like a new media revision and blocked safe in-place
+    # caption updates.
     manifest_fields = (
         "publication_presentation_manifest_json",
-        "publication_media_manifest_json",
         "presentation_manifest_json",
         "selected_media_ids_json",
-        "selected_media_materialization_json",
-        "media_materialization_items_json",
-        "media_manifest_items",
-        "publication_media_items",
         "selected_media_ids",
         "selected_media",
         "publication_asset_ids",
     )
     scalar_fields = (
-        "input_media_manifest_hash",
-        "image_vlm_media_manifest_hash",
         "publication_presentation_mode",
         "publication_visual_strategy",
         "publication_preview_mode",
@@ -1020,7 +1019,73 @@ def operator_review_media_manifest(row: dict[str, Any]) -> dict[str, Any]:
         if value in (None, "", [], {}):
             continue
         payload[field] = _canonical_manifest_value(value)
+    # Compatibility for older/fallback deliveries that have no explicit
+    # presentation manifest yet.  Their ordered raw manifest is the only
+    # available media identity and must remain binding.  Once an explicit
+    # selected presentation exists, the raw cache list is non-semantic.
+    if not any(field in payload for field in manifest_fields):
+        for field in (
+            "publication_media_manifest_json",
+            "selected_media_materialization_json",
+            "media_materialization_items_json",
+            "media_manifest_items",
+            "publication_media_items",
+        ):
+            value = row.get(field)
+            if value not in (None, "", [], {}):
+                payload[field] = _canonical_manifest_value(value)
     return payload
+
+
+def normalized_delivery_media_manifest(value: Any) -> dict[str, Any]:
+    """Project old/new ledger manifests onto the stable presentation surface."""
+
+    canonical = _canonical_manifest_value(value)
+    if not isinstance(canonical, dict):
+        return {}
+    stable_fields = {
+        "publication_presentation_manifest_json",
+        "presentation_manifest_json",
+        "selected_media_ids_json",
+        "selected_media_ids",
+        "selected_media",
+        "publication_asset_ids",
+        "publication_presentation_mode",
+        "publication_visual_strategy",
+        "publication_preview_mode",
+        "publication_media_layout",
+        "publication_primary_image_url",
+        "selected_image_url",
+        "image_url_or_local_path",
+        "media_kind",
+        "publication_media_materialization_status",
+        "publication_media_materialization_reason",
+        "publication_media_materialization_contract_version",
+    }
+    projected = {
+        key: canonical[key]
+        for key in sorted(stable_fields)
+        if canonical.get(key) not in (None, "", [], {})
+    }
+    stable_manifest_fields = {
+        "publication_presentation_manifest_json",
+        "presentation_manifest_json",
+        "selected_media_ids_json",
+        "selected_media_ids",
+        "selected_media",
+        "publication_asset_ids",
+    }
+    if not any(field in projected for field in stable_manifest_fields):
+        for key in (
+            "publication_media_manifest_json",
+            "selected_media_materialization_json",
+            "media_materialization_items_json",
+            "media_manifest_items",
+            "publication_media_items",
+        ):
+            if canonical.get(key) not in (None, "", [], {}):
+                projected[key] = canonical[key]
+    return {key: projected[key] for key in sorted(projected)}
 
 
 def publication_operator_review_payload(row: dict[str, Any]) -> dict[str, Any]:
@@ -1870,7 +1935,9 @@ async def edit_pending_revision_in_place(
         return {"status": "blocked", "reason": "prior_delivery_post_mismatch"}
 
     current_review_fields = publication_delivery_review_fields(row)
-    if str(prior_delivery.get("operator_review_media_manifest_json") or "") != str(
+    if normalized_delivery_media_manifest(
+        prior_delivery.get("operator_review_media_manifest_json") or "{}"
+    ) != normalized_delivery_media_manifest(
         current_review_fields["operator_review_media_manifest_json"]
     ):
         return {"status": "blocked", "reason": "pending_revision_media_changed"}
