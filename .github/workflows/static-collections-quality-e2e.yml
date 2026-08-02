@@ -1,0 +1,282 @@
+name: Static collections quality E2E
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/static-collections-quality-e2e.yml"
+      - "docs/features/static-site-pages/**"
+      - "docs/review-data/**"
+      - "scripts/validate_static_collections_quality.py"
+      - "site/scripts/static_collection_*.json"
+      - "site/scripts/static_collection_*.py"
+      - "site/scripts/static_event_bge.py"
+      - "site/scripts/check-static-collections-e2e.mjs"
+      - "site/scripts/static-collections-e2e.*"
+      - "site/src/**"
+      - "tests/fixtures/static_collections_*.json"
+      - "tests/test_static_collection_*.py"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/static-collections-quality-e2e.yml"
+      - "docs/features/static-site-pages/**"
+      - "docs/review-data/**"
+      - "scripts/validate_static_collections_quality.py"
+      - "site/scripts/static_collection_*.json"
+      - "site/scripts/static_collection_*.py"
+      - "site/scripts/static_event_bge.py"
+      - "site/scripts/check-static-collections-e2e.mjs"
+      - "site/scripts/static-collections-e2e.*"
+      - "site/src/**"
+      - "tests/fixtures/static_collections_*.json"
+      - "tests/test_static_collection_*.py"
+  schedule:
+    - cron: "37 3 * * *"
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Optional candidate/root URL; never paste a bearer URL into committed files"
+        required: false
+        type: string
+      strict:
+        description: "Require migrated review seed, owner gold, provenance, families and score hashes"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: static-collections-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve validation mode
+        id: validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.strict }}" == "true" ]]; then
+            echo "mode=strict" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=baseline" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate collection policy and review data
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          if [[ "${{ steps.validation.outputs.mode }}" == "strict" ]]; then
+            python3 scripts/validate_static_collections_quality.py \
+              --mode strict \
+              --policy site/scripts/static_collection_policy.v2.json \
+              --seed docs/review-data/static_collections_review_seed_v1.json \
+              --owner-gold tests/fixtures/static_collections_owner_gold_v1.json \
+              --json-report artifacts/static-collections-quality.json \
+              --markdown-report artifacts/static-collections-quality.md
+          else
+            python3 scripts/validate_static_collections_quality.py \
+              --mode baseline \
+              --policy site/scripts/static_collection_policy.v1.json \
+              --seed tests/fixtures/static_collections_gold_v1.json \
+              --json-report artifacts/static-collections-quality.json \
+              --markdown-report artifacts/static-collections-quality.md
+          fi
+
+      - name: Test quality validator behavior
+        run: python3 -m unittest discover -s tests -p "test_static_collection_quality_validator.py"
+
+      - name: Add quality report to summary
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f artifacts/static-collections-quality.md ]]; then
+            cat artifacts/static-collections-quality.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Static collections quality report was not produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Test E2E checker behavior
+        run: node --test site/scripts/static-collections-e2e.behavior.test.mjs
+
+      - name: Upload contract report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-collections-contract-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+
+  browser:
+    name: browser
+    needs:
+      - contract
+    if: >-
+      ${{
+        github.event_name == 'schedule' ||
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'push' && vars.STATIC_COLLECTIONS_E2E_ON_PUSH == 'true')
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      INPUT_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.base_url || '' }}
+      SECRET_BASE_URL: ${{ secrets.STATIC_COLLECTIONS_E2E_BASE_URL }}
+      E2E_REQUIRED: ${{ vars.STATIC_COLLECTIONS_E2E_REQUIRED || 'false' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve E2E configuration
+        id: e2e
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_url="$INPUT_BASE_URL"
+          if [[ -z "$base_url" ]]; then
+            base_url="$SECRET_BASE_URL"
+          fi
+          required="$(printf '%s' "$E2E_REQUIRED" | tr '[:upper:]' '[:lower:]')"
+          if [[ "$required" != "true" ]]; then
+            required="false"
+          fi
+          echo "required=$required" >> "$GITHUB_OUTPUT"
+          if [[ -n "$base_url" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "STATIC_COLLECTIONS_BASE_URL<<STATIC_COLLECTIONS_URL"
+              printf '%s\n' "$base_url"
+              echo "STATIC_COLLECTIONS_URL"
+            } >> "$GITHUB_ENV"
+            echo "Browser E2E URL is configured (value redacted)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Browser E2E URL is not configured." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "Required mode: $required" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail when required URL is missing
+        if: steps.e2e.outputs.configured != 'true' && steps.e2e.outputs.required == 'true'
+        shell: bash
+        run: |
+          echo "::error::STATIC_COLLECTIONS_E2E_BASE_URL is required but missing"
+          exit 1
+
+      - name: Record bootstrap skip
+        if: steps.e2e.outputs.configured != 'true' && steps.e2e.outputs.required != 'true'
+        shell: bash
+        run: |
+          echo "E2E status: **NOT CONFIGURED**. This is allowed only during bootstrap." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up Node
+        if: steps.e2e.outputs.configured == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install site dependencies
+        if: steps.e2e.outputs.configured == 'true'
+        working-directory: site
+        run: npm ci
+
+      - name: Install Chromium
+        if: steps.e2e.outputs.configured == 'true'
+        working-directory: site
+        run: npx playwright install --with-deps chromium
+
+      - name: Run collection browser E2E
+        if: steps.e2e.outputs.configured == 'true'
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ../artifacts/static-collections-browser
+          node scripts/check-static-collections-e2e.mjs \
+            --base-url "$STATIC_COLLECTIONS_BASE_URL" \
+            --contract scripts/static-collections-e2e.contract.v1.json \
+            --report ../artifacts/static-collections-browser/report.json \
+            --artifact-dir ../artifacts/static-collections-browser/evidence
+
+      - name: Add browser result to summary
+        if: always() && steps.e2e.outputs.configured == 'true'
+        shell: bash
+        run: |
+          if [[ -f artifacts/static-collections-browser/report.json ]]; then
+            python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/static-collections-browser/report.json").read_text())
+          print("## Static collections browser E2E")
+          print()
+          print(f"- Result: **{'PASS' if report.get('ok') else 'FAIL'}**")
+          print(f"- Checked routes: `{len(report.get('routes') or [])}`")
+          failures = report.get("failures") or []
+          print(f"- Failures: `{len(failures)}`")
+          for failure in failures[:20]:
+              print(
+                  f"  - `{failure.get('code')}`"
+                  f" label=`{failure.get('label')}`"
+                  f" viewport=`{(failure.get('viewport') or {}).get('name')}`"
+              )
+          PY
+          else
+            echo "Browser E2E report was not produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload browser evidence
+        if: always() && steps.e2e.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-collections-browser-${{ github.run_id }}
+          path: artifacts/static-collections-browser/
+          if-no-files-found: warn
+          retention-days: 14
+
+  gate:
+    name: gate
+    if: always()
+    needs:
+      - contract
+      - browser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate unified gate
+        shell: bash
+        env:
+          CONTRACT_RESULT: ${{ needs.contract.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
+        run: |
+          set -euo pipefail
+          echo "Contract result: $CONTRACT_RESULT"
+          echo "Browser result: $BROWSER_RESULT"
+          if [[ "$CONTRACT_RESULT" != "success" ]]; then
+            echo "::error::Static collections contract validation failed"
+            exit 1
+          fi
+          if [[ "$BROWSER_RESULT" == "failure" || "$BROWSER_RESULT" == "cancelled" ]]; then
+            echo "::error::Static collections browser E2E failed"
+            exit 1
+          fi
+          echo "Static collections unified gate passed."
