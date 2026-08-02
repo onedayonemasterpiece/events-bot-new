@@ -10,9 +10,11 @@ test('Appium adapter uses real browser capabilities and ordinary digit input wit
   assert.match(source, /browserName: 'Safari'/u);
   assert.match(source, /UiAutomator2/u);
   assert.match(source, /XCUITest/u);
-  assert.match(source, /'appium:nativeWebTap': true/u);
   assert.match(source, /'appium:connectHardwareKeyboard': false/u);
   assert.match(source, /'appium:forceSimulatorSoftwareKeyboardPresence': true/u);
+  assert.match(source, /mobile: calibrateWebToRealCoordinatesTranslation/u);
+  assert.match(source, /updateSettings\(\{ nativeWebTapStrict: true \}\)/u);
+  assert.match(source, /scrollIntoView/u);
   assert.match(source, /'appium:usePreinstalledWDA': true/u);
   assert.match(source, /'appium:prebuiltWDAPath': env\.E2E_PREBUILT_WDA_PATH/u);
   assert.equal((source.match(/'wdio:enforceWebDriverClassic': true/gu) || []).length, 2);

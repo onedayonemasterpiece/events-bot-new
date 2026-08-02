@@ -103,11 +103,10 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     'appium:newCommandTimeout': 180, 'appium:language': 'ru', 'appium:locale': 'ru_RU',
     'appium:safariInitialUrl': 'about:blank', 'appium:includeSafariInWebviews': true,
     'appium:showSafariNetworkLog': true,
-    // A WebKit-remote synthetic click can focus an input without opening the
-    // simulator keyboard. Route web taps through XCTest and make the software
-    // keyboard preference explicit so the native-keyboard acceptance check is
-    // exercising what an iPhone user actually sees.
-    'appium:nativeWebTap': true, 'appium:connectHardwareKeyboard': false,
+    // Keep ordinary navigation in WebKit: blanket nativeWebTap can miss
+    // off-screen controls. Critical input focus is calibrated and routed
+    // through XCTest narrowly in focusWithNativeTap below.
+    'appium:connectHardwareKeyboard': false,
     'appium:forceSimulatorSoftwareKeyboardPresence': true,
     ...(env.E2E_PREBUILT_WDA_PATH ? {
       'appium:usePreinstalledWDA': true,
@@ -193,6 +192,21 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     return accepted;
   }
 
+  async function focusWithNativeTap(selector) {
+    await driver.execute((css) => document.querySelector(css)?.scrollIntoView({ block: 'center', inline: 'center' }), selector);
+    await driver.pause(200);
+    const element = await driver.$(selector);
+    if (platform !== 'ios') {
+      await element.click();
+      return;
+    }
+    // XCUITest's strict path uses the calibration obtained in openInvite and
+    // performs a physical screen tap rather than a WebKit synthetic focus.
+    await driver.updateSettings({ nativeWebTapStrict: true });
+    try { await element.click(); }
+    finally { await driver.updateSettings({ nativeWebTapStrict: false }); }
+  }
+
   async function maskDom() {
     await driver.execute(() => {
       document.querySelectorAll('input[type="email"], input[autocomplete="one-time-code"]').forEach((node) => { node.value = ''; node.setAttribute('data-e2e-masked', 'true'); });
@@ -207,6 +221,11 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     device,
     async openInvite() {
       await driver.url(target.href); await driver.waitUntil(async () => (await driver.getUrl()).startsWith(target.origin), { timeout: 30_000 });
+      if (platform === 'ios') {
+        await driver.executeScript('mobile: calibrateWebToRealCoordinatesTranslation', []);
+        await driver.waitUntil(async () => (await driver.getUrl()).startsWith(target.origin), { timeout: 30_000 });
+        await driver.waitUntil(async () => await driver.execute(() => document.readyState === 'complete'), { timeout: 30_000 });
+      }
       const userAgent = await driver.execute(() => navigator.userAgent);
       const version = platform === 'android' ? String(userAgent).match(/Chrome\/([^\s]+)/u)?.[1] : String(userAgent).match(/Version\/([^\s]+)/u)?.[1];
       if (version) device.browser_version = version;
@@ -220,7 +239,7 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     async waitForInstallStage() { await (await driver.$(SELECTORS.install)).waitForDisplayed({ timeout: 20_000 }); },
     async skipInstall() { await (await driver.$(SELECTORS.skip)).click(); },
     async openEmailStep() { await (await driver.$(SELECTORS.emailOpen)).click(); },
-    async focusEmailInput() { const el = await driver.$(SELECTORS.email); await el.click(); return keyboardEvidence('email', SELECTORS.email); },
+    async focusEmailInput() { await focusWithNativeTap(SELECTORS.email); return keyboardEvidence('email', SELECTORS.email); },
     async enterEmail(value) { await (await driver.$(SELECTORS.email)).setValue(value); },
     async requestOtpWithCompetingGestures() {
       const send = await driver.$(SELECTORS.send); const email = await driver.$(SELECTORS.email);
@@ -238,7 +257,7 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
       await driver.releaseActions();
     },
     async waitForCodeStep() { await (await driver.$(SELECTORS.code)).waitForDisplayed({ timeout: 25_000 }); },
-    async focusOtpInput() { const el = await driver.$(SELECTORS.otp); await el.click(); return keyboardEvidence('otp', SELECTORS.otp); },
+    async focusOtpInput() { await focusWithNativeTap(SELECTORS.otp); return keyboardEvidence('otp', SELECTORS.otp); },
     async enterOtpDigitByDigit(value) { const el = await driver.$(SELECTORS.otp); for (const digit of value) { await el.addValue(digit); await driver.pause(45); } },
     async waitForMembershipConfirmed() { await waitText(driver, /Участие подтверждено/u); },
     async requestCounts() {
