@@ -135,13 +135,24 @@ export async function inspectSafariNativeUiProtocol({ findElements, getAlertText
   }
   const title = 'Выбор поисковой системы';
   const action = 'Продолжить';
-  const titlePredicate = `type == 'XCUIElementTypeStaticText' AND visible == 1 AND (name == '${title}' OR label == '${title}')`;
-  const query = async () => {
-    const result = await findElements('-ios predicate string', titlePredicate);
+  const settings = 'Настройки';
+  const predicates = {
+    exactVisibleStaticText: `type == 'XCUIElementTypeStaticText' AND visible == 1 AND (name == '${title}' OR label == '${title}')`,
+    exactStaticText: `type == 'XCUIElementTypeStaticText' AND (name == '${title}' OR label == '${title}')`,
+    containingStaticText: `type == 'XCUIElementTypeStaticText' AND (name CONTAINS '${title}' OR label CONTAINS '${title}')`,
+    exactAnyElement: `(name == '${title}' OR label == '${title}')`,
+  };
+  const query = async (predicate) => {
+    const result = await findElements('-ios predicate string', predicate);
     if (!Array.isArray(result)) throw new TypeError('safari_native_find_elements_non_array');
     return result;
   };
-  const titles = await query();
+  // Keep WebDriver commands serial: one WDA session is the evidence source and
+  // concurrent snapshots would make cross-query counts incomparable.
+  const titles = await query(predicates.exactVisibleStaticText);
+  const exactStaticTexts = await query(predicates.exactStaticText);
+  const containingStaticTexts = await query(predicates.containingStaticText);
+  const exactAnyElements = await query(predicates.exactAnyElement);
   let alertText = null;
   let buttons = [];
   try {
@@ -161,11 +172,28 @@ export async function inspectSafariNativeUiProtocol({ findElements, getAlertText
   // rather than by position or substring.
   const lines = alertText?.split(/\r?\n/u).map((line) => line.trim()).filter(Boolean) || [];
   const exactTitleLineCount = lines.filter((line) => line === title).length;
+  const titleSubstringCount = alertText == null ? 0 : alertText.split(title).length - 1;
   const currentAlertCount = alertText == null ? 0 : 1;
   const titleBelongsToCurrentAlert = titles.length === 1 && exactTitleLineCount === 1;
   const scopedActions = titleBelongsToCurrentAlert ? buttons.filter((label) => label === action) : [];
-  return classifySafariInspection({ titleCount: titles.length, scopedActions,
-    topLevelCount: currentAlertCount, knownTopLevelCount: titleBelongsToCurrentAlert ? 1 : 0 });
+  return {
+    ...classifySafariInspection({ titleCount: titles.length, scopedActions,
+      topLevelCount: currentAlertCount, knownTopLevelCount: titleBelongsToCurrentAlert ? 1 : 0 }),
+    contract_probe: {
+      exact_visible_static_text_count: titles.length,
+      exact_static_text_count: exactStaticTexts.length,
+      containing_static_text_count: containingStaticTexts.length,
+      exact_any_element_count: exactAnyElements.length,
+      current_alert_present: currentAlertCount === 1,
+      alert_text_length: alertText?.length || 0,
+      alert_text_line_count: lines.length,
+      exact_title_line_count: exactTitleLineCount,
+      title_substring_count: titleSubstringCount,
+      alert_button_count: buttons.length,
+      exact_continue_button_count: buttons.filter((label) => label === action).length,
+      exact_settings_button_count: buttons.filter((label) => label === settings).length,
+    },
+  };
 }
 
 export async function createAppiumUi({ platform, target, expectedRepoSha, evidenceRoot, directHost, relayHost, secrets = [], env = process.env }) {
