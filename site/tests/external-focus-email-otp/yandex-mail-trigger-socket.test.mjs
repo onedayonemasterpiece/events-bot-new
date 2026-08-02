@@ -71,7 +71,7 @@ test('Yandex Mail Trigger extracts OTP from decoded subject when body is transfe
   assert.equal(socket.safeDiagnostics({ recipient }).otp_parse_count, 1);
 });
 
-test('Yandex Mail Trigger rejects conflicting subject and body OTP values', () => {
+test('Yandex Mail Trigger treats an exact OTP subject as canonical over raw MIME body fragments', () => {
   const socket = new YandexMailTriggerSocket({
     url: 'wss://example.test/protected',
     expectedFrom: 'notify@kenigevents\\.ru',
@@ -81,6 +81,24 @@ test('Yandex Mail Trigger rejects conflicting subject and body OTP values', () =
   const triggerMessage = message('123456 — код входа в KenigEvents');
   triggerMessage.message = '<div>Одноразовый код: <b>654321</b></div>';
   socket.events = [{ arrivedAt: 2, message: triggerMessage }];
-  assert.equal(socket.matchingMessages({ checkpoint: 1, recipient }).length, 0);
-  assert.equal(socket.safeDiagnostics({ recipient }).otp_parse_count, 0);
+  const matches = socket.matchingMessages({ checkpoint: 1, recipient });
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].otp, '123456');
+  assert.equal(socket.safeDiagnostics({ recipient }).otp_parse_count, 1);
+});
+
+test('Yandex Mail Trigger falls back to visible HTML body when subject has no OTP', () => {
+  const socket = new YandexMailTriggerSocket({
+    url: 'wss://example.test/protected',
+    expectedFrom: 'notify@kenigevents\\.ru',
+    expectedSubject: '^Код входа в KenigEvents$',
+  });
+  socket.checkpointAt = 1;
+  const triggerMessage = message('Код входа в KenigEvents');
+  triggerMessage.headers.push({ name: 'Content-Type', values: ['text/html; charset=UTF-8'] });
+  triggerMessage.message = '<a href="https://example.test/path/654321">link</a><b>123456</b>';
+  socket.events = [{ arrivedAt: 2, message: triggerMessage }];
+  const matches = socket.matchingMessages({ checkpoint: 1, recipient });
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].otp, '123456');
 });

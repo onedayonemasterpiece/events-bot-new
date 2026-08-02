@@ -121,12 +121,13 @@ The runner connects outbound before OTP issuance and retains only the selected
 code in memory. It has no access to the shared private inbound bucket. The IMAP
 adapter remains supported for an independently controlled mailbox.
 
-Mail Trigger can deliver an already-decoded subject together with a
-transfer-encoded MIME body. The protected adapter therefore extracts one unique
-six-digit value from **subject and body together**: the same value repeated in
-both is valid, while different values are `otp_ambiguous` and fail closed. This
-keeps the raw message out of evidence while avoiding a false delivery timeout
-when only the subject is immediately readable. Failures of the best-effort
+Mail Trigger exposes header values and message body separately. The protected
+provider contract includes one six-digit OTP in the exact allowlisted Subject,
+so that decoded header is canonical; a visible text/HTML body is used only when
+the matching Subject has no OTP. Raw multipart/MIME bodies may contain unrelated
+numeric fragments and are never combined with an already valid OTP Subject.
+This follows the documented [Yandex Mail Trigger message format](https://yandex.cloud/ru/docs/api-gateway/concepts/trigger/mail-trigger#format)
+and keeps raw mail out of evidence. Failures of the best-effort
 `focus_auth_record_client_outcome_v1` telemetry are retained as structured
 warnings; they never replace the blocking issue/verify/registration checks.
 

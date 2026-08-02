@@ -80,10 +80,11 @@ clean pre-navigation iOS startup artifact described above.
   relay OTP dispatch `1`, mail `1`, verify `1`, registration durable effect `1`.
 - Retain only allowlisted host class, route, method, pathname class, status and
   fault result. Never retain query, body, headers, email, OTP or token.
-- With Yandex Mail Trigger, parse one unique six-digit OTP from decoded Subject
-  and message body together. Identical subject/body values collapse to one;
-  conflicting values fail as ambiguous. Do not retain raw mail to diagnose it:
-  safe counters for recipient/sender/subject/OTP matches are sufficient.
+- With Yandex Mail Trigger, treat the exact allowlisted decoded Subject as the
+  canonical OTP source when it contains one six-digit value. Parse visible
+  text/HTML body only as a fallback when that Subject has no code; never combine
+  a valid Subject with raw multipart/MIME numeric fragments. Do not retain raw
+  mail: safe recipient/sender/subject/OTP counters are sufficient.
 - Production and secret-candidate builds must reject activation variables and
   scan emitted text assets for the injector sentinel. Runtime-disable alone is
   not sufficient production exclusion.
