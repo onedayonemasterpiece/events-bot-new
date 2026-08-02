@@ -83,27 +83,30 @@ source profile described in [Source onboarding profile](source-onboarding-profil
 It stores `source_onboarding_evidence_item` and
 `source_onboarding_profile_item`, then writes the candidate-specific paragraph
 and all claim/evidence references into `publication_candidate_item`. The
-notifier renders `О блогере: …` only when the deterministic support and
-300–600-character checks return `source_onboarding_status=ready`; otherwise the
-candidate remains reviewable without an invented biography.
+Writer uses the profile only when deterministic support returns
+`source_onboarding_status=ready`; otherwise the accepted verdict is preserved,
+the row becomes `needs_source_profile`, and no generic public copy is produced.
 
-### Editorial onboarding writer v10
+### Editorial Writer v11 / source-profile hook
 
 The final verifier remains the owner of the publication verdict. Accepted
 candidates are rewritten by a separate LLM-first copy pipeline,
-`region_talk_editorial_onboarding_writer_v10_publisher_reader_brief`:
+`region_talk_editorial_writer_v11_source_profile_hook`:
 
 1. **Strategy** chooses the external-source angle and an honest history mode
    from at most five actually published or exact-current `approved + clean`
    predecessors. A forced bridge is replaced by `fresh_start`.
-2. **Publisher/source onboarding** is a reusable evidence-grounded LLM profile.
-   Article lanes require outlet identity, intended audience and distinctive
-   editorial value; social lanes retain the author/channel profile.
-3. **Grounded Writer** produces exactly two Russian paragraphs. For articles,
-   paragraph one cites all three publisher dimensions and gives the reader a
-   compact reason to care about the outlet. Paragraph two covers one or two
-   concrete details of the current material and a reason to open it.
-4. Deterministic validators check 150–500 characters per paragraph, the
+2. **Publisher/source onboarding** must already be a reusable,
+   evidence-grounded profile before Writer starts. Article lanes require outlet
+   identity, intended audience and distinctive value; social lanes require a
+   ready bounded-capture author/channel profile. Missing/stale profiles become
+   `needs_source_profile` with zero Writer calls.
+3. **Grounded Writer** produces exactly two Russian paragraphs. Paragraph one
+   has exactly two sentences: a 45–110-character current-content hook grounded
+   only in `content_fact`, followed by a compact source-value sentence grounded
+   in `source_profile_fact`. Paragraph two contains one or two concrete details
+   from the current material.
+4. Deterministic validators check paragraph/body/caption bounds, the
    550–900-character visible caption target, Russian language, banned
    clickbait/PR wording, third-person ownership and evidence-ID integrity. The
    adversative AI-cliché family built as `не …, а …` is a named hard failure,
@@ -154,20 +157,20 @@ Social evidence is restored from the exact Telegram/VK post using only the
 role-scoped discovery identities/API. Article evidence is read from the
 retained `external_publication_intake_item`; a teaser projection is no longer
 treated as finished public copy. The explicit v7 prompt version is stale.
-The v10 rollout invalidates earlier draft/cache fingerprints and runs a
+The v11 rollout invalidates earlier draft/cache fingerprints and runs a
 bounded copy backfill over unpublished confirmed candidates. It builds/reuses
-publisher reader briefs before regenerating article copy. Backfill archives
+source/publisher profiles before regenerating copy. Backfill archives
 its old reaction projection once as `principle approved +
 rewrite requested`, clears the current-review projection, and gives the new
 text-plus-media revision a new fingerprint that requires fresh reactions.
 Already target-published rows are excluded fail-closed by canonical URL and
 candidate ID, including publication status recorded directly on the candidate.
 Unversioned drafts are stale and never satisfy readiness; unversioned/older
-terminal backfill rows are migration debt and become actionable under v10.
+terminal backfill rows are migration debt and become actionable under v11.
 Operators may target an exact URL
 with repeatable `--candidate-url`; `--force-regenerate` is allowed only together
 with that explicit selector and bypasses that row's terminal/retry cooldown.
-If the v10 copy is already current and only the legacy presentation manifest is
+If the v11 copy is already current and only the legacy presentation manifest is
 pending, `--materialize-only` performs a zero-LLM repair. Telegram albums use
 the exact source post plus the reviewed message-ID order; VK albums resolve the
 reviewed attachment ordinals through exact `wall.getById` data and persist the
@@ -198,16 +201,20 @@ social lanes:
 
 {paragraph 2}
 
-Источник публикации  -> точный URL поста/материала
+{source-aware CTA} -> точный URL поста/материала
 
 О Калининграде говорят -> https://t.me/kalinigrad_visit
 ```
 
-The actual labels are Russian: `Источник публикации` and
-`О Калининграде говорят`. Both labels are links; the first URL is always
-the canonical concrete post/material URL. Outlet homepages and a second
-`Оригинал` link are forbidden on this surface. The blank line between the
-links is mandatory. `scripts/region_talk_preproduction_footer_repair.py`
+The CTA is selected deterministically from the ready profile/entity type:
+`Подробнее — у автора …`, `Подробнее — в блоге …`,
+`Подробнее — в канале «…»`, `Подробнее — в статье на …`,
+`Подробнее — в статье журнала «…»`, or the safe fallback
+`Подробнее — в оригинальной публикации`. The full CTA phrase is one link to
+the canonical concrete post/material URL. `О Калининграде говорят` is the
+single linked channel footer. Outlet homepages and a second source/original
+link are forbidden on this surface. The blank line between the CTA and channel
+footer is mandatory. `scripts/region_talk_preproduction_footer_repair.py`
 synchronizes reactions first, re-reads live YDB, checks exact reactions again
 immediately before each edit, edits only still-pending current revisions in
 place, verifies the two exact Telegram text-link entities and rotates the

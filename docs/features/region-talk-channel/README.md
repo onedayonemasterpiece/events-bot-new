@@ -17,10 +17,12 @@
 - [LLM/VLM verifier contract](llm-verifier-contract.md) — Gemini Flash-Lite verifier/post-writer только для top candidates.
 - [Publication queue](publication-queue.md) — queue, slots, idempotency, diversity caps, dry-run.
 - [Source onboarding profile](source-onboarding-profile.md) — доказательный профиль автора/канала и абзац `О блогере` для финального кандидата.
+- [Source-profile recovery plan](source-profile-recovery-plan.md) — bounded social capture, guarded publisher profiles, readiness order, Writer vNext and live closure gates.
 - [External publications](external-publications.md) — broad-web prompt, JSON Schema, staging importer, public-interest contract и on-demand anti-vector queue для материалов изданий.
 - [External-publication research results](external-publication-research-results.md) — immutable historical JSON inputs, checksums and current semantic-validation status.
 - [External-publication guarded import runbook](external-publication-import-runbook.md) — PR/main/manual-dispatch, OIDC-only YDB staging and audit-evidence procedure; staging never publishes.
-- [Editorial onboarding writer prompt](editorial-onboarding-writer-gemini-review.prompt.md) — исторический review-пакет; актуальные production-ограничения и версия v10 с publisher reader brief описаны в каноническом контракте ниже.
+- [Publisher-profile enrichment results](publisher-profile-enrichment-results.md) — exact sidecar hashes, reusable profile readiness and linked correction status.
+- [Editorial onboarding writer prompt](editorial-onboarding-writer-gemini-review.prompt.md) — исторический review-пакет; актуальные production-ограничения Writer vNext (hook first, grounded source sentence second) описаны в канонических source-profile/publication-queue контрактах.
 - [Gemini Pro onboarding consultation](onboarding-prompt-consultation.md) — архивный prompt-design review v8/output-v2; архитектура Strategy → Grounded Writer → validators → Critic сохранена, примеры с запрещённым противопоставлением не являются production-образцами.
 - [Editorial and visual product decision](editorial-visual-product.md) — benchmark похожих Telegram-каналов и целевой hero/album/video/link-preview формат.
 - [To-Be orchestration and vector queues](orchestration-to-be.md) — короткие queue-driven прогоны, отдельный BGE-M3 worker, YDB triggers, non-region geo bank и semantic anti-vector diversity.

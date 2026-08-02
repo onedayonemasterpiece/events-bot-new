@@ -35,6 +35,49 @@
   of requiring a human mailbox, and a strict canonical-issue `/qa run` gateway
   routes ChatGPT requests to the same reusable workflow. Preview metadata now
   records the full repository SHA required by this release gate.
+- Fixed a Region Talk scheduled-orchestrator deadlock on oversized single-line
+  cycle JSON: the wrapper now drains stdout in bounded chunks, uses a bounded
+  larger asyncio transport buffer and preserves complete JSONL parsing, so the
+  child loop can continue polling Kaggle/YDB instead of blocking in
+  `pipe_write`.
+- Fixed Region Talk publisher-sidecar reuse in article backfill: the imported
+  string/list dimension schema is now deterministically projected to the
+  Writer's evidence-linked `{text, evidence_ids}` contract. Ready Archi.ru and
+  journal profiles therefore no longer shadow themselves as
+  `needs_source_profile`; incomplete evidence still fails closed.
+
+- Fixed Region Talk source-profile request lifecycle: a processed bounded
+  capture now clears only the explicit acquisition request while a non-ready
+  profile remains fail closed. CandidateReport treats that explicit flag as
+  authoritative, preventing unchanged `needs_review` archives from consuming
+  the same history slots on every recovery cycle. Capture completion is now
+  persisted immediately by CandidateReport and reconciled idempotently by the
+  finalizer even if an independent candidate fingerprint fence defers the row.
+- Fixed Region Talk social-profile recovery routing: explicit
+  `source_profile_capture` requests now own the bounded source-history slots
+  ahead of ordinary discovery and rescans, so a small capture-only run reaches
+  the requested source even when it was scanned recently. A stale priority-lane
+  label without current request booleans cannot reopen the capture. This changes
+  neither candidate review state nor publication permission.
+- Added an explicit Region Talk capture-only recovery mode that stops after
+  bounded role-scoped source capture and its YDB receipt, with zero semantic
+  scoring, embeddings, image-queue work or publication effect. Scheduled
+  CandidateReport runs retain the normal full-report default.
+- Added fail-closed Region Talk source-profile recovery before Writer: bounded
+  Telegram/VK description+pinned+30–80-post capture with stable fingerprints,
+  reusable social profiles and separate profile/writer budgets; exact-byte
+  guarded publisher-profile import with monotonic future evidence merge;
+  serializable candidate-correction review that never mutates the candidate;
+  and Writer v11 with a content hook first, grounded source value second,
+  concrete details, source-aware CTA and full rendered-copy revalidation. Old
+  unpublished drafts/reactions are version-invalidated, while published rows,
+  accepted verdicts and all manual/publication permission gates remain
+  monotonic. Correction review now requires a present matching live identity,
+  and an unchanged non-ready profile attempt cannot spend another LLM call
+  merely because the daily budget identity changed. A correction joined by its
+  canonical candidate URL clears the old re-adjudication action only after an
+  explicit resolved/retained review grants both regeneration and candidate
+  mutation; every other state remains fail closed.
 - Added a reusable KenigEvents email roundtrip skill and read-only Yandex Mail
   Trigger helper. Automated OTP/canary receipt now reuses the already-live
   generated trigger address and private inbound envelope path instead of

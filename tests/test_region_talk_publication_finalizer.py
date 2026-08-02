@@ -52,6 +52,33 @@ def candidate_row(url: str = "https://t.me/travelcase/10", **overrides):
     return row
 
 
+def ready_social_capture(fingerprint: str = "stable-capture") -> dict[str, object]:
+    topics = ("route", "history", "practical", "architecture", "nature", "culture", "food", "city_life")
+    return {
+        "capture_status": "ready",
+        "capture_version": "region_talk_source_profile_capture.v1",
+        "capture_fingerprint": fingerprint,
+        "scanned_count": 50,
+        "authored_count": 24,
+        "selected_count": 8,
+        "description_evidence": {"status": "available", "text": "Авторский канал о самостоятельных поездках."},
+        "pinned_evidence": {
+            "status": "available",
+            "text": "Здесь собраны маршруты, полевые заметки и практические советы.",
+            "post_url": "https://t.me/travelcase/1",
+        },
+        "representative_excerpts": [
+            {
+                "excerpt": f"Разнообразный авторский фрагмент {index} о поездке и наблюдениях.",
+                "post_url": f"https://t.me/travelcase/{10 + index}",
+                "published_at": f"2026-07-{index:02d}",
+                "topic": topic,
+            }
+            for index, topic in enumerate(topics, 1)
+        ],
+    }
+
+
 def eligibility(verdict: str = "eligible") -> dict[str, object]:
     return {
         "verdict": verdict,
@@ -752,7 +779,7 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         # One read per required kind. The removed post-snapshot pass used to
         # read candidate/source/status a second time and caused the live YDB
         # deadline failure.
-        self.assertEqual(select_mock.call_count, 9)
+        self.assertEqual(select_mock.call_count, 12)
 
     def test_external_publication_source_is_authoritative_by_web_key(self) -> None:
         mod = self.mod
@@ -827,6 +854,85 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         )
         self.assertEqual(incomplete["profile_status"], "needs_review")
 
+    def test_trusted_publisher_profile_is_reused_without_profile_llm(self) -> None:
+        mod = self.mod
+        source = {
+            "canonical_source_key": "web:archi.ru",
+            "source_title": "Архи.ру",
+            "source_url": "https://archi.ru/",
+            "source_topic_class": "editorial_publication",
+            "publisher_source_overview": "Профессиональное издание об архитектуре.",
+            "source_externality_basis": "Общероссийская профессиональная редакция.",
+        }
+        publisher = {
+            "publisher_profile_id": "rtpublisher_archi",
+            "canonical_source_key": "web:archi.ru",
+            "source_name": "Архи.ру",
+            "canonical_url": "https://archi.ru/",
+            "entity_type": "professional_platform",
+            "scope": "external",
+            "profile_status": "ready",
+            "usable_without_profile_llm": True,
+            "profile_hash": "publisher-profile-hash",
+            "public_copy_eligibility": "allowed",
+            "profile_dimensions": {
+                "outlet_identity": "Профессиональное издание об архитектуре и городской среде.",
+                "intended_audience": [{"label": "архитекторы и читатели городской культуры", "evidence_refs": ["about"]}],
+                "distinctive_value": [{"text": "Соединяет авторские разборы с каталогом проектов.", "evidence_refs": ["about"]}],
+            },
+            "copy_projection": {
+                "short_reader_brief": "Архи.ру объясняет архитектурные проекты через профессиональный замысел и устройство среды.",
+                "cta_label": "Подробнее — в статье на Архи.ру",
+                "public_copy_eligibility": "allowed",
+            },
+            "evidence": [{
+                "evidence_id": "about",
+                "paraphrase": "Официальная страница описывает тематику, аудиторию и форматы издания.",
+                "url": "https://archi.ru/about",
+            }],
+        }
+        row = candidate_row(
+            url="https://archi.ru/russia/example",
+            publication_status="gemini_accept",
+            content_origin_type="editorial_publication",
+            canonical_source_key="web:archi.ru",
+            source_title="Архи.ру",
+            source_url="https://archi.ru/",
+            _authoritative_source=source,
+        )
+        evidence = mod.build_source_onboarding_evidence(
+            source, [], row, publisher_profile=publisher,
+        )
+        row["_source_onboarding_evidence"] = evidence
+        row["_publisher_profile"] = publisher
+        paragraph = (
+            "Архи.ру работает как профессиональное издание об архитектуре и городской среде, "
+            "адресованное архитекторам и читателям городской культуры. Его авторские разборы "
+            "связаны с каталогом проектов и помогают видеть замысел здания в контексте среды. "
+            "Этот материал показывает такой подход на конкретном калининградском объекте."
+        )
+        with mock.patch.object(mod, "_call_structured_with_budget", return_value=({
+            "llm_gate_status": "ok",
+            "data": {
+                "status": "ready",
+                "onboarding_paragraph": paragraph,
+                "claim_ids": ["PC1", "PC2", "PC3"],
+                "evidence_ids": ["E1"],
+                "selected_angle_id": "PA1",
+                "covered_publisher_dimensions": ["outlet_identity", "intended_audience", "distinctive_value"],
+            },
+        }, True)) as call:
+            enriched, profiles, stats = mod.enrich_accepted_rows_with_onboarding(
+                [row], max_llm=0, max_profile_llm=1, max_writer_llm=1,
+                model="gemini-test", default_env_var_name="KEY", durable_budget=None,
+            )
+        self.assertEqual(call.call_count, 1)
+        self.assertEqual(stats["profile_calls"], 0)
+        self.assertEqual(stats["profiles_reused"], 1)
+        self.assertEqual(profiles, [])
+        self.assertEqual(enriched[0]["source_profile_fingerprint"], "publisher-profile-hash")
+        self.assertEqual(enriched[0]["source_profile_cta_label"], "Подробнее — в статье на Архи.ру")
+
     def test_external_publication_onboarding_prompt_uses_publisher_language(self) -> None:
         mod = self.mod
         prompt = mod._candidate_onboarding_prompt(
@@ -842,6 +948,34 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertIn("издании/журнале", prompt)
         self.assertIn("чем интересна эта публикация", prompt)
         self.assertNotIn("кто автор", prompt)
+
+    def test_one_current_social_post_is_not_a_ready_reusable_profile(self) -> None:
+        mod = self.mod
+        row = candidate_row(text="Восстановленный личный рассказ о зимней поездке в Калининград.")
+        evidence = mod.build_source_onboarding_evidence(
+            row["_authoritative_source"],
+            [{"post_url": row["post_url"], "text": row["text"]}],
+            row,
+        )
+
+        self.assertEqual(evidence["evidence_status"], "insufficient")
+        self.assertEqual(evidence["profile_readiness_reason"], "source_capture_missing")
+
+    def test_ready_social_capture_supplies_description_pinned_and_diverse_excerpts(self) -> None:
+        mod = self.mod
+        capture = ready_social_capture("capture-fingerprint")
+        evidence = mod.build_source_onboarding_evidence(
+            external_source("travelcase"), [], candidate_row(), source_capture=capture,
+        )
+        items = json.loads(evidence["evidence_pack_json"])
+
+        self.assertEqual(evidence["evidence_status"], "sufficient")
+        self.assertEqual(evidence["source_capture_fingerprint"], "capture-fingerprint")
+        self.assertEqual(evidence["authored_posts_captured_total"], 24)
+        self.assertEqual(evidence["representative_excerpts_total"], 8)
+        self.assertGreaterEqual(evidence["representative_topics_total"], 3)
+        self.assertTrue(any(item["kind"] == "source_description" for item in items))
+        self.assertTrue(any(item["kind"] == "pinned_post_excerpt" for item in items))
 
     def test_source_onboarding_evidence_is_compact_deduplicated_and_traceable(self) -> None:
         mod = self.mod
@@ -866,15 +1000,16 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
                 "full_text": "Личный рассказ о прогулке по Балтийской косе. " * 80,
             },
         ]
-        evidence = mod.build_source_onboarding_evidence(source, memory, candidate_row())
+        capture = ready_social_capture("capture-fp")
+        evidence = mod.build_source_onboarding_evidence(source, memory, candidate_row(), source_capture=capture)
         items = json.loads(evidence["evidence_pack_json"])
         self.assertEqual(evidence["evidence_status"], "sufficient")
-        self.assertLessEqual(len(items), 8)
+        self.assertLessEqual(len(items), 20)
         self.assertEqual(len({item["evidence_id"] for item in items}), len(items))
         self.assertTrue(all(len(item["excerpt"]) <= 500 for item in items))
-        self.assertEqual(sum(1 for item in items if item["url"] == "https://t.me/travelcase/10"), 1)
+        self.assertEqual(sum(1 for item in items if item["url"] == "https://t.me/travelcase/11"), 1)
 
-    def test_source_onboarding_evidence_prefers_current_restored_text_for_same_url(self) -> None:
+    def test_current_restored_text_does_not_substitute_for_source_capture(self) -> None:
         mod = self.mod
         row = candidate_row(text="Восстановленный личный рассказ о зимней поездке в Калининград.")
         compacted_memory = [{
@@ -895,11 +1030,9 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         items = json.loads(evidence["evidence_pack_json"])
         authored = [item for item in items if item["kind"] == "authored_post_excerpt"]
 
-        self.assertEqual(evidence["evidence_status"], "sufficient")
-        self.assertEqual(evidence["authored_post_evidence_total"], 1)
-        self.assertEqual(len(authored), 1)
-        self.assertEqual(authored[0]["url"], row["post_url"])
-        self.assertIn("Восстановленный личный рассказ", authored[0]["excerpt"])
+        self.assertEqual(evidence["evidence_status"], "insufficient")
+        self.assertEqual(evidence["authored_post_evidence_total"], 0)
+        self.assertEqual(authored, [])
 
     def test_source_onboarding_profile_and_writer_fail_closed_on_unsupported_references(self) -> None:
         mod = self.mod
@@ -964,6 +1097,118 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         )
         self.assertEqual(cliched["source_onboarding_status"], "needs_review")
 
+    def test_social_profile_requires_grounded_reader_value_dimensions(self) -> None:
+        mod = self.mod
+        evidence = mod.build_source_onboarding_evidence(
+            external_source("travelcase"), [], candidate_row(),
+            source_capture=ready_social_capture(),
+        )
+        evidence_ids = [item["evidence_id"] for item in json.loads(evidence["evidence_pack_json"])]
+        result = {
+            "llm_gate_status": "ok",
+            "data": {
+                "status": "ready",
+                "entity_type": "thematic_channel",
+                "profile_summary": "Авторский канал о самостоятельных поездках.",
+                "claims": [{"claim_id": "C1", "text": "Публикует маршруты", "evidence_ids": [evidence_ids[-1]]}],
+                "candidate_angles": [],
+                "social_dimensions": {
+                    "stable_topics": [{"text": "самостоятельные поездки", "evidence_ids": [evidence_ids[-1]]}],
+                    "recurring_formats": [{"text": "маршруты", "evidence_ids": [evidence_ids[-1]]}],
+                    "intended_audience": {"text": "читатели, планирующие поездки", "evidence_ids": [evidence_ids[-1]]},
+                    "distinctive_value": {"text": "личные наблюдения и дорожные детали", "evidence_ids": [evidence_ids[-1]]},
+                    "reader_brief": {"text": "Канал полезен личными маршрутами и наблюдениями из дороги.", "evidence_ids": [evidence_ids[-1]]},
+                },
+                "do_not_say": ["ведущий тревел-канал"],
+            },
+        }
+        profile = mod.normalize_source_onboarding_profile(
+            result, evidence, model="gemini-test", profile_fingerprint="social-fp",
+        )
+        self.assertEqual(profile["profile_status"], "ready")
+        self.assertEqual(profile["social_dimensions_status"], "ready")
+        self.assertEqual(profile["reader_brief"], "Канал полезен личными маршрутами и наблюдениями из дороги.")
+        del result["data"]["social_dimensions"]["reader_brief"]
+        incomplete = mod.normalize_source_onboarding_profile(
+            result, evidence, model="gemini-test", profile_fingerprint="social-fp-2",
+        )
+        self.assertEqual(incomplete["profile_status"], "needs_review")
+
+    def test_missing_social_profile_projects_explicit_capture_request(self) -> None:
+        mod = self.mod
+        source = external_source("travelcase") | {"_ydb_pk": "source_queue_item:telegram:travelcase"}
+        row = candidate_row(
+            publication_status="gemini_accept",
+            source_onboarding_status="needs_source_profile",
+            source_onboarding_llm_reason="source_capture_missing",
+            _authoritative_source=source,
+        )
+        updates = mod.source_profile_capture_request_updates(
+            [row], now_iso="2026-08-02T10:00:00+00:00",
+        )
+        self.assertEqual(len(updates), 1)
+        self.assertEqual(updates[0]["source_profile_capture_requested"], "true")
+        self.assertEqual(updates[0]["needs_source_profile"], "true")
+        self.assertEqual(updates[0]["next_action"], "capture_bounded_source_profile")
+
+        source.update({
+            "source_profile_capture_requested": "true",
+            "needs_source_profile": "true",
+            "priority_lane": "source_profile_capture",
+            "priority_reason": "accepted_candidate_needs_source_profile",
+        })
+        row.update({
+            "_authoritative_source": source,
+            "source_onboarding_status": "ready",
+            "source_onboarding_profile_fingerprint": "profile-fp",
+        })
+        cleared = mod.source_profile_capture_request_updates(
+            [row], now_iso="2026-08-02T11:00:00+00:00",
+        )
+        self.assertEqual(cleared[0]["source_profile_capture_requested"], "false")
+        self.assertEqual(cleared[0]["needs_source_profile"], "false")
+        self.assertEqual(cleared[0]["priority_lane"], "")
+        self.assertEqual(cleared[0]["priority_reason"], "")
+
+    def test_processed_nonready_capture_clears_only_acquisition_request(self) -> None:
+        mod = self.mod
+        source = external_source("travelcase") | {
+            "_ydb_pk": "source_queue_item:telegram:travelcase",
+            "source_profile_capture_requested": "true",
+            "needs_source_profile": "true",
+            "priority_lane": "source_profile_capture",
+            "priority_reason": "accepted_candidate_needs_source_profile",
+        }
+        row = candidate_row(
+            publication_status="gemini_accept",
+            source_onboarding_status="needs_source_profile",
+            source_onboarding_llm_reason="insufficient_grounded_reader_brief",
+            _authoritative_source=source,
+        )
+        row["_source_onboarding_evidence"] = {
+            "source_capture_status": "ready",
+            "source_capture_fingerprint": "capture-fp",
+        }
+
+        updates = mod.source_profile_capture_request_updates(
+            [row], now_iso="2026-08-02T12:00:00+00:00",
+        )
+
+        self.assertEqual(len(updates), 1)
+        self.assertEqual(updates[0]["source_profile_capture_requested"], "false")
+        self.assertEqual(updates[0]["needs_source_profile"], "true")
+        self.assertEqual(updates[0]["priority_lane"], "")
+        self.assertEqual(updates[0]["priority_reason"], "")
+        self.assertEqual(updates[0]["next_action"], "review_nonready_source_profile")
+
+        row["publication_status"] = "gemini_needs_review"
+        deferred_updates = mod.source_profile_capture_request_updates(
+            [row], now_iso="2026-08-02T12:01:00+00:00",
+        )
+        self.assertEqual(len(deferred_updates), 1)
+        self.assertEqual(deferred_updates[0]["source_profile_capture_requested"], "false")
+        self.assertEqual(deferred_updates[0]["needs_source_profile"], "true")
+
     def test_onboarding_reuses_current_profile_and_spends_only_writer_call(self) -> None:
         mod = self.mod
         row = candidate_row(publication_status="gemini_accept", sent_to_chat="false")
@@ -971,6 +1216,7 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             row["_authoritative_source"],
             [{"post_url": row["post_url"], "text": row["text"]}],
             row,
+            source_capture=ready_social_capture(),
         )
         profile = {
             "source_profile_id": evidence["source_profile_id"],
@@ -998,6 +1244,41 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(stats["profiles_reused"], 1)
         self.assertEqual(stats["writer_calls"], 1)
         self.assertEqual(enriched[0]["source_onboarding_status"], "ready")
+
+    def test_unchanged_nonready_profile_spends_zero_profile_llm_calls(self) -> None:
+        mod = self.mod
+        row = candidate_row(publication_status="gemini_accept", sent_to_chat="false")
+        evidence = mod.build_source_onboarding_evidence(
+            row["_authoritative_source"],
+            [{"post_url": row["post_url"], "text": row["text"]}],
+            row,
+            source_capture=ready_social_capture(),
+        )
+        row["_source_onboarding_evidence"] = evidence
+        row["_source_onboarding_profile"] = {
+            "source_profile_id": evidence["source_profile_id"],
+            "profile_status": "needs_review",
+            "profile_reason": "insufficient_grounded_reader_brief",
+            "evidence_fingerprint": evidence["evidence_fingerprint"],
+            "profile_prompt_version": mod.SOURCE_ONBOARDING_PROFILE_PROMPT_VERSION,
+            "profile_fingerprint": "current-nonready-profile-attempt",
+        }
+
+        with mock.patch.object(
+            mod,
+            "_call_structured_with_budget",
+            side_effect=AssertionError("unchanged failed profile must not call provider again"),
+        ) as call:
+            enriched, profiles, stats = mod.enrich_accepted_rows_with_onboarding(
+                [row], max_llm=10, max_profile_llm=10, max_writer_llm=10,
+                model="gemini-test", default_env_var_name="KEY", durable_budget=None,
+            )
+
+        self.assertEqual(call.call_count, 0)
+        self.assertEqual(profiles, [])
+        self.assertEqual(stats["profile_calls"], 0)
+        self.assertEqual(stats["profiles_reused"], 1)
+        self.assertEqual(enriched[0]["source_onboarding_status"], "needs_source_profile")
 
     def test_eligibility_helper_receives_authoritative_source_and_fields_persist(self) -> None:
         mod = self.mod
@@ -1846,6 +2127,9 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             "online_source_item": {},
             "external_publication_source_item": {},
             "external_publication_intake_item": {},
+            "source_profile_capture_item": {},
+            "publisher_profile_item": {},
+            "publisher_profile_candidate_correction_item": {},
         }
 
         class Pool:
@@ -1902,6 +2186,9 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             "online_source_item": {},
             "external_publication_source_item": {},
             "external_publication_intake_item": {},
+            "source_profile_capture_item": {},
+            "publisher_profile_item": {},
+            "publisher_profile_candidate_correction_item": {},
         }
 
         class Pool:
@@ -1929,6 +2216,91 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(payload["audit_status"], "manual_review_required")
         self.assertEqual(payload["post_url"], url)
         self.assertEqual(payload["previous_target_publication_status"], "published")
+
+    def test_pending_candidate_correction_blocks_copy_without_downgrading_acceptance(self) -> None:
+        mod = self.mod
+        url = "https://rg.ru/2025/09/16/reg-szfo/example.html"
+        source = {
+            **external_source("unused"),
+            "_ydb_pk": "external_publication_source_item:rg",
+            "canonical_source_key": "web:rg.ru",
+            "source_url": "https://rg.ru/",
+            "source_title": "Российская газета",
+        }
+        row = candidate_row(
+            url=url,
+            canonical_source_key="web:rg.ru",
+            content_origin_type="editorial_publication",
+            publication_status="gemini_accept",
+            publication_candidate_status="llm_confirmed",
+            _authoritative_source=source,
+            _previous_publication={},
+        )
+        row["_live_decision_fingerprint"] = mod.live_finalization_fingerprint(
+            image=None, memory=None, intake=None, source=source, publication=None,
+        )
+        correction = {
+            "_ydb_pk": "publisher_profile_candidate_correction_item:rg",
+            "canonical_url": url,
+            "recommended_action": "re_adjudicate_externality",
+            "reason_codes": ["regional_local_edition", "local_correspondent"],
+            "review_status": "unreviewed",
+            "live_revalidation_status": "pending_live_revalidation",
+            "candidate_mutation_allowed": False,
+            "regeneration_allowed": False,
+        }
+        kinds = {
+            "image_queue_item": {},
+            "candidate_memory_item": {},
+            "publication_candidate_item": {},
+            "source_queue_item": {},
+            "source_status_item": {},
+            "online_source_item": {},
+            "external_publication_source_item": {source["_ydb_pk"]: source},
+            "external_publication_intake_item": {},
+            "source_profile_capture_item": {},
+            "publisher_profile_item": {},
+            "publisher_profile_candidate_correction_item": {correction["_ydb_pk"]: correction},
+        }
+
+        class Pool:
+            def retry_operation_sync(self, operation):
+                return operation(object())
+
+        captured = {}
+
+        def upsert(_session, _ydb, _table, items, _now, **_kwargs):
+            captured["items"] = items
+            return len(items)
+
+        with (
+            mock.patch.object(mod, "_current_complete_kind", side_effect=lambda _s, _y, _t, kind, _limit: kinds[kind]),
+            mock.patch.object(mod.rt, "ensure_ydb_kv_table"),
+            mock.patch.object(mod.rt, "ydb_upsert_json_many", side_effect=upsert),
+        ):
+            written = mod.write_publication_rows(Pool(), object(), "table", [row], "run-correction")
+
+        self.assertEqual(written, 1)
+        _pk, kind, payload = captured["items"][0]
+        self.assertEqual(kind, "publication_candidate_item")
+        self.assertEqual(payload["publication_status"], "gemini_accept")
+        self.assertEqual(payload["source_onboarding_status"], "needs_source_profile")
+        self.assertEqual(payload["final_decision_guard_status"], "blocked_candidate_correction_review")
+        self.assertEqual(payload["candidate_correction_regeneration_allowed"], "false")
+
+    def test_explicit_fresh_evidence_override_resolves_re_adjudication_action(self) -> None:
+        correction = {
+            "recommended_action": "re_adjudicate_externality",
+            "reason_codes": ["regional_local_edition", "local_correspondent"],
+            "review_status": "retained_external",
+            "live_revalidation_status": "resolved_external",
+            "candidate_mutation_allowed": True,
+            "regeneration_allowed": True,
+            "review_id": "explicit-fresh-evidence-review",
+        }
+        self.assertFalse(self.mod.candidate_correction_requires_explicit_review(correction))
+        correction["regeneration_allowed"] = False
+        self.assertTrue(self.mod.candidate_correction_requires_explicit_review(correction))
 
 
 if __name__ == "__main__":

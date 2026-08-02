@@ -1,0 +1,142 @@
+mode: worktree_worker
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/main@ba8ab078ba9894ccd5810045b1b8787ecb29d743
+base_branch: main
+integration_branch: integration/region-talk-source-profile-recovery-20260802
+global_constraints:
+  - LLM-first semantics; deterministic logic only normalization, dedupe and safety validation
+  - no target-channel publication
+  - no manual-review promotion
+  - Google calls only through atomic limiter
+  - role-scoped Telegram sessions never concurrent
+  - historical external research JSON immutable
+verification_owner: /root
+stop_conditions:
+  - incomplete strong YDB read
+  - profile/locality conflict
+  - provider limiter unavailable
+  - role session active elsewhere
+  - candidate already published
+lanes:
+  - id: SOCIAL
+    role: worker
+    requirement_ids: [R02]
+    target: bounded Telegram/VK source capture and durable capture projection
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/region-talk-source-profile-recovery/social-capture
+    worktree: /home/dev/.codex/worktrees/events-bot-new/rt-source-profile-social
+    writable_files:
+      - scripts/region_talk_source_profile_capture.py
+      - kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py
+      - tests/test_region_talk_source_profile_capture.py
+      - tests/test_region_talk_candidate_report.py
+      - .env.example
+      - .codex/lanes/rt-source-profile-social/RESULTS.md
+    forbidden_files:
+      - scripts/region_talk_publication_finalizer.py
+      - scripts/region_talk_publication_draft_backfill.py
+      - scripts/region_talk_external_publication_import.py
+      - docs/**
+      - CHANGELOG.md
+    expected_output: committed capture module/integration/tests and RESULTS
+    verification_scope: targeted
+    status: completed
+  - id: PUBLISHER
+    role: worker
+    requirement_ids: [R04, R05, R07]
+    target: publisher profile projection/import, correction queue, normal-intake enrichment and guarded Action
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/region-talk-source-profile-recovery/publisher-import
+    worktree: /home/dev/.codex/worktrees/events-bot-new/rt-source-profile-publisher
+    writable_files:
+      - scripts/region_talk_publisher_profile.py
+      - scripts/region_talk_publisher_profile_import.py
+      - scripts/region_talk_external_publication_import.py
+      - .github/workflows/region-talk-publisher-profile-auto-import.yml
+      - tests/test_region_talk_publisher_profile_import.py
+      - tests/test_region_talk_external_publication_import.py
+      - tests/test_region_talk_publisher_profile_packages.py
+      - .codex/lanes/rt-source-profile-publisher/RESULTS.md
+    forbidden_files:
+      - scripts/region_talk_publication_finalizer.py
+      - scripts/region_talk_publication_draft_backfill.py
+      - kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py
+      - docs/**
+      - CHANGELOG.md
+    expected_output: committed importer/merge/workflow/tests and RESULTS
+    verification_scope: targeted
+    status: completed
+  - id: WRITER
+    role: worker
+    requirement_ids: [R06]
+    target: Writer vNext, validators, source-aware CTA, renderer and review identity
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/region-talk-source-profile-recovery/writer-vnext
+    worktree: /home/dev/.codex/worktrees/events-bot-new/rt-source-profile-writer
+    writable_files:
+      - scripts/region_talk_publication_draft_backfill.py
+      - scripts/region_talk_goal_notify.py
+      - scripts/region_talk_preproduction_footer_repair.py
+      - tests/test_region_talk_publication_draft_backfill.py
+      - tests/test_region_talk_goal_notify.py
+      - tests/test_region_talk_preproduction_footer_repair.py
+      - tests/test_region_talk_reaction_sync.py
+      - .codex/lanes/rt-source-profile-writer/RESULTS.md
+    forbidden_files:
+      - scripts/region_talk_publication_finalizer.py
+      - scripts/region_talk_external_publication_import.py
+      - kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py
+      - docs/**
+      - CHANGELOG.md
+    expected_output: committed prompt/validator/CTA/version tests and RESULTS
+    verification_scope: targeted
+    status: completed
+  - id: PROFILE-RUNTIME
+    role: integrator
+    requirement_ids: [R03]
+    target: finalizer ordering/capture/profile reuse/budgets/current-state fences
+    depends_on: [SOCIAL, PUBLISHER]
+    execution_mode: serial_after_dependency
+    branch: integration/region-talk-source-profile-recovery-20260802
+    worktree: /home/dev/projects/events-bot-new-region-talk-intake-fingerprint-hotfix-20260802
+    writable_files:
+      - scripts/region_talk_publication_finalizer.py
+      - scripts/region_talk_orchestrator.py
+      - tests/test_region_talk_publication_finalizer.py
+      - tests/test_region_talk_orchestrator.py
+    forbidden_files: []
+    expected_output: integrated runtime profile lifecycle and focused tests
+    verification_scope: full_local
+    status: completed
+  - id: INTEGRATOR-QA
+    role: merge_reviewer
+    requirement_ids: [R01, R09]
+    target: integration, docs/changelog, complete tests and acceptance evidence
+    depends_on: [SOCIAL, PUBLISHER, WRITER, PROFILE-RUNTIME]
+    execution_mode: serial_after_dependency
+    branch: integration/region-talk-source-profile-recovery-20260802
+    worktree: /home/dev/projects/events-bot-new-region-talk-intake-fingerprint-hotfix-20260802
+    writable_files:
+      - docs/features/region-talk-channel/**
+      - CHANGELOG.md
+      - .codex/integration/region-talk-source-profile-recovery-20260802.md
+    forbidden_files: []
+    expected_output: merged code, full validation and integration report
+    verification_scope: full_local
+    status: planned
+  - id: LIVE-INTEGRATOR
+    role: integrator
+    requirement_ids: [R08]
+    target: guarded import/deploy/live backfill/operator delivery/zero-autopublish
+    depends_on: [INTEGRATOR-QA]
+    execution_mode: serial_after_dependency
+    branch: main
+    worktree: clean exact origin/main deployment checkout
+    writable_files: []
+    forbidden_files: []
+    expected_output: receipts, YDB readback, message IDs and safety proof in artifacts
+    verification_scope: full_local
+    status: planned

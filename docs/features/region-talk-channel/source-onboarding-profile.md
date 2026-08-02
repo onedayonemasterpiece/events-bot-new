@@ -1,21 +1,95 @@
 # Source profile and one-paragraph onboarding
 
-Status: **bounded MVP-2 implementation is live in the publication finalizer and draft backfill**. Evidence/profile/paragraph rows are durable in YDB and a supported paragraph is included in the operator revision. Profile/about/pinned-post acquisition and archive-wide dual-vector recall remain follow-up work; the implementation fails closed when the collected public evidence is insufficient.
+Status: **bounded source-profile recovery is implemented in code; production
+import/capture/backfill evidence is tracked separately during release**. Social
+profiles now require a dedicated description/pinned/30–80-post capture, while
+publisher and journal profiles come from guarded official-evidence sidecars.
+Missing or conflicting evidence fails closed before the public-copy Writer.
 
-## Implemented bounded path (updated 2026-08-01)
+## Implemented bounded path (updated 2026-08-02)
 
-The first production-safe slice is implemented in `scripts/region_talk_publication_finalizer.py` and `scripts/region_talk_goal_notify.py`:
+The production-safe bounded path is implemented across CandidateReport,
+`scripts/region_talk_publication_finalizer.py`, the dedicated publisher-profile
+import/review commands and Writer vNext:
 
-1. When a post reaches the finalizer/backfill, it consolidates the canonical source row, verified external-blogger fields and up to eight authored excerpts. An external article additionally contributes only the publisher-level, copy-supported slice of its retained research intake: outlet overview, scope attestation and referenced page evidence.
-2. The compact evidence pack is stored as `source_onboarding_evidence_item` with stable `source_profile_id`, evidence ids, URLs/dates and `evidence_fingerprint`.
-3. A Gemini profile request is made only for a new/changed evidence fingerprint. Its atomic claims and angles are rejected unless all referenced evidence ids exist. The resulting `source_onboarding_profile_item` is reusable across candidates.
-4. For a publisher, the reusable profile must contain three separately grounded dimensions: `outlet_identity`, `intended_audience` and `distinctive_value`. Audience may be labelled as a cautious editorial inference from supported topics/formats. Missing evidence makes the profile `needs_review`.
-5. A second candidate-specific request writes a 300–600 character reader brief. Deterministic validation requires valid claim/evidence references, all three publisher dimensions for article lanes, the length contract and the shared final-copy style guard; otherwise no paragraph is shown.
-6. `publication_candidate_item` retains the profile/writer fingerprints, dimension payload, references, entity type and paragraph. Social cards render `О блогере`; editorial/academic copy must carry the publisher brief into paragraph one of the atomic reviewed caption.
-7. The staged public-copy Writer receives three ID-addressable publisher facts and must cite all of them from paragraph one. Critic/readiness fail closed on `missing_publisher_reader_brief`; paragraph two remains the current-material summary and click reason.
-8. Profile and writer calls share the same durable daily Region Talk budget and Supabase provider limiter as the final verifier. A new source/candidate therefore uses at most two extra point requests; an unchanged source profile needs only the writer request.
+1. CandidateReport reuses its existing role-scoped Telegram/VK reader. For an
+   explicitly requested social source it reads public description, pinned
+   evidence and 30–80 recent rows (50 by default), without acknowledgement,
+   reaction or media download.
+   Recovery operators may set `REGION_TALK_SOURCE_PROFILE_CAPTURE_ONLY=1` for
+   this bounded pass. After the online capture writes it emits a terminal
+   receipt and skips candidate scoring, embeddings, image queues and every
+   publication path; the normal scheduled report keeps the flag disabled.
+2. Deterministic safety preprocessing classifies
+   `authored|repost|service|ad_like`, keeps at least 20 authored posts, selects
+   8–16 diverse recent excerpts and stores a stable
+   `source_profile_capture_item`. Reposts, service rows and ads never become
+   authored profile evidence.
+3. The finalizer accepts only a complete `ready` capture. It persists the
+   compact evidence pack as `source_onboarding_evidence_item` and makes one
+   profile LLM request only when the capture/evidence fingerprint changes.
+   An unchanged reusable or non-ready profile attempt spends zero profile
+   calls; a failed attempt is retried only after evidence/prompt fingerprint
+   change, not because a new daily budget ID exists.
+4. A missing/stale social profile is projected back to the source queue as
+   `source_profile_capture_requested=true` and `needs_source_profile=true`;
+   this does not change the accepted candidate verdict or grant publication.
+   Explicit capture requests own the bounded source-history slots ahead of
+   ordinary discovery/rescan rows, including when the source itself was scanned
+   recently; otherwise a small `REGION_TALK_MAX_SOURCES` run could repeatedly
+   miss the requested source before reaching the capture stage. The durable
+   request booleans are authoritative; a leftover `priority_lane` label after
+   request completion cannot reopen or reprioritize capture by itself.
+   Acquisition and editorial readiness are separate after the bounded read:
+   once a current capture has been processed, the finalizer clears
+   `source_profile_capture_requested` even when the evidence-backed profile
+   remains fail-closed `needs_review`. In that state `needs_source_profile`
+   stays true and the source is routed to profile review; the unchanged archive
+   is not fetched again merely because the public-copy Writer is still blocked.
+   CandidateReport closes that acquisition flag immediately after a durable
+   `written|unchanged_noop` capture. The finalizer also reconciles historical
+   outstanding flags from live capture evidence even when an independent
+   final-decision fingerprint fence temporarily defers the candidate.
+5. Editorial/academic sources use separately imported
+   `publisher_profile_item` rows. A reusable publisher profile must be
+   `ready`, external, public-copy-eligible and contain grounded
+   `outlet_identity`, `intended_audience` and `distinctive_value` dimensions.
+6. `scripts/region_talk_publisher_profile_import.py` validates exact sidecar
+   bytes and schema, strongly rereads all affected keys and atomically writes
+   profile/correction/batch/receipt rows. The normal external intake importer
+   can only enrich the same publisher identity monotonically.
+7. Candidate corrections remain fail closed until
+   `scripts/region_talk_publisher_profile_correction_review.py` verifies the
+   exact correction, identity and intake snapshot in one serializable
+   transaction. That command writes the correction verdict and immutable audit
+   only; it never mutates a candidate or grants publication permission.
+8. Writer vNext runs only after reusable profile readiness. Paragraph one is
+   exactly a grounded current-content hook followed by a compact grounded
+   source sentence; paragraph two contains one or two material details. The
+   rendered body is revalidated before the deterministic source-aware CTA and
+   the separated linked channel footer are appended.
+9. Profile and onboarding-writer call caps are accounted separately while all
+   provider calls still share the durable Region Talk budget and atomic Google
+   limiter. Missing profile budget yields `needs_source_profile`, never generic
+   filler copy.
 
-Current limitation: this bounded path does not issue additional Telegram profile/full-channel requests and does not crawl an archive solely for biography. It uses evidence already collected by the product pipeline, avoiding new Telegram pressure and unsupported claims. The broader recall design below remains the target for evidence-poor sources.
+Current limitation: this bounded recovery intentionally does not build a
+vector database over each source archive. The longer archive-wide dual-vector
+recall design below remains a later product option; the implemented MVP uses a
+bounded normalized capture and a single LLM synthesis over selected evidence.
+
+Operational defaults live in `.env.example`:
+
+- `REGION_TALK_SOURCE_PROFILE_CAPTURE_ENABLED=1`;
+- `REGION_TALK_SOURCE_PROFILE_SCAN_POSTS=50` (code clamps to 30–80);
+- `REGION_TALK_SOURCE_PROFILE_MIN_AUTHORED_POSTS=20`;
+- `REGION_TALK_SOURCE_PROFILE_CAPTURE_MAX_SOURCES_PER_RUN=2`;
+- `REGION_TALK_SOURCE_PROFILE_MAX_LLM=10`;
+- `REGION_TALK_SOURCE_ONBOARDING_WRITER_MAX_LLM=10`.
+
+The last two are stage caps, not new provider quotas. All physical requests
+still reserve through the shared atomic limiter and the durable global Region
+Talk budget.
 
 ## Product result
 

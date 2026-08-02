@@ -567,6 +567,489 @@ def canonical_source_key(platform: str, handle: str = "", url: str = "") -> str:
     return (p or "unknown") + ":" + (cu or canonical_handle(handle).lower())
 
 
+SOURCE_PROFILE_CAPTURE_VERSION = "region_talk_source_profile_capture.v1"
+SOURCE_PROFILE_CAPTURE_FINGERPRINT_VERSION = "region_talk_source_profile_capture_fingerprint.v1"
+SOURCE_PROFILE_CAPTURE_CLASSIFICATIONS = ("authored", "repost", "service", "ad_like")
+SOURCE_PROFILE_CAPTURE_TOPIC_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("route", ("маршрут", "дорог", "путь", "добраться", "поездк", "путешеств")),
+    ("history", ("истори", "архив", "старин", "наслед", "прошл")),
+    ("architecture", ("архитект", "фасад", "здани", "планиров", "модерниз")),
+    ("nature", ("природ", "лес", "озер", "озёр", "дюн", "птиц", "троп")),
+    ("culture", ("музе", "выстав", "театр", "культур", "искусств")),
+    ("food", ("кафе", "ресторан", "кухн", "еда", "блюд")),
+    ("practical", ("совет", "когда", "парков", "билет", "расписан", "полезн")),
+    ("city_life", ("город", "квартал", "улиц", "жител", "прогул")),
+)
+SOURCE_PROFILE_CAPTURE_FORMAT_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("route", ("маршрут", "добраться", "путь", "дорога")),
+    ("practical_advice", ("совет", "как ", "когда ", "где ", "полезн")),
+    ("history_note", ("истори", "архив", "раньше", "прошл")),
+    ("photo_story", ("фото", "снимок", "кадр", "фотограф")),
+    ("personal_diary", ("я ", "мы ", "личн", "дневник", "побывал", "поехал")),
+    ("professional_analysis", ("разбор", "анализ", "проект", "планиров", "архитект")),
+)
+SOURCE_PROFILE_CAPTURE_AD_PATTERNS = (
+    r"(?<!\w)(?:реклама|на правах рекламы|партн[её]рский материал)(?!\w)",
+    r"(?<!\w)(?:промокод|розыгрыш|конкурс)(?!\w)",
+    r"(?<!\w)(?:купить|заказать|забронировать|регистрация)(?!\w)",
+    r"(?:скидк[аиуой]?|\b\d[\d ]*(?:₽|руб(?:\.|лей|ля|ль)?\b))",
+)
+_REGION_TALK_SOURCE_PROFILE_CAPTURED_KEYS: set[str] = set()
+
+
+def _source_profile_capture_int(
+    environ: dict[str, str],
+    name: str,
+    default: int,
+    minimum: int,
+    maximum: int,
+) -> int:
+    try:
+        value = int(str(environ.get(name) or default).strip())
+    except Exception:
+        value = default
+    return max(minimum, min(maximum, value))
+
+
+def capture_settings(environ: dict[str, str] | None = None) -> dict[str, int]:
+    """Return the bounded, deterministic capture configuration.
+
+    The source-profile lane never creates a second Telegram credential lane and
+    never performs a provider call.  These settings only bound public archive
+    acquisition performed by the already-connected CandidateReport reader.
+    """
+
+    values = environ if environ is not None else os.environ
+    return {
+        "scan_posts": _source_profile_capture_int(
+            values, "REGION_TALK_SOURCE_PROFILE_SCAN_POSTS", 50, 30, 80
+        ),
+        "min_authored_posts": _source_profile_capture_int(
+            values, "REGION_TALK_SOURCE_PROFILE_MIN_AUTHORED_POSTS", 20, 1, 80
+        ),
+        "selected_excerpts": _source_profile_capture_int(
+            values, "REGION_TALK_SOURCE_PROFILE_SELECTED_EXCERPTS", 12, 8, 16
+        ),
+    }
+
+
+def normalize_source_profile_capture_text(value: Any) -> str:
+    text = html.unescape(str(value or ""))
+    text = re.sub(r"[\u200b-\u200f\u2060\ufeff]", "", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _source_profile_capture_platform(source: dict[str, Any]) -> str:
+    platform = str(source.get("platform") or source.get("platform_guess") or "").strip().lower()
+    url = str(source.get("source_url") or source.get("canonical_url") or source.get("url") or "")
+    if platform in {"tg", "telegram-channel"} or "t.me/" in url.lower():
+        return "telegram"
+    if platform.startswith("vk") or "vk.com/" in url.lower():
+        return "vk"
+    return platform or "unknown"
+
+
+def source_profile_capture_canonical_source_key(source: dict[str, Any]) -> str:
+    platform = _source_profile_capture_platform(source)
+    supplied = str(source.get("canonical_source_key") or "").strip().lower()
+    if supplied.startswith(platform + ":"):
+        return supplied.rstrip("/")
+    return canonical_source_key(
+        platform,
+        str(source.get("handle") or source.get("username_or_handle") or ""),
+        str(source.get("source_url") or source.get("canonical_url") or source.get("url") or ""),
+    )
+
+
+def _source_profile_capture_date(value: Any) -> str:
+    if isinstance(value, datetime):
+        current = value
+    else:
+        raw = str(value or "").strip()
+        if not raw:
+            return ""
+        try:
+            current = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except Exception:
+            return raw
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    return current.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def classify_source_profile_capture_post(row: dict[str, Any]) -> str:
+    if bool(
+        row.get("is_forwarded_or_repost")
+        or row.get("copy_history")
+        or row.get("forwarded_from_post_url")
+        or row.get("repost_source_id")
+    ):
+        return "repost"
+    text = normalize_source_profile_capture_text(row.get("text") or row.get("message"))
+    if row.get("service_action") or row.get("action") or row.get("is_service"):
+        return "service"
+    if not text:
+        return "service"
+    if row.get("is_ad_like") or row.get("is_ad_or_promo"):
+        return "ad_like"
+    low = text.lower().replace("ё", "е")
+    if any(re.search(pattern, low, flags=re.I) for pattern in SOURCE_PROFILE_CAPTURE_AD_PATTERNS):
+        return "ad_like"
+    return "authored"
+
+
+def _source_profile_capture_label(
+    text: str,
+    patterns: tuple[tuple[str, tuple[str, ...]], ...],
+    fallback: str,
+) -> str:
+    low = text.lower().replace("ё", "е")
+    best = fallback
+    best_hits = 0
+    for label, stems in patterns:
+        hits = sum(1 for stem in stems if stem.replace("ё", "е") in low)
+        if hits > best_hits:
+            best = label
+            best_hits = hits
+    return best
+
+
+def _source_profile_capture_entities(text: str) -> list[str]:
+    hashtags = ["#" + value.lower() for value in re.findall(r"(?<!\w)#([\w-]{3,})", text, flags=re.U)]
+    named = re.findall(r"(?<![.!?]\s)(?<!^)\b[А-ЯЁA-Z][А-ЯЁа-яёA-Za-z-]{3,}(?:\s+[А-ЯЁA-Z][А-ЯЁа-яёA-Za-z-]{3,})?", text)
+    return sorted(dict.fromkeys(hashtags + [normalize_source_profile_capture_text(v) for v in named]))[:8]
+
+
+def _source_profile_capture_evidence_row(row: dict[str, Any], classification: str) -> dict[str, Any]:
+    text = normalize_source_profile_capture_text(row.get("text") or row.get("message"))
+    key = str(
+        row.get("platform_post_key")
+        or row.get("source_message_id")
+        or row.get("post_id")
+        or row.get("id")
+        or row.get("post_url")
+        or ""
+    ).strip()
+    url = str(row.get("post_url") or row.get("source_message_url") or row.get("url") or "").strip()
+    published_at = _source_profile_capture_date(
+        row.get("post_date") or row.get("published_at") or row.get("date")
+    )
+    text_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    evidence_id = "capture_post_" + stable_hash(key, url, text_hash, length=20)
+    return {
+        "evidence_id": evidence_id,
+        "platform_post_key": key,
+        "post_url": url,
+        "published_at": published_at,
+        "classification": classification,
+        "text": text,
+        "text_hash": text_hash,
+        "topic": _source_profile_capture_label(text, SOURCE_PROFILE_CAPTURE_TOPIC_PATTERNS, "other"),
+        "format": _source_profile_capture_label(text, SOURCE_PROFILE_CAPTURE_FORMAT_PATTERNS, "observation"),
+        "entities": _source_profile_capture_entities(text),
+    }
+
+
+def _source_profile_representatives(
+    authored: list[dict[str, Any]],
+    limit: int,
+) -> list[dict[str, Any]]:
+    ordered = sorted(
+        authored,
+        key=lambda row: (str(row.get("published_at") or ""), str(row.get("platform_post_key") or "")),
+        reverse=True,
+    )
+    selected: list[dict[str, Any]] = []
+    used: set[str] = set()
+    seen_signatures: set[tuple[str, str]] = set()
+    for row in ordered:
+        signature = (str(row.get("topic") or "other"), str(row.get("format") or "observation"))
+        if signature in seen_signatures:
+            continue
+        selected.append(row)
+        used.add(str(row["evidence_id"]))
+        seen_signatures.add(signature)
+        if len(selected) >= limit:
+            break
+    if len(selected) < limit:
+        for row in ordered:
+            if str(row["evidence_id"]) in used:
+                continue
+            selected.append(row)
+            used.add(str(row["evidence_id"]))
+            if len(selected) >= limit:
+                break
+    return [
+        {
+            "evidence_id": row["evidence_id"],
+            "platform_post_key": row["platform_post_key"],
+            "post_url": row["post_url"],
+            "published_at": row["published_at"],
+            "classification": "authored",
+            "topic": row["topic"],
+            "format": row["format"],
+            "entities": row["entities"],
+            "excerpt": str(row["text"])[:700],
+            "text_hash": row["text_hash"],
+        }
+        for row in selected
+    ]
+
+
+def build_source_profile_capture(
+    source: dict[str, Any],
+    posts: Iterable[dict[str, Any]],
+    *,
+    description: str = "",
+    pinned_post: dict[str, Any] | None = None,
+    scan_posts: int | None = None,
+    min_authored_posts: int | None = None,
+    selected_excerpts: int | None = None,
+    archive_exhausted: bool = False,
+) -> dict[str, Any]:
+    """Build the durable bounded source capture without an LLM/provider call."""
+
+    settings = capture_settings()
+    scan_limit = max(30, min(80, int(scan_posts or settings["scan_posts"])))
+    authored_min = max(1, min(80, int(min_authored_posts or settings["min_authored_posts"])))
+    representative_limit = max(8, min(16, int(selected_excerpts or settings["selected_excerpts"])))
+    platform = _source_profile_capture_platform(source)
+    canonical_key = source_profile_capture_canonical_source_key(source)
+    normalized_source = {
+        "canonical_source_key": canonical_key,
+        "platform": platform,
+        "platform_source_id": str(source.get("platform_source_id") or source.get("source_id") or ""),
+        "handle": canonical_handle(str(source.get("handle") or source.get("username_or_handle") or "")),
+        "source_url": canonical_source_url(
+            platform,
+            str(source.get("handle") or source.get("username_or_handle") or ""),
+            str(source.get("source_url") or source.get("canonical_url") or source.get("url") or ""),
+        ),
+        "source_title": normalize_source_profile_capture_text(source.get("source_title") or source.get("title") or ""),
+    }
+    raw_rows = [dict(row) for row in posts if isinstance(row, dict)]
+    raw_rows.sort(
+        key=lambda row: (
+            _source_profile_capture_date(row.get("post_date") or row.get("published_at") or row.get("date")),
+            str(row.get("platform_post_key") or row.get("post_id") or row.get("id") or row.get("post_url") or ""),
+        ),
+        reverse=True,
+    )
+    bounded = raw_rows[:scan_limit]
+    deduplicated: list[dict[str, Any]] = []
+    seen_content: set[str] = set()
+    duplicate_count = 0
+    for row in bounded:
+        classification = classify_source_profile_capture_post(row)
+        evidence = _source_profile_capture_evidence_row(row, classification)
+        dedupe_key = evidence["text_hash"] if evidence["text"] else str(evidence["platform_post_key"] or evidence["post_url"])
+        if dedupe_key in seen_content:
+            duplicate_count += 1
+            continue
+        seen_content.add(dedupe_key)
+        deduplicated.append(evidence)
+    counts = {name: 0 for name in SOURCE_PROFILE_CAPTURE_CLASSIFICATIONS}
+    for row in deduplicated:
+        counts[str(row["classification"])] += 1
+    authored = [row for row in deduplicated if row["classification"] == "authored"]
+    representatives = _source_profile_representatives(authored, representative_limit)
+    description_text = normalize_source_profile_capture_text(description)
+    description_evidence = {
+        "evidence_id": "capture_description_" + stable_hash(canonical_key, description_text, length=20),
+        "text": description_text,
+        "status": "available" if description_text else "unavailable",
+    }
+    pinned_evidence: dict[str, Any] = {"status": "unavailable"}
+    if isinstance(pinned_post, dict) and (
+        normalize_source_profile_capture_text(pinned_post.get("text") or pinned_post.get("message"))
+        or pinned_post.get("platform_post_key")
+        or pinned_post.get("post_url")
+    ):
+        pinned_evidence = _source_profile_capture_evidence_row(pinned_post, "authored")
+        pinned_evidence["status"] = "available"
+    scanned_count = len(bounded)
+    if len(authored) < authored_min:
+        capture_status = "insufficient_authored_posts"
+        reason = f"authored_count={len(authored)} below required minimum={authored_min}"
+    elif scanned_count < 30 and not archive_exhausted:
+        capture_status = "insufficient_scanned_posts"
+        reason = f"scanned_count={scanned_count} below bounded minimum=30 and archive is not exhausted"
+    elif len(representatives) < 8:
+        capture_status = "insufficient_representative_posts"
+        reason = f"representative_count={len(representatives)} below minimum=8"
+    elif len({str(row.get("topic") or "other") for row in representatives}) < 3:
+        capture_status = "insufficient_representative_diversity"
+        reason = "representative excerpts cover fewer than three deterministic topic groups"
+    else:
+        capture_status = "ready"
+        reason = "bounded capture has sufficient authored and diverse representative evidence"
+    topic_counts: dict[str, int] = {}
+    format_counts: dict[str, int] = {}
+    entity_counts: dict[str, int] = {}
+    for row in authored:
+        topic_counts[str(row["topic"])] = topic_counts.get(str(row["topic"]), 0) + 1
+        format_counts[str(row["format"])] = format_counts.get(str(row["format"]), 0) + 1
+        for entity in row.get("entities") or []:
+            entity_counts[str(entity)] = entity_counts.get(str(entity), 0) + 1
+    dates = sorted(str(row.get("published_at") or "") for row in deduplicated if row.get("published_at"))
+    manifest = [
+        {
+            "evidence_id": row["evidence_id"],
+            "platform_post_key": row["platform_post_key"],
+            "post_url": row["post_url"],
+            "published_at": row["published_at"],
+            "classification": row["classification"],
+            "text_hash": row["text_hash"],
+        }
+        for row in sorted(deduplicated, key=lambda item: str(item["evidence_id"]))
+    ]
+    fingerprint_input = {
+        "fingerprint_version": SOURCE_PROFILE_CAPTURE_FINGERPRINT_VERSION,
+        "source": normalized_source,
+        "description": description_evidence,
+        "pinned": pinned_evidence,
+        "post_evidence_manifest": manifest,
+        "archive_exhausted": bool(archive_exhausted),
+        "scan_limit": scan_limit,
+        "min_authored_posts": authored_min,
+    }
+    fingerprint = hashlib.sha256(
+        json.dumps(fingerprint_input, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return {
+        **normalized_source,
+        "capture_version": SOURCE_PROFILE_CAPTURE_VERSION,
+        "capture_fingerprint_version": SOURCE_PROFILE_CAPTURE_FINGERPRINT_VERSION,
+        "capture_fingerprint": fingerprint,
+        "capture_status": capture_status,
+        "capture_status_reason": reason,
+        "profile_llm_eligible": capture_status == "ready",
+        "profile_llm_call_required": capture_status == "ready",
+        "scan_limit": scan_limit,
+        "min_authored_posts": authored_min,
+        "archive_exhausted": bool(archive_exhausted),
+        "scanned_count": scanned_count,
+        "deduplicated_post_count": len(deduplicated),
+        "duplicate_count": duplicate_count,
+        "authored_count": len(authored),
+        "selected_count": len(representatives),
+        "classification_counts": counts,
+        "date_range": {"from": dates[0] if dates else "", "to": dates[-1] if dates else ""},
+        "description_evidence": description_evidence,
+        "pinned_evidence": pinned_evidence,
+        "deterministic_digest": {
+            "topic_counts": dict(sorted(topic_counts.items(), key=lambda item: (-item[1], item[0]))),
+            "format_counts": dict(sorted(format_counts.items(), key=lambda item: (-item[1], item[0]))),
+            "entity_counts": dict(sorted(entity_counts.items(), key=lambda item: (-item[1], item[0]))[:30]),
+        },
+        "representative_excerpts": representatives,
+        "post_evidence_manifest": manifest,
+        "autopublish_allowed": False,
+        "publication_effect": "none",
+    }
+
+
+def source_profile_capture_storage_pk(capture_or_source: dict[str, Any]) -> str:
+    key = str(capture_or_source.get("canonical_source_key") or "").strip().lower()
+    if not key:
+        key = source_profile_capture_canonical_source_key(capture_or_source)
+    if not key or key.endswith(":"):
+        raise ValueError("source profile capture requires a canonical source key")
+    return "source_profile_capture_item:" + key
+
+
+def capture_change_decision(
+    previous_capture: dict[str, Any] | None,
+    capture: dict[str, Any],
+) -> dict[str, Any]:
+    previous = previous_capture if isinstance(previous_capture, dict) else {}
+    same_source = not previous or str(previous.get("canonical_source_key") or "") == str(capture.get("canonical_source_key") or "")
+    if not same_source:
+        status = "conflict"
+    elif previous and str(previous.get("capture_fingerprint") or "") == str(capture.get("capture_fingerprint") or ""):
+        status = "unchanged"
+    elif previous:
+        status = "changed"
+    else:
+        status = "new"
+    llm_required = bool(status in {"new", "changed"} and capture.get("capture_status") == "ready")
+    return {
+        "capture_change_status": status,
+        "profile_llm_call_required": llm_required,
+        "profile_llm_calls_requested": 1 if llm_required else 0,
+        "previous_capture_fingerprint": str(previous.get("capture_fingerprint") or ""),
+        "capture_fingerprint": str(capture.get("capture_fingerprint") or ""),
+    }
+
+
+def source_profile_capture_requested(source_row: dict[str, Any] | None) -> bool:
+    if not getenv_bool("REGION_TALK_SOURCE_PROFILE_CAPTURE_ENABLED", True):
+        return False
+    row = source_row if isinstance(source_row, dict) else {}
+    # Once the finalizer has written the explicit acquisition flag it is the
+    # authoritative request state.  `needs_source_profile` describes editorial
+    # readiness and may legitimately remain true after a bounded capture was
+    # processed into a fail-closed `needs_review` profile.  Treating that
+    # readiness flag as another acquisition request caused the same archive to
+    # be fetched on every run without creating any new evidence.
+    capture_requested_raw = row.get("source_profile_capture_requested")
+    if capture_requested_raw not in (None, ""):
+        return _rt_bool(capture_requested_raw)
+    if str(row.get("needs_source_profile") or "").strip().lower() in {"1", "true", "yes", "on"}:
+        return True
+    evidence_status = str(
+        row.get("external_blogger_evidence_status")
+        or row.get("confirmation_status")
+        or ""
+    ).strip().lower()
+    if evidence_status in {"confirmed_external", "confirmed", "verified", "accepted"}:
+        return True
+    return getenv_bool("REGION_TALK_SOURCE_PROFILE_CAPTURE_ALL_SELECTED_SOURCES", False)
+
+
+def reserve_source_profile_capture_slot(source: dict[str, Any]) -> bool:
+    key = source_profile_capture_canonical_source_key(source)
+    if key in _REGION_TALK_SOURCE_PROFILE_CAPTURED_KEYS:
+        return False
+    max_sources = max(0, getenv_int("REGION_TALK_SOURCE_PROFILE_CAPTURE_MAX_SOURCES_PER_RUN", 2))
+    if max_sources <= 0 or len(_REGION_TALK_SOURCE_PROFILE_CAPTURED_KEYS) >= max_sources:
+        return False
+    _REGION_TALK_SOURCE_PROFILE_CAPTURED_KEYS.add(key)
+    return True
+
+
+def source_profile_capture_completion_queue_fields(
+    queue_row: dict[str, Any] | None,
+    persistence_status: str,
+) -> dict[str, Any]:
+    """Close acquisition after a durable bounded capture, not after Writer readiness.
+
+    Both a newly written capture and an identical fingerprint prove that the
+    current bounded archive has already been acquired.  Conflict/error states
+    remain requested and fail closed.
+    """
+
+    if str(persistence_status or "").strip().lower() not in {"written", "unchanged_noop"}:
+        return {}
+    row = queue_row if isinstance(queue_row, dict) else {}
+    now_iso = utc_now_iso()
+    current_lane = str(row.get("priority_lane") or "")
+    current_reason = str(row.get("priority_reason") or "")
+    return {
+        "source_profile_capture_requested": "false",
+        "needs_source_profile": "true",
+        "source_profile_capture_request_cleared_at": now_iso,
+        "source_profile_capture_request_reason": "current_bounded_capture_persisted",
+        "priority_lane": "" if current_lane == "source_profile_capture" else current_lane,
+        "priority_reason": (
+            "" if current_reason == "accepted_candidate_needs_source_profile" else current_reason
+        ),
+        "priority_updated_at": now_iso,
+        "next_action": "synthesize_or_review_current_source_profile",
+        "queue_item_updated_at": now_iso,
+    }
+
+
 
 
 def normalize_source_platform(value: str, url: str = "") -> str:
@@ -1164,6 +1647,12 @@ def _seed_scan_due_state(seed: Seed, previous_state: dict[str, Any] | None = Non
 
 def source_queue_priority_bucket(queue_row: dict[str, Any] | None = None) -> int:
     row = queue_row if isinstance(queue_row, dict) else {}
+    capture_requested_raw = row.get("source_profile_capture_requested")
+    if _rt_bool(capture_requested_raw) or (
+        capture_requested_raw in (None, "")
+        and _rt_bool(row.get("needs_source_profile"))
+    ):
+        return -3
     if (
         str(row.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
         or str(row.get("priority_lane") or "").strip().lower() == "confirmed_external_blogger"
@@ -1411,6 +1900,26 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
     confirmed_external_priority: list[Seed] = []
     confirmed_external_selected: list[Seed] = []
     confirmed_external_pairs: list[tuple[Seed, dict[str, Any]]] = []
+    capture_limit = min(
+        max(0, max_sources),
+        max(0, getenv_int("REGION_TALK_SOURCE_PROFILE_CAPTURE_MAX_SOURCES_PER_RUN", 2)),
+    )
+    capture_requested_pairs = [
+        (seed, due) for seed, due in annotated
+        if source_queue_priority_bucket(due.get("queue_row")) == -3
+        and not source_terminal_rejected_status(str(
+            (due.get("queue_row") or {}).get("source_queue_status")
+            or (due.get("queue_row") or {}).get("fetch_status")
+            or ""
+        ))
+    ]
+    capture_requested = [
+        seed for seed, _due in sorted(capture_requested_pairs, key=lambda item: (
+            source_selection_cache_bucket(item[0], previous_state),
+            source_admission_seq(_source_queue_row_for_seed(item[0], previous_state)) or 999999999,
+            item[0].canonical_url,
+        ))[:capture_limit]
+    ]
 
     # A permanently non-empty first-scan backlog must not starve sources that
     # already proved product value. Reserve a small, explicit share for due
@@ -1549,20 +2058,22 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
         # to publication than a generic known-KO source rescan. Finish its
         # bounded five-post source attestation first; the previous ordering
         # let four generic KO rescans consume the entire history budget.
-        selected = priority_revisit_selected + [
-            seed for seed in confirmed_external_selected if seed not in priority_revisit_selected
+        selected = capture_requested + [
+            seed for seed in priority_revisit_selected if seed not in capture_requested
         ] + [
-            seed for seed in publication_completion if seed not in confirmed_external_selected and seed not in priority_revisit_selected
+            seed for seed in confirmed_external_selected if seed not in priority_revisit_selected and seed not in capture_requested
         ] + [
-            seed for seed in high_yield_rescan if seed not in publication_completion and seed not in confirmed_external_selected and seed not in priority_revisit_selected
+            seed for seed in publication_completion if seed not in confirmed_external_selected and seed not in priority_revisit_selected and seed not in capture_requested
+        ] + [
+            seed for seed in high_yield_rescan if seed not in publication_completion and seed not in confirmed_external_selected and seed not in priority_revisit_selected and seed not in capture_requested
         ] + [
             seed for seed in primary_due
-            if seed not in publication_completion and seed not in high_yield_rescan and seed not in confirmed_external_selected and seed not in priority_revisit_selected
+            if seed not in publication_completion and seed not in high_yield_rescan and seed not in confirmed_external_selected and seed not in priority_revisit_selected and seed not in capture_requested
         ]
         if not selected and not global_primary_backlog_exists:
             selected = rescan_due
     else:
-        selected = priority_revisit_selected + [seed for seed in primary_due if seed not in priority_revisit_selected]
+        selected = capture_requested + [seed for seed in priority_revisit_selected if seed not in capture_requested] + [seed for seed in primary_due if seed not in priority_revisit_selected and seed not in capture_requested]
         if not selected and not global_primary_backlog_exists:
             selected = rescan_due
     if (
@@ -1582,6 +2093,8 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
     _REGION_TALK_TELEGRAM_RUNTIME["history_revisit_reserved_slots"] = revisit_slots
     _REGION_TALK_TELEGRAM_RUNTIME["history_revisit_eligible_total"] = len(priority_revisit_pairs)
     _REGION_TALK_TELEGRAM_RUNTIME["history_revisit_selected_total"] = len(priority_revisit_selected)
+    _REGION_TALK_TELEGRAM_RUNTIME["source_profile_capture_requested_total"] = len(capture_requested_pairs)
+    _REGION_TALK_TELEGRAM_RUNTIME["source_profile_capture_selected_total"] = len(capture_requested)
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_not_due_total"] = sum(1 for _seed, due in annotated if not bool(due.get("due")))
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_not_due_sample"] = [
         {"source_title": seed.source_title, "canonical_url": seed.canonical_url, "reason": str(due.get("reason") or "")}
@@ -4513,6 +5026,100 @@ def write_region_talk_text_vector_enrichment_items(rows: list[dict[str, Any]], *
         _record_ydb_online_write_failure(exc, label="text_vector_enrichment")
         print(f"[region-talk] text_vector_enrichment_ydb_failed stage={stage} {type(exc).__name__}: {str(exc)[:160]}", flush=True)
         return 0
+
+
+def write_region_talk_online_source_profile_capture(
+    capture: dict[str, Any],
+    *,
+    run_id: str,
+    stage: str,
+) -> dict[str, Any]:
+    """Strong-read then persist one stable-keyed capture item.
+
+    An identical fingerprint is an explicit no-op and requests zero profile LLM
+    calls.  This function stores evidence only; it cannot approve, promote, or
+    publish a candidate.
+    """
+
+    pk = source_profile_capture_storage_pk(capture)
+    ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
+    timeout_seconds = getenv_int(
+        "REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS",
+        getenv_int("REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS", 8),
+    )
+    retry_settings = ydb_retry_settings(
+        ydb,
+        timeout_seconds=timeout_seconds,
+        max_retries=getenv_int("REGION_TALK_YDB_QUEUE_MAX_RETRIES", 0),
+    )
+
+    def read_current(session: Any) -> dict[str, Any]:
+        settings = ydb_request_settings(ydb, timeout_seconds=timeout_seconds)
+        query = session.prepare(
+            f"""
+DECLARE $pk AS Utf8;
+SELECT payload_json FROM `{table_path}` WHERE pk = $pk;
+""",
+            settings=settings,
+        )
+        result_sets = session.transaction(ydb.SnapshotReadOnly()).execute(
+            query,
+            {"$pk": pk},
+            commit_tx=True,
+            settings=settings,
+        )
+        rows = result_sets[0].rows if result_sets else []
+        if not rows:
+            return {}
+        payload = rows[0].payload_json
+        return json.loads(payload) if isinstance(payload, str) else dict(payload or {})
+
+    previous = pool.retry_operation_sync(read_current, retry_settings=retry_settings)
+    decision = capture_change_decision(previous, capture)
+    if decision["capture_change_status"] == "conflict":
+        return {
+            **decision,
+            "capture_storage_pk": pk,
+            "written_ydb_rows": 0,
+            "persistence_status": "conflict_no_write",
+        }
+    if decision["capture_change_status"] == "unchanged":
+        return {
+            **decision,
+            "capture_storage_pk": pk,
+            "written_ydb_rows": 0,
+            "persistence_status": "unchanged_noop",
+        }
+    stored = {
+        **capture,
+        **decision,
+        "profile_llm_calls_requested": int(decision["profile_llm_calls_requested"]),
+        "run_id": run_id,
+        "updated_at": utc_now_iso(),
+        "last_seen_run_id": run_id,
+        "online_update_stage": stage,
+    }
+
+    def write_changed(session: Any) -> None:
+        ensure_ydb_kv_table(ydb, session, table_path)
+        ydb_upsert_json(
+            session,
+            ydb,
+            table_path,
+            pk,
+            "source_profile_capture_item",
+            stored,
+            str(stored["updated_at"]),
+            timeout_seconds=timeout_seconds,
+        )
+
+    pool.retry_operation_sync(write_changed, retry_settings=retry_settings)
+    return {
+        **decision,
+        "capture_storage_pk": pk,
+        "written_ydb_rows": 1,
+        "persistence_status": "written",
+    }
 
 
 def write_region_talk_online_discovery_items(
@@ -12690,6 +13297,90 @@ def vk_resolved_wall_domain(domain: str, token: str) -> tuple[str, str, dict[str
     return str(signed_owner_id), object_type, payload
 
 
+def _vk_source_profile_group(response: dict[str, Any]) -> dict[str, Any]:
+    raw_groups = response.get("groups") if isinstance(response, dict) else []
+    if isinstance(raw_groups, dict):
+        raw_groups = raw_groups.get("items") or raw_groups.get("groups") or []
+    return next((dict(row) for row in (raw_groups or []) if isinstance(row, dict)), {})
+
+
+def vk_source_profile_metadata(domain: str, response: dict[str, Any], token: str) -> dict[str, Any]:
+    """Return public VK description/pinned identity using the existing read token."""
+
+    group = _vk_source_profile_group(response)
+    if normalize_source_profile_capture_text(group.get("description")):
+        return group
+    time.sleep(random.uniform(
+        getenv_float("REGION_TALK_VK_SEARCH_DELAY_MIN_SECONDS", 0.6),
+        getenv_float("REGION_TALK_VK_SEARCH_DELAY_MAX_SECONDS", 1.2),
+    ))
+    payload = vk_api_read(
+        "groups.getById",
+        {"group_ids": domain, "fields": "description,pinned_post"},
+        token,
+    )
+    if payload.get("error"):
+        return group
+    raw = payload.get("response") or []
+    if isinstance(raw, dict):
+        raw = raw.get("groups") or raw.get("items") or []
+    enriched = next((dict(row) for row in raw if isinstance(row, dict)), {})
+    return {**group, **enriched}
+
+
+def build_vk_source_profile_capture(
+    seed: Any,
+    items: Iterable[dict[str, Any]],
+    *,
+    response: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
+    scan_posts: int | None = None,
+    min_authored_posts: int | None = None,
+    selected_excerpts: int | None = None,
+    archive_exhausted: bool = False,
+) -> dict[str, Any]:
+    response = response if isinstance(response, dict) else {}
+    profile = dict(metadata or _vk_source_profile_group(response))
+    rows: list[dict[str, Any]] = []
+    pinned_row: dict[str, Any] | None = None
+    pinned_id = int(profile.get("pinned_post") or 0)
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        message_id = int(item.get("id") or 0)
+        owner_id = item.get("owner_id") or item.get("from_id") or ""
+        row = {
+            "platform_post_key": f"vk:{owner_id}:{message_id}" if owner_id and message_id else str(message_id),
+            "post_url": f"https://vk.com/wall{owner_id}_{message_id}" if owner_id and message_id else "",
+            "post_date": datetime.fromtimestamp(int(item.get("date") or 0), timezone.utc) if item.get("date") else "",
+            "text": str(item.get("text") or ""),
+            "is_forwarded_or_repost": bool(item.get("copy_history")),
+            "service_action": str(item.get("service_action") or ""),
+        }
+        rows.append(row)
+        if bool(item.get("is_pinned")) or (pinned_id and message_id == pinned_id):
+            pinned_row = row
+    source = {
+        "platform": "vk",
+        "platform_source_id": str(profile.get("id") or getattr(seed, "source_id", "") or ""),
+        "handle": getattr(seed, "handle", ""),
+        "source_url": getattr(seed, "canonical_url", ""),
+        "source_title": profile.get("name") or getattr(seed, "source_title", ""),
+    }
+    capture = build_source_profile_capture(
+        source,
+        rows,
+        description=str(profile.get("description") or ""),
+        pinned_post=pinned_row,
+        scan_posts=scan_posts,
+        min_authored_posts=min_authored_posts,
+        selected_excerpts=selected_excerpts,
+        archive_exhausted=archive_exhausted,
+    )
+    capture["metadata_status"] = "available" if capture["description_evidence"]["status"] == "available" else "description_unavailable"
+    return capture
+
+
 def fetch_vk_wall_for_seed(
     seed: Seed,
     output_dir: Path,
@@ -12714,9 +13405,13 @@ def fetch_vk_wall_for_seed(
         return src, []
     try:
         import urllib.request
+        profile_capture_requested = source_profile_capture_requested(source_row)
+        requested_wall_posts = max_posts
+        if profile_capture_requested:
+            requested_wall_posts = max(requested_wall_posts, capture_settings()["scan_posts"])
         wall_params = {
             "domain": domain,
-            "count": max(1, min(max_posts, getenv_int("REGION_TALK_VK_MAX_WALL_POSTS_PER_SOURCE", max_posts))),
+            "count": max(1, min(80, getenv_int("REGION_TALK_VK_MAX_WALL_POSTS_PER_SOURCE", requested_wall_posts), requested_wall_posts)),
             "filter": "owner",
             "extended": 1,
         }
@@ -12809,6 +13504,46 @@ def fetch_vk_wall_for_seed(
             unique_items[item_key] = item
         items = list(unique_items.values())
         groups = {str(g.get("id")): g for g in response.get("groups") or [] if isinstance(g, dict)}
+        if profile_capture_requested and reserve_source_profile_capture_slot({
+            "platform": "vk",
+            "handle": seed.handle or domain,
+            "source_url": seed.canonical_url,
+        }):
+            try:
+                profile_metadata = vk_source_profile_metadata(domain, response, token)
+                profile_capture = build_vk_source_profile_capture(
+                    seed,
+                    items,
+                    response=response,
+                    metadata=profile_metadata,
+                    scan_posts=capture_settings()["scan_posts"],
+                    archive_exhausted=len(items) < capture_settings()["scan_posts"],
+                )
+                src.update({
+                    "source_profile_capture_status": profile_capture["capture_status"],
+                    "source_profile_capture_reason": profile_capture["capture_status_reason"],
+                    "source_profile_capture_fingerprint": profile_capture["capture_fingerprint"],
+                    "source_profile_capture_scanned_count": profile_capture["scanned_count"],
+                    "source_profile_capture_authored_count": profile_capture["authored_count"],
+                    "source_profile_capture_selected_count": profile_capture["selected_count"],
+                })
+                if (os.getenv("REGION_TALK_STATE_BACKEND") or "").strip().lower() == "ydb":
+                    persistence = write_region_talk_online_source_profile_capture(
+                        profile_capture,
+                        run_id=run_id,
+                        stage="vk_source_profile_capture",
+                    )
+                    src["source_profile_capture_persistence_status"] = persistence["persistence_status"]
+                    src["source_profile_capture_profile_llm_call_required"] = str(bool(persistence["profile_llm_call_required"])).lower()
+                    src.update(source_profile_capture_completion_queue_fields(
+                        source_row, persistence["persistence_status"],
+                    ))
+            except Exception as exc:
+                src.update({
+                    "source_profile_capture_status": "capture_error",
+                    "source_profile_capture_reason": f"{type(exc).__name__}: {str(exc)[:180]}",
+                    "source_profile_capture_profile_llm_call_required": "false",
+                })
         posts: list[dict[str, Any]] = []
         media_budget = getenv_int("REGION_TALK_VK_MAX_MEDIA_DOWNLOADS_PER_RUN", getenv_int("REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN", 120))
         for item in items:
@@ -14460,6 +15195,43 @@ async def fetch_telegram_posts(
                 status.event("alive", **{**source_progress, "progress_label": f"источники {idx}/{len(monitored)} · budget exhausted · {seed.source_title or seed.canonical_url}", "sources_done": idx, "fetch_status": src_row.get("fetch_status"), "posts_scanned": 0})
                 continue
             entity_by_source[seed.source_id] = entity
+            if source_profile_capture_requested({**selected_queue_row, **src_row}) and reserve_source_profile_capture_slot({
+                "platform": "telegram",
+                "handle": seed.handle,
+                "source_url": seed.canonical_url,
+            }):
+                try:
+                    profile_capture = await acquire_telegram_source_profile_capture(
+                        client,
+                        entity,
+                        seed,
+                        governor,
+                    )
+                    src_row.update({
+                        "source_profile_capture_status": profile_capture["capture_status"],
+                        "source_profile_capture_reason": profile_capture["capture_status_reason"],
+                        "source_profile_capture_fingerprint": profile_capture["capture_fingerprint"],
+                        "source_profile_capture_scanned_count": profile_capture["scanned_count"],
+                        "source_profile_capture_authored_count": profile_capture["authored_count"],
+                        "source_profile_capture_selected_count": profile_capture["selected_count"],
+                    })
+                    if (os.getenv("REGION_TALK_STATE_BACKEND") or "").strip().lower() == "ydb":
+                        persistence = write_region_talk_online_source_profile_capture(
+                            profile_capture,
+                            run_id=run_id,
+                            stage="telegram_source_profile_capture",
+                        )
+                        src_row["source_profile_capture_persistence_status"] = persistence["persistence_status"]
+                        src_row["source_profile_capture_profile_llm_call_required"] = str(bool(persistence["profile_llm_call_required"])).lower()
+                        src_row.update(source_profile_capture_completion_queue_fields(
+                            selected_queue_row, persistence["persistence_status"],
+                        ))
+                except Exception as exc:
+                    src_row.update({
+                        "source_profile_capture_status": "capture_error",
+                        "source_profile_capture_reason": f"{type(exc).__name__}: {str(exc)[:180]}",
+                        "source_profile_capture_profile_llm_call_required": "false",
+                    })
             previous_highest_message_id, resume_min_id, resume_overlap_ids = telegram_history_resume_min_id(
                 seed, previous_state
             )
@@ -15634,6 +16406,187 @@ async def telethon_iter_messages_list(
         return out
 
     return await asyncio.wait_for(collect(), timeout=telethon_call_timeout_seconds(method_name))
+
+
+async def telegram_source_profile_metadata(client: Any, entity: Any) -> dict[str, Any]:
+    """Read public Telegram profile metadata on the caller's existing client.
+
+    ``GetFullChannelRequest`` is read-only.  It is intentionally issued through
+    the CandidateReport client rather than constructing another role session.
+    Tests and already-materialized entities may supply ``about`` directly.
+    """
+
+    description = normalize_source_profile_capture_text(getattr(entity, "about", None))
+    pinned_message_id = int(getattr(entity, "pinned_msg_id", 0) or 0)
+    platform_source_id = str(getattr(entity, "id", "") or "")
+    if description and pinned_message_id:
+        return {
+            "description": description,
+            "pinned_message_id": pinned_message_id,
+            "platform_source_id": platform_source_id,
+            "metadata_status": "available_from_resolved_entity",
+        }
+    try:
+        from telethon.tl.functions.channels import GetFullChannelRequest  # type: ignore
+
+        full = await telethon_await(client(GetFullChannelRequest(entity)), "source_profile.GetFullChannel")
+        full_chat = getattr(full, "full_chat", None)
+        description = normalize_source_profile_capture_text(getattr(full_chat, "about", None)) or description
+        pinned_message_id = int(getattr(full_chat, "pinned_msg_id", 0) or pinned_message_id)
+        return {
+            "description": description,
+            "pinned_message_id": pinned_message_id,
+            "platform_source_id": platform_source_id,
+            "metadata_status": "available" if description else "description_unavailable",
+        }
+    except Exception as exc:
+        return {
+            "description": description,
+            "pinned_message_id": pinned_message_id,
+            "platform_source_id": platform_source_id,
+            "metadata_status": "partial" if description or pinned_message_id else "unavailable",
+            "metadata_error_code": type(exc).__name__,
+            "metadata_error_message": str(exc)[:180],
+        }
+
+
+def _telegram_source_profile_message_row(message: Any, seed: Any) -> dict[str, Any]:
+    message_id = int(getattr(message, "id", 0) or 0)
+    handle = str(getattr(seed, "handle", "") or "").strip().lstrip("@").lower()
+    forward = getattr(message, "fwd_from", None) or getattr(message, "forward", None)
+    action = getattr(message, "action", None)
+    post_url = f"https://t.me/{handle}/{message_id}" if handle and message_id else ""
+    return {
+        "platform_post_key": f"tg:{handle}:{message_id}" if handle and message_id else str(message_id),
+        "post_url": post_url,
+        "post_date": getattr(message, "date", None),
+        "text": str(getattr(message, "message", None) or ""),
+        "is_forwarded_or_repost": bool(forward),
+        "service_action": type(action).__name__ if action is not None else "",
+    }
+
+
+async def acquire_telegram_source_profile_capture(
+    client: Any,
+    entity: Any,
+    seed: Any,
+    governor: Any,
+    *,
+    scan_posts: int | None = None,
+    min_authored_posts: int | None = None,
+    selected_excerpts: int | None = None,
+    archive_exhausted: bool | None = None,
+) -> dict[str, Any]:
+    """Capture Telegram metadata/history using the existing role-scoped reader.
+
+    This path does not acknowledge reads, load reactions, download media, or
+    invoke Google/any other LLM.  Every network operation consumes the existing
+    CandidateReport governor's pacing/request ledger.
+    """
+
+    settings = capture_settings()
+    limit = max(30, min(80, int(scan_posts or settings["scan_posts"])))
+    source_id = str(getattr(seed, "source_id", "") or "")
+    canonical_url = str(getattr(seed, "canonical_url", "") or "")
+    metadata: dict[str, Any] = {}
+    if governor.has_total_request_budget("source_profile.GetFullChannel", source_id, canonical_url):
+        if not await governor.humanlike_pause(
+            "source_profile.GetFullChannel",
+            source_id,
+            canonical_url,
+            min_env="REGION_TALK_TG_SOURCE_PROFILE_METADATA_DELAY_MIN_SECONDS",
+            max_env="REGION_TALK_TG_SOURCE_PROFILE_METADATA_DELAY_MAX_SECONDS",
+            default_min=1.0,
+            default_max=3.0,
+            reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180),
+        ):
+            raise TimeoutError("runtime budget exhausted before source-profile metadata read")
+        governor.total_attempted += 1
+        governor.requests_by_method["source_profile.GetFullChannel"] = governor.requests_by_method.get("source_profile.GetFullChannel", 0) + 1
+        metadata = await telegram_source_profile_metadata(client, entity)
+        governor.total_ok += 1
+    else:
+        raise RuntimeError("Telegram request budget/cooldown blocks source-profile metadata read")
+    if not governor.has_total_request_budget("source_profile.iter_messages", source_id, canonical_url):
+        raise RuntimeError("Telegram request budget/cooldown blocks source-profile archive read")
+    if not await governor.humanlike_pause(
+        "source_profile.iter_messages",
+        source_id,
+        canonical_url,
+        min_env="REGION_TALK_TG_SOURCE_PROFILE_HISTORY_DELAY_MIN_SECONDS",
+        max_env="REGION_TALK_TG_SOURCE_PROFILE_HISTORY_DELAY_MAX_SECONDS",
+        default_min=2.0,
+        default_max=6.0,
+        reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180),
+    ):
+        raise TimeoutError("runtime budget exhausted before source-profile archive read")
+    governor.total_attempted += 1
+    governor.requests_by_method["source_profile.iter_messages"] = governor.requests_by_method.get("source_profile.iter_messages", 0) + 1
+    messages = await telethon_iter_messages_list(
+        client,
+        entity,
+        method_name="source_profile.iter_messages",
+        limit=limit,
+    )
+    governor.total_ok += 1
+    rows = [_telegram_source_profile_message_row(message, seed) for message in messages]
+    pinned_id = int(metadata.get("pinned_message_id") or 0)
+    pinned_row = next(
+        (row for row in rows if str(row.get("platform_post_key") or "").endswith(f":{pinned_id}")),
+        None,
+    ) if pinned_id else None
+    if pinned_id and pinned_row is None and hasattr(client, "get_messages"):
+        method = "source_profile.get_pinned_message"
+        if governor.has_total_request_budget(method, source_id, canonical_url) and await governor.humanlike_pause(
+            method,
+            source_id,
+            canonical_url,
+            min_env="REGION_TALK_TG_SOURCE_PROFILE_PINNED_DELAY_MIN_SECONDS",
+            max_env="REGION_TALK_TG_SOURCE_PROFILE_PINNED_DELAY_MAX_SECONDS",
+            default_min=1.0,
+            default_max=3.0,
+            reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180),
+        ):
+            governor.total_attempted += 1
+            governor.requests_by_method[method] = governor.requests_by_method.get(method, 0) + 1
+            pinned_message = await telethon_await(client.get_messages(entity, ids=pinned_id), method)
+            governor.total_ok += 1
+            if pinned_message is not None:
+                pinned_row = _telegram_source_profile_message_row(pinned_message, seed)
+    source = {
+        "platform": "telegram",
+        "platform_source_id": metadata.get("platform_source_id") or getattr(entity, "id", ""),
+        "handle": getattr(seed, "handle", ""),
+        "source_url": canonical_url,
+        "source_title": getattr(entity, "title", None) or getattr(seed, "source_title", ""),
+    }
+    capture = build_source_profile_capture(
+        source,
+        rows,
+        description=str(metadata.get("description") or ""),
+        pinned_post=pinned_row,
+        scan_posts=limit,
+        min_authored_posts=min_authored_posts,
+        selected_excerpts=selected_excerpts,
+        archive_exhausted=(len(messages) < limit) if archive_exhausted is None else bool(archive_exhausted),
+    )
+    capture["metadata_status"] = str(metadata.get("metadata_status") or "unknown")
+    if metadata.get("metadata_error_code"):
+        capture["metadata_error_code"] = str(metadata.get("metadata_error_code"))
+        capture["metadata_error_message"] = str(metadata.get("metadata_error_message") or "")
+    governor.log(
+        "source_profile.capture",
+        "source_profile_capture",
+        source_id,
+        canonical_url,
+        capture["capture_status"],
+        ok=capture["capture_status"] == "ready",
+        scanned_count=capture["scanned_count"],
+        authored_count=capture["authored_count"],
+        media_downloads=0,
+        provider_calls=0,
+    )
+    return capture
 
 
 def _prefix_for_embedding_model(model_id: str, text: str, *, query: bool) -> str:
@@ -20021,6 +20974,59 @@ async def amain() -> int:
             state_meta=state_meta,
         )
     status.event('posts_fetched', phase='fetch', status='running', sources_scanned=len(source_rows), posts_fetched=len(posts))
+    if getenv_bool("REGION_TALK_SOURCE_PROFILE_CAPTURE_ONLY", False):
+        capture_rows = [
+            row for row in source_rows
+            if str(row.get("source_profile_capture_status") or "").strip()
+        ]
+        ready_rows = [
+            row for row in capture_rows
+            if str(row.get("source_profile_capture_status") or "").strip().lower() == "ready"
+        ]
+        error_rows = [
+            row for row in capture_rows
+            if str(row.get("source_profile_capture_status") or "").strip().lower() in {"capture_error", "error", "conflict"}
+            or str(row.get("source_profile_capture_persistence_status") or "").strip().lower() in {"error", "conflict"}
+        ]
+        terminal_status = "done" if capture_rows and not error_rows else "partial"
+        summary = {
+            "run_id": run_id,
+            "status": terminal_status,
+            "source_profile_capture_only": "true",
+            "sources_scanned": len(source_rows),
+            "posts_fetched": len(posts),
+            "posts_scored": 0,
+            "capture_attempted": len(capture_rows),
+            "capture_ready": len(ready_rows),
+            "capture_errors": len(error_rows),
+            "capture_source_keys": sorted({
+                str(row.get("canonical_source_key") or "")
+                for row in capture_rows
+                if str(row.get("canonical_source_key") or "")
+            }),
+            "provider_calls": 0,
+            "media_downloads": 0,
+            "publication_effect": "none",
+            "ydb_read_status": state_meta.get("ydb_read_status"),
+            "ydb_write_status": "error" if error_rows else "ok",
+            "partial_reason": "" if terminal_status == "done" else "no_ready_capture_or_capture_error",
+        }
+        result = {"ok": not error_rows, "status": terminal_status, "run_id": run_id, "summary": summary}
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "stage_status.json").write_text(
+            json.dumps({"run_id": run_id, "generated_at": utc_now_iso(), "status": terminal_status, "summary": summary}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        (Path.cwd() / "output.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        status.event(
+            "source_profile_capture_only_done",
+            phase="source_profile_capture",
+            status=terminal_status,
+            run_id=run_id,
+            **{key: value for key, value in summary.items() if key not in {"run_id", "status"}},
+        )
+        close_region_talk_runtime_clients(status)
+        return 0 if not error_rows else 1
     payload = build_report(
         seeds,
         source_rows,

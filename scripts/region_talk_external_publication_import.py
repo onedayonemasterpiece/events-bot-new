@@ -35,6 +35,15 @@ from scripts.region_talk_goal_notify import (  # noqa: E402
     ydb_endpoint_database,
     ydb_table_path,
 )
+from scripts.region_talk_publisher_profile import (  # noqa: E402
+    PublisherProfileConflict,
+    canonical_json_sha256,
+    canonical_publisher_domain,
+    merge_publisher_profile_rows,
+    publisher_evidence_fingerprint,
+    publisher_profile_id,
+    runtime_publisher_source_key,
+)
 
 
 SCHEMA_VERSION = "region_talk_external_research.v1"
@@ -891,7 +900,13 @@ def prepare_import(
             seen_row,
         ))
     sources_by_key: dict[str, dict[str, Any]] = {}
-    for row in valid:
+    publisher_profiles_by_key: dict[str, dict[str, Any]] = {}
+    publisher_candidates = list(valid) + [
+        {**observation["observed_candidate"], "external_publication_id": observation["external_publication_id"]}
+        for observation in replay_observations
+        if isinstance(observation.get("observed_candidate"), dict)
+    ]
+    for row in publisher_candidates:
         publication = row.get("publication") if isinstance(row.get("publication"), dict) else {}
         source_assessment = row.get("source_assessment") if isinstance(row.get("source_assessment"), dict) else {}
         quality = row.get("quality_assessment") if isinstance(row.get("quality_assessment"), dict) else {}
@@ -903,14 +918,24 @@ def prepare_import(
             for ref in (support.get("evidence_refs") or [])
             if str(ref)
         }
+        publisher_refs.update(
+            str(item.get("evidence_id") or "")
+            for item in (row.get("evidence") or [])
+            if isinstance(item, dict)
+            and any(str(support).startswith("publisher.") for support in (item.get("supports") or []))
+        )
+        publisher_refs.discard("")
         publisher_evidence = [
             item for item in (row.get("evidence") or [])
             if isinstance(item, dict) and str(item.get("evidence_id") or "") in publisher_refs
         ]
-        domain = str(publication.get("source_domain") or "").strip().lower()
+        try:
+            domain = canonical_publisher_domain(publication.get("source_domain"))
+        except PublisherProfileConflict as exc:
+            raise ContractError(f"publisher source_domain: {exc}") from exc
         if not domain:
             continue
-        canonical_key = "web:" + domain
+        canonical_key = runtime_publisher_source_key(domain)
         topic = "academic_publication" if str(quality.get("track") or "") == "scholarly" else "editorial_publication"
         source = sources_by_key.setdefault(canonical_key, {
             "external_publication_source_id": "extpubsrc_" + stable_hash(canonical_key),
@@ -919,8 +944,8 @@ def prepare_import(
             "source_title": publication.get("source_name") or domain,
             "source_url": "https://" + domain,
             "canonical_url": "https://" + domain,
-            "source_scope": "external",
-            "source_geo_class": "nonlocal_russia",
+            "source_scope": source_assessment.get("scope") or "unknown",
+            "source_geo_class": "nonlocal_russia" if source_assessment.get("scope") == "external" else "unknown",
             "source_topic_class": topic,
             "source_quick_class": "candidate_keep",
             "source_queue_status": "confirmed_external_publication_research",
@@ -935,16 +960,95 @@ def prepare_import(
             "external_publication_ids": [],
             "updated_at": imported_at,
         })
+        existing_publisher_evidence = json.loads(source.get("publisher_profile_evidence_json") or "[]")
+        publisher_evidence_by_hash = {
+            canonical_json_sha256(item): item
+            for item in existing_publisher_evidence + publisher_evidence
+            if isinstance(item, dict)
+        }
+        source["publisher_profile_evidence_json"] = json.dumps(
+            [publisher_evidence_by_hash[key] for key in sorted(publisher_evidence_by_hash)],
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        source["publisher_source_overview_evidence_refs_json"] = json.dumps(
+            sorted(set(json.loads(source.get("publisher_source_overview_evidence_refs_json") or "[]")).union(publisher_refs)),
+            ensure_ascii=False,
+        )
+        if len(str(editorial_pack.get("source_overview") or "")) > len(str(source.get("publisher_source_overview") or "")):
+            source["publisher_source_overview"] = editorial_pack.get("source_overview") or ""
         if request_id not in source["research_request_ids"]:
             source["research_request_ids"].append(request_id)
         if row["external_publication_id"] not in source["external_publication_ids"]:
             source["external_publication_ids"].append(row["external_publication_id"])
+
+        profile_id = publisher_profile_id(canonical_key)
+        evidence_fingerprint = publisher_evidence_fingerprint(publisher_evidence)
+        seed = {
+            "pk": "publisher_profile_item:" + profile_id,
+            "publisher_profile_id": profile_id,
+            "canonical_source_key": canonical_key,
+            "input_canonical_source_key": "domain:" + domain,
+            "source_domain": domain,
+            "source_name": publication.get("source_name") or domain,
+            "canonical_url": "https://" + domain,
+            "entity_type": source_assessment.get("entity_type") or "other",
+            "scope": source_assessment.get("scope") or "unknown",
+            "profile_status": "needs_review",
+            "profile_origin": "external_research_seed",
+            "profile_payload": None,
+            "profile_hash": "",
+            "profile_hashes": [],
+            "evidence": publisher_evidence,
+            "evidence_fingerprint": evidence_fingerprint,
+            "evidence_json_sha256": canonical_json_sha256(publisher_evidence),
+            "evidence_fingerprints": [evidence_fingerprint],
+            "evidence_item_hashes": sorted(canonical_json_sha256(item) for item in publisher_evidence),
+            "profile_dimensions": {
+                "outlet_identity": editorial_pack.get("source_overview") or "",
+                "intended_audience": [],
+                "distinctive_value": [],
+                "editorial_scope": [],
+                "recurring_formats": [],
+                "locality_guard": {
+                    "article_producer_check": source_assessment.get("externality_basis") or "",
+                    "evidence_refs": list(source_assessment.get("externality_evidence_refs") or []),
+                },
+            },
+            "copy_projection": None,
+            "public_copy_eligibility": "candidate_specific_review",
+            "usable_without_profile_llm": False,
+            "review_status": "unreviewed",
+            "publication_permission": "not_granted",
+            "request_id": request_id,
+            "input_json_sha256": raw_input_sha256,
+            "provenance_observations": [{
+                "request_id": request_id,
+                "input_json_sha256": raw_input_sha256,
+                "evidence_fingerprint": evidence_fingerprint,
+                "external_publication_id": row["external_publication_id"],
+                "observed_at": imported_at,
+            }],
+            "import_version": IMPORT_VERSION,
+            "imported_at": imported_at,
+            "first_imported_at": imported_at,
+            "updated_at": imported_at,
+        }
+        existing_seed = publisher_profiles_by_key.get(canonical_key)
+        if existing_seed:
+            try:
+                seed = merge_publisher_profile_rows(existing_seed, seed)
+            except PublisherProfileConflict as exc:
+                raise ContractError(str(exc)) from exc
+        publisher_profiles_by_key[canonical_key] = seed
     for canonical_key, source in sorted(sources_by_key.items()):
         rows.append((
             "external_publication_source_item:" + source["external_publication_source_id"],
             "external_publication_source_item",
             source,
         ))
+    for canonical_key, profile in sorted(publisher_profiles_by_key.items()):
+        rows.append((profile["pk"], "publisher_profile_item", profile))
     for item in rejected:
         error_id = stable_hash(batch_id, item["index"], item.get("canonical_url"), item.get("errors"))
         rows.append((
@@ -979,6 +1083,7 @@ def prepare_import(
         "new_intake_ids": new_intake_ids,
         "execution_blocked": bool(rejected or conflicts),
         "external_sources_staged": len(sources_by_key),
+        "publisher_profiles_staged": len(publisher_profiles_by_key),
         "ready_for_region_talk_scoring": sum(1 for row in valid if row["decision"]["import_status"] == "ready_for_region_talk_scoring"),
         "manual_or_blocked": sum(1 for row in valid if row["decision"]["import_status"] != "ready_for_region_talk_scoring"),
         "duplicate_seen_count": duplicate_seen_count,
@@ -1134,6 +1239,67 @@ VALUES ($pk, $kind, $payload_json, $updated_at);
                 + str(existing.get("external_publication_id") or "another publication")
             )
 
+        merged_row_overrides: dict[str, dict[str, Any]] = {}
+        for pk, kind, incoming in rows:
+            if kind not in {"publisher_profile_item", "external_publication_source_item"}:
+                continue
+            response = tx.execute(select, {"$pk": pk}, commit_tx=False)
+            if len(response or []) != 1 or len(response[0].rows) > 1:
+                tx.rollback()
+                raise ContractError(f"incomplete strong publisher reread for {pk}")
+            if not response[0].rows:
+                continue
+            current = _json_payload(response[0].rows[0].payload_json)
+            if kind == "publisher_profile_item":
+                try:
+                    merged_row_overrides[pk] = merge_publisher_profile_rows(current, incoming)
+                except PublisherProfileConflict as exc:
+                    tx.rollback()
+                    raise ContractError(str(exc)) from exc
+                continue
+
+            if str(current.get("canonical_source_key") or "") != str(incoming.get("canonical_source_key") or ""):
+                tx.rollback()
+                raise ContractError("external publisher source replay maps to another source key")
+            old_scope = str(current.get("source_scope") or "unknown")
+            new_scope = str(incoming.get("source_scope") or "unknown")
+            if {old_scope, new_scope} == {"external", "regional"}:
+                tx.rollback()
+                raise ContractError(f"conflicting publisher scope/locality: {old_scope} vs {new_scope}")
+            merged = dict(current)
+            if old_scope in {"unknown", ""}:
+                merged["source_scope"] = new_scope
+            elif new_scope == "mixed" or old_scope == "mixed":
+                merged["source_scope"] = "mixed"
+            for field in ("research_request_ids", "external_publication_ids", "externality_evidence_refs"):
+                merged[field] = sorted({
+                    str(value) for value in list(current.get(field) or []) + list(incoming.get(field) or [])
+                    if str(value)
+                })
+            evidence_by_hash = {
+                canonical_json_sha256(item): item
+                for item in (
+                    json.loads(str(current.get("publisher_profile_evidence_json") or "[]"))
+                    + json.loads(str(incoming.get("publisher_profile_evidence_json") or "[]"))
+                )
+                if isinstance(item, dict)
+            }
+            merged["publisher_profile_evidence_json"] = json.dumps(
+                [evidence_by_hash[key] for key in sorted(evidence_by_hash)],
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+            current_refs = json.loads(str(current.get("publisher_source_overview_evidence_refs_json") or "[]"))
+            incoming_refs = json.loads(str(incoming.get("publisher_source_overview_evidence_refs_json") or "[]"))
+            merged["publisher_source_overview_evidence_refs_json"] = json.dumps(
+                sorted({str(value) for value in current_refs + incoming_refs if str(value)}),
+                ensure_ascii=False,
+            )
+            if len(str(incoming.get("publisher_source_overview") or "")) > len(str(current.get("publisher_source_overview") or "")):
+                merged["publisher_source_overview"] = incoming.get("publisher_source_overview") or ""
+            merged["updated_at"] = incoming.get("updated_at") or current.get("updated_at")
+            merged_row_overrides[pk] = merged
+
         intake_enrichments: dict[str, dict[str, Any]] = {}
         for observation in replay_observation_rows:
             external_id = str(observation.get("external_publication_id") or "").strip()
@@ -1214,8 +1380,8 @@ VALUES ($pk, $kind, $payload_json, $updated_at);
             tx.rollback()
             raise ContractError("prepared import has no durable rows")
         rows_to_write = [
-            item for item in rows
-            if not (item[1] == "external_publication_identity_item" and item[0] in existing_same_owner_identity_pks)
+            (pk, kind, merged_row_overrides.get(pk, row)) for pk, kind, row in rows
+            if not (kind == "external_publication_identity_item" and pk in existing_same_owner_identity_pks)
         ]
         rows_to_write.extend(
             (pk, "external_publication_intake_item", payload)

@@ -18,6 +18,12 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-02-region-talk-orchestrator-stdout-deadlock.md`
+  - Scope: Region Talk scheduled-wrapper stdout transport, loop progress and
+    Kaggle/YDB polling continuity.
+  - Must not regress: an oversized single-line cycle report cannot block the
+    child pipe; runtime JSONL and at least the next polling cycle must progress.
+
 - `INC-2026-08-01-telegram-monitor-google-ai-package-closure.md`
   - Scope: Telegram Monitoring Kaggle notebook generation, embedded `google_ai`
     import closure, scheduled retry/catch-up and the role-scoped S22 lease.

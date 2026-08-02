@@ -1400,14 +1400,12 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
     def test_publication_taxonomy_and_finalizer_are_url_level(self) -> None:
         mod = load_module()
         p1 = (
-            "Петербургский автор внимательно исследует повседневный ритм города и собирает маршрут "
-            "из наблюдений за улицами, площадями и привычками жителей. Такой внешний взгляд помогает "
-            "увидеть знакомое пространство с новой точки и сохраняет авторскую интонацию источника."
+            "В Гусеве строгая геометрия улиц выводит прогулку к восстановленным фрескам. "
+            "Авторский канал собирает маршруты из личных наблюдений и точных деталей дороги."
         )
         p2 = (
-            "В публикации подробно описаны геометрия улиц, восстановленные фрески и последовательность "
-            "прогулки. Оригинал стоит открыть ради конкретных деталей и цельной фотосерии, которая "
-            "показывает обычную городскую жизнь далеко за пределами центральной площади и соседних районов."
+            "Автор связывает фрески с повседневным ритмом города и порядком остановок. "
+            "Маршрут продолжается за центральной площадью и сохраняет ясные ориентиры прогулки."
         )
         images = [
             {"post_url": "https://t.me/a/1", "image_queue_status": "actual_scored", "image_model_input_type": "actual_image", "image_publication_ready": "true"},
@@ -1428,10 +1426,16 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
                 "publication_draft_telegram_text": f"{p1}\n\n{p2}\n\nИсточник: Автор\nОригинал: https://t.me/a/1",
                 "publication_draft_vk_text": f"{p1}\n\n{p2}\n\nИсточник: Автор\nОригинал: https://t.me/a/1",
                 "publication_draft_fact_points_json": '[{"claim":"Факт","support_excerpt":"Опора"}]',
-                "publication_draft_prompt_version": "region_talk_editorial_onboarding_writer_v10_publisher_reader_brief",
-                "publication_draft_contract_version": "region_talk_editorial_onboarding_output_v4",
+                "publication_draft_prompt_version": "region_talk_editorial_writer_v11_source_profile_hook",
+                "publication_draft_contract_version": "region_talk_editorial_output_v5_source_profile_hook",
                 "publication_media_materialization_status": "fallback",
                 "publication_media_materialization_contract_version": "region_talk_media_materialization_v1",
+                "source_profile_fingerprint": "profile-fp",
+                "source_onboarding_profile_fingerprint": "profile-fp",
+                "source_onboarding_status": "ready",
+                "source_onboarding_paragraph": (
+                    "Авторский канал собирает маршруты из личных наблюдений и точных деталей дороги."
+                ),
             },
             {
                 "post_url": "https://t.me/c/3",

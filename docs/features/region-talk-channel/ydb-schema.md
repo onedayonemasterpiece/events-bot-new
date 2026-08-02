@@ -247,6 +247,33 @@ main records as soon as they are selected, discovered, fetched, scored or
 reclassified. Heartbeats remain observability-only and are not sufficient proof
 that a source/post/image/candidate exists in the product state.
 
+### Source-profile recovery row kinds
+
+The bounded source-profile path uses stable row-level projections in the same
+compact KV table. None grants publication permission:
+
+| `kind` / stable PK | Purpose and readiness boundary |
+|---|---|
+| `source_profile_capture_item` / `source_profile_capture_item:<canonical_source_key>` | Current Telegram/VK description, pinned evidence, 30–80-row classification manifest, compact digest, 8–16 authored representative excerpts and `capture_fingerprint`. Only `status=ready`, `authored_count>=20` and sufficient representative diversity may feed profile synthesis. |
+| `source_onboarding_evidence_item` / stable `source_profile_id` projection | Compact ID-addressable evidence pack used by the profile LLM. It references the current capture/profile evidence fingerprint rather than embedding an unbounded archive. |
+| `source_onboarding_profile_item` / stable `source_profile_id` projection | Reusable social profile, atomic claims/dimensions/reader brief, evidence refs, `do_not_say`, profile fingerprint and last successful capture fingerprint. |
+| `publisher_profile_item` / `publisher_profile_item:rtpublisher_<hash(web:domain)>` | Durable official-evidence publisher/journal profile. It preserves the sidecar `domain:<domain>` key and canonical runtime `web:<domain>` key, exact profile/evidence hashes, dimensions and public-copy eligibility. Only `ready + external + allowed + usable_without_profile_llm` is Writer-ready. |
+| `publisher_profile_candidate_correction_item` / stable correction id | Candidate-specific correction queue. New rows are `unreviewed`, `pending_live_revalidation`, `regeneration_allowed=false`, `candidate_mutation_allowed=false`. Pending/hard-locality rows block Writer without changing the accepted verdict. |
+| `publisher_profile_candidate_correction_review_item` / stable review id | Immutable explicit-review attestation after a serializable correction/identity/intake reread and exact intake snapshot-hash match. The review command mutates no candidate and keeps `publication_permission=not_granted`. |
+| `publisher_profile_import_batch` and `publisher_profile_import_receipt_item` / stable request batch id | Exact-byte idempotency, hash/provenance and sanitized import receipt. A partial replay, request/SHA conflict or incomplete strong read writes nothing. |
+
+An accepted social candidate with no current reusable profile sets
+`source_profile_capture_requested=true` and `needs_source_profile=true` on its
+authoritative `source_queue_item`. CandidateReport consumes this bounded work
+flag through its existing source loop. The explicit capture flag is the
+authoritative acquisition state: after a current bounded capture has been
+processed it is cleared even if synthesis remains fail-closed `needs_review`.
+`needs_source_profile` then stays true as the independent Writer-readiness
+state. Clearing either flag never approves the candidate or grants publication.
+CandidateReport writes this capture-completion transition together with the
+updated source row; the finalizer repeats it idempotently for historical rows
+whose request predates the completion rule.
+
 ## Live product funnel contract
 
 Operator-visible live YDB state must answer product questions, not just expose

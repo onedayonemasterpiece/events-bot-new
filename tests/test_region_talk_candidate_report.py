@@ -395,6 +395,148 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual([seed.canonical_url for seed in selected], [confirmed.canonical_url])
         self.assertTrue(mod._REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_priority_enabled"])
 
+    def test_explicit_source_profile_capture_request_owns_bounded_history_slot(self) -> None:
+        mod = load_module()
+        capture = self._seed(mod, "@capturefirst", seed_id="capture")
+        confirmed = self._seed(mod, "@confirmedfirst", seed_id="confirmed")
+        queue = {
+            "telegram:capturefirst": {
+                "canonical_source_key": "telegram:capturefirst",
+                "platform": "telegram",
+                "handle": capture.handle,
+                "source_url": capture.canonical_url,
+                "source_queue_status": "processed_no_ko",
+                "queue_order": 20,
+                "posts_scanned": 50,
+                "last_history_fetch_at": mod.utc_now_iso(),
+                "source_profile_capture_requested": "true",
+                "needs_source_profile": "true",
+                "priority_lane": "source_profile_capture",
+            },
+            "telegram:confirmedfirst": {
+                "canonical_source_key": "telegram:confirmedfirst",
+                "platform": "telegram",
+                "handle": confirmed.handle,
+                "source_url": confirmed.canonical_url,
+                "source_queue_status": "pending_scan",
+                "queue_order": 1,
+                "external_blogger_evidence_status": "confirmed_external",
+                "priority_lane": "confirmed_external_blogger",
+            },
+        }
+        previous = {"unified_source_queue_cursor_position": 0, "unified_source_queue": queue}
+
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_CONFIRMED_BLOGGER_PRIORITY_ENABLED": "1",
+            "REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN": "1",
+            "REGION_TALK_SOURCE_PROFILE_CAPTURE_MAX_SOURCES_PER_RUN": "1",
+        }, clear=False):
+            selected = mod.selected_sources_for_run([confirmed, capture], 1, previous_state=previous)
+
+        self.assertEqual([seed.canonical_url for seed in selected], [capture.canonical_url])
+        self.assertEqual(mod.source_queue_priority_bucket(queue["telegram:capturefirst"]), -3)
+
+    def test_stale_source_profile_capture_lane_is_not_an_active_request(self) -> None:
+        mod = load_module()
+        stale = self._seed(mod, "@stalecapture", seed_id="stale_capture")
+        pending = self._seed(mod, "@pendingfirst", seed_id="pending")
+        queue = {
+            "telegram:stalecapture": {
+                "canonical_source_key": "telegram:stalecapture",
+                "platform": "telegram",
+                "handle": stale.handle,
+                "source_url": stale.canonical_url,
+                "source_queue_status": "processed_no_ko",
+                "queue_order": 1,
+                "posts_scanned": 50,
+                "last_history_fetch_at": mod.utc_now_iso(),
+                "source_profile_capture_requested": "false",
+                "needs_source_profile": "false",
+                "priority_lane": "source_profile_capture",
+            },
+            "telegram:pendingfirst": {
+                "canonical_source_key": "telegram:pendingfirst",
+                "platform": "telegram",
+                "handle": pending.handle,
+                "source_url": pending.canonical_url,
+                "source_queue_status": "pending_scan",
+                "queue_order": 2,
+            },
+        }
+        previous = {"unified_source_queue_cursor_position": 0, "unified_source_queue": queue}
+
+        selected = mod.selected_sources_for_run([stale, pending], 1, previous_state=previous)
+
+        self.assertEqual([seed.canonical_url for seed in selected], [pending.canonical_url])
+        self.assertNotEqual(mod.source_queue_priority_bucket(queue["telegram:stalecapture"]), -3)
+
+    def test_explicit_cleared_capture_request_overrides_nonready_profile_flag(self) -> None:
+        mod = load_module()
+        row = {
+            "source_profile_capture_requested": "false",
+            "needs_source_profile": "true",
+            "external_blogger_evidence_status": "confirmed_external",
+        }
+
+        self.assertFalse(mod.source_profile_capture_requested(row))
+        self.assertNotEqual(mod.source_queue_priority_bucket(row), -3)
+
+    def test_durable_capture_completion_clears_only_acquisition_state(self) -> None:
+        mod = load_module()
+        fields = mod.source_profile_capture_completion_queue_fields({
+            "priority_lane": "source_profile_capture",
+            "priority_reason": "accepted_candidate_needs_source_profile",
+        }, "written")
+
+        self.assertEqual(fields["source_profile_capture_requested"], "false")
+        self.assertEqual(fields["needs_source_profile"], "true")
+        self.assertEqual(fields["priority_lane"], "")
+        self.assertEqual(fields["next_action"], "synthesize_or_review_current_source_profile")
+        self.assertEqual(
+            mod.source_profile_capture_completion_queue_fields({}, "conflict_no_write"), {}
+        )
+
+    def test_capture_only_run_stops_before_semantic_report(self) -> None:
+        mod = load_module()
+        seed = self._seed(mod, "@captureonly", seed_id="capture_only")
+        source_row = {
+            "canonical_source_key": "telegram:captureonly",
+            "source_profile_capture_status": "ready",
+            "source_profile_capture_persistence_status": "new",
+        }
+
+        with tempfile.TemporaryDirectory() as td, mock.patch.dict(os.environ, {
+            "REGION_TALK_SOURCE_PROFILE_CAPTURE_ONLY": "1",
+            "REGION_TALK_OUTPUT_DIR": td,
+            "REGION_TALK_DRY_RUN": "1",
+            "REGION_TALK_DISABLE_PUBLISH": "1",
+        }, clear=False), mock.patch.object(mod, "load_dotenv"), mock.patch.object(
+            mod, "load_split_runtime_from_kaggle_input", return_value={"run_id": "capture-only-test", "env": {}}
+        ), mock.patch.object(mod, "validate_required_ydb_runtime_credential"), mock.patch.object(
+            mod, "start_region_talk_stack_watchdog"
+        ), mock.patch.object(mod, "find_seed_file", return_value=Path(td) / "seeds.csv"), mock.patch.object(
+            mod, "load_seeds", return_value=[seed]
+        ), mock.patch.object(mod, "ydb_config_status", return_value={"missing": ""}), mock.patch.object(
+            mod, "load_region_talk_state", return_value=({}, {"ydb_read_status": "ok"})
+        ), mock.patch.object(
+            mod, "fetch_telegram_posts", new=mock.AsyncMock(return_value=([source_row], [{"post_url": "https://t.me/captureonly/1"}]))
+        ), mock.patch.object(mod, "build_report") as build_report, mock.patch.object(
+            mod, "close_region_talk_runtime_clients"
+        ):
+            old_cwd = Path.cwd()
+            try:
+                os.chdir(td)
+                rc = asyncio.run(mod.amain())
+                result = json.loads((Path(td) / "output.json").read_text(encoding="utf-8"))
+            finally:
+                os.chdir(old_cwd)
+
+        self.assertEqual(rc, 0)
+        build_report.assert_not_called()
+        self.assertEqual(result["summary"]["capture_ready"], 1)
+        self.assertEqual(result["summary"]["posts_scored"], 0)
+        self.assertEqual(result["summary"]["publication_effect"], "none")
+
     def test_confirmed_blogger_history_slots_are_balanced_between_telegram_and_vk(self) -> None:
         mod = load_module()
         tg = self._seed(mod, "@evidencetg", seed_id="evidence_tg")
@@ -5242,13 +5384,15 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             mod.Seed("vk1", "vk", "VK1", "@places", "https://vk.com/places", "travel", "", 1, "", "", "", "", "", "", True, "unknown", ""),
             mod.Seed("vv1", "vkvideo", "VV1", "@rgoclub", "https://vk.com/rgoclub", "travel", "", 1, "", "", "", "", "", "", True, "unknown", ""),
         ]
-        os.environ["REGION_TALK_MAX_SOURCES"] = "4"
-        os.environ["REGION_TALK_FETCH_TELEGRAM"] = "0"
-        try:
+        # This is a fetch-disabled coverage contract.  Keep it hermetic from
+        # production/test-run REGION_TALK_* settings inherited by the pytest
+        # process; selection policy overrides must not silently remove one of
+        # the four coverage surfaces and make the full suite order-dependent.
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_MAX_SOURCES": "4",
+            "REGION_TALK_FETCH_TELEGRAM": "0",
+        }, clear=True):
             rows, posts = __import__("asyncio").run(mod.fetch_telegram_posts(seeds, mod.Status(), Path(tempfile.mkdtemp())))
-        finally:
-            os.environ.pop("REGION_TALK_MAX_SOURCES", None)
-            os.environ.pop("REGION_TALK_FETCH_TELEGRAM", None)
         self.assertFalse(posts)
         statuses = {r["source_seed_id"]: r["fetch_status"] for r in rows}
         self.assertEqual(statuses["tg1"], "skipped_fetch_disabled")
@@ -5799,6 +5943,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
     def test_vk_wall_retries_resolved_signed_owner_after_domain_error(self) -> None:
         mod = load_module()
         wall_domains = []
+        profile_metadata_calls = []
 
         class Response:
             def __init__(self, payload):
@@ -5816,6 +5961,9 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             params = urllib.parse.parse_qs(parsed.query)
             if "utils.resolveScreenName" in parsed.path:
                 return Response({"response": {"object_id": 321, "type": "group"}})
+            if "groups.getById" in parsed.path:
+                profile_metadata_calls.append(params)
+                return Response({"response": {"groups": [{"id": 321, "name": "Travel", "description": "Авторские поездки"}]}})
             wall_domains.append(params.get("domain", [""])[0])
             if len(wall_domains) == 1:
                 return Response({"error": {"error_code": 100, "error_msg": "domain not domain"}})
@@ -5831,6 +5979,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             source, posts = mod.fetch_vk_wall_for_seed(seed, Path(td), 10, source_row={"external_blogger_evidence_status": "confirmed_external"})
 
         self.assertEqual(wall_domains, ["renamedvk", "-321"])
+        self.assertEqual(len(profile_metadata_calls), 1)
         self.assertEqual(source["fetch_status"], "ok")
         self.assertEqual(source["vk_wall_resolve_status"], "group")
         self.assertEqual(posts[0]["post_url"], "https://vk.com/wall-321_7")
