@@ -132,6 +132,20 @@ Before a DNS change, store a sanitized before-snapshot in ignored `artifacts/cod
 
 ## Inbound flow
 
+### Reusable send/receive operator workflow
+
+Use `.codex/skills/kenigevents-email-roundtrip/` for controlled inbound canaries,
+OTP receipt checks and redacted roundtrip evidence. The skill discovers the
+existing active Yandex Cloud Mail Trigger and private bucket; it does not create
+a mailbox or mutate infrastructure.
+
+An automated test recipient does not require a SpaceWeb mailbox. Yandex Cloud
+generates a technical address for `kenigevents-email-mail-trigger`, and the
+existing intake path retains its normalized message body privately. A human
+mailbox remains necessary only for durable correspondence/replies. The shared
+inbound bucket must not be exposed to GitHub Actions; unattended OTP E2E needs a
+dedicated Mail Trigger/bucket or a single-purpose signed retrieval boundary.
+
 1. Internet mail is delivered by SpaceWeb MX and retained in `info@kenigevents.ru`.
 2. SpaceWeb exposes mailbox destination modes (`Mail`, `Forwarding`, `Distribution`)
    as mutually exclusive settings. Switching `info@` to `Forwarding` would remove

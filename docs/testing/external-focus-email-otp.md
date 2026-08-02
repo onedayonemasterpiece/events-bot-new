@@ -41,6 +41,15 @@ not count as acceptance.
 Safari Share Sheet, Launcher/SpringBoard, standalone and relaunch. It must not be
 folded into the first browser-tab mobile PR.
 
+The stable recipient does not have to be a provisioned human mailbox. The
+existing Yandex Cloud Mail Trigger proves the automated-receipt route and is
+operable through `.codex/skills/kenigevents-email-roundtrip/`. For unattended
+GitHub execution, use a dedicated trigger and short-retention bucket (or a
+narrowly signed one-time read endpoint); never give the workflow access to the
+shared private bucket that also contains the read-only `info@kenigevents.ru`
+copy. The current IMAP adapter remains supported for an independently controlled
+mailbox.
+
 ## Test identity policy
 
 The default is one fixed mailbox, for example
@@ -76,7 +85,9 @@ runs are allowed only after separate stable identities/mailboxes are assigned.
 
 ## GitHub Environment
 
-Create the protected Environment `external-e2e`:
+Create the protected Environment `external-e2e`. Configure exactly one receive
+adapter: controlled IMAP, or the dedicated Yandex Mail Trigger boundary described
+above. For the current IMAP adapter:
 
 - require a reviewer;
 - allow deployment from the default branch only;
