@@ -1,0 +1,130 @@
+mode: serial_external_gates_with_parallel_implementation
+repo: onedayonemasterpiece/events-bot-new
+base_ref: 61b8d7dcf58a4299c2e9a7538fa55c3eeda9be79
+base_branch: integration/static-collection-facts-v3
+integration_branch: integration/static-collection-facts-v3
+global_constraints:
+  - no ontology, prompt, model, threshold, owner-gold, PR-B, Astro route, navigation, sitemap, or publication changes
+  - no unrelated location, parser identity, or venue-grounding fixes
+  - capture is manual, bounded to one selected packet per adapter, sanitized, artifact-only, and never a production table/service
+  - no production mutation or Fly deploy before source-faithful Gate E, clean main integration, and main-reachable SHA
+  - paid/provider operations run serially under the root integrator
+verification_owner: root integrator
+stop_conditions:
+  - capture contains credentials, auth/session tokens, or private bearer data
+  - capture mutates production DB or triggers publication
+  - warm collection provider call, write, event/source change, or duplicate
+  - product-quality FAIL
+  - unrelated ingestion guard failure is "fixed" inside this scope
+  - deploy SHA is not clean and reachable from origin/main
+lanes:
+  - id: copy-gate-d
+    role: planner
+    effort: high
+    requirement_ids: [R1, R2]
+    target: fresh production-copy fixed 20-source plan/apply/identical-warm evidence
+    depends_on: []
+    execution_mode: serial_integrator
+    branch: integration/static-collection-facts-v3
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collection-facts-v3
+    writable_files: [artifacts]
+    forbidden_files: [/data/db.sqlite, production database]
+    expected_output: fixed-cohort plan/apply/warm receipts with zero-call/zero-write warm
+    verification_scope: full_local
+    status: planned
+  - id: capture-map
+    role: planner
+    effort: high
+    requirement_ids: [R3, R4, R5, R6]
+    target: map exact production packet shapes, entry boundaries, sanitization and fresh-input acquisition paths
+    depends_on: []
+    execution_mode: parallel_read_only
+    branch: none
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collection-facts-v3
+    writable_files: []
+    forbidden_files: [all]
+    expected_output: bounded implementation map and safe acquisition commands
+    verification_scope: inspection_only
+    status: planned
+  - id: capture-implementation
+    role: worker
+    effort: high
+    requirement_ids: [R3, R5]
+    target: manual artifact-only pre-entrypoint capture seam and replay contract
+    depends_on: [capture-map]
+    execution_mode: serial_after_dependency
+    branch: agent/static-collection-shadow-e2e/capture
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collection-shadow-capture
+    writable_files:
+      - source_parsing/telegram
+      - source_parsing/handlers.py
+      - source_parsing
+      - scripts/run_static_collection_ingestion_replay.py
+      - scripts/static_collection_ingestion_capture.py
+      - tests/test_static_collection_ingestion_capture.py
+      - tests/test_static_collection_ingestion_replay.py
+      - .codex/lanes/static-collection-shadow-capture/RESULTS.md
+    forbidden_files:
+      - smart_event_update.py
+      - ontology/review seed
+      - location/parser/identity semantics
+      - kaggle/StaticSiteBuilder
+      - site/src/pages
+    expected_output: committed capture seam with redaction, one-packet limits and no-side-effect tests
+    verification_scope: full_local
+    status: planned
+  - id: builder-monitor
+    role: worker
+    effort: high
+    requirement_ids: [R7, R8, R9, R10]
+    target: run product-quality monitor directly after StaticSiteBuilder snapshot and persist JSON/Markdown/qa-summary
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-collection-shadow-e2e/builder-monitor
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collection-shadow-builder
+    writable_files:
+      - kaggle/StaticSiteBuilder/static_site_builder.py
+      - scripts/run_static_site_builder_kaggle.py
+      - site/scripts/export-production-preview-data.py
+      - scripts/check_static_collections_product_quality.py
+      - tests/test_static_collection_product_snapshot.py
+      - tests/test_static_collections_product_quality.py
+      - tests/test_static_collection_export.py
+      - .codex/lanes/static-collection-shadow-builder/RESULTS.md
+    forbidden_files:
+      - source_parsing
+      - smart_event_update.py
+      - site/src/pages
+      - publication/schedule controls
+      - owner baseline fixtures
+    expected_output: committed single-pipeline builder integration and focused tests
+    verification_scope: full_local
+    status: planned
+  - id: fresh-real-replay
+    role: planner
+    effort: max
+    requirement_ids: [R4, R5, R6, R7]
+    target: capture and replay one fresh Telegram, VK and parser packet with per-first/warm product reports
+    depends_on: [capture-implementation, builder-monitor, copy-gate-d]
+    execution_mode: serial_integrator
+    branch: integration/static-collection-facts-v3
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collection-facts-v3
+    writable_files: [artifacts]
+    forbidden_files: [production database, publication]
+    expected_output: three source-faithful first/warm receipts and stable non-FAIL product output
+    verification_scope: full_local
+    status: planned
+  - id: release-stack
+    role: merge_reviewer
+    effort: max
+    requirement_ids: [R11, R12]
+    target: merge stack in required order, supersede #234 only after diff audit, clean current-main CI, then bounded Fly canary
+    depends_on: [fresh-real-replay]
+    execution_mode: serial_after_dependency
+    branch: integration/static-collection-shadow-main
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collection-shadow-main
+    writable_files: [integration/release documentation]
+    forbidden_files: [PR-B, owner gold, public routes, mobile]
+    expected_output: exact main-reachable SHA and Fly PASS, or external blocker with evidence
+    verification_scope: full_local
+    status: planned
