@@ -198,7 +198,7 @@ jobs:
           export E2E_HOST_OS_VERSION="$(sw_vers -productVersion)"
           export E2E_XCODE_VERSION="$(xcodebuild -version | tr '\n' ' ')"
           npx appium --base-path /wd/hub --port 4723 > "${RUNNER_TEMP}/appium-ios.log" 2>&1 &
-          for n in {1..45}; do curl -fsS http://127.0.0.1:4723/wd/hub/status >/dev/null && break; sleep 1; done
+          ready=0; for n in $(seq 1 120); do if curl --max-time 2 -fsS http://127.0.0.1:4723/wd/hub/status >/dev/null; then ready=1; break; fi; sleep 1; done; test "$ready" = 1
           npm run e2e:external-focus-email-otp
       - name: Emit safe BLOCKED artifact when simulator failed before harness
         if: ${{ always() }}

@@ -106,7 +106,8 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
   };
   let driver;
   try {
-    driver = await remote({ hostname: config.hostname, port: config.port, path: config.path, logLevel: 'warn', capabilities: caps });
+    driver = await remote({ hostname: config.hostname, port: config.port, path: config.path, logLevel: 'warn',
+      connectionRetryTimeout: platform === 'ios' ? 360_000 : 120_000, connectionRetryCount: 0, capabilities: caps });
   } catch (error) {
     throw new Error(`simulator_appium_startup:${String(error?.message || error).slice(0, 240)}`);
   }

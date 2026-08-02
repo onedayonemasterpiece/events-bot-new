@@ -11,6 +11,8 @@ test('Appium adapter uses real browser capabilities and ordinary digit input wit
   assert.match(source, /UiAutomator2/u);
   assert.match(source, /XCUITest/u);
   assert.equal((source.match(/'wdio:enforceWebDriverClassic': true/gu) || []).length, 2);
+  assert.match(source, /connectionRetryTimeout: platform === 'ios' \? 360_000 : 120_000/u);
+  assert.match(source, /connectionRetryCount: 0/u);
   assert.match(source, /for \(const digit of value\).*addValue\(digit\)/su);
   assert.doesNotMatch(source, /getPageSource|pageSource|input\.value\s*=\s*value/u);
 });
