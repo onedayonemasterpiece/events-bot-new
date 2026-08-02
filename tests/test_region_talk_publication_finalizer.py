@@ -578,7 +578,17 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             "publication_eligibility_gate_version": mod.rt.PUBLICATION_ELIGIBILITY_GATE_VERSION,
         }
         kinds = {
-            "image_queue_item": {},
+            # A compact image row can remain after the media lane stopped at
+            # manual review. It must not mask the terminal publication row,
+            # because that stale image is not itself a finalizer input.
+            "image_queue_item": {
+                "image:archived-stale": {
+                    "post_url": post_url,
+                    "external_publication_id": "extpub-archived",
+                    "image_queue_status": "needs_visual_review",
+                    "image_model_input_type": "actual_image",
+                }
+            },
             "candidate_memory_item": {},
             "publication_candidate_item": {"publication:archived": publication},
             "source_queue_item": {},
