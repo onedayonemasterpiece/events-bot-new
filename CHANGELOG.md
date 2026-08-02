@@ -25,6 +25,8 @@
   without immediately sending a duplicate message. Added a fixed-identity,
   fresh-OTP deployed integration check while retaining real mailbox delivery
   as a separate external E2E gate.
+- Added immutable Region Talk external-publication research inputs, semantic-validation status, and an OIDC-only guarded YDB staging runbook with audit evidence and no-publication boundary.
+- Completed the Region Talk writer-v10 compensating backfill: all 22 current confirmed candidates now have cliché-free grounded copy, exact ready/fallback media, current operator-chat delivery, reaction synchronization, and rebuilt anti-vector queue/daily-plan snapshots.
 - Fixed Region Talk reviewed article-image delivery on content-negotiating publisher CDNs: the notifier now reproduces ImageDiagnostic's image `Accept` and user-agent request contract before verifying the fail-closed content digest.
 - Fixed Region Talk Telegram source-media resolution: generic `hero:1` presentation ordinals are no longer misread as Telegram message id 1, `#media` sentinels no longer replace exact source-video refs, explicit zero-LLM media repair reclassifies the exact anchor as video when Telethon proves it, and a video/hero inside a mixed grouped post is bounded to one source item instead of failing the single-media contract with the whole group.
 - Fixed Region Talk operator delivery head-of-line blocking: a pre-send media materialization/hash failure is now persisted as `materialization_failed`, remains unsent for evidence repair, and no longer prevents later review revisions in the same bounded batch from reaching the chat.

@@ -5,6 +5,7 @@ import importlib
 import importlib.util
 import json
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -360,14 +361,14 @@ def test_execute_without_sidecar_uses_live_ydb_guard_and_refreshes_registry(
     input_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
     request_mod = importlib.import_module("scripts.region_talk_external_research_request")
-    registry_mod = importlib.import_module("scripts.region_talk_external_research_registry")
+    registry_mod = types.ModuleType("scripts.region_talk_external_research_registry")
+    registry_mod.publish_current_registry = lambda *, seen_limit: {
+        "seen_publication_count": 0,
+        "seen_limit": seen_limit,
+    }
     monkeypatch.setattr(request_mod, "read_seen_from_ydb", lambda _limit: [])
     monkeypatch.setattr(mod, "write_ydb", lambda rows: len(rows))
-    monkeypatch.setattr(
-        registry_mod,
-        "publish_current_registry",
-        lambda *, seen_limit: {"seen_publication_count": 0, "seen_limit": seen_limit},
-    )
+    monkeypatch.setitem(sys.modules, registry_mod.__name__, registry_mod)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -383,7 +384,51 @@ def test_execute_without_sidecar_uses_live_ydb_guard_and_refreshes_registry(
     assert mod.main() == 0
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report["live_duplicate_guard_applied"] is True
+    assert report["registry_publication_enabled"] is True
     assert report["registry_publication"]["seen_limit"] == 20000
+    assert report["registry_publication_error"] is None
+
+
+def test_execute_can_skip_object_storage_registry_for_ydb_only_service_account(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    mod = load_module()
+    payload = valid_payload()
+    payload["candidates"] = []
+    input_path = tmp_path / "result.json"
+    report_path = tmp_path / "report.json"
+    input_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    request_mod = importlib.import_module("scripts.region_talk_external_research_request")
+    registry_mod = types.ModuleType("scripts.region_talk_external_research_registry")
+
+    def registry_publish_must_not_run(*, seen_limit: int) -> None:
+        raise AssertionError(f"registry publish unexpectedly called with {seen_limit=}")
+
+    registry_mod.publish_current_registry = registry_publish_must_not_run
+    monkeypatch.setattr(request_mod, "read_seen_from_ydb", lambda _limit: [])
+    monkeypatch.setattr(mod, "write_ydb", lambda rows: len(rows))
+    monkeypatch.setitem(sys.modules, registry_mod.__name__, registry_mod)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            str(MODULE_PATH),
+            str(input_path),
+            "--report",
+            str(report_path),
+            "--execute",
+            "--no-publish-registry",
+        ],
+    )
+
+    assert mod.main() == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["executed"] is True
+    assert report["live_duplicate_guard_applied"] is True
+    assert report["registry_publication_enabled"] is False
+    assert report["registry_publication"] is None
     assert report["registry_publication_error"] is None
 
 

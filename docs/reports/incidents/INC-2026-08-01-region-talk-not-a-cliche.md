@@ -67,6 +67,10 @@ exact pattern in the Telegram and VK fields of
   four of five social drafts remain shorter than the exact caption contract
   after retry. Further calls pause until the retry prompt carries the numeric
   deficit, a safe target and a new durable stage execution revision.
+- 2026-08-01 23:02–23:56 UTC — the writer-v10 catch-up finishes for all 22
+  current confirmed candidates. The production inventory contains zero banned
+  construction matches; all exact revisions reach the operator chat and the
+  anti-vector queue and daily plan are rebuilt from the corrected copy.
 
 ## Root Cause
 
@@ -145,9 +149,9 @@ drafts stale and actionable without changing the semantic publication verdict.
 - [x] run compensating candidate backfill attempts and deliver the corrected
   Archi.ru operator revision;
 - [x] verify zero banned patterns in current unpublished confirmed drafts;
-- [ ] finish the quota-deferred retry tail after Gemini RPD reset without
+- [x] finish the quota-deferred retry tail after Gemini RPD reset without
   lowering the model/grounding contract;
-- [ ] deploy writer v10 and finish the complete confirmed-candidate catch-up,
+- [x] deploy writer v10 and finish the complete confirmed-candidate catch-up,
   including fresh operator messages and a rebuilt anti-vector plan;
 - [ ] observe the next scheduled Region Talk cycle without regression.
 
@@ -172,6 +176,20 @@ drafts stale and actionable without changing the semantic publication verdict.
   `GOOGLE_API_KEY2` lanes returned Gemini `RPD`/`RESOURCE_EXHAUSTED`; further
   key guessing stopped because quotas are project/model scoped. No lower model
   or uncontrolled provider path was substituted.
+- completed catch-up: 22/22 current confirmed candidates are writer-v10 ready,
+  zero final-copy cliché matches, 22/22 exact media contracts are ready or
+  explicit fallback, and zero current revisions remain unsent. The staged
+  calls used `gemini-3.5-flash-lite`; the configured
+  `gemini-3.1-flash-lite` lane remained the bounded fallback.
+- delivery and planning: corrected exact revisions are visible in operator
+  messages `33809`–`33860`; queue snapshot
+  `rtqueue_830732b80370dca6fd072862` is message `33861`; the persisted
+  reaction-gated daily-plan snapshot is `rtdayplan_8b8ee9fe7c93e0cd2ea42e39`
+  with all 22 current revisions blocked pending operator approval.
+- release evidence: PRs #196, #198, #199, #200 and #203 are merged;
+  `origin/main` SHA `5a5d28cc1cc579a462ddf5cb49e0a6830e6f1199` is deployed as
+  Fly `v1866`; `/healthz` is ready and the final Region Talk suite reports
+  `721 passed`.
 
 ## Prevention
 
