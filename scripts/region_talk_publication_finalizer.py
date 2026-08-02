@@ -898,11 +898,38 @@ def read_live_rows(
             "media_review_mode": "system_link_preview_terminal_fallback",
         }
 
+    # Terminal publication rows may outlive their compact image/memory working
+    # payloads.  They still need zero-provider attestation refreshes when a
+    # legacy external intake gains provenance or changes review state.  Project
+    # those rows into the finalizer without pretending that the publication row
+    # is fresh image evidence; the current publication/intake/source snapshots
+    # remain the authorities used by the final decision fence below.
+    covered_input_urls = {
+        normalize_post_url(str(item.get("post_url") or ""))
+        for item in finalizer_inputs.values()
+        if normalize_post_url(str(item.get("post_url") or ""))
+    }
+    for publication_pk, publication in publications_by_pk.items():
+        post_url = normalize_post_url(str(publication.get("post_url") or ""))
+        if (
+            not post_url
+            or post_url in covered_input_urls
+            or not str(publication.get("external_publication_id") or "").strip()
+        ):
+            continue
+        finalizer_inputs["terminal-publication:" + str(publication_pk)] = {
+            **publication,
+            "_ydb_pk": "",
+            "_terminal_publication_projection": "true",
+        }
+        covered_input_urls.add(post_url)
+
     for image in finalizer_inputs.values():
         actual_image = image.get("image_queue_status") == "actual_scored" and image.get("image_model_input_type") == "actual_image"
         video_manual_review = rt.is_video_media_candidate(image)
         external_link_article = rt.uses_external_link_article_lane(image)
-        if not actual_image and not video_manual_review and not external_link_article:
+        terminal_publication_projection = rt._rt_bool(image.get("_terminal_publication_projection"))
+        if not actual_image and not video_manual_review and not external_link_article and not terminal_publication_projection:
             continue
         original_post_url = str(image.get("post_url") or "")
         post_url = normalize_post_url(original_post_url)

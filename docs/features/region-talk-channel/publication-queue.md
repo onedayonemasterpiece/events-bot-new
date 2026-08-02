@@ -541,7 +541,10 @@ attestation projection without another provider call. The refresh includes the
 current intake fingerprint, revision, intake/review status, publication
 permission and manual-review flag. This prevents an otherwise unchanged
 eligibility/source attestation from leaving a legacy candidate outside the
-planner merely because its intake fingerprint was added later.
+planner merely because its intake fingerprint was added later. The zero-LLM
+projection also covers terminal external-publication candidates whose compact
+image/memory working rows have already been pruned; it does not recreate media
+evidence or reopen the provider verdict.
 
 All Region Talk Gemini consumers (final verifier/onboarding, visual
 adjudicator and optional grounded external research) disable direct reserve and
