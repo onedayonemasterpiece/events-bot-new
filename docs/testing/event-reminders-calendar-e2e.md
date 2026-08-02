@@ -1,30 +1,28 @@
 # E2E-сценарии напоминаний и календарной доставки
 
-> **Статус:** test design + executable scaffold; product side effects пока не реализованы  
+> **Статус:** source parity с `schedule-user-requirements.md` подтверждён; test design + executable environment scaffold; product side effects пока не реализованы  
 > **Product strategy:** [`../features/static-site-pages/event-reminders-calendar-strategy.md`](../features/static-site-pages/event-reminders-calendar-strategy.md)  
 > **Исходные требования:** [`../features/static-site-pages/schedule-user-requirements.md`](../features/static-site-pages/schedule-user-requirements.md) — не изменяются  
-> **Общая стратегия:** [`../operations/static-site-autotest-strategy.md`](../operations/static-site-autotest-strategy.md)  
+> **Общий release plan:** [`../features/static-site-pages/release-plan.md`](../features/static-site-pages/release-plan.md), Stage 14  
+> **Общая тестовая стратегия:** [`../operations/static-site-autotest-strategy.md`](../operations/static-site-autotest-strategy.md)  
 > **Scenario registry:** [`static-site-autotest-scenarios.v1.yml`](static-site-autotest-scenarios.v1.yml)  
 > **Workflow scaffold:** [`.github/workflows/event-reminders-calendar-e2e.yml`](../../.github/workflows/event-reminders-calendar-e2e.yml)
 
-## 1. Решение по слоям
+## 1. Слои доказательства
 
-Используются существующие уровни доказательства:
-
-- **L0:** canonical event/ICS/MIME/outbox contracts без браузера;
+- **L0:** event/ICS/MIME/outbox/preferences/calendar-view contracts без браузера;
 - **L1:** Chromium journey на exact deployed HTTPS target;
-- **L2 Android:** Android Emulator + Chrome + UiAutomator2/native UI;
-- **L2 iOS:** iOS Simulator + Mobile Safari + XCUITest/native UI;
-- **L3:** физические устройства/device farm для Push background/OEM и реальных
-  Gmail/Apple Mail/Calendar integration canaries.
+- **L2 Android:** Android Emulator + Chrome/Appium UiAutomator2 + native UI;
+- **L2 iOS:** iOS Simulator + Mobile Safari/Appium XCUITest + native UI;
+- **L3:** физические устройства/device farm для background Push, OEM/calendar apps и реальных mail clients.
 
-Mobile viewport в desktop Chromium не заменяет Android/iOS. Full event catalog
-не запускается на эмуляторах. Один run выбирает ровно одно актуальное событие и
-передаёт его всем downstream jobs как immutable test input.
+Mobile viewport в desktop Chromium не заменяет Android/iOS. Playwright WebKit
+не заменяет Mobile Safari/system UI. На эмуляторах не обходится полный каталог:
+один run выбирает одно актуальное событие и передаёт его всем downstream jobs.
 
 ## 2. Актуальное событие вместо hardcoded URL
 
-### 2.1. Resolver contract
+### 2.1. Resolver
 
 `site/e2e/event-reminders/resolve-current-event.mjs` получает:
 
@@ -38,25 +36,19 @@ E2E_SELECTED_EVENT_PATH
 
 Алгоритм:
 
-1. Разрешить exact preview base и получить `preview-build.json`.
-2. Сверить полный `repo_sha` с workflow input.
-3. Обойти в фиксированном порядке текущие listing routes:
-   `zavtra`, `segodnya`, `vyhodnye`, `populyarnoe`, root.
-4. Извлечь только same-origin event links внутри того же preview prefix.
-5. Для каждой страницы запросить соседний `event.ics`.
+1. Определить exact preview base и получить `preview-build.json`.
+2. Сверить полный `repo_sha`.
+3. Обойти `zavtra`, `segodnya`, `vyhodnye`, `populyarnoe`, root.
+4. Извлечь только same-origin event links внутри того же prefix.
+5. Для каждой страницы получить adjacent `event.ics`.
 6. Развернуть folded ICS lines и извлечь первый `VEVENT`.
-7. Отфильтровать:
-   - started/past;
-   - `STATUS:CANCELLED`;
-   - all-day для первого test slice;
-   - неизвестный datetime format;
-   - отсутствие `UID`, `SUMMARY`, `LOCATION`, `DTSTART`, `DTEND`;
-   - lead меньше configured minimum или больше configured maximum.
-8. Выбрать детерминированно самое раннее подходящее событие; при равном времени
-   использовать event URL.
-9. Сохранить SHA-256 ICS и selection evidence.
+7. Отбросить started/past, `STATUS:CANCELLED`, all-day первого slice,
+   неизвестный datetime и записи без UID/SUMMARY/LOCATION/DTSTART/DTEND.
+8. Применить lead-time window.
+9. Детерминированно выбрать earliest complete timed current event.
+10. Сохранить ICS hash и build identity.
 
-`selected-event.json` содержит:
+`selected-event.json`:
 
 ```json
 {
@@ -79,58 +71,62 @@ E2E_SELECTED_EVENT_PATH
 }
 ```
 
-### 2.2. Revalidation и устаревание
+Protected backend дополнительно разрешает selected URL/UID в canonical
+`event_id`, revision и `event_city`. Browser location string не является
+источником city classification.
 
-Перед первым side effect каждый protected scenario повторно получает event page
-и ICS и сверяет:
+### 2.2. Revalidation
 
-- event ещё не начался и не отменён;
-- UID и event URL прежние;
-- ICS hash/revision соответствует политике сценария;
-- deployed repo SHA не изменился.
+Перед первым side effect повторно проверяются page и ICS:
 
-Если событие устарело **до первого side effect**, resolver может быть запущен
-ровно один раз повторно. После отправки Push/email переключение на другой event
-запрещено: run завершается `BLOCKED_EVENT_CHANGED_AFTER_SIDE_EFFECT`.
+- событие ещё не началось и не отменено;
+- URL/UID прежние;
+- event revision/ICS hash допустимы для сценария;
+- deployed repo SHA прежний.
 
-Expired editorial event не удаляет deterministic unit coverage. Формат ICS,
-MIME, scheduler и lifecycle дополнительно проверяются frozen fixtures; live
-resolver нужен для production-like route/delivery journey.
+До первого side effect разрешён один повторный resolver run. После первой
+Push/email отправки переключение на другое событие запрещено:
+
+```text
+BLOCKED_EVENT_CHANGED_AFTER_SIDE_EFFECT
+```
+
+Frozen fixtures сохраняют deterministic coverage, когда редакционные события
+устаревают. Live resolver нужен для production-like integration journey.
 
 ## 3. Реестр сценариев
 
-| Scenario ID | Статус сейчас | Layers/platforms | Side effects | Blocking policy |
-|---|---|---|---|---|
-| `event.current_event.selection` | scaffold implemented | L0/L1 browser | none | blocking для остальных сценариев |
-| `event.ics.download_contract` | partial existing | L0/L1 browser | download only | release при изменении ICS |
-| `event.reminder.push_subscription` | planned | L1/L2 Android/iOS | test subscription | при реализации Push contract |
-| `event.reminder.push_delivery` | planned | L1/L2 + L3 canary | protected Push | release blocking после реализации |
-| `event.reminder.lifecycle` | planned | L0/L1/L2 sample | isolated revision overlay + Push | release blocking после реализации |
-| `event.calendar_email.postbox_mime` | planned | L0 | none | PR blocking при MIME builder change |
-| `event.calendar_email.postbox_roundtrip` | planned | server + mailbox | protected one-message sequence | protected release/research gate |
-| `event.calendar_email.client_action` | planned | L2/L3 | controlled invitation | research acceptance, not routine PR |
-| `event.calendar_connector.android` | planned | L0/L1/L2 Android + L3 | system calendar editor | connector release blocking |
-| `event.current_event.mobile_environment` | scaffold implemented | L2 Android/iOS | none | environment diagnostic only |
+| Scenario ID | Статус | Layers/platforms | Side effects |
+|---|---|---|---|
+| `event.current_event.selection` | scaffold implemented | L0/L1 browser | none |
+| `event.current_event.mobile_environment` | scaffold implemented | L2 Android/iOS | none |
+| `event.saved_calendar_view` | planned | L0/L1 browser | idempotent saved-event fixture |
+| `event.ics.download_contract` | partial existing | L0/L1 browser | download only |
+| `event.reminder.push_subscription` | planned | L1/L2 Android/iOS | test subscription |
+| `event.reminder.preferences` | planned | L0/L1/L2 | preference updates |
+| `event.reminder.push_delivery` | planned | L1/L2 + L3 | protected Push |
+| `event.reminder.lifecycle` | planned | L0/L1/L2 | revision overlay + Push |
+| `event.calendar_email.postbox_mime` | planned | L0 | none |
+| `event.calendar_email.postbox_roundtrip` | planned | server/mailbox | protected REQUEST/update/CANCEL |
+| `event.calendar_email.client_action` | planned | L1/L2/L3 | controlled invitation |
+| `event.calendar_connector.android` | planned | L0/L1/L2/L3 Android | system editor |
 
-`planned` не превращается в PASS. Workflow skeleton может доказать resolver и
-mobile environment readiness, но должен писать `NOT_IMPLEMENTED` для product
-assertions, которых ещё нет.
+`planned` не превращается в PASS. Environment scaffold обязан возвращать
+`NOT_IMPLEMENTED` для отсутствующих product assertions.
 
 ## 4. `event.current_event.selection`
 
-### Assertions
+Assertions:
 
-- exact preview metadata доступна;
-- expected и observed full SHA совпали;
-- source listing и event link same-origin и внутри одного prefix;
-- event page и ICS возвращают `200`;
-- start/end валидны и событие не началось;
-- UID, summary, location непусты;
-- ICS hash сохранён;
-- выбор детерминирован;
-- в evidence нет bearer query/hash и персональных данных.
+- exact build metadata и full SHA;
+- current listing/event/ICS в одном origin/prefix;
+- HTTP 200;
+- future start/end;
+- непустые UID/summary/location;
+- deterministic selection;
+- sanitized evidence.
 
-### Failure domains
+Failure domains:
 
 ```text
 BLOCKED_TARGET_METADATA
@@ -141,218 +137,262 @@ FAIL_CROSS_ORIGIN_EVENT
 FAIL_EVENT_ALREADY_STARTED
 ```
 
-## 5. `event.ics.download_contract`
+## 5. `event.saved_calendar_view`
+
+### Dynamic integration
+
+1. Resolver выбирает актуальное событие.
+2. Сценарий сохраняет его idempotent test identity.
+3. Открывает календарный вид «Избранного».
+4. Проверяет правильную date group.
+5. Проверяет строку:
+
+```text
+HH:MM–HH:MM | Мероприятие | локация
+```
+
+6. Повторный save не создаёт duplicate.
+7. Отключение Push не удаляет строку.
+
+### Frozen contracts
+
+- несколько дат;
+- несколько событий в один день;
+- хронологическая сортировка;
+- favorite + calendar source без duplicate;
+- unknown end/location typed fallback;
+- reschedule перемещает строку;
+- cancellation видима;
+- честный empty state.
+
+Live current event обеспечивает актуальный integration input, а сложные
+группировки не зависят от редакционного каталога конкретного дня.
+
+## 6. `event.ics.download_contract`
 
 ### L0
 
 - CRLF и unfolded semantic fields;
-- stable UID для event/revision policy;
-- DTSTART/DTEND и timezone;
+- stable UID;
+- DTSTART/DTEND/timezone;
 - canonical URL;
 - escaping/folding;
-- no cancelled event presented as active;
-- content type и filename.
+- active/cancelled semantics;
+- content type/filename.
 
 ### L1
 
-1. Открыть выбранную event page.
-2. Найти calendar/ICS action.
-3. Нажать ordinary pointer gesture.
-4. Доказать один download с `.ics` и ожидаемым content.
-5. Проверить видимый feedback «Файл календаря скачан».
-6. Не принимать download за внешний calendar save.
+1. Открыть selected event.
+2. Нажать ordinary ICS CTA.
+3. Получить ровно один `.ics` download.
+4. Сверить semantic content с snapshot.
+5. Проверить visible feedback.
+6. Не считать download внешним calendar save.
 
-Android/iOS system import не входит в этот сценарий: лаборатория уже доказала,
-что браузерный download/share не является переносимым calendar insertion path.
+System import в Android/iOS не входит: browser download/share не является
+переносимым insertion contract.
 
-## 6. Push-сценарии
+## 7. Push scenarios
 
-## 6.1. `event.reminder.push_subscription`
+### 7.1. `event.reminder.push_subscription`
 
-1. Открыть выбранное актуальное событие.
-2. Сохранить событие test identity.
-3. Проверить, что permission ещё не запрошен автоматически.
+1. Открыть selected event.
+2. Сохранить test identity.
+3. Доказать отсутствие автоматического permission prompt.
 4. Нажать «Включить напоминания».
-5. Принять permission в native UI.
-6. Получить одну subscription и server-side binding к test identity/device.
-7. Повторное действие не создаёт вторую активную subscription.
-8. Revoke/deny даёт честное состояние и не удаляет saved event/ICS.
+5. Принять native permission dialog.
+6. Получить одну device-bound subscription.
+7. Повторное действие не создаёт вторую active subscription.
+8. Deny/revoke не удаляет saved event, calendar view и ICS.
 
-Android/iOS permission dialog проверяется в native context. DOM-флаг недостаточен.
+Native dialog обязателен; DOM-флаг недостаточен.
 
-## 6.2. `event.reminder.push_delivery`
+### 7.2. `event.reminder.preferences`
 
-CI не ждёт 24 часа. Семантические kinds остаются production:
+Проверяются независимые controls:
+
+- all Push on/off;
+- T−24h on/off;
+- city-relative near reminder on/off;
+- настройка одного event не меняет другое;
+- disabled type не создаёт pending job;
+- повторный save не сбрасывает preferences;
+- all-off сохраняет saved event/calendar view/ICS.
+
+Поведение lifecycle kinds и смены текущего города остаётся owner decision до
+implementation и не подменяется незафиксированным default.
+
+### 7.3. `event.reminder.push_delivery`
+
+Production kinds:
 
 ```text
 event_reminder_24h
-event_reminder_1h
+event_reminder_1h_current_city
+event_reminder_3h_other_city
 ```
 
-Но защищённый E2E namespace для фиксированной test identity преобразует их в
-короткие deadlines, например:
+Один protected run выполняет две изолированные profile branches на одном event:
 
 ```text
-24h kind → +90 seconds
-1h kind  → +30 seconds
+A. current city == event city
+   → T−24h + T−1h_current_city
+   → T−3h_other_city отсутствует
+
+B. current city != event city
+   → T−24h + T−3h_other_city
+   → T−1h_current_city отсутствует
 ```
 
-Это server-side test clock/offset override, а не browser-supplied event time.
-Browser передаёт только selected event ID/revision; producer перечитывает
-canonical event snapshot.
+CI не ждёт реальные часы. Server-side E2E namespace отображает semantic kinds
+на короткие deadlines, например:
+
+```text
+T−24h → +90 s
+T−3h  → +45 s
+T−1h  → +30 s
+```
+
+Browser не задаёт event time, revision или city classification.
 
 Assertions:
 
-- созданы ровно два outbox jobs с разными kinds;
-- порядок scheduled_at корректен;
-- один claim/provider send на kind;
-- Android/iOS получает два видимых notifications;
-- title/event identity соответствуют selected snapshot;
+- ровно два jobs на profile branch, не три;
+- near kinds взаимоисключающие;
+- unknown city даёт typed fail-closed state;
+- correct scheduling order;
+- one claim/provider send per kind;
+- два visible notifications;
+- title/event identity совпадают;
 - click открывает exact event URL;
-- app closed/background path проверен;
-- повторный scheduler tick не создаёт duplicate;
-- expired/revoked subscription завершается typed permanent failure.
+- closed/background path;
+- scheduler replay не создаёт duplicate;
+- expired subscription даёт permanent typed failure.
 
-### L3 boundary
+L2 проверяет permission/UI/click-through. Финальная background reliability — L3:
+Android OEM/battery и real iPhone locked/background/cold canary.
 
-Эмулятор проверяет permission, UI, click-through и deterministic provider
-contract. Финальная background reliability требует physical canary:
+### 7.4. `event.reminder.lifecycle`
 
-- Android OEM/battery state;
-- iPhone real APNs/Web Push delivery;
-- device locked/background/cold state.
-
-## 6.3. `event.reminder.lifecycle`
-
-Не менять реальное editorial событие. Test control plane создаёт из выбранного
-snapshot изолированные revisions:
+Editorial event не мутируется. Из snapshot создаются isolated revisions:
 
 ```text
-revision N     original
-revision N+1   start + 30 min
-revision N+2   cancelled
+N     original
+N+1   start + 30 min
+N+2   cancelled
 ```
 
 Assertions:
 
-- pending old-revision reminders инвалидированы;
-- новая revision создаёт новые offsets;
-- ровно один `event_rescheduled`;
-- cancellation удаляет ordinary pending reminders;
-- ровно один `event_cancelled`;
+- old pending jobs invalidated;
+- N+1 создаёт T−24h + ровно один city-relative near kind;
+- один `event_rescheduled`;
+- N+2 удаляет ordinary pending reminders;
+- один `event_cancelled`;
 - same revision replay — no-op;
-- notification click открывает event lifecycle page/state;
-- test overlay удаляется после run.
+- click открывает lifecycle state;
+- overlay очищается.
 
-## 7. Postbox calendar email
+## 8. Postbox calendar email
 
-## 7.1. `event.calendar_email.postbox_mime`
+### 8.1. `event.calendar_email.postbox_mime`
 
-Postbox уже принимает raw MIME через `Content.Raw.Data`; тестируем не простую
-возможность raw transport, а правильность нашего builder.
+Postbox уже принимает Raw MIME; тестируется наш strict builder.
 
-Frozen fixture + selected live event:
+Frozen fixture + selected current event:
 
-- `multipart/alternative` или reviewed `multipart/mixed` structure;
-- `text/plain` и `text/html` существуют;
-- `text/calendar; method=REQUEST` существует;
-- MIME method совпадает с VCALENDAR `METHOD`;
-- UID стабилен;
-- `SEQUENCE` монотонен;
-- organizer/attendee server-owned;
-- timezone/title/location/canonical URL соответствуют event snapshot;
+- reviewed multipart structure;
+- text/plain + text/html;
+- `text/calendar; method=REQUEST`;
+- MIME method == VCALENDAR METHOD;
+- stable UID;
+- monotonic SEQUENCE;
+- server-owned organizer/attendee;
+- correct timezone/title/location/URL;
 - CRLF/folding;
-- Base64 Postbox body декодируется обратно в byte-identical MIME;
-- browser payload не может передать raw MIME/header override;
-- prohibited headers (`From`, `Return-Path`, `Message-ID`) server-owned.
+- Base64 Postbox body roundtrip;
+- browser не может передать raw MIME/header override;
+- From/Return-Path/Message-ID server-owned.
 
-Variants для research:
+Research variants:
 
 ```text
-A: inline text/calendar inside multipart/alternative
-B: inline calendar + event.ics attachment
-C: ordinary METHOD:PUBLISH attachment (negative/control)
+A inline text/calendar
+B inline + event.ics attachment
+C METHOD:PUBLISH attachment control
 ```
 
-## 7.2. `event.calendar_email.postbox_roundtrip`
+### 8.2. `event.calendar_email.postbox_roundtrip`
 
-Protected Environment, sequential, controlled mailboxes.
+Protected Environment, sequential mailbox/UID sequence:
 
-1. Resolver выбирает актуальное событие.
-2. Создать один server-side calendar invitation request.
-3. Доказать ровно один outbox row/claim/network start.
-4. Получить реальный Postbox `MessageId`.
-5. Получить authenticated Send/Delivery feedback по существующему contract.
-6. Получить письмо через controlled mailbox adapter после checkpoint.
-7. Сохранить только redacted MIME structure/field hashes.
-8. Проверить REQUEST fields.
-9. Отправить update с тем же UID и `SEQUENCE+1`.
-10. Отправить CANCEL с тем же UID.
-11. Каждый этап имеет отдельный stable idempotency key.
-12. Ambiguous delivery не повторяется автоматически.
+1. Resolve/revalidate current event.
+2. Create one server-side invitation request.
+3. Prove one outbox row/claim/network start.
+4. Receive real Postbox `MessageId`.
+5. Receive authenticated Send/Delivery feedback.
+6. Read controlled mailbox after checkpoint.
+7. Store only redacted MIME structure/hashes.
+8. Validate REQUEST.
+9. Send update with same UID and SEQUENCE+1.
+10. Send CANCEL with same UID.
+11. Separate idempotency key per stage.
+12. Never auto-retry ambiguous delivery.
 
-Один recipient и один UID sequence выполняются последовательно. Параллельные
-mail jobs запрещены, пока каждой платформе не выделен независимый mailbox.
+Parallel mail jobs запрещены, пока платформы не имеют независимые mailboxes.
 
-## 7.3. `event.calendar_email.client_action`
-
-Матрица:
+### 8.3. `event.calendar_email.client_action`
 
 | Client | Layer | Acceptance |
 |---|---|---|
-| Gmail Android + Google Calendar | L3 primary | invitation card/action, fields, add/update/cancel/no duplicate |
-| Apple Mail + Calendar | L2 diagnostic, L3 final | event recognized, system editor/calendar fields, update/cancel |
-| Outlook mobile/web | L2/L3 or protected browser | meeting request, fields, update/cancel |
-| Gmail web | L1 | MIME recognition/control baseline |
+| Gmail web | L1 | MIME recognition baseline |
+| Gmail Android + Google Calendar | L3 primary | action, fields, add/update/cancel/no duplicate |
+| Apple Mail + Calendar | L2 diagnostic, L3 final | recognition, fields, update/cancel |
+| Outlook web/mobile | L1/L2/L3 | meeting request lifecycle |
 
-Ограничения runners:
+`google_apis` Android image пригоден для Chrome/Appium, но не доказывает Gmail +
+Google Calendar account environment. Final Gmail acceptance требует managed Play
+image с test account либо device farm. iOS Simulator — diagnostic; final mail and
+background Push may require physical iPhone.
 
-- OTP Android image `google_apis` пригоден для Chrome/Appium, но не является
-  гарантированным Gmail/Google Calendar account environment;
-- настоящий Gmail→Google Calendar acceptance выполняется на managed Play image
-  с подготовленным test account либо на физическом device farm;
-- iOS Simulator может проверить системный UI и web app, но final mail/push
-  behavior остаётся L3, если simulator не воспроизводит provider delivery.
+Evidence исключает raw recipient/body/token/account. Screenshots — после masking.
 
-Evidence не содержит raw recipient, full message body, auth token или calendar
-account. Для client matrix допустимы screenshots только после masking.
-
-## 8. `event.calendar_connector.android`
+## 9. `event.calendar_connector.android`
 
 ### L0
 
-- stable package/signing identity contract;
-- exact `assetlinks.json` package + certificate fingerprint;
-- autoVerify App Link host/path;
-- no `READ_CALENDAR`/`WRITE_CALENDAR`/storage permissions;
+- stable package/signing identity;
+- exact assetlinks package/fingerprint;
+- autoVerify host/path;
+- no READ/WRITE_CALENDAR/storage permissions;
 - payload schema/expiry/size/redirect allowlist;
-- canonical event facts server-side.
+- canonical server-side event facts.
 
 ### L1 fallback
 
-- connector absent: HTTPS route returns valid web fallback;
-- ICS action остаётся доступным;
-- не возникает redirect loop;
-- PWA state сохраняется.
+- connector absent → valid HTTPS fallback;
+- ICS доступен;
+- no redirect loop;
+- PWA state preserved.
 
 ### L2 Android
 
-1. Установить signed connector test APK.
-2. Открыть selected event в Chrome и затем в installed PWA.
-3. Нажать connector CTA.
-4. Проверить verified App Link открыл package, а не chooser/browser.
+1. Install signed test APK.
+2. Open selected event in Chrome and installed PWA.
+3. Tap connector CTA.
+4. Verified App Link opens package, not browser/chooser.
 5. Connector fetches exact selected event payload.
-6. Запускается `ACTION_INSERT` с `CalendarContract.Events.CONTENT_URI`.
-7. Native editor содержит title/start/end/location/description/link.
-8. Save и Cancel не приводят к crash.
-9. Connector не сообщает «saved» только по Activity launch.
-10. Malformed/expired token fail closed.
+6. Launch `ACTION_INSERT` with `CalendarContract.Events.CONTENT_URI`.
+7. Native editor contains title/start/end/location/description/link.
+8. Save and Cancel do not crash.
+9. Activity launch is not reported as confirmed save.
+10. Malformed/expired token fails closed.
 
-Финальный OEM handler matrix остаётся L3.
+Final OEM handler matrix remains L3.
 
-## 9. GitHub Actions scaffold
+## 10. GitHub Actions scaffold
 
-Workflow имеет inputs:
+Workflow inputs:
 
 ```text
 target_url
@@ -360,32 +400,28 @@ expected_repo_sha
 platform: resolver | browser | android | ios | all
 ```
 
-Jobs:
+Current jobs:
 
-1. `resolve-current-event` — blocking L0/L1 input selection;
-2. `browser-contract` — revalidation и ICS route smoke;
-3. `android-current-event-smoke` — API 35 Pixel 7 Chrome environment;
-4. `ios-current-event-smoke` — macOS 15, Xcode 16.4, iPhone 16/iOS 18.5;
-5. product Push/email/connector jobs добавляются только после runtime contracts.
+1. `resolve_current_event`;
+2. `browser_contract`;
+3. `android_current_event_smoke` — API 35, Pixel 7, Chrome;
+4. `ios_current_event_smoke` — macOS 15, Xcode 16.4, iPhone 16/iOS 18.5;
+5. `summary`.
 
-Scaffold mobile jobs используют exact environment choices, отлаженные в
-`feature/mobile-otp-autotest-20260802`, но не копируют OTP/mail side effects.
-После merge общей Appium platform layer следует переиспользовать её adapters,
-a не поддерживать второй набор capabilities.
+Environment choices reuse the OTP mobile work. After shared Appium adapters are
+merged, this suite must reuse them instead of maintaining divergent capabilities.
 
-Scaffold выдаёт только:
+Current truthful outcomes:
 
 ```text
-PASS                 resolver/browser/current-route smoke
-NOT_IMPLEMENTED      Push/email-client/connector product journey
-BLOCKED               emulator/runtime/target problem
+PASS             resolver/browser/current-route smoke
+NOT_IMPLEMENTED  Push/email-client/connector product journey
+BLOCKED          emulator/runtime/target problem
 ```
 
-Environment smoke не считается Push/calendar PASS.
+Environment boot/open is not Push/calendar PASS.
 
-## 10. Evidence
-
-Один package format:
+## 11. Evidence
 
 ```text
 evidence/
@@ -402,28 +438,32 @@ evidence/
 └── redaction-audit.json
 ```
 
-Обязательные metadata:
+Metadata:
 
-- full repo SHA;
-- preview build ID;
-- selected event URL/ICS hash/UID hash;
+- full repo SHA/build ID;
+- selected event URL, ICS hash, UID hash;
 - platform/OS/browser/device;
 - scenario ID;
-- target and selection reason;
+- city branch and server-owned city decision reference where relevant;
 - side-effect checkpoint;
 - terminal status/failure domain;
 - redaction result.
 
-## 11. Release policy
+## 12. Release policy
 
 NO-GO после реализации соответствующего channel, если:
 
-- current event selection не воспроизводится;
+- hardcoded/expired URL вместо current-event resolver;
 - target SHA mismatch;
-- browser supplies authoritative event facts;
-- Push duplicate или stale-revision delivery;
-- Postbox MIME/client behavior заявлено без roundtrip evidence;
-- Gmail/iOS behavior выдано за проверенное только по desktop browser;
-- App Link/Calendar editor не проверены в native UI;
-- required L2/L3 result `BLOCKED`/`NOT_IMPLEMENTED`;
-- evidence не прошло redaction.
+- selected event изменился после first side effect;
+- browser supplies authoritative event time/revision/current city;
+- T−1h and T−3h near jobs coexist;
+- saved calendar view violates date/time/event/location contract;
+- disabled reminder type still creates job;
+- duplicate/stale-revision Push;
+- Postbox acceptance declared client recognition;
+- Gmail/iOS claimed only from desktop browser;
+- App Link/editor not asserted in native UI;
+- required L2/L3 is BLOCKED/NOT_IMPLEMENTED;
+- environment smoke called product PASS;
+- evidence failed redaction.
