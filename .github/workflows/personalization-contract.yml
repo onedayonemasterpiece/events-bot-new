@@ -1,0 +1,38 @@
+name: Personalization contract
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/personalization-contract.yml'
+      - 'docs/features/static-site-pages/personalizaion/**'
+      - 'tests/test_personalization_implementation_contract.py'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/personalization-contract.yml'
+      - 'docs/features/static-site-pages/personalizaion/**'
+      - 'tests/test_personalization_implementation_contract.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: personalization-contract-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: validate-personalization-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate personalization contracts
+        run: python tests/test_personalization_implementation_contract.py
