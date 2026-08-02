@@ -54,3 +54,33 @@ test('safe diagnostics identify a subject-contract mismatch without retaining ma
     otp_parse_count: 0,
   });
 });
+
+test('Yandex Mail Trigger extracts OTP from decoded subject when body is transfer encoded', () => {
+  const socket = new YandexMailTriggerSocket({
+    url: 'wss://example.test/protected',
+    expectedFrom: 'notify@kenigevents\\.ru',
+    expectedSubject: '^[0-9]{6} — код входа в KenigEvents$',
+  });
+  socket.checkpointAt = 1;
+  const triggerMessage = message('123456 — код входа в KenigEvents');
+  triggerMessage.message = 'Content-Transfer-Encoding: base64\r\n\r\n0JrQvtC0';
+  socket.events = [{ arrivedAt: 2, message: triggerMessage }];
+  const matches = socket.matchingMessages({ checkpoint: 1, recipient });
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].otp, '123456');
+  assert.equal(socket.safeDiagnostics({ recipient }).otp_parse_count, 1);
+});
+
+test('Yandex Mail Trigger rejects conflicting subject and body OTP values', () => {
+  const socket = new YandexMailTriggerSocket({
+    url: 'wss://example.test/protected',
+    expectedFrom: 'notify@kenigevents\\.ru',
+    expectedSubject: '^[0-9]{6} — код входа в KenigEvents$',
+  });
+  socket.checkpointAt = 1;
+  const triggerMessage = message('123456 — код входа в KenigEvents');
+  triggerMessage.message = '<div>Одноразовый код: <b>654321</b></div>';
+  socket.events = [{ arrivedAt: 2, message: triggerMessage }];
+  assert.equal(socket.matchingMessages({ checkpoint: 1, recipient }).length, 0);
+  assert.equal(socket.safeDiagnostics({ recipient }).otp_parse_count, 0);
+});

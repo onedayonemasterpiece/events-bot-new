@@ -10,6 +10,10 @@
   fault flags and scan artifacts to keep the injector physically absent. The
   resilient-client CI command now enables Node type stripping for both test
   groups so its TypeScript imports also work on the pinned Node 22 runner.
+- Fixed Yandex Mail Trigger OTP extraction for transfer-encoded bodies by
+  validating one unique code across the decoded subject and body. Duplicate
+  asset cancellations and unavailable best-effort client-outcome telemetry are
+  now classified without hiding failures of the product OTP operations.
 
 - Changed iOS Safari OTP preflight to create a native-first Safari session,
   enable XCUITest `respectSystemAlerts`, close the bounded first-run sheet, and

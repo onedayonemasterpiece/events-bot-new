@@ -121,6 +121,15 @@ The runner connects outbound before OTP issuance and retains only the selected
 code in memory. It has no access to the shared private inbound bucket. The IMAP
 adapter remains supported for an independently controlled mailbox.
 
+Mail Trigger can deliver an already-decoded subject together with a
+transfer-encoded MIME body. The protected adapter therefore extracts one unique
+six-digit value from **subject and body together**: the same value repeated in
+both is valid, while different values are `otp_ambiguous` and fail closed. This
+keeps the raw message out of evidence while avoiding a false delivery timeout
+when only the subject is immediately readable. Failures of the best-effort
+`focus_auth_record_client_outcome_v1` telemetry are retained as structured
+warnings; they never replace the blocking issue/verify/registration checks.
+
 ## Test identity policy
 
 The default is one fixed mailbox, for example

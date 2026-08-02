@@ -50,6 +50,26 @@ let result = publicResult({ scenario_id: scenario, platform, status: 'FAIL', cov
   expected_repo_sha: null, observed_repo_sha: null, otp_issue_request_count: 0, otp_verify_request_count: 0,
   participant_registration_request_count: 0, failures: [] });
 
+function summarizeFaultEvidence(profile, evidence) {
+  if (profile === 'normal') return { expected_profile: profile, active: true };
+  const receipt = evidence?.receipt;
+  const expectedBlockedHost = profile === 'client_supabase_direct_unreachable' ? 'supabase_direct'
+    : profile === 'client_yandex_relay_unreachable' ? 'yandex_supabase_relay' : null;
+  const hits = (evidence?.fault_events || []).filter((event) => !expectedBlockedHost
+    || event.host_class === expectedBlockedHost).length;
+  const outcomes = evidence?.transport_outcomes || [];
+  return {
+    expected_profile: profile,
+    active: receipt?.profile_id === profile
+      && /^[0-9a-f]{64}$/u.test(String(receipt?.registry_digest || '')) && hits > 0,
+    registry_digest: /^[0-9a-f]{64}$/u.test(String(receipt?.registry_digest || '')) ? receipt.registry_digest : null,
+    fault_hit_count: hits,
+    otp_issue_route: outcomes.find((event) => event.operation === 'auth.otp')?.finalRoute || null,
+    otp_verify_route: outcomes.find((event) => event.operation === 'auth.verify')?.finalRoute || null,
+    registration_route: outcomes.find((event) => event.operation === 'rpc.register_focus_group_participant_v1')?.finalRoute || null,
+  };
+}
+
 try {
   target = validateFocusE2eTarget(required('E2E_TARGET_URL'));
   const expected = expectedRepoSha();
@@ -69,15 +89,11 @@ try {
     ? await runIosKeyboardPreflight({ ui, step })
     : await runFocusOtpBrowserTab({ ui, mailbox, recipient, timeoutMs, step, onSecret });
   transportFaultEvidence = await ui.transportFaultEvidence?.() || transportFaultEvidence;
+  transportFaultSummary = summarizeFaultEvidence(expectedFaultProfile, transportFaultEvidence);
   if (expectedFaultProfile !== 'normal') {
-    const receipt = transportFaultEvidence.receipt;
-    if (receipt?.profile_id !== expectedFaultProfile || !/^[0-9a-f]{64}$/u.test(String(receipt?.registry_digest || ''))) {
+    if (!transportFaultSummary.active) {
       throw new Error('fault_not_active:receipt_missing_or_mismatched');
     }
-    const expectedBlockedHost = expectedFaultProfile === 'client_supabase_direct_unreachable' ? 'supabase_direct'
-      : expectedFaultProfile === 'client_yandex_relay_unreachable' ? 'yandex_supabase_relay' : null;
-    const hits = transportFaultEvidence.fault_events.filter((event) => !expectedBlockedHost || event.host_class === expectedBlockedHost).length;
-    if (hits < 1) throw new Error('fault_not_active:no_matching_fault_hit');
     if (expectedFaultProfile === 'client_supabase_direct_unreachable') {
       for (const operation of ['auth.otp', 'auth.verify', 'rpc.register_focus_group_participant_v1']) {
         const outcomes = transportFaultEvidence.transport_outcomes.filter((event) => event.operation === operation);
@@ -88,15 +104,6 @@ try {
         }
       }
     }
-    transportFaultSummary = {
-      expected_profile: expectedFaultProfile,
-      active: true,
-      registry_digest: receipt.registry_digest,
-      fault_hit_count: hits,
-      otp_issue_route: transportFaultEvidence.transport_outcomes.find((event) => event.operation === 'auth.otp')?.finalRoute || null,
-      otp_verify_route: transportFaultEvidence.transport_outcomes.find((event) => event.operation === 'auth.verify')?.finalRoute || null,
-      registration_route: transportFaultEvidence.transport_outcomes.find((event) => event.operation === 'rpc.register_focus_group_participant_v1')?.finalRoute || null,
-    };
   }
   diagnostics = summarizeRuntimeDiagnostics(recorder.entries, ui.consoles);
   if (diagnostics.blocking_failure_count > 0) throw new Error(`runtime_diagnostics:blocking:${diagnostics.blocking_failure_count}`);
@@ -118,6 +125,7 @@ try {
 } catch (error) {
   latestCounts = await ui?.requestCounts?.().catch(() => null);
   transportFaultEvidence = await ui?.transportFaultEvidence?.().catch(() => transportFaultEvidence) || transportFaultEvidence;
+  transportFaultSummary = summarizeFaultEvidence(expectedFaultProfile, transportFaultEvidence);
   diagnostics = summarizeRuntimeDiagnostics(recorder.entries, ui?.consoles || []);
   const domain = focusOtpFailureDomain(error);
   const message = redactText(String(error?.message || error), [...secrets, otp]);

@@ -10,6 +10,14 @@ function headers(message) {
   return new Map((message?.headers || []).map((item) => [String(item?.name || '').toLowerCase(), (item?.values || []).map(String)]));
 }
 
+function messageOtp(message, subject) {
+  // Mail Trigger may expose a MIME/transfer-encoded body while the provider's
+  // already-decoded Subject still carries the same one-time code. Parse both
+  // sources together: the Set-based parser accepts the repeated same code and
+  // rejects conflicting codes as ambiguous.
+  return extractSingleOtp({ text: `${subject}\n${String(message?.message || '')}` });
+}
+
 export class YandexMailTriggerSocket {
   constructor(config) {
     this.url = String(config.url || '').trim();
@@ -60,7 +68,7 @@ export class YandexMailTriggerSocket {
       diagnostics.sender_match_count += 1;
       if (this.expectedSubject && !this.expectedSubject.test(subject)) continue;
       diagnostics.subject_match_count += 1;
-      try { extractSingleOtp({ text: event.message?.message || '' }); } catch { continue; }
+      try { messageOtp(event.message, subject); } catch { continue; }
       diagnostics.otp_parse_count += 1;
     }
     diagnostics.matching_message_count = diagnostics.otp_parse_count;
@@ -78,7 +86,7 @@ export class YandexMailTriggerSocket {
       if (this.expectedFrom && !this.expectedFrom.test(from)) continue;
       if (this.expectedSubject && !this.expectedSubject.test(subject)) continue;
       let otp;
-      try { otp = extractSingleOtp({ text: event.message?.message || '' }); } catch { continue; }
+      try { otp = messageOtp(event.message, subject); } catch { continue; }
       matches.push({ otp, receivedAt: event.message?.received_at || null,
         messageIdHash: shortHash((map.get('message-id') || [String(event.arrivedAt)])[0]) });
     }
