@@ -28,8 +28,6 @@ on:
       - "site/scripts/static_collection_*.json"
       - "scripts/backfill_static_collection_facts.py"
       - "smart_event_update.py"
-  schedule:
-    - cron: "19 4 * * *"
   workflow_dispatch:
     inputs:
       snapshot_path:
@@ -137,7 +135,6 @@ jobs:
     needs: [skeleton]
     if: >-
       ${{
-        github.event_name == 'schedule' ||
         github.event_name == 'workflow_dispatch' ||
         (github.event_name == 'push' && vars.STATIC_COLLECTIONS_PRODUCT_QUALITY_ON_PUSH == 'true')
       }}
