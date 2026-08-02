@@ -179,14 +179,17 @@ viewport geometry before ordinary user input. Direct JS assignment of the email
 or OTP value does not satisfy the mobile scenario.
 
 On iOS Appium owns simulator boot/shutdown for the exact shutdown UDID. The harness sets `connectHardwareKeyboard=false` and `forceSimulatorSoftwareKeyboardPresence=true`; it does not mutate global Simulator defaults, open Simulator itself, or send menu/`Cmd-K` rescue gestures. A control email and control numeric field distinguish simulator keyboard failure (`BLOCKED_IOS_SIMULATOR_KEYBOARD`) from a product-field failure. Evidence records empty-field screenshots, baseline/focused `visualViewport` geometry and bounded activation attempts.
-Safari native-modal inspection uses raw WebDriver `findElements` protocol
-arrays. The exact `Продолжить` action is selected only beneath the nearest
-modal ancestor of the exact `Выбор поисковой системы` title; WebdriverIO
-enhanced `$$` collections are not used at this native boundary. This contract
-was added after protected preflight `30763157336` exposed an adapter
-`object is not iterable` failure while its screenshot still showed the known
-first-run modal. That failed preflight retained exact `0/0/0` side-effect
-counts and is not an acceptance pass.
+Safari native-modal inspection uses XCTest's native exact predicate for the
+title and WDA's current-alert API for the text/buttons. The first non-empty
+alert-text line must equal `Выбор поисковой системы`, and `Продолжить` must
+occur exactly once among the buttons returned for that same current alert
+before the exact-label accept action is allowed. XPath and WebdriverIO enhanced
+`$$` collections are not used at this boundary. Protected preflight
+`30763157336` exposed an enhanced-collection `object is not iterable` failure;
+the first correction run `30764460049` then proved that XPath could return a
+false absence while the screenshot still showed the modal. Both failed
+preflights retained exact `0/0/0` side-effect counts and are not acceptance
+passes.
 If Safari acknowledges the initial navigation command but stays on
 `about:blank`, the harness records `BLOCKED_INFRASTRUCTURE` with zero side
 effects and the workflow may use its one bounded Appium/WDA retry.
