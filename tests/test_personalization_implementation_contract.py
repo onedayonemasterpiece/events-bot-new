@@ -34,6 +34,7 @@ def test_personalization_document_index_is_complete() -> None:
         DOC_ROOT / "README.md",
         DOC_ROOT / "requirements.md",
         DOC_ROOT / "personalization-to-be.md",
+        DOC_ROOT / "personalization-research-traceability.md",
         DOC_ROOT / "personalization-implementation-contract.md",
         DOC_ROOT / "personalization-current-runtime-audit-2026-08-02.md",
         DOC_ROOT / "implementation-status.yml",
@@ -45,6 +46,40 @@ def test_personalization_document_index_is_complete() -> None:
     ]
     missing = [str(path.relative_to(ROOT)) for path in required if not path.is_file()]
     assert not missing, f"personalization implementation package is incomplete: {missing}"
+
+
+def test_target_research_precedence_and_legacy_quarantine_are_explicit() -> None:
+    index = (DOC_ROOT / "README.md").read_text(encoding="utf-8")
+    traceability = (DOC_ROOT / "personalization-research-traceability.md").read_text(encoding="utf-8")
+    wave_zero = (DOC_ROOT / "tasks" / "personalization-wave-0.md").read_text(encoding="utf-8")
+
+    assert index.index("personalization-to-be.md") < index.index("personalization-implementation-contract.md")
+    assert "не может менять продуктовый или модельный смысл" in index
+    assert "Если целевой документ оставляет вопрос открытым" in index
+    assert "legacy/profile-v1.ts" in index
+    assert "legacy/scorer-v1.ts" in index
+
+    required_research = [
+        "Golden personas — soft mixture",
+        "Session/short/mid/long horizons",
+        "Rescue не более 10%",
+        "Interest percentage UI",
+        "Campaign/easter-egg interactions",
+        "Variants control/facets/hard-persona/soft-persona/hybrid",
+        "NDCG/MRR/coverage/diversity/novelty/worst-group/latency",
+        "A/B заранее регистрирует",
+        "Путь `legacy code → inferred product truth` запрещён",
+    ]
+    missing = [fragment for fragment in required_research if fragment not in traceability]
+    assert not missing, f"fresh personalization research lost from traceability: {missing}"
+
+    assert "site/src/lib/personalization/legacy/scorer-v1.ts" in wave_zero
+    assert "site/src/lib/personalization/scorer.ts" in wave_zero
+    assert "В Wave 0 **не создавать**" in wave_zero
+    assert "Простое переименование `legacy/scorer-v1.ts`" in wave_zero
+    assert "не является target quality" in wave_zero
+    assert "research-delta review" in wave_zero
+    assert "не выводи продуктовую истину из EventLayout" in wave_zero
 
 
 def test_browser_state_schema_keeps_one_compact_bounded_state() -> None:
@@ -170,6 +205,8 @@ def test_wave_zero_forbids_remote_or_product_behavior_changes() -> None:
     assert "DB migrations/RLS/RPC" in text
     assert "unknown surface → static/no-signal" in text
     assert "production behavior change=0" in text
+    assert "target scorer/model weights" in text
+    assert "legacy_policy_promoted_to_target = 0" in text
 
 
 def run_contract_tests() -> list[str]:
