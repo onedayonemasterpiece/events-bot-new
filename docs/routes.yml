@@ -132,7 +132,7 @@ sections:
     incident_tg_monitor_stale_s22_lease_2026_07_20: docs/reports/incidents/INC-2026-07-20-tg-monitor-stale-s22-lease.md
     incident_image_geometry_pixel_drift_2026_07_20: docs/reports/incidents/INC-2026-07-20-image-geometry-pixel-drift.md
     incident_static_event_keyboard_visual_regressions_2026_07_20: docs/reports/incidents/INC-2026-07-20-static-event-keyboard-visual-regressions.md
-    incident_static_site_stale_builder_lease_2026_07_19: docs/reports/incidents/INC-2026-07-19-static-builder-lease.md
+    incident_static_site_stale_builder_lease_2026_07_19: docs/reports/incidents/INC-2026-07-19-static-site-stale-builder-lease.md
     incident_meow_source_medallion_telegram_2026_07_17: docs/reports/incidents/INC-2026-07-17-meow-source-medallion-telegram.md
     incident_event_vector_sidecar_sync_stalled_2026_07_11: docs/reports/incidents/INC-2026-07-11-event-vector-sidecar-sync-stalled.md
     incident_future_event_semantic_audit_2026_07_10: docs/reports/incidents/INC-2026-07-10-future-event-semantic-audit.md
@@ -147,7 +147,7 @@ sections:
     incident_cherryflash_missing_true3d_bundle_2026_07_18: docs/reports/incidents/INC-2026-07-18-cherryflash-missing-true3d-bundle.md
     incident_vk_story_forward_wall_first_2026_06_05: docs/reports/incidents/INC-2026-06-05-vk-story-forward-wall-first.md
     incident_vk_posts_personal_author_2026_05_19: docs/reports/incidents/INC-2026-05-19-vk-posts-personal-author.md
-    incident_vk_retrospective_reschedule_wrong_postponement_2026_05_17: docs/reports/incidents/INC-2026-05-17-vk-retrospective-reschedule-wrong-postponement.md
+    incident_vk_retrospective_reschedule_wrong_postponement_2026_05_17: docs/reports/incidents/INC-2026-05-17-vk-retrospective-wrong-postponement.md
     incident_konb_cherryflash_render_lock_empty_selection_2026_05_18: docs/reports/incidents/INC-2026-05-18-konb-cherryflash-render-lock-and-empty-selection.md
     incident_tg_location_prose_cityjazz_recurrence_2026_05_16: docs/reports/incidents/INC-2026-05-16-tg-location-prose-cityjazz-recurrence.md
     incident_future_event_quality_regressions_2026_05_17: docs/reports/incidents/INC-2026-05-17-future-event-quality-regressions.md
@@ -706,7 +706,7 @@ features:
       - scripts/backfill_event_age_ratings.py
       - scripts/evaluate_event_age_golden.py
       - kaggle/EventAgeBgeAssessment/event_age_bge_assessment.py
-      - site/scripts/export-production-preview-data.py
+      - site/scripts/export-production_preview_data.py
   event_media:
     status: implemented
     docs: docs/features/event-media/README.md
