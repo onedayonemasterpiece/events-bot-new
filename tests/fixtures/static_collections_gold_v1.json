@@ -1,6 +1,7 @@
 {
   "schema_version": "static-collections-gold-v1",
   "status": "starter_not_approved",
+  "publication_eligible": false,
   "acceptance": {
     "semantic_minimum_positives": 15,
     "semantic_minimum_hard_negatives": 20,
