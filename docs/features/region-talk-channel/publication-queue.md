@@ -590,6 +590,16 @@ image/memory working rows have already been pruned, or whose only remaining
 image row is non-actionable (for example `needs_visual_review`); it does not
 recreate media evidence or reopen the provider verdict.
 
+The same zero-provider terminal projection keeps social source-profile
+acquisition live after compact image/memory rows have been pruned. If an
+accepted Telegram/VK candidate still lacks a reusable onboarding profile, the
+finalizer writes `source_profile_capture_requested=true` to the exact
+authoritative source row. CandidateReport consumes that narrow, role-scoped
+request and performs its bounded capture. A completed but insufficient capture
+is not acquired again unchanged: the acquisition request is cleared while the
+candidate remains fail-closed at `needs_source_profile`. This maintenance does
+not reopen the provider verdict or advance manual/publication review state.
+
 All Region Talk Gemini consumers (final verifier/onboarding, visual
 adjudicator and optional grounded external research) disable direct reserve and
 process-local limiter fallbacks. If Supabase, `google_ai_reserve`, the

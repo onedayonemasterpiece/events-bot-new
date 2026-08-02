@@ -1223,11 +1223,12 @@ def read_live_rows(
         }
 
     # Terminal publication rows may outlive their compact image/memory working
-    # payloads.  They still need zero-provider attestation refreshes when a
-    # legacy external intake gains provenance or changes review state.  Project
-    # those rows into the finalizer without pretending that the publication row
-    # is fresh image evidence; the current publication/intake/source snapshots
-    # remain the authorities used by the final decision fence below.
+    # payloads.  They still need zero-provider maintenance when a legacy
+    # external intake changes attestation or an accepted social candidate needs
+    # a bounded source-profile capture.  Project those rows into the finalizer
+    # without pretending that the publication row is fresh image evidence; the
+    # current publication/intake/source snapshots remain the authorities used
+    # by the final decision fence below.
     covered_input_urls = {
         normalize_post_url(str(item.get("post_url") or ""))
         for item in finalizer_inputs.values()
@@ -1243,10 +1244,36 @@ def read_live_rows(
     }
     for publication_pk, publication in publications_by_pk.items():
         post_url = normalize_post_url(str(publication.get("post_url") or ""))
+        source_key = canonical_source_key_for_row(publication)
+        authoritative_source = sources_by_key.get(source_key)
+        accepted_social_candidate = bool(
+            source_key.startswith(("telegram:", "vk:"))
+            and authoritative_source
+            and (
+                str(publication.get("publication_status") or "") == "gemini_accept"
+                or str(publication.get("publication_candidate_status") or "")
+                in {"llm_confirmed", "sent_to_chat", "accepted_for_publication"}
+            )
+        )
+        reusable_profile_ready = bool(
+            str(publication.get("source_onboarding_status") or "") == "ready"
+            and str(publication.get("source_onboarding_profile_fingerprint") or "").strip()
+        )
+        social_profile_maintenance = bool(
+            accepted_social_candidate
+            and (
+                not reusable_profile_ready
+                or rt._rt_bool(authoritative_source.get("source_profile_capture_requested"))
+                or rt._rt_bool(authoritative_source.get("needs_source_profile"))
+            )
+        )
+        external_attestation_maintenance = bool(
+            str(publication.get("external_publication_id") or "").strip()
+        )
         if (
             not post_url
             or post_url in covered_input_urls
-            or not str(publication.get("external_publication_id") or "").strip()
+            or not (external_attestation_maintenance or social_profile_maintenance)
         ):
             continue
         finalizer_inputs["terminal-publication:" + str(publication_pk)] = {
@@ -1726,7 +1753,11 @@ def source_profile_capture_request_updates(
             str(onboarding_evidence.get("source_capture_fingerprint") or "").strip()
             or str(onboarding_evidence.get("source_capture_status") or "").strip()
         )
-        accepted = str(row.get("publication_status") or "") == "gemini_accept"
+        accepted = bool(
+            str(row.get("publication_status") or "") == "gemini_accept"
+            or str(row.get("publication_candidate_status") or "")
+            in {"llm_confirmed", "sent_to_chat", "accepted_for_publication"}
+        )
         # A live capture completion is queue maintenance, so it must survive a
         # candidate being deferred by an independent final-decision fence.  New
         # acquisition requests are still projected only from accepted rows.
