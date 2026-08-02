@@ -184,6 +184,74 @@ def test_valid_candidate_is_normalized_to_fail_closed_staging_row() -> None:
     assert result["batch"]["external_sources_staged"] == 1
 
 
+def test_normal_import_stages_separate_publisher_seed_from_publisher_evidence() -> None:
+    mod = load_module()
+    payload = valid_payload()
+    candidate = payload["candidates"][0]
+    candidate["evidence"].append({
+        "evidence_id": "publisher-about",
+        "supports": [
+            "publisher.identity", "publisher.audience", "publisher.distinctive_value",
+            "publisher.editorial_scope", "publisher.formats", "publisher.locality",
+        ],
+        "url": "https://example.org/about",
+        "page_role": "source_about",
+        "retrieved_at": "2026-07-19T10:00:00Z",
+        "location_hint": "publisher about page",
+        "paraphrase": "The official page describes the journal, audience, scope and format.",
+        "quote_short": None,
+    })
+    source_support = next(
+        row for row in candidate["editorial_pack"]["copy_support"]
+        if row["surface"] == "source_overview"
+    )
+    source_support["evidence_refs"] = ["publisher-about"]
+
+    result = mod.prepare_import(payload, raw_input_sha256="c" * 64)
+
+    publisher_rows = [
+        row for _pk, kind, row in result["ydb_rows"]
+        if kind == "publisher_profile_item"
+    ]
+    assert len(publisher_rows) == 1
+    publisher = publisher_rows[0]
+    assert publisher["canonical_source_key"] == "web:example.org"
+    assert publisher["publisher_profile_id"].startswith("rtpublisher_")
+    assert publisher["profile_origin"] == "external_research_seed"
+    assert publisher["profile_status"] == "needs_review"
+    assert publisher["usable_without_profile_llm"] is False
+    assert publisher["publication_permission"] == "not_granted"
+    assert [row["evidence_id"] for row in publisher["evidence"]] == ["publisher-about"]
+    assert publisher["evidence_fingerprint"].startswith("rtpublisher_evidence_")
+    assert all(kind != "publication_candidate_item" for _pk, kind, _row in result["ydb_rows"])
+
+
+def test_existing_candidate_replay_can_still_stage_publisher_evidence() -> None:
+    mod = load_module()
+    payload = valid_payload()
+    candidate = payload["candidates"][0]
+    url_key = "url:" + mod.canonical_url_identity(candidate["canonical_url"])
+    title_key = mod.title_authors_identity(
+        candidate["publication"]["title"], candidate["publication"]["authors"]
+    )
+    external_id = "extpub_" + "e" * 24
+    guard = {
+        "snapshot_id": "rtseen_live",
+        "request": {},
+        "urls": set(),
+        "dois": set(),
+        "titles_authors": set(),
+        "identity_map": {url_key: external_id, title_key: external_id},
+    }
+
+    result = mod.prepare_import(payload, duplicate_guard=guard, raw_input_sha256="d" * 64)
+
+    assert not result["valid"]
+    assert result["replayed"][0]["external_publication_id"] == external_id
+    assert any(kind == "publisher_profile_item" for _pk, kind, _row in result["ydb_rows"])
+    assert result["batch"]["publisher_profiles_staged"] == 1
+
+
 def test_one_invalid_candidate_does_not_abort_batch() -> None:
     mod = load_module()
     payload = valid_payload()
@@ -682,6 +750,64 @@ def test_atomic_execute_is_idempotent_and_request_sha_conflicts_write_nothing(mo
         mod.execute_import(conflicting)
     assert durable == durable_after_first
 
+
+def test_normal_import_monotonically_enriches_full_profile_without_downgrade(monkeypatch) -> None:
+    mod = load_module()
+    durable = _install_fake_ydb(mod, monkeypatch)
+    prepared = mod.prepare_import(valid_payload(), raw_input_sha256="a" * 64)
+    seed_pk, _kind, seed = next(
+        row for row in prepared["ydb_rows"] if row[1] == "publisher_profile_item"
+    )
+    full = copy.deepcopy(seed)
+    full.update({
+        "profile_origin": "publisher_profile_sidecar",
+        "profile_status": "ready",
+        "usable_without_profile_llm": True,
+        "profile_hash": "f" * 64,
+        "profile_hashes": ["f" * 64],
+        "profile_dimensions": {
+            "outlet_identity": "Verified full publisher identity",
+            "intended_audience": [{"label": "readers", "basis": "explicit", "evidence_refs": ["full"]}],
+            "distinctive_value": [{"text": "method", "evidence_refs": ["full"]}],
+            "editorial_scope": ["research"],
+            "recurring_formats": ["articles"],
+            "locality_guard": {"brand_scope_basis": "external"},
+        },
+        "evidence": [{"evidence_id": "full", "supports": ["publisher.identity"], "url": "https://example.org/about"}],
+        "evidence_fingerprint": "rtpublisher_evidence_full",
+    })
+    durable[seed_pk] = json.dumps(full, ensure_ascii=False)
+
+    mod.execute_import(prepared)
+
+    stored = json.loads(durable[seed_pk])
+    assert stored["profile_origin"] == "publisher_profile_sidecar"
+    assert stored["profile_status"] == "ready"
+    assert stored["usable_without_profile_llm"] is True
+    assert stored["profile_dimensions"] == full["profile_dimensions"]
+    assert {row["evidence_id"] for row in stored["evidence"]} == {"full", "ev-1"}
+    intake_pk = next(pk for pk in durable if pk.startswith("external_publication_intake_item:"))
+    intake = json.loads(durable[intake_pk])
+    assert intake["review_status"] == "unreviewed"
+    assert intake["publication_permission"] == "not_granted"
+
+
+def test_conflicting_publisher_scope_fails_atomic_execute_without_partial_write(monkeypatch) -> None:
+    mod = load_module()
+    durable = _install_fake_ydb(mod, monkeypatch)
+    prepared = mod.prepare_import(valid_payload(), raw_input_sha256="a" * 64)
+    seed_pk, _kind, seed = next(
+        row for row in prepared["ydb_rows"] if row[1] == "publisher_profile_item"
+    )
+    conflicting = copy.deepcopy(seed)
+    conflicting["scope"] = "regional"
+    durable[seed_pk] = json.dumps(conflicting, ensure_ascii=False)
+    before = dict(durable)
+
+    with pytest.raises(mod.ContractError, match="scope/locality"):
+        mod.execute_import(prepared)
+
+    assert durable == before
 
 def test_identity_reservation_race_fails_closed_without_partial_write(monkeypatch) -> None:
     mod = load_module()
