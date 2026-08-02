@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Changed iOS Safari OTP preflight to create a native-first Safari session,
+  enable XCUITest `respectSystemAlerts`, close the bounded first-run sheet, and
+  only then attach WebKit. Slow CI webview discovery now has a 60-second bound;
+  a pre-input hierarchy is reduced in memory to allowlisted owner/type counts.
 - Added privacy-safe iOS Safari alert contract probes to preflight evidence:
   predicate-result counts with and without `visible`, current-alert text
   length/line/exact-title counters, and exact known-button counters. The probe

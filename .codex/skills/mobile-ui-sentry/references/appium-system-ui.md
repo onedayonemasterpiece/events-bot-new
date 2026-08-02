@@ -47,7 +47,9 @@ alert; require exactly one allowed label before exact-label acceptance.
 
 For the Russian Safari first-run dialog:
 
-1. switch to `NATIVE_APP`;
+1. create a native-first Safari session with `com.apple.mobilesafari`, set
+   `respectSystemAlerts=true`, and stay in `NATIVE_APP` until system UI is
+   clear; do not make WebKit attachment part of initial session creation;
 2. query exactly one visible StaticText named/labelled
    `Выбор поисковой системы` through XCTest predicate;
 3. call current-alert text and button APIs;
@@ -55,6 +57,12 @@ For the Russian Safari first-run dialog:
 5. accept with `buttonLabel: 'Продолжить'`;
 6. poll native inspection until three consecutive obstruction-free samples;
 7. capture a safe post-transition screenshot before product input.
+
+For a clean, side-effect-free simulator preflight only, a native source may be
+read transiently before any identity input and immediately reduced to
+allowlisted application/alert/sheet and known title/button type counts. Never
+log or upload the raw XML. Attach the Safari web context only after the native
+blocker is proven absent.
 
 Unknown title, duplicate title/action, missing action, alert API disagreement or
 failure to disappear is `BLOCKED_SAFARI_FIRST_RUN_UI`. Never type through it.

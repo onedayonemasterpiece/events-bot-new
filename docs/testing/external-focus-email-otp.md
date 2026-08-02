@@ -200,6 +200,14 @@ length/line/exact-title/substring counters; and exact known-button counters.
 The probe never retains the alert text, button labels or native hierarchy and
 never changes which dialog is actionable. It exists to choose the next single
 fix from runner evidence instead of retrying locator guesses.
+The iOS session starts with native Safari (`com.apple.mobilesafari`) rather
+than attaching WebKit during session creation. XCUITest
+`respectSystemAlerts=true` allows WDA to report SpringBoard while it owns a
+system sheet. Only after the bounded handler proves the sheet absent does the
+harness attach a Safari web context, with a 60-second CI discovery bound, and
+navigate to the candidate. Before any identity or OTP input, one transient
+native source may be reduced in memory to known title/button/container counts;
+the raw XML is neither logged nor written to evidence.
 The mobile sentry captures a safe screenshot immediately after Safari launch
 and repeats observation after at most 20 seconds without the expected marker.
 Every native action must produce a verified state transition. Two unchanged

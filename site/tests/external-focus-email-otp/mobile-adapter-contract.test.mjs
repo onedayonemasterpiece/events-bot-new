@@ -3,28 +3,55 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { parse } from 'yaml';
 
-import { buildAppiumCapabilities, extractDriverNetworkEvents,
-  inspectSafariNativeUiProtocol } from '../../e2e/focus-email/adapters/appium-ui.mjs';
+import { buildAppiumCapabilities, classifyActiveIosApp, extractDriverNetworkEvents,
+  inspectSafariNativeUiProtocol, summarizeKnownSafariNativeSource } from '../../e2e/focus-email/adapters/appium-ui.mjs';
 
 test('Appium capability builder pins real mobile browsers and iOS keyboard ownership', () => {
   const ios = buildAppiumCapabilities('ios', { deviceName: 'iPhone 16', platformVersion: '18.5', udid: 'opaque' },
     { E2E_PREBUILT_WDA_PATH: '/safe/wda.app' });
-  assert.deepEqual({ platformName: ios.platformName, browserName: ios.browserName,
+  assert.deepEqual({ platformName: ios.platformName, browserName: ios.browserName, bundleId: ios['appium:bundleId'],
     automationName: ios['appium:automationName'], hardware: ios['appium:connectHardwareKeyboard'],
     software: ios['appium:forceSimulatorSoftwareKeyboardPresence'], udid: ios['appium:udid'] },
-  { platformName: 'iOS', browserName: 'Safari', automationName: 'XCUITest', hardware: false, software: true, udid: 'opaque' });
+  { platformName: 'iOS', browserName: undefined, bundleId: 'com.apple.mobilesafari', automationName: 'XCUITest', hardware: false, software: true, udid: 'opaque' });
   assert.equal(ios['appium:usePreinstalledWDA'], true);
   assert.equal(ios['appium:prebuiltWDAPath'], '/safe/wda.app');
+  assert.equal(ios['appium:settings[respectSystemAlerts]'], true);
+  assert.equal(ios['appium:webviewConnectTimeout'], 60_000);
+  assert.equal(ios['appium:webviewConnectRetries'], 120);
 
   const android = buildAppiumCapabilities('android', { deviceName: 'Pixel 7', platformVersion: '15' }, {});
   assert.equal(android.browserName, 'Chrome');
   assert.equal(android['appium:automationName'], 'UiAutomator2');
 });
 
-test('adapter excludes unsafe hierarchy reads, JS value injection and desktop keyboard rescue', async () => {
+test('adapter confines transient native source inspection before sensitive input and excludes unsafe persistence', async () => {
   const source = await readFile(new URL('../../e2e/focus-email/adapters/appium-ui.mjs', import.meta.url), 'utf8');
-  assert.doesNotMatch(source, /getPageSource|pageSource|input\.value\s*=\s*value|osascript|Cmd-K|Toggle Software Keyboard/u);
+  assert.doesNotMatch(source, /writeFile[^\n]+(?:pageSource|nativeSource)|input\.value\s*=\s*value|osascript|Cmd-K|Toggle Software Keyboard/u);
+  assert.match(source, /summarizeKnownSafariNativeSource\(await driver\.getPageSource\(\)\)/u);
   assert.match(source, /00-safari-launch\.png/u);
+  const openInvite = source.slice(source.indexOf('async openInvite()'), source.indexOf('async verifyReleaseIdentity()'));
+  assert.ok(openInvite.indexOf('ensureSafariSystemUiStable()') < openInvite.indexOf('switchToSafariWebContext()'));
+  assert.ok(openInvite.indexOf('switchToSafariWebContext()') < openInvite.indexOf('driver.url(target.href)'));
+});
+
+test('transient native source reduces to known element/container counters and owner enum', () => {
+  const source = '<XCUIElementTypeApplication name="SpringBoard"><XCUIElementTypeSheet><XCUIElementTypeStaticText name="Выбор поисковой системы"/><XCUIElementTypeButton label="Настройки"/><XCUIElementTypeButton label="Продолжить"/></XCUIElementTypeSheet></XCUIElementTypeApplication>';
+  assert.deepEqual(summarizeKnownSafariNativeSource(source), {
+    source_inspected: true,
+    application_container_count: 1,
+    alert_container_count: 0,
+    sheet_container_count: 1,
+    title_match_count: 1,
+    continue_match_count: 1,
+    settings_match_count: 1,
+    matched_static_text_count: 1,
+    matched_button_count: 2,
+    matched_other_type_count: 0,
+  });
+  assert.equal(classifyActiveIosApp({ bundleId: 'com.apple.springboard' }), 'springboard');
+  assert.equal(classifyActiveIosApp({ bundleId: 'com.apple.mobilesafari' }), 'safari');
+  assert.equal(classifyActiveIosApp({ bundleId: 'example.other' }), 'other');
+  assert.equal(classifyActiveIosApp(null), 'unknown');
 });
 
 test('Safari native inspection uses exact predicate title and same-alert button contract', async () => {
