@@ -82,7 +82,7 @@ lanes:
       - generated live artifacts
     expected_output: committed integration branch, reviewed PR, terminal live receipts
     verification_scope: full_local
-    status: spawned
+    status: committed
     effort: high
 
   - id: ios_otp_checklist_review
@@ -97,5 +97,5 @@ lanes:
     forbidden_files: ['**/*']
     expected_output: requirement-by-requirement defects and closure verdict
     verification_scope: inspection_only
-    status: spawned
+    status: committed
     effort: high
