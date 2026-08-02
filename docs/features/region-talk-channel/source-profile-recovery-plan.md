@@ -266,6 +266,13 @@ durable live-overlay поля YDB с префиксом `_live_*` остаютс
 позднее реальное изменение кандидата по-прежнему останавливает запись, а само
 наличие актуальной live-проекции больше не создаёт ложный
 `candidate_changed_since_strong_reread`.
+Сильное перечитывание отдельно восстанавливает live fingerprint источника из
+актуальных `source_queue_item` / `source_status_item` / `online_source_item`
+(для статьи — также из полного малого kind
+`external_publication_source_item`). Та же source-проекция повторно читается в
+финальной serializable-транзакции: исчезнувший, новый или изменившийся overlay
+останавливает запись как `candidate_source_changed_since_strong_reread`, не
+вызывает автоматического повышения review-state и не публикует кандидат.
 
 ### 6.2. Не хранить лишнее
 
