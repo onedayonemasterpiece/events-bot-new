@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Added a bounded ordinary-ingestion facts-v3 replay harness for disposable
+  SQLite copies. Source-bound Telegram, VK and parser fixtures now cross their
+  production handlers with publication/network enrichment disabled, emit
+  redacted provider/write/receipt evidence, and must pass an identical warm
+  replay with zero collection calls or Event/EventSource changes.
 - Added a pure offline facts-v3 Gate-B evaluator and versioned result schema:
   corrected seed, source-review receipts, immutable SQLite and exact git/report
   cohorts are hash-bound before occurrence-family recall is calculated. The
