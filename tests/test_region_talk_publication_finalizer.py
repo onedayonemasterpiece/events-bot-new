@@ -664,6 +664,67 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             mod.rt.external_publication_intake_fingerprint(intake),
         )
 
+    def test_read_live_rows_projects_archived_social_accept_for_profile_capture_request(self) -> None:
+        mod = self.mod
+        post_url = "https://t.me/figarotravel/7346"
+        source = external_source("figarotravel") | {
+            "_ydb_pk": "source_queue_item:telegram:figarotravel",
+        }
+        publication = {
+            "post_url": post_url,
+            "canonical_source_key": "telegram:figarotravel",
+            "publication_status": "gemini_accept",
+            "publication_candidate_status": "sent_to_chat",
+            "sent_to_chat": "true",
+            "source_onboarding_status": "needs_source_profile",
+            "source_onboarding_llm_reason": "source_capture_missing",
+        }
+        kinds = {
+            "image_queue_item": {},
+            "candidate_memory_item": {},
+            "publication_candidate_item": {"publication:archived-social": publication},
+            "source_queue_item": {"source:figarotravel": source},
+            "source_status_item": {},
+            "online_source_item": {},
+            "external_publication_source_item": {},
+            "external_publication_intake_item": {},
+            "source_onboarding_profile_item": {},
+            "source_profile_capture_item": {},
+            "publisher_profile_item": {},
+            "publisher_profile_candidate_correction_item": {},
+        }
+
+        class Pool:
+            def retry_operation_sync(self, operation):
+                return operation(object())
+
+        class Ydb:
+            def SessionPool(self, _driver):
+                return Pool()
+
+        with (
+            mock.patch.object(mod.rt, "ydb_connect", return_value=(Ydb(), object(), object())),
+            mock.patch.object(mod.rt, "ydb_kv_table_path", return_value="table"),
+            mock.patch.object(
+                mod.rt,
+                "ydb_select_kind_items",
+                side_effect=lambda _s, _y, _t, kind, limit, **_kwargs: kinds.get(kind, {}),
+            ),
+            mock.patch.object(mod.rt, "utc_now_iso", return_value="2026-08-02T12:00:00+00:00"),
+        ):
+            _ydb, _driver, _pool, _table, rows, _strict_priority = mod.read_live_rows(100, 100)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["post_url"], post_url)
+        self.assertEqual(rows[0]["_authoritative_source"]["canonical_source_key"], "telegram:figarotravel")
+        updates = mod.source_profile_capture_request_updates(
+            rows, now_iso="2026-08-02T12:01:00+00:00",
+        )
+        self.assertEqual(len(updates), 1)
+        self.assertEqual(updates[0]["source_profile_capture_requested"], "true")
+        self.assertEqual(updates[0]["needs_source_profile"], "true")
+        self.assertEqual(updates[0]["next_action"], "capture_bounded_source_profile")
+
     def test_read_live_rows_prefers_current_memory_text_reject_over_stale_image_snapshot(self) -> None:
         mod = self.mod
         source = external_source("kseniacalm")

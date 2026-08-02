@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Fixed the Region Talk source-profile handoff for archived accepted social
+  rows: the finalizer now projects missing-profile capture requests after
+  compact image/memory working rows are pruned, without reopening the provider
+  verdict or repeating an unchanged processed insufficient capture.
 - Recorded the live Static Site QA control-plane acceptance: canonical issue
   `#253` launched protected browser run `30755922643`, received bot-authored
   acceptance/terminal receipts and produced a redaction-safe PASS artifact with
