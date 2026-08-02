@@ -843,9 +843,52 @@ def test_article_writer_requires_all_publisher_reader_brief_dimensions_in_profil
         output, evidence_ids, required_publisher_evidence_ids=required,
     )
     evidence_ids.update(required)
+    assert "publisher_reader_brief_not_grounded_in_source_sentence" in mod.validate_editorial_output(
+        output, evidence_ids, required_publisher_evidence_ids=required,
+    )
+    output["grounding_map"][1]["evidence_ids"] = sorted(required)
     assert mod.validate_editorial_output(
         output, evidence_ids, required_publisher_evidence_ids=required,
     ) == []
+
+
+def test_article_critic_must_semantically_attest_complete_publisher_reader_brief() -> None:
+    mod = load_module()
+    required = {
+        "source.publisher.outlet_identity",
+        "source.publisher.intended_audience",
+        "source.publisher.distinctive_value",
+    }
+    assert mod.validate_critic_output(
+        {"status": "pass"}, required_publisher_evidence_ids=required,
+    ) == ["publisher_reader_brief_critic_check_failed"]
+    assert mod.validate_critic_output({
+        "status": "pass",
+        "publisher_reader_brief_checks": {
+            "outlet_identity_covered": True,
+            "intended_audience_covered": True,
+            "distinctive_value_covered": True,
+            "useful_for_read_or_skip_decision": True,
+        },
+    }, required_publisher_evidence_ids=required) == []
+
+
+def test_article_writer_and_critic_prompts_require_reader_decision_summary() -> None:
+    mod = load_module()
+    payload = {
+        "required_publisher_evidence_ids": [
+            "source.publisher.outlet_identity",
+            "source.publisher.intended_audience",
+            "source.publisher.distinctive_value",
+        ]
+    }
+    writer_prompt = mod._stage_prompt("writer", payload)
+    critic_prompt = mod._stage_prompt("critic", payload)
+    assert "what kind of outlet this is" in writer_prompt
+    assert "who will find it useful" in writer_prompt
+    assert "what distinguishes its coverage" in writer_prompt
+    assert "publisher_reader_brief_checks" in critic_prompt
+    assert "useful_for_read_or_skip_decision" in critic_prompt
 
 
 def test_v9_validator_rejects_banned_not_a_construction() -> None:
@@ -875,6 +918,11 @@ def test_v9_writer_gets_one_style_retry_then_fails_closed(monkeypatch) -> None:
     mod = load_module()
     clean = _valid_writer_output(mod)
     clean["_stage_status"] = "ok"
+    clean["grounding_map"][1]["evidence_ids"] = [
+        "source.publisher.outlet_identity",
+        "source.publisher.intended_audience",
+        "source.publisher.distinctive_value",
+    ]
     banned = json.loads(json.dumps(clean, ensure_ascii=False))
     banned["public_copy"]["paragraph_2"] = (
         "В публикации автор показывает музей не как цепочку отдельных залов, а как цельный "
@@ -885,7 +933,15 @@ def test_v9_writer_gets_one_style_retry_then_fails_closed(monkeypatch) -> None:
         "_stage_status": "ok", "status": "ready", "throughline_mode": "fresh_start",
         "used_history_urls": [], "visual_hook_evidence_ids": [],
     }
-    critic = {"_stage_status": "ok", "status": "pass", "reason_codes": []}
+    critic = {
+        "_stage_status": "ok", "status": "pass", "reason_codes": [],
+        "publisher_reader_brief_checks": {
+            "outlet_identity_covered": True,
+            "intended_audience_covered": True,
+            "distinctive_value_covered": True,
+            "useful_for_read_or_skip_decision": True,
+        },
+    }
     dimensions = {
         key: {"text": key, "evidence_ids": ["E1"]}
         for key in mod.notify.PUBLISHER_READER_BRIEF_DIMENSIONS
