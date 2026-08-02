@@ -1,0 +1,248 @@
+schema: static_site_autotest_scenarios.v1
+status: canonical_strategy_seed
+updated_at: '2026-08-02'
+strategy: docs/operations/static-site-autotest-strategy.md
+release_gates: docs/features/static-site-pages/release-autotest-gates.md
+implementation_prompt: docs/testing/static-site-autotest-codex-prompt.md
+
+outcomes:
+  - PASS
+  - FAIL
+  - BLOCKED
+  - STARTED_BACKGROUND
+  - SKIPPED_NOT_APPLICABLE
+  - NOT_IMPLEMENTED
+
+platforms:
+  browser:
+    layer: L1
+    runner: playwright
+  android:
+    layer: L2
+    runner: appium_uiautomator2_android_emulator
+  ios:
+    layer: L2
+    runner: appium_xcuitest_ios_simulator
+
+suites:
+  pr-fast:
+    mode: blocking
+    default_platforms: [browser]
+  feature:
+    mode: selector_defined
+  catalog:
+    mode: background_advisory
+  mobile-critical:
+    mode: selector_defined
+  release:
+    mode: blocking
+  post-deploy:
+    mode: selector_defined
+
+scenarios:
+  artifact.route_manifest_integrity:
+    title: Static artifact, routes and manifest are internally consistent
+    status: implemented_existing
+    layers: [L0]
+    platforms: []
+    trigger_tags: [static-data, static-route, release-publisher]
+    cost: low
+    side_effects: none
+    evidence: structured_summary
+    blocking:
+      pull_request: true
+      release: true
+
+  browser.generated_release_gate:
+    title: Generated event candidate browser release journeys
+    status: implemented_existing
+    layers: [L1]
+    platforms: [browser]
+    trigger_tags: [static-route, visual-layout, release-publisher]
+    cost: medium
+    side_effects: none
+    evidence: screenshots_and_report
+    blocking:
+      pull_request: affected_scope
+      release: true
+
+  browser.route_health:
+    title: Every selected HTML route is non-empty and runtime healthy
+    status: partial
+    layers: [L0, L1]
+    platforms: [browser]
+    trigger_tags: [static-data, static-route, visual-layout]
+    cost: medium
+    side_effects: none
+    selection: affected_routes_on_pr_full_manifest_on_catalog_or_release
+    evidence: failure_only_plus_route_jsonl
+    blocking:
+      pull_request: affected_scope
+      release: true
+
+  data.content_minimum:
+    title: Page-family minimum expected content or typed empty state
+    status: planned
+    layers: [L0, L1]
+    platforms: [browser]
+    trigger_tags: [static-data, static-route]
+    cost: medium
+    side_effects: none
+    evidence: route_contract_report
+    blocking:
+      pull_request: false_until_implemented
+      release: false_until_implemented
+
+  event.transport_blocks:
+    title: Transport blocks exist and contain minimum expected content when promised
+    status: partial
+    layers: [L0, L1]
+    platforms: [browser]
+    trigger_tags: [static-data, static-route]
+    cost: low
+    side_effects: none
+    evidence: selected_route_assertions
+    blocking:
+      pull_request: affected_scope_after_contract_activation
+      release: after_contract_activation
+
+  event.venue_source_medallions:
+    title: Venue and source medallions are present, grounded and non-conflicting
+    status: partial
+    layers: [L0, L1]
+    platforms: [browser]
+    trigger_tags: [static-data, static-route, visual-layout]
+    cost: low
+    side_effects: none
+    evidence: positive_negative_specimens
+    blocking:
+      pull_request: affected_scope
+      release: true_for_public_medallion_changes
+
+  event.people_cards:
+    title: People, headliner and celebrity cards are grounded and rendered correctly
+    status: planned
+    layers: [L0, L1]
+    platforms: [browser]
+    trigger_tags: [static-data, static-route, visual-layout]
+    cost: medium
+    side_effects: none
+    evidence: positive_negative_specimens
+    blocking:
+      pull_request: false_until_implemented
+      release: false_until_implemented
+
+  personal.for_me_page:
+    title: Authenticated pre-generated personal page is available without data leakage
+    status: planned
+    layers: [L0, L1]
+    platforms: [browser]
+    trigger_tags: [personalization, supabase-connectivity, static-route]
+    cost: medium
+    side_effects: controlled_read_only_or_idempotent
+    evidence: restricted_authenticated_summary
+    blocking:
+      pull_request: false_until_implemented
+      release: false_until_implemented
+
+  connectivity.supabase_direct_relay:
+    title: Supabase direct and relay routes provide the expected schema and nonce
+    status: partial
+    layers: [L0, L1]
+    platforms: [browser]
+    trigger_tags: [supabase-connectivity, yandex-relay, auth-otp, personalization]
+    cost: low
+    side_effects: read_only
+    evidence: sanitized_network_summary
+    blocking:
+      pull_request: affected_scope
+      release: true_for_connectivity_changes
+
+  personalization.core_journey:
+    title: Personalization ordering, feedback and persistence
+    status: planned
+    layers: [L0, L1]
+    platforms: [browser]
+    trigger_tags: [personalization, static-data, static-route]
+    cost: medium
+    side_effects: idempotent_test_identity
+    evidence: restricted_authenticated_summary
+    blocking:
+      pull_request: false_until_implemented
+      release: false_until_implemented
+
+  focus.otp.browser_tab:
+    title: Real focus-group email OTP in browser tab
+    status:
+      browser: implemented_existing
+      android: planned_first_mobile_milestone
+      ios: planned_first_mobile_milestone
+    layers: [L1, L2]
+    platforms: [browser, android, ios]
+    trigger_tags: [auth-otp, mobile-input, supabase-connectivity, yandex-relay]
+    cost: high
+    side_effects: protected_real_email_and_idempotent_membership
+    target: deployed_https_exact_repo_sha
+    isolation: external-focus-email-otp
+    execution: sequential_while_one_mailbox_is_shared
+    evidence: restricted_no_video_no_trace_no_har
+    blocking:
+      pull_request: direct_contract_change_only
+      release: true_for_auth_onboarding_or_mail_route_changes
+
+  focus.pwa.install_launch:
+    title: Install, launch and relaunch focus PWA from system home screen
+    status:
+      browser: component_contract_only
+      android: planned_after_mobile_otp
+      ios: planned_after_mobile_otp
+    layers: [L0, L1, L2]
+    platforms: [android, ios]
+    trigger_tags: [pwa-system, mobile-input, auth-otp]
+    cost: high
+    side_effects: simulator_install_state
+    target: deployed_https_exact_repo_sha
+    evidence: native_ui_screenshots_video_allowed_without_real_otp
+    blocking:
+      pull_request: direct_pwa_contract_change_after_implementation
+      release: true_for_pwa_contract_changes_after_implementation
+
+  mobile.keyboard_inputs:
+    title: Real email, OTP, search and numeric keyboards preserve usable viewport
+    status: planned
+    layers: [L2]
+    platforms: [android, ios]
+    trigger_tags: [mobile-input]
+    cost: high
+    side_effects: none_or_scenario_defined
+    selection: critical_inputs_only
+    evidence: native_hierarchy_and_masked_screenshots
+    blocking:
+      pull_request: direct_input_contract_change_after_implementation
+      release: true_after_implementation
+
+  mobile.page_family_specimens:
+    title: Stratified mobile sample of current page families
+    status: planned
+    layers: [L2]
+    platforms: [android, ios]
+    trigger_tags: [visual-layout, static-route]
+    cost: high
+    side_effects: none
+    selection: one_or_more_specimens_per_changed_family
+    evidence: screenshots_and_geometry
+    blocking:
+      pull_request: advisory_unless_high_risk
+      release: selector_defined
+
+policies:
+  full_catalog_on_emulators: forbidden
+  mobile_viewport_substitutes_android_or_ios: false
+  playwright_webkit_substitutes_native_ios: false
+  real_otp_video_trace_har: forbidden
+  real_otp_parallel_on_single_mailbox: forbidden
+  fixed_test_identity_for_routine_otp: required
+  fresh_user_otp: protected_manual_only
+  background_outcome_may_be_reported_as_pass: false
+  mandatory_background_must_be_terminal_before_release: true
+  planned_scenario_blocks_release: false
