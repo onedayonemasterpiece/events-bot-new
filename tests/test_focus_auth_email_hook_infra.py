@@ -42,6 +42,19 @@ def test_function_boundary_is_narrow_and_secret_safe() -> None:
     assert "${FOCUS_AUTH_EMAIL_HOOK_INVOKER_SERVICE_ACCOUNT_ID}" in spec
 
 
+def test_unreconciled_notisend_capacity_is_unknown_not_zero() -> None:
+    migration = (
+        ROOT
+        / "supabase/migrations/20260802013600_notisend_unreconciled_capacity_unknown.sql"
+    ).read_text(encoding="utf-8")
+
+    assert "alter column provider_used_count drop not null" in migration
+    assert "alter column provider_used_count drop default" in migration
+    assert "set provider_used_count = null" in migration
+    assert "where provider_reconciled_at is null" in migration
+    assert "provider_reconciliation_value_chk" in migration
+
+
 def test_provider_policy_has_one_dispatch_and_shared_unique_recipient_cap() -> None:
     desired = json.loads((INFRA / "desired-state.json").read_text(encoding="utf-8"))
     source = (SOURCE / "index.py").read_text(encoding="utf-8")

@@ -54,4 +54,6 @@ The hosted database migration and inactive Yandex Function/API Gateway boundary
 were staged on 2026-08-02. The Send Email Hook remains disabled. NotiSend stays
 fail-closed (`routing_ready=false`) until an operator reconciles the provider's
 actual unique-recipient count and billing-period end; the database value `0`
-before reconciliation is not a statement about the provider account.
+before the follow-up migration was not a statement about the provider account.
+Current operator output returns unknown (`null`) rather than a fictional
+available balance until that reconciliation succeeds.

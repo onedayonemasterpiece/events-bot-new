@@ -17,7 +17,8 @@
   are assigned to Postbox before dispatch. The hosted ledger migration and an
   inactive least-privilege Yandex Function/API Gateway boundary are staged;
   Auth hook enablement remains blocked on provider-count reconciliation and a
-  real external-mailbox E2E.
+  real external-mailbox E2E. Unreconciled provider usage is now reported as
+  unknown rather than the misleading `0 used / 200 available`.
 - Added a protected, manual Chromium + real-IMAPS external E2E for focus-group
   email OTP, with fixed test identities by default, exact deployment SHA checks,
   six-digit auto-submit coverage and sanitized ChatGPT-readable evidence.
