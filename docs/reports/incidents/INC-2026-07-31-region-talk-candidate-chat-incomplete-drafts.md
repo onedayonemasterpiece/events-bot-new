@@ -89,6 +89,11 @@ rows, proving that the data existed but publication preparation had not run.
   false positive caused by required Latin-script source names; the guard is
   changed to exclude exact source-owned labels while retaining rejection of
   unrelated English prose.
+- 2026-08-01 23:02–23:56 UTC — the compensating catch-up completes all 22
+  currently confirmed candidates at writer v10. Legacy Telegram/VK media is
+  repaired without provider calls, every exact revision is delivered to the
+  operator chat, reactions are synchronized, and the 14-day anti-vector plan
+  is rebuilt and persisted.
 
 ## Root Cause
 
@@ -193,7 +198,7 @@ retries duplicate messages.
 - [ ] Observe the next post-deploy natural slot to completion; this is a
   monitoring/closure check, not a blocker for the already active autonomous
   discovery-to-operator pipeline.
-- [ ] Complete the writer-v10 catch-up for every confirmed candidate, deliver
+- [x] Complete the writer-v10 catch-up for every confirmed candidate, deliver
   the new exact revisions and rebuild the anti-vector plan.
 
 ## Release And Closure Evidence
@@ -217,6 +222,21 @@ retries duplicate messages.
 - plan evidence: snapshot `rtdayplan_a2a35a30d4810151b649bc86`, four planned
   articles, 14 planned social posts, ten vacant future article slots, zero
   vacant social slots and no duplicate URL among 18 occupied slots
+- final catch-up evidence: 22/22 confirmed candidates have current writer-v10
+  drafts, 22/22 have `ready`/explicit fallback media, and the current-revision
+  unsent count is zero. Recovered exact revisions occupy operator messages
+  `33809`–`33860`; anti-vector queue snapshot
+  `rtqueue_830732b80370dca6fd072862` is visible as message `33861`.
+- final daily-plan evidence: after reaction synchronization, reaction-gated
+  snapshot `rtdayplan_8b8ee9fe7c93e0cd2ea42e39` persists zero planned slots:
+  all three article and nineteen social revisions correctly remain blocked
+  pending a current operator approval. The separate read-only anti-vector
+  snapshot in message `33861` exposes the complete 22-item potential order.
+- final delivery releases: PRs #196, #198, #199, #200 and #203 are merged into
+  `origin/main`; exact deployed SHA
+  `5a5d28cc1cc579a462ddf5cb49e0a6830e6f1199`, Fly release `v1866`,
+  `/healthz` ready with `db=ok` and no issues. Final regression suite:
+  `721 passed`.
 
 ## Prevention
 
