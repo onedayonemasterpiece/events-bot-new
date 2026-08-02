@@ -237,6 +237,14 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     if (!nativeContext) throw new Error(`fail_browser_context:native_context_missing:${selector}`);
     await driver.switchContext(nativeContext);
     try {
+      const waitForNativeKeyboard = async () => {
+        let shown = false;
+        await driver.waitUntil(async () => {
+          shown = await driver.isKeyboardShown().catch(() => false);
+          return shown;
+        }, { timeout: 3_000, interval: 200 }).catch(() => undefined);
+        return shown;
+      };
       const escapedLabel = label.replaceAll("'", "\\'");
       const predicate = `type == 'XCUIElementTypeTextField' AND visible == 1 AND (name == '${escapedLabel}' OR label == '${escapedLabel}')`;
       const matches = await driver.findElements('-ios predicate string', predicate);
@@ -253,8 +261,9 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
         x: Math.round(rect.x + rect.width / 2),
         y: Math.round(rect.y + rect.height / 2),
       }]);
-      await driver.pause(350);
-      nativeKeyboardAtTap[kind] = await driver.isKeyboardShown().catch(() => false);
+      // Do not sample during the keyboard's animation and then accidentally
+      // toggle it back off. Hosted Simulator timing varies materially.
+      nativeKeyboardAtTap[kind] = await waitForNativeKeyboard();
       if (!nativeKeyboardAtTap[kind] && env.E2E_HOST_OS_VERSION) {
         // Simulator has a separate "Toggle Software Keyboard" state from the
         // hardware-keyboard connection preference. Invoke its exact menu item
@@ -265,8 +274,7 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
           x: Math.round(rect.x + rect.width / 2),
           y: Math.round(rect.y + rect.height / 2),
         }]);
-        await driver.pause(500);
-        nativeKeyboardAtTap[kind] = await driver.isKeyboardShown().catch(() => false);
+        nativeKeyboardAtTap[kind] = await waitForNativeKeyboard();
       }
     } finally {
       await driver.switchContext(originalContext);

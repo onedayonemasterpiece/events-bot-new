@@ -168,7 +168,9 @@ On GitHub-hosted iOS, the hardware-keyboard preference and Simulator's visible
 software-keyboard toggle are separate. After a real native input tap still
 reports no `XCUIElementTypeKeyboard`, the adapter activates Simulator, invokes
 the exact `I/O → Keyboard → Toggle Software Keyboard` menu item once, retaps the
-same field and checks again. It never treats a sent keyboard shortcut as proof.
+same field and checks again. Each check polls through a bounded native-keyboard
+animation window; an early false sample must not trigger the toggle and turn an
+arriving keyboard back off. The harness never treats a sent action as proof.
 If Safari acknowledges the initial navigation command but stays on
 `about:blank`, the harness records `BLOCKED_INFRASTRUCTURE` with zero side
 effects and the workflow may use its one bounded Appium/WDA retry.

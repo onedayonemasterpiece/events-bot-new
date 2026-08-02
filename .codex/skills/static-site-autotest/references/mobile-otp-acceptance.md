@@ -38,6 +38,9 @@ instead of copying it.
   and click the exact `I/O → Keyboard → Toggle Software Keyboard` menu item once,
   then retap and recheck; a best-effort shortcut can be delivered to the wrong
   process, so never assume it succeeded.
+- Poll keyboard presence through a bounded animation window after the physical
+  tap. A single early `false` can race the keyboard animation; immediately
+  toggling at that point may turn off the keyboard that was still appearing.
 - On a fresh Simulator, detect and close only the exact allowlisted Safari
   first-run prompt before journey interaction. Do not use a generic alert
   accepter: unrelated permission/security dialogs must still fail visibly.

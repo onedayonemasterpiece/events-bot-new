@@ -36,7 +36,9 @@
   A hosted Safari session that acknowledges navigation but remains on
   `about:blank` is now classified as a pre-side-effect simulator startup block,
   allowing the existing single bounded Appium retry instead of reporting a
-  product failure.
+  product failure. Keyboard detection now waits through the native animation
+  before deciding the software keyboard is absent, preventing the menu fallback
+  from toggling off a keyboard that appeared just after an early sample.
 - Added reusable project skill guidance for constructing protected static-site
   browser/Android/iOS acceptance journeys and for sending/receiving controlled
   OTP mail through the existing Yandex Mail Trigger boundary without exposing
