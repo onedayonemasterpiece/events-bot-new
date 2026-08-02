@@ -10,6 +10,7 @@ import { createMailbox } from './helpers/mailbox.mjs';
 import { validatePlatform } from './helpers/platform.mjs';
 import { redactText } from './helpers/redaction.mjs';
 import { summarizeRuntimeDiagnostics } from './helpers/runtime-diagnostics.mjs';
+import { assertExpectedTransportRoutes } from './helpers/transport-fault-acceptance.mjs';
 import { recipientForRun, sanitizedRunId, targetEvidence, validateFocusE2eTarget } from './helpers/target-url.mjs';
 import { runFocusOtpBrowserTab, runIosKeyboardPreflight } from './journey.mjs';
 
@@ -94,16 +95,7 @@ try {
     if (!transportFaultSummary.active) {
       throw new Error('fault_not_active:receipt_missing_or_mismatched');
     }
-    if (expectedFaultProfile === 'client_supabase_direct_unreachable') {
-      for (const operation of ['auth.otp', 'auth.verify', 'rpc.register_focus_group_participant_v1']) {
-        const outcomes = transportFaultEvidence.transport_outcomes.filter((event) => event.operation === operation);
-        const relayOutcomes = outcomes.filter((event) => event.finalRoute === 'relay');
-        const directOutcomes = outcomes.filter((event) => event.finalRoute === 'direct');
-        if (relayOutcomes.length !== 1 || directOutcomes.length !== 0) {
-          throw new Error(`fault_route_selection:${operation}:${directOutcomes.length}:${relayOutcomes.length}`);
-        }
-      }
-    }
+    assertExpectedTransportRoutes(expectedFaultProfile, transportFaultEvidence.transport_outcomes);
   }
   diagnostics = summarizeRuntimeDiagnostics(recorder.entries, ui.consoles);
   if (diagnostics.blocking_failure_count > 0) throw new Error(`runtime_diagnostics:blocking:${diagnostics.blocking_failure_count}`);
