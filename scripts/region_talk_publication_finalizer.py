@@ -1673,6 +1673,70 @@ def source_evidence_priority_clear_updates(rows: list[dict[str, Any]], *, now_is
     return list(by_key.values())
 
 
+def source_profile_capture_request_updates(
+    rows: list[dict[str, Any]], *, now_iso: str,
+) -> list[dict[str, Any]]:
+    """Project explicit social-profile demand back to the source queue.
+
+    CandidateReport consumes this narrow flag through its existing selected
+    source loop and role-scoped reader.  The accepted candidate verdict is not
+    changed; clearing the flag only means a current reusable profile exists.
+    """
+
+    by_key: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if str(row.get("publication_status") or "") != "gemini_accept":
+            continue
+        if str(row.get("content_origin_type") or "") in {"editorial_publication", "academic_publication"}:
+            continue
+        source = row.get("_authoritative_source") if isinstance(row.get("_authoritative_source"), dict) else {}
+        key = canonical_source_key_for_row(source or row)
+        if not source or not key or not key.startswith(("telegram:", "vk:")):
+            continue
+        ready = bool(
+            str(row.get("source_onboarding_status") or "") == "ready"
+            and row.get("source_onboarding_profile_fingerprint")
+        )
+        requested = not ready
+        if (
+            rt._rt_bool(source.get("source_profile_capture_requested")) == requested
+            and rt._rt_bool(source.get("needs_source_profile")) == requested
+        ):
+            continue
+        current_priority_lane = str(source.get("priority_lane") or "")
+        current_priority_reason = str(source.get("priority_reason") or "")
+        by_key[key] = {
+            **source,
+            "source_profile_capture_requested": str(requested).lower(),
+            "needs_source_profile": str(requested).lower(),
+            "source_profile_capture_request_post_url": (
+                normalize_post_url(str(row.get("post_url") or "")) if requested else ""
+            ),
+            "source_profile_capture_request_reason": (
+                str(row.get("source_onboarding_llm_reason") or "source_profile_missing_or_stale")
+                if requested else "current_reusable_profile_ready"
+            ),
+            "source_profile_capture_requested_at": now_iso if requested else "",
+            "source_profile_capture_request_cleared_at": "" if requested else now_iso,
+            "priority_lane": (
+                "source_profile_capture"
+                if requested else ("" if current_priority_lane == "source_profile_capture" else current_priority_lane)
+            ),
+            "priority_reason": (
+                "accepted_candidate_needs_source_profile"
+                if requested else (
+                    ""
+                    if current_priority_reason == "accepted_candidate_needs_source_profile"
+                    else current_priority_reason
+                )
+            ),
+            "priority_updated_at": now_iso,
+            "next_action": "capture_bounded_source_profile" if requested else "normal_queue_policy",
+            "queue_item_updated_at": now_iso,
+        }
+    return list(by_key.values())
+
+
 def write_source_evidence_priority_rows(
     pool: Any,
     ydb: Any,
@@ -3420,6 +3484,14 @@ def main() -> int:
             default_env_var_name=args.default_env_var_name,
             durable_budget=durable_budget,
         )
+    profile_capture_request_rows = source_profile_capture_request_updates(
+        verified, now_iso=rt.utc_now_iso(),
+    )
+    profile_capture_requests_written = (
+        0 if args.dry_run else write_source_evidence_priority_rows(
+            pool, ydb, table, profile_capture_request_rows, run_id=run_id,
+        )
+    )
     evidence_by_profile = {
         str(evidence.get("source_profile_id") or ""): evidence
         for row in verified
@@ -3467,6 +3539,8 @@ def main() -> int:
         "onboarding_profiles_reused": onboarding_stats["profiles_reused"],
         "onboarding_paragraphs_ready": onboarding_stats["paragraphs_ready"],
         "onboarding_needs_review": onboarding_stats["needs_review"],
+        "source_profile_capture_requests_total": len(profile_capture_request_rows),
+        "source_profile_capture_requests_written": profile_capture_requests_written,
         "onboarding_evidence_rows_written": onboarding_write["evidence_written"],
         "onboarding_profile_rows_written": onboarding_write["profiles_written"],
         "accepted_new": sum(1 for row in verified if is_newly_accepted_in_run(row)),

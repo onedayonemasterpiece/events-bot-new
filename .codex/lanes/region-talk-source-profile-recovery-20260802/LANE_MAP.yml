@@ -93,7 +93,7 @@ lanes:
       - CHANGELOG.md
     expected_output: committed prompt/validator/CTA/version tests and RESULTS
     verification_scope: targeted
-    status: in_progress
+    status: completed
   - id: PROFILE-RUNTIME
     role: integrator
     requirement_ids: [R03]
@@ -110,7 +110,7 @@ lanes:
     forbidden_files: []
     expected_output: integrated runtime profile lifecycle and focused tests
     verification_scope: full_local
-    status: planned
+    status: completed
   - id: INTEGRATOR-QA
     role: merge_reviewer
     requirement_ids: [R01, R09]
@@ -140,4 +140,3 @@ lanes:
     expected_output: receipts, YDB readback, message IDs and safety proof in artifacts
     verification_scope: full_local
     status: planned
-

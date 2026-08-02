@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Added fail-closed Region Talk source-profile recovery before Writer: bounded
+  Telegram/VK description+pinned+30–80-post capture with stable fingerprints,
+  reusable social profiles and separate profile/writer budgets; exact-byte
+  guarded publisher-profile import with monotonic future evidence merge;
+  serializable candidate-correction review that never mutates the candidate;
+  and Writer v11 with a content hook first, grounded source value second,
+  concrete details, source-aware CTA and full rendered-copy revalidation. Old
+  unpublished drafts/reactions are version-invalidated, while published rows,
+  accepted verdicts and all manual/publication permission gates remain
+  monotonic.
 - Fixed Region Talk article/social review footers: final captions now contain
   one link to the exact source post/material, a blank line and one
   `О Калининграде говорят` link to `@kalinigrad_visit`, with no
