@@ -17,7 +17,9 @@
   monitor immediately after generating its product snapshot and persist the
   quality JSON, Markdown and `qa-summary.json` through the existing Kaggle
   runner. `WATCH` stays non-blocking and `FAIL` is preserved before the build
-  stops; the GitHub live job remains off until it receives this real artifact.
+  stops; preview semantic validation now binds the collection batch to the
+  just-exported preview slice instead of a stale packaged production catalog.
+  The GitHub live job remains off until it receives this real artifact.
 - Added a bounded ordinary-ingestion facts-v3 replay harness for disposable
   SQLite copies. Source-bound Telegram, VK and parser fixtures now cross their
   production handlers with publication/network enrichment disabled, emit

@@ -221,6 +221,8 @@ Use the bounded harness against a disposable mutable copy:
 python3 scripts/run_static_collection_ingestion_replay.py \
   --db-copy /dev/shm/static-collection-facts-v3-ingestion.sqlite \
   --manifest artifacts/static-collection-facts-v3/ingestion-manifest.json \
+  --product-artifact-dir artifacts/static-collection-facts-v3/product-replays \
+  --current-date 2026-08-02 \
   --output artifacts/static-collection-facts-v3/ingestion-report.json \
   --allow-mutable-copy
 ```
@@ -234,34 +236,48 @@ logical hash reported by a dry copy inspection; a mismatch stops the run.
 Every expected first-pass call/write count is explicit, and the warm expectation
 is always zero calls and no collection write.
 
-The acceptance manifest contains at least 12 artifact-backed cases and retains
-the frozen boundary mix from the acceptance design: 3 direct-child, 3 explicit
-family, 2 explicit joint-family, plus parents-only, age-only, vague-family and
-ordinary-adult negatives; use at least 4 Telegram, 4 VK and 2 parser cases.
+Gate B already covers the semantic boundary matrix. The shortened Gate-E
+manifest contains one fresh Telegram, one VK and one official-parser case,
+each replayed first + warm. Prefer natural positive/negative and create/merge
+variety when available, but do not increase calls just to fill categories.
 Festival extraction/pages and cinema sources are not cases in this run.
 
-Fixture shapes deliberately preserve upstream adapter contracts:
+Captures deliberately preserve upstream adapter contracts in the closed
+`static-collection-upstream-capture-v1` schema:
 
-- Telegram: the complete, unchanged `telegram_results.json` packet plus
-  `adapter_options.source_username` and `message_id`;
-- VK: `{source_post_url, draft, photos}` where `draft` is an `EventDraft` JSON
-  object and `photos` contains only reproducible URL strings; serialized
-  `poster_media` objects are rejected;
-- official parser: `{source, event}` where `event` contains only
-  `TheatreEvent` constructor fields.
+- Telegram: one exact message and matching `sources_meta` from a genuine
+  schema-v2 `telegram_results.json`; unresolved reply/linked/album dependencies
+  are refused;
+- VK: one exact pre-persist `{source_post_url, draft, photos}`; `PosterMedia`
+  metadata is preserved while binary bytes are omitted with hash/size;
+- official parser: one exact `{source, event}` after the official parser has
+  produced a `TheatreEvent`.
 
-Acquire these inputs without another extraction run. Download an already
-completed Telegram Monitoring `telegram_results.json` from the recorded Kaggle
-kernel output and reduce a copy to the selected messages while retaining their
-matching `sources_meta` rows and recomputing the four `stats` counters. For
-official parsers, take the corresponding event object from an already completed
-parser kernel JSON and wrap it with its source name. A VK replay requires the
-actual pre-persist `EventDraft` captured by the intake run. The production DB
-does not retain original Telegram packets, parser objects, or VK drafts: an
-Event/EventSource-derived reconstruction is useful only as a smoke fixture and
-must not be labeled source-faithful acceptance. If the exact historical upstream
-artifact for a selected row is unavailable, replace that row with another
-preselected real binding whose artifact is available; do not invent the packet.
+Use the manual pure capture CLI; it does not import a DB, handler or publication
+code and refuses `/data` and overwrite:
+
+```bash
+python3 scripts/capture_static_collection_upstream_packet.py telegram \
+  --input artifacts/.../telegram_results.json \
+  --source-username public_channel --message-id 123 \
+  --output artifacts/.../telegram-capture.json
+
+python3 scripts/capture_static_collection_upstream_packet.py parser \
+  --input artifacts/.../one-theatre-event.json \
+  --output artifacts/.../parser-capture.json
+```
+
+For VK, call the pure `build_capture(adapter="vk", raw=...)` helper exactly at
+the disposable-copy seam immediately before `persist_event_and_pages`; never
+run producer capture against production SQLite. The helper records one packet,
+actual capture time, exact handler/repo/source binding, canonical sanitized
+payload SHA and verified binary omissions. It rejects credential-shaped fields.
+
+Download only the latest completed genuine Telegram Monitoring output; do not
+use `scripts/run_tg_monitor.py`, because it mutates source state/imports, and do
+not substitute the E2E Telegram session for remote S22. Official catalog fetch
+or completed parser output is acceptable. The production DB does not retain
+these upstream packets, so EventSource reconstruction is never acceptance.
 
 The harness invokes `process_telegram_results`, `persist_event_and_pages` and
 `process_source_events` respectively. It keeps Smart Update and collection
@@ -278,6 +294,10 @@ source copy, URLs, prompts, responses and credentials are not emitted. PASS
 requires the declared first-pass collection call/write behavior, exact persisted
 quote grounding, unique binding, SQLite `quick_check=ok`, then an identical warm
 replay with no Event or EventSource changes and zero collection calls/writes.
+With product arguments, each pass also emits snapshot + quality JSON/Markdown;
+PASS requires non-`FAIL` product status and equal first/warm normalized output.
+An adapter exception is redacted to type/message hash and stops before an
+automatic warm retry, preventing a second paid call.
 This tool never publishes, deploys, enables routes, or substitutes a direct
 facts apply for normal ingestion.
 

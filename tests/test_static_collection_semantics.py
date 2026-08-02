@@ -309,6 +309,90 @@ def test_kernel_requires_and_validates_collection_receipt_for_pgvector_without_u
     }
 
 
+def test_static_site_preview_validates_collection_batch_against_current_slice(
+    tmp_path, monkeypatch
+):
+    builder_path = ROOT / "kaggle" / "StaticSiteBuilder" / "static_site_builder.py"
+    spec = importlib.util.spec_from_file_location("collection_preview_kernel_test", builder_path)
+    assert spec and spec.loader
+    builder = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(builder)
+
+    site_dir = tmp_path / "site"
+    data_dir = site_dir / "src" / "data"
+    scripts_dir = site_dir / "scripts"
+    data_dir.mkdir(parents=True)
+    scripts_dir.mkdir(parents=True)
+    for name in (
+        "static_collection_batch.py",
+        "static_collection_product_snapshot.py",
+    ):
+        (scripts_dir / name).write_text(
+            (SCRIPTS / name).read_text(encoding="utf-8"), encoding="utf-8"
+        )
+    (scripts_dir / "check_static_collections_product_quality.py").write_text(
+        (ROOT / "scripts" / "check_static_collections_product_quality.py").read_text(
+            encoding="utf-8"
+        ),
+        encoding="utf-8",
+    )
+    batch = batch_module.build_collection_batch(
+        catalog_hash=_sha("f"),
+        labels={
+            "unusual": {
+                "strategy": "semantic_bge",
+                "compute_status": "pass",
+                "quality_status": "pass",
+                "publication_status": "shadow",
+                "item_ids": [2],
+            }
+        },
+    )
+    batch_module.write_collection_batch(data_dir / "collection-batch-v1.json", batch)
+    # The repository may contain a stale full catalog during a bounded preview.
+    # Validation must use the just-exported preview slice instead.
+    (data_dir / "production-catalog.json").write_text(
+        json.dumps({"eligible": [{"event_id": 1}]}), encoding="utf-8"
+    )
+    (data_dir / "preview-events.json").write_text(
+        json.dumps({"events": [{"id": 2}]}), encoding="utf-8"
+    )
+    product_snapshot = product_snapshot_module.build_product_snapshot(
+        [
+            {
+                "id": 2,
+                "title": "Preview",
+                "start_date": "2026-08-10",
+                "lifecycle_status": "active",
+            }
+        ],
+        collection_decisions_by_id={},
+        source_records_by_event={},
+        current_date="2026-08-01",
+        generated_at="2026-08-01T12:00:00Z",
+    )
+    product_snapshot_module.write_product_snapshot(
+        data_dir / "static-collection-product-snapshot-v1.json", product_snapshot
+    )
+    working = tmp_path / "working"
+    working.mkdir()
+    monkeypatch.setattr(builder, "SITE_DIR", site_dir)
+    monkeypatch.setattr(builder, "WORKING", working)
+    sys.modules.pop("static_collection_batch", None)
+
+    receipt = builder.read_collection_semantic_receipt(
+        {
+            "profile": "preview",
+            "collection_semantic_compute": True,
+            "repo_sha": "2" * 40,
+            "build_clock": {"effective_date": "2026-08-01"},
+        }
+    )
+
+    assert receipt["status"] == "validated"
+    assert receipt["collection_product_quality_status"] == "WATCH"
+
+
 def test_runner_persists_collection_receipt_without_requiring_unusual_outputs(
     tmp_path,
 ):

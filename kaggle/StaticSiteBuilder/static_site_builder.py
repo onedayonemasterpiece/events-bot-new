@@ -526,15 +526,22 @@ def read_collection_semantic_receipt(config: dict) -> dict:
     from static_collection_product_snapshot import validate_product_snapshot
 
     batch = json.loads(batch_path.read_text(encoding='utf-8'))
-    catalog_path = SITE_DIR / 'src' / 'data' / 'production-catalog.json'
+    preview_profile = str(config.get('profile') or 'preview') == 'preview'
+    catalog_path = SITE_DIR / 'src' / 'data' / (
+        'preview-events.json' if preview_profile else 'production-catalog.json'
+    )
     catalog_ids = None
     if catalog_path.is_file():
         catalog = json.loads(catalog_path.read_text(encoding='utf-8'))
-        rows = (
-            catalog.get('eligible') or catalog.get('events')
-            if isinstance(catalog, dict)
-            else None
-        )
+        rows = None
+        if isinstance(catalog, dict):
+            rows = (
+                catalog.get('events')
+                if preview_profile
+                else catalog.get('eligible')
+            )
+            if rows is None:
+                rows = catalog.get('eligible') or catalog.get('events')
         if isinstance(rows, list):
             catalog_ids = [
                 row.get('event_id', row.get('id'))
