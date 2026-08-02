@@ -1300,6 +1300,10 @@ class GoogleAIClient:
         safety_settings: Optional[list] = None,
         max_output_tokens: Optional[int] = None,
         candidate_key_ids: Optional[list[str]] = None,
+        *,
+        allow_model_fallback: bool = True,
+        max_provider_attempts: Optional[int] = None,
+        attempt_observer: Optional[Callable[[dict[str, Any]], None]] = None,
     ) -> tuple[str, UsageInfo]:
         """Generate content with rate limiting and retries.
         
@@ -1310,6 +1314,13 @@ class GoogleAIClient:
             safety_settings: Optional safety settings
             max_output_tokens: Max output tokens (for TPM reservation)
             candidate_key_ids: Optional list of API key IDs to try
+            allow_model_fallback: Per-call opt-out from the configured model
+                fallback chain. The shared client and limiter are still used.
+            max_provider_attempts: Optional physical-send ceiling across key
+                rotation, retry and model fallback for this call.
+            attempt_observer: Optional synchronous hook invoked after the
+                limiter marks a physical attempt sent and before the provider
+                request. Only non-secret model/attempt metadata is exposed.
             
         Returns:
             Tuple of (response_text, usage_info)
@@ -1325,6 +1336,13 @@ class GoogleAIClient:
         )
         requested_model = (model or "").strip()
         model_chain = self._build_model_chain(requested_model)
+        if not allow_model_fallback:
+            model_chain = [requested_model]
+        provider_attempt_cap = (
+            max(1, int(max_provider_attempts))
+            if max_provider_attempts is not None
+            else None
+        )
         attempt_cursor = 0
 
         last_error: Optional[Exception] = None
@@ -1360,6 +1378,7 @@ class GoogleAIClient:
                         safety_settings=safety_settings,
                         max_output_tokens=max_output_tokens,
                         candidate_key_ids=attempt_candidate_key_ids,
+                        attempt_observer=attempt_observer,
                     )
                     usage.model = limit_model
                     return response_text, usage
@@ -1432,6 +1451,10 @@ class GoogleAIClient:
                             selected_key_id
                             and not selected_key_was_already_excluded
                             and remaining_key_ids
+                            and (
+                                provider_attempt_cap is None
+                                or attempt_cursor < provider_attempt_cap
+                            )
                         ):
                             self._log_event(
                                 "google_ai.provider_key_rotation",
@@ -1447,7 +1470,14 @@ class GoogleAIClient:
                         # pools keep the existing fail-fast contract. Higher
                         # layers may wait, defer, or choose a model fallback.
                         raise
-                    can_retry = bool(e.retryable) and local_attempt_no < self.max_retries
+                    can_retry = (
+                        bool(e.retryable)
+                        and local_attempt_no < self.max_retries
+                        and (
+                            provider_attempt_cap is None
+                            or attempt_cursor < provider_attempt_cap
+                        )
+                    )
                     if can_retry:
                         delay_ms = self.retry_delays_ms[
                             min(local_attempt_no - 1, len(self.retry_delays_ms) - 1)
@@ -1460,8 +1490,13 @@ class GoogleAIClient:
                         continue
 
                     has_fallback = (
-                        self.allow_provider_model_fallback
+                        allow_model_fallback
+                        and self.allow_provider_model_fallback
                         and model_index < (len(model_chain) - 1)
+                        and (
+                            provider_attempt_cap is None
+                            or attempt_cursor < provider_attempt_cap
+                        )
                     )
                     await self._notify_incident(
                         "provider_error_fallback" if has_fallback else "provider_error",
@@ -1668,6 +1703,7 @@ class GoogleAIClient:
         safety_settings: Optional[list],
         max_output_tokens: Optional[int],
         candidate_key_ids: Optional[list[str]],
+        attempt_observer: Optional[Callable[[dict[str, Any]], None]] = None,
     ) -> tuple[str, UsageInfo]:
         """Single attempt to generate content."""
         
@@ -1701,6 +1737,18 @@ class GoogleAIClient:
         
         # 3. Mark as sent (before actual call)
         await self._mark_sent(ctx, attempt_no)
+        if attempt_observer is not None:
+            try:
+                attempt_observer(
+                    {
+                        "attempt_no": attempt_no,
+                        "requested_model": ctx.requested_model or ctx.model,
+                        "provider_model": ctx.provider_model,
+                        "provider_model_name": ctx.provider_model_name,
+                    }
+                )
+            except Exception:
+                logger.warning("google_ai attempt_observer failed", exc_info=True)
         
         # 4. Call provider
         start_time = _monotonic()

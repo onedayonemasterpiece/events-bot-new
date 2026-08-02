@@ -785,32 +785,59 @@ feature не увеличивает число provider requests на событ
 разделены; конфликт fail-closed, публичный default — declared-only. Полная
 каноника, CPU Kaggle/BGE gate и backfill: [Event age rating](../event-age-rating/README.md).
 
-### Collection facts for static selections (data-prep v1)
+### Collection facts for static selections (facts v3)
 
 Static selections do not make admission, target-audience or visiting-person
 decisions in Astro/BGE. Smart Update owns a nullable, independently merged
-`Event.collection_decisions` container with three grounded projections:
+`Event.collection_decisions` container with independently grounded facts:
 
 - `admission_decision.value = confirmed_free|confirmed_paid|unknown`;
-- `audience_decision.value = kids|family|none|unknown`;
+- `child_directed_decision.value = confirmed|denied|unknown`;
+- `family_suitable_decision.value = confirmed|denied|unknown`;
+- `joint_family_activity_decision.value = confirmed|denied|unknown`;
 - `people_appearances[]` with explicit role, `confirmed|mentioned|unknown` and
   separately evidenced origin scope.
 
-The stage is a short strict-schema `collection_candidate_adjudication`, not an
-extension of every large writer request. It is routed only by admission
-claims/conflicts, `FAMILY|KIDS_SCHOOL`, `PERSONALITIES`, explicit backfill/conflict
-reasons or BGE candidate signals. Ticket status/link alone and age alone do not
-route or prove meaning. Topics/BGE are recall signals only; every accepted
-non-unknown result requires an exact contiguous quote from the attached
-same-event source/OCR corpus. Provider failure, invalid schema/quote and
-`unknown` abstain without erasing accepted truth.
+The versioned contracts are `static-collection-facts-v3` and
+`static-collection-adjudication-v2`. The three audience facts are returned by
+the existing single short `collection_candidate_adjudication` JSON request;
+there is no second audience request and no expansion of create/merge writers.
+The primary remains `gemma-4-31b-it`. This label uses one native-schema
+physical send with Google model fallback/retry disabled per call, followed by
+at most the existing one GPT-4o fallback send. Gemini Lite is not a fallback
+for this label. Trace records expose physical sends, actual model path and
+available token usage.
+
+Routing remains high recall: topics/BGE, existing legacy/v3 facts and narrow
+audience phrases can request the one evaluation. Ticket availability and an
+age rating alone do not route. None of these recall signals is evidence.
+Every `confirmed` or `denied` v3 fact needs an exact continuous source quote;
+`denied` additionally needs explicit negative wording. Missing proof is
+`unknown`. Child authorship, a family theme/atmosphere, parents-only copy and a
+bare “семейный турнир” do not prove the corresponding positive fact. A
+confirmed joint activity is rejected unless both child-directed and
+family-suitable are independently confirmed.
 
 Accepted source attachment and decision application are atomic. JSON is deep
 merged per decision and reassigned as a whole for SQLAlchemy persistence; manual
-lock wins, otherwise source trust and recency decide conflicts.
+lock wins, then official/high/medium/low source trust and recency decide each
+key independently. At apply time v3 quotes are rechecked against the persisted
+same-event `EventSource.source_text`, not candidate OCR or `raw_excerpt`.
+`unknown` never removes accepted truth.
+
+A bounded `evaluation_receipts` cache is persisted by `(source_id,input_hash)`.
+It retains validated all-unknown evaluations too, allowing normal Smart Update
+and the bounded backfill to skip provider calls and writes on an identical warm
+replay. The input hash includes policy/schema, so a policy bump invalidates
+coverage. The legacy `audience_decision` is a deterministic compatibility
+projection (`family`, then `kids`, explicit source-proven adults-only `none`)
+marked `derived_from_facts_v3`; it is never produced by a second LLM request.
+
 `Event.is_free` remains the compatible materialized bool and changes only from
 `confirmed_free|confirmed_paid`; exporter code must not infer it from prose
-`ticket_status`. The additive schema is `20260801_static_collection_facts`. A bounded operational
+`ticket_status`. Reason-filtered audience-only apply cannot change admission,
+people or `is_free`; callers without a filter retain the existing all-reasons
+behavior. The additive DB schema remains `20260801_static_collection_facts`. A bounded operational
 backfill is implemented in `scripts/backfill_static_collection_facts.py`: plan
 mode is read-only; `--apply` reuses persisted `EventSource`, the same strict
 adjudicator and atomic apply contract, prefers trusted/recent source evidence,
