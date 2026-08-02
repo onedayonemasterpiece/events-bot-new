@@ -81,6 +81,8 @@ side-effect contract. Secrets не передаются browser catalog или v
 2. выделить shared semantic journey;
 3. добавить Android Emulator + Chrome + реальную keyboard acceptance;
 4. добавить iOS Simulator + Mobile Safari + реальную keyboard acceptance;
+   перед одним real-mail run получить три последовательных side-effect-free
+   `focus.otp.ios_keyboard_preflight` PASS (`0/0/0`);
 5. выполнять real-mail variants последовательно;
 6. сохранить one issue / one verify / one participant registration;
 7. выпустить одинаковый sanitized evidence contract;
@@ -88,6 +90,9 @@ side-effect contract. Secrets не передаются browser catalog или v
 
 До terminal PASS Android и iOS новый OTP transport нельзя объявлять доказанным
 для переноса на остальные authorized static pages.
+
+Исторический iOS run `30754894934` — `BLOCKED_SAFARI_FIRST_RUN_UI`, а не
+keyboard failure: видимый first-run dialog исключает keyboard verdict.
 
 ## 5. Отдельный PWA gate
 

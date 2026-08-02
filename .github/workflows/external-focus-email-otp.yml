@@ -6,6 +6,7 @@ on:
       target_url: { required: true, type: string }
       expected_repo_sha: { required: true, type: string }
       platform: { required: true, type: string }
+      scenario: { required: false, type: string, default: focus.otp.browser_tab }
   workflow_dispatch:
     inputs:
       target_url:
@@ -22,6 +23,12 @@ on:
         default: all
         type: choice
         options: [browser, android, ios, all]
+      scenario:
+        description: Closed QA scenario id
+        required: true
+        default: focus.otp.browser_tab
+        type: choice
+        options: [focus.otp.browser_tab, focus.otp.ios_keyboard_preflight]
 
 permissions:
   contents: read
@@ -31,13 +38,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Validate scenario and platform pair
+        env:
+          SCENARIO: ${{ inputs.scenario }}
+          PLATFORM: ${{ inputs.platform }}
+        run: |
+          case "${SCENARIO}:${PLATFORM}" in
+            focus.otp.browser_tab:browser|focus.otp.browser_tab:android|focus.otp.browser_tab:ios|focus.otp.browser_tab:all|focus.otp.ios_keyboard_preflight:ios) ;;
+            *) echo 'Unsupported scenario/platform pair' >&2; exit 1 ;;
+          esac
+
   browser:
-    if: ${{ inputs.platform == 'browser' || inputs.platform == 'all' }}
+    needs: validate
+    if: ${{ inputs.scenario == 'focus.otp.browser_tab' && (inputs.platform == 'browser' || inputs.platform == 'all') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: { name: external-e2e }
     env:
       E2E_PLATFORM: browser
+      E2E_SCENARIO_ID: ${{ inputs.scenario }}
+      E2E_HARNESS_REPO_SHA: ${{ github.sha }}
       E2E_TARGET_URL: ${{ inputs.target_url }}
       E2E_EXPECTED_REPO_SHA: ${{ inputs.expected_repo_sha }}
       E2E_RUN_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
@@ -74,13 +97,15 @@ jobs:
           retention-days: 7
 
   android:
-    needs: browser
-    if: ${{ always() && ((inputs.platform == 'android' && needs.browser.result == 'skipped') || (inputs.platform == 'all' && needs.browser.result == 'success')) }}
+    needs: [validate, browser]
+    if: ${{ always() && needs.validate.result == 'success' && inputs.scenario == 'focus.otp.browser_tab' && ((inputs.platform == 'android' && needs.browser.result == 'skipped') || (inputs.platform == 'all' && needs.browser.result == 'success')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     environment: { name: external-e2e }
     env:
       E2E_PLATFORM: android
+      E2E_SCENARIO_ID: ${{ inputs.scenario }}
+      E2E_HARNESS_REPO_SHA: ${{ github.sha }}
       E2E_DEVICE_NAME: Pixel 7
       E2E_PLATFORM_VERSION: '15'
       E2E_TARGET_URL: ${{ inputs.target_url }}
@@ -129,7 +154,7 @@ jobs:
             E2E_HOST_OS_VERSION="$(uname -sr)" npm run e2e:external-focus-email-otp
       - name: Emit safe BLOCKED artifact when emulator failed before harness
         if: ${{ always() }}
-        run: test -f "$E2E_EVIDENCE_DIR/.redaction-ok" || npm run e2e:external-focus-email-otp || true
+        run: test -f "$E2E_EVIDENCE_DIR/.redaction-ok" || node scripts/write-static-otp-blocked-evidence.mjs
       - name: Upload sanitized Android evidence
         if: ${{ always() && hashFiles('site/artifacts/external-focus-email-otp-evidence-android-*/.redaction-ok') != '' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -140,13 +165,15 @@ jobs:
           retention-days: 7
 
   ios:
-    needs: android
-    if: ${{ always() && ((inputs.platform == 'ios' && needs.android.result == 'skipped') || (inputs.platform == 'all' && needs.android.result == 'success')) }}
+    needs: [validate, android]
+    if: ${{ always() && needs.validate.result == 'success' && ((inputs.platform == 'ios' && needs.android.result == 'skipped') || (inputs.scenario == 'focus.otp.browser_tab' && inputs.platform == 'all' && needs.android.result == 'success')) }}
     runs-on: macos-15
     timeout-minutes: 40
     environment: { name: external-e2e }
     env:
       E2E_PLATFORM: ios
+      E2E_SCENARIO_ID: ${{ inputs.scenario }}
+      E2E_HARNESS_REPO_SHA: ${{ github.sha }}
       E2E_TARGET_URL: ${{ inputs.target_url }}
       E2E_EXPECTED_REPO_SHA: ${{ inputs.expected_repo_sha }}
       E2E_RUN_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
@@ -180,18 +207,15 @@ jobs:
             --platform iOS \
             --kind sim
           test -d "${RUNNER_TEMP}/kenigevents-wda-ios-sim/WebDriverAgentRunner-Runner.app"
-      - name: Boot exact iPhone 16 / iOS 18.5 Simulator
+      - name: Create exact shutdown iPhone 16 / iOS 18.5 Simulator for Appium ownership
         id: simulator
         shell: bash
         run: |
           set -euo pipefail
           xcrun simctl list runtimes | grep -F 'iOS 18.5'
-          defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
           udid="$(xcrun simctl create 'KenigEvents OTP iPhone 16' 'com.apple.CoreSimulator.SimDeviceType.iPhone-16' 'com.apple.CoreSimulator.SimRuntime.iOS-18-5')"
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
-          xcrun simctl boot "$udid"
-          open -a Simulator
-          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl list devices | grep -F "$udid" | grep -F '(Shutdown)'
       - name: Run Mobile Safari / XCUITest
         env:
           E2E_DEVICE_NAME: iPhone 16
@@ -204,8 +228,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          trap 'rm -f "${RUNNER_TEMP}/appium-ios.log"' EXIT
           export E2E_HOST_OS_VERSION="$(sw_vers -productVersion)"
           export E2E_XCODE_VERSION="$(xcodebuild -version | tr '\n' ' ')"
+          export E2E_APPIUM_VERSION="$(npx appium --version)"
+          export E2E_APPIUM_DRIVER_VERSION="$(npx appium driver list --installed --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const x=JSON.parse(s);process.stdout.write(String(x.xcuitest?.version||x.xcuitest||"unreported"))})')"
+          export E2E_WDA_SHA="$(find "$E2E_PREBUILT_WDA_PATH" -type f -exec shasum -a 256 {} + | LC_ALL=C sort | shasum -a 256 | cut -d' ' -f1)"
+          export E2E_WDA_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$E2E_PREBUILT_WDA_PATH/Info.plist" 2>/dev/null || echo unreported)"
           start_appium() {
             npx appium --base-path /wd/hub --port 4723 > "${RUNNER_TEMP}/appium-ios.log" 2>&1 &
             appium_pid=$!
@@ -226,7 +255,9 @@ jobs:
             node - "$E2E_EVIDENCE_DIR/result.json" <<'NODE' && retryable=1 || true
           const { readFileSync } = require('node:fs');
           const result = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          const retryable = ['BLOCKED_INFRASTRUCTURE', 'BLOCKED_SAFARI_FIRST_RUN_UI'];
           process.exit(result.status === 'BLOCKED'
+            && retryable.includes(result.failure_domain)
             && result.otp_issue_request_count === 0
             && result.otp_verify_request_count === 0
             && result.participant_registration_request_count === 0 ? 0 : 1);
@@ -237,11 +268,10 @@ jobs:
             wait "$appium_pid" || true
             find "$E2E_EVIDENCE_DIR" -mindepth 1 -delete
           done
-          if [ "$status" -ne 0 ]; then tail -n 400 "${RUNNER_TEMP}/appium-ios.log"; fi
           exit "$status"
       - name: Emit safe BLOCKED artifact when simulator failed before harness
         if: ${{ always() }}
-        run: test -f "$E2E_EVIDENCE_DIR/.redaction-ok" || npm run e2e:external-focus-email-otp || true
+        run: test -f "$E2E_EVIDENCE_DIR/.redaction-ok" || node scripts/write-static-otp-blocked-evidence.mjs
       - name: Delete simulator
         if: ${{ always() && steps.simulator.outputs.udid != '' }}
         run: xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true; xcrun simctl delete '${{ steps.simulator.outputs.udid }}' || true

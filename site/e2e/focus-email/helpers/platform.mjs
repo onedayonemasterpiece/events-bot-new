@@ -33,11 +33,20 @@ export function validateMobileConfig(platform, env = process.env) {
 }
 
 export function classifyKeyboardAcceptance({ shown, active, visible, inputMode, viewport }) {
-  const geometry = viewport && Number(viewport.innerHeight) > 0 && Number(viewport.elementBottom) <= Number(viewport.innerHeight) + 2;
+  const viewportHeight = Number(viewport?.focused?.height ?? viewport?.height ?? viewport?.innerHeight);
+  const elementBottom = Number(viewport?.focused?.element_bottom ?? viewport?.elementBottom);
+  const geometry = viewportHeight > 0 && elementBottom <= viewportHeight + Number(viewport?.focused?.offset_top || 0) + 2;
   const inputPath = ['email', 'numeric', 'decimal', 'tel'].includes(String(inputMode || '').toLowerCase());
   return {
     passed: shown === true && active === true && visible === true && geometry && inputPath,
     shown: shown === true, active: active === true, visible: visible === true,
-    input_mode: String(inputMode || ''), viewport_geometry_ok: Boolean(geometry),
+    input_mode: String(inputMode || ''), input_visible_in_visual_viewport: Boolean(geometry),
+    visual_viewport: viewport || null,
   };
+}
+
+export function keyboardFailureClass(acceptance) {
+  if (acceptance?.passed) return null;
+  return acceptance?.shown && !acceptance?.input_visible_in_visual_viewport
+    ? 'fail_mobile_viewport' : 'fail_mobile_keyboard';
 }

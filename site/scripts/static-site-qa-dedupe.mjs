@@ -13,6 +13,8 @@ export function classifyDuplicateActiveRequest({ current, comments }) {
   const currentCreated = timestamp(current?.created_at);
   const currentBody = String(current?.body || '');
   const currentId = Number(current?.id || 0);
+  const scenario = currentBody.match(/scenario=(focus\.otp\.(?:browser_tab|ios_keyboard_preflight))/u)?.[1];
+  if (!scenario) return { duplicate: false, runId: null };
   const prior = comments
     .filter((comment) => Number(comment?.id || 0) !== currentId
       && String(comment?.body || '') === currentBody
@@ -21,14 +23,14 @@ export function classifyDuplicateActiveRequest({ current, comments }) {
   if (!prior) return { duplicate: false, runId: null };
 
   const accepted = comments
-    .filter((comment) => isBotReceipt(comment, 'ACCEPTED · focus.otp.browser_tab ·')
+    .filter((comment) => isBotReceipt(comment, `ACCEPTED · ${scenario} ·`)
       && timestamp(comment?.created_at) >= timestamp(prior.created_at))
     .sort((a, b) => timestamp(a.created_at) - timestamp(b.created_at))
     .find((comment) => /\/actions\/runs\/([0-9]+)/u.test(String(comment.body)));
   const runId = String(accepted?.body || '').match(/\/actions\/runs\/([0-9]+)/u)?.[1] || null;
   if (!runId) return { duplicate: false, runId: null };
 
-  const terminal = comments.find((comment) => isBotReceipt(comment, 'TERMINAL · focus.otp.browser_tab ·')
+  const terminal = comments.find((comment) => isBotReceipt(comment, `TERMINAL · ${scenario} ·`)
     && String(comment.body).includes(`/actions/runs/${runId}`));
   return {
     duplicate: Boolean(terminal && timestamp(terminal.created_at) > currentCreated),

@@ -30,46 +30,19 @@
   secrets before the called jobs apply the `external-e2e` Environment, and the
   checkout-free terminal job passes the repository explicitly when publishing
   its issue receipt. Added a source contract test for both boundaries.
-- Fixed the protected focus OTP acceptance workflow after its first live run:
-  the generated Mail Trigger recipient is now a secret, browser failure cannot
-  accidentally unlock Android/iOS, failed evidence retains the verified preview
-  SHA, and PII-free mail-stage counters distinguish receipt, sender, subject and
-  OTP parsing failures. The live subject contract now covers both the current
-  Supabase custom SMTP/Postbox template and the staged Send Email Hook template.
-  Android now also enables and verifies GitHub-hosted runner KVM before starting
-  the API 35 emulator instead of silently falling back to unusable software
-  emulation; the permission step operates directly on the runner's existing
-  `/dev/kvm` node and does not depend on retriggering udev inside the VM.
-  Mobile Safari input focus now uses the exact labelled XCTest text field,
-  avoiding WebKit-only focus and unreliable Safari coordinate calibration while
-  keeping native field values and hierarchy out of test evidence. The iOS gate
-  also restarts Appium/WDA once, and only once, when sanitized evidence proves
-  the failed session created no OTP, verification or registration side effect;
-  it closes only Safari's exact allowlisted first-run search-choice prompt so a
-  fresh simulator cannot intercept the physical input tap invisibly. Keyboard
-  focus uses XCUITest's synthesized `mobile: tap` at the center of the exact
-  XCTest-returned native field rect rather than an accessibility-only element
-  click or coordinates derived from the DOM, and records keyboard presence at
-  that physical tap before returning to Safari's web-inspector context. A
-  hosted Simulator that still has its independent software-keyboard toggle off
-  receives the exact Simulator `I/O → Keyboard → Toggle Software Keyboard`
-  menu action once and must then expose the native keyboard after one repeated
-  physical field tap before the journey can continue. Mobile Safari now submits
-  the selected-once OTP request with a
-  competing real button click and focused-field Return input rather than an
-  XCUITest web-context touch source that can be acknowledged without reaching
-  WebKit; iOS screenshot capture also waits for the native text overlay to
-  repaint after destructive masking; the sensitive field is blurred first so
-  Safari cannot retain its prior native editing overlay in the screenshot.
-  A hosted Safari session that acknowledges navigation but remains on
-  `about:blank` is now classified as a pre-side-effect simulator startup block,
-  allowing the existing single bounded Appium retry instead of reporting a
-  product failure. Keyboard detection now waits through the native animation
-  before deciding the software keyboard is absent, preventing the menu fallback
-  from toggling off a keyboard that appeared just after an early sample. If the
-  exact menu click and physical retap still leave no native keyboard after that
-  bounded window, the adapter sends the equivalent `Cmd-K` only to an explicitly
-  frontmost Simulator process and performs one final retap/check.
+- Fixed the protected focus OTP/iOS evidence contract after screenshot review: run
+  `30754894934` is correctly classified as `BLOCKED_SAFARI_FIRST_RUN_UI` with
+  `0/0/0` and no keyboard verdict. Safari first-run handling is now an exact,
+  bounded title/action state machine with verified disappearance. Appium owns
+  the exact shutdown simulator; global defaults, external boot/open, menu and
+  `Cmd-K` rescue actions were removed. Added side-effect-free iOS email/numeric
+  control preflight, empty-keyboard/visualViewport evidence, immediate recipient
+  and OTP masking, sanitized network diagnostics, and full Appium/WDA/SHA
+  provenance. The QA control issue now reads terminal `qa-summary.json` rather
+  than reporting reusable-workflow success, and accepts the iOS-only preflight
+  scenario before the single real-mail run. Missing platform summaries fail
+  closed; an incomplete harness output is replaced by a static BLOCKED receipt
+  with unknown counts and never by rerunning the OTP journey.
 - Added reusable project skill guidance for constructing protected static-site
   browser/Android/iOS acceptance journeys and for sending/receiving controlled
   OTP mail through the existing Yandex Mail Trigger boundary without exposing

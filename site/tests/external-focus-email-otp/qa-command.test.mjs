@@ -12,6 +12,9 @@ test('QA command parser accepts only the exact OTP registry command', () => {
   for (const unsafe of [`${command}\nanything`, command.replace('mode=blocking', 'mode=advisory'), command.replace('platform=all', 'platform=desktop'), command.replace('kenigevents.ru', 'evil.example')]) {
     assert.throws(() => parseQaRunCommand(unsafe));
   }
+  const preflight = command.replace('focus.otp.browser_tab', 'focus.otp.ios_keyboard_preflight').replace('platform=all', 'platform=ios');
+  assert.equal(parseQaRunCommand(preflight).scenario, 'focus.otp.ios_keyboard_preflight');
+  assert.throws(() => parseQaRunCommand(preflight.replace('platform=ios', 'platform=browser')), /scenario_platform_invalid/u);
 });
 
 test('QA command requires the canonical labelled issue', async () => {

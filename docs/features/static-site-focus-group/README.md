@@ -708,10 +708,7 @@ registration and returning membership; Android additionally proves the email
 and numeric system keyboards. iOS adapter execution has a separate terminal
 non-acceptance receipt
 [30754894934](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30754894934):
-Mobile Safari reached the active native email field, but the system keyboard was
-not observable after every bounded activation path, so it stopped with
-`FAIL_MOBILE_KEYBOARD`, zero OTP/verify/registration side effects and redaction
-PASS. iOS remains open until a terminal protected PASS.
+the retained screenshot visibly shows Safari's first-run «Выбор поисковой системы» dialog obstructing the page. The historical run is therefore corrected to `BLOCKED_SAFARI_FIRST_RUN_UI`, with issue/verify/registration `0/0/0`; it contains no valid product-email or OTP keyboard verdict. iOS remains open until three side-effect-free keyboard preflights and one terminal protected real-mail PASS.
 
 For a clean operator retest on one device use:
 

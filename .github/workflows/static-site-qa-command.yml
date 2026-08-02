@@ -50,7 +50,7 @@ jobs:
           STATIC_SITE_QA_COMMENTS_FILE="$comments_file" node scripts/static-site-qa-dedupe.mjs
           if grep -qx 'duplicate=true' "$GITHUB_OUTPUT"; then
             prior_run_id="$(sed -n 's/^prior_run_id=//p' "$GITHUB_OUTPUT")"
-            gh issue comment "$ISSUE" --body "DEDUPLICATED · focus.otp.browser_tab · identical request was posted while run https://github.com/${GITHUB_REPOSITORY}/actions/runs/${prior_run_id} was active · no new OTP run created"
+            gh issue comment "$ISSUE" --body "DEDUPLICATED · ${{ steps.parse.outputs.scenario }} · identical request was posted while run https://github.com/${GITHUB_REPOSITORY}/actions/runs/${prior_run_id} was active · no new OTP run created"
           fi
       - name: Verify SHA exists in trusted repository
         if: ${{ steps.dedupe.outputs.duplicate != 'true' }}
@@ -67,8 +67,9 @@ jobs:
           SHA: ${{ steps.parse.outputs.expected_repo_sha }}
           TARGET_ORIGIN: ${{ steps.parse.outputs.target_origin }}
           TARGET_PATH: ${{ steps.parse.outputs.target_path }}
+          SCENARIO: ${{ steps.parse.outputs.scenario }}
         run: |
-          gh issue comment "$ISSUE" --body "ACCEPTED · focus.otp.browser_tab · ${PLATFORM} · ${SHA} · ${TARGET_ORIGIN}${TARGET_PATH} · run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          gh issue comment "$ISSUE" --body "ACCEPTED · ${SCENARIO} · ${PLATFORM} · ${SHA} · ${TARGET_ORIGIN}${TARGET_PATH} · run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
   run:
     if: ${{ needs.prepare.outputs.duplicate != 'true' }}
@@ -78,6 +79,7 @@ jobs:
       target_url: ${{ needs.prepare.outputs.target_url }}
       expected_repo_sha: ${{ needs.prepare.outputs.expected_repo_sha }}
       platform: ${{ needs.prepare.outputs.platform }}
+      scenario: ${{ needs.prepare.outputs.scenario }}
     secrets: inherit
 
   terminal:
@@ -85,11 +87,25 @@ jobs:
     needs: [prepare, run]
     runs-on: ubuntu-24.04
     steps:
-      - name: Publish terminal link
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Download sanitized QA summaries
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: static-site-qa-focus-otp-*
+          path: ${{ runner.temp }}/static-site-qa-artifacts
+      - name: Build strict terminal receipt from qa-summary
+        working-directory: site
+        env:
+          STATIC_SITE_QA_ARTIFACT_ROOT: ${{ runner.temp }}/static-site-qa-artifacts
+          STATIC_SITE_QA_SCENARIO: ${{ needs.prepare.outputs.scenario }}
+          STATIC_SITE_QA_PLATFORM: ${{ needs.prepare.outputs.platform }}
+          STATIC_SITE_QA_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          STATIC_SITE_QA_TERMINAL_BODY: ${{ runner.temp }}/static-site-qa-terminal.md
+        run: node scripts/static-site-qa-terminal.mjs
+      - name: Publish terminal evidence receipt
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ github.event.issue.number }}
-          RESULT: ${{ needs.run.result }}
-          PLATFORM: ${{ needs.prepare.outputs.platform }}
         run: |
-          gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "TERMINAL · focus.otp.browser_tab · ${PLATFORM} · workflow=${RESULT} · sanitized artifacts (7 days): ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body-file "${RUNNER_TEMP}/static-site-qa-terminal.md"

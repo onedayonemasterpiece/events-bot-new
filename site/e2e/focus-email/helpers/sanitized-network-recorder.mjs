@@ -31,7 +31,7 @@ export function createSanitizedNetworkRecorder(page, { directHost = '', relayHos
       path: url.pathname,
       status: null,
       duration_ms: Math.max(0, Date.now() - (starts.get(request) || Date.now())),
-      failure_class: String(request.failure()?.errorText || 'request_failed').slice(0, 80),
+      failure_class: sanitizedFailureClass({ errorText: request.failure()?.errorText }),
     });
   });
   return {
@@ -42,3 +42,4 @@ export function createSanitizedNetworkRecorder(page, { directHost = '', relayHos
     statuses(suffix) { return entries.filter((item) => item.path.endsWith(suffix)).map((item) => item.status); },
   };
 }
+import { sanitizedFailureClass } from './runtime-diagnostics.mjs';

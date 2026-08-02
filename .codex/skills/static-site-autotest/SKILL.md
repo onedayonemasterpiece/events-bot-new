@@ -80,6 +80,8 @@ ChatGPT launch boundary from the control-plane document; a UI-only
   posted after its terminal receipt remains an intentional rerun.
 - Report accepted requests with run URL/ID as `STARTED_BACKGROUND` or blocking
   start; report terminal PASS/FAIL/BLOCKED separately.
+- Build terminal comments from downloaded, redaction-gated `qa-summary.json`;
+  reusable-workflow success is not a scenario result.
 
 ## Focus OTP boundary
 
@@ -100,6 +102,13 @@ ChatGPT launch boundary from the control-plane document; a UI-only
   navigation in WebKit, but focus keyboard-critical Safari inputs through their
   exact labelled XCTest text fields. Do not use blanket `nativeWebTap`, Safari
   coordinate calibration, raw hierarchy dumps or JS value assignment.
+- Let Appium own boot/shutdown of the exact shutdown simulator UDID. Do not use
+  external Simulator boot/open/defaults or menu/`Cmd-K` keyboard rescues.
+- Before an iOS real-mail run require the side-effect-free control email,
+  control numeric and product email keyboard preflight. A visible Safari
+  first-run dialog is `BLOCKED_SAFARI_FIRST_RUN_UI`, never a keyboard verdict.
+- Mask a derived recipient immediately. Mask/register an extracted OTP before
+  the next WebDriver command; never upload or print a raw Appium log tail.
 
 ## Release blockers
 

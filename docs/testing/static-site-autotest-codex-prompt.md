@@ -303,7 +303,8 @@ redaction-audit.json
 - notification banner с кодом;
 - native hierarchy, если он содержит unmasked email/OTP.
 
-Скриншоты делаются только после masking. Перед upload выполняется fail-closed
+Скриншоты после ввода делаются только после masking. До ввода разрешены только
+явно пустые keyboard-control/product поля и safe Safari blocker frame. Перед upload выполняется fail-closed
 redaction audit. `BLOCKED` artifact тоже должен быть доступен, если безопасен.
 
 ## Failure taxonomy
@@ -311,6 +312,8 @@ redaction audit. `BLOCKED` artifact тоже должен быть доступ�
 Сохрани/расширь минимум:
 
 - `BLOCKED_INFRASTRUCTURE`;
+- `BLOCKED_SAFARI_FIRST_RUN_UI`;
+- `BLOCKED_IOS_SIMULATOR_KEYBOARD`;
 - `FAIL_RELEASE_EVIDENCE`;
 - `FAIL_DELIVERY`;
 - `FAIL_PRODUCT`;
@@ -322,6 +325,11 @@ redaction audit. `BLOCKED` artifact тоже должен быть доступ�
 Один bounded retry разрешён только для доказанного simulator/Appium startup
 flake до side effect. Не повторяй OTP issuance автоматически после возможного
 side effect.
+
+Перед полным iOS OTP выполни три последовательных
+`focus.otp.ios_keyboard_preflight`: exact allowlisted Safari first-run state,
+empty control email/numeric keyboards, empty product email keyboard и строго
+`issue/verify/registration=0/0/0`. Только затем запускай один real-mail iOS run.
 
 ## Tests до live run
 

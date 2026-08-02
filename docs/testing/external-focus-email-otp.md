@@ -59,13 +59,7 @@ The immutable preview under test records repository SHA
   returning-state assertions PASS.
 - iOS 18.5 / iPhone 16 / Mobile Safari / XCUITest:
   [run 30754894934](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30754894934)
-  is the terminal **non-acceptance** receipt. The exact native email field was
-  active and visible, but XCUITest reported no `XCUIElementTypeKeyboard` after
-  the bounded physical tap, exact Simulator menu toggle, frontmost `Cmd-K` and
-  retap sequence. The run failed as `FAIL_MOBILE_KEYBOARD` before email entry,
-  with `issue=0`, `verify=0`, `registration=0` and redaction PASS. The iOS
-  adapter is implemented, but iOS product acceptance remains open; this receipt
-  must never be presented as PASS.
+  is the terminal **non-acceptance** receipt. Its screenshot visibly contains Safari's first-run «Выбор поисковой системы» dialog over the product page, so the corrected classification is `BLOCKED_SAFARI_FIRST_RUN_UI`, with `issue=0`, `verify=0`, `registration=0` and redaction PASS. It contains no valid email/OTP keyboard verdict and must never be presented as a product or keyboard failure.
 
 The Ubuntu Android job explicitly enables and verifies `/dev/kvm` before
 booting API 35. Unaccelerated x86 emulation is a blocked infrastructure result,
@@ -172,22 +166,19 @@ The platform selection is:
 - `ios`;
 - `all` with sequential real-mail execution.
 
+For iOS acceptance, post the following command to control issue `#253` three
+times sequentially and require terminal PASS for each before using the full
+scenario command once:
+
+```text
+/qa run scenario=focus.otp.ios_keyboard_preflight platform=ios target_url=<exact-preview-invite-url> expected_repo_sha=<40-hex> mode=blocking
+```
+
 Android/iOS verify native keyboard presence, active input and usable
 viewport geometry before ordinary user input. Direct JS assignment of the email
 or OTP value does not satisfy the mobile scenario.
 
-On GitHub-hosted iOS, the hardware-keyboard preference and Simulator's visible
-software-keyboard toggle are separate. After a real native input tap still
-reports no `XCUIElementTypeKeyboard`, the adapter activates Simulator, invokes
-the exact `I/O → Keyboard → Toggle Software Keyboard` menu item once, retaps the
-same field and checks again. Each check polls through a bounded native-keyboard
-animation window; an early false sample must not trigger the toggle and turn an
-arriving keyboard back off. The harness never treats a sent action as proof.
-If the exact menu route still leaves no keyboard after the second bounded check,
-the adapter sends the equivalent `Cmd-K` only after explicitly making Simulator
-frontmost, performs one final physical retap and still requires the native
-keyboard element. This is keyboard activation before email entry, not an OTP
-request retry.
+On iOS Appium owns simulator boot/shutdown for the exact shutdown UDID. The harness sets `connectHardwareKeyboard=false` and `forceSimulatorSoftwareKeyboardPresence=true`; it does not mutate global Simulator defaults, open Simulator itself, or send menu/`Cmd-K` rescue gestures. A control email and control numeric field distinguish simulator keyboard failure (`BLOCKED_IOS_SIMULATOR_KEYBOARD`) from a product-field failure. Evidence records empty-field screenshots, baseline/focused `visualViewport` geometry and bounded activation attempts.
 If Safari acknowledges the initial navigation command but stays on
 `about:blank`, the harness records `BLOCKED_INFRASTRUCTURE` with zero side
 effects and the workflow may use its one bounded Appium/WDA retry.
@@ -197,6 +188,15 @@ sources. Mobile Safari uses the corresponding ordinary WebKit button click and
 focused-field Return commands as one competing batch: XCUITest may acknowledge
 a web-context touch action without delivering it to the page. Both paths must
 still produce exactly one `/auth/v1/otp`; there is no fallback resend.
+If the harness crashes before producing `.redaction-ok`, the workflow deletes
+the incomplete directory and emits a static safe `BLOCKED_INFRASTRUCTURE`
+receipt with side-effect counts `unknown`; it never starts the journey again.
+
+Sanitized runtime diagnostics treat only an aborted losing `/auth/v1/health`
+probe with a successful peer as expected cancellation. The exact best-effort
+`focus_auth_record_verification_v1` HTTP 403 is a structured
+`BEST_EFFORT_AUTH_TELEMETRY_403` warning; every other network/HTTP/console
+failure remains blocking.
 
 A heavy Android/iOS advisory run may be started without waiting only when it is
 not the current release blocker. It must be reported as `STARTED_BACKGROUND`
@@ -217,7 +217,8 @@ days and contains:
 - `console.sanitized.jsonl`;
 - `mail-delivery.sanitized.json` — count, inbox placement, latency, code length
   and hashed message id;
-- masked screenshots;
+- sanitized screenshots: destructive masking after values, plus explicitly
+  empty keyboard controls/product fields and the safe Safari-blocker frame;
 - `redaction-audit.json` and `.redaction-ok`.
 
 - `device.json`, `scenarios.jsonl`, `junit.xml` and safe

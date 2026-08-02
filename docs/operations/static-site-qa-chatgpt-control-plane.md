@@ -35,9 +35,9 @@ workflow само по себе не гарантирует, что текуща
 
 Каноническая рабочая точка: [Static Site QA Control #253](https://github.com/onedayonemasterpiece/events-bot-new/issues/253).
 Repository variable `STATIC_SITE_QA_CONTROL_ISSUE_NUMBER=253` привязывает
-listener только к ней. Reusable-вызов явно использует `secrets: inherit`, а
-terminal job всегда указывает `--repo`, поэтому protected Environment secrets и
-issue comment работают независимо от наличия checkout в конкретном job.
+listener только к ней. Reusable-вызов явно использует `secrets: inherit`.
+Terminal job checkout-ит trusted formatter, скачивает sanitized artifacts и
+всегда указывает `--repo` при публикации issue comment.
 
 ## 2. Целевая схема
 
@@ -143,6 +143,13 @@ run, queued обработчик отвечает `DEDUPLICATED` со ссылк
 - redaction result;
 - для background run — связь с исходным `STARTED_BACKGROUND` request.
 
+Terminal job обязан скачать redaction-gated artifact и сформировать receipt из
+`qa-summary.json`: реальный scenario status/domain, `issue/verify/registration`,
+registration status, mail count, returning state, keyboard/preflight, warnings,
+redaction и harness/tested/observed SHA. Отсутствие любой ожидаемой platform
+summary — terminal FAIL. Статус
+reusable workflow сам по себе не является результатом сценария.
+
 Комментарий не заменяет artifact. `qa-summary.json` остаётся machine-readable
 source for ChatGPT analysis.
 
@@ -150,6 +157,9 @@ source for ChatGPT analysis.
 
 Первый сценарий, подключаемый к control plane, —
 `focus.otp.browser_tab`.
+
+Side-effect-free iOS companion — `focus.otp.ios_keyboard_preflight`; он разрешён
+только с `platform=ios` и обязан завершаться с `0/0/0`.
 
 - `browser`, `android`, `ios` и `all` используют один shared journey;
 - `all` выполняется последовательно при одном mailbox;
