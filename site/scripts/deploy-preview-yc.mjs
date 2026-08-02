@@ -173,7 +173,10 @@ if (existsSync(labManifest) && existsSync(labWorker)) {
     [`${labPublicUrl}sw.js`, 'PWA capabilities lab worker', 'application/javascript'],
   );
   for (const asset of [
-    'assets/pwa/announcements-192.png',
+    'assets/pwa/announcements-brand-v2-192.png',
+    'assets/pwa/announcements-brand-v2-512.png',
+    'assets/pwa/announcements-brand-v2-maskable-192.png',
+    'assets/pwa/announcements-brand-v2-maskable-512.png',
     'assets/pwa/announcements-brand-192.png',
     'assets/pwa/focus-group-icon.png',
   ]) {

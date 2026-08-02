@@ -93,6 +93,7 @@ test('Astro sources keep install/runtime paths base-aware and deploy exact lab M
 
   assert.match(worker, /withBase\('\/lab\/pwa-capabilities\/'\)/u);
   assert.match(worker, /withBase\('\/assets\/pwa\/announcements-192\.png'\)/u);
+  assert.match(worker, /addEventListener\('fetch'/u);
   assert.doesNotMatch(worker, /Service-Worker-Allowed/u);
   assert.match(manifest, /id:\s*labUrl/u);
   assert.match(manifest, /start_url:\s*labUrl/u);
@@ -127,7 +128,12 @@ test('built preview fixture contains no unprefixed lab runtime paths', async (co
   assert.equal(manifest.id, expectedLabPath);
   assert.equal(manifest.start_url, expectedLabPath);
   assert.equal(manifest.scope, expectedLabPath);
+  assert.deepEqual(
+    manifest.icons.map((icon) => [icon.sizes, icon.purpose]),
+    [['192x192', 'any'], ['512x512', 'any'], ['192x192', 'maskable'], ['512x512', 'maskable']],
+  );
   assert.match(worker, new RegExp(`const LAB_PATH = ['"]/${buildId}/lab/pwa-capabilities/['"]`, 'u'));
+  assert.match(worker, /addEventListener\('fetch'/u);
   assert.doesNotMatch(worker, /Service-Worker-Allowed/u);
 
   const scriptPaths = [...page.matchAll(/<script[^>]+src="([^"]+\.js)"/gu)].map((match) => match[1]);
@@ -141,7 +147,14 @@ test('built preview fixture contains no unprefixed lab runtime paths', async (co
   }
 
   const emittedAssets = await readdir(new URL('assets/pwa/', buildDir));
-  for (const name of ['announcements-192.png', 'announcements-brand-192.png', 'focus-group-icon.png']) {
+  for (const name of [
+    'announcements-brand-v2-192.png',
+    'announcements-brand-v2-512.png',
+    'announcements-brand-v2-maskable-192.png',
+    'announcements-brand-v2-maskable-512.png',
+    'announcements-brand-192.png',
+    'focus-group-icon.png',
+  ]) {
     assert.ok(emittedAssets.includes(name), `missing base-aware lab asset ${name}`);
   }
 });

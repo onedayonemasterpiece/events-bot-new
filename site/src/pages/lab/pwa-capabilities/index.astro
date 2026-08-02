@@ -25,6 +25,11 @@ const cacheName = `kenigevents-pwa-capabilities-lab-${encodeURIComponent(labUrl)
     <meta name="description" content={description} />
     <link rel="canonical" href={canonicalUrl} />
     <link rel="manifest" href={manifestUrl} />
+    <link rel="icon" href={withBase('/assets/pwa/announcements-brand-v2-192.png')} type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href={withBase('/assets/pwa/announcements-brand-v2-192.png')} />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="PWA Lab" />
+    <meta name="theme-color" content="#9d3f1c" />
     <title>{title}</title>
     <script is:inline>
       // Capture Chromium's one-shot event before hydrated modules run.

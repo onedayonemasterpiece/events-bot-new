@@ -446,6 +446,14 @@ accepted пользователь получает инструкцию закр
 через новую иконку. В установленном окне явно показываются
 `PWA Lab запущена с главного экрана` и `display-mode: standalone`.
 
+После Android-проверки preview `preview-pwa-capabilities-b16ca75a`, где Chrome
+создал только browser shortcut, lab install contract дополнительно выровнен с
+рабочим focus-group preview: lab worker содержит network-only `fetch` handler,
+а отдельный lab manifest использует полный набор существующих brand-v2
+`any`/`maskable` иконок 192/512. Это compatibility hardening для Android/WebAPK;
+сам факт WebAPK всё равно подтверждается только наличием приложения в launcher
+и запуском без адресной строки, а не результатом desktop/CDP-проверки.
+
 Проверки из `site/`:
 
 ```bash

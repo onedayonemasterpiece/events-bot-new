@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Fixed the PWA lab's Android install compatibility after a real-device check
+  produced only a browser shortcut: its isolated worker now mirrors the
+  focus-group network-only fetch contract and its dedicated manifest uses the
+  proven 192/512 brand-v2 `any` plus `maskable` launcher icon set.
 - Added controlled installation to the versioned PWA capabilities lab by
   reusing the shared focus-group install controller: early one-shot prompt
   capture, immediate directory-scoped worker registration, Android/Custom Tab
