@@ -269,6 +269,87 @@ def test_execute_article_uses_retained_intake_without_social_fetch_unpack(monkey
     assert written[0]["source_onboarding_publisher_dimensions_status"] == "ready"
 
 
+def test_imported_publisher_sidecar_dimensions_are_ready_for_article_writer() -> None:
+    """The importer stores the sidecar schema, not the Writer projection schema."""
+
+    mod = load_module()
+    row = {
+        "post_url": "https://archi.ru/russia/example",
+        "content_origin_type": "editorial_publication",
+        "canonical_source_key": "web:archi.ru",
+    }
+    profile = {
+        "publisher_profile_id": "archi",
+        "canonical_source_key": "web:archi.ru",
+        "profile_status": "ready",
+        "profile_hash": "profile-archi",
+        "usable_without_profile_llm": True,
+        "scope": "external",
+        "public_copy_eligibility": "allowed",
+        "copy_projection": {
+            "short_reader_brief": (
+                "Архи.ру объясняет архитектурные проекты через профессиональный "
+                "замысел и устройство среды."
+            ),
+        },
+        # Exact shape persisted by region_talk_publisher_profile_import.py.
+        "profile_dimensions": {
+            "outlet_identity": "Профессиональное издание об архитектуре и городской среде.",
+            "intended_audience": [{
+                "label": "архитекторы и читатели городской культуры",
+                "evidence_refs": ["archi.about"],
+            }],
+            "distinctive_value": [{
+                "text": "Соединяет авторские разборы с каталогом проектов.",
+                "evidence_refs": ["archi.about"],
+            }],
+        },
+        "evidence": [{
+            "evidence_id": "archi.about",
+            "supports": ["publisher.identity", "publisher.audience", "publisher.distinctive_value"],
+            "url": "https://archi.ru/about",
+        }],
+    }
+
+    mod.bind_source_profile(row, profile)
+
+    assert mod.source_profile_ready(row) is True
+    dimensions = json.loads(row["source_onboarding_publisher_dimensions_json"])
+    assert set(dimensions) == {"outlet_identity", "intended_audience", "distinctive_value"}
+    assert dimensions["outlet_identity"]["evidence_ids"] == ["archi.about"]
+    assert row["source_onboarding_publisher_dimensions_status"] == "ready"
+
+
+def test_imported_publisher_sidecar_dimension_without_matching_evidence_fails_closed() -> None:
+    mod = load_module()
+    row = {
+        "post_url": "https://example.org/article",
+        "content_origin_type": "editorial_publication",
+    }
+    profile = {
+        "publisher_profile_id": "publisher",
+        "profile_status": "ready",
+        "profile_hash": "profile-hash",
+        "usable_without_profile_llm": True,
+        "scope": "external",
+        "public_copy_eligibility": "allowed",
+        "copy_projection": {"short_reader_brief": "Краткое описание издания."},
+        "profile_dimensions": {
+            "outlet_identity": "Профессиональное издание.",
+            "intended_audience": [{"label": "профессионалы", "evidence_refs": ["E1"]}],
+            "distinctive_value": [{"text": "Подробные разборы", "evidence_refs": ["E1"]}],
+        },
+        # E1 does not support publisher.identity, so the bare identity string
+        # cannot borrow it merely because it belongs to the same profile.
+        "evidence": [{"evidence_id": "E1", "supports": ["publisher.audience"]}],
+    }
+
+    mod.bind_source_profile(row, profile)
+
+    assert mod.source_profile_ready(row) is False
+    assert row["source_onboarding_publisher_dimensions_status"] == "needs_review"
+
+
 def test_request_fingerprint_changes_with_exact_source_text() -> None:
     mod = load_module()
     row = {"post_url": "https://t.me/source/1", "llm_decision": "accept"}

@@ -234,6 +234,87 @@ def source_profile_reader_brief(row: dict[str, Any]) -> str:
     ).strip()
 
 
+_PUBLISHER_DIMENSION_SUPPORTS = {
+    "outlet_identity": "publisher.identity",
+    "intended_audience": "publisher.audience",
+    "distinctive_value": "publisher.distinctive_value",
+}
+
+
+def normalized_publisher_dimensions(
+    profile: dict[str, Any],
+    *,
+    fallback_row: dict[str, Any] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Project imported sidecar dimensions into the Writer evidence schema.
+
+    Publisher sidecars deliberately store their source schema: identity is a
+    string while audience/value are evidence-linked arrays.  Older onboarding
+    profiles already store ``{text, evidence_ids}`` objects.  The article
+    Writer consumes the latter shape, so normalize both without an LLM call.
+    """
+
+    raw_dimensions = (
+        profile.get("publisher_dimensions_json")
+        or profile.get("profile_dimensions")
+        or (fallback_row or {}).get("source_onboarding_publisher_dimensions_json")
+        or {}
+    )
+    dimensions = _json_value(raw_dimensions, {})
+    if not isinstance(dimensions, dict):
+        return {}
+    evidence = _json_value(profile.get("evidence") or profile.get("evidence_json"), [])
+    evidence = evidence if isinstance(evidence, list) else []
+
+    normalized: dict[str, dict[str, Any]] = {}
+    for key in ("outlet_identity", "intended_audience", "distinctive_value"):
+        value = dimensions.get(key)
+        values = value if isinstance(value, list) else [value]
+        texts: list[str] = []
+        refs: list[str] = []
+        bases: list[str] = []
+        for item in values:
+            if isinstance(item, dict):
+                text = str(
+                    item.get("text")
+                    or item.get("label")
+                    or item.get("summary")
+                    or item.get("value")
+                    or ""
+                ).strip()
+                item_refs = item.get("evidence_ids") or item.get("evidence_refs") or []
+                if isinstance(item_refs, str):
+                    item_refs = [item_refs]
+                refs.extend(str(ref).strip() for ref in item_refs if str(ref).strip())
+                if str(item.get("basis") or "").strip():
+                    bases.append(str(item.get("basis") or "").strip())
+            else:
+                text = str(item or "").strip()
+            if text:
+                texts.append(re.sub(r"\s+", " ", text))
+        if not refs:
+            support = _PUBLISHER_DIMENSION_SUPPORTS.get(str(key), "")
+            for item in evidence:
+                if not isinstance(item, dict):
+                    continue
+                supports = item.get("supports") or []
+                if isinstance(supports, str):
+                    supports = [supports]
+                evidence_id = str(item.get("evidence_id") or "").strip()
+                if support in supports and evidence_id:
+                    refs.append(evidence_id)
+        clean_refs = list(dict.fromkeys(refs))
+        if texts and clean_refs:
+            normalized[str(key)] = {
+                "text": "; ".join(texts[:3])[:600].rstrip(),
+                "basis": bases[0] if bases else (
+                    "explicit" if key == "outlet_identity" else "editorial_inference"
+                ),
+                "evidence_ids": clean_refs[:12],
+            }
+    return normalized
+
+
 def source_profile_ready(row: dict[str, Any]) -> bool:
     profile = (
         row.get("_source_onboarding_profile")
@@ -269,13 +350,7 @@ def source_profile_ready(row: dict[str, Any]) -> bool:
     if profile_fp and profile_fp != fingerprint:
         return False
     if content_lane(row) == "article":
-        raw_dimensions = (
-            profile.get("publisher_dimensions_json")
-            or profile.get("profile_dimensions")
-            or row.get("source_onboarding_publisher_dimensions_json")
-            or "{}"
-        )
-        dimensions = _json_value(raw_dimensions, {})
+        dimensions = normalized_publisher_dimensions(profile, fallback_row=row)
         if not (
             isinstance(dimensions, dict)
             and set(notify.PUBLISHER_READER_BRIEF_DIMENSIONS).issubset(dimensions)
@@ -319,16 +394,7 @@ def bind_source_profile(row: dict[str, Any], profile: dict[str, Any] | None) -> 
         row["source_onboarding_status"] = "ready"
     dimensions = current.get("publisher_dimensions_json") or current.get("profile_dimensions")
     if dimensions not in (None, ""):
-        parsed = _json_value(dimensions, {})
-        normalized_dimensions: dict[str, Any] = {}
-        for key, value in parsed.items():
-            if not isinstance(value, dict):
-                continue
-            normalized_dimensions[str(key)] = {
-                **value,
-                "text": str(value.get("text") or value.get("value") or "").strip(),
-                "evidence_ids": list(value.get("evidence_ids") or value.get("evidence_refs") or []),
-            }
+        normalized_dimensions = normalized_publisher_dimensions(current, fallback_row=row)
         row["source_onboarding_publisher_dimensions_json"] = json.dumps(
             normalized_dimensions, ensure_ascii=False, separators=(",", ":")
         )

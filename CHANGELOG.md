@@ -7,6 +7,11 @@
   larger asyncio transport buffer and preserves complete JSONL parsing, so the
   child loop can continue polling Kaggle/YDB instead of blocking in
   `pipe_write`.
+- Fixed Region Talk publisher-sidecar reuse in article backfill: the imported
+  string/list dimension schema is now deterministically projected to the
+  Writer's evidence-linked `{text, evidence_ids}` contract. Ready Archi.ru and
+  journal profiles therefore no longer shadow themselves as
+  `needs_source_profile`; incomplete evidence still fails closed.
 
 - Fixed Region Talk source-profile request lifecycle: a processed bounded
   capture now clears only the explicit acquisition request while a non-ready
