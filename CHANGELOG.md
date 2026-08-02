@@ -2,15 +2,24 @@
 
 ## [Unreleased]
 
+- Added the project `mobile-ui-sentry` skill for Android/iOS system-layer
+  blockers: immediate safe startup observation, explicit UI-layer
+  classification, exact same-dialog actions, post-action transition checks,
+  a two-unchanged-action/20-second no-progress watchdog, privacy-safe evidence
+  and mandatory official-contract research before a third similar tool fix.
+  The static-site autotest skill now routes native overlays and keyboard
+  ambiguity through this sentry instead of retrying DOM/coordinate gestures.
 - Fixed the iOS Safari first-run inspector after protected preflight
   `30763157336` and correction run `30764460049`: the native boundary no longer
   uses WebdriverIO enhanced `$$` collections or XPath hierarchy snapshots.
   XCTest's exact title predicate is paired with WDA's current-alert text/button
-  API, and the exact-label accept action is allowed only when the first alert
+  API, and the exact-label accept action is allowed only when exactly one alert
   line is the exact search-engine-choice title and `Продолжить` occurs exactly
   once in that same alert. This fixes both the iterable mismatch and the XPath
-  false absence visible in the second run's screenshot. Both failed runs
-  preserved side-effect counts `0/0/0` and were not promoted to acceptance.
+  false absence visible in the second run's screenshot, without assuming WDA
+  descendant text is title-first. Safe last-inspection counts now make future
+  blockers diagnosable without retaining alert text. All failed runs preserved
+  side-effect counts `0/0/0` and were not promoted to acceptance.
 - Fixed Region Talk contract-only review rebinding: Telegram's
   `MessageNotModified` response is now accepted only after exact live caption
   and ordered-link verification, so an already-current pending message no

@@ -43,6 +43,8 @@ test('Safari startup waits for a delayed exact dialog and verifies stable disapp
   assert.equal(evidence.dismissed, true);
   assert.equal(evidence.obstruction_free, true);
   assert.equal(evidence.attempts, 1);
+  assert.deepEqual(evidence.last_inspection, { known_dialog_count: 0, continue_button_count: 0,
+    blocking_dialog_count: 0, unknown_blocking_dialog_count: 0 });
 });
 
 test('Safari startup accepts a bounded observation window with no modal', async () => {

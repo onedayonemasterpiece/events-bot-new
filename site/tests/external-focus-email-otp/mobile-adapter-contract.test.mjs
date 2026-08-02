@@ -24,6 +24,7 @@ test('Appium capability builder pins real mobile browsers and iOS keyboard owner
 test('adapter excludes unsafe hierarchy reads, JS value injection and desktop keyboard rescue', async () => {
   const source = await readFile(new URL('../../e2e/focus-email/adapters/appium-ui.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /getPageSource|pageSource|input\.value\s*=\s*value|osascript|Cmd-K|Toggle Software Keyboard/u);
+  assert.match(source, /00-safari-launch\.png/u);
 });
 
 test('Safari native inspection uses exact predicate title and same-alert button contract', async () => {
@@ -33,7 +34,8 @@ test('Safari native inspection uses exact predicate title and same-alert button 
       calls.push({ using, predicate });
       return [{ ELEMENT: 'exact-title' }];
     },
-    getAlertText: async () => 'Выбор поисковой системы\nSafe body text',
+    // WDA descendant enumeration does not promise title-first ordering.
+    getAlertText: async () => 'Safe body text\nВыбор поисковой системы\nMore safe body text',
     getAlertButtons: async () => ['Настройки', 'Продолжить'],
   });
   assert.equal(calls.length, 1);

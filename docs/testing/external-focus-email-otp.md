@@ -180,9 +180,10 @@ or OTP value does not satisfy the mobile scenario.
 
 On iOS Appium owns simulator boot/shutdown for the exact shutdown UDID. The harness sets `connectHardwareKeyboard=false` and `forceSimulatorSoftwareKeyboardPresence=true`; it does not mutate global Simulator defaults, open Simulator itself, or send menu/`Cmd-K` rescue gestures. A control email and control numeric field distinguish simulator keyboard failure (`BLOCKED_IOS_SIMULATOR_KEYBOARD`) from a product-field failure. Evidence records empty-field screenshots, baseline/focused `visualViewport` geometry and bounded activation attempts.
 Safari native-modal inspection uses XCTest's native exact predicate for the
-title and WDA's current-alert API for the text/buttons. The first non-empty
-alert-text line must equal `Выбор поисковой системы`, and `Продолжить` must
-occur exactly once among the buttons returned for that same current alert
+title and WDA's current-alert API for the text/buttons. Exactly one full
+alert-text line must equal `Выбор поисковой системы` (WDA does not promise
+title-first descendant ordering), and `Продолжить` must occur exactly once
+among the buttons returned for that same current alert
 before the exact-label accept action is allowed. XPath and WebdriverIO enhanced
 `$$` collections are not used at this boundary. Protected preflight
 `30763157336` exposed an enhanced-collection `object is not iterable` failure;
@@ -190,6 +191,13 @@ the first correction run `30764460049` then proved that XPath could return a
 false absence while the screenshot still showed the modal. Both failed
 preflights retained exact `0/0/0` side-effect counts and are not acceptance
 passes.
+Safari startup evidence also retains only the last inspection counts (known,
+action, blocking and unknown); it never retains native alert text.
+The mobile sentry captures a safe screenshot immediately after Safari launch
+and repeats observation after at most 20 seconds without the expected marker.
+Every native action must produce a verified state transition. Two unchanged
+actions stop blind retries and terminate through the classified system-UI
+blocker path; a dispatched click alone is never success.
 If Safari acknowledges the initial navigation command but stays on
 `about:blank`, the harness records `BLOCKED_INFRASTRUCTURE` with zero side
 effects and the workflow may use its one bounded Appium/WDA retry.

@@ -124,8 +124,8 @@ export function buildAppiumCapabilities(platform, config, env = process.env) {
 
 /**
  * Inspect only the current bounded Safari first-run alert through native
- * XCTest predicate lookup plus WDA's alert API. The first non-empty alert-text
- * line must equal the expected title, and the requested button must occur
+ * XCTest predicate lookup plus WDA's alert API. Exactly one alert-text line
+ * must equal the expected title, and the requested button must occur
  * exactly once in that same current alert. No XPath hierarchy snapshot or
  * unscoped same-named button is accepted.
  */
@@ -156,9 +156,13 @@ export async function inspectSafariNativeUiProtocol({ findElements, getAlertText
     alertText = null;
     buttons = [];
   }
-  const firstLine = alertText?.split(/\r?\n/u).map((line) => line.trim()).find(Boolean) || null;
+  // WDA builds alert text by enumerating all StaticText descendants. Their
+  // order is not a title-first API contract, so bind by an exact full line
+  // rather than by position or substring.
+  const lines = alertText?.split(/\r?\n/u).map((line) => line.trim()).filter(Boolean) || [];
+  const exactTitleLineCount = lines.filter((line) => line === title).length;
   const currentAlertCount = alertText == null ? 0 : 1;
-  const titleBelongsToCurrentAlert = titles.length === 1 && firstLine === title;
+  const titleBelongsToCurrentAlert = titles.length === 1 && exactTitleLineCount === 1;
   const scopedActions = titleBelongsToCurrentAlert ? buttons.filter((label) => label === action) : [];
   return classifySafariInspection({ titleCount: titles.length, scopedActions,
     topLevelCount: currentAlertCount, knownTopLevelCount: titleBelongsToCurrentAlert ? 1 : 0 });
@@ -402,6 +406,12 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
         // command while remaining at about:blank. This is a pre-side-effect
         // simulator/browser startup failure, not a product assertion failure.
         throw new Error('simulator_safari_navigation:target_origin_not_reached');
+      }
+      // Observe the whole device before any native action or sensitive input.
+      // This makes a delayed/first-run Safari overlay visible in evidence even
+      // if an accessibility locator later disagrees with the screen.
+      if (platform === 'ios') {
+        await driver.saveScreenshot(join(evidenceRoot, 'screenshots', '00-safari-launch.png'));
       }
       await ensureSafariSystemUiStable();
       const userAgent = await driver.execute(() => navigator.userAgent);
