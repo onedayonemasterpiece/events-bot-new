@@ -10,7 +10,8 @@
   Supabase custom SMTP/Postbox template and the staged Send Email Hook template.
   Android now also enables and verifies GitHub-hosted runner KVM before starting
   the API 35 emulator instead of silently falling back to unusable software
-  emulation.
+  emulation; the permission step operates directly on the runner's existing
+  `/dev/kvm` node and does not depend on retriggering udev inside the VM.
 - Added the first real mobile focus OTP vertical slice: one platform-neutral
   journey now drives existing Chromium, Chrome Android/Appium UiAutomator2 and
   Mobile Safari/Appium XCUITest sequentially, checks native keyboard/viewport
