@@ -26,9 +26,11 @@ PASS on the isolated `otp-r5` page. It used a fresh hosted-Auth code and confirm
 verify `200` plus participant registration `200`; it is not mailbox-delivery
 evidence.
 
-The new harness unit/configuration gates are local test evidence. Until the
-`external-e2e` Environment and controlled mailbox are configured and one manual
-workflow run passes, the external-delivery status is
+The new harness unit/configuration gates are local test evidence. The protected
+`external-e2e` Environment is now configured with required review, an exact
+`main` branch policy and non-secret direct/relay/IMAP variables. Until the
+controlled dedicated mailbox, recipient variable and IMAP secrets are
+configured and one manual workflow run passes, the external-delivery status is
 `BLOCKED_EXTERNAL_CONFIGURATION`. No mock is represented as a live E2E.
 
 ## Security decisions
@@ -48,3 +50,8 @@ telemetry. Provider selection for repeat/test identities must be server-side,
 idempotent and receipt-backed; browser code must not choose Postbox or NotiSend.
 Auth-method/attempt/route/outcome telemetry must contain no email, OTP or token.
 
+The hosted database migration and inactive Yandex Function/API Gateway boundary
+were staged on 2026-08-02. The Send Email Hook remains disabled. NotiSend stays
+fail-closed (`routing_ready=false`) until an operator reconciles the provider's
+actual unique-recipient count and billing-period end; the database value `0`
+before reconciliation is not a statement about the provider account.

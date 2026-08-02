@@ -18,6 +18,12 @@ def test_function_boundary_is_narrow_and_secret_safe() -> None:
     assert desired["function"]["stage_budget_ms"]["total_network_ceiling"] == 4_200
     assert desired["function"]["stage_budget_ms"]["total_network_ceiling"] < 5_000
     assert desired["function"]["required_roles"] == ["postbox.sender"]
+    assert desired["function"]["secret_access"] == {
+        "hook_secret": "lockbox.payloadViewer",
+        "notisend_secret": "lockbox.payloadViewer",
+        "notisend_secret_kms_key": "kms.keys.encrypterDecrypter",
+    }
+    assert desired["api_gateway"]["function_access_role"] == "functions.functionInvoker"
     assert desired["api_gateway"]["public_path"] == "/v1/send-email"
     assert desired["api_gateway"]["method"] == "POST"
     assert desired["api_gateway"]["max_body_bytes"] == 65_536

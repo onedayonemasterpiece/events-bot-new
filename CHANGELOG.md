@@ -13,7 +13,10 @@
   period. The operator-reconciled provider counter plus atomic admissions since
   that snapshot is now the source of truth; repeated fixed identities reuse one
   period slot, while missing/expired accounting and recipients above capacity
-  are assigned to Postbox before dispatch.
+  are assigned to Postbox before dispatch. The hosted ledger migration and an
+  inactive least-privilege Yandex Function/API Gateway boundary are staged;
+  Auth hook enablement remains blocked on provider-count reconciliation and a
+  real external-mailbox E2E.
 - Added a protected, manual Chromium + real-IMAPS external E2E for focus-group
   email OTP, with fixed test identities by default, exact deployment SHA checks,
   six-digit auto-submit coverage and sanitized ChatGPT-readable evidence.

@@ -7,16 +7,24 @@
     "purpose": "focus-auth-email-hook"
   },
   "function": {
+    "id": "d4euk47p8gv7qmgrtib4",
     "name": "kenigevents-focus-auth-email-hook",
+    "active_version_id": "d4enugm7qkmm9a5qijgp",
     "runtime": "python312",
     "entrypoint": "index.handler",
     "memory_mb": 256,
     "timeout_seconds": 5,
     "concurrency": 2,
     "service_account_name": "kenigevents-focus-auth-mailer",
+    "service_account_id": "ajel0d7nkvhjtn9tl5i1",
     "required_roles": [
       "postbox.sender"
     ],
+    "secret_access": {
+      "hook_secret": "lockbox.payloadViewer",
+      "notisend_secret": "lockbox.payloadViewer",
+      "notisend_secret_kms_key": "kms.keys.encrypterDecrypter"
+    },
     "stage_budget_ms": {
       "attempt_and_capacity_rpc": 1100,
       "provider_dispatch": 2000,
@@ -25,12 +33,18 @@
     }
   },
   "api_gateway": {
+    "id": "d5d17smc4tutrt316fjo",
     "name": "kenigevents-focus-auth-email-hook",
+    "domain": "d5d17smc4tutrt316fjo.uvah0e6r.apigw.yandexcloud.net",
+    "integration_service_account_id": "ajel0d7nkvhjtn9tl5i1",
+    "function_access_role": "functions.functionInvoker",
     "public_path": "/v1/send-email",
     "method": "POST",
     "max_body_bytes": 65536
   },
   "lockbox": {
+    "hook_secret_id": "e6qkr3o8dej5674hcah5",
+    "notisend_secret_id": "e6qa6hv138tu7ekbpjn2",
     "required_environment_variables": [
       "SEND_EMAIL_HOOK_SECRET",
       "PERSONALIZATION_SUPABASE_SECRET_KEY",
