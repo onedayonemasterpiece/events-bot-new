@@ -176,7 +176,7 @@ scenarios:
     status:
       browser: implemented_terminal_live_acceptance
       android: implemented_terminal_live_acceptance
-      ios: implemented_terminal_blocked_safari_first_run_ui_no_keyboard_verdict
+      ios: implemented_terminal_live_acceptance
     layers: [L1, L2]
     platforms: [browser, android, ios]
     trigger_tags: [auth-otp, mobile-input, supabase-connectivity, yandex-relay]
@@ -210,6 +210,8 @@ scenarios:
       browser_control_issue: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30755922643
       android: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30747598046
       ios_blocked_safari_first_run_ui: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30754894934
+      android_client_supabase_direct_unreachable: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30772062840
+      ios_client_supabase_direct_unreachable: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30772233868
     blocking:
       pull_request: direct_contract_change_only
       release: true_for_auth_onboarding_or_mail_route_changes
@@ -217,7 +219,7 @@ scenarios:
   focus.otp.ios_keyboard_preflight:
     title: Side-effect-free iOS Safari keyboard ownership preflight
     status:
-      ios: implemented_pending_three_terminal_passes
+      ios: implemented_terminal_live_acceptance
     layers: [L2]
     platforms: [ios]
     trigger_tags: [auth-otp, mobile-input, safari-first-run, appium-ownership]
@@ -225,8 +227,11 @@ scenarios:
     side_effects: forbidden_issue_verify_registration_must_remain_0_0_0
     target: deployed_https_exact_repo_sha
     isolation: external-focus-email-otp
-    execution: three_sequential_preflights_before_one_full_ios_otp
+    execution: standalone_or_embedded_before_full_ios_otp
     evidence: restricted_empty_keyboard_screenshots_and_sanitized_geometry
+    acceptance_receipts:
+      standalone: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30767191144
+      embedded_full_journey: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30772233868
     blocking:
       pull_request: direct_ios_harness_change_only
       release: true_for_ios_auth_onboarding_or_mail_route_changes

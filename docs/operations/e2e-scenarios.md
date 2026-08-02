@@ -16,7 +16,7 @@ and its operating contract is [`docs/testing/external-focus-email-otp.md`](../te
 Routine runs reuse one fixed mailbox and therefore do not create a new Auth user;
 fresh-user aliases are explicit, non-routine coverage.
 
-`focus.otp.ios_keyboard_preflight` is the side-effect-free iOS control scenario: it stabilizes only the exact allowlisted Safari first-run dialog, proves empty control email/numeric keyboards, then the empty product email keyboard, and requires issue/verify/registration `0/0/0`. The first valid native-first receipt is [run 30767191144, attempt 2](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30767191144): exact dialog observed/dismissed once, stable absence and all three keyboard checks PASS, `0/0/0`. The proven control path is native `com.apple.mobilesafari` + `respectSystemAlerts=true`, exact current-alert action, then WebKit attachment; WebKit-first and fuzzy/global-button handlers are forbidden. Three terminal preflight passes are required immediately before one full iOS OTP run.
+`focus.otp.ios_keyboard_preflight` is the side-effect-free iOS control scenario: it stabilizes only the exact allowlisted Safari first-run dialog, proves empty control email/numeric keyboards, then the empty product email keyboard, and requires issue/verify/registration `0/0/0`. The first valid native-first receipt is [run 30767191144, attempt 2](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30767191144): exact dialog observed/dismissed once, stable absence and all three keyboard checks PASS, `0/0/0`. The proven control path is native `com.apple.mobilesafari` + `respectSystemAlerts=true`, exact current-alert action, then WebKit attachment; WebKit-first and fuzzy/global-button handlers are forbidden. The full iOS journey embeds the same control preflight in its session; terminal [run 30772233868](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30772233868) therefore supersedes repeated preflights for this harness SHA. Repeat the standalone preflight after a direct iOS startup/keyboard harness change, not as a ritual before every OTP send.
 
 `focus.otp.browser_tab` uses one semantic journey across protected Chromium,
 Android Chrome/UiAutomator2 and iOS Safari/XCUITest jobs. Terminal receipts and
@@ -30,6 +30,18 @@ and Android
 iOS terminal run
 [30754894934](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30754894934)
 is retained as corrected `BLOCKED_SAFARI_FIRST_RUN_UI` with zero mail/Auth/membership side effects. The visible first-run search-engine dialog invalidates every keyboard conclusion from that run; it is not acceptance.
+
+Fault preview SHA `3e892bd510818c07b2e14b708db7d5f39e2ae845` has terminal
+`client_supabase_direct_unreachable` PASS receipts for Android
+[30772062840](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30772062840)
+and iOS
+[30772233868](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30772233868).
+Each artifact proves one matching mail, exact `issue=1`, `verify=1`,
+`registration=1` with registration `200`, relay as the final route for all
+three mandatory operations, an active direct-host fault, confirmed membership,
+returning state and redaction PASS. The iOS receipt additionally proves the
+search-choice dialog was observed and dismissed exactly once and all control/product
+email/numeric keyboards passed.
 
 The same scenario now has an explicit transport contract and immutable
 build-time fault profiles. The first faulted mobile release cell is

@@ -27,6 +27,11 @@
   run `30771673908`: after a web-field click, UiAutomator2 now gets a bounded
   native-context keyboard poll instead of one immediate sample, without
   repeating the gesture or introducing an OTP resend path.
+- Recorded terminal Android run `30772062840` and iOS run `30772233868` for the
+  `client_supabase_direct_unreachable` OTP cell. Both exact-SHA artifacts prove
+  one mail and `1/1/1` issue/verify/registration over relay, active direct-host
+  faults, registration `200`, returning membership and redaction PASS; the iOS
+  receipt also closes Safari first-run and native keyboard acceptance.
 
 - Changed iOS Safari OTP preflight to create a native-first Safari session,
   enable XCUITest `respectSystemAlerts`, close the bounded first-run sheet, and
