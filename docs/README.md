@@ -34,7 +34,8 @@
   `docs/features/static-site-pages/schedule-user-requirements.md`, производная
   стратегия `docs/features/static-site-pages/event-reminders-calendar-strategy.md`,
   dynamic-current-event и Android/iOS test design
-  `docs/testing/event-reminders-calendar-e2e.md`.
+  `docs/testing/event-reminders-calendar-e2e.md`; rollout и blocking status —
+  Stage 14 общего `docs/features/static-site-pages/release-plan.md`.
 - Kaggle static-site builder / publisher protocol: `docs/operations/kaggle-static-site-builder.md`
 - Default-off two-bucket/ALB atomic root publisher and setup/rollback runbook:
   `docs/operations/static-site-atomic-root.md`
