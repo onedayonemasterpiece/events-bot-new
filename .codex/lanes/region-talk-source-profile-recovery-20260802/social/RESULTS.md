@@ -5,7 +5,7 @@
 - Lane: `R02 / social-capture`
 - Branch: `agent/region-talk-source-profile-recovery/social-capture`
 - Base SHA: `ba8ab078ba9894ccd5810045b1b8787ecb29d743`
-- Implementation head SHA: `4c66898e9e63f251beb997a48c478f9472a88b04`
+- Implementation head SHA: `4c66898e177dd11913689a40f4f295323bc46ce5`
 - Scope: Telegram/VK acquisition adapters, deterministic capture contract,
   stable YDB capture persistence, and owned tests only.
 
