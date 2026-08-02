@@ -219,13 +219,11 @@ export async function inspectSafariNativeUiProtocol({ findElements, getAlertText
   const currentAlertCount = alertText == null ? 0 : 1;
   let activeAppOwner = null;
   let nativeSource = null;
-  if (currentAlertCount === 1) {
-    if (typeof getActiveAppInfo === 'function') {
-      activeAppOwner = classifyActiveIosApp(await getActiveAppInfo().catch(() => null));
-    }
-    if (typeof getNativeSourceSummary === 'function') {
-      nativeSource = await getNativeSourceSummary().catch(() => ({ source_inspected: false }));
-    }
+  if (typeof getActiveAppInfo === 'function') {
+    activeAppOwner = classifyActiveIosApp(await getActiveAppInfo().catch(() => null));
+  }
+  if (typeof getNativeSourceSummary === 'function') {
+    nativeSource = await getNativeSourceSummary().catch(() => ({ source_inspected: false }));
   }
   const titleBelongsToCurrentAlert = titles.length === 1 && exactTitleLineCount === 1;
   const scopedActions = titleBelongsToCurrentAlert ? buttons.filter((label) => label === action) : [];
@@ -277,6 +275,8 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
   const keyboard = {};
   const keyboardPreflight = { status: 'not_run', controls: {}, product: {} };
   let safariStartup = { status: platform === 'ios' ? 'pending' : 'not_applicable' };
+  let startupActiveAppInfoPromise = null;
+  let startupNativeSourceSummaryPromise = null;
   const nativeKeyboardAtTap = {};
   const actualCaps = driver.capabilities || {};
   const device = { platform, device_name: config.deviceName, expected_platform_version: config.platformVersion,
@@ -347,14 +347,20 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
       findElements: (using, value) => driver.findElements(using, value),
       getAlertText: () => driver.getAlertText(),
       getAlertButtons: () => driver.executeScript('mobile: alert', [{ action: 'getButtons' }]),
-      getActiveAppInfo: () => driver.executeScript('mobile: activeAppInfo', []),
+      getActiveAppInfo: () => {
+        startupActiveAppInfoPromise ??= driver.executeScript('mobile: activeAppInfo', []);
+        return startupActiveAppInfoPromise;
+      },
       // This runs before candidate navigation and before any identity/OTP
       // input. Retain the complete clean-simulator tree for the bounded system
       // UI diagnosis requested by the operator, then also derive stable counts.
-      getNativeSourceSummary: async () => {
-        const source = await driver.getPageSource();
-        await writeFile(join(evidenceRoot, 'native-ui', 'ios-startup.raw.xml'), source);
-        return summarizeKnownSafariNativeSource(source);
+      getNativeSourceSummary: () => {
+        startupNativeSourceSummaryPromise ??= (async () => {
+          const source = await driver.getPageSource();
+          await writeFile(join(evidenceRoot, 'native-ui', 'ios-startup.raw.xml'), source);
+          return summarizeKnownSafariNativeSource(source);
+        })();
+        return startupNativeSourceSummaryPromise;
       },
     });
   }

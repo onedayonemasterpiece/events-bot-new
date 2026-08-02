@@ -119,6 +119,20 @@ test('Safari native inspection emits safe contract probes when the visible exact
   assert.equal(state.action_token, null);
 });
 
+test('Safari native inspection captures the startup owner and source even when no alert is present', async () => {
+  const state = await inspectSafariNativeUiProtocol({
+    findElements: async () => [],
+    getAlertText: async () => { throw new Error('no alert'); },
+    getAlertButtons: async () => [],
+    getActiveAppInfo: async () => ({ bundleId: 'com.apple.mobilesafari' }),
+    getNativeSourceSummary: async () => ({ source_inspected: true, application_container_count: 1 }),
+  });
+  assert.equal(state.contract_probe.current_alert_present, false);
+  assert.equal(state.contract_probe.active_app_owner, 'safari');
+  assert.equal(state.contract_probe.native_source.source_inspected, true);
+  assert.equal(state.contract_probe.native_source.application_container_count, 1);
+});
+
 test('same-named action in a different current alert remains unknown and non-actionable', async () => {
   const state = await inspectSafariNativeUiProtocol({
     findElements: async () => [{ ELEMENT: 'exact-title-behind-alert' }],
