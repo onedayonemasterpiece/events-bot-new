@@ -122,6 +122,21 @@ def message_matches(message: Any, row: dict[str, Any]) -> bool:
     )
 
 
+def repair_identity_current(row: dict[str, Any], updated: dict[str, Any]) -> bool:
+    """Return true when Telegram/YDB already bind the repaired exact revision."""
+
+    return bool(
+        str(row.get("delivery_key") or "") == str(updated.get("delivery_key") or "")
+        and str(row.get("operator_review_fingerprint") or "")
+        == str(updated.get("operator_review_fingerprint") or "")
+        and str(row.get("sent_operator_review_fingerprint") or "")
+        == str(updated.get("sent_operator_review_fingerprint") or "")
+        and str(row.get("sent_publication_draft_fingerprint") or "")
+        == str(updated.get("sent_publication_draft_fingerprint") or "")
+        and str(row.get("footer_repair_version") or "") == FOOTER_REPAIR_VERSION
+    )
+
+
 def _persist_candidate(
     pool: Any, ydb: Any, table: str, pk: str, payload: dict[str, Any]
 ) -> None:
@@ -201,6 +216,13 @@ async def repair(args: argparse.Namespace) -> dict[str, Any]:
                         raise RuntimeError(
                             f"Telegram footer verification failed for message {message_id}"
                         )
+                    if not changed and repair_identity_current(row, updated):
+                        report["already_current"].append({
+                            "message_id": message_id,
+                            "post_url": notify.canonical_post_url(updated),
+                            "delivery_key": str(updated["delivery_key"]),
+                        })
+                        continue
 
                     old_delivery_key = str(row.get("delivery_key") or "")
                     new_delivery_key = str(updated["delivery_key"])
@@ -236,8 +258,7 @@ async def repair(args: argparse.Namespace) -> dict[str, Any]:
                             "superseded_by_delivery_key": new_delivery_key,
                             "supersede_reason": "preproduction_footer_repair",
                         })
-                    target = "edited" if changed else "already_current"
-                    report[target].append({
+                    report["edited" if changed else "already_current"].append({
                         "message_id": message_id,
                         "post_url": notify.canonical_post_url(updated),
                         "delivery_key": new_delivery_key,

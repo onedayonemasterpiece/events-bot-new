@@ -56,6 +56,16 @@ def test_repaired_candidate_rotates_review_identity_and_removes_duplicate_source
     assert updated["operator_review_decision"] == "pending"
 
 
+def test_current_repair_identity_needs_no_ydb_rewrite() -> None:
+    updated = repair.repaired_candidate(_row(), chat_id="-100")
+    assert repair.repair_identity_current(updated, repair.repaired_candidate(
+        updated, chat_id="-100"
+    )) is True
+    assert repair.repair_identity_current(
+        {**updated, "delivery_key": "stale"}, updated
+    ) is False
+
+
 def test_message_verifier_requires_exact_two_footer_links() -> None:
     updated = repair.repaired_candidate(_row(), chat_id="-100")
     p1, p2 = notify._draft_two_paragraphs(updated)
