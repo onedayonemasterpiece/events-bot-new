@@ -23,6 +23,13 @@
 - Read-only duplicate-image audit: `docs/operations/event-image-duplicate-audit.md`
 - Email delivery/deliverability: `docs/operations/email-delivery.md`
 - External focus-group mailbox OTP E2E: `docs/testing/external-focus-email-otp.md`
+- **Стратегия автотестирования статического сайта и данных, Android/iOS gates,
+  запуск из ChatGPT, scenario registry и Codex handoff:**
+  `docs/operations/static-site-autotest-strategy.md`,
+  `docs/features/static-site-pages/release-autotest-gates.md`,
+  `docs/operations/static-site-qa-chatgpt-control-plane.md`,
+  `docs/testing/static-site-autotest-scenarios.v1.yml`,
+  `docs/testing/static-site-autotest-codex-prompt.md`
 - Kaggle static-site builder / publisher protocol: `docs/operations/kaggle-static-site-builder.md`
 - Default-off two-bucket/ALB atomic root publisher and setup/rollback runbook:
   `docs/operations/static-site-atomic-root.md`
