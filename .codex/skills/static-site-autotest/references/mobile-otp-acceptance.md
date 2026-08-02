@@ -32,6 +32,9 @@ instead of copying it.
   `usePreinstalledWDA` and `prebuiltWDAPath`. Treat WDA startup failure as
   infrastructure failure before OTP issuance.
 - Disable the hardware keyboard and require the simulator software keyboard.
+- On a fresh Simulator, detect and close only the exact allowlisted Safari
+  first-run prompt before journey interaction. Do not use a generic alert
+  accepter: unrelated permission/security dialogs must still fail visibly.
 - Keep navigation clicks in the Safari web context.
 - Before a keyboard-critical tap, scroll the HTML input to the center, switch
   to `NATIVE_APP`, locate exactly one visible `XCUIElementTypeTextField` by the

@@ -228,6 +228,28 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     }
   }
 
+  async function dismissSafariFirstRunPrompt() {
+    if (platform !== 'ios') return;
+    const originalContext = await driver.getContext();
+    const contexts = await driver.getContexts();
+    const nativeContext = contexts.find((value) => String(value).toUpperCase() === 'NATIVE_APP');
+    if (!nativeContext) throw new Error('fail_browser_context:native_context_missing:safari_first_run');
+    await driver.switchContext(nativeContext);
+    try {
+      const predicate = "type == 'XCUIElementTypeButton' AND visible == 1 AND (name == 'Продолжить' OR label == 'Продолжить')";
+      const matches = await driver.findElements('-ios predicate string', predicate);
+      if (matches.length > 1) throw new Error(`fail_browser_context:safari_first_run_match_count:${matches.length}`);
+      if (matches.length === 1) {
+        const elementId = matches[0]['element-6066-11e4-a52e-4f735466cecf'] || matches[0].ELEMENT;
+        if (!elementId) throw new Error('fail_browser_context:safari_first_run_id_missing');
+        await driver.elementClick(elementId);
+        await driver.pause(350);
+      }
+    } finally {
+      await driver.switchContext(originalContext);
+    }
+  }
+
   async function maskDom() {
     await driver.execute(() => {
       document.querySelectorAll('input[type="email"], input[autocomplete="one-time-code"]').forEach((node) => { node.value = ''; node.setAttribute('data-e2e-masked', 'true'); });
@@ -242,6 +264,7 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     device,
     async openInvite() {
       await driver.url(target.href); await driver.waitUntil(async () => (await driver.getUrl()).startsWith(target.origin), { timeout: 30_000 });
+      await dismissSafariFirstRunPrompt();
       const userAgent = await driver.execute(() => navigator.userAgent);
       const version = platform === 'android' ? String(userAgent).match(/Chrome\/([^\s]+)/u)?.[1] : String(userAgent).match(/Version\/([^\s]+)/u)?.[1];
       if (version) device.browser_version = version;
