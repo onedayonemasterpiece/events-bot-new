@@ -1,0 +1,433 @@
+name: Materialize validated Region Talk research successors
+
+on:
+  push:
+    branches:
+      - agent/region-talk-research-successors-import-20260802
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out target branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/region-talk-research-successors-import-20260802
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install pinned dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+
+      - name: Build immutable successor JSON files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          root = Path("docs/features/region-talk-channel")
+          predecessor_1 = root / "region-talk-external-research-result-region-talk-external-2026-07-31-125052.json"
+          predecessor_2 = root / "region-talk-external-research-result-region-talk-external-2026-07-31-174033.json"
+          successor_1 = root / "region-talk-external-research-result-region-talk-external-2026-08-02-063020.json"
+          successor_2 = root / "region-talk-external-research-result-region-talk-external-2026-08-02-063021.json"
+
+          expected_predecessor_sha = {
+              predecessor_1: "59b1d7cc43fff8eabe53f4f8b84b700d1c5ebc60f326b9f3f8c2d208999bc2cf",
+              predecessor_2: "c040269f09bd72f16cf74fe2f721d9b8375ede82bd3742ce989e406747384cb0",
+          }
+          expected_successor_sha = {
+              successor_1: "2862d6bb2537c03376c8d347bdd07040496a597c365e5481f1059cd24183553e",
+              successor_2: "2f6f4f4c3e1ef63c426332edf182dc6b6851544d0d5ca9c5cefa5ac4c9c300de",
+          }
+
+          for path, expected in expected_predecessor_sha.items():
+              actual = hashlib.sha256(path.read_bytes()).hexdigest()
+              if actual != expected:
+                  raise SystemExit(f"historical input SHA mismatch for {path}: {actual}")
+
+          def load(path: Path) -> dict:
+              value = json.loads(path.read_text(encoding="utf-8"))
+              if not isinstance(value, dict):
+                  raise SystemExit(f"top-level JSON is not an object: {path}")
+              return value
+
+          def write(path: Path, value: dict) -> None:
+              raw = (json.dumps(value, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+              path.write_bytes(raw)
+              actual = hashlib.sha256(raw).hexdigest()
+              if actual != expected_successor_sha[path]:
+                  raise SystemExit(f"successor SHA mismatch for {path}: {actual}")
+
+          def append_coverage(value: dict, predecessor_request_id: str) -> None:
+              suffix = (
+                  f" Successor recheck: {predecessor_request_id}; semantic fields corrected "
+                  "only after reopening affected primary pages."
+              )
+              for row in value["coverage"]:
+                  row["notes"] = str(row.get("notes") or "") + suffix
+
+          first = load(predecessor_1)
+          first["run"].update({
+              "request_id": "region-talk-external-2026-08-02-063020",
+              "executed_at": "2026-08-02T06:30:20Z",
+              "window_end": "2026-08-02",
+              "scope_note": (
+                  "Исправленный successor для region-talk-external-2026-07-31-125052: "
+                  "повторно проверены первичные страницы и устранены semantic-validation "
+                  "ошибки без изменения исторического JSON. Полнотекстовые интервью и "
+                  "кинокритика классифицированы как non_news; две пограничные строки по "
+                  "доступу/текущему событию понижены до manual_review_required."
+              ),
+          })
+          append_coverage(first, "region-talk-external-2026-07-31-125052")
+          first["run_uncertainties"].append(
+              "Это successor ранее сохранённого пакета region-talk-external-2026-07-31-125052; "
+              "новый широкий поиск не выполнялся. Импорт обязан повторно применить актуальный "
+              "live-YDB duplicate guard и остаться идемпотентным."
+          )
+
+          patches = {
+              2: {
+                  "newsiness": "non_news",
+                  "decision": {
+                      "research_decision": "candidate",
+                      "downstream_readiness": "candidate_report",
+                      "reason_codes": [
+                          "external_expert_interview", "original_analysis",
+                          "positive_region_image", "successor_semantic_correction",
+                      ],
+                      "reason_short": (
+                          "Полнотекстовое профессиональное интервью с самостоятельным анализом "
+                          "экспозиционного дизайна; открытие музея является контекстом, а не "
+                          "новостным содержанием."
+                      ),
+                  },
+                  "evidence": {
+                      "evidence_id": "succ01.recheck",
+                      "supports": ["policy_classification", "decision", "successor_correction"],
+                      "url": "https://www.theartnewspaper.ru/posts/20250609-wjnz/",
+                      "page_role": "primary_article",
+                      "retrieved_at": "2026-08-02T06:30:20Z",
+                      "location_hint": "Заголовок, дата и полный текст интервью",
+                      "paraphrase": (
+                          "Первичная страница содержит полное интервью от 9 июня 2025 года с "
+                          "развернутым обсуждением экспозиционного дизайна, музейной архитектуры "
+                          "и двух калининградских экспозиций."
+                      ),
+                      "quote_short": None,
+                  },
+              },
+              4: {
+                  "decision": {
+                      "research_decision": "needs_review",
+                      "downstream_readiness": "manual_review_required",
+                      "reason_codes": [
+                          "constructive_heritage_story", "external_cultural_interview",
+                          "full_text_not_publicly_available", "partial_access_caveated",
+                          "successor_semantic_correction",
+                      ],
+                      "reason_short": (
+                          "Открытая страница содержит содержательный фрагмент и фотогалерею, но "
+                          "прямо сообщает, что полный текст доступен только в печатном выпуске; "
+                          "автоматическое повышение запрещено."
+                      ),
+                  },
+                  "uncertainty": {
+                      "field": "publication.access_status",
+                      "severity": "medium",
+                      "reason": (
+                          "На открытой странице опубликован только небольшой фрагмент; полная "
+                          "версия доступна в печатном выпуске."
+                      ),
+                      "required_manual_check": (
+                          "Без подтверждённого доступа к полной печатной версии не повышать "
+                          "строку выше manual_review_required."
+                      ),
+                      "evidence_refs": ["c05.primary"],
+                  },
+                  "evidence": {
+                      "evidence_id": "succ02.recheck",
+                      "supports": ["policy_classification", "decision", "successor_correction"],
+                      "url": "https://www.nn.media/magazine/3-133/1288/",
+                      "page_role": "primary_article",
+                      "retrieved_at": "2026-08-02T06:30:20Z",
+                      "location_hint": "Уведомление после открытого фрагмента",
+                      "paraphrase": (
+                          "Страница явно указывает, что онлайн опубликован небольшой фрагмент, "
+                          "а полная версия материала доступна только в печатном журнале."
+                      ),
+                      "quote_short": None,
+                  },
+              },
+              11: {
+                  "decision": {
+                      "research_decision": "needs_review",
+                      "downstream_readiness": "manual_review_required",
+                      "reason_codes": [
+                          "analysis_tied_to_current_event", "constructive_neutral_image",
+                          "external_comparative_cultural_analysis", "substantial_region_case",
+                          "successor_semantic_correction",
+                      ],
+                      "reason_short": (
+                          "Содержательный сравнительный обзор культурных кластеров, но страница "
+                          "находится в новостном разделе и привязана к текущему ходу строительства; "
+                          "оставлена только для ручной проверки."
+                      ),
+                  },
+                  "uncertainty": {
+                      "field": "policy_classification.newsiness",
+                      "severity": "medium",
+                      "reason": (
+                          "Материал сочетает долговечный сравнительный обзор с текущими "
+                          "строительными статусами и опубликован в разделе новостей."
+                      ),
+                      "required_manual_check": (
+                          "Не повышать автоматически; для дальнейшего использования нужен отдельный "
+                          "редакционный вердикт о долговечности материала."
+                      ),
+                      "evidence_refs": ["succ03.recheck"],
+                  },
+                  "evidence": {
+                      "evidence_id": "succ03.recheck",
+                      "supports": ["policy_classification", "decision", "successor_correction"],
+                      "url": "https://www.theartnewspaper.ru/posts/20260120-cntd/",
+                      "page_role": "primary_article",
+                      "retrieved_at": "2026-08-02T06:30:20Z",
+                      "location_hint": "Раздел, подзаголовок, дата и основной текст",
+                      "paraphrase": (
+                          "Первичная страница опубликована в разделе новостей и сравнивает четыре "
+                          "культурных кластера, включая текущие статусы строительства "
+                          "калининградских объектов."
+                      ),
+                      "quote_short": None,
+                  },
+              },
+              16: {
+                  "newsiness": "non_news",
+                  "decision": {
+                      "research_decision": "candidate",
+                      "downstream_readiness": "candidate_report",
+                      "reason_codes": [
+                          "external_original_film_criticism", "non_listing",
+                          "substantial_kaliningrad_festival", "successor_semantic_correction",
+                      ],
+                      "reason_short": (
+                          "Полнотекстовая авторская кинокритика двенадцати фестивальных фильмов; "
+                          "завершение фестиваля служит поводом, но материал не является новостной "
+                          "сводкой."
+                      ),
+                  },
+                  "evidence": {
+                      "evidence_id": "succ04.recheck",
+                      "supports": ["policy_classification", "decision", "successor_correction"],
+                      "url": (
+                          "https://daily.afisha.ru/cinema/29869-koroche-snimay-12-rossiyskih-"
+                          "filmov-s-festivalya-debyutnogo-kino-v-kaliningrade/"
+                      ),
+                      "page_role": "primary_article",
+                      "retrieved_at": "2026-08-02T06:30:20Z",
+                      "location_hint": "Заголовок, автор, дата и критические блоки по фильмам",
+                      "paraphrase": (
+                          "Первичная страница содержит авторскую оценку двенадцати полнометражных "
+                          "и короткометражных работ фестиваля «Короче», а не только итоговые "
+                          "результаты."
+                      ),
+                      "quote_short": None,
+                  },
+              },
+              17: {
+                  "newsiness": "non_news",
+                  "decision": {
+                      "research_decision": "candidate",
+                      "downstream_readiness": "candidate_report",
+                      "reason_codes": [
+                          "collective_review", "external_original_film_criticism",
+                          "substantial_kaliningrad_festival", "successor_semantic_correction",
+                      ],
+                      "reason_short": (
+                          "Коллективный полнотекстовый критический обзор программы «Короче» с "
+                          "разбором отдельных фильмов; новостной итог фестиваля является вводным "
+                          "контекстом."
+                      ),
+                  },
+                  "evidence": {
+                      "evidence_id": "succ05.recheck",
+                      "supports": ["policy_classification", "decision", "successor_correction"],
+                      "url": "https://www.kinopoisk.ru/media/article/4011668/",
+                      "page_role": "primary_article",
+                      "retrieved_at": "2026-08-02T06:30:20Z",
+                      "location_hint": "Вводная и последовательные критические разделы",
+                      "paraphrase": (
+                          "Страница содержит развернутые критические блоки о короткометражной и "
+                          "полнометражной программах фестиваля, подписанные журналистами и критиками."
+                      ),
+                      "quote_short": None,
+                  },
+              },
+          }
+          for index, patch in patches.items():
+              row = first["candidates"][index]
+              if "newsiness" in patch:
+                  row["policy_classification"]["newsiness"] = patch["newsiness"]
+              row["decision"] = patch["decision"]
+              if "uncertainty" in patch:
+                  row["uncertainties"] = [patch["uncertainty"]]
+              row["evidence"].append(patch["evidence"])
+          write(successor_1, first)
+
+          second = load(predecessor_2)
+          second["run"].update({
+              "request_id": "region-talk-external-2026-08-02-063021",
+              "executed_at": "2026-08-02T06:30:21Z",
+              "window_end": "2026-08-02",
+              "scope_note": (
+                  "Исправленный successor для region-talk-external-2026-07-31-174033: "
+                  "повторно проверены первичные страницы и устранены semantic-validation "
+                  "ошибки без изменения исторического JSON. Археологический полевой отчёт "
+                  "подтверждён как долговечный объяснительный материал и классифицирован non_news."
+              ),
+          })
+          append_coverage(second, "region-talk-external-2026-07-31-174033")
+          second["run_uncertainties"].append(
+              "Это successor ранее сохранённого пакета region-talk-external-2026-07-31-174033; "
+              "новый широкий поиск не выполнялся. Импорт обязан повторно применить актуальный "
+              "live-YDB duplicate guard и остаться идемпотентным."
+          )
+          row = second["candidates"][1]
+          row["policy_classification"]["newsiness"] = "non_news"
+          row["decision"] = {
+              "research_decision": "candidate",
+              "downstream_readiness": "candidate_report",
+              "reason_codes": [
+                  "durable_historical_layer", "external_primary_archaeology_report",
+                  "high_public_interest", "successor_semantic_correction",
+              ],
+              "reason_short": (
+                  "Первичный полнотекстовый отчёт Института археологии РАН описывает культурные "
+                  "слои Дальнего Форштадта, историю участка и результаты работ; текущий сезон "
+                  "является контекстом долговечного объяснительного материала."
+              ),
+          }
+          row["evidence"].append({
+              "evidence_id": "succ06.recheck",
+              "supports": ["policy_classification", "decision", "successor_correction"],
+              "url": (
+                  "https://archaeolog.ru/press/articles/"
+                  "raskopki-v-kaliningrade-territoriya-dalnego-forshtadta"
+              ),
+              "page_role": "primary_article",
+              "retrieved_at": "2026-08-02T06:30:21Z",
+              "location_hint": "Дата, вводный абзац и историко-археологическое описание",
+              "paraphrase": (
+                  "Первичная страница Института археологии РАН от 22 июля 2026 года подробно "
+                  "описывает культурные слои XVI–XX веков, историю освоения Дальнего Форштадта "
+                  "и текущие раскопки."
+              ),
+              "quote_short": None,
+          })
+          write(successor_2, second)
+          PY
+
+      - name: Strict schema and importer semantic validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/codex/region-talk-external-publications
+          for file in \
+            docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-08-02-063020.json \
+            docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-08-02-063021.json
+          do
+            name="$(basename "$file" .json)"
+            python scripts/region_talk_external_publication_import.py "$file" \
+              --report "artifacts/codex/region-talk-external-publications/${name}.dry-run.json"
+          done
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("artifacts/codex/region-talk-external-publications")
+          expected = {
+              "region-talk-external-research-result-region-talk-external-2026-08-02-063020.dry-run.json": (20, 12, 8),
+              "region-talk-external-research-result-region-talk-external-2026-08-02-063021.dry-run.json": (14, 10, 4),
+          }
+          for name, (valid_count, ready, held) in expected.items():
+              report = json.loads((root / name).read_text(encoding="utf-8"))
+              if report.get("rejected") or report.get("conflicts"):
+                  raise SystemExit(f"semantic validation failed: {name}")
+              if len(report.get("valid") or []) != valid_count:
+                  raise SystemExit(f"valid count mismatch: {name}")
+              if report.get("ready_for_region_talk_scoring") != ready:
+                  raise SystemExit(f"ready count mismatch: {name}")
+              if report.get("manual_or_blocked") != held:
+                  raise SystemExit(f"held count mismatch: {name}")
+              if report.get("executed") is not False:
+                  raise SystemExit(f"dry-run unexpectedly executed: {name}")
+          PY
+
+      - name: Update canonical research-result index
+        shell: bash
+        run: |
+          cat > docs/features/region-talk-channel/external-publication-research-results.md <<'MARKDOWN'
+          # Region Talk: результаты внешнего поиска публикаций
+
+          Status: **validated research evidence / automated YDB intake**. JSON-файлы соответствуют контракту `region_talk_external_research.v1`; чистые `candidate_report` поступают только в штатный Region Talk pipeline проверки и скоринга. `manual_review_required` остаётся непубликуемым и автоматически не повышается. Импорт в YDB не является разрешением на публикацию.
+
+          ## Исторические неизменяемые пакеты
+
+          | Выполнено, UTC | JSON | Кандидаты | Результат текущего importer | SHA-256 |
+          |---|---|---:|---|---|
+          | 2026-07-31 12:50:52 | [`region-talk-external-research-result-region-talk-external-2026-07-31-125052.json`](region-talk-external-research-result-region-talk-external-2026-07-31-125052.json) | 20 | 5 semantic rejections; заменён successor `region-talk-external-2026-08-02-063020`, исторический файл не импортировать | `59b1d7cc43fff8eabe53f4f8b84b700d1c5ebc60f326b9f3f8c2d208999bc2cf` |
+          | 2026-07-31 17:40:33 | [`region-talk-external-research-result-region-talk-external-2026-07-31-174033.json`](region-talk-external-research-result-region-talk-external-2026-07-31-174033.json) | 14 | 1 semantic rejection; заменён successor `region-talk-external-2026-08-02-063021`, исторический файл не импортировать | `c040269f09bd72f16cf74fe2f721d9b8375ede82bd3742ce989e406747384cb0` |
+          | 2026-08-01 16:31:42 | [`region-talk-external-research-result-region-talk-external-2026-08-01-163142.json`](region-talk-external-research-result-region-talk-external-2026-08-01-163142.json) | 20 | clean: 20 valid / 0 rejected; допускается идемпотентный импорт или replay | `e662b449811a0887dd2fa0ebe33903d8caffed3231323ee9e8fbfc55b027bad7` |
+
+          ## Актуальные импортируемые пакеты
+
+          | Request ID / выполнено UTC | JSON | Кандидаты | `candidate_report` | `manual_review_required` | Исключено | Unresolved | Проверка | SHA-256 |
+          |---|---|---:|---:|---:|---:|---:|---|---|
+          | `region-talk-external-2026-08-02-063020` / 2026-08-02 06:30:20 | [`region-talk-external-research-result-region-talk-external-2026-08-02-063020.json`](region-talk-external-research-result-region-talk-external-2026-08-02-063020.json) | 20 | 12 | 8 | 2 | 2 | strict schema + importer semantic validation: clean; successor of `region-talk-external-2026-07-31-125052` | `2862d6bb2537c03376c8d347bdd07040496a597c365e5481f1059cd24183553e` |
+          | `region-talk-external-2026-08-02-063021` / 2026-08-02 06:30:21 | [`region-talk-external-research-result-region-talk-external-2026-08-02-063021.json`](region-talk-external-research-result-region-talk-external-2026-08-02-063021.json) | 14 | 10 | 4 | 3 | 4 | strict schema + importer semantic validation: clean; successor of `region-talk-external-2026-07-31-174033` | `2f6f4f4c3e1ef63c426332edf182dc6b6851544d0d5ca9c5cefa5ac4c9c300de` |
+          | `region-talk-external-2026-08-01-163142` / 2026-08-01 16:31:42 | [`region-talk-external-research-result-region-talk-external-2026-08-01-163142.json`](region-talk-external-research-result-region-talk-external-2026-08-01-163142.json) | 20 | 10 | 10 | 4 | 1 | strict schema + importer semantic validation: clean | `e662b449811a0887dd2fa0ebe33903d8caffed3231323ee9e8fbfc55b027bad7` |
+
+          Successor-пакеты заменяют два ошибочных исторических входа и не увеличивают число уникально найденных публикаций. Перед каждым `--execute` importer перечитывает live YDB, применяет canonical URL / DOI / normalized title+authors identity guard и выполняет запись атомарно. Повторный запуск становится replay/no-op и не создаёт дубликатов.
+
+          ## Автоматический импорт
+
+          После попадания чистого JSON в `main` используется workflow `Import trusted Region Talk external-publication research`. Он сначала выполняет dry validation точных committed bytes, затем через GitHub OIDC получает короткоживущий Yandex IAM token и запускает атомарный staging import. Результаты фиксируются в SHA-addressed Actions artifact с `new_intake_ids`, replay и conflict counters.
+
+          Импорт не пишет `publication_candidate_item`, не выдаёт `publication_permission`, не вызывает Telegram/VK publishing и не повышает `manual_review_required`. Новая запись начинается как `unreviewed`; только `candidate_report` направляется в существующий LLM-first Region Talk pipeline.
+
+          ## Правило пополнения
+
+          Новый результат добавляется под исходным именем `region-talk-external-research-result-<request_id>.json`. Исторические JSON не редактируются: любая правка выпускается отдельным successor с новым `request_id`, фактическим SHA-256 и кратким validation summary в этой странице.
+          MARKDOWN
+
+      - name: Commit only successors and index
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/materialize-region-talk-research-successors-20260802.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-08-02-063020.json \
+            docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-08-02-063021.json \
+            docs/features/region-talk-channel/external-publication-research-results.md \
+            .github/workflows/materialize-region-talk-research-successors-20260802.yml
+          git diff --cached --check
+          git commit -m "Add validated Region Talk research successors"
+          git push origin HEAD:agent/region-talk-research-successors-import-20260802
