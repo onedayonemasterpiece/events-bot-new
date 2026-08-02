@@ -13,7 +13,7 @@
   },
   "source": {
     "production": "Fly SQLite /data/db.sqlite (read-only live source revalidation)",
-    "reviewed_at": "2026-08-02T09:18:31.733493Z",
+    "reviewed_at": "2026-08-02T16:28:11.268351Z",
     "reviewed_event_count": 126,
     "source_event_count": 126,
     "prior_catalog_hash": "274ae8ad7645e32c3f45ce405ee4454fc24860f297c48d46ee1c24140fe5ce24",
@@ -26,7 +26,7 @@
     "generator_command": "python3 scripts/build_static_collections_review_seed.py --seed docs/review-data/static_collections_review_seed_v1.json --source-review-index docs/review-data/static-collections-source-reviews-v1/index.json --snapshot artifacts/codex/static-collections-pr-a/static-collections-evidence-snapshot-v1.json --output /tmp/static_collections_review_seed_v1.json",
     "score_artifact_status": "pending_pr_b",
     "policy_sha256": "9c35da76b772e023ecce071e1971593de6c30df967c1fc130b230bcacc0bb660",
-    "source_review_index_sha256": "436aef1448e06ff5b74787b3f1128fe2856a54cf540a54dd4d36869e4d1b6971",
+    "source_review_index_sha256": "82d0c5ddd824af46aa0e64dd65ae4fdb814f2c7541d5166d408f71ad1db16649",
     "extracted_at": "2026-08-02T09:10:18.144847Z",
     "extraction_repo_sha": "f1a732fce6003dc24bcf38b012072951be85e5e6",
     "seed_builder_repo_sha": "86bda03782a270637d3e0a1f683e729eba3d0d7f",
@@ -90,7 +90,8 @@
           "source_quote_end_char": 894,
           "source_quote_char_count": 894,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6937,
@@ -132,7 +133,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 83
+          "source_quote_omitted_suffix_chars": 83,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7088,
@@ -174,7 +176,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 257
+          "source_quote_omitted_suffix_chars": 257,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7361,
@@ -216,7 +219,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 27
+          "source_quote_omitted_suffix_chars": 27,
+          "source_status": "sufficient"
         }
       ],
       "hard_negatives": [
@@ -260,7 +264,8 @@
           "source_quote_end_char": 587,
           "source_quote_char_count": 587,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 3999,
@@ -302,7 +307,8 @@
           "source_quote_end_char": 1350,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 350,
-          "source_quote_omitted_suffix_chars": 192
+          "source_quote_omitted_suffix_chars": 192,
+          "source_status": "sufficient"
         },
         {
           "event_id": 4517,
@@ -344,7 +350,8 @@
           "source_quote_end_char": 999,
           "source_quote_char_count": 999,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 328
+          "source_quote_omitted_suffix_chars": 328,
+          "source_status": "sufficient"
         },
         {
           "event_id": 5370,
@@ -393,7 +400,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 409
+          "source_quote_omitted_suffix_chars": 409,
+          "source_status": "sufficient"
         },
         {
           "event_id": 5666,
@@ -435,7 +443,8 @@
           "source_quote_end_char": 822,
           "source_quote_char_count": 822,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 5997,
@@ -477,7 +486,8 @@
           "source_quote_end_char": 677,
           "source_quote_char_count": 677,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6053,
@@ -521,7 +531,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 1709
+          "source_quote_omitted_suffix_chars": 1709,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6117,
@@ -563,7 +574,8 @@
           "source_quote_end_char": 694,
           "source_quote_char_count": 694,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6429,
@@ -606,7 +618,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 479
+          "source_quote_omitted_suffix_chars": 479,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6552,
@@ -648,7 +661,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 151
+          "source_quote_omitted_suffix_chars": 151,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6745,
@@ -690,7 +704,8 @@
           "source_quote_end_char": 297,
           "source_quote_char_count": 297,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6809,
@@ -732,7 +747,8 @@
           "source_quote_end_char": 530,
           "source_quote_char_count": 530,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6821,
@@ -774,7 +790,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 59
+          "source_quote_omitted_suffix_chars": 59,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7005,
@@ -816,7 +833,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 348
+          "source_quote_omitted_suffix_chars": 348,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7045,
@@ -858,7 +876,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 64
+          "source_quote_omitted_suffix_chars": 64,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7080,
@@ -900,7 +919,8 @@
           "source_quote_end_char": 1350,
           "source_quote_char_count": 999,
           "source_quote_omitted_prefix_chars": 351,
-          "source_quote_omitted_suffix_chars": 973
+          "source_quote_omitted_suffix_chars": 973,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7126,
@@ -942,7 +962,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 101
+          "source_quote_omitted_suffix_chars": 101,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7182,
@@ -984,7 +1005,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 399
+          "source_quote_omitted_suffix_chars": 399,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7284,
@@ -1027,7 +1049,8 @@
           "source_quote_end_char": 591,
           "source_quote_char_count": 591,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7351,
@@ -1069,7 +1092,8 @@
           "source_quote_end_char": 965,
           "source_quote_char_count": 965,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7370,
@@ -1111,7 +1135,8 @@
           "source_quote_end_char": 1700,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 700,
-          "source_quote_omitted_suffix_chars": 1100
+          "source_quote_omitted_suffix_chars": 1100,
+          "source_status": "sufficient"
         }
       ],
       "counts": {
@@ -1166,7 +1191,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 1619
+          "source_quote_omitted_suffix_chars": 1619,
+          "source_status": "sufficient"
         },
         {
           "event_id": 4327,
@@ -1208,7 +1234,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 1243
+          "source_quote_omitted_suffix_chars": 1243,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6696,
@@ -1251,7 +1278,8 @@
           "source_quote_end_char": 894,
           "source_quote_char_count": 894,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6937,
@@ -1293,7 +1321,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 83
+          "source_quote_omitted_suffix_chars": 83,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7055,
@@ -1335,7 +1364,8 @@
           "source_quote_end_char": 999,
           "source_quote_char_count": 999,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 276
+          "source_quote_omitted_suffix_chars": 276,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7088,
@@ -1377,7 +1407,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 257
+          "source_quote_omitted_suffix_chars": 257,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7310,
@@ -1421,7 +1452,8 @@
           "source_quote_end_char": 2050,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 1050,
-          "source_quote_omitted_suffix_chars": 447
+          "source_quote_omitted_suffix_chars": 447,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7331,
@@ -1463,7 +1495,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 344
+          "source_quote_omitted_suffix_chars": 344,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7361,
@@ -1505,7 +1538,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 27
+          "source_quote_omitted_suffix_chars": 27,
+          "source_status": "sufficient"
         }
       ],
       "hard_negatives": [
@@ -1549,7 +1583,8 @@
           "source_quote_end_char": 587,
           "source_quote_char_count": 587,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 3999,
@@ -1591,7 +1626,8 @@
           "source_quote_end_char": 1350,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 350,
-          "source_quote_omitted_suffix_chars": 192
+          "source_quote_omitted_suffix_chars": 192,
+          "source_status": "sufficient"
         },
         {
           "event_id": 4517,
@@ -1633,7 +1669,8 @@
           "source_quote_end_char": 999,
           "source_quote_char_count": 999,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 328
+          "source_quote_omitted_suffix_chars": 328,
+          "source_status": "sufficient"
         },
         {
           "event_id": 5370,
@@ -1682,7 +1719,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 409
+          "source_quote_omitted_suffix_chars": 409,
+          "source_status": "sufficient"
         },
         {
           "event_id": 5666,
@@ -1724,7 +1762,8 @@
           "source_quote_end_char": 822,
           "source_quote_char_count": 822,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 5997,
@@ -1766,7 +1805,8 @@
           "source_quote_end_char": 677,
           "source_quote_char_count": 677,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6053,
@@ -1810,7 +1850,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 1709
+          "source_quote_omitted_suffix_chars": 1709,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6117,
@@ -1852,7 +1893,8 @@
           "source_quote_end_char": 694,
           "source_quote_char_count": 694,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6429,
@@ -1895,7 +1937,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 479
+          "source_quote_omitted_suffix_chars": 479,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6552,
@@ -1937,7 +1980,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 151
+          "source_quote_omitted_suffix_chars": 151,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6745,
@@ -1979,7 +2023,8 @@
           "source_quote_end_char": 297,
           "source_quote_char_count": 297,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6809,
@@ -2021,7 +2066,8 @@
           "source_quote_end_char": 530,
           "source_quote_char_count": 530,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6821,
@@ -2063,7 +2109,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 59
+          "source_quote_omitted_suffix_chars": 59,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7005,
@@ -2105,7 +2152,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 348
+          "source_quote_omitted_suffix_chars": 348,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7045,
@@ -2147,7 +2195,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 64
+          "source_quote_omitted_suffix_chars": 64,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7080,
@@ -2189,7 +2238,8 @@
           "source_quote_end_char": 1350,
           "source_quote_char_count": 999,
           "source_quote_omitted_prefix_chars": 351,
-          "source_quote_omitted_suffix_chars": 973
+          "source_quote_omitted_suffix_chars": 973,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7126,
@@ -2231,7 +2281,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 101
+          "source_quote_omitted_suffix_chars": 101,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7182,
@@ -2273,7 +2324,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 399
+          "source_quote_omitted_suffix_chars": 399,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7284,
@@ -2316,7 +2368,8 @@
           "source_quote_end_char": 591,
           "source_quote_char_count": 591,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7351,
@@ -2358,7 +2411,8 @@
           "source_quote_end_char": 965,
           "source_quote_char_count": 965,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7370,
@@ -2400,7 +2454,8 @@
           "source_quote_end_char": 1700,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 700,
-          "source_quote_omitted_suffix_chars": 1100
+          "source_quote_omitted_suffix_chars": 1100,
+          "source_status": "sufficient"
         }
       ],
       "counts": {
@@ -2468,7 +2523,8 @@
           "source_quote_end_char": 788,
           "source_quote_char_count": 788,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6652,
@@ -2512,7 +2568,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 268
+          "source_quote_omitted_suffix_chars": 268,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6949,
@@ -2554,7 +2611,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 920
+          "source_quote_omitted_suffix_chars": 920,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7374,
@@ -2597,7 +2655,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 40
+          "source_quote_omitted_suffix_chars": 40,
+          "source_status": "sufficient"
         }
       ],
       "hard_negatives": [
@@ -2641,7 +2700,8 @@
           "source_quote_end_char": 587,
           "source_quote_char_count": 587,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 3796,
@@ -2683,7 +2743,8 @@
           "source_quote_end_char": 436,
           "source_quote_char_count": 436,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 4960,
@@ -2725,7 +2786,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 550
+          "source_quote_omitted_suffix_chars": 550,
+          "source_status": "sufficient"
         },
         {
           "event_id": 5997,
@@ -2767,7 +2829,8 @@
           "source_quote_end_char": 677,
           "source_quote_char_count": 677,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6117,
@@ -2809,7 +2872,8 @@
           "source_quote_end_char": 694,
           "source_quote_char_count": 694,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6521,
@@ -2851,7 +2915,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 301
+          "source_quote_omitted_suffix_chars": 301,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6643,
@@ -2893,7 +2958,8 @@
           "source_quote_end_char": 667,
           "source_quote_char_count": 667,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6745,
@@ -2935,7 +3001,8 @@
           "source_quote_end_char": 297,
           "source_quote_char_count": 297,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6809,
@@ -2977,7 +3044,8 @@
           "source_quote_end_char": 530,
           "source_quote_char_count": 530,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6825,
@@ -3019,7 +3087,8 @@
           "source_quote_end_char": 1350,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 350,
-          "source_quote_omitted_suffix_chars": 157
+          "source_quote_omitted_suffix_chars": 157,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6917,
@@ -3061,7 +3130,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 247
+          "source_quote_omitted_suffix_chars": 247,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6973,
@@ -3103,7 +3173,8 @@
           "source_quote_end_char": 917,
           "source_quote_char_count": 917,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7005,
@@ -3145,7 +3216,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 348
+          "source_quote_omitted_suffix_chars": 348,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7059,
@@ -3187,7 +3259,8 @@
           "source_quote_end_char": 1276,
           "source_quote_char_count": 926,
           "source_quote_omitted_prefix_chars": 350,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7072,
@@ -3229,7 +3302,8 @@
           "source_quote_end_char": 1350,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 350,
-          "source_quote_omitted_suffix_chars": 523
+          "source_quote_omitted_suffix_chars": 523,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7087,
@@ -3272,7 +3346,8 @@
           "source_quote_end_char": 921,
           "source_quote_char_count": 921,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7107,
@@ -3314,7 +3389,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 457
+          "source_quote_omitted_suffix_chars": 457,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7215,
@@ -3356,7 +3432,8 @@
           "source_quote_end_char": 357,
           "source_quote_char_count": 357,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7227,
@@ -3398,7 +3475,8 @@
           "source_quote_end_char": 367,
           "source_quote_char_count": 367,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7228,
@@ -3440,7 +3518,8 @@
           "source_quote_end_char": 416,
           "source_quote_char_count": 416,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7235,
@@ -3482,7 +3561,8 @@
           "source_quote_end_char": 382,
           "source_quote_char_count": 382,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7288,
@@ -3524,7 +3604,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 452
+          "source_quote_omitted_suffix_chars": 452,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7296,
@@ -3567,7 +3648,8 @@
           "source_quote_end_char": 413,
           "source_quote_char_count": 413,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7324,
@@ -3609,7 +3691,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 313
+          "source_quote_omitted_suffix_chars": 313,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7334,
@@ -3651,7 +3734,8 @@
           "source_quote_end_char": 309,
           "source_quote_char_count": 309,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         }
       ],
       "counts": {
@@ -3706,7 +3790,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 1619
+          "source_quote_omitted_suffix_chars": 1619,
+          "source_status": "sufficient"
         },
         {
           "event_id": 3742,
@@ -3748,7 +3833,8 @@
           "source_quote_end_char": 471,
           "source_quote_char_count": 471,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 5703,
@@ -3790,7 +3876,8 @@
           "source_quote_end_char": 769,
           "source_quote_char_count": 769,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7055,
@@ -3832,7 +3919,8 @@
           "source_quote_end_char": 999,
           "source_quote_char_count": 999,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 276
+          "source_quote_omitted_suffix_chars": 276,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7373,
@@ -3875,7 +3963,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 40
+          "source_quote_omitted_suffix_chars": 40,
+          "source_status": "sufficient"
         }
       ],
       "hard_negatives": [
@@ -3919,7 +4008,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 520
+          "source_quote_omitted_suffix_chars": 520,
+          "source_status": "sufficient"
         },
         {
           "event_id": 3177,
@@ -3961,7 +4051,8 @@
           "source_quote_end_char": 541,
           "source_quote_char_count": 541,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 3216,
@@ -4003,7 +4094,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 1303
+          "source_quote_omitted_suffix_chars": 1303,
+          "source_status": "sufficient"
         },
         {
           "event_id": 4327,
@@ -4045,7 +4137,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 1243
+          "source_quote_omitted_suffix_chars": 1243,
+          "source_status": "sufficient"
         },
         {
           "event_id": 4648,
@@ -4089,7 +4182,8 @@
           "source_quote_end_char": 763,
           "source_quote_char_count": 763,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 4961,
@@ -4134,7 +4228,8 @@
           "source_quote_end_char": 527,
           "source_quote_char_count": 527,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 5259,
@@ -4178,7 +4273,8 @@
           "source_quote_end_char": 836,
           "source_quote_char_count": 836,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 5997,
@@ -4220,7 +4316,8 @@
           "source_quote_end_char": 677,
           "source_quote_char_count": 677,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6318,
@@ -4262,7 +4359,8 @@
           "source_quote_end_char": 1350,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 350,
-          "source_quote_omitted_suffix_chars": 349
+          "source_quote_omitted_suffix_chars": 349,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6924,
@@ -4304,7 +4402,8 @@
           "source_quote_end_char": 557,
           "source_quote_char_count": 557,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7045,
@@ -4346,7 +4445,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 64
+          "source_quote_omitted_suffix_chars": 64,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7120,
@@ -4389,7 +4489,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 203
+          "source_quote_omitted_suffix_chars": 203,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7262,
@@ -4431,7 +4532,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 141
+          "source_quote_omitted_suffix_chars": 141,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7280,
@@ -4473,7 +4575,8 @@
           "source_quote_end_char": 1263,
           "source_quote_char_count": 913,
           "source_quote_omitted_prefix_chars": 350,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7310,
@@ -4517,7 +4620,8 @@
           "source_quote_end_char": 2050,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 1050,
-          "source_quote_omitted_suffix_chars": 447
+          "source_quote_omitted_suffix_chars": 447,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7349,
@@ -4559,7 +4663,8 @@
           "source_quote_end_char": 223,
           "source_quote_char_count": 223,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7350,
@@ -4601,7 +4706,8 @@
           "source_quote_end_char": 223,
           "source_quote_char_count": 223,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6917,
@@ -4643,7 +4749,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 247
+          "source_quote_omitted_suffix_chars": 247,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7150,
@@ -4685,7 +4792,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 1978
+          "source_quote_omitted_suffix_chars": 1978,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7231,
@@ -4727,7 +4835,8 @@
           "source_quote_end_char": 399,
           "source_quote_char_count": 399,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7364,
@@ -4769,7 +4878,8 @@
           "source_quote_end_char": 646,
           "source_quote_char_count": 646,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6793,
@@ -4811,7 +4921,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 1277
+          "source_quote_omitted_suffix_chars": 1277,
+          "source_status": "sufficient"
         }
       ],
       "counts": {
@@ -4866,7 +4977,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6689,
@@ -4908,7 +5020,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 427
+          "source_quote_omitted_suffix_chars": 427,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6822,
@@ -4950,7 +5063,8 @@
           "source_quote_end_char": 990,
           "source_quote_char_count": 990,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6823,
@@ -4992,7 +5106,8 @@
           "source_quote_end_char": 834,
           "source_quote_char_count": 834,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6898,
@@ -5034,7 +5149,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 85
+          "source_quote_omitted_suffix_chars": 85,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7054,
@@ -5076,7 +5192,8 @@
           "source_quote_end_char": 976,
           "source_quote_char_count": 976,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7112,
@@ -5119,7 +5236,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 105
+          "source_quote_omitted_suffix_chars": 105,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7117,
@@ -5163,7 +5281,8 @@
           "source_quote_end_char": 999,
           "source_quote_char_count": 999,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 186
+          "source_quote_omitted_suffix_chars": 186,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7134,
@@ -5207,96 +5326,8 @@
           "source_quote_end_char": 548,
           "source_quote_char_count": 548,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
-        },
-        {
-          "event_id": 7172,
-          "family_id": "linked:5290",
-          "occurrence_member_ids": [
-            5290,
-            5291,
-            7172
-          ],
-          "title": "🎭 Мюзикл «Алиса в Стране Чудес»",
-          "occurrence_date": "2026-09-26",
-          "venue": "Калининградский театр эстрады (Дом искусств)",
-          "expected": "positive_candidate",
-          "confidence": "high",
-          "review_decision": "keep",
-          "reason_code": "children_family_musical",
-          "source_refs": [
-            {
-              "source_id": 9573634,
-              "source_type": "parser:estrada",
-              "source_url": "https://domiskusstv.edinoepole.ru/widget/events/935/event_seats",
-              "trust_level": "high",
-              "source_chat_username": null,
-              "source_message_id": null,
-              "source_text_sha256": "3e597d9a1331c58ede6d120260ad2764159ae63e94bb01bcd53b0f5b6daac9c4",
-              "source_record_sha256": "4098e63b92a332f39f59500602ad6925ddac6a8d50d0ac6a7b997674f29cfefc",
-              "event_id": 7172,
-              "source_text_char_count": 401,
-              "source_ref_sha256": "918642f878a3335321f457dbbe23ed28e8f59d72a258afff79325f434346bd10"
-            }
-          ],
-          "source_quote": "Название: Мюзикл \"Алиса в Стране Чудес\nДата: 2026-09-26\nВремя: 17:00\nПлощадка: Калининградский театр эстрады (Дом искусств), Ленинский проспект 155, Калининград\nАдрес: Ленинский проспект 155, Калининград\nВозраст: 6+\nСтатус билетов: доступны\nЦена: от 300 RUB\nСсылка: https://domiskusstv.edinoepole.ru/widget/events/935/event_seats\n\nОписание:\nБольшой зал. 1 час 20 минут\n\nВозраст: 6+\n\nСцена: Большой зал",
-          "source_quote_sha256": "3e597d9a1331c58ede6d120260ad2764159ae63e94bb01bcd53b0f5b6daac9c4",
-          "model_document_hash": "3574e80eb6fa9d2e5d73bcadb71cd12cbdab80ad82f483b91745d0f49635e0a1",
-          "model_excerpt": "Музыкальный спектакль создан по мотивам сказки Льюиса Кэрролла. Литературной основой постановки послужило знаменитое произведение английского писателя.",
-          "bge_selected": false,
-          "score_status": "pending_pr_b",
-          "source_quote_kind": "full",
-          "source_quote_truncated": false,
-          "source_quote_start_char": 0,
-          "source_quote_end_char": 401,
-          "source_quote_char_count": 401,
-          "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
-        },
-        {
-          "event_id": 7176,
-          "family_id": "linked:7176",
-          "occurrence_member_ids": [
-            7176,
-            7177
-          ],
-          "title": "🎭 «Три кота: День Варенья»",
-          "occurrence_date": "2026-10-11",
-          "venue": "Калининградский театр эстрады (Дом искусств)",
-          "expected": "positive_candidate",
-          "confidence": "high",
-          "review_decision": "keep",
-          "reason_code": "children_franchise_show",
-          "source_refs": [
-            {
-              "source_id": 9573638,
-              "source_type": "parser:estrada",
-              "source_url": "https://domiskusstv.edinoepole.ru/widget/events/931/event_seats",
-              "trust_level": "high",
-              "source_chat_username": null,
-              "source_message_id": null,
-              "source_text_sha256": "8d211accc778bf72d812366bd66e0bb134c089e9057478b94fecb1a7f4dda6c8",
-              "source_record_sha256": "3d07202f49d12d645c3d1a661097bea7b116014554f284d7ba52944087383681",
-              "event_id": 7176,
-              "source_text_char_count": 392,
-              "source_ref_sha256": "9ecfd012c5234e30ae08f371b7848a8cafbca3702c1466b864c4d750222933b0"
-            }
-          ],
-          "source_quote": "Название: \"Три кота: День Варенья\"\nДата: 2026-10-11\nВремя: 11:00\nПлощадка: Калининградский театр эстрады (Дом искусств), Ленинский проспект 155, Калининград\nАдрес: Ленинский проспект 155, Калининград\nВозраст: 0+\nСтатус билетов: доступны\nЦена: от 1000 RUB\nСсылка: https://domiskusstv.edinoepole.ru/widget/events/931/event_seats\n\nОписание:\nБольшой зал. 55 минут\n\nВозраст: 0+\n\nСцена: Большой зал",
-          "source_quote_sha256": "8d211accc778bf72d812366bd66e0bb134c089e9057478b94fecb1a7f4dda6c8",
-          "model_document_hash": "4d3d09466e74a208416ab1af3a2cee0f0813f12ef4e36377694956500dc52b7e",
-          "model_excerpt": "Детский музыкальный спектакль «Три кота: День Варенья» создан по мотивам мультсериала о приключениях котят.",
-          "bge_selected": false,
-          "score_status": "pending_pr_b",
-          "festival_scope_kind": "festival_child_event",
-          "occurrence_specific_source": true,
-          "source_quote_kind": "full",
-          "source_quote_truncated": false,
-          "source_quote_start_char": 0,
-          "source_quote_end_char": 392,
-          "source_quote_char_count": 392,
-          "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7190,
@@ -5338,7 +5369,8 @@
           "source_quote_end_char": 343,
           "source_quote_char_count": 343,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7211,
@@ -5380,7 +5412,8 @@
           "source_quote_end_char": 357,
           "source_quote_char_count": 357,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7228,
@@ -5422,7 +5455,8 @@
           "source_quote_end_char": 416,
           "source_quote_char_count": 416,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7256,
@@ -5464,7 +5498,8 @@
           "source_quote_end_char": 1349,
           "source_quote_char_count": 999,
           "source_quote_omitted_prefix_chars": 350,
-          "source_quote_omitted_suffix_chars": 187
+          "source_quote_omitted_suffix_chars": 187,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7290,
@@ -5506,7 +5541,8 @@
           "source_quote_end_char": 892,
           "source_quote_char_count": 892,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7335,
@@ -5548,7 +5584,8 @@
           "source_quote_end_char": 999,
           "source_quote_char_count": 999,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 535
+          "source_quote_omitted_suffix_chars": 535,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7376,
@@ -5590,7 +5627,8 @@
           "source_quote_end_char": 668,
           "source_quote_char_count": 668,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         }
       ],
       "hard_negatives": [
@@ -5634,7 +5672,8 @@
           "source_quote_end_char": 1350,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 350,
-          "source_quote_omitted_suffix_chars": 192
+          "source_quote_omitted_suffix_chars": 192,
+          "source_status": "sufficient"
         },
         {
           "event_id": 4960,
@@ -5676,7 +5715,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 550
+          "source_quote_omitted_suffix_chars": 550,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6248,
@@ -5718,7 +5758,8 @@
           "source_quote_end_char": 999,
           "source_quote_char_count": 999,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 232
+          "source_quote_omitted_suffix_chars": 232,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6521,
@@ -5760,7 +5801,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 301
+          "source_quote_omitted_suffix_chars": 301,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6562,
@@ -5802,7 +5844,8 @@
           "source_quote_end_char": 891,
           "source_quote_char_count": 891,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6595,
@@ -5844,7 +5887,8 @@
           "source_quote_end_char": 657,
           "source_quote_char_count": 657,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6624,
@@ -5886,7 +5930,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 2527
+          "source_quote_omitted_suffix_chars": 2527,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6737,
@@ -5928,7 +5973,8 @@
           "source_quote_end_char": 685,
           "source_quote_char_count": 685,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6797,
@@ -5970,7 +6016,8 @@
           "source_quote_end_char": 711,
           "source_quote_char_count": 711,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6825,
@@ -6012,7 +6059,8 @@
           "source_quote_end_char": 1350,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 350,
-          "source_quote_omitted_suffix_chars": 157
+          "source_quote_omitted_suffix_chars": 157,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6826,
@@ -6054,7 +6102,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 263
+          "source_quote_omitted_suffix_chars": 263,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7182,
@@ -6096,7 +6145,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 399
+          "source_quote_omitted_suffix_chars": 399,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7282,
@@ -6138,7 +6188,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 416
+          "source_quote_omitted_suffix_chars": 416,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7291,
@@ -6180,7 +6231,8 @@
           "source_quote_end_char": 892,
           "source_quote_char_count": 892,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7337,
@@ -6222,7 +6274,8 @@
           "source_quote_end_char": 972,
           "source_quote_char_count": 972,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7351,
@@ -6264,7 +6317,8 @@
           "source_quote_end_char": 965,
           "source_quote_char_count": 965,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7352,
@@ -6306,7 +6360,8 @@
           "source_quote_end_char": 965,
           "source_quote_char_count": 965,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 3803,
@@ -6348,7 +6403,8 @@
           "source_quote_end_char": 997,
           "source_quote_char_count": 997,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 591
+          "source_quote_omitted_suffix_chars": 591,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6809,
@@ -6390,7 +6446,8 @@
           "source_quote_end_char": 530,
           "source_quote_char_count": 530,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6942,
@@ -6432,14 +6489,15 @@
           "source_quote_end_char": 413,
           "source_quote_char_count": 413,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         }
       ],
       "counts": {
-        "positive_candidates": 18,
-        "high_confidence_positives": 14,
+        "positive_candidates": 16,
+        "high_confidence_positives": 12,
         "hard_negatives": 20,
-        "positive_families": 18,
+        "positive_families": 16,
         "hard_negative_families": 20
       }
     },
@@ -6447,6 +6505,49 @@
       "definition_id": "ontology-v2.family_suitable",
       "definition": "Взрослые и дети прямо приглашены на совместное посещение.",
       "positives": [
+        {
+          "event_id": 6562,
+          "family_id": "event:6562",
+          "occurrence_member_ids": [
+            6562
+          ],
+          "title": "Ревущий лев, поющий лось",
+          "occurrence_date": "2026-07-01",
+          "venue": "Музей Изобразительных искусств",
+          "expected": "positive_candidate",
+          "confidence": "high",
+          "review_decision": "keep",
+          "reason_code": "explicit_whole_family_invitation",
+          "source_refs": [
+            {
+              "source_id": 7734705,
+              "source_type": "telegram",
+              "source_url": "https://t.me/kulturnaya_chaika/7956",
+              "trust_level": "medium",
+              "source_chat_username": "kulturnaya_chaika",
+              "source_message_id": 7956,
+              "source_text_sha256": "275d4fa5888ed03d3e7a4f305cc7e7847aba20108c5fdb5bfe02ee43f5f5fc84",
+              "source_record_sha256": "d6b78da7bf07c1d0fd5a7614c2c0cbcc7655bd88cb0e91f60cbbfd9c2f7ab6bf",
+              "event_id": 6562,
+              "source_text_char_count": 891,
+              "source_ref_sha256": "72af912f3cf20a29775d9d5a5fef0a42932d6c6cc23db983f1d4d1e7fd573cc6"
+            }
+          ],
+          "source_quote": "Выставка «Ревущий лев, поющий лось»\n\n🗓️ до #2_августа\n📍 Ленинский пр-кт 83\n\nРады сообщить о продлении выставки «Ревущий лев, поющий лось», организованной Калининградским музеем изобразительных искусств совместно с Калининградским зоопарком. Экспозиция, посвященная 130-летнему юбилею одного из старейших зоопарков нашей страны, продолжит свою работу до 2 августа.\n\nНе упустите шанс увидеть удивительные экспонаты и погрузиться в мир природы и искусства. Содержание выставки призвано продемонстрировать анималистическую тематику с разных сторон и порой неожиданных ракурсов. Здесь и животные в разных видах искусства, и открытки из советского прошлого, и плакаты зоопарка, которые узнает старшее поколение.\n\nПриходите всей семьёй!\n\nСтоимость билетов: стандартный – 250 рублей; студенческий – 200 рублей; школьный, пенсионный – 150 рублей. Справки – по телефону: +7 (4012) 46-71-43.\n\n#выставка",
+          "source_quote_sha256": "275d4fa5888ed03d3e7a4f305cc7e7847aba20108c5fdb5bfe02ee43f5f5fc84",
+          "model_document_hash": "f361cbf48e4e36c856397e3a993798ae8ac628f37d234f1bd9f598945f8bb84c",
+          "model_excerpt": "> Выставка «Ревущий лев, поющий лось» Экспозиция приурочена к 130-летнему юбилею одного из старейших зоопарков страны и раскрывает анималистическую тематику в искусстве с разных сторон и неожиданных ракурсов. В центре внимания — образы животных, представленные через разнообразные художественные формы и исторические материалы. 🐾 ### Анималистика в искусстве В",
+          "bge_selected": true,
+          "score_status": "pending_pr_b",
+          "source_quote_kind": "full",
+          "source_quote_truncated": false,
+          "source_quote_start_char": 0,
+          "source_quote_end_char": 891,
+          "source_quote_char_count": 891,
+          "source_quote_omitted_prefix_chars": 0,
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
+        },
         {
           "event_id": 6822,
           "family_id": "event:6822",
@@ -6487,7 +6588,8 @@
           "source_quote_end_char": 990,
           "source_quote_char_count": 990,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6824,
@@ -6531,49 +6633,8 @@
           "source_quote_end_char": 1185,
           "source_quote_char_count": 835,
           "source_quote_omitted_prefix_chars": 350,
-          "source_quote_omitted_suffix_chars": 0
-        },
-        {
-          "event_id": 6898,
-          "family_id": "event:6898",
-          "occurrence_member_ids": [
-            6898
-          ],
-          "title": "День крабовой палочки с VICI",
-          "occurrence_date": "2026-08-01",
-          "venue": "набережная реки Неман",
-          "expected": "positive_candidate",
-          "confidence": "high",
-          "review_decision": "keep",
-          "reason_code": "family_day_with_children_zone",
-          "source_refs": [
-            {
-              "source_id": 8817752,
-              "source_type": "vk",
-              "source_url": "https://vk.com/wall-162306445_37492",
-              "trust_level": null,
-              "source_chat_username": null,
-              "source_message_id": 37492,
-              "source_text_sha256": "852f71550eafa808e0a166c1200936c26ea90da3cb3d623ae49b5dd54f6077e4",
-              "source_record_sha256": "c7a29227bcf55f18196d05a96ef346078cc1581a5a2156976602180dcc75ec9d",
-              "event_id": 6898,
-              "source_text_char_count": 1085,
-              "source_ref_sha256": "ce22def4dbdf562e200ebed104baf9f7ba5bebe4de10d7522eaa32b8a1cae903"
-            }
-          ],
-          "source_quote": "День крабовой палочки с Vici 👍\n\nАдминистрация Советского городского округа и компания «Вичи-Русь» 1 августа приглашают на большой праздник на набережной!\n\nВ программе мероприятия:\n● торжественное открытие с участием главы Советского городского округа и управляющего директора компании «Вичи-Русь»\n● награждение сотрудников завода\n● масштабная концертная программа\n● ярмарка фермерской продукции Калининградской области\n● фудкорт с новыми вкусами, включая специальные блюда от Vici\n● развлекательная и спортивная программы\n● детская зона с аниматорами, бесплатными мастер-классами\n● фотозона, моментальные фото и видеоспиннер - видеоселфи 360, которое сразу можно получить себе на телефон и разместить в соцсетях\n● розыгрыши и лотерея с подарками\n\nЭто событие станет не только праздником компании, но и прекрасной городской традицией, объединяющей жителей, партнёров и гостей Советска.\n\n 📍 Место: Советск, набережная реки Неман\n 📅 Дата: 1 августа 2026 года\n\n Сохраняйте дату, приглашайте друзей и знак",
-          "source_quote_sha256": "ea05a163cb553e8d0413b618e0a455cacd91c8b382ba00b8627455c209ad2bee",
-          "model_document_hash": "9ec73f6362e6e603f49565acd4f749279f8bab4269fcf8d58ff7a5e4f76a6913",
-          "model_excerpt": "День крабовой палочки с Vici включает торжественное награждение сотрудников завода и масштабную концертную программу. Мероприятие объединяет ярмарку фермерской продукции Калининградской области, гастрономические площадки и разнообразные активности для гостей. 🦀 ### Программа и гастрономия На событии запланирована масштабная концертная программа, а также разв",
-          "bge_selected": true,
-          "score_status": "pending_pr_b",
-          "source_quote_kind": "excerpt",
-          "source_quote_truncated": true,
-          "source_quote_start_char": 0,
-          "source_quote_end_char": 1000,
-          "source_quote_char_count": 1000,
-          "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 85
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6924,
@@ -6615,51 +6676,8 @@
           "source_quote_end_char": 557,
           "source_quote_char_count": 557,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
-        },
-        {
-          "event_id": 7102,
-          "family_id": "event:7102",
-          "occurrence_member_ids": [
-            7102
-          ],
-          "title": "Мастер-класс по созданию гига-мозаики",
-          "occurrence_date": "2026-08-08",
-          "venue": "Площадка у Солнечных часов на променаде",
-          "expected": "positive_candidate",
-          "confidence": "high",
-          "review_decision": "keep",
-          "reason_code": "parent_child_collective_mosaic",
-          "source_refs": [
-            {
-              "source_id": 9470752,
-              "source_type": "telegram",
-              "source_url": "https://t.me/kldevents/2791",
-              "trust_level": null,
-              "source_chat_username": "kldevents",
-              "source_message_id": 2791,
-              "source_text_sha256": "6c883a3a03bc7d114d0d2c310943f6737d366b9e7b6f84bb4d9119c7304ea403",
-              "source_record_sha256": "956f98be67c853e75438394648846f48cd39cad356da2e1669051574ff13abb6",
-              "event_id": 7102,
-              "source_text_char_count": 380,
-              "source_ref_sha256": "68d053f6f326e5662882cfd03277629a34b5800088bfa7af27288ccf699bd862"
-            }
-          ],
-          "source_quote": "🎨 Мастер-класс по созданию гига-мозаики\n✨ Море внутри\n🎟 8–9 августа\n📍 Площадка у Солнечных часов на променаде, #Светлогорск\n🆓🆓🆓🆓, по регистрации\n\nЭто будет не просто раскраска, а трёхметровая бумажная гига-мозаика! Иллюстратор - Анна Покаржевская с сыном Василием.\n\n#8августа #8_августа #афишасветлогорск #мастеркласс #фестиваль #бесплатно #Моревнутри\n\n🔎 Подробнее Max · Вконтакте",
-          "source_quote_sha256": "6c883a3a03bc7d114d0d2c310943f6737d366b9e7b6f84bb4d9119c7304ea403",
-          "model_document_hash": "9d57edd6cb245755370b34c97dcfa8fb01a8f184b33c5696f6be47b335259afd",
-          "model_excerpt": "В рамках фестиваля «Море внутри» пройдёт семейный мастер-класс по созданию трёхметровой бумажной гига-мозаики. 🎨 Занятие проведут иллюстратор Анна Покаржевская и её сын Василий. Организатором фестиваля выступает МОРЕ ВНУТРИ.",
-          "bge_selected": true,
-          "score_status": "pending_pr_b",
-          "festival_scope_kind": "festival_child_event",
-          "occurrence_specific_source": true,
-          "source_quote_kind": "full",
-          "source_quote_truncated": false,
-          "source_quote_start_char": 0,
-          "source_quote_end_char": 380,
-          "source_quote_char_count": 380,
-          "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7134,
@@ -6703,7 +6721,8 @@
           "source_quote_end_char": 548,
           "source_quote_char_count": 548,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7176,
@@ -6748,7 +6767,8 @@
           "source_quote_end_char": 392,
           "source_quote_char_count": 392,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7228,
@@ -6790,50 +6810,8 @@
           "source_quote_end_char": 416,
           "source_quote_char_count": 416,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
-        },
-        {
-          "event_id": 7258,
-          "family_id": "linked:3514",
-          "occurrence_member_ids": [
-            3514,
-            7258
-          ],
-          "title": "Бесплатная игротека в МЕГЕ",
-          "occurrence_date": "2026-08-01",
-          "venue": "ТЦ «МЕГА»",
-          "expected": "positive_candidate",
-          "confidence": "borderline",
-          "review_decision": "keep",
-          "reason_code": "family_game_library",
-          "source_refs": [
-            {
-              "source_id": 9603530,
-              "source_type": "telegram",
-              "source_url": "https://t.me/kulturnaya_chaika/8088",
-              "trust_level": "medium",
-              "source_chat_username": "kulturnaya_chaika",
-              "source_message_id": 8088,
-              "source_text_sha256": "10c92e1bfb70a13162c5de1a7c7805601b477ca5701da377c581d61f366964b2",
-              "source_record_sha256": "e9aecb01abaf846b6daab7dc14775a9d2b0df05792e52f29cc934b6c47e1c590",
-              "event_id": 7258,
-              "source_text_char_count": 910,
-              "source_ref_sha256": "1a2d237ca9269bea429d9ca27d6c7495a5d8dbb593dc88452b211c4251725cb2"
-            }
-          ],
-          "source_quote": "Бесплатная игротека в МЕГЕ\n\n🗓 #1_августа (суббота) с 13:00 до 18:00\n📍 Адрес: ТЦ «МЕГА», ул. Генерал-лейтенанта Озерова, 17Б\n🔶 Участие бесплатное. Только ваше желание играть и хорошее настроение!\n\nЛето на исходе. Но не время унывать! Отмечаем начало последнего летнего месяца вместе за настольными играми 😎☀️\n\n📍Игротека проходит слева, прямо у центрального входа📍\n\nПервые летние выходные дни отмечаем вместе.\nПришло время собраться с близкими и любимыми, что бы весело провести время за игровым столом!\n\nЧто вас ждёт\n🎲 Огромный выбор настольных игр для любой компании и возрастов. У нас есть всё — от легендарных игр для всех, до самых обсуждаемых новинок сезона.\n🤩 Территория живых эмоций и смеха. Самый верный способ зарядиться летней энергией!\n🫶 Встречаем долгожданное лето вместе.\n\nИдея для встречи с друзьями готова! Просто приходите, выбирайте игру и наслаждайтесь отличным времяпрепровождением.\n\n#встреча",
-          "source_quote_sha256": "10c92e1bfb70a13162c5de1a7c7805601b477ca5701da377c581d61f366964b2",
-          "model_document_hash": "b87a8dd7e771249e3e0e9c7b12fc2f712db7a7d5f749754cbaaf89fd38c7b319",
-          "model_excerpt": "В программе представлены настольные игры для любой компании и возрастов. В ассортименте присутствуют как легендарные игры, так и новинки сезона.",
-          "bge_selected": true,
-          "score_status": "pending_pr_b",
-          "source_quote_kind": "full",
-          "source_quote_truncated": false,
-          "source_quote_start_char": 0,
-          "source_quote_end_char": 910,
-          "source_quote_char_count": 910,
-          "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7283,
@@ -6875,49 +6853,8 @@
           "source_quote_end_char": 818,
           "source_quote_char_count": 818,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
-        },
-        {
-          "event_id": 7290,
-          "family_id": "event:7290",
-          "occurrence_member_ids": [
-            7290
-          ],
-          "title": "Столярный мастер-класс «Человек – пиктограмма (семейный)»",
-          "occurrence_date": "2026-08-01",
-          "venue": "Филиал Третьяковской галереи",
-          "expected": "positive_candidate",
-          "confidence": "high",
-          "review_decision": "keep",
-          "reason_code": "parent_child_joint_woodwork",
-          "source_refs": [
-            {
-              "source_id": 9745554,
-              "source_type": "telegram",
-              "source_url": "https://t.me/tretyakovka_kaliningrad/3514",
-              "trust_level": "high",
-              "source_chat_username": "tretyakovka_kaliningrad",
-              "source_message_id": 3514,
-              "source_text_sha256": "84411d76a01ed4dab8616aa58df6a38a795121a991dc2a6e01defaadf827fd89",
-              "source_record_sha256": "3c1c81f14da1da721b4ab192c5ecf81f68ba69be290165e57785142e7be6e63c",
-              "event_id": 7290,
-              "source_text_char_count": 892,
-              "source_ref_sha256": "dbe89455d7d40da6ae664ec3b32bce53c08ed7b3d2df5692e14d9f7f6b8e3e3d"
-            }
-          ],
-          "source_quote": "Публикуем расписание ближайших занятий в творческих мастерских🥳🥳🥳\n\n29 июля в 15:00\nМастер-класс «Сказочные звери» (6+)\nТехника: гуашь\nБилеты: vk.cc/cZNGSY\n\n30 июля в 15:30\nМастер-класс «Цветочный оттиск» (12+)\nТехника: ручная лепка, пластовая, оттиск, ангоб\nБилеты: vk.cc/cYMQ5S\n\n30 июля в 16:00\nМастер-класс «Цветомузыка» (12+)\nТехника: цветные чернила\nБилеты: vk.cc/cYMQ5c\n\n1 августа в 13:00\nСтолярный мастер-класс «Человек – пиктограмма (семейный)» (6+)\nТехника: панно из дерева\nБилеты: vk.cc/cZZ5dP\n\n1 августа в 15:30\nМастер-класс «Точки и линии» (12+)\nТехника: сухая пастель\nБилеты: vk.cc/cZarIv\n\n1 августа в 16:00\nСтолярный мастер-класс «Конструктивизм на ткани» (16+)\nТехника: панно из дерева\nБилеты: vk.cc/cZZ5bG\n\n2 августа в 11:00\nМастер-класс «Летний кот» (6+)\nТехника: гуашь\nБилеты: vk.cc/cYAJ8X\n\n2 августа в 14:00\nМастер-класс «Парус в заливе. Живопись» (16+)\nБилеты: vk.cc/cZWQ5e",
-          "source_quote_sha256": "84411d76a01ed4dab8616aa58df6a38a795121a991dc2a6e01defaadf827fd89",
-          "model_document_hash": "b6da0907e5be5caa9a02f4b04a3b65ec18d94f468da5d2e231b2e04fc5f5dee6",
-          "model_excerpt": "Участники творческого занятия смогут попробовать свои силы в столярном деле и создать авторское панно из дерева. Программа ориентирована на семейное посещение, что позволяет взрослым и детям совместно поработать над общим проектом. ### Особенности занятия 🎨 Работа с деревом требует внимательности и аккуратности, поэтому мастер-класс предполагает выполнение п",
-          "bge_selected": true,
-          "score_status": "pending_pr_b",
-          "source_quote_kind": "full",
-          "source_quote_truncated": false,
-          "source_quote_start_char": 0,
-          "source_quote_end_char": 892,
-          "source_quote_char_count": 892,
-          "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7326,
@@ -6960,7 +6897,8 @@
           "source_quote_end_char": 719,
           "source_quote_char_count": 719,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7354,
@@ -7002,7 +6940,8 @@
           "source_quote_end_char": 970,
           "source_quote_char_count": 970,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7372,
@@ -7044,7 +6983,8 @@
           "source_quote_end_char": 908,
           "source_quote_char_count": 908,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         }
       ],
       "hard_negatives": [
@@ -7088,7 +7028,8 @@
           "source_quote_end_char": 1350,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 350,
-          "source_quote_omitted_suffix_chars": 192
+          "source_quote_omitted_suffix_chars": 192,
+          "source_status": "sufficient"
         },
         {
           "event_id": 4960,
@@ -7130,7 +7071,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 550
+          "source_quote_omitted_suffix_chars": 550,
+          "source_status": "sufficient"
         },
         {
           "event_id": 5556,
@@ -7172,7 +7114,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6248,
@@ -7214,7 +7157,8 @@
           "source_quote_end_char": 999,
           "source_quote_char_count": 999,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 232
+          "source_quote_omitted_suffix_chars": 232,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6521,
@@ -7256,49 +7200,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 301
-        },
-        {
-          "event_id": 6562,
-          "family_id": "event:6562",
-          "occurrence_member_ids": [
-            6562
-          ],
-          "title": "Ревущий лев, поющий лось",
-          "occurrence_date": "2026-07-01",
-          "venue": "Музей Изобразительных искусств",
-          "expected": "hard_negative",
-          "confidence": "high",
-          "review_decision": "keep",
-          "reason_code": "generic_family_topic_exhibition",
-          "source_refs": [
-            {
-              "source_id": 7734705,
-              "source_type": "telegram",
-              "source_url": "https://t.me/kulturnaya_chaika/7956",
-              "trust_level": "medium",
-              "source_chat_username": "kulturnaya_chaika",
-              "source_message_id": 7956,
-              "source_text_sha256": "275d4fa5888ed03d3e7a4f305cc7e7847aba20108c5fdb5bfe02ee43f5f5fc84",
-              "source_record_sha256": "d6b78da7bf07c1d0fd5a7614c2c0cbcc7655bd88cb0e91f60cbbfd9c2f7ab6bf",
-              "event_id": 6562,
-              "source_text_char_count": 891,
-              "source_ref_sha256": "72af912f3cf20a29775d9d5a5fef0a42932d6c6cc23db983f1d4d1e7fd573cc6"
-            }
-          ],
-          "source_quote": "Выставка «Ревущий лев, поющий лось»\n\n🗓️ до #2_августа\n📍 Ленинский пр-кт 83\n\nРады сообщить о продлении выставки «Ревущий лев, поющий лось», организованной Калининградским музеем изобразительных искусств совместно с Калининградским зоопарком. Экспозиция, посвященная 130-летнему юбилею одного из старейших зоопарков нашей страны, продолжит свою работу до 2 августа.\n\nНе упустите шанс увидеть удивительные экспонаты и погрузиться в мир природы и искусства. Содержание выставки призвано продемонстрировать анималистическую тематику с разных сторон и порой неожиданных ракурсов. Здесь и животные в разных видах искусства, и открытки из советского прошлого, и плакаты зоопарка, которые узнает старшее поколение.\n\nПриходите всей семьёй!\n\nСтоимость билетов: стандартный – 250 рублей; студенческий – 200 рублей; школьный, пенсионный – 150 рублей. Справки – по телефону: +7 (4012) 46-71-43.\n\n#выставка",
-          "source_quote_sha256": "275d4fa5888ed03d3e7a4f305cc7e7847aba20108c5fdb5bfe02ee43f5f5fc84",
-          "model_document_hash": "f361cbf48e4e36c856397e3a993798ae8ac628f37d234f1bd9f598945f8bb84c",
-          "model_excerpt": "> Выставка «Ревущий лев, поющий лось» Экспозиция приурочена к 130-летнему юбилею одного из старейших зоопарков страны и раскрывает анималистическую тематику в искусстве с разных сторон и неожиданных ракурсов. В центре внимания — образы животных, представленные через разнообразные художественные формы и исторические материалы. 🐾 ### Анималистика в искусстве В",
-          "bge_selected": true,
-          "score_status": "pending_pr_b",
-          "source_quote_kind": "full",
-          "source_quote_truncated": false,
-          "source_quote_start_char": 0,
-          "source_quote_end_char": 891,
-          "source_quote_char_count": 891,
-          "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 301,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6595,
@@ -7340,7 +7243,8 @@
           "source_quote_end_char": 657,
           "source_quote_char_count": 657,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6624,
@@ -7382,7 +7286,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 2527
+          "source_quote_omitted_suffix_chars": 2527,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6689,
@@ -7424,7 +7329,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 427
+          "source_quote_omitted_suffix_chars": 427,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6737,
@@ -7466,7 +7372,8 @@
           "source_quote_end_char": 685,
           "source_quote_char_count": 685,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6797,
@@ -7508,7 +7415,8 @@
           "source_quote_end_char": 711,
           "source_quote_char_count": 711,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6825,
@@ -7550,7 +7458,8 @@
           "source_quote_end_char": 1350,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 350,
-          "source_quote_omitted_suffix_chars": 157
+          "source_quote_omitted_suffix_chars": 157,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6826,
@@ -7592,7 +7501,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 263
+          "source_quote_omitted_suffix_chars": 263,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7054,
@@ -7634,7 +7544,8 @@
           "source_quote_end_char": 976,
           "source_quote_char_count": 976,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7112,
@@ -7677,7 +7588,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 105
+          "source_quote_omitted_suffix_chars": 105,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7182,
@@ -7719,7 +7631,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 399
+          "source_quote_omitted_suffix_chars": 399,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7190,
@@ -7761,7 +7674,8 @@
           "source_quote_end_char": 343,
           "source_quote_char_count": 343,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7211,
@@ -7803,7 +7717,8 @@
           "source_quote_end_char": 357,
           "source_quote_char_count": 357,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7256,
@@ -7845,7 +7760,8 @@
           "source_quote_end_char": 1349,
           "source_quote_char_count": 999,
           "source_quote_omitted_prefix_chars": 350,
-          "source_quote_omitted_suffix_chars": 187
+          "source_quote_omitted_suffix_chars": 187,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7282,
@@ -7887,7 +7803,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 416
+          "source_quote_omitted_suffix_chars": 416,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7335,
@@ -7929,7 +7846,8 @@
           "source_quote_end_char": 999,
           "source_quote_char_count": 999,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 535
+          "source_quote_omitted_suffix_chars": 535,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7337,
@@ -7971,7 +7889,8 @@
           "source_quote_end_char": 972,
           "source_quote_char_count": 972,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7351,
@@ -8013,7 +7932,8 @@
           "source_quote_end_char": 965,
           "source_quote_char_count": 965,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7376,
@@ -8055,15 +7975,16 @@
           "source_quote_end_char": 668,
           "source_quote_char_count": 668,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         }
       ],
       "counts": {
-        "positive_candidates": 14,
-        "high_confidence_positives": 11,
-        "hard_negatives": 24,
-        "positive_families": 14,
-        "hard_negative_families": 24
+        "positive_candidates": 11,
+        "high_confidence_positives": 9,
+        "hard_negatives": 23,
+        "positive_families": 11,
+        "hard_negative_families": 23
       }
     },
     "joint_family_activity": {
@@ -8071,135 +7992,6 @@
       "definition": "Взрослый и ребёнок выполняют общую практику или задание.",
       "positives": [
         {
-          "event_id": 7102,
-          "family_id": "event:7102",
-          "occurrence_member_ids": [
-            7102
-          ],
-          "title": "Мастер-класс по созданию гига-мозаики",
-          "occurrence_date": "2026-08-08",
-          "venue": "Площадка у Солнечных часов на променаде",
-          "expected": "positive_candidate",
-          "confidence": "high",
-          "review_decision": "keep",
-          "reason_code": "parent_child_collective_mosaic",
-          "source_refs": [
-            {
-              "source_id": 9470752,
-              "source_type": "telegram",
-              "source_url": "https://t.me/kldevents/2791",
-              "trust_level": null,
-              "source_chat_username": "kldevents",
-              "source_message_id": 2791,
-              "source_text_sha256": "6c883a3a03bc7d114d0d2c310943f6737d366b9e7b6f84bb4d9119c7304ea403",
-              "source_record_sha256": "956f98be67c853e75438394648846f48cd39cad356da2e1669051574ff13abb6",
-              "event_id": 7102,
-              "source_text_char_count": 380,
-              "source_ref_sha256": "68d053f6f326e5662882cfd03277629a34b5800088bfa7af27288ccf699bd862"
-            }
-          ],
-          "source_quote": "🎨 Мастер-класс по созданию гига-мозаики\n✨ Море внутри\n🎟 8–9 августа\n📍 Площадка у Солнечных часов на променаде, #Светлогорск\n🆓🆓🆓🆓, по регистрации\n\nЭто будет не просто раскраска, а трёхметровая бумажная гига-мозаика! Иллюстратор - Анна Покаржевская с сыном Василием.\n\n#8августа #8_августа #афишасветлогорск #мастеркласс #фестиваль #бесплатно #Моревнутри\n\n🔎 Подробнее Max · Вконтакте",
-          "source_quote_sha256": "6c883a3a03bc7d114d0d2c310943f6737d366b9e7b6f84bb4d9119c7304ea403",
-          "model_document_hash": "9d57edd6cb245755370b34c97dcfa8fb01a8f184b33c5696f6be47b335259afd",
-          "model_excerpt": "В рамках фестиваля «Море внутри» пройдёт семейный мастер-класс по созданию трёхметровой бумажной гига-мозаики. 🎨 Занятие проведут иллюстратор Анна Покаржевская и её сын Василий. Организатором фестиваля выступает МОРЕ ВНУТРИ.",
-          "bge_selected": true,
-          "score_status": "pending_pr_b",
-          "festival_scope_kind": "festival_child_event",
-          "occurrence_specific_source": true,
-          "source_quote_kind": "full",
-          "source_quote_truncated": false,
-          "source_quote_start_char": 0,
-          "source_quote_end_char": 380,
-          "source_quote_char_count": 380,
-          "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
-        },
-        {
-          "event_id": 7258,
-          "family_id": "linked:3514",
-          "occurrence_member_ids": [
-            3514,
-            7258
-          ],
-          "title": "Бесплатная игротека в МЕГЕ",
-          "occurrence_date": "2026-08-01",
-          "venue": "ТЦ «МЕГА»",
-          "expected": "positive_candidate",
-          "confidence": "borderline",
-          "review_decision": "keep",
-          "reason_code": "family_game_library",
-          "source_refs": [
-            {
-              "source_id": 9603530,
-              "source_type": "telegram",
-              "source_url": "https://t.me/kulturnaya_chaika/8088",
-              "trust_level": "medium",
-              "source_chat_username": "kulturnaya_chaika",
-              "source_message_id": 8088,
-              "source_text_sha256": "10c92e1bfb70a13162c5de1a7c7805601b477ca5701da377c581d61f366964b2",
-              "source_record_sha256": "e9aecb01abaf846b6daab7dc14775a9d2b0df05792e52f29cc934b6c47e1c590",
-              "event_id": 7258,
-              "source_text_char_count": 910,
-              "source_ref_sha256": "1a2d237ca9269bea429d9ca27d6c7495a5d8dbb593dc88452b211c4251725cb2"
-            }
-          ],
-          "source_quote": "Бесплатная игротека в МЕГЕ\n\n🗓 #1_августа (суббота) с 13:00 до 18:00\n📍 Адрес: ТЦ «МЕГА», ул. Генерал-лейтенанта Озерова, 17Б\n🔶 Участие бесплатное. Только ваше желание играть и хорошее настроение!\n\nЛето на исходе. Но не время унывать! Отмечаем начало последнего летнего месяца вместе за настольными играми 😎☀️\n\n📍Игротека проходит слева, прямо у центрального входа📍\n\nПервые летние выходные дни отмечаем вместе.\nПришло время собраться с близкими и любимыми, что бы весело провести время за игровым столом!\n\nЧто вас ждёт\n🎲 Огромный выбор настольных игр для любой компании и возрастов. У нас есть всё — от легендарных игр для всех, до самых обсуждаемых новинок сезона.\n🤩 Территория живых эмоций и смеха. Самый верный способ зарядиться летней энергией!\n🫶 Встречаем долгожданное лето вместе.\n\nИдея для встречи с друзьями готова! Просто приходите, выбирайте игру и наслаждайтесь отличным времяпрепровождением.\n\n#встреча",
-          "source_quote_sha256": "10c92e1bfb70a13162c5de1a7c7805601b477ca5701da377c581d61f366964b2",
-          "model_document_hash": "b87a8dd7e771249e3e0e9c7b12fc2f712db7a7d5f749754cbaaf89fd38c7b319",
-          "model_excerpt": "В программе представлены настольные игры для любой компании и возрастов. В ассортименте присутствуют как легендарные игры, так и новинки сезона.",
-          "bge_selected": true,
-          "score_status": "pending_pr_b",
-          "source_quote_kind": "full",
-          "source_quote_truncated": false,
-          "source_quote_start_char": 0,
-          "source_quote_end_char": 910,
-          "source_quote_char_count": 910,
-          "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
-        },
-        {
-          "event_id": 7290,
-          "family_id": "event:7290",
-          "occurrence_member_ids": [
-            7290
-          ],
-          "title": "Столярный мастер-класс «Человек – пиктограмма (семейный)»",
-          "occurrence_date": "2026-08-01",
-          "venue": "Филиал Третьяковской галереи",
-          "expected": "positive_candidate",
-          "confidence": "high",
-          "review_decision": "keep",
-          "reason_code": "parent_child_joint_woodwork",
-          "source_refs": [
-            {
-              "source_id": 9745554,
-              "source_type": "telegram",
-              "source_url": "https://t.me/tretyakovka_kaliningrad/3514",
-              "trust_level": "high",
-              "source_chat_username": "tretyakovka_kaliningrad",
-              "source_message_id": 3514,
-              "source_text_sha256": "84411d76a01ed4dab8616aa58df6a38a795121a991dc2a6e01defaadf827fd89",
-              "source_record_sha256": "3c1c81f14da1da721b4ab192c5ecf81f68ba69be290165e57785142e7be6e63c",
-              "event_id": 7290,
-              "source_text_char_count": 892,
-              "source_ref_sha256": "dbe89455d7d40da6ae664ec3b32bce53c08ed7b3d2df5692e14d9f7f6b8e3e3d"
-            }
-          ],
-          "source_quote": "Публикуем расписание ближайших занятий в творческих мастерских🥳🥳🥳\n\n29 июля в 15:00\nМастер-класс «Сказочные звери» (6+)\nТехника: гуашь\nБилеты: vk.cc/cZNGSY\n\n30 июля в 15:30\nМастер-класс «Цветочный оттиск» (12+)\nТехника: ручная лепка, пластовая, оттиск, ангоб\nБилеты: vk.cc/cYMQ5S\n\n30 июля в 16:00\nМастер-класс «Цветомузыка» (12+)\nТехника: цветные чернила\nБилеты: vk.cc/cYMQ5c\n\n1 августа в 13:00\nСтолярный мастер-класс «Человек – пиктограмма (семейный)» (6+)\nТехника: панно из дерева\nБилеты: vk.cc/cZZ5dP\n\n1 августа в 15:30\nМастер-класс «Точки и линии» (12+)\nТехника: сухая пастель\nБилеты: vk.cc/cZarIv\n\n1 августа в 16:00\nСтолярный мастер-класс «Конструктивизм на ткани» (16+)\nТехника: панно из дерева\nБилеты: vk.cc/cZZ5bG\n\n2 августа в 11:00\nМастер-класс «Летний кот» (6+)\nТехника: гуашь\nБилеты: vk.cc/cYAJ8X\n\n2 августа в 14:00\nМастер-класс «Парус в заливе. Живопись» (16+)\nБилеты: vk.cc/cZWQ5e",
-          "source_quote_sha256": "84411d76a01ed4dab8616aa58df6a38a795121a991dc2a6e01defaadf827fd89",
-          "model_document_hash": "b6da0907e5be5caa9a02f4b04a3b65ec18d94f468da5d2e231b2e04fc5f5dee6",
-          "model_excerpt": "Участники творческого занятия смогут попробовать свои силы в столярном деле и создать авторское панно из дерева. Программа ориентирована на семейное посещение, что позволяет взрослым и детям совместно поработать над общим проектом. ### Особенности занятия 🎨 Работа с деревом требует внимательности и аккуратности, поэтому мастер-класс предполагает выполнение п",
-          "bge_selected": true,
-          "score_status": "pending_pr_b",
-          "source_quote_kind": "full",
-          "source_quote_truncated": false,
-          "source_quote_start_char": 0,
-          "source_quote_end_char": 892,
-          "source_quote_char_count": 892,
-          "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
-        },
-        {
           "event_id": 7372,
           "family_id": "event:7372",
           "occurrence_member_ids": [
@@ -8239,7 +8031,8 @@
           "source_quote_end_char": 908,
           "source_quote_char_count": 908,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         }
       ],
       "hard_negatives": [
@@ -8283,7 +8076,8 @@
           "source_quote_end_char": 1350,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 350,
-          "source_quote_omitted_suffix_chars": 192
+          "source_quote_omitted_suffix_chars": 192,
+          "source_status": "sufficient"
         },
         {
           "event_id": 4960,
@@ -8325,7 +8119,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 550
+          "source_quote_omitted_suffix_chars": 550,
+          "source_status": "sufficient"
         },
         {
           "event_id": 5556,
@@ -8367,7 +8162,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6248,
@@ -8409,7 +8205,8 @@
           "source_quote_end_char": 999,
           "source_quote_char_count": 999,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 232
+          "source_quote_omitted_suffix_chars": 232,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6521,
@@ -8451,7 +8248,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 301
+          "source_quote_omitted_suffix_chars": 301,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6562,
@@ -8493,7 +8291,8 @@
           "source_quote_end_char": 891,
           "source_quote_char_count": 891,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6595,
@@ -8535,7 +8334,8 @@
           "source_quote_end_char": 657,
           "source_quote_char_count": 657,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6624,
@@ -8577,7 +8377,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 2527
+          "source_quote_omitted_suffix_chars": 2527,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6689,
@@ -8619,7 +8420,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 427
+          "source_quote_omitted_suffix_chars": 427,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6737,
@@ -8661,7 +8463,8 @@
           "source_quote_end_char": 685,
           "source_quote_char_count": 685,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6797,
@@ -8703,7 +8506,8 @@
           "source_quote_end_char": 711,
           "source_quote_char_count": 711,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6825,
@@ -8745,7 +8549,8 @@
           "source_quote_end_char": 1350,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 350,
-          "source_quote_omitted_suffix_chars": 157
+          "source_quote_omitted_suffix_chars": 157,
+          "source_status": "sufficient"
         },
         {
           "event_id": 6826,
@@ -8787,7 +8592,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 263
+          "source_quote_omitted_suffix_chars": 263,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7054,
@@ -8829,7 +8635,8 @@
           "source_quote_end_char": 976,
           "source_quote_char_count": 976,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7112,
@@ -8872,7 +8679,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 105
+          "source_quote_omitted_suffix_chars": 105,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7182,
@@ -8914,7 +8722,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 399
+          "source_quote_omitted_suffix_chars": 399,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7190,
@@ -8956,7 +8765,8 @@
           "source_quote_end_char": 343,
           "source_quote_char_count": 343,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7211,
@@ -8998,7 +8808,8 @@
           "source_quote_end_char": 357,
           "source_quote_char_count": 357,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7256,
@@ -9040,7 +8851,8 @@
           "source_quote_end_char": 1349,
           "source_quote_char_count": 999,
           "source_quote_omitted_prefix_chars": 350,
-          "source_quote_omitted_suffix_chars": 187
+          "source_quote_omitted_suffix_chars": 187,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7282,
@@ -9082,7 +8894,8 @@
           "source_quote_end_char": 1000,
           "source_quote_char_count": 1000,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 416
+          "source_quote_omitted_suffix_chars": 416,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7335,
@@ -9124,7 +8937,8 @@
           "source_quote_end_char": 999,
           "source_quote_char_count": 999,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 535
+          "source_quote_omitted_suffix_chars": 535,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7337,
@@ -9166,7 +8980,8 @@
           "source_quote_end_char": 972,
           "source_quote_char_count": 972,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7351,
@@ -9208,7 +9023,8 @@
           "source_quote_end_char": 965,
           "source_quote_char_count": 965,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         },
         {
           "event_id": 7376,
@@ -9250,14 +9066,15 @@
           "source_quote_end_char": 668,
           "source_quote_char_count": 668,
           "source_quote_omitted_prefix_chars": 0,
-          "source_quote_omitted_suffix_chars": 0
+          "source_quote_omitted_suffix_chars": 0,
+          "source_status": "sufficient"
         }
       ],
       "counts": {
-        "positive_candidates": 4,
-        "high_confidence_positives": 3,
+        "positive_candidates": 1,
+        "high_confidence_positives": 1,
         "hard_negatives": 24,
-        "positive_families": 4,
+        "positive_families": 1,
         "hard_negative_families": 24
       }
     }
@@ -9285,5 +9102,14 @@
     "event_count": 126,
     "event_source_count": 389,
     "db_file_mtime": "2026-08-02T08:57:28.269214Z"
+  },
+  "source_status_contract": {
+    "version": "static-collection-source-status-v1",
+    "allowed": [
+      "sufficient",
+      "insufficient",
+      "needs_source_review"
+    ],
+    "review_supply_status": "sufficient"
   }
 }

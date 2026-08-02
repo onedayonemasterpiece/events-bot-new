@@ -9,8 +9,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REVIEW_DIR = ROOT / "docs" / "review-data" / "static-collections-source-reviews-v1"
 REQUIRED_IDS = {
-    5757, 5781, 6696, 6766, 6871, 6878, 7054, 7113, 7114,
-    7237, 7238, 7307, 7326, 7333, 7344, 7373, 7374,
+    5757, 5781, 6562, 6696, 6766, 6871, 6878, 6898, 7054, 7102,
+    7113, 7114, 7172, 7176, 7237, 7238, 7258, 7290, 7307, 7326,
+    7333, 7344, 7373, 7374,
 }
 
 
@@ -106,6 +107,25 @@ class StaticCollectionDataQualityReviewTests(unittest.TestCase):
         self.assertEqual(evidence["source_ref"]["source_id"], 9603588)
         self.assertIn("8 августа, 21:00", evidence["raw_source_quote"])
         self.assertIn("Вечерний кинопоказ", evidence["raw_source_quote"])
+
+    def test_corrected_audience_receipts_bind_exact_review_sources(self) -> None:
+        promoted = json.loads((REVIEW_DIR / "6562.json").read_text(encoding="utf-8"))
+        self.assertEqual(promoted["status"], "corrected")
+        self.assertEqual(promoted["source_evidence"][0]["source_ref"]["source_id"], 7734705)
+        self.assertEqual(
+            promoted["semantic_review_decision"]["family_suitable"],
+            "move_hard_negative_to_positive",
+        )
+
+        removed = json.loads(
+            (REVIEW_DIR / "6898-7102-7172-7176-7258-7290.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            [item["source_ref"]["source_id"] for item in removed["source_evidence"]],
+            [8817752, 9470752, 9573634, 9573638, 9603530, 9745554],
+        )
 
 
 if __name__ == "__main__":

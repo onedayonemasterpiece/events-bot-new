@@ -1,0 +1,289 @@
+{
+  "schema_version": "static-collection-source-review-v1",
+  "receipt_id": "6898-7102-7172-7176-7258-7290",
+  "reviewed_at": "2026-08-02T16:28:11.268351Z",
+  "status": "corrected",
+  "event_ids": [
+    6898,
+    7102,
+    7172,
+    7176,
+    7258,
+    7290
+  ],
+  "issue": "Provisional positives exceeded ontology v2: child zones, age/title signals, author relationships and generic company wording do not prove the removed audience dimensions.",
+  "canonical_before": [
+    {
+      "id": 6898,
+      "title": "День крабовой палочки с VICI",
+      "description": "День крабовой палочки с Vici включает торжественное награждение сотрудников завода и масштабную концертную программу. Мероприятие объединяет ярмарку фермерской продукции Калининградской области, гастрономические площадки и разнообразные активности для гостей. 🦀\n\n### Программа и гастрономия\nНа событии запланирована масштабная концертная программа, а также развлекательные и спортивные активности. Гости смогут посетить:\n- Ярмарку фермерской продукции Калининградской области.\n- Фудкорт с новыми вкусами, включая специальные блюда от Vici.\n\n### Розыгрыши и интерактивные зоны\nДля посетителей подготовлены розыгрыши и лотерея с подарками. Также организованы интерактивные площадки для памятных кадров:\n- Фотозона.\n- Моментальные фото.\n- Видеоспиннер — видеоселфи 360.",
+      "date": "2026-08-01",
+      "time": "13:00..22:00",
+      "location_name": "набережная реки Неман",
+      "location_address": null,
+      "city": "Советск",
+      "event_type": "ярмарка",
+      "linked_event_ids": "[]",
+      "identity_status": "canonical",
+      "merged_into_event_id": null
+    },
+    {
+      "id": 7102,
+      "title": "Мастер-класс по созданию гига-мозаики",
+      "description": "В рамках фестиваля «Море внутри» пройдёт семейный мастер-класс по созданию трёхметровой бумажной гига-мозаики. 🎨\n\nЗанятие проведут иллюстратор Анна Покаржевская и её сын Василий. Организатором фестиваля выступает МОРЕ ВНУТРИ.",
+      "date": "2026-08-08",
+      "time": "",
+      "location_name": "Площадка у Солнечных часов на променаде",
+      "location_address": null,
+      "city": "Светлогорск",
+      "event_type": "мастер-класс",
+      "linked_event_ids": "[]",
+      "identity_status": "canonical",
+      "merged_into_event_id": null
+    },
+    {
+      "id": 7172,
+      "title": "🎭 Мюзикл «Алиса в Стране Чудес»",
+      "description": "Музыкальный спектакль создан по мотивам сказки Льюиса Кэрролла. Литературной основой постановки послужило знаменитое произведение английского писателя.",
+      "date": "2026-09-26",
+      "time": "17:00",
+      "location_name": "Калининградский театр эстрады (Дом искусств)",
+      "location_address": "Ленинский проспект 155",
+      "city": "Калининград",
+      "event_type": "спектакль",
+      "linked_event_ids": "[5290, 5291]",
+      "identity_status": "canonical",
+      "merged_into_event_id": null
+    },
+    {
+      "id": 7176,
+      "title": "🎭 «Три кота: День Варенья»",
+      "description": "Детский музыкальный спектакль «Три кота: День Варенья» создан по мотивам мультсериала о приключениях котят.",
+      "date": "2026-10-11",
+      "time": "11:00",
+      "location_name": "Калининградский театр эстрады (Дом искусств)",
+      "location_address": "Ленинский проспект 155",
+      "city": "Калининград",
+      "event_type": "спектакль",
+      "linked_event_ids": "[7177]",
+      "identity_status": "canonical",
+      "merged_into_event_id": null
+    },
+    {
+      "id": 7258,
+      "title": "Бесплатная игротека в МЕГЕ",
+      "description": "В программе представлены настольные игры для любой компании и возрастов. В ассортименте присутствуют как легендарные игры, так и новинки сезона.",
+      "date": "2026-08-01",
+      "time": "13:00-18:00",
+      "location_name": "ТЦ «МЕГА»",
+      "location_address": "Генерал-лейтенанта Озерова 17Б",
+      "city": "Калининград",
+      "event_type": "встреча",
+      "linked_event_ids": "[3514]",
+      "identity_status": "canonical",
+      "merged_into_event_id": null
+    },
+    {
+      "id": 7290,
+      "title": "Столярный мастер-класс «Человек – пиктограмма (семейный)»",
+      "description": "Участники творческого занятия смогут попробовать свои силы в столярном деле и создать авторское панно из дерева. Программа ориентирована на семейное посещение, что позволяет взрослым и детям совместно поработать над общим проектом.\n\n### Особенности занятия 🎨\n\nРабота с деревом требует внимательности и аккуратности, поэтому мастер-класс предполагает выполнение последовательных этапов обработки материала. Участники познакомятся с техникой создания изображения в стиле пиктограммы, перенося графический образ на деревянную основу.\n\n### Условия участия\n\nК посещению приглашаются дети в возрасте от шести лет и их родители. Все необходимые инструменты и материалы для создания панно предоставляются на месте.",
+      "date": "2026-08-01",
+      "time": "13:00",
+      "location_name": "Филиал Третьяковской галереи",
+      "location_address": "Парадная наб. 3",
+      "city": "Калининград",
+      "event_type": "мастер-класс",
+      "linked_event_ids": "[]",
+      "identity_status": "canonical",
+      "merged_into_event_id": null
+    }
+  ],
+  "canonical_after": null,
+  "source_evidence": [
+    {
+      "event_id": 6898,
+      "source_ref": {
+        "source_id": 8817752,
+        "source_type": "vk",
+        "source_url": "https://vk.com/wall-162306445_37492",
+        "trust_level": null,
+        "source_chat_username": null,
+        "source_message_id": 37492,
+        "source_text_sha256": "852f71550eafa808e0a166c1200936c26ea90da3cb3d623ae49b5dd54f6077e4",
+        "source_record_sha256": "c7a29227bcf55f18196d05a96ef346078cc1581a5a2156976602180dcc75ec9d",
+        "event_id": 6898,
+        "source_text_char_count": 1085,
+        "source_ref_sha256": "ce22def4dbdf562e200ebed104baf9f7ba5bebe4de10d7522eaa32b8a1cae903"
+      },
+      "raw_source_quote": "День крабовой палочки с Vici 👍\n\nАдминистрация Советского городского округа и компания «Вичи-Русь» 1 августа приглашают на большой праздник на набережной!\n\nВ программе мероприятия:\n● торжественное открытие с участием главы Советского городского округа и управляющего директора компании «Вичи-Русь»\n● награждение сотрудников завода\n● масштабная концертная программа\n● ярмарка фермерской продукции Калининградской области\n● фудкорт с новыми вкусами, включая специальные блюда от Vici\n● развлекательная и спортивная программы\n● детская зона с аниматорами, бесплатными мастер-классами\n● фотозона, моментальные фото и видеоспиннер - видеоселфи 360, которое сразу можно получить себе на телефон и разместить в соцсетях\n● розыгрыши и лотерея с подарками\n\nЭто событие станет не только праздником компании, но и прекрасной городской традицией, объединяющей жителей, партнёров и гостей Советска.\n\n 📍 Место: Советск, набережная реки Неман\n 📅 Дата: 1 августа 2026 года\n\n Сохраняйте дату, приглашайте друзей и знак",
+      "raw_source_quote_sha256": "ea05a163cb553e8d0413b618e0a455cacd91c8b382ba00b8627455c209ad2bee",
+      "canonical_sha256": "58150a2035ac36041c0111a59d5a0cfd49db0535392c898eef086ef7bc51032a",
+      "raw_source_quote_kind": "excerpt",
+      "raw_source_quote_truncated": true,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 1000,
+      "raw_source_quote_char_count": 1000,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 85
+    },
+    {
+      "event_id": 7102,
+      "source_ref": {
+        "source_id": 9470752,
+        "source_type": "telegram",
+        "source_url": "https://t.me/kldevents/2791",
+        "trust_level": null,
+        "source_chat_username": "kldevents",
+        "source_message_id": 2791,
+        "source_text_sha256": "6c883a3a03bc7d114d0d2c310943f6737d366b9e7b6f84bb4d9119c7304ea403",
+        "source_record_sha256": "956f98be67c853e75438394648846f48cd39cad356da2e1669051574ff13abb6",
+        "event_id": 7102,
+        "source_text_char_count": 380,
+        "source_ref_sha256": "68d053f6f326e5662882cfd03277629a34b5800088bfa7af27288ccf699bd862"
+      },
+      "raw_source_quote": "🎨 Мастер-класс по созданию гига-мозаики\n✨ Море внутри\n🎟 8–9 августа\n📍 Площадка у Солнечных часов на променаде, #Светлогорск\n🆓🆓🆓🆓, по регистрации\n\nЭто будет не просто раскраска, а трёхметровая бумажная гига-мозаика! Иллюстратор - Анна Покаржевская с сыном Василием.\n\n#8августа #8_августа #афишасветлогорск #мастеркласс #фестиваль #бесплатно #Моревнутри\n\n🔎 Подробнее Max · Вконтакте",
+      "raw_source_quote_sha256": "6c883a3a03bc7d114d0d2c310943f6737d366b9e7b6f84bb4d9119c7304ea403",
+      "canonical_sha256": "424628ec4efe2647ca0e301f5385b4301ac33d596c5fa723c60a1a94e404ab9f",
+      "raw_source_quote_kind": "full",
+      "raw_source_quote_truncated": false,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 380,
+      "raw_source_quote_char_count": 380,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 0
+    },
+    {
+      "event_id": 7172,
+      "source_ref": {
+        "source_id": 9573634,
+        "source_type": "parser:estrada",
+        "source_url": "https://domiskusstv.edinoepole.ru/widget/events/935/event_seats",
+        "trust_level": "high",
+        "source_chat_username": null,
+        "source_message_id": null,
+        "source_text_sha256": "3e597d9a1331c58ede6d120260ad2764159ae63e94bb01bcd53b0f5b6daac9c4",
+        "source_record_sha256": "4098e63b92a332f39f59500602ad6925ddac6a8d50d0ac6a7b997674f29cfefc",
+        "event_id": 7172,
+        "source_text_char_count": 401,
+        "source_ref_sha256": "918642f878a3335321f457dbbe23ed28e8f59d72a258afff79325f434346bd10"
+      },
+      "raw_source_quote": "Название: Мюзикл \"Алиса в Стране Чудес\nДата: 2026-09-26\nВремя: 17:00\nПлощадка: Калининградский театр эстрады (Дом искусств), Ленинский проспект 155, Калининград\nАдрес: Ленинский проспект 155, Калининград\nВозраст: 6+\nСтатус билетов: доступны\nЦена: от 300 RUB\nСсылка: https://domiskusstv.edinoepole.ru/widget/events/935/event_seats\n\nОписание:\nБольшой зал. 1 час 20 минут\n\nВозраст: 6+\n\nСцена: Большой зал",
+      "raw_source_quote_sha256": "3e597d9a1331c58ede6d120260ad2764159ae63e94bb01bcd53b0f5b6daac9c4",
+      "canonical_sha256": "bf44472e4b86bcc71637f1bff6eaec7c790248b2044bf791339b799448558f75",
+      "raw_source_quote_kind": "full",
+      "raw_source_quote_truncated": false,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 401,
+      "raw_source_quote_char_count": 401,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 0
+    },
+    {
+      "event_id": 7176,
+      "source_ref": {
+        "source_id": 9573638,
+        "source_type": "parser:estrada",
+        "source_url": "https://domiskusstv.edinoepole.ru/widget/events/931/event_seats",
+        "trust_level": "high",
+        "source_chat_username": null,
+        "source_message_id": null,
+        "source_text_sha256": "8d211accc778bf72d812366bd66e0bb134c089e9057478b94fecb1a7f4dda6c8",
+        "source_record_sha256": "3d07202f49d12d645c3d1a661097bea7b116014554f284d7ba52944087383681",
+        "event_id": 7176,
+        "source_text_char_count": 392,
+        "source_ref_sha256": "9ecfd012c5234e30ae08f371b7848a8cafbca3702c1466b864c4d750222933b0"
+      },
+      "raw_source_quote": "Название: \"Три кота: День Варенья\"\nДата: 2026-10-11\nВремя: 11:00\nПлощадка: Калининградский театр эстрады (Дом искусств), Ленинский проспект 155, Калининград\nАдрес: Ленинский проспект 155, Калининград\nВозраст: 0+\nСтатус билетов: доступны\nЦена: от 1000 RUB\nСсылка: https://domiskusstv.edinoepole.ru/widget/events/931/event_seats\n\nОписание:\nБольшой зал. 55 минут\n\nВозраст: 0+\n\nСцена: Большой зал",
+      "raw_source_quote_sha256": "8d211accc778bf72d812366bd66e0bb134c089e9057478b94fecb1a7f4dda6c8",
+      "canonical_sha256": "795101485efa32137d682ae58c3d34a9a130088b6a0ebb5a8294433a800763f1",
+      "raw_source_quote_kind": "full",
+      "raw_source_quote_truncated": false,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 392,
+      "raw_source_quote_char_count": 392,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 0
+    },
+    {
+      "event_id": 7258,
+      "source_ref": {
+        "source_id": 9603530,
+        "source_type": "telegram",
+        "source_url": "https://t.me/kulturnaya_chaika/8088",
+        "trust_level": "medium",
+        "source_chat_username": "kulturnaya_chaika",
+        "source_message_id": 8088,
+        "source_text_sha256": "10c92e1bfb70a13162c5de1a7c7805601b477ca5701da377c581d61f366964b2",
+        "source_record_sha256": "e9aecb01abaf846b6daab7dc14775a9d2b0df05792e52f29cc934b6c47e1c590",
+        "event_id": 7258,
+        "source_text_char_count": 910,
+        "source_ref_sha256": "1a2d237ca9269bea429d9ca27d6c7495a5d8dbb593dc88452b211c4251725cb2"
+      },
+      "raw_source_quote": "Бесплатная игротека в МЕГЕ\n\n🗓 #1_августа (суббота) с 13:00 до 18:00\n📍 Адрес: ТЦ «МЕГА», ул. Генерал-лейтенанта Озерова, 17Б\n🔶 Участие бесплатное. Только ваше желание играть и хорошее настроение!\n\nЛето на исходе. Но не время унывать! Отмечаем начало последнего летнего месяца вместе за настольными играми 😎☀️\n\n📍Игротека проходит слева, прямо у центрального входа📍\n\nПервые летние выходные дни отмечаем вместе.\nПришло время собраться с близкими и любимыми, что бы весело провести время за игровым столом!\n\nЧто вас ждёт\n🎲 Огромный выбор настольных игр для любой компании и возрастов. У нас есть всё — от легендарных игр для всех, до самых обсуждаемых новинок сезона.\n🤩 Территория живых эмоций и смеха. Самый верный способ зарядиться летней энергией!\n🫶 Встречаем долгожданное лето вместе.\n\nИдея для встречи с друзьями готова! Просто приходите, выбирайте игру и наслаждайтесь отличным времяпрепровождением.\n\n#встреча",
+      "raw_source_quote_sha256": "10c92e1bfb70a13162c5de1a7c7805601b477ca5701da377c581d61f366964b2",
+      "canonical_sha256": "885e75a8263417a6002a4389450dc7bff6be50a287962d2887415eee2c31fb23",
+      "raw_source_quote_kind": "full",
+      "raw_source_quote_truncated": false,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 910,
+      "raw_source_quote_char_count": 910,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 0
+    },
+    {
+      "event_id": 7290,
+      "source_ref": {
+        "source_id": 9745554,
+        "source_type": "telegram",
+        "source_url": "https://t.me/tretyakovka_kaliningrad/3514",
+        "trust_level": "high",
+        "source_chat_username": "tretyakovka_kaliningrad",
+        "source_message_id": 3514,
+        "source_text_sha256": "84411d76a01ed4dab8616aa58df6a38a795121a991dc2a6e01defaadf827fd89",
+        "source_record_sha256": "3c1c81f14da1da721b4ab192c5ecf81f68ba69be290165e57785142e7be6e63c",
+        "event_id": 7290,
+        "source_text_char_count": 892,
+        "source_ref_sha256": "dbe89455d7d40da6ae664ec3b32bce53c08ed7b3d2df5692e14d9f7f6b8e3e3d"
+      },
+      "raw_source_quote": "Публикуем расписание ближайших занятий в творческих мастерских🥳🥳🥳\n\n29 июля в 15:00\nМастер-класс «Сказочные звери» (6+)\nТехника: гуашь\nБилеты: vk.cc/cZNGSY\n\n30 июля в 15:30\nМастер-класс «Цветочный оттиск» (12+)\nТехника: ручная лепка, пластовая, оттиск, ангоб\nБилеты: vk.cc/cYMQ5S\n\n30 июля в 16:00\nМастер-класс «Цветомузыка» (12+)\nТехника: цветные чернила\nБилеты: vk.cc/cYMQ5c\n\n1 августа в 13:00\nСтолярный мастер-класс «Человек – пиктограмма (семейный)» (6+)\nТехника: панно из дерева\nБилеты: vk.cc/cZZ5dP\n\n1 августа в 15:30\nМастер-класс «Точки и линии» (12+)\nТехника: сухая пастель\nБилеты: vk.cc/cZarIv\n\n1 августа в 16:00\nСтолярный мастер-класс «Конструктивизм на ткани» (16+)\nТехника: панно из дерева\nБилеты: vk.cc/cZZ5bG\n\n2 августа в 11:00\nМастер-класс «Летний кот» (6+)\nТехника: гуашь\nБилеты: vk.cc/cYAJ8X\n\n2 августа в 14:00\nМастер-класс «Парус в заливе. Живопись» (16+)\nБилеты: vk.cc/cZWQ5e",
+      "raw_source_quote_sha256": "84411d76a01ed4dab8616aa58df6a38a795121a991dc2a6e01defaadf827fd89",
+      "canonical_sha256": "1bfd902c81cbfb08ddc1cdf0870c1407e6e8b3e604d5b9609d25e1c77ff41994",
+      "raw_source_quote_kind": "full",
+      "raw_source_quote_truncated": false,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 892,
+      "raw_source_quote_char_count": 892,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 0
+    }
+  ],
+  "semantic_review_decision": {
+    "6898": {
+      "family_suitable": "remove_positive",
+      "joint_family_activity": "assert_absent",
+      "child_directed": "unchanged"
+    },
+    "7102": {
+      "family_suitable": "remove_positive",
+      "joint_family_activity": "remove_positive"
+    },
+    "7172": {
+      "child_directed": "remove_positive"
+    },
+    "7176": {
+      "child_directed": "remove_positive",
+      "family_suitable": "unchanged"
+    },
+    "7258": {
+      "family_suitable": "remove_positive",
+      "joint_family_activity": "remove_positive"
+    },
+    "7290": {
+      "family_suitable": "remove_positive",
+      "joint_family_activity": "remove_positive",
+      "child_directed": "unchanged"
+    }
+  },
+  "scope_note": "Receipt changes provisional semantic review supply only; festival extraction/pages, canonical events, owner gold and publication remain out of scope.",
+  "receipt_sha256": "b89b21a508fa04b84fa193552f22f7dd64c29e8e004ca43aa7f07795f9367394"
+}

@@ -48,8 +48,13 @@ LEGACY_ONTOLOGY_LABELS = frozenset(
     {"science", "audience_kids_candidate", "audience_family_candidate"}
 )
 REQUIRED_SOURCE_REVIEW_IDS = frozenset(
-    {5757, 5781, 6696, 6766, 6871, 6878, 7054, 7113, 7114, 7237, 7238, 7307, 7326, 7333, 7344, 7373, 7374}
+    {
+        5757, 5781, 6562, 6696, 6766, 6871, 6878, 6898, 7054, 7102,
+        7113, 7114, 7172, 7176, 7237, 7238, 7258, 7290, 7307, 7326,
+        7333, 7344, 7373, 7374,
+    }
 )
+SOURCE_STATUSES = frozenset({"sufficient", "insufficient", "needs_source_review"})
 SOURCE_REF_HASH_FIELDS = (
     "event_id",
     "source_id",
@@ -513,6 +518,21 @@ def validate_row(
                 label=label,
                 event_id=event_id,
             )
+        source_status = row.get("source_status")
+        if source_status not in SOURCE_STATUSES:
+            issues.error(
+                "source_status_invalid",
+                "migrated row requires source_status=sufficient|insufficient|needs_source_review",
+                label=label,
+                event_id=event_id,
+            )
+        elif source_status != "sufficient":
+            issues.error(
+                "review_supply_source_insufficient",
+                "only source_status=sufficient rows may enter positive/hard-negative supply",
+                label=label,
+                event_id=event_id,
+            )
         if not family:
             issues.error(
                 "family_id_missing", "migrated row requires family_id", label=label, event_id=event_id
@@ -798,6 +818,15 @@ def validate_seed(
             issues.error("review_seed_publishable", "review seed must set publication_eligible=false")
         if seed.get("ontology_version") != "static-collection-ontology-v2":
             issues.error("review_seed_ontology_invalid", "review seed must bind ontology v2")
+        if seed.get("source_status_contract") != {
+            "version": "static-collection-source-status-v1",
+            "allowed": ["sufficient", "insufficient", "needs_source_review"],
+            "review_supply_status": "sufficient",
+        }:
+            issues.error(
+                "source_status_contract_invalid",
+                "review seed must declare the versioned source-status denominator contract",
+            )
         review_scope = seed.get("review_scope")
         if not isinstance(review_scope, Mapping) or any(
             review_scope.get(field) != expected

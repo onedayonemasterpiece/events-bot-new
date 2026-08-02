@@ -500,6 +500,16 @@ data-collection-state="ready|empty|last-good|blocked|degraded"
 
 **Gate:** contract CI green, semantic labels blocked.
 
+Повторная source-bound коррекция PR A не должна компенсировать ошибки
+количеством. Текущая проверенная выборка содержит: `child_directed` 16
+positives (12 high-confidence), `family_suitable` 11 positives (9
+high-confidence) и 23 hard negatives, `joint_family_activity` 1 positive (1
+high-confidence). Для воспроизводимого Gate B обязательный denominator состоит
+только из строк с `confidence=high`, `review_decision=keep` и
+`source_status=sufficient`; остальные статусы source-status-v1 не входят в
+review supply. Эти малые counts являются warnings, а semantic publication
+остаётся blocked до PR B.
+
 Stacked merge после принятия PR A: сначала завершить и слить PR #207, затем
 rebase/retarget draft PR #222 на свежий `main`, убедиться, что diff содержит
 только PR A, повторить contract/CI и слить #222. PR B начинается только после

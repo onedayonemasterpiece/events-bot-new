@@ -5,9 +5,14 @@
 - Added static-collection PR-A quality contracts: ontology v2 separates child,
   family, joint-family, science-pop and research-in-action meanings; the
   provisional seed moved out of the misleading gold fixture into source-bound
-  review data with occurrence families and eleven hashed defect receipts; normal
+  review data with occurrence families and thirteen hashed defect receipts; normal
   CI now runs the intermediate review gate while owner gold, scores, Astro
   routes, cinema sources, festivals and semantic publication remain blocked.
+- Corrected the provisional PR-A audience truth against exact EventSource text:
+  promoted 6562 to `family_suitable` on its explicit whole-family invitation,
+  removed unsupported family/joint/child positives 6898/7102/7172/7176/7258/7290,
+  added hash-bound correction receipts, and versioned the explicit row-level
+  `source_status` contract used by the future high-confidence Gate-B denominator.
 - Hardened draft PR #222 review data without starting PR B: removed unsupported
   4648/6871/7103 semantic positives, split festival parent/child/page scope,
   added the occurrence-specific 6871 receipt, role-specific generator SHAs and

@@ -275,6 +275,24 @@ class StaticCollectionsQualityValidatorTests(unittest.TestCase):
                     {issue["code"] for issue in report["issues"]},
                 )
 
+    def test_missing_or_non_sufficient_source_status_fails_review_supply(self) -> None:
+        def remove_status(seed):
+            seed["labels"]["science_pop"]["positives"][0].pop("source_status")
+
+        result, report = self._run_repository_mutation(seed_mutator=remove_status)
+        self.assertEqual(result, 1)
+        self.assertIn("source_status_invalid", {issue["code"] for issue in report["issues"]})
+
+        def mark_insufficient(seed):
+            seed["labels"]["science_pop"]["positives"][0]["source_status"] = "insufficient"
+
+        result, report = self._run_repository_mutation(seed_mutator=mark_insufficient)
+        self.assertEqual(result, 1)
+        self.assertIn(
+            "review_supply_source_insufficient",
+            {issue["code"] for issue in report["issues"]},
+        )
+
     def test_repository_strict_contract_expectedly_fails_without_pr_b_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             report_path = Path(directory) / "strict-report.json"

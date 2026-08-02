@@ -41,6 +41,14 @@ class StaticCollectionReviewSeedTests(unittest.TestCase):
 
     def test_review_rows_have_source_provenance_and_unique_families(self) -> None:
         seed = load(SEED)
+        self.assertEqual(
+            seed["source_status_contract"],
+            {
+                "version": "static-collection-source-status-v1",
+                "allowed": ["sufficient", "insufficient", "needs_source_review"],
+                "review_supply_status": "sufficient",
+            },
+        )
         for label, payload in seed["labels"].items():
             positives = payload["positives"]
             negatives = payload["hard_negatives"]
@@ -75,6 +83,7 @@ class StaticCollectionReviewSeedTests(unittest.TestCase):
                     row["source_quote_truncated"], row["source_quote_kind"] == "excerpt"
                 )
                 self.assertEqual(row["source_quote_char_count"], len(row["source_quote"]))
+                self.assertEqual(row["source_status"], "sufficient")
 
     def test_short_supply_is_visible_and_not_padded_with_duplicate_occurrences(self) -> None:
         seed = load(SEED)
@@ -107,6 +116,67 @@ class StaticCollectionReviewSeedTests(unittest.TestCase):
                 for payload in seed["labels"].values()
                 for side in ("positives", "hard_negatives")
                 for row in payload[side]
+            },
+        )
+
+    def test_corrected_audience_truth_is_label_specific(self) -> None:
+        seed = load(SEED)
+        positives = {
+            label: {row["event_id"] for row in payload["positives"]}
+            for label, payload in seed["labels"].items()
+        }
+        negatives = {
+            label: {row["event_id"] for row in payload["hard_negatives"]}
+            for label, payload in seed["labels"].items()
+        }
+
+        self.assertIn(6562, positives["family_suitable"])
+        self.assertNotIn(6562, negatives["family_suitable"])
+        promoted = next(
+            row
+            for row in seed["labels"]["family_suitable"]["positives"]
+            if row["event_id"] == 6562
+        )
+        self.assertEqual(promoted["reason_code"], "explicit_whole_family_invitation")
+        self.assertIn("Приходите всей семьёй!", promoted["source_quote"])
+
+        self.assertTrue({7172, 7176}.isdisjoint(positives["child_directed"]))
+        self.assertTrue(
+            {6898, 7102, 7258, 7290}.isdisjoint(positives["family_suitable"])
+        )
+        self.assertTrue(
+            {6898, 7102, 7258, 7290}.isdisjoint(
+                positives["joint_family_activity"]
+            )
+        )
+        self.assertEqual(
+            seed["labels"]["child_directed"]["counts"],
+            {
+                "positive_candidates": 16,
+                "high_confidence_positives": 12,
+                "hard_negatives": 20,
+                "positive_families": 16,
+                "hard_negative_families": 20,
+            },
+        )
+        self.assertEqual(
+            seed["labels"]["family_suitable"]["counts"],
+            {
+                "positive_candidates": 11,
+                "high_confidence_positives": 9,
+                "hard_negatives": 23,
+                "positive_families": 11,
+                "hard_negative_families": 23,
+            },
+        )
+        self.assertEqual(
+            seed["labels"]["joint_family_activity"]["counts"],
+            {
+                "positive_candidates": 1,
+                "high_confidence_positives": 1,
+                "hard_negatives": 24,
+                "positive_families": 1,
+                "hard_negative_families": 24,
             },
         )
 

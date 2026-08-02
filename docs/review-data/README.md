@@ -30,6 +30,25 @@ EventSource identity и hash-bound source-ref projection. Canonical description
 `strong_impressions`. Receipts 7333/7344 сохраняют только известный
 duplicate-family defect и не добавляют festival extraction/source/page behavior.
 
+Повторный source-bound review audience-строк исправил ещё два класса ошибок, не
+добавляя замен ради supply. Event 6562 перенесён из `family_suitable` hard
+negative в positive: исходная цитата прямо говорит «Приходите всей семьёй!»,
+что соответствует приглашению взрослых и детей на совместное посещение.
+Events 7102/7258/7290 удалены из family/joint positives, 7172/7176 — из child
+positives, а 6898 — из family positive; детская зона внутри общего праздника,
+возрастной рейтинг, слово «семейный», родство автора и универсальность формата
+сами по себе не доказывают удалённые ontology-v2 dimensions. Изменения связаны
+с exact EventSource через corrected receipts `6562.json` и
+`6898-7102-7172-7176-7258-7290.json`.
+
+Каждая строка, которая входит в positive/hard-negative supply, явно объявляет
+`source_status=sufficient`. Versioned contract
+`static-collection-source-status-v1` также знает `insufficient` и
+`needs_source_review`, но такие статусы не входят в supply. Поэтому будущий
+Gate-B denominator воспроизводим: `confidence=high`, `review_decision=keep` и
+`source_status=sufficient`; borderline и нерешённые источники считаются
+отдельно, а не превращаются в обязательную истину.
+
 ## Canonical evidence snapshot
 
 Snapshot является ignored operational artifact:
