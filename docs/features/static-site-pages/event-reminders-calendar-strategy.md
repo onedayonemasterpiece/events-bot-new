@@ -1,52 +1,72 @@
 # Напоминания о событиях и календарная доставка
 
 > **Дата решения:** 2026-08-02  
-> **Статус:** product scope и test design зафиксированы; runtime Push, calendar-email producer и Android connector ещё не реализованы  
-> **Исходные требования:** [`schedule-user-requirements.md`](schedule-user-requirements.md) — неизменяемый источник пользовательских требований  
-> **Release truth:** [`release-plan.md`](release-plan.md)  
-> **Тестирование:** [`../../testing/event-reminders-calendar-e2e.md`](../../testing/event-reminders-calendar-e2e.md)
+> **Статус:** source parity с пользовательскими требованиями подтверждён; product scope и test design зафиксированы; runtime Push, calendar-email producer и Android connector ещё не реализованы  
+> **Неизменяемый источник:** [`schedule-user-requirements.md`](schedule-user-requirements.md)  
+> **Общий release truth:** [`release-plan.md`](release-plan.md), Stage 14  
+> **Release evidence:** [`release-autotest-gates.md`](release-autotest-gates.md) и [`../../testing/event-reminders-calendar-e2e.md`](../../testing/event-reminders-calendar-e2e.md)
 
-## 1. Решение
+## 1. Source parity и продуктовая цель
+
+Исходные требования определяют одну пользовательскую задачу: человек не должен
+забыть о выбранном мероприятии или опоздать на него. Они также прямо требуют:
+
+1. простой календарный вид сохранённых событий в «Избранном»;
+2. Push за сутки;
+3. ближний Push за 1 час для события в текущем городе либо за 3 часа для другого города;
+4. возможность выключать уведомления целиком и отдельные типы;
+5. отсутствие notification storm;
+6. сохранение ICS download;
+7. календарное приглашение по email;
+8. системную форму календаря через отдельное APK или упакованный сайт.
+
+Настоящий документ не изменяет и не «улучшает» эти формулировки. При расхождении
+приоритет всегда имеет `schedule-user-requirements.md`.
 
 Задача формулируется как **«не пропустить сохранённое событие»**, а не как
-обязательная запись в сторонний календарь.
+обязательная запись в произвольный внешний календарь. Календарь, email и APK —
+независимые delivery channels вокруг одной saved-event сущности.
 
-Принятый scope:
+## 2. Зафиксированная матрица решений
 
 | Канал | Решение | Роль |
 |---|---|---|
-| Web Push за сутки и за час | `GO_TO_IMPLEMENTATION` | основной пользовательский путь |
+| Простой календарный вид в «Избранном» | `GO_TO_IMPLEMENTATION` | основное место просмотра сохранённых событий |
+| Web Push T−24h | `GO_TO_IMPLEMENTATION` | основное раннее напоминание |
+| Web Push T−1h current city / T−3h other city | `GO_TO_IMPLEMENTATION_WITH_OWNER_DECISION` | ближнее напоминание; нужен server-owned источник текущего города |
 | Push при отмене, переносе и существенном изменении места | `GO_TO_IMPLEMENTATION` | lifecycle-уведомления |
-| Существующий ICS download | `KEEP` | ручной universal fallback |
+| Управление Push и отдельными типами | `GO_TO_IMPLEMENTATION` | обязательное требование, включая anti-storm |
+| Существующий ICS download | `KEEP` | честный ручной fallback |
 | Calendar invitation через Yandex Cloud Postbox | `GO_TO_RESEARCH` | основной email-кандидат |
-| Calendar invitation через NotiSend | `COMPARISON_ONLY` | не production-route без отдельного решения |
+| Calendar invitation через NotiSend | `COMPARISON_ONLY` | не production-route и не fallback без отдельного решения |
 | Тонкий Android connector APK | `GO_TO_PROTOTYPE` | системная форма календаря через `ACTION_INSERT` |
-| Google Calendar OAuth/API | `OUT_OF_SCOPE` | не проектировать в текущем track |
+| Google Calendar OAuth/API | `OUT_OF_SCOPE` | не проектировать в этом track |
 | Google Calendar web template | `NO_GO_PRODUCT_UX` | не использовать как основной мобильный CTA |
 | Подписные календари | `OUT_OF_SCOPE` | не проектировать |
-| Browser `intent:` | `NO_GO` | лаборатория не доказала portable contract |
+| Browser `intent:` | `NO_GO` | лаборатория не доказала переносимый contract |
 | ICS через Web Share | `NO_GO_CALENDAR_INSERTION` | Share не равен открытию calendar editor |
-| Фоновая загрузка и последующее открытие ICS из PWA | `NO_GO` | у PWA нет системного URI скачанного файла |
+| Фоновая загрузка и последующее открытие ICS из PWA | `NO_GO` | PWA не получает системный URI скачанного файла |
 
-`docs/features/static-site-pages/schedule-user-requirements.md` не изменяется
-этим документом. Перед implementation merge выполняется byte-level source parity:
-производная стратегия не может ослабить или переопределить исходные требования.
+## 3. Пользовательский сценарий
 
-## 2. Пользовательский сценарий
-
-Основная CTA:
+Основная CTA на карточке/странице:
 
 ```text
 Не пропустить
 ```
 
-После действия:
+После сохранения:
 
 ```text
-Напоминания включены
+Событие сохранено
+
+Напоминания
 ✓ За сутки
-✓ За час
+✓ За 1 час, если событие в текущем городе
+  или за 3 часа, если оно в другом городе
 ✓ При переносе или отмене
+
+[Настроить уведомления]
 
 Другие способы
 ├── Скачать ICS
@@ -54,51 +74,116 @@
 └── Открыть через Calendar Connector      [Android, после prototype]
 ```
 
-Сохранение события, Push permission, email invitation и ICS download — четыре
-независимых состояния. Нельзя автоматически считать одно согласием на другое.
+Сохранение события, Notification permission, reminder preferences, email
+invitation и ICS download — независимые состояния. Одно действие не является
+согласием на другое.
 
 Нельзя показывать «Добавлено в календарь», если система знает только о:
 
 - скачивании ICS;
-- принятии письма провайдером;
+- принятии email провайдером;
 - открытии письма;
-- запуске Android Calendar Activity;
+- запуске Android Activity;
 - открытии системной формы события.
 
-## 3. Push reminders
+## 4. Простой календарный вид в «Избранном»
 
-### 3.1. Базовые offsets
+Исходный UI contract намеренно простой — не обязательная month-grid, а
+calendar-first список:
 
 ```text
-T−24h
-T−1h
+Дата
+HH:MM–HH:MM | Мероприятие | локация
 ```
 
-| Когда пользователь сохраняет событие | План |
-|---|---|
-| раньше T−24h | T−24h и T−1h |
-| между T−24h и T−1h | только T−1h |
-| позднее T−1h | не создавать backdated jobs; immediate reminder остаётся owner decision |
-| после начала события | reminder jobs не создаются |
+Обязательные свойства:
 
-Расчёт выполняется по абсолютному `starts_at`. Отображение —
-`Europe/Kaliningrad`. Нельзя планировать напоминание только по календарной дате.
+- показываются только сохранённые пользователем события;
+- future/current события группируются по локальной дате;
+- даты и строки внутри даты сортируются хронологически;
+- одно occurrence не дублируется из-за одновременного favorite/calendar source;
+- повторное сохранение идемпотентно;
+- перенос перемещает строку в новую дату/время;
+- отмена видима как lifecycle state, а не исчезает молча;
+- неизвестное окончание или локация не выдумываются и имеют typed fallback;
+- выключение Push не удаляет событие из календарного вида;
+- календарный вид работает независимо от того, импортирован ли ICS во внешний календарь.
 
-### 3.2. Permission UX
+Точная визуальная композиция и необходимость дополнительной month-grid остаются
+UI implementation decision. Release gate проверяет полезный простой формат, а
+не незафиксированную сложную календарную модель.
 
-1. Пользователь сохраняет событие или нажимает «Не пропустить».
-2. UI объясняет два времени напоминания.
-3. Notification permission запрашивается только после отдельного tap.
-4. `denied` не отменяет сохранение события и не блокирует ICS.
-5. Настройки позволяют отключить Push для одного события и для устройства.
+## 5. Push reminders
 
-### 3.3. Lifecycle
-
-Минимальные kinds:
+### 5.1. Временные kinds
 
 ```text
 event_reminder_24h
-event_reminder_1h
+event_reminder_1h_current_city
+event_reminder_3h_other_city
+```
+
+Для одной event revision создаётся максимум два временных напоминания:
+
+```text
+T−24h
++
+ровно один ближний kind:
+  T−1h_current_city
+  или
+  T−3h_other_city
+```
+
+`T−1h_current_city` и `T−3h_other_city` взаимоисключающие.
+
+| Момент сохранения | Текущий город | Другой город |
+|---|---|---|
+| раньше T−24h | T−24h + T−1h | T−24h + T−3h |
+| после T−24h, но раньше ближнего offset | только T−1h | только T−3h |
+| позднее ближнего offset | backdated job не создаётся | backdated job не создаётся |
+| после начала события | jobs не создаются | jobs не создаются |
+
+Расчёт выполняется по абсолютному `starts_at`; пользовательское отображение —
+`Europe/Kaliningrad` либо другой явно принятый timezone contract. Напоминание
+нельзя планировать только по текстовой дате.
+
+### 5.2. Открытый вопрос: текущий город
+
+Исходные требования задают разное время для текущего и другого города, но не
+определяют источник текущего города пользователя.
+
+До implementation M1 требуется owner/data decision. Возможные источники должны
+быть рассмотрены отдельно:
+
+- явно выбранный город в пользовательском профиле;
+- существующая server-owned настройка региона;
+- другой устойчивый owner-scoped атрибут.
+
+Browser geolocation, User-Agent, IP-эвристика и caller-supplied `current_city`
+не становятся источником истины автоматически. Если city relation неизвестен,
+система может безопасно поставить T−24h, но ближний kind должен оставаться
+fail-closed до отдельного утверждённого fallback.
+
+### 5.3. Permission и preferences UX
+
+1. Пользователь сохраняет событие или нажимает «Не пропустить».
+2. UI объясняет T−24h и один city-relative ближний reminder.
+3. Notification permission запрашивается только после отдельного tap.
+4. `denied` не отменяет saved event, календарный вид и ICS.
+5. Пользователь может выключить:
+   - все Push;
+   - T−24h;
+   - ближний reminder;
+   - конкретное событие.
+6. Выключенный тип не создаёт новый outbox job и инвалидирует pending job согласно принятой политике.
+7. Повторное сохранение не сбрасывает preferences.
+
+Поведение lifecycle-типов при частичном отключении — отдельное owner decision,
+которое должно быть отражено в UI и тестах до реализации.
+
+### 5.4. Lifecycle kinds
+
+```text
 event_rescheduled
 event_cancelled
 event_location_changed
@@ -107,17 +192,37 @@ event_location_changed
 При новой event revision:
 
 - pending reminders старой revision инвалидируются;
-- offsets пересчитываются от нового времени;
-- существенное изменение создаёт ровно одно lifecycle-уведомление;
-- отменённое событие не получает обычные reminders;
-- повторный Smart Update с той же revision/kind не создаёт duplicate.
+- временные reminders пересчитываются от нового времени;
+- city classification перечитывается из server-owned данных;
+- существенное изменение создаёт ровно одно lifecycle-уведомление соответствующего kind;
+- отменённое событие не получает обычные countdown reminders;
+- повторный Smart Update с той же revision/kind — no-op.
 
-### 3.4. Ownership и idempotency
+### 5.5. Anti-storm
 
-Не создавать второй saved-event truth. Связь пользователя с событием должна
-использовать существующий durable saved-event contract.
+Требование запрещает notification storm, приводящий к когнитивным ошибкам и
+потере фокуса.
 
-Необходимые runtime-сущности:
+Минимальные гарантии:
+
+- максимум два time-based jobs на event revision;
+- local/other-city near kinds не могут существовать одновременно;
+- повторный scheduler tick, retry или Smart Update не создаёт новый visible Push;
+- один lifecycle kind отправляется не более одного раза на revision;
+- отключённый тип не ставится повторно;
+- ambiguous provider result не повторяется вслепую;
+- multi-device отправка различает одно логическое уведомление и доставки по subscriptions.
+
+Глобальный дневной cap, объединение нескольких событий в digest и политика при
+нескольких мероприятиях в одно время не определены исходными требованиями и
+остаются owner decisions. Документ не придумывает численный предел.
+
+### 5.6. Ownership и idempotency
+
+Не создаётся второй saved-event truth. Используется существующий durable
+`user_saved_event` contract.
+
+Планируемые runtime-сущности:
 
 ```text
 push_subscription
@@ -130,14 +235,15 @@ push_subscription
 event_reminder_preference
 ├── owner identity
 ├── event id
-├── offsets
+├── enabled types
+├── city decision reference
 ├── event revision
 └── enabled
 
 event_reminder_outbox
 ├── idempotency key
 ├── event/user/subscription
-├── kind
+├── notification kind
 ├── scheduled_at
 ├── event revision
 ├── claim/attempt state
@@ -147,40 +253,39 @@ event_reminder_outbox
 Минимальный idempotency key:
 
 ```text
-user + event + revision + kind + subscription
+owner + event + revision + notification kind + subscription
 ```
 
-Push endpoint и encryption keys считаются transport credentials. Они не попадают
-в статический HTML, YDB, публичные artifacts и обычную telemetry.
+Push endpoint и encryption keys — transport credentials. Они не попадают в
+статический HTML, YDB, публичные artifacts и обычную telemetry.
 
-### 3.5. Delivery semantics
+### 5.7. Delivery semantics
 
 Web Push — best effort, не точный будильник. Provider acceptance не доказывает
 фактический показ или просмотр уведомления.
 
-Обязательные свойства:
+Обязательное:
 
-- claim/lease до сетевой отправки;
+- claim/lease перед сетевой отправкой;
 - bounded retry только для однозначно retryable результата;
-- revoked/expired subscription отключается;
+- `404/410` отключает истёкшую subscription;
 - notification click открывает canonical event route;
-- payload не содержит лишних персональных данных;
-- мониторинг различает `scheduled`, `provider_accepted`, `permanent_failure`,
-  `opened`, но не смешивает эти состояния.
+- payload не содержит лишние персональные данные;
+- мониторинг различает `scheduled`, `provider_accepted`, `permanent_failure`, `opened`.
 
-## 4. ICS download
+## 6. ICS download
 
-Существующий ICS download сохраняется без изменения продуктовой роли.
+Существующий ICS download остаётся доступным как ручной fallback.
 
 Обязательный contract:
 
 - стабильный `UID`;
 - корректные `DTSTAMP`, `DTSTART`, `DTEND`;
 - title, description, location и canonical event URL;
-- UTC/`Europe/Kaliningrad` без временного сдвига;
+- UTC/timezone без сдвига;
 - CRLF, escaping и line folding;
 - понятное имя файла;
-- возможность повторной загрузки;
+- повторная загрузка со страницы события и из saved events;
 - видимый feedback «Файл календаря скачан»;
 - download/click не считается внешним calendar save.
 
@@ -191,89 +296,71 @@ Web Push — best effort, не точный будильник. Provider accepta
 - попытку восстановить `content://` URI;
 - ICS Web Share как основной calendar path.
 
-## 5. Почему Postbox — основной email-кандидат
+## 7. Calendar invitation через Postbox
 
-Yandex Cloud Postbox поддерживает raw MIME через `Content.Raw.Data`. Текущий
-`email_control/providers/postbox.py` уже формирует MIME-сообщение, кодирует его
-в Base64 и отправляет через Postbox Raw API. Поэтому provider-level вопрос
-«можно ли передать произвольную MIME-структуру» для Postbox в основном закрыт.
+### 7.1. Почему Postbox — основной кандидат
 
-Открыты другие вопросы:
+Текущий `email_control/providers/postbox.py` уже формирует MIME bytes,
+кодирует их Base64 и отправляет через Postbox Raw API (`Content.Raw.Data`).
+Поэтому provider-level вопрос «можно ли передать raw MIME» практически закрыт.
 
-- как Gmail, Apple Mail и Outlook интерпретируют конкретный iTIP/MIME;
-- нужен ли inline `text/calendar`, attachment или оба;
-- корректно ли работают `REQUEST`, update и `CANCEL`;
-- возникает ли duplicate;
-- как письмо попадает в Inbox/Spam;
-- какие sender/consent/product формулировки принимаются.
+Открытые вопросы относятся к нашему builder и mail clients:
 
-Текущий worker принимает только `transactional-plain-v1` с ключами
-`subject`, `text`, `html`. Calendar invitation требует отдельного строгого
-шаблона, например:
+- inline `text/calendar`, attachment или оба;
+- `METHOD:REQUEST`, update и `CANCEL`;
+- стабильный UID и монотонный SEQUENCE;
+- duplicate behavior;
+- Gmail, Apple Mail, Outlook;
+- Inbox/Spam placement;
+- timezone и fields после импорта.
+
+Текущий worker допускает только `transactional-plain-v1` с `subject/text/html`.
+Нужен новый строгий server-owned template, например:
 
 ```text
 transactional-calendar-request-v1
 ```
 
-Нельзя добавлять произвольный raw MIME из browser payload. Server-side producer
-получает event ID, перечитывает канонический event snapshot и сам строит MIME.
+Browser передаёт только event/save action. Producer повторно читает канонический
+event snapshot и самостоятельно формирует MIME, sender headers, `ORGANIZER`,
+`ATTENDEE`, `UID` и `SEQUENCE`.
 
-### 5.1. Предлагаемая MIME-структура
-
-```text
-multipart/mixed
-├── multipart/alternative
-│   ├── text/plain
-│   ├── text/html
-│   └── text/calendar; method=REQUEST; charset=UTF-8
-└── event.ics; Content-Disposition: attachment
-```
-
-Research сравнивает также inline-only вариант. `METHOD` внутри VCALENDAR должен
-совпадать с MIME `method`.
-
-Минимальный payload:
+### 7.2. Research variants
 
 ```text
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//KenigEvents//Calendar Invitation//RU
-CALSCALE:GREGORIAN
-METHOD:REQUEST
-BEGIN:VEVENT
-UID:<stable-per-user-event-uid>
-SEQUENCE:0
-DTSTAMP:<utc>
-DTSTART:<utc-or-explicit-tz>
-DTEND:<utc-or-explicit-tz>
-SUMMARY:<title>
-DESCRIPTION:<description + canonical URL>
-LOCATION:<location>
-ORGANIZER:mailto:<controlled-sender>
-ATTENDEE;RSVP=TRUE:mailto:<controlled-recipient>
-STATUS:CONFIRMED
-END:VEVENT
-END:VCALENDAR
+A. multipart/alternative
+   ├── text/plain
+   ├── text/html
+   └── text/calendar; method=REQUEST
+
+B. multipart/mixed
+   ├── multipart/alternative с text/calendar
+   └── event.ics attachment
+
+C. METHOD:PUBLISH attachment
+   └── negative/control variant
 ```
 
-### 5.2. Update и cancel
+`method` в MIME и `METHOD` в VCALENDAR обязаны совпадать.
+
+Lifecycle:
 
 - initial: `METHOD:REQUEST`, `SEQUENCE:0`;
-- update: тот же `UID`, `SEQUENCE:1+`;
+- update: тот же `UID`, `SEQUENCE+1`;
 - cancel: тот же `UID`, `METHOD:CANCEL`;
-- ambiguous send никогда не повторяется автоматически;
-- initial/update/cancel имеют отдельные idempotency keys.
+- каждый этап имеет отдельный idempotency key;
+- ambiguous send не повторяется автоматически.
 
-### 5.3. NotiSend
+### 7.3. NotiSend boundary
 
-NotiSend остаётся сравнительным исследованием только по явному owner decision.
-Действующая email architecture направляет event transactional mail в Postbox;
-NotiSend не становится скрытым fallback и не выбирается после ambiguous Postbox
-send.
+NotiSend остаётся comparison-only. Действующая архитектура направляет event
+transactional mail в Postbox. NotiSend не становится hidden fallback, не
+использует recommendation consent и не выбирается после ambiguous Postbox send
+без отдельного owner/architecture decision.
 
-## 6. Тонкий Android Calendar Connector
+## 8. Тонкий Android Calendar Connector
 
-Connector — отдельное небольшое Android-приложение. Сайт/PWA остаётся основной
+Connector — отдельное небольшое Android-приложение; сайт/PWA остаётся основной
 точкой входа.
 
 ```text
@@ -300,151 +387,128 @@ location
 notifications
 ```
 
-Пользователь видит системную форму, выбирает календарь и сам нажимает Save.
+Пользователь видит системную форму, выбирает календарь и нажимает Save.
 Connector сообщает «Форма календаря открыта», а не «Событие добавлено».
 
-### 6.1. App identity
+Обязательные свойства:
 
 - постоянный package name;
 - постоянный release signing key;
 - `android:autoVerify="true"`;
 - `assetlinks.json` с exact certificate fingerprint;
 - release build, не debug APK;
+- bounded first-party payload по opaque token;
+- запрет arbitrary host/redirect и `file://`/`content://` deep links;
 - сначала Google Play Internal/Closed Testing;
 - direct signed APK — только bounded pilot.
 
-### 6.2. Event payload
+## 9. Тестирование и актуальные события
 
-App Link не принимает произвольный JSON в query string. Connector получает
-bounded first-party payload по opaque token.
+Канонический test design:
+[`../../testing/event-reminders-calendar-e2e.md`](../../testing/event-reminders-calendar-e2e.md).
 
-```json
-{
-  "schema": "kenigevents-calendar-connector-v1",
-  "event_id": 123,
-  "revision": 7,
-  "title": "…",
-  "starts_at": "…",
-  "ends_at": "…",
-  "all_day": false,
-  "location": "…",
-  "description": "…",
-  "canonical_url": "…",
-  "expires_at": "…"
-}
-```
+Production-like сценарии не используют hardcoded event URL. Resolver:
 
-Запрещено:
+1. проверяет `preview-build.json` и full repository SHA;
+2. обходит current listing routes того же build;
+3. выбирает complete timed future event;
+4. получает adjacent ICS;
+5. сохраняет immutable `selected-event.json`;
+6. revalidates событие до первого side effect.
 
-- arbitrary host/redirect;
-- `file://`/`content://` из deep link;
-- прямая запись без системной формы;
-- чтение пользовательского календаря;
-- логирование полного event description как analytics.
+После первого Push/email side effect сценарий не может тихо переключиться на
+другое событие.
 
-## 7. Порядок реализации
+## 10. Порядок реализации
 
 ### M0 — документы и test scaffold
 
-- source requirements остаются byte-identical;
-- product strategy;
+- source requirements byte-identical;
+- strategy, routes и Stage 14 общего release plan;
 - scenario registry;
 - dynamic current-event resolver;
-- GitHub Actions scaffold;
-- никаких provider/native/runtime side effects.
+- GitHub Actions browser/Android/iOS environment scaffold;
+- никаких production provider/native side effects.
 
-### M1 — Push
+### M1a — календарный вид
 
-- data model и idempotent outbox;
-- subscription UI;
-- T−24/T−1 scheduler;
+- простой date/time/event/location view;
+- сортировка и no-duplicate;
+- lifecycle и typed empty/fallback states;
+- current-event integration + frozen grouping fixtures.
+
+### M1b — Push
+
+- owner decision по источнику текущего города;
+- subscription/preferences UI;
+- T−24h + взаимоисключающий T−1h-current-city/T−3h-other-city scheduler;
+- anti-storm и idempotent outbox;
 - lifecycle invalidation;
-- Android L2 и real-device L3 acceptance;
-- iOS Home Screen PWA acceptance;
-- independent feature flag и rollback.
+- Android/iOS L2 и bounded L3 acceptance;
+- independent feature flags и rollback.
 
-### M2 — Postbox calendar invitation research
+### M2 — Postbox research
 
-- MIME builder contracts;
-- Postbox Raw acceptance;
-- controlled mailbox roundtrip;
+- deterministic MIME builder;
+- protected REQUEST/update/CANCEL roundtrip;
 - Gmail/Apple Mail/Outlook matrix;
-- update/cancel;
 - отдельный release decision.
 
 ### M3 — Android connector POC
 
-- Android project;
+- Android project и stable signing identity;
 - verified App Links;
 - `ACTION_INSERT`;
 - Internal Testing;
-- emulator + real-device evidence;
+- emulator + real-device/OEM evidence;
 - отдельное решение о публичном распространении.
 
 Fail M2 или M3 не блокирует M1 и не удаляет ICS fallback.
 
-## 8. NO-GO и rollback
+## 11. NO-GO и rollback
 
 NO-GO:
 
-- source requirements недоступны или parity не подтверждена;
-- event facts принимаются от browser вместо server-side canonical snapshot;
-- duplicate Push возможен при retry/Smart Update;
+- source requirements изменены этим track;
+- календарный вид отсутствует либо выдумывает время/локацию;
+- current city принимается от browser как authoritative факт;
+- одновременно создаются T−1h и T−3h near jobs;
+- выключенный reminder type продолжает создавать jobs;
+- duplicate/notification storm возможен при retry, scheduler tick или Smart Update;
+- event facts принимаются от browser вместо server-side snapshot;
 - permission запрашивается без user gesture;
-- Postbox client compatibility объявлена без received MIME/client evidence;
-- NotiSend включён как скрытый fallback;
-- connector запрашивает calendar write permission;
-- App Link не verified;
-- debug signer используется как release;
-- desktop mobile viewport выдан за Android/iOS acceptance.
+- Postbox provider acceptance выдан за calendar-client recognition;
+- connector просит calendar write permission либо не прошёл App Link/native editor acceptance;
+- ICS download назван внешним calendar save;
+- Android/iOS environment smoke назван product PASS.
 
-Rollback:
+Rollback независим по channel:
 
-```text
-Push failure
-→ disable producer/sender
-→ invalidate pending jobs
-→ saved events и ICS остаются
+- Push producer/sender выключается, pending jobs инвалидируются;
+- email experiment выключается без ambiguous resend;
+- connector CTA возвращается к web fallback;
+- saved event, простой календарный вид и ICS остаются доступны.
 
-Email research failure
-→ disable invitation experiment
-→ не повторять ambiguous sends
-→ Push + ICS остаются
-
-Connector failure
-→ web App Link fallback остаётся
-→ install CTA отключается
-→ canonical event routes не меняются
-```
-
-## 9. Открытые owner decisions
+## 12. Открытые owner decisions
 
 Перед M1:
 
-1. Нужен ли immediate reminder при сохранении менее чем за час?
-2. Offsets фиксированы или пользователь может их менять?
-3. Изменение только площадки создаёт отдельный Push?
-4. Как обрабатывается событие без точного времени?
+1. Какая server-owned сущность определяет текущий город пользователя?
+2. Что делать, когда текущий город неизвестен?
+3. Нужен ли immediate reminder при сохранении позднее ближнего offset?
+4. Пользователь меняет offsets или только включает/выключает типы?
+5. Как обрабатывать событие без точного времени или достоверного города?
+6. Нужен ли отдельный Push при изменении только площадки?
+7. Каков глобальный anti-storm cap и нужно ли объединять несколько близких событий?
 
 Перед M2:
 
-5. Какой controlled sender используется для invitation canary?
-6. Какие Gmail/iCloud/Outlook mailboxes входят в blocking matrix?
-7. Initial-only допустим или update/cancel обязательны для MVP?
+8. Какой controlled sender используется для invitation canary?
+9. Какие Gmail/iCloud/Outlook mailboxes входят в blocking matrix?
+10. Initial-only допустим или update/cancel обязательны для MVP?
 
 Перед M3:
 
-8. Какой host выделяется под App Links?
-9. Как называется connector?
-10. Pilot только через Play Internal Testing или также direct signed APK?
-
-## 10. Связанные документы
-
-- [`schedule-user-requirements.md`](schedule-user-requirements.md)
-- [`pwa-capabilities-lab.md`](pwa-capabilities-lab.md)
-- [`release-plan.md`](release-plan.md)
-- [`release-autotest-gates.md`](release-autotest-gates.md)
-- [`../event-favorites-calendar/README.md`](../event-favorites-calendar/README.md)
-- [`../event-email-notifications/README.md`](../event-email-notifications/README.md)
-- [`../../operations/email-delivery.md`](../../operations/email-delivery.md)
-- [`../../testing/event-reminders-calendar-e2e.md`](../../testing/event-reminders-calendar-e2e.md)
+11. Какой host выделяется под App Links?
+12. Как называется connector?
+13. Pilot только через Play Internal Testing или также direct signed APK?
