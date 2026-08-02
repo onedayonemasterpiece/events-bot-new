@@ -72,36 +72,46 @@ def _read_current_kind_rows_complete(
     after = prefix
     out: list[dict[str, Any]] = []
     page_size = min(500, max_rows + 1)
-    while len(out) < max_rows + 1:
-        query_text = (
-            "DECLARE $prefix AS Utf8; DECLARE $prefix_upper AS Utf8; DECLARE $after AS Utf8; "
-            f"SELECT pk, payload_json, updated_at FROM `{table}` "
-            "WHERE pk >= $prefix AND pk < $prefix_upper AND pk > $after "
-            f"ORDER BY pk LIMIT {min(page_size, max_rows + 1 - len(out))};"
-        )
+    def op(session: Any) -> list[dict[str, Any]]:
+        local_after = after
+        tx = session.transaction(ydb.SnapshotReadOnly())
+        try:
+            while len(out) < max_rows + 1:
+                query_text = (
+                    "DECLARE $prefix AS Utf8; DECLARE $prefix_upper AS Utf8; DECLARE $after AS Utf8; "
+                    f"SELECT pk, payload_json, updated_at FROM `{table}` "
+                    "WHERE pk >= $prefix AND pk < $prefix_upper AND pk > $after "
+                    f"ORDER BY pk LIMIT {min(page_size, max_rows + 1 - len(out))};"
+                )
+                query = session.prepare(query_text)
+                result_sets = tx.execute(
+                    query,
+                    {"$prefix": prefix, "$prefix_upper": prefix_upper, "$after": local_after},
+                    commit_tx=False,
+                )
+                batch = result_sets[0].rows if result_sets else []
+                if not batch:
+                    break
+                for raw in batch:
+                    local_after = str(raw.pk)
+                    payload = raw.payload_json
+                    row = json.loads(payload) if isinstance(payload, str) else dict(payload or {})
+                    if isinstance(row, dict):
+                        row.setdefault("_ydb_pk", local_after)
+                        row.setdefault("_ydb_updated_at", str(getattr(raw, "updated_at", "") or ""))
+                        out.append(row)
+                if len(batch) < page_size:
+                    break
+            tx.commit()
+            return out
+        except Exception:
+            try:
+                tx.rollback()
+            except Exception:
+                pass
+            raise
 
-        def op(session: Any) -> Any:
-            query = session.prepare(query_text)
-            return session.transaction(ydb.SnapshotReadOnly()).execute(
-                query,
-                {"$prefix": prefix, "$prefix_upper": prefix_upper, "$after": after},
-                commit_tx=True,
-            )
-
-        result_sets = pool.retry_operation_sync(op)
-        batch = result_sets[0].rows if result_sets else []
-        if not batch:
-            break
-        for raw in batch:
-            after = str(raw.pk)
-            payload = raw.payload_json
-            row = json.loads(payload) if isinstance(payload, str) else dict(payload or {})
-            if isinstance(row, dict):
-                row.setdefault("_ydb_pk", after)
-                row.setdefault("_ydb_updated_at", str(getattr(raw, "updated_at", "") or ""))
-                out.append(row)
-        if len(batch) < page_size:
-            break
+    pool.retry_operation_sync(op)
     if len(out) > max_rows:
         raise RuntimeError(f"publication plan current read truncated: {kind}")
     return out
@@ -453,22 +463,26 @@ UPSERT INTO `{table}` (pk, kind, payload_json, updated_at)
 VALUES ($pk, $kind, $payload_json, $updated_at);
 """
 
-    def write_one(session: Any, pk: str, kind: str, payload: dict[str, Any]) -> None:
-        updated_at = str(payload.get("updated_at") or datetime.now(timezone.utc).isoformat())
-        query = session.prepare(query_text)
-        session.transaction(ydb.SerializableReadWrite()).execute(
-            query,
-            {
-                "$pk": pk,
-                "$kind": kind,
-                "$payload_json": json.dumps(payload, ensure_ascii=False),
-                "$updated_at": updated_at,
-            },
-            commit_tx=True,
-        )
+    if not rows:
+        return 0
 
-    for pk, kind, payload in rows:
-        pool.retry_operation_sync(lambda session, p=pk, k=kind, item=payload: write_one(session, p, k, item))
+    def write_all(session: Any) -> None:
+        query = session.prepare(query_text)
+        tx = session.transaction(ydb.SerializableReadWrite())
+        for index, (pk, kind, payload) in enumerate(rows):
+            updated_at = str(payload.get("updated_at") or datetime.now(timezone.utc).isoformat())
+            tx.execute(
+                query,
+                {
+                    "$pk": pk,
+                    "$kind": kind,
+                    "$payload_json": json.dumps(payload, ensure_ascii=False),
+                    "$updated_at": updated_at,
+                },
+                commit_tx=index == len(rows) - 1,
+            )
+
+    pool.retry_operation_sync(write_all)
     return len(rows)
 
 

@@ -581,6 +581,25 @@ visibility.
   `review_status=unreviewed`, `publication_permission=not_granted`. It is not a
   publication candidate and cannot bypass the E5+BGE/image/final-verifier/
   operator gates;
+- legacy intake rows created before the exact-byte contract may instead carry
+  `legacy_provenance_attestation` v1. The attestation records the immutable
+  legacy YDB research-row SHA, original request ID, intake time, public evidence
+  URLs and all normalized identity keys, and explicitly states that the original
+  input JSON SHA is unavailable. It is created only by the idempotent
+  `region_talk_external_publication_provenance_backfill.py` migration, never by
+  normal import, and does not change the research decision or grant publication;
+- kind `external_publication_intake_observation_item`, pk
+  `external_publication_intake_observation_item:extpubobs_<stable-id>` — an
+  immutable later observation of an already-known publication. It preserves
+  request ID, exact input JSON SHA, evidence URLs, intake time and the complete
+  observed identity set. A replay may add a new same-owner DOI/URL/title+authors
+  alias and safely enrich missing provenance on a legacy intake, while preserving
+  its semantic decision and keeping it unreviewed/no-permission;
+- kind `external_publication_identity_item`, pk
+  `external_publication_identity_item:<sha256(identity-key)>` — serializable
+  reservation for one canonical URL, DOI or exact normalized title+authors key.
+  Same-owner replay aliases are idempotent; a different owner is an all-or-nothing
+  conflict;
 - kind `external_publication_source_item`, pk
   `external_publication_source_item:extpubsrc_<stable-id>` — compact external
   publisher identity and externality attestation, keyed in payload by
@@ -599,9 +618,10 @@ visibility.
   supplied to the next external research agent;
 - kind `external_publication_import_batch`, pk
   `external_publication_import_batch:extpubrun_<stable-id>` — idempotent input
-  batch identity derived from request plus exact input SHA, new/replay/conflict
-  counts and sorted IDs, research window and bounded coverage evidence. An
-  identical replay is a no-op; request-ID/SHA disagreement writes nothing;
+  batch receipt derived from the request ID. The exact input SHA is stored as
+  its immutable byte guard alongside new/replay/conflict counts and sorted IDs,
+  research window and bounded coverage evidence. An identical replay is a
+  no-op; request-ID/SHA disagreement writes nothing;
 - kind `external_publication_import_error_item`, pk
   `external_publication_import_error_item:<stable-error-id>` — row-level
   contract-error shape retained for audit compatibility. The current protected
@@ -619,12 +639,19 @@ see [the guarded import runbook](external-publication-import-runbook.md).
 `external_publication_intake_item` is still staging only and cannot authorize
 immediate public posting.
 
-Decision-critical consumers use a strong YDB transaction for the narrow active
-intake prefix and request `limit + 1`; observing the extra row is an incomplete
+Decision-critical consumers use one strong YDB snapshot transaction across all
+keyset pages of the narrow active intake prefix and request `limit + 1`;
+observing the extra row is an incomplete
 read and therefore blocks selection/write. CandidateReport records the intake
 revision used for scoring. The finalizer and planner reread immediately before
 their write and compare that revision/current eligibility, so a concurrent
 manual block or import cannot be hidden by an older snapshot.
+
+When current evidence for an already published row changes, the published
+`publication_candidate_item` remains immutable and the finalizer writes a
+`publication_final_decision_audit_item:<stable-id>` with both fingerprints,
+reason and `manual_review_required` operator action. A log line alone is not the
+audit record.
 
 When an external intake reaches `publication_candidate_item`, its compact row
 retains `content_origin_type`, external publication/research identifiers and

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -27,7 +28,6 @@ from scripts.region_talk_external_publication_import import (  # noqa: E402
 from scripts.region_talk_goal_notify import (  # noqa: E402
     ensure_ydb_module,
     load_env,
-    read_kind_rows,
     ydb_credentials,
     ydb_endpoint_database,
     ydb_table_path,
@@ -185,6 +185,71 @@ def build_request(
     return payload
 
 
+def _read_kinds_current_complete(
+    pool: Any,
+    ydb: Any,
+    table: str,
+    kinds: list[str],
+    limit: int,
+) -> dict[str, list[dict[str, Any]]]:
+    """Read every duplicate-guard lane from one current, complete snapshot."""
+
+    max_rows = max(1, int(limit))
+    for kind in kinds:
+        if not re.fullmatch(r"[A-Za-z0-9_:-]+", kind):
+            raise ValueError(f"unsafe YDB kind: {kind!r}")
+
+    def op(session: Any) -> dict[str, list[dict[str, Any]]]:
+        tx = session.transaction(ydb.SnapshotReadOnly())
+        result: dict[str, list[dict[str, Any]]] = {}
+        try:
+            for kind in kinds:
+                prefix = kind + ":"
+                prefix_upper = kind + ";"
+                after = prefix
+                rows_out: list[dict[str, Any]] = []
+                page_size = min(500, max_rows + 1)
+                while len(rows_out) < max_rows + 1:
+                    query = session.prepare(
+                        "DECLARE $prefix AS Utf8; DECLARE $prefix_upper AS Utf8; "
+                        "DECLARE $after AS Utf8; "
+                        f"SELECT pk, payload_json, updated_at FROM `{table}` "
+                        "WHERE pk >= $prefix AND pk < $prefix_upper AND pk > $after "
+                        f"ORDER BY pk LIMIT {min(page_size, max_rows + 1 - len(rows_out))};"
+                    )
+                    response = tx.execute(
+                        query,
+                        {"$prefix": prefix, "$prefix_upper": prefix_upper, "$after": after},
+                        commit_tx=False,
+                    )
+                    batch = response[0].rows if response else []
+                    if not batch:
+                        break
+                    for raw in batch:
+                        after = str(raw.pk)
+                        payload = raw.payload_json
+                        item = json.loads(payload) if isinstance(payload, str) else dict(payload or {})
+                        if isinstance(item, dict):
+                            item.setdefault("_ydb_pk", after)
+                            item.setdefault("_ydb_updated_at", str(getattr(raw, "updated_at", "") or ""))
+                            rows_out.append(item)
+                    if len(batch) < page_size:
+                        break
+                if len(rows_out) > max_rows:
+                    raise RuntimeError(f"external publication duplicate guard truncated: {kind}")
+                result[kind] = rows_out
+            tx.commit()
+            return result
+        except Exception:
+            try:
+                tx.rollback()
+            except Exception:
+                pass
+            raise
+
+    return dict(pool.retry_operation_sync(op) or {})
+
+
 def read_seen_from_ydb(limit: int) -> list[dict[str, Any]]:
     ydb = ensure_ydb_module()
     endpoint, database = ydb_endpoint_database()
@@ -193,8 +258,15 @@ def read_seen_from_ydb(limit: int) -> list[dict[str, Any]]:
     pool = ydb.SessionPool(driver)
     table = ydb_table_path(database)
     try:
-        seen = read_kind_rows(pool, ydb, table, "external_publication_seen_item", limit)
-        intake = read_kind_rows(pool, ydb, table, "external_publication_intake_item", limit)
+        current = _read_kinds_current_complete(
+            pool,
+            ydb,
+            table,
+            ["external_publication_seen_item", "external_publication_intake_item"],
+            limit,
+        )
+        seen = current["external_publication_seen_item"]
+        intake = current["external_publication_intake_item"]
         return build_seen_publications(seen_rows=seen, intake_rows=intake)
     finally:
         driver.stop(timeout=5)

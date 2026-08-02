@@ -1769,6 +1769,51 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
                 mod.write_publication_rows(Pool(), object(), "table", [row], "run-read-error")
         upsert.assert_not_called()
 
+    def test_published_row_stays_immutable_and_writes_durable_conflict_audit(self) -> None:
+        mod = self.mod
+        url = "https://t.me/travelcase/100"
+        row = candidate_row(
+            post_url=url,
+            _live_decision_fingerprint="old-fingerprint",
+            _previous_publication={"target_publication_status": "published", "plan_status": "completed"},
+        )
+        kinds = {
+            "image_queue_item": {},
+            "candidate_memory_item": {},
+            "publication_candidate_item": {},
+            "source_queue_item": {},
+            "source_status_item": {},
+            "online_source_item": {},
+            "external_publication_source_item": {},
+            "external_publication_intake_item": {},
+        }
+
+        class Pool:
+            def retry_operation_sync(self, operation):
+                return operation(object())
+
+        captured = {}
+
+        def upsert(_session, _ydb, _table, items, _now, **_kwargs):
+            captured["items"] = items
+            return len(items)
+
+        with (
+            mock.patch.object(mod, "_current_complete_kind", side_effect=lambda _s, _y, _t, kind, _limit: kinds[kind]),
+            mock.patch.object(mod.rt, "ensure_ydb_kv_table"),
+            mock.patch.object(mod.rt, "ydb_upsert_json_many", side_effect=upsert),
+        ):
+            written = mod.write_publication_rows(Pool(), object(), "table", [row], "run-audit")
+
+        self.assertEqual(written, 1)
+        self.assertEqual(len(captured["items"]), 1)
+        pk, kind, payload = captured["items"][0]
+        self.assertTrue(pk.startswith("publication_final_decision_audit_item:rtfinalaudit_"))
+        self.assertEqual(kind, "publication_final_decision_audit_item")
+        self.assertEqual(payload["audit_status"], "manual_review_required")
+        self.assertEqual(payload["post_url"], url)
+        self.assertEqual(payload["previous_target_publication_status"], "published")
+
 
 if __name__ == "__main__":
     unittest.main()

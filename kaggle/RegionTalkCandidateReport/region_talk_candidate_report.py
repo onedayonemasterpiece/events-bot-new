@@ -4810,8 +4810,10 @@ def ydb_select_kind_items(
     prefix_upper = kind + ";"
     after = prefix
     settings = ydb_request_settings(ydb)
-    while len(out) < max_items:
-        query = session.prepare(f"""
+    current_tx = session.transaction(ydb.SnapshotReadOnly()) if current else None
+    try:
+        while len(out) < max_items:
+            query = session.prepare(f"""
 DECLARE $prefix AS Utf8;
 DECLARE $prefix_upper AS Utf8;
 DECLARE $after AS Utf8;
@@ -4820,27 +4822,36 @@ WHERE pk >= $prefix AND pk < $prefix_upper AND pk > $after
 ORDER BY pk
 LIMIT {min(page_size, max_items - len(out))};
 """, settings=settings)
-        transaction_mode = ydb.SnapshotReadOnly() if current else ydb.StaleReadOnly()
-        result_sets = session.transaction(transaction_mode).execute(
-            query,
-            {"$prefix": prefix, "$prefix_upper": prefix_upper, "$after": after},
-            commit_tx=True,
-            settings=settings,
-        )
-        rows = result_sets[0].rows if result_sets else []
-        if not rows:
-            break
-        for row in rows:
-            pk = str(row.pk)
-            payload = row.payload_json
-            data = json.loads(payload) if isinstance(payload, str) else dict(payload or {})
-            if isinstance(data, dict):
-                data.setdefault("_ydb_pk", pk)
-                data.setdefault("_ydb_updated_at", str(getattr(row, "updated_at", "") or ""))
-                out[pk] = data
-            after = pk
-        if len(rows) < page_size:
-            break
+            tx = current_tx or session.transaction(ydb.StaleReadOnly())
+            result_sets = tx.execute(
+                query,
+                {"$prefix": prefix, "$prefix_upper": prefix_upper, "$after": after},
+                commit_tx=not current,
+                settings=settings,
+            )
+            rows = result_sets[0].rows if result_sets else []
+            if not rows:
+                break
+            for row in rows:
+                pk = str(row.pk)
+                payload = row.payload_json
+                data = json.loads(payload) if isinstance(payload, str) else dict(payload or {})
+                if isinstance(data, dict):
+                    data.setdefault("_ydb_pk", pk)
+                    data.setdefault("_ydb_updated_at", str(getattr(row, "updated_at", "") or ""))
+                    out[pk] = data
+                after = pk
+            if len(rows) < page_size:
+                break
+        if current_tx is not None:
+            current_tx.commit(settings=settings)
+    except Exception:
+        if current_tx is not None:
+            try:
+                current_tx.rollback(settings=settings)
+            except Exception:
+                pass
+        raise
     if require_complete and len(out) >= max_items:
         raise DecisionCriticalYdbReadError(
             f"decision-critical YDB read may be truncated: kind={kind} limit={max_items - 1}"
@@ -16740,6 +16751,7 @@ def external_publication_intake_fingerprint(row: dict[str, Any] | None) -> str:
             "operator_policy_override", "source_assessment", "publication",
             "region_relevance", "quality_assessment", "media_and_rights",
             "editorial_pack", "evidence", "provenance",
+            "legacy_provenance_attestation",
         )
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
@@ -16760,6 +16772,51 @@ def external_publication_intake_requires_manual_review(row: dict[str, Any] | Non
     }
     return bool(explicit & EXTERNAL_PUBLICATION_MANUAL_REVIEW_STATUSES) or _rt_bool(
         row.get("manual_review_required")
+    )
+
+
+def external_publication_intake_provenance_complete(row: dict[str, Any] | None) -> bool:
+    """Require immutable origin evidence before an intake can enter scoring."""
+
+    if not isinstance(row, dict):
+        return False
+    request_id = str(row.get("request_id") or row.get("research_request_id") or "").strip()
+    input_sha256 = str(row.get("input_json_sha256") or row.get("raw_input_json_sha256") or "").strip().lower()
+    intake_at = str(row.get("intake_at") or row.get("intake_received_at") or row.get("imported_at") or "").strip()
+    evidence_urls = [
+        str(value).strip()
+        for value in (row.get("canonical_evidence_urls") or [])
+        if str(value).strip().startswith(("https://", "http://"))
+    ]
+    identity_keys = [str(value).strip() for value in (row.get("identity_keys") or []) if str(value).strip()]
+    modern_complete = bool(
+        request_id
+        and re.fullmatch(r"[a-f0-9]{64}", input_sha256)
+        and intake_at
+        and evidence_urls
+        and identity_keys
+    )
+    if modern_complete:
+        return True
+    legacy = row.get("legacy_provenance_attestation")
+    if not isinstance(legacy, dict):
+        return False
+    legacy_evidence = [
+        str(value).strip()
+        for value in (legacy.get("canonical_evidence_urls") or [])
+        if str(value).strip().startswith(("https://", "http://"))
+    ]
+    legacy_identities = [
+        str(value).strip() for value in (legacy.get("identity_keys") or []) if str(value).strip()
+    ]
+    return bool(
+        str(legacy.get("attestation_version") or "") == "region_talk_legacy_external_provenance_v1"
+        and str(legacy.get("request_id") or "").strip()
+        and re.fullmatch(r"[a-f0-9]{64}", str(legacy.get("legacy_row_sha256") or "").strip().lower())
+        and str(legacy.get("intake_at") or "").strip()
+        and legacy_evidence
+        and legacy_identities
+        and legacy.get("input_json_sha256_available") is False
     )
 
 
@@ -16798,6 +16855,7 @@ def external_publication_intake_to_post(row: dict[str, Any]) -> dict[str, Any] |
         and not hard_exclusions
         and str(override.get("decision") or "").lower() not in {"blocked", "reject", "excluded"}
         and not external_publication_intake_requires_manual_review(row)
+        and external_publication_intake_provenance_complete(row)
     )
     if not ready:
         return None
@@ -16832,6 +16890,9 @@ def external_publication_intake_to_post(row: dict[str, Any]) -> dict[str, Any] |
     ]
     direct_image = candidate_urls[0] if candidate_urls else ""
     topics = [str(value).strip() for value in (relevance.get("topics") or []) if str(value).strip()]
+    legacy_provenance = row.get("legacy_provenance_attestation") if isinstance(
+        row.get("legacy_provenance_attestation"), dict
+    ) else {}
     return {
         "post_id": external_id,
         "platform": "web",
@@ -16866,6 +16927,12 @@ def external_publication_intake_to_post(row: dict[str, Any]) -> dict[str, Any] |
         "normalized_title": row.get("normalized_title") or publication.get("title") or "",
         "authors": row.get("authors") or publication.get("authors") or [],
         "identity_keys": row.get("identity_keys") or [],
+        "legacy_provenance_attestation_id": legacy_provenance.get("attestation_id") or "",
+        "legacy_provenance_source_sha256": legacy_provenance.get("legacy_row_sha256") or "",
+        "legacy_provenance_attestation_json": (
+            json.dumps(legacy_provenance, ensure_ascii=False, separators=(",", ":"))
+            if legacy_provenance else ""
+        ),
         "external_intake_fingerprint": external_publication_intake_fingerprint(row),
         "external_intake_revision": row.get("intake_revision") or row.get("revision") or "",
         "external_intake_status": row.get("intake_status") or "",
@@ -16928,6 +16995,10 @@ def refresh_external_publication_intake_for_selection(
     if str(meta.get("state_backend") or "") != "ydb" or (
         os.getenv("REGION_TALK_YDB_STATE_SNAPSHOT_FILE") or ""
     ).strip():
+        state["external_publication_intake"] = {}
+        state["external_publication_intake_read_status"] = "failed_closed_current_ydb_required"
+        meta["external_publication_selection_refresh_status"] = "failed_closed_current_ydb_required"
+        meta["external_publication_selection_refresh_rows"] = 0
         return state, meta
     limit = getenv_int("REGION_TALK_YDB_MAX_EXTERNAL_PUBLICATION_ROWS", 2000)
     driver = None

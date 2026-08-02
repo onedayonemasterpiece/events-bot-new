@@ -306,6 +306,15 @@ detailed page verification. The importer is the independent second layer: it
 re-reads live YDB at import time and rejects a URL/DOI that appeared after the
 agent fetched its registry snapshot.
 
+That import-time duplicate guard reads the seen and intake prefixes from one
+current, complete YDB snapshot rather than a bounded stale helper. A verified
+same-owner replay writes an immutable observation, reserves any newly observed
+DOI/URL/title+authors aliases and preserves its exact request/SHA/evidence/time
+provenance. An anonymous or cross-owner match fails closed. For pre-ledger rows
+whose original JSON bytes no longer exist, the separate legacy provenance
+backfill records an explicit legacy-row attestation instead of inventing an
+input JSON SHA; it never changes the LLM research decision.
+
 
 ## Operator chat and ranking
 

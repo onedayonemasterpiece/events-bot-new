@@ -338,36 +338,46 @@ def read_kind_rows(pool: Any, ydb: Any, table: str, kind: str, limit: int) -> li
     prefix = kind + ":"
     prefix_upper = kind + ";"
     after = prefix
-    while len(out) < max_items:
-        query_text = (
-            "DECLARE $prefix AS Utf8; DECLARE $prefix_upper AS Utf8; DECLARE $after AS Utf8; "
-            f"SELECT pk, payload_json, updated_at FROM `{table}` "
-            "WHERE pk >= $prefix AND pk < $prefix_upper AND pk > $after "
-            f"ORDER BY pk LIMIT {min(page_size, max_items - len(out))};"
-        )
+    def op(session: Any) -> list[dict[str, Any]]:
+        local_after = after
+        tx = session.transaction(ydb.SnapshotReadOnly())
+        try:
+            while len(out) < max_items:
+                query_text = (
+                    "DECLARE $prefix AS Utf8; DECLARE $prefix_upper AS Utf8; DECLARE $after AS Utf8; "
+                    f"SELECT pk, payload_json, updated_at FROM `{table}` "
+                    "WHERE pk >= $prefix AND pk < $prefix_upper AND pk > $after "
+                    f"ORDER BY pk LIMIT {min(page_size, max_items - len(out))};"
+                )
+                query = session.prepare(query_text)
+                result_sets = tx.execute(
+                    query,
+                    {"$prefix": prefix, "$prefix_upper": prefix_upper, "$after": local_after},
+                    commit_tx=False,
+                )
+                rows = result_sets[0].rows if result_sets else []
+                if not rows:
+                    break
+                for raw in rows:
+                    local_after = str(raw.pk)
+                    payload = raw.payload_json
+                    item = json.loads(payload) if isinstance(payload, str) else dict(payload or {})
+                    if isinstance(item, dict):
+                        item.setdefault("_ydb_pk", local_after)
+                        item.setdefault("_ydb_updated_at", str(getattr(raw, "updated_at", "") or ""))
+                        out.append(item)
+                if len(rows) < page_size:
+                    break
+            tx.commit()
+            return out
+        except Exception:
+            try:
+                tx.rollback()
+            except Exception:
+                pass
+            raise
 
-        def op(session: Any) -> Any:
-            query = session.prepare(query_text)
-            return session.transaction(ydb.SnapshotReadOnly()).execute(
-                query,
-                {"$prefix": prefix, "$prefix_upper": prefix_upper, "$after": after},
-                commit_tx=True,
-            )
-
-        result_sets = pool.retry_operation_sync(op)
-        rows = result_sets[0].rows if result_sets else []
-        if not rows:
-            break
-        for raw in rows:
-            after = str(raw.pk)
-            payload = raw.payload_json
-            item = json.loads(payload) if isinstance(payload, str) else dict(payload or {})
-            if isinstance(item, dict):
-                item.setdefault("_ydb_pk", after)
-                item.setdefault("_ydb_updated_at", str(getattr(raw, "updated_at", "") or ""))
-                out.append(item)
-        if len(rows) < page_size:
-            break
+    pool.retry_operation_sync(op)
     return out
 
 

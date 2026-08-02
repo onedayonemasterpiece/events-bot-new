@@ -4915,6 +4915,10 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             "external_publication_id": "extpub_archi",
             "canonical_url": "https://archi.example/ocean",
             "research_request_id": "run-1",
+            "input_json_sha256": "b" * 64,
+            "canonical_evidence_urls": ["https://archi.example/ocean"],
+            "intake_at": "2026-08-02T10:00:00+00:00",
+            "identity_keys": ["url:https://archi.example/ocean"],
             "publication": {
                 "title": "Вся мудрость океана",
                 "source_name": "Архи.ру",
@@ -5023,6 +5027,43 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         row["operator_policy_override"] = {"decision": "blocked"}
         self.assertIsNone(mod.external_publication_intake_to_post(row))
 
+    def test_external_publication_intake_fails_closed_without_complete_provenance(self) -> None:
+        mod = load_module()
+        row = {
+            "external_publication_id": "extpub-missing-provenance",
+            "canonical_url": "https://publisher.example/article",
+            "request_id": "request-8",
+            "publication": {"title": "Article", "source_domain": "publisher.example"},
+            "policy_classification": {"product_policy_match": True, "hard_exclusion_codes": []},
+            "decision": {
+                "import_status": "ready_for_region_talk_scoring",
+                "downstream_readiness": "candidate_report",
+            },
+        }
+
+        self.assertFalse(mod.external_publication_intake_provenance_complete(row))
+        self.assertIsNone(mod.external_publication_intake_to_post(row))
+
+        row.update({
+            "canonical_evidence_urls": ["https://publisher.example/article"],
+            "identity_keys": ["url:https://publisher.example/article"],
+            "intake_at": "2026-07-19T22:31:25+00:00",
+            "legacy_provenance_attestation": {
+                "attestation_id": "extpubprov_legacy",
+                "attestation_version": "region_talk_legacy_external_provenance_v1",
+                "request_id": "request-8",
+                "legacy_row_sha256": "c" * 64,
+                "canonical_evidence_urls": ["https://publisher.example/article"],
+                "identity_keys": ["url:https://publisher.example/article"],
+                "intake_at": "2026-07-19T22:31:25+00:00",
+                "input_json_sha256_available": False,
+            },
+        })
+        self.assertTrue(mod.external_publication_intake_provenance_complete(row))
+        projected = mod.external_publication_intake_to_post(row)
+        self.assertIsNotNone(projected)
+        self.assertEqual(projected["legacy_provenance_source_sha256"], "c" * 64)
+
     def test_clean_unreviewed_intake_enters_only_normal_scoring_with_provenance(self) -> None:
         mod = load_module()
         row = {
@@ -5083,6 +5124,12 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             def execute(self, *_args, **_kwargs):
                 return [types.SimpleNamespace(rows=[Row("external_publication_intake_item:a"), Row("external_publication_intake_item:b")])]
 
+            def commit(self, **_kwargs):
+                return None
+
+            def rollback(self, **_kwargs):
+                return None
+
         class Session:
             def prepare(self, query, **_kwargs):
                 return query
@@ -5109,6 +5156,18 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                 Session(), ydb, "table", "external_publication_intake_item", limit=1
             )
         self.assertEqual(modes, [snapshot_mode])
+
+    def test_external_intake_selection_fails_closed_without_live_ydb(self) -> None:
+        mod = load_module()
+        state, meta = mod.refresh_external_publication_intake_for_selection(
+            {"external_publication_intake": {"extpub-stale": {"external_publication_id": "extpub-stale"}}},
+            {"state_backend": "memory"},
+        )
+        self.assertEqual(state["external_publication_intake"], {})
+        self.assertEqual(
+            meta["external_publication_selection_refresh_status"],
+            "failed_closed_current_ydb_required",
+        )
 
     def test_external_publication_final_verifier_does_not_require_firsthand_visit(self) -> None:
         mod = load_module()

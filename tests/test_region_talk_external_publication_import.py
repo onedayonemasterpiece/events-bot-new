@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import importlib
 import importlib.util
 import json
@@ -301,7 +302,7 @@ def test_wrong_schema_is_rejected_before_row_processing() -> None:
         mod.prepare_import(payload)
 
 
-def test_generated_duplicate_guard_reports_seen_candidate_as_replay_without_staging() -> None:
+def test_anonymous_duplicate_guard_fails_closed_without_staging() -> None:
     mod = load_module()
     payload = valid_payload()
     guard = {
@@ -313,13 +314,17 @@ def test_generated_duplicate_guard_reports_seen_candidate_as_replay_without_stag
     result = mod.prepare_import(payload, duplicate_guard=guard)
 
     assert not result["valid"]
-    assert result["batch"]["duplicate_seen_rejected"] == 1
+    assert result["batch"]["duplicate_seen_rejected"] == 0
     assert not result["rejected"]
-    assert result["replayed"][0]["reason"] == "already_seen"
+    assert not result["replayed"]
+    assert result["batch"]["execution_blocked"] is True
+    assert result["conflicts"][0]["errors"] == [
+        "identity keys resolve to different or unverifiable existing publications"
+    ]
     assert all(kind != "external_publication_intake_item" for _, kind, _ in result["ydb_rows"])
 
 
-def test_live_seen_guard_needs_no_run_specific_request_sidecar() -> None:
+def test_live_seen_guard_without_owner_fails_closed() -> None:
     mod = load_module()
     payload = valid_payload()
     live = mod.duplicate_guard_from_seen_publications([{
@@ -333,7 +338,9 @@ def test_live_seen_guard_needs_no_run_specific_request_sidecar() -> None:
     result = mod.prepare_import(payload, duplicate_guard=live)
 
     assert not result["valid"]
-    assert result["batch"]["duplicate_seen_rejected"] == 1
+    assert result["batch"]["duplicate_seen_rejected"] == 0
+    assert result["batch"]["execution_blocked"] is True
+    assert len(result["conflicts"]) == 1
     assert live["request"] == {}
 
 
@@ -690,6 +697,67 @@ def test_identity_reservation_race_fails_closed_without_partial_write(monkeypatc
         mod.execute_import(second)
 
     assert durable == durable_after_first
+
+
+def test_later_replay_persists_observation_and_new_identity_alias(monkeypatch) -> None:
+    mod = load_module()
+    durable = _install_fake_ydb(mod, monkeypatch)
+    first = mod.prepare_import(valid_payload(), raw_input_sha256="a" * 64)
+    committed = mod.execute_import(first)
+    external_id = committed["new_intake_ids"][0]
+
+    second_payload = valid_payload()
+    second_payload["run"]["request_id"] = "later-observation"
+    second_payload["candidates"][0]["doi"] = "10.1234/KALININGRAD"
+    candidate = second_payload["candidates"][0]
+    guard = {
+        "snapshot_id": "rtseen_live",
+        "request": {},
+        "urls": {mod.canonical_url_identity(candidate["canonical_url"])},
+        "dois": set(),
+        "titles_authors": set(),
+        "identity_map": {
+            "url:" + mod.canonical_url_identity(candidate["canonical_url"]): external_id,
+            mod.title_authors_identity(
+                candidate["publication"]["title"], candidate["publication"]["authors"]
+            ): external_id,
+        },
+    }
+    second = mod.prepare_import(
+        second_payload,
+        duplicate_guard=guard,
+        raw_input_sha256="b" * 64,
+        imported_at="2026-08-02T12:00:00+00:00",
+    )
+
+    assert second["batch"]["new_intake_count"] == 0
+    assert second["batch"]["replay_count"] == 1
+    assert second["batch"]["replay_observation_rows_staged"] == 1
+    observation = second["replay_observations"][0]
+    assert observation["request_id"] == "later-observation"
+    assert observation["input_json_sha256"] == "b" * 64
+    assert observation["canonical_evidence_urls"]
+    assert "doi:10.1234/kaliningrad" in observation["identity_keys"]
+
+    result = mod.execute_import(second)
+
+    assert result["status"] == "committed"
+    assert result["new_intake_count"] == 0
+    assert result["replay_ids"] == [external_id]
+    doi_sha = hashlib.sha256("doi:10.1234/kaliningrad".encode()).hexdigest()
+    doi_pk = "external_publication_identity_item:" + doi_sha
+    assert json.loads(durable[doi_pk])["external_publication_id"] == external_id
+    observations = [pk for pk in durable if pk.startswith("external_publication_intake_observation_item:")]
+    assert len(observations) == 1
+    intake_pk = "external_publication_intake_item:" + external_id
+    enriched = json.loads(durable[intake_pk])
+    assert enriched["request_id"] == valid_payload()["run"]["request_id"]
+    assert enriched["input_json_sha256"] == "a" * 64
+    assert enriched["review_status"] == "unreviewed"
+    assert enriched["publication_permission"] == "not_granted"
+    assert "doi:10.1234/kaliningrad" in enriched["identity_keys"]
+    assert enriched["provenance_observations"][0]["external_publication_observation_id"].startswith("extpubobs_")
+    assert enriched["provenance_observations"][0]["input_json_sha256"] == "b" * 64
 
 
 def test_execute_with_rejected_row_does_not_call_writer_or_registry(tmp_path: Path, monkeypatch) -> None:

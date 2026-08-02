@@ -636,6 +636,7 @@ def prepare_import(
     valid: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
     replayed: list[dict[str, Any]] = []
+    replay_observations: list[dict[str, Any]] = []
     conflicts: list[dict[str, Any]] = []
     identity_owner: dict[str, str] = dict((duplicate_guard or {}).get("identity_map") or {})
     anonymous_guard_keys: set[str] = set()
@@ -671,7 +672,7 @@ def prepare_import(
         identity_keys = list(normalized.get("identity_keys") or [])
         matched_owners = {identity_owner[key] for key in identity_keys if key in identity_owner}
         anonymous_matches = [key for key in identity_keys if key in anonymous_guard_keys]
-        if len(matched_owners) > 1 or (matched_owners and anonymous_matches) or len(anonymous_matches) > 1:
+        if len(matched_owners) > 1 or anonymous_matches:
             conflicts.append({
                 "index": index,
                 "canonical_url": normalized["canonical_url"],
@@ -680,17 +681,37 @@ def prepare_import(
                 "errors": ["identity keys resolve to different or unverifiable existing publications"],
             })
             continue
-        if matched_owners or anonymous_matches:
+        if matched_owners:
             duplicate_seen_count += 1
-            external_id = next(iter(matched_owners), normalized["external_publication_id"])
+            external_id = next(iter(matched_owners))
             replayed.append({
                 "index": index,
                 "canonical_url": normalized["canonical_url"],
                 "external_publication_id": external_id,
                 "matched_identity_keys": sorted(
-                    key for key in identity_keys if key in identity_owner or key in anonymous_guard_keys
+                    key for key in identity_keys if key in identity_owner
                 ),
                 "reason": "already_seen",
+            })
+            replay_observations.append({
+                "external_publication_id": external_id,
+                "request_id": request_id,
+                "research_request_id": request_id,
+                "input_json_sha256": raw_input_sha256,
+                "raw_input_json_sha256": raw_input_sha256,
+                "intake_at": imported_at,
+                "intake_received_at": imported_at,
+                "imported_at": imported_at,
+                "observed_at": imported_at,
+                "observation_status": "replay_existing_intake",
+                "canonical_url": normalized.get("canonical_url"),
+                "doi": normalized.get("doi"),
+                "normalized_title": normalized.get("normalized_title"),
+                "normalized_authors": normalized.get("normalized_authors") or [],
+                "identity_keys": identity_keys,
+                "canonical_evidence_urls": list(normalized.get("canonical_evidence_urls") or []),
+                "observed_candidate": normalized,
+                "updated_at": imported_at,
             })
             for key in identity_keys:
                 identity_owner.setdefault(key, external_id)
@@ -726,6 +747,28 @@ def prepare_import(
 
     batch_id = "extpubrun_" + stable_hash(request_id)
     rows: list[tuple[str, str, dict[str, Any]]] = []
+    identity_rows_by_pk: dict[str, dict[str, Any]] = {}
+
+    def reserve_identity(identity_key: str, external_id: str, *, reservation_mode: str) -> None:
+        identity_sha256 = hashlib.sha256(identity_key.encode("utf-8")).hexdigest()
+        pk = "external_publication_identity_item:" + identity_sha256
+        intended = {
+            "identity_key_sha256": identity_sha256,
+            "identity_type": identity_key.split(":", 1)[0],
+            "identity_value": identity_key.split(":", 1)[1],
+            "external_publication_id": external_id,
+            "request_id": request_id,
+            "input_json_sha256": raw_input_sha256,
+            "raw_input_json_sha256": raw_input_sha256,
+            "reserved_at": imported_at,
+            "identity_ledger_version": IDENTITY_LEDGER_VERSION,
+            "reservation_mode": reservation_mode,
+            "updated_at": imported_at,
+        }
+        existing = identity_rows_by_pk.setdefault(pk, intended)
+        if str(existing.get("external_publication_id") or "") != external_id:
+            raise ContractError("prepared identity reservation maps to multiple publications")
+
     for row in valid:
         rows.append((
             "external_publication_intake_item:" + row["external_publication_id"],
@@ -733,24 +776,30 @@ def prepare_import(
             row,
         ))
         for identity_key in row.get("identity_keys") or []:
-            identity_sha256 = hashlib.sha256(identity_key.encode("utf-8")).hexdigest()
-            identity_row = {
-                "identity_key_sha256": identity_sha256,
-                "identity_type": identity_key.split(":", 1)[0],
-                "identity_value": identity_key.split(":", 1)[1],
-                "external_publication_id": row["external_publication_id"],
-                "request_id": request_id,
-                "input_json_sha256": raw_input_sha256,
-                "raw_input_json_sha256": raw_input_sha256,
-                "reserved_at": imported_at,
-                "identity_ledger_version": IDENTITY_LEDGER_VERSION,
-                "updated_at": imported_at,
-            }
-            rows.append((
-                "external_publication_identity_item:" + identity_sha256,
-                "external_publication_identity_item",
-                identity_row,
-            ))
+            reserve_identity(identity_key, row["external_publication_id"], reservation_mode="new_intake")
+    for observation in replay_observations:
+        observation_id = "extpubobs_" + stable_hash(
+            observation["external_publication_id"],
+            request_id,
+            raw_input_sha256,
+            observation.get("canonical_url"),
+        )
+        observation["external_publication_observation_id"] = observation_id
+        rows.append((
+            "external_publication_intake_observation_item:" + observation_id,
+            "external_publication_intake_observation_item",
+            observation,
+        ))
+        for identity_key in observation.get("identity_keys") or []:
+            reserve_identity(
+                identity_key,
+                str(observation["external_publication_id"]),
+                reservation_mode="replay_alias",
+            )
+    rows.extend(
+        (pk, "external_publication_identity_item", row)
+        for pk, row in sorted(identity_rows_by_pk.items())
+    )
     seen_rows: dict[str, dict[str, Any]] = {}
 
     def add_seen(
@@ -794,9 +843,14 @@ def prepare_import(
             "updated_at": imported_at,
         })
 
-    for row in valid:
+    for row in valid + replay_observations:
         publication = row.get("publication") if isinstance(row.get("publication"), dict) else {}
-        status = str((row.get("decision") or {}).get("import_status") or "")
+        if not publication and isinstance(row.get("observed_candidate"), dict):
+            publication = row["observed_candidate"].get("publication") or {}
+        decision_row = row.get("decision") if isinstance(row.get("decision"), dict) else {}
+        if not decision_row and isinstance(row.get("observed_candidate"), dict):
+            decision_row = row["observed_candidate"].get("decision") or {}
+        status = str(decision_row.get("import_status") or "")
         disposition = (
             "candidate" if status == "ready_for_region_talk_scoring"
             else "manual_review" if status == "manual_review_required"
@@ -930,6 +984,7 @@ def prepare_import(
         "duplicate_seen_count": duplicate_seen_count,
         "duplicate_seen_rejected": duplicate_seen_count,
         "seen_publication_rows_staged": len(seen_rows),
+        "replay_observation_rows_staged": len(replay_observations),
         "seen_guard_snapshot_id": str(duplicate_guard.get("snapshot_id") or "") if duplicate_guard else "",
         "coverage": payload.get("coverage") if isinstance(payload.get("coverage"), list) else [],
         "run_uncertainties": payload.get("run_uncertainties") if isinstance(payload.get("run_uncertainties"), list) else [],
@@ -940,6 +995,7 @@ def prepare_import(
         "valid": valid,
         "rejected": rejected,
         "replayed": replayed,
+        "replay_observations": replay_observations,
         "conflicts": conflicts,
         "ydb_rows": rows,
     }
@@ -1005,6 +1061,10 @@ def execute_import(prepared: dict[str, Any]) -> dict[str, Any]:
     batch_pk = "external_publication_import_batch:" + str(batch.get("batch_id") or "")
     raw_sha256 = str(batch.get("input_json_sha256") or batch.get("raw_input_json_sha256") or "")
     identity_rows = [(pk, row) for pk, kind, row in rows if kind == "external_publication_identity_item"]
+    replay_observation_rows = [
+        row for _pk, kind, row in rows
+        if kind == "external_publication_intake_observation_item"
+    ]
 
     ydb = ensure_ydb_module()
     endpoint, database = ydb_endpoint_database()
@@ -1023,6 +1083,7 @@ VALUES ($pk, $kind, $payload_json, $updated_at);
         select = session.prepare(select_text)
         upsert = session.prepare(upsert_text)
         tx = session.transaction(ydb.SerializableReadWrite())
+        existing_same_owner_identity_pks: set[str] = set()
 
         response = tx.execute(select, {"$pk": batch_pk}, commit_tx=False)
         existing_rows = response[0].rows if response else []
@@ -1054,6 +1115,17 @@ VALUES ($pk, $kind, $payload_json, $updated_at);
             if not existing_rows:
                 continue
             existing = _json_payload(existing_rows[0].payload_json)
+            if (
+                str(intended.get("reservation_mode") or "") == "replay_alias"
+                and str(existing.get("external_publication_id") or "") == str(
+                    intended.get("external_publication_id") or ""
+                )
+            ):
+                # A later observation may add URL/DOI/title+authors aliases to
+                # the same publication.  Reusing the same-owner reservation is
+                # idempotent; only an owner change is a safety conflict.
+                existing_same_owner_identity_pks.add(pk)
+                continue
             tx.rollback()
             raise ContractError(
                 "identity reservation conflict: "
@@ -1062,10 +1134,95 @@ VALUES ($pk, $kind, $payload_json, $updated_at);
                 + str(existing.get("external_publication_id") or "another publication")
             )
 
+        intake_enrichments: dict[str, dict[str, Any]] = {}
+        for observation in replay_observation_rows:
+            external_id = str(observation.get("external_publication_id") or "").strip()
+            if not external_id:
+                tx.rollback()
+                raise ContractError("replay observation is missing external_publication_id")
+            intake_pk = "external_publication_intake_item:" + external_id
+            current = intake_enrichments.get(intake_pk)
+            if current is None:
+                response = tx.execute(select, {"$pk": intake_pk}, commit_tx=False)
+                existing_rows = response[0].rows if response else []
+                if not existing_rows:
+                    # A seen-only excluded/unresolved publication has no intake
+                    # to enrich. Its immutable observation and aliases are still
+                    # durable, without creating a publishable candidate.
+                    continue
+                current = _json_payload(existing_rows[0].payload_json)
+            current_external_id = str(current.get("external_publication_id") or "").strip()
+            if current_external_id and current_external_id != external_id:
+                tx.rollback()
+                raise ContractError("replay observation intake owner conflict")
+            evidence_urls = sorted({
+                str(value).strip()
+                for value in list(current.get("canonical_evidence_urls") or [])
+                + list(observation.get("canonical_evidence_urls") or [])
+                if str(value).strip()
+            })
+            identity_keys = sorted({
+                str(value).strip()
+                for value in list(current.get("identity_keys") or [])
+                + list(observation.get("identity_keys") or [])
+                if str(value).strip()
+            })
+            provenance = [
+                item for item in (current.get("provenance_observations") or [])
+                if isinstance(item, dict)
+            ]
+            compact_observation = {
+                "request_id": observation.get("request_id") or "",
+                "input_json_sha256": observation.get("input_json_sha256") or "",
+                "external_publication_observation_id": observation.get("external_publication_observation_id") or "",
+                "canonical_evidence_urls": list(observation.get("canonical_evidence_urls") or []),
+                "intake_at": observation.get("intake_at") or observation.get("observed_at") or "",
+            }
+            observation_key = (
+                str(compact_observation["request_id"]),
+                str(compact_observation["input_json_sha256"]),
+                str(compact_observation["external_publication_observation_id"]),
+            )
+            if observation_key not in {
+                (
+                    str(item.get("request_id") or ""),
+                    str(item.get("input_json_sha256") or ""),
+                    str(item.get("external_publication_observation_id") or ""),
+                )
+                for item in provenance
+            }:
+                provenance.append(compact_observation)
+            current.update({
+                "external_publication_id": external_id,
+                "request_id": current.get("request_id") or observation.get("request_id") or "",
+                "input_json_sha256": current.get("input_json_sha256") or observation.get("input_json_sha256") or "",
+                "raw_input_json_sha256": current.get("raw_input_json_sha256") or observation.get("raw_input_json_sha256") or "",
+                "intake_at": current.get("intake_at") or observation.get("intake_at") or observation.get("observed_at") or "",
+                "intake_received_at": current.get("intake_received_at") or observation.get("intake_received_at") or observation.get("observed_at") or "",
+                "canonical_evidence_urls": evidence_urls,
+                "identity_keys": identity_keys,
+                "intake_status": current.get("intake_status") or "new_intake",
+                "review_status": current.get("review_status") or "unreviewed",
+                "publication_permission": current.get("publication_permission") or "not_granted",
+                "provenance_observations": provenance,
+                "provenance_enriched_at": observation.get("observed_at") or utc_now_iso(),
+                "updated_at": observation.get("observed_at") or utc_now_iso(),
+            })
+            intake_enrichments[intake_pk] = current
+
         if not rows:
             tx.rollback()
             raise ContractError("prepared import has no durable rows")
-        for index, (pk, kind, row) in enumerate(rows):
+        rows_to_write = [
+            item for item in rows
+            if not (item[1] == "external_publication_identity_item" and item[0] in existing_same_owner_identity_pks)
+        ]
+        rows_to_write.extend(
+            (pk, "external_publication_intake_item", payload)
+            for pk, payload in sorted(intake_enrichments.items())
+            if not any(existing_pk == pk for existing_pk, _kind, _row in rows_to_write)
+        )
+        for index, (pk, kind, row) in enumerate(rows_to_write):
             tx.execute(
                 upsert,
                 {
@@ -1074,13 +1231,13 @@ VALUES ($pk, $kind, $payload_json, $updated_at);
                     "$payload_json": json.dumps(row, ensure_ascii=False, separators=(",", ":")),
                     "$updated_at": str(row.get("updated_at") or row.get("imported_at") or utc_now_iso()),
                 },
-                commit_tx=index == len(rows) - 1,
+                commit_tx=index == len(rows_to_write) - 1,
             )
         new_ids = sorted(str(value) for value in (batch.get("new_intake_ids") or []) if str(value))
         replay_ids = sorted(str(value) for value in (batch.get("replay_ids") or []) if str(value))
         return {
             "status": "committed",
-            "written_ydb_rows": len(rows),
+            "written_ydb_rows": len(rows_to_write),
             "new_intake_count": len(new_ids),
             "new_intake_ids": new_ids,
             "replay_count": len(replay_ids),

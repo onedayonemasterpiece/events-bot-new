@@ -150,3 +150,28 @@ the normal checking/scoring funnel; a `manual_review_required` row stays held.
 Neither case authorizes public posting at intake time. If any input row is
 invalid, conflicting, lacks required proof or live YDB cannot be read
 completely, `--execute` is all-or-nothing and performs no staging writes.
+
+## One-time provenance migration for pre-ledger intake
+
+Rows imported before the exact-byte ledger cannot truthfully recover the
+original JSON SHA. Do not fill `input_json_sha256` with a reconstructed value.
+Use the dry-run-first migration, which hashes the immutable embedded YDB
+research row and preserves its public evidence and normalized identities in an
+explicit legacy attestation:
+
+```bash
+python3 scripts/region_talk_external_publication_provenance_backfill.py \
+  --env-file .env \
+  --report artifacts/codex/region-talk-legacy-provenance-backfill.dry.json
+
+python3 scripts/region_talk_external_publication_provenance_backfill.py \
+  --env-file .env --execute \
+  --report artifacts/codex/region-talk-legacy-provenance-backfill.execute.json
+```
+
+The command performs a current complete read, compares each exact legacy-row
+SHA again inside the serializable write transaction, and is idempotent. Any
+missing request/evidence/identity or concurrent row change aborts the whole
+write. The migration retains the semantic decision, defaults absent review
+state to `unreviewed`, keeps `publication_permission=not_granted`, and therefore
+only restores eligibility for the ordinary LLM-first scoring pipeline.

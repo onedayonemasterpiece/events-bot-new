@@ -2338,7 +2338,7 @@ def filter_rows_against_current_finalization_state(
     }
     safe: list[dict[str, Any]] = []
 
-    def defer_changed(row: dict[str, Any], reason: str) -> None:
+    def defer_changed(row: dict[str, Any], reason: str, current_fingerprint: str = "") -> None:
         previous = row.get("_previous_publication") if isinstance(row.get("_previous_publication"), dict) else {}
         published_states = {
             str(previous.get("target_publication_status") or row.get("target_publication_status") or "").lower(),
@@ -2347,14 +2347,33 @@ def filter_rows_against_current_finalization_state(
         }
         already_published = bool(published_states & {"published", "target_published", "completed"})
         if already_published:
-            # Delivered/public rows are immutable. Their changed evidence is
-            # visible in logs and will require a separate operator audit, but
-            # this finalizer must not rewrite the historical publication.
+            # Delivered/public rows stay immutable, while the safety conflict
+            # itself is a durable operator-visible audit record.
             print(
                 f"[region-talk-finalizer] immutable published row needs audit: {reason} "
                 f"{row.get('post_url')}",
                 flush=True,
             )
+            expected_fingerprint = str(row.get("_live_decision_fingerprint") or "")
+            post_url = normalize_post_url(str(row.get("post_url") or ""))
+            external_id = str(row.get("external_publication_id") or "")
+            audit_id = "rtfinalaudit_" + rt.stable_hash(
+                post_url, external_id, reason, expected_fingerprint, current_fingerprint
+            )
+            safe.append({
+                "_final_decision_audit_only": True,
+                "final_decision_audit_id": audit_id,
+                "audit_status": "manual_review_required",
+                "audit_reason": reason,
+                "post_url": post_url,
+                "external_publication_id": external_id,
+                "expected_live_decision_fingerprint": expected_fingerprint,
+                "current_live_decision_fingerprint": current_fingerprint,
+                "previous_target_publication_status": previous.get("target_publication_status") or row.get("target_publication_status") or "",
+                "previous_public_publication_status": previous.get("public_publication_status") or row.get("public_publication_status") or "",
+                "previous_plan_status": previous.get("plan_status") or row.get("plan_status") or "",
+                "operator_action": "review_immutable_published_evidence_conflict",
+            })
             return
         row["publication_status"] = "gemini_needs_review"
         row["publication_candidate_status"] = "llm_needs_review"
@@ -2410,7 +2429,7 @@ def filter_rows_against_current_finalization_state(
                 f"[region-talk-finalizer] final decision deferred: live fingerprint changed {url}",
                 flush=True,
             )
-            defer_changed(row, "live_eligibility_or_provenance_fingerprint_changed")
+            defer_changed(row, "live_eligibility_or_provenance_fingerprint_changed", current)
             continue
         row["final_decision_guard_status"] = "current_unchanged"
         row["final_decision_guard_fingerprint"] = current
@@ -2428,6 +2447,8 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
         "external_research_quality_score", "request_id", "input_json_sha256", "raw_input_json_sha256",
         "canonical_evidence_urls", "intake_at", "intake_received_at", "imported_at",
         "normalized_title", "authors", "identity_keys", "source_overview", "diversity_topics",
+        "legacy_provenance_attestation_id", "legacy_provenance_source_sha256",
+        "legacy_provenance_attestation_json",
         "external_intake_fingerprint", "external_intake_revision", "external_intake_status",
         "external_intake_review_status", "external_intake_publication_permission",
         "external_intake_manual_review_required", "final_decision_guard_status",
@@ -2494,6 +2515,26 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
     ]
     items = []
     for row in rows:
+        if row.get("_final_decision_audit_only"):
+            audit = {
+                key: value for key, value in row.items()
+                if not str(key).startswith("_final_decision_")
+            }
+            audit.update({
+                "final_decision_audit_id": row.get("final_decision_audit_id"),
+                "run_id": run_id,
+                "created_at": now,
+                "updated_at": now,
+                "audit_contract_version": "region_talk_final_decision_audit_v1",
+            })
+            audit_id = str(audit.get("final_decision_audit_id") or "")
+            if audit_id:
+                items.append((
+                    "publication_final_decision_audit_item:" + audit_id,
+                    "publication_final_decision_audit_item",
+                    audit,
+                ))
+            continue
         durable_row = dict(row)
         terminal_text = bool(
             str(row.get("sent_to_chat") or "").lower() == "true"
@@ -2534,6 +2575,7 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
             "publication_presentation_manifest_json",
             "selected_media_materialization_json",
             "media_materialization_items_json",
+            "legacy_provenance_attestation_json",
         ):
             if durable_row.get(lossless_field) not in (None, ""):
                 payload[lossless_field] = durable_row[lossless_field]
@@ -2545,7 +2587,9 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
 
     def op(session: Any) -> int:
         rt.ensure_ydb_kv_table(ydb, session, table)
-        return rt.ydb_upsert_json_many(session, ydb, table, items, now, chunk_size=20, timeout_seconds=8)
+        return rt.ydb_upsert_json_many(
+            session, ydb, table, items, now, chunk_size=max(1, len(items)), timeout_seconds=8
+        )
 
     return int(pool.retry_operation_sync(op) or 0)
 
