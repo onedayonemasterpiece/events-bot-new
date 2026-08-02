@@ -119,16 +119,14 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_7
+          working-directory: site
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -timezone UTC
           disable-animations: true
           script: |
-            cd site
             adb shell settings put secure show_ime_with_hard_keyboard 1
-            export E2E_PLATFORM=android E2E_HOST_OS_VERSION="$(uname -sr)"
-            export APPIUM_BASE_PATH=/wd/hub APPIUM_PORT=4723
             npx appium --base-path /wd/hub --port 4723 > "${RUNNER_TEMP}/appium-android.log" 2>&1 &
-            for n in {1..45}; do curl -fsS http://127.0.0.1:4723/wd/hub/status >/dev/null && break; sleep 1; done
-            npm run e2e:external-focus-email-otp
+            for n in $(seq 1 45); do curl -fsS http://127.0.0.1:4723/wd/hub/status >/dev/null && break; sleep 1; done
+            E2E_HOST_OS_VERSION="$(uname -sr)" npm run e2e:external-focus-email-otp
       - name: Emit safe BLOCKED artifact when emulator failed before harness
         if: ${{ always() }}
         run: test -f "$E2E_EVIDENCE_DIR/.redaction-ok" || npm run e2e:external-focus-email-otp || true
