@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk article visual-grounding prompt/audit alignment: each
+  second-paragraph sentence must carry concrete content evidence even when it
+  also discusses reviewed media, and a pre-Critic Writer failure now clears a
+  stale Critic pass from the current audit projection.
 - Fixed Region Talk article Writer evidence projection: imported publisher
   string/list dimensions now use the same normalized, evidence-linked form in
   both readiness and prompt construction, so all three reader-brief dimensions
