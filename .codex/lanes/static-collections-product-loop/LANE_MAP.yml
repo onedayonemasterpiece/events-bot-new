@@ -1,0 +1,112 @@
+mode: serial_dependency_chain_with_parallel_mapping
+repo: onedayonemasterpiece/events-bot-new
+base_ref: origin/agent/static-collections-quality/pr-a-ontology
+base_branch: agent/static-collections-quality/pr-a-ontology
+integration_branch: integration/static-collection-facts-v3
+global_constraints:
+  - no PR-B scores, thresholds, or owner gold
+  - no additional LLM call
+  - no Astro routes, navigation, sitemap, or publication
+  - no daily product schedule before a real product snapshot
+  - no production/Fly mutation until corrected copy and ingestion gates pass and the SHA is main-reachable
+  - preserve source-grounded evidence and one physical primary send per source
+verification_owner: root integrator
+stop_conditions:
+  - confirmed known hard negative
+  - invalid exact quote or source/event mismatch
+  - more than one collection physical send per source
+  - unexpected evaluate or warm database write
+  - systematic semantic miss class
+  - accepted truth erased on provider failure
+lanes:
+  - id: pr-a-truth
+    role: worker
+    effort: high
+    requirement_ids: [R1, R2]
+    target: correct seven provisional source-bound rows and all derived PR-A contracts
+    depends_on: []
+    execution_mode: serial_first
+    branch: agent/static-collections-quality/pr-a-ontology
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collections-analyst-review-20260801
+    writable_files:
+      - docs/review-data/static_collection_*.json
+      - tests/test_static_collection_review_seed.py
+      - tests/test_static_collection_data_quality_reviews.py
+      - docs/features/static-site-pages/podborki-to-be.md
+      - CHANGELOG.md
+      - .codex/lanes/static-collections-pr-a-correction/RESULTS.md
+    forbidden_files: [smart_event_update.py, google_ai/client.py, site, scripts/backfill_static_collection_facts.py]
+    expected_output: committed and pushed corrected PR-A head with passing review gate
+    verification_scope: full_local
+    status: planned
+  - id: facts-gate-ci-router
+    role: worker
+    effort: high
+    requirement_ids: [R3, R4, R5, R6]
+    target: rebase facts v3, add reproducible Gate-B evaluator, router recall, and affected-scope CI
+    depends_on: [pr-a-truth]
+    execution_mode: serial_after_dependency
+    branch: agent/static-collection-product-loop/facts-gate-ci-router
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collection-product-loop-facts
+    writable_files:
+      - smart_event_update.py
+      - scripts
+      - tests
+      - .github/workflows
+      - docs/features/static-site-pages
+      - docs/operations/static-collection-facts-v3.md
+      - CHANGELOG.md
+      - .codex/lanes/static-collection-product-loop-facts/RESULTS.md
+    forbidden_files: [site/src/pages, site/src/components]
+    expected_output: committed evaluator/router/CI increment on corrected facts-v3 stack
+    verification_scope: full_local
+    status: planned
+  - id: product-snapshot
+    role: worker
+    effort: high
+    requirement_ids: [R9, R10]
+    target: integrate PR-234 runner through one existing exporter-boundary adapter
+    depends_on: [facts-gate-ci-router]
+    execution_mode: serial_after_dependency
+    branch: agent/static-collection-product-loop/product-snapshot
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collection-product-loop-product
+    writable_files:
+      - site/scripts
+      - scripts
+      - tests
+      - docs/features/static-site-pages
+      - docs/operations
+      - CHANGELOG.md
+      - .codex/lanes/static-collection-product-loop-product/RESULTS.md
+    forbidden_files: [site/src/pages, site/src/components, site/src/layouts]
+    expected_output: current/future facts-v3 product snapshot and product-quality runner integration
+    verification_scope: full_local
+    status: planned
+  - id: real-gates
+    role: planner
+    effort: max
+    requirement_ids: [R7, R8, R11]
+    target: full primary replay, fallback drill, copy apply/warm, ordinary ingestion, and product reports
+    depends_on: [facts-gate-ci-router, product-snapshot]
+    execution_mode: serial_integrator
+    branch: integration/static-collection-facts-v3
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collection-facts-v3
+    writable_files: [artifacts]
+    forbidden_files: [production database]
+    expected_output: hashed real-data receipts and explicit WATCH/FAIL classification
+    verification_scope: full_local
+    status: planned
+  - id: release-canary
+    role: merge_reviewer
+    effort: max
+    requirement_ids: [R12, R13, R14, R15]
+    target: final closure audit, clean main-based integration, and only then bounded Fly canary
+    depends_on: [real-gates]
+    execution_mode: serial_after_dependency
+    branch: integration/static-collection-product-loop-main
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-collection-product-loop-main
+    writable_files: [integration report, release documentation]
+    forbidden_files: [PR-B, Astro publication surfaces, mobile]
+    expected_output: main-based audited diff and Fly evidence or honest blocked reason
+    verification_scope: full_local
+    status: planned
