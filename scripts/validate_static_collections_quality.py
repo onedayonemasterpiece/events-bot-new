@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Fail-closed static-collection policy/review validator.
 
-Baseline mode supports the current provisional legacy fixture and reports the
-missing target provenance/family/score fields as warnings. Strict mode is the
-post-migration contract and requires a separate owner gold.
+Baseline mode supports both the empty starter fixture in main and the
+provisional review seed. Missing supply/provenance/family/score fields remain
+visible as warnings while all semantic labels stay fail-closed. Strict mode is
+the post-migration contract and requires a separate owner gold.
 """
 
 from __future__ import annotations
@@ -315,12 +316,18 @@ def validate_label(
     payload: Mapping[str, Any],
     *,
     strict: bool,
+    starter: bool,
     minimum_positives: int,
     minimum_negatives: int,
     issues: Collector,
 ) -> dict[str, int]:
     if not text(payload.get("definition")):
-        issues.error("label_definition_missing", "definition is required", label=label)
+        issues.add(
+            "warning" if starter and not strict else "error",
+            "label_definition_missing",
+            "definition is required",
+            label=label,
+        )
     positives = rows(payload.get("positives"), "positives", label, issues)
     negatives = rows(payload.get("hard_negatives"), "hard_negatives", label, issues)
 
@@ -416,7 +423,8 @@ def validate_label(
     positive_units = len(set(positive_families)) if positive_families else len(positive_ids)
     negative_units = len(set(negative_families)) if negative_families else len(negative_ids)
     if negative_units < minimum_negatives:
-        issues.error(
+        issues.add(
+            "warning" if starter and not strict else "error",
             "hard_negative_supply_shortfall",
             f"{negative_units} negatives < required {minimum_negatives}",
             label=label,
@@ -463,12 +471,26 @@ def validate_seed(
     seed_path: Path,
     issues: Collector,
 ) -> dict[str, dict[str, int]]:
-    provisional = seed.get("status") == "provisional_agent_seed_not_owner_approved"
-    if provisional and seed.get("publication_eligible") is not False:
+    status = str(seed.get("status") or "")
+    starter = status == "starter_not_approved"
+    provisional = status == "provisional_agent_seed_not_owner_approved"
+    publication_eligible = seed.get("publication_eligible")
+    if provisional and publication_eligible is not False:
         issues.error(
             "provisional_seed_publishable",
             "provisional review seed must set publication_eligible=false",
         )
+    if starter:
+        if publication_eligible is True:
+            issues.error(
+                "starter_seed_publishable",
+                "starter seed cannot authorize publication",
+            )
+        elif publication_eligible is None:
+            issues.warning(
+                "starter_publication_flag_missing",
+                "starter seed should explicitly set publication_eligible=false",
+            )
     if strict:
         if seed.get("schema_version") != "static-collections-review-seed-v1":
             issues.error("review_seed_schema_legacy", "strict mode requires review-seed-v1 schema")
@@ -515,6 +537,7 @@ def validate_seed(
             label,
             payload,
             strict=strict,
+            starter=starter,
             minimum_positives=minimum_positives,
             minimum_negatives=minimum_negatives,
             issues=issues,
