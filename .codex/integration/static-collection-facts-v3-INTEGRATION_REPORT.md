@@ -242,11 +242,29 @@ snapshot:
 
 `WATCH` is non-blocking; `FAIL` is written as evidence and then blocks the
 build. The outer Kaggle runner hash-validates and persists all three artifacts.
-Combined capture/replay/builder focused verification currently passes 52
-builder tests and 22 capture/replay tests. The GitHub live-product job remains
-off on PR/schedule because it still does not receive a generated builder
-artifact; the skeleton is not claimed as live monitoring. A real builder run
-and completed post-ingestion first/warm pair remain required.
+Combined capture/replay/builder focused verification passes 53 builder tests
+and 22 capture/replay tests. A real Kaggle preview at repo SHA
+`6365395ebe6d085aa76dc776f7d91324ee851a9a` then proved the in-builder
+connection before an unrelated later check:
+
+- build id: `preview-20260802-collections-product-monitor-shadow-v3`;
+- product snapshot SHA-256:
+  `95a384094cb0394d5f911ab17860745a591fcc3de943c501a806a34d4c355bf4`;
+- product quality JSON/MD SHA-256: `7cafb02f…` / `9cc79137…`;
+- `qa-summary.json` SHA-256: `bba46e1e…`;
+- product status `WATCH`, QA outcome `PASS`, fail issues 0, provider calls 0;
+- normalized output SHA-256:
+  `0ac8638e26a5721f48178225094b426ea93e6fc238d10b5614c3d3548adf46fc`.
+
+The overall preview later failed `npm run check:preview` because the bounded
+50-event slice omits unrelated mobile rail canary event 4211. The product
+artifacts were already written and downloaded. Per scope, mobile routes/checks
+were not changed and no third build was launched merely to bypass that canary.
+Blocker artifact SHA-256: `af1a04353f864bd31c76153ec21db05b2eb65fddb70420c684671cc7ece9c95f`.
+
+The GitHub live-product job remains off on PR/schedule because it still does not
+receive a generated builder artifact; the skeleton is not claimed as live
+monitoring. A completed post-ingestion first/warm pair remains required.
 
 Artifacts:
 

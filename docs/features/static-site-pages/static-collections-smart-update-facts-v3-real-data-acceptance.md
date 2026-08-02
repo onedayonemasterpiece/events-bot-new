@@ -13,8 +13,9 @@
   source bindings прошёл `plan → apply → identical warm`; 6797 был исключён до
   plan, cohort не менялся, warm дал нулевые calls/sends/writes/diffs;
 - product monitor PARTIAL WITH WATCH: он встроен в существующий
-  StaticSiteBuilder и сохраняет JSON/MD/qa-summary, но реальный builder canary и
-  завершённые post-ingestion first/warm snapshots ещё отсутствуют;
+  StaticSiteBuilder; реальный Kaggle preview сохранил snapshot + JSON/MD +
+  qa-summary с product WATCH/QA PASS/0 FAIL, после чего общий preview остановил
+  unrelated mobile-rail canary; post-ingestion first/warm snapshots отсутствуют;
 - Gate E **BLOCKED WITH FRESH CAPTURES**: добавлен bounded capture contract,
   получены настоящие VK и parser packets; parser warm меняет `imported_at`, VK
   упёрся в shared RPD до DB mutation, Telegram Kaggle run ещё выполняется;

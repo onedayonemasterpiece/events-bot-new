@@ -1852,9 +1852,15 @@ HEALTHY, kids-union 15 HEALTHY, joint 0 WATCH; дополнительные WATC
 StaticSiteBuilder теперь сразу после snapshot запускает тот же monitor и
 сохраняет `static-collections-product-quality.json`, Markdown и
 `qa-summary.json`; `WATCH` не блокирует, `FAIL` сохраняется и блокирует build.
+Реальный Kaggle preview на SHA `6365395e…` подтвердил этот участок:
+product `WATCH`, QA `PASS`, 0 FAIL, provider calls 0, normalized output
+`0ac8638e…`; все три отчёта скачаны и hash-проверены. Уже после этого
+`npm run check:preview` остановил общий bounded preview на unrelated mobile-rail
+canary 4211, отсутствующем в 50-event slice. Mobile scope не исправлялся и
+третий build ради обхода guard не запускался.
 GitHub live-product job намеренно остаётся выключенным, пока workflow не получает
 реальный builder artifact. Поэтому product evidence остаётся PARTIAL до
-реального builder canary и post-ingestion first/warm pair.
+post-ingestion first/warm pair и полноценного не-bounded builder canary.
 
 Для будущих прогонов добавлен маленький manual capture-only seam с закрытым
 `static-collection-upstream-capture-v1`: один sanitized packet, production
