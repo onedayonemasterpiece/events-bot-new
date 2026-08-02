@@ -1,0 +1,256 @@
+name: Event reminders and calendar E2E
+
+on:
+  workflow_call:
+    inputs:
+      target_url:
+        required: true
+        type: string
+      expected_repo_sha:
+        required: true
+        type: string
+      platform:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: Exact deployed HTTPS preview URL from the requested repository SHA
+        required: true
+        type: string
+      expected_repo_sha:
+        description: Exact full repository SHA from preview-build.json
+        required: true
+        type: string
+      platform:
+        description: Current scaffold layer to run
+        required: true
+        default: all
+        type: choice
+        options: [resolver, browser, android, ios, all]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: event-reminders-calendar-e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  E2E_TARGET_URL: ${{ inputs.target_url }}
+  E2E_EXPECTED_REPO_SHA: ${{ inputs.expected_repo_sha }}
+  E2E_SELECTED_EVENT_PATH: ${{ github.workspace }}/site/artifacts/event-reminders/selected-event.json
+
+jobs:
+  resolve_current_event:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1b724322adc0b8cc0a90 # intentionally invalid placeholder guard
+        if: ${{ false }}
+        with: { node-version: '22.22.0' }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '22.22.0' }
+      - name: Resolver unit contracts
+        run: node --test tests/event-reminders/current-event-resolver.test.mjs
+      - name: Resolve one current event from deployed listings
+        run: node e2e/event-reminders/resolve-current-event.mjs
+      - name: Upload immutable selected-event input
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: event-reminders-selected-event-${{ github.run_id }}-${{ github.run_attempt }}
+          path: site/artifacts/event-reminders/selected-event.json
+          if-no-files-found: error
+          retention-days: 7
+
+  browser_contract:
+    needs: resolve_current_event
+    if: ${{ inputs.platform != 'resolver' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: site
+    env:
+      E2E_EVIDENCE_DIR: ${{ github.workspace }}/site/artifacts/event-reminders/browser-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.22.0'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: event-reminders-selected-event-${{ github.run_id }}-${{ github.run_attempt }}
+          path: site/artifacts/event-reminders
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Revalidate selected event and browser route
+        run: node e2e/event-reminders/check-selected-event.mjs
+      - name: Upload browser evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: static-site-qa-event-reminders-browser-${{ github.run_id }}-${{ github.run_attempt }}
+          path: site/artifacts/event-reminders/browser-*
+          if-no-files-found: error
+          retention-days: 7
+
+  android_current_event_smoke:
+    needs: browser_contract
+    if: ${{ always() && (inputs.platform == 'android' || inputs.platform == 'all') && needs.browser_contract.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: site
+    env:
+      E2E_PLATFORM: android
+      E2E_DEVICE_NAME: Pixel 7
+      E2E_PLATFORM_VERSION: '15'
+      E2E_BROWSER_NAME: Chrome
+      E2E_EVIDENCE_DIR: ${{ github.workspace }}/site/artifacts/event-reminders/android-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '22.22.0' }
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: event-reminders-selected-event-${{ github.run_id }}-${{ github.run_attempt }}
+          path: site/artifacts/event-reminders
+      - name: Enable KVM for Android Emulator
+        run: |
+          test -c /dev/kvm
+          sudo chmod 0666 /dev/kvm
+          test -r /dev/kvm && test -w /dev/kvm
+      - name: Boot Android 15 and open the dynamically selected event
+        id: android_smoke
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.34.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          working-directory: site
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -timezone UTC
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            mkdir -p "$E2E_EVIDENCE_DIR/screenshots" "$E2E_EVIDENCE_DIR/native-ui"
+            event_url="$(node -e "const x=require(process.env.E2E_SELECTED_EVENT_PATH); process.stdout.write(x.event_url)")"
+            adb shell am force-stop com.android.chrome || true
+            adb shell am start -W -a android.intent.action.VIEW -d "$event_url" com.android.chrome
+            sleep 8
+            adb shell dumpsys activity activities | grep -E 'mResumedActivity.*com.android.chrome|topResumedActivity.*com.android.chrome'
+            adb exec-out screencap -p > "$E2E_EVIDENCE_DIR/screenshots/selected-event.png"
+            adb shell uiautomator dump /sdcard/event-reminders-window.xml >/dev/null || true
+            adb pull /sdcard/event-reminders-window.xml "$E2E_EVIDENCE_DIR/native-ui/window.xml" >/dev/null || true
+      - name: Write honest Android environment evidence
+        if: ${{ always() }}
+        env:
+          E2E_MOBILE_SMOKE_OK: ${{ steps.android_smoke.outcome == 'success' && '1' || '0' }}
+          E2E_MOBILE_FAILURE_DOMAIN: BLOCKED_ANDROID_EMULATOR_OR_CHROME
+          E2E_HOST_OS_VERSION: ${{ runner.os }}
+        run: node e2e/event-reminders/write-mobile-environment-evidence.mjs
+      - name: Upload Android evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: static-site-qa-event-reminders-android-${{ github.run_id }}-${{ github.run_attempt }}
+          path: site/artifacts/event-reminders/android-*
+          if-no-files-found: error
+          retention-days: 7
+
+  ios_current_event_smoke:
+    needs: browser_contract
+    if: ${{ always() && (inputs.platform == 'ios' || inputs.platform == 'all') && needs.browser_contract.result == 'success' }}
+    runs-on: macos-15
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: site
+    env:
+      E2E_PLATFORM: ios
+      E2E_DEVICE_NAME: iPhone 16
+      E2E_PLATFORM_VERSION: '18.5'
+      E2E_BROWSER_NAME: Mobile Safari
+      E2E_EVIDENCE_DIR: ${{ github.workspace }}/site/artifacts/event-reminders/ios-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.6.0
+        with: { xcode-version: '16.4' }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '22.22.0' }
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: event-reminders-selected-event-${{ github.run_id }}-${{ github.run_attempt }}
+          path: site/artifacts/event-reminders
+      - name: Boot exact iPhone 16 / iOS 18.5 Simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun simctl list runtimes | grep -F 'iOS 18.5'
+          udid="$(xcrun simctl create 'KenigEvents Calendar iPhone 16' 'com.apple.CoreSimulator.SimDeviceType.iPhone-16' 'com.apple.CoreSimulator.SimRuntime.iOS-18-5')"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$udid"
+          open -a Simulator
+          xcrun simctl bootstatus "$udid" -b
+      - name: Open dynamically selected event in Mobile Safari
+        id: ios_smoke
+        env:
+          SIM_UDID: ${{ steps.simulator.outputs.udid }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$E2E_EVIDENCE_DIR/screenshots" "$E2E_EVIDENCE_DIR/native-ui"
+          event_url="$(node -e "const x=require(process.env.E2E_SELECTED_EVENT_PATH); process.stdout.write(x.event_url)")"
+          xcrun simctl openurl "$SIM_UDID" "$event_url"
+          sleep 10
+          xcrun simctl io "$SIM_UDID" screenshot "$E2E_EVIDENCE_DIR/screenshots/selected-event.png"
+          xcrun simctl spawn "$SIM_UDID" launchctl print system/com.apple.WebKit.WebContent > "$E2E_EVIDENCE_DIR/native-ui/webkit-process.txt" 2>&1 || true
+      - name: Write honest iOS environment evidence
+        if: ${{ always() }}
+        env:
+          E2E_MOBILE_SMOKE_OK: ${{ steps.ios_smoke.outcome == 'success' && '1' || '0' }}
+          E2E_MOBILE_FAILURE_DOMAIN: BLOCKED_IOS_SIMULATOR_OR_SAFARI
+        shell: bash
+        run: |
+          export E2E_HOST_OS_VERSION="$(sw_vers -productVersion)"
+          export E2E_XCODE_VERSION="$(xcodebuild -version | tr '\n' ' ')"
+          node e2e/event-reminders/write-mobile-environment-evidence.mjs
+      - name: Delete simulator
+        if: ${{ always() && steps.simulator.outputs.udid != '' }}
+        run: xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true; xcrun simctl delete '${{ steps.simulator.outputs.udid }}' || true
+      - name: Upload iOS evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: static-site-qa-event-reminders-ios-${{ github.run_id }}-${{ github.run_attempt }}
+          path: site/artifacts/event-reminders/ios-*
+          if-no-files-found: error
+          retention-days: 7
+
+  summary:
+    needs: [resolve_current_event, browser_contract, android_current_event_smoke, ios_current_event_smoke]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Publish terminal scaffold disposition
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Event reminders/calendar E2E scaffold
+
+          - Resolver: `${{ needs.resolve_current_event.result }}`
+          - Browser current-event contract: `${{ needs.browser_contract.result }}`
+          - Android environment smoke: `${{ needs.android_current_event_smoke.result }}`
+          - iOS environment smoke: `${{ needs.ios_current_event_smoke.result }}`
+          - Push delivery, Postbox client action and Android connector journeys remain `NOT_IMPLEMENTED` until their runtime contracts exist.
+
+          An emulator boot/open PASS is environment evidence only; it is not calendar/Push acceptance.
+          EOF
