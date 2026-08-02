@@ -1,0 +1,494 @@
+schema: kenigevents.focus_group_release_scenarios.v3
+updated_at: '2026-08-02'
+
+canonical_docs:
+  owner_brief: docs/features/static-site-pages/focus-group.md
+  strategy: docs/features/static-site-pages/focus-group-release/README.md
+  status: docs/features/static-site-pages/focus-group-release/status.md
+  nps_ui: docs/features/static-site-pages/focus-group-release/nps-ui.md
+  testing: docs/features/static-site-pages/focus-group-release/testing.md
+  prize_rules: docs/features/static-site-pages/focus-group-release/prize-rules.md
+
+programme:
+  id: static-site-focus-group-2026
+  site_kind: static_astro_site
+  eligibility_cutoff: '2026-08-31T18:00:00+02:00'
+  timezone: Europe/Kaliningrad
+  access:
+    kind: soft_local_marker_gate
+    default_state: locked_placeholder
+    main_ui_visible_without_marker: false
+    security_boundary: none
+    technical_bypass_is_incident: false
+  artifacts:
+    collection_version: focus-eggs-v1
+    total: 12
+    required: 10
+  raffle:
+    verified_identity_required: true
+    nps_required: true
+    base_chances: 1
+    text_feedback_bonus: 1
+    screenshot_feedback_bonus: 1
+    maximum_chances: 3
+    winner_response_days: 3
+    prize: two_partner_theatre_tickets
+    delivery: in_person
+    all_verified_participants_receive_final_email: true
+
+outcomes:
+  - PASS
+  - FAIL
+  - BLOCKED
+  - NOT_IMPLEMENTED
+  - SKIPPED_NOT_APPLICABLE
+
+states:
+  - ready
+  - partial
+  - missing
+  - blocked
+  - optional
+  - not_required
+
+workflows:
+  focus_group_contract:
+    file: .github/workflows/focus-group-contract.yml
+    state: missing
+    trigger: pull_request_and_main
+    secrets: none
+
+  external_focus_email_otp:
+    file: .github/workflows/external-focus-email-otp.yml
+    state: partial
+    trigger: protected_manual_and_workflow_call
+    secrets: external-e2e
+    evidence:
+      browser_pass: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30745526613
+      android_pass: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30747598046
+      ios_non_acceptance: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30754894934
+
+  focus_group_live:
+    file: .github/workflows/focus-group-live.yml
+    state: missing
+    trigger: protected_manual_and_workflow_call
+    secrets: focus-e2e
+
+  focus_group_draw:
+    file: .github/workflows/focus-group-draw.yml
+    state: missing
+    trigger: protected_manual
+    secrets: focus-draw
+
+  focus_group_report:
+    state: not_required
+    reason: statistics_are_queried_read_only_on_demand
+
+policies:
+  exact_deployed_sha_required: true
+  open_pr_is_pass: false
+  background_started_is_pass: false
+  local_marker_is_security_boundary: false
+  interface_visible_without_marker: false
+  unverified_user_can_test_site: true
+  unverified_user_can_enter_raffle: false
+  nps_scale_exactly_0_to_10: true
+  nps_hidden_behind_button: false
+  nps_comment_required: false
+  selected_score_must_be_displayed_as_number: true
+  raw_feedback_in_actions_artifact: false
+  github_artifact_contains_pii: false
+  daily_statistics_report_required: false
+  whole_catalog_on_mobile_emulators: false
+  playwright_webkit_replaces_native_ios: false
+  real_otp_parallel_on_one_mailbox: false
+  real_otp_trace_har_video: forbidden
+
+release_sets:
+  seed:
+    required:
+      - access.placeholder_first_paint
+      - access.main_ui_hidden_without_marker
+      - access.invite_sets_marker
+      - access.marker_survives_reload
+      - access.fixed_cutoff
+      - nps.visible_before_footer
+      - nps.exact_scale
+      - nps.immediate_save
+      - nps.numeric_saved_state
+      - nps.optional_details
+      - nps.offline_idempotency
+      - nps.page_revision
+      - auth.browser_identity
+      - auth.android_identity
+      - auth.iphone_supported_identity
+      - auth.yandex_identity
+      - auth.unverified_ineligible
+      - pwa.android_relaunch
+      - pwa.iphone_home_screen
+      - use.share
+      - use.calendar
+      - use.not_interested
+      - use.for_me
+      - artifacts.exact_collection
+      - artifacts.server_receipt
+      - artifacts.threshold
+      - stats.queryable
+      - stats.no_pii
+      - raffle.chances
+      - raffle.rules_versioned
+      - raffle.dry_draw
+      - release.full_rehearsal
+
+  expand_to_80:
+    required:
+      - seed
+      - operations.no_mass_p0
+      - operations.feedback_queue_manageable
+      - stats.counts_consistent
+
+  expand_to_200:
+    required:
+      - expand_to_80
+      - auth.cap_boundary
+      - artifacts.receipt_integrity
+      - raffle.snapshot_rehearsal
+
+scenarios:
+  access.placeholder_first_paint:
+    state: missing
+    layer: deployed_browser
+    platform: browser
+    blocking: seed
+    acceptance:
+      - placeholder_is_visible_before_hydration
+      - ordinary_app_shell_is_not_visible
+      - no_flash_of_afisha
+
+  access.main_ui_hidden_without_marker:
+    state: missing
+    layer: deployed_browser
+    platform: browser
+    blocking: seed
+    acceptance:
+      - main_landmarks_hidden_or_inert
+      - keyboard_cannot_reach_afisha
+      - screen_reader_does_not_expose_afisha
+      - technical_dom_unhide_is_not_security_failure
+
+  access.invite_sets_marker:
+    state: partial
+    layer: deployed_browser
+    platform: browser
+    blocking: seed
+    acceptance:
+      - valid_invite_fragment_sets_marker
+      - fragment_removed_from_url
+      - normal_static_site_becomes_visible
+
+  access.marker_survives_reload:
+    state: partial
+    layer: deployed_browser_and_mobile
+    platform: browser_android
+    blocking: seed
+    acceptance:
+      - reload_keeps_access
+      - pwa_relaunch_keeps_access
+      - for_me_reset_does_not_remove_marker
+
+  access.fixed_cutoff:
+    state: blocked
+    layer: repository_and_database
+    platform: none
+    blocking: seed
+    acceptance:
+      - one_constant_2026_08_31_18_00_kaliningrad
+      - no_rolling_30_day_marker
+      - actions_at_or_after_cutoff_do_not_change_eligibility
+
+  nps.visible_before_footer:
+    state: partial
+    layer: deployed_browser
+    platform: browser_android_ios
+    blocking: seed
+    acceptance:
+      - nps_block_visible_without_extra_click
+      - placed_after_main_content_before_footer
+      - not_modal_or_floating_overlay
+
+  nps.exact_scale:
+    state: partial
+    layer: repository_and_browser
+    platform: browser_android_ios
+    blocking: seed
+    acceptance:
+      - exactly_11_values_zero_through_ten
+      - recommendation_question_visible
+      - endpoint_labels_visible
+      - no_default_selection
+      - no_stars_emoji_slider_or_dropdown
+
+  nps.immediate_save:
+    state: partial
+    layer: deployed_browser
+    platform: browser
+    blocking: seed
+    acceptance:
+      - tap_score_creates_one_idempotent_request
+      - no_submit_button_required_for_score
+
+  nps.numeric_saved_state:
+    state: missing
+    layer: deployed_browser
+    platform: browser_android_ios
+    blocking: seed
+    acceptance:
+      - saved_ui_reads_vasha_ocenka_number
+      - edit_action_available
+      - selected_cell_is_not_only_state_indicator
+
+  nps.optional_details:
+    state: partial
+    layer: deployed_browser
+    platform: browser_android_ios
+    blocking: seed
+    acceptance:
+      - text_button_available
+      - screenshot_button_available
+      - neither_is_required_for_nps
+      - event_id_attached_automatically_on_event_page
+
+  nps.offline_idempotency:
+    state: partial
+    layer: deployed_browser_fault_injection
+    platform: browser
+    blocking: seed
+    acceptance:
+      - offline_response_queued
+      - online_flush_creates_exactly_one_row
+      - honest_queued_copy_visible
+
+  nps.page_revision:
+    state: missing
+    layer: repository_and_browser
+    platform: browser
+    blocking: seed
+    acceptance:
+      - revision_changes_only_on_meaningful_page_change
+      - new_revision_reopens_scale
+      - prior_revision_score_remains_in_history
+
+  auth.browser_identity:
+    state: partial
+    layer: protected_live
+    platform: browser
+    blocking: seed
+    acceptance:
+      - final_target_real_email_or_magic_link_pass
+      - one_participant_registration
+
+  auth.android_identity:
+    state: partial
+    layer: protected_live
+    platform: android
+    blocking: seed
+    acceptance:
+      - final_target_real_email_identity_pass
+      - native_keyboard_and_viewport_usable
+
+  auth.iphone_supported_identity:
+    state: blocked
+    layer: protected_live
+    platform: ios
+    blocking: seed
+    acceptance_any:
+      - native_otp_keyboard_and_verify_pass
+      - real_magic_link_pass
+      - real_yandex_identity_pass
+
+  auth.yandex_identity:
+    state: partial
+    layer: protected_live
+    platform: browser_or_ios
+    blocking: seed
+    acceptance:
+      - real_consent_roundtrip
+      - one_auth_user
+      - one_participant
+
+  auth.unverified_ineligible:
+    state: partial
+    layer: deployed_browser_and_database
+    platform: browser
+    blocking: seed
+    acceptance:
+      - marker_opens_site
+      - participant_or_raffle_row_not_created_without_verified_identity
+
+  auth.cap_boundary:
+    state: partial
+    layer: database_integration
+    platform: none
+    blocking: expand_to_200
+    acceptance:
+      - repeat_registration_idempotent
+      - boundary_does_not_create_201st_participant
+      - synthetic_rows_cleaned
+
+  pwa.android_relaunch:
+    state: partial
+    layer: native_mobile
+    platform: android
+    blocking: seed
+    acceptance:
+      - install_prompt_or_system_install
+      - launcher_icon_open
+      - standalone_mode
+      - marker_preserved
+
+  pwa.iphone_home_screen:
+    state: missing
+    layer: native_mobile
+    platform: ios
+    blocking: seed
+    acceptance:
+      - honest_add_to_home_screen_instructions_or_automation
+      - home_icon_open
+      - marker_preserved
+
+  use.share:
+    state: partial
+    layer: deployed_browser_and_mobile
+    platform: browser_android_ios
+    blocking: seed
+    acceptance:
+      - share_action_opens_supported_path
+
+  use.calendar:
+    state: partial
+    layer: deployed_browser_and_mobile
+    platform: browser_android_ios
+    blocking: seed
+    acceptance:
+      - valid_ics_or_calendar_handoff
+
+  use.not_interested:
+    state: partial
+    layer: deployed_browser
+    platform: browser
+    blocking: seed
+    acceptance:
+      - state_persists
+      - undo_works
+
+  use.for_me:
+    state: partial
+    layer: deployed_browser
+    platform: browser
+    blocking: seed
+    acceptance:
+      - explicit_interest_change
+      - visible_explanation_or_order_change
+
+  artifacts.exact_collection:
+    state: ready
+    layer: repository_contract
+    platform: none
+    blocking: seed
+    evidence: site/src/lib/focus-easter-eggs.ts
+    acceptance:
+      - exact_ids_fg_e01_through_fg_e12
+      - total_12
+
+  artifacts.server_receipt:
+    state: missing
+    layer: database_integration
+    platform: none
+    blocking: seed
+    acceptance:
+      - one_receipt_per_participant_artifact_version
+      - replay_idempotent
+      - local_storage_not_authoritative
+
+  artifacts.threshold:
+    state: missing
+    layer: database_integration
+    platform: none
+    blocking: seed
+    acceptance:
+      - nine_of_twelve_ineligible
+      - ten_of_twelve_eligible
+
+  stats.queryable:
+    state: partial
+    layer: operator_read_only
+    platform: operator
+    blocking: seed
+    acceptance:
+      - code_agent_can_query_participants_nps_text_screenshot_artifacts_chances
+      - no_scheduled_report_dependency
+      - counts_reconcile
+
+  stats.no_pii:
+    state: partial
+    layer: repository_and_operator
+    platform: operator
+    blocking: seed
+    acceptance:
+      - chat_safe_query_omits_email_user_uuid_otp_ip_user_agent_raw_feedback_screenshot_path
+      - explicitly_private_query_is_separate
+
+  raffle.chances:
+    state: missing
+    layer: database_contract
+    platform: none
+    blocking: seed
+    acceptance:
+      - base_one
+      - text_bonus_zero_or_one
+      - screenshot_bonus_zero_or_one
+      - maximum_three
+      - sentiment_and_message_count_irrelevant
+
+  raffle.rules_versioned:
+    state: partial
+    layer: repository_and_product
+    platform: none
+    blocking: seed
+    acceptance:
+      - published_rules_include_cutoff_12_artifacts_10_threshold_chances_prize_and_three_day_response
+
+  raffle.dry_draw:
+    state: missing
+    layer: protected_workflow
+    platform: operator
+    blocking: seed
+    acceptance:
+      - immutable_synthetic_snapshot
+      - weighted_winner
+      - distinct_reserve
+      - same_snapshot_same_result
+      - cleanup
+
+  raffle.final_draw:
+    state: missing
+    layer: protected_workflow
+    platform: operator
+    blocking: programme_end
+    acceptance:
+      - starts_after_2026_08_31_18_00_kaliningrad
+      - winner_email_sent
+      - three_calendar_day_deadline
+      - reserve_promotion_supported
+      - final_thank_you_and_winner_email_to_verified_cohort
+
+  release.full_rehearsal:
+    state: missing
+    layer: all
+    platform: browser_android_ios_operator
+    blocking: seed
+    acceptance:
+      - exact_immutable_target
+      - all_seed_scenarios_terminal
+      - synthetic_data_cleanup_pass
+      - no_real_prize_or_cohort_email_sent
