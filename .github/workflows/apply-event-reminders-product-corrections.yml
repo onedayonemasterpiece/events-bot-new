@@ -33,6 +33,7 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           cat .github/patches/event-reminders-product-corrections/part*.txt | tr -d '\n' | base64 -d | gzip -d > /tmp/event-reminders-patch.py
           python3 /tmp/event-reminders-patch.py
+          sed -i 's/[[:blank:]]*$//' docs/features/static-site-focus-group/event-reminders-acceptance.md
           git diff --exit-code origin/main -- docs/features/static-site-pages/schedule-user-requirements.md
           node --test site/tests/event-reminders/current-event-resolver.test.mjs
           git diff --check
