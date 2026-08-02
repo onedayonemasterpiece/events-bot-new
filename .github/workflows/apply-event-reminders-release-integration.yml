@@ -1,0 +1,669 @@
+name: Apply event reminders release integration
+
+on:
+  push:
+    branches: [feature/event-reminders-calendar-test-design-20260802]
+    paths:
+      - .github/workflows/apply-event-reminders-release-integration.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: contains(github.event.head_commit.message, '[apply-reminders-release-integration]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          ref: feature/event-reminders-calendar-test-design-20260802
+      - name: Merge current main and apply the requirements/release-plan integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git fetch origin main
+          git merge --no-edit origin/main
+
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          ROOT = Path('.')
+
+          def read(path):
+              return (ROOT / path).read_text(encoding='utf-8')
+
+          def write(path, content):
+              (ROOT / path).write_text(content, encoding='utf-8')
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one match, found {count}')
+              return text.replace(old, new, 1)
+
+          requirements_path = 'docs/features/static-site-pages/schedule-user-requirements.md'
+          if not (ROOT / requirements_path).is_file():
+              raise SystemExit('schedule user requirements missing after main merge')
+
+          # Product strategy: reconcile every explicit user requirement.
+          path = 'docs/features/static-site-pages/event-reminders-calendar-strategy.md'
+          text = read(path)
+          text = replace_once(
+              text,
+              '> **Статус:** product scope и test design зафиксированы; runtime Push, calendar-email producer и Android connector ещё не реализованы  ',
+              '> **Статус:** source parity с требованиями из PR #238 подтверждён; product scope и test design зафиксированы; runtime Push, calendar-email producer и Android connector ещё не реализованы  ',
+              'strategy status',
+          )
+          text = replace_once(
+              text,
+              '| Web Push за сутки и за час | `GO_TO_IMPLEMENTATION` | основной пользовательский путь |',
+              '| Web Push за сутки и за 1/3 часа по отношению к текущему городу | `GO_TO_IMPLEMENTATION` | основной пользовательский путь |',
+              'strategy push row',
+          )
+          text = replace_once(
+              text,
+              '`docs/features/static-site-pages/schedule-user-requirements.md` не изменяется\nэтим документом. Перед implementation merge выполняется byte-level source parity:\nпроизводная стратегия не может ослабить или переопределить исходные требования.\n',
+              '`docs/features/static-site-pages/schedule-user-requirements.md` добавлен в\n`origin/main` через PR #238 и остаётся неизменяемым источником. Выполненная\nsource-parity проверка закрепляет пять обязательств: простой календарный вид\nсохранённых событий; Push за сутки и один ближний Push — за час для текущего\nгорода либо за три часа для другого города; возможность отключать уведомления\nи их отдельные типы; сохранение ICS; email invitation и системная календарная\nформа через отдельный Android APK/упакованное приложение. Производная стратегия\nне может ослабить или переопределить эти требования.\n',
+              'strategy source parity',
+          )
+          text = replace_once(
+              text,
+              'Напоминания включены\n✓ За сутки\n✓ За час\n✓ При переносе или отмене',
+              'Напоминания включены\n✓ За сутки\n✓ За 1 час, если событие в текущем городе\n✓ За 3 часа, если событие в другом городе\n✓ При переносе или отмене',
+              'strategy UX reminder copy',
+          )
+          old_offsets = '''### 3.1. Базовые offsets
+
+```text
+T−24h
+T−1h
+```
+
+| Когда пользователь сохраняет событие | План |
+|---|---|
+| раньше T−24h | T−24h и T−1h |
+| между T−24h и T−1h | только T−1h |
+| позднее T−1h | не создавать backdated jobs; immediate reminder остаётся owner decision |
+| после начала события | reminder jobs не создаются |
+
+Расчёт выполняется по абсолютному `starts_at`. Отображение —
+`Europe/Kaliningrad`. Нельзя планировать напоминание только по календарной дате.
+'''
+          new_offsets = '''### 3.1. Базовые offsets и город
+
+```text
+T−24h                         для любого сохранённого timed event
+T−1h_current_city             если event city совпадает с текущим городом пользователя
+T−3h_other_city               если event city отличается
+```
+
+Для одного события создаётся не три, а максимум два временных напоминания:
+`T−24h` и ровно один ближний kind. `T−1h_current_city` и
+`T−3h_other_city` взаимоисключающие.
+
+| Когда пользователь сохраняет событие | Текущий город | Другой город |
+|---|---|---|
+| раньше T−24h | T−24h + T−1h | T−24h + T−3h |
+| после T−24h, но раньше ближнего offset | только T−1h | только T−3h |
+| позднее ближнего offset | backdated job не создаётся | backdated job не создаётся |
+| после начала события | jobs не создаются | jobs не создаются |
+
+Расчёт выполняется по абсолютному `starts_at`. Отображение —
+`Europe/Kaliningrad`. Нельзя планировать напоминание только по календарной дате.
+
+Исходные требования не определяют источник «текущего города». До реализации
+нужен отдельный owner/data decision: профиль пользователя, явно выбранный город
+или другая server-owned сущность. Browser geolocation и caller-supplied city не
+становятся источником истины. Пока city relation не разрешён, T−24h можно
+планировать отдельно, а ближний kind должен оставаться fail closed.
+'''
+          text = replace_once(text, old_offsets, new_offsets, 'strategy offsets')
+          text = replace_once(
+              text,
+              'event_reminder_24h\nevent_reminder_1h\nevent_rescheduled',
+              'event_reminder_24h\nevent_reminder_1h_current_city\nevent_reminder_3h_other_city\nevent_rescheduled',
+              'strategy reminder kinds',
+          )
+          text = replace_once(
+              text,
+              '2. UI объясняет два времени напоминания.\n3. Notification permission запрашивается только после отдельного tap.\n4. `denied` не отменяет сохранение события и не блокирует ICS.\n5. Настройки позволяют отключить Push для одного события и для устройства.',
+              '2. UI объясняет напоминание за сутки и один ближний тип по отношению к текущему городу.\n3. Notification permission запрашивается только после отдельного tap.\n4. `denied` не отменяет сохранение события и не блокирует ICS.\n5. Настройки позволяют отключить все Push, конкретное событие и отдельные типы напоминаний.',
+              'strategy permission UX',
+          )
+          text = replace_once(
+              text,
+              '### 3.5. Delivery semantics\n',
+              '### 3.5. Delivery semantics\n',
+              'strategy delivery heading guard',
+          )
+          anti_storm = '''
+### 3.6. Anti-storm и управление типами
+
+Требование запрещает notification storm, который создаёт когнитивные ошибки и
+отвлекает от главного. Минимальные гарантии:
+
+- максимум два time-based reminder jobs на event revision: T−24h и один ближний;
+- local/other-city kinds не могут существовать одновременно;
+- повторный scheduler/Smart Update с тем же revision/kind — no-op;
+- ровно одно lifecycle-уведомление каждого kind на revision;
+- пользователь может отключить T−24h, ближний reminder и все Push независимо;
+- выключение Push не удаляет saved event, calendar view или ICS;
+- provider retry не создаёт новую пользовательскую нотификацию после ambiguous send.
+
+Глобальный дневной cap, объединение нескольких событий в один digest и политика
+при нескольких мероприятиях в одно время остаются отдельными owner decisions;
+документ не придумывает численный предел, которого нет в исходных требованиях.
+
+'''
+          anchor = '## 4. ICS download\n'
+          if anti_storm.strip() not in text:
+              text = replace_once(text, anchor, anti_storm + anchor, 'strategy anti-storm insertion')
+
+          text = replace_once(
+              text,
+              '- T−24/T−1 scheduler;\n',
+              '- T−24h + взаимоисключающий T−1h-current-city/T−3h-other-city scheduler;\n',
+              'strategy M1 scheduler',
+          )
+          text = replace_once(
+              text,
+              '### M1 — Push\n\n- data model и idempotent outbox;',
+              '### M1 — Saved calendar view и Push\n\n- простой календарный вид в «Избранном»;\n- data model и idempotent outbox;',
+              'strategy M1 title',
+          )
+          old_decisions = '''Перед M1:
+
+1. Нужен ли immediate reminder при сохранении менее чем за час?
+2. Offsets фиксированы или пользователь может их менять?
+3. Изменение только площадки создаёт отдельный Push?
+4. Как обрабатывается событие без точного времени?
+
+Перед M2:
+
+5. Какой controlled sender используется для invitation canary?
+6. Какие Gmail/iCloud/Outlook mailboxes входят в blocking matrix?
+7. Initial-only допустим или update/cancel обязательны для MVP?
+
+Перед M3:
+
+8. Какой host выделяется под App Links?
+9. Как называется connector?
+10. Pilot только через Play Internal Testing или также direct signed APK?
+'''
+          new_decisions = '''Перед M1:
+
+1. Какая server-owned сущность определяет текущий город пользователя?
+2. Что делать, когда текущий город неизвестен: не ставить ближний reminder или использовать явно утверждённый fallback?
+3. Нужен ли immediate reminder при сохранении позднее ближнего offset?
+4. Offsets фиксированы или пользователь управляет только включением типов?
+5. Изменение только площадки создаёт отдельный Push?
+6. Как обрабатывается событие без точного времени или без достоверного города?
+7. Каков глобальный anti-storm cap и нужно ли объединять несколько близких событий?
+
+Перед M2:
+
+8. Какой controlled sender используется для invitation canary?
+9. Какие Gmail/iCloud/Outlook mailboxes входят в blocking matrix?
+10. Initial-only допустим или update/cancel обязательны для MVP?
+
+Перед M3:
+
+11. Какой host выделяется под App Links?
+12. Как называется connector?
+13. Pilot только через Play Internal Testing или также direct signed APK?
+'''
+          text = replace_once(text, old_decisions, new_decisions, 'strategy owner decisions')
+
+          # Insert the missing calendar-view requirement and keep document numbering coherent.
+          if '## 2. Календарный вид в «Избранном»' not in text:
+              heading = re.compile(r'^(#{2,3}) (\d+)(\.\d+)?\.', re.MULTILINE)
+              def bump(match):
+                  major = int(match.group(2))
+                  if major < 2:
+                      return match.group(0)
+                  return f'{match.group(1)} {major + 1}{match.group(3) or ""}.'
+              text = heading.sub(bump, text)
+              calendar_view = '''## 2. Календарный вид в «Избранном»
+
+Исходное требование задаёт намеренно простой calendar-first список, а не
+обязательную сетку месяца. В разделе «Избранное» события группируются по дате и
+показываются строкой:
+
+```text
+Дата
+HH:MM–HH:MM | Мероприятие | локация
+```
+
+Контракт:
+
+- только сохранённые пользователем актуальные события;
+- даты и строки внутри даты отсортированы хронологически;
+- одно occurrence не дублируется из-за одновременного favorite/calendar source;
+- перенос обновляет время/дату строки, отмена получает явное lifecycle-состояние;
+- неизвестное окончание или локация не выдумываются и отображаются typed fallback;
+- календарный вид доступен независимо от Push permission и внешнего импорта ICS.
+
+Точный visual component и необходимость month-grid остаются UI implementation
+decision; release acceptance проверяет простой формат и полезность, а не
+неподтверждённую сложную календарную модель.
+
+'''
+              text = replace_once(text, '## 3. Пользовательский сценарий\n', calendar_view + '## 3. Пользовательский сценарий\n', 'strategy calendar view insertion')
+          write(path, text)
+
+          # Test design: add saved-calendar and per-type/city scenarios.
+          path = 'docs/testing/event-reminders-calendar-e2e.md'
+          text = read(path)
+          text = replace_once(
+              text,
+              '> **Статус:** test design + executable scaffold; product side effects пока не реализованы  ',
+              '> **Статус:** source parity с PR #238 подтверждён; test design + executable scaffold; product side effects пока не реализованы  ',
+              'test design status',
+          )
+          text = replace_once(
+              text,
+              '| `event.current_event.selection` | scaffold implemented | L0/L1 browser | none | blocking для остальных сценариев |\n| `event.ics.download_contract`',
+              '| `event.current_event.selection` | scaffold implemented | L0/L1 browser | none | blocking для остальных сценариев |\n| `event.saved_calendar_view` | planned | L0/L1 browser | idempotent saved-event fixture | release blocking после реализации |\n| `event.ics.download_contract`',
+              'test scenario table calendar view',
+          )
+          text = replace_once(
+              text,
+              '| `event.reminder.push_subscription` | planned | L1/L2 Android/iOS | test subscription | при реализации Push contract |\n| `event.reminder.push_delivery`',
+              '| `event.reminder.push_subscription` | planned | L1/L2 Android/iOS | test subscription | при реализации Push contract |\n| `event.reminder.preferences` | planned | L0/L1/L2 | idempotent preference updates | release blocking после реализации |\n| `event.reminder.push_delivery`',
+              'test scenario table preferences',
+          )
+          text = replace_once(
+              text,
+              'Expired editorial event не удаляет deterministic unit coverage. Формат ICS,\nMIME, scheduler и lifecycle дополнительно проверяются frozen fixtures; live\nresolver нужен для production-like route/delivery journey.\n',
+              'Expired editorial event не удаляет deterministic unit coverage. Формат ICS,\nMIME, scheduler и lifecycle дополнительно проверяются frozen fixtures; live\nresolver нужен для production-like route/delivery journey. Перед Push side\neffects protected backend дополнительно разрешает selected URL/UID в canonical\n`event_id`, event revision и `event_city`; browser location string не является\nисточником city classification.\n',
+              'test canonical city context',
+          )
+
+          if '## 5. `event.saved_calendar_view`' not in text:
+              heading = re.compile(r'^(##) (\d+)(\.\d+)?\.', re.MULTILINE)
+              def bump_test(match):
+                  major = int(match.group(2))
+                  if major < 5:
+                      return match.group(0)
+                  return f'{match.group(1)} {major + 1}{match.group(3) or ""}.'
+              text = heading.sub(bump_test, text)
+              saved_view = '''## 5. `event.saved_calendar_view`
+
+### Dynamic integration
+
+1. Resolver выбирает актуальное событие из exact deployed build.
+2. Сценарий сохраняет его idempotent test identity.
+3. Открывает календарный вид «Избранного».
+4. Проверяет группу с правильной датой.
+5. Проверяет строку `время–время | мероприятие | локация` по canonical snapshot.
+6. Повторный save не создаёт вторую строку.
+7. Отключение Push не удаляет строку.
+
+### Frozen contracts
+
+- сортировка нескольких дат и нескольких событий в один день;
+- отсутствие duplicate при favorite + calendar source;
+- typed fallback для неизвестного окончания/локации;
+- reschedule перемещает строку, cancellation видима и не маскируется;
+- empty state не изображает календарь с несуществующими событиями.
+
+Один live current event обеспечивает неустаревающий integration input; сложные
+группировки остаются deterministic fixtures и не зависят от редакционного
+каталога конкретного дня.
+
+'''
+              text = replace_once(text, '## 6. `event.ics.download_contract`\n', saved_view + '## 6. `event.ics.download_contract`\n', 'test calendar view section')
+
+          # Current numbering after insertion: Push is section 7.
+          old_delivery = '''## 7.2. `event.reminder.push_delivery`
+
+CI не ждёт 24 часа. Семантические kinds остаются production:
+
+```text
+event_reminder_24h
+event_reminder_1h
+```
+
+Но защищённый E2E namespace для фиксированной test identity преобразует их в
+короткие deadlines, например:
+
+```text
+24h kind → +90 seconds
+1h kind  → +30 seconds
+```
+
+Это server-side test clock/offset override, а не browser-supplied event time.
+Browser передаёт только selected event ID/revision; producer перечитывает
+canonical event snapshot.
+
+Assertions:
+
+- созданы ровно два outbox jobs с разными kinds;
+- порядок scheduled_at корректен;
+- один claim/provider send на kind;
+- Android/iOS получает два видимых notifications;
+- title/event identity соответствуют selected snapshot;
+- click открывает exact event URL;
+- app closed/background path проверен;
+- повторный scheduler tick не создаёт duplicate;
+- expired/revoked subscription завершается typed permanent failure.
+'''
+          preferences = '''## 7.2. `event.reminder.preferences`
+
+Проверяются независимые пользовательские controls:
+
+- все Push on/off;
+- T−24h on/off;
+- ближний city-relative reminder on/off;
+- настройка одного event не меняет другое событие;
+- выключенный тип не создаёт pending outbox job;
+- повторное сохранение не сбрасывает выбор пользователя;
+- выключение всех Push сохраняет saved event, calendar view и ICS.
+
+Разрешение на lifecycle kinds и поведение при смене текущего города остаются
+явными owner decisions; тест не подменяет их незафиксированным default.
+
+## 7.3. `event.reminder.push_delivery`
+
+CI не ждёт 24 часа. Семантические kinds остаются production:
+
+```text
+event_reminder_24h
+event_reminder_1h_current_city
+event_reminder_3h_other_city
+```
+
+Один run выполняет две изолированные profile-ветки на том же актуальном event:
+
+```text
+A. test current city == event city
+   → T−24h + T−1h_current_city
+   → T−3h_other_city отсутствует
+
+B. test current city != event city
+   → T−24h + T−3h_other_city
+   → T−1h_current_city отсутствует
+```
+
+Защищённый E2E namespace преобразует semantic deadlines в короткие server-side
+интервалы; browser не задаёт event time или city classification. Например,
+T−24h → +90 seconds, T−3h → +45 seconds, T−1h → +30 seconds.
+
+Assertions:
+
+- на одну profile-ветку созданы ровно два outbox jobs, не три;
+- local/other-city near kinds взаимоисключающие;
+- порядок scheduled_at корректен;
+- один claim/provider send на kind;
+- Android/iOS получает два видимых notifications;
+- title/event identity соответствуют selected snapshot;
+- click открывает exact event URL;
+- app closed/background path проверен;
+- повторный scheduler tick не создаёт duplicate;
+- unknown city relation даёт typed fail-closed state, а не случайный near kind;
+- expired/revoked subscription завершается typed permanent failure.
+'''
+          text = replace_once(text, old_delivery, preferences, 'test push delivery replacement')
+          text = replace_once(
+              text,
+              '## 7.3. `event.reminder.lifecycle`',
+              '## 7.4. `event.reminder.lifecycle`',
+              'test lifecycle renumber',
+          )
+          text = replace_once(
+              text,
+              '- новая revision создаёт новые offsets;',
+              '- новая revision создаёт T−24h и ровно один city-relative near offset;',
+              'test lifecycle offsets',
+          )
+          text = replace_once(
+              text,
+              '- selected event переключился после первого Push/email side effect;\n- emulator environment smoke выдан за Push/calendar PASS;',
+              '- selected event переключился после первого Push/email side effect;\n- city classification взята из browser payload либо одновременно созданы T−1h и T−3h;\n- календарный вид «Избранного» не соответствует простому date/time/event/location contract;\n- emulator environment smoke выдан за Push/calendar PASS;',
+              'test release no-go',
+          )
+          write(path, text)
+
+          # Machine-readable registry.
+          path = 'docs/testing/static-site-autotest-scenarios.v1.yml'
+          text = read(path)
+          calendar_scenario = '''
+  event.saved_calendar_view:
+    title: Saved current event appears once in the simple date time event location calendar view
+    status: planned
+    layers: [L0, L1]
+    platforms: [browser]
+    trigger_tags: [static-data, static-route, event-reminder, personalization]
+    cost: medium
+    side_effects: idempotent_test_saved_event
+    target: selected_current_event_plus_frozen_grouping_fixtures
+    evidence: selected_event_row_sorting_lifecycle_and_no_duplicate_report
+    blocking:
+      pull_request: false_until_implemented
+      release: true_after_implementation
+
+'''
+          anchor = '  event.ics.download_contract:\n'
+          if '  event.saved_calendar_view:' not in text:
+              text = replace_once(text, anchor, calendar_scenario + anchor, 'registry calendar view')
+          preferences_scenario = '''
+  event.reminder.preferences:
+    title: User can disable all reminders or independent time reminder types without losing the saved event
+    status: planned
+    layers: [L0, L1, L2]
+    platforms: [browser, android, ios]
+    trigger_tags: [pwa-system, event-reminder, personalization]
+    cost: medium
+    side_effects: idempotent_test_preference_updates
+    target: selected_current_event
+    evidence: preference_outbox_calendar_view_and_native_state
+    blocking:
+      pull_request: false_until_implemented
+      release: true_after_implementation
+
+'''
+          anchor = '  event.reminder.push_delivery:\n'
+          if '  event.reminder.preferences:' not in text:
+              text = replace_once(text, anchor, preferences_scenario + anchor, 'registry reminder preferences')
+          text = replace_once(
+              text,
+              'title: T-24h and T-1h reminder kinds deliver exactly once and open the selected event',
+              'title: T-24h plus exactly one current-city T-1h or other-city T-3h reminder delivers once',
+              'registry push title',
+          )
+          text = replace_once(
+              text,
+              'target: selected_current_event_and_server_side_test_clock\n    evidence: provider_outbox_native_notification_click_and_l3_canary',
+              'target: selected_current_event_canonical_city_context_and_server_side_test_clock\n    evidence: city_branch_provider_outbox_native_notification_click_and_l3_canary',
+              'registry push target',
+          )
+          if '  city_near_reminders_may_coexist: false' not in text:
+              text += '\n  city_near_reminders_may_coexist: false\n  current_city_may_be_supplied_by_browser: false\n  saved_calendar_view_required_by_source_requirements: true\n'
+          write(path, text)
+
+          # Release autotest companion explicitly owns the evidence for the umbrella plan track.
+          path = 'docs/features/static-site-pages/release-autotest-gates.md'
+          text = read(path)
+          text = replace_once(
+              text,
+              '| Personalization/personal pages | no-leak/data contract + authenticated browser journey; mobile sample when UI/input changes |\n| Event Push subscription/reminder scheduler',
+              '| Personalization/personal pages | no-leak/data contract + authenticated browser journey; mobile sample when UI/input changes |\n| Saved-event simple calendar view | L0 grouping/sort/lifecycle + L1 selected-current-event row and duplicate prevention |\n| Event Push subscription/reminder scheduler',
+              'release gates calendar row',
+          )
+          text = replace_once(
+              text,
+              'Канонический test design:\n[`../../testing/event-reminders-calendar-e2e.md`](../../testing/event-reminders-calendar-e2e.md).',
+              'Этот раздел является evidence companion к одноимённому track в\n[`release-plan.md`](release-plan.md), а не отдельным release plan. Исходные\nтребования — [`schedule-user-requirements.md`](schedule-user-requirements.md).\nКанонический test design:\n[`../../testing/event-reminders-calendar-e2e.md`](../../testing/event-reminders-calendar-e2e.md).',
+              'release gates plan linkage',
+          )
+          text = replace_once(
+              text,
+              '- `event.reminder.push_subscription`;\n- `event.reminder.push_delivery`;\n- `event.reminder.lifecycle`;\n- exact-once kinds T−24h/T−1h;',
+              '- `event.saved_calendar_view`;\n- `event.reminder.push_subscription`;\n- `event.reminder.preferences`;\n- `event.reminder.push_delivery`;\n- `event.reminder.lifecycle`;\n- exact-once T−24h + ровно один T−1h-current-city/T−3h-other-city kind;',
+              'release gates scenario list',
+          )
+          text = replace_once(
+              text,
+              '- Postbox provider acceptance выдан за calendar-client recognition;\n- ICS download выдан за внешнее calendar save.',
+              '- Postbox provider acceptance выдан за calendar-client recognition;\n- current city принят из browser payload или local/other near reminders созданы одновременно;\n- календарный вид «Избранного» не проверен на актуальном event и frozen grouping fixtures;\n- ICS download выдан за внешнее calendar save.',
+              'release gates no-go',
+          )
+          write(path, text)
+
+          # Static-site feature home and route map.
+          path = 'docs/features/static-site-pages/README.md'
+          text = read(path)
+          if '> **Saved-event reminders/calendar track:**' not in text:
+              text = replace_once(
+                  text,
+                  '> **Current release plan:** [production profile, atomic promotion and 10-day Telegraph cutover](release-plan.md).\n',
+                  '> **Current release plan:** [production profile, atomic promotion and 10-day Telegraph cutover](release-plan.md).\n> **Saved-event reminders/calendar track:** [source requirements](schedule-user-requirements.md), [product strategy](event-reminders-calendar-strategy.md) and [release evidence design](../../testing/event-reminders-calendar-e2e.md) are governed by the same release plan.\n',
+                  'static page README link',
+              )
+          write(path, text)
+
+          path = 'docs/routes.yml'
+          text = read(path)
+          if '    schedule_user_requirements: docs/features/static-site-pages/schedule-user-requirements.md' not in text:
+              text = replace_once(
+                  text,
+                  '    release_plan: docs/features/static-site-pages/release-plan.md\n',
+                  '    release_plan: docs/features/static-site-pages/release-plan.md\n    schedule_user_requirements: docs/features/static-site-pages/schedule-user-requirements.md\n    event_reminders_calendar_strategy: docs/features/static-site-pages/event-reminders-calendar-strategy.md\n    event_reminders_calendar_test_design: docs/testing/event-reminders-calendar-e2e.md\n    event_reminders_calendar_workflow: .github/workflows/event-reminders-calendar-e2e.yml\n',
+                  'route map insertion',
+              )
+          write(path, text)
+
+          # Umbrella release plan: one bounded track, no competing plan.
+          path = 'docs/features/static-site-pages/release-plan.md'
+          text = read(path)
+          if '## Saved-event calendar, reminders and calendar delivery track, 2026-08-02' not in text:
+              anchor = '## Static selections data-prep track, 2026-08-01\n'
+              section = '''## Saved-event calendar, reminders and calendar delivery track, 2026-08-02
+
+Этот track является частью общего static-site release plan. Исходные
+пользовательские требования неизменно хранятся в
+[`schedule-user-requirements.md`](schedule-user-requirements.md), добавленном в
+`origin/main` через PR #238. Производная product/architecture стратегия —
+[`event-reminders-calendar-strategy.md`](event-reminders-calendar-strategy.md),
+a release evidence и Android/iOS сценарии —
+[`../../testing/event-reminders-calendar-e2e.md`](../../testing/event-reminders-calendar-e2e.md)
+и [`release-autotest-gates.md`](release-autotest-gates.md).
+
+Track не создаёт второй release truth. Он не меняет текущее общее решение
+`NO-GO` по canonical-root promotion и не блокирует независимый root release,
+пока соответствующая UI/runtime capability не включена в candidate. Как только
+candidate публикует saved calendar view, Push, calendar-email или connector CTA,
+соответствующие gates ниже становятся blocking для этого candidate и promotion.
+
+### Scope и статус
+
+| Capability | Статус | Release boundary |
+|---|---|---|
+| Простой календарный вид «Избранного» | `GO_TO_IMPLEMENTATION` | дата + `время–время | мероприятие | локация`, current-event integration + frozen grouping/lifecycle fixtures |
+| Push T−24h | `GO_TO_IMPLEMENTATION` | durable preference/outbox, exact-once, Android/iOS L2 и bounded L3 background canary |
+| Push T−1h текущий город / T−3h другой город | `GO_TO_IMPLEMENTATION_WITH_OWNER_DECISION` | server-owned current-city source обязателен; local/other kinds взаимоисключающие |
+| Управление Push и отдельными типами | `GO_TO_IMPLEMENTATION` | off не удаляет saved event/calendar view/ICS; disabled type не создаёт job |
+| Существующий ICS download | `KEEP` | L0/L1 contract; download не считается external calendar save |
+| Postbox calendar invitation | `RESEARCH_REQUIRED` | raw MIME builder + protected REQUEST/update/CANCEL + Gmail/Apple Mail/Outlook acceptance |
+| NotiSend | `COMPARISON_ONLY` | не hidden fallback и не production route без отдельного architecture decision |
+| Thin Android connector | `PROTOTYPE_REQUIRED` | signed package, verified App Links, no calendar permission, native `ACTION_INSERT`, L2/L3 evidence |
+| Google Calendar OAuth/web template, subscriptions, browser intent/share | `OUT/NO_GO` | не входят в этот track |
+
+### Обязательная последовательность
+
+1. M0 source parity: requirements из PR #238 byte-identical; strategy, routes,
+   scenario registry, GitHub Actions scaffold и этот umbrella track связаны.
+2. M1a calendar view: current saved event, простой row contract, сортировка,
+   no-duplicate и lifecycle/empty states.
+3. M1b Push: subscription/permission, preferences, T−24h и ровно один city-near
+   kind, lifecycle invalidation, compressed server-side E2E clock, Android/iOS
+   L2 и real-device/device-farm L3.
+4. M2 Postbox research: deterministic MIME, один последовательный
+   REQUEST/update/CANCEL roundtrip, provider feedback, controlled mailbox и
+   client matrix. Provider acceptance не равен calendar-client recognition.
+5. M3 Android connector: first-party App Link payload, signed APK/AAB,
+   `ACTION_INSERT`, web fallback, Play Internal/Closed Testing и OEM canary.
+6. Каждый channel продвигается независимо. Fail M2/M3 не отключает Push и не
+   удаляет ICS; planned capability не выдаётся за release PASS.
+
+### NO-GO / rollback
+
+- hardcoded/expired event URL вместо dynamic current-event resolver;
+- selected event сменился после первого Push/email side effect;
+- browser supplied authoritative event time, revision или current city;
+- одновременно созданы T−1h-current-city и T−3h-other-city jobs;
+- duplicate/notification storm при retry, scheduler tick или Smart Update;
+- пользователь выключил тип, но pending/new job сохранился;
+- calendar view потерял saved event, создал duplicate или выдумал time/location;
+- Postbox MIME/client compatibility объявлена без protected evidence;
+- Android environment smoke выдан за connector/calendar PASS;
+- ICS click назван внешним calendar save.
+
+Rollback независим по channel: Push producer/sender выключается и pending jobs
+инвалидируются; email experiment выключается без ambiguous resend; connector CTA
+возвращается к web fallback; saved event, calendar view и ICS остаются доступны.
+
+'''
+              text = replace_once(text, anchor, section + anchor, 'release plan track insertion')
+          write(path, text)
+
+          # Human indexes explicitly point back to the umbrella release plan.
+          path = 'docs/README.md'
+          text = read(path)
+          text = replace_once(
+              text,
+              '  dynamic-current-event и Android/iOS test design\n  `docs/testing/event-reminders-calendar-e2e.md`.\n',
+              '  dynamic-current-event и Android/iOS test design\n  `docs/testing/event-reminders-calendar-e2e.md`; rollout и blocking status —\n  в общем `docs/features/static-site-pages/release-plan.md`.\n',
+              'docs README release plan link',
+          )
+          write(path, text)
+
+          path = 'docs/features/README.md'
+          text = read(path)
+          if 'общий release track' not in text:
+              text = replace_once(
+                  text,
+                  '- `docs/features/static-site-pages/event-reminders-calendar-strategy.md` — calendar/reminder product strategy: Push, Postbox research, retained ICS и thin Android connector; test design — `docs/testing/event-reminders-calendar-e2e.md`\n',
+                  '- `docs/features/static-site-pages/event-reminders-calendar-strategy.md` — calendar/reminder product strategy: простой calendar view, Push T−24/T−1-current-city/T−3-other-city, Postbox research, retained ICS и thin Android connector; test design — `docs/testing/event-reminders-calendar-e2e.md`, общий release track — `docs/features/static-site-pages/release-plan.md`\n',
+                  'features README release plan link',
+              )
+          write(path, text)
+
+          path = 'CHANGELOG.md'
+          text = read(path)
+          entry = '''- Added the source-parity event reminders/calendar release track: a simple
+  saved-event calendar view, T−24h plus mutually exclusive current-city T−1h or
+  other-city T−3h Push, per-type controls, retained ICS, Postbox invitation
+  research, thin Android connector gates, dynamic current-event selection and
+  Android/iOS GitHub Actions scaffold are now tied to the static-site release
+  plan. No production Push, email invitation or APK behavior is enabled.
+
+'''
+          if 'source-parity event reminders/calendar release track' not in text:
+              text = replace_once(text, '## [Unreleased]\n\n', '## [Unreleased]\n\n' + entry, 'changelog insertion')
+          write(path, text)
+          PY
+
+          # The original requirements are authoritative and unchanged by this branch.
+          git diff --exit-code origin/main -- docs/features/static-site-pages/schedule-user-requirements.md
+
+          git add \
+            CHANGELOG.md \
+            docs/README.md \
+            docs/features/README.md \
+            docs/features/static-site-pages/README.md \
+            docs/features/static-site-pages/event-reminders-calendar-strategy.md \
+            docs/features/static-site-pages/release-autotest-gates.md \
+            docs/features/static-site-pages/release-plan.md \
+            docs/routes.yml \
+            docs/testing/event-reminders-calendar-e2e.md \
+            docs/testing/static-site-autotest-scenarios.v1.yml
+
+          git diff --cached --check
+          git commit -m "docs: tie event reminders to static-site release plan"
+          git push origin HEAD:feature/event-reminders-calendar-test-design-20260802
