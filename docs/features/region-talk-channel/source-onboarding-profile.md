@@ -30,6 +30,10 @@ import/review commands and Writer vNext:
 4. A missing/stale social profile is projected back to the source queue as
    `source_profile_capture_requested=true` and `needs_source_profile=true`;
    this does not change the accepted candidate verdict or grant publication.
+   Explicit capture requests own the bounded source-history slots ahead of
+   ordinary discovery/rescan rows, including when the source itself was scanned
+   recently; otherwise a small `REGION_TALK_MAX_SOURCES` run could repeatedly
+   miss the requested source before reaching the capture stage.
 5. Editorial/academic sources use separately imported
    `publisher_profile_item` rows. A reusable publisher profile must be
    `ready`, external, public-copy-eligible and contain grounded

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk social-profile recovery routing: explicit
+  `source_profile_capture` requests now own the bounded source-history slots
+  ahead of ordinary discovery and rescans, so a small capture-only run reaches
+  the requested source even when it was scanned recently. This changes neither
+  candidate review state nor publication permission.
 - Added fail-closed Region Talk source-profile recovery before Writer: bounded
   Telegram/VK description+pinned+30–80-post capture with stable fingerprints,
   reusable social profiles and separate profile/writer budgets; exact-byte
