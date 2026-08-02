@@ -23,6 +23,10 @@
   warnings without also incrementing blocking network/HTTP counters. The
   sanitized evidence from Android fault run `30771235222` now replays with zero
   blocking diagnostics while arbitrary product failures remain blocking.
+- Fixed the Android OTP keyboard observation race exposed by zero-side-effect
+  run `30771673908`: after a web-field click, UiAutomator2 now gets a bounded
+  native-context keyboard poll instead of one immediate sample, without
+  repeating the gesture or introducing an OTP resend path.
 
 - Changed iOS Safari OTP preflight to create a native-first Safari session,
   enable XCUITest `respectSystemAlerts`, close the bounded first-run sheet, and

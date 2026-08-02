@@ -78,6 +78,11 @@ clean pre-navigation iOS startup artifact described above.
 - For `client_supabase_direct_unreachable`, fault the direct health probe so
   selected-once OTP is preselected to relay. Require direct OTP dispatch `0`,
   relay OTP dispatch `1`, mail `1`, verify `1`, registration durable effect `1`.
+- After focusing a mobile web input, observe the native keyboard with a bounded
+  poll; do not make a single immediate `isKeyboardShown()` sample authoritative.
+  The poll may observe only: it must not repeat the tap, submit, or input. A
+  retry is allowed only when sanitized evidence proves mail/issue/verify/
+  registration are all zero.
 - Treat best-effort client/auth telemetry as disposable: it may retry or drop,
   but must never alter capability route health. If registration reports
   `no_route` after a relay probe passed, inspect the preceding disposable

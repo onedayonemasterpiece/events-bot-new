@@ -310,6 +310,14 @@ If the harness crashes before producing `.redaction-ok`, the workflow deletes
 the incomplete directory and emits a static safe `BLOCKED_INFRASTRUCTURE`
 receipt with side-effect counts `unknown`; it never starts the journey again.
 
+After an Android web-field click, Appium switches to native context and waits
+up to three seconds for UiAutomator2's keyboard state instead of sampling it
+once immediately. This is observation only: it does not repeat the click or
+type anything. Run `30771673908` proved why the bound is required by reporting
+an active, visible email field but a not-yet-observed IME with exact
+`issue=0`, `verify=0`, `registration=0`, mail `0`; that receipt permits one
+controlled rerun after the observation fix, not an OTP resend fallback.
+
 Sanitized runtime diagnostics treat only an aborted losing request with a
 successful same-method/path peer as expected cancellation. Transport/CORS/HTTP
 failures of the exact disposable `focus_auth_record_verification_v1` and

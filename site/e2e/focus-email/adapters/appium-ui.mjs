@@ -94,6 +94,15 @@ async function waitText(driver, pattern, timeout = 30_000) {
   });
 }
 
+export async function observeNativeKeyboard(driver, { timeout = 3_000, interval = 200 } = {}) {
+  let shown = false;
+  await driver.waitUntil(async () => {
+    shown = await driver.isKeyboardShown().catch(() => false);
+    return shown;
+  }, { timeout, interval }).catch(() => undefined);
+  return shown;
+}
+
 export function buildAppiumCapabilities(platform, config, env = process.env) {
   return platform === 'android' ? {
     platformName: 'Android', browserName: 'Chrome',
@@ -473,6 +482,9 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, expect
     if (platform !== 'ios') {
       attempts.push({ route: 'webdriver_element_click', outcome: 'dispatched' });
       await (await driver.$(selector)).click();
+      const shown = await withNativeContext(() => observeNativeKeyboard(driver));
+      nativeKeyboardAtTap[kind] = shown;
+      attempts.at(-1).keyboard_shown = shown;
     } else {
       await withNativeContext(async () => {
         const escapedLabel = label.replaceAll("'", "\\'");
@@ -486,10 +498,7 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, expect
         if (!(rect.width > 0 && rect.height > 0)) throw new Error(`fail_browser_context:native_input_rect_invalid:${kind}`);
         await driver.executeScript('mobile: tap', [{ x: Math.round(rect.x + rect.width / 2), y: Math.round(rect.y + rect.height / 2) }]);
         attempts.at(-1).outcome = 'tap_dispatched';
-        let shown = false;
-        await driver.waitUntil(async () => {
-          shown = await driver.isKeyboardShown().catch(() => false); return shown;
-        }, { timeout: 3_000, interval: 200 }).catch(() => undefined);
+        const shown = await observeNativeKeyboard(driver);
         nativeKeyboardAtTap[kind] = shown;
         attempts.at(-1).keyboard_shown = shown;
       });
