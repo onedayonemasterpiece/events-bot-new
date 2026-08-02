@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- Added the stacked Smart Update static-collection facts-v3 implementation:
+  the existing single Gemma adjudication call now returns independent
+  child-directed, family-suitable and joint-family facts with exact persisted
+  `EventSource` quotes, strict one-primary-send accounting, per-source warm
+  receipts, independent merge and deterministic legacy projection. The bounded
+  backfill now has read-only plan/evaluate, explicit event+source allowlists,
+  primary-only mode, logical diff enforcement and a versioned report schema.
+  A fresh 50-source production-snapshot replay proved one Gemma send per source,
+  zero writes and 100% quote validity but failed semantic recall/provisional-data
+  consistency; production apply, ingestion replay, Fly canary and publication
+  remain blocked rather than being claimed.
 - Added static-collection PR-A quality contracts: ontology v2 separates child,
   family, joint-family, science-pop and research-in-action meanings; the
   provisional seed moved out of the misleading gold fixture into source-bound

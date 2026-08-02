@@ -50,6 +50,8 @@
 - Static-site service share: `docs/features/static-site-pages/service-sharing.md`
 - Static-site collections: original requirements in `docs/features/static-site-pages/podborki.md`,
   extraction/product/venue/egress plan in `docs/features/static-site-pages/podborki-to-be.md`
+- Static-collection facts-v3 bounded replay/apply runbook:
+  `docs/operations/static-collection-facts-v3.md` (publication remains blocked)
 - Static-site Easter eggs product discovery, analytics and external-research brief: `docs/features/static-site-easter-eggs/README.md`
 - Service-share preview runbook: `docs/operations/service-sharing-preview.md`
 - 3D previews (`/3di`): `docs/features/preview-3d/README.md`

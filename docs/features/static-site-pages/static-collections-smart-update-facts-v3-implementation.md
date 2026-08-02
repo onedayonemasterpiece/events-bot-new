@@ -2,6 +2,13 @@
 
 Статус: **implementation handoff**.
 
+Кодовая реализация подготовлена в отдельной stacked-ветке
+`integration/static-collection-facts-v3`; это не изменение docs-only PR #226.
+Unit/contracts проходят, однако обязательный primary-only real-data Gate B от
+2026-08-02 имеет статус **NO-GO**, поэтому production apply/deploy и публикация
+не выполнялись. Фактическая приёмка и выявленные provisional-data противоречия:
+[integration report](../../../.codex/integration/static-collection-facts-v3-INTEGRATION_REPORT.md).
+
 Stack base: `agent/static-collections-quality/pr-a-ontology` @
 `3164e984d04208fcff5618c49271a4633d304eab`.
 

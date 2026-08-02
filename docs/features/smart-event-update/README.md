@@ -843,7 +843,13 @@ mode is read-only; `--apply` reuses persisted `EventSource`, the same strict
 adjudicator and atomic apply contract, prefers trusted/recent source evidence,
 is hash-resumable, and can be limited by reason/event/source count. It does not
 re-run Smart Update identity/writer logic or scan the whole archive. Production
-execution and source review remain release steps. Product/extraction contract:
+execution is gated by the bounded operator runbook. The 2026-08-02 primary-only
+real replay stopped at Gate B: transport/call-count/quote checks passed, but
+quality thresholds and several provisional review rows did not. Therefore no
+copy apply, ingestion replay, Fly canary or publication is claimed. See the
+[operator runbook](../../operations/static-collection-facts-v3.md),
+[integration report](../../../.codex/integration/static-collection-facts-v3-INTEGRATION_REPORT.md)
+and product/extraction contract
 [`podborki-to-be.md`](../static-site-pages/podborki-to-be.md).
 
 ### Interest-club relation handoff

@@ -2,6 +2,15 @@
 
 Статус: **mandatory acceptance gate**.
 
+Фактический прогон 2026-08-02: **Gate A PASS, Gate B NO-GO; Gates C–F не
+запускались по stop-condition**. На свежем production snapshot все 50
+event/source bindings были точными, каждый routed source получил ровно один
+primary Gemma send, writes остались нулевыми и exact-quote rate составил 100%,
+но provisional recall не достиг gate и обнаружились противоречащие ontology v2
+review rows (в частности 6562/7102/7258/7290). Полные команды, hashes и
+непредъявленные claims: [integration report](../../../.codex/integration/static-collection-facts-v3-INTEGRATION_REPORT.md).
+Semantic publication и production apply остаются **BLOCKED**.
+
 Этот документ проверяет не только functions и fixtures, а фактическую цепочку:
 
 ```text

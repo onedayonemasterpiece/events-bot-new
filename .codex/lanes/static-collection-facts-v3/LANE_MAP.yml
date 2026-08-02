@@ -86,7 +86,7 @@ lanes:
     expected_output: committed core implementation with focused tests and reconciliation notes
     verification_scope: focused_unit
     effort: high
-    status: in_progress
+    status: completed
   - id: facts-v3-backfill
     role: worker
     requirement_ids: [R04]
@@ -110,7 +110,7 @@ lanes:
     expected_output: committed backfill/report implementation with focused tests and documented core API assumptions
     verification_scope: focused_unit
     effort: high
-    status: in_progress
+    status: completed
   - id: facts-v3-integrator
     role: worker
     requirement_ids: [R06, R07, R08, R09, R10, R11, R12]
@@ -137,4 +137,5 @@ lanes:
     expected_output: separate stacked implementation PR with staged real-data and canary evidence
     verification_scope: full_local
     effort: high
-    status: pending
+    status: completed
+    acceptance_status: blocked_no_go_at_primary_real_data
