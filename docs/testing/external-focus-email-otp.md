@@ -164,6 +164,12 @@ Android/iOS verify native keyboard presence, active input and usable
 viewport geometry before ordinary user input. Direct JS assignment of the email
 or OTP value does not satisfy the mobile scenario.
 
+For selected-once issuance, Android uses simultaneous W3C touch and Return
+sources. Mobile Safari uses the corresponding ordinary WebKit button click and
+focused-field Return commands as one competing batch: XCUITest may acknowledge
+a web-context touch action without delivering it to the page. Both paths must
+still produce exactly one `/auth/v1/otp`; there is no fallback resend.
+
 A heavy Android/iOS advisory run may be started without waiting only when it is
 not the current release blocker. It must be reported as `STARTED_BACKGROUND`
 with run ID/URL, exact SHA and target; it is never PASS until terminal evidence

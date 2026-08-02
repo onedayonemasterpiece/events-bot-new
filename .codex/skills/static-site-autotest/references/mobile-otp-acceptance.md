@@ -49,6 +49,14 @@ instead of copying it.
 - Do not use a synthetic WebKit click as keyboard proof. Do not use global
   `nativeWebTap`, `nativeWebTapStrict`, coordinate translation calibration or a
   guessed screen offset. Do not persist native hierarchy or field values.
+- For competing issuance gestures, prefer an ordinary WebKit element click and
+  focused-field Return command started in one batch. Do not rely on XCUITest's
+  web-context W3C touch source: it can acknowledge `performActions` without
+  dispatching the pointer event to Safari. This batch is the sole issuance
+  attempt, never a retry or fallback.
+- After destructive DOM masking, allow Mobile Safari's native text overlay one
+  paint frame before screenshot capture; a masked DOM alone does not prove the
+  screenshot stopped displaying the prior field value.
 
 ## Evidence and failure rules
 

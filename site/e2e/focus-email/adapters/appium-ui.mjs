@@ -316,6 +316,18 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     async requestOtpWithCompetingGestures() {
       const send = await driver.$(SELECTORS.send); const email = await driver.$(SELECTORS.email);
       await email.click();
+      if (platform === 'ios') {
+        // XCUITest accepts both commands as ordinary Safari user input, while
+        // its web-context W3C touch source can acknowledge performActions
+        // without dispatching the pointer event to WebKit. Start the button
+        // tap and the focused field's Return gesture as one competing batch;
+        // the product's selected-once guard must collapse them to one issue.
+        await Promise.all([
+          send.click(),
+          driver.keys('\uE007'),
+        ]);
+        return;
+      }
       const location = await send.getLocation(); const size = await send.getSize();
       await driver.performActions([
         { type: 'pointer', id: 'e2e-finger', parameters: { pointerType: 'touch' }, actions: [
@@ -340,7 +352,15 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     },
     async reloadOrReopen() { await syncNetwork(); await driver.refresh(); pageEntriesSeen = 0; await driver.pause(500); await driver.execute(networkBootstrap, directHost, relayHost); },
     async waitForReturningMember() { await waitText(driver, /Вы уже в фокус-группе|Участие подтверждено/u, 20_000); },
-    async captureMaskedEvidence(name) { await driver.hideKeyboard().catch(() => undefined); await maskDom(); await driver.saveScreenshot(join(evidenceRoot, 'screenshots', `${name}.png`)); },
+    async captureMaskedEvidence(name) {
+      await driver.hideKeyboard().catch(() => undefined);
+      await maskDom();
+      // Mobile Safari paints the native text-field overlay one frame after the
+      // DOM value changes. Waiting here prevents the prior value from leaking
+      // into the screenshot even though the DOM was already masked.
+      if (platform === 'ios') await driver.pause(200);
+      await driver.saveScreenshot(join(evidenceRoot, 'screenshots', `${name}.png`));
+    },
     async close() { await driver?.deleteSession().catch(() => undefined); },
   };
 }

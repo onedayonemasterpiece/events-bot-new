@@ -26,7 +26,11 @@
   hosted Simulator that still has its independent software-keyboard toggle off
   receives the documented `Cmd-K` action once and must then expose the native
   keyboard after one repeated physical field tap before the journey can
-  continue.
+  continue. Mobile Safari now submits the selected-once OTP request with a
+  competing real button click and focused-field Return input rather than an
+  XCUITest web-context touch source that can be acknowledged without reaching
+  WebKit; iOS screenshot capture also waits for the native text overlay to
+  repaint after destructive masking.
 - Added reusable project skill guidance for constructing protected static-site
   browser/Android/iOS acceptance journeys and for sending/receiving controlled
   OTP mail through the existing Yandex Mail Trigger boundary without exposing
