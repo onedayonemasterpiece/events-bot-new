@@ -61,6 +61,19 @@ test('best-effort client outcome telemetry transport/CORS failures are warnings'
   assert.equal(summary.blocking_failure_count, 0);
 });
 
+test('best-effort verification telemetry transport/CORS failures are warnings', () => {
+  const path = '/rest/v1/rpc/focus_auth_record_verification_v1';
+  const summary = summarizeRuntimeDiagnostics([
+    { method: 'POST', path, status: null, failure_class: 'network_failure' },
+    { method: 'OPTIONS', path, status: 404, failure_class: null },
+  ]);
+  assert.equal(summary.unexpected_network_failure_count, 0);
+  assert.equal(summary.unexpected_http_4xx_5xx_count, 0);
+  assert.equal(summary.warnings[0].code, 'BEST_EFFORT_AUTH_TELEMETRY_UNAVAILABLE');
+  assert.equal(summary.warnings[0].count, 2);
+  assert.equal(summary.blocking_failure_count, 0);
+});
+
 test('driver failure text is reduced to an allowlisted class', () => {
   assert.equal(sanitizedFailureClass({ canceled: true, errorText: 'secret' }), 'request_cancelled');
   assert.equal(sanitizedFailureClass({ errorText: 'net::ERR_ABORTED' }), 'request_cancelled');

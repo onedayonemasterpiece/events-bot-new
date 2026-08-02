@@ -18,6 +18,11 @@
   quarantined both data routes after OTP verify and left participant
   registration at `no_route`. Disposable telemetry no longer mutates shared
   capability route health; product registration retains the probed relay.
+- Fixed the mobile OTP runtime classifier so transport/CORS failures of the
+  exact disposable verification and client-outcome RPCs remain structured
+  warnings without also incrementing blocking network/HTTP counters. The
+  sanitized evidence from Android fault run `30771235222` now replays with zero
+  blocking diagnostics while arbitrary product failures remain blocking.
 
 - Changed iOS Safari OTP preflight to create a native-first Safari session,
   enable XCUITest `respectSystemAlerts`, close the bounded first-run sheet, and
