@@ -1,13 +1,11 @@
 name: Execute Region Talk external-publication YDB import receipt
 
 on:
-  pull_request:
+  push:
     branches:
       - main
-    types:
-      - opened
-      - synchronize
-      - reopened
+    paths:
+      - '.github/workflows/region-talk-external-publication-import-receipt-20260802.yml'
 
 permissions:
   contents: write
@@ -19,7 +17,6 @@ concurrency:
 
 jobs:
   import-and-record:
-    if: github.head_ref == 'agent/region-talk-ydb-import-receipt-20260802'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     environment: region-talk-ydb-import
@@ -30,14 +27,22 @@ jobs:
       REGION_TALK_YDB_DATABASE: ${{ vars.REGION_TALK_YDB_DATABASE }}
       REGION_TALK_YDB_NAMESPACE: ${{ vars.REGION_TALK_YDB_NAMESPACE }}
       REPORT_ROOT: artifacts/github-actions/region-talk-external-publication-import-receipt-20260802
+      RESULT_BRANCH: agent/region-talk-ydb-import-receipt-result-20260802
 
     steps:
-      - name: Check out writable PR head
+      - name: Check out exact trusted main commit
         uses: actions/checkout@v4
         with:
-          ref: agent/region-talk-ydb-import-receipt-20260802
-          fetch-depth: 2
+          ref: main
+          fetch-depth: 1
           persist-credentials: true
+
+      - name: Verify trusted checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse --verify HEAD)" = "$(git rev-parse --verify origin/main)"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -187,36 +192,35 @@ jobs:
           PY
           done < "$REPORT_ROOT/inputs.tsv"
 
-      - name: Build sanitized receipt and update canonical index
+      - name: Build sanitized receipt and result branch
         shell: bash
         run: |
           set -euo pipefail
-          head_sha="$(git rev-parse HEAD)"
+          main_sha="$(git rev-parse HEAD)"
           python - "$REPORT_ROOT/validation-summary.ndjson" "$REPORT_ROOT/execute-summary.ndjson" \
-            "$head_sha" "$GITHUB_RUN_ID" <<'PY'
+            "$main_sha" "$GITHUB_RUN_ID" <<'PY'
           import json
           import sys
           from datetime import datetime, timezone
           from pathlib import Path
 
-          validation_path, execute_path, head_sha, run_id = sys.argv[1:]
+          validation_path, execute_path, main_sha, run_id = sys.argv[1:]
           validations = [json.loads(line) for line in Path(validation_path).read_text(encoding="utf-8").splitlines() if line]
           imports = [json.loads(line) for line in Path(execute_path).read_text(encoding="utf-8").splitlines() if line]
           if len(validations) != 3 or len(imports) != 3:
               raise SystemExit("receipt must contain exactly three validated imports")
           by_request = {row["request_id"]: row for row in validations}
+          merged = []
           for row in imports:
               if row["request_id"] not in by_request:
                   raise SystemExit(f"execute request missing from validation: {row['request_id']}")
+              merged.append({**by_request[row["request_id"]], **row})
           receipt = {
               "schema_version": "region_talk_external_publication_import_receipt.v1",
               "executed_at": datetime.now(timezone.utc).isoformat(),
               "github_actions_run_id": int(run_id),
-              "source_branch_head_sha": head_sha,
-              "imports": [
-                  {**by_request[row["request_id"]], **row}
-                  for row in imports
-              ],
+              "trusted_main_sha": main_sha,
+              "imports": merged,
               "totals": {
                   "candidate_rows_valid": sum(row["candidate_rows_valid"] for row in validations),
                   "ready_for_region_talk_scoring": sum(row["ready_for_region_talk_scoring"] for row in validations),
@@ -240,22 +244,21 @@ jobs:
           report_md = Path("docs/reports/region-talk-external-publication-ydb-import-receipt-2026-08-02.md")
           report_json.write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-          rows = []
-          for row in receipt["imports"]:
-              rows.append(
-                  f"| `{row['request_id']}` | {row['candidate_rows_valid']} | "
-                  f"{row['ready_for_region_talk_scoring']} | {row['manual_or_blocked']} | "
-                  f"{row['new_intake_count']} | {row['replay_count']} | "
-                  f"{row['conflict_count']} | `{row['input_sha256']}` |"
-              )
+          rows = [
+              f"| `{row['request_id']}` | {row['candidate_rows_valid']} | "
+              f"{row['ready_for_region_talk_scoring']} | {row['manual_or_blocked']} | "
+              f"{row['new_intake_count']} | {row['replay_count']} | "
+              f"{row['conflict_count']} | `{row['input_sha256']}` |"
+              for row in receipt["imports"]
+          ]
           totals = receipt["totals"]
           report_md.write_text(
               "# Region Talk: YDB intake receipt — 2026-08-02\n\n"
-              f"GitHub Actions run: `{run_id}`. Source branch head before receipt commit: `{head_sha}`.\n\n"
+              f"GitHub Actions run: `{run_id}`. Trusted main SHA: `{main_sha}`.\n\n"
               "Все три research-result JSON прошли строгую schema/importer validation до получения "
               "Yandex IAM token. Затем они обработаны последовательно; перед каждым execute importer "
-              "перечитал live YDB identity ledger. Импорт идемпотентен: повторные identity записаны как "
-              "replay, а не как новые intake rows.\n\n"
+              "перечитал live YDB identity ledger. Повторные identity записаны как replay, а не как "
+              "новые intake rows.\n\n"
               "| Request ID | Valid | Candidate pipeline | Manual/blocked | New intake | Replay | Conflicts | Input SHA-256 |\n"
               "|---|---:|---:|---:|---:|---:|---:|---|\n"
               + "\n".join(rows)
@@ -287,10 +290,7 @@ jobs:
           if heading in index:
               prefix, remainder = index.split(heading, 1)
               next_heading = remainder.find("\n## ")
-              if next_heading >= 0:
-                  index = prefix + section + remainder[next_heading + 1:]
-              else:
-                  index = prefix + section
+              index = prefix + section + (remainder[next_heading + 1:] if next_heading >= 0 else "")
           else:
               anchor = "## Автоматический импорт"
               if anchor not in index:
@@ -298,6 +298,15 @@ jobs:
               index = index.replace(anchor, section + anchor, 1)
           index_path.write_text(index, encoding="utf-8")
           PY
+
+          rm -f .github/workflows/region-talk-external-publication-import-receipt-20260802.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$RESULT_BRANCH"
+          git add -A
+          git diff --cached --check
+          git commit -m "Record Region Talk external-publication YDB import receipt"
+          git push --force origin "HEAD:$RESULT_BRANCH"
 
           {
             echo "### Region Talk YDB import receipt"
@@ -311,18 +320,6 @@ jobs:
               "- conflicts: \(.totals.conflict_count)"
             ' docs/reports/region-talk-external-publication-ydb-import-receipt-2026-08-02.json
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Commit sanitized receipt and remove one-shot workflow
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -f .github/workflows/region-talk-external-publication-import-receipt-20260802.yml
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --check
-          git commit -m "Record Region Talk external-publication YDB import receipt"
-          git push origin HEAD:agent/region-talk-ydb-import-receipt-20260802
 
       - name: Upload immutable validation and execute reports
         if: ${{ always() }}
