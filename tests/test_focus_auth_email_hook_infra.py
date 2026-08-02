@@ -54,6 +54,18 @@ def test_unreconciled_notisend_capacity_is_unknown_not_zero() -> None:
     assert "where provider_reconciled_at is null" in migration
     assert "provider_reconciliation_value_chk" in migration
 
+    projection = (
+        ROOT
+        / "supabase/migrations/20260802014500_notisend_unreconciled_operator_projection.sql"
+    ).read_text(encoding="utf-8")
+    assert "focus_auth_operator_summary_base_v1" in projection
+    assert "{notisend_capacity,provider_reported}" in projection
+    assert "{notisend_capacity,admitted_after_reconcile}" in projection
+    assert "{notisend_capacity,occupied}" in projection
+    assert "{notisend_capacity,available}" in projection
+    assert projection.count("'null'::jsonb") == 4
+    assert "to service_role" in projection
+
 
 def test_provider_policy_has_one_dispatch_and_shared_unique_recipient_cap() -> None:
     desired = json.loads((INFRA / "desired-state.json").read_text(encoding="utf-8"))
