@@ -21,6 +21,7 @@ import os
 import shlex
 import sqlite3
 import sys
+import tempfile
 from collections.abc import Mapping, Sequence
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -32,6 +33,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from db import Database
+from scripts.capture_static_collection_upstream_packet import (
+    SCHEMA_VERSION as UPSTREAM_CAPTURE_SCHEMA_VERSION,
+    load_capture as load_upstream_capture,
+)
 
 
 MANIFEST_SCHEMA_VERSION = "static-collection-ingestion-replay-manifest-v1"
@@ -559,6 +564,71 @@ def _dataclass_kwargs(cls: type, payload: Mapping[str, Any], *, label: str) -> d
     return {key: value for key, value in payload.items() if key in allowed}
 
 
+def _fixture_payload(
+    fixture_path: Path,
+    *,
+    case: Mapping[str, Any],
+) -> tuple[dict[str, Any], bool]:
+    """Return a legacy fixture or a validated capture payload.
+
+    A capture is accepted only when its immutable source binding agrees with
+    the replay manifest.  This prevents an operator from relabeling one fresh
+    upstream packet as another event source.
+    """
+
+    raw = _load_object(fixture_path)
+    if raw.get("schema_version") != UPSTREAM_CAPTURE_SCHEMA_VERSION:
+        return raw, False
+    capture = load_upstream_capture(fixture_path)
+    adapter = str(case["adapter"])
+    expected = dict(case["expected"])
+    if capture["adapter"] != adapter:
+        raise ValueError(
+            f"{fixture_path}: capture adapter {capture['adapter']!r} does not match {adapter!r}"
+        )
+    for key in ("source_url", "source_type"):
+        if str(capture[key]) != str(expected[key]):
+            raise ValueError(
+                f"{fixture_path}: capture {key} {capture[key]!r} does not match "
+                f"manifest {expected[key]!r}"
+            )
+    return dict(capture["payload"]), True
+
+
+def _captured_vk_poster_media(
+    rows: Any,
+    *,
+    fixture_path: Path,
+) -> list[Any]:
+    """Narrowly restore replay-relevant PosterMedia with raw bytes omitted."""
+
+    if not isinstance(rows, list):
+        raise ValueError(f"{fixture_path}: captured draft.poster_media must be an array")
+    poster_module = importlib.import_module("poster_media")
+    output: list[Any] = []
+    allowed = {field.name for field in dataclasses.fields(poster_module.PosterMedia)}
+    for index, raw in enumerate(rows):
+        if not isinstance(raw, Mapping):
+            raise ValueError(f"{fixture_path}: captured poster #{index} must be an object")
+        if raw.get("data_omitted") is not True:
+            raise ValueError(f"{fixture_path}: captured poster #{index} must omit binary data")
+        digest = str(raw.get("data_sha256") or "")
+        if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
+            raise ValueError(f"{fixture_path}: captured poster #{index} has invalid data_sha256")
+        declared_digest = str(raw.get("digest") or "")
+        if declared_digest and declared_digest != digest:
+            raise ValueError(f"{fixture_path}: captured poster #{index} digest mismatch")
+        kwargs = {
+            key: value
+            for key, value in raw.items()
+            if key in allowed and key != "data"
+        }
+        kwargs["data"] = b""
+        kwargs["digest"] = digest
+        output.append(poster_module.PosterMedia(**kwargs))
+    return output
+
+
 async def invoke_adapter(case: Mapping[str, Any], db: Database) -> Any:
     adapter = str(case["adapter"])
     fixture_path = Path(str(case["fixture_path"]))
@@ -570,17 +640,32 @@ async def invoke_adapter(case: Mapping[str, Any], db: Database) -> Any:
             username=str(options["source_username"]),
             message_id=int(options["message_id"]),
         )
-        return await tg.process_telegram_results(fixture_path, db, bot=None)
-    payload = _load_object(fixture_path)
+        payload, is_capture = _fixture_payload(fixture_path, case=case)
+        if not is_capture:
+            return await tg.process_telegram_results(fixture_path, db, bot=None)
+        with tempfile.TemporaryDirectory(prefix="collection-tg-capture-") as temp_dir:
+            handler_path = Path(temp_dir) / "telegram_results.json"
+            handler_path.write_text(
+                json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                encoding="utf-8",
+            )
+            return await tg.process_telegram_results(handler_path, db, bot=None)
+    payload, is_capture = _fixture_payload(fixture_path, case=case)
     if adapter == "vk":
         vk = importlib.import_module("vk_intake")
         draft_payload = payload.get("draft")
         if not isinstance(draft_payload, Mapping):
             raise ValueError(f"{fixture_path}: VK fixture requires draft object")
-        if "poster_media" in draft_payload:
+        draft_payload = dict(draft_payload)
+        if "poster_media" in draft_payload and not is_capture:
             raise ValueError(
                 f"{fixture_path}: draft.poster_media is not a JSON fixture contract; "
                 "put reproducible URL strings in top-level photos"
+            )
+        if is_capture:
+            draft_payload["poster_media"] = _captured_vk_poster_media(
+                draft_payload.get("poster_media"),
+                fixture_path=fixture_path,
             )
         draft = vk.EventDraft(
             **_dataclass_kwargs(vk.EventDraft, draft_payload, label=f"{fixture_path}: draft")
