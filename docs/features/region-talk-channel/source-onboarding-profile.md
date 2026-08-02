@@ -46,6 +46,10 @@ import/review commands and Writer vNext:
    remains fail-closed `needs_review`. In that state `needs_source_profile`
    stays true and the source is routed to profile review; the unchanged archive
    is not fetched again merely because the public-copy Writer is still blocked.
+   CandidateReport closes that acquisition flag immediately after a durable
+   `written|unchanged_noop` capture. The finalizer also reconciles historical
+   outstanding flags from live capture evidence even when an independent
+   final-decision fingerprint fence temporarily defers the candidate.
 5. Editorial/academic sources use separately imported
    `publisher_profile_item` rows. A reusable publisher profile must be
    `ready`, external, public-copy-eligible and contain grounded

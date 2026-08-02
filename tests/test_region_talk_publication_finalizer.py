@@ -1201,6 +1201,14 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(updates[0]["priority_reason"], "")
         self.assertEqual(updates[0]["next_action"], "review_nonready_source_profile")
 
+        row["publication_status"] = "gemini_needs_review"
+        deferred_updates = mod.source_profile_capture_request_updates(
+            [row], now_iso="2026-08-02T12:01:00+00:00",
+        )
+        self.assertEqual(len(deferred_updates), 1)
+        self.assertEqual(deferred_updates[0]["source_profile_capture_requested"], "false")
+        self.assertEqual(deferred_updates[0]["needs_source_profile"], "true")
+
     def test_onboarding_reuses_current_profile_and_spends_only_writer_call(self) -> None:
         mod = self.mod
         row = candidate_row(publication_status="gemini_accept", sent_to_chat="false")

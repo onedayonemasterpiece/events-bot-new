@@ -1018,6 +1018,38 @@ def reserve_source_profile_capture_slot(source: dict[str, Any]) -> bool:
     return True
 
 
+def source_profile_capture_completion_queue_fields(
+    queue_row: dict[str, Any] | None,
+    persistence_status: str,
+) -> dict[str, Any]:
+    """Close acquisition after a durable bounded capture, not after Writer readiness.
+
+    Both a newly written capture and an identical fingerprint prove that the
+    current bounded archive has already been acquired.  Conflict/error states
+    remain requested and fail closed.
+    """
+
+    if str(persistence_status or "").strip().lower() not in {"written", "unchanged_noop"}:
+        return {}
+    row = queue_row if isinstance(queue_row, dict) else {}
+    now_iso = utc_now_iso()
+    current_lane = str(row.get("priority_lane") or "")
+    current_reason = str(row.get("priority_reason") or "")
+    return {
+        "source_profile_capture_requested": "false",
+        "needs_source_profile": "true",
+        "source_profile_capture_request_cleared_at": now_iso,
+        "source_profile_capture_request_reason": "current_bounded_capture_persisted",
+        "priority_lane": "" if current_lane == "source_profile_capture" else current_lane,
+        "priority_reason": (
+            "" if current_reason == "accepted_candidate_needs_source_profile" else current_reason
+        ),
+        "priority_updated_at": now_iso,
+        "next_action": "synthesize_or_review_current_source_profile",
+        "queue_item_updated_at": now_iso,
+    }
+
+
 
 
 def normalize_source_platform(value: str, url: str = "") -> str:
@@ -13503,6 +13535,9 @@ def fetch_vk_wall_for_seed(
                     )
                     src["source_profile_capture_persistence_status"] = persistence["persistence_status"]
                     src["source_profile_capture_profile_llm_call_required"] = str(bool(persistence["profile_llm_call_required"])).lower()
+                    src.update(source_profile_capture_completion_queue_fields(
+                        source_row, persistence["persistence_status"],
+                    ))
             except Exception as exc:
                 src.update({
                     "source_profile_capture_status": "capture_error",
@@ -15188,6 +15223,9 @@ async def fetch_telegram_posts(
                         )
                         src_row["source_profile_capture_persistence_status"] = persistence["persistence_status"]
                         src_row["source_profile_capture_profile_llm_call_required"] = str(bool(persistence["profile_llm_call_required"])).lower()
+                        src_row.update(source_profile_capture_completion_queue_fields(
+                            selected_queue_row, persistence["persistence_status"],
+                        ))
                 except Exception as exc:
                     src_row.update({
                         "source_profile_capture_status": "capture_error",

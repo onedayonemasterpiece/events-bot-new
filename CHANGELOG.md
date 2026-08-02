@@ -6,7 +6,9 @@
   capture now clears only the explicit acquisition request while a non-ready
   profile remains fail closed. CandidateReport treats that explicit flag as
   authoritative, preventing unchanged `needs_review` archives from consuming
-  the same history slots on every recovery cycle.
+  the same history slots on every recovery cycle. Capture completion is now
+  persisted immediately by CandidateReport and reconciled idempotently by the
+  finalizer even if an independent candidate fingerprint fence defers the row.
 - Fixed Region Talk social-profile recovery routing: explicit
   `source_profile_capture` requests now own the bounded source-history slots
   ahead of ordinary discovery and rescans, so a small capture-only run reaches
