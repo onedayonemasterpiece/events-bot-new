@@ -12,6 +12,11 @@
   unpublished drafts/reactions are version-invalidated, while published rows,
   accepted verdicts and all manual/publication permission gates remain
   monotonic.
+- Added a reusable KenigEvents email roundtrip skill and read-only Yandex Mail
+  Trigger helper. Automated OTP/canary receipt now reuses the already-live
+  generated trigger address and private inbound envelope path instead of
+  treating a newly provisioned human mailbox as mandatory; the workflow fails
+  closed on duplicate codes and forbids CI access to the shared inbound bucket.
 - Fixed Region Talk article/social review footers: final captions now contain
   one link to the exact source post/material, a blank line and one
   `О Калининграде говорят` link to `@kalinigrad_visit`, with no
