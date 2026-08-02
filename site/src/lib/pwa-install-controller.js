@@ -24,6 +24,7 @@ export function createPwaInstallController({
   status,
   guidance,
   texts = {},
+  onInstallResult,
 }) {
   if (!windowRef || !navigatorRef || !root || !button) return null;
 
@@ -133,6 +134,10 @@ export function createPwaInstallController({
       windowRef.__kenigEventsPwaInstallPrompt = null;
     }
     installPrompt = event;
+    onInstallResult?.({
+      phase: 'ready',
+      platforms: Array.isArray(event.platforms) ? [...event.platforms] : [],
+    });
     if (status) status.textContent = copy.readyStatus;
     reveal();
   };
@@ -159,6 +164,11 @@ export function createPwaInstallController({
 
     try {
       const result = await promptEvent.prompt();
+      onInstallResult?.({
+        phase: 'prompt-result',
+        outcome: String(result?.outcome || 'unknown'),
+        platform: String(result?.platform || ''),
+      });
       if (presentation) {
         if (result?.outcome === 'accepted') showInstalling();
         else {
@@ -166,7 +176,8 @@ export function createPwaInstallController({
           if (status) status.textContent = copy.cancelledStatus;
         }
       }
-    } catch {
+    } catch (error) {
+      onInstallResult?.({ phase: 'prompt-error', message: String(error?.message || error || '') });
       if (presentation) {
         showPresentationWaiting();
         if (status) status.textContent = copy.promptErrorStatus;
@@ -179,6 +190,7 @@ export function createPwaInstallController({
   };
 
   const onAppInstalled = () => {
+    onInstallResult?.({ phase: 'appinstalled' });
     if (presentation) {
       installPrompt = null;
       prompting = false;

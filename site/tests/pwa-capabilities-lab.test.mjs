@@ -81,10 +81,13 @@ test('Astro sources keep install/runtime paths base-aware and deploy exact lab M
   assert.match(page, /data-pwa-install-id=\{labInstallId\}/u);
   assert.match(page, /data-pwa-open-href=\{labOpenHref\}/u);
   assert.match(page, />Установить PWA Lab</u);
+  assert.match(page, /data-pwa-install-detail/u);
+  assert.match(page, /accepted\/appinstalled не доказывают WebAPK/u);
   assert.match(installAdapter, /createPwaInstallController\(/u);
   assert.match(installAdapter, /PWA Lab запущена с главного экрана/u);
   assert.match(installAdapter, /display-mode: standalone/u);
   assert.match(installAdapter, /Закройте вкладку и откройте PWA Lab через новую иконку/u);
+  assert.match(installAdapter, /WebAPK подтверждается только launcher\/Settings/u);
   assert.match(installController, /texts = \{\}/u);
   assert.doesNotMatch(browserRuntime, unprefixedRuntimePath);
   assert.match(browserRuntime, /new URL\('\.\/sw\.js', labUrl\)/u);

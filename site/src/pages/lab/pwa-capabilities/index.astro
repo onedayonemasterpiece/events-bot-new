@@ -65,11 +65,15 @@ const cacheName = `kenigevents-pwa-capabilities-lab-${encodeURIComponent(labUrl)
         <p class="install-status" data-pwa-install-status role="status" aria-live="polite">
           Проверяем, предложит ли браузер установку PWA Lab.
         </p>
+        <p class="install-detail" data-pwa-install-detail role="status" aria-live="polite">
+          Системный install event: ожидание.
+        </p>
         <p class="standalone-status" data-pwa-install-standalone hidden></p>
         <div class="install-guidance" data-pwa-install-guidance>
           <strong>Если кнопка установки не появилась</strong>
           <span>Chrome Custom Tab: откройте меню ⋮ → «Открыть в Chrome», затем обновите страницу.</span>
           <span>Неподдерживаемый браузер: откройте эту же ссылку в актуальном Chrome на Android. Обычная вкладка не считается acceptance.</span>
+          <span>Даже accepted/appinstalled не доказывают WebAPK: при недоступном Android minting Chrome создаёт browser shortcut. Проверка — приложение в launcher/«Настройки → Приложения» и запуск без адресной строки.</span>
         </div>
       </section>
 
@@ -212,6 +216,7 @@ const cacheName = `kenigevents-pwa-capabilities-lab-${encodeURIComponent(labUrl)
   .install-panel + .hero { margin-top:18px; }
   .install-panel > p:not(.eyebrow) { max-width:70ch; }
   .install-status, .standalone-status { color:var(--accent); font-weight:800; }
+  .install-detail { color:var(--muted); font-family:ui-monospace, monospace; font-size:.88rem; }
   .install-guidance { display:grid; gap:6px; margin-top:14px; border-radius:12px; padding:12px 14px; background:#fff7df; color:#725214; }
   .install-guidance[hidden], [data-pwa-install-button][hidden], .standalone-status[hidden] { display:none; }
   h1, h2, h3 { line-height:1.15; margin-top:0; }

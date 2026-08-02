@@ -454,6 +454,21 @@ accepted пользователь получает инструкцию закр
 сам факт WebAPK всё равно подтверждается только наличием приложения в launcher
 и запуском без адресной строки, а не результатом desktop/CDP-проверки.
 
+Повторная ручная проверка того же build через отдельный HTTPS origin
+`static.kenigevents.ru` также завершилась предложением browser shortcut. Поэтому
+гипотеза о конфликте nested PWA на origin `kenigevents.ru` отвергнута. История
+Git и metadata публичных объектов также исключают незамеченный site regression:
+рабочий накануне focus preview не менялся после 2026-08-01 20:44 UTC, его live
+bundle содержит install flow из `04cf31cf`/`5ff151e4`/`309b1617`, а AutoPresenter
+PWA не менялась после 2026-07-30. У всех трёх проверенных публичных URL Chromium
+показывает пустые manifest/installability errors, active controlling worker и
+валидные 192/512 icons. Общим внешним участником остаётся Android Chrome/GMS
+WebAPK minting: при недоступности minting service Chrome документированно
+деградирует к browser shortcut. UI отдельно показывает получение
+`beforeinstallprompt`, результат системного prompt и факт `appinstalled`, но
+`accepted` без launcher/Android Settings app, standalone launch и controlling
+worker не закрывает ручной Android acceptance.
+
 Проверки из `site/`:
 
 ```bash
@@ -525,6 +540,7 @@ notification, simulated push payload, optional PushManager subscription, offline
 
 ## 12. Основные источники
 
+- PWA installation / WebAPK and shortcut fallback: https://web.dev/learn/pwa/installation
 - Android Calendar intents and provider: https://developer.android.com/identity/providers/calendar-provider
 - Android common intents: https://developer.android.com/guide/components/intents-common
 - Chrome Android intents: https://developer.chrome.com/docs/android/intents

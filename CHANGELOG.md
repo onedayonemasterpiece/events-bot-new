@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Added explicit PWA lab install diagnostics for the browser prompt and
+  `appinstalled` phases after immutable focus/lab previews both degraded from
+  WebAPK to browser shortcuts on the same Android device. The UI now states
+  that only launcher/Android Settings presence plus a standalone launch proves
+  WebAPK; an accepted prompt is not reported as Android acceptance.
 - Fixed the PWA lab's Android install compatibility after a real-device check
   produced only a browser shortcut: its isolated worker now mirrors the
   focus-group network-only fetch contract and its dedicated manifest uses the

@@ -15,6 +15,7 @@ interface LabPwaInstallOptions {
   status?: HTMLElement | null;
   guidance?: HTMLElement | null;
   standaloneStatus?: HTMLElement | null;
+  installDetail?: HTMLElement | null;
 }
 
 const AFTER_ACCEPTED = 'Закройте вкладку и откройте PWA Lab через новую иконку.';
@@ -27,6 +28,7 @@ export function createLabPwaInstallController({
   status,
   guidance,
   standaloneStatus,
+  installDetail,
 }: LabPwaInstallOptions) {
   const standalone = isStandaloneDisplay(windowRef, navigatorRef);
   const controller = createPwaInstallController({
@@ -43,6 +45,19 @@ export function createLabPwaInstallController({
     button,
     status,
     guidance,
+    onInstallResult(result) {
+      if (!installDetail) return;
+      if (result.phase === 'ready') {
+        const platforms = result.platforms?.length ? result.platforms.join(', ') : 'не указана';
+        installDetail.textContent = `Системный install event: готов; platform: ${platforms}.`;
+      } else if (result.phase === 'prompt-result') {
+        installDetail.textContent = `Системный prompt: ${result.outcome}; platform: ${result.platform || 'не указана'}. Это ещё не подтверждает WebAPK.`;
+      } else if (result.phase === 'appinstalled') {
+        installDetail.textContent = 'Событие appinstalled: получено; WebAPK подтверждается только launcher/Settings и standalone-запуском.';
+      } else if (result.phase === 'prompt-error') {
+        installDetail.textContent = `Ошибка системного prompt: ${result.message || 'без сообщения'}.`;
+      }
+    },
     texts: {
       installedButton: 'Приложение установлено',
       standaloneStatus: 'PWA Lab запущена с главного экрана',
@@ -64,6 +79,7 @@ export function createLabPwaInstallController({
       standaloneStatus.hidden = false;
       standaloneStatus.textContent = 'display-mode: standalone';
     }
+    if (installDetail) installDetail.textContent = 'Запуск standalone подтверждён браузером.';
   }
 
   return controller;
@@ -87,5 +103,6 @@ export function hydrateLabPwaInstallAction({
     status: root.querySelector<HTMLElement>('[data-pwa-install-status]'),
     guidance: root.querySelector<HTMLElement>('[data-pwa-install-guidance]'),
     standaloneStatus: root.querySelector<HTMLElement>('[data-pwa-install-standalone]'),
+    installDetail: root.querySelector<HTMLElement>('[data-pwa-install-detail]'),
   });
 }
