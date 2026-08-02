@@ -52,6 +52,7 @@ def test_target_research_precedence_and_legacy_quarantine_are_explicit() -> None
     index = (DOC_ROOT / "README.md").read_text(encoding="utf-8")
     traceability = (DOC_ROOT / "personalization-research-traceability.md").read_text(encoding="utf-8")
     wave_zero = (DOC_ROOT / "tasks" / "personalization-wave-0.md").read_text(encoding="utf-8")
+    compact_wave_zero = " ".join(wave_zero.split())
 
     assert index.index("personalization-to-be.md") < index.index("personalization-implementation-contract.md")
     assert "не может менять продуктовый или модельный смысл" in index
@@ -76,10 +77,10 @@ def test_target_research_precedence_and_legacy_quarantine_are_explicit() -> None
     assert "site/src/lib/personalization/legacy/scorer-v1.ts" in wave_zero
     assert "site/src/lib/personalization/scorer.ts" in wave_zero
     assert "В Wave 0 **не создавать**" in wave_zero
-    assert "Простое переименование `legacy/scorer-v1.ts`" in wave_zero
+    assert "переименование `legacy/scorer-v1.ts` в `scorer.ts`" in compact_wave_zero
     assert "не является target quality" in wave_zero
     assert "research-delta review" in wave_zero
-    assert "не выводи продуктовую истину из EventLayout" in wave_zero
+    assert "не выводи продуктовую истину из EventLayout" in compact_wave_zero
 
 
 def test_browser_state_schema_keeps_one_compact_bounded_state() -> None:
