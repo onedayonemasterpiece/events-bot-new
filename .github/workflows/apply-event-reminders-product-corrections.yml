@@ -1,0 +1,52 @@
+name: Apply event reminders product corrections
+
+on:
+  push:
+    branches: [feature/event-reminders-calendar-test-design-20260802]
+    paths:
+      - .github/workflows/apply-event-reminders-product-corrections.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: contains(github.event.head_commit.message, '[apply-event-reminders-product-corrections]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          ref: feature/event-reminders-calendar-test-design-20260802
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.22.0'
+      - name: Apply product, promo and focus-group corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          cat .github/patches/event-reminders-product-corrections/part*.txt | tr -d '\n' | base64 -d | gzip -d > /tmp/event-reminders-patch.py
+          python3 /tmp/event-reminders-patch.py
+          git diff --exit-code origin/main -- docs/features/static-site-pages/schedule-user-requirements.md
+          node --test site/tests/event-reminders/current-event-resolver.test.mjs
+          git diff --check
+          git rm -r .github/patches/event-reminders-product-corrections
+          git rm .github/workflows/apply-event-reminders-product-corrections.yml
+          git add \
+            CHANGELOG.md \
+            docs/features/event-favorites-calendar/README.md \
+            docs/features/promo-campaigns/README.md \
+            docs/features/static-site-focus-group/README.md \
+            docs/features/static-site-focus-group/event-reminders-acceptance.md \
+            docs/features/static-site-pages/event-reminders-calendar-strategy.md \
+            docs/features/static-site-pages/release-autotest-gates.md \
+            docs/features/static-site-pages/release-plan.md \
+            docs/routes.yml \
+            docs/testing/event-reminders-calendar-e2e.md \
+            docs/testing/static-site-autotest-scenarios.v1.yml
+          git diff --cached --check
+          git commit -m "docs: connect Favorites promo Push and focus acceptance"
+          git push origin HEAD:feature/event-reminders-calendar-test-design-20260802
