@@ -184,7 +184,7 @@ scenarios:
     cost: low
     side_effects: none
     subchecks: [health, semantic_sample, stability]
-    selection: affected_runner_on_pr_full_product_snapshot_on_schedule_or_release
+    selection: affected_runner_on_pr_full_snapshot_on_manual_future_schedule_or_release
     evidence: qa_summary_product_scorecard_json_and_markdown
     watch_policy: visible_non_blocking_by_default
     blocking:
