@@ -171,6 +171,11 @@ the exact `I/O → Keyboard → Toggle Software Keyboard` menu item once, retaps
 same field and checks again. Each check polls through a bounded native-keyboard
 animation window; an early false sample must not trigger the toggle and turn an
 arriving keyboard back off. The harness never treats a sent action as proof.
+If the exact menu route still leaves no keyboard after the second bounded check,
+the adapter sends the equivalent `Cmd-K` only after explicitly making Simulator
+frontmost, performs one final physical retap and still requires the native
+keyboard element. This is keyboard activation before email entry, not an OTP
+request retry.
 If Safari acknowledges the initial navigation command but stays on
 `about:blank`, the harness records `BLOCKED_INFRASTRUCTURE` with zero side
 effects and the workflow may use its one bounded Appium/WDA retry.

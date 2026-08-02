@@ -98,6 +98,18 @@ end tell`;
   await execFileAsync('osascript', ['-e', script], { timeout: 10_000 });
 }
 
+async function toggleSimulatorSoftwareKeyboardShortcut() {
+  const script = `
+tell application "Simulator" to activate
+tell application "System Events"
+  tell process "Simulator"
+    set frontmost to true
+    keystroke "k" using command down
+  end tell
+end tell`;
+  await execFileAsync('osascript', ['-e', script], { timeout: 10_000 });
+}
+
 async function waitText(driver, pattern, timeout = 30_000) {
   await driver.waitUntil(async () => pattern.test(await (await driver.$(SELECTORS.done)).getText()), {
     timeout, timeoutMsg: 'membership_state_timeout', interval: 350,
@@ -275,6 +287,18 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
           y: Math.round(rect.y + rect.height / 2),
         }]);
         nativeKeyboardAtTap[kind] = await waitForNativeKeyboard();
+        if (!nativeKeyboardAtTap[kind]) {
+          // Some hosted Simulator builds acknowledge the exact menu click but
+          // leave the device toggle unchanged. Only after both bounded checks
+          // remain false, send the equivalent shortcut to the explicitly
+          // frontmost Simulator process and perform one final physical retap.
+          await toggleSimulatorSoftwareKeyboardShortcut();
+          await driver.executeScript('mobile: tap', [{
+            x: Math.round(rect.x + rect.width / 2),
+            y: Math.round(rect.y + rect.height / 2),
+          }]);
+          nativeKeyboardAtTap[kind] = await waitForNativeKeyboard();
+        }
       }
     } finally {
       await driver.switchContext(originalContext);

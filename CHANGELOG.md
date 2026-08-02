@@ -38,7 +38,10 @@
   allowing the existing single bounded Appium retry instead of reporting a
   product failure. Keyboard detection now waits through the native animation
   before deciding the software keyboard is absent, preventing the menu fallback
-  from toggling off a keyboard that appeared just after an early sample.
+  from toggling off a keyboard that appeared just after an early sample. If the
+  exact menu click and physical retap still leave no native keyboard after that
+  bounded window, the adapter sends the equivalent `Cmd-K` only to an explicitly
+  frontmost Simulator process and performs one final retap/check.
 - Added reusable project skill guidance for constructing protected static-site
   browser/Android/iOS acceptance journeys and for sending/receiving controlled
   OTP mail through the existing Yandex Mail Trigger boundary without exposing

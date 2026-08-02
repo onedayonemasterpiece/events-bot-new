@@ -41,6 +41,10 @@ instead of copying it.
 - Poll keyboard presence through a bounded animation window after the physical
   tap. A single early `false` can race the keyboard animation; immediately
   toggling at that point may turn off the keyboard that was still appearing.
+- If an exact menu click plus physical retap still leaves no keyboard after the
+  second bounded check, the equivalent shortcut may be sent only after making
+  the Simulator process explicitly frontmost. Retap once and require native
+  keyboard evidence; never infer success from the shortcut itself.
 - On a fresh Simulator, detect and close only the exact allowlisted Safari
   first-run prompt before journey interaction. Do not use a generic alert
   accepter: unrelated permission/security dialogs must still fail visibly.

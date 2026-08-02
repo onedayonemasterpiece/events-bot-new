@@ -22,6 +22,8 @@ test('Appium adapter uses real browser capabilities and ordinary digit input wit
   assert.match(source, /execFileAsync\('osascript'/u);
   assert.match(source, /Toggle Software Keyboard/u);
   assert.match(source, /menu bar item "I\/O"/u);
+  assert.match(source, /toggleSimulatorSoftwareKeyboardShortcut/u);
+  assert.match(source, /keystroke "k" using command down/u);
   assert.match(source, /sensitiveInputs\.includes\(document\.activeElement\).*document\.activeElement\.blur/u);
   assert.match(source, /Promise\.all\(\[\s*send\.click\(\),\s*driver\.keys\('\\uE007'\)/u);
   assert.match(source, /if \(platform === 'ios'\) await driver\.pause\(200\)/u);
