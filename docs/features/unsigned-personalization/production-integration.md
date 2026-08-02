@@ -464,6 +464,10 @@ Route selection follows these rules:
   they do not themselves generate background traffic and never gate a request;
 - network/body/decode failure opens a per-route circuit breaker. Initial
   quarantine targets are 30/60/120/300 seconds with one half-open probe;
+- disposable telemetry may retry or drop, but neither its success nor failure
+  refreshes, invalidates or quarantines capability route health. A best-effort
+  observer must never consume the last healthy route needed by a product
+  command such as focus-group registration;
 - compact last-known-good hints are persisted across pages with contract
   version and expiry. They contain no PII, tokens, bodies or full URLs and are
   hints, not proof for another browser/WebView context.

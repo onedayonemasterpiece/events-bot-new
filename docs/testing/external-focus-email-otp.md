@@ -42,6 +42,11 @@ scan emitted text assets for the E2E injector sentinel. The profile is passed
 to the protected workflow as `fault_profile`; a mismatch between workflow and
 `preview-build.json` fails before email issuance.
 
+Disposable auth/client telemetry shares the data capability only for dispatch;
+its result must not mutate route health. The direct-unreachable acceptance
+specifically guards that failed telemetry cannot quarantine the relay selected
+by `transport_probe_v1` before participant registration.
+
 The profiles `client_yandex_relay_unreachable` and
 `both_client_routes_unreachable` are already reserved in the closed registry;
 their terminal product journeys follow after the direct-unreachable relay

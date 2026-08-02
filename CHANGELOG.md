@@ -14,6 +14,10 @@
   the exact allowlisted OTP Subject as canonical and visible body as fallback. Duplicate
   asset cancellations and unavailable best-effort client-outcome telemetry are
   now classified without hiding failures of the product OTP operations.
+- Fixed direct-transport outage onboarding where failed best-effort telemetry
+  quarantined both data routes after OTP verify and left participant
+  registration at `no_route`. Disposable telemetry no longer mutates shared
+  capability route health; product registration retains the probed relay.
 
 - Changed iOS Safari OTP preflight to create a native-first Safari session,
   enable XCUITest `respectSystemAlerts`, close the bounded first-run sheet, and
