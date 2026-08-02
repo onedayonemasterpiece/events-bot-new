@@ -421,10 +421,19 @@ site/tests/pwa-capabilities-lab.test.mjs         # минимальный source
   production-навигации;
 - `site/src/lib/pwaCapabilitiesLab.js` — calendar/ICS, notification/push probes,
   IndexedDB/Cache Storage, Web Share/Clipboard, diagnostics и единый журнал;
-- `site/src/pages/lab/pwa-capabilities/sw.js.ts` — отдельный worker со scope
-  `/lab/pwa-capabilities/`;
+- `site/src/pages/lab/pwa-capabilities/sw.js.ts` — отдельный worker со
+  стандартным directory scope фактического prefixed lab-каталога;
+- `site/src/pages/lab/pwa-capabilities/manifest.webmanifest.ts` — отдельная
+  lab identity, `start_url` и scope; root manifest не используется;
 - `site/tests/pwa-capabilities-lab.test.mjs` — минимальный contract для ICS,
-  Google Calendar URL, 30 demo-card DTO, noindex и lab-scoped worker.
+  Google Calendar URL, 30 demo-card DTO, noindex, manifest и base-aware
+  lab-scoped worker.
+
+Все browser runtime URLs строятся от Astro base: preview
+`/<preview-id>/lab/pwa-capabilities/` регистрирует worker из своего каталога,
+показывает notification icons, открывает notification click target и кэширует
+изображения только по URL с тем же preview prefix. Worker использует стандартный
+directory scope и не зависит от root-only `Service-Worker-Allowed`.
 
 Проверки из `site/`:
 
@@ -437,6 +446,19 @@ npm run build
 `/lab/pwa-capabilities/index.html` и `/lab/pwa-capabilities/sw.js`. Root manifest,
 root service worker, sitemap, global navigation, Auth/Supabase и release gates не менялись.
 Ручная проверка Android/target-приложений остаётся отдельным acceptance-шагом из раздела 9.
+
+Для внешнего Android-теста используется только versioned preview-контур:
+
+```bash
+PREVIEW_BUILD_ID=preview-pwa-capabilities-<short-sha> npm run build:preview
+PREVIEW_BUILD_ID=preview-pwa-capabilities-<short-sha> npm run test:pwa-capabilities-lab
+PREVIEW_BUILD_ID=preview-pwa-capabilities-<short-sha> npm run deploy:preview
+```
+
+Deploy повторно выставляет для lab manifest
+`application/manifest+json; charset=utf-8`, а для lab worker —
+`application/javascript; charset=utf-8` и
+`no-cache, no-store, must-revalidate`.
 
 ## 9. Ручная Android-матрица
 

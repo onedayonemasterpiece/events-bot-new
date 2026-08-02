@@ -107,6 +107,29 @@ if (existsSync(pwaManifest)) {
   ], { env: awsEnv, stdio: 'inherit' });
   if (put.status !== 0) process.exit(put.status || 1);
 }
+const labDir = join(sourceDir, 'lab', 'pwa-capabilities');
+const labManifest = join(labDir, 'manifest.webmanifest');
+if (existsSync(labManifest)) {
+  const rel = labManifest.slice(sourceDir.length + 1);
+  const put = spawnSync('aws', [
+    '--endpoint-url', endpoint, 's3', 'cp', labManifest, `s3://${bucket}/${buildId}/${rel}`,
+    '--content-type', 'application/manifest+json; charset=utf-8',
+    '--cache-control', 'public, max-age=300, must-revalidate',
+    '--no-progress', ...dryRunArgs,
+  ], { env: awsEnv, stdio: 'inherit' });
+  if (put.status !== 0) process.exit(put.status || 1);
+}
+const labWorker = join(labDir, 'sw.js');
+if (existsSync(labWorker)) {
+  const rel = labWorker.slice(sourceDir.length + 1);
+  const put = spawnSync('aws', [
+    '--endpoint-url', endpoint, 's3', 'cp', labWorker, `s3://${bucket}/${buildId}/${rel}`,
+    '--content-type', 'application/javascript; charset=utf-8',
+    '--cache-control', 'no-cache, no-store, must-revalidate',
+    '--no-progress', ...dryRunArgs,
+  ], { env: awsEnv, stdio: 'inherit' });
+  if (put.status !== 0) process.exit(put.status || 1);
+}
 // Ensure calendar endpoints have the right metadata in one bounded AWS process.
 // Spawning one SDK process per event makes large previews exceed the launcher
 // lifetime even though every destination is the same accepted prefix.
@@ -138,6 +161,25 @@ if (existsSync(pwaManifest)) {
     verifyTargets.push([
       `${publicBase}/${buildId}/assets/pwa/announcements-${size}.png`,
       `PWA ${size} icon`,
+      'image/png',
+    ]);
+  }
+}
+if (existsSync(labManifest) && existsSync(labWorker)) {
+  const labPublicUrl = `${publicBase}/${buildId}/lab/pwa-capabilities/`;
+  verifyTargets.push(
+    [labPublicUrl, 'PWA capabilities lab'],
+    [`${labPublicUrl}manifest.webmanifest`, 'PWA capabilities lab manifest', 'application/manifest+json'],
+    [`${labPublicUrl}sw.js`, 'PWA capabilities lab worker', 'application/javascript'],
+  );
+  for (const asset of [
+    'assets/pwa/announcements-192.png',
+    'assets/pwa/announcements-brand-192.png',
+    'assets/pwa/focus-group-icon.png',
+  ]) {
+    verifyTargets.push([
+      `${publicBase}/${buildId}/${asset}`,
+      `PWA capabilities lab asset ${asset.split('/').pop()}`,
       'image/png',
     ]);
   }

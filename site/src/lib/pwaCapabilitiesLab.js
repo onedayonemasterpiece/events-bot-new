@@ -1,24 +1,34 @@
-const LAB_PATH = '/lab/pwa-capabilities/';
-const LAB_SW_URL = `${LAB_PATH}sw.js`;
 const DB_NAME = 'kenigevents-pwa-capabilities-lab';
 const DB_VERSION = 1;
 const CARD_STORE = 'cards';
-const CACHE_NAME = 'kenigevents-pwa-capabilities-lab-v1';
 const PERIODIC_TAG = 'pwa-capabilities-lab-refresh';
-const IMAGE_URLS = [
-  '/assets/pwa/announcements-192.png',
-  '/assets/pwa/announcements-brand-192.png',
-  '/assets/pwa/focus-group-icon.png',
-];
 
-export function createDemoCards(now = new Date()) {
+export function resolvePwaLabRuntimeConfig(config, locationHref = globalThis.location?.href) {
+  if (!config?.labUrl || !locationHref) throw new Error('Base-aware labUrl не задан.');
+  const labUrl = new URL(config.labUrl, locationHref);
+  if (!labUrl.pathname.endsWith('/')) labUrl.pathname = `${labUrl.pathname}/`;
+  const workerUrl = new URL('./sw.js', labUrl);
+  const scopeUrl = new URL('./', labUrl);
+  const imageUrls = (config.imageUrls || []).map((value) => new URL(value, locationHref).href);
+  if (!imageUrls.length) throw new Error('Base-aware imageUrls не заданы.');
+  return {
+    labUrl,
+    workerUrl,
+    scopeUrl,
+    imageUrls,
+    cacheName: config.cacheName || `kenigevents-pwa-capabilities-lab-${encodeURIComponent(scopeUrl.pathname)}`,
+    vapidPublicKey: config.vapidPublicKey || '',
+  };
+}
+
+export function createDemoCards(now = new Date(), imageUrls = []) {
   return Array.from({ length: 30 }, (_, index) => ({
     id: `pwa-lab-${String(index + 1).padStart(2, '0')}`,
     version: 1,
     title: `Демо-событие ${index + 1}`,
     startsAt: new Date(now.getTime() + (index + 1) * 3_600_000).toISOString(),
     place: index % 2 ? 'Остров Канта' : 'Музейный квартал',
-    imageUrl: IMAGE_URLS[index % IMAGE_URLS.length],
+    imageUrl: imageUrls.length ? imageUrls[index % imageUrls.length] : null,
     generatedAt: now.toISOString(),
     profileKey: 'pwa-lab-demo',
   }));
@@ -166,7 +176,15 @@ function base64UrlToUint8Array(value) {
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
-export function initPwaCapabilitiesLab({ vapidPublicKey = '' } = {}) {
+export function initPwaCapabilitiesLab(config = {}) {
+  const {
+    labUrl,
+    workerUrl,
+    scopeUrl,
+    imageUrls,
+    cacheName,
+    vapidPublicKey,
+  } = resolvePwaLabRuntimeConfig(config, window.location.href);
   const byId = (id) => document.getElementById(id);
   const logElement = byId('result-log');
   const cardsElement = byId('offline-cards');
@@ -236,7 +254,8 @@ export function initPwaCapabilitiesLab({ vapidPublicKey = '' } = {}) {
   async function registerLabWorker() {
     if (!window.isSecureContext) throw new Error('Нужен HTTPS или localhost.');
     if (!('serviceWorker' in navigator)) throw new Error('Service Worker не поддерживается.');
-    const registration = await navigator.serviceWorker.register(LAB_SW_URL, { scope: LAB_PATH });
+    if (workerUrl.origin !== window.location.origin) throw new Error('Lab worker должен быть same-origin.');
+    const registration = await navigator.serviceWorker.register(workerUrl.href);
     await waitForActivation(registration);
     updateDiagnostics();
     return registration;
@@ -290,10 +309,10 @@ export function initPwaCapabilitiesLab({ vapidPublicKey = '' } = {}) {
   async function updateDiagnostics() {
     let registration = null;
     if ('serviceWorker' in navigator) {
-      const candidate = await navigator.serviceWorker.getRegistration(LAB_PATH).catch(() => null);
+      const candidate = await navigator.serviceWorker.getRegistration(labUrl.href).catch(() => null);
       const isLabWorker = candidate
-        && new URL(candidate.scope).pathname === LAB_PATH
-        && Boolean(candidate.active?.scriptURL.includes(LAB_SW_URL));
+        && new URL(candidate.scope).href === scopeUrl.href
+        && new URL(candidate.active?.scriptURL || '', window.location.href).href === workerUrl.href;
       registration = isLabWorker ? candidate : null;
     }
     let fileShare = false;
@@ -335,7 +354,7 @@ export function initPwaCapabilitiesLab({ vapidPublicKey = '' } = {}) {
   const now = new Date();
   byId('event-start').value = formatForInput(new Date(now.getTime() + 2 * 3_600_000), timezone);
   byId('event-end').value = formatForInput(new Date(now.getTime() + 3.5 * 3_600_000), timezone);
-  byId('event-url').value = new URL('/sobytiya/pwa-lab-demo/', window.location.origin).toString();
+  byId('event-url').value = labUrl.href;
 
   guard('google-calendar', async () => {
     const url = createGoogleCalendarUrl(eventFromForm());
@@ -401,7 +420,7 @@ export function initPwaCapabilitiesLab({ vapidPublicKey = '' } = {}) {
     const registration = await registerLabWorker();
     await registration.showNotification('PWA Lab: локальное уведомление', {
       body: 'Показано service worker без remote push.', tag: 'pwa-lab-local',
-      icon: IMAGE_URLS[0], data: { url: LAB_PATH, kind: 'local' },
+      icon: imageUrls[0], data: { url: labUrl.href, kind: 'local' },
     });
     setStatus(notificationStatus, 'Локальное уведомление передано service worker.', 'success');
     log('Local notification', 'success', 'showNotification выполнен');
@@ -440,7 +459,10 @@ export function initPwaCapabilitiesLab({ vapidPublicKey = '' } = {}) {
   guard('clear-worker', async () => {
     if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations();
-      const labRegistrations = registrations.filter((item) => item.scope.endsWith(LAB_PATH) || item.active?.scriptURL.includes(LAB_SW_URL));
+      const labRegistrations = registrations.filter((item) => (
+        new URL(item.scope).href === scopeUrl.href
+        || new URL(item.active?.scriptURL || '', window.location.href).href === workerUrl.href
+      ));
       await Promise.all(labRegistrations.map((item) => item.unregister()));
       log('Lab worker', 'success', `удалено регистраций: ${labRegistrations.length}; root worker не затронут`);
     }
@@ -448,7 +470,7 @@ export function initPwaCapabilitiesLab({ vapidPublicKey = '' } = {}) {
   });
 
   guard('save-cards', async () => {
-    const cards = createDemoCards();
+    const cards = createDemoCards(new Date(), imageUrls);
     await transact('readwrite', (store) => cards.forEach((card) => store.put(card)));
     await readCards(false);
     log('IndexedDB save', 'success', 'сохранено ровно 30 demo-card DTO');
@@ -458,11 +480,11 @@ export function initPwaCapabilitiesLab({ vapidPublicKey = '' } = {}) {
 
   guard('warm-images', async () => {
     if (!('caches' in window)) throw new Error('Cache Storage не поддерживается.');
-    const cache = await caches.open(CACHE_NAME);
-    const results = await Promise.allSettled(IMAGE_URLS.map((url) => cache.add(new Request(url, { cache: 'reload' }))));
+    const cache = await caches.open(cacheName);
+    const results = await Promise.allSettled(imageUrls.map((url) => cache.add(new Request(url, { cache: 'reload' }))));
     const count = results.filter((result) => result.status === 'fulfilled').length;
     if (!count) throw new Error('Не удалось закэшировать ни одного изображения.');
-    log('Cache Storage', count === IMAGE_URLS.length ? 'success' : 'fallback', `прогрето ${count}/${IMAGE_URLS.length} same-origin изображений`);
+    log('Cache Storage', count === imageUrls.length ? 'success' : 'fallback', `прогрето ${count}/${imageUrls.length} same-origin изображений`);
   });
 
   guard('periodic-sync', async () => {
@@ -477,7 +499,7 @@ export function initPwaCapabilitiesLab({ vapidPublicKey = '' } = {}) {
       const request = indexedDB.deleteDatabase(DB_NAME);
       request.onsuccess = resolve; request.onerror = () => reject(request.error); request.onblocked = resolve;
     });
-    if ('caches' in window) await caches.delete(CACHE_NAME);
+    if ('caches' in window) await caches.delete(cacheName);
     renderCards([]);
     setStatus(offlineStatus, 'Lab IndexedDB и cache очищены.', 'success');
     log('Offline clear', 'success', 'lab data удалены; production cache не затронут');
@@ -496,7 +518,7 @@ export function initPwaCapabilitiesLab({ vapidPublicKey = '' } = {}) {
 
   guard('share-image', async () => {
     const event = eventFromForm();
-    const response = await fetch(IMAGE_URLS[1]);
+    const response = await fetch(imageUrls[1] || imageUrls[0]);
     if (!response.ok) throw new Error(`Не удалось получить demo image (${response.status}).`);
     const file = new File([await response.blob()], 'kenigevents-demo.png', { type: 'image/png' });
     if (!navigator.share || !navigator.canShare?.({ files: [file] })) {

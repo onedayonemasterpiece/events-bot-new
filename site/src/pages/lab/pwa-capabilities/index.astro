@@ -1,10 +1,18 @@
 ---
-import { absoluteUrl, SITE_NAME } from '../../../lib/events';
+import { absoluteUrl, SITE_NAME, withBase } from '../../../lib/events';
 
 const title = `PWA capabilities lab | ${SITE_NAME}`;
 const description = 'Изолированная лаборатория web-возможностей календаря, уведомлений, offline storage, Share и Clipboard.';
 const canonicalUrl = absoluteUrl('/lab/pwa-capabilities/');
 const vapidPublicKey = import.meta.env.PUBLIC_PWA_LAB_VAPID_PUBLIC_KEY || '';
+const labUrl = withBase('/lab/pwa-capabilities/');
+const manifestUrl = withBase('/lab/pwa-capabilities/manifest.webmanifest');
+const imageUrls = [
+  withBase('/assets/pwa/announcements-192.png'),
+  withBase('/assets/pwa/announcements-brand-192.png'),
+  withBase('/assets/pwa/focus-group-icon.png'),
+];
+const cacheName = `kenigevents-pwa-capabilities-lab-${encodeURIComponent(labUrl)}`;
 ---
 <!doctype html>
 <html lang="ru">
@@ -14,6 +22,7 @@ const vapidPublicKey = import.meta.env.PUBLIC_PWA_LAB_VAPID_PUBLIC_KEY || '';
     <meta name="robots" content="noindex,nofollow,noarchive" />
     <meta name="description" content={description} />
     <link rel="canonical" href={canonicalUrl} />
+    <link rel="manifest" href={manifestUrl} />
     <title>{title}</title>
   </head>
   <body>
@@ -133,8 +142,8 @@ const vapidPublicKey = import.meta.env.PUBLIC_PWA_LAB_VAPID_PUBLIC_KEY || '';
       </section>
     </main>
 
-    <script define:vars={{ vapidPublicKey }}>
-      window.__PWA_LAB_CONFIG__ = { vapidPublicKey };
+    <script define:vars={{ vapidPublicKey, labUrl, imageUrls, cacheName }}>
+      window.__PWA_LAB_CONFIG__ = { vapidPublicKey, labUrl, imageUrls, cacheName };
     </script>
     <script>
       import { initPwaCapabilitiesLab } from '../../../lib/pwaCapabilitiesLab.js';

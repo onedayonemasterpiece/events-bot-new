@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Changed the isolated PWA capabilities lab to be fully preview-base-aware:
+  its page, assets, default event URL, directory-scoped worker, notification
+  clicks/cache and dedicated lab manifest now remain inside a versioned preview
+  prefix, with exact manifest/worker MIME and cache metadata on preview deploy.
 - Added an isolated noindex `/lab/pwa-capabilities/` Astro lab with Google
   Calendar/ICS/Android-intent probes, a lab-scoped notification and push service
   worker, optional VAPID subscription diagnostics, 30-card IndexedDB/Cache
