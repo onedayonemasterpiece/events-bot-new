@@ -5023,6 +5023,93 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         row["operator_policy_override"] = {"decision": "blocked"}
         self.assertIsNone(mod.external_publication_intake_to_post(row))
 
+    def test_clean_unreviewed_intake_enters_only_normal_scoring_with_provenance(self) -> None:
+        mod = load_module()
+        row = {
+            "external_publication_id": "extpub-clean",
+            "canonical_url": "https://publisher.example/clean",
+            "request_id": "request-7",
+            "input_json_sha256": "a" * 64,
+            "canonical_evidence_urls": ["https://publisher.example/clean"],
+            "intake_at": "2026-08-02T10:00:00+00:00",
+            "normalized_title": "Clean research candidate",
+            "authors": ["Author"],
+            "identity_keys": ["url:https://publisher.example/clean"],
+            "intake_status": "new_intake",
+            "review_status": "unreviewed",
+            "publication_permission": "not_granted",
+            "publication": {"title": "Clean research candidate", "source_domain": "publisher.example"},
+            "source_assessment": {"scope": "external"},
+            "region_relevance": {"summary": "Калининградская область — главная тема"},
+            "policy_classification": {"product_policy_match": True, "hard_exclusion_codes": []},
+            "quality_assessment": {"track": "professional_editorial"},
+            "editorial_pack": {"teaser": "Исследовательский материал о регионе."},
+            "media_and_rights": {},
+            "decision": {
+                "import_status": "ready_for_region_talk_scoring",
+                "downstream_readiness": "candidate_report",
+            },
+        }
+
+        projected = mod.external_publication_intake_to_post(row)
+
+        self.assertIsNotNone(projected)
+        self.assertEqual(projected["platform"], "web")
+        self.assertEqual(projected["external_intake_review_status"], "unreviewed")
+        self.assertEqual(projected["external_intake_publication_permission"], "not_granted")
+        self.assertEqual(projected["request_id"], "request-7")
+        self.assertEqual(projected["input_json_sha256"], "a" * 64)
+        self.assertNotIn("publication_status", projected)
+        self.assertNotIn("publication_candidate_status", projected)
+        self.assertNotIn("llm_confirmed", json.dumps(projected, ensure_ascii=False))
+
+        row["decision"] = {
+            "import_status": "manual_review_required",
+            "downstream_readiness": "manual_review_required",
+        }
+        self.assertIsNone(mod.external_publication_intake_to_post(row))
+
+    def test_current_complete_intake_read_uses_snapshot_mode_and_fails_on_limit_plus_one(self) -> None:
+        mod = load_module()
+        modes = []
+
+        class Row:
+            def __init__(self, pk):
+                self.pk = pk
+                self.payload_json = "{}"
+                self.updated_at = ""
+
+        class Tx:
+            def execute(self, *_args, **_kwargs):
+                return [types.SimpleNamespace(rows=[Row("external_publication_intake_item:a"), Row("external_publication_intake_item:b")])]
+
+        class Session:
+            def prepare(self, query, **_kwargs):
+                return query
+
+            def transaction(self, mode):
+                modes.append(mode)
+                return Tx()
+
+        snapshot_mode = object()
+        class Settings:
+            def with_timeout(self, _value):
+                return self
+
+            def with_operation_timeout(self, _value):
+                return self
+
+        ydb = types.SimpleNamespace(
+            SnapshotReadOnly=lambda: snapshot_mode,
+            StaleReadOnly=lambda: self.fail("stale mode must not be used"),
+            BaseRequestSettings=Settings,
+        )
+        with self.assertRaises(mod.DecisionCriticalYdbReadError):
+            mod.ydb_select_kind_items_current_complete(
+                Session(), ydb, "table", "external_publication_intake_item", limit=1
+            )
+        self.assertEqual(modes, [snapshot_mode])
+
     def test_external_publication_final_verifier_does_not_require_firsthand_visit(self) -> None:
         mod = load_module()
         post = {"content_origin_type": "editorial_publication"}

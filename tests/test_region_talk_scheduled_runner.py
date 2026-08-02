@@ -195,6 +195,70 @@ async def test_reaction_sync_runs_after_orchestrator_before_publication_plan(mon
     assert result["metrics"]["reaction_candidate_projections_changed"] == 2
 
 
+@pytest.mark.asyncio
+async def test_failed_reaction_sync_preserves_existing_plan_and_exposes_new_intake(monkeypatch, tmp_path: Path) -> None:
+    env = complete_env(tmp_path)
+    env.update({
+        "REGION_TALK_EXTERNAL_RESEARCH_ENABLED": "1",
+        "REGION_TALK_REACTION_SYNC_ENABLED": "1",
+        "REGION_TALK_PUBLICATION_PLAN_ENABLED": "1",
+    })
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    sync_script = tmp_path / "region_talk_reaction_sync.py"
+    sync_script.write_text("# unit\n", encoding="utf-8")
+    monkeypatch.setattr(runner, "reaction_sync_script_path", lambda: sync_script)
+
+    class Process:
+        def __init__(self, payload: dict, returncode: int = 0):
+            self.returncode = returncode
+            self.raw = (json.dumps(payload) + "\n").encode()
+            self.stdout = asyncio.StreamReader()
+            self.stdout.feed_data(self.raw)
+            self.stdout.feed_eof()
+
+        async def wait(self):
+            return self.returncode
+
+        async def communicate(self):
+            return self.raw, None
+
+        def terminate(self):
+            self.returncode = -15
+
+        def kill(self):
+            self.returncode = -9
+
+    processes = [
+        Process({
+            "ok": True, "stage": "external_research", "status": "complete",
+            "ready_for_region_talk_scoring": 2, "new_intake_count": 2,
+            "new_intake_ids": ["ext-b", "ext-a"],
+        }),
+        Process({"ok": True, "cycle": 1, "metrics": {}}),
+        Process({
+            "ok": False, "stage": "operator_reaction_sync",
+            "error": "incomplete reaction page",
+        }, returncode=1),
+    ]
+    launched: list[str] = []
+
+    async def fake_subprocess(*args, **_kwargs):
+        launched.append(str(args[1]))
+        return processes.pop(0)
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_subprocess)
+
+    result = await runner.run_region_talk_scheduled(None, scheduler_run_id="reaction-fail-closed")
+
+    assert not any(path.endswith("region_talk_publication_plan.py") for path in launched)
+    assert result["publication_plan_ok"] is False
+    assert result["publication_plan_status"] == "deferred_reaction_sync_not_current"
+    assert result["publication_plan_counts"] == {}
+    assert result["external_publication_intake_new_count"] == 2
+    assert result["external_publication_intake_new_ids"] == ["ext-a", "ext-b"]
+
+
 def test_cli_preflight_is_redacted(monkeypatch, tmp_path: Path, capsys) -> None:
     env = complete_env(tmp_path)
     for key, value in env.items():

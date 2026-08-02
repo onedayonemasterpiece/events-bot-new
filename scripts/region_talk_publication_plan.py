@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
@@ -45,6 +46,134 @@ DEFAULT_TIMEZONE = "Europe/Kaliningrad"
 DEFAULT_ARTICLE_TIME = "12:00"
 DEFAULT_SOCIAL_TIME = "18:00"
 EVIDENCE_PROJECTION_DRAFT_VERSION = "region_talk_external_evidence_projection_v1"
+
+
+def _read_current_kind_rows_complete(
+    pool: Any,
+    ydb: Any,
+    table: str,
+    kind: str,
+    limit: int,
+) -> list[dict[str, Any]]:
+    """Read a current YDB kind with a limit+1 completeness proof."""
+
+    max_rows = max(1, int(limit))
+    # Unit callers use simple sentinels; production YDB exposes SnapshotReadOnly.
+    if not hasattr(ydb, "SnapshotReadOnly"):
+        rows = read_kind_rows(pool, ydb, table, kind, max_rows + 1)
+        if len(rows) > max_rows:
+            raise RuntimeError(f"publication plan current read truncated: {kind}")
+        return rows
+    if not re.fullmatch(r"[A-Za-z0-9_:-]+", kind):
+        raise ValueError(f"unsafe YDB kind: {kind!r}")
+    prefix = kind + ":"
+    prefix_upper = kind + ";"
+    after = prefix
+    out: list[dict[str, Any]] = []
+    page_size = min(500, max_rows + 1)
+    while len(out) < max_rows + 1:
+        query_text = (
+            "DECLARE $prefix AS Utf8; DECLARE $prefix_upper AS Utf8; DECLARE $after AS Utf8; "
+            f"SELECT pk, payload_json, updated_at FROM `{table}` "
+            "WHERE pk >= $prefix AND pk < $prefix_upper AND pk > $after "
+            f"ORDER BY pk LIMIT {min(page_size, max_rows + 1 - len(out))};"
+        )
+
+        def op(session: Any) -> Any:
+            query = session.prepare(query_text)
+            return session.transaction(ydb.SnapshotReadOnly()).execute(
+                query,
+                {"$prefix": prefix, "$prefix_upper": prefix_upper, "$after": after},
+                commit_tx=True,
+            )
+
+        result_sets = pool.retry_operation_sync(op)
+        batch = result_sets[0].rows if result_sets else []
+        if not batch:
+            break
+        for raw in batch:
+            after = str(raw.pk)
+            payload = raw.payload_json
+            row = json.loads(payload) if isinstance(payload, str) else dict(payload or {})
+            if isinstance(row, dict):
+                row.setdefault("_ydb_pk", after)
+                row.setdefault("_ydb_updated_at", str(getattr(raw, "updated_at", "") or ""))
+                out.append(row)
+        if len(batch) < page_size:
+            break
+    if len(out) > max_rows:
+        raise RuntimeError(f"publication plan current read truncated: {kind}")
+    return out
+
+
+def external_intake_fingerprint(row: dict[str, Any] | None) -> str:
+    if not isinstance(row, dict):
+        return ""
+    payload = {
+        key: row.get(key)
+        for key in (
+            "external_publication_id", "canonical_url", "request_id", "research_request_id",
+            "input_json_sha256", "raw_input_json_sha256", "canonical_evidence_urls",
+            "intake_at", "intake_received_at", "imported_at", "normalized_title", "authors", "identity_keys", "intake_status",
+            "review_status", "publication_permission", "intake_revision",
+            "revision", "decision", "policy_classification",
+            "operator_policy_override", "source_assessment", "publication",
+            "region_relevance", "quality_assessment", "media_and_rights",
+            "editorial_pack", "evidence", "provenance",
+        )
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def current_external_intake_allows_published_candidate(
+    publication: dict[str, Any],
+    intake: dict[str, Any] | None,
+) -> bool:
+    """Fence planning on the exact clean intake used by the normal LLM funnel."""
+
+    if not isinstance(intake, dict):
+        return False
+    decision = intake.get("decision") if isinstance(intake.get("decision"), dict) else {}
+    policy = intake.get("policy_classification") if isinstance(intake.get("policy_classification"), dict) else {}
+    statuses = {
+        str(intake.get("intake_status") or "").lower(),
+        str(intake.get("review_status") or "").lower(),
+        str(decision.get("import_status") or "").lower(),
+    }
+    if statuses & {"manual_review_required", "needs_manual_review", "needs_review", "blocked", "rejected"}:
+        return False
+    return bool(
+        decision.get("import_status") == "ready_for_region_talk_scoring"
+        and decision.get("downstream_readiness") == "candidate_report"
+        and policy.get("product_policy_match") is True
+        and not policy.get("hard_exclusion_codes")
+        and str(publication.get("external_intake_fingerprint") or "")
+        == external_intake_fingerprint(intake)
+    )
+
+
+def _plan_decision_snapshot_fingerprint(
+    publications: list[dict[str, Any]],
+    schedule: list[dict[str, Any]],
+    intakes: list[dict[str, Any]],
+) -> str:
+    def compact(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return sorted(
+            [
+                {key: value for key, value in row.items() if not str(key).startswith("_ydb_")}
+                for row in rows
+            ],
+            key=lambda row: str(row.get("_ydb_pk") or row.get("post_url") or row.get("external_publication_id") or ""),
+        )
+    raw = json.dumps(
+        {"publications": compact(publications), "schedule": compact(schedule), "intakes": compact(intakes)},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def operator_review_approved_clean(row: dict[str, Any]) -> bool:
@@ -269,6 +398,11 @@ def _compact_plan_row(
         "publication_draft_prompt_version": row.get("publication_draft_prompt_version") or "",
         "content_origin_type": row.get("content_origin_type") or "",
         "external_publication_id": row.get("external_publication_id") or "",
+        "external_intake_fingerprint": row.get("external_intake_fingerprint") or "",
+        "external_intake_revision": row.get("external_intake_revision") or "",
+        "plan_reevaluation_required": bool(row.get("plan_reevaluation_required")),
+        "plan_reevaluation_reason": row.get("plan_reevaluation_reason") or "",
+        "prepared_identity_frozen": bool(row.get("prepared_identity_frozen")),
         "quality_score": row.get("quality_score"),
         "rank_score": row.get("rank_score"),
         "max_similarity_to_selected_or_history": row.get("max_similarity_to_selected_or_history"),
@@ -289,6 +423,7 @@ def _compact_plan_row(
         "candidate_url", "post_url", "publication_candidate_id", "external_publication_id",
         "vacancy_reason", "source_title", "publication_title", "content_origin_type",
         "publication_draft_status", "publication_draft_prompt_version",
+        "external_intake_fingerprint", "external_intake_revision", "plan_reevaluation_reason",
     }}
 
 
@@ -333,14 +468,24 @@ VALUES ($pk, $kind, $payload_json, $updated_at);
 def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     ydb, driver, pool, table, publications = read_publication_rows(max(args.scan_limit, 5000))
     try:
-        vectors = read_kind_rows(pool, ydb, table, "text_vector_enrichment_item", args.vector_scan_limit)
-        schedule = read_kind_rows(pool, ydb, table, "publication_schedule_item", args.history_limit)
-        semantic_history = read_kind_rows(pool, ydb, table, "publication_semantic_history_item", args.history_limit)
-        external_intakes = read_kind_rows(
+        # `read_publication_rows` opens the configured driver, but its notifier
+        # compatibility read is stale.  Replace every planning input with a
+        # current, complete SnapshotReadOnly refresh.
+        if hasattr(ydb, "SnapshotReadOnly"):
+            publications = _read_current_kind_rows_complete(
+                pool, ydb, table, "publication_candidate_item", max(args.scan_limit, 5000)
+            )
+        vectors = _read_current_kind_rows_complete(pool, ydb, table, "text_vector_enrichment_item", args.vector_scan_limit)
+        schedule = _read_current_kind_rows_complete(pool, ydb, table, "publication_schedule_item", args.history_limit)
+        semantic_history = _read_current_kind_rows_complete(pool, ydb, table, "publication_semantic_history_item", args.history_limit)
+        external_intakes = _read_current_kind_rows_complete(
             pool, ydb, table, "external_publication_intake_item", args.history_limit
         )
-        logs = read_kind_rows(pool, ydb, table, "publication_log_item", args.history_limit)
-        logs += read_kind_rows(pool, ydb, table, "region_talk_publication_log", args.history_limit)
+        logs = _read_current_kind_rows_complete(pool, ydb, table, "publication_log_item", args.history_limit)
+        logs += _read_current_kind_rows_complete(pool, ydb, table, "region_talk_publication_log", args.history_limit)
+        decision_snapshot_fingerprint = _plan_decision_snapshot_fingerprint(
+            publications, schedule, external_intakes
+        )
         attach_latest_bge_vectors(publications, vectors)
         attach_latest_bge_vectors(schedule, vectors)
         attach_latest_bge_vectors(semantic_history, vectors)
@@ -387,6 +532,14 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
             row = dict(row)
             lane = content_lane(row)
             confirmed_by_lane[lane] += 1
+            external_id = str(row.get("external_publication_id") or "")
+            if external_id and not current_external_intake_allows_published_candidate(
+                row,
+                intake_by_id.get(external_id),
+            ):
+                # A normal Gemini acceptance remains durable evidence, but a
+                # missing/changed/manual intake cannot advance into a release.
+                continue
             # Article intake remains evidence for the staged v8 writer.  The
             # old deterministic teaser/takeaway projection is intentionally
             # no longer promoted to review-ready public copy.
@@ -431,14 +584,59 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
             except (TypeError, ValueError):
                 scheduled_at = None
             elapsed_planned = status == "planned" and scheduled_at is not None and scheduled_at <= local_now
+            matched = _matching_publication(row, by_url, by_id)
+            candidate_id = _canonical_candidate_id(row)
+            candidate_url = canonical_url(row)
+            prepared = bool(
+                status in {"prepared", "reviewed", "approved", "locked"}
+                or row.get("prepared_identity_frozen")
+                or publication_draft_ready(matched)
+            )
+            prepared_changed = False
+            reevaluation_reason = ""
+            if prepared:
+                if not candidate_id and not candidate_url:
+                    prepared_changed = True
+                    reevaluation_reason = "prepared_slot_missing_candidate_identity"
+                elif canonical_url(matched) != candidate_url and _canonical_candidate_id(matched) != candidate_id:
+                    prepared_changed = True
+                    reevaluation_reason = "prepared_candidate_missing_from_current_ledger"
+                elif row.get("external_publication_id") or matched.get("external_publication_id"):
+                    external_id = str(
+                        row.get("external_publication_id")
+                        or matched.get("external_publication_id")
+                        or ""
+                    )
+                    intake = intake_by_id.get(external_id)
+                    captured = str(
+                        row.get("external_intake_fingerprint")
+                        or matched.get("external_intake_fingerprint")
+                        or ""
+                    )
+                    if not captured or captured != external_intake_fingerprint(intake):
+                        prepared_changed = True
+                        reevaluation_reason = "prepared_external_intake_revision_changed_or_missing"
+                if (
+                    str(matched.get("operator_review_decision") or "")
+                    and not operator_review_approved_clean(matched)
+                ):
+                    prepared_changed = True
+                    reevaluation_reason = "prepared_operator_review_revision_changed"
             if (
                 start.isoformat() <= day <= final_day
                 and lane in {"article", "social"}
-                and (status in {"locked", "published"} or elapsed_planned)
+                and (status in {"locked", "published"} or elapsed_planned or prepared)
             ):
-                locked_slots[(day, lane)] = _matching_publication(row, by_url, by_id) | {
-                    "plan_status": "locked" if elapsed_planned else status,
+                locked_slots[(day, lane)] = matched | {
+                    "plan_status": (
+                        "manual_review_required"
+                        if prepared_changed
+                        else "locked" if elapsed_planned else status
+                    ),
                     "content_lane": lane,
+                    "prepared_identity_frozen": True,
+                    "plan_reevaluation_required": prepared_changed,
+                    "plan_reevaluation_reason": reevaluation_reason,
                 }
 
         planned = build_daily_publication_plan(
@@ -507,7 +705,7 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
             payload["updated_at"] = generated_at
             writes.append((pk, "publication_candidate_item", payload))
         for row in compact_rows:
-            if row.get("slot_locked"):
+            if row.get("slot_locked") and not row.get("plan_reevaluation_required"):
                 continue
             writes.append((
                 "publication_schedule_item:" + str(row["plan_slot_id"]),
@@ -545,6 +743,38 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
                 payload,
             ))
 
+        if args.execute:
+            # Final revision fence: do not write a plan built from inputs that
+            # changed during ranking/copy preparation.  The next scheduled
+            # cycle recomputes from the new current snapshot.
+            current_publications = (
+                _read_current_kind_rows_complete(
+                    pool, ydb, table, "publication_candidate_item", max(args.scan_limit, 5000)
+                )
+                if hasattr(ydb, "SnapshotReadOnly")
+                else publications
+            )
+            current_schedule = _read_current_kind_rows_complete(
+                pool, ydb, table, "publication_schedule_item", args.history_limit
+            )
+            current_intakes = _read_current_kind_rows_complete(
+                pool, ydb, table, "external_publication_intake_item", args.history_limit
+            )
+            final_fingerprint = _plan_decision_snapshot_fingerprint(
+                current_publications, current_schedule, current_intakes
+            )
+            if final_fingerprint != decision_snapshot_fingerprint:
+                return {
+                    "ok": False,
+                    "stage": "publication_plan",
+                    "status": "deferred_live_state_changed",
+                    "executed": False,
+                    "planned_ydb_rows": len(writes),
+                    "written_ydb_rows": 0,
+                    "next_action": "recompute_from_current_ydb_on_next_cycle",
+                    "counts": counts,
+                    "rows": compact_rows,
+                }
         written = _upsert_rows(pool, ydb, table, writes) if args.execute else 0
         result = {
             "ok": True,

@@ -2695,7 +2695,11 @@ IMAGE_QUEUE_STATE_FIELDS = [
     "last_image_diag_run_id", "last_image_diag_stage", "last_image_diag_at", "post_id",
     "post_url", "platform_post_key", "source_id", "source_title", "source_url", "post_date",
     "platform", "canonical_source_key", "content_origin_type", "publication_content_type", "publication_language", "external_publication_id",
-    "external_research_quality_score", "source_overview", "diversity_topics", "rights_policy", "media_use_policy", "media_reuse_allowed",
+    "external_research_quality_score", "request_id", "input_json_sha256", "raw_input_json_sha256",
+    "canonical_evidence_urls", "intake_at", "intake_received_at", "imported_at", "normalized_title", "authors", "identity_keys",
+    "external_intake_fingerprint", "external_intake_revision", "external_intake_status",
+    "external_intake_review_status", "external_intake_publication_permission", "external_intake_manual_review_required",
+    "source_overview", "diversity_topics", "rights_policy", "media_use_policy", "media_reuse_allowed",
     "research_policy_classification", "research_decision", "external_research_policy_attestation_version",
     "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
     "source_surface_filter_reason", "monitoring_exclusion_reason",
@@ -2765,7 +2769,11 @@ POST_LIVE_STATE_FIELDS = POST_STATE_FIELDS + [
 CANDIDATE_MEMORY_STATE_FIELDS = [
     "candidate_memory_id", "post_id", "source_id", "source_title", "platform", "post_url", "post_date",
     "canonical_source_key", "content_origin_type", "publication_content_type", "publication_language", "external_publication_id",
-    "external_research_quality_score", "source_overview", "diversity_topics", "rights_policy", "media_use_policy", "media_reuse_allowed",
+    "external_research_quality_score", "request_id", "input_json_sha256", "raw_input_json_sha256",
+    "canonical_evidence_urls", "intake_at", "intake_received_at", "imported_at", "normalized_title", "authors", "identity_keys",
+    "external_intake_fingerprint", "external_intake_revision", "external_intake_status",
+    "external_intake_review_status", "external_intake_publication_permission", "external_intake_manual_review_required",
+    "source_overview", "diversity_topics", "rights_policy", "media_use_policy", "media_reuse_allowed",
     "research_policy_classification", "research_decision", "external_research_policy_attestation_version",
     "platform_post_key", "source_url", "source_scope", "source_geo_class", "source_topic_class",
     "source_quick_class", "source_queue_status", "fetch_status", "source_surface_filter_reason", "monitoring_exclusion_reason",
@@ -2790,7 +2798,11 @@ PUBLICATION_CANDIDATE_STATE_FIELDS = [
     "publication_candidate_id", "publication_goal_id", "publication_rank", "publication_candidate_status",
     "post_id", "post_url", "source_id", "source_title", "source_geo_class", "source_topic_class",
     "platform", "canonical_source_key", "source_url", "content_origin_type", "publication_content_type", "publication_language", "external_publication_id",
-    "external_research_quality_score", "source_overview", "diversity_topics", "rights_policy", "media_use_policy", "media_reuse_allowed",
+    "external_research_quality_score", "request_id", "input_json_sha256", "raw_input_json_sha256",
+    "canonical_evidence_urls", "intake_at", "intake_received_at", "imported_at", "normalized_title", "authors", "identity_keys",
+    "external_intake_fingerprint", "external_intake_revision", "external_intake_status",
+    "external_intake_review_status", "external_intake_publication_permission", "external_intake_manual_review_required",
+    "source_overview", "diversity_topics", "rights_policy", "media_use_policy", "media_reuse_allowed",
     "research_policy_classification", "research_decision", "external_research_policy_attestation_version",
     "post_date", "short_summary", "why_selected", "why_not_selected", "matched_place_names",
     "candidate_score", "publication_score", "visual_score", "text_story_score", "diversity_penalty",
@@ -4777,7 +4789,20 @@ def ydb_bulk_upsert_json_many(
     return written
 
 
-def ydb_select_kind_items(session: Any, ydb: Any, table_path: str, kind: str, *, limit: int = 10000) -> dict[str, dict[str, Any]]:
+class DecisionCriticalYdbReadError(RuntimeError):
+    """A current decision read failed or could not prove completeness."""
+
+
+def ydb_select_kind_items(
+    session: Any,
+    ydb: Any,
+    table_path: str,
+    kind: str,
+    *,
+    limit: int = 10000,
+    current: bool = False,
+    require_complete: bool = False,
+) -> dict[str, dict[str, Any]]:
     max_items = max(1, int(limit))
     page_size = max(1, min(max_items, getenv_int("REGION_TALK_YDB_SELECT_PAGE_SIZE", 200)))
     out: dict[str, dict[str, Any]] = {}
@@ -4795,7 +4820,8 @@ WHERE pk >= $prefix AND pk < $prefix_upper AND pk > $after
 ORDER BY pk
 LIMIT {min(page_size, max_items - len(out))};
 """, settings=settings)
-        result_sets = session.transaction(ydb.StaleReadOnly()).execute(
+        transaction_mode = ydb.SnapshotReadOnly() if current else ydb.StaleReadOnly()
+        result_sets = session.transaction(transaction_mode).execute(
             query,
             {"$prefix": prefix, "$prefix_upper": prefix_upper, "$after": after},
             commit_tx=True,
@@ -4815,7 +4841,32 @@ LIMIT {min(page_size, max_items - len(out))};
             after = pk
         if len(rows) < page_size:
             break
+    if require_complete and len(out) >= max_items:
+        raise DecisionCriticalYdbReadError(
+            f"decision-critical YDB read may be truncated: kind={kind} limit={max_items - 1}"
+        )
     return out
+
+
+def ydb_select_kind_items_current_complete(
+    session: Any,
+    ydb: Any,
+    table_path: str,
+    kind: str,
+    *,
+    limit: int,
+) -> dict[str, dict[str, Any]]:
+    """Strongly read at most ``limit`` rows and prove the kind is complete."""
+
+    return ydb_select_kind_items(
+        session,
+        ydb,
+        table_path,
+        kind,
+        limit=max(1, int(limit)) + 1,
+        current=True,
+        require_complete=True,
+    )
 
 
 def ydb_select_latest_state(session: Any, ydb: Any, table_path: str) -> dict[str, Any]:
@@ -5100,13 +5151,23 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                 comment_link_items = ydb_select_kind_items(session, ydb, table_path, "comment_link_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
                 post_link_items = ydb_select_kind_items(session, ydb, table_path, "post_link_queue_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
                 text_vector_items = ydb_select_kind_items(session, ydb, table_path, "text_vector_enrichment_item", limit=getenv_int("REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS", 20000))
-                external_publication_items = ydb_select_kind_items(
-                    session,
-                    ydb,
-                    table_path,
-                    "external_publication_intake_item",
-                    limit=getenv_int("REGION_TALK_YDB_MAX_EXTERNAL_PUBLICATION_ROWS", 2000),
-                )
+                external_publication_read_status = "ok"
+                try:
+                    external_publication_items = ydb_select_kind_items_current_complete(
+                        session,
+                        ydb,
+                        table_path,
+                        "external_publication_intake_item",
+                        limit=getenv_int("REGION_TALK_YDB_MAX_EXTERNAL_PUBLICATION_ROWS", 2000),
+                    )
+                except Exception as exc:
+                    # Intake is decision-critical and asynchronous.  Never use
+                    # the compact start-of-run snapshot when the current kind
+                    # cannot be read completely.
+                    external_publication_items = {}
+                    external_publication_read_status = (
+                        f"error:{type(exc).__name__}:{str(exc)[:180]}"
+                    )
                 external_publication_source_items = ydb_select_kind_items(
                     session,
                     ydb,
@@ -5263,6 +5324,12 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                                 q[key] = {**q.get(key, {}), **item}
                         data0["external_publication_intake"] = q
                         data0["ydb_row_level_external_publication_items_loaded"] = len(external_publication_items)
+                    # A failed current refresh explicitly clears any legacy
+                    # embedded intake so it cannot advance from stale state.
+                    data0["external_publication_intake_read_status"] = external_publication_read_status
+                    if external_publication_read_status != "ok":
+                        data0["external_publication_intake"] = {}
+                        data0["ydb_row_level_external_publication_items_loaded"] = 0
                     if external_publication_source_items:
                         q = (
                             data0.get("external_publication_sources")
@@ -16648,6 +16715,53 @@ EXTERNAL_PUBLICATION_VECTOR_CONTENT_TYPES = {
     "academic_publication_candidate",
 }
 
+EXTERNAL_PUBLICATION_MANUAL_REVIEW_STATUSES = {
+    "manual_review_required",
+    "needs_manual_review",
+    "needs_review",
+    "blocked",
+    "rejected",
+}
+
+
+def external_publication_intake_fingerprint(row: dict[str, Any] | None) -> str:
+    """Fingerprint the exact intake evidence and routing state used downstream."""
+
+    if not isinstance(row, dict):
+        return ""
+    payload = {
+        key: row.get(key)
+        for key in (
+            "external_publication_id", "canonical_url", "request_id", "research_request_id",
+            "input_json_sha256", "raw_input_json_sha256", "canonical_evidence_urls",
+            "intake_at", "intake_received_at", "imported_at", "normalized_title", "authors", "identity_keys", "intake_status",
+            "review_status", "publication_permission", "intake_revision",
+            "revision", "decision", "policy_classification",
+            "operator_policy_override", "source_assessment", "publication",
+            "region_relevance", "quality_assessment", "media_and_rights",
+            "editorial_pack", "evidence", "provenance",
+        )
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def external_publication_intake_requires_manual_review(row: dict[str, Any] | None) -> bool:
+    """Return only explicit intake workflow blocks; never infer semantics."""
+
+    if not isinstance(row, dict):
+        return True
+    decision = row.get("decision") if isinstance(row.get("decision"), dict) else {}
+    explicit = {
+        str(row.get("intake_status") or "").strip().lower(),
+        str(row.get("review_status") or "").strip().lower(),
+        str(decision.get("import_status") or "").strip().lower(),
+        str(decision.get("downstream_readiness") or "").strip().lower(),
+    }
+    return bool(explicit & EXTERNAL_PUBLICATION_MANUAL_REVIEW_STATUSES) or _rt_bool(
+        row.get("manual_review_required")
+    )
+
 
 def external_publication_quality_score(row: dict[str, Any]) -> float:
     """Normalize the seven research diagnostics without inventing a new LLM verdict."""
@@ -16683,6 +16797,7 @@ def external_publication_intake_to_post(row: dict[str, Any]) -> dict[str, Any] |
         and bool(policy.get("product_policy_match"))
         and not hard_exclusions
         and str(override.get("decision") or "").lower() not in {"blocked", "reject", "excluded"}
+        and not external_publication_intake_requires_manual_review(row)
     )
     if not ready:
         return None
@@ -16741,6 +16856,25 @@ def external_publication_intake_to_post(row: dict[str, Any]) -> dict[str, Any] |
         "quality_assessment": quality,
         "external_research_quality_score": external_publication_quality_score(row),
         "external_publication_id": external_id,
+        "request_id": row.get("request_id") or row.get("research_request_id") or "",
+        "input_json_sha256": row.get("input_json_sha256") or row.get("raw_input_json_sha256") or "",
+        "raw_input_json_sha256": row.get("raw_input_json_sha256") or row.get("input_json_sha256") or "",
+        "canonical_evidence_urls": row.get("canonical_evidence_urls") or [],
+        "intake_at": row.get("intake_at") or row.get("intake_received_at") or row.get("imported_at") or "",
+        "intake_received_at": row.get("intake_received_at") or row.get("intake_at") or "",
+        "imported_at": row.get("imported_at") or row.get("intake_at") or "",
+        "normalized_title": row.get("normalized_title") or publication.get("title") or "",
+        "authors": row.get("authors") or publication.get("authors") or [],
+        "identity_keys": row.get("identity_keys") or [],
+        "external_intake_fingerprint": external_publication_intake_fingerprint(row),
+        "external_intake_revision": row.get("intake_revision") or row.get("revision") or "",
+        "external_intake_status": row.get("intake_status") or "",
+        "external_intake_review_status": row.get("review_status") or "",
+        # Arrival is routing evidence only.  This value is deliberately
+        # carried through the normal funnel and never interpreted as an LLM or
+        # publication approval.
+        "external_intake_publication_permission": row.get("publication_permission") or "not_granted",
+        "external_intake_manual_review_required": "false",
         "external_research_request_id": row.get("research_request_id") or "",
         "text": text,
         "text_excerpt": re.sub(r"\s+", " ", text)[:500],
@@ -16775,6 +16909,67 @@ def external_publication_posts_from_state(previous_state: dict[str, Any]) -> lis
         [row for row in projected if row],
         key=lambda row: (-float(row.get("external_research_quality_score") or 0), str(row.get("post_url") or "")),
     )
+
+
+def refresh_external_publication_intake_for_selection(
+    previous_state: dict[str, Any],
+    state_meta: dict[str, Any] | None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Reread current intake immediately before one scoring selection cycle.
+
+    CandidateReport acquisition can run for many minutes.  The intake rows it
+    loaded at startup are therefore not a valid decision snapshot.  A failed,
+    incomplete, or truncated narrow refresh clears this lane while leaving
+    ordinary Telegram/VK acquisition available.
+    """
+
+    meta = dict(state_meta or {})
+    state = dict(previous_state or {})
+    if str(meta.get("state_backend") or "") != "ydb" or (
+        os.getenv("REGION_TALK_YDB_STATE_SNAPSHOT_FILE") or ""
+    ).strip():
+        return state, meta
+    limit = getenv_int("REGION_TALK_YDB_MAX_EXTERNAL_PUBLICATION_ROWS", 2000)
+    driver = None
+    try:
+        ydb, driver, cfg = ydb_connect()
+        pool = ydb.SessionPool(driver)
+        table = ydb_kv_table_path(cfg)
+
+        def read(session: Any) -> dict[str, dict[str, Any]]:
+            return ydb_select_kind_items_current_complete(
+                session,
+                ydb,
+                table,
+                "external_publication_intake_item",
+                limit=limit,
+            )
+
+        rows = pool.retry_operation_sync(read)
+        intake: dict[str, dict[str, Any]] = {}
+        for pk, item in rows.items():
+            key = str(
+                item.get("external_publication_id")
+                or pk.replace("external_publication_intake_item:", "")
+            ).strip()
+            if key:
+                intake[key] = dict(item)
+        state["external_publication_intake"] = intake
+        state["external_publication_intake_read_status"] = "ok"
+        meta["external_publication_selection_refresh_status"] = "ok"
+        meta["external_publication_selection_refresh_rows"] = len(intake)
+    except Exception as exc:
+        state["external_publication_intake"] = {}
+        state["external_publication_intake_read_status"] = "failed_closed"
+        meta["external_publication_selection_refresh_status"] = "failed_closed"
+        meta["external_publication_selection_refresh_rows"] = 0
+        meta["external_publication_selection_refresh_error"] = (
+            f"{type(exc).__name__}: {str(exc)[:220]}"
+        )
+    finally:
+        if driver is not None:
+            driver.stop(timeout=5)
+    return state, meta
 
 
 def apply_external_publication_scope_attestation(
@@ -16921,7 +17116,19 @@ def build_report(
         "posts_actionable": len(posts),
         "post_work_reasons_json": json.dumps({"legacy_all_rows": len(posts)}, ensure_ascii=False),
     }
+    previous_state, state_meta = refresh_external_publication_intake_for_selection(
+        previous_state,
+        state_meta,
+    )
     external_publication_posts = external_publication_posts_from_state(previous_state)
+    report_event(
+        "external_publication_intake_selection_refresh",
+        phase="candidate_processing",
+        status=str(state_meta.get("external_publication_selection_refresh_status") or "not_required"),
+        external_publication_intake_rows=int(
+            state_meta.get("external_publication_selection_refresh_rows") or 0
+        ),
+    )
     scoring_pool = external_publication_posts + list(posts)
     if external_publication_posts:
         report_event(

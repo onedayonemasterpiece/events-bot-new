@@ -35,7 +35,7 @@ from scripts.region_talk_goal_notify import (  # noqa: E402
     is_unsent_confirmed_publication,
     ensure_ydb_module,
     load_env,
-    read_kind_rows,
+    read_kind_rows as _stale_read_kind_rows,
     ydb_credentials,
     ydb_endpoint_database,
     ydb_has_direct_credential,
@@ -269,6 +269,7 @@ ORCHESTRATOR_YDB_METRIC_LIMITS = {
     "source_onboarding_evidence_item": 2500,
     "source_onboarding_profile_item": 2500,
     "external_publication_source_item": 2500,
+    "external_publication_intake_item": 2500,
 }
 
 # The vector payload also contains the dense embedding. Loading thousands of
@@ -326,6 +327,50 @@ def _orchestrator_kind_limit(kind: str, requested_limit: int) -> int:
     return max(1, min(max(1, int(requested_limit)), cap))
 
 
+def read_kind_rows(pool: Any, ydb: Any, table: str, kind: str, limit: int) -> list[dict[str, Any]]:
+    """Strongly read current metric rows; callers use limit+1 for completeness."""
+
+    if not re.fullmatch(r"[A-Za-z0-9_:-]+", kind):
+        raise ValueError(f"unsafe YDB kind: {kind!r}")
+    out: list[dict[str, Any]] = []
+    max_items = max(1, int(limit))
+    page_size = max(1, min(500, _env_int("REGION_TALK_YDB_SELECT_PAGE_SIZE", 200), max_items))
+    prefix = kind + ":"
+    prefix_upper = kind + ";"
+    after = prefix
+    while len(out) < max_items:
+        query_text = (
+            "DECLARE $prefix AS Utf8; DECLARE $prefix_upper AS Utf8; DECLARE $after AS Utf8; "
+            f"SELECT pk, payload_json, updated_at FROM `{table}` "
+            "WHERE pk >= $prefix AND pk < $prefix_upper AND pk > $after "
+            f"ORDER BY pk LIMIT {min(page_size, max_items - len(out))};"
+        )
+
+        def op(session: Any) -> Any:
+            query = session.prepare(query_text)
+            return session.transaction(ydb.SnapshotReadOnly()).execute(
+                query,
+                {"$prefix": prefix, "$prefix_upper": prefix_upper, "$after": after},
+                commit_tx=True,
+            )
+
+        result_sets = pool.retry_operation_sync(op)
+        rows = result_sets[0].rows if result_sets else []
+        if not rows:
+            break
+        for raw in rows:
+            after = str(raw.pk)
+            payload = raw.payload_json
+            item = json.loads(payload) if isinstance(payload, str) else dict(payload or {})
+            if isinstance(item, dict):
+                item.setdefault("_ydb_pk", after)
+                item.setdefault("_ydb_updated_at", str(getattr(raw, "updated_at", "") or ""))
+                out.append(item)
+        if len(rows) < page_size:
+            break
+    return out
+
+
 def read_text_vector_metric_rows(pool: Any, ydb: Any, table: str, limit: int) -> list[dict[str, Any]]:
     """Read vector metadata without materializing dense embedding arrays."""
     max_items = max(1, int(limit))
@@ -348,7 +393,7 @@ def read_text_vector_metric_rows(pool: Any, ydb: Any, table: str, limit: int) ->
 
         def op(session: Any) -> Any:
             query = session.prepare(query_text)
-            return session.transaction(ydb.StaleReadOnly()).execute(
+            return session.transaction(ydb.SnapshotReadOnly()).execute(
                 query,
                 {"$prefix": prefix, "$prefix_upper": prefix_upper, "$after": after},
                 commit_tx=True,
@@ -370,6 +415,15 @@ def read_text_vector_metric_rows(pool: Any, ydb: Any, table: str, limit: int) ->
         if len(rows) < page_size:
             break
     return out
+
+
+def ensure_decision_metric_reads_complete(truncated_kinds: list[str]) -> None:
+    """Fail only when asynchronous intake completeness cannot be proven."""
+
+    if "external_publication_intake_item" in truncated_kinds:
+        raise RuntimeError(
+            "decision-critical YDB intake read truncated: external_publication_intake_item"
+        )
 
 
 def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
@@ -3763,6 +3817,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
             "image_frame_score_item",
             "publication_candidate_item",
             "external_publication_source_item",
+            "external_publication_intake_item",
             "region_talk_llm_budget_item",
             "publication_delivery_item",
             "source_onboarding_evidence_item",
@@ -3786,9 +3841,10 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
                 truncated_kinds.append(kind)
                 loaded = loaded[:kind_limit]
             rows_by_kind[kind] = loaded
+        ensure_decision_metric_reads_complete(truncated_kinds)
         latest_query = f"SELECT pk, payload_json, updated_at FROM `{table}` WHERE pk IN ('latest_state', 'latest_business_heartbeat', 'latest_business_heartbeat:bge_m3_enrichment', 'latest_business_heartbeat:image_diagnostic');"
         def read_latest_rows(session: Any) -> dict[str, dict[str, Any]]:
-            result_sets = session.transaction(ydb.StaleReadOnly()).execute(latest_query, commit_tx=True)
+            result_sets = session.transaction(ydb.SnapshotReadOnly()).execute(latest_query, commit_tx=True)
             rows = result_sets[0].rows if result_sets else []
             out: dict[str, dict[str, Any]] = {}
             for row in rows:
@@ -3809,7 +3865,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
                 f"vk_video_url, rutube_url, pipeline_status FROM `{evidence_table}` "
                 f"ORDER BY record_id LIMIT {evidence_limit};"
             )
-            result_sets = session.transaction(ydb.StaleReadOnly()).execute(query, commit_tx=True)
+            result_sets = session.transaction(ydb.SnapshotReadOnly()).execute(query, commit_tx=True)
             rows = result_sets[0].rows if result_sets else []
             return [{
                 "record_id": getattr(row, "record_id", None),
@@ -3836,6 +3892,12 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     images = rows_by_kind["image_queue_item"]
     image_frame_scores = rows_by_kind["image_frame_score_item"]
     publications = rows_by_kind["publication_candidate_item"]
+    external_intakes = rows_by_kind["external_publication_intake_item"]
+    external_intake_ids = sorted({
+        str(row.get("external_publication_id") or "")
+        for row in external_intakes
+        if str(row.get("external_publication_id") or "")
+    })
     llm_budgets = rows_by_kind["region_talk_llm_budget_item"]
     deliveries = rows_by_kind["publication_delivery_item"]
     onboarding_evidence_rows = rows_by_kind["source_onboarding_evidence_item"]
@@ -4255,6 +4317,28 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         **publication_metrics,
         **image_review_lifecycle_metrics,
         "publication_delivery_rows_total": len(deliveries),
+        "external_publication_intake_total": len(external_intakes),
+        "external_publication_intake_ids": external_intake_ids,
+        "external_publication_intake_ready_for_normal_scoring_total": sum(
+            1 for row in external_intakes
+            if str((row.get("decision") if isinstance(row.get("decision"), dict) else {}).get("import_status") or "")
+            == "ready_for_region_talk_scoring"
+            and str(row.get("intake_status") or "") not in {
+                "manual_review_required", "needs_manual_review", "blocked", "rejected"
+            }
+        ),
+        "external_publication_intake_manual_review_total": sum(
+            1 for row in external_intakes
+            if str((row.get("decision") if isinstance(row.get("decision"), dict) else {}).get("import_status") or "")
+            == "manual_review_required"
+            or str(row.get("intake_status") or "") in {
+                "manual_review_required", "needs_manual_review", "blocked", "rejected"
+            }
+        ),
+        "external_publication_intake_permission_not_granted_total": sum(
+            1 for row in external_intakes
+            if str(row.get("publication_permission") or "not_granted") == "not_granted"
+        ),
         "publication_delivery_completed_total": sum(1 for row in deliveries if str(row.get("status") or "") == "delivered"),
         "source_onboarding_evidence_total": len(onboarding_evidence_rows),
         "source_onboarding_profile_total": len(onboarding_profile_rows),
@@ -4704,17 +4788,71 @@ def run_orchestrator_cycle(args: argparse.Namespace, *, allow_yc_fallback: bool,
     if args.stats_message:
         result["stats_message"] = build_orchestrator_stats_message(metrics)
     if will_execute:
-        selected = select_actions_for_execution(
-            actions,
-            execute_ready=bool(args.execute_ready),
-            max_actions=args.max_actions_per_cycle,
-        )
-        result["selected_actions"] = [a.get("action") for a in selected]
-        executions = []
-        for action in selected:
+        # Every action selection gets its own current YDB snapshot.  Remote and
+        # local actions can mutate queues while the cycle is still running, so
+        # selecting four actions from the first snapshot is not safe.
+        selected_names: list[str] = []
+        executions: list[dict[str, Any]] = []
+        selection_snapshots: list[dict[str, Any]] = []
+        selected_action_keys: set[str] = set()
+        previous_intake_ids = {
+            str(value) for value in (metrics.get("external_publication_intake_ids") or [])
+            if str(value)
+        }
+        max_selections = max(1, int(args.max_actions_per_cycle or 1))
+        for selection_index in range(1, max_selections + 1):
+            current_metrics = read_region_talk_queue_metrics(
+                args.limit,
+                bge_sample_limit=args.bge_sample_limit,
+                allow_yc_fallback=allow_yc_fallback,
+            )
+            if kaggle_statuses:
+                current_metrics["kaggle_kernel_statuses"] = kaggle_statuses
+            current_actions = build_decision_plan(
+                current_metrics,
+                target_confirmed=args.target_confirmed,
+                bge_threshold=args.bge_threshold,
+                image_threshold=args.image_threshold,
+                include_main=not args.no_main,
+            )
+            current_actions, current_skips = filter_actions_for_active_kernels(
+                current_actions,
+                kaggle_statuses,
+                block_unverified=not bool(args.allow_unverified_kaggle_status),
+            )
+            current_actions = [
+                action for action in current_actions
+                if str(action.get("action") or "") not in selected_action_keys
+            ]
+            selected = select_actions_for_execution(
+                current_actions,
+                execute_ready=bool(args.execute_ready),
+                max_actions=1,
+            )
+            current_intake_ids = {
+                str(value) for value in (current_metrics.get("external_publication_intake_ids") or [])
+                if str(value)
+            }
+            new_intake_ids = sorted(current_intake_ids - previous_intake_ids)
+            selection_snapshots.append({
+                "selection_index": selection_index,
+                "read_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+                "metrics": current_metrics,
+                "candidate_actions": [str(item.get("action") or "") for item in current_actions],
+                "active_kernel_skips": current_skips,
+                "new_external_publication_intake_ids": new_intake_ids,
+                "new_external_publication_intake_count": len(new_intake_ids),
+            })
+            previous_intake_ids = current_intake_ids
+            if not selected:
+                break
+            action = selected[0]
+            action_name = str(action.get("action") or "")
+            selected_action_keys.add(action_name)
+            selected_names.append(action_name)
             if not action.get("cmd"):
                 continue
-            if str(action.get("action") or "") == "stop":
+            if action_name == "stop":
                 continue
             # In production the scheduler supplies credentials through the
             # process environment and there is intentionally no /app/.env.
@@ -4729,6 +4867,9 @@ def run_orchestrator_cycle(args: argparse.Namespace, *, allow_yc_fallback: bool,
                 action=action,
                 run_id=run_id,
             ))
+        result["metrics"] = dict(selection_snapshots[-1]["metrics"]) if selection_snapshots else metrics
+        result["selection_metric_snapshots"] = selection_snapshots
+        result["selected_actions"] = selected_names
         result["execution"] = executions
     return result
 
