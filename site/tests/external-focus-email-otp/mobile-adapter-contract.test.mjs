@@ -10,6 +10,11 @@ test('Appium adapter uses real browser capabilities and ordinary digit input wit
   assert.match(source, /browserName: 'Safari'/u);
   assert.match(source, /UiAutomator2/u);
   assert.match(source, /XCUITest/u);
+  assert.match(source, /'appium:nativeWebTap': true/u);
+  assert.match(source, /'appium:connectHardwareKeyboard': false/u);
+  assert.match(source, /'appium:forceSimulatorSoftwareKeyboardPresence': true/u);
+  assert.match(source, /'appium:usePreinstalledWDA': true/u);
+  assert.match(source, /'appium:prebuiltWDAPath': env\.E2E_PREBUILT_WDA_PATH/u);
   assert.equal((source.match(/'wdio:enforceWebDriverClassic': true/gu) || []).length, 2);
   assert.match(source, /connectionRetryTimeout: platform === 'ios' \? 360_000 : 120_000/u);
   assert.match(source, /connectionRetryCount: 0/u);
@@ -48,4 +53,6 @@ test('protected workflow keeps the recipient secret and gates all platforms stri
   assert.equal((source.match(/node-version: '22\.22\.0'/gu) || []).length, 3);
   assert.match(source, /working-directory: site/u);
   assert.match(source, /--allow-insecure uiautomator2:chromedriver_autodownload/u);
+  assert.match(source, /download-wda --/u);
+  assert.match(source, /WebDriverAgentRunner-Runner\.app/u);
 });

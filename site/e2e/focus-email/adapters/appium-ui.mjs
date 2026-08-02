@@ -109,6 +109,10 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     // exercising what an iPhone user actually sees.
     'appium:nativeWebTap': true, 'appium:connectHardwareKeyboard': false,
     'appium:forceSimulatorSoftwareKeyboardPresence': true,
+    ...(env.E2E_PREBUILT_WDA_PATH ? {
+      'appium:usePreinstalledWDA': true,
+      'appium:prebuiltWDAPath': env.E2E_PREBUILT_WDA_PATH,
+    } : {}),
   };
   let driver;
   try {
