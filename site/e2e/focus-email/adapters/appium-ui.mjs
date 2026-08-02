@@ -104,8 +104,8 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     'appium:safariInitialUrl': 'about:blank', 'appium:includeSafariInWebviews': true,
     'appium:showSafariNetworkLog': true,
     // Keep ordinary navigation in WebKit: blanket nativeWebTap can miss
-    // off-screen controls. Critical input focus is calibrated and routed
-    // through XCTest narrowly in focusWithNativeTap below.
+    // off-screen controls. Critical input focus is routed through an exact
+    // native accessibility locator in focusWithNativeTap below.
     'appium:connectHardwareKeyboard': false,
     'appium:forceSimulatorSoftwareKeyboardPresence': true,
     ...(env.E2E_PREBUILT_WDA_PATH ? {
@@ -200,11 +200,32 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
       await element.click();
       return;
     }
-    // XCUITest's strict path uses the calibration obtained in openInvite and
-    // performs a physical screen tap rather than a WebKit synthetic focus.
-    await driver.updateSettings({ nativeWebTapStrict: true });
-    try { await element.click(); }
-    finally { await driver.updateSettings({ nativeWebTapStrict: false }); }
+    // Safari's WebKit click only changes DOM focus and does not reliably open
+    // the software keyboard. Tap the labelled HTML input as the corresponding
+    // XCTest text field instead. This avoids fragile Safari coordinate mapping
+    // and never reads the native hierarchy or the input value.
+    const labels = Object.freeze({
+      [SELECTORS.email]: 'Электронная почта',
+      [SELECTORS.otp]: 'Код из письма',
+    });
+    const label = labels[selector];
+    if (!label) throw new Error(`fail_browser_context:unknown_native_input:${selector}`);
+    const originalContext = await driver.getContext();
+    const contexts = await driver.getContexts();
+    const nativeContext = contexts.find((value) => String(value).toUpperCase() === 'NATIVE_APP');
+    if (!nativeContext) throw new Error(`fail_browser_context:native_context_missing:${selector}`);
+    await driver.switchContext(nativeContext);
+    try {
+      const escapedLabel = label.replaceAll("'", "\\'");
+      const predicate = `type == 'XCUIElementTypeTextField' AND visible == 1 AND (name == '${escapedLabel}' OR label == '${escapedLabel}')`;
+      const matches = await driver.findElements('-ios predicate string', predicate);
+      if (matches.length !== 1) throw new Error(`fail_browser_context:native_input_match_count:${selector}:${matches.length}`);
+      const elementId = matches[0]['element-6066-11e4-a52e-4f735466cecf'] || matches[0].ELEMENT;
+      if (!elementId) throw new Error(`fail_browser_context:native_input_id_missing:${selector}`);
+      await driver.elementClick(elementId);
+    } finally {
+      await driver.switchContext(originalContext);
+    }
   }
 
   async function maskDom() {
@@ -221,11 +242,6 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, eviden
     device,
     async openInvite() {
       await driver.url(target.href); await driver.waitUntil(async () => (await driver.getUrl()).startsWith(target.origin), { timeout: 30_000 });
-      if (platform === 'ios') {
-        await driver.executeScript('mobile: calibrateWebToRealCoordinatesTranslation', []);
-        await driver.waitUntil(async () => (await driver.getUrl()).startsWith(target.origin), { timeout: 30_000 });
-        await driver.waitUntil(async () => await driver.execute(() => document.readyState === 'complete'), { timeout: 30_000 });
-      }
       const userAgent = await driver.execute(() => navigator.userAgent);
       const version = platform === 'android' ? String(userAgent).match(/Chrome\/([^\s]+)/u)?.[1] : String(userAgent).match(/Version\/([^\s]+)/u)?.[1];
       if (version) device.browser_version = version;

@@ -12,6 +12,9 @@
   the API 35 emulator instead of silently falling back to unusable software
   emulation; the permission step operates directly on the runner's existing
   `/dev/kvm` node and does not depend on retriggering udev inside the VM.
+  Mobile Safari input focus now uses the exact labelled XCTest text field,
+  avoiding WebKit-only focus and unreliable Safari coordinate calibration while
+  keeping native field values and hierarchy out of test evidence.
 - Added the first real mobile focus OTP vertical slice: one platform-neutral
   journey now drives existing Chromium, Chrome Android/Appium UiAutomator2 and
   Mobile Safari/Appium XCUITest sequentially, checks native keyboard/viewport

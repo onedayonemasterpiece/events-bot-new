@@ -12,8 +12,10 @@ test('Appium adapter uses real browser capabilities and ordinary digit input wit
   assert.match(source, /XCUITest/u);
   assert.match(source, /'appium:connectHardwareKeyboard': false/u);
   assert.match(source, /'appium:forceSimulatorSoftwareKeyboardPresence': true/u);
-  assert.match(source, /mobile: calibrateWebToRealCoordinatesTranslation/u);
-  assert.match(source, /updateSettings\(\{ nativeWebTapStrict: true \}\)/u);
+  assert.match(source, /findElements\('-ios predicate string', predicate\)/u);
+  assert.match(source, /elementClick\(elementId\)/u);
+  assert.match(source, /XCUIElementTypeTextField/u);
+  assert.doesNotMatch(source, /calibrateWebToRealCoordinatesTranslation|nativeWebTapStrict/u);
   assert.match(source, /scrollIntoView/u);
   assert.match(source, /'appium:usePreinstalledWDA': true/u);
   assert.match(source, /'appium:prebuiltWDAPath': env\.E2E_PREBUILT_WDA_PATH/u);
