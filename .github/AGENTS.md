@@ -10,7 +10,8 @@ follow:
 - `.codex/skills/static-site-autotest/SKILL.md`;
 - `docs/operations/static-site-autotest-strategy.md`;
 - `docs/testing/static-site-autotest-scenarios.v1.yml`;
-- `docs/features/static-site-pages/release-autotest-gates.md`.
+- `docs/features/static-site-pages/release-autotest-gates.md`;
+- `docs/operations/static-site-qa-chatgpt-control-plane.md`.
 
 Workflow structure must reflect scenario/suite/platform, not one workflow file
 per business step. Use reusable workflows or matrix jobs where this reduces
@@ -25,6 +26,27 @@ copying without hiding side effects.
 - macOS/iOS is not used for data-only PRs.
 - Heavy advisory workflows may run asynchronously, but must publish a terminal
   summary and must never be reported as PASS while still running.
+
+## ChatGPT launch control plane
+
+Every implemented static-site scenario must be launchable from ChatGPT without
+asking Codex to change or execute code.
+
+- Keep `workflow_dispatch` for GitHub UI, but do not assume every connector can
+  dispatch a new workflow.
+- Add the strict canonical issue-comment `/qa run` gateway defined in
+  `docs/operations/static-site-qa-chatgpt-control-plane.md` and route it to the
+  same reusable workflow.
+- Validate exact control issue/label, actor repository permission, checked-in
+  scenario/platform allowlist, target origin/path and full repository SHA before
+  checkout or side effects.
+- Never use `eval`, arbitrary refs, shell fragments or secret-bearing comment
+  inputs.
+- Protected real OTP remains behind `external-e2e` approval and global
+  concurrency even when requested from ChatGPT.
+- Reply with accepted/rejected state and run URL/ID, then publish a separate
+  terminal PASS/FAIL/BLOCKED result and safe artifact name.
+- A UI-only `workflow_dispatch` does not close the ChatGPT-launch requirement.
 
 ## Mobile integrity
 
@@ -57,6 +79,8 @@ competing workflow.
 - While one mailbox is shared, browser, Android and iOS real-mail variants are
   sequential or explicitly selected one at a time.
 - Do not automatically run real OTP on every PR or nightly.
+- Connect the scenario to the safe ChatGPT command gateway; the gateway starts
+  the protected workflow but never bypasses Environment review.
 - A retry before any side effect may handle a proven simulator startup flake;
   never blindly retry an ambiguous OTP issuance.
 - A workflow skeleton/configuration test is not mobile acceptance without a
