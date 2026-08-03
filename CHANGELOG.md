@@ -11,6 +11,9 @@
   now prove selected-once and idempotent behavior with OTP/mail counters fixed at
   zero; focus release, Yandex degradation and standard-onboarding contracts are
   synchronized without enabling gated product promises.
+  Session-fixture acceptance now additionally requires exactly one successful
+  same-origin protected REST read with the created Bearer JWT and publishable
+  key, so an omitted, bypassed or failed RLS probe cannot produce a PASS receipt.
 - Added the behavior-preserving P13N-00 boundary and unified page runtime:
   quarantined legacy scoring, typed fail-closed surface policies, one inert
   personalization marker on every eligible HTML route, generated auth/transport/
@@ -18,12 +21,18 @@
   zero network, storage, reorder or handler changes. Standard cards now arbitrate
   a 280 ms single navigation against desktop double-click/mobile double-tap to
   set the existing like state exactly once, including dynamically inserted cards.
+  The same common layout now exposes one typed, script-free inert standard-
+  onboarding `page_end` context while keeping artifact, club and raffle programs
+  disabled and focus-product routes outside that boundary.
 - Added the event question CTA contract and fail-closed VK resolver. Published
   partner posts take precedence only with exact VK-intake owner/post/timestamp
   provenance; partner-looking raw, scheduled or stored URLs fall back to a
   published managed Afisha post and otherwise remain hidden. Event pages render the
   SVGRepo-sourced “Остались вопросы?” block before recommendations, and a live
   managed VK publication schedules one coalesced Smart Update refresh.
+  Partner URLs now require exact VK live-at-import provenance (source type,
+  import time, owner and post id); a raw or merely partner-looking stored URL
+  falls through to the published managed post or to no CTA.
 - Added the inert typed standard-onboarding route-context and `page_end` slot
   marker plus generated inventory enforcement. It adds no runtime behavior and
   keeps artifact, club and raffle programmes explicitly disabled; focus-group
@@ -43,6 +52,10 @@
   of normal-path population scans. Exact database/cost guards remain mandatory;
   legacy broad fallback needs two explicit flags, and scheduler/catch-up/RU
   enablement remain blocked pending the approved server-RU canary.
+  Due work now uses deterministic keyset pages, a generation/queue cursor,
+  serializable owner/token leases and CAS ACK. Partial consumer runs ACK the
+  existing ready generation without replacing its current pointer; only a
+  complete producer input may publish and swap a new generation.
 
 - Restored the production Supabase/focus API Gateways, isolated email triggers
   and bounded Postbox feedback YDB after `yc.iam.reaper` suspended them during

@@ -85,7 +85,7 @@ waves:
       route_inventory_checker: site/scripts/check-personalization-route-inventory.mjs
       source_guard: site/scripts/check-personalization-source-guard.mjs
       common_layout_mount: site/src/layouts/EventLayout.astro
-      route_inventory_result: 384_eligible_0_missing_0_duplicate_0_unclassified
+      route_inventory_result: 392_eligible_0_missing_0_duplicate_0_unclassified
       production_off_browser_characterization: site/tests/personalization-off.playwright.mjs
       production_off_result: network_0_storage_delta_0_reorder_0_handler_adds_0
   - id: P13N-01

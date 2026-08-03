@@ -155,4 +155,46 @@ lanes:
     expected_output: dry-run producer and pointer-last publisher contract
     verification_scope: full_local_no_external_publish
     effort: high
-    status: draft_pr_2_live_adapter_canary_pending
+    status: superseded_by_green_draft_pr_4_default_off_live_canary_pending
+  - id: L1C
+    role: worker
+    requirement_ids: [RYDB]
+    target: exact typed projection parity and atomic due cursor/lease claims
+    depends_on: [L1B]
+    execution_mode: serial_reviewer_followup
+    branch: agent/static-unified/l1c-ydb-projection-lease
+    worktree: removed_after_integration
+    writable_files: [Region Talk CandidateReport YDB projection, read model, tests, schema and incident docs]
+    forbidden_files: [site/src, CHANGELOG.md, docs/routes.yml]
+    expected_output: shared alias parity, due cutoff, deterministic pagination and token-CAS ACK
+    verification_scope: full_local_no_live_ydb
+    effort: high_max_available
+    status: merged_live_enable_blocked
+  - id: L1D
+    role: worker
+    requirement_ids: [RYDB]
+    target: preserve ready generation across bounded consumer pages
+    depends_on: [L1C]
+    execution_mode: serial_reviewer_followup
+    branch: agent/static-unified/l1d-ydb-consumer-lifecycle
+    worktree: removed_after_integration
+    writable_files: [Region Talk CandidateReport consumer lifecycle, tests, schema and incident docs]
+    forbidden_files: [site/src, CHANGELOG.md, docs/routes.yml]
+    expected_output: ACK-only partial consumers and complete-producer-only pointer swap
+    verification_scope: full_local_no_live_ydb
+    effort: high_max_available
+    status: merged_live_enable_blocked
+  - id: L2C
+    role: worker
+    requirement_ids: [R5]
+    target: mandatory protected JWT/RLS session-fixture probe
+    depends_on: [L2B]
+    execution_mode: serial_reviewer_followup
+    branch: agent/static-unified/l2c-auth-protected-probe
+    worktree: removed_after_integration
+    writable_files: [auth session fixture, tests and canonical autotest docs]
+    forbidden_files: [site/src/layouts/EventLayout.astro, CHANGELOG.md, docs/routes.yml]
+    expected_output: no PASS receipt without exactly one successful protected REST GET
+    verification_scope: full_local_no_real_mail
+    effort: high
+    status: merged_hosted_acceptance_pending
