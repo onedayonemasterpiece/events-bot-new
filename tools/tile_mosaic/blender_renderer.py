@@ -342,7 +342,26 @@ def _configure_scene(plan: dict[str, Any], output: Path, engine: str) -> Any:
         scene.cycles.use_denoising = True
         scene.cycles.device = "CPU"
     else:
-        scene.render.engine = "BLENDER_EEVEE_NEXT"
+        # Blender 4.0 exposes EEVEE as ``BLENDER_EEVEE`` while newer releases
+        # renamed the same renderer to ``BLENDER_EEVEE_NEXT``. Probe the RNA
+        # enum instead of coupling the laboratory to one minor Blender line.
+        eevee_engine = None
+        for candidate in ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"):
+            try:
+                scene.render.engine = candidate
+                eevee_engine = candidate
+                break
+            except TypeError:
+                continue
+        if eevee_engine is None:
+            supported = tuple(
+                item.identifier
+                for item in scene.render.bl_rna.properties["engine"].enum_items
+            )
+            raise RuntimeError(
+                "No supported EEVEE render engine is available; "
+                f"Blender reports {supported!r}"
+            )
         samples = int(render.get("samples", 64))
         eevee = getattr(scene, "eevee", None)
         if eevee is not None:
