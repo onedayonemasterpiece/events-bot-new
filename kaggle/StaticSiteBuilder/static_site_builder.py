@@ -941,6 +941,12 @@ def main() -> int:
         install_cmd = ['npm', 'ci', '--no-audit', '--no-fund'] if (SITE_DIR / 'package-lock.json').exists() else ['npm', 'install', '--no-audit', '--no-fund']
         run(install_cmd, cwd=SITE_DIR, env=env)
         profile = str(config.get('profile') or 'preview')
+        repo_sha = str(config.get('repo_sha') or '').strip().lower()
+        if not re.fullmatch(r'[0-9a-f]{40}', repo_sha):
+            raise RuntimeError('static-site build requires a full repo SHA')
+        # Kaggle receives an archive rather than a Git checkout. Preview and
+        # production builders consume the exact runner-bound SHA.
+        env['STATIC_SITE_REPO_SHA'] = repo_sha
         if profile == 'production-candidate':
             status_event('alive', phase='install', status='alive', progress={'phase': 'install', 'progress_percent': 31, 'progress_label': 'установка pinned Chromium для release gate'})
             # Kaggle's CPU image does not include Playwright's Linux shared
@@ -953,7 +959,6 @@ def main() -> int:
         artifacts: list[dict] = []
         result_details: dict = {}
         if profile == 'production-candidate':
-            repo_sha = str(config.get('repo_sha') or '')
             run_id = str(config.get('run_id') or '')
             token = str(config.get('candidate_token') or '')
             if not re.fullmatch(r'[0-9a-f]{40}', repo_sha) or not run_id or not re.fullmatch(r'[A-Za-z0-9_-]{43}', token):

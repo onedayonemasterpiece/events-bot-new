@@ -644,6 +644,9 @@ Contract:
 - the bundle also carries the exact repo-level
   `docs/testing/transport-fault-profiles.v1.yml` contract resolved by preview
   scripts as a sibling of `site/`; staging fails closed if it is missing;
+- preview provenance uses the runner-bound full `STATIC_SITE_REPO_SHA`; the
+  Kaggle archive is not treated as a Git checkout and cannot silently emit a
+  synthetic or short SHA;
 - the kernel extracts the site to `/tmp/kenigevents-static-site`, not read-only `/kaggle/src`;
 - Kaggle CPU currently provides Node 20, while Astro 6 requires Node `>=22.12.0`, so the kernel installs local `node@22.12.0` before build/check;
 - output is intentionally minimal: `<build_id>.tar.gz`, `static_site_build_result.json`, and the kernel log; `node_modules` is not left under `/kaggle/working`;

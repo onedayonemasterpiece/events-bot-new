@@ -12,7 +12,9 @@
   requiring identical collection receipts/evidence and product output.
 - Fixed StaticSiteBuilder Kaggle source packaging to carry the repo-level
   transport-fault profile consumed by preview builds; staging now fails closed
-  instead of starting a remote build with that contract missing.
+  instead of starting a remote build with that contract missing. Preview
+  provenance now uses the full runner-bound repo SHA rather than requiring a
+  `.git` directory inside the Kaggle archive.
 
 - Fixed the Google AI registry after operator confirmation that all six API
   keys belong to different Google Cloud projects: each key now has an

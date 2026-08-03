@@ -376,6 +376,22 @@ def resolve_build_template(value: str | None, build_id: str) -> str | None:
     return resolved
 
 
+def resolve_repo_sha(value: str | None) -> str:
+    configured = str(value or '').strip().lower()
+    if not configured:
+        completed = subprocess.run(
+            ['git', 'rev-parse', 'HEAD'],
+            cwd=str(ROOT),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        configured = completed.stdout.strip().lower()
+    if not re.fullmatch(r'[0-9a-f]{40}', configured):
+        raise ValueError('static-site builder requires a full 40-character repo SHA')
+    return configured
+
+
 def tar_site_source(site_dir: Path, archive_path: Path) -> None:
     def tar_filter(info: tarfile.TarInfo) -> tarfile.TarInfo | None:
         parts = Path(info.name).parts
@@ -1098,6 +1114,7 @@ def main() -> int:
     parser.add_argument('--expected-dataset-ref', default='', help='Durable input dataset identity required for adoption')
     parser.add_argument('--keep-staging', action='store_true')
     args = parser.parse_args()
+    args.repo_sha = resolve_repo_sha(args.repo_sha)
     clock = resolve_build_clock(
         current_date=args.current_date or None,
         current_datetime=args.current_datetime or None,
