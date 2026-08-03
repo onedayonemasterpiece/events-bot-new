@@ -1,0 +1,42 @@
+mode: serial_integrator
+repo: /home/dev/projects/events-bot-new
+base_ref: 67333baf3dd8bb4ea9e0f172f74b9bd32a67761f
+base_branch: agent/static-unified/l1b-ydb-typed-read-model
+integration_branch: agent/static-unified/l1b-ydb-typed-read-model
+global_constraints:
+  - scheduler and catch-up remain disabled
+  - no live YDB reads or writes, deploys, or RU throttle changes
+  - do not modify site/src, CHANGELOG.md, or docs/routes.yml
+  - preserve integrated L1 budget and exact-database guards
+verification_owner: L1B serial integrator
+stop_conditions:
+  - any test path attempts a live YDB connection
+  - compatibility fallback bypasses the L1 cost budget
+  - typed read-model schema cannot prove a bounded primary-key-prefix query
+lanes:
+  - id: L1B
+    role: worker
+    requirement_ids: [R01, R02, R03, R04, R05, R06]
+    target: typed Region Talk work queue and materialized counter read model
+    depends_on: [L1]
+    execution_mode: serial_after_dependency
+    branch: agent/static-unified/l1b-ydb-typed-read-model
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-unified-20260803/l1b-ydb
+    writable_files:
+      - scripts/region_talk_ydb_read_model.py
+      - scripts/region_talk_orchestrator.py
+      - kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py
+      - kaggle/execute_region_talk_candidate_report.py
+      - tests/test_region_talk_ydb_read_model.py
+      - tests/test_region_talk_candidate_report.py
+      - tests/test_region_talk_orchestrator.py
+      - docs/features/region-talk-channel/ydb-schema.md
+      - docs/reports/incidents/INC-2026-08-03-ydb-request-unit-billing.md
+      - .codex/lanes/L1B/RESULTS.md
+    forbidden_files:
+      - site/src
+      - CHANGELOG.md
+      - docs/routes.yml
+    expected_output: committed schema, cutover reader/writer, regression tests, and RESULTS.md
+    verification_scope: full_local
+    status: planned

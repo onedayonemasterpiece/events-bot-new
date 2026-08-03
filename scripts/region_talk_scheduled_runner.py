@@ -317,6 +317,8 @@ async def run_region_talk_scheduled(
         child_env.setdefault("REGION_TALK_YDB_BUDGET_MAX_ROWS_WRITTEN", "1000")
         child_env.setdefault("REGION_TALK_YDB_BUDGET_MAX_BYTES_WRITTEN", str(16 * 1024 * 1024))
         child_env.setdefault("REGION_TALK_YDB_BUDGET_MAX_ESTIMATED_IO_RU", "8000")
+        child_env.setdefault("REGION_TALK_YDB_READ_MODEL_MODE", "required")
+        child_env.setdefault("REGION_TALK_YDB_ALLOW_LEGACY_BROAD_READ_FALLBACK", "0")
         # Human sessions are outside the Region Talk functional pipeline.
         # Strip them even when an operator shell inherited either variable:
         # delivery/discovery may use only their explicitly role-scoped

@@ -3052,6 +3052,67 @@ YDB_POST_LINK_DUE_STATUSES = {
     "", "pending_fetch", "retry_fetch", "fetch_error", "retry_wait_entity_cache",
     "bge_ready_rescore", "fetched",
 }
+YDB_READ_MODEL_SCHEMA_VERSION = "region-talk-ydb-read-model-v1"
+YDB_WORK_QUEUE_SCHEMA_VERSION = "region-talk-ydb-work-queue-v1"
+YDB_READ_MODEL_DECISION_METRICS = (
+    "post_link_queue_exact_ready_total", "post_link_queue_bge_ready_rescore_total",
+    "post_link_queue_source_terminal_cleanup_total", "image_pending_total",
+    "image_scoring_retry_total", "image_contract_rescore_backlog_total",
+    "image_vlm_backlog_total", "image_actionable_work_total",
+    "bge_missing_current_sample_total", "bge_immediate_pair_backlog_total",
+    "finalizer_pending_url_total", "publication_unsent_confirmed_total",
+    "publication_onboarding_pending_unsent_total", "publication_source_evidence_backlog_total",
+)
+
+
+class RegionTalkYdbReadModelUnavailable(RuntimeError):
+    pass
+
+
+def region_talk_ydb_read_model_mode() -> str:
+    mode = str(os.getenv("REGION_TALK_YDB_READ_MODEL_MODE") or "required").strip().lower()
+    if mode not in {"required", "shadow", "legacy"}:
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:invalid_cutover_mode")
+    return mode
+
+
+def region_talk_ydb_legacy_fallback_allowed() -> bool:
+    return (
+        region_talk_ydb_read_model_mode() in {"shadow", "legacy"}
+        and getenv_bool("REGION_TALK_YDB_ALLOW_LEGACY_BROAD_READ_FALLBACK", False)
+    )
+
+
+def region_talk_ydb_read_model_paths(cfg: dict[str, str]) -> tuple[str, str]:
+    root = cfg["database"].rstrip("/")
+    prefix = re.sub(r"[^A-Za-z0-9_]+", "_", str(cfg.get("namespace") or "region_talk_compact")).strip("_")
+    if not prefix:
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:namespace_missing")
+    return root + "/" + prefix + "_work_queue_v1", root + "/" + prefix + "_read_model_v1"
+
+
+def region_talk_ydb_generation(state: dict[str, Any]) -> str:
+    raw = f"{str(state.get('run_id') or '').strip()}\n{str(state.get('updated_at') or '').strip()}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def validate_region_talk_ydb_read_model(payload: Any, *, require_ready: bool = True) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:payload_missing")
+    if payload.get("schema_version") != YDB_READ_MODEL_SCHEMA_VERSION:
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:schema_mismatch")
+    if payload.get("work_queue_schema_version") != YDB_WORK_QUEUE_SCHEMA_VERSION:
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:work_schema_mismatch")
+    if require_ready and payload.get("cutover_state") != "ready":
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:not_ready")
+    if require_ready and payload.get("work_queue_complete") is not True:
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:work_queue_incomplete")
+    if not str(payload.get("generation") or ""):
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:generation_missing")
+    metrics = payload.get("metrics")
+    if not isinstance(metrics, dict) or any(key not in metrics for key in YDB_READ_MODEL_DECISION_METRICS):
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:decision_metrics_incomplete")
+    return payload
 
 
 def region_talk_ydb_cost_snapshot() -> dict[str, Any]:
@@ -3122,6 +3183,7 @@ def ydb_table_plan() -> str:
     return ";".join([
         "region_talk_state_kv(compact)", "region_talk_sources(compact)", "region_talk_processed_posts(compact)",
         "region_talk_image_metrics(compact)", "region_talk_run_metrics(compact)",
+        "region_talk_work_queue_v1(typed,bounded)", "region_talk_read_model_v1(counters)",
     ])
 
 
@@ -3935,6 +3997,380 @@ def ensure_ydb_kv_table(ydb: Any, session: Any, table_path: str) -> None:
         .with_primary_key("pk")
     )
     session.create_table(table_path, desc)
+
+
+def ensure_region_talk_ydb_read_model_tables(
+    session: Any,
+    work_table_path: str,
+    read_model_table_path: str,
+) -> None:
+    """Create v1 projections whose PK order is the read access path."""
+
+    for table_path, ddl in (
+        (work_table_path, f"""CREATE TABLE IF NOT EXISTS `{work_table_path}` (
+  generation Utf8 NOT NULL, queue_name Utf8 NOT NULL, status Utf8 NOT NULL,
+  due_at Utf8 NOT NULL, priority Uint64 NOT NULL, item_key Utf8 NOT NULL,
+  state_pk Utf8, payload_json Json, updated_at Utf8,
+  PRIMARY KEY (generation, queue_name, status, due_at, priority, item_key)
+);"""),
+        (read_model_table_path, f"""CREATE TABLE IF NOT EXISTS `{read_model_table_path}` (
+  model_name Utf8 NOT NULL, schema_version Utf8, generation Utf8,
+  cutover_state Utf8, payload_json Json, updated_at Utf8,
+  PRIMARY KEY (model_name)
+);"""),
+    ):
+        try:
+            session.describe_table(table_path)
+        except Exception:
+            if _ACTIVE_YDB_COST_BUDGET is not None:
+                _ACTIVE_YDB_COST_BUDGET.before_query("candidate.read_model.ensure_schema")
+            session.execute_scheme(ddl)
+
+
+def ydb_select_current_read_model(
+    session: Any,
+    ydb: Any,
+    table_path: str,
+) -> dict[str, Any]:
+    if _ACTIVE_YDB_COST_BUDGET is not None:
+        _ACTIVE_YDB_COST_BUDGET.before_query("candidate.read_model.current")
+    result_sets = session.transaction(ydb.SnapshotReadOnly()).execute(
+        f"SELECT payload_json FROM `{table_path}` WHERE model_name = 'current';",
+        commit_tx=True,
+        settings=ydb_request_settings(ydb),
+    )
+    rows = result_sets[0].rows if result_sets else []
+    if _ACTIVE_YDB_COST_BUDGET is not None:
+        _ACTIVE_YDB_COST_BUDGET.record_read("candidate.read_model.current", rows)
+    if not rows:
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:current_missing")
+    raw = rows[0].payload_json
+    payload = json.loads(raw) if isinstance(raw, str) else dict(raw or {})
+    return validate_region_talk_ydb_read_model(payload)
+
+
+def ydb_select_materialized_work(
+    session: Any,
+    ydb: Any,
+    table_path: str,
+    *,
+    generation: str,
+    queue_names: Iterable[str],
+    limit_per_queue: int,
+) -> list[dict[str, Any]]:
+    """Read bounded pages by the work table's leading primary-key prefix."""
+
+    out: list[dict[str, Any]] = []
+    maximum = max(1, int(limit_per_queue))
+    settings = ydb_request_settings(ydb)
+    for queue_name in queue_names:
+        if not re.fullmatch(r"[a-z_]+", str(queue_name)):
+            raise ValueError("unsafe Region Talk work queue name")
+        query = session.prepare(f"""
+DECLARE $generation AS Utf8;
+DECLARE $queue_name AS Utf8;
+SELECT generation, queue_name, status, due_at, priority, item_key, state_pk, payload_json, updated_at
+FROM `{table_path}`
+WHERE generation = $generation AND queue_name = $queue_name
+ORDER BY generation, queue_name, status, due_at, priority, item_key
+LIMIT {maximum};
+""", settings=settings)
+        if _ACTIVE_YDB_COST_BUDGET is not None:
+            _ACTIVE_YDB_COST_BUDGET.before_query("candidate.read_model.work:" + queue_name)
+        result_sets = session.transaction(ydb.SnapshotReadOnly()).execute(
+            query,
+            {"$generation": generation, "$queue_name": queue_name},
+            commit_tx=True,
+            settings=settings,
+        )
+        rows = result_sets[0].rows if result_sets else []
+        if _ACTIVE_YDB_COST_BUDGET is not None:
+            _ACTIVE_YDB_COST_BUDGET.record_read("candidate.read_model.work:" + queue_name, rows)
+        for row in rows:
+            out.append({
+                "generation": str(row.generation),
+                "queue_name": str(row.queue_name),
+                "status": str(row.status),
+                "due_at": str(row.due_at or ""),
+                "priority": int(row.priority or 0),
+                "item_key": str(row.item_key),
+                "state_pk": str(row.state_pk or ""),
+                "payload_json": getattr(row, "payload_json", "") or "",
+                "updated_at": str(getattr(row, "updated_at", "") or ""),
+            })
+    return out
+
+
+def hydrate_region_talk_state_from_materialized_work(
+    data: dict[str, Any],
+    work_rows: list[dict[str, Any]],
+    state_items: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Hydrate only actionable rows returned by typed pages and point joins."""
+
+    out = dict(data)
+    collections: dict[str, dict[str, Any]] = {
+        "unified_source_queue": {}, "post_link_queue": {},
+        "image_candidate_queue": {}, "candidate_memory": {},
+        "publication_candidate_queue": {}, "processed_posts": {},
+        "text_vector_enrichment": {}, "telegram_entity_cache": {},
+    }
+    for pk, item in state_items.items():
+        if not isinstance(item, dict):
+            continue
+        if pk.startswith("source_queue_item:"):
+            target, key = "unified_source_queue", str(item.get("canonical_source_key") or pk.split(":", 1)[1])
+        elif pk.startswith("post_link_queue_item:"):
+            target, key = "post_link_queue", str(item.get("post_link_queue_id") or item.get("post_url") or pk.split(":", 1)[1])
+        elif pk.startswith("image_queue_item:"):
+            target, key = "image_candidate_queue", str(item.get("image_queue_id") or item.get("post_url") or pk.split(":", 1)[1])
+        elif pk.startswith("candidate_memory_item:"):
+            target, key = "candidate_memory", str(item.get("candidate_memory_id") or item.get("post_id") or item.get("post_url") or pk.split(":", 1)[1])
+            item = {**item, "_row_level_candidate_memory_loaded": "true"}
+        elif pk.startswith("publication_candidate_item:"):
+            target, key = "publication_candidate_queue", str(item.get("publication_candidate_id") or item.get("post_url") or pk.split(":", 1)[1])
+        elif pk.startswith("processed_post_item:"):
+            target, key = "processed_posts", durable_processed_post_key(item) or pk.split(":", 1)[1]
+        elif pk.startswith("text_vector_enrichment_item:"):
+            target, key = "text_vector_enrichment", str(item.get("text_vector_enrichment_id") or item.get("post_id") or pk.split(":", 1)[1])
+        elif pk.startswith("telegram_entity_cache_item:"):
+            target, key = "telegram_entity_cache", str(item.get("entity_cache_key") or item.get("username") or pk.split(":", 1)[1])
+        else:
+            continue
+        if key:
+            collections[target][key] = item
+    for key, value in collections.items():
+        out[key] = value
+    out["posts"] = collections["processed_posts"]
+    out["sources"] = collections["unified_source_queue"]
+    out["region_talk_sources"] = collections["unified_source_queue"]
+    out["ydb_materialized_work_rows_loaded"] = len(work_rows)
+    out["ydb_materialized_state_point_rows_loaded"] = len(state_items)
+    out["ydb_read_path"] = "typed_work_queue_plus_point_join"
+    return out
+
+
+def build_region_talk_ydb_materialized_projection(
+    state: dict[str, Any],
+    *,
+    max_per_queue: int,
+    cutover_state: str = "ready",
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Build the standalone-kernel equivalent of the shared v1 projection."""
+
+    generation = region_talk_ydb_generation(state)
+    maximum = max(1, int(max_per_queue))
+    specs = (
+        ("source", "unified_source_queue", "source_queue_status", {"pending_scan", "needs_rescan_or_retry", "retry", "error"}, ("canonical_source_key", "source_queue_id"), "source_queue_item:"),
+        ("post_link", "post_link_queue", "post_link_status", {"", "pending_fetch", "retry_fetch", "fetch_error", "retry_wait_entity_cache", "bge_ready_rescore"}, ("post_link_queue_id", "post_url", "keyword_hit_post_url"), "post_link_queue_item:"),
+        ("image", "image_candidate_queue", "image_queue_status", {"", "needs_actual_image_fetch", "selected_for_next_image_batch", "scoring_retry", "image_analysis_in_progress", "needs_visual_review"}, ("image_queue_id", "post_url", "post_id"), "image_queue_item:"),
+        ("bge", "candidate_memory", "vector_gate_status", {"vector_defer_wait_bge_m3", "missing_bge_m3_enrichment", "dual_model_vector_enrichment_pending"}, ("candidate_memory_id", "post_id", "post_url"), "candidate_memory_item:"),
+        ("publication", "publication_candidate_queue", "publication_status", {"", "pending", "gemini_accept", "llm_confirmed", "needs_source_evidence", "needs_source_profile", "needs_review"}, ("publication_candidate_id", "post_url", "post_id"), "publication_candidate_item:"),
+    )
+    work_rows: list[dict[str, Any]] = []
+    expected_queue_counts: dict[str, int] = {}
+    for queue_name, collection, status_field, statuses, key_fields, pk_prefix in specs:
+        values = state.get(collection)
+        items = values.values() if isinstance(values, dict) else (values if isinstance(values, list) else [])
+        candidates: list[dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            status = str(item.get(status_field) or item.get("current_stage") or "")
+            if queue_name == "source" and status.startswith("skipped_telegram_unresolved"):
+                pass
+            elif status not in statuses:
+                continue
+            if queue_name == "publication" and str(item.get("sent_to_chat") or "").lower() == "true":
+                continue
+            key = next((str(item.get(field) or "").strip() for field in key_fields if str(item.get(field) or "").strip()), "")
+            if not key:
+                continue
+            priority = 0
+            for field in ("priority", "queue_order", "queue_seq", "image_queue_order", "list_order"):
+                try:
+                    priority = max(0, int(float(item.get(field) or 0)))
+                    if priority:
+                        break
+                except (TypeError, ValueError):
+                    continue
+            due_at = str(item.get("next_fetch_after") or item.get("retry_after") or item.get("next_attempt_after") or item.get("updated_at") or "")
+            candidates.append({
+                "generation": generation, "queue_name": queue_name,
+                "status": status or ("pending_scan" if queue_name == "source" else "pending"),
+                "due_at": due_at, "priority": priority, "item_key": key,
+                "state_pk": pk_prefix + key,
+                "payload_json": json.dumps({
+                    field: item.get(field) for field in (
+                        "canonical_source_key", "post_url", "post_id", "source_id",
+                        "candidate_memory_id", "publication_candidate_id", "image_queue_id",
+                    ) if item.get(field) not in (None, "")
+                }, ensure_ascii=False, sort_keys=True),
+                "updated_at": str(state.get("updated_at") or ""),
+            })
+        expected_queue_counts[queue_name] = len(candidates)
+        work_rows.extend(sorted(candidates, key=lambda row: (row["priority"], row["due_at"], row["item_key"]))[:maximum])
+    queue_counts: dict[str, int] = {}
+    status_counts: dict[tuple[str, str], int] = {}
+    for row in work_rows:
+        queue_counts[row["queue_name"]] = queue_counts.get(row["queue_name"], 0) + 1
+        pair = (row["queue_name"], row["status"])
+        status_counts[pair] = status_counts.get(pair, 0) + 1
+    # The queue is capped, counters are not. Aggregate the full in-memory state
+    # once so the read model never reports a page limit as population truth.
+    def full_rows(name: str) -> list[dict[str, Any]]:
+        value = state.get(name)
+        if isinstance(value, dict):
+            return [row for row in value.values() if isinstance(row, dict)]
+        if isinstance(value, list):
+            return [row for row in value if isinstance(row, dict)]
+        return []
+    post_status_counts: dict[str, int] = {}
+    for item in full_rows("post_link_queue"):
+        status = str(item.get("post_link_status") or item.get("fetch_status") or "pending_fetch")
+        post_status_counts[status] = post_status_counts.get(status, 0) + 1
+    image_status_counts: dict[str, int] = {}
+    for item in full_rows("image_candidate_queue"):
+        status = str(item.get("image_queue_status") or item.get("image_quality_decision") or "needs_actual_image_fetch")
+        image_status_counts[status] = image_status_counts.get(status, 0) + 1
+    bge_total = sum(
+        1 for item in full_rows("candidate_memory")
+        if str(item.get("vector_gate_status") or item.get("text_vector_fusion_status") or item.get("current_stage") or "")
+        in {"vector_defer_wait_bge_m3", "missing_bge_m3_enrichment", "dual_model_vector_enrichment_pending"}
+    )
+    active_publications = [
+        item for item in full_rows("publication_candidate_queue")
+        if str(item.get("sent_to_chat") or "").lower() != "true"
+        and str(item.get("publication_status") or item.get("publication_candidate_status") or "")
+        not in {"rejected", "published", "sent_to_chat", "expired"}
+        and not str(item.get("publication_status") or item.get("publication_candidate_status") or "").startswith("operator_rejected")
+    ]
+    publication_status_counts: dict[str, int] = {}
+    for item in active_publications:
+        status = str(item.get("publication_status") or item.get("publication_candidate_status") or "pending")
+        publication_status_counts[status] = publication_status_counts.get(status, 0) + 1
+    metrics = {}
+    for source in (state.get("all_time_metrics"), state.get("run_funnel_metrics")):
+        if isinstance(source, dict):
+            metrics.update(source)
+    metrics.update({
+        "post_link_queue_exact_ready_total": sum(post_status_counts.get(status, 0) for status in {"pending_fetch", "retry_fetch", "fetch_error", "retry_wait_entity_cache"}),
+        "post_link_queue_bge_ready_rescore_total": post_status_counts.get("bge_ready_rescore", 0),
+        "post_link_queue_source_terminal_cleanup_total": 0,
+        "image_pending_total": sum(image_status_counts.get(status, 0) for status in {"", "needs_actual_image_fetch", "selected_for_next_image_batch"}),
+        "image_scoring_retry_total": image_status_counts.get("scoring_retry", 0),
+        "image_contract_rescore_backlog_total": 0,
+        "image_vlm_backlog_total": image_status_counts.get("needs_visual_review", 0),
+        "bge_missing_current_sample_total": bge_total,
+        "bge_immediate_pair_backlog_total": bge_total,
+        "finalizer_pending_url_total": len(active_publications),
+        "publication_unsent_confirmed_total": sum(publication_status_counts.get(status, 0) for status in {"gemini_accept", "llm_confirmed"}),
+        "publication_onboarding_pending_unsent_total": sum(publication_status_counts.get(status, 0) for status in {"gemini_accept", "needs_source_profile", "needs_review"}),
+        "publication_source_evidence_backlog_total": sum(publication_status_counts.get(status, 0) for status in {"needs_source_evidence", "needs_source_profile"}),
+    })
+    metrics["image_actionable_work_total"] = metrics["image_pending_total"] + metrics["image_scoring_retry_total"] + metrics["image_vlm_backlog_total"]
+    for key in YDB_READ_MODEL_DECISION_METRICS:
+        metrics.setdefault(key, 0)
+    population = lambda name: len(state.get(name) or {}) if isinstance(state.get(name), (dict, list)) else 0
+    previous_population = state.get("ydb_read_model_population_totals")
+    if not isinstance(previous_population, dict):
+        previous_population = {}
+    current_population = {
+        "sources": population("unified_source_queue"),
+        "processed_posts": population("processed_posts") or population("posts"),
+        "candidate_memory": population("candidate_memory"),
+        "images": population("image_candidate_queue"),
+        "publications": population("publication_candidate_queue"),
+        "post_links": population("post_link_queue"),
+    }
+    population_totals = {
+        key: max(int(previous_population.get(key) or 0), value)
+        for key, value in current_population.items()
+    }
+    source_rows = full_rows("unified_source_queue")
+    source_queue_max_seq = max([
+        int(float(row.get("queue_seq") or row.get("queue_order") or 0)) for row in source_rows
+    ] + [int(state.get("ydb_read_model_source_queue_max_seq") or 0)])
+    source_queue_max_order = max([
+        int(float(row.get("queue_order") or 0)) for row in source_rows
+    ] + [int(state.get("ydb_read_model_source_queue_max_order") or 0)])
+    complete = all(queue_counts.get(name, 0) == expected_queue_counts.get(name, 0) for name in expected_queue_counts)
+    read_model = {
+        "schema_version": YDB_READ_MODEL_SCHEMA_VERSION,
+        "work_queue_schema_version": YDB_WORK_QUEUE_SCHEMA_VERSION,
+        "model_name": "current", "cutover_state": cutover_state if complete else "blocked_overflow",
+        "generation": generation, "source_run_id": str(state.get("run_id") or ""),
+        "updated_at": str(state.get("updated_at") or ""),
+        "work_counts": queue_counts, "expected_work_counts": expected_queue_counts,
+        "work_queue_complete": complete, "work_total": len(work_rows),
+        "source_queue_max_seq": source_queue_max_seq,
+        "source_queue_max_order": source_queue_max_order,
+        "population_totals": population_totals,
+        "metrics": metrics,
+    }
+    return work_rows, validate_region_talk_ydb_read_model(
+        read_model,
+        require_ready=cutover_state == "ready",
+    )
+
+
+def write_region_talk_ydb_materialized_projection(
+    driver: Any,
+    session: Any,
+    ydb: Any,
+    work_table_path: str,
+    read_model_table_path: str,
+    state: dict[str, Any],
+    *,
+    max_per_queue: int,
+    cutover_state: str,
+) -> tuple[int, dict[str, Any]]:
+    """Publish generation rows first and the current pointer last."""
+
+    ensure_region_talk_ydb_read_model_tables(session, work_table_path, read_model_table_path)
+    work_rows, read_model = build_region_talk_ydb_materialized_projection(
+        state, max_per_queue=max_per_queue, cutover_state=cutover_state,
+    )
+    if work_rows:
+        columns = (
+            ydb.BulkUpsertColumns()
+            .add_column("generation", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+            .add_column("queue_name", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+            .add_column("status", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+            .add_column("due_at", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+            .add_column("priority", ydb.OptionalType(ydb.PrimitiveType.Uint64))
+            .add_column("item_key", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+            .add_column("state_pk", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+            .add_column("payload_json", ydb.OptionalType(ydb.PrimitiveType.Json))
+            .add_column("updated_at", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+        )
+        chunk_size = max(1, min(200, getenv_int("REGION_TALK_YDB_READ_MODEL_WRITE_CHUNK_SIZE", 100)))
+        for start in range(0, len(work_rows), chunk_size):
+            chunk = work_rows[start:start + chunk_size]
+            if _ACTIVE_YDB_COST_BUDGET is not None:
+                _ACTIVE_YDB_COST_BUDGET.before_query("candidate.read_model.work_upsert")
+                _ACTIVE_YDB_COST_BUDGET.record_write(
+                    "candidate.read_model.work_upsert",
+                    [(row["item_key"], row["queue_name"], row) for row in chunk],
+                )
+            driver.table_client.bulk_upsert(work_table_path, chunk, columns)
+    if _ACTIVE_YDB_COST_BUDGET is not None:
+        _ACTIVE_YDB_COST_BUDGET.before_query("candidate.read_model.publish")
+        _ACTIVE_YDB_COST_BUDGET.record_write("candidate.read_model.publish", [("current", "read_model", read_model)])
+    query = session.prepare(f"""
+DECLARE $schema_version AS Utf8; DECLARE $generation AS Utf8;
+DECLARE $cutover_state AS Utf8; DECLARE $payload_json AS Json; DECLARE $updated_at AS Utf8;
+UPSERT INTO `{read_model_table_path}`
+(model_name, schema_version, generation, cutover_state, payload_json, updated_at)
+VALUES ('current', $schema_version, $generation, $cutover_state, $payload_json, $updated_at);
+""")
+    session.transaction(ydb.SerializableReadWrite()).execute(query, {
+        "$schema_version": YDB_READ_MODEL_SCHEMA_VERSION,
+        "$generation": read_model["generation"], "$cutover_state": read_model["cutover_state"],
+        "$payload_json": json.dumps(read_model, ensure_ascii=False, sort_keys=True),
+        "$updated_at": read_model["updated_at"],
+    }, commit_tx=True)
+    return len(work_rows), read_model
 
 
 
@@ -6026,6 +6462,59 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
             def op(session: Any) -> dict[str, Any]:
                 ensure_ydb_kv_table(ydb, session, table_path)
                 data0 = ydb_select_latest_state(session, ydb, table_path)
+                work_table_path, read_model_table_path = region_talk_ydb_read_model_paths(cfg)
+                try:
+                    read_model = ydb_select_current_read_model(session, ydb, read_model_table_path)
+                    work_rows = ydb_select_materialized_work(
+                        session,
+                        ydb,
+                        work_table_path,
+                        generation=str(read_model["generation"]),
+                        queue_names=("source", "post_link", "image", "bge", "publication"),
+                        limit_per_queue=getenv_int("REGION_TALK_YDB_READ_MODEL_PAGE_LIMIT", 200),
+                    )
+                    state_pks = {str(row.get("state_pk") or "") for row in work_rows if str(row.get("state_pk") or "")}
+                    state_items = ydb_select_pk_items(session, ydb, table_path, state_pks)
+                    # A second bounded lookup brings only dependencies of the
+                    # active rows (source/post/vector/cache), never a kind.
+                    related_pks: set[str] = set()
+                    for item in state_items.values():
+                        source_key = str(item.get("canonical_source_key") or item.get("source_key") or "").strip()
+                        if source_key:
+                            related_pks.add("source_queue_item:" + source_key)
+                        post_key = durable_processed_post_key(item)
+                        if post_key:
+                            related_pks.add("processed_post_item:" + post_key)
+                        for identifier in {
+                            str(item.get("candidate_memory_id") or ""),
+                            str(item.get("text_vector_enrichment_id") or ""),
+                            str(item.get("post_id") or ""),
+                        }:
+                            if identifier:
+                                related_pks.add("candidate_memory_item:" + identifier)
+                                related_pks.add("text_vector_enrichment_item:" + identifier)
+                        username = str(item.get("username") or item.get("recommended_username") or "").strip().lstrip("@").lower()
+                        if username:
+                            related_pks.add("telegram_entity_cache_item:telegram:username:" + username)
+                    related_pks.difference_update(state_items)
+                    if related_pks:
+                        state_items.update(ydb_select_pk_items(session, ydb, table_path, related_pks))
+                    data0 = hydrate_region_talk_state_from_materialized_work(data0, work_rows, state_items)
+                    data0["ydb_read_model_schema_version"] = read_model["schema_version"]
+                    data0["ydb_work_queue_schema_version"] = read_model["work_queue_schema_version"]
+                    data0["ydb_read_model_generation"] = read_model["generation"]
+                    data0["ydb_read_model_population_totals"] = read_model.get("population_totals") or {}
+                    data0["ydb_read_model_source_queue_max_seq"] = int(read_model.get("source_queue_max_seq") or 0)
+                    data0["ydb_read_model_source_queue_max_order"] = int(read_model.get("source_queue_max_order") or 0)
+                    data0["ydb_read_model_metrics"] = read_model.get("metrics") or {}
+                    return data0
+                except RegionTalkYdbBudgetExceeded:
+                    raise
+                except Exception as exc:
+                    if not region_talk_ydb_legacy_fallback_allowed():
+                        raise RegionTalkYdbReadModelUnavailable(
+                            "region_talk_ydb_read_model:required_start_state_unavailable"
+                        ) from exc
                 # Merge row-level queue items written by parallel notebooks (e.g. ImageDiagnostic).
                 image_items = ydb_select_kind_items(session, ydb, table_path, "image_queue_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
                 source_queue_full_read_limit = max(
@@ -6387,7 +6876,20 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
         try:
             ydb, driver, cfg = ydb_connect()
             table_path = ydb_kv_table_path(cfg)
+            work_table_path, read_model_table_path = region_talk_ydb_read_model_paths(cfg)
             compact = compact_region_talk_state_for_ydb(state)
+            # Validate projection completeness before any YDB mutation.  An
+            # overfull queue must not advance latest_state and then publish an
+            # incomplete work generation.
+            projection_max_per_queue = getenv_int("REGION_TALK_YDB_READ_MODEL_MAX_PER_QUEUE", 200)
+            projection_cutover_state = (
+                "ready" if getenv_bool("REGION_TALK_YDB_READ_MODEL_PUBLISH_READY", False) else "shadow"
+            )
+            build_region_talk_ydb_materialized_projection(
+                state,
+                max_per_queue=projection_max_per_queue,
+                cutover_state=projection_cutover_state,
+            )
             checkpoint = compact_region_talk_checkpoint_for_ydb(compact)
             updated_at = str(compact.get("updated_at") or utc_now_iso())
             payload = json.dumps(checkpoint, ensure_ascii=False, sort_keys=True)
@@ -6443,7 +6945,7 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                         if key:
                             row_items.append(("image_queue_item:" + key, "image_queue_item", item))
                 processed_snapshot_items = processed_post_snapshot_row_items(
-                    compact,
+                    state,
                     skip_row_rewrite=skip_row_rewrite,
                 )
                 # New/refetched posts are already written online with run_id,
@@ -6509,12 +7011,24 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                     updated_at,
                     chunk_size=getenv_int("REGION_TALK_YDB_SNAPSHOT_BULK_CHUNK_SIZE", 500),
                 )
+                materialized_rows, materialized_model = write_region_talk_ydb_materialized_projection(
+                    driver,
+                    session,
+                    ydb,
+                    work_table_path,
+                    read_model_table_path,
+                    compact,
+                    max_per_queue=projection_max_per_queue,
+                    cutover_state=projection_cutover_state,
+                )
+                compact["_ydb_materialized_work_rows_written"] = materialized_rows
+                compact["_ydb_read_model_generation"] = materialized_model.get("generation")
                 compact["_ydb_pruned_legacy_queue_payload_rows"] = ydb_prune_legacy_queue_payloads(session, ydb, table_path)
                 compact["_ydb_retention_pruned_rows"] = ydb_prune_compact_retention(session, ydb, table_path)
             pool.retry_operation_sync(op, retry_settings=state_retry_settings)
             driver.stop(timeout=5)
             row_kind_counts = compact.get("_ydb_row_kind_counts_written") or {}
-            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": checkpoint.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_checkpoint_payload_bytes": len(payload.encode("utf-8")), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_retention_pruned_rows": json.dumps(compact.get("_ydb_retention_pruned_rows", {}), ensure_ascii=False, sort_keys=True), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_source_candidates": len(compact.get("source_candidates") or {}), "ydb_compact_source_edges": len(compact.get("source_edges") or {}), "ydb_compact_comment_discovery": len(compact.get("comment_discovery") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_publication_candidate_queue": len(compact.get("publication_candidate_queue") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_processed_post_items_written": compact.get("_ydb_row_level_processed_post_items_written", 0), "ydb_row_level_candidate_memory_items_written": row_kind_counts.get("candidate_memory_item", 0), "ydb_row_level_source_candidate_items_written": row_kind_counts.get("source_candidate_item", 0), "ydb_row_level_source_edge_items_written": row_kind_counts.get("source_edge_item", 0), "ydb_row_level_comment_link_items_written": row_kind_counts.get("comment_link_item", 0), "ydb_row_level_source_queue_items_written": row_kind_counts.get("source_queue_item", 0), "ydb_row_level_image_queue_items_written": row_kind_counts.get("image_queue_item", 0), "ydb_row_level_publication_candidate_items_written": compact.get("_ydb_row_level_publication_candidate_items_written", 0), "ydb_queue_cursor_items_written": row_kind_counts.get("queue_cursor", 0), "ydb_row_level_items_written": compact.get("_ydb_row_level_items_written", 0)}
+            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": checkpoint.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_checkpoint_payload_bytes": len(payload.encode("utf-8")), "ydb_read_model_schema_version": YDB_READ_MODEL_SCHEMA_VERSION, "ydb_work_queue_schema_version": YDB_WORK_QUEUE_SCHEMA_VERSION, "ydb_read_model_generation": compact.get("_ydb_read_model_generation", ""), "ydb_materialized_work_rows_written": compact.get("_ydb_materialized_work_rows_written", 0), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_retention_pruned_rows": json.dumps(compact.get("_ydb_retention_pruned_rows", {}), ensure_ascii=False, sort_keys=True), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_source_candidates": len(compact.get("source_candidates") or {}), "ydb_compact_source_edges": len(compact.get("source_edges") or {}), "ydb_compact_comment_discovery": len(compact.get("comment_discovery") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_publication_candidate_queue": len(compact.get("publication_candidate_queue") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_processed_post_items_written": compact.get("_ydb_row_level_processed_post_items_written", 0), "ydb_row_level_candidate_memory_items_written": row_kind_counts.get("candidate_memory_item", 0), "ydb_row_level_source_candidate_items_written": row_kind_counts.get("source_candidate_item", 0), "ydb_row_level_source_edge_items_written": row_kind_counts.get("source_edge_item", 0), "ydb_row_level_comment_link_items_written": row_kind_counts.get("comment_link_item", 0), "ydb_row_level_source_queue_items_written": row_kind_counts.get("source_queue_item", 0), "ydb_row_level_image_queue_items_written": row_kind_counts.get("image_queue_item", 0), "ydb_row_level_publication_candidate_items_written": compact.get("_ydb_row_level_publication_candidate_items_written", 0), "ydb_queue_cursor_items_written": row_kind_counts.get("queue_cursor", 0), "ydb_row_level_items_written": compact.get("_ydb_row_level_items_written", 0)}
         except Exception as exc:
             return {**meta, "ydb_write_status": "error", "state_write_status": "error", "state_write_error": f"{type(exc).__name__}: {str(exc)[:220]}"}
     try:
@@ -9481,8 +9995,17 @@ def build_unified_source_queue(
         return parsed if parsed > 0 else 0
 
     source_queue_read_truncated = str(previous_state.get("ydb_row_level_source_queue_items_truncated") or "").lower() == "true"
+    materialized_queue_mode = previous_state.get("ydb_read_path") == "typed_work_queue_plus_point_join"
 
     def require_full_queue_read(reason: str) -> None:
+        if materialized_queue_mode:
+            population = previous_state.get("ydb_read_model_population_totals") or {}
+            if int(population.get("sources") or 0) > 0 and int(previous_state.get("ydb_read_model_source_queue_max_seq") or 0) <= 0:
+                raise RuntimeError(
+                    "materialized source queue is missing its authoritative max sequence; "
+                    f"unsafe repair/admission refused ({reason})"
+                )
+            return
         if source_queue_read_truncated or str(previous_state.get("ydb_source_queue_full_read_complete") or "true").lower() == "false":
             raise RuntimeError(
                 "source queue admission sequence requires a full YDB source_queue_item read; "
@@ -9518,8 +10041,14 @@ def build_unified_source_queue(
     queue_seq_missing_repaired = 0
     queue_seq_duplicate_repaired = 0
     used_queue_seqs: set[int] = set()
-    max_queue_seq = max([queue_positive_int(rec.get("queue_seq")) for rec in entries.values()] or [0])
-    max_queue_order = max([queue_positive_int(rec.get("queue_order")) for rec in entries.values()] or [0])
+    max_queue_seq = max(
+        [queue_positive_int(rec.get("queue_seq")) for rec in entries.values()]
+        + [queue_positive_int(previous_state.get("ydb_read_model_source_queue_max_seq"))]
+    )
+    max_queue_order = max(
+        [queue_positive_int(rec.get("queue_order")) for rec in entries.values()]
+        + [queue_positive_int(previous_state.get("ydb_read_model_source_queue_max_order"))]
+    )
     for key, rec in sorted(entries.items(), key=lambda item: (queue_positive_int(item[1].get("queue_order")) or 999999999, item[0])):
         seq = queue_positive_int(rec.get("queue_seq"))
         if seq > 0 and seq not in used_queue_seqs:

@@ -267,6 +267,57 @@ main records as soon as they are selected, discovered, fetched, scored or
 reclassified. Heartbeats remain observability-only and are not sufficient proof
 that a source/post/image/candidate exists in the product state.
 
+### Bounded work/read projection v1
+
+The cost-containment follow-up to
+`INC-2026-08-03-ydb-request-unit-billing` adds two projections next to the
+compact KV ledger:
+
+- `<namespace>_work_queue_v1`, schema
+  `region-talk-ydb-work-queue-v1`, has typed `generation`, `queue_name`,
+  `status`, `due_at`, `priority`, `item_key`, `state_pk`, compact payload and
+  update time. Its primary key begins with `(generation, queue_name, status,
+  due_at, priority, item_key)`, so normal work reads are bounded key-prefix
+  pages. Selected `state_pk` values are hydrated through `AS_TABLE` primary-key
+  point joins into the compact KV ledger.
+- `<namespace>_read_model_v1`, schema
+  `region-talk-ydb-read-model-v1`, has one `model_name=current` pointer. Its
+  payload carries the generation, exact producer-side population/action
+  counters, authoritative source-queue max sequence/order and per-queue work
+  counts.
+
+The producer aggregates counters over the complete state already in memory; it
+never derives population totals from a bounded work page. If an active queue
+exceeds its materialization ceiling, the pointer is
+`blocked_overflow`/incomplete and `required` readers reject it. Generation rows
+are written before the singleton pointer, so readers cannot observe a pointer
+to a partially written generation.
+
+Cutover modes are explicit:
+
+- `REGION_TALK_YDB_READ_MODEL_MODE=required` (autonomous default) accepts only
+  a complete `ready` v1 model and never performs historical kind scans;
+- `shadow` and `legacy` do not authorize a broad read by themselves;
+  compatibility also requires
+  `REGION_TALK_YDB_ALLOW_LEGACY_BROAD_READ_FALLBACK=1`, and the L1 query/row/
+  byte/I/O-RU budget still aborts a 20k population;
+- CandidateReport publishes only `shadow` by default. A `ready` pointer also
+  requires `REGION_TALK_YDB_READ_MODEL_PUBLISH_READY=1`, complete work counts
+  and a separately reviewed writer-coverage/canary gate.
+
+In `required` mode CandidateReport start state is the compact checkpoint plus
+typed work pages (default 200 per queue) and referenced primary-key joins. The
+orchestrator reads the single counter pointer. Neither path calls the old
+5k/20k kind readers. `scripts/region_talk_ydb_read_model_cutover.py` renders DDL
+and a generation-first/pointer-last plan from a trusted full-state export; it
+has no live-write mode.
+
+This slice does **not** authorize autonomous use. BGE, ImageDiagnostic and
+publication-finalizer writer coverage, exact server-side RU measurement,
+generation retention and a manually approved bounded canary remain release
+gates. Scheduling and YDB throttling remain at their incident containment
+values.
+
 ### Source-profile recovery row kinds
 
 The bounded source-profile path uses stable row-level projections in the same

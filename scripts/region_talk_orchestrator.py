@@ -48,6 +48,12 @@ from scripts.region_talk_ydb_cost import (  # noqa: E402
     payload_size_bytes,
     validate_expected_database,
 )
+from scripts.region_talk_ydb_read_model import (  # noqa: E402
+    YdbReadModelUnavailable,
+    legacy_fallback_allowed,
+    read_current_model,
+    table_paths as ydb_read_model_table_paths,
+)
 
 
 ACTIVE_KERNEL_STATUSES = {"RUNNING", "PENDING", "QUEUED", "INITIALIZING"}
@@ -88,6 +94,9 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_YDB_BUDGET_MAX_BYTES_WRITTEN": str(16 * 1024 * 1024),
     "REGION_TALK_YDB_BUDGET_MAX_ESTIMATED_IO_RU": "8000",
     "REGION_TALK_YDB_DUE_PAGE_SCAN_MAX_ROWS": "200",
+    "REGION_TALK_YDB_READ_MODEL_MODE": "required",
+    "REGION_TALK_YDB_ALLOW_LEGACY_BROAD_READ_FALLBACK": "0",
+    "REGION_TALK_YDB_READ_MODEL_PAGE_LIMIT": "200",
     "REGION_TALK_TEXT_EMBEDDING_MODEL_IDS": "intfloat/multilingual-e5-base",
     "REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS": "0",
     "REGION_TALK_EXTERNAL_BGE_M3_FUSION_ENABLED": "1",
@@ -3866,6 +3875,35 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     )
     pool = ydb.SessionPool(driver)
     table = ydb_table_path(database)
+    namespace = (os.getenv("REGION_TALK_YDB_NAMESPACE") or "region_talk_compact").strip()
+    _work_table, read_model_table = ydb_read_model_table_paths(database, namespace)
+    try:
+        read_model = read_current_model(pool, ydb, read_model_table, budget=budget)
+        metrics = dict(read_model.get("metrics") or {})
+        metrics.update({
+            "ydb_read_path": "materialized_read_model",
+            "ydb_read_model_schema_version": read_model.get("schema_version"),
+            "ydb_work_queue_schema_version": read_model.get("work_queue_schema_version"),
+            "ydb_read_model_generation": read_model.get("generation"),
+            "ydb_read_model_updated_at": read_model.get("updated_at"),
+            "ydb_read_model_population_totals": read_model.get("population_totals") or {},
+            "ydb_read_model_work_counts": read_model.get("work_counts") or {},
+            "ydb_cost_budget": budget.snapshot(),
+        })
+        driver.stop()
+        return with_canonical_metric_aliases(metrics)
+    except YdbCostBudgetExceeded:
+        driver.stop()
+        raise
+    except Exception as exc:
+        if not legacy_fallback_allowed():
+            driver.stop()
+            raise YdbReadModelUnavailable(
+                "region_talk_ydb_read_model:required_observability_unavailable"
+            ) from exc
+        # Explicit compatibility mode proceeds into the historical reader.
+        # L1's same per-cycle budget remains active, so this path fails closed
+        # as soon as a large population is encountered.
     external_blogger_evidence_rows: list[dict[str, Any]] = []
     external_blogger_evidence_read_ok = False
     try:
