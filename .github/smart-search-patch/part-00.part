@@ -118,30 +118,3 @@
        E2E_EXPECTED_REPO_SHA: ${{ inputs.expected_repo_sha }}
        E2E_RUN_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
        E2E_EVIDENCE_DIR: artifacts/external-focus-email-otp-evidence-ios-${{ github.run_id }}-${{ github.run_attempt }}
-@@ -297,7 +305,7 @@
-         if: ${{ always() && hashFiles('site/artifacts/external-focus-email-otp-evidence-ios-*/.redaction-ok') != '' }}
-         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-         with:
--          name: static-site-qa-focus-otp-ios-${{ github.run_id }}-${{ github.run_attempt }}
-+          name: static-site-qa-${{ inputs.scenario }}-ios-${{ github.run_id }}-${{ github.run_attempt }}
-           path: site/artifacts/external-focus-email-otp-evidence-ios-*
-           if-no-files-found: error
-           retention-days: 7
---- a/.github/workflows/static-site-qa-command.yml
-+++ b/.github/workflows/static-site-qa-command.yml
-@@ -20,6 +20,8 @@
-       scenario: ${{ steps.parse.outputs.scenario }}
-       platform: ${{ steps.parse.outputs.platform }}
-       target_url: ${{ steps.parse.outputs.target_url }}
-+      search_target_url: ${{ steps.parse.outputs.search_target_url }}
-+      fault_profile: ${{ steps.parse.outputs.fault_profile }}
-       expected_repo_sha: ${{ steps.parse.outputs.expected_repo_sha }}
-       mode: ${{ steps.parse.outputs.mode }}
-       duplicate: ${{ steps.dedupe.outputs.duplicate }}
-@@ -67,9 +69,11 @@
-           SHA: ${{ steps.parse.outputs.expected_repo_sha }}
-           TARGET_ORIGIN: ${{ steps.parse.outputs.target_origin }}
-           TARGET_PATH: ${{ steps.parse.outputs.target_path }}
-+          SEARCH_TARGET_PATH: ${{ steps.parse.outputs.search_target_path }}
-+          FAULT_PROFILE: ${{ steps.parse.outputs.fault_profile }}
-           SCENARIO: ${{ steps.parse.outputs.scenario }}
