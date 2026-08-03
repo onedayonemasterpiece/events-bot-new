@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Restored the production Supabase/focus API Gateways, isolated email triggers
+  and bounded Postbox feedback YDB after `yc.iam.reaper` suspended them during
+  the account-transfer window. Recovery verified outbound mail gates before
+  resume, preserved the pre-existing focus OTP DLQ and left Region Talk and the
+  obsolete KGD80 database untouched. The inbound reconciler now reports
+  non-`ACTIVE` Functions/Triggers as fail-closed drift instead of accepting their
+  existence as ready (`INC-2026-08-03-yandex-cloud-reaper-service-suspension`).
+
 - Fixed the Region Talk YDB billing runaway and wrong-account placement: disabled autonomous scheduling, migrated all five tables to the 1 GiB serverless database in `cloud-art-koder/default`, verified exact row counts and ordered-export hashes, switched Fly/GitHub database configuration, deleted the verified source database and three obsolete service accounts from the wrong account, removed the old GitHub WIF identity reference, kept the target at 0 RU/s, and added an exact expected-database preflight guard before any future scheduled run.
 
 - Fixed the CherryFlash `popular_review` retry storm: both startup catch-up and

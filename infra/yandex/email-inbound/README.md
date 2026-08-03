@@ -52,8 +52,18 @@ python3 infra/yandex/email-inbound/reconcile.py \
 ```
 
 If the folder is absent, the first apply creates only the folder. Re-run plan and
-apply to create safe resource shells. Existing names are `ready`, so reruns are
-idempotent. The reconciler never updates or deletes an existing resource.
+apply to create safe resource shells. An existing Function or Trigger is `ready`
+only when its runtime status is `ACTIVE`; `PAUSED`, `STOPPED` and unknown states
+are reported as `drift`. Recovery remains an explicit operator action because a
+blind resume can release a retained backlog. Other existing resource names remain
+idempotent. The reconciler never resumes, updates or deletes an existing resource.
+
+After an organization/billing-account transfer, run the plan even when no
+infrastructure commit changed. The transfer acceptance must inventory every
+KenigEvents folder, classify every non-active resource, verify outbound Supabase
+send gates before resuming email automation, and then exercise safe read-only
+gateway probes. Do not use this reconciler to start Region Talk or the obsolete
+KGD80 Postbox database.
 
 ## Operator-gated completion order
 
