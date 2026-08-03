@@ -2,7 +2,7 @@
 
 ## Status
 
-in progress
+committed
 
 ## Requirement IDs
 
@@ -27,7 +27,8 @@ in progress
 
 ## Head SHA
 
-Pending commit.
+Implementation commit: `af2244e25`. This metadata commit follows it; integrate
+the branch tip.
 
 ## Verification
 

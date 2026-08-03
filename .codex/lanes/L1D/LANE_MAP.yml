@@ -34,4 +34,4 @@ lanes:
       - docs/routes.yml
     expected_output: disjoint lifecycle fix, deterministic multi-run regression, docs, results
     verification_scope: targeted_local_no_live_ydb
-    status: in_progress
+    status: committed
