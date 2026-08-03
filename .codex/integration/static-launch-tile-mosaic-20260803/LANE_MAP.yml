@@ -35,7 +35,7 @@ lanes:
       - CHANGELOG.md
     expected_output: committed UI implementation with local verification
     verification_scope: targeted
-    status: spawned
+    status: merged
   - id: db
     role: worker
     effort: high
@@ -54,7 +54,7 @@ lanes:
       - CHANGELOG.md
     expected_output: committed migration with SQL/security verification
     verification_scope: targeted
-    status: spawned
+    status: merged
   - id: docs
     role: worker
     effort: high
@@ -74,7 +74,7 @@ lanes:
       - CHANGELOG.md
     expected_output: committed canonical docs and reusable prompt
     verification_scope: inspection_only
-    status: spawned
+    status: merged
   - id: integration
     role: merge_reviewer
     effort: high
@@ -92,4 +92,4 @@ lanes:
       - site/src/pages/index.astro
     expected_output: integrated candidate with build, screenshots, draft PR, secret preview, and sent link
     verification_scope: full_local
-    status: in_progress
+    status: committed
