@@ -29,17 +29,29 @@ jobs:
           ref: agent/region-talk-research-terminal-remediation-20260802
           fetch-depth: 0
 
-      - name: Extract embedded materializer and data
+      - name: Extract embedded materializer
         shell: bash
         run: |
           set -euo pipefail
-          source_workflow=.github/workflows/region-talk-research-remediation-export-20260802.yml
-          script_b64="$(sed -n "s/^[[:space:]]*SCRIPT_B64='\(.*\)'$/\1/p" "$source_workflow")"
-          data_b64="$(sed -n "s/^[[:space:]]*DATA_B64='\(.*\)'$/\1/p" "$source_workflow")"
-          test -n "$script_b64"
-          test -n "$data_b64"
-          printf '%s' "$script_b64" | base64 --decode > /tmp/apply_rt_final.original.py
-          printf '%s' "$data_b64" | base64 --decode > .tmp/region-talk-terminal-remediation/data.bin
+          python - <<'PY'
+          import base64
+          import gzip
+          from pathlib import Path
+
+          source = Path('.github/workflows/region-talk-research-remediation-export-20260802.yml')
+          text = source.read_text(encoding='utf-8')
+          marker = "cat > /tmp/apply.b64 <<'B64'\n"
+          if marker not in text:
+              raise SystemExit('materializer heredoc start marker not found')
+          encoded_and_tail = text.split(marker, 1)[1]
+          if '\nB64\n' not in encoded_and_tail:
+              raise SystemExit('materializer heredoc end marker not found')
+          encoded = encoded_and_tail.split('\nB64\n', 1)[0].strip()
+          compressed = base64.b64decode(encoded, validate=True)
+          script = gzip.decompress(compressed)
+          Path('/tmp/apply_rt_final.original.py').write_bytes(script)
+          print(f'extracted materializer bytes={len(script)}')
+          PY
           python -m py_compile /tmp/apply_rt_final.original.py
 
       - name: Disable only the terminal importer assertion for diagnostics
@@ -57,10 +69,13 @@ jobs:
 
           class DiagnosticTransformer(ast.NodeTransformer):
               def visit_Assert(self, node):
-                  global removed
+                  nonlocal_removed = False
                   message = node.msg.value if isinstance(node.msg, ast.Constant) else ''
                   if message == 'terminal payloads fail current importer semantic validation':
+                      global removed
                       removed += 1
+                      nonlocal_removed = True
+                  if nonlocal_removed:
                       return ast.copy_location(
                           ast.Expr(
                               value=ast.Call(
@@ -87,8 +102,7 @@ jobs:
           set -euo pipefail
           python /tmp/apply_rt_final.py \
             --repo "$PWD" \
-            --archive "$PWD/.tmp/region-talk-terminal-remediation/part-00" \
-            --blob "$PWD/.tmp/region-talk-terminal-remediation/data.bin"
+            --archive "$PWD/.tmp/region-talk-terminal-remediation/part-00"
 
       - name: Run current importer and emit row-level errors
         id: importer
@@ -100,16 +114,20 @@ jobs:
           cp /tmp/apply_rt_final.original.py /tmp/rt-remediation-diagnostic/
 
           status=0
-          while IFS= read -r input_path; do
+          for input_path in \
+            docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-08-02-191600.json \
+            docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-08-02-191601.json \
+            docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-08-02-191602.json
+          do
+            test -f "$input_path"
             name="$(basename "$input_path" .json)"
             report="/tmp/rt-remediation-diagnostic/${name}.validation.json"
             if ! python scripts/region_talk_external_publication_import.py \
               "$input_path" --report "$report"; then
               status=1
             fi
-          done < <(find docs/features/region-talk-channel -maxdepth 1 -type f \
-            -name 'region-talk-external-research-result-region-talk-external-2026-08-02-*.json' \
-            | sort)
+            cp "$input_path" /tmp/rt-remediation-diagnostic/
+          done
 
           python - <<'PY'
           import json
@@ -138,8 +156,6 @@ jobs:
           print(json.dumps(summary, ensure_ascii=False, indent=2))
           PY
 
-          cp docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-08-02-*.json \
-            /tmp/rt-remediation-diagnostic/ 2>/dev/null || true
           echo "status=$status" >> "$GITHUB_OUTPUT"
 
       - name: Upload diagnostic reports and generated successors
