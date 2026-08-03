@@ -28,7 +28,10 @@ To avoid parallel long-running operations (especially **manual** starts overlapp
 VK crawling runs six times per day by default at `05:15`, `09:15`, `13:15`, `17:15`, `21:15` and `22:45` Europe/Kaliningrad time (`VK_CRAWL_TIMES_LOCAL` / `VK_CRAWL_TZ`).
 
 Region Talk autonomous discovery is opt-in via
-`ENABLE_REGION_TALK_SCHEDULED=1`. The production canary runs at `06:20`,
+`ENABLE_REGION_TALK_SCHEDULED=1`. It is currently forced off after
+`INC-2026-08-03-ydb-request-unit-billing` while the new serverless database is
+throttled at 0 RU/s. Re-enabling requires an explicit bounded-cost canary and
+verification of `REGION_TALK_YDB_EXPECTED_DATABASE`. The production canary runs at `06:20`,
 `09:50`, `13:50`, `17:50`, and `21:50`
 Europe/Kaliningrad by default (`REGION_TALK_TIMES_LOCAL` / `REGION_TALK_TZ`).
 Each slot is bounded to 90 minutes and Region Talk slots are spaced by more
