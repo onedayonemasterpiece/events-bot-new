@@ -4,6 +4,12 @@
 
 - Fixed the 2026-08-03 StaticSiteBuilder failure storm: preview validation now derives Popular repeated-occurrence expectations from the generated family data instead of a fixture literal, requires the deterministic multi-image recommendation specimen, and distinguishes loaded-image shell containment from a correctly hidden missing-image fallback. The Chromium release gate now keeps strict geometry for loaded media while accepting only a bounded visible fallback for failed media (`INC-2026-08-03-static-site-builder-failure-storm`).
 
+- Fixed the follow-up exact-main StaticSiteBuilder canary failure by binding the
+  Chromium festival-calendar inventory to the hash-bound release manifest's
+  rendered active subset instead of the original 21-row source-ledger size;
+  source identity, source/rendered count ordering, card count and image count
+  remain fail-closed (`INC-2026-08-03-static-site-builder-failure-storm`).
+
 - Restored the production Supabase/focus API Gateways, isolated email triggers
   and bounded Postbox feedback YDB after `yc.iam.reaper` suspended them during
   the account-transfer window. Recovery verified outbound mail gates before
