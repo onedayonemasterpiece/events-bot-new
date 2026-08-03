@@ -10,30 +10,53 @@
 
 - `/` — индексируемая заглушка с датой запуска, кратким объяснением сервиса и формой уведомления;
 - все остальные HTML-страницы получают `noindex,nofollow,noarchive,nosnippet` на уровне итогового артефакта;
-- из HTML-маршрутов `robots.txt` разрешает только точный корень; технические `/_astro/` и `/assets/` остаются доступными для корректного отображения индексируемой заглушки;
+- из HTML-маршрутов `robots.txt` разрешает только точный корень; технические `/_astro/` и `/assets/` остаются доступны для отображения заглушки;
 - `sitemap.xml` содержит только `https://kenigevents.ru/`;
-- обычный каталог продолжает собираться и проходить продуктовые проверки, но до запуска не продвигается в поиске.
+- полный каталог продолжает собираться и проходить продуктовые проверки, но до запуска не продвигается в поиске.
 
-Итоговая build-политика применяется после Astro-сборки ко **всем** HTML-файлам, поэтому не зависит от того, какой layout использует отдельная страница.
+Итоговая build-политика применяется после Astro-сборки ко всем HTML-файлам и не зависит от layout отдельной страницы.
 
 ## Визуальная концепция
 
-Заглушка использует утверждённый PWA-образ бренда из `docs/reference/PKA-PWA2.png` через канонический публичный asset:
+Канонический implementation/review contract находится в [`prelaunch-handoff/README.md`](prelaunch-handoff/README.md). Основной референс хранится в [`prelaunch-handoff/reference/target-desktop.webp`](prelaunch-handoff/reference/target-desktop.webp).
+
+Заглушка использует утверждённый PWA-образ через production asset:
 
 `site/public/assets/pwa/announcements-brand-v2-512.png`
 
-Это не двухколоночная страница и не карточка с отдельной иллюстрацией. Один непрерывный PWA-образ расположен в полноэкранном нижнем слое и проходит под всей мозаикой. Поверх него находятся четыре независимо заменяемых слоя:
+Изображение является одним непрерывным background layer. Над ним находятся 72 стеклянные плитки и отдельная непрозрачная маска межплиточных швов.
 
-1. `background` — тёмная основа и одно непрерывное PWA-изображение;
-2. `mosaic` — 72 крупные физические плитки, перекрывающие весь viewport;
-3. `atmosphere` — виньетка, мягкий медный свет, материал и редкие искры;
-4. `foreground` — бренд, заголовок, объяснение и форма без blend-mode.
+### Обязательные визуальные инварианты
 
-Плитки имеют ровно три смысловых состояния: `sealed`, `dim`, `revealed`. Небольшие неповторяющиеся группы в случайном порядке медленно светлеют и темнеют. Переход реализован через композитное `opacity`, а длительность составляет примерно 4,2–8,1 секунды; новая разреженная группа выбирается не чаще чем раз в 1,8–3,6 секунды. При `prefers-reduced-motion: reduce` таймер и переходы отключаются, контент и форма остаются полностью доступны.
+- изображение не может быть видно в промежутках между плитками;
+- `.prelaunch__tile` имеет прозрачный base и opacity `1`;
+- затемнение, blur, matte texture, border и bevel реализованы на псевдоэлементах плитки;
+- состояния `sealed`, `dim`, `revealed` отличаются не только opacity, но и blur, saturation, brightness, кромкой и глубиной;
+- плитки в верхнеправой зоне отражают направленный тёплый свет, но не превращаются в резкие вырезанные окна;
+- изменяется маленькая случайная группа, а не вся мозаика;
+- при `prefers-reduced-motion: reduce` сцена полностью статична.
 
-Desktop-композиция держит компактный бренд в левом верхнем углу, крупный заголовок «Запуск 1 сентября» в средней части и форму у нижней границы. На узких экранах те же 72 DOM-плитки перестраиваются CSS-сеткой, заголовок переносится, а email и кнопка становятся одноколоночными. Минимальная поддерживаемая ширина — 320 px, без горизонтального overflow.
+Использование opacity всей плитки запрещено: оно одновременно ослабляет кромку и открывает фон в шве, разрушая стеклянную конструкцию.
 
-Кодовый handoff, автономный направляющий prototype и screenshot-референсы находятся в `docs/features/static-site-pages/prelaunch-handoff/README.md`.
+## Визуальное доказательство
+
+Browser gate сохраняет PNG, DOM и computed-style JSON для:
+
+- `1200×1200` — reference-square;
+- `1440×900` — desktop;
+- `390×844` — mobile.
+
+В reference-square проверяются положение первых швов, H1 и PWA-проекции. Дополнительно gate доказывает:
+
+- ровно 72 плитки;
+- детерминированное исходное распределение состояний;
+- три разных backdrop-filter treatment;
+- непрозрачную repeating-gradient маску швов;
+- отсутствие whole-tile opacity animation;
+- sparse motion `2–5` плиток;
+- отсутствие horizontal overflow.
+
+Workflow `.github/workflows/prelaunch-visual-review.yml` публикует screenshots, DOM, scene JSON и reference WebP одним artifact для ручного сравнения.
 
 ## Уведомление о запуске
 
@@ -59,7 +82,7 @@ Desktop-композиция держит компактный бренд в л�
 
 `supabase/migrations/20260803113000_prelaunch_launch_notifications_v1.sql`
 
-Миграция должна быть применена к personalization Supabase **до** публикации заглушки. Наличие файла в репозитории само по себе не означает, что таблица уже создана в рабочем проекте.
+Миграция должна быть применена к personalization Supabase до публикации заглушки. Наличие файла в репозитории само по себе не означает, что таблица уже создана в рабочем проекте.
 
 ## Запуск 1 сентября
 
@@ -78,12 +101,12 @@ Desktop-композиция держит компактный бренд в л�
 
 ```bash
 npm --prefix site run test:static-release
-npm --prefix site run build:production
+PUBLIC_PRELAUNCH_MODE=on npm --prefix site run build
+python3 -m http.server 4173 --directory site/dist
 npm --prefix site run check:prelaunch-browser -- \
-  --url http://127.0.0.1:4321/ \
-  --artifact-dir ../artifacts/codex/prelaunch/browser-local
+  --url http://127.0.0.1:4173/ \
+  --artifact-dir ../artifacts/prelaunch-browser
+npm --prefix site run build:production
 ```
 
-Production checker различает `prelaunch` и `full_catalog` по полю `prelaunch_mode` в build/manifest и блокирует релиз, если индексируется более одного HTML-документа до запуска.
-
-Secret candidate обязан наследовать `prelaunch_mode` из уже проверенного production manifest. Пересборка candidate не может молча заменить заглушку обычной главной страницей. Candidate также сохраняет `noindex,nofollow,noarchive,nosnippet`, `no-referrer`, bearer-prefix canonical и явные поля `prelaunch_mode`/`public_surface` в manifest.
+Production checker различает `prelaunch` и `full_catalog` по полю `prelaunch_mode` в build/manifest и блокирует релиз, если до запуска индексируется более одного HTML-документа.
