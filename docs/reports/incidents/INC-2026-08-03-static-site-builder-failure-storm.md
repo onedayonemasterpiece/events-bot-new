@@ -64,6 +64,17 @@ family.
   `check:preview`; the durable successful pointer still did not move.
 - 2026-08-03 18:35 UTC — local generated-tree preview and Chromium browser
   gates passed after both gate corrections; no live canary was launched.
+- 2026-08-03 19:04 UTC — after the exact merged SHA reached Fly, the durable
+  single-flight owner launched exact-main canary
+  `static-site:production-secret-20260803T210348-d0fa8b9b:de85cdfea8e8`.
+- 2026-08-03 19:47 UTC — the canary passed the corrected Popular gate and the
+  first eight Chromium journeys, then failed at the festival-calendar selector.
+  Exact HTML and Chromium reproduction showed 18 valid active cards from the
+  21-row SQLite source ledger because three exact editions had ended.
+- 2026-08-03 19:49 UTC — both retryable outbox rows were placed on an explicit
+  incident hold before their next due time. The worker had already dequeued the
+  operator row before that transaction and launched one stale-SHA retry at
+  19:50 UTC; it remained the sole active run and no additional run was started.
 
 ## Root Cause
 
@@ -81,6 +92,11 @@ family.
    (a zero rectangle) and paints the bounded fallback. The old check called
    that valid fallback state an image-shell escape before evaluating the
    already-present missing-image contract.
+5. The next exact-main canary exposed a second mutable-calendar assumption:
+   `assertFestivalCalendar` selected only `data-festival-count="21"` even though
+   the exporter intentionally removes exact festival editions after their end
+   date. On 2026-08-03 the source ledger still contained 21 accepted rows while
+   the release manifest and rendered page correctly contained 18 active cards.
 
 The earlier 22 failures were not assigned this assertion as a shared root
 cause: the durable ledger places them in earlier build/export/browser stages.
@@ -158,6 +174,11 @@ The latest five failures form the current reproducible blocker addressed here.
 - Treat the canonical destination URL plus `DOMContentLoaded` event shell as
   completed keyboard navigation; remote media is not allowed to hold that
   navigation assertion open until the later `load` event.
+- Derive the festival browser inventory from the checked production/candidate
+  manifest. Require the canonical SQLite projection source, positive source and
+  rendered counts, `rendered <= source`, and exact DOM card/image parity at both
+  desktop and mobile sizes. The 21-card fallback remains only for the clean
+  preview fixture that has no release manifest.
 
 ## Follow-up Actions
 
