@@ -106,6 +106,15 @@ sequence and is superseded. The final exact run reported the preview pre-gate as
 `/neobychnoe/` remains candidate-only and no production-root promotion is
 implied until the owner accepts the complete candidate.
 
+The clean preview also pins the generated, reciprocal multi-image browser
+journey `6408 → 6407`; both pages must retain a real closed gallery and the
+source must retain at least three canonical recommendation cards. Browser media
+acceptance distinguishes loaded pixels from the intentional missing-media
+fallback. A loaded image must remain inside its shell. A failed image must be
+removed from painting and expose the bounded fallback; its zero rectangle is
+not an image-shell escape. This distinction preserves geometry enforcement
+while making CDN/network failure evidence deterministic.
+
 The production catalog is calendar-day inclusive: every otherwise-public event
 whose start date is the current Kaliningrad date remains in the static export
 after its start time. This lets `/segodnya/` render elapsed events with the

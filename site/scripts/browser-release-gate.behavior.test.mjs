@@ -6,6 +6,8 @@ import test from 'node:test';
 import {
   BROWSER_GATE_ACTION_TIMEOUT_MS,
   BROWSER_GATE_NAVIGATION_TIMEOUT_MS,
+  assertRecommendationGeometry,
+  assertRequiredPreviewBrowserJourney,
   expectedObjectFitForTreatment,
   localReleaseAssetPath,
   recordBrowserVisualSuccess,
@@ -24,6 +26,7 @@ test('R03 mandatory browser gate has bounded action/navigation waits and no netw
   assert.match(source, /data-hide-sticky-after/gu);
   assert.match(source, /page\.mouse\.wheel\(0, 320\)/gu);
   assert.match(source, /closeAllConnections/u);
+  assert.match(source, /url\.href === expected, \{ timeout: 12_000, waitUntil:'domcontentloaded' \}/u);
   assert.match(source, /let server = null;[\s\S]*let browser = null;/u);
   assert.match(source, /if \(browser\)[\s\S]*if \(server\)/u);
 });
@@ -154,14 +157,54 @@ test('R03 production specimen discovery is static, bounded and prefers the repor
       ${target ? `<div data-gallery-slide-kind="cta"><a href="${basePath}/sobytiya/${target}/">next</a></div>` : ''}
       </main>`);
   };
-  makePage('alpha-100', 'target-200');
-  makePage('dog-6408', 'target-200');
-  makePage('target-200', null, { related: false });
-  const routes = ['alpha-100', 'dog-6408', 'target-200'].map((slug) => `${basePath}/sobytiya/${slug}/`);
-  assert.deepEqual(staticSpecimenCandidates(root, basePath, routes), [
-    { route: `${basePath}/sobytiya/dog-6408/`, targetPath: `${basePath}/sobytiya/target-200/` },
-    { route: `${basePath}/sobytiya/alpha-100/`, targetPath: `${basePath}/sobytiya/target-200/` },
+  makePage('alpha-100', 'target-6407');
+  makePage('dog-6408', 'target-6407');
+  makePage('target-6407', null, { related: false });
+  const routes = ['alpha-100', 'dog-6408', 'target-6407'].map((slug) => `${basePath}/sobytiya/${slug}/`);
+  const candidates = staticSpecimenCandidates(root, basePath, routes);
+  assert.deepEqual(candidates, [
+    { route: `${basePath}/sobytiya/dog-6408/`, targetPath: `${basePath}/sobytiya/target-6407/` },
+    { route: `${basePath}/sobytiya/alpha-100/`, targetPath: `${basePath}/sobytiya/target-6407/` },
   ]);
+  assert.deepEqual(assertRequiredPreviewBrowserJourney(candidates), candidates[0]);
+});
+
+test('R01 missing recommendation image uses its bounded fallback without a false shell-escape failure', { timeout: 30_000 }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'static-browser-missing-card-'));
+  writeFileSync(join(root, 'index.html'), `<!doctype html><style>
+    body { margin:40px; }
+    [data-event-card] { display:grid; width:240px; }
+    [data-card-media-shell] { position:relative; display:block; width:240px; height:160px; overflow:hidden; }
+    [data-card-image] { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+    [data-card-image-fallback] { position:absolute; inset:0; display:grid; }
+    .event-card__body { display:grid; }
+  </style>
+  <article data-event-card data-event-id="6407" data-feed-card-variant="split-actions" tabindex="0"
+    data-card-href="/event" data-lab-row-index="0" data-lab-media-kind="visual"
+    data-lab-media-treatment="visual-cover" data-lab-cover-crop="0.0964" data-lab-row-worst-crop="0.0964">
+    <a href="/event" data-card-media-link><span data-card-media-shell class="is-image-loading">
+      <span data-card-image-fallback>Image unavailable</span>
+      <img data-card-image src="/missing-6407.webp" style="object-fit:cover"
+        onerror="this.closest('[data-card-media-shell]').classList.remove('is-image-loading');this.closest('[data-card-media-shell]').classList.add('is-image-missing');this.hidden=true;this.removeAttribute('src')">
+    </span></a>
+    <div class="event-card__body"><a href="/event" data-card-title>Старший сын</a></div>
+    <button data-feedback-action="like"></button><button data-feedback-action="not_interested"></button><button data-native-share></button>
+  </article>`);
+  const server = await startReleaseServer(root);
+  const { chromium } = await import('playwright');
+  let browser = null;
+  try {
+    browser = await chromium.launch({ headless:true });
+    const page = await browser.newPage({ viewport:{ width:800, height:600 } });
+    await page.goto(server.origin, { waitUntil:'domcontentloaded' });
+    const metrics = await assertRecommendationGeometry(page, '[data-event-card]', 1);
+    assert.equal(metrics[0].id, '6407');
+    assert.equal(metrics[0].imageMissing, true);
+    assert.equal(metrics[0].fallbackVisible, true);
+  } finally {
+    if (browser) await browser.close();
+    await server.close();
+  }
 });
 
 test('R01 hero crop canaries cover every generated visual-only desktop family/fit combination', () => {

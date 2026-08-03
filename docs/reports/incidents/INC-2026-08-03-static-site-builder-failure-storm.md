@@ -12,9 +12,10 @@ Related docs: `docs/features/static-site-pages/astro-preview.md`, `docs/operatio
 ## Summary
 
 The production StaticSiteBuilder launched 27 times in the audited window and
-recorded 26 failures without advancing the durable secret-candidate pointer.
+recorded 27 failures without advancing the durable secret-candidate pointer.
 The public production root stayed on its prior release. The newest four
-terminal runs converged on `npm run check:preview`; the exact Kaggle log showed
+terminal runs, followed by the in-flight retry, converged on
+`npm run check:preview`; the exact Kaggle log showed
 that a mutable-catalog Popular check required the fixture-specific text
 `ещё 1 показ` even when the ranked desktop selection contained no repeated-date
 family.
@@ -40,6 +41,9 @@ family.
 - The ledger retained only the failed command. The exact assertion was visible
   in Kaggle logs, which is why opaque terminal status alone is not acceptable
   closure evidence.
+- GitHub Actions run `30810580372`, job `91676107974`, supplied a second exact
+  browser failure: event `6407` was reported as escaping its media shell while
+  exercising the deterministic `6408 → 6407` gallery journey.
 
 ## Timeline
 
@@ -56,6 +60,10 @@ family.
   claim. It was still alive during the read-only audit and runs pre-fix code.
 - 2026-08-03 18:08 UTC — runtime mirror and durable-state recheck confirmed the
   old successful pointer remained intact.
+- 2026-08-03 18:31 UTC — the last pre-fix automatic run also terminated at
+  `check:preview`; the durable successful pointer still did not move.
+- 2026-08-03 18:35 UTC — local generated-tree preview and Chromium browser
+  gates passed after both gate corrections; no live canary was launched.
 
 ## Root Cause
 
@@ -67,10 +75,16 @@ family.
 3. The gate therefore tested the incidental catalog composition rather than
    the intended contract: linked occurrences must collapse to one card and a
    selected family must expose its actual repeat count.
+4. The browser geometry gate separately applied the loaded-image rectangle
+   invariant to both successful images and intentionally hidden failed images.
+   A CDN/network failure puts the card in `is-image-missing`, hides the `<img>`
+   (a zero rectangle) and paints the bounded fallback. The old check called
+   that valid fallback state an image-shell escape before evaluating the
+   already-present missing-image contract.
 
 The earlier 22 failures were not assigned this assertion as a shared root
 cause: the durable ledger places them in earlier build/export/browser stages.
-The latest four failures form the current reproducible blocker addressed here.
+The latest five failures form the current reproducible blocker addressed here.
 
 ## Contributing Factors
 
@@ -101,6 +115,8 @@ The latest four failures form the current reproducible blocker addressed here.
 ### Mandatory checks before closure or deploy
 
 - `npm --prefix site run test:popular-occurrence-contract`;
+- `npm --prefix site run test:browser-release-gate`, including an actual
+  Chromium 404/missing-image card for event `6407`;
 - `PREVIEW_BUILD_ID=<unique> npm --prefix site run build:preview` followed by
   `check:preview` on the same tree;
 - an exact-SHA, no-root-promotion production canary reaches terminal success;
@@ -133,6 +149,15 @@ The latest four failures form the current reproducible blocker addressed here.
   second desktop card.
 - Add isolated behavior coverage for zero-family, valid multi-family, duplicate
   linked-card and missing-summary cases.
+- Make the clean preview pre-gate require the real deterministic multi-image
+  `6408 → 6407` journey discovered from generated HTML. The browser gate itself
+  remains fail-closed and data-driven for other valid journeys.
+- Apply shell containment only to loaded image pixels. For the existing
+  missing-image state, require the failed image layer to be `display:none` and
+  the bounded fallback to be visibly present.
+- Treat the canonical destination URL plus `DOMContentLoaded` event shell as
+  completed keyboard navigation; remote media is not allowed to hold that
+  navigation assertion open until the later `load` event.
 
 ## Follow-up Actions
 
@@ -147,8 +172,9 @@ The latest four failures form the current reproducible blocker addressed here.
 
 - deployed SHA: pending
 - deploy path: pending merge to `origin/main`; no root promotion authorized
-- regression checks: targeted behavior test passes; full build/check and canary
-  pending
+- regression checks: targeted occurrence tests, browser behavior tests,
+  generated preview check and full local Chromium release gate pass; exact-SHA
+  canary pending
 - post-deploy verification: pending terminal ledger success and immutable
   review receipt
 
