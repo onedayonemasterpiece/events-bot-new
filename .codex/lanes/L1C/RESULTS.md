@@ -2,7 +2,7 @@
 
 ## Status
 
-in progress
+committed
 
 ## Requirement IDs
 
@@ -35,11 +35,20 @@ in progress
 
 ## Head SHA
 
-Pending commit.
+Implementation commit: `c37dff17b`. This RESULTS metadata commit follows it;
+integrate the branch tip.
 
 ## Verification
 
-Pending final targeted and CandidateReport regression runs.
+- `14 passed in 0.65s` for the final targeted v2 read-model suite.
+- `335 passed, 1 deselected in 17.06s` for the targeted read-model plus full
+  CandidateReport suite. The deselected test is the pre-existing optional
+  `openpyxl` case; the un-deselected run had `335 passed` and only that missing
+  dependency failure.
+- `py_compile` passed for both implementation modules, the offline planner and
+  the targeted test module; `git diff --check` passed.
+- CandidateReport-generated report files were removed using an explicit
+  untracked allowlist; only lane-owned source/docs/tests are committed.
 
 ## Live actions
 
