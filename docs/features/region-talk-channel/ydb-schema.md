@@ -267,24 +267,42 @@ main records as soon as they are selected, discovered, fetched, scored or
 reclassified. Heartbeats remain observability-only and are not sufficient proof
 that a source/post/image/candidate exists in the product state.
 
-### Bounded work/read projection v1
+### Bounded work/read projection v2
 
 The cost-containment follow-up to
-`INC-2026-08-03-ydb-request-unit-billing` adds two projections next to the
+`INC-2026-08-03-ydb-request-unit-billing` adds three projections next to the
 compact KV ledger:
 
-- `<namespace>_work_queue_v1`, schema
-  `region-talk-ydb-work-queue-v1`, has typed `generation`, `queue_name`,
+- `<namespace>_work_queue_v2`, schema
+  `region-talk-ydb-work-queue-v2`, has typed `generation`, `queue_name`,
   `status`, `due_at`, `priority`, `item_key`, `state_pk`, compact payload and
-  update time. Its primary key begins with `(generation, queue_name, status,
-  due_at, priority, item_key)`, so normal work reads are bounded key-prefix
-  pages. Selected `state_pk` values are hydrated through `AS_TABLE` primary-key
-  point joins into the compact KV ledger.
+  update time. Its exact primary-key order is
+  `(generation, queue_name, due_at, priority, status, item_key)`: this makes
+  `due_at <= cutoff` plus the last four columns a deterministic bounded keyset
+  page and prevents a future item in one status from starving due work in a
+  later status. Selected `state_pk` values are hydrated through `AS_TABLE`
+  primary-key point joins into the compact KV ledger.
+- `<namespace>_work_cursor_v2`, schema
+  `region-talk-ydb-work-cursor-v2`, has one row per immutable
+  `(generation, queue_name)`. A serializable claim records the exact page end,
+  count, owner, random token and expiry but does **not** move the committed
+  cursor. A serializable ACK compares owner + token + unexpired lease before it
+  advances the cursor. A crash or expired lease therefore replays the same
+  page; a stale owner cannot skip it or ACK a replacement claim.
 - `<namespace>_read_model_v1`, schema
   `region-talk-ydb-read-model-v1`, has one `model_name=current` pointer. Its
   payload carries the generation, exact producer-side population/action
   counters, authoritative source-queue max sequence/order and per-queue work
   counts.
+
+CandidateReport and the shared builder use the same typed classification:
+source status aliases are `source_queue_status|queue_status|fetch_status`, post
+links use `post_link_status|fetch_status`, images use
+`image_queue_status|image_quality_decision`, BGE uses
+`vector_gate_status|text_vector_fusion_status|current_stage`, and publication
+uses `publication_status|publication_candidate_status`. Publication accepts
+every non-terminal, unsent status. These aliases define both emitted rows and
+expected counts; a local/expected divergence cannot mark the model complete.
 
 The producer aggregates counters over the complete state already in memory; it
 never derives population totals from a bounded work page. If an active queue
@@ -306,11 +324,18 @@ Cutover modes are explicit:
   and a separately reviewed writer-coverage/canary gate.
 
 In `required` mode CandidateReport start state is the compact checkpoint plus
-typed work pages (default 200 per queue) and referenced primary-key joins. The
-orchestrator reads the single counter pointer. Neither path calls the old
+atomically claimed due work pages (default 200 per queue) and referenced
+primary-key joins. The generation/queue cursor is seeded before the current
+pointer is published. Each normal page is generation + queue scoped, applies an
+explicit UTC due cutoff, and is ordered by due/priority/status/item key. A
+cursor/model count mismatch, missing cursor, active foreign lease, overflow or
+stale ACK fails closed. A partial materialized start state is explicitly marked
+incomplete and cannot be republished as `ready`, even when its local counts fit
+under the page cap. The orchestrator reads the single counter pointer. Neither
+path calls the old
 5k/20k kind readers. `scripts/region_talk_ydb_read_model_cutover.py` renders DDL
-and a generation-first/pointer-last plan from a trusted full-state export; it
-has no live-write mode.
+for work + cursor rows and a generation-first/cursor-seed/pointer-last plan from
+a trusted full-state export; it has no live-write mode.
 
 This slice does **not** authorize autonomous use. BGE, ImageDiagnostic and
 publication-finalizer writer coverage, exact server-side RU measurement,

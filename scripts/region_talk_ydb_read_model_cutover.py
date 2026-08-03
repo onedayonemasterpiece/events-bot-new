@@ -21,10 +21,12 @@ if str(ROOT) not in sys.path:
 from scripts.region_talk_ydb_read_model import (  # noqa: E402
     build_read_model,
     build_work_items,
+    cursor_table_path,
     read_model_table_ddl,
     table_paths,
     validate_read_model,
     work_table_ddl,
+    work_cursor_table_ddl,
 )
 
 
@@ -52,21 +54,34 @@ def build_plan(
     if cutover_state == "ready":
         validate_read_model(model)
     work_table, read_model_table = table_paths(database, namespace)
+    cursor_table = cursor_table_path(work_table)
     return {
         "schema_version": model["schema_version"],
         "work_queue_schema_version": model["work_queue_schema_version"],
         "cutover_order": [
             "create_schema",
             "write_complete_generation",
+            "seed_generation_queue_cursors",
             "validate_counts_and_point_keys",
             "publish_current_pointer_last",
         ],
         "live_execution_performed": False,
         "ddl": {
             "work_queue": work_table_ddl(work_table),
+            "work_cursor": work_cursor_table_ddl(cursor_table),
             "read_model": read_model_table_ddl(read_model_table),
         },
         "work_rows": [item.as_row(updated_at=str(state.get("updated_at") or "")) for item in work],
+        "cursor_rows": [
+            {
+                "generation": model["generation"], "queue_name": queue_name,
+                "expected_count": int(expected_count or 0), "consumed_count": 0,
+                "cursor_due_at": "", "cursor_priority": 0,
+                "cursor_status": "", "cursor_item_key": "",
+                "updated_at": str(state.get("updated_at") or ""),
+            }
+            for queue_name, expected_count in sorted(model["expected_work_counts"].items())
+        ],
         "read_model": model,
     }
 
