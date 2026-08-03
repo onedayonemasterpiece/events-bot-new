@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-03-ydb-request-unit-billing.md`
+  - Scope: Region Talk YDB account ownership, RU throttling, wide metric reads,
+    scheduled/watchdog catch-up and migration integrity.
+  - Must not regress: production must match the exact expected database path;
+    re-enable requires a bounded RU canary; source/target migrations require
+    count plus ordered-export hash evidence.
+
 - `INC-2026-08-03-cherryflash-cdn-tls-retry-storm.md`
   - Scope: CherryFlash poster prefetch/Kaggle render, general
     `video_popular_review_watchdog`, and public `static.kenigevents.ru` TLS.

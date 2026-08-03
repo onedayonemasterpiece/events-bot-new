@@ -10,8 +10,26 @@ Configuration:
 - `REGION_TALK_YDB_DATABASE`
 - `REGION_TALK_YDB_AUTH_MODE=service_account|metadata|static_credentials`
 - `REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON` or equivalent least-privilege secret lane
+- `REGION_TALK_YDB_EXPECTED_DATABASE` must equal the full production database
+  path; the scheduled wrapper fails closed on any mismatch
 - for local-only orchestrator/debug probes, `--allow-yc-fallback` may use a pre-authenticated `/home/dev/yandex-cloud/bin/yc` profile to discover `events-bot-acq-discovery` and mint a short-lived IAM token; Kaggle/server runs should not depend on this browser-auth path
 - `REGION_TALK_YDB_TLS=true`
+
+Production ownership after the 2026-08-03 billing incident:
+
+- organization/cloud: `cloud-art-koder` (`b1ghfk15fpug7mn5439l`);
+- folder: `default` (`b1g5tck18cgqtjb7rn3s`);
+- database: `events-bot-acq-discovery`
+  (`/ru-central1/b1ghfk15fpug7mn5439l/etnkibjidis0o6stn2cq`);
+- serverless storage limit: 1 GiB; provisioned RCU: 0;
+- request throttling is intentionally enabled at **0 RU/s** while autonomous
+  Region Talk is disabled. Raising it requires a bounded cost canary and an
+  explicit operator decision.
+
+The former database
+`/ru-central1/b1goifscr17duurhullj/etnrao7p6gh6il6b4qv9` is quarantined at
+0 RU/s. It is migration evidence only and must never be selected by name-based
+fallback, Fly configuration, Kaggle configuration, or GitHub Actions.
 
 For semi-manual live product runs, `REGION_TALK_STATE_BACKEND=ydb` is a
 fail-fast contract, not a preference. CandidateReport/ImageDiagnostic launchers

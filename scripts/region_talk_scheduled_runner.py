@@ -70,6 +70,16 @@ def missing_autonomy_config(env: Mapping[str, str] | None = None) -> list[str]:
     )
     missing = ["|".join(group) for group in groups if not any(present(name) for name in group)]
 
+    database = str(values.get("REGION_TALK_YDB_DATABASE") or "").strip().rstrip("/")
+    expected_database = str(
+        values.get("REGION_TALK_YDB_EXPECTED_DATABASE") or ""
+    ).strip().rstrip("/")
+    if expected_database and database and database != expected_database:
+        # Do not leak either database path into logs: the stable marker is
+        # enough for operators and prevents a stale/wrong billing-account YDB
+        # from being used after a secret or deploy rollback.
+        missing.append("REGION_TALK_YDB_DATABASE(expected_database_mismatch)")
+
     default_key_name = str(values.get("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME") or "GOOGLE_API_KEY3").strip()
     key_aliases = {default_key_name}
     if default_key_name == "GOOGLE_API_KEY3":
