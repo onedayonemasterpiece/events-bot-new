@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- Добавлен полноэкранный кинематографичный prelaunch с 72-плиточной мозаикой, тремя состояниями стекла, reduced-motion browser gate и репозиторным handoff-пакетом.
+
+### Fixed
+
+- Secret candidate теперь наследует `prelaunch_mode` проверенного production manifest и не подменяет prelaunch root обычной главной страницей.
+
 - Fixed the Google AI registry after operator confirmation that all six API
   keys belong to different Google Cloud projects: each key now has an
   independent redacted `quota_scope`, while historical attempts and any 429

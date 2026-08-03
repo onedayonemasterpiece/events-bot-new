@@ -368,6 +368,8 @@ features:
   static_site_pages:
     status: secret_candidate_pipeline_root_promotion_blocked
     docs: docs/features/static-site-pages/README.md
+    prelaunch: docs/features/static-site-pages/prelaunch.md
+    prelaunch_handoff: docs/features/static-site-pages/prelaunch-handoff/README.md
     collections_original_requirements: docs/features/static-site-pages/podborki.md
     collections_extraction_and_product_plan: docs/features/static-site-pages/podborki-to-be.md
     release_plan: docs/features/static-site-pages/release-plan.md

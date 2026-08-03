@@ -2,144 +2,137 @@
 import { withBase } from '../lib/events';
 
 const PRELAUNCH_LAUNCH_DATE = '2026-09-01';
-const veilPattern = [
-  .12, .54, .28, .7, .18, .43,
-  .62, .2, .47, .1, .74, .32,
-  .24, .66, .14, .5, .36, .78,
-  .57, .16, .72, .3, .09, .45,
-  .19, .63, .39, .76, .22, .52,
-  .68, .26, .48, .11, .6, .34,
-];
-const tiles = veilPattern.map((veil, index) => ({
-  veil,
-  speed: 2.8 + ((index * 17) % 23) / 10,
-  delay: -((index * 13) % 31) / 10,
-  blur: index % 5 === 0 ? 1.8 : index % 3 === 0 ? .8 : 0,
+const statePattern = ['sealed', 'dim', 'revealed', 'dim', 'sealed', 'dim'];
+const tiles = Array.from({ length: 72 }, (_, index) => ({
+  state: statePattern[(index * 5 + Math.floor(index / 8) * 3) % statePattern.length],
+  duration: 4.6 + ((index * 17) % 31) / 10,
+  delay: -((index * 11) % 29) / 10,
 }));
 ---
-<main id="main" class="prelaunch" data-home-page data-prelaunch-page data-launch-date={PRELAUNCH_LAUNCH_DATE}>
-  <div class="prelaunch__halo prelaunch__halo--one" aria-hidden="true"></div>
-  <div class="prelaunch__halo prelaunch__halo--two" aria-hidden="true"></div>
 
-  <section class="prelaunch__shell" aria-labelledby="prelaunch-title">
-    <div class="prelaunch__copy">
-      <div class="prelaunch__brandline">
-        <span class="prelaunch__brandmark" aria-hidden="true"></span>
-        <span>Полюбить Калининград Анонсы</span>
-      </div>
+<main
+  id="main"
+  class="prelaunch"
+  data-home-page
+  data-prelaunch-page
+  data-launch-date={PRELAUNCH_LAUNCH_DATE}
+>
+  <div class="prelaunch__background" aria-hidden="true">
+    <img
+      class="prelaunch__projection"
+      src={withBase('/assets/pwa/announcements-brand-v2-512.png')}
+      width="512"
+      height="512"
+      alt=""
+      decoding="async"
+      fetchpriority="high"
+    />
+  </div>
 
-      <p class="prelaunch__date">
-        <span class="prelaunch__date-label">Открытие</span>
-        <time datetime="2026-09-01">1 сентября 2026</time>
+  <div class="prelaunch__mosaic" aria-hidden="true" data-prelaunch-mosaic>
+    {tiles.map((tile, index) => (
+      <span
+        class="prelaunch__tile"
+        data-prelaunch-tile
+        data-index={index}
+        data-state={tile.state}
+        style={`--speed:${tile.duration}s;--delay:${tile.delay}s;`}
+      ></span>
+    ))}
+  </div>
+
+  <div class="prelaunch__atmosphere" aria-hidden="true">
+    <span class="prelaunch__halo prelaunch__halo--warm"></span>
+    <span class="prelaunch__halo prelaunch__halo--soft"></span>
+    <span class="prelaunch__spark prelaunch__spark--one"></span>
+    <span class="prelaunch__spark prelaunch__spark--two"></span>
+    <span class="prelaunch__spark prelaunch__spark--three"></span>
+  </div>
+
+  <div class="prelaunch__foreground">
+    <header class="prelaunch__brand" aria-label="Полюбить Калининград Анонсы">
+      <img
+        src={withBase('/assets/pwa/announcements-brand-v2-192.png')}
+        width="192"
+        height="192"
+        alt=""
+        decoding="async"
+      />
+      <p><span>Полюбить</span><span>Калининград</span><span>Анонсы</span></p>
+    </header>
+
+    <section class="prelaunch__copy" aria-labelledby="prelaunch-title">
+      <h1 id="prelaunch-title">Запуск 1 сентября</h1>
+      <p>
+        Персонализированный сервис анонсов<br class="prelaunch__desktop-break" />
+        и навигатор по культурным<br class="prelaunch__desktop-break" />
+        и просветительским событиям<br class="prelaunch__desktop-break" />
+        Калининградской области
       </p>
+    </section>
 
-      <h1 id="prelaunch-title">События региона — ближе к вашим интересам.</h1>
-
-      <p class="prelaunch__lead">
-        1 сентября откроется персонализированный сервис анонсов и навигатор по культурным и просветительским событиям Калининградской области.
-      </p>
-      <p class="prelaunch__support">
-        Он поможет не просматривать всё подряд, а быстрее находить события, которые подходят именно вам. Сейчас сервис проходит финальное тестирование вместе с фокус-группой.
-      </p>
-
-      <section class="prelaunch__notify" aria-labelledby="notify-title">
-        <div class="prelaunch__notify-heading">
-          <div>
-            <p class="prelaunch__notify-kicker">Одно письмо. Только по делу.</p>
-            <h2 id="notify-title">Сообщить о запуске</h2>
-          </div>
-          <span class="prelaunch__notify-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" role="img">
-              <path d="M4.5 6.5h15v11h-15z" fill="none" stroke="currentColor" stroke-width="1.5" />
-              <path d="m5.3 7.3 6.7 5.1 6.7-5.1" fill="none" stroke="currentColor" stroke-width="1.5" />
-            </svg>
-          </span>
-        </div>
-        <p class="prelaunch__notify-copy">Оставьте email — 1 сентября отправим письмо со ссылкой на сервис.</p>
-
-        <form class="prelaunch-form" data-prelaunch-form novalidate>
-          <div class="prelaunch-form__row">
-            <label class="prelaunch-form__field">
-              <span>Email</span>
-              <input
-                type="email"
-                name="email"
-                inputmode="email"
-                autocomplete="email"
-                maxlength="254"
-                placeholder="name@example.ru"
-                aria-describedby="prelaunch-consent prelaunch-status"
-                required
-              />
-            </label>
-            <button type="submit" data-prelaunch-submit>
-              <span data-prelaunch-submit-label>Напомнить мне</span>
-              <span class="prelaunch-form__arrow" aria-hidden="true">↗</span>
-            </button>
-          </div>
-
-          <label class="prelaunch-form__consent" id="prelaunch-consent">
-            <input type="checkbox" name="consent" required />
-            <span>Согласен получить одно письмо о запуске. Email будет использован только для этого уведомления.</span>
+    <section class="prelaunch__notify" aria-labelledby="notify-title">
+      <h2 id="notify-title">Напомнить о запуске</h2>
+      <form class="prelaunch-form" data-prelaunch-form novalidate>
+        <div class="prelaunch-form__row">
+          <label class="prelaunch-form__field">
+            <span>Email</span>
+            <input
+              type="email"
+              name="email"
+              inputmode="email"
+              autocomplete="email"
+              maxlength="254"
+              placeholder="E-mail"
+              aria-describedby="prelaunch-consent prelaunch-status"
+              required
+            />
           </label>
-
-          <label class="prelaunch-form__trap" aria-hidden="true">
-            <span>Ваш сайт</span>
-            <input type="text" name="website" tabindex="-1" autocomplete="off" />
-          </label>
-
-          <p class="prelaunch-form__status" id="prelaunch-status" data-prelaunch-status role="status" aria-live="polite"></p>
-          <noscript><p class="prelaunch-form__noscript">Для отправки формы нужен JavaScript.</p></noscript>
-        </form>
-      </section>
-    </div>
-
-    <figure class="prelaunch__visual">
-      <div class="prelaunch__frame">
-        <img
-          src={withBase('/assets/pwa/announcements-brand-v2-512.png')}
-          width="512"
-          height="512"
-          alt="Логотип «Полюбить Калининград Анонсы»"
-          decoding="async"
-          fetchpriority="high"
-        />
-        <div class="prelaunch__mosaic" aria-hidden="true" data-prelaunch-mosaic>
-          {tiles.map((tile, index) => (
-            <span
-              class="prelaunch__tile"
-              data-prelaunch-tile
-              data-index={index}
-              style={`--veil:${tile.veil};--speed:${tile.speed}s;--delay:${tile.delay}s;--blur:${tile.blur}px;`}
-            ></span>
-          ))}
+          <button type="submit" data-prelaunch-submit>
+            <span data-prelaunch-submit-label>Напомнить о запуске</span>
+          </button>
         </div>
-        <div class="prelaunch__frame-light" aria-hidden="true"></div>
-      </div>
-      <figcaption>
-        <span>Персональная афиша</span>
-        <span aria-hidden="true">·</span>
-        <span>Калининградская область</span>
-      </figcaption>
-    </figure>
-  </section>
 
-  <footer class="prelaunch__footer">
-    <span>Культурные и просветительские события региона</span>
-    <span class="prelaunch__footer-rule" aria-hidden="true"></span>
-    <time datetime="2026-09-01">Запуск 01.09.2026</time>
-  </footer>
+        <label class="prelaunch-form__consent" id="prelaunch-consent">
+          <input type="checkbox" name="consent" required />
+          <span>Согласен получить одно письмо о запуске. Email используется только для этого уведомления.</span>
+        </label>
+
+        <label class="prelaunch-form__trap" aria-hidden="true">
+          <span>Ваш сайт</span>
+          <input type="text" name="website" tabindex="-1" autocomplete="off" />
+        </label>
+
+        <p
+          class="prelaunch-form__status"
+          id="prelaunch-status"
+          data-prelaunch-status
+          role="status"
+          aria-live="polite"
+        ></p>
+        <noscript><p class="prelaunch-form__noscript">Для отправки формы нужен JavaScript.</p></noscript>
+      </form>
+    </section>
+  </div>
 </main>
 
 <script>
   import { getResilientDataClient } from '../lib/resilientDataClient';
   import { parseSupabaseTransportError } from '../lib/resilientSupabaseTransport';
 
+  type TileState = 'sealed' | 'dim' | 'revealed';
+
   const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
   const tiles = Array.from(document.querySelectorAll<HTMLElement>('[data-prelaunch-tile]'));
   let mosaicTimer = 0;
+  let previousIndices = new Set<number>();
 
   const randomBetween = (minimum: number, maximum: number) => minimum + Math.random() * (maximum - minimum);
+  const randomState = (current: string | undefined): TileState => {
+    if (current === 'sealed') return Math.random() > .45 ? 'dim' : 'revealed';
+    if (current === 'revealed') return Math.random() > .35 ? 'dim' : 'sealed';
+    return Math.random() > .5 ? 'sealed' : 'revealed';
+  };
 
   function stopMosaic(): void {
     if (!mosaicTimer) return;
@@ -151,18 +144,20 @@ const tiles = veilPattern.map((veil, index) => ({
     stopMosaic();
     if (motionQuery.matches || document.hidden || tiles.length === 0) return;
     mosaicTimer = window.setTimeout(() => {
-      const changes = Math.max(2, Math.floor(randomBetween(2, 7)));
-      const candidates = [...tiles].sort(() => Math.random() - .5).slice(0, changes);
-      for (const tile of candidates) {
-        const current = Number.parseFloat(tile.style.getPropertyValue('--veil')) || .4;
-        const next = current > .55 ? randomBetween(.07, .42) : randomBetween(.38, .79);
-        tile.style.setProperty('--veil', next.toFixed(3));
-        tile.style.setProperty('--blur', `${randomBetween(0, 2.2).toFixed(2)}px`);
-        tile.style.setProperty('--shine', randomBetween(0, .11).toFixed(3));
-        tile.style.setProperty('--speed', `${randomBetween(2.7, 5.8).toFixed(2)}s`);
+      const available = tiles
+        .map((tile, index) => ({ tile, index }))
+        .filter(({ index }) => !previousIndices.has(index))
+        .sort(() => Math.random() - .5);
+      const changeCount = Math.floor(randomBetween(2, 6));
+      const changed = available.slice(0, changeCount);
+      previousIndices = new Set(changed.map(({ index }) => index));
+      for (const { tile } of changed) {
+        tile.dataset.state = randomState(tile.dataset.state);
+        tile.style.setProperty('--speed', `${randomBetween(4.2, 8.1).toFixed(2)}s`);
+        tile.style.setProperty('--delay', '0s');
       }
       scheduleMosaic();
-    }, randomBetween(1150, 2500));
+    }, randomBetween(1800, 3600));
   }
 
   document.addEventListener('visibilitychange', scheduleMosaic);
@@ -185,7 +180,7 @@ const tiles = veilPattern.map((veil, index) => ({
     if (!submit || !submitLabel) return;
     submit.disabled = active;
     submit.setAttribute('aria-busy', String(active));
-    submitLabel.textContent = active ? 'Сохраняем…' : 'Напомнить мне';
+    submitLabel.textContent = active ? 'Сохраняем…' : 'Напомнить о запуске';
   }
 
   form?.addEventListener('submit', async (event) => {
@@ -275,162 +270,186 @@ const tiles = veilPattern.map((veil, index) => ({
   .prelaunch {
     position: relative;
     isolation: isolate;
-    min-height: 100vh;
-    padding: clamp(1rem, 2vw, 1.75rem) clamp(1rem, 4vw, 4.5rem) 1.25rem;
-    display: grid;
-    grid-template-rows: 1fr auto;
+    min-height: 100svh;
     overflow: hidden;
+    background: #0a0c0f;
+    color: #f2e5d8;
   }
-  .prelaunch__halo {
+
+  .prelaunch__background,
+  .prelaunch__mosaic,
+  .prelaunch__atmosphere {
     position: absolute;
-    z-index: -1;
-    width: 42rem;
-    aspect-ratio: 1;
-    border-radius: 50%;
-    filter: blur(85px);
-    opacity: .16;
+    inset: 0;
     pointer-events: none;
   }
-  .prelaunch__halo--one { right: -15rem; top: -16rem; background: #ba7244; }
-  .prelaunch__halo--two { left: -22rem; bottom: -22rem; background: #4c7565; }
 
-  .prelaunch__shell {
-    width: min(1260px, 100%);
-    margin: auto;
+  .prelaunch__background { z-index: 0; overflow: hidden; }
+  .prelaunch__background::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background:
+      linear-gradient(90deg, rgba(8,10,13,.74) 0%, rgba(8,10,13,.2) 48%, rgba(8,10,13,.38) 100%),
+      linear-gradient(180deg, rgba(7,9,12,.36), transparent 45%, rgba(7,9,12,.32));
+  }
+
+  .prelaunch__projection {
+    position: absolute;
+    width: clamp(780px, 82vw, 1380px);
+    max-width: none;
+    height: auto;
+    left: 57%;
+    top: 35%;
+    transform: translateX(-50%);
+    filter: saturate(.86) contrast(1.03) brightness(.82);
+  }
+
+  .prelaunch__mosaic {
+    --tile-size: clamp(148px, 14vw, 236px);
+    z-index: 1;
+    inset: calc(var(--tile-size) * -.58) auto auto calc(var(--tile-size) * -.5);
+    width: max-content;
+    height: max-content;
     display: grid;
-    grid-template-columns: minmax(0, 1.02fr) minmax(360px, .98fr);
-    align-items: center;
-    gap: clamp(3rem, 7vw, 7.5rem);
-    padding-block: clamp(2.25rem, 8vh, 7rem);
+    grid-template-columns: repeat(9, var(--tile-size));
+    grid-auto-rows: var(--tile-size);
+    gap: clamp(7px, .75vw, 13px);
+    transform: rotate(-.08deg);
   }
-  .prelaunch__copy { max-width: 42rem; }
-  .prelaunch__brandline {
-    display: inline-flex;
-    align-items: center;
-    gap: .72rem;
-    margin-bottom: clamp(2.6rem, 6vh, 5.5rem);
-    color: rgba(245, 239, 230, .78);
-    font-size: .74rem;
-    font-weight: 650;
-    letter-spacing: .16em;
-    line-height: 1.3;
-    text-transform: uppercase;
+
+  .prelaunch__tile {
+    position: relative;
+    border: 1px solid rgba(235,220,204,.13);
+    border-radius: clamp(10px, 1vw, 17px);
+    background: rgb(11, 14, 18);
+    backdrop-filter: blur(var(--tile-blur, 1px)) saturate(var(--tile-saturation, .78));
+    box-shadow:
+      inset 0 1px 1px rgba(255,255,255,.07),
+      inset 0 -12px 26px rgba(0,0,0,.18),
+      0 2px 7px rgba(0,0,0,.32);
   }
-  .prelaunch__brandmark {
-    width: .7rem;
+  .prelaunch__tile::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    border-radius: inherit;
+    background:
+      radial-gradient(circle at 72% 16%, rgba(255,222,196,var(--tile-glow,0)), transparent 46%),
+      linear-gradient(135deg, rgba(255,255,255,.055), transparent 31%, rgba(0,0,0,.13));
+  }
+  .prelaunch__tile[data-state="sealed"] { --veil: .94; --tile-blur: 3px; --tile-saturation: .4; --tile-glow: .01; }
+  .prelaunch__tile[data-state="dim"] { --veil: .7; --tile-blur: 1.4px; --tile-saturation: .68; --tile-glow: .055; }
+  .prelaunch__tile[data-state="revealed"] { --veil: .28; --tile-blur: .2px; --tile-saturation: .94; --tile-glow: .16; }
+
+  .prelaunch__atmosphere {
+    z-index: 2;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 86% 23%, rgba(237,176,136,.2), transparent 23%),
+      radial-gradient(circle at 63% 48%, rgba(197,95,51,.13), transparent 34%),
+      linear-gradient(90deg, rgba(4,6,9,.54), transparent 36%, rgba(4,6,9,.1) 72%, rgba(4,6,9,.37));
+  }
+  .prelaunch__atmosphere::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    opacity: .16;
+    background-image:
+      repeating-radial-gradient(circle at 15% 28%, rgba(255,255,255,.14) 0 1px, transparent 1px 6px),
+      linear-gradient(115deg, transparent 0 63%, rgba(255,236,219,.04) 71%, transparent 80%);
+    background-size: 37px 43px, 100% 100%;
+    mix-blend-mode: soft-light;
+  }
+  .prelaunch__halo { position: absolute; border-radius: 50%; filter: blur(70px); }
+  .prelaunch__halo--warm { width: 42vw; height: 38vw; right: -12vw; top: 3vh; background: rgba(215,126,85,.18); }
+  .prelaunch__halo--soft { width: 34vw; height: 30vw; left: 35%; bottom: 4vh; background: rgba(144,69,42,.12); }
+  .prelaunch__spark {
+    position: absolute;
+    width: 7px;
     aspect-ratio: 1;
-    border: 1px solid rgba(240, 200, 158, .72);
-    background: rgba(215, 160, 106, .14);
-    box-shadow: 0 0 24px rgba(215,160,106,.23);
+    border-radius: 50%;
+    background: #f7dfce;
+    box-shadow: 0 0 14px 4px rgba(248,211,185,.44);
+    opacity: .55;
   }
-  .prelaunch__date {
-    display: inline-flex;
+  .prelaunch__spark--one { top: 12%; right: 9%; }
+  .prelaunch__spark--two { top: 31%; right: 4%; width: 4px; }
+  .prelaunch__spark--three { right: 10%; bottom: 9%; width: 10px; border-radius: 0 100% 0 100%; transform: rotate(45deg); }
+
+  .prelaunch__foreground {
+    position: relative;
+    z-index: 3;
+    width: min(1360px, 100%);
+    min-height: 100svh;
+    margin: 0 auto;
+    padding: clamp(34px, 5.2vh, 78px) clamp(28px, 6.7vw, 112px) clamp(30px, 5.8vh, 86px);
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+  }
+
+  .prelaunch__brand {
+    display: flex;
     align-items: center;
-    gap: .8rem;
-    margin: 0 0 1.5rem;
-    padding: .45rem .72rem .45rem .48rem;
-    border: 1px solid var(--prelaunch-line);
-    border-radius: 999px;
-    background: rgba(255,255,255,.025);
-    color: var(--prelaunch-copper-soft);
-    font-size: .76rem;
-    font-weight: 700;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    box-shadow: inset 0 1px rgba(255,255,255,.045);
+    gap: clamp(14px, 1.5vw, 24px);
+    width: max-content;
   }
-  .prelaunch__date-label {
-    padding: .28rem .55rem;
-    border-radius: 999px;
-    background: rgba(215,160,106,.14);
-    color: #f7ddc1;
+  .prelaunch__brand img {
+    width: clamp(72px, 7.7vw, 124px);
+    border-radius: 23%;
+    box-shadow: 0 14px 36px rgba(0,0,0,.3), 0 0 28px rgba(207,102,61,.1);
   }
-  .prelaunch h1 {
-    max-width: 13ch;
+  .prelaunch__brand p {
     margin: 0;
-    font-family: Georgia, "Times New Roman", serif;
-    font-size: clamp(3.05rem, 6.3vw, 6.65rem);
-    font-weight: 400;
-    line-height: .94;
-    letter-spacing: -.052em;
+    display: grid;
+    color: #ead8c8;
+    font-size: clamp(1.15rem, 2.25vw, 2.35rem);
+    font-weight: 650;
+    line-height: .95;
+    letter-spacing: -.035em;
+    text-shadow: 0 2px 16px rgba(0,0,0,.5);
+  }
+
+  .prelaunch__copy {
+    align-self: start;
+    margin-top: clamp(72px, 12vh, 190px);
+    max-width: 1180px;
+  }
+  .prelaunch__copy h1 {
+    margin: 0;
+    color: #f4e8dc;
+    font-size: clamp(4.25rem, 8.4vw, 9.2rem);
+    font-weight: 590;
+    line-height: .9;
+    letter-spacing: -.065em;
+    text-shadow: 0 5px 35px rgba(0,0,0,.48);
     text-wrap: balance;
   }
-  .prelaunch__lead {
-    max-width: 38rem;
-    margin: clamp(1.8rem, 4vh, 2.8rem) 0 0;
-    color: #ebe3d8;
-    font-size: clamp(1.08rem, 1.55vw, 1.34rem);
-    line-height: 1.58;
-    text-wrap: pretty;
-  }
-  .prelaunch__support {
-    max-width: 38rem;
-    margin: .9rem 0 0;
-    color: var(--prelaunch-muted);
-    font-size: .98rem;
-    line-height: 1.68;
-    text-wrap: pretty;
+  .prelaunch__copy p {
+    max-width: 31ch;
+    margin: clamp(30px, 4.5vh, 58px) 0 0;
+    color: rgba(233,218,204,.9);
+    font-size: clamp(1.15rem, 1.75vw, 2rem);
+    font-weight: 400;
+    line-height: 1.28;
+    letter-spacing: -.018em;
+    text-shadow: 0 3px 20px rgba(0,0,0,.75);
   }
 
-  .prelaunch__notify {
-    max-width: 39rem;
-    margin-top: clamp(2rem, 4.8vh, 3.25rem);
-    padding: clamp(1.15rem, 2.4vw, 1.65rem);
-    border: 1px solid var(--prelaunch-line);
-    border-radius: 1.4rem;
-    background:
-      linear-gradient(135deg, rgba(255,255,255,.052), rgba(255,255,255,.018)),
-      var(--prelaunch-surface);
-    box-shadow: 0 24px 70px rgba(0,0,0,.24), inset 0 1px rgba(255,255,255,.05);
-    backdrop-filter: blur(22px) saturate(115%);
-  }
-  .prelaunch__notify-heading {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1rem;
-  }
-  .prelaunch__notify-kicker {
-    margin: 0 0 .25rem;
-    color: var(--prelaunch-copper-soft);
-    font-size: .69rem;
-    font-weight: 700;
-    letter-spacing: .12em;
-    text-transform: uppercase;
-  }
+  .prelaunch__notify { width: min(760px, 68vw); }
   .prelaunch__notify h2 {
-    margin: 0;
-    font-family: Georgia, "Times New Roman", serif;
-    font-size: clamp(1.45rem, 2.3vw, 2rem);
-    font-weight: 400;
-    letter-spacing: -.025em;
-  }
-  .prelaunch__notify-icon {
-    flex: 0 0 auto;
-    display: grid;
-    place-items: center;
-    width: 2.5rem;
-    aspect-ratio: 1;
-    border: 1px solid var(--prelaunch-line);
-    border-radius: 50%;
-    color: var(--prelaunch-copper-soft);
-  }
-  .prelaunch__notify-icon svg { width: 1.15rem; }
-  .prelaunch__notify-copy {
-    margin: .55rem 0 1.05rem;
-    color: var(--prelaunch-muted);
-    font-size: .9rem;
+    margin: 0 0 14px;
+    color: rgba(238,221,205,.92);
+    font-size: clamp(.95rem, 1.25vw, 1.28rem);
+    font-weight: 460;
   }
   .prelaunch-form__row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: .65rem;
+    gap: 14px;
   }
-  .prelaunch-form__field {
-    display: grid;
-    gap: .38rem;
-    min-width: 0;
-  }
+  .prelaunch-form__field { min-width: 0; }
   .prelaunch-form__field > span {
     position: absolute;
     width: 1px;
@@ -444,58 +463,46 @@ const tiles = veilPattern.map((veil, index) => ({
   }
   .prelaunch-form input[type="email"] {
     width: 100%;
-    min-height: 3.25rem;
-    padding: .75rem 1rem;
-    border: 1px solid rgba(239,223,201,.22);
-    border-radius: .82rem;
-    background: rgba(4,8,7,.56);
-    color: var(--prelaunch-text);
-    caret-color: var(--prelaunch-copper-soft);
-    box-shadow: inset 0 1px 8px rgba(0,0,0,.13);
+    min-height: clamp(58px, 6.7vh, 78px);
+    padding: 0 clamp(18px, 2vw, 28px);
+    border: 1px solid rgba(231,160,122,.66);
+    border-radius: 12px;
+    background: rgba(19,23,28,.76);
+    color: #f6e8db;
+    caret-color: #e9a077;
+    box-shadow: inset 0 1px 8px rgba(0,0,0,.23), 0 8px 26px rgba(0,0,0,.16);
+    backdrop-filter: blur(18px);
   }
-  .prelaunch-form input[type="email"]::placeholder { color: rgba(187,181,170,.55); }
-  .prelaunch-form input[type="email"]:focus { border-color: rgba(240,200,158,.62); outline: none; }
+  .prelaunch-form input[type="email"]::placeholder { color: rgba(207,202,198,.48); }
+  .prelaunch-form input[type="email"]:focus { border-color: #efb08d; outline: none; }
   .prelaunch-form button {
-    min-height: 3.25rem;
-    padding: .75rem 1.05rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: .8rem;
+    min-height: clamp(58px, 6.7vh, 78px);
+    padding: 0 clamp(22px, 2.35vw, 36px);
     border: 0;
-    border-radius: .82rem;
-    background: linear-gradient(135deg, #efd0ad, #c98c55);
-    color: #21150d;
-    font-size: .88rem;
-    font-weight: 760;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #e4a079, #bc6d4d);
+    color: #24130f;
+    font-weight: 640;
+    white-space: nowrap;
     cursor: pointer;
-    box-shadow: 0 12px 32px rgba(198,132,75,.19), inset 0 1px rgba(255,255,255,.45);
-    transition: transform .2s ease, filter .2s ease, box-shadow .2s ease;
+    box-shadow: 0 13px 32px rgba(126,55,36,.28), inset 0 1px rgba(255,255,255,.3);
+    transition: transform .2s ease, filter .2s ease;
   }
-  .prelaunch-form button:hover:not(:disabled) {
-    transform: translateY(-1px);
-    filter: brightness(1.05);
-    box-shadow: 0 16px 36px rgba(198,132,75,.26), inset 0 1px rgba(255,255,255,.5);
-  }
+  .prelaunch-form button:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.07); }
   .prelaunch-form button:disabled { cursor: progress; opacity: .72; }
-  .prelaunch-form__arrow { font-size: 1.05rem; line-height: 1; }
   .prelaunch-form__consent {
     display: grid;
-    grid-template-columns: 1rem 1fr;
+    grid-template-columns: 16px minmax(0, 1fr);
     align-items: start;
-    gap: .58rem;
-    margin-top: .8rem;
-    color: rgba(187,181,170,.82);
+    gap: 8px;
+    max-width: 620px;
+    margin-top: 11px;
+    color: rgba(220,208,197,.68);
     font-size: .72rem;
-    line-height: 1.48;
+    line-height: 1.42;
     cursor: pointer;
   }
-  .prelaunch-form__consent input {
-    width: .95rem;
-    height: .95rem;
-    margin: .14rem 0 0;
-    accent-color: var(--prelaunch-copper);
-  }
+  .prelaunch-form__consent input { width: 15px; height: 15px; margin: 1px 0 0; accent-color: #d78661; }
   .prelaunch-form__trap {
     position: absolute !important;
     width: 1px !important;
@@ -506,147 +513,65 @@ const tiles = veilPattern.map((veil, index) => ({
   }
   .prelaunch-form__status,
   .prelaunch-form__noscript {
-    min-height: 1.35rem;
-    margin: .7rem 0 0;
+    min-height: 1.3rem;
+    margin: 8px 0 0;
     font-size: .78rem;
-    line-height: 1.45;
+    line-height: 1.4;
   }
-  .prelaunch-form__status:empty { margin-top: 0; min-height: 0; }
+  .prelaunch-form__status:empty { min-height: 0; margin-top: 0; }
   .prelaunch-form__status[data-kind="success"] { color: var(--prelaunch-success); }
   .prelaunch-form__status[data-kind="error"],
   .prelaunch-form__noscript { color: var(--prelaunch-error); }
 
-  .prelaunch__visual {
-    position: relative;
-    width: min(100%, 38rem);
-    margin: 0;
-    justify-self: end;
-  }
-  .prelaunch__frame {
-    position: relative;
-    aspect-ratio: 1;
-    overflow: hidden;
-    border: 1px solid rgba(239,223,201,.18);
-    border-radius: clamp(1.2rem, 3vw, 2.5rem);
-    background: #130e0b;
-    box-shadow:
-      0 44px 100px rgba(0,0,0,.47),
-      0 0 0 10px rgba(255,255,255,.012),
-      inset 0 1px rgba(255,255,255,.12);
-    transform: rotate(.65deg);
-  }
-  .prelaunch__frame > img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    transform: scale(1.012);
-    filter: saturate(.86) contrast(1.04) brightness(.88);
-  }
-  .prelaunch__mosaic {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    grid-template-rows: repeat(6, 1fr);
-  }
-  .prelaunch__tile {
-    --shine: 0;
-    position: relative;
-    border-right: 1px solid rgba(255,255,255,.045);
-    border-bottom: 1px solid rgba(255,255,255,.04);
-    background:
-      radial-gradient(circle at 32% 22%, rgba(255,227,194,var(--shine)), transparent 65%),
-      rgba(7, 13, 12, var(--veil));
-    backdrop-filter: blur(var(--blur)) saturate(.78);
-    box-shadow: inset 0 0 24px rgba(0,0,0,.07);
-    transition:
-      background-color var(--speed) cubic-bezier(.45,0,.25,1) var(--delay),
-      backdrop-filter var(--speed) cubic-bezier(.45,0,.25,1) var(--delay),
-      box-shadow var(--speed) cubic-bezier(.45,0,.25,1) var(--delay);
-    will-change: background-color, backdrop-filter;
-  }
-  .prelaunch__frame-light {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background:
-      linear-gradient(122deg, rgba(255,255,255,.1), transparent 21%, transparent 73%, rgba(218,165,111,.07)),
-      radial-gradient(circle at 62% 15%, rgba(255,226,195,.09), transparent 28%);
-    mix-blend-mode: screen;
-  }
-  .prelaunch__visual::before {
-    content: "";
-    position: absolute;
-    inset: 12% -5% -7% 18%;
-    z-index: -1;
-    border-radius: 42%;
-    background: rgba(190,124,71,.15);
-    filter: blur(54px);
-  }
-  .prelaunch__visual figcaption {
-    display: flex;
-    justify-content: center;
-    gap: .55rem;
-    margin-top: 1.05rem;
-    color: rgba(187,181,170,.6);
-    font-size: .68rem;
-    font-weight: 650;
-    letter-spacing: .12em;
-    text-transform: uppercase;
-  }
-
-  .prelaunch__footer {
-    width: min(1260px, 100%);
-    margin: 0 auto;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    color: rgba(187,181,170,.53);
-    font-size: .66rem;
-    font-weight: 650;
-    letter-spacing: .11em;
-    text-transform: uppercase;
-  }
-  .prelaunch__footer-rule { flex: 1; height: 1px; background: rgba(239,223,201,.1); }
-
-  @media (max-width: 960px) {
-    .prelaunch { padding-inline: clamp(1rem, 5vw, 2.5rem); }
-    .prelaunch__shell {
-      grid-template-columns: 1fr;
-      gap: 3.2rem;
-      padding-block: 3rem 2.5rem;
+  @media (max-width: 760px) {
+    .prelaunch { min-height: max(100svh, 760px); overflow-y: auto; }
+    .prelaunch__projection { width: 164vw; left: 58%; top: 14%; filter: saturate(.84) brightness(.7); }
+    .prelaunch__background::before {
+      background: linear-gradient(180deg, rgba(8,10,13,.22), rgba(8,10,13,.38) 43%, rgba(8,10,13,.8) 76%, #090b0e 100%);
     }
-    .prelaunch__copy { max-width: 47rem; }
-    .prelaunch__brandline { margin-bottom: 3rem; }
-    .prelaunch h1 { max-width: 12ch; font-size: clamp(3.4rem, 10vw, 6.4rem); }
-    .prelaunch__visual { width: min(88vw, 36rem); justify-self: center; }
+    .prelaunch__mosaic {
+      --tile-size: clamp(88px, 28vw, 126px);
+      inset: calc(var(--tile-size) * -.45) auto auto 50%;
+      grid-template-columns: repeat(6, var(--tile-size));
+      transform: translateX(-50%);
+      gap: 7px;
+    }
+    .prelaunch__atmosphere {
+      background:
+        radial-gradient(circle at 87% 18%, rgba(237,176,136,.18), transparent 25%),
+        linear-gradient(180deg, rgba(4,6,9,.05), rgba(4,6,9,.18) 48%, rgba(4,6,9,.6));
+    }
+    .prelaunch__foreground {
+      min-height: max(100svh, 760px);
+      padding: clamp(22px, 5.5vw, 34px) clamp(18px, 6vw, 30px) 26px;
+    }
+    .prelaunch__brand { gap: 12px; }
+    .prelaunch__brand img { width: clamp(54px, 17vw, 72px); }
+    .prelaunch__brand p { font-size: clamp(.95rem, 4.6vw, 1.25rem); }
+    .prelaunch__copy { align-self: center; margin-top: clamp(190px, 31vh, 300px); }
+    .prelaunch__copy h1 { font-size: clamp(3.25rem, 15.2vw, 5.35rem); line-height: .92; max-width: 9ch; }
+    .prelaunch__copy p { margin-top: 22px; max-width: 29ch; font-size: clamp(1rem, 4.4vw, 1.2rem); line-height: 1.38; }
+    .prelaunch__desktop-break { display: none; }
+    .prelaunch__notify { width: 100%; margin-top: 44px; }
+    .prelaunch__notify h2 { margin-bottom: 10px; font-size: .95rem; }
+    .prelaunch-form__row { grid-template-columns: 1fr; gap: 10px; }
+    .prelaunch-form input[type="email"],
+    .prelaunch-form button { min-height: 58px; width: 100%; border-radius: 10px; }
+    .prelaunch-form__consent { font-size: .68rem; }
   }
 
-  @media (max-width: 620px) {
-    .prelaunch { min-height: auto; padding: .85rem .85rem 1rem; }
-    .prelaunch__shell { padding-block: 1.5rem 2rem; gap: 2.4rem; }
-    .prelaunch__brandline {
-      margin-bottom: 2.4rem;
-      font-size: .63rem;
-      letter-spacing: .12em;
-    }
-    .prelaunch__date { margin-bottom: 1.1rem; font-size: .67rem; }
-    .prelaunch h1 { max-width: 11ch; font-size: clamp(3rem, 16vw, 4.5rem); line-height: .95; }
-    .prelaunch__lead { margin-top: 1.45rem; font-size: 1rem; line-height: 1.54; }
-    .prelaunch__support { font-size: .9rem; line-height: 1.6; }
-    .prelaunch__notify { margin-top: 1.8rem; padding: 1rem; border-radius: 1.15rem; }
-    .prelaunch-form__row { grid-template-columns: 1fr; }
-    .prelaunch-form button { width: 100%; }
-    .prelaunch__visual { width: min(100%, 31rem); }
-    .prelaunch__frame { border-radius: 1.45rem; transform: none; }
-    .prelaunch__visual figcaption { flex-wrap: wrap; font-size: .58rem; letter-spacing: .08em; }
-    .prelaunch__footer { align-items: flex-start; flex-direction: column; gap: .45rem; line-height: 1.5; }
-    .prelaunch__footer-rule { width: 100%; flex: none; }
+  @media (max-height: 760px) and (min-width: 761px) {
+    .prelaunch__foreground { padding-block: 26px; }
+    .prelaunch__brand img { width: 70px; }
+    .prelaunch__brand p { font-size: 1.15rem; }
+    .prelaunch__copy { margin-top: 38px; }
+    .prelaunch__copy h1 { font-size: clamp(4rem, 7vw, 6.8rem); }
+    .prelaunch__copy p { margin-top: 20px; font-size: 1.08rem; }
+    .prelaunch-form input[type="email"], .prelaunch-form button { min-height: 54px; }
   }
 
   @media (prefers-reduced-motion: reduce) {
     .prelaunch__tile,
-    .prelaunch-form button { transition: none; }
-    .prelaunch__frame { transform: none; }
+    .prelaunch-form button { transition: none !important; }
   }
 </style>

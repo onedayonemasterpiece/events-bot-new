@@ -75,18 +75,40 @@ test('landing source uses the approved brand asset and purpose-limited resilient
   const catalog = source('site/src/lib/backendOperationCatalog.ts');
 
   assert.match(landing, /announcements-brand-v2-512\.png/u);
-  assert.match(landing, /1 сентября 2026/u);
-  assert.match(landing, /персонализированный сервис анонсов/u);
+  assert.match(landing, /Запуск 1 сентября/u);
+  assert.match(landing, /Персонализированный сервис анонсов/u);
   assert.match(landing, /register_prelaunch_notification_v1/u);
   assert.match(landing, /getResilientDataClient/u);
   assert.match(landing, /launch-2026-09-01-v1/u);
   assert.match(landing, /prefers-reduced-motion/u);
+  assert.match(landing, /prelaunch__background/u);
+  assert.match(landing, /prelaunch__mosaic/u);
+  assert.match(landing, /prelaunch__atmosphere/u);
+  assert.match(landing, /prelaunch__foreground/u);
+  assert.match(landing, /length: 72/u);
+  assert.match(landing, /data-state/u);
+  assert.match(landing, /'sealed', 'dim', 'revealed'/u);
   assert.match(layout, /content=\{robots\}/u);
   assert.match(layout, /prelaunch-motion\.css/u);
   assert.match(motion, /opacity:\s*var\(--veil\)/u);
   assert.match(motion, /transition:[\s\S]*opacity var\(--speed\)/u);
   assert.match(motion, /prefers-reduced-motion/u);
   assert.match(catalog, /'register_prelaunch_notification_v1'/u);
+});
+
+test('secret candidate inherits the checked production prelaunch surface', () => {
+  const build = source('site/scripts/build-secret-candidate.mjs');
+  const check = source('site/scripts/check-secret-candidate.mjs');
+  const layout = source('site/src/layouts/PrelaunchLayout.astro');
+
+  assert.match(build, /productionManifest\.prelaunch_mode/u);
+  assert.match(build, /PUBLIC_PRELAUNCH_MODE:\s*prelaunchMode \? 'on' : 'off'/u);
+  assert.match(build, /prelaunch_mode:\s*prelaunchMode/u);
+  assert.match(check, /data-prelaunch-page/u);
+  assert.match(check, /candidate public surface disagrees with prelaunch mode/u);
+  assert.match(layout, /noindex,nofollow,noarchive,nosnippet/u);
+  assert.match(layout, /name="referrer" content="no-referrer"/u);
+  assert.match(layout, /withBase\('\/'\)/u);
 });
 
 test('prelaunch notification RPC is classified as idempotent replay', () => {

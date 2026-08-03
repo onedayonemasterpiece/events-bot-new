@@ -1,5 +1,5 @@
 ---
-import { IS_PRODUCTION, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
+import { IS_PRODUCTION, IS_SECRET_CANDIDATE, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
 import '../styles/prelaunch-motion.css';
 
 interface Props {
@@ -11,9 +11,43 @@ const {
   title = `${SITE_NAME} — запуск 1 сентября`,
   description = 'Персонализированный сервис анонсов и навигатор по культурным и просветительским событиям Калининградской области. Запуск 1 сентября 2026 года.',
 } = Astro.props;
-const canonicalUrl = `${SITE_ORIGIN}/`;
-const robots = IS_PRODUCTION ? 'index,follow' : 'noindex,nofollow,noarchive';
+const canonicalUrl = `${SITE_ORIGIN}${withBase('/')}`;
+const robots = IS_PRODUCTION ? 'index,follow' : 'noindex,nofollow,noarchive,nosnippet';
 const shareImage = `${SITE_ORIGIN}${withBase('/assets/pwa/announcements-brand-v2-512.png')}`;
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebSite',
+      '@id': `${canonicalUrl}#website`,
+      url: canonicalUrl,
+      name: SITE_NAME,
+      description,
+      inLanguage: 'ru',
+    },
+    {
+      '@type': 'WebPage',
+      '@id': `${canonicalUrl}#prelaunch`,
+      url: canonicalUrl,
+      name: title,
+      description,
+      inLanguage: 'ru',
+      isPartOf: { '@id': `${canonicalUrl}#website` },
+      about: { '@id': `${canonicalUrl}#service` },
+    },
+    {
+      '@type': 'Service',
+      '@id': `${canonicalUrl}#service`,
+      name: SITE_NAME,
+      description,
+      areaServed: [
+        { '@type': 'City', name: 'Калининград' },
+        { '@type': 'AdministrativeArea', name: 'Калининградская область' },
+      ],
+      serviceType: 'Персонализированный сервис анонсов культурных и просветительских событий',
+    },
+  ],
+};
 ---
 <!doctype html>
 <html lang="ru">
@@ -21,11 +55,13 @@ const shareImage = `${SITE_ORIGIN}${withBase('/assets/pwa/announcements-brand-v2
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content={robots} />
+    {IS_SECRET_CANDIDATE && <meta name="referrer" content="no-referrer" />}
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonicalUrl} />
     <meta property="og:site_name" content={SITE_NAME} />
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content="ru_RU" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalUrl} />
@@ -34,9 +70,13 @@ const shareImage = `${SITE_ORIGIN}${withBase('/assets/pwa/announcements-brand-v2
     <meta property="og:image:height" content="512" />
     <meta property="og:image:alt" content="Логотип «Полюбить Калининград Анонсы»" />
     <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={shareImage} />
     <link rel="icon" href={withBase('/assets/pwa/announcements-brand-v2-192.png')} type="image/png" />
     <meta name="theme-color" content="#0b1110" />
     <meta name="color-scheme" content="dark" />
+    <script type="application/ld+json" set:html={JSON.stringify(structuredData)}></script>
     <style is:global>
       :root {
         color-scheme: dark;
