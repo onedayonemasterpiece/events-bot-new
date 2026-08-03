@@ -1,14 +1,23 @@
-.prelaunch__tile {
-  /* Opacity is composited reliably while custom colors are not interpolated
-     consistently by every browser used for the release gate. */
-  opacity: var(--veil);
+.prelaunch__tile::before {
+  /* Keep the tile geometry and the opaque inter-tile seam static. Only the
+     glass surface changes, so the background never flashes through the gaps. */
   transition:
-    opacity var(--speed) cubic-bezier(.45, 0, .25, 1) var(--delay),
-    backdrop-filter var(--speed) cubic-bezier(.45, 0, .25, 1) var(--delay),
-    box-shadow var(--speed) cubic-bezier(.45, 0, .25, 1) var(--delay) !important;
-  will-change: opacity, backdrop-filter;
+    background-color var(--speed) cubic-bezier(.45, 0, .22, 1) var(--delay),
+    -webkit-backdrop-filter var(--speed) cubic-bezier(.45, 0, .22, 1) var(--delay),
+    backdrop-filter var(--speed) cubic-bezier(.45, 0, .22, 1) var(--delay),
+    border-color var(--speed) cubic-bezier(.45, 0, .22, 1) var(--delay),
+    box-shadow var(--speed) cubic-bezier(.45, 0, .22, 1) var(--delay);
+  will-change: background-color, backdrop-filter, border-color, box-shadow;
+}
+
+.prelaunch__tile::after {
+  transition: opacity var(--speed) cubic-bezier(.45, 0, .22, 1) var(--delay);
+  will-change: opacity;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .prelaunch__tile { transition: none !important; }
+  .prelaunch__tile::before,
+  .prelaunch__tile::after {
+    transition: none !important;
+  }
 }
