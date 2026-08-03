@@ -29,7 +29,7 @@ lanes:
     expected_output: committed incident fix plus evidence and RESULTS.md
     verification_scope: full_local_and_live_canary
     effort: high_max_available
-    status: spawned
+    status: merged_live_canary_running
   - id: L1
     role: worker
     requirement_ids: [RYDB]
@@ -43,7 +43,7 @@ lanes:
     expected_output: committed code/tests/docs and RESULTS.md; scheduler remains off
     verification_scope: full_local_no_live_writes
     effort: high_max_available
-    status: spawned
+    status: merged
   - id: L2
     role: worker
     requirement_ids: [R5, R6, R7, R8]
@@ -57,7 +57,7 @@ lanes:
     expected_output: committed implementation/contracts/tests and RESULTS.md
     verification_scope: full_local_no_real_mail
     effort: high_max_available
-    status: spawned
+    status: merged
   - id: L3
     role: worker
     requirement_ids: [R3]
@@ -71,7 +71,7 @@ lanes:
     expected_output: committed pure contracts/tests/docs and RESULTS.md; EventLayout mount handed to integrator
     verification_scope: full_local
     effort: high
-    status: spawned
+    status: merged
   - id: L5
     role: worker
     requirement_ids: [R2]
@@ -85,7 +85,7 @@ lanes:
     expected_output: committed data plane/UI/tests/docs and RESULTS.md
     verification_scope: full_local
     effort: high
-    status: spawned
+    status: merged
   - id: L6
     role: worker
     requirement_ids: [R4]
@@ -99,7 +99,7 @@ lanes:
     expected_output: committed consumer/contracts/icons/tests/docs and RESULTS.md; producer handoff if external repo blocks
     verification_scope: full_local_no_external_publish
     effort: high
-    status: spawned
+    status: merged_default_off
   - id: L4
     role: worker
     requirement_ids: [R0b, R1]
@@ -113,4 +113,46 @@ lanes:
     expected_output: committed implementation/tests/docs and RESULTS.md
     verification_scope: full_local
     effort: high
-    status: planned
+    status: merged
+  - id: L1B
+    role: worker
+    requirement_ids: [RYDB]
+    target: typed YDB work queue and materialized counter read model
+    depends_on: [L1]
+    execution_mode: serial_after_dependency
+    branch: agent/static-unified/l1b-ydb-typed-read-model
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-unified-20260803/l1b-ydb
+    writable_files: [Region Talk typed YDB queue/read model, tests, canonical schema and incident docs]
+    forbidden_files: [site/src, CHANGELOG.md, docs/routes.yml]
+    expected_output: bounded normal path with broad fallback fail-closed
+    verification_scope: full_local_no_live_ydb
+    effort: high_max_available
+    status: merged_live_enable_blocked
+  - id: L2B
+    role: worker
+    requirement_ids: [R5, R6, R7]
+    target: complete deterministic zero-mail transport fault matrix
+    depends_on: [L2]
+    execution_mode: serial_after_dependency
+    branch: agent/static-unified/l2b-transport-fault-matrix
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-unified-20260803/l2b-transport
+    writable_files: [noMailFaultMatrix.ts, transport tests, canonical reliability docs]
+    forbidden_files: [site/src/layouts/EventLayout.astro, CHANGELOG.md, docs/routes.yml]
+    expected_output: seven executable no-mail profiles with sanitized receipts
+    verification_scope: full_local_no_real_mail
+    effort: high
+    status: merged_live_mobile_acceptance_pending
+  - id: L6P
+    role: worker
+    requirement_ids: [R4]
+    target: weather-calendar-v1 immutable producer in cat-weather-new
+    depends_on: [L6]
+    execution_mode: serial_after_dependency_external_repo
+    branch: agent/weather-calendar-v1-producer
+    worktree: /home/dev/.codex/worktrees/cat-weather-new/weather-calendar-v1-producer
+    writable_files: [weather_calendar, producer tests, cat-weather docs and CHANGELOG]
+    forbidden_files: [events-bot-new]
+    expected_output: dry-run producer and pointer-last publisher contract
+    verification_scope: full_local_no_external_publish
+    effort: high
+    status: draft_pr_2_live_adapter_canary_pending

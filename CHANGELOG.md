@@ -4,6 +4,41 @@
 
 - Fixed the 2026-08-03 StaticSiteBuilder failure storm: preview validation now derives Popular repeated-occurrence expectations from the generated family data instead of a fixture literal, requires the deterministic multi-image recommendation specimen, and distinguishes loaded-image shell containment from a correctly hidden missing-image fallback. The Chromium release gate now keeps strict geometry for loaded media while accepting only a bounded visible fallback for failed media (`INC-2026-08-03-static-site-builder-failure-storm`).
 
+- Added the anonymous-first static-site auth and reliability test plane: isolated
+  no-mail Supabase session fixtures, a closed auth-mode registry, and executable
+  normal/direct-down/relay-down/both-down/shared-upstream/ambiguous-body/recovery
+  matrices for Auth, Search, personalization and focus feedback. Ordinary tests
+  now prove selected-once and idempotent behavior with OTP/mail counters fixed at
+  zero; focus release, Yandex degradation and standard-onboarding contracts are
+  synchronized without enabling gated product promises.
+- Added the behavior-preserving P13N-00 boundary and unified page runtime:
+  quarantined legacy scoring, typed fail-closed surface policies, one inert
+  personalization marker on every eligible HTML route, generated auth/transport/
+  personalization inventory, and production-off browser characterization with
+  zero network, storage, reorder or handler changes. Standard cards now arbitrate
+  a 280 ms single navigation against desktop double-click/mobile double-tap to
+  set the existing like state exactly once, including dynamically inserted cards.
+- Added the event question CTA contract and fail-closed VK resolver. Published
+  partner posts take precedence over published managed Afisha posts; scheduled,
+  stored and wrong-community URLs remain hidden. Event pages render the
+  SVGRepo-sourced “Остались вопросы?” block before recommendations, and a live
+  managed VK publication schedules one coalesced Smart Update refresh.
+- Added the checked `/podborki/` catalog and collection registry, including
+  public/repair/blocked/deferred navigation policy and the exact-ID
+  `gastronomy_v1` lifecycle. Blocked collections stay out of navigation and the
+  sitemap, while gastronomy warm builds use no provider calls or prose
+  reclassification.
+- Added the default-off weather-calendar consumer, strict immutable snapshot and
+  atomic-pointer schemas, same-origin SHA verification, date/weekend placements,
+  stale/partial guards and a coherent CC0 SVGRepo outline set. Browser weather
+  requests remain first-party only; rollout stays disabled pending the producer
+  policy/live-smoke and seven-day canary gates.
+- Changed Region Talk YDB startup and orchestration to use a generation-scoped,
+  bounded typed work queue, point joins and one materialized counter row instead
+  of normal-path population scans. Exact database/cost guards remain mandatory;
+  legacy broad fallback needs two explicit flags, and scheduler/catch-up/RU
+  enablement remain blocked pending the approved server-RU canary.
+
 - Restored the production Supabase/focus API Gateways, isolated email triggers
   and bounded Postbox feedback YDB after `yc.iam.reaper` suspended them during
   the account-transfer window. Recovery verified outbound mail gates before

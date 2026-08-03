@@ -7,7 +7,14 @@ import { chromium } from 'playwright';
 const port = 43183;
 const origin = `http://127.0.0.1:${port}`;
 const server = spawn('python3', ['-m', 'http.server', String(port), '--bind', '127.0.0.1', '--directory', 'dist'], { stdio:'ignore' });
-await new Promise((resolve) => setTimeout(resolve, 450));
+for (let attempt = 0; attempt < 40; attempt += 1) {
+  try {
+    const response = await fetch(origin, { signal:AbortSignal.timeout(500) });
+    if (response.ok) break;
+  } catch {}
+  if (attempt === 39) throw new Error('event-card fixture server did not become ready');
+  await new Promise((resolve) => setTimeout(resolve, 100));
+}
 const executablePath = [
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
   '/home/dev/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome',
