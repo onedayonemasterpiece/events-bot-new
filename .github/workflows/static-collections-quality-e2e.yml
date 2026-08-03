@@ -8,6 +8,7 @@ on:
       - "docs/review-data/**"
       - "scripts/validate_static_collections_quality.py"
       - "scripts/build_static_collections_review_seed.py"
+      - "scripts/build_static_collection_gastronomy.py"
       - "scripts/backfill_static_collection_facts.py"
       - "scripts/evaluate_static_collection_facts_v3_gate_b.py"
       - "smart_event_update.py"
@@ -17,6 +18,7 @@ on:
       - "tests/test_google_ai_client.py"
       - "tests/test_static_collection_backfills.py"
       - "tests/test_static_collection_facts_backfill_report.py"
+      - "tests/test_static_collection_gastronomy.py"
       - "site/scripts/static_collection_*.json"
       - "site/scripts/static_collection_*.py"
       - "site/scripts/static_event_bge.py"
@@ -34,6 +36,7 @@ on:
       - "docs/review-data/**"
       - "scripts/validate_static_collections_quality.py"
       - "scripts/build_static_collections_review_seed.py"
+      - "scripts/build_static_collection_gastronomy.py"
       - "scripts/backfill_static_collection_facts.py"
       - "scripts/evaluate_static_collection_facts_v3_gate_b.py"
       - "smart_event_update.py"
@@ -43,6 +46,7 @@ on:
       - "tests/test_google_ai_client.py"
       - "tests/test_static_collection_backfills.py"
       - "tests/test_static_collection_facts_backfill_report.py"
+      - "tests/test_static_collection_gastronomy.py"
       - "site/scripts/static_collection_*.json"
       - "site/scripts/static_collection_*.py"
       - "site/scripts/static_event_bge.py"
@@ -74,7 +78,7 @@ permissions:
 
 jobs:
   facts-v3:
-    name: facts-v3 offline contract
+    name: collection offline contracts
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -92,19 +96,24 @@ jobs:
       - name: Install Python dependencies
         run: python -m pip install --disable-pip-version-check -r requirements.txt
 
-      - name: Validate Gate-B schema and run exact facts-v3 suite
+      - name: Validate facts-v3 and gastronomy extraction contracts
         shell: bash
         run: |
           set -euo pipefail
           python -m json.tool docs/review-data/static_collection_facts_v3_gate_b_report.schema.json >/dev/null
           python -m json.tool docs/review-data/static_collection_facts_v3_boundary_manifest.schema.json >/dev/null
-          python -m py_compile scripts/evaluate_static_collection_facts_v3_gate_b.py
+          python -m json.tool docs/review-data/static_collection_gastronomy_decisions.schema.json >/dev/null
+          python -m py_compile \
+            scripts/evaluate_static_collection_facts_v3_gate_b.py \
+            scripts/build_static_collection_gastronomy.py \
+            site/scripts/static_collection_gastronomy.py
           python -m pytest -q \
             tests/test_smart_event_update.py \
             tests/test_event_update_merge.py \
             tests/test_google_ai_client.py \
             tests/test_static_collection_backfills.py \
-            tests/test_static_collection_facts_backfill_report.py
+            tests/test_static_collection_facts_backfill_report.py \
+            tests/test_static_collection_gastronomy.py
 
   contract:
     name: contract
@@ -330,10 +339,10 @@ jobs:
         run: |
           set -euo pipefail
           echo "Contract result: $CONTRACT_RESULT"
-          echo "Facts v3 result: $FACTS_V3_RESULT"
+          echo "Collection offline contracts result: $FACTS_V3_RESULT"
           echo "Browser result: $BROWSER_RESULT"
           if [[ "$FACTS_V3_RESULT" != "success" ]]; then
-            echo "::error::Static collection facts-v3 offline contract failed"
+            echo "::error::Static collection offline contracts failed"
             exit 1
           fi
           if [[ "$CONTRACT_RESULT" != "success" ]]; then
