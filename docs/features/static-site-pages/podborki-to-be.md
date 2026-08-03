@@ -1488,15 +1488,17 @@ review seed и owner-approved gold, а также один generated batch manif
 
 ## 11. Эффективная очередь реализации
 
-Текущая ветка содержит **только этот анализ**. Код, конфиг, production jobs и
-данные в этом окне не меняются. Реализацию безопаснее разделить ровно на две
-ветки по стабильной границе manifest, а не смешивать extraction и Astro UI.
+Этот раздел фиксирует исходную очередь на момент проектирования. Ветка A/data
+preparation впоследствии реализована и слита через clean-main PR #299; её
+актуальная production-приёмка приведена в конце документа. Граница по-прежнему
+действует: extraction/data plane не смешивается с PR B и Astro UI.
 
 ### 11.1. Ветка A — сбор данных и подготовка
 
-Предлагаемое имя следующей ветки: `feature/static-collections-data-prep`, от
-свежего `origin/main`. Она не меняет публичные routes, sitemap и меню и может
-быть принята отдельно.
+Исторически предложенное имя: `feature/static-collections-data-prep`. Итоговая
+clean-main интеграция была выполнена в
+`integration/static-collections-audience-shadow-main-20260803` и достигла
+`origin/main` через PR #299. Публичные routes, sitemap и меню не менялись.
 
 Один компактный набор source contracts:
 
@@ -1930,3 +1932,46 @@ calls, product `WATCH`, а проверенный архив содержит `3
 его coverage=`unknown`, тогда как точные `62 = 2 + 60 + 0` закреплены в
 отдельном локальном hash-bound coverage/product snapshot; normalized visible
 SHA обоих product outputs совпадает.
+
+### Production acceptance после merge, 2026-08-03
+
+Clean-main интеграция слита PR #299 как
+`f44f7fc66ce6f833b7412796de1fb36f53cacec0` и развёрнута Fly release `1894`.
+Bounded facts-v3 canary на шести свежих exact event/source bindings завершил
+`6/6` apply без deferred. Identical warm прочитал все шесть решений из cache и
+дал `0` provider calls, `0` physical sends, `0` writes и пустой
+Event/EventSource diff.
+
+Это также production-доказательство правильной карты Google-проектов: шесть
+вызовов прошли через шесть разных key IDs и шесть разных `quota_scope`, а не
+через склеенный общий бюджет. Все requests/attempts получили terminal
+`succeeded`, `finalized_at`/`completed_at` и usage. Контракты —
+`google_ai_project_model_atomic_v1` и `rolling_60s_pacific_day_v2`.
+
+Event `7402` (`Детское шоу фокусов`) дал source-grounded подтверждение сразу
+для `child_directed` и `family_suitable`; обе цитаты exact относительно raw
+source. Поэтому production product snapshot теперь содержит по одной семье в
+`child_directed`, `family_suitable` и union `kids`; joint-полка остаётся пустой.
+Monitor возвращает `WATCH`, provider calls `0`, normalized SHA
+`b91da9d559bbc3699a6958a36df572904adb022b3bdb012835167106a594dc05`.
+Это bounded MVP evidence и не заменяет полный coverage baseline
+`62 = 2 + 60 + 0`.
+
+Production `StaticSiteBuilder` на том же main SHA и snapshot SHA
+`7bfd8f4714cef345293289a1411c004518686faa5a2a0d3a470b5b4849240074`
+успешно выполнил collection-часть: `377` событий, BGE/QA PASS, product `WATCH`,
+`0` provider calls, `0` дополнительных external requests и
+`supabase_core_reads=0`. Vector barrier `ops_run=5159` также complete:
+`377` событий и `754` unchanged embedding skips без provider calls.
+
+Общий candidate build не был принят: уже после этих проверок независимый
+Chromium production-root gate воспроизвёл известный дефект карточки event
+`6407` — `image escapes its shell` ([issue #300](https://github.com/onedayonemasterpiece/events-bot-new/issues/300)).
+Его исправление явно не входит в этот data/extraction track. Lease корректно
+освобождён, terminal `report_written` записан; candidate receipt не продвинут,
+секретный кандидат не опубликован и root promotion не выполнялся.
+
+Итог по этому треку: extraction/merge/warm/limiter/product plane готов для
+shadow-эксплуатации. Semantic publication по-прежнему `BLOCKED` до PR B;
+Astro routes, navigation и sitemap не добавлялись. Полный checked candidate
+отдельно ждёт исправления #300 без ослабления browser gate.
