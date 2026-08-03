@@ -20,20 +20,35 @@
 
 приглашение / QR
   → локальная метка до 31 августа, 18:00
+  → тихая анонимная Supabase-сессия без PII
   → обычный статический сайт
 
-неавторизованный участник
-  → может тестировать сайт
-  → не участвует в розыгрыше
+анонимный участник
+  → сайт + анонимная персонализация
+  → page score + общий NPS + текст + screenshot
+  → server progress/receipts
+  → raffle eligibility = false
 
 email / Яндекс подтверждён
-  → серверный participant
-  → артефакты, оценки и бонусные шансы могут войти в eligibility
+  → та же Supabase user identity становится постоянной
+  → прежние данные и прогресс сохраняются
+  → при выполнении правил raffle eligibility = true
 ```
 
 Не создаётся отдельное приложение фокус-группы, сложный кабинет или серьёзный
 периметр безопасности. Люди пользуются тем же статическим сайтом, который затем
 может быть открыт публично.
+
+В продуктовой терминологии пользователь до email/Яндекса остаётся
+**неавторизованным/неподтверждённым**. Технически Supabase anonymous Auth создаёт
+ему JWT и `auth.uid()` с признаком `is_anonymous=true`; это внутренний механизм
+RLS и связи данных, а не заявление пользователю «вы вошли».
+
+Официальный контракт Supabase допускает анонимного пользователя без PII и
+последующее связывание email или OAuth identity с тем же user ID:
+
+- [Anonymous Sign-Ins](https://supabase.com/docs/guides/auth/auth-anonymous)
+- [Identity Linking](https://supabase.com/docs/guides/auth/auth-identity-linking)
 
 ## 2. Soft gate: заглушка действительно выключает интерфейс
 
@@ -73,7 +88,84 @@ screen reader. Заглушка — единственная активная п
 нужны публичная форма регистрации, обратный отсчёт до обещанной даты запуска или
 описание внутренних тестов.
 
-## 3. Оценка страницы постоянно видна
+## 3. Анонимный участник и Supabase
+
+### 3.1. Что создаётся после приглашения
+
+При первом принятии валидного приглашения клиент должен:
+
+1. записать локальную focus marker, открывающую интерфейс;
+2. создать или восстановить одну анонимную Supabase Auth-сессию;
+3. использовать её `auth.uid()` как псевдонимный `focus_subject_id`;
+4. не показывать анонимную сессию как подтверждённый вход;
+5. не создавать новую anonymous user row при каждом reload или повторном invite.
+
+Локальная marker и Supabase subject решают разные задачи:
+
+- marker управляет видимостью статического сайта;
+- Supabase subject владеет feedback, private screenshot, server personalization
+  state и artifact receipts;
+- marker без server subject не даёт prize eligibility;
+- ручной обход marker не создаёт server subject автоматически.
+
+### 3.2. Что доступно без email/Яндекса
+
+Анонимный участник может:
+
+- пользоваться всем доступным сайтом;
+- получать локальную и синхронизируемую анонимную персонализацию;
+- ставить `page_score`;
+- ставить общий `service_nps`;
+- отправлять текст и private screenshot;
+- находить артефакты и видеть прогресс;
+- пользоваться Share, Calendar, «Не интересно», «Для меня» и поиском в пределах
+  продуктовых ограничений соответствующей функции.
+
+Он не может:
+
+- войти в eligible pool розыгрыша;
+- получить письмо победителя/участника;
+- восстановить ту же анонимную identity после очистки browser data или на другом
+  устройстве без последующего linking.
+
+### 3.3. Offline и отказ Supabase
+
+Supabase не является условием открытия сайта. Если транспорт недоступен:
+
+- marker всё равно открывает интерфейс;
+- локальная персонализация работает;
+- feedback и сильные действия попадают в ограниченный idempotent outbox;
+- создание анонимной сессии и flush повторяются после восстановления связи;
+- UI показывает честное pending/queued состояние.
+
+### 3.4. Повышение до подтверждённого участника
+
+Email или Яндекс должны **повысить существующую anonymous identity**, а не
+создать рядом второй продуктовый профиль:
+
+- email связывается с текущим anonymous user и подтверждается;
+- Яндекс связывается через `linkIdentity()`;
+- canonical user ID по возможности остаётся тем же;
+- уже собранные page scores, service NPS, feedback, profile state и artifact
+  receipts остаются привязанными;
+- participant registration и raffle eligibility включаются только после
+  подтверждённой identity.
+
+Если email/Яндекс уже принадлежит другому существующему аккаунту, выполняется
+идемпотентный server-side merge anonymous subject → permanent subject. Merge
+дедуплицирует оценки по revision, artifacts по ID/version и action receipts по
+idempotency key.
+
+### 3.5. Что не соответствует этому контракту сейчас
+
+Текущий `FocusGroupLabPanel` вызывает `requireSession()` и без сессии предлагает
+«подтвердить участие». Текущий `StaticSiteAuth` не создаёт silent anonymous
+session и может принять любую Supabase session за обычный signed-in state.
+Следовательно, модель владельца пока **не реализована**, хотя существующие
+feedback RPC и private Storage уже опираются на `auth.uid()` и могут быть
+переиспользованы после корректного anonymous-session flow.
+
+## 4. Оценка страницы постоянно видна
 
 Внизу каждой поддерживаемой страницы, непосредственно перед footer, расположен
 постоянно видимый Lab-блок. Шкала `0–10` доступна сразу, без modal или кнопки
@@ -89,6 +181,10 @@ screen reader. Заглушка — единственная активная п
   → при желании открывает текст или добавляет скриншот
 ```
 
+Оценка и feedback доступны анонимному участнику. Вместо требования войти UI
+должен тихо восстановить/create anonymous subject; подтверждение identity
+предлагается отдельно как путь к розыгрышу и восстановлению между устройствами.
+
 Отдельных видимых анкет «полезность», «предложение» и «ошибка события» нет.
 Технический контекст прикладывается автоматически.
 
@@ -97,7 +193,7 @@ screen reader. Заглушка — единственная активная п
 В данных это `page_score`, привязанный к:
 
 ```text
-participant/device subject
+focus_subject_id
 page_family
 page_revision
 ```
@@ -131,7 +227,7 @@ Lab · Страница обновилась
 
 Подробный UI-контракт — в [`nps-ui.md`](nps-ui.md).
 
-## 4. Общий NPS всего сервиса
+## 5. Общий NPS всего сервиса
 
 Отдельно существует один общий NPS сервиса. Он не повторяется вторым вопросом на
 каждой странице.
@@ -153,15 +249,19 @@ Lab · Страница обновилась
 используется для общей NPS-метрики. `page_score` остаётся диагностикой отдельных
 интерфейсов и не смешивается с общим NPS.
 
-Общий NPS не вводит дополнительное обязательное условие розыгрыша: принятая
-eligibility по-прежнему требует хотя бы одну оценку страницы.
+Общий NPS доступен анонимному участнику и не вводит дополнительное обязательное
+условие розыгрыша: принятая eligibility по-прежнему требует хотя бы одну оценку
+страницы.
 
-## 5. Что собирается
+## 6. Что собирается
 
 Минимальная связанная модель:
 
 ```text
-participant/device subject
+focus_subject:
+  auth_user_id
+  is_anonymous
+  linked_permanent_user_id nullable
 
 page score:
   page_family
@@ -194,7 +294,7 @@ common:
 сети UI честно говорит, что ответ сохранён на устройстве и будет отправлен
 позже.
 
-## 6. Статистика: собираем, но не строим отчётную систему
+## 7. Статистика: собираем, но не строим отчётную систему
 
 Отдельный ежедневный workflow, JSON и Markdown-отчёт не являются требованием.
 Владельцу достаточно в любой момент попросить кодового агента выполнить
@@ -205,16 +305,22 @@ read-only запрос к Supabase/операторским таблицам и 
 - нормализованные и документированные поля;
 - service-role/read-only путь запроса;
 - отсутствие PII в ответе, если запрос предназначен для передачи в чат;
+- отдельные counts анонимных и подтверждённых участников;
+- проверяемый anonymous-to-auth link/merge;
 - корректное разделение `page_score` и `service_nps`;
-- связь participant → text/screenshot → artifacts → chances;
+- связь subject → text/screenshot → artifacts → chances;
 - возможность проверить полноту и дубли.
 
 Не нужен data warehouse, scheduled digest или отдельная витрина статистики.
 
-## 7. Артефакты и розыгрыш
+## 8. Артефакты и розыгрыш
 
 В существующем прототипе уже зафиксированы 12 артефактов `FG-E01…FG-E12`.
 Порог `80%` означает 10 находок.
+
+Анонимный участник может находить артефакты и получать server receipts. До
+подтверждения identity они не создают eligibility. После корректного linking или
+merge прежние receipts сохраняются.
 
 Eligibility:
 
@@ -238,49 +344,58 @@ Cutoff и автоматический draw — 31 августа 2026 года 
 подтверждения всем подтверждённым участникам отправляется благодарность и
 сообщение о победителе.
 
-## 8. Минимальный backlog до первой волны
+## 9. Минимальный backlog до первой волны
 
 1. **FG-01 — soft gate:** общий locked state, актуальная заглушка, fixed cutoff.
-2. **FG-02 — page score:** постоянно видимая шкала, numeric saved state,
-   revision-aware state, optional text/screenshot.
-3. **FG-03 — service NPS:** один общий блок в participant hub и отдельное
+2. **FG-02 — anonymous subject:** silent Supabase anonymous session после invite,
+   offline retry, product-visible distinction `anonymous` vs `verified`.
+3. **FG-03 — anonymous-to-auth upgrade:** email/Yandex linking или merge без
+   смены/потери данных и дублей.
+4. **FG-04 — page score:** постоянно видимая шкала, numeric saved state,
+   revision-aware state, optional text/screenshot для anonymous и verified.
+5. **FG-05 — service NPS:** один общий блок в participant hub и отдельное
    хранение от page scores.
-4. **FG-04 — Auth acceptance:** final browser/Android/iPhone/Yandex paths.
-5. **FG-05 — PWA return:** Android install/relaunch и честный iPhone home-screen
+6. **FG-06 — Auth acceptance:** final browser/Android/iPhone/Yandex paths.
+7. **FG-07 — PWA return:** Android install/relaunch и честный iPhone home-screen
    path.
-6. **FG-06 — key journeys:** Share, Calendar, «Не интересно», «Для меня».
-7. **FG-07 — artifacts:** 12 server receipts, progress 10/12, eligibility.
-8. **FG-08 — queryable stats:** read-only запрос проверяет данные без отдельного
-   report workflow.
-9. **FG-09 — prize:** published rules, immutable snapshot, weighted draw,
-   reserve participant and email lifecycle.
-10. **FG-10 — rehearsal:** один полный exact-target synthetic прогон и cleanup.
+8. **FG-08 — key journeys:** Share, Calendar, «Не интересно», «Для меня».
+9. **FG-09 — artifacts:** 12 server receipts, progress 10/12, eligibility после
+   identity upgrade.
+10. **FG-10 — queryable stats:** read-only запрос проверяет anonymous/verified
+    data без отдельного report workflow.
+11. **FG-11 — prize:** published rules, immutable snapshot, weighted draw,
+    reserve participant and email lifecycle.
+12. **FG-12 — rehearsal:** один полный exact-target synthetic прогон и cleanup.
 
-## 9. Ворота запуска
+## 10. Ворота запуска
 
 ### Seed 20–30 участников
 
-Нужны terminal PASS для FG-01…FG-10. Допустим один явно документированный iPhone
+Нужны terminal PASS для FG-01…FG-12. Допустим один явно документированный iPhone
 fallback, если native OTP keyboard остаётся дефектным, но email magic link или
 Яндекс реально проходят на iPhone.
 
 ### Расширение до 80
 
 - нет массовой P0/P1 проблемы;
-- feedback не теряется и не дублируется;
+- anonymous feedback не теряется и не требует identity;
+- upgrade сохраняет прежние данные;
 - code-agent query возвращает непротиворечивые counts;
 - оператор успевает просматривать тексты/скриншоты.
 
 ### Расширение до 200
 
-- cap проверен на границе;
+- cap проверен на границе только для verified raffle participants;
+- anonymous-user creation/reuse и cleanup не раздувают `auth.users`;
 - PWA return и Auth стабильны;
 - server artifact receipts считаются корректно;
 - draw rehearsal выполнен на synthetic snapshot.
 
-## 10. Что намеренно не строим
+## 11. Что намеренно не строим
 
 - серьёзный auth-proxy для всего статического HTML;
+- собственную параллельную device-token identity систему, если достаточно
+  Supabase anonymous Auth;
 - множество пользовательских feedback-форм;
 - второй общий NPS-вопрос на каждой странице;
 - публичный leaderboard;
