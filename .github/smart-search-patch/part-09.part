@@ -1,0 +1,120 @@
++  const workflow = parse(source);
++  assert.ok(workflow.on.workflow_call.inputs.search_target_url);
++  assert.match(source, /search\.transport_route_matrix/u);
++  assert.equal(workflow.jobs.android.needs[1], 'browser');
++  assert.equal(workflow.jobs.ios.needs[1], 'android');
++  assert.equal(workflow.jobs.browser.env.E2E_SEARCH_TARGET_URL, '${{ inputs.search_target_url }}');
++});
+--- a/site/tests/external-focus-email-otp/platform.test.mjs
++++ b/site/tests/external-focus-email-otp/platform.test.mjs
+@@ -23,6 +23,7 @@
+   assert.equal(accepted.passed, true);
+   assert.equal(classifyKeyboardAcceptance({ shown: false, active: true, visible: true, inputMode: 'email', viewport: { innerHeight: 400, elementBottom: 350 } }).passed, false);
+   assert.equal(classifyKeyboardAcceptance({ shown: true, active: true, visible: true, inputMode: 'text', viewport: { innerHeight: 400, elementBottom: 350 } }).passed, false);
++  assert.equal(classifyKeyboardAcceptance({ shown: true, active: true, visible: true, inputMode: '', enterKeyHint: 'search', viewport: { innerHeight: 400, elementBottom: 350 } }).passed, true);
+   assert.equal(keyboardFailureClass({ passed: false, shown: true, input_visible_in_visual_viewport: false }), 'fail_mobile_viewport');
+   assert.equal(keyboardFailureClass({ passed: false, shown: false, input_visible_in_visual_viewport: true }), 'fail_mobile_keyboard');
+ });
+--- a/site/tests/external-focus-email-otp/qa-command.test.mjs
++++ b/site/tests/external-focus-email-otp/qa-command.test.mjs
+@@ -4,10 +4,12 @@
+ import { parseQaRunCommand, validateIssueEvent } from '../../scripts/static-site-qa-command.mjs';
+ 
+ const command = '/qa run scenario=focus.otp.browser_tab platform=all target_url=https://kenigevents.ru/preview-safe-target/fokus-gruppa/priglashenie/ expected_repo_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa mode=blocking';
++const searchCommand = '/qa run scenario=search.transport_route_matrix platform=all fault_profile=client_supabase_direct_unreachable target_url=https://kenigevents.ru/preview-safe-target/fokus-gruppa/priglashenie/ search_target_url=https://kenigevents.ru/preview-safe-target/poisk/ expected_repo_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa mode=blocking';
+ 
+-test('QA command parser accepts only the exact OTP registry command', () => {
++test('QA command parser accepts the closed OTP and Smart Search registry surface', () => {
+   const parsed = parseQaRunCommand(command);
+   assert.equal(parsed.platform, 'all');
++  assert.equal(parsed.fault_profile, 'normal');
+   assert.equal(parsed.expected_repo_sha, 'a'.repeat(40));
+   for (const unsafe of [`${command}\nanything`, command.replace('mode=blocking', 'mode=advisory'), command.replace('platform=all', 'platform=desktop'), command.replace('kenigevents.ru', 'evil.example')]) {
+     assert.throws(() => parseQaRunCommand(unsafe));
+@@ -15,6 +17,13 @@
+   const preflight = command.replace('focus.otp.browser_tab', 'focus.otp.ios_keyboard_preflight').replace('platform=all', 'platform=ios');
+   assert.equal(parseQaRunCommand(preflight).scenario, 'focus.otp.ios_keyboard_preflight');
+   assert.throws(() => parseQaRunCommand(preflight.replace('platform=ios', 'platform=browser')), /scenario_platform_invalid/u);
++
++  const search = parseQaRunCommand(searchCommand);
++  assert.equal(search.search_target_path, '/preview-safe-target/poisk/');
++  assert.equal(search.fault_profile, 'client_supabase_direct_unreachable');
++  assert.equal(parseQaRunCommand(searchCommand.replace(/ search_target_url=\S+/u, '')).search_target_url,
++    'https://kenigevents.ru/preview-safe-target/poisk/');
++  assert.throws(() => parseQaRunCommand(`${command} search_target_url=https://kenigevents.ru/poisk/`), /not_applicable/u);
+ });
+ 
+ test('QA command requires the canonical labelled issue', async () => {
+--- a/site/tests/external-focus-email-otp/search-acceptance.test.mjs
++++ b/site/tests/external-focus-email-otp/search-acceptance.test.mjs
+@@ -0,0 +1,47 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++
++import { assertSearchRouteMatrix, expectedSearchRoute, summarizeSearchPayload, syntheticSearchQuery }
++  from '../../e2e/focus-email/helpers/search-acceptance.mjs';
++
++test('synthetic query is stable per workflow run but evidence needs only its id', () => {
++  const one = syntheticSearchQuery('gh-12345-1');
++  const two = syntheticSearchQuery('gh-12345-1');
++  assert.deepEqual(one, two);
++  assert.equal(one.query_id, 'evening_music_transport_v1');
++  assert.match(one.value, /^музыка вечером в Калининграде контроль [a-z0-9]+$/u);
++});
++
++test('search payload summary removes query and event-card bodies', () => {
++  const summary = summarizeSearchPayload({
++    schema_version: 'event-search-results-v1', algorithm_id: 'vector', request_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
++    served_list_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', result_cache_status: 'stored', served_from_cache: false,
++    embedding_cache_status: 'miss', items: [{ title: 'secret title' }], fallback_items: [], query_hash: 'secret',
++    llm_verifier: { requested: true, used: false, status: 'degraded:timeout', model: null, policy: 'lite_first' },
++    timings_ms: { total_ms: 123, unsafe: 'drop' },
++  });
++  assert.equal(summary.item_count, 1);
++  assert.equal(summary.timings_ms.total_ms, 123);
++  assert.doesNotMatch(JSON.stringify(summary), /secret title|query_hash|secret/u);
++});
++
++test('browser route matrix requires one cold response, one cache hit and selected-once routes', () => {
++  const outcomes = [1, 2].map((index) => ({ operationId: `op-${index}`, operation: 'functions.event-search',
++    policy: 'selected-once', kind: 'definitive', status: 200, initialRoute: 'relay', finalRoute: 'relay' }));
++  const result = assertSearchRouteMatrix({
++    profile: 'client_supabase_direct_unreachable', platform: 'browser', attempts: 2, outcomes,
++    uiStates: [{ completed: true, rendered_card_count: 2 }, { completed: true, rendered_card_count: 2 }],
++    responses: [
++      { schema_version: 'event-search-results-v1', result_cache_status: 'stored', served_from_cache: false, item_count: 2, fallback_count: 0 },
++      { schema_version: 'event-search-results-v1', result_cache_status: 'hit', served_from_cache: true, item_count: 2, fallback_count: 0 },
++    ],
++  });
++  assert.deepEqual(result.routes, ['relay', 'relay']);
++  assert.equal(expectedSearchRoute('client_yandex_relay_unreachable'), 'direct');
++});
++
++test('mobile route matrix requires exactly one successful selected-once operation', () => {
++  assert.throws(() => assertSearchRouteMatrix({ profile: 'client_yandex_relay_unreachable', platform: 'ios', attempts: 1,
++    outcomes: [{ operation: 'functions.event-search', policy: 'selected-once', kind: 'definitive', status: 200,
++      initialRoute: 'relay', finalRoute: 'relay' }], uiStates: [{ completed: true, rendered_card_count: 1 }] }), /search_transport_route/u);
++});
+--- a/site/tests/external-focus-email-otp/target-url.test.mjs
++++ b/site/tests/external-focus-email-otp/target-url.test.mjs
+@@ -1,31 +1,13 @@
+ import assert from 'node:assert/strict';
+ import test from 'node:test';
+ 
+-import { recipientForRun, validateFocusE2eTarget } from '../../e2e/focus-email/helpers/target-url.mjs';
++import { validateFocusE2eTarget, validateSearchE2eTarget } from '../../e2e/focus-email/helpers/target-url.mjs';
+ 
+-test('accepts exact KenigEvents preview and production onboarding targets', () => {
+-  assert.equal(validateFocusE2eTarget('https://kenigevents.ru/preview-20260801-focus-onboarding-otp-r5/fokus-gruppa/priglashenie/?install=presentation&focus_test_reset=1#invite=focus-group-2026-announcements').hostname, 'kenigevents.ru');
+-  assert.equal(validateFocusE2eTarget('https://kenigevents.ru/fokus-gruppa/priglashenie/').pathname, '/fokus-gruppa/priglashenie/');
++test('search target derives from the immutable focus preview and permits production root only', () => {
++  const focus = validateFocusE2eTarget('https://kenigevents.ru/preview-safe-target/fokus-gruppa/priglashenie/');
++  assert.equal(validateSearchE2eTarget('', focus).href, 'https://kenigevents.ru/preview-safe-target/poisk/');
++  assert.equal(validateSearchE2eTarget('https://kenigevents.ru/poisk/').pathname, '/poisk/');
++  assert.throws(() => validateSearchE2eTarget('https://evil.example/poisk/'), /origin_not_allowed/u);
++  assert.throws(() => validateSearchE2eTarget('https://kenigevents.ru/preview-safe-target/sobytiya/'), /path_not_allowed/u);
++  assert.throws(() => validateSearchE2eTarget('https://kenigevents.ru/poisk/?q=x'), /suffix_not_allowed/u);
+ });
+-
+-test('rejects unsafe origin, credentials, ports, paths and encoded controls', () => {
+-  for (const value of [
