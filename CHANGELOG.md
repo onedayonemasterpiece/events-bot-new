@@ -6,9 +6,10 @@
   StaticSiteBuilder failure storm: preview validation now derives Popular
   repeated-occurrence expectations from generated family data, requires the
   deterministic multi-image specimen, and distinguishes loaded-image geometry
-  from a bounded missing-image fallback. Incident closure remains pending a
-  terminal successful candidate after the later festival-count assertion is
-  corrected (`INC-2026-08-03-static-site-builder-failure-storm`).
+  from a bounded missing-image fallback. Together with the follow-up
+  festival-count correction below, the exact-main canary reached terminal
+  success, produced a verified immutable candidate without mutating the public
+  root/ICS, and closed `INC-2026-08-03-static-site-builder-failure-storm`.
 
 - Added the anonymous-first static-site auth and reliability test plane: isolated
   no-mail Supabase session fixtures, a closed auth-mode registry, and executable

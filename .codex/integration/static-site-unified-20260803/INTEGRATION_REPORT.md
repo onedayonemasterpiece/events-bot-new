@@ -83,8 +83,8 @@
    SHA `6c797020…` passed the single no-root-promotion canary, immutable receipt
    and public non-mutation checks. PR #319 closed the incident on `main`.
 2. Auth/transport + P13N-00 + shared runtime/CTA + collections/weather consumer:
-   open draft PR #316, with final combined validation/review running on its
-   latest metadata commit.
+   open PR #316, CLEAN with all required checks green and no auto-merge request;
+   final combined requirement audit found no Done overclaim.
 3. Weather producer: cat-weather-new draft PR #4 directly on `main`, all checks
    green; prerequisite repair PR #3 is merged.
 4. YDB code may merge disabled, but live DDL/cutover/scheduler/RU changes require
