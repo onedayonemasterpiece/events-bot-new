@@ -7,6 +7,10 @@
 > и [`release-autotest-gates.md`](../features/static-site-pages/release-autotest-gates.md).
 > **Машиночитаемый реестр:**
 > [`docs/testing/static-site-autotest-scenarios.v1.yml`](../testing/static-site-autotest-scenarios.v1.yml).
+> **Auth session fixture:**
+> [`docs/testing/static-site-auth-session-fixture.md`](../testing/static-site-auth-session-fixture.md).
+> **Yandex dependency resilience:**
+> [`docs/operations/yandex-dependency-resilience.md`](yandex-dependency-resilience.md).
 > **Первый implementation handoff:**
 > [`docs/testing/static-site-autotest-codex-prompt.md`](../testing/static-site-autotest-codex-prompt.md).
 
@@ -33,10 +37,16 @@ Safari, Share Sheet или Home Screen.
 выполняют L0/L1. L2 используется только для системно значимых мобильных путей и
 небольшой стратифицированной выборки page families.
 
-## 2. Проверенный baseline на 2026-08-02
+Для функций **после входа** default — `session_fixture`: свежая настоящая
+Supabase-сессия, выпущенная trusted setup без внешнего письма и ограниченная
+одним worker/job. Real-mail OTP запускается только тогда, когда предметом
+проверки является OTP issue, доставка, шаблон письма, Auth transport либо
+email/OTP mobile input.
+
+## 2. Проверенный baseline на 2026-08-03
 
 Аудит выполнен по `main`, начиная со среза
-`ba8ab078ba9894ccd5810045b1b8787ecb29d743`.
+`ba8ab078ba9894ccd5810045b1b8787ecb29d743` и последующих terminal receipts.
 
 Уже существует:
 
@@ -51,21 +61,34 @@ Safari, Share Sheet или Home Screen.
   к человеческому ящику или приватному inbound bucket;
 - exact deployment SHA check, один OTP issue, один verify, одна idempotent
   participant registration, reload/returning state;
+- focus-specific admin-issued OTP/link без внешней доставки в
+  `site/scripts/issue-focus-agent-test-credentials.mjs` и
+  `site/scripts/check-focus-onboarding-email-integration.mjs`;
 - scenario registry, platform selector, GitHub issue `/qa run` gateway и единый
   PII-free evidence index с redaction gate.
 
-Terminal live receipts для immutable SHA
-`4a19fbe0b243d8a9a4652ff0c1e4fee9e895cf9c`: Chromium
-[30745526613](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30745526613)
-и Android
-[30747598046](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30747598046)
-прошли весь путь. iOS adapter реализован, но terminal run
-[30754894934](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30754894934)
-был ошибочно назван `FAIL_MOBILE_KEYBOARD`: screenshot показывает блокирующий Safari first-run dialog. Канонический результат — `BLOCKED_SAFARI_FIRST_RUN_UI`, `0/0/0`, без keyboard verdict; iOS acceptance остаётся открытым.
+Terminal live receipts:
+
+- Chromium normal OTP: `30745526613`;
+- Android normal OTP: `30747598046`;
+- iOS native-first side-effect-free preflight: `30767191144`, attempt 2;
+- Android/iOS direct-Supabase-outage: `30772062840` / `30772233868`;
+- Android/iOS relay-outage: `30772957771` / `30773125445`.
+
+Исторический iOS run `30754894934` остаётся корректно классифицированным как
+`BLOCKED_SAFARI_FIRST_RUN_UI`, `0/0/0`, без keyboard verdict. Последующие
+terminal runs закрыли browser-tab iOS acceptance и обе single-client-route-down
+ячейки.
+
+Реализован локальный generic harness `site/e2e/auth-session-fixture/`: он
+проверяет allowlist, per-worker/device isolation, штатный `verifyOtp`,
+`auth.getUser`, ephemeral storage state, cleanup/redaction и нулевые счётчики
+product OTP/mail. Рядом выполняются registry lint и deterministic no-mail fault
+matrix. Это **не** заменяет live acceptance на hosted allowlisted target.
 
 Не существует и не должно считаться готовым:
 
-- принятый terminal iOS Simulator real-OTP PASS;
+- terminal live acceptance общего `session_fixture` на hosted target;
 - native install/relaunch PWA acceptance;
 - автоматизация всех перечисленных ниже будущих page/data сценариев.
 
@@ -80,6 +103,7 @@ lifecycle.
 
 Сценарий — одна бизнес-проверка со стабильным ID, например:
 
+- `auth.session_fixture`;
 - `focus.otp.browser_tab`;
 - `focus.otp.ios_keyboard_preflight` (iOS only, `0/0/0` side effects);
 - `focus.pwa.install_launch`;
@@ -124,11 +148,32 @@ SpringBoard — не должны размножать бизнес-сценар
 OTP и PWA installation проверяются против опубликованного HTTPS target с exact
 repo SHA. Локальный HTTP не заменяет secure-context и real-host acceptance.
 
+### 3.5 Auth mode
+
+Каждый сценарий, затрагивающий identity, обязан заранее выбрать один режим из
+registry:
+
+- `anonymous` — анонимный product contract;
+- `anonymous_session` — настоящая Supabase anonymous JWT/RLS session без PII,
+  внешнего письма и raffle eligibility;
+- `mocked_ui` — только компонентный signed-in UI, без backend claims;
+- `session_fixture` — настоящий JWT/RLS без внешнего письма;
+- `admin_otp_ui` — настоящий OTP UI/verify без внешней доставки;
+- `real_mail_otp` — настоящий issue, письмо, receipt, ввод и verify;
+- `yandex_oauth` — настоящий redirect/consent/callback.
+
+Локальная метка, `authorized=true`, fixture user object или focus participation
+marker не заменяют Supabase session. `session_fixture` не доказывает доставку
+письма; `real_mail_otp` не должен повторяться в тесте Search или персонализации.
+Для focus v5 приглашение и `anonymous_session` предшествуют необязательному
+identity upgrade: feedback не требует email/Яндекса, а raffle eligibility —
+требует подтверждённую identity.
+
 ## 4. Селектор запуска: что запускать и когда
 
 Решение принимает scenario registry, а не память агента. Для каждого сценария
-фиксируются platform, trigger tags, cost tier, side effects, evidence policy и
-blocking policy.
+фиксируются platform, trigger tags, cost tier, side effects, evidence policy,
+auth mode и blocking policy.
 
 ### 4.1 Обязательный синхронный минимум
 
@@ -138,7 +183,8 @@ blocking policy.
 - короткий L1 smoke для изменённой page family;
 - unit/component regressions, добавленные или изменённые в PR;
 - release-blocking scenario, если изменение непосредственно меняет его contract;
-- redaction/audit tests при изменении evidence или OTP.
+- `auth.session_fixture`, если blocking scenario зависит от авторизации;
+- redaction/audit tests при изменении evidence, Auth session или OTP.
 
 ### 4.2 Фоновый advisory run
 
@@ -169,25 +215,45 @@ Real-mail OTP, fresh-user identity, destructive state reset, платный devi
 и production write probes запускаются только явно, в защищённом Environment и с
 concurrency/side-effect policy.
 
+Trusted `session_fixture` setup также требует защищённой issuer boundary, но не
+должен автоматически превращать каждый использующий его business scenario в
+real-mail manual run.
+
 ### 4.4 Нельзя «запустить и забыть»
 
 `STARTED_BACKGROUND` — допустимый промежуточный operational outcome, но не
 release evidence. Если run завершился после merge, его terminal result должен
 попасть в следующий release/candidate decision.
 
+### 4.5 Auth side-effect selector
+
+Для `session_fixture` и `admin_otp_ui` обязательны:
+
+```text
+product /auth/v1/otp = 0
+external mail send/receipt = 0/0
+real-mail fallback = forbidden
+```
+
+Ошибка fixture даёт `BLOCKED_AUTH_FIXTURE`, а не новый OTP. Сохранённая session в
+GitHub Secret, фиксированный OTP, service-role key в browser и общий refresh
+token между параллельными jobs запрещены.
+
 ## 5. Change classes и выбор платформ
 
-| Изменение | L0 | L1 browser | Android | iOS | Real OTP |
-|---|---:|---:|---:|---:|---:|
-| Только docs/copy без runtime contract | выборочно | нет/короткий smoke | нет | нет | нет |
-| Data exporter, manifest, catalog, ICS, SEO | да | affected routes/full sample | нет | нет | нет |
-| Layout/CSS/component без native integration | да | да, desktop+mobile viewport | только representative при high-risk | representative при high-risk | нет |
-| Input, focus, keyboard, viewport resize | да | да | да | да | при Auth-flow изменении |
-| PWA manifest/install/start_url/scope/service worker | да | да | да | да | при onboarding/Auth coupling |
-| Focus onboarding/Auth/Supabase/Yandex relay/email hook | да | да | да | да | да |
-| Только backend mail routing без UI | server contracts | browser integration | background sample | background sample | protected release gate |
-| Все event pages / массовая непустота | да, полный каталог | да, шардированно | только specimens | только specimens | нет |
-| Push/background/OEM/performance | частично | нет | simulator partial | simulator partial | нет; L3 нужен |
+| Изменение | L0 | L1 browser | Android | iOS | Auth / Real OTP |
+|---|---:|---:|---:|---:|---|
+| Только docs/copy без runtime contract | выборочно | нет/короткий smoke | нет | нет | не требуется |
+| Data exporter, manifest, catalog, ICS, SEO | да | affected routes/full sample | нет | нет | не требуется |
+| Layout/CSS/component без native integration | да | да, desktop+mobile viewport | только representative при high-risk | representative при high-risk | `mocked_ui` либо existing fixture |
+| Input, focus, keyboard, viewport resize | да | да | да | да | real OTP только при Auth-flow изменении |
+| PWA manifest/install/start_url/scope/service worker | да | да | да | да | fixture; real OTP только при onboarding/Auth coupling |
+| Focus invite/anonymous feedback/personalization | да | да | representative при native/input risk | representative при native/input risk | `anonymous_session`; OTP/mail = 0 |
+| Focus identity upgrade/Auth/Supabase relay/email hook | да | да | да | да | `real_mail_otp` или `yandex_oauth` только при изменении этого contract |
+| Только backend mail routing без UI | server contracts | browser integration | background sample | background sample | protected real-mail release gate |
+| Search/personalization/feedback/saved state после входа | да | authenticated journey | representative при native/input risk | representative при native/input risk | `session_fixture`, real OTP = нет |
+| Все event pages / массовая непустота | да, полный каталог | да, шардированно | только specimens | только specimens | не требуется |
+| Push/background/OEM/performance | частично | нет | simulator partial | simulator partial | real OTP не требуется; L3 нужен |
 
 ### Trigger tags
 
@@ -198,9 +264,16 @@ release evidence. Если run завершился после merge, его ter
 - `visual-layout`;
 - `mobile-input`;
 - `pwa-system`;
+- `auth-session`;
 - `auth-otp`;
 - `supabase-connectivity`;
 - `yandex-relay`;
+- `yandex-sidecar`;
+- `yandex-oauth`;
+- `durable-outbox`;
+- `partial-delivery`;
+- `provider-mail`;
+- `focus-feedback`;
 - `personalization`;
 - `release-publisher`.
 
@@ -218,18 +291,22 @@ of truth. Ручной override допустим только в сторону 
 - preview/artifact check;
 - browser smoke изменённых route families;
 - changed-route screenshots на failure;
-- scenario selector report.
+- scenario selector report;
+- `session_fixture` + affected authenticated scenario, когда меняется функция
+  после входа и protected setup разрешён для доверенного кода.
 
-Эмуляторы по умолчанию не запускаются.
+Эмуляторы и real-mail OTP по умолчанию не запускаются.
 
 ### PR mobile-sensitive — mixed
 
-Запускается при tags `mobile-input`, `pwa-system`, `auth-otp`:
+Запускается при tags `mobile-input`, `pwa-system`, `auth-session`, `auth-otp`:
 
 - Android critical scenario — blocking для feature PR, если изменён его contract;
 - iOS critical scenario — blocking для direct iOS contract change, иначе допускается
   background advisory до release candidate;
-- real OTP — только protected/manual либо явно утверждённый release integration run.
+- real OTP — только protected/manual либо явно утверждённый release integration run;
+- ordinary authenticated mobile journey получает отдельную per-device session,
+  а не общий refresh token или новое письмо.
 
 ### Main/nightly — background advisory
 
@@ -238,10 +315,12 @@ of truth. Ручной override допустим только в сторону 
 - Android mobile-critical suite;
 - iOS mobile-critical suite;
 - connectivity read-only canaries;
+- authenticated read/business canaries через fixed personas + `session_fixture`;
 - aggregate `qa-summary.json`.
 
 Nightly не должен создавать новых пользователей, массово отправлять OTP или
-писать production данные.
+писать production данные. Real-mail OTP в nightly запрещён; session fixture
+должен доказывать `product OTP=0` и `external mail=0`.
 
 ### Release candidate — blocking
 
@@ -250,7 +329,9 @@ Nightly не должен создавать новых пользователе
 - full route health;
 - Android critical journeys;
 - iOS critical journeys;
-- protected real OTP browser-tab scenario;
+- `auth.session_fixture` и affected authenticated journeys;
+- protected real OTP browser-tab scenario **только** если selector связал релиз
+  с Auth/onboarding/mail/OTP contract;
 - PWA install/relaunch, если релиз затрагивает PWA contract;
 - terminal review всех релевантных background signals.
 
@@ -259,6 +340,7 @@ Nightly не должен создавать новых пользователе
 - короткий read-only production smoke;
 - manifest/service-worker canary;
 - Supabase/Yandex nonce/read path;
+- authenticated cached/read canary через `session_fixture`;
 - fresh-device PWA canary периодически, а не после каждого data-only deploy.
 
 ## 7. Первый обязательный mobile milestone: focus OTP
@@ -320,7 +402,7 @@ identity/mailbox каждой платформе.
 
 Сохраняются существующие ограничения:
 
-- no service-role key in test runner;
+- no service-role key in test runner/browser;
 - no fixed OTP/bypass;
 - no automatic resend after ambiguous request;
 - one global concurrency group;
@@ -341,7 +423,85 @@ PR:
 
 Разделение позволяет отличить Auth regression от install/lifecycle regression.
 
-## 8. Критические page/data scenarios
+## 8. Общий Auth session fixture
+
+Канонический детальный контракт:
+[`static-site-auth-session-fixture.md`](../testing/static-site-auth-session-fixture.md).
+
+### 8.1 Назначение
+
+`session_fixture` нужен для сценариев, которые проверяют бизнес-функцию после
+входа, а не способ получения OTP. Trusted setup выпускает свежий одноразовый
+admin link/OTP без доставки, проходит штатный Supabase callback/verify и
+сохраняет настоящую session в ephemeral state одного worker/device job.
+
+### 8.2 Обязательные свойства
+
+- настоящий `auth.getUser` и JWT, а не локальный boolean;
+- настоящий RLS/RPC/Edge behavior;
+- fixed allowlisted persona, а не новый email на каждый run;
+- fresh credential и session на каждый parallel worker/job;
+- state только в `$RUNNER_TEMP`/ephemeral storage;
+- `POST /auth/v1/otp = 0`;
+- external mail send/receipt `0/0`;
+- no artifact/cache/job-output session transfer;
+- fail-closed cleanup/redaction;
+- `BLOCKED_AUTH_FIXTURE` без fallback на реальное письмо.
+
+### 8.3 Запрещённые подмены
+
+- `authorized=true` и fake user для live backend E2E;
+- постоянная Supabase session в GitHub Secret;
+- один refresh token для параллельных jobs;
+- фиксированный OTP для production project;
+- self-issued JWT;
+- service-role/secret key в browser/Appium/localStorage/URL;
+- direct token injection как platform acceptance;
+- автоматическая отправка OTP при сбое fixture.
+
+### 8.4 Scenario mapping
+
+`session_fixture` является default для:
+
+- `personal.for_me_page`;
+- `personalization.core_journey`;
+- `search.authenticated_contract`;
+- `search.live_cached_journey`;
+- `search.live_cold_journey`;
+- `search.cache_provider_zero`;
+- authenticated `search.transport_route_matrix`;
+- будущих feedback/saved-event/authenticated page scenarios.
+
+Auth issue/verify transport продолжает доказываться отдельным
+`focus.otp.browser_tab`; Search не должен заново отправлять письмо.
+
+### 8.5 Security evolution
+
+Первый implementation может использовать минимальный issuer step в protected
+GitHub Environment на доверенной ветке. Целевой контур — OIDC-protected
+server-side broker, который проверяет repository/ref/workflow/run/persona/
+redirect и выдаёт только одноразовый пользовательский credential, не общий
+Supabase Admin API.
+
+### 8.6 No-mail transport matrix
+
+Routine reliability tests не используют внешний ящик. Исполняемый harness
+`site/e2e/auth-session-fixture/noMailFaultMatrix.ts` проверяет четыре независимых
+операции в профилях `normal`, `direct-down`, `relay-down`, `both-down`:
+
+- Auth verify, Search и personalization — `selected-once`: маршрут выбирается
+  до dispatch, при двух недоступных маршрутах dispatch равен нулю;
+- focus feedback — `idempotent-replay`: повтор разрешён только с тем же
+  idempotency key;
+- для каждой ячейки product OTP issue, provider mail send и receipt равны нулю;
+- отказ fixture или отсутствие allowlisted session заканчивается
+  `BLOCKED_AUTH_FIXTURE`, без real-mail fallback.
+
+Матрица доказывает transport policy локально и детерминированно. Она не выдаёт
+fake session за live hosted acceptance и не закрывает provider-specific mail,
+OAuth либо мобильный keyboard contract.
+
+## 9. Критические page/data scenarios
 
 Реестр содержит статус `implemented`, `partial` или `planned`; planned scenario
 не должен делать CI красным до появления продукта и явного gate transition.
@@ -386,9 +546,23 @@ PR:
 - Supabase direct/relay read/write contract;
 - Yandex relay availability и nonce/schema;
 - future personalization ordering/feedback lifecycle;
-- local-first actions + idempotent outbox.
+- local-first actions + idempotent outbox;
+- `session_fixture` как default auth preparation, `0` product OTP и `0` писем.
 
-## 9. Стратифицированная мобильная выборка
+### Yandex capability и degraded semantics
+
+Yandex не моделируется одним boolean. Registry разделяет relay, YDB
+analytics/control, OAuth, Postbox, inbound pipeline и Object Storage/CDN. Для
+каждой capability сценарий фиксирует SOR, acknowledgement boundary, operation
+semantics, idempotency/replay и честное pending/partial состояние. Обязательные
+fault contracts перечислены в
+[`yandex-dependency-resilience.md`](yandex-dependency-resilience.md): оба
+клиентских маршрута недоступны, общий Supabase upstream недоступен, YDB
+projection lag, reconnect exactly-once, component-partial focus feedback,
+OAuth fallback, durable Postbox outbox и inbound replay. Planned строки не
+становятся PASS только из-за наличия записи в registry.
+
+## 10. Стратифицированная мобильная выборка
 
 Не открывать сотни event pages на двух симуляторах. Из каждой актуальной family
 выбирается по одному или нескольким specimens:
@@ -406,7 +580,10 @@ PR:
 Specimen identity и reason сохраняются в evidence. Expired live event не должен
 удалять executable contract: для критической геометрии остаются frozen fixtures.
 
-## 10. Evidence, доступный ChatGPT
+Authenticated mobile specimen получает отдельную per-device session. Один
+browser storage state или refresh token нельзя копировать в Android и iOS jobs.
+
+## 11. Evidence, доступный ChatGPT
 
 Каждый job публикует единый безопасный пакет:
 
@@ -433,12 +610,14 @@ evidence/
 - workflow run ID/attempt;
 - target URL origin/path без bearer leakage;
 - suite/scenario/platform;
+- auth mode и session scope, если применимо;
 - OS/runtime/browser/device/locale/timezone;
 - blocking/advisory/manual mode;
 - PASS/FAIL/BLOCKED/STARTED_BACKGROUND;
 - failure domain и first failed step;
+- product OTP issue count и external mail send/receipt counts;
 - links/relative paths к screenshots/artifacts;
-- redaction status.
+- cleanup и redaction status.
 
 Artifact name должен быть предсказуемым:
 
@@ -449,25 +628,28 @@ Artifact name должен быть предсказуемым:
 сценарий/route упал и какие evidence files смотреть дальше.
 
 Для обычных UI-сценариев допустимы video/trace on failure. Для real OTP video,
-trace, HAR и raw mail запрещены. Маскированные screenshots и sanitized structured
-events остаются обязательными.
+trace, HAR и raw mail запрещены. Для session bootstrap trace/HAR также
+запрещены; serialized auth state никогда не загружается как artifact.
+Маскированные screenshots и sanitized structured events остаются обязательными.
 
-## 11. Политика PASS/FAIL/BLOCKED
+## 12. Политика PASS/FAIL/BLOCKED
 
 - **PASS:** все mandatory assertions выполнены на exact target identity.
 - **FAIL:** продукт/данные/контракт дали неверный результат.
-- **BLOCKED:** среда, secret, runner, mailbox, simulator runtime или target
-  identity не позволили честно выполнить сценарий.
+- **BLOCKED:** среда, secret, issuer, runner, mailbox, simulator runtime или
+  target identity не позволили честно выполнить сценарий.
 - **STARTED_BACKGROUND:** run создан, terminal результата ещё нет; никогда не
   эквивалентен PASS.
 - **SKIPPED_NOT_APPLICABLE:** registry доказал, что scenario не относится к
   изменению.
 - **NOT_IMPLEMENTED:** product/scenario planned; не маскировать как skip/pass.
 
-Infrastructure flake может получить один bounded retry. Product assertion и
-OTP side effect не повторяются автоматически без сценарно безопасного contract.
+`session_fixture` failure — `BLOCKED_AUTH_FIXTURE`; unexpected product OTP/mail,
+identity mismatch или credential leak — FAIL. Infrastructure flake может
+получить один bounded retry. Product assertion, OTP side effect и неоднозначный
+verify/callback не повторяются автоматически без сценарно безопасного contract.
 
-## 12. Экономичность
+## 13. Экономичность
 
 - L0/L1 сначала, L2 только после их зелёного результата.
 - Browser crawl шардируется; full-page screenshots только на failure/выборке.
@@ -476,11 +658,14 @@ OTP side effect не повторяются автоматически без с
 - Android/iOS images, Appium drivers и actions pins кешируются безопасно.
 - iOS/macOS не запускается на data-only PR.
 - Real OTP не запускается nightly и не создаёт fresh users по умолчанию.
-- Один fixed identity/mailbox, один sequential run, bounded timeout.
+- Обычные authorized suites используют fixed personas + `session_fixture`.
+- Fixture создаётся один раз на worker/job, а не на каждый test.
+- Session state не хранится между runs и не передаётся через artifacts/cache.
+- Один fixed mailbox, один sequential real-mail run, bounded timeout.
 - AI visual review — advisory triage, deterministic assertions остаются gate.
 - Новый тест добавляется при реальном regression risk, а не для полноты каталога.
 
-## 13. Release integration
+## 14. Release integration
 
 `release-plan.md` остаётся umbrella release truth. Этот документ определяет
 способ доказательства его browser/mobile/data gates.
@@ -492,21 +677,29 @@ Release decision обязан перечислить:
 - blocking terminal results;
 - advisory/background results и их disposition;
 - Android/iOS requirement reason либо `not_applicable` evidence;
-- real OTP requirement reason и run artifact;
+- auth mode и session fixture receipt для authenticated scenarios;
+- real OTP requirement reason и run artifact либо явный `not_applicable`;
 - known planned gaps, которые не выдаются за implemented coverage.
 
 NO-GO, если:
 
 - изменён Auth/PWA/mobile-input contract, но отсутствует требуемый Android или
   iOS result;
-- external OTP scenario FAIL/BLOCKED при релизе соответствующей функции;
+- external OTP scenario FAIL/BLOCKED при релизе соответствующей Auth/mail функции;
+- authenticated release scenario требует session fixture, но он отсутствует,
+  отправил неожиданный OTP/mail или утёк в evidence;
 - target SHA не совпадает;
 - evidence не прошёл redaction;
 - обязательный background run ещё не terminal;
 - full catalog имеет unexplained empty/broken route;
 - planned feature ошибочно отмечена implemented/pass.
+- пользовательский success показан до durable SOR acknowledgement либо скрывает
+  partial component failure;
+- selected-once/ambiguous операция автоматически повторилась через другой
+  route/provider;
+- Yandex sidecar outage откатил primary action или уничтожил durable outbox.
 
-## 14. Поступательная реализация
+## 15. Поступательная реализация
 
 ### M0 — документы и agent contract
 
@@ -523,20 +716,37 @@ protected real mail приняты terminal run `30747598046`.
 
 ### M3 — iOS browser-tab OTP
 
-Adapter и protected job реализованы. Historical run `30754894934` остановлен видимым Safari first-run search-engine dialog и переклассифицирован в `BLOCKED_SAFARI_FIRST_RUN_UI` с `0/0/0`; он ничего не доказывает о клавиатуре. Milestone остаётся открытым до трёх последовательных `focus.otp.ios_keyboard_preflight` PASS и следующего полного real-mail iOS PASS.
+Завершено: native-first Safari preflight принят run `30767191144` attempt 2;
+полные iOS direct-outage и relay-outage journeys приняты runs `30772233868` и
+`30773125445`. Исторический `30754894934` остаётся корректным blocked receipt.
 
-### M4 — PWA install/relaunch
+### M4 — generic Auth session fixture
 
-Короткие отдельные Android/iOS scenarios без offline-first обещаний.
+Локальный generic harness, persona/target allowlist, per-scope isolation,
+`verifyOtp`/`auth.getUser`, ephemeral Playwright state, cleanup/redaction,
+registry lint и no-mail matrix реализованы. Остаются terminal live acceptance на
+hosted allowlisted target, protected issuer integration и доказательство второго
+browser context/device bootstrap; до этого registry честно маркирует milestone
+как partial, а не PASS.
 
-### M5 — generic browser/data registry runner
+### M5 — подключение authorized business scenarios
+
+Search cached/cold/cache-zero, `Для меня`, personalization, feedback и saved
+state переходят на `session_fixture` без повторной проверки доставки.
+
+### M6 — Android/iOS session bootstrap и PWA install/relaunch
+
+Отдельная session на device job, same-storage continuation и короткие PWA
+install/relaunch scenarios без offline-first обещаний.
+
+### M7 — generic browser/data registry runner
 
 Affected-route health, content minimum и шардированный catalog evidence.
 
-### M6 — новые feature scenarios
+### M8 — новые feature scenarios
 
 Transport, medallions, people cards, personal pages, connectivity и
 personalization добавляются вместе с реализацией/audit соответствующей surface.
 
-Нельзя откладывать Android/iOS до «когда-нибудь после общей системы», но и нельзя
-строить весь generic framework до доказательства первого OTP vertical slice.
+Нельзя откладывать Android/iOS до «когда-нибудь после общей системы», но нельзя и
+заставлять каждый authenticated business test повторять дорогой real-mail OTP.
