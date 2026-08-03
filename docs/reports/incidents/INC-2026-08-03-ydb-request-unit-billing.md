@@ -17,7 +17,8 @@ cycles, amplified by watchdog catch-up runs after crashes, consumed about
 82.42 million Request Units by the time of detection. The scheduler was stopped,
 the source database was throttled to 0 RU/s, and all five tables were migrated
 to a 1 GiB serverless database in `cloud-art-koder/default` with exact row and
-ordered-export hash verification.
+ordered-export hash verification. After explicit owner approval, the verified
+source database was deleted from the wrong account.
 
 ## User / Business Impact
 
@@ -54,6 +55,10 @@ cost accumulated.
   checked. Its only Cloud Function is the unrelated
   `pharmastaff-partnership-form`; there are no triggers or serverless
   containers. The Pharmastaff mail function was intentionally left unchanged.
+- 2026-08-03 14:13 UTC — after explicit owner approval, Yandex Cloud operation
+  `etndquiisa371hgl8p7r` deleted source database `etnrao7p6gh6il6b4qv9`.
+  Direct lookup returned `Not Found`; the unrelated `pharmastaff-forms` and
+  `kotopogoda-content` databases remained untouched.
 
 ## Root Cause
 
@@ -89,7 +94,7 @@ cost accumulated.
 - `fly.toml` Region Talk scheduler and YDB configuration;
 - `scripts/region_talk_scheduled_runner.py` preflight;
 - Fly secrets, Kaggle encrypted run datasets and GitHub protected environment;
-- both Yandex Managed Service for YDB databases;
+- the deleted source and active target Yandex Managed Service for YDB databases;
 - Yandex Cloud Billing and RU throttling.
 
 ### Mandatory checks before closure or deploy
@@ -98,15 +103,17 @@ cost accumulated.
 - scheduled wrapper rejects a wrong-cloud path without logging secret values;
 - source and target table counts match;
 - ordered data exports match by SHA-256 for all tables;
-- source remains at 0 RU/s; target remains at 0 RU/s while scheduling is disabled;
+- source lookup returns `Not Found`; target remains at 0 RU/s while scheduling
+  is disabled;
 - Fly `/healthz` is ready and reports Region Talk plus watchdog disabled;
-- no production re-enable without a bounded RU canary and billing observation.
+- no production re-enable without a bounded RU canary and billing observation;
 - do not migrate or modify the unrelated `pharmastaff-partnership-form` Cloud
   Function as part of this incident.
 
 ### Required evidence
 
-- source and target database IDs, folder/cloud IDs and throttle state;
+- source deletion operation plus `Not Found` verification, and target
+  folder/cloud ID plus throttle state;
 - row-count and ordered-export hash comparison;
 - Fly runtime database/service-account identity and health response;
 - GitHub protected-environment database variable;
@@ -126,6 +133,8 @@ cost accumulated.
 - Switched Fly and GitHub configuration to the target database.
 - Added an exact-database preflight guard and made the durable Fly scheduler
   default disabled.
+- Deleted the verified source database from the wrong account after explicit
+  owner approval; preserved unrelated Pharmastaff and Kotopogoda databases.
 
 ## Follow-up Actions
 
@@ -136,8 +145,9 @@ cost accumulated.
 - [ ] Before autonomous use, add an application-side daily run/query budget;
       billing budgets only notify and YDB's RU/s throttle is not a per-day
       request counter. Keep the database at 0 RU/s until this is accepted.
-- [ ] After retention/owner approval, delete the quarantined source database and
-      revoke its obsolete service-account key.
+- [x] Delete the verified source database after owner approval.
+- [ ] Revoke the obsolete source service-account key after moving the GitHub WIF
+      principal fully into the target organization.
 - [ ] Move the GitHub WIF principal fully into the target organization; the
       current cross-organization database-scoped binding is a migration bridge.
 
@@ -159,5 +169,6 @@ cost accumulated.
 
 Production scheduling now requires an exact expected database path. The wrong
 cloud/database produces a stable fail-closed preflight marker without leaking
-paths. The scheduler remains disabled and both YDB databases remain at 0 RU/s
-until a separate bounded-cost acceptance explicitly raises the target limit.
+paths. The source database is deleted; the scheduler remains disabled and the
+target remains at 0 RU/s until a separate bounded-cost acceptance explicitly
+raises its limit.
