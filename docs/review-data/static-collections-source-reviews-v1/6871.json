@@ -1,0 +1,64 @@
+{
+  "schema_version": "static-collection-source-review-v1",
+  "receipt_id": "6871",
+  "reviewed_at": "2026-08-02T09:18:31.733493Z",
+  "status": "needs_source_review",
+  "event_ids": [
+    6871
+  ],
+  "issue": "The 2026-08-08 occurrence-specific source advertises an evening film/video-art screening; the earlier source describes past interactivity at forum SHUM and cannot support an interactive strong_impressions positive for this occurrence.",
+  "canonical_before": [
+    {
+      "id": 6871,
+      "title": "Иммерсивный проект «Окна времени»",
+      "description": "> Выставка «Окна времени» — иммерсивный проект об истории Калининградской области.\n\nНа площадке V юбилейного форума «ШУМ» представлена экспозиция, отражающая путь региона с 1945 года до наших дней через живые портреты и судьбы людей. Проект реализован фестивалем «Море внутри» при участии Росмолодёжи и Центра «ШУМ» с целью знакомства с историей с помощью искусства и новейших технологий.\n\n### Концепция и формат экспозиции\nИстория Калининградской области представлена не через сухие даты, а через образы, голоса и время. Проект использует формат иммерсивного искусства для подачи исторического материала, включая лекцию-путешествие сквозь эпохи и презентацию барельефов, символизирующих застывшие мгновения истории 🎞️.\n\n### Команда проекта\nНад созданием экспозиции работали:\n- Серафима Москаева, основатель фестиваля\n- Мария Жданова, куратор проекта «Окна времени»\n- Анна Суворова, художественный руководитель\n- Михаил Пивиков, куратор видеоарта\n- Александра Рославцева, куратор мастер-классов\n- Наталья Ветлина, творческий волонтёр\n- Екатерина Смирнова\n- Ольга Соколова\n\n### Участники реализации\nВ наполнении проекта приняли участие:\n- Тамара Мигунова\n- Анастасия Савченко\n- Ирина Миронова\n- Елена Утикалая\n- Оксана Женжуренко\n- Ирина Шевченко\n- Ольга Мозуль\n- Айнура Насибулина\n- Таша Грехова\n- Маргарита Сафронова 🖼️",
+      "date": "2026-08-08",
+      "time": "21:00",
+      "location_name": "Променад Светлогорска",
+      "location_address": null,
+      "city": "Светлогорск",
+      "event_type": "выставка",
+      "linked_event_ids": "[]",
+      "identity_status": "canonical",
+      "merged_into_event_id": null
+    }
+  ],
+  "canonical_after": null,
+  "source_evidence": [
+    {
+      "event_id": 6871,
+      "source_ref": {
+        "source_id": 9603588,
+        "source_type": "vk",
+        "source_url": "https://vk.com/wall-195754292_11541",
+        "trust_level": null,
+        "source_chat_username": null,
+        "source_message_id": 11541,
+        "source_text_sha256": "e80aa3a8623d129369621cdf23d60464549c843d8454dcc57bf1adf9e46c4a2c",
+        "source_record_sha256": "450f9dd0b9e269624f381c40388bf59d9ad429e665000e020f9bb36eef719e49",
+        "event_id": 6871,
+        "source_text_char_count": 819,
+        "source_ref_sha256": "7ac8e5e4dd52275f5be0ff7c4471c352c663ab4e318bbc5b04c6841e9fecc2cf"
+      },
+      "raw_source_quote": "📽 Вечерний кинопоказ\n\n🗓 8 августа, 21:00\n🚩 Променад Светлогорска (ориентир — «Солнечные часы»)\n💸 Вход свободный\n\n🎬 Иммерсивный проект «Окна времени»\n\n👥 Участники:\n• Серафима Москаева\n• Анна Суворова\n• Тамара Мигунова\n• Анастасия Савченко\n• Ирина Миронова\n• Елена Утикалая\n• Оксана Женжуренко\n• Ирина Шевченко\n• Ольга Мозуль\n• Айнура Насибулина\n• Таша Грехова\n• Маргарита Сафронова\n• Светлана Яшина\n• Дарья Дорощук\n\n🎯 Команда проекта:\n• Мария Жданова — куратор проекта\n• Анна Суворова — куратор проекта, декоратор\n• Михаил Пивиков — куратор видео-арта\n\n🙌При поддержке администрации [club151577515|Светлогорский городской округ]\nПартнёры кинопоказа:\n[club228644467|МедиаСфера ТВ | Калининград] с проектом \"Люди и судьбы\"\n[club229360733|Форум «ШУМ»]\n\n#видеоарт #кинопоказ #нейросеть #ИИ #Светлогорск #моревнутри #фестиваль",
+      "raw_source_quote_sha256": "e80aa3a8623d129369621cdf23d60464549c843d8454dcc57bf1adf9e46c4a2c",
+      "canonical_sha256": "a2e83ed9dbfbca4b8a1712ad85b942d2febfd90de103f8858805126e178aadd6",
+      "raw_source_quote_kind": "full",
+      "raw_source_quote_truncated": false,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 819,
+      "raw_source_quote_char_count": 819,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 0
+    }
+  ],
+  "family_decision": {
+    "seed_action": "exclude_pending_occurrence_specific_semantic_review",
+    "family_id": "event:6871",
+    "occurrence_member_ids": [
+      6871
+    ]
+  },
+  "scope_note": "Receipt changes provisional semantic review supply only; festival extraction/pages and canonical production repair remain out of scope.",
+  "receipt_sha256": "82f20fa5ee83c6c2294fa7883bd1c0ca346cc9a87f133f015c54a70628481abc"
+}

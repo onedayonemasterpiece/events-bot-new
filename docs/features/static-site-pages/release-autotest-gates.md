@@ -146,3 +146,26 @@ Release blocked, если:
 - real OTP только явно и последовательно;
 - один bounded retry только для инфраструктурного flake;
 - deterministic gates решают release, AI visual review помогает triage.
+
+## 9. Продуктовое качество статических подборок
+
+Канонический сценарий `collections.product_quality` формирует один продуктовый
+scorecard из трёх секций:
+
+- `health` — наполняемость, актуальность, дубли, source/review blockers и
+  концентрация выдачи;
+- `semantic_sample` — живые известные positives и грубые false positives;
+- `stability` — деградация относительно owner-accepted baseline и сохранение
+  last-good.
+
+Runner/workflow и facts-v3 product adapter описаны в
+[`../../testing/static-collections-product-quality-autotests.md`](../../testing/static-collections-product-quality-autotests.md).
+Adapter строит source-bound snapshot в существующем exporter и проверяется в
+StaticSiteBuilder до Astro build. До owner-accepted baseline и terminal live run
+сценарий остаётся `partial`: `FAIL` блокирует promotion, `WATCH` является
+видимым неблокирующим результатом, а отсутствие baseline не выдаётся за
+подтверждённое качество production-подборок.
+
+Публичный `collections.product_page_smoke` остаётся `planned` до появления
+Astro routes. В этом shadow-релизе routes, navigation, sitemap и publication
+запрещены. Android/iOS для data-only изменения подборок не запускаются.

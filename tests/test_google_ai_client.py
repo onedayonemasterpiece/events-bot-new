@@ -286,6 +286,46 @@ def test_requested_gemma_model_stays_first_in_model_chain():
 
 
 @pytest.mark.asyncio
+async def test_per_call_single_send_disables_retry_and_model_fallback(monkeypatch):
+    client = GoogleAIClient()
+    client.max_retries = 3
+    client.fallback_models = ["gemini-3.1-flash-lite"]
+    calls: list[str] = []
+    observed: list[dict] = []
+
+    async def fake_attempt_generate(*, ctx, attempt_no, attempt_observer, **_kwargs):
+        calls.append(ctx.model)
+        attempt_observer(
+            {
+                "attempt_no": attempt_no,
+                "requested_model": ctx.requested_model,
+                "provider_model_name": ctx.provider_model_name,
+            }
+        )
+        raise ProviderError(
+            error_type="ServerError",
+            error_message="forced failure",
+            retryable=True,
+            status_code=503,
+        )
+
+    monkeypatch.setattr(client, "_attempt_generate", fake_attempt_generate)
+    with pytest.raises(ProviderError):
+        await client.generate_content_async(
+            model="gemma-4-31b-it",
+            prompt="bounded",
+            max_output_tokens=1000,
+            allow_model_fallback=False,
+            max_provider_attempts=1,
+            attempt_observer=observed.append,
+        )
+
+    assert calls == ["gemma-4-31b"]
+    assert len(observed) == 1
+    assert observed[0]["provider_model_name"] == "models/gemma-4-31b-it"
+
+
+@pytest.mark.asyncio
 async def test_quota_block_falls_through_to_next_model(monkeypatch):
     client = GoogleAIClient()
     client.fallback_models = ["gemini-3.1-flash-lite"]

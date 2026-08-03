@@ -487,6 +487,12 @@ def export_preview_data_if_configured(config: dict) -> None:
             str(SITE_DIR / 'src' / 'data' / 'collection-batch-v1.json'),
             '--collection-batch-last-good',
             str(semantic_paths['collection_batch_last_good_filename']),
+            '--collection-product-snapshot-output',
+            str(SITE_DIR / 'src' / 'data' / 'static-collection-product-snapshot-v1.json'),
+            '--collection-product-source-scope',
+            str(config.get('collection_product_source_scope') or 'static-site-builder-export'),
+            '--collection-product-evidence-trust-scope',
+            str(config.get('collection_product_evidence_trust_scope') or 'all'),
         ])
     if config.get('gemma_related_verify'):
         cmd.append('--gemma-related-verify')
@@ -517,17 +523,25 @@ def read_collection_semantic_receipt(config: dict) -> dict:
     if scripts_dir not in sys.path:
         sys.path.insert(0, scripts_dir)
     from static_collection_batch import validate_collection_batch
+    from static_collection_product_snapshot import validate_product_snapshot
 
     batch = json.loads(batch_path.read_text(encoding='utf-8'))
-    catalog_path = SITE_DIR / 'src' / 'data' / 'production-catalog.json'
+    preview_profile = str(config.get('profile') or 'preview') == 'preview'
+    catalog_path = SITE_DIR / 'src' / 'data' / (
+        'preview-events.json' if preview_profile else 'production-catalog.json'
+    )
     catalog_ids = None
     if catalog_path.is_file():
         catalog = json.loads(catalog_path.read_text(encoding='utf-8'))
-        rows = (
-            catalog.get('eligible') or catalog.get('events')
-            if isinstance(catalog, dict)
-            else None
-        )
+        rows = None
+        if isinstance(catalog, dict):
+            rows = (
+                catalog.get('events')
+                if preview_profile
+                else catalog.get('eligible')
+            )
+            if rows is None:
+                rows = catalog.get('eligible') or catalog.get('events')
         if isinstance(rows, list):
             catalog_ids = [
                 row.get('event_id', row.get('id'))
@@ -544,14 +558,109 @@ def read_collection_semantic_receipt(config: dict) -> dict:
             'collection batch validation failed: '
             + '; '.join(validation.get('errors') or [])
         )
+    product_path = SITE_DIR / 'src' / 'data' / 'static-collection-product-snapshot-v1.json'
+    if not product_path.is_file():
+        raise RuntimeError('required static-collection-product-snapshot-v1.json is missing')
+    product_snapshot = json.loads(product_path.read_text(encoding='utf-8'))
+    product_validation = validate_product_snapshot(product_snapshot)
+    if not product_validation.get('valid'):
+        raise RuntimeError(
+            'collection product snapshot validation failed: '
+            + '; '.join(product_validation.get('errors') or [])
+        )
     output_path = WORKING / 'collection-batch-v1.json'
     shutil.copy2(batch_path, output_path)
+    product_output_path = WORKING / 'static-collection-product-snapshot-v1.json'
+    shutil.copy2(product_path, product_output_path)
+    product_quality = run_collection_product_quality(
+        config,
+        snapshot_path=product_output_path,
+    )
     return {
         'status': 'validated',
         'collection_batch_sha256': sha256_file(output_path),
         'batch_contract_sha256': batch.get('batch_sha256'),
         'label_count': len(batch.get('labels') or {}),
+        'collection_product_snapshot_sha256': sha256_file(product_output_path),
+        'collection_product_snapshot_contract_sha256': product_snapshot.get('snapshot_sha256'),
+        'collection_product_input_fingerprint': product_snapshot.get('input_fingerprint'),
+        'collection_product_normalized_output_sha256': product_snapshot.get('normalized_output_sha256'),
+        'collection_product_provider_calls': product_snapshot.get('provider_calls'),
+        **product_quality,
     }
+
+
+def run_collection_product_quality(config: dict, *, snapshot_path: Path) -> dict:
+    """Evaluate the generated product projection inside the builder pipeline.
+
+    The monitor remains the single contract implementation: the builder loads
+    the already-staged checker and invokes its normal CLI entry point in
+    process.  WATCH is deliberately non-blocking; FAIL still fails the build
+    after all three evidence files have been written.
+    """
+
+    checker_path = SITE_DIR / 'scripts' / 'check_static_collections_product_quality.py'
+    if not checker_path.is_file():
+        raise RuntimeError('static collections product-quality checker is missing')
+    module_name = 'events_bot_static_collections_product_quality'
+    spec = importlib.util.spec_from_file_location(module_name, checker_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError('static collections product-quality checker cannot be loaded')
+    checker = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = checker
+    try:
+        spec.loader.exec_module(checker)
+    finally:
+        sys.modules.pop(module_name, None)
+
+    json_path = WORKING / 'static-collections-product-quality.json'
+    markdown_path = WORKING / 'static-collections-product-quality.md'
+    qa_summary_path = WORKING / 'qa-summary.json'
+    clock = config.get('build_clock') if isinstance(config.get('build_clock'), dict) else {}
+    today = str(clock.get('effective_date') or config.get('current_date') or '').strip()
+    args = [
+        '--snapshot', str(snapshot_path),
+        '--json-report', str(json_path),
+        '--markdown-report', str(markdown_path),
+    ]
+    if today:
+        args.extend(['--today', today])
+    exit_code = int(checker.main(args))
+    if not json_path.is_file() or not markdown_path.is_file():
+        raise RuntimeError('static collections product-quality reports are missing')
+    report = json.loads(json_path.read_text(encoding='utf-8'))
+    status = str(report.get('status') or '')
+    if status not in {'HEALTHY', 'WATCH', 'FAIL'}:
+        raise RuntimeError('static collections product-quality status is invalid')
+    qa_summary = {
+        'schema': 'static-site-qa-summary-v1',
+        'scenario': 'collections.product_quality',
+        'platform': 'static-site-builder',
+        'repo_sha': str(config.get('repo_sha') or '') or None,
+        'target': snapshot_path.name,
+        'outcome': 'PASS' if status in {'HEALTHY', 'WATCH'} and exit_code == 0 else 'FAIL',
+        'product_status': status,
+        'live_product_evaluated': True,
+        'watch_is_blocking': False,
+        'evidence_scope': 'generated_static_site_builder_snapshot',
+        'snapshot_sha256': sha256_file(snapshot_path),
+        'normalized_output_sha256': report.get('normalized_output_sha256'),
+        'quality_report_sha256': sha256_file(json_path),
+        'quality_markdown_sha256': sha256_file(markdown_path),
+    }
+    qa_summary_path.write_text(
+        json.dumps(qa_summary, ensure_ascii=False, indent=2) + '\n',
+        encoding='utf-8',
+    )
+    result = {
+        'collection_product_quality_status': status,
+        'collection_product_quality_report_sha256': sha256_file(json_path),
+        'collection_product_quality_markdown_sha256': sha256_file(markdown_path),
+        'collection_product_quality_qa_summary_sha256': sha256_file(qa_summary_path),
+    }
+    if exit_code != 0:
+        raise RuntimeError(f'static collections product-quality monitor failed: {status}')
+    return result
 
 
 def render_daily_service_share(config: dict, build_clock: dict) -> dict:
@@ -787,6 +896,22 @@ def main() -> int:
                 or not re.fullmatch(r'[0-9a-f]{64}', str(semantic_result.get('artifact_sha256') or ''))
             ):
                 raise RuntimeError('shared collection semantic result is partial or mismatched')
+            if config.get('collection_semantic_compute') and (
+                int(semantic_result.get('collection_product_provider_calls', -1)) != 0
+                or not re.fullmatch(
+                    r'[0-9a-f]{64}',
+                    str(semantic_result.get('collection_product_snapshot_sha256') or ''),
+                )
+                or not re.fullmatch(
+                    r'[0-9a-f]{64}',
+                    str(semantic_result.get('collection_product_input_fingerprint') or ''),
+                )
+                or not re.fullmatch(
+                    r'[0-9a-f]{64}',
+                    str(semantic_result.get('collection_product_normalized_output_sha256') or ''),
+                )
+            ):
+                raise RuntimeError('shared collection product snapshot metadata is mismatched')
             if (
                 (config.get('related_mode') == 'bge' or config.get('unusual_enabled'))
                 and not re.fullmatch(

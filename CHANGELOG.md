@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Added the clean main-based audience-collections shadow contour: source-grounded
+  facts v3, review receipts and warm cache, immutable Telegram/VK/parser replay,
+  full-catalog product snapshot/monitor and StaticSiteBuilder artifacts. The
+  current rolling/Pacific project-scoped Google limiter remains authoritative;
+  PR B, owner gold/calibration, Astro routes, navigation, sitemap and publication
+  remain blocked.
+
 - Fixed the Google AI registry after operator confirmation that all six API
   keys belong to different Google Cloud projects: each key now has an
   independent redacted `quota_scope`, while historical attempts and any 429

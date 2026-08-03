@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sqlite3
 import sys
 from pathlib import Path
@@ -14,6 +15,7 @@ import static_collection_batch as batch_module
 import static_collection_export as collections
 import static_event_bge as bge
 from static_place_org_registry import load_registry
+import static_collection_product_snapshot as product_snapshot_module
 
 
 def _load_exporter():
@@ -69,6 +71,62 @@ def test_collect_source_records_preserves_type_username_and_trust():
             "telegram_username": "dramteatr39",
         }
     ]
+
+
+def test_exporter_product_boundary_emits_source_bound_facts_v3_without_provider(tmp_path):
+    exporter = _load_exporter()
+    con = sqlite3.connect(":memory:")
+    con.row_factory = sqlite3.Row
+    con.execute(
+        """
+        create table event_source(
+          id integer primary key, event_id integer, source_type text,
+          source_url text, source_text text, trust_level text
+        )
+        """
+    )
+    con.execute(
+        "insert into event_source values(7,1,'telegram','https://t.me/example/7',?, 'official')",
+        ("Приглашаем родителей с детьми",),
+    )
+    output = tmp_path / "product.json"
+    result = exporter.build_collection_product_output(
+        con,
+        events=[
+            {
+                "id": 1,
+                "title": "Семейное занятие",
+                "start_date": "2026-08-10",
+                "lifecycle_status": "active",
+                "other_date_ids": [],
+                "organizer_names": ["Семейный центр"],
+            }
+        ],
+        collection_decisions_by_id={
+            1: {
+                "family_suitable_decision": {
+                    "value": "confirmed",
+                    "confidence": 0.9,
+                    "evidence_quote": "родителей с детьми",
+                    "reason_code": "explicit_family_invitation",
+                    "source_id": 7,
+                    "input_hash": "a" * 64,
+                    "policy_version": product_snapshot_module.FACTS_POLICY_VERSION,
+                }
+            }
+        },
+        current_date="2026-08-02",
+        generated_at="2026-08-02T12:00:00Z",
+        source_scope="production-copy-after-apply",
+        evidence_trust_scope="all",
+        output_path=output,
+    )
+
+    snapshot = json.loads(output.read_text(encoding="utf-8"))
+    assert result["collection_product_provider_calls"] == 0
+    assert result["collection_product_input_fingerprint"] == snapshot["input_fingerprint"]
+    assert snapshot["collections"]["family_suitable"]["items"][0]["source_status"] == "grounded"
+    assert snapshot["collections"]["family_suitable"]["items"][0]["organizer"] == "Семейный центр"
 
 
 def test_registry_projection_keeps_official_theatre_and_exact_venue_roles_separate():

@@ -1,0 +1,106 @@
+{
+  "schema_version": "static-collection-source-review-v1",
+  "receipt_id": "7373-7374",
+  "reviewed_at": "2026-08-02T09:18:31.733493Z",
+  "status": "corrected",
+  "event_ids": [
+    7373,
+    7374
+  ],
+  "issue": "Reciprocal links and one raw VK announcement identify consecutive dates as one drakkar occurrence family.",
+  "canonical_before": [
+    {
+      "id": 7373,
+      "title": "⛵ Путешествие на драккаре викингов «Рагна»",
+      "description": "Путешествие проходит на драккаре викингов «Рагна». Судно представляет собой реконструкцию средневековой ладьи эпохи викингов.",
+      "date": "2026-08-01",
+      "time": "10:00",
+      "location_name": "причал реки Тростянка",
+      "location_address": null,
+      "city": "Зеленоградск",
+      "event_type": "встреча",
+      "linked_event_ids": "[7374]",
+      "identity_status": "canonical",
+      "merged_into_event_id": null
+    },
+    {
+      "id": 7374,
+      "title": "Путешествие на драккаре викингов «Рагна»",
+      "description": "Драккар «Рагна» является реконструкцией корабля IX века. 🛶",
+      "date": "2026-08-02",
+      "time": "10:00",
+      "location_name": "причал реки Тростянка",
+      "location_address": null,
+      "city": "Зеленоградск",
+      "event_type": "встреча",
+      "linked_event_ids": "[7373]",
+      "identity_status": "canonical",
+      "merged_into_event_id": null
+    }
+  ],
+  "canonical_after": null,
+  "source_evidence": [
+    {
+      "event_id": 7373,
+      "source_ref": {
+        "source_id": 10394912,
+        "source_type": "vk",
+        "source_url": "https://vk.com/wall-48845044_24959",
+        "trust_level": null,
+        "source_chat_username": null,
+        "source_message_id": 24959,
+        "source_text_sha256": "bf3083fa67bd0b5be6b09628e7322c4b7265116dfd6f4ef6678b0bf9d85c5fcf",
+        "source_record_sha256": "9a5403a002934601c400ea9452d48c6ffdf79faa1f358884a7c339a5197bfb73",
+        "event_id": 7373,
+        "source_text_char_count": 1040,
+        "source_ref_sha256": "47d3b4948fc7f5d1a896ad8c4f82115d945d499016cc4c8b1f3ca615d66e08fa"
+      },
+      "raw_source_quote": "Путешествие на драккаре викингов «Рагна»!\n\nВ эту субботу и воскресенье, 1 и 2 августа, вы сможете отправиться в настоящее путешествие по водам Куршского залива на средневековой ладье эпохи викингов!\n\nДраккар «Рагна» — реконструкция корабля IX века, построенная согласно данным из археологических раскопок. На подобных судах по водам Самбии ходили древние пруссы и викинги более тысячи лет назад.\n\nВо время 3-часового похода вы сможете:\n— освоить греблю на ладье\n— поставить парус\n— постоять за рулём средневекового корабля\n— выйти в Куршский залив\n— почувствовать себя настоящим мореходом средневековья\n\nПутешествие на «Рагне» - это возможность прикоснуться к живой истории, почувствовать ветер в парусе и пройти по древним водным путям Самбии.\n\n📍 Старт:\n- 1 августа в 10:00\n- 2 августа в 10:00\n📍 Отправление: причал реки Тростянка, Зеленоградск\n⏳ Продолжительность путешествия: 3 часа\n💰 Стоимость: 2500₽\n\nПодробности на сайте:\nmorehodi.kaup39.ru\n\n✏Запись:\n- ВК :vk.ru/moresambia\n- По телефону: +7(98",
+      "raw_source_quote_sha256": "60bed87468bff13ce3b753173e5beb3dcf92aa76ea665011a6dd8080611e5edd",
+      "canonical_sha256": "89c863150913ffbc54aec6c61353395573f6d3ec6040d634d00c406e5b538cc9",
+      "raw_source_quote_kind": "excerpt",
+      "raw_source_quote_truncated": true,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 1000,
+      "raw_source_quote_char_count": 1000,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 40
+    },
+    {
+      "event_id": 7374,
+      "source_ref": {
+        "source_id": 10394913,
+        "source_type": "vk",
+        "source_url": "https://vk.com/wall-48845044_24959",
+        "trust_level": null,
+        "source_chat_username": null,
+        "source_message_id": 24959,
+        "source_text_sha256": "bf3083fa67bd0b5be6b09628e7322c4b7265116dfd6f4ef6678b0bf9d85c5fcf",
+        "source_record_sha256": "cfb87f8c5b4ff9d52e8aad5ea4ee7a90d68234ed0051f6af1c4c985438fce49d",
+        "event_id": 7374,
+        "source_text_char_count": 1040,
+        "source_ref_sha256": "31f9ea3f08aef2f0f9fc435d6567db3cac51a0701e58cd0fcd8ed6a5dee3d2d4"
+      },
+      "raw_source_quote": "Путешествие на драккаре викингов «Рагна»!\n\nВ эту субботу и воскресенье, 1 и 2 августа, вы сможете отправиться в настоящее путешествие по водам Куршского залива на средневековой ладье эпохи викингов!\n\nДраккар «Рагна» — реконструкция корабля IX века, построенная согласно данным из археологических раскопок. На подобных судах по водам Самбии ходили древние пруссы и викинги более тысячи лет назад.\n\nВо время 3-часового похода вы сможете:\n— освоить греблю на ладье\n— поставить парус\n— постоять за рулём средневекового корабля\n— выйти в Куршский залив\n— почувствовать себя настоящим мореходом средневековья\n\nПутешествие на «Рагне» - это возможность прикоснуться к живой истории, почувствовать ветер в парусе и пройти по древним водным путям Самбии.\n\n📍 Старт:\n- 1 августа в 10:00\n- 2 августа в 10:00\n📍 Отправление: причал реки Тростянка, Зеленоградск\n⏳ Продолжительность путешествия: 3 часа\n💰 Стоимость: 2500₽\n\nПодробности на сайте:\nmorehodi.kaup39.ru\n\n✏Запись:\n- ВК :vk.ru/moresambia\n- По телефону: +7(98",
+      "raw_source_quote_sha256": "60bed87468bff13ce3b753173e5beb3dcf92aa76ea665011a6dd8080611e5edd",
+      "canonical_sha256": "368aca013ed708ca04f96a7b0b415b624666e7198178d4b7935e24a5bdc902fe",
+      "raw_source_quote_kind": "excerpt",
+      "raw_source_quote_truncated": true,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 1000,
+      "raw_source_quote_char_count": 1000,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 40
+    }
+  ],
+  "family_decision": {
+    "seed_action": "keep_7373_as_family_representative",
+    "family_id": "linked:7373",
+    "occurrence_member_ids": [
+      7373,
+      7374
+    ]
+  },
+  "scope_note": "Receipt repairs review/calibration inputs only; canonical production changes require the normal Smart Update/data-integrity path.",
+  "receipt_sha256": "0b8b1d22e8035ea26493a523f08ee792671957a249ecc604e6042ad874d1dae1"
+}
