@@ -4650,33 +4650,58 @@ class VideoAnnounceScenario:
                 filename = f"scene_{idx + 1}_{image_idx + 1}{ext}"
                 dest = tmp_path / "assets" / "posters" / filename
                 dest.parent.mkdir(parents=True, exist_ok=True)
-                try:
-                    host = urlparse(candidate).netloc.lower()
-                    timeout = 6 if host.endswith("files.catbox.moe") else 20
-                    retries = 1 if host.endswith("files.catbox.moe") else 3
-                    backoff = 0.25 if host.endswith("files.catbox.moe") else 1.0
-                    resp = await http_call(
-                        "video_announce.poster_prefetch",
-                        "GET",
-                        candidate,
-                        timeout=timeout,
-                        retries=retries,
-                        backoff=backoff,
-                        headers=headers,
+                host = urlparse(candidate).netloc.lower()
+                fetch_candidates = [candidate]
+                if host == "static.kenigevents.ru":
+                    object_path = candidate.split("?", 1)[0].split(
+                        "https://static.kenigevents.ru/", 1
+                    )[-1]
+                    query = candidate.split("?", 1)[1] if "?" in candidate else ""
+                    origin_candidate = (
+                        "https://storage.yandexcloud.net/kenigevents.ru/"
+                        + object_path
+                        + (f"?{query}" if query else "")
                     )
-                except Exception:
-                    logger.warning(
-                        "video_announce: failed to prefetch scene image=%s",
-                        candidate,
-                        exc_info=True,
-                    )
-                    continue
-                if resp.status_code != 200 or not resp.content:
+                    fetch_candidates.append(origin_candidate)
+                resp = None
+                for fetch_candidate in fetch_candidates:
+                    fetch_host = urlparse(fetch_candidate).netloc.lower()
+                    timeout = 6 if fetch_host.endswith("files.catbox.moe") else 20
+                    retries = 1 if fetch_host.endswith("files.catbox.moe") else 3
+                    backoff = 0.25 if fetch_host.endswith("files.catbox.moe") else 1.0
+                    try:
+                        current_resp = await http_call(
+                            "video_announce.poster_prefetch",
+                            "GET",
+                            fetch_candidate,
+                            timeout=timeout,
+                            retries=retries,
+                            backoff=backoff,
+                            headers=headers,
+                        )
+                    except Exception:
+                        logger.warning(
+                            "video_announce: failed to prefetch scene image=%s fallback=%s",
+                            fetch_candidate,
+                            fetch_candidate != candidate,
+                            exc_info=fetch_candidate == fetch_candidates[-1],
+                        )
+                        continue
+                    if current_resp.status_code == 200 and current_resp.content:
+                        resp = current_resp
+                        if fetch_candidate != candidate:
+                            logger.warning(
+                                "video_announce: CDN poster fetch failed; used canonical "
+                                "Yandex Object Storage origin path=%s",
+                                object_path,
+                            )
+                        break
                     logger.warning(
                         "video_announce: scene image fetch failed status=%s url=%s",
-                        resp.status_code,
-                        candidate,
+                        current_resp.status_code,
+                        fetch_candidate,
                     )
+                if resp is None:
                     continue
                 dest.write_bytes(resp.content)
                 local_images.append(filename)
