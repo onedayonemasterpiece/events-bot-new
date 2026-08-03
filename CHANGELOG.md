@@ -4,9 +4,9 @@
 
 - Fixed the Region Talk YDB billing runaway and wrong-account placement: disabled autonomous scheduling, migrated all five tables to the 1 GiB serverless database in `cloud-art-koder/default`, verified exact row counts and ordered-export hashes, switched Fly/GitHub configuration, quarantined both databases at 0 RU/s, and added an exact expected-database preflight guard before any future scheduled run.
 
-- Fixed the CherryFlash `popular_review` watchdog retry storm: after two
-  persisted failed sessions for the same local target date it stops launching
-  ten-minute Kaggle replacements, keeping CDN/render outages bounded. Poster
+- Fixed the CherryFlash `popular_review` retry storm: both startup catch-up and
+  the ten-minute watchdog stop after two persisted failed sessions for the same
+  local target date, keeping CDN/render outages bounded across restarts. Poster
   prefetch also falls back from the strict-TLS CDN URL to the identical canonical
   Yandex Object Storage object path without disabling certificate verification.
 

@@ -88,8 +88,8 @@ persisted failed-session retry cap.
 
 ### Mandatory checks before closure or deploy
 
-- prove the general `popular_review` watchdog stops after two persisted failed
-  sessions for one target date, including across restarts;
+- prove both general `popular_review` startup catch-up and its watchdog stop after
+  two persisted failed sessions for one target date, including across restarts;
 - preserve successful/live remote-handoff suppression checks;
 - strict TLS must show `static.kenigevents.ru` in the served SAN;
 - strict CDN poster and ICS requests must succeed;
@@ -115,8 +115,8 @@ persisted failed-session retry cap.
 
 ## Corrective Actions
 
-- Added a persisted two-failed-session same-day cap to the general
-  `popular_review` watchdog.
+- Added a persisted two-failed-session same-day cap shared by general
+  `popular_review` startup catch-up and its watchdog.
 - CherryFlash poster prefetch now retries canonical `static.kenigevents.ru`
   object paths through the same bucket's strict-TLS Object Storage origin when
   the CDN edge is unavailable; it never disables certificate verification.

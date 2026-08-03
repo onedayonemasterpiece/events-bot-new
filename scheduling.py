@@ -2013,6 +2013,22 @@ async def _maybe_catch_up_popular_review_on_startup(db: Any, bot: Any) -> bool:
         )
         return False
 
+    failed_session_count = await _popular_review_failed_session_count_today(
+        db,
+        day_start_utc=day_start_local.astimezone(timezone.utc),
+        day_end_utc=day_end_local.astimezone(timezone.utc),
+        target_date=target_date,
+    )
+    if failed_session_count >= POPULAR_REVIEW_FAILED_SESSION_RETRY_CAP:
+        logging.error(
+            "SCHED startup catchup video_popular_review retry cap reached "
+            "target_date=%s failed_sessions=%s cap=%s",
+            target_date,
+            failed_session_count,
+            POPULAR_REVIEW_FAILED_SESSION_RETRY_CAP,
+        )
+        return False
+
     logging.warning(
         "SCHED startup catchup dispatching missed video_popular_review slot scheduled_local=%s now_local=%s",
         scheduled_local.isoformat(),

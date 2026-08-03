@@ -97,9 +97,10 @@ The icon layer uses the approved SVG Repo-derived assets packaged in `video_anno
   - scheduled `popular_review` must wait through the pre-Kaggle phase until `videoannounce_session.kaggle_dataset` is set and `kaggle_kernel_ref` is a real Kaggle slug such as `zigomaro/cherryflash`;
   - `ops_run(kind='video_popular_review')` must not be marked `success` while the session is still local-only (`local:CherryFlash`), and a successful `ops_run` handoff is not delivery evidence by itself;
   - same-day startup/watchdog catch-up may retry a missed CherryFlash slot when today's matching session failed before render/output evidence; it must not launch a full replacement Kaggle run after `video_url`, terminal Kaggle ledger evidence (`done`/`partial` with `terminal_at`), `DONE`, `PUBLISH_BLOCKED`, `PUBLISHED_TEST`, or `PUBLISHED_MAIN`. Post-render bot/test delivery failures and deterministic fanout blockers such as `BOOSTS_REQUIRED` are narrow publish/reconcile problems, not rerender signals.
-  - the general `popular_review` watchdog has a persisted same-day cap of two
-    failed sessions (scheduled attempt plus one recovery); an external CDN/render
-    failure must not create a new Kaggle session every ten minutes.
+  - the general `popular_review` startup catch-up and watchdog share a persisted
+    same-day cap of two failed sessions (scheduled attempt plus one recovery); an
+    external CDN/render failure must not create a new Kaggle session every ten
+    minutes or after each process restart.
   - launcher-side prefetch keeps strict TLS and, for canonical
     `static.kenigevents.ru/<object-path>` posters only, may retry the identical
     object path via `storage.yandexcloud.net/kenigevents.ru/<object-path>` when
