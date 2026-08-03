@@ -34,6 +34,11 @@ PREVIEW_BUILD_ID=preview-<unique-id> npm --prefix site run check:preview
 PREVIEW_BUILD_ID=preview-<unique-id> npm --prefix site run check:unified-prototype
 ```
 
+`check:preview` treats a date listing without mobile event rows as valid only
+when the generated page retains the mobile rail shell and renders the explicit
+no-events marker as visible. This keeps empty current dates buildable without
+weakening the missing-markup regression check for non-empty listings.
+
 The reviewer enters through `/<id>/__preview/`; that hub owns the page-type
 inventory and links only targets inside the same prefix. It must state that the
 integrated Search visual is not acceptance of the live auth/backend journey.

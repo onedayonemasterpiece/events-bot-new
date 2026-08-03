@@ -14,7 +14,10 @@
   transport-fault profile consumed by preview builds; staging now fails closed
   instead of starting a remote build with that contract missing. Preview
   provenance now uses the full runner-bound repo SHA rather than requiring a
-  `.git` directory inside the Kaggle archive.
+  `.git` directory inside the Kaggle archive. Preview validation also accepts a
+  listing without mobile rows only when its rendered no-events marker is
+  explicitly visible, so a genuinely empty production date does not fail the
+  Kaggle build while missing rail markup still fails closed.
 
 - Fixed the Google AI registry after operator confirmation that all six API
   keys belong to different Google Cloud projects: each key now has an
