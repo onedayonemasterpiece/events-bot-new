@@ -53,7 +53,7 @@ test('artifact policy indexes only the root and hides every other HTML page', ()
     assert.match(readFileSync(join(root, 'index.html'), 'utf8'), /content="index,follow"/u);
     assert.match(
       readFileSync(join(root, 'sobytiya', 'test', 'index.html'), 'utf8'),
-      new RegExp(`content="${PRELAUNCH_ROBOTS_DIRECTIVE}"`, 'u'),
+      new RegExp(`content="${PRELAUNCH_ROBOTS_DIRECTIVE}"`, 'u),
     );
     assert.equal(
       readFileSync(join(root, 'robots.txt'), 'utf8'),
@@ -94,7 +94,7 @@ test('landing source keeps functional contracts and the reference-bound glass sc
   assert.match(landing, /--tile-height:\s*clamp\(166px, 15\.525vw, 256px\)/u);
   assert.match(landing, /\.prelaunch__tile\s*\{[\s\S]*?background:\s*transparent;[\s\S]*?opacity:\s*1;/u);
   assert.match(landing, /\.prelaunch__tile::before[\s\S]*?backdrop-filter:/u);
-  assert.match(landing, /radial-gradient\(circle at 86% 15%/u);
+  assert.match(landing, /radial-gradient\(circle at\s+86%\s+15%/u);
 
   const rowsMatch = /const tileStateRows = \[([\s\S]*?)\] as const;/u.exec(landing);
   assert.ok(rowsMatch, 'deterministic tile state rows must be explicit');
