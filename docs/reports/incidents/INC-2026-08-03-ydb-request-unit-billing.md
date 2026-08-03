@@ -143,11 +143,17 @@ cost accumulated.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending main merge
-- deploy path: Fly secrets/runtime containment completed; durable config pending
+- deployed SHA: `797d756c1688f4084e6d9823c74567d06766ebae`, exact
+  `origin/main` at deployment time
+- release path: PR [#304](https://github.com/onedayonemasterpiece/events-bot-new/pull/304)
+  followed by `scripts/deploy_fly_main.sh --remote-only`
 - regression checks: migration counts and hashes passed; scheduled-runner unit
-  suite passed (`18 passed`)
-- post-deploy verification: `/healthz` ready, Region Talk disabled, watchdog disabled
+  suite passed (`18 passed`); PR `python-ci` and
+  `static-browser-release-gate` passed
+- post-deploy verification: Fly machine version `1901` started with its health
+  check passing; `/healthz` ready; Region Talk and watchdog disabled; runtime
+  database and expected-database paths both identify target
+  `etnkibjidis0o6stn2cq`; embedded image SHA matches the deployed SHA
 
 ## Prevention
 
