@@ -1,0 +1,661 @@
+schema: kenigevents.focus_group_release_scenarios.v4
+updated_at: '2026-08-03'
+
+canonical_docs:
+  owner_brief: docs/features/static-site-pages/focus-group.md
+  strategy: docs/features/static-site-pages/focus-group-release/README.md
+  status: docs/features/static-site-pages/focus-group-release/status.md
+  nps_ui: docs/features/static-site-pages/focus-group-release/nps-ui.md
+  testing: docs/features/static-site-pages/focus-group-release/testing.md
+  prize_rules: docs/features/static-site-pages/focus-group-release/prize-rules.md
+
+programme:
+  id: static-site-focus-group-2026
+  site_kind: static_astro_site
+  eligibility_cutoff: '2026-08-31T18:00:00+02:00'
+  timezone: Europe/Kaliningrad
+  access:
+    kind: soft_local_marker_gate
+    default_state: locked_placeholder
+    main_ui_visible_without_marker: false
+    security_boundary: none
+    technical_bypass_is_incident: false
+  feedback:
+    page_score:
+      scale: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+      identity: participant_page_family_page_revision
+      official_nps_metric: false
+      visible_before_footer: true
+      revision_changed_copy_required: true
+    service_nps:
+      scale: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+      identity: participant_service_revision
+      official_nps_metric: true
+      canonical_route: /zakrytaya-afisha/
+      optional_general_comment: true
+      raffle_requirement: false
+  artifacts:
+    collection_version: focus-eggs-v1
+    total: 12
+    required: 10
+  raffle:
+    verified_identity_required: true
+    page_score_required: true
+    service_nps_required: false
+    base_chances: 1
+    text_feedback_bonus: 1
+    screenshot_feedback_bonus: 1
+    maximum_chances: 3
+    winner_response_days: 3
+    prize: two_partner_theatre_tickets
+    delivery: in_person
+    all_verified_participants_receive_final_email: true
+
+outcomes:
+  - PASS
+  - FAIL
+  - BLOCKED
+  - NOT_IMPLEMENTED
+  - SKIPPED_NOT_APPLICABLE
+
+states:
+  - ready
+  - partial
+  - missing
+  - blocked
+  - prototype
+  - optional
+  - not_required
+
+workflows:
+  focus_group_contract:
+    file: .github/workflows/focus-group-contract.yml
+    state: missing
+    trigger: pull_request_and_main
+    secrets: none
+
+  external_focus_email_otp:
+    file: .github/workflows/external-focus-email-otp.yml
+    state: partial
+    trigger: protected_manual_and_workflow_call
+    secrets: external-e2e
+    evidence:
+      browser_pass: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30745526613
+      android_pass: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30747598046
+      ios_non_acceptance: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30754894934
+
+  focus_group_live:
+    file: .github/workflows/focus-group-live.yml
+    state: missing
+    trigger: protected_manual_and_workflow_call
+    secrets: focus-e2e
+
+  focus_group_draw:
+    file: .github/workflows/focus-group-draw.yml
+    state: missing
+    trigger: protected_manual
+    secrets: focus-draw
+
+  focus_group_report:
+    state: not_required
+    reason: statistics_are_queried_read_only_on_demand
+
+policies:
+  exact_deployed_sha_required: true
+  open_pr_is_pass: false
+  background_started_is_pass: false
+  local_marker_is_security_boundary: false
+  interface_visible_without_marker: false
+  unverified_user_can_test_site: true
+  unverified_user_can_enter_raffle: false
+  score_scale_exactly_0_to_10: true
+  page_score_hidden_behind_button: false
+  page_score_comment_required: false
+  selected_score_must_be_displayed_as_number: true
+  page_score_key_includes_revision: true
+  page_score_24_hour_ttl_is_revision_contract: false
+  service_nps_repeated_on_every_page: false
+  service_nps_separate_from_page_score: true
+  service_nps_used_for_official_nps_calculation: true
+  raw_feedback_in_actions_artifact: false
+  github_artifact_contains_pii: false
+  daily_statistics_report_required: false
+  whole_catalog_on_mobile_emulators: false
+  playwright_webkit_replaces_native_ios: false
+  real_otp_parallel_on_one_mailbox: false
+  real_otp_trace_har_video: forbidden
+
+release_sets:
+  seed:
+    required:
+      - access.placeholder_first_paint
+      - access.main_ui_hidden_without_marker
+      - access.invite_sets_marker
+      - access.marker_survives_reload
+      - access.fixed_cutoff
+      - page_score.route_matrix
+      - page_score.visible_before_footer
+      - page_score.exact_scale
+      - page_score.immediate_save
+      - page_score.numeric_saved_state
+      - page_score.same_revision_persists
+      - page_score.revision_changed_message
+      - page_score.new_revision_submission
+      - page_score.cross_family_independent
+      - page_score.optional_details
+      - page_score.offline_idempotency
+      - service_nps.hub_visible
+      - service_nps.immediate_save
+      - service_nps.independent_from_page_score
+      - service_nps.optional_general_comment
+      - auth.browser_identity
+      - auth.android_identity
+      - auth.iphone_supported_identity
+      - auth.yandex_identity
+      - auth.unverified_ineligible
+      - pwa.android_relaunch
+      - pwa.iphone_home_screen
+      - use.share
+      - use.calendar
+      - use.not_interested
+      - use.for_me
+      - artifacts.exact_collection
+      - artifacts.server_receipt
+      - artifacts.threshold
+      - stats.queryable
+      - stats.no_pii
+      - raffle.chances
+      - raffle.rules_versioned
+      - raffle.dry_draw
+      - release.full_rehearsal
+
+  expand_to_80:
+    required:
+      - seed
+      - operations.no_mass_p0
+      - operations.feedback_queue_manageable
+      - stats.counts_consistent
+
+  expand_to_200:
+    required:
+      - expand_to_80
+      - auth.cap_boundary
+      - artifacts.receipt_integrity
+      - raffle.snapshot_rehearsal
+
+scenarios:
+  access.placeholder_first_paint:
+    state: missing
+    layer: deployed_browser
+    platform: browser
+    blocking: seed
+    acceptance:
+      - placeholder_is_visible_before_hydration
+      - ordinary_app_shell_is_not_visible
+      - no_flash_of_afisha
+
+  access.main_ui_hidden_without_marker:
+    state: missing
+    layer: deployed_browser
+    platform: browser
+    blocking: seed
+    acceptance:
+      - main_landmarks_hidden_or_inert
+      - keyboard_cannot_reach_afisha
+      - screen_reader_does_not_expose_afisha
+      - technical_dom_unhide_is_not_security_failure
+
+  access.invite_sets_marker:
+    state: partial
+    layer: deployed_browser
+    platform: browser
+    blocking: seed
+    acceptance:
+      - valid_invite_fragment_sets_marker
+      - fragment_removed_from_url
+      - normal_static_site_becomes_visible
+
+  access.marker_survives_reload:
+    state: partial
+    layer: deployed_browser_and_mobile
+    platform: browser_android
+    blocking: seed
+    acceptance:
+      - reload_keeps_access
+      - pwa_relaunch_keeps_access
+      - for_me_reset_does_not_remove_marker
+
+  access.fixed_cutoff:
+    state: blocked
+    layer: repository_and_database
+    platform: none
+    blocking: seed
+    acceptance:
+      - one_constant_2026_08_31_18_00_kaliningrad
+      - no_rolling_30_day_marker
+      - actions_at_or_after_cutoff_do_not_change_eligibility
+
+  page_score.route_matrix:
+    state: partial
+    layer: repository_and_deployed_browser
+    platform: browser
+    blocking: seed
+    current_evidence:
+      - site/src/lib/focus-group-surface.test.ts
+      - site/src/layouts/EventLayout.astro
+    acceptance:
+      - exact_supported_family_matrix
+      - exactly_one_lab_block_per_supported_route
+      - excluded_focus_lab_partner_routes_have_no_page_score
+      - candidate_and_preview_prefixes_resolve_same_family
+
+  page_score.visible_before_footer:
+    state: partial
+    layer: deployed_browser
+    platform: browser_android_ios
+    blocking: seed
+    acceptance:
+      - page_score_visible_without_extra_click
+      - placed_after_main_content_before_footer
+      - lab_badge_visible
+      - not_modal_or_floating_overlay
+      - not_obscured_by_bottom_navigation
+
+  page_score.exact_scale:
+    state: partial
+    layer: repository_and_browser
+    platform: browser_android_ios
+    blocking: seed
+    acceptance:
+      - exactly_11_values_zero_through_ten
+      - page_usability_question_visible
+      - endpoint_labels_visible
+      - no_default_selection
+      - no_stars_emoji_slider_or_dropdown
+
+  page_score.immediate_save:
+    state: partial
+    layer: deployed_browser
+    platform: browser
+    blocking: seed
+    acceptance:
+      - tap_score_creates_one_idempotent_request
+      - no_submit_button_required_for_score
+
+  page_score.numeric_saved_state:
+    state: missing
+    layer: deployed_browser
+    platform: browser_android_ios
+    blocking: seed
+    acceptance:
+      - saved_ui_reads_vasha_ocenka_number
+      - edit_action_available
+      - selected_cell_is_not_only_state_indicator
+
+  page_score.same_revision_persists:
+    state: missing
+    layer: repository_and_browser
+    platform: browser
+    blocking: seed
+    acceptance:
+      - same_revision_reload_shows_saved_number
+      - same_revision_after_24_hours_still_shows_saved_number
+      - score_can_be_changed_without_duplicate_current_revision
+
+  page_score.revision_changed_message:
+    state: missing
+    layer: repository_and_browser
+    platform: browser
+    blocking: seed
+    acceptance:
+      - old_revision_score_detected
+      - lab_page_updated_label_visible
+      - prior_score_number_visible
+      - copy_asks_to_rate_new_version_for_usability_and_task_success
+      - scale_immediately_available
+
+  page_score.new_revision_submission:
+    state: missing
+    layer: repository_browser_and_database
+    platform: browser
+    blocking: seed
+    acceptance:
+      - new_revision_score_saved_separately
+      - previous_revision_history_preserved
+      - one_current_answer_per_participant_family_revision
+      - page_revision_not_equal_to_build_sha_by_default
+
+  page_score.cross_family_independent:
+    state: partial
+    layer: repository_and_browser
+    platform: browser
+    blocking: seed
+    acceptance:
+      - event_detail_score_does_not_mark_home_answered
+      - score_follows_same_family_across_routes
+      - page_path_and_event_id_are_context_not_score_identity
+
+  page_score.optional_details:
+    state: partial
+    layer: deployed_browser
+    platform: browser_android_ios
+    blocking: seed
+    acceptance:
+      - text_button_available
+      - screenshot_button_available
+      - neither_is_required_for_page_score
+      - event_id_attached_automatically_on_event_page
+      - service_nps_link_available
+
+  page_score.offline_idempotency:
+    state: partial
+    layer: deployed_browser_fault_injection
+    platform: browser
+    blocking: seed
+    acceptance:
+      - offline_response_queued
+      - online_flush_creates_exactly_one_row
+      - honest_queued_copy_visible
+
+  service_nps.hub_visible:
+    state: prototype
+    layer: deployed_browser
+    platform: browser_android_ios
+    blocking: seed
+    current_evidence:
+      - site/src/components/FocusGroupFeedback.astro
+      - site/tests/focus-group-product-surface.test.mjs
+    acceptance:
+      - exactly_one_service_nps_block_in_participant_hub
+      - standard_recommendation_question_visible
+      - exact_zero_to_ten_scale
+      - page_routes_do_not_repeat_second_service_nps_question
+
+  service_nps.immediate_save:
+    state: missing
+    layer: deployed_browser_and_database
+    platform: browser
+    blocking: seed
+    acceptance:
+      - tap_creates_one_service_nps_request
+      - saved_ui_reads_vasha_obshchaya_ocenka_number
+      - edit_updates_current_service_revision
+
+  service_nps.independent_from_page_score:
+    state: missing
+    layer: repository_browser_and_database
+    platform: browser
+    blocking: seed
+    acceptance:
+      - page_score_does_not_mark_service_nps_answered
+      - service_nps_does_not_mark_page_family_answered
+      - official_nps_query_reads_service_nps_only
+
+  service_nps.optional_general_comment:
+    state: prototype
+    layer: deployed_browser_and_database
+    platform: browser
+    blocking: seed
+    acceptance:
+      - general_inconvenience_or_improvement_text_is_optional
+      - screenshot_optional
+      - comment_linked_to_service_revision
+      - comment_does_not_change_page_score
+
+  auth.browser_identity:
+    state: partial
+    layer: protected_live
+    platform: browser
+    blocking: seed
+    acceptance:
+      - final_target_real_email_or_magic_link_pass
+      - one_participant_registration
+
+  auth.android_identity:
+    state: partial
+    layer: protected_live
+    platform: android
+    blocking: seed
+    acceptance:
+      - final_target_real_email_identity_pass
+      - native_keyboard_and_viewport_usable
+
+  auth.iphone_supported_identity:
+    state: blocked
+    layer: protected_live
+    platform: ios
+    blocking: seed
+    acceptance_any:
+      - native_otp_keyboard_and_verify_pass
+      - real_magic_link_pass
+      - real_yandex_identity_pass
+
+  auth.yandex_identity:
+    state: partial
+    layer: protected_live
+    platform: browser_or_ios
+    blocking: seed
+    acceptance:
+      - real_consent_roundtrip
+      - one_auth_user
+      - one_participant
+
+  auth.unverified_ineligible:
+    state: partial
+    layer: deployed_browser_and_database
+    platform: browser
+    blocking: seed
+    acceptance:
+      - marker_opens_site
+      - participant_or_raffle_row_not_created_without_verified_identity
+
+  auth.cap_boundary:
+    state: partial
+    layer: database_integration
+    platform: none
+    blocking: expand_to_200
+    acceptance:
+      - repeat_registration_idempotent
+      - boundary_does_not_create_201st_participant
+      - synthetic_rows_cleaned
+
+  pwa.android_relaunch:
+    state: partial
+    layer: native_mobile
+    platform: android
+    blocking: seed
+    acceptance:
+      - install_prompt_or_system_install
+      - launcher_icon_open
+      - standalone_mode
+      - marker_preserved
+
+  pwa.iphone_home_screen:
+    state: missing
+    layer: native_mobile
+    platform: ios
+    blocking: seed
+    acceptance:
+      - honest_add_to_home_screen_instructions_or_automation
+      - home_icon_open
+      - marker_preserved
+
+  use.share:
+    state: partial
+    layer: deployed_browser_and_mobile
+    platform: browser_android_ios
+    blocking: seed
+    acceptance:
+      - share_action_opens_supported_path
+
+  use.calendar:
+    state: partial
+    layer: deployed_browser_and_mobile
+    platform: browser_android_ios
+    blocking: seed
+    acceptance:
+      - valid_ics_or_calendar_handoff
+
+  use.not_interested:
+    state: partial
+    layer: deployed_browser
+    platform: browser
+    blocking: seed
+    acceptance:
+      - state_persists
+      - undo_works
+
+  use.for_me:
+    state: partial
+    layer: deployed_browser
+    platform: browser
+    blocking: seed
+    acceptance:
+      - explicit_interest_change
+      - visible_explanation_or_order_change
+
+  artifacts.exact_collection:
+    state: ready
+    layer: repository_contract
+    platform: none
+    blocking: seed
+    evidence: site/src/lib/focus-easter-eggs.ts
+    acceptance:
+      - exact_ids_fg_e01_through_fg_e12
+      - total_12
+
+  artifacts.server_receipt:
+    state: missing
+    layer: database_integration
+    platform: none
+    blocking: seed
+    acceptance:
+      - one_receipt_per_participant_artifact_version
+      - replay_idempotent
+      - local_storage_not_authoritative
+
+  artifacts.threshold:
+    state: missing
+    layer: database_integration
+    platform: none
+    blocking: seed
+    acceptance:
+      - nine_of_twelve_ineligible
+      - ten_of_twelve_eligible
+
+  stats.queryable:
+    state: partial
+    layer: operator_read_only
+    platform: operator
+    blocking: seed
+    acceptance:
+      - code_agent_can_query_participants_page_scores_service_nps_text_screenshot_artifacts_chances
+      - no_scheduled_report_dependency
+      - counts_reconcile
+
+  stats.no_pii:
+    state: partial
+    layer: repository_and_operator
+    platform: operator
+    blocking: seed
+    acceptance:
+      - chat_safe_query_omits_email_user_uuid_otp_ip_user_agent_raw_feedback_screenshot_path
+      - explicitly_private_query_is_separate
+
+  raffle.chances:
+    state: missing
+    layer: database_contract
+    platform: none
+    blocking: seed
+    acceptance:
+      - base_one
+      - text_bonus_zero_or_one
+      - screenshot_bonus_zero_or_one
+      - maximum_three
+      - page_score_value_service_nps_value_sentiment_and_message_count_irrelevant
+
+  raffle.rules_versioned:
+    state: partial
+    layer: repository_and_product
+    platform: none
+    blocking: seed
+    acceptance:
+      - published_rules_include_cutoff_12_artifacts_10_threshold_chances_prize_and_three_day_response
+
+  raffle.dry_draw:
+    state: missing
+    layer: protected_workflow
+    platform: operator
+    blocking: seed
+    acceptance:
+      - immutable_synthetic_snapshot
+      - weighted_winner
+      - distinct_reserve
+      - same_snapshot_same_result
+      - cleanup
+
+  raffle.final_draw:
+    state: missing
+    layer: protected_workflow
+    platform: operator
+    blocking: programme_end
+    acceptance:
+      - starts_after_2026_08_31_18_00_kaliningrad
+      - winner_email_sent
+      - three_calendar_day_deadline
+      - reserve_promotion_supported
+      - final_thank_you_and_winner_email_to_verified_cohort
+
+  release.full_rehearsal:
+    state: missing
+    layer: all
+    platform: browser_android_ios_operator
+    blocking: seed
+    acceptance:
+      - exact_immutable_target
+      - all_seed_scenarios_terminal
+      - synthetic_data_cleanup_pass
+      - no_real_prize_or_cohort_email_sent
+
+  operations.no_mass_p0:
+    state: missing
+    layer: operator
+    platform: operator
+    blocking: expand_to_80
+    acceptance:
+      - no_unresolved_mass_access_auth_feedback_or_data_loss_incident
+
+  operations.feedback_queue_manageable:
+    state: missing
+    layer: operator
+    platform: operator
+    blocking: expand_to_80
+    acceptance:
+      - operator_can_open_and_process_new_text_and_screenshot_feedback
+
+  stats.counts_consistent:
+    state: missing
+    layer: operator_read_only
+    platform: operator
+    blocking: expand_to_80
+    acceptance:
+      - page_score_service_nps_feedback_artifact_and_chance_counts_reconcile
+
+  artifacts.receipt_integrity:
+    state: missing
+    layer: database_integration
+    platform: none
+    blocking: expand_to_200
+    acceptance:
+      - no_duplicate_participant_artifact_receipts
+      - progress_recomputes_deterministically
+
+  raffle.snapshot_rehearsal:
+    state: missing
+    layer: protected_workflow
+    platform: operator
+    blocking: expand_to_200
+    acceptance:
+      - production_shaped_synthetic_snapshot
+      - deterministic_receipt
+      - winner_reserve_and_cleanup_pass
