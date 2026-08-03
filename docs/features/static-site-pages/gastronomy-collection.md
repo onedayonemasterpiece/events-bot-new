@@ -1,6 +1,6 @@
 # Гастрономические события как списочная подборка
 
-Статус: **продуктовое решение принято; data-prep и Astro-страница ещё не реализованы**.
+Статус: **продуктовое решение принято; data-prep infrastructure реализована, owner-approved membership и Astro-страница ещё не реализованы**.
 
 Этот документ — нормативное дополнение к общей документации статических подборок:
 
@@ -161,6 +161,60 @@ immutable Fly SQLite snapshot
 - full catalog coverage, manifest validity и event ID membership проверяются до
   promotion; техническая неполнота не публикуется как нулевая выдача.
 
+### 5.1. Реализованный data-prep контур
+
+Текущая реализация добавляет `gastronomy` в уже существующие runtime policy и
+prototype bank общего `collection_semantics_v1` BGE-прохода. BGE выдаёт только
+high-recall candidate IDs и никогда не становится membership truth.
+
+Source-grounded часть реализована отдельным provider-free builder:
+
+```text
+collection-batch-v1 gastronomy candidates
+  + immutable SQLite Event/EventSource
+  + owner decision store
+  -> source-bound review queue
+  -> gastronomy manifest
+  -> exact gastronomy IDs overlay in the same collection-batch-v1
+  -> product-quality projection
+```
+
+Канонические файлы:
+
+- `site/scripts/static_collection_gastronomy.py` — family dedupe, source binding,
+  exact-quote/input-hash validation, manifest и fail-closed batch overlay;
+- `scripts/build_static_collection_gastronomy.py` — read-only операторский CLI;
+- `docs/review-data/static_collections_gastronomy_decisions_v1.json` — owner
+  decision store, изначально пустой и не одобренный;
+- `docs/review-data/static_collection_gastronomy_decisions.schema.json` —
+  machine-readable decision contract.
+
+Пример запуска после общего collection BGE batch:
+
+```bash
+python3 scripts/build_static_collection_gastronomy.py \
+  --db /path/to/immutable.sqlite \
+  --collection-batch /path/to/collection-batch-v1.json \
+  --current-date 2026-08-03 \
+  --review-queue-output artifacts/gastronomy-review-queue.json \
+  --manifest-output artifacts/gastronomy-manifest.json \
+  --product-snapshot-output artifacts/gastronomy-product-quality.json \
+  --batch-output artifacts/collection-batch-v1.with-gastronomy.json
+```
+
+До полного owner review:
+
+- candidate IDs сохраняются отдельно в `candidate_item_ids`;
+- exact `item_ids` остаются пустыми;
+- `catalog_state=unknown`, а не ложный `dormant`;
+- `publication_status=blocked`;
+- техническая неполнота не превращается в продуктовый ноль.
+
+После полного owner-approved review всех candidate families exact membership
+получают только `core` и `co_core`; `adjacent`, `incidental` и `unknown` остаются
+в evidence, но не входят в выдачу. Даже после этого batch остаётся shadow, пока
+отдельная Astro/UI задача не реализует страницу и release gates.
+
 ## 6. Дедупликация и grain
 
 Счётчик и карточки строятся по уникальным публичным occurrence families / event
@@ -211,7 +265,7 @@ concepts, а не по числу сырых строк.
 ### Ноль будущих событий и нет подтверждённой активности более шести месяцев
 
 - `catalog_state=dormant`;
-- стабильный URL и identity сохраняются;
+- стабильный URL и identity сохраняется;
 - страница убирается из каталога подборок, активной навигации и sitemap;
 - до появления нового accepted события используется `noindex,follow`;
 - новая accepted relation автоматически возвращает тот же URL в `active` или
@@ -271,14 +325,17 @@ concepts, а не по числу сырых строк.
 
 ## 11. Следующий этап
 
-В следующей data-prep ветке:
+Следующая data-prep итерация выполняется уже на свежем полном production
+snapshot, без изменения membership contract:
 
-1. добавить `gastronomy_v1` policy/prototypes/gold в общий collection semantic contract;
-2. получить candidate decisions на свежем production snapshot и провести
-   bounded owner review boundary cases;
-3. записывать exact accepted IDs и lifecycle metadata в collection batch;
-4. добавить fixtures для dedupe и 3+/1–2/0/dormant states;
-5. передать manifest в отдельную Astro/UI integration ветку стандартных
+1. получить реальную `gastronomy` candidate queue из общего BGE batch;
+2. провести bounded owner review core/co_core/adjacent/incidental и утвердить
+   positive, hard-negative и boundary gold;
+3. повторить cold/warm и подтвердить exact IDs, family dedupe и нулевые provider
+   calls неизменившегося цикла;
+4. добавить recent-six-month lifecycle input и last-good promotion после
+   принятого owner review;
+5. передать готовый manifest в отдельную Astro/UI integration ветку стандартных
    списочных подборок.
 
 Проектирование редакционных подборок проводится отдельной задачей после

@@ -56,6 +56,16 @@
       "minimum_margin": 0.02,
       "publication": "blocked"
     },
+    "gastronomy": {
+      "strategy": "semantic_bge_recall",
+      "positive_prefix": "gastronomy.positive.",
+      "negative_prefix": "gastronomy.hard_negative.",
+      "minimum_positive_similarity": 0.38,
+      "minimum_margin": -0.01,
+      "publication": "blocked",
+      "publication_truth": "source_grounded_gastronomy_v1",
+      "runtime_status": "candidate_recall_and_owner_review"
+    },
     "audience_kids_candidate": {
       "strategy": "semantic_bge_recall",
       "positive_prefix": "audience_kids.positive.",

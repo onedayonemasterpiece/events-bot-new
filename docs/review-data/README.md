@@ -8,6 +8,10 @@
 - `static-collections-source-reviews-v1/` — hash-bound receipts ручной
   перепроверки известных дефектов и occurrence families по `event_source` из
   Fly SQLite.
+- `static_collections_gastronomy_decisions_v1.json` — отдельный fail-closed
+  owner decision store для `gastronomy_v1`. Он изначально пуст, не является
+  owner gold и не разрешает publication; его schema находится в
+  `static_collection_gastronomy_decisions.schema.json`.
 - будущий owner-approved gold живёт отдельно в `tests/fixtures/`, создаётся
   только после независимого owner/editor review и сам по себе не разрешает
   публикацию.
@@ -48,6 +52,29 @@ positives, а 6898 — из family positive; детская зона внутр�
 Gate-B denominator воспроизводим: `confidence=high`, `review_decision=keep` и
 `source_status=sufficient`; borderline и нерешённые источники считаются
 отдельно, а не превращаются в обязательную истину.
+
+## Gastronomy owner decisions
+
+Общий BGE-head `gastronomy` производит только high-recall candidate IDs.
+`scripts/build_static_collection_gastronomy.py` привязывает каждую candidate
+family к реальному `EventSource`, exact source text и input hash, после чего
+строит review queue. Decision store хранит роли:
+
+```text
+core | co_core | adjacent | incidental | unknown
+```
+
+Только `core` и `co_core` могут попасть в exact manifest, и только после
+полного `owner_approved` review всех candidate families. До этого:
+
+- candidate IDs остаются отдельно;
+- exact membership пуст;
+- `catalog_state=unknown`, а не ложный `dormant`;
+- publication заблокирована;
+- provider calls и SQLite writes отсутствуют.
+
+Гастрономический decision store имеет собственный `gastronomy_v1` contract и
+не меняет hash-bound `static_collection_policy.v2.json` audience-review corpus.
 
 ## Canonical evidence snapshot
 

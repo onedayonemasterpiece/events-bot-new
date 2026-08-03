@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenigevents.ru/schemas/static-collection-gastronomy-decisions-v1.json",
+  "title": "Source-bound gastronomy collection owner decisions",
+  "type": "object",
+  "required": ["schema_version", "policy_version", "status", "reviewed_at", "reviewer", "decisions"],
+  "properties": {
+    "schema_version": {"const": "static-collection-gastronomy-decisions-v1"},
+    "policy_version": {"const": "gastronomy_v1"},
+    "status": {"enum": ["starter_not_owner_approved", "provisional", "owner_approved"]},
+    "reviewed_at": {"type": ["string", "null"], "format": "date-time"},
+    "reviewer": {"type": ["string", "null"]},
+    "notes": {"type": "array", "items": {"type": "string"}},
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "event_id", "family_id", "input_hash", "source_id", "source_url",
+          "role", "confidence", "evidence_quote", "reason_code",
+          "review_status", "reviewed_at", "reviewer", "manual_lock"
+        ],
+        "properties": {
+          "event_id": {"type": "integer", "minimum": 1},
+          "family_id": {"type": "string", "minLength": 1},
+          "input_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "source_id": {"type": "integer", "minimum": 1},
+          "source_url": {"type": "string", "minLength": 1},
+          "role": {"enum": ["core", "co_core", "adjacent", "incidental", "unknown"]},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+          "evidence_quote": {"type": "string"},
+          "reason_code": {
+            "enum": [
+              "food_is_primary_program", "food_is_equal_program",
+              "food_is_secondary_program", "venue_or_service_only",
+              "ordinary_food_court", "metaphorical_title_or_art_object",
+              "generic_market_without_food_focus", "insufficient_evidence",
+              "conflicting_evidence"
+            ]
+          },
+          "review_status": {"enum": ["approved", "needs_review"]},
+          "reviewed_at": {"type": ["string", "null"], "format": "date-time"},
+          "reviewer": {"type": ["string", "null"]},
+          "manual_lock": {"type": "boolean"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": true
+}
