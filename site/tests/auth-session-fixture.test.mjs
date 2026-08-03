@@ -65,7 +65,7 @@ test('creates a real-shaped per-worker session state with zero OTP/mail side eff
     supabaseUrl: 'https://project.supabase.co',
     publishableKey: 'publishable',
     secretKey: 'server-secret',
-    targetUrl: 'https://kenigevents.ru/poisk/',
+    targetUrl: 'https://kenigevents.ru/_review/super-secret-preview-token/poisk/',
     allowedOrigins: ['https://kenigevents.ru'],
     personas: { 'search-cached': { email: 'search-cached@example.invalid' } },
     personaId: 'search-cached',
@@ -88,8 +88,10 @@ test('creates a real-shaped per-worker session state with zero OTP/mail side eff
   assert.equal(fixture.receipt.external_mail_receipt_count, 0);
   assert.equal(fixture.receipt.real_mail_fallback, 'forbidden');
   assert.equal(fixture.receipt.cleanup_status, 'PENDING');
+  assert.equal(fixture.receipt.target_path_class, 'immutable_preview');
+  assert.match(fixture.receipt.target_path_hash, /^[a-f0-9]{20}$/u);
   const serializedReceipt = JSON.stringify(fixture.receipt);
-  assert.doesNotMatch(serializedReceipt, /example\.invalid|access\.secret|refresh\.secret|456789|token=/u);
+  assert.doesNotMatch(serializedReceipt, /example\.invalid|access\.secret|refresh\.secret|456789|token=|super-secret-preview-token/u);
 
   const state = JSON.parse(await readFile(fixture.storageStatePath, 'utf8'));
   assert.equal(state.origins[0].origin, 'https://kenigevents.ru');

@@ -61,6 +61,14 @@ function identityHash(personaId, salt) {
   return createHash('sha256').update(`${salt}:${personaId}`).digest('hex').slice(0, 20);
 }
 
+function targetPathClass(pathname) {
+  const path = String(pathname || '/');
+  const firstSegment = path.split('/').filter(Boolean)[0] || '';
+  if (firstSegment === '_review' || firstSegment.startsWith('preview-')) return 'immutable_preview';
+  if (path === '/') return 'root';
+  return 'public_page';
+}
+
 function resolvePersona(personaId, personas) {
   const id = String(personaId || '').trim();
   const persona = personas instanceof Map ? personas.get(id) : personas?.[id];
@@ -266,7 +274,8 @@ export async function createAuthSessionFixture(options = {}) {
       persona_role: persona.id,
       persona_hash: identityHash(persona.id, salt),
       target_origin: target.origin,
-      target_path: target.pathname,
+      target_path_class: targetPathClass(target.pathname),
+      target_path_hash: identityHash(target.pathname, salt),
       project_ref_hash: identityHash(new URL(supabaseUrl).hostname.split('.')[0], salt),
       bootstrap_method: 'admin_generate_link_then_verify_otp',
       admin_credential_count: counters.adminCredentials,
