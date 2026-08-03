@@ -9,6 +9,7 @@ Run only through Blender:
 from __future__ import annotations
 
 import argparse
+import ctypes.util
 import json
 import math
 from pathlib import Path
@@ -216,6 +217,13 @@ def _make_tile_mesh(
     mesh = bpy.data.meshes.new(name)
     mesh.from_pydata(vertices, [], faces)
     mesh.update()
+    # Blender 4.0 requires Auto Smooth for hardened bevel normals and the
+    # Weighted Normal modifier. Newer Blender lines may remove this RNA
+    # property, so the modifier path below is conditional on its presence.
+    if hasattr(mesh, "use_auto_smooth"):
+        mesh.use_auto_smooth = True
+        if hasattr(mesh, "auto_smooth_angle"):
+            mesh.auto_smooth_angle = math.radians(60.0)
     uv_layer = mesh.uv_layers.new(name="UVMap")
     u0, v0, u1, v1 = uv_bounds
     front_uv = ((u0, v0), (u1, v0), (u1, v1), (u0, v1))
@@ -296,14 +304,18 @@ def _create_tile(
     bevel.width = float(grid["bevel_radius"])
     bevel.segments = 4
     bevel.limit_method = "ANGLE"
+    auto_smooth_enabled = bool(getattr(mesh, "use_auto_smooth", False))
     if hasattr(bevel, "harden_normals"):
-        bevel.harden_normals = True
+        bevel.harden_normals = auto_smooth_enabled
     if hasattr(bevel, "material"):
         bevel.material = 1
 
-    weighted = obj.modifiers.new("Weighted normals", "WEIGHTED_NORMAL")
-    if hasattr(weighted, "keep_sharp"):
-        weighted.keep_sharp = True
+    # Keep weighted normals only where the corresponding mesh contract exists.
+    # This removes Blender 4.0 modifier warnings without flattening the bevel.
+    if auto_smooth_enabled:
+        weighted = obj.modifiers.new("Weighted normals", "WEIGHTED_NORMAL")
+        if hasattr(weighted, "keep_sharp"):
+            weighted.keep_sharp = True
     return obj
 
 
@@ -319,6 +331,24 @@ def _create_area_light(name: str, config: dict[str, Any]) -> Any:
     obj.location = tuple(float(value) for value in config["position"])
     _look_at(obj, (0.0, 0.0, 0.0))
     return obj
+
+
+def _resolve_engine(requested: str) -> str:
+    if requested != "eevee":
+        return requested
+    # EEVEE needs a working EGL/OpenGL runtime even in Blender background mode.
+    # GitHub runners and minimal containers may intentionally omit libEGL.
+    # Cycles CPU is slower but fully headless and preserves the physical material
+    # contract, so use it as a deterministic portability fallback.
+    if ctypes.util.find_library("EGL"):
+        return requested
+    print(json.dumps({
+        "event": "blender_engine_fallback",
+        "requested": requested,
+        "effective": "cycles",
+        "reason": "libEGL.so.1 not available",
+    }, ensure_ascii=False), flush=True)
+    return "cycles"
 
 
 def _configure_scene(plan: dict[str, Any], output: Path, engine: str) -> Any:
@@ -492,11 +522,13 @@ def build(plan: dict[str, Any], textures_dir: Path, output: Path, engine: str) -
 def main() -> None:
     args = _args()
     plan = json.loads(Path(args.plan).read_text(encoding="utf-8"))
-    build(plan, Path(args.textures_dir), Path(args.output), args.engine)
+    effective_engine = _resolve_engine(args.engine)
+    build(plan, Path(args.textures_dir), Path(args.output), effective_engine)
     print(json.dumps({
         "status": "ok",
         "output": str(Path(args.output).resolve()),
-        "engine": args.engine,
+        "requested_engine": args.engine,
+        "engine": effective_engine,
         "plan_sha256": plan.get("plan_sha256"),
     }, ensure_ascii=False))
 
