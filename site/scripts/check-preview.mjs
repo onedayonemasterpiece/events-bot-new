@@ -9,6 +9,7 @@ import templateContract from '../src/data/eventTemplateContract.json' with { typ
 import { resolveMobileListingRailMediaItems } from '../src/lib/mobileListingRailMedia.mjs';
 import { localPreviewRuntimePath } from './preview-asset-path.mjs';
 import { assertPopularOccurrenceCollapse } from './popular-occurrence-contract.mjs';
+import { assertRequiredPreviewBrowserJourney, staticSpecimenCandidates } from './check-browser-release-gate.mjs';
 
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
 const distDir = join(siteDir, 'dist');
@@ -70,6 +71,12 @@ if (festivalTimelineData.schema_version !== 'festival-timeline-static-v1') {
   throw new Error('Festival timeline projection schema is missing');
 }
 const previewBuild = JSON.parse(readFileSync(join(root, 'preview-build.json'), 'utf8'));
+const browserJourneyBasePath = String(previewBuild.basePath || `/${buildId}`).replace(/\/$/u, '');
+const browserJourneyRoutes = [6408, 6407]
+  .map((eventId) => eventsData.events.find((event) => Number(event.id) === eventId))
+  .filter(Boolean)
+  .map((event) => `${browserJourneyBasePath}/sobytiya/${event.slug}/`);
+assertRequiredPreviewBrowserJourney(staticSpecimenCandidates(root, browserJourneyBasePath, browserJourneyRoutes));
 const previewCurrentDate = String(previewBuild.currentDate || eventsData.build.current_date || '');
 const previewReferenceIso = String(previewBuild.referenceIso || eventsData.build.generated_at || '');
 const optionalScoreIsValid = (value) => value === null || value === undefined
