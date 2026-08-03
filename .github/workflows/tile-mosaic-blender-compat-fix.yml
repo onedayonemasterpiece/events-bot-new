@@ -1,4 +1,4 @@
-name: Apply tile mosaic Blender compatibility fix
+name: Apply tile mosaic Blender headless portability fix
 
 on:
   pull_request:
@@ -29,7 +29,7 @@ jobs:
           ref: ${{ github.head_ref || github.ref_name }}
           fetch-depth: 0
 
-      - name: Patch Blender engine compatibility
+      - name: Patch physical renderer
         shell: bash
         run: |
           set -euo pipefail
@@ -38,13 +38,43 @@ jobs:
 
           path = Path('tools/tile_mosaic/blender_renderer.py')
           text = path.read_text(encoding='utf-8')
-          old = '''    else:\n        scene.render.engine = "BLENDER_EEVEE_NEXT"\n        samples = int(render.get("samples", 64))\n        eevee = getattr(scene, "eevee", None)\n        if eevee is not None:\n            for attribute in ("taa_render_samples", "taa_samples"):\n                if hasattr(eevee, attribute):\n                    setattr(eevee, attribute, samples)\n'''
-          new = '''    else:\n        # Blender 4.0 exposes EEVEE as ``BLENDER_EEVEE`` while newer releases\n        # renamed the same renderer to ``BLENDER_EEVEE_NEXT``. Probe the RNA\n        # enum instead of coupling the laboratory to one minor Blender line.\n        eevee_engine = None\n        for candidate in ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"):\n            try:\n                scene.render.engine = candidate\n                eevee_engine = candidate\n                break\n            except TypeError:\n                continue\n        if eevee_engine is None:\n            supported = tuple(\n                item.identifier\n                for item in scene.render.bl_rna.properties["engine"].enum_items\n            )\n            raise RuntimeError(\n                "No supported EEVEE render engine is available; "\n                f"Blender reports {supported!r}"\n            )\n        samples = int(render.get("samples", 64))\n        eevee = getattr(scene, "eevee", None)\n        if eevee is not None:\n            for attribute in ("taa_render_samples", "taa_samples"):\n                if hasattr(eevee, attribute):\n                    setattr(eevee, attribute, samples)\n'''
-          if new in text:
-              raise SystemExit('Blender compatibility fix is already present')
-          if old not in text:
-              raise SystemExit('Expected Blender engine block was not found')
-          path.write_text(text.replace(old, new), encoding='utf-8')
+
+          import_old = 'import argparse\nimport json\n'
+          import_new = 'import argparse\nimport ctypes.util\nimport json\n'
+          if import_new not in text:
+              if import_old not in text:
+                  raise SystemExit('Import insertion point not found')
+              text = text.replace(import_old, import_new, 1)
+
+          mesh_old = '''    mesh = bpy.data.meshes.new(name)\n    mesh.from_pydata(vertices, [], faces)\n    mesh.update()\n    uv_layer = mesh.uv_layers.new(name="UVMap")\n'''
+          mesh_new = '''    mesh = bpy.data.meshes.new(name)\n    mesh.from_pydata(vertices, [], faces)\n    mesh.update()\n    # Blender 4.0 requires Auto Smooth for hardened bevel normals and the\n    # Weighted Normal modifier. Newer Blender lines may remove this RNA\n    # property, so the modifier path below is conditional on its presence.\n    if hasattr(mesh, "use_auto_smooth"):\n        mesh.use_auto_smooth = True\n        if hasattr(mesh, "auto_smooth_angle"):\n            mesh.auto_smooth_angle = math.radians(60.0)\n    uv_layer = mesh.uv_layers.new(name="UVMap")\n'''
+          if mesh_new not in text:
+              if mesh_old not in text:
+                  raise SystemExit('Mesh smoothing insertion point not found')
+              text = text.replace(mesh_old, mesh_new, 1)
+
+          modifier_old = '''    bevel = obj.modifiers.new("Rounded physical edge", "BEVEL")\n    bevel.width = float(grid["bevel_radius"])\n    bevel.segments = 4\n    bevel.limit_method = "ANGLE"\n    if hasattr(bevel, "harden_normals"):\n        bevel.harden_normals = True\n    if hasattr(bevel, "material"):\n        bevel.material = 1\n\n    weighted = obj.modifiers.new("Weighted normals", "WEIGHTED_NORMAL")\n    if hasattr(weighted, "keep_sharp"):\n        weighted.keep_sharp = True\n    return obj\n'''
+          modifier_new = '''    bevel = obj.modifiers.new("Rounded physical edge", "BEVEL")\n    bevel.width = float(grid["bevel_radius"])\n    bevel.segments = 4\n    bevel.limit_method = "ANGLE"\n    auto_smooth_enabled = bool(getattr(mesh, "use_auto_smooth", False))\n    if hasattr(bevel, "harden_normals"):\n        bevel.harden_normals = auto_smooth_enabled\n    if hasattr(bevel, "material"):\n        bevel.material = 1\n\n    # Keep weighted normals only where the corresponding mesh contract exists.\n    # This removes Blender 4.0 modifier warnings without flattening the bevel.\n    if auto_smooth_enabled:\n        weighted = obj.modifiers.new("Weighted normals", "WEIGHTED_NORMAL")\n        if hasattr(weighted, "keep_sharp"):\n            weighted.keep_sharp = True\n    return obj\n'''
+          if modifier_new not in text:
+              if modifier_old not in text:
+                  raise SystemExit('Modifier block not found')
+              text = text.replace(modifier_old, modifier_new, 1)
+
+          resolver_anchor = '\ndef _configure_scene(plan: dict[str, Any], output: Path, engine: str) -> Any:\n'
+          resolver = '''\ndef _resolve_engine(requested: str) -> str:\n    if requested != "eevee":\n        return requested\n    # EEVEE needs a working EGL/OpenGL runtime even in Blender background mode.\n    # GitHub runners and minimal containers may intentionally omit libEGL.\n    # Cycles CPU is slower but fully headless and preserves the physical material\n    # contract, so use it as a deterministic portability fallback.\n    if ctypes.util.find_library("EGL"):\n        return requested\n    print(json.dumps({\n        "event": "blender_engine_fallback",\n        "requested": requested,\n        "effective": "cycles",\n        "reason": "libEGL.so.1 not available",\n    }, ensure_ascii=False), flush=True)\n    return "cycles"\n\n\ndef _configure_scene(plan: dict[str, Any], output: Path, engine: str) -> Any:\n'''
+          if 'def _resolve_engine(requested: str)' not in text:
+              if resolver_anchor not in text:
+                  raise SystemExit('Engine resolver insertion point not found')
+              text = text.replace(resolver_anchor, resolver, 1)
+
+          main_old = '''def main() -> None:\n    args = _args()\n    plan = json.loads(Path(args.plan).read_text(encoding="utf-8"))\n    build(plan, Path(args.textures_dir), Path(args.output), args.engine)\n    print(json.dumps({\n        "status": "ok",\n        "output": str(Path(args.output).resolve()),\n        "engine": args.engine,\n        "plan_sha256": plan.get("plan_sha256"),\n    }, ensure_ascii=False))\n'''
+          main_new = '''def main() -> None:\n    args = _args()\n    plan = json.loads(Path(args.plan).read_text(encoding="utf-8"))\n    effective_engine = _resolve_engine(args.engine)\n    build(plan, Path(args.textures_dir), Path(args.output), effective_engine)\n    print(json.dumps({\n        "status": "ok",\n        "output": str(Path(args.output).resolve()),\n        "requested_engine": args.engine,\n        "engine": effective_engine,\n        "plan_sha256": plan.get("plan_sha256"),\n    }, ensure_ascii=False))\n'''
+          if main_new not in text:
+              if main_old not in text:
+                  raise SystemExit('Main engine block not found')
+              text = text.replace(main_old, main_new, 1)
+
+          path.write_text(text, encoding='utf-8')
           PY
           python -m pip install --disable-pip-version-check 'Pillow==12.2.0'
           python -m compileall -q tools/tile_mosaic tests/test_tile_mosaic_*.py
@@ -59,5 +89,5 @@ jobs:
           git add tools/tile_mosaic/blender_renderer.py
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git commit -m 'fix(tile-mosaic): support Blender 4.0 EEVEE enum'
+          git commit -m 'fix(tile-mosaic): make Blender headless render portable'
           git push origin "HEAD:${HEAD_BRANCH}"
