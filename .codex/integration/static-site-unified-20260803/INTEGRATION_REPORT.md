@@ -77,7 +77,8 @@
    selector. A dequeue/hold race launched one old-SHA retry; deterministic local
    fix and incident closure remain in progress without another manual run.
 2. Auth/transport + P13N-00 + shared runtime/CTA + collections/weather consumer:
-   integration branch, combined validation and review before PR publication.
+   open draft PR #316, with final combined validation/review running on its
+   latest metadata commit.
 3. Weather producer: cat-weather-new draft PR #4 directly on `main`, all checks
    green; prerequisite repair PR #3 is merged.
 4. YDB code may merge disabled, but live DDL/cutover/scheduler/RU changes require

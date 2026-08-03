@@ -29,7 +29,7 @@ lanes:
     expected_output: committed incident fix plus evidence and RESULTS.md
     verification_scope: full_local_and_live_canary
     effort: high_max_available
-    status: merged_live_canary_running
+    status: partial_first_canary_failed_stale_old_sha_retry_running_local_fix_validating
   - id: L1
     role: worker
     requirement_ids: [RYDB]
@@ -102,7 +102,7 @@ lanes:
     status: merged_default_off
   - id: L4
     role: worker
-    requirement_ids: [R0b, R1]
+    requirement_ids: [R0b, R1, R8]
     target: shared runtime, double-like and VK question CTA
     depends_on: [L2, L3]
     execution_mode: serial_after_dependency
@@ -198,3 +198,31 @@ lanes:
     verification_scope: full_local_no_real_mail
     effort: high
     status: merged_hosted_acceptance_pending
+  - id: L4C
+    role: worker
+    requirement_ids: [R1, R8]
+    target: close live partner provenance and executable inert onboarding slots
+    depends_on: [L4]
+    execution_mode: serial_reviewer_followup
+    branch: agent/static-unified/l4-partner-live-fix
+    worktree: removed_after_integration
+    writable_files: [VK CTA resolver/exporter, EventLayout onboarding context, inventories, tests and canonical docs]
+    forbidden_files: [unrelated runtime, remote VK writes]
+    expected_output: fail-closed live-at-import provenance and one disabled typed page-end slot
+    verification_scope: full_local_no_live_vk
+    effort: high
+    status: merged_reviewer_finding_closed
+  - id: L6P2
+    role: worker
+    requirement_ids: [R4]
+    target: weather producer binding, provider policy and conditional object-store publication
+    depends_on: [L6P]
+    execution_mode: serial_external_repo_followup
+    branch: agent/weather-calendar-r4-producer-gates
+    worktree: /home/dev/.codex/worktrees/cat-weather-new/weather-calendar-r4-producer-gates
+    writable_files: [weather producer, location binding, provider policy, Object Storage adapter, tests and docs]
+    forbidden_files: [events-bot-new, live remote writes]
+    expected_output: green standalone default-off draft PR with live gates explicit
+    verification_scope: full_local_no_external_publish
+    effort: high
+    status: draft_pr_4_green_pr_2_superseded_live_canary_pending

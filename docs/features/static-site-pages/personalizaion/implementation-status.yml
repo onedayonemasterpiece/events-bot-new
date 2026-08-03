@@ -175,7 +175,6 @@ current_p0_findings:
   - no_pending_undo_commit_window
   - local_only_reset
   - multiple_inline_rankers
-  - no_generated_cross_route_surface_proof
   - legacy_scorer_was_at_risk_of_being_named_as_target
 required_evidence_per_pr:
   - immutable_repository_sha

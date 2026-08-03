@@ -2,7 +2,13 @@
 
 ## [Unreleased]
 
-- Fixed the 2026-08-03 StaticSiteBuilder failure storm: preview validation now derives Popular repeated-occurrence expectations from the generated family data instead of a fixture literal, requires the deterministic multi-image recommendation specimen, and distinguishes loaded-image shell containment from a correctly hidden missing-image fallback. The Chromium release gate now keeps strict geometry for loaded media while accepting only a bounded visible fallback for failed media (`INC-2026-08-03-static-site-builder-failure-storm`).
+- Fixed the initial deterministic defects from the 2026-08-03
+  StaticSiteBuilder failure storm: preview validation now derives Popular
+  repeated-occurrence expectations from generated family data, requires the
+  deterministic multi-image specimen, and distinguishes loaded-image geometry
+  from a bounded missing-image fallback. Incident closure remains pending a
+  terminal successful candidate after the later festival-count assertion is
+  corrected (`INC-2026-08-03-static-site-builder-failure-storm`).
 
 - Added the anonymous-first static-site auth and reliability test plane: isolated
   no-mail Supabase session fixtures, a closed auth-mode registry, and executable
@@ -21,18 +27,12 @@
   zero network, storage, reorder or handler changes. Standard cards now arbitrate
   a 280 ms single navigation against desktop double-click/mobile double-tap to
   set the existing like state exactly once, including dynamically inserted cards.
-  The same common layout now exposes one typed, script-free inert standard-
-  onboarding `page_end` context while keeping artifact, club and raffle programs
-  disabled and focus-product routes outside that boundary.
 - Added the event question CTA contract and fail-closed VK resolver. Published
   partner posts take precedence only with exact VK-intake owner/post/timestamp
   provenance; partner-looking raw, scheduled or stored URLs fall back to a
   published managed Afisha post and otherwise remain hidden. Event pages render the
   SVGRepo-sourced “Остались вопросы?” block before recommendations, and a live
   managed VK publication schedules one coalesced Smart Update refresh.
-  Partner URLs now require exact VK live-at-import provenance (source type,
-  import time, owner and post id); a raw or merely partner-looking stored URL
-  falls through to the published managed post or to no CTA.
 - Added the inert typed standard-onboarding route-context and `page_end` slot
   marker plus generated inventory enforcement. It adds no runtime behavior and
   keeps artifact, club and raffle programmes explicitly disabled; focus-group
@@ -45,8 +45,8 @@
 - Added the default-off weather-calendar consumer, strict immutable snapshot and
   atomic-pointer schemas, same-origin SHA verification, date/weekend placements,
   stale/partial guards and a coherent CC0 SVGRepo outline set. Browser weather
-  requests remain first-party only; rollout stays disabled pending the producer
-  policy/live-smoke and seven-day canary gates.
+  requests remain first-party only; rollout stays disabled pending owner/provider
+  approval, remote publication smoke and seven-day canary gates.
 - Changed Region Talk YDB startup and orchestration to use a generation-scoped,
   bounded typed work queue, point joins and one materialized counter row instead
   of normal-path population scans. Exact database/cost guards remain mandatory;
