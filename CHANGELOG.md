@@ -57,6 +57,12 @@
   existing ready generation without replacing its current pointer; only a
   complete producer input may publish and swap a new generation.
 
+- Fixed the follow-up exact-main StaticSiteBuilder canary failure by binding the
+  Chromium festival-calendar inventory to the hash-bound release manifest's
+  rendered active subset instead of the original 21-row source-ledger size;
+  source identity, source/rendered count ordering, card count and image count
+  remain fail-closed (`INC-2026-08-03-static-site-builder-failure-storm`).
+
 - Restored the production Supabase/focus API Gateways, isolated email triggers
   and bounded Postbox feedback YDB after `yc.iam.reaper` suspended them during
   the account-transfer window. Recovery verified outbound mail gates before

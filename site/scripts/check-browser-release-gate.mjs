@@ -69,6 +69,22 @@ export function releaseRootMetadata(rootPath, manifestOverride = '') {
   return { root, manifestPath, manifest, basePath };
 }
 
+export function festivalCalendarExpectedCount(manifest) {
+  // Clean preview fixtures predate release manifests with projection metadata
+  // and intentionally retain the accepted 21-card calendar. Production-root
+  // and secret-candidate manifests, however, carry the exact rendered subset:
+  // ended editions may leave the page while remaining in the source ledger.
+  if (!manifest) return 21;
+  const projection = manifest?.versions?.festival_calendar;
+  invariant(projection?.source === 'sqlite-festival-calendar-v1', 'festival calendar manifest source is invalid');
+  const databaseCount = projection.database_row_count;
+  const renderedCount = projection.rendered_count;
+  invariant(Number.isSafeInteger(databaseCount) && databaseCount > 0, 'festival calendar manifest database count is invalid');
+  invariant(Number.isSafeInteger(renderedCount) && renderedCount > 0, 'festival calendar manifest rendered count is invalid');
+  invariant(renderedCount <= databaseCount, 'festival calendar manifest renders more cards than its source ledger');
+  return renderedCount;
+}
+
 export function recordBrowserVisualSuccess(manifestPath, report) {
   invariant(manifestPath, 'release manifest is required for browser_visual receipt');
   invariant(report?.ok === true, 'refusing to record browser_visual before a successful gate');
@@ -806,7 +822,7 @@ async function assertFooterShortcuts(page, origin, route) {
   invariant(await footer.locator('[data-service-share-intent="image"]:focus, [data-service-share-intent="text"]:focus').count() === 0, 'browser gate must not focus footer controls');
 }
 
-async function assertFestivalCalendar(page, origin, basePath) {
+async function assertFestivalCalendar(page, origin, basePath, expectedCount) {
   const route = `${basePath}/festivali/`.replace(/\/+/gu, '/');
   const reports = [];
   for (const viewport of [
@@ -815,12 +831,12 @@ async function assertFestivalCalendar(page, origin, basePath) {
   ]) {
     await page.setViewportSize(viewport);
     await page.goto(`${origin}${route}`, { waitUntil:'domcontentloaded' });
-    const root = page.locator('[data-festival-timeline][data-festival-count="21"]');
+    const root = page.locator(`[data-festival-timeline][data-festival-count="${expectedCount}"]`);
     invariant(await root.count() === 1, `festival calendar is missing at ${viewport.width}px`);
-    invariant(await root.locator('[data-festival-card]').count() === 21, `festival calendar lost cards at ${viewport.width}px`);
+    invariant(await root.locator('[data-festival-card]').count() === expectedCount, `festival calendar lost cards at ${viewport.width}px`);
     const images = root.locator('[data-festival-card] img');
-    invariant(await images.count() === 21, `festival calendar image inventory is incomplete at ${viewport.width}px`);
-    for (let index = 0; index < 21; index += 1) {
+    invariant(await images.count() === expectedCount, `festival calendar image inventory is incomplete at ${viewport.width}px`);
+    for (let index = 0; index < expectedCount; index += 1) {
       const image = images.nth(index);
       await image.scrollIntoViewIfNeeded();
       await image.evaluate((node) => node.decode?.().catch(() => undefined));
@@ -839,7 +855,7 @@ async function assertFestivalCalendar(page, origin, basePath) {
   return reports;
 }
 
-async function runBrowserGate({ root, basePath, origin, browser, artifactDir = '' }) {
+async function runBrowserGate({ root, basePath, manifest, origin, browser, artifactDir = '' }) {
   const routes = eventRoutes(root, basePath);
   const candidates = staticSpecimenCandidates(root, basePath, routes);
   invariant(candidates.length > 0, 'generated release has no static multi-image recommendation journey');
@@ -956,7 +972,12 @@ async function runBrowserGate({ root, basePath, origin, browser, artifactDir = '
     await assertFooterShortcuts(page, origin, specimen.route);
     checks.footer_shortcuts = 'ok';
     console.log('[browser-release-gate] footer_shortcuts=ok');
-    const festivalCalendar = await assertFestivalCalendar(page, origin, basePath);
+    const festivalCalendar = await assertFestivalCalendar(
+      page,
+      origin,
+      basePath,
+      festivalCalendarExpectedCount(manifest),
+    );
     checks.festival_calendar = 'ok';
     console.log('[browser-release-gate] festival_calendar=ok');
     return {
@@ -1002,7 +1023,7 @@ export async function main(argv = process.argv.slice(2)) {
     server = await startReleaseServer(metadata.root, metadata.basePath);
     const artifactDir = args.artifact_dir ? resolve(args.artifact_dir) : '';
     if (artifactDir) mkdirSync(artifactDir, { recursive:true });
-    const report = await runBrowserGate({ root: metadata.root, basePath: metadata.basePath, origin: server.origin, browser, artifactDir });
+    const report = await runBrowserGate({ root: metadata.root, basePath: metadata.basePath, manifest: metadata.manifest, origin: server.origin, browser, artifactDir });
     report.browser = browserName;
     if (metadata.manifestPath) recordBrowserVisualSuccess(metadata.manifestPath, report);
     if (args.report) writeFileSync(resolve(args.report), `${JSON.stringify(report, null, 2)}\n`);
