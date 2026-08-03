@@ -1,4 +1,5 @@
 ---
+import PersonalizationRuntime from '../../components/personalization/PersonalizationRuntime.astro';
 import FocusLabBadge from '../../components/FocusLabBadge.astro';
 import FocusGroupThankYou from '../../components/FocusGroupThankYou.astro';
 import FocusGroupInviteShare from '../../components/FocusGroupInviteShare.astro';
@@ -25,6 +26,7 @@ const robots = IS_SECRET_CANDIDATE
     <meta name="theme-color" content="#fff7e7" />
   </head>
   <body>
+    <PersonalizationRuntime />
     <a class="focus-programme__skip" href="#main">К основному содержанию</a>
     <main id="main" class="focus-programme">
       <nav class="focus-programme__nav" aria-label="Навигация фокус-группы">

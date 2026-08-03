@@ -1,0 +1,57 @@
+---
+import EventLayout from '../../../layouts/EventLayout.astro';
+import EventQuestionCta from '../../../components/EventQuestionCta.astro';
+import preview from '../../../data/preview-events.json';
+import type { PreviewEvent } from '../../../lib/types';
+import { absoluteUrl, SITE_NAME } from '../../../lib/events';
+
+const seed = preview.events[0] as unknown as PreviewEvent;
+const partnerEvent: PreviewEvent = {
+  ...seed,
+  question_cta: {
+    provider:'vk',
+    url:'https://vk.com/wall-194467353_8190',
+    source:'partner_post',
+  },
+};
+const managedEvent: PreviewEvent = {
+  ...seed,
+  id:seed.id + 1,
+  question_cta: {
+    provider:'vk',
+    url:'https://vk.com/wall-231920894_7532',
+    source:'managed_afisha_post',
+  },
+};
+---
+
+<EventLayout
+  title={`VK question CTA specimen | ${SITE_NAME}`}
+  description="Isolated noindex specimen for the event question CTA desktop and mobile renderings."
+  canonicalUrl={absoluteUrl('/lab/question-cta/')}
+  structuredData={[]}
+>
+  <main id="main" class="question-cta-lab" data-question-cta-lab>
+    <header>
+      <p>isolated rendering specimen · SVGRepo CC0 assets</p>
+      <h1>Event question CTA</h1>
+    </header>
+    <section aria-labelledby="question-cta-desktop-title">
+      <h2 id="question-cta-desktop-title">Desktop · partner post</h2>
+      <EventQuestionCta event={partnerEvent} surface="desktop" />
+    </section>
+    <section class="question-cta-lab__mobile" aria-labelledby="question-cta-mobile-title">
+      <h2 id="question-cta-mobile-title">Mobile · managed Afisha post</h2>
+      <div><EventQuestionCta event={managedEvent} surface="mobile" /></div>
+    </section>
+  </main>
+</EventLayout>
+
+<style>
+  .question-cta-lab { min-height:100vh; padding:clamp(2rem,5vw,5rem) 1rem 6rem; background:#f1e8dc; color:#241c17; }
+  .question-cta-lab>header, .question-cta-lab>section { width:min(1180px,100%); margin-inline:auto; }
+  .question-cta-lab>header p { margin:0; color:#98401f; font-weight:850; letter-spacing:.08em; text-transform:uppercase; }
+  .question-cta-lab h1 { margin:.4rem 0 3rem; font-size:clamp(2.8rem,7vw,6.4rem); line-height:.9; letter-spacing:-.06em; }
+  .question-cta-lab h2 { margin:2.5rem 0 .6rem; font-size:1rem; text-transform:uppercase; letter-spacing:.08em; }
+  .question-cta-lab__mobile>div { width:min(390px,100%); padding:1px 16px 16px; border-radius:24px; background:#fff; box-shadow:0 18px 45px rgba(35,25,18,.14); }
+</style>

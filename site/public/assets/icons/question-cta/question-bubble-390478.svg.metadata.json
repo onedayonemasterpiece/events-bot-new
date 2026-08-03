@@ -1,0 +1,25 @@
+{
+  "id": "svgrepo-390478-bubble-chat-comment-conversation-message-talk",
+  "source": "svgrepo",
+  "source_id": "390478",
+  "slug": "bubble-chat-comment-conversation-message-talk",
+  "title": "Bubble Chat Comment Conversation Message Talk",
+  "category": "ui/actions",
+  "tags": [
+    "comment",
+    "chat",
+    "bubble",
+    "outline",
+    "ui",
+    "filled-outline"
+  ],
+  "path": "icons/svgrepo/ui/actions/390478-bubble-chat-comment-conversation-message-talk.svg",
+  "page_url": "https://www.svgrepo.com/svg/390478/bubble-chat-comment-conversation-message-talk",
+  "raw_url": "https://www.svgrepo.com/show/390478/bubble-chat-comment-conversation-message-talk.svg",
+  "license": "CC0 License",
+  "source_note": "",
+  "usage_note": "Preferred over 326553 for compact event social signals after Gemini acceptance review: filled-outline geometry is more consistent with project heart/share currentColor icons.",
+  "viewBox": "0 0 28 28",
+  "width": "800px",
+  "height": "800px"
+}

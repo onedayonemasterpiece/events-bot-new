@@ -13,6 +13,7 @@ import Icon from '../../components/Icon.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
 import MobileEventProductionStyles from '../../components/MobileEventProductionStyles.astro';
 import KeyboardEventNavigation from '../../components/KeyboardEventNavigation.astro';
+import EventQuestionCta from '../../components/EventQuestionCta.astro';
 import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/seo';
 import { eventImageUrl } from '../../lib/assets';
 import desktopThumbnailOverridesData from '../../data/desktop-event-thumbnail-overrides.json';
@@ -171,6 +172,8 @@ const keyboardEventNavigationEnabled = (IS_PRODUCTION_FAMILY
         </section>
 
       </div>
+
+      <EventQuestionCta event={event} surface="mobile" />
 
       <section id="discovery-feed" class="section-card mobile-event-production__discovery" style="margin-top: 1rem;" data-hide-sticky-after>
         <div class="section-card__inner">

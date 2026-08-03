@@ -7,6 +7,7 @@ import EventOccurrenceNav from './EventOccurrenceNav.astro';
 import Breadcrumbs from './Breadcrumbs.astro';
 import EventFallbackArt from './EventFallbackArt.astro';
 import DesktopEventActionPanel from './DesktopEventActionPanel.astro';
+import EventQuestionCta from './EventQuestionCta.astro';
 import EventTransportSchedule from './EventTransportSchedule.astro';
 import EventBusTransportSchedule from './EventBusTransportSchedule.astro';
 import KaupTransportSchedule from './KaupTransportSchedule.astro';
@@ -595,6 +596,8 @@ const descriptionHtml = (event.description_html || '')
     </section>
   )}
   </div>
+
+  <EventQuestionCta event={event} surface="desktop" />
 
   <section class="desktop-clean-related" data-related-start data-hide-sticky-after data-related-treatment={relatedMediaTreatment} aria-labelledby={`related-${event.id}`}>
     <div class="page-shell">

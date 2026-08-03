@@ -1830,6 +1830,136 @@ def collect_source_urls(con: sqlite3.Connection, event_id: int, row: sqlite3.Row
     return urls
 
 
+VK_WALL_POST_RE = re.compile(
+    r"^https://(?:www\.)?vk\.com/wall(?P<owner>-?\d+)_(?P<post>\d+)(?:[/?#].*)?$",
+    re.IGNORECASE,
+)
+
+
+def _question_cta_vk_post(value: Any) -> tuple[str, int] | None:
+    """Return a canonical public VK wall URL and absolute owner id."""
+
+    url = clean_text(value)
+    match = VK_WALL_POST_RE.fullmatch(url)
+    if not match or int(match.group("post")) <= 0:
+        return None
+    owner = int(match.group("owner"))
+    if owner == 0:
+        return None
+    return f"https://vk.com/wall{owner}_{int(match.group('post'))}", abs(owner)
+
+
+def _question_cta_columns(con: sqlite3.Connection, table: str) -> set[str]:
+    if table not in {"user", "organization", "event_source", "event_publication"}:
+        return set()
+    try:
+        return {str(item[1]) for item in con.execute(f'pragma table_info("{table}")')}
+    except sqlite3.DatabaseError:
+        return set()
+
+
+def _partner_question_vk_url(
+    con: sqlite3.Connection,
+    event_id: int,
+    row: sqlite3.Row,
+) -> str | None:
+    """Resolve only a partner-community post proven by organization ownership."""
+
+    creator_id = row_get(row, "creator_id")
+    user_columns = _question_cta_columns(con, "user")
+    organization_columns = _question_cta_columns(con, "organization")
+    if not creator_id or not {"user_id", "is_partner", "organization"}.issubset(user_columns):
+        return None
+    try:
+        partner = con.execute(
+            'select is_partner, organization from "user" where user_id=? limit 1',
+            (creator_id,),
+        ).fetchone()
+    except sqlite3.DatabaseError:
+        return None
+    if not partner or not bool(partner[0]) or not clean_text(partner[1]):
+        return None
+    if not {"name", "vk_source_group_ids"}.issubset(organization_columns):
+        return None
+    try:
+        organization = con.execute(
+            "select vk_source_group_ids from organization where name=? limit 1",
+            (clean_text(partner[1]),),
+        ).fetchone()
+    except sqlite3.DatabaseError:
+        return None
+    group_ids = {
+        abs(int(value))
+        for value in read_json(organization[0] if organization else None, [])
+        if str(value).lstrip("-").isdigit() and int(value) != 0
+    }
+    if not group_ids:
+        return None
+
+    candidates = [row_get(row, "source_post_url")]
+    source_columns = _question_cta_columns(con, "event_source")
+    if {"event_id", "source_url"}.issubset(source_columns):
+        try:
+            candidates.extend(
+                source[0]
+                for source in con.execute(
+                    "select source_url from event_source where event_id=? order by rowid asc",
+                    (event_id,),
+                )
+            )
+        except sqlite3.DatabaseError:
+            pass
+    for candidate in candidates:
+        parsed = _question_cta_vk_post(candidate)
+        if parsed and parsed[1] in group_ids:
+            return parsed[0]
+    return None
+
+
+def _managed_question_vk_url(con: sqlite3.Connection, event_id: int) -> str | None:
+    """Resolve an already-live Afisha post; stored/postponed URLs fail closed."""
+
+    columns = _question_cta_columns(con, "event_publication")
+    required = {"event_id", "platform", "target", "status", "live_url"}
+    if not required.issubset(columns):
+        return None
+    try:
+        publication = con.execute(
+            """
+            select live_url from event_publication
+            where event_id=? and platform='vk' and target='klgdevents'
+              and status='published' and live_url is not null
+            order by resolved_at desc, rowid desc limit 1
+            """,
+            (event_id,),
+        ).fetchone()
+    except sqlite3.DatabaseError:
+        return None
+    parsed = _question_cta_vk_post(publication[0] if publication else None)
+    managed_group = clean_text(
+        os.getenv("VK_EVENTS_GROUP_ID") or os.getenv("VK_AFISHA_GROUP_ID") or "231920894"
+    ).lstrip("-")
+    if not parsed or not managed_group.isdigit() or parsed[1] != int(managed_group):
+        return None
+    return parsed[0]
+
+
+def event_question_cta(
+    con: sqlite3.Connection,
+    event_id: int,
+    row: sqlite3.Row,
+) -> dict[str, str] | None:
+    """Build the public question CTA without exposing arbitrary source URLs."""
+
+    partner_url = _partner_question_vk_url(con, event_id, row)
+    if partner_url:
+        return {"provider": "vk", "url": partner_url, "source": "partner_post"}
+    managed_url = _managed_question_vk_url(con, event_id)
+    if managed_url:
+        return {"provider": "vk", "url": managed_url, "source": "managed_afisha_post"}
+    return None
+
+
 def collect_source_records(con: sqlite3.Connection, event_id: int) -> list[dict[str, Any]]:
     """Keep structured source identity/trust for exact registry adapters.
 
@@ -2480,6 +2610,7 @@ def build_event(
         "source_url": source_url,
         "source_urls": source_urls,
         "source_count": len(source_urls),
+        "question_cta": event_question_cta(con, event_id, row),
         "telegraph_url": clean_text(row["telegraph_url"]) or None,
         "image_url": primary_image,
         "image_alt": primary_alt,

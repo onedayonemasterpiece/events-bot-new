@@ -24,14 +24,22 @@ function attributeValues(html, name) {
   return Array.from(html.matchAll(expression), (match) => match[1] ?? match[2] ?? '');
 }
 
+function renderedMarkup(html) {
+  return html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/giu, '')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/giu, '');
+}
+
 function publicPath(relativePath) {
   let path = `/${relativePath.split(sep).join('/')}`;
   path = path.replace(/\/index\.html$/u, '/').replace(/\.html$/u, '/');
   return path.replace(/^\/preview-[A-Za-z0-9._-]+(?=\/)/u, '') || '/';
 }
 
-function isExcludedTestArtifact(path) {
-  return path.startsWith('/lab/');
+function exclusionReason(path, html) {
+  if (path.startsWith('/lab/')) return 'documented-isolated-lab-artifact';
+  if (!/^\s*(?:<!doctype\s+html|<html\b)/iu.test(html)) return 'generated-non-html-route';
+  return null;
 }
 
 function collectionLike(path) {
@@ -43,20 +51,22 @@ export function buildPersonalizationRouteInventory(distRoot) {
     const relativePath = relative(distRoot, file).split(sep).join('/');
     const path = publicPath(relativePath);
     const html = readFileSync(file, 'utf8');
-    const markerCount = attributeValues(html, 'data-p13n-runtime-marker').length;
-    const surfaces = Array.from(new Set(attributeValues(html, 'data-p13n-surface').filter(Boolean)));
-    const legacySurfaces = Array.from(new Set(attributeValues(html, 'data-surface').filter(Boolean)));
-    const policies = Array.from(new Set(attributeValues(html, 'data-p13n-policy').filter(Boolean)));
-    const pageFamilies = attributeValues(html, 'data-p13n-page-family').filter(Boolean);
-    const staticReasons = attributeValues(html, 'data-p13n-static-only-reason').filter(Boolean);
-    const excluded = isExcludedTestArtifact(path);
+    const markup = renderedMarkup(html);
+    const markerCount = attributeValues(markup, 'data-p13n-runtime-marker').length;
+    const surfaces = Array.from(new Set(attributeValues(markup, 'data-p13n-surface').filter(Boolean)));
+    const legacySurfaces = Array.from(new Set(attributeValues(markup, 'data-surface').filter(Boolean)));
+    const policies = Array.from(new Set(attributeValues(markup, 'data-p13n-policy').filter(Boolean)));
+    const pageFamilies = attributeValues(markup, 'data-p13n-page-family').filter(Boolean);
+    const staticReasons = attributeValues(markup, 'data-p13n-static-only-reason').filter(Boolean);
+    const excludedReason = exclusionReason(path, html);
+    const excluded = Boolean(excludedReason);
     const missing = !excluded && markerCount === 0;
     const duplicate = !excluded && markerCount > 1;
     const unknown = !excluded && (!surfaces.length || surfaces.includes('unknown') || !policies.length || policies.includes('unknown-static')) && !staticReasons.length;
     const calendar = surfaces.some((surface) => ['calendar_primary', 'today_primary', 'tomorrow_primary', 'weekend_primary'].includes(surface));
     const calendarNonIdentity = !excluded && calendar && !policies.includes('calendar-exact-only');
     const legacyPromoted = policies.some((item) => /legacy/iu.test(item))
-      || attributeValues(html, 'data-p13n-target-algorithm').some((item) => /legacy/iu.test(item));
+      || attributeValues(markup, 'data-p13n-target-algorithm').some((item) => /legacy/iu.test(item));
     const legacyMismatch = legacySurfaces.length > 0 && legacySurfaces.some((surface) => !surfaces.includes(surface));
     return {
       relative_path: relativePath,
@@ -68,7 +78,7 @@ export function buildPersonalizationRouteInventory(distRoot) {
       resolved_target_policies: policies,
       static_only_reason: staticReasons[0] || null,
       excluded,
-      exclusion_reason: excluded ? 'documented-isolated-lab-artifact' : null,
+      exclusion_reason: excludedReason,
       legacy_behavior_mismatch_diagnostic: legacyMismatch ? 'p13n_inventory.legacy_surface_target_mismatch' : null,
       status: excluded ? 'excluded' : (missing ? 'missing-runtime' : duplicate ? 'duplicate-runtime' : unknown ? 'unclassified' : calendarNonIdentity ? 'calendar-policy-violation' : legacyPromoted ? 'legacy-promoted' : 'ok'),
       diagnostics: [

@@ -64,6 +64,58 @@ def _expected_vk_source_hash(event, text):
     )
 
 
+@pytest.mark.asyncio
+async def test_live_vk_publication_coalesces_static_site_refresh(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("ENABLE_STATIC_SITE_KAGGLE_BUILDER", "1")
+    monkeypatch.setenv("STATIC_SITE_VK_PUBLICATION_REFRESH_DELAY_SECONDS", "45")
+    captured = []
+
+    async def fake_enqueue(db_arg, **kwargs):
+        captured.append((db_arg, kwargs))
+        return "new"
+
+    monkeypatch.setattr(main, "enqueue_static_site_build_request", fake_enqueue)
+    events = [
+        main.Event(
+            id=11,
+            title="First",
+            description="Body",
+            source_text="Body",
+            date="2026-08-20",
+            time="18:00",
+            location_name="Place",
+        ),
+        main.Event(
+            id=12,
+            title="Second",
+            description="Body",
+            source_text="Body",
+            date="2026-08-20",
+            time="20:00",
+            location_name="Place",
+        ),
+    ]
+
+    await main._enqueue_static_site_after_vk_publication(
+        db,
+        events,
+        vk_url="https://vk.com/wall-231920894_101",
+    )
+
+    assert len(captured) == 1
+    assert captured[0][0] is db
+    request = captured[0][1]
+    assert request["reason"] == "vk_publication_live"
+    assert request["trigger"] == "vk_publication_live"
+    assert request["event_ids"] == [11, 12]
+    assert set(request["event_revisions"]) == {11, 12}
+    assert request["delay_seconds"] == 45
+    assert request["correlation_id"].startswith("vk-publication-live:11:")
+    await db.close()
+
+
 @pytest.fixture(autouse=True)
 def _sync_event_updates(monkeypatch):
     monkeypatch.setenv("EVENT_UPDATE_SYNC", "1")
