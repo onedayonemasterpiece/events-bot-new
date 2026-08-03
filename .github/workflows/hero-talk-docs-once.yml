@@ -6,6 +6,14 @@ on:
       - agent/hero-talk-chain-research-20260803
     paths:
       - .github/workflows/hero-talk-docs-once.yml
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches:
+      - agent/standard-user-onboarding-strategy
+    paths:
+      - .github/workflows/hero-talk-docs-once.yml
+      - docs/features/hero-talk/**
+      - docs/features/static-site-pages/hero-talk-release-track.md
 
 permissions:
   contents: write
@@ -16,6 +24,7 @@ concurrency:
 
 jobs:
   patch:
+    if: github.event_name == 'push' || github.head_ref == 'agent/hero-talk-chain-research-20260803'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
