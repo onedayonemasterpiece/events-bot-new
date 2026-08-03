@@ -56,16 +56,29 @@ def test_partial_dedicated_pair_fails_closed_without_fallback(
     assert fallback_called is False
 
 
-def test_absent_dedicated_pair_uses_only_explicit_legacy_factory() -> None:
+def test_absent_dedicated_pair_does_not_use_legacy_factory_by_default() -> None:
+    legacy = object()
+    fallback_called = False
+
+    def legacy_factory():
+        nonlocal fallback_called
+        fallback_called = True
+        return legacy
+
+    assert build_google_ai_limiter_supabase_client(
+        environ={}, fallback_factory=legacy_factory
+    ) is None
+    assert fallback_called is False
+    assert build_google_ai_limiter_supabase_client(environ={}) is None
+
+
+def test_absent_dedicated_pair_allows_explicit_local_legacy_opt_in() -> None:
     legacy = object()
 
-    assert (
-        build_google_ai_limiter_supabase_client(
-            environ={}, fallback_factory=lambda: legacy
-        )
-        is legacy
-    )
-    assert build_google_ai_limiter_supabase_client(environ={}) is None
+    assert build_google_ai_limiter_supabase_client(
+        environ={"GOOGLE_AI_LIMITER_ALLOW_LEGACY_FALLBACK": "1"},
+        fallback_factory=lambda: legacy,
+    ) is legacy
 
 
 def test_required_backend_rejects_absent_or_empty_legacy_client() -> None:
@@ -75,6 +88,16 @@ def test_required_backend_rejects_absent_or_empty_legacy_client() -> None:
     ):
         build_google_ai_limiter_supabase_client(
             environ={}, fallback_factory=lambda: None, require_configured=True
+        )
+
+    with pytest.raises(
+        GoogleAILimiterSupabaseConfigurationError,
+        match="not configured",
+    ):
+        build_google_ai_limiter_supabase_client(
+            environ={"GOOGLE_AI_LIMITER_ALLOW_LEGACY_FALLBACK": "1"},
+            fallback_factory=lambda: object(),
+            require_configured=True,
         )
 
 

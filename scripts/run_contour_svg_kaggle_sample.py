@@ -240,6 +240,8 @@ def build_secret_payload() -> str:
         "SUPABASE_KEY",
         "SUPABASE_SERVICE_KEY",
         "SUPABASE_SCHEMA",
+        "GOOGLE_AI_LIMITER_SUPABASE_URL",
+        "GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY",
         "GOOGLE_AI_RESERVE_SCOPE_TO_DEFAULT_ENV",
         "GOOGLE_AI_RESERVE_OVERFLOW_KEY_ENVS",
     ]
@@ -248,7 +250,15 @@ def build_secret_payload() -> str:
         overflow_envs = [name for name in ("GOOGLE_API_KEY2", "GOOGLE_API_KEY3", "GOOGLE_API_KEY4") if payload.get(name)]
         if overflow_envs:
             payload["GOOGLE_AI_RESERVE_OVERFLOW_KEY_ENVS"] = ",".join(overflow_envs)
-    missing = [name for name in ["GOOGLE_API_KEY", "SUPABASE_URL"] if not payload.get(name)]
+    missing = [
+        name
+        for name in [
+            "GOOGLE_API_KEY",
+            "GOOGLE_AI_LIMITER_SUPABASE_URL",
+            "GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY",
+        ]
+        if not payload.get(name)
+    ]
     if missing:
         raise RuntimeError(f"Missing required secret envs: {', '.join(missing)}")
     return json.dumps(payload, ensure_ascii=False)

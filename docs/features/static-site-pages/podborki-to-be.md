@@ -1716,6 +1716,22 @@ LLM по всем историческим 6 969 строкам.
 - фестивальный проект;
 - кино и источники кинотеатров.
 
+### 12.1. Уточнение Gate E после production-ledger аудита (2026-08-03)
+
+Статусы свежих Telegram/VK packets нельзя фиксировать как
+`BLOCKED_EXTERNAL_CAPACITY` только по внутреннему `rpd` deny. Gate E использовал
+production-неэквивалентный model route: `create_bundle_grounding` был закреплён
+на Gemini 3.1, тогда как Gemini 3.5 имел отдельный доступный model budget; кроме
+того, ledger считал daily boundary по UTC вместо Pacific Time. Это **internal
+admission/routing blocker**, а не доказанный semantic/product fail и не
+доказанная недоступность Google.
+
+После limiter release повторяется только уже сохранённый immutable packet
+`kulturnaya_chaika/8140` и существующий VK capture: один first pass, warm —
+только после успешного first. Prompt/ontology facts v3 не меняются. Acceptance:
+source-grounded facts, `0` warm collection calls/writes, совпадающие
+facts/receipts/product hashes и отсутствие duplicate rows.
+
 ## 13. Итог
 
 Гипотеза владельца в основном подтверждается:

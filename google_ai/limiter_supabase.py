@@ -18,6 +18,9 @@ GOOGLE_AI_LIMITER_SUPABASE_URL_ENV = "GOOGLE_AI_LIMITER_SUPABASE_URL"
 GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY_ENV = (
     "GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY"
 )
+GOOGLE_AI_LIMITER_ALLOW_LEGACY_FALLBACK_ENV = (
+    "GOOGLE_AI_LIMITER_ALLOW_LEGACY_FALLBACK"
+)
 
 
 class GoogleAILimiterSupabaseConfigurationError(RuntimeError):
@@ -52,10 +55,10 @@ def build_google_ai_limiter_supabase_client(
     """Build the Supabase client used only for Google AI quota accounting.
 
     ``GOOGLE_AI_LIMITER_SUPABASE_URL`` and
-    ``GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY`` are an atomic pair.  When both
-    are absent, an explicitly supplied legacy factory may provide the rollout
-    fallback.  No general Supabase environment variables are read here, which
-    keeps storage, personalization, and other projects independent.
+    ``GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY`` are an atomic pair.  A legacy
+    factory is accepted only when the caller explicitly opts into the
+    local-development compatibility flag.  Production and remote runtimes must
+    never silently move quota accounting to another Supabase project.
     """
 
     source = os.environ if environ is None else environ
@@ -75,7 +78,10 @@ def build_google_ai_limiter_supabase_client(
         )
 
     if not raw_url:
-        if fallback_factory is not None:
+        allow_legacy_fallback = str(
+            source.get(GOOGLE_AI_LIMITER_ALLOW_LEGACY_FALLBACK_ENV, "") or ""
+        ).strip().lower() in {"1", "true", "yes", "on"}
+        if fallback_factory is not None and allow_legacy_fallback and not require_configured:
             client = fallback_factory()
             if client is not None:
                 return client
@@ -112,6 +118,7 @@ def build_google_ai_limiter_supabase_client(
 __all__ = [
     "GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY_ENV",
     "GOOGLE_AI_LIMITER_SUPABASE_URL_ENV",
+    "GOOGLE_AI_LIMITER_ALLOW_LEGACY_FALLBACK_ENV",
     "GoogleAILimiterSupabaseConfigurationError",
     "build_google_ai_limiter_supabase_client",
 ]

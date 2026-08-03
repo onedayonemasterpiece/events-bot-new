@@ -40,6 +40,15 @@
     *   Если metadata для scoped ENV-ключа отсутствует, клиент **не** снимает
         scope и не берёт общий key pool: remote runtime fail-closed завершает
         вызов без provider send.
+    *   Admission RPM/TPM считается по physical attempts за последние
+        скользящие 60 секунд. Calendar-minute rows сохраняются только как
+        диагностические counters. RPD использует календарный день
+        `America/Los_Angeles`: Google сбрасывает daily quota в полночь Pacific
+        Time, а не UTC.
+    *   Provider `429` публикуется через `google_ai_report_provider_429` и
+        временно закрывает весь `quota_scope/model`. Повтор на другом ключе того
+        же Cloud project запрещён; переход допустим только в другой
+        подтверждённый scope или на следующую явно разрешённую модель.
 *   **Supabase RPC (`google_ai_mark_sent`)**: Помечает, что запрос реально отправлен провайдеру (для диагностики/восстановления).
 *   **Supabase RPC (`google_ai_finalize`)**: Фиксирует фактическое потребление токенов и статус провайдера.
     Каждая physical retry хранит собственные `minute_bucket`/`day_bucket` в
@@ -56,6 +65,11 @@
     * process-local limiter разрешается только явным opt-in в одном
       изолированном dev-процессе. Он не является контролем для параллельных
       Codex/Fly/Kaggle процессов и не должен включаться в remote runtime;
+    * general `SUPABASE_*` не используется как неявный backend. Legacy factory
+      доступна только при отдельном
+      `GOOGLE_AI_LIMITER_ALLOW_LEGACY_FALLBACK=1` и лишь для
+      `require_configured=False`; remote/Kaggle consumers требуют dedicated
+      limiter pair;
     * fallback больше не “залипает” навсегда в процессе: клиент периодически перепроверяет RPC и автоматически возвращается к Supabase-limiter после восстановления.
     * интервал перепроверки: `GOOGLE_AI_RESERVE_RPC_RECHECK_SECONDS` (по умолчанию `600` сек).
     * при transient сетевых сбоях (`SSL handshake timeout`, `server disconnected`, `EOF`) reserve RPC сначала делает короткие retry и только затем переключается в local fallback:
@@ -115,6 +129,7 @@ python scripts/inspect/probe_supabase_rpc.py google_ai_reserve --schema public -
 supabase/migrations/20260731170000_google_ai_canonical_limiter_bootstrap.sql
 supabase/migrations/20260731170100_google_ai_limiter_registry_seed.sql
 supabase/migrations/20260731183500_google_ai_retry_attempt_accounting.sql
+supabase/migrations/20260803074500_google_ai_rolling_windows_pacific_rpd.sql
 ```
 
 После применения обязательны:
@@ -179,6 +194,9 @@ consumers переведены на gateway; legacy GemmaKey2 raw-key notebook �
 эксплуатации без manual override. Офлайн-аудит
 `scripts/inspect/audit_google_ai_provider_paths.py` обязан показывать
 `allowlisted_debt=0` и `unapproved=0`.
+Для Telegram/Guide notebooks имя embedded-переменной само по себе больше не
+является allowlist: audit byte-for-byte сравнивает сериализованные `client.py`
+и `limiter_supabase.py` с текущим repository source.
 
 Локальные `agy`/Gemini CLI используют отдельную OAuth-аутентификацию и не
 входят в API-key ledger; их нельзя запускать как будто они защищены этим

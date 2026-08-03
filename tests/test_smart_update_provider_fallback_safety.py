@@ -32,6 +32,15 @@ def test_legacy_create_bundle_has_no_unreviewed_4o_fallback() -> None:
     assert su._smart_update_4o_fallback_enabled("create_bundle_grounding") is False
 
 
+def test_facts_stages_use_bounded_lite_then_gemma_model_fallback() -> None:
+    assert su._smart_update_fallback_models(
+        "create_bundle_grounding", su.SMART_UPDATE_FACTS_MODEL
+    ) == ["gemini-3.5-flash-lite", "gemma-4-31b-it"]
+    assert su._smart_update_fallback_models(
+        "split_description_writer", su.SMART_UPDATE_WRITER_MODEL
+    ) is None
+
+
 def test_create_prompts_have_no_incident_specific_proper_nouns() -> None:
     source = inspect.getsource(su)
     assert "Плоский мир" not in source

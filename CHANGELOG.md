@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Fixed shared Google AI quota integrity across Fly, Kaggle and Edge: rolling
+  60-second RPM/TPM admission, Pacific-day RPD, quota-scope/model cooldown after
+  provider 429, fail-closed metadata and dedicated-ledger resolution, and
+  scope-aware key rotation. Smart Update facts stages now use the bounded
+  Gemini 3.1 Flash Lite → Gemini 3.5 Flash Lite → Gemma 4 chain; committed
+  Telegram/Guide notebooks and remote launchers require the same ledger, and
+  the static provider-path audit rejects stale embedded gateway snapshots.
+
 - Added deterministic, build-bound static-site transport fault profiles at the
   `ResilientSupabaseTransport` fetch boundary. Fault previews isolate route
   cache by profile/digest and emit sanitized fault/route evidence; the focus OTP

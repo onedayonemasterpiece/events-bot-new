@@ -93,6 +93,15 @@ UTC day. Deterministic narrative construction and cross-model fallbacks to
 Gemma/`gpt-4o-mini` are forbidden; when both approved writers are unavailable,
 publication fails closed.
 
+Для внутренних facts/grounding стадий Smart Update действует отдельная узкая
+политика доступности: primary `gemini-3.1-flash-lite`, затем
+`gemini-3.5-flash-lite`, затем `gemma-4-31b-it`. Она передаётся per-call только
+для facts-labels (включая `create_bundle_grounding`) и не расширяет writer,
+публикационные или иные LLM-пути. Каждый переход заново проходит shared
+reserve; provider `429` сначала закрывает весь фактический
+`quota_scope/model`, поэтому другой key того же Cloud project не получает
+повторный send.
+
 Documented exceptions (rare, guardrail-only):
 - Collapsing duplicate drafts produced from a single umbrella “program/schedule” post
   into one event with a `time` range (prevents accidental duplicates).

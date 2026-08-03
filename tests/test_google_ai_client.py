@@ -1046,8 +1046,18 @@ def test_explicit_default_lane_does_not_inherit_gateway_pool(
 
 class _NormalPoolSupabase:
     rows = [
-        {"id": "id-key4", "env_var_name": "GOOGLE_API_KEY4", "priority": 2},
-        {"id": "id-key5", "env_var_name": "GOOGLE_API_KEY5", "priority": 4},
+        {
+            "id": "id-key4",
+            "env_var_name": "GOOGLE_API_KEY4",
+            "priority": 2,
+            "quota_scope": "google:project-a",
+        },
+        {
+            "id": "id-key5",
+            "env_var_name": "GOOGLE_API_KEY5",
+            "priority": 4,
+            "quota_scope": "google:project-b",
+        },
     ]
 
     def __init__(self, blocked: set[str] | None = None):
@@ -1057,18 +1067,21 @@ class _NormalPoolSupabase:
     def table(self, _name: str):
         return _FakeSupabaseQuery(self.rows)
 
-    def rpc(self, _name: str, payload: dict):
-        self.rpc_calls.append(dict(payload))
+    def rpc(self, name: str, payload: dict):
+        self.rpc_calls.append({"name": name, **dict(payload)})
+        if name == "google_ai_report_provider_429":
+            return SimpleNamespace(execute=lambda: SimpleNamespace(data=None))
         key_id = list(payload.get("p_candidate_key_ids") or [None])[0]
         if key_id in self.blocked:
             data = {"ok": False, "blocked_reason": "rpm", "retry_after_ms": 1000}
         else:
             env = "GOOGLE_API_KEY4" if key_id == "id-key4" else "GOOGLE_API_KEY5"
+            row = next(row for row in self.rows if row["id"] == key_id)
             data = {
                 "ok": True,
                 "api_key_id": key_id,
                 "env_var_name": env,
-                "quota_scope": "google:test-project",
+                "quota_scope": row["quota_scope"],
                 "limiter_contract": _ATOMIC_LIMITER_CONTRACT,
             }
         return SimpleNamespace(execute=lambda d=data: SimpleNamespace(data=d))
@@ -1180,7 +1193,7 @@ async def test_normal_pool_without_shared_limiter_fails_closed() -> None:
 
 
 @pytest.mark.asyncio
-async def test_normal_pool_rotates_to_another_key_on_provider_429(
+async def test_normal_pool_rotates_to_another_quota_scope_on_provider_429(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _NORMAL_POOL_ENV_CANDIDATE_CACHE.clear()
@@ -1201,6 +1214,7 @@ async def test_normal_pool_rotates_to_another_key_on_provider_429(
         calls.append(candidate_key_ids)
         if len(calls) == 1:
             ctx.api_key_id = "id-key4"
+            ctx.quota_scope = "google:project-a"
             raise ProviderError(
                 error_type="ClientError",
                 error_message="429 RESOURCE_EXHAUSTED",
@@ -1209,6 +1223,7 @@ async def test_normal_pool_rotates_to_another_key_on_provider_429(
                 retry_after_ms=45000,
             )
         ctx.api_key_id = "id-key5"
+        ctx.quota_scope = "google:project-b"
         return "ok", SimpleNamespace(total_tokens=1)
 
     monkeypatch.setattr(client, "_attempt_generate", fake_attempt_generate)
@@ -1230,6 +1245,93 @@ async def test_normal_pool_rotates_to_another_key_on_provider_429(
     assert rotation["exhausted_api_key_id"] == "id-key4"
     assert rotation["remaining_pool_members"] == 1
     assert rotation["retry_after_ms"] == 45000
+
+
+@pytest.mark.asyncio
+async def test_normal_pool_does_not_rotate_inside_same_quota_scope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _NORMAL_POOL_ENV_CANDIDATE_CACHE.clear()
+    _NORMAL_POOL_CURSOR.clear()
+    supabase = _NormalPoolSupabase()
+    supabase.rows = [dict(row, quota_scope="google:shared-project") for row in supabase.rows]
+    client = GoogleAIClient(
+        supabase_client=supabase,
+        consumer="smart_update",
+        reserve_key_envs=["GOOGLE_API_KEY4", "GOOGLE_API_KEY5"],
+        reserve_overflow_key_envs=[],
+    )
+    client.max_retries = 1
+    calls = 0
+
+    async def fake_attempt_generate(*, ctx, **_kwargs):
+        nonlocal calls
+        calls += 1
+        ctx.api_key_id = "id-key4"
+        ctx.quota_scope = "google:shared-project"
+        raise ProviderError(
+            error_type="ClientError",
+            error_message="429 RESOURCE_EXHAUSTED",
+            retryable=True,
+            status_code=429,
+            retry_after_ms=45000,
+        )
+
+    monkeypatch.setattr(client, "_attempt_generate", fake_attempt_generate)
+
+    with pytest.raises(ProviderError):
+        await client.generate_content_async(
+            model="gemini-3.1-flash-lite",
+            prompt="same provider project",
+            max_output_tokens=16,
+        )
+
+    assert calls == 1
+    assert [call["name"] for call in supabase.rpc_calls] == [
+        "google_ai_report_provider_429"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_provider_429_can_fall_back_to_next_explicit_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _NORMAL_POOL_ENV_CANDIDATE_CACHE.clear()
+    _NORMAL_POOL_CURSOR.clear()
+    supabase = _NormalPoolSupabase()
+    supabase.rows = [dict(row, quota_scope="google:shared-project") for row in supabase.rows]
+    client = GoogleAIClient(
+        supabase_client=supabase,
+        consumer="smart_update",
+        reserve_key_envs=["GOOGLE_API_KEY4", "GOOGLE_API_KEY5"],
+        reserve_overflow_key_envs=[],
+    )
+    calls: list[str] = []
+
+    async def fake_attempt_generate(*, ctx, **_kwargs):
+        calls.append(ctx.requested_model)
+        ctx.api_key_id = "id-key4"
+        ctx.quota_scope = "google:shared-project"
+        if ctx.requested_model == "gemini-3.1-flash-lite":
+            raise ProviderError(
+                error_type="ClientError",
+                error_message="429 RESOURCE_EXHAUSTED",
+                retryable=True,
+                status_code=429,
+            )
+        return "ok-3.5", SimpleNamespace(total_tokens=1)
+
+    monkeypatch.setattr(client, "_attempt_generate", fake_attempt_generate)
+
+    text, _usage = await client.generate_content_async(
+        model="gemini-3.1-flash-lite",
+        fallback_models=["gemini-3.5-flash-lite"],
+        prompt="facts extraction",
+        max_output_tokens=16,
+    )
+
+    assert text == "ok-3.5"
+    assert calls == ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite"]
 
 
 @pytest.mark.asyncio

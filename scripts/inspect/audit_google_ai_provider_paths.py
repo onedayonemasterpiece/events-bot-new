@@ -389,9 +389,24 @@ def _raw_sort_key(finding: RawFinding) -> tuple[object, ...]:
     )
 
 
-def _is_embedded_gateway(finding: RawFinding) -> bool:
+def _is_embedded_gateway(finding: RawFinding, root: Path) -> bool:
     prefix = APPROVED_EMBEDDED_GATEWAYS.get(finding.path)
-    return bool(prefix and finding.source_line.lstrip().startswith(prefix))
+    if not prefix or not finding.source_line.lstrip().startswith(prefix):
+        return False
+    # A notebook assignment is approved only while its serialized gateway is
+    # byte-for-byte current.  Merely using the expected variable name used to
+    # let old fail-open gateway snapshots pass this audit indefinitely.
+    try:
+        payload = json.loads(finding.source_line.lstrip()[len(prefix):].strip())
+        if not isinstance(payload, dict):
+            return False
+        for relative in ("client.py", "limiter_supabase.py"):
+            canonical = (root / "google_ai" / relative).read_text(encoding="utf-8")
+            if payload.get(relative) != canonical:
+                return False
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+    return True
 
 
 def _apply_rules(
@@ -437,7 +452,7 @@ def audit_repository(root: str | Path) -> AuditReport:
         if raw.path in APPROVED_GATEWAY_PATHS:
             disposition = "approved_gateway"
             rationale = "central Google AI provider gateway implementation"
-        elif _is_embedded_gateway(raw):
+        elif _is_embedded_gateway(raw, root_path):
             disposition = "approved_embedded_gateway"
             rationale = "serialized central gateway snapshot in a Kaggle notebook"
         elif index in probe_matches:

@@ -281,12 +281,19 @@ def build_secret_payload(
     gemma_value: str,
     four_o_token: str,
     google_api_localname: str | None,
+    limiter_url: str,
+    limiter_service_key: str,
 ) -> str:
     payload = {
         "GOOGLE_API_KEY": gemma_value,
         "GOOGLE_API_KEY2": gemma_value,
         "GOOGLE_API_KEY_2": gemma_value,
         "FOUR_O_TOKEN": four_o_token,
+        "GOOGLE_AI_LIMITER_SUPABASE_URL": limiter_url,
+        "GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY": limiter_service_key,
+        "GOOGLE_AI_ALLOW_RESERVE_FALLBACK": "0",
+        "GOOGLE_AI_LOCAL_LIMITER_FALLBACK": "0",
+        "GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR": "0",
     }
     if google_api_localname:
         payload["GOOGLE_API_LOCALNAME"] = google_api_localname
@@ -569,12 +576,20 @@ def main() -> int:
     gemma_value, gemma_name, gemma_source = resolve_secret_value(gemma_names, env_files)
     four_o_value, four_o_name, four_o_source = resolve_secret_value(["FOUR_O_TOKEN"], env_files)
     google_localname = (os.getenv("GOOGLE_API_LOCALNAME") or "").strip() or None
+    limiter_url, limiter_url_name, limiter_url_source = resolve_secret_value(
+        ["GOOGLE_AI_LIMITER_SUPABASE_URL"], env_files
+    )
+    limiter_service_key, limiter_key_name, limiter_key_source = resolve_secret_value(
+        ["GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY"], env_files
+    )
     logger.info(
-        "lollipop_canary.secrets_resolved gemma=%s from=%s four_o=%s from=%s",
+        "lollipop_canary.secrets_resolved gemma=%s from=%s four_o=%s from=%s limiter=%s/%s",
         gemma_name,
         gemma_source,
         four_o_name,
         four_o_source,
+        limiter_url_source,
+        limiter_key_source,
     )
 
     run_id = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
@@ -592,6 +607,8 @@ def main() -> int:
         gemma_value=gemma_value,
         four_o_token=four_o_value,
         google_api_localname=google_localname,
+        limiter_url=limiter_url,
+        limiter_service_key=limiter_service_key,
     )
 
     client = KaggleClient()

@@ -50,6 +50,7 @@ function key() {
     api_key_id: KEY_ID,
     configured_env_name: "GOOGLE_API_KEY5",
     limiter_env_name: "GOOGLE_API_KEY5",
+    quota_scope: "google:test-project",
   };
 }
 
@@ -85,8 +86,18 @@ test("provider URL construction is owned by the shared quota module", () => {
 test("strict pool resolves compact/underscored aliases in declared order", async () => {
   const backend = fakeBackend({
     rows: [
-      { id: OTHER_KEY_ID, env_var_name: "GOOGLE_API_KEY_4", priority: 2 },
-      { id: KEY_ID, env_var_name: "GOOGLE_API_KEY5", priority: 1 },
+      {
+        id: OTHER_KEY_ID,
+        env_var_name: "GOOGLE_API_KEY_4",
+        quota_scope: "google:project-4",
+        priority: 2,
+      },
+      {
+        id: KEY_ID,
+        env_var_name: "GOOGLE_API_KEY5",
+        quota_scope: "google:project-5",
+        priority: 1,
+      },
     ],
   });
   const pool = await resolveStrictGoogleQuotaPool(backend, [
@@ -98,18 +109,25 @@ test("strict pool resolves compact/underscored aliases in declared order", async
       api_key_id: KEY_ID,
       configured_env_name: "GOOGLE_API_KEY5",
       limiter_env_name: "GOOGLE_API_KEY5",
+      quota_scope: "google:project-5",
     },
     {
       api_key_id: OTHER_KEY_ID,
       configured_env_name: "GOOGLE_API_KEY4",
       limiter_env_name: "GOOGLE_API_KEY_4",
+      quota_scope: "google:project-4",
     },
   ]);
 });
 
 test("strict pool rejects incomplete key metadata", async () => {
   const backend = fakeBackend({
-    rows: [{ id: KEY_ID, env_var_name: "GOOGLE_API_KEY5", priority: 1 }],
+    rows: [{
+      id: KEY_ID,
+      env_var_name: "GOOGLE_API_KEY5",
+      quota_scope: "google:project-5",
+      priority: 1,
+    }],
   });
   await assert.rejects(
     resolveStrictGoogleQuotaPool(backend, [
@@ -213,6 +231,7 @@ test("provider failure is finalized before it is rethrown", async () => {
       google_ai_reserve: reservation(),
       google_ai_mark_sent: null,
       google_ai_finalize: null,
+      google_ai_report_provider_429: null,
     },
   });
   await assert.rejects(
@@ -232,6 +251,34 @@ test("provider failure is finalized before it is rethrown", async () => {
   assert.equal(finalizeCall.payload.p_provider_status, "http_429");
   assert.equal(finalizeCall.payload.p_error_type, "provider_http");
   assert.equal(finalizeCall.payload.p_error_code, "429");
+  assert.equal(
+    backend.calls.some((call) => call.name === "google_ai_report_provider_429"),
+    true,
+  );
+});
+
+test("provider 429 report failure prevents cross-key rotation", async () => {
+  const backend = fakeBackend({
+    responses: {
+      google_ai_reserve: reservation(),
+      google_ai_mark_sent: null,
+      google_ai_finalize: null,
+      google_ai_report_provider_429: new Error("cooldown ledger unavailable"),
+    },
+  });
+  await assert.rejects(
+    withSharedGoogleQuotaAttempt(
+      runOptions(backend, async () => {
+        throw new GoogleProviderAttemptError("provider_429", {
+          provider_status: "http_429",
+          error_type: "provider_http",
+          error_code: "429",
+        });
+      }),
+    ),
+    (error) =>
+      error instanceof SharedGoogleQuotaError && error.stage === "finalize",
+  );
 });
 
 test("malformed successful reservation is cleaned up and never sent", async () => {

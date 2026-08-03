@@ -316,6 +316,12 @@ def test_kaggle_runtime_payload_forwards_interest_club_release_gates(
     monkeypatch.setenv("GOOGLE_API_KEY4", "google-test")
     monkeypatch.setenv("PERSONALIZATION_SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setenv("PERSONALIZATION_SUPABASE_SECRET_KEY", "secret-test")
+    monkeypatch.setenv(
+        "GOOGLE_AI_LIMITER_SUPABASE_URL", "https://limiter.supabase.co"
+    )
+    monkeypatch.setenv(
+        "GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY", "limiter-secret-test"
+    )
     monkeypatch.setenv("ENABLE_INTEREST_CLUB_STATIC_PROJECTION", "1")
     monkeypatch.setenv("PUBLIC_INTEREST_CLUBS_ENABLED", "1")
     args = SimpleNamespace(
@@ -330,6 +336,7 @@ def test_kaggle_runtime_payload_forwards_interest_club_release_gates(
 
     assert payload["ENABLE_INTEREST_CLUB_STATIC_PROJECTION"] == "1"
     assert payload["PUBLIC_INTEREST_CLUBS_ENABLED"] == "1"
+    assert payload["GOOGLE_AI_LIMITER_SUPABASE_URL"] == "https://limiter.supabase.co"
 
 
 def test_kaggle_runner_and_builder_forward_related_corpus_revision(

@@ -85,6 +85,7 @@ class RequestContext:
     provider_model: Optional[str] = None
     provider_model_name: Optional[str] = None
     api_key_id: Optional[str] = None
+    quota_scope: Optional[str] = None
     started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -508,14 +509,15 @@ class GoogleAIClient:
             )
             rows = list(result.data or [])
         except Exception as exc:
-            logger.warning(
+            logger.error(
                 "google_ai.default_env_candidates_failed consumer=%s env=%s err=%s",
                 consumer,
                 ",".join(env_names),
                 exc,
             )
-            _DEFAULT_ENV_CANDIDATE_CACHE[cache_key] = None
-            return None
+            raise ReservationError(
+                "Google AI key metadata lookup failed for the explicitly scoped lane"
+            ) from exc
         ids = tuple(
             str(row.get("id"))
             for row in rows
@@ -671,20 +673,58 @@ class GoogleAIClient:
             _NORMAL_POOL_ENV_CANDIDATE_CACHE[env_tuple] = cached_ids
             return list(cached_ids)
         except Exception as exc:
-            logger.warning(
+            logger.error(
                 "google_ai.normal_pool_candidates_failed consumer=%s envs=%s err=%s",
                 self.consumer,
                 ",".join(env_tuple),
                 exc,
             )
-            _NORMAL_POOL_ENV_CANDIDATE_CACHE[env_tuple] = None
-            return None
+            raise ReservationError(
+                "Google AI key metadata lookup failed for the normal pool"
+            ) from exc
+
+    def _candidate_quota_scopes(self, key_ids: list[str]) -> dict[str, str]:
+        """Resolve key -> provider quota scope without ever widening on error."""
+
+        if self.supabase is None or not key_ids:
+            return {}
+        try:
+            result = (
+                self.supabase.table("google_ai_api_keys")
+                .select("id, quota_scope")
+                .eq("is_active", True)
+                .in_("id", key_ids)
+                .execute()
+            )
+            rows = list(result.data or [])
+        except Exception as exc:
+            logger.error(
+                "google_ai.quota_scope_metadata_failed consumer=%s err=%s",
+                self.consumer,
+                exc,
+            )
+            return {}
+        scopes = {
+            str(row.get("id")): str(row.get("quota_scope") or "").strip()
+            for row in rows
+            if row.get("id") and str(row.get("quota_scope") or "").strip()
+        }
+        if any(key_id not in scopes for key_id in key_ids):
+            logger.error(
+                "google_ai.quota_scope_metadata_incomplete consumer=%s requested=%s resolved=%s",
+                self.consumer,
+                len(key_ids),
+                len(scopes),
+            )
+            return {}
+        return scopes
 
     def _provider_429_rotation_candidates(
         self,
         *,
         explicit_candidate_key_ids: Optional[list[str]],
-        exclude: set[str],
+        exclude_key_ids: set[str],
+        exclude_quota_scopes: set[str],
     ) -> list[str]:
         """Return unused members of an explicitly configured normal pool.
 
@@ -700,7 +740,52 @@ class GoogleAIClient:
         if explicit_candidate_key_ids is not None:
             allowed = set(explicit_candidate_key_ids)
             pool = [key_id for key_id in pool if key_id in allowed]
-        return [key_id for key_id in pool if key_id not in exclude]
+        pool = [key_id for key_id in pool if key_id not in exclude_key_ids]
+        scopes = self._candidate_quota_scopes(pool)
+        if not scopes:
+            return []
+        return [
+            key_id
+            for key_id in pool
+            if scopes[key_id] not in exclude_quota_scopes
+        ]
+
+    async def _report_provider_429(
+        self,
+        *,
+        ctx: RequestContext,
+        attempt_no: int,
+        retry_after_ms: int | None,
+    ) -> bool:
+        """Publish provider-side quota drift to the shared ledger.
+
+        Rotation is unsafe if this report fails: another process could select
+        the same Cloud-project scope immediately.  Callers therefore rotate
+        only after this RPC succeeds.
+        """
+
+        if self.supabase is None:
+            return False
+        try:
+            await self._call_supabase_rpc_with_retries(
+                "google_ai_report_provider_429",
+                {
+                    "p_request_uid": ctx.request_uid,
+                    "p_attempt_no": attempt_no,
+                    "p_retry_after_ms": retry_after_ms,
+                },
+                log_label="provider_429",
+            )
+            return True
+        except Exception as exc:
+            logger.error(
+                "google_ai.provider_429_report_failed consumer=%s model=%s scope=%s err=%s",
+                ctx.consumer,
+                ctx.model,
+                ctx.quota_scope,
+                exc,
+            )
+            return False
 
     @staticmethod
     def _rotated_normal_pool(candidate_key_ids: list[str]) -> list[str]:
@@ -871,11 +956,18 @@ class GoogleAIClient:
             out.append(model)
         return out
 
-    def _build_model_chain(self, requested_model: str) -> list[str]:
+    def _build_model_chain(
+        self,
+        requested_model: str,
+        fallback_models: Optional[list[str]] = None,
+    ) -> list[str]:
         requested = (requested_model or "").strip()
+        effective_fallbacks = (
+            self.fallback_models if fallback_models is None else fallback_models
+        )
         chain: list[str] = []
         seen: set[str] = set()
-        for model in [requested, *self.fallback_models]:
+        for model in [requested, *effective_fallbacks]:
             m = (model or "").strip()
             if not m:
                 continue
@@ -891,7 +983,9 @@ class GoogleAIClient:
                 continue
             seen.add(key)
             chain.append(m)
-        has_gemma = self._is_gemma_model(requested) or any(self._is_gemma_model(m) for m in self.fallback_models)
+        has_gemma = self._is_gemma_model(requested) or any(
+            self._is_gemma_model(m) for m in effective_fallbacks
+        )
         return chain or [self.TEXT_PRIMARY_MODEL if has_gemma else requested_model]
 
     async def _notify_incident(
@@ -1300,6 +1394,7 @@ class GoogleAIClient:
         safety_settings: Optional[list] = None,
         max_output_tokens: Optional[int] = None,
         candidate_key_ids: Optional[list[str]] = None,
+        fallback_models: Optional[list[str]] = None,
     ) -> tuple[str, UsageInfo]:
         """Generate content with rate limiting and retries.
         
@@ -1324,7 +1419,7 @@ class GoogleAIClient:
             max_output_tokens=max_output_tokens or self.DEFAULT_MAX_OUTPUT_TOKENS,
         )
         requested_model = (model or "").strip()
-        model_chain = self._build_model_chain(requested_model)
+        model_chain = self._build_model_chain(requested_model, fallback_models)
         attempt_cursor = 0
 
         last_error: Optional[Exception] = None
@@ -1346,6 +1441,7 @@ class GoogleAIClient:
 
             local_attempt_no = 0
             provider_429_excluded_key_ids: set[str] = set()
+            provider_429_excluded_quota_scopes: set[str] = set()
             attempt_candidate_key_ids = candidate_key_ids
             while True:
                 local_attempt_no += 1
@@ -1366,7 +1462,7 @@ class GoogleAIClient:
                 except RateLimitError as e:
                     blocked_reason = (e.blocked_reason or "").strip().lower()
                     has_quota_fallback = (
-                        blocked_reason in {"rpm", "tpm", "rpd"}
+                        blocked_reason in {"rpm", "tpm", "rpd", "provider_429"}
                         and model_index < (len(model_chain) - 1)
                     )
                     if has_quota_fallback:
@@ -1419,14 +1515,25 @@ class GoogleAIClient:
                         if not self.allow_provider_429_rotation:
                             raise
                         selected_key_id = (ctx.api_key_id or "").strip()
+                        selected_quota_scope = (ctx.quota_scope or "").strip()
+                        report_ok = await self._report_provider_429(
+                            ctx=ctx,
+                            attempt_no=attempt_no,
+                            retry_after_ms=e.retry_after_ms,
+                        )
+                        if not report_ok:
+                            raise
                         selected_key_was_already_excluded = (
                             selected_key_id in provider_429_excluded_key_ids
                         )
                         if selected_key_id:
                             provider_429_excluded_key_ids.add(selected_key_id)
+                        if selected_quota_scope:
+                            provider_429_excluded_quota_scopes.add(selected_quota_scope)
                         remaining_key_ids = self._provider_429_rotation_candidates(
                             explicit_candidate_key_ids=candidate_key_ids,
-                            exclude=provider_429_excluded_key_ids,
+                            exclude_key_ids=provider_429_excluded_key_ids,
+                            exclude_quota_scopes=provider_429_excluded_quota_scopes,
                         )
                         if (
                             selected_key_id
@@ -1438,14 +1545,43 @@ class GoogleAIClient:
                                 ctx,
                                 attempt_no=attempt_no,
                                 exhausted_api_key_id=selected_key_id,
+                                exhausted_quota_scope=selected_quota_scope,
                                 remaining_pool_members=len(remaining_key_ids),
                                 retry_after_ms=e.retry_after_ms,
                             )
                             attempt_candidate_key_ids = remaining_key_ids
                             continue
                         # Unpooled consumers and exhausted/explicitly scoped
-                        # pools keep the existing fail-fast contract. Higher
-                        # layers may wait, defer, or choose a model fallback.
+                        # pools never send again into the same provider quota
+                        # scope.  A configured model fallback may use its own
+                        # independent model quota; otherwise remain fail-fast.
+                        has_fallback = (
+                            self.allow_provider_model_fallback
+                            and model_index < (len(model_chain) - 1)
+                        )
+                        if has_fallback:
+                            next_model = model_chain[model_index + 1]
+                            self._log_event(
+                                "google_ai.model_fallback",
+                                ctx,
+                                attempt_no=attempt_no,
+                                next_model=next_model,
+                                error=e,
+                            )
+                            await self._notify_incident(
+                                "provider_error_fallback",
+                                ctx=ctx,
+                                severity="warning",
+                                message=str(e),
+                                details={
+                                    "error_type": e.error_type,
+                                    "status_code": e.status_code,
+                                    "attempt_no": attempt_no,
+                                    "next_model": next_model,
+                                    "exhausted_quota_scope": selected_quota_scope,
+                                },
+                            )
+                            break
                         raise
                     can_retry = bool(e.retryable) and local_attempt_no < self.max_retries
                     if can_retry:
@@ -1580,6 +1716,7 @@ class GoogleAIClient:
             )
 
         ctx.api_key_id = reserve_result.api_key_id
+        ctx.quota_scope = reserve_result.quota_scope
         self._log_event("google_ai.reserve_ok", ctx, attempt_no=attempt_no, reserve=reserve_result)
 
         api_key = self._get_api_key(reserve_result.env_var_name)
@@ -1685,6 +1822,7 @@ class GoogleAIClient:
             )
 
         ctx.api_key_id = reserve_result.api_key_id
+        ctx.quota_scope = reserve_result.quota_scope
         self._log_event("google_ai.reserve_ok", ctx, attempt_no=attempt_no, reserve=reserve_result)
         
         # 2. Get API key
@@ -2844,6 +2982,8 @@ class GoogleAIClient:
             "provider_model": ctx.provider_model,
             "provider_model_name": ctx.provider_model_name,
             "invoked_model": ctx.provider_model_name or ctx.requested_model or ctx.model,
+            "api_key_id": ctx.api_key_id,
+            "quota_scope": ctx.quota_scope,
             "reserved_tpm": ctx.reserved_tpm,
         }
         

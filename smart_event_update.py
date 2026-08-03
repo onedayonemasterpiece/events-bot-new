@@ -223,9 +223,8 @@ SMART_UPDATE_IDENTITY_GOOGLE_KEY_ENV = os.getenv(
 # main writer to gemini-3.1-flash-lite (the production registry reserves a
 # defensive 450 RPD project lane) while the rest of the Smart Update pipeline
 # (revise/rewrite/short_description/search_digest/coverage) keeps
-# SMART_UPDATE_MODEL. ``GOOGLE_AI_FALLBACK_MODELS`` is expected to include
-# ``gemma-4-31b-it`` so the GoogleAIClient model chain falls back to Gemma 4
-# automatically when the primary returns 5xx/429.
+# SMART_UPDATE_MODEL. Facts-only calls receive their own bounded fallback chain
+# below; unrelated writers must not inherit it through a process-global setting.
 SMART_UPDATE_FACTS_MODEL = (
     os.getenv("SMART_UPDATE_FACTS_MODEL", "gemini-3.1-flash-lite").strip()
     or SMART_UPDATE_MODEL
@@ -234,31 +233,25 @@ SMART_UPDATE_WRITER_MODEL = (
     os.getenv("SMART_UPDATE_WRITER_MODEL", "gemini-3.1-flash-lite").strip()
     or SMART_UPDATE_MODEL
 )
+SMART_UPDATE_FACTS_FALLBACK_MODELS = tuple(
+    model.strip()
+    for model in (
+        os.getenv(
+            "SMART_UPDATE_FACTS_FALLBACK_MODELS",
+            "gemini-3.5-flash-lite,gemma-4-31b-it",
+        )
+        or ""
+    ).split(",")
+    if model.strip()
+)
 SMART_UPDATE_FORCE_STAGED_GEMINI = (
     os.getenv("SMART_UPDATE_FORCE_STAGED_GEMINI", "0") or ""
 ).strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _resolve_smart_update_model(label: str | None) -> str:
+def _is_smart_update_facts_stage(label: str | None) -> bool:
     label_l = (label or "").strip().lower()
-    if SMART_UPDATE_FORCE_STAGED_GEMINI:
-        if (
-            label_l in {
-                "facts_extract",
-                "rich_facts_extract",
-                "title_recover",
-                "title_recover_public",
-                "anchor_role_review",
-                "create_bundle_grounding",
-                "occurrence_scope_review",
-                "duration_forecast",
-            }
-            or label_l.endswith(":fact_first_cov")
-        ):
-            return SMART_UPDATE_FACTS_MODEL
-        return SMART_UPDATE_WRITER_MODEL
-    # Pure facts extraction stages (split-create / fact-first paths).
-    if label_l in {
+    return label_l in {
         "facts_extract",
         "rich_facts_extract",
         "title_recover",
@@ -268,7 +261,17 @@ def _resolve_smart_update_model(label: str | None) -> str:
         "occurrence_scope_review",
         "location_grounding_review",
         "duration_forecast",
-    }:
+    } or label_l.endswith(":fact_first_cov")
+
+
+def _resolve_smart_update_model(label: str | None) -> str:
+    label_l = (label or "").strip().lower()
+    if SMART_UPDATE_FORCE_STAGED_GEMINI:
+        if _is_smart_update_facts_stage(label):
+            return SMART_UPDATE_FACTS_MODEL
+        return SMART_UPDATE_WRITER_MODEL
+    # Pure facts extraction stages (split-create / fact-first paths).
+    if _is_smart_update_facts_stage(label):
         return SMART_UPDATE_FACTS_MODEL
     # Pure writer stages (split-create / fact-first paths). The fact-first
     # writer label is composed as ``f"{label}:fact_first_desc"`` (e.g.
@@ -291,6 +294,16 @@ def _resolve_smart_update_model(label: str | None) -> str:
     # ``rich_facts_extract`` (Gemini), ``split_description_writer`` (Gemini)
     # and ``split_derived_fields`` (Gemma).
     return SMART_UPDATE_MODEL
+
+
+def _smart_update_fallback_models(label: str | None, model: str) -> list[str] | None:
+    """Use the spare stable Lite lane only for facts-style Smart Update calls."""
+
+    if model != SMART_UPDATE_FACTS_MODEL:
+        return None
+    if not _is_smart_update_facts_stage(label):
+        return None
+    return list(SMART_UPDATE_FACTS_FALLBACK_MODELS)
 SMART_UPDATE_GEMMA_NATIVE_SCHEMA = (
     os.getenv("SMART_UPDATE_GEMMA_NATIVE_SCHEMA", "0") or ""
 ).strip().lower() in {"1", "true", "yes", "on"}
@@ -8374,6 +8387,7 @@ async def _ask_gemma_json_unbounded(
                             prompt=native_prompt,
                             generation_config=native_gen_cfg,
                             max_output_tokens=max_tokens,
+                            fallback_models=_smart_update_fallback_models(label, model),
                         )
                         raw_last = raw_native or ""
                         data_native = _extract_json(raw_last)
@@ -8414,6 +8428,7 @@ async def _ask_gemma_json_unbounded(
                             prompt=full_prompt,
                             generation_config=json_gen_cfg,
                             max_output_tokens=max_tokens,
+                            fallback_models=_smart_update_fallback_models(label, model),
                         )
                         break
                     except Exception as exc:
@@ -8478,6 +8493,7 @@ async def _ask_gemma_json_unbounded(
                             prompt=fix_prompt,
                             generation_config=json_gen_cfg,
                             max_output_tokens=max_tokens,
+                            fallback_models=_smart_update_fallback_models(label, model),
                         )
                         break
                     except Exception as exc:
@@ -8694,6 +8710,7 @@ async def _ask_gemma_text_unbounded(
                                 temperature=temperature
                             ),
                             max_output_tokens=max_tokens,
+                            fallback_models=_smart_update_fallback_models(label, model),
                         )
                         break
                     except Exception as exc:
