@@ -1,0 +1,95 @@
+mode: worktree_worker
+repo: onedayonemasterpiece/events-bot-new
+base_ref: origin/feature/static-launch-tile-mosaic-20260803
+base_branch: feature/static-launch-tile-mosaic-20260803
+integration_branch: integration/static-launch-tile-mosaic-20260803
+global_constraints:
+  - Do not edit site/src/pages/index.astro or existing lab prototypes.
+  - Keep the candidate route noindex and unlisted.
+  - Never expose a Supabase service-role key.
+  - Do not merge to main.
+verification_owner: root
+stop_conditions:
+  - Existing production behavior is modified.
+  - A worker worktree becomes dirty outside its owned scope.
+  - A secret/service-role credential appears in client or committed files.
+lanes:
+  - id: ui
+    role: worker
+    effort: high
+    requirement_ids: [R01, R02, R04]
+    target: Tile mosaic launch component and isolated lab page
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-launch-tile-mosaic-20260803/ui
+    worktree: /dev/shm/static-launch-mosaic-ui
+    writable_files:
+      - site/src/components/launch/TileMosaicLaunch.astro
+      - site/src/pages/lab/launch/tile-mosaic/index.astro
+      - site/public/assets/launch/**
+      - .codex/lanes/ui/RESULTS.md
+    forbidden_files:
+      - site/src/pages/index.astro
+      - supabase/**
+      - docs/**
+      - CHANGELOG.md
+    expected_output: committed UI implementation with local verification
+    verification_scope: targeted
+    status: spawned
+  - id: db
+    role: worker
+    effort: high
+    requirement_ids: [R03]
+    target: Secure idempotent Supabase subscription schema and RPC
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-launch-tile-mosaic-20260803/db
+    worktree: /dev/shm/static-launch-mosaic-db
+    writable_files:
+      - supabase/migrations/*_create_site_launch_subscriptions.sql
+      - .codex/lanes/db/RESULTS.md
+    forbidden_files:
+      - site/**
+      - docs/**
+      - CHANGELOG.md
+    expected_output: committed migration with SQL/security verification
+    verification_scope: targeted
+    status: spawned
+  - id: docs
+    role: worker
+    effort: high
+    requirement_ids: [R05]
+    target: Canonical implementation guide and coding-agent prompt
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-launch-tile-mosaic-20260803/docs
+    worktree: /dev/shm/static-launch-mosaic-docs
+    writable_files:
+      - docs/features/static-site-pages/launch-tile-mosaic-placeholder.md
+      - docs/features/static-site-pages/prompts/tile-mosaic-launch-coding-agent.md
+      - .codex/lanes/docs/RESULTS.md
+    forbidden_files:
+      - site/**
+      - supabase/**
+      - CHANGELOG.md
+    expected_output: committed canonical docs and reusable prompt
+    verification_scope: inspection_only
+    status: spawned
+  - id: integration
+    role: merge_reviewer
+    effort: high
+    requirement_ids: [R06, R07, R08]
+    target: Integration, changelog, QA, preview, PR, and Telegram delivery
+    depends_on: [ui, db, docs]
+    execution_mode: serial_after_dependency
+    branch: integration/static-launch-tile-mosaic-20260803
+    worktree: /dev/shm/static-launch-mosaic-integration
+    writable_files:
+      - CHANGELOG.md
+      - .codex/integration/static-launch-tile-mosaic-20260803/**
+      - tests or QA scripts required to validate the candidate
+    forbidden_files:
+      - site/src/pages/index.astro
+    expected_output: integrated candidate with build, screenshots, draft PR, secret preview, and sent link
+    verification_scope: full_local
+    status: in_progress
