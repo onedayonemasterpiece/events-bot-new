@@ -6,7 +6,6 @@ on:
       - feature/static-launch-tile-mosaic-20260803
     paths:
       - .github/workflows/tile-mosaic-material-bootstrap.yml
-      - .github/tile-mosaic-bootstrap/**
   workflow_dispatch:
 
 permissions:
@@ -45,8 +44,9 @@ jobs:
             exit 1
           fi
           tar -xzf /tmp/tile-mosaic-material-lab.tar.gz -C .
-          rm -rf .github/tile-mosaic-bootstrap
-          rm -f .github/workflows/tile-mosaic-material-bootstrap.yml
+          mv .github/workflows/tile-mosaic-material-lab.yml \
+            .github/tile-mosaic-bootstrap/tile-mosaic-material-lab.yml.pending
+          find .github/tile-mosaic-bootstrap -maxdepth 1 -name 'payload.*.b64' -delete
 
       - name: Compile, test and publish materialized laboratory
         shell: bash
@@ -57,7 +57,7 @@ jobs:
           python -m pip install --disable-pip-version-check 'Pillow==12.2.0'
           python -m compileall -q tools/tile_mosaic tests/test_tile_mosaic_*.py
           python -m unittest discover -s tests -p 'test_tile_mosaic_*.py' -v
-          git add -A .github/workflows .github/tile-mosaic-bootstrap \
+          git add -A .github/tile-mosaic-bootstrap \
             docs/features/static-site-pages/tile-mosaic-material-generator.md \
             docs/review-data/tile-mosaic-material-lab \
             tests/test_tile_mosaic_*.py tests/__init__.py \
