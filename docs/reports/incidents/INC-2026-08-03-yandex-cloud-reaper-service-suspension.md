@@ -1,10 +1,10 @@
 # INC-2026-08-03 Yandex Cloud reaper service suspension after account transfer
 
-Status: mitigated; closure pending release of the regression guard
+Status: closed
 Severity: sev1
 Service: Supabase relay, focus Auth/email gateways, inbound email and Postbox feedback
 Opened: 2026-08-03
-Closed: —
+Closed: 2026-08-03
 Owners: events-bot production owner / Yandex Cloud operations
 Related incidents: `INC-2026-08-03-ydb-request-unit-billing`, `INC-2026-07-30-focus-email-otp-false-success`
 Related docs: `docs/operations/email-delivery.md`, `docs/features/unsigned-personalization/production-integration.md`, `docs/operations/release-governance.md`
@@ -57,6 +57,8 @@ Postbox feedback processing no longer matched their accepted live desired state.
   two fresh invocations without error.
 - 2026-08-03 16:39 UTC — repeated public acceptance passes: Supabase relay
   `10/10`, focus YDB control `5/5`, and Fly `/healthz` HTTP 200/ready.
+- 2026-08-03 16:46 UTC — regression guard merged to `origin/main` after both
+  required GitHub checks passed; incident closed.
 
 ## Root Cause
 
@@ -154,7 +156,9 @@ Postbox feedback processing no longer matched their accepted live desired state.
   ignored artifact
   `artifacts/codex/INC-2026-08-03-yandex-cloud-reaper-service-suspension/restore-operations.txt`;
   no Fly application deploy was required.
-- release SHA: pending merge to `origin/main`.
+- release SHA: `e69541fb8c73a96926accc3e864654baa509955a`, reachable
+  from `origin/main` via PR #311. This is an operator/reconciler guard release;
+  no Fly deploy was needed because application runtime code did not change.
 - regression checks:
   - email YDB `RUNNING`, deletion protection enabled, provisioned RCU `0`, hard
     serverless throttle `10 RCU/s`;
@@ -171,6 +175,7 @@ Postbox feedback processing no longer matched their accepted live desired state.
   - IMAP collector invocations at 16:28 and 16:30 completed without error;
   - Fly `/healthz` HTTP 200 with `ready=true`, DB/schedulers/email workers `ok`,
     `issues=[]`, and Region Talk explicitly `disabled`.
+  - GitHub `python-ci` and `static-browser-release-gate` passed before merge.
 
 ## Prevention
 
