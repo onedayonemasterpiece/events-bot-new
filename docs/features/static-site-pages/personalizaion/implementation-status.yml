@@ -1,9 +1,9 @@
 schema_version: personalization-implementation-status-v1
-updated_at: '2026-08-02T20:55:00Z'
+updated_at: '2026-08-03T18:20:00Z'
 repository: onedayonemasterpiece/events-bot-new
 baseline:
   branch: main
-  sha: 079a9dc7a6830925456116770f54b82a5fe59fb0
+  sha: 0bc8482dcf9f74b835743f72d57aa5dcce755c28
   state: local_prototype_not_production_loop
 canonical:
   requirements: docs/features/static-site-pages/personalizaion/requirements.md
@@ -63,7 +63,7 @@ budgets:
 waves:
   - id: P13N-00
     name: legacy_quarantine_characterization_and_extraction
-    state: ready_for_implementation
+    state: implementation_ready_pending_common_layout_mount_and_browser_acceptance
     production_effect: none
     remote_writes: false
     target_model_effect: none
@@ -78,6 +78,16 @@ waves:
       - unknown_surface_fails_closed
       - no_new_personalization_logic_in_giant_inline_script
       - no_legacy_import_from_target_paths
+    evidence:
+      research_delta: docs/features/static-site-pages/personalizaion/p13n-00-research-delta.md
+      target_modules: site/src/lib/personalization/
+      runtime_component: site/src/components/personalization/PersonalizationRuntime.astro
+      route_inventory_checker: site/scripts/check-personalization-route-inventory.mjs
+      source_guard: site/scripts/check-personalization-source-guard.mjs
+      remaining_integration_gate:
+        - one_common_layout_mount
+        - generated_full_route_inventory_pass
+        - production_like_browser_characterization
   - id: P13N-01
     name: activation_and_compact_local_state
     state: blocked_by_P13N-00

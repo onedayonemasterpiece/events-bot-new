@@ -34,6 +34,8 @@ def test_personalization_document_index_is_complete() -> None:
         DOC_ROOT / "README.md",
         DOC_ROOT / "requirements.md",
         DOC_ROOT / "personalization-to-be.md",
+        DOC_ROOT / "personalization-research-traceability.md",
+        DOC_ROOT / "p13n-00-research-delta.md",
         DOC_ROOT / "personalization-implementation-contract.md",
         DOC_ROOT / "personalization-current-runtime-audit-2026-08-02.md",
         DOC_ROOT / "implementation-status.yml",
