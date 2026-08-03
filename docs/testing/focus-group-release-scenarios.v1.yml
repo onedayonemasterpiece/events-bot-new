@@ -1,4 +1,4 @@
-schema: kenigevents.focus_group_release_scenarios.v4
+schema: kenigevents.focus_group_release_scenarios.v5
 updated_at: '2026-08-03'
 
 canonical_docs:
@@ -20,28 +20,48 @@ programme:
     main_ui_visible_without_marker: false
     security_boundary: none
     technical_bypass_is_incident: false
+  identity:
+    anonymous_provider: supabase_auth_anonymous
+    anonymous_claim: is_anonymous
+    anonymous_product_state: focus_participant_unverified
+    anonymous_has_stable_auth_uid: true
+    anonymous_can_use_site: true
+    anonymous_can_personalize: true
+    anonymous_can_submit_feedback: true
+    anonymous_can_collect_artifacts: true
+    anonymous_can_enter_raffle: false
+    verified_provider_any_of: [email, custom:yandex]
+    upgrade_same_user_id_preferred: true
+    merge_existing_permanent_account_required: true
+    pre_upgrade_data_preserved: true
   feedback:
     page_score:
       scale: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-      identity: participant_page_family_page_revision
+      identity: focus_subject_page_family_page_revision
       official_nps_metric: false
       visible_before_footer: true
       revision_changed_copy_required: true
+      verified_identity_required: false
     service_nps:
       scale: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-      identity: participant_service_revision
+      identity: focus_subject_service_revision
       official_nps_metric: true
       canonical_route: /zakrytaya-afisha/
       optional_general_comment: true
       raffle_requirement: false
+      verified_identity_required: false
   artifacts:
     collection_version: focus-eggs-v1
     total: 12
     required: 10
+    anonymous_receipts_allowed: true
+    receipts_survive_identity_upgrade: true
   raffle:
     verified_identity_required: true
+    anonymous_subject_excluded: true
     page_score_required: true
     service_nps_required: false
+    pre_upgrade_actions_count_after_linking: true
     base_chances: 1
     text_feedback_bonus: 1
     screenshot_feedback_bonus: 1
@@ -106,8 +126,17 @@ policies:
   background_started_is_pass: false
   local_marker_is_security_boundary: false
   interface_visible_without_marker: false
+  invite_creates_or_reuses_anonymous_subject: true
+  anonymous_session_reused_on_reload: true
+  anonymous_session_presented_as_verified_login: false
+  anonymous_feedback_allowed: true
+  anonymous_personalization_allowed: true
+  anonymous_artifact_receipts_allowed: true
+  anonymous_user_can_enter_raffle: false
+  verified_identity_upgrade_preserves_data: true
+  existing_account_requires_idempotent_merge: true
+  pre_auth_actions_count_after_upgrade_before_cutoff: true
   unverified_user_can_test_site: true
-  unverified_user_can_enter_raffle: false
   score_scale_exactly_0_to_10: true
   page_score_hidden_behind_button: false
   page_score_comment_required: false
@@ -133,6 +162,16 @@ release_sets:
       - access.invite_sets_marker
       - access.marker_survives_reload
       - access.fixed_cutoff
+      - anonymous.session_created
+      - anonymous.session_reused
+      - anonymous.ui_unverified
+      - anonymous.feedback_allowed
+      - anonymous.personalization_available
+      - anonymous.offline_session_recovery
+      - identity.email_upgrade_preserves_data
+      - identity.yandex_upgrade_preserves_data
+      - identity.existing_account_merge
+      - identity.anonymous_ineligible
       - page_score.route_matrix
       - page_score.visible_before_footer
       - page_score.exact_scale
@@ -152,7 +191,6 @@ release_sets:
       - auth.android_identity
       - auth.iphone_supported_identity
       - auth.yandex_identity
-      - auth.unverified_ineligible
       - pwa.android_relaunch
       - pwa.iphone_home_screen
       - use.share
@@ -161,6 +199,7 @@ release_sets:
       - use.for_me
       - artifacts.exact_collection
       - artifacts.server_receipt
+      - artifacts.upgrade_preserves_receipts
       - artifacts.threshold
       - stats.queryable
       - stats.no_pii
@@ -175,11 +214,13 @@ release_sets:
       - operations.no_mass_p0
       - operations.feedback_queue_manageable
       - stats.counts_consistent
+      - anonymous.creation_rate_bounded
 
   expand_to_200:
     required:
       - expand_to_80
       - auth.cap_boundary
+      - anonymous.retention_cleanup
       - artifacts.receipt_integrity
       - raffle.snapshot_rehearsal
 
@@ -214,6 +255,7 @@ scenarios:
       - valid_invite_fragment_sets_marker
       - fragment_removed_from_url
       - normal_static_site_becomes_visible
+      - anonymous_session_start_is_non_blocking
 
   access.marker_survives_reload:
     state: partial
@@ -234,6 +276,146 @@ scenarios:
       - one_constant_2026_08_31_18_00_kaliningrad
       - no_rolling_30_day_marker
       - actions_at_or_after_cutoff_do_not_change_eligibility
+
+  anonymous.session_created:
+    state: missing
+    layer: deployed_browser_and_auth
+    platform: browser
+    blocking: seed
+    acceptance:
+      - valid_invite_creates_one_supabase_anonymous_user
+      - jwt_is_anonymous_true
+      - auth_uid_available_for_rls
+      - no_email_or_other_pii_required
+
+  anonymous.session_reused:
+    state: missing
+    layer: deployed_browser_and_auth
+    platform: browser_android_ios
+    blocking: seed
+    acceptance:
+      - reload_reuses_same_auth_uid
+      - repeat_invite_reuses_same_auth_uid
+      - pwa_relaunch_reuses_same_auth_uid
+      - no_duplicate_anonymous_user_created
+
+  anonymous.ui_unverified:
+    state: missing
+    layer: deployed_browser
+    platform: browser_android_ios
+    blocking: seed
+    acceptance:
+      - anonymous_session_not_rendered_as_verified_login
+      - ui_says_participation_unverified
+      - email_or_yandex_upgrade_cta_available
+      - feedback_not_blocked_by_upgrade_cta
+
+  anonymous.feedback_allowed:
+    state: blocked
+    layer: deployed_browser_and_database
+    platform: browser_android_ios
+    blocking: seed
+    current_gap:
+      - focus_group_lab_panel_requires_session_and_prompts_confirmation_when_absent
+      - no_silent_anonymous_session_flow
+    acceptance:
+      - anonymous_page_score_insert_passes_rls
+      - anonymous_service_nps_insert_passes_rls
+      - anonymous_text_feedback_insert_passes_rls
+      - anonymous_private_screenshot_upload_passes_owner_policy
+      - no_verified_identity_required
+
+  anonymous.personalization_available:
+    state: partial
+    layer: browser_and_database
+    platform: browser_android_ios
+    blocking: seed
+    acceptance:
+      - local_personalization_works_immediately
+      - strong_actions_use_anonymous_subject_when_server_available
+      - supabase_failure_keeps_local_fallback
+      - identity_upgrade_preserves_profile_state
+
+  anonymous.offline_session_recovery:
+    state: missing
+    layer: deployed_browser_fault_injection
+    platform: browser
+    blocking: seed
+    acceptance:
+      - marker_opens_site_when_supabase_unavailable
+      - feedback_action_is_queued_before_session_exists
+      - anonymous_session_creation_retries_bounded
+      - one_row_created_after_session_and_transport_recover
+
+  anonymous.creation_rate_bounded:
+    state: missing
+    layer: auth_and_operations
+    platform: operator
+    blocking: expand_to_80
+    acceptance:
+      - creation_rate_limit_or_captcha_contract
+      - no_reload_creation_storm
+      - counts_queryable_without_user_pii
+
+  anonymous.retention_cleanup:
+    state: missing
+    layer: database_and_operations
+    platform: operator
+    blocking: expand_to_200
+    acceptance:
+      - inactive_orphan_anonymous_users_pruned_after_policy_window
+      - active_focus_subjects_not_pruned
+      - linked_permanent_users_never_pruned_as_anonymous
+
+  identity.email_upgrade_preserves_data:
+    state: missing
+    layer: protected_live_and_database
+    platform: browser_android_ios
+    blocking: seed
+    acceptance:
+      - email_verification_upgrades_current_anonymous_user_or_audited_merge
+      - page_scores_preserved
+      - service_nps_preserved
+      - text_and_screenshot_links_preserved
+      - artifact_receipts_preserved
+      - participant_registration_created_once
+
+  identity.yandex_upgrade_preserves_data:
+    state: partial
+    layer: protected_live_and_database
+    platform: browser_or_ios
+    blocking: seed
+    current_evidence:
+      - site/src/lib/staticSiteAuth.ts_linkIdentity
+    acceptance:
+      - yandex_link_identity_from_anonymous_session
+      - one_permanent_user
+      - one_participant
+      - pre_upgrade_data_preserved
+
+  identity.existing_account_merge:
+    state: missing
+    layer: protected_live_and_database
+    platform: browser
+    blocking: seed
+    acceptance:
+      - existing_email_or_yandex_account_detected
+      - anonymous_subject_merged_idempotently
+      - page_revision_scores_deduplicated
+      - artifacts_deduplicated
+      - action_ids_deduplicated
+      - merge_audit_receipt_created
+
+  identity.anonymous_ineligible:
+    state: partial
+    layer: deployed_browser_and_database
+    platform: browser
+    blocking: seed
+    acceptance:
+      - anonymous_subject_can_use_site_and_submit_feedback
+      - participant_registration_requires_verified_identity
+      - raffle_eligibility_false_while_is_anonymous_true
+      - upgrade_after_cutoff_does_not_change_snapshot
 
   page_score.route_matrix:
     state: partial
@@ -279,8 +461,9 @@ scenarios:
     platform: browser
     blocking: seed
     acceptance:
-      - tap_score_creates_one_idempotent_request
+      - anonymous_or_verified_tap_creates_one_idempotent_request
       - no_submit_button_required_for_score
+      - no_identity_wall
 
   page_score.numeric_saved_state:
     state: missing
@@ -322,7 +505,7 @@ scenarios:
     acceptance:
       - new_revision_score_saved_separately
       - previous_revision_history_preserved
-      - one_current_answer_per_participant_family_revision
+      - one_current_answer_per_subject_family_revision
       - page_revision_not_equal_to_build_sha_by_default
 
   page_score.cross_family_independent:
@@ -346,6 +529,7 @@ scenarios:
       - neither_is_required_for_page_score
       - event_id_attached_automatically_on_event_page
       - service_nps_link_available
+      - anonymous_subject_supported
 
   page_score.offline_idempotency:
     state: partial
@@ -356,6 +540,7 @@ scenarios:
       - offline_response_queued
       - online_flush_creates_exactly_one_row
       - honest_queued_copy_visible
+      - session_created_after_action_is_supported
 
   service_nps.hub_visible:
     state: prototype
@@ -370,6 +555,7 @@ scenarios:
       - standard_recommendation_question_visible
       - exact_zero_to_ten_scale
       - page_routes_do_not_repeat_second_service_nps_question
+      - anonymous_subject_supported
 
   service_nps.immediate_save:
     state: missing
@@ -377,9 +563,10 @@ scenarios:
     platform: browser
     blocking: seed
     acceptance:
-      - tap_creates_one_service_nps_request
+      - anonymous_or_verified_tap_creates_one_service_nps_request
       - saved_ui_reads_vasha_obshchaya_ocenka_number
       - edit_updates_current_service_revision
+      - no_identity_wall
 
   service_nps.independent_from_page_score:
     state: missing
@@ -401,6 +588,7 @@ scenarios:
       - screenshot_optional
       - comment_linked_to_service_revision
       - comment_does_not_change_page_score
+      - anonymous_subject_supported
 
   auth.browser_identity:
     state: partial
@@ -408,7 +596,9 @@ scenarios:
     platform: browser
     blocking: seed
     acceptance:
+      - starts_from_anonymous_focus_subject
       - final_target_real_email_or_magic_link_pass
+      - pre_upgrade_data_preserved
       - one_participant_registration
 
   auth.android_identity:
@@ -417,7 +607,9 @@ scenarios:
     platform: android
     blocking: seed
     acceptance:
+      - starts_from_anonymous_focus_subject
       - final_target_real_email_identity_pass
+      - pre_upgrade_data_preserved
       - native_keyboard_and_viewport_usable
 
   auth.iphone_supported_identity:
@@ -426,9 +618,9 @@ scenarios:
     platform: ios
     blocking: seed
     acceptance_any:
-      - native_otp_keyboard_and_verify_pass
-      - real_magic_link_pass
-      - real_yandex_identity_pass
+      - anonymous_to_native_otp_keyboard_and_verify_pass
+      - anonymous_to_real_magic_link_pass
+      - anonymous_to_real_yandex_identity_pass
 
   auth.yandex_identity:
     state: partial
@@ -436,18 +628,10 @@ scenarios:
     platform: browser_or_ios
     blocking: seed
     acceptance:
-      - real_consent_roundtrip
-      - one_auth_user
+      - real_consent_roundtrip_from_anonymous_subject
+      - one_permanent_auth_user
       - one_participant
-
-  auth.unverified_ineligible:
-    state: partial
-    layer: deployed_browser_and_database
-    platform: browser
-    blocking: seed
-    acceptance:
-      - marker_opens_site
-      - participant_or_raffle_row_not_created_without_verified_identity
+      - pre_upgrade_data_preserved
 
   auth.cap_boundary:
     state: partial
@@ -455,8 +639,9 @@ scenarios:
     platform: none
     blocking: expand_to_200
     acceptance:
+      - anonymous_subjects_do_not_consume_verified_participant_cap
       - repeat_registration_idempotent
-      - boundary_does_not_create_201st_participant
+      - boundary_does_not_create_201st_verified_participant
       - synthetic_rows_cleaned
 
   pwa.android_relaunch:
@@ -469,6 +654,7 @@ scenarios:
       - launcher_icon_open
       - standalone_mode
       - marker_preserved
+      - anonymous_auth_uid_preserved
 
   pwa.iphone_home_screen:
     state: missing
@@ -479,6 +665,7 @@ scenarios:
       - honest_add_to_home_screen_instructions_or_automation
       - home_icon_open
       - marker_preserved
+      - anonymous_auth_uid_preserved
 
   use.share:
     state: partial
@@ -503,6 +690,7 @@ scenarios:
     blocking: seed
     acceptance:
       - state_persists
+      - affects_anonymous_personalization
       - undo_works
 
   use.for_me:
@@ -512,6 +700,7 @@ scenarios:
     blocking: seed
     acceptance:
       - explicit_interest_change
+      - anonymous_profile_updates
       - visible_explanation_or_order_change
 
   artifacts.exact_collection:
@@ -530,9 +719,20 @@ scenarios:
     platform: none
     blocking: seed
     acceptance:
-      - one_receipt_per_participant_artifact_version
+      - one_receipt_per_focus_subject_artifact_version
+      - anonymous_subject_supported
       - replay_idempotent
       - local_storage_not_authoritative
+
+  artifacts.upgrade_preserves_receipts:
+    state: missing
+    layer: database_integration
+    platform: none
+    blocking: seed
+    acceptance:
+      - anonymous_receipts_remain_after_same_user_upgrade
+      - merge_deduplicates_same_artifact_version
+      - verified_eligibility_reads_preserved_receipts
 
   artifacts.threshold:
     state: missing
@@ -541,7 +741,8 @@ scenarios:
     blocking: seed
     acceptance:
       - nine_of_twelve_ineligible
-      - ten_of_twelve_eligible
+      - anonymous_ten_of_twelve_still_ineligible
+      - verified_ten_of_twelve_eligible
 
   stats.queryable:
     state: partial
@@ -549,7 +750,9 @@ scenarios:
     platform: operator
     blocking: seed
     acceptance:
-      - code_agent_can_query_participants_page_scores_service_nps_text_screenshot_artifacts_chances
+      - code_agent_can_query_anonymous_and_verified_subject_counts
+      - code_agent_can_query_page_scores_service_nps_text_screenshot_artifacts_chances
+      - anonymous_to_verified_link_counts_available
       - no_scheduled_report_dependency
       - counts_reconcile
 
@@ -568,9 +771,10 @@ scenarios:
     platform: none
     blocking: seed
     acceptance:
-      - base_one
-      - text_bonus_zero_or_one
-      - screenshot_bonus_zero_or_one
+      - anonymous_subject_has_zero_chances
+      - verified_base_one
+      - pre_upgrade_text_bonus_zero_or_one_after_linking
+      - pre_upgrade_screenshot_bonus_zero_or_one_after_linking
       - maximum_three
       - page_score_value_service_nps_value_sentiment_and_message_count_irrelevant
 
@@ -580,6 +784,7 @@ scenarios:
     platform: none
     blocking: seed
     acceptance:
+      - published_rules_include_anonymous_participation_and_upgrade
       - published_rules_include_cutoff_12_artifacts_10_threshold_chances_prize_and_three_day_response
 
   raffle.dry_draw:
@@ -589,6 +794,8 @@ scenarios:
     blocking: seed
     acceptance:
       - immutable_synthetic_snapshot
+      - anonymous_subjects_excluded
+      - linked_pre_auth_actions_included_once
       - weighted_winner
       - distinct_reserve
       - same_snapshot_same_result
@@ -601,6 +808,7 @@ scenarios:
     blocking: programme_end
     acceptance:
       - starts_after_2026_08_31_18_00_kaliningrad
+      - anonymous_subjects_excluded
       - winner_email_sent
       - three_calendar_day_deadline
       - reserve_promotion_supported
@@ -613,8 +821,9 @@ scenarios:
     blocking: seed
     acceptance:
       - exact_immutable_target
+      - invite_anonymous_feedback_upgrade_journey_terminal
       - all_seed_scenarios_terminal
-      - synthetic_data_cleanup_pass
+      - synthetic_anonymous_and_permanent_data_cleanup_pass
       - no_real_prize_or_cohort_email_sent
 
   operations.no_mass_p0:
@@ -623,7 +832,7 @@ scenarios:
     platform: operator
     blocking: expand_to_80
     acceptance:
-      - no_unresolved_mass_access_auth_feedback_or_data_loss_incident
+      - no_unresolved_mass_access_anonymous_identity_auth_feedback_or_data_loss_incident
 
   operations.feedback_queue_manageable:
     state: missing
@@ -631,7 +840,7 @@ scenarios:
     platform: operator
     blocking: expand_to_80
     acceptance:
-      - operator_can_open_and_process_new_text_and_screenshot_feedback
+      - operator_can_open_and_process_anonymous_and_verified_text_and_screenshot_feedback
 
   stats.counts_consistent:
     state: missing
@@ -639,7 +848,7 @@ scenarios:
     platform: operator
     blocking: expand_to_80
     acceptance:
-      - page_score_service_nps_feedback_artifact_and_chance_counts_reconcile
+      - anonymous_verified_page_score_service_nps_feedback_artifact_and_chance_counts_reconcile
 
   artifacts.receipt_integrity:
     state: missing
@@ -647,7 +856,8 @@ scenarios:
     platform: none
     blocking: expand_to_200
     acceptance:
-      - no_duplicate_participant_artifact_receipts
+      - no_duplicate_subject_artifact_receipts
+      - merge_does_not_duplicate_receipts
       - progress_recomputes_deterministically
 
   raffle.snapshot_rehearsal:
@@ -657,5 +867,7 @@ scenarios:
     blocking: expand_to_200
     acceptance:
       - production_shaped_synthetic_snapshot
+      - anonymous_subjects_excluded
+      - linked_pre_auth_actions_included_once
       - deterministic_receipt
       - winner_reserve_and_cleanup_pass
