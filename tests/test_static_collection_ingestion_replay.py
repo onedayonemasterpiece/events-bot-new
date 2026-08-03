@@ -83,6 +83,27 @@ def test_manifest_allows_only_parser_imported_at_warm_metadata(tmp_path):
         replay.validate_manifest(manifest, manifest_path=path)
 
 
+def test_manifest_allows_only_bounded_non_collection_warm_event_fields(tmp_path):
+    fixture = tmp_path / "packet.json"
+    fixture.write_text("{}", encoding="utf-8")
+    path = tmp_path / "manifest.json"
+    manifest = _manifest(fixture, adapter="telegram")
+    manifest["cases"][0]["allowed_warm_event_fields"] = [
+        "description",
+        "search_digest",
+    ]
+
+    cases = replay.validate_manifest(manifest, manifest_path=path)
+
+    assert cases[0]["allowed_warm_event_fields"] == [
+        "description",
+        "search_digest",
+    ]
+    manifest["cases"][0]["allowed_warm_event_fields"] = ["collection_decisions"]
+    with pytest.raises(ValueError, match="semantic or unsupported"):
+        replay.validate_manifest(manifest, manifest_path=path)
+
+
 def test_parser_warm_imported_at_is_explicit_operational_metadata():
     case = {
         "adapter": "parser",
@@ -730,6 +751,66 @@ def test_warm_receipt_fails_on_any_event_mutation():
 
     assert receipt["status"] == "FAIL"
     assert "warm_event_changed" in receipt["errors"]
+
+
+def test_warm_receipt_reports_acknowledged_non_collection_drift():
+    source = {
+        "id": 1,
+        "event_id": 1,
+        "source_type": "telegram",
+        "source_url": "https://t.me/real_source/44",
+        "source_text": "Source-bound fact.",
+    }
+    before_event = {
+        "id": 1,
+        "description": "Before",
+        "search_digest": "Before",
+        "collection_decisions": None,
+    }
+    after_event = {
+        **before_event,
+        "description": "After",
+        "search_digest": "After",
+    }
+    before = {
+        "quick_check": "ok",
+        "event_count": 1,
+        "event_source_count": 1,
+        "logical_sha256": "a" * 64,
+        "events": {"1": before_event},
+        "event_sources": {"1": source},
+    }
+    after = {
+        **before,
+        "logical_sha256": "b" * 64,
+        "events": {"1": after_event},
+    }
+    case = {
+        "allowed_warm_event_fields": ["description", "search_digest"],
+        "expected": {
+            "event_id": 1,
+            "source_id": 1,
+            "source_url": source["source_url"],
+            "source_type": "telegram",
+            "first_collection_calls": 0,
+            "warm_collection_calls": 0,
+            "first_collection_write": False,
+            "warm_collection_write": False,
+        },
+    }
+
+    receipt = replay._pass_receipt(
+        case=case,
+        pass_name="warm",
+        result={"status": "merged"},
+        trace=[],
+        before=before,
+        after=after,
+    )
+
+    assert receipt["status"] == "PASS_WITH_NON_COLLECTION_DRIFT"
+    assert receipt["errors"] == []
+    assert receipt["writes"]["non_collection_event_drift_only"] is True
 
 
 def test_receipt_payload_quote_must_be_grounded_in_bound_source():

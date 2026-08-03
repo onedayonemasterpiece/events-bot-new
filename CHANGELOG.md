@@ -7,7 +7,9 @@
   full-catalog product snapshot/monitor and StaticSiteBuilder artifacts. The
   current rolling/Pacific project-scoped Google limiter remains authoritative;
   PR B, owner gold/calibration, Astro routes, navigation, sitemap and publication
-  remain blocked.
+  remain blocked. The replay report now distinguishes an explicitly bounded
+  Telegram/VK prose-only warm drift from collection-plane changes, while still
+  requiring identical collection receipts/evidence and product output.
 
 - Fixed the Google AI registry after operator confirmation that all six API
   keys belong to different Google Cloud projects: each key now has an

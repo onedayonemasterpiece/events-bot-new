@@ -48,8 +48,25 @@ FACT_KEYS = (
     "family_suitable_decision",
     "joint_family_activity_decision",
 )
-PASS_STATUSES = {"PASS", "PASS_WITH_OPERATIONAL_METADATA"}
+PASS_STATUSES = {
+    "PASS",
+    "PASS_WITH_OPERATIONAL_METADATA",
+    "PASS_WITH_NON_COLLECTION_DRIFT",
+}
 PARSER_WARM_OPERATIONAL_FIELDS = {"imported_at"}
+WARM_NON_COLLECTION_EVENT_FIELDS = {
+    "description",
+    "search_digest",
+    "short_description",
+    "source_text",
+    # A prose rewrite can invalidate the separately maintained age assessment.
+    # These are provenance/cache metadata, not audience collection facts.
+    "age_assessment_input_hash",
+    "age_assessment_updated_at",
+    "age_restriction_decision_version",
+    "age_restriction_input_hash",
+    "age_restriction_updated_at",
+}
 MAX_CASES = 24
 TRACE_SAFE_KEYS = {
     "kind",
@@ -364,6 +381,28 @@ def validate_manifest(manifest: Mapping[str, Any], *, manifest_path: Path) -> li
             raise ValueError(
                 f"case {case_id}: only parser warm imported_at may be allowed"
             )
+        allowed_warm_event_fields = raw.get("allowed_warm_event_fields") or []
+        if (
+            not isinstance(allowed_warm_event_fields, list)
+            or any(not isinstance(item, str) for item in allowed_warm_event_fields)
+        ):
+            raise ValueError(
+                f"case {case_id}: allowed_warm_event_fields must be a string array"
+            )
+        allowed_warm_event_fields = [
+            item.strip() for item in allowed_warm_event_fields if item.strip()
+        ]
+        if len(set(allowed_warm_event_fields)) != len(allowed_warm_event_fields):
+            raise ValueError(
+                f"case {case_id}: allowed_warm_event_fields must not contain duplicates"
+            )
+        if allowed_warm_event_fields and (
+            adapter not in {"telegram", "vk"}
+            or not set(allowed_warm_event_fields) <= WARM_NON_COLLECTION_EVENT_FIELDS
+        ):
+            raise ValueError(
+                f"case {case_id}: allowed_warm_event_fields contains a semantic or unsupported field"
+            )
         normalized.append(
             {
                 **dict(raw),
@@ -383,6 +422,7 @@ def validate_manifest(manifest: Mapping[str, Any], *, manifest_path: Path) -> li
                 },
                 "adapter_options": dict(options),
                 "allowed_warm_event_source_fields": allowed_warm_source_fields,
+                "allowed_warm_event_fields": allowed_warm_event_fields,
             }
         )
         seen.add(case_id)
@@ -576,6 +616,17 @@ def _trace_summary(trace: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "labels": [str(row.get("label") or "") for row in safe],
         "trace": safe,
     }
+
+
+def _aggregate_pass_status(rows: Sequence[Mapping[str, Any]]) -> str:
+    statuses = {str(row.get("status") or "") for row in rows}
+    if any(status not in PASS_STATUSES for status in statuses):
+        return "FAIL"
+    if "PASS_WITH_NON_COLLECTION_DRIFT" in statuses:
+        return "PASS_WITH_NON_COLLECTION_DRIFT"
+    if "PASS_WITH_OPERATIONAL_METADATA" in statuses:
+        return "PASS_WITH_OPERATIONAL_METADATA"
+    return "PASS"
 
 
 async def _async_noop(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
@@ -895,12 +946,20 @@ def _pass_receipt(
         )
         if source_changed_ids and not operational_source_change:
             errors.append("warm_event_source_changed")
-        if event_changed_ids:
+        allowed_event_fields = set(case.get("allowed_warm_event_fields") or [])
+        non_collection_event_drift = bool(event_changed_ids) and (
+            bool(allowed_event_fields)
+            and event_changed_ids == [event_id]
+            and set(event_changed_keys) <= allowed_event_fields
+            and not collection_write
+        )
+        if event_changed_ids and not non_collection_event_drift:
             errors.append("warm_event_changed")
         if collection_write:
             errors.append("warm_collection_decisions_changed")
     else:
         operational_source_change = False
+        non_collection_event_drift = False
     evidence = _decision_evidence(event_after, source_row)
     if evidence["source_grounding_errors"]:
         errors.append("facts_v3_source_grounding_failed")
@@ -909,6 +968,8 @@ def _pass_receipt(
     status = "PASS" if not errors else "FAIL"
     if status == "PASS" and operational_source_change:
         status = "PASS_WITH_OPERATIONAL_METADATA"
+    if status == "PASS" and non_collection_event_drift:
+        status = "PASS_WITH_NON_COLLECTION_DRIFT"
     return {
         "pass": pass_name,
         "status": status,
@@ -931,7 +992,11 @@ def _pass_receipt(
             "allowed_warm_event_source_fields": list(
                 case.get("allowed_warm_event_source_fields") or []
             ),
+            "allowed_warm_event_fields": list(
+                case.get("allowed_warm_event_fields") or []
+            ),
             "operational_metadata_only": operational_source_change,
+            "non_collection_event_drift_only": non_collection_event_drift,
             "event_changed_keys": event_changed_keys,
             "logical_sha256_before": before.get("logical_sha256"),
             "logical_sha256_after": after.get("logical_sha256"),
@@ -1027,6 +1092,16 @@ async def run_manifest(
                         ):
                             passes[1]["errors"].append("product_normalized_output_changed")
                             passes[1]["status"] = "FAIL"
+                if len(passes) == 2 and (
+                    (passes[0].get("evidence") or {}).get(
+                        "collection_decisions_sha256"
+                    )
+                    != (passes[1].get("evidence") or {}).get(
+                        "collection_decisions_sha256"
+                    )
+                ):
+                    passes[1]["errors"].append("collection_evidence_changed")
+                    passes[1]["status"] = "FAIL"
                 case_reports.append(
                     {
                         "case_id": case["case_id"],
@@ -1034,18 +1109,7 @@ async def run_manifest(
                         "fixture_sha256": hashlib.sha256(
                             Path(str(case["fixture_path"])).read_bytes()
                         ).hexdigest(),
-                        "status": (
-                            "FAIL"
-                            if any(item["status"] not in PASS_STATUSES for item in passes)
-                            else (
-                                "PASS_WITH_OPERATIONAL_METADATA"
-                                if any(
-                                    item["status"] == "PASS_WITH_OPERATIONAL_METADATA"
-                                    for item in passes
-                                )
-                                else "PASS"
-                            )
-                        ),
+                        "status": _aggregate_pass_status(passes),
                         "passes": passes,
                     }
                 )
@@ -1074,18 +1138,7 @@ async def run_manifest(
         },
         "publication_side_effects": "disabled",
         "direct_apply_collection_decisions": False,
-        "status": (
-            "FAIL"
-            if any(item["status"] not in PASS_STATUSES for item in case_reports)
-            else (
-                "PASS_WITH_OPERATIONAL_METADATA"
-                if any(
-                    item["status"] == "PASS_WITH_OPERATIONAL_METADATA"
-                    for item in case_reports
-                )
-                else "PASS"
-            )
-        ),
+        "status": _aggregate_pass_status(case_reports),
         "cases": case_reports,
     }
 

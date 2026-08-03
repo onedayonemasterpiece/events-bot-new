@@ -44,6 +44,24 @@
           "uniqueItems": true,
           "items": {"const": "imported_at"}
         },
+        "allowed_warm_event_fields": {
+          "description": "Explicit acknowledgement of known non-collection Smart Update drift. Collection decisions are never allowed here.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "description",
+              "search_digest",
+              "short_description",
+              "source_text",
+              "age_assessment_input_hash",
+              "age_assessment_updated_at",
+              "age_restriction_decision_version",
+              "age_restriction_input_hash",
+              "age_restriction_updated_at"
+            ]
+          }
+        },
         "boundary_class": {
           "enum": [
             "child_directed",

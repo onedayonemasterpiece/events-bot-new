@@ -329,6 +329,18 @@ emit the field-level diff and use `PASS_WITH_OPERATIONAL_METADATA`. Event,
 other EventSource row remain immutable. The raw logical DB SHA is still recorded
 and may differ solely because of this timestamp.
 
+### Known Smart Update prose drift outside the collection plane
+
+For an immutable Telegram/VK packet, a manifest may acknowledge only the
+enumerated non-collection Event fields with `allowed_warm_event_fields`. The
+runner then reports `PASS_WITH_NON_COLLECTION_DRIFT`, never a plain `PASS`.
+This does not weaken the collection gate: warm collection calls/writes must
+still be zero, the full `collection_decisions` hash (facts and receipts) must
+remain identical, exact source binding/evidence must pass, and product
+normalized SHA must be stable. Identity/date/venue/ticket fields and
+`collection_decisions` cannot be allowlisted. The drift remains a separate
+Smart Update idempotency task rather than silently disappearing from evidence.
+
 ### Full current/future audience coverage
 
 StaticSiteBuilder consumes persisted facts and does not perform the LLM
