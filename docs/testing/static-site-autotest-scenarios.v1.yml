@@ -523,6 +523,11 @@ policies:
   playwright_webkit_substitutes_native_ios: false
   real_otp_video_trace_har: forbidden
   real_otp_parallel_on_single_mailbox: forbidden
+  fixed_test_identity_for_routine_otp: required
+  fresh_user_otp: protected_manual_only
+  background_outcome_may_be_reported_as_pass: false
+  mandatory_background_must_be_terminal_before_release: true
+  planned_scenario_blocks_release: false
   real_otp_for_ordinary_authenticated_business_scenario: forbidden
   session_fixture_product_otp_issue_count: 0
   session_fixture_external_mail_send_count: 0
