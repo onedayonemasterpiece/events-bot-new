@@ -1,4 +1,4 @@
-# Онбоардинг стандартного пользователя KenigEvents
+# Онбординг стандартного пользователя KenigEvents
 
 > **Статус:** owner-corrected canonical strategy v0.4 / product decision; не
 > описание уже выпущенного production behavior.  
