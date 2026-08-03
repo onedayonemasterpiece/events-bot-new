@@ -1,110 +1,126 @@
-# Варианты стратегии онбоардинга стандартного пользователя
+# Варианты стратегии онбординга стандартного пользователя
 
-> **Статус:** decision record после консолидации Gemini, ChatGPT и каноники
-> Hero-talk.  
+> **Статус:** owner-corrected decision record v0.4 после консолидации
+> исследований и каноники Hero-talk.  
 > **Выбранный baseline:** вариант A.  
 > **Связанные документы:** [каноническая onboarding strategy](README.md),
 > [согласование с Hero-talk](hero-talk-alignment-2026-08-03.md),
-> [синтез исследований](research/research-synthesis-2026-08-03.md).  
-> **Hero-talk dependency:** `docs/features/hero-talk/README.md` в stacked PR
-> [#291](https://github.com/onedayonemasterpiece/events-bot-new/pull/291).
+> [каноника Hero-talk](../hero-talk/README.md).  
+> **Ключевая owner correction:** артефакты-пасхалки входят в стандартный
+> онбординг и связаны с Клубом друзей Анонсов и регулярными розыгрышами билетов.
 
 ## 1. Что именно варьируется
 
-Исследования не дают оснований выбирать между линейным туром и контекстным
-онбордингом: тур отвергнут. После изучения каноники Hero-talk также нельзя
-выбирать между «статическим Hero» и «настоящим Hero-talk» как между вариантами
-онбординга.
+Линейный tour, tutorial wall и checklist отвергнуты. Также не существует выбора
+между «статическим Hero» и «настоящим Hero-talk»: semantic typed briefing,
+конечный курсор, optional tile media и coherent chain являются грамматикой
+самого Hero-talk.
 
-Typed briefing, конечная cursor semantics, optional tile media и coherent
-narrative chain — определяющая грамматика самого Hero-talk. Поэтому варианты A
-и B различаются не наличием этой грамматики, а:
+После owner correction больше нет отдельного «культурного варианта C».
+Артефактный контур присутствует и в A, и в B. Варианты различаются:
 
-- интенсивностью и частотой программ;
-- допустимой длиной цепочек;
-- использованием cross-session thread state;
-- глубиной return/personalized/editorial context;
-- campaign integration;
+- интенсивностью и частотой Hero-talk programmes;
+- длиной и памятью цепочек;
+- глубиной return/personal/editorial context;
+- способом продолжения artifact/club narrative между визитами;
+- уровнем campaign automation;
 - required Hero-talk release stage.
 
-Онбординг во всех вариантах владеет capability eligibility, competency,
-success, dismissal, mastery и suppression. Hero-talk владеет presentation,
-chain graph, page context, phrase packs и served plan.
+## 2. Общая продуктовая модель
 
-## 2. Сравнение
+```text
+базовая event value
+→ контекстное освоение полезных действий
+→ первая точная подсказка об артефакте
+→ находка и коллекция
+→ дальнейшее самостоятельное исследование
+→ Клуб друзей Анонсов
+→ регулярные розыгрыши билетов по опубликованным правилам
+```
 
-| Параметр | A. Сдержанный utility-first | B. Chain-rich contextual challenger | C. Культурный extension |
-|---|---|---|---|
-| Роль | Основная стратегия MVP | Challenger после доказанного baseline | Не onboarding MVP; post-release track |
-| Hero-talk grammar | Полная каноническая grammar | Та же grammar | Может использовать `artifact_hint`, но не определяет Hero-talk |
-| `home_hero` cold/unknown | Полезная static first scene; single/short generic chain | Та же первая сцена; richer nodes только после eligibility | Не используется для первой находки |
-| Greeting/local identity | Допустимы bounded `Добрый день` / `«кеска»` families | Те же, плюс связные return/editorial bridges | Только если культурно релевантно и не маскирует artifact |
-| Feature discovery | Одна capability, один CTA-path, редкая system-origin chain | То же правило, но richer context and cross-visit continuation | Core capability не обучается через artifact |
-| Page-end | Один точный next step после value; exact page context | Bounded contextual chain, open loop/resolution | Один добровольный cultural invitation |
-| Cross-session memory | Нет либо только технический terminal/suppression state | Bounded last/penultimate nodes, open loop, meaningful watermark | Отдельный bounded artifact ledger |
-| Personalization | Generic/local factual explanation | Persona packs, explicit-interest overlay, return delta после activation | Artifact action не taste signal |
-| Editorial/promo arcs | Нет campaign takeover; safe editorial single scene only after gates | Own editorial/campaign arcs after HT-7 and experiment | Отдельная cultural campaign |
-| Action echo | Immediate local echo; Hero may only continue confirmed result | То же | Отдельно от artifact feedback |
-| Login/PWA/permissions | Только после antecedent value и release/platform eligibility | То же | Не обязательны |
-| State complexity | Низкая/средняя | Высокая, но bounded | Отдельный небольшой домен |
-| Основной риск | Недостаточная заметность полезной функции | Banner blindness, narrative fatigue, false familiarity | CTA cannibalization, novelty и maintenance debt |
-| Required Hero-talk stages | HT-1, HT-2, HT-4, HT-5 по включённым surfaces | HT-6, HT-7, HT-10 поверх A | Отдельный artifact gate плюс Hero-talk stage, если используется hint |
+Артефакты являются частью onboarding и product identity, но не admission wall:
+без них доступны event facts, навигация, поиск, сохранение, календарь и внешние
+CTA.
 
-## 3. Общие неизменяемые правила A и B
+Focus-group leaderboard, NPS/feedback scoring и research missions не
+переносятся. Стандартный club/raffle programme — отдельная product mechanism и
+не запрещается этим правилом.
 
-1. Никаких tour, checklist, missions и глобального `onboarding_completed`.
-2. Core facts, navigation и event CTA доступны до Hero-talk runtime/state.
-3. First useful Hero fragment присутствует в static HTML.
-4. Одна новая capability за один page journey; coherent chain может содержать
-   несколько связанных nodes, но сохраняет один основной CTA-path.
-5. Safety, lifecycle, direct error и immediate action result не вытесняются
-   onboarding/editorial/campaign сценами.
-6. Exposure — delivery diagnostic, не competence и не taste.
-7. Immediate confirmation/Undo принадлежит action owner; Hero-talk не дублирует
-   его и может продолжать только подтверждённый результат.
-8. Dismissal/cooldown/mastery приходят из onboarding state и обязательны для
-   Hero-talk compiler/runtime.
-9. Golden-persona pack не меняет urgency, CTA, refusal, consent, caps, права или
-   result claim.
-10. Runtime не вызывает LLM; используются только заранее скомпилированные packs.
-11. При JS/storage/profile failure остаётся полезная generic first scene либо
-   статический fallback.
-12. Hero-talk CTR не является primary product outcome.
+## 3. Сравнение вариантов
 
-## 4. Вариант A — сдержанный utility-first contextual onboarding
+| Параметр | A. Сдержанный contextual baseline | B. Chain-rich contextual challenger |
+|---|---|---|
+| Роль | Основная стратегия запуска | Расширение после доказанного baseline |
+| Hero-talk grammar | Полная каноническая grammar | Та же grammar |
+| Cold/unknown home | Полезная generic static first scene; short owner-reviewed chain | Та же first scene; richer nodes только после eligibility |
+| Текущий `HomeHeroTalk` | Текущая реализация и migration donor; не rollback contract | То же |
+| Utility feature discovery | Одна capability/одна задача/один CTA-path | То же правило, но richer context и continuation |
+| Артефакты | Входят: точная первая подсказка, доступная находка, коллекция | Входят: серии, open loops, return delta, campaign continuity |
+| Клуб друзей Анонсов | Тихий handoff после реального artifact progress или explicit interest | Bounded cross-session club narrative и персональный статус после release |
+| Розыгрыши билетов | Объясняются только после rules/application release; без ложных обещаний | То же; дополнительно contextual return/status chains |
+| Page-end | Один точный next step после value | Bounded contextual chain с open-loop/resolution |
+| Cross-session memory | Минимум: suppression, collection state, factual result | Bounded last/penultimate nodes, open loop, meaningful watermark |
+| Personalization | Generic/local factual explanation | Persona packs и explicit-interest overlay после activation |
+| Editorial/campaign arcs | Редкие owner-reviewed programmes | Отдельные bounded programmes после HT-7 |
+| State complexity | Низкая/средняя | Выше, но bounded и versioned |
+| Основной риск | Недостаточная заметность полезных механик | Narrative fatigue, false familiarity, stale open loops |
+| Required stages | HT-1/2/4/5 + artifact collection gate | HT-6/7/10 поверх A |
 
-### 4.1. Назначение
+## 4. Общие неизменяемые правила A и B
 
-Помочь человеку получить пользу и освоить нужное действие, используя
-канонический Hero-talk без превращения сайта в непрерывный разговор или продажу
-функций.
+1. Нет tour, tutorial wall, checklist и глобального `onboarding_completed`.
+2. Core event value доступна до login, PWA, permissions, артефактов и клуба.
+3. Первый полезный Hero fragment присутствует в static HTML.
+4. За page journey продвигается одна новая смысловая задача и один основной
+   CTA-path; chain может содержать несколько связанных nodes.
+5. Safety, lifecycle, direct error и immediate action result выше onboarding,
+   artifact, club, editorial и promo messages.
+6. Exposure — delivery diagnostic, не competence, find, taste или consent.
+7. Immediate confirmation/Undo принадлежит action owner.
+8. Dismissal/cooldown/mastery обязательны для Hero-talk compiler/runtime.
+9. Persona pack не меняет urgency, CTA, refusal, consent, odds или права.
+10. Runtime не вызывает LLM; используются immutable precompiled packs.
+11. JS/storage/profile failure сохраняет generic static first scene и core UI.
+12. Hero-talk CTR и artifact completion не являются North Star.
+13. Artifact find не становится preference signal.
+14. Artifact threshold не подаёт raffle application автоматически.
+15. Club membership не означает consent на promo.
+16. Основные CTA события не маскируются под артефакт или розыгрыш.
 
-### 4.2. Базовый цикл
+## 5. Вариант A — сдержанный contextual onboarding
+
+### 5.1. Назначение
+
+Помочь человеку быстро получить event value, освоить нужные действия и узнать
+характер сервиса через первый артефакт, не превращая сайт в непрерывный разговор
+или игру с обязательным прогрессом.
+
+### 5.2. Базовый цикл
 
 ```text
 useful static first scene
 → real discovery/event task
 → inline help only on observable difficulty
-→ immediate action success/failure echo
+→ exact action success/failure echo
 → optional one-capability Hero-talk continuation
-→ where-to-find-result
-→ mastery/suppression
+→ first-artifact invitation when contextually eligible
+→ find/story/collection
+→ suppression or next independent task
 ```
 
-### 4.3. `home_hero`
+### 5.3. `home_hero`
 
-- текущий static `HomeHeroTalk` сохраняется только как rollback/fallback, а не
-  как второй продукт рядом с Hero-talk;
-- целевой renderer показывает полезную first scene сразу;
-- chain допускается длины один либо короткая owner-reviewed последовательность;
-- возможны greeting, local identity, today/weekend и service-orientation
-  families из HT-1/HT-2;
-- до activation нет persona packs, return delta и claims о пользовательских
-  интересах;
-- campaign/artifact не вытесняют узнаваемую ориентацию cold/unknown visitor;
-- typed motion не задерживает H1, CTA и начало ленты.
+- текущий `HomeHeroTalk.astro` — current implementation и donor для migration;
+- целевой renderer сам содержит полезную static first scene;
+- fallback/rollback реализуется generic served plan и kill switch внутри нового
+  механизма, а не возвратом к legacy-компоненту;
+- chain допускается длины один либо короткая owner-reviewed sequence;
+- greeting, local identity, today/weekend, service orientation и точный
+  `artifact_hint` допустимы по eligibility;
+- typed motion не задерживает H1, CTA и начало ленты;
+- cold/unknown user не получает сразу одновременно Search, PWA, club и raffle.
 
-### 4.4. Feature discovery
+### 5.4. Utility feature discovery
 
 Кандидат создаёт onboarding capability engine:
 
@@ -114,189 +130,175 @@ origin: system
 capability_id: <released capability>
 ```
 
-Hero-talk compiler может оформить его как coherent chain, но:
+Правила:
 
-- продвигается только одна capability;
-- один CTA ведёт к реальному released action/help surface;
-- подсказка не появляется без observable relevance;
-- success/mastery сразу подавляет базовый hint;
-- `Что умеет сайт` остаётся постоянным manual help route.
+- продвигается одна capability;
+- CTA ведёт к released action/help surface;
+- success/mastery подавляет базовый hint;
+- permanent help surface `Что умеет сайт` доступен независимо от prompts.
 
-### 4.5. Page-end
+### 5.5. Первый артефакт
 
-Для onboarding/continuity Page-end нужен antecedent value: event decision,
-successful action, saved state, completed recovery или explicit Help.
+Первый артефакт — отдельная onboarding capability/product arc:
+
+```yaml
+intent: artifact_hint
+origin: system | editorial_program
+collection_id: <active collection>
+artifact_id: <first eligible artifact>
+```
+
+Требования:
+
+- сначала человек видит полезный сайт, но не обязан достигать абстрактного
+  `mastered core`;
+- первая подсказка точная: page family и понятное место;
+- находка стабильна и доступна touch/keyboard/screen reader;
+- после find показываются точный echo, история и ссылка на коллекцию;
+- последующие подсказки могут быть менее прямыми;
+- progress не блокирует афишу и не влияет на taste profile;
+- пользователь может скрыть текущую artifact campaign.
+
+### 5.6. Клуб и регулярные розыгрыши
+
+Связь является частью стратегии, но exact rules не выдумываются.
+
+```text
+artifact progress / explicit club interest
+→ factual club invitation
+→ published membership/rules surface
+→ explicit application or membership action
+→ regular raffle lifecycle
+```
+
+До release запрещено говорить:
+
+- что пользователь уже участвует;
+- что threshold автоматически подал заявку;
+- что собранная сверх threshold коллекция повышает шансы;
+- сколько билетов, когда draw и на какие события, если это не опубликовано;
+- что login или promo consent обязательны для самой афиши.
+
+Текущий artifact collection contract с threshold/application является исходным
+документом для согласования с моделью Клуба друзей Анонсов, а не основанием
+вынести весь контур за onboarding.
+
+### 5.7. Page-end
 
 Допустимы:
 
 - открыть результат действия;
 - показать, где найти сохранённое;
-- продолжить по связанной дате/подборке;
-- объяснить factual local rerank;
-- после release — предложить PWA/identity/reminder.
+- продолжить exact event/festival/club context;
+- предложить точную подсказку первого артефакта;
+- открыть коллекцию после find;
+- объяснить клубный handoff после подтверждённого progress;
+- после release предложить PWA/identity/reminder.
 
-Общий editorial/event-context Page-end принадлежит Hero-talk и может быть
-eligible по exact page context без onboarding capability, но не маскируется под
-обучение.
+Один scroll не создаёт eligibility. Artifact hint может использовать page
+context, но не перекрывает canonical recommendations или transactional CTA.
 
-### 4.6. MVP capabilities
+### 5.8. Почему выбран
 
-- date/route orientation — постоянный IA, без prompt;
-- event facts — content hierarchy, не coachmark;
-- `Не интересно` — exact local echo + Undo;
-- like — точная реакция, не «сохранение»;
-- share — различать share-sheet invocation и copy success;
-- calendar/ICS — только после owner decision по семантике;
-- Search recovery — только после production acceptance Search;
-- Hero-talk feature delivery — только после HT-5.
-
-### 4.7. Почему выбран
-
-- сохраняет static-first и no-JS value;
-- соответствует канонической Hero-talk grammar, не создавая второй renderer;
-- ограничивает narrative burden и state complexity;
-- использует существующие live regions для action echo;
+- сохраняет static-first и event-first value;
+- соответствует канонической Hero-talk grammar;
+- не создаёт второй renderer;
+- включает ключевую локальную механику, а не откладывает её «на потом»;
+- отделяет artifact/club/raffle state от taste и utility state;
 - легче проверяется при небольшом трафике;
-- создаёт чистый baseline для richer chains.
+- даёт чистый baseline для richer narrative.
 
-### 4.8. Kill/rollback
+## 6. Вариант B — chain-rich contextual challenger
 
-Независимо отключается любая message family/chain, если:
+### 6.1. Назначение
 
-- ухудшается first-value time или core CTA;
-- появляется после permanent dismissal/mastery;
-- обещает не выпущенный результат;
-- нарушает one-capability/one-CTA-path rule;
-- создаёт duplicate announcement или focus obstruction;
-- неверно продолжает старый thread/open loop;
-- требует недоступный backend/platform capability;
-- не выдерживает novelty-aware guardrails.
+Расширить A более содержательными bounded return, personal, editorial,
+artifact-series и club arcs. Это не включение narrative mode: chain-first уже
+есть в A.
 
-## 5. Вариант B — chain-rich contextual challenger
+### 6.2. Дополнительные возможности
 
-### 5.1. Назначение
-
-Расширить уже работающий вариант A более содержательными bounded return,
-personalized, editorial и campaign arcs. Это не «включение narrative mode»:
-chain-first grammar уже присутствует в A.
-
-### 5.2. Дополнительные возможности
-
-- `home_hero` продолжает нить прошлого и позапрошлого meaningful visit;
+- продолжение нити прошлого и позапрошлого meaningful visit;
 - bounded open loops и resolutions;
-- `Пока вас не было` с единым `served_delta_id` для count и destination;
-- finite Golden-persona packs и explicit-interest overlay после activation;
+- `Пока вас не было` с единым `served_delta_id`;
+- finite Golden-persona packs после activation;
 - event/festival/club/program context;
-- собственные editorial/promo campaigns как кандидаты общего compiler;
-- richer Page-end bridges и cross-page/cross-session arcs;
-- один допустимый curiosity hook по каноническому ограничению.
+- серии коллекций и главы artifact campaign;
+- точный return status по коллекции, заявке и клубу после release;
+- own editorial/campaign programmes;
+- richer page-end bridges и cross-session arcs.
 
-### 5.3. Отдельный thread state
+### 6.3. Допустимый artifact/club thread
 
-Hero-talk хранит только bounded доказуемое состояние, например:
-
-```json
-{
-  "thread_id": "ht_...",
-  "last_node_ids": ["n3", "n2"],
-  "open_loop_id": "festival-kantata-education",
-  "last_action": "opened_event",
-  "expires_at": "..."
-}
+```text
+В прошлый раз вы нашли янтарного космонавта.
+→ В коллекции открылась новая морская глава.
+→ Показать доступную подсказку.
 ```
 
-Это не onboarding competency, не taste profile и не полный текст разговора.
-Потеря thread state ведёт к generic first scene, а не к выдуманному
-«продолжению».
+После rules release:
 
-### 5.4. Дополнительные риски
+```text
+Для заявки достаточно ещё одной находки.
+→ Открыть коллекцию и правила.
+```
 
-- Hero-talk становится баннером или сериализацией ради самой сериализации;
-- bounded memory ошибочно выглядит как «сайт всё помнит»;
-- persona pack создаёт creepy/familiar pressure;
-- campaign arc маскируется под system help;
-- open loop продолжается после изменения lifecycle/catalog;
-- chain compiler увеличивает editorial, QA и data-contract debt;
-- return delta count расходится с destination.
+Count, threshold, deadline и destination должны строиться из одного immutable
+served snapshot. При stale rules, suspended campaign или storage/identity
+uncertainty используется generic collection scene без персонального claim.
 
-### 5.5. Условия допуска
+### 6.4. Условия допуска
 
-Вариант B допускается только если:
+B допускается только если:
 
-1. вариант A и соответствующие HT stages имеют стабильный baseline;
-2. HT-6/HT-7 contracts реализованы и протестированы;
-3. thread/watermark/served-delta имеют exact evidence;
-4. owner принимает конкретные chain fixtures;
-5. purpose/source disclosure не смешиваются;
-6. treatment non-inferior по event discovery и core CTA;
-7. Day 7/14 novelty/fatigue review выполнен;
-8. существует независимый kill switch для program/chain family;
-9. causal rollout проходит HT-10.
+1. вариант A имеет стабильный baseline;
+2. HT-6/HT-7 contracts реализованы;
+3. artifact ledger и club/raffle state имеют release truth;
+4. thread/watermark/delta evidence точны;
+5. owner принимает concrete chain fixtures;
+6. purpose/source disclosure не смешиваются;
+7. treatment non-inferior по event discovery и core CTA;
+8. Day 7/14 novelty/fatigue review выполнен;
+9. существуют независимые kill switches;
+10. causal rollout проходит HT-10.
 
-## 6. Слой C — культурное исследование
+## 7. Kill/rollback
 
-### 6.1. Статус
+Отключается конкретная message/program family, если она:
 
-Это не вариант первичного онбординга. Он подключается после core value и может
-быть полностью отклонён без изменения A/B.
+- ухудшает first-value time или core CTA;
+- появляется после permanent dismissal/mastery;
+- обещает не выпущенный result или raffle status;
+- нарушает one-task/one-CTA-path rule;
+- создаёт duplicate announcement или focus obstruction;
+- продолжает stale artifact/club thread;
+- требует недоступный backend/platform capability;
+- делает artifact похожим на event badge или рекламу;
+- скрывает равноправный отказ;
+- загрязняет taste profile;
+- не выдерживает accessibility или novelty-aware guardrails.
 
-### 6.2. Допустимые формы
+Откат Hero-talk означает переход к generic static served plan. Он не означает
+архитектурный возврат к legacy `HomeHeroTalk` как отдельному продукту.
 
-#### C1. Мини-коллекция
+## 8. Решение владельца
 
-- одна тема;
-- небольшой bounded set;
-- первая подсказка точная;
-- progress локальный или отдельный ledger;
-- нет login, prize, streak, share advantage;
-- provenance, rights, freshness и archive state обязательны.
+Принято:
 
-#### C2. Статический культурный маршрут
+- baseline — вариант A;
+- артефакты-пасхалки входят в стандартный onboarding scope;
+- первый артефакт должен быть явно и доступно объяснён;
+- артефакты связаны с Клубом друзей Анонсов;
+- клуб предусматривает регулярные розыгрыши билетов;
+- focus-group-specific scoring не переносится;
+- variant C отменён;
+- `HomeHeroTalk` не является отдельным rollback contract.
 
-Обычная редакционная страница/подборка без hidden placements, progress и state.
-Это наиболее дешёвый и доступный способ проверить культурную ценность без
-gamification debt.
+Требуют отдельной спецификации, но не блокируют включение механики в стратегию:
 
-#### C3. After-action декоративный объект
-
-Появляется после подтверждённого core action, но не является наградой, не
-считается progress и не влияет на профиль. Допустим только после проверки, что
-не отвлекает от result echo.
-
-### 6.3. Не допускается
-
-- использовать находку как prerequisite функции;
-- маскировать artifact под event badge/quality mark;
-- считать find/completion activation или mastery;
-- выводить интерес к теме из находки;
-- требовать hover, motion, точное наведение или второй экран;
-- использовать focus-group prize model;
-- ставить opaque clue вместо первого понятного пути.
-
-## 7. Решение владельцу
-
-### Уже принято
-
-**Вариант A** остаётся каноническим onboarding baseline, но теперь определяется
-как сдержанная программа внутри настоящего Hero-talk, а не отказ от его typed и
-chain-first grammar.
-
-### Отложено
-
-**Вариант B** — более богатые cross-session/personal/editorial/campaign arcs,
-а не сам факт narrative chains. Он возвращается к owner review после HT-6,
-HT-7 и evidence HT-10.
-
-**Слой C** не блокирует onboarding MVP.
-
-### Решения, которые нужны независимо от варианта
-
-1. Семантика `like` / `favorite_saved` / `calendar_saved` / ICS и имя
-   `Моё`/`Мои события`.
-2. Какие capabilities действительно release-ready.
-3. Какой action-result copy подтверждается current implementation.
-4. Когда PWA/identity/reminder имеют доказанный antecedent value.
-5. Какой legal/data contract применим к target personalization.
-6. Какая Hero-talk first-scene/service-orientation family принимается в HT-1.
-7. Какие short chains входят в A, а какие требуют B/HT-6/HT-7.
-8. Имеет ли cultural layer самостоятельную ценность помимо novelty.
+- membership contract Клуба друзей Анонсов;
+- frequency и exact rules регулярных draws;
+- prize source/quantity/claim;
+- relationship между collection threshold, application и membership;
+- durable ledger, identity, privacy, legal и anti-abuse;
+- release order первой публичной коллекции и первого raffle.
