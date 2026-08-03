@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-03-cherryflash-cdn-tls-retry-storm.md`
+  - Scope: CherryFlash poster prefetch/Kaggle render, general
+    `video_popular_review_watchdog`, and public `static.kenigevents.ru` TLS.
+  - Must not regress: a deterministic failed daily render stops after two
+    persisted failed sessions; CDN readiness requires the public certificate SAN
+    and strict poster/ICS requests; restoration requires one controlled catch-up.
+
 - `INC-2026-07-29-mtproto-proxy-desktop-disconnect.md`
   - Scope: host-level `vpn-server` MTProto container, TCP `1443`, Telegram DC connectivity, persistent application-log mount and bounded retention.
   - Must not regress: current-day proxy logs must survive container recreation; old rotations must stay bounded; closure requires a live listener, fresh Telegram DC handshake evidence, downstream connections and disk-usage evidence.

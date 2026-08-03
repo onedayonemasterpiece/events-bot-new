@@ -1622,6 +1622,56 @@ async def _popular_review_session_exists_today(
     return False
 
 
+POPULAR_REVIEW_FAILED_SESSION_RETRY_CAP = 2
+
+
+async def _popular_review_failed_session_count_today(
+    db: Any,
+    *,
+    day_start_utc: datetime,
+    day_end_utc: datetime,
+    target_date: str,
+) -> int:
+    """Count persisted failures for today's scheduled CherryFlash slot.
+
+    Keep the retry budget in SQLite so a runtime restart cannot reset it and
+    turn a deterministic render or dependency failure into a ten-minute retry
+    storm.
+    """
+    if db is None or not hasattr(db, "raw_conn"):
+        return 0
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT status, selection_params
+            FROM videoannounce_session
+            WHERE profile_key = 'popular_review'
+              AND created_at >= ?
+              AND created_at < ?
+            ORDER BY id DESC
+            """,
+            (_utc_sql_text(day_start_utc), _utc_sql_text(day_end_utc)),
+        )
+        rows = await cur.fetchall()
+    count = 0
+    for status, selection_params_raw in rows:
+        if str(status or "").strip() != "FAILED":
+            continue
+        params: dict[str, Any] = {}
+        if isinstance(selection_params_raw, str) and selection_params_raw.strip():
+            try:
+                parsed = json.loads(selection_params_raw)
+            except Exception:
+                parsed = {}
+            if isinstance(parsed, dict):
+                params = parsed
+        elif isinstance(selection_params_raw, dict):
+            params = selection_params_raw
+        if str(params.get("target_date") or "").strip() == target_date:
+            count += 1
+    return count
+
+
 async def _partner_track_session_exists_today(
     db: Any,
     *,
@@ -2684,6 +2734,22 @@ async def maybe_dispatch_popular_review_watchdog(db: Any, bot: Any) -> bool:
         day_end_utc=day_end_local.astimezone(timezone.utc),
         target_date=target_date,
     ):
+        return False
+
+    failed_session_count = await _popular_review_failed_session_count_today(
+        db,
+        day_start_utc=day_start_local.astimezone(timezone.utc),
+        day_end_utc=day_end_local.astimezone(timezone.utc),
+        target_date=target_date,
+    )
+    if failed_session_count >= POPULAR_REVIEW_FAILED_SESSION_RETRY_CAP:
+        logging.error(
+            "SCHED video_popular_review watchdog retry cap reached "
+            "target_date=%s failed_sessions=%s cap=%s",
+            target_date,
+            failed_session_count,
+            POPULAR_REVIEW_FAILED_SESSION_RETRY_CAP,
+        )
         return False
 
     logging.error(
