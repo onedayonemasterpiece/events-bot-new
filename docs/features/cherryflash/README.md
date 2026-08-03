@@ -100,6 +100,10 @@ The icon layer uses the approved SVG Repo-derived assets packaged in `video_anno
   - the general `popular_review` watchdog has a persisted same-day cap of two
     failed sessions (scheduled attempt plus one recovery); an external CDN/render
     failure must not create a new Kaggle session every ten minutes.
+  - launcher-side prefetch keeps strict TLS and, for canonical
+    `static.kenigevents.ru/<object-path>` posters only, may retry the identical
+    object path via `storage.yandexcloud.net/kenigevents.ru/<object-path>` when
+    the CDN edge fails; this is an availability fallback, not a public URL rewrite.
   - partner-track watchdogs persist a per-profile/date failure budget: the scheduled attempt may receive one recovery attempt, but after two `FAILED` sessions the slot is deferred instead of launching every ten minutes until the deadline;
   - live intro selection comes from the session bundle. The `assets/cherryflash_selection.json` and root-level redundant copy are derived conveniences; canonical root-level `payload.json` must reconstruct the same primary event/poster selection if either is missing or empty. With `CHERRYFLASH_ROOT` set, the renderer fails closed rather than substituting the obsolete April fixture.
   - Eco event-date recall may select an event with a renderable source poster but no persisted `EventPoster.ocr_text`; the Eco partner profile therefore keeps that scene and adds the canonical title/date/location overlay (`allow_empty_ocr=true`) instead of dropping all primary scenes after selection. Other partner profiles retain their existing OCR requirement.

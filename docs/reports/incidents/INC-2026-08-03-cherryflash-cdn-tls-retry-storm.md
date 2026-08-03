@@ -117,8 +117,11 @@ persisted failed-session retry cap.
 
 - Added a persisted two-failed-session same-day cap to the general
   `popular_review` watchdog.
+- CherryFlash poster prefetch now retries canonical `static.kenigevents.ru`
+  object paths through the same bucket's strict-TLS Object Storage origin when
+  the CDN edge is unavailable; it never disables certificate verification.
 - Added a regression test reproducing the retry storm with two failed remote
-  CherryFlash sessions.
+  CherryFlash sessions and a test for the CDN-to-origin poster fallback.
 
 ## Follow-up Actions
 
