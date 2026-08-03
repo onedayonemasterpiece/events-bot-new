@@ -1,9 +1,12 @@
 ---
 import type { PreviewEvent } from '../../lib/types';
+import type { WeatherRouteKind } from '../../lib/weatherCalendar';
+import WeatherDateContext from '../WeatherDateContext.astro';
 import MobileListingRailRow from './MobileListingRailRow.astro';
 import MobileDateAccessory from './MobileDateAccessory.astro';
 
-interface Section { id: string; title?: string; subtitle?: string; events: PreviewEvent[]; }
+interface WeatherContext { date: string; dateLabel: string; routeKind: WeatherRouteKind; }
+interface Section { id: string; title?: string; subtitle?: string; events: PreviewEvent[]; weather?: WeatherContext; }
 interface City { name: string; count: number; }
 interface Props {
   sections: Section[];
@@ -18,6 +21,7 @@ interface Props {
   calendarDate?: string;
   weekendEnd?: string;
   amberArtifactTailEventId?: number | null;
+  weather?: WeatherContext;
 }
 const {
   sections,
@@ -32,6 +36,7 @@ const {
   calendarDate = '',
   weekendEnd = '',
   amberArtifactTailEventId = null,
+  weather,
 } = Astro.props;
 let rowIndex = 0;
 const total = sections.reduce((sum, section) => sum + section.events.length, 0);
@@ -46,6 +51,7 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
     <h1 id={`mobile-v23-title-${current}`}>{title}</h1>
     <p>{meta}</p>
   </section>
+  {weather ? <WeatherDateContext {...weather} surface="mobile" /> : null}
   <div class="mobile-listing-pin-sentinel" data-mobile-listing-pin-sentinel aria-hidden="true"></div>
   <div class="sticky-date mobile-listing-sticky-title" data-mobile-listing-sticky-title aria-hidden="true">
     <strong>{title}</strong><span>{meta}</span>
@@ -76,6 +82,7 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
             <span data-mobile-v23-group-count>{section.events.length}</span>
           </header>
         )}
+        {section.weather ? <WeatherDateContext {...section.weather} compact surface="mobile" /> : null}
         <div class="event-list">
           {section.events.map((event) => {
             const priority = rowIndex++ < 2;

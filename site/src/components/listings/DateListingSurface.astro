@@ -8,6 +8,7 @@ import ListingTimeNav from './ListingTimeNav.astro';
 import ExactTimeTimeline from './ExactTimeTimeline.astro';
 import MobileListingRailSurface from './MobileListingRailSurface.astro';
 import ListingPersonalFilter from '../ListingPersonalFilter.astro';
+import WeatherDateContext from '../WeatherDateContext.astro';
 import { getCurrentDate } from '../../lib/events';
 
 interface Props {
@@ -56,6 +57,7 @@ const mobileMeta = `${mobileDate} · ${mobileWeekday} · ${events.length} ${even
   data-listing-has-time-nav="true"
 >
   <ListingPageHeader title={title} dateLabel={dateLabel} count={events.length} current={kind} />
+  <WeatherDateContext date={date} dateLabel={dateLabel} routeKind={kind} surface="desktop" />
   <ListingDiscoveryRail
     cities={cities}
     total={events.length}
@@ -78,6 +80,7 @@ const mobileMeta = `${mobileDate} · ${mobileWeekday} · ${events.length} ${even
     cities={cities}
     calendarToday={getCurrentDate()}
     calendarDate={date}
+    weather={{ date, dateLabel, routeKind: kind }}
   />
   <div class="ke-listing-desktop-body" data-listing-representation="desktop">
   {kind === 'today' ? (
