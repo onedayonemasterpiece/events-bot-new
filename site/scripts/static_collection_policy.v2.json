@@ -55,6 +55,13 @@
       "definition_id": "ontology-v2.medieval",
       "definition": "Средневековье, рыцарская культура, замок как предмет программы, викинги либо living history являются содержанием события.",
       "insufficient_evidence": ["старый замок как площадка", "фэнтези", "один средневековый номер", "другой исторический период"]
+    },
+    "gastronomy": {
+      "definition_id": "gastronomy_v1",
+      "definition": "Еда или напитки являются основной либо равноправной центральной причиной участия в событии.",
+      "roles": ["core", "co_core", "adjacent", "incidental"],
+      "accepted_roles": ["core", "co_core"],
+      "insufficient_evidence": ["ресторан или кафе только как площадка", "обычный фуд-корт", "кофе-брейк или фуршет как сервис", "еда только в образном названии или как объект рисунка", "ярмарка без подтверждённого продуктового фокуса"]
     }
   },
   "public_projections": {
@@ -76,37 +83,14 @@
     "popular": {"strategy": "existing_ranking", "publication": "shadow"},
     "guests_russia": {"strategy": "grounded_people_fact", "publication": "shadow"},
     "guests_foreign": {"strategy": "grounded_people_fact", "publication": "shadow"},
-    "unusual": {
-      "strategy": "semantic_bge", "positive_prefix": "unusual.positive.", "negative_prefix": "unusual.hard_negative.",
-      "minimum_positive_similarity": 0.42, "minimum_margin": 0.02, "publication": "blocked"
-    },
-    "science_pop": {
-      "strategy": "semantic_bge", "definition_ref": "ontology-v2.science_pop", "positive_prefix": "science_pop.positive.", "negative_prefix": "science_pop.hard_negative.",
-      "minimum_positive_similarity": 0.42, "minimum_margin": 0.02, "publication": "blocked", "runtime_status": "pending_pr_b_prototypes_and_pr_c_adjudication"
-    },
-    "research_in_action": {
-      "strategy": "semantic_bge", "definition_ref": "ontology-v2.research_in_action", "positive_prefix": "research_in_action.positive.", "negative_prefix": "research_in_action.hard_negative.",
-      "minimum_positive_similarity": 0.42, "minimum_margin": 0.02, "publication": "blocked", "runtime_status": "pending_pr_b_prototypes_and_pr_c_adjudication"
-    },
-    "strong_impressions": {
-      "strategy": "semantic_bge", "definition_ref": "ontology-v2.strong_impressions", "positive_prefix": "strong_impressions.positive.", "negative_prefix": "strong_impressions.hard_negative.",
-      "minimum_positive_similarity": 0.42, "minimum_margin": 0.02, "publication": "blocked"
-    },
-    "medieval": {
-      "strategy": "semantic_bge", "definition_ref": "ontology-v2.medieval", "positive_prefix": "medieval.positive.", "negative_prefix": "medieval.hard_negative.",
-      "minimum_positive_similarity": 0.42, "minimum_margin": 0.02, "publication": "blocked"
-    },
-    "child_directed": {
-      "strategy": "semantic_bge_recall", "definition_ref": "ontology-v2.child_directed", "positive_prefix": "child_directed.positive.", "negative_prefix": "child_directed.hard_negative.",
-      "minimum_positive_similarity": 0.38, "minimum_margin": -0.01, "publication": "blocked", "publication_truth": "grounded_audience_decision"
-    },
-    "family_suitable": {
-      "strategy": "semantic_bge_recall", "definition_ref": "ontology-v2.family_suitable", "positive_prefix": "family_suitable.positive.", "negative_prefix": "family_suitable.hard_negative.",
-      "minimum_positive_similarity": 0.38, "minimum_margin": -0.01, "publication": "blocked", "publication_truth": "grounded_audience_decision"
-    },
-    "joint_family_activity": {
-      "strategy": "semantic_bge_recall", "definition_ref": "ontology-v2.joint_family_activity", "positive_prefix": "joint_family_activity.positive.", "negative_prefix": "joint_family_activity.hard_negative.",
-      "minimum_positive_similarity": 0.38, "minimum_margin": -0.01, "publication": "blocked", "publication_truth": "grounded_audience_decision"
-    }
+    "unusual": {"strategy": "semantic_bge", "positive_prefix": "unusual.positive.", "negative_prefix": "unusual.hard_negative.", "minimum_positive_similarity": 0.42, "minimum_margin": 0.02, "publication": "blocked"},
+    "science_pop": {"strategy": "semantic_bge", "definition_ref": "ontology-v2.science_pop", "positive_prefix": "science_pop.positive.", "negative_prefix": "science_pop.hard_negative.", "minimum_positive_similarity": 0.42, "minimum_margin": 0.02, "publication": "blocked", "runtime_status": "pending_pr_b_prototypes_and_pr_c_adjudication"},
+    "research_in_action": {"strategy": "semantic_bge", "definition_ref": "ontology-v2.research_in_action", "positive_prefix": "research_in_action.positive.", "negative_prefix": "research_in_action.hard_negative.", "minimum_positive_similarity": 0.42, "minimum_margin": 0.02, "publication": "blocked", "runtime_status": "pending_pr_b_prototypes_and_pr_c_adjudication"},
+    "strong_impressions": {"strategy": "semantic_bge", "definition_ref": "ontology-v2.strong_impressions", "positive_prefix": "strong_impressions.positive.", "negative_prefix": "strong_impressions.hard_negative.", "minimum_positive_similarity": 0.42, "minimum_margin": 0.02, "publication": "blocked"},
+    "medieval": {"strategy": "semantic_bge", "definition_ref": "ontology-v2.medieval", "positive_prefix": "medieval.positive.", "negative_prefix": "medieval.hard_negative.", "minimum_positive_similarity": 0.42, "minimum_margin": 0.02, "publication": "blocked"},
+    "gastronomy": {"strategy": "semantic_bge_recall", "definition_ref": "gastronomy_v1", "positive_prefix": "gastronomy.positive.", "negative_prefix": "gastronomy.hard_negative.", "minimum_positive_similarity": 0.38, "minimum_margin": -0.01, "publication": "blocked", "publication_truth": "source_grounded_gastronomy_v1", "runtime_status": "candidate_recall_and_owner_review"},
+    "child_directed": {"strategy": "semantic_bge_recall", "definition_ref": "ontology-v2.child_directed", "positive_prefix": "child_directed.positive.", "negative_prefix": "child_directed.hard_negative.", "minimum_positive_similarity": 0.38, "minimum_margin": -0.01, "publication": "blocked", "publication_truth": "grounded_audience_decision"},
+    "family_suitable": {"strategy": "semantic_bge_recall", "definition_ref": "ontology-v2.family_suitable", "positive_prefix": "family_suitable.positive.", "negative_prefix": "family_suitable.hard_negative.", "minimum_positive_similarity": 0.38, "minimum_margin": -0.01, "publication": "blocked", "publication_truth": "grounded_audience_decision"},
+    "joint_family_activity": {"strategy": "semantic_bge_recall", "definition_ref": "ontology-v2.joint_family_activity", "positive_prefix": "joint_family_activity.positive.", "negative_prefix": "joint_family_activity.hard_negative.", "minimum_positive_similarity": 0.38, "minimum_margin": -0.01, "publication": "blocked", "publication_truth": "grounded_audience_decision"}
   }
 }
