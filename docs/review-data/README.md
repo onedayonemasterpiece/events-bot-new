@@ -102,3 +102,13 @@ Validator пересчитывает этот hash во всех seed rows и в
 production evidence export; `seed_builder_repo_sha` — версия source binder;
 `integration_repo_sha` — воспроизводимая PR-A integration base. Они не
 схлопываются обратно в неоднозначный `generator_repo_sha`.
+
+## Audience live regression pack
+
+`static_collections_audience_live_regression_v1.json` — отдельный от
+синтетических unit fixtures provisional-набор реальных event IDs для shadow
+product monitor. Он фиксирует living positives и грубые false positives по
+`child_directed`, `family_suitable`, `joint_family_activity` и производному
+`kids` union на дату 2026-08-03. Missing positive даёт `WATCH`, возвращение
+known false positive — `FAIL`. Файл не является owner gold, threshold/calibration
+artifact или разрешением публикации.

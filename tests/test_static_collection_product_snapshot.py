@@ -6,6 +6,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 SITE_SCRIPTS = ROOT / "site" / "scripts"
 if str(SITE_SCRIPTS) not in sys.path:
@@ -96,7 +98,53 @@ def test_snapshot_uses_only_direct_facts_v3_and_kids_is_child_or_family():
     assert snapshot["source_scope"] == "unit-test-fixture"
     assert snapshot["evidence_trust_scope"] == "all"
     assert snapshot["provider_calls"] == 0
+    assert snapshot["coverage"] == {
+        "status": "unknown",
+        "catalog_event_count": 3,
+        "candidate_event_count": None,
+        "evaluated_event_count": None,
+        "deferred_event_count": None,
+        "unprocessed_event_count": None,
+        "candidate_event_ids_sha256": None,
+        "evaluated_event_ids_sha256": None,
+        "deferred_event_ids_sha256": None,
+        "unprocessed_event_ids_sha256": None,
+        "generator_command": None,
+    }
     assert product.validate_product_snapshot(snapshot) == {"valid": True, "errors": []}
+
+
+def test_explicit_coverage_is_hash_bound_and_complete_requires_no_unprocessed():
+    coverage = {
+        "status": "complete",
+        "candidate_event_count": 3,
+        "evaluated_event_count": 2,
+        "deferred_event_count": 1,
+        "unprocessed_event_count": 0,
+        "candidate_event_ids_sha256": "a" * 64,
+        "evaluated_event_ids_sha256": "b" * 64,
+        "deferred_event_ids_sha256": "c" * 64,
+        "unprocessed_event_ids_sha256": "d" * 64,
+        "generator_command": "python scripts/backfill_static_collection_facts.py --plan",
+    }
+    snapshot = product.build_product_snapshot(
+        [_event(1), _event(2), _event(3)],
+        collection_decisions_by_id={},
+        source_records_by_event={},
+        current_date="2026-08-02",
+        generated_at="2026-08-02T12:00:00Z",
+        source_scope="full-current-future-shadow",
+        coverage=coverage,
+    )
+
+    assert snapshot["coverage"]["status"] == "complete"
+    assert snapshot["coverage"]["catalog_event_count"] == 3
+    assert product.validate_product_snapshot(snapshot)["valid"] is True
+    with pytest.raises(ValueError, match="zero unprocessed"):
+        product.normalize_coverage(
+            {**coverage, "unprocessed_event_count": 1, "deferred_event_count": 0},
+            catalog_event_count=3,
+        )
 
 
 def test_mutual_link_family_dedupes_deterministically_without_fact_transfer():

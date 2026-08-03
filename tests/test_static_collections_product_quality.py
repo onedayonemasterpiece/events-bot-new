@@ -18,6 +18,9 @@ sys.modules[SPEC.name] = quality
 SPEC.loader.exec_module(quality)
 
 FIXTURE_DIR = ROOT / "tests" / "fixtures" / "static_collections_product_quality"
+LIVE_REGRESSION = (
+    ROOT / "docs" / "review-data" / "static_collections_audience_live_regression_v1.json"
+)
 
 
 def load(name: str) -> dict:
@@ -35,6 +38,34 @@ def evaluate(current: dict, *, baseline: dict | None = None, regression: dict | 
 
 
 class StaticCollectionsProductQualityTests(unittest.TestCase):
+    def test_partial_or_unknown_coverage_is_watch(self) -> None:
+        current = load("current.json")
+        current["coverage"] = {
+            "status": "partial",
+            "candidate_event_count": 10,
+            "evaluated_event_count": 7,
+            "deferred_event_count": 1,
+            "unprocessed_event_count": 2,
+        }
+        report = evaluate(current, baseline=load("baseline.json"))
+        self.assertEqual(report["status"], "WATCH")
+        self.assertIn("coverage_partial", {item["code"] for item in report["issues"]})
+        current.pop("coverage")
+        report = evaluate(current, baseline=load("baseline.json"))
+        self.assertIn("coverage_unknown", {item["code"] for item in report["issues"]})
+
+    def test_live_regression_pack_uses_real_disjoint_audience_examples(self) -> None:
+        pack = json.loads(LIVE_REGRESSION.read_text(encoding="utf-8"))
+        self.assertFalse(pack["publication_eligible"])
+        expected_ids = {6737, 6797, 6562, 7326, 7372, 7307, 7102, 7258, 7290}
+        seen: set[int] = set()
+        for config in pack["collections"].values():
+            positives = set(config.get("must_include_event_ids") or [])
+            negatives = set(config.get("must_exclude_event_ids") or [])
+            self.assertTrue(positives.isdisjoint(negatives))
+            seen.update(positives | negatives)
+        self.assertEqual(seen, expected_ids)
+
     def test_example_fixture_reports_watch_not_failure(self) -> None:
         report = evaluate(
             load("current.json"),

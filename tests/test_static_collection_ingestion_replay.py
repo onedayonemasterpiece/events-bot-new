@@ -68,6 +68,103 @@ def test_manifest_requires_reproducible_call_and_write_expectations(tmp_path):
         replay.validate_manifest(manifest, manifest_path=path)
 
 
+def test_manifest_allows_only_parser_imported_at_warm_metadata(tmp_path):
+    fixture = tmp_path / "packet.json"
+    fixture.write_text("{}", encoding="utf-8")
+    path = tmp_path / "manifest.json"
+    manifest = _manifest(fixture, adapter="parser")
+    manifest["cases"][0]["allowed_warm_event_source_fields"] = ["imported_at"]
+
+    cases = replay.validate_manifest(manifest, manifest_path=path)
+
+    assert cases[0]["allowed_warm_event_source_fields"] == ["imported_at"]
+    manifest["cases"][0]["adapter"] = "vk"
+    with pytest.raises(ValueError, match="only parser warm imported_at"):
+        replay.validate_manifest(manifest, manifest_path=path)
+
+
+def test_parser_warm_imported_at_is_explicit_operational_metadata():
+    case = {
+        "adapter": "parser",
+        "allowed_warm_event_source_fields": ["imported_at"],
+        "expected": {
+            "event_id": 1,
+            "source_id": 7,
+            "source_url": "https://example.test/event",
+            "source_type": "parser:yantarhall",
+            "first_collection_calls": 0,
+            "warm_collection_calls": 0,
+            "first_collection_write": False,
+            "warm_collection_write": False,
+        },
+    }
+    event = {"id": 1, "collection_decisions": None}
+    source_before = {
+        "id": 7,
+        "event_id": 1,
+        "source_url": "https://example.test/event",
+        "source_type": "parser:yantarhall",
+        "source_text": "exact source",
+        "imported_at": "2026-08-03T08:00:00+00:00",
+    }
+    source_after = {
+        **source_before,
+        "imported_at": "2026-08-03T09:00:00+00:00",
+    }
+    receipt = replay._pass_receipt(
+        case=case,
+        pass_name="warm",
+        result={"status": "ok"},
+        trace=[],
+        before={
+            "quick_check": "ok",
+            "event_count": 1,
+            "event_source_count": 1,
+            "events": {"1": event},
+            "event_sources": {"7": source_before},
+            "logical_sha256": "a" * 64,
+        },
+        after={
+            "quick_check": "ok",
+            "event_count": 1,
+            "event_source_count": 1,
+            "events": {"1": event},
+            "event_sources": {"7": source_after},
+            "logical_sha256": "b" * 64,
+        },
+    )
+
+    assert receipt["status"] == "PASS_WITH_OPERATIONAL_METADATA"
+    assert receipt["writes"]["operational_metadata_only"] is True
+    assert receipt["writes"]["changed_event_source_fields"] == {7: ["imported_at"]}
+
+    changed_source_text = {**source_after, "source_text": "changed"}
+    rejected = replay._pass_receipt(
+        case=case,
+        pass_name="warm",
+        result={"status": "ok"},
+        trace=[],
+        before={
+            "quick_check": "ok",
+            "event_count": 1,
+            "event_source_count": 1,
+            "events": {"1": event},
+            "event_sources": {"7": source_before},
+            "logical_sha256": "a" * 64,
+        },
+        after={
+            "quick_check": "ok",
+            "event_count": 1,
+            "event_source_count": 1,
+            "events": {"1": event},
+            "event_sources": {"7": changed_source_text},
+            "logical_sha256": "c" * 64,
+        },
+    )
+    assert rejected["status"] == "FAIL"
+    assert "warm_event_source_changed" in rejected["errors"]
+
+
 def test_adapter_result_redacts_source_material_urls_and_secrets():
     safe = replay._safe_adapter_result(
         {

@@ -39,6 +39,7 @@ LABEL_MODES = {
 }
 EVIDENCE_TRUST_SCOPES = {"all", "trusted"}
 TRUSTED_LEVELS = {"official", "high"}
+COVERAGE_STATUSES = {"complete", "partial", "unknown"}
 
 
 def _canonical_json(value: Any) -> bytes:
@@ -278,6 +279,64 @@ def normalized_visible_output(snapshot: Mapping[str, Any]) -> dict[str, list[tup
     return normalized
 
 
+def normalize_coverage(
+    coverage: Mapping[str, Any] | None,
+    *,
+    catalog_event_count: int,
+) -> dict[str, Any]:
+    """Normalize explicit full-shadow coverage without guessing candidate recall."""
+
+    raw = dict(coverage or {})
+    status = str(raw.get("status") or "unknown").strip().casefold()
+    if status not in COVERAGE_STATUSES:
+        raise ValueError(f"unsupported coverage status: {status}")
+    normalized: dict[str, Any] = {
+        "status": status,
+        "catalog_event_count": int(catalog_event_count),
+        "candidate_event_count": None,
+        "evaluated_event_count": None,
+        "deferred_event_count": None,
+        "unprocessed_event_count": None,
+        "candidate_event_ids_sha256": raw.get("candidate_event_ids_sha256"),
+        "evaluated_event_ids_sha256": raw.get("evaluated_event_ids_sha256"),
+        "deferred_event_ids_sha256": raw.get("deferred_event_ids_sha256"),
+        "unprocessed_event_ids_sha256": raw.get("unprocessed_event_ids_sha256"),
+        "generator_command": raw.get("generator_command"),
+    }
+    count_fields = (
+        "candidate_event_count",
+        "evaluated_event_count",
+        "deferred_event_count",
+        "unprocessed_event_count",
+    )
+    supplied_counts = 0
+    for field in count_fields:
+        value = raw.get(field)
+        if value is None:
+            continue
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"coverage {field} must be a non-negative integer")
+        normalized[field] = value
+        supplied_counts += 1
+    if status != "unknown" and supplied_counts != len(count_fields):
+        raise ValueError("complete/partial coverage requires all count fields")
+    if supplied_counts == len(count_fields):
+        candidate_count = int(normalized["candidate_event_count"])
+        accounted = sum(
+            int(normalized[field])
+            for field in (
+                "evaluated_event_count",
+                "deferred_event_count",
+                "unprocessed_event_count",
+            )
+        )
+        if accounted != candidate_count:
+            raise ValueError("coverage evaluated+deferred+unprocessed must equal candidates")
+        if status == "complete" and int(normalized["unprocessed_event_count"]) != 0:
+            raise ValueError("complete coverage requires zero unprocessed events")
+    return normalized
+
+
 def build_product_snapshot(
     events: Sequence[Mapping[str, Any]],
     *,
@@ -287,6 +346,7 @@ def build_product_snapshot(
     generated_at: str,
     source_scope: str = "standalone-db",
     evidence_trust_scope: str = "all",
+    coverage: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build one deterministic product projection from already-extracted facts."""
 
@@ -306,6 +366,10 @@ def build_product_snapshot(
         if event_id > 0 and start and end and end >= current and lifecycle == "active":
             eligible.append(event)
     eligible.sort(key=lambda row: (_date(row.get("start_date", row.get("date"))) or "", _event_id(row)))
+    normalized_coverage = normalize_coverage(
+        coverage,
+        catalog_event_count=len(eligible),
+    )
     families = normalize_mutual_occurrence_families(eligible)
     by_id = {_event_id(event): event for event in eligible}
     sources_by_event: dict[int, dict[int, dict[str, Any]]] = {}
@@ -411,6 +475,7 @@ def build_product_snapshot(
         ],
         "facts": input_facts,
         "sources": sorted(input_sources, key=lambda row: (row["event_id"], row["source_id"])),
+        "coverage": normalized_coverage,
     }
     snapshot: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -421,6 +486,7 @@ def build_product_snapshot(
         "evidence_trust_scope": evidence_trust_scope,
         "input_fingerprint": stable_hash(input_projection),
         "provider_calls": 0,
+        "coverage": normalized_coverage,
         "publication": {
             "status": "blocked",
             "allowed_modes": ["shadow", "experimental"],
@@ -447,6 +513,20 @@ def validate_product_snapshot(snapshot: Mapping[str, Any]) -> dict[str, Any]:
         errors.append("evidence_trust_scope_invalid")
     if snapshot.get("provider_calls") != 0:
         errors.append("provider_calls_must_be_zero")
+    coverage = snapshot.get("coverage")
+    if not isinstance(coverage, Mapping):
+        errors.append("coverage_missing")
+    else:
+        try:
+            normalized_coverage = normalize_coverage(
+                coverage,
+                catalog_event_count=int(coverage.get("catalog_event_count") or 0),
+            )
+        except (TypeError, ValueError) as exc:
+            errors.append(f"coverage_invalid:{exc}")
+        else:
+            if dict(coverage) != normalized_coverage:
+                errors.append("coverage_not_canonical")
     publication = snapshot.get("publication")
     if not isinstance(publication, Mapping) or publication.get("status") != "blocked":
         errors.append("publication_must_be_blocked")
@@ -590,10 +670,21 @@ def main() -> int:
         default="all",
         help="Optional evidence trust filter; separate from stage provenance.",
     )
+    parser.add_argument(
+        "--coverage-json",
+        type=Path,
+        help="Explicit full-shadow candidate/evaluated/deferred/unprocessed coverage receipt.",
+    )
     args = parser.parse_args()
     uri = f"file:{Path(args.db).resolve().as_posix()}?mode=ro"
     with sqlite3.connect(uri, uri=True) as con:
         events, decisions, sources = load_snapshot_inputs(con, current_date=args.current_date)
+    coverage = None
+    if args.coverage_json:
+        decoded = json.loads(args.coverage_json.read_text(encoding="utf-8"))
+        if not isinstance(decoded, Mapping):
+            raise SystemExit("coverage JSON must be an object")
+        coverage = decoded
     snapshot = build_product_snapshot(
         events,
         collection_decisions_by_id=decisions,
@@ -602,6 +693,7 @@ def main() -> int:
         generated_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         source_scope=args.source_scope,
         evidence_trust_scope=args.evidence_trust_scope,
+        coverage=coverage,
     )
     validation = validate_product_snapshot(snapshot)
     if not validation["valid"]:

@@ -239,6 +239,23 @@ def evaluate_snapshot(
         issues.append(Issue("fail", "collections_missing", "Snapshot contains no collections."))
         collections = {}
 
+    coverage = snapshot.get("coverage")
+    coverage_status = "unknown"
+    if isinstance(coverage, Mapping):
+        coverage_status = str(coverage.get("status") or "unknown").strip().casefold()
+    if coverage_status not in {"complete", "partial", "unknown"}:
+        issues.append(
+            Issue("fail", "coverage_invalid", f"Unsupported coverage status: {coverage_status}.")
+        )
+    elif coverage_status != "complete":
+        issues.append(
+            Issue(
+                "watch",
+                f"coverage_{coverage_status}",
+                "Current/future audience candidate coverage is not complete; supply is provisional.",
+            )
+        )
+
     baseline_collections = baseline.get("collections")
     if not isinstance(baseline_collections, Mapping):
         baseline_collections = {}
@@ -588,6 +605,7 @@ def evaluate_snapshot(
         "today": today.isoformat(),
         "snapshot_generated_at": generated_at.isoformat().replace("+00:00", "Z") if generated_at else None,
         "source_scope": snapshot.get("source_scope"),
+        "coverage": dict(coverage) if isinstance(coverage, Mapping) else {"status": "unknown"},
         "input_fingerprint": current_input,
         "normalized_output_sha256": normalized_output_fingerprint(snapshot),
         "collections": summaries,
@@ -603,6 +621,7 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         f"- Overall: **{report.get('status')}**",
         f"- Today: `{report.get('today')}`",
         f"- Source scope: `{report.get('source_scope') or 'unspecified'}`",
+        f"- Coverage: `{(report.get('coverage') or {}).get('status', 'unknown')}`",
         f"- Output SHA-256: `{report.get('normalized_output_sha256')}`",
         "",
         "| Collection | Mode | Status | Families | 14d | 30d | 90d | Nearest | Added | Removed | Duplicates | Review/source blockers |",

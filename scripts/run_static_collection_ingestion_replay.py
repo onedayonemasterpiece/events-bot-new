@@ -48,6 +48,8 @@ FACT_KEYS = (
     "family_suitable_decision",
     "joint_family_activity_decision",
 )
+PASS_STATUSES = {"PASS", "PASS_WITH_OPERATIONAL_METADATA"}
+PARSER_WARM_OPERATIONAL_FIELDS = {"imported_at"}
 MAX_CASES = 24
 TRACE_SAFE_KEYS = {
     "kind",
@@ -340,6 +342,28 @@ def validate_manifest(manifest: Mapping[str, Any], *, manifest_path: Path) -> li
                 raise ValueError(
                     f"case {case_id}: Telegram source_username/message_id are required"
                 )
+        allowed_warm_source_fields = raw.get("allowed_warm_event_source_fields") or []
+        if (
+            not isinstance(allowed_warm_source_fields, list)
+            or any(not isinstance(item, str) for item in allowed_warm_source_fields)
+        ):
+            raise ValueError(
+                f"case {case_id}: allowed_warm_event_source_fields must be a string array"
+            )
+        allowed_warm_source_fields = [
+            item.strip() for item in allowed_warm_source_fields if item.strip()
+        ]
+        if len(set(allowed_warm_source_fields)) != len(allowed_warm_source_fields):
+            raise ValueError(
+                f"case {case_id}: allowed_warm_event_source_fields must not contain duplicates"
+            )
+        if allowed_warm_source_fields and (
+            adapter != "parser"
+            or set(allowed_warm_source_fields) != PARSER_WARM_OPERATIONAL_FIELDS
+        ):
+            raise ValueError(
+                f"case {case_id}: only parser warm imported_at may be allowed"
+            )
         normalized.append(
             {
                 **dict(raw),
@@ -358,6 +382,7 @@ def validate_manifest(manifest: Mapping[str, Any], *, manifest_path: Path) -> li
                     "warm_collection_write": bool(expected.get("warm_collection_write", False)),
                 },
                 "adapter_options": dict(options),
+                "allowed_warm_event_source_fields": allowed_warm_source_fields,
             }
         )
         seen.add(case_id)
@@ -823,6 +848,13 @@ def _pass_receipt(
     source_changed_ids = _changed_ids(
         before.get("event_sources") or {}, after.get("event_sources") or {}
     )
+    source_changed_fields = {
+        source_id: _changed_keys(
+            (before.get("event_sources") or {}).get(str(source_id)),
+            (after.get("event_sources") or {}).get(str(source_id)),
+        )
+        for source_id in source_changed_ids
+    }
     event_changed_keys = _changed_keys(event_before, event_after)
     collection_write = collection_before != collection_after
     summary = _trace_summary(trace)
@@ -853,20 +885,33 @@ def _pass_receipt(
             errors.append("warm_event_count_changed")
         if after.get("event_source_count") != before.get("event_source_count"):
             errors.append("warm_event_source_count_changed")
-        if source_changed_ids:
+        allowed_source_fields = set(case.get("allowed_warm_event_source_fields") or [])
+        resolved_source_id = int(source_row["id"]) if source_row is not None else None
+        operational_source_change = bool(source_changed_ids) and (
+            bool(allowed_source_fields)
+            and source_changed_ids == [resolved_source_id]
+            and set(source_changed_fields.get(resolved_source_id) or [])
+            <= allowed_source_fields
+        )
+        if source_changed_ids and not operational_source_change:
             errors.append("warm_event_source_changed")
         if event_changed_ids:
             errors.append("warm_event_changed")
         if collection_write:
             errors.append("warm_collection_decisions_changed")
+    else:
+        operational_source_change = False
     evidence = _decision_evidence(event_after, source_row)
     if evidence["source_grounding_errors"]:
         errors.append("facts_v3_source_grounding_failed")
     if evidence["receipt_grounding_errors"]:
         errors.append("facts_v3_receipt_grounding_failed")
+    status = "PASS" if not errors else "FAIL"
+    if status == "PASS" and operational_source_change:
+        status = "PASS_WITH_OPERATIONAL_METADATA"
     return {
         "pass": pass_name,
-        "status": "PASS" if not errors else "FAIL",
+        "status": status,
         "errors": errors,
         "adapter_result": _safe_adapter_result(result),
         "resolved": {
@@ -882,6 +927,11 @@ def _pass_receipt(
             "collection_decisions": int(collection_write),
             "changed_event_ids": event_changed_ids,
             "changed_event_source_ids": source_changed_ids,
+            "changed_event_source_fields": source_changed_fields,
+            "allowed_warm_event_source_fields": list(
+                case.get("allowed_warm_event_source_fields") or []
+            ),
+            "operational_metadata_only": operational_source_change,
             "event_changed_keys": event_changed_keys,
             "logical_sha256_before": before.get("logical_sha256"),
             "logical_sha256_after": after.get("logical_sha256"),
@@ -966,7 +1016,7 @@ async def run_manifest(
                     # guards can return an ordinary ``invalid`` result (rather than
                     # raising), which is still visible here as a failed receipt
                     # because the expected source/event binding was not created.
-                    if pass_receipt["status"] != "PASS":
+                    if pass_receipt["status"] not in PASS_STATUSES:
                         break
                 if product_artifact_dir is not None:
                     if len(passes) == 2:
@@ -985,7 +1035,16 @@ async def run_manifest(
                             Path(str(case["fixture_path"])).read_bytes()
                         ).hexdigest(),
                         "status": (
-                            "PASS" if all(item["status"] == "PASS" for item in passes) else "FAIL"
+                            "FAIL"
+                            if any(item["status"] not in PASS_STATUSES for item in passes)
+                            else (
+                                "PASS_WITH_OPERATIONAL_METADATA"
+                                if any(
+                                    item["status"] == "PASS_WITH_OPERATIONAL_METADATA"
+                                    for item in passes
+                                )
+                                else "PASS"
+                            )
                         ),
                         "passes": passes,
                     }
@@ -1015,7 +1074,18 @@ async def run_manifest(
         },
         "publication_side_effects": "disabled",
         "direct_apply_collection_decisions": False,
-        "status": "PASS" if all(item["status"] == "PASS" for item in case_reports) else "FAIL",
+        "status": (
+            "FAIL"
+            if any(item["status"] not in PASS_STATUSES for item in case_reports)
+            else (
+                "PASS_WITH_OPERATIONAL_METADATA"
+                if any(
+                    item["status"] == "PASS_WITH_OPERATIONAL_METADATA"
+                    for item in case_reports
+                )
+                else "PASS"
+            )
+        ),
         "cases": case_reports,
     }
 
@@ -1089,7 +1159,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     encoded = json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     args.output.write_text(encoded, encoding="utf-8")
     print(encoded, end="")
-    return 0 if result["status"] == "PASS" else 1
+    return 0 if result["status"] in PASS_STATUSES else 1
 
 
 if __name__ == "__main__":

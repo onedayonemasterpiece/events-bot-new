@@ -37,6 +37,13 @@
         "case_id": {"type": "string", "minLength": 1},
         "adapter": {"enum": ["telegram", "vk", "parser"]},
         "fixture_path": {"type": "string", "minLength": 1},
+        "allowed_warm_event_source_fields": {
+          "description": "Parser-only acknowledgement of the operational re-import timestamp update.",
+          "type": "array",
+          "maxItems": 1,
+          "uniqueItems": true,
+          "items": {"const": "imported_at"}
+        },
         "boundary_class": {
           "enum": [
             "child_directed",

@@ -313,3 +313,48 @@ in a production machine.
 The live sequence is read-only evaluate (at most 20 IDs), reviewed apply (at
 most 12), identical warm replay, then at least six preselected fresh real posts.
 Verify `/healthz`, `PRAGMA quick_check`, scheduler, outbox and runtime file logs.
+
+### Parser warm operational metadata
+
+Official parser replay may declare exactly:
+
+```json
+"allowed_warm_event_source_fields": ["imported_at"]
+```
+
+This allowance is rejected for Telegram/VK and for every other field. It is
+valid only for the uniquely bound expected parser `source_id`; the report must
+emit the field-level diff and use `PASS_WITH_OPERATIONAL_METADATA`. Event,
+`source_text`, facts, receipts, input hashes, product normalized SHA and every
+other EventSource row remain immutable. The raw logical DB SHA is still recorded
+and may differ solely because of this timestamp.
+
+### Full current/future audience coverage
+
+StaticSiteBuilder consumes persisted facts and does not perform the LLM
+backfill. Before calling a snapshot full, create a provider-free coverage
+receipt from the exact mutated copy:
+
+```bash
+python3 scripts/build_static_collection_audience_coverage.py \
+  --db /dev/shm/static-collection-facts-v3-work.sqlite \
+  --current-date 2026-08-03 \
+  --deferred-event-id-file artifacts/.../reviewed-deferred-event-ids.json \
+  --output artifacts/.../audience-coverage.json
+
+python3 site/scripts/static_collection_product_snapshot.py \
+  --db /dev/shm/static-collection-facts-v3-work.sqlite \
+  --current-date 2026-08-03 \
+  --source-scope full-current-future-shadow-after-warm \
+  --coverage-json artifacts/.../audience-coverage.json \
+  --output artifacts/.../static-collection-product-snapshot-v1.json
+```
+
+The receipt reuses the same high-recall audience router, top source ranking and
+facts-v3 input-hash/receipt cache contract as the backfill. It reports the exact
+candidate/evaluated/deferred/unprocessed ID sets and hashes with
+`provider_calls=0`. `complete` permits reviewed deferred rows but requires zero
+unprocessed candidates; `partial` or missing/`unknown` coverage is always
+`WATCH`. The separate provisional live regression pack is
+`docs/review-data/static_collections_audience_live_regression_v1.json`; it is
+not owner gold and cannot enable publication.
