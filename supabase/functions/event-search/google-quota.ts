@@ -41,9 +41,11 @@ export type GoogleQuotaLease = GoogleQuotaKey & {
   day_bucket: string;
   quota_scope: string;
   limiter_contract: string;
+  bucket_strategy: string;
 };
 
 export const REQUIRED_LIMITER_CONTRACT = "google_ai_project_model_atomic_v1";
+export const REQUIRED_BUCKET_STRATEGY = "rolling_60s_pacific_day_v2";
 const GOOGLE_GENERATIVE_LANGUAGE_BASE_URL =
   "https://generativelanguage.googleapis.com/v1beta/models";
 
@@ -363,6 +365,7 @@ export async function withSharedGoogleQuotaAttempt<T>(options: {
   const dayBucket = String(reservation.day_bucket || "").trim();
   const quotaScope = String(reservation.quota_scope || "").trim();
   const limiterContract = String(reservation.limiter_contract || "").trim();
+  const bucketStrategy = String(reservation.bucket_strategy || "").trim();
   if (
     returnedKeyId !== options.key.api_key_id ||
     !returnedEnvName ||
@@ -371,7 +374,8 @@ export async function withSharedGoogleQuotaAttempt<T>(options: {
     !dayBucket ||
     !quotaScope ||
     quotaScope !== options.key.quota_scope ||
-    limiterContract !== REQUIRED_LIMITER_CONTRACT
+    limiterContract !== REQUIRED_LIMITER_CONTRACT ||
+    bucketStrategy !== REQUIRED_BUCKET_STRATEGY
   ) {
     try {
       await cleanupUnsentReservation(
@@ -392,6 +396,8 @@ export async function withSharedGoogleQuotaAttempt<T>(options: {
       "metadata",
       limiterContract !== REQUIRED_LIMITER_CONTRACT
         ? `shared_google_limiter_contract_${limiterContract ? "incompatible" : "missing"}`
+        : bucketStrategy !== REQUIRED_BUCKET_STRATEGY
+        ? `shared_google_bucket_strategy_${bucketStrategy ? "incompatible" : "missing"}`
         : !quotaScope
         ? "shared_google_quota_scope_missing"
         : "shared_google_reservation_metadata_invalid",
@@ -407,6 +413,7 @@ export async function withSharedGoogleQuotaAttempt<T>(options: {
     day_bucket: dayBucket,
     quota_scope: quotaScope,
     limiter_contract: limiterContract,
+    bucket_strategy: bucketStrategy,
   };
   const apiKey = String(options.readEnv(options.key.configured_env_name) || "").trim();
   if (!apiKey) {

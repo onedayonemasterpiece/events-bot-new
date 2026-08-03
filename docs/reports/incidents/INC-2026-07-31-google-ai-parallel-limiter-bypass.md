@@ -270,6 +270,11 @@ no Antigravity limiter bypass was found.
 - Regenerated Telegram/Guide notebooks from current gateway sources and made
   the static audit reject stale embedded `client.py`/`limiter_supabase.py`
   snapshots instead of trusting only the assignment name.
+- Made the rolling-window rollout independently fail closed: a successful
+  reserve must include `bucket_strategy=rolling_60s_pacific_day_v2` in addition
+  to the older atomic contract marker. This prevents an old fixed-minute/UTC-day
+  RPC from being accepted merely because both versions share the v1 project
+  scope contract name.
 
 ## Follow-up Actions
 

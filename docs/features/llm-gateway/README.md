@@ -30,8 +30,12 @@
     `google_ai_project_model_atomic_v1`. Каноническая self-contained схема —
     `supabase/migrations/20260731170000_google_ai_canonical_limiter_bootstrap.sql`;
     наличие старой RPC с тем же именем не доказывает этот контракт. Успешный
-    ответ обязательно содержит `limiter_contract`, `quota_scope` и
-    `env_var_name`; клиент отвергает старый или неполный ответ до чтения ключа.
+    ответ обязательно содержит `limiter_contract`, `bucket_strategy`,
+    `quota_scope` и `env_var_name`; Python- и Edge-клиенты отвергают старый или
+    неполный ответ до чтения ключа. После rolling-window migration допустим
+    только `bucket_strategy=rolling_60s_pacific_day_v2`: одного старого
+    `google_ai_project_model_atomic_v1` недостаточно, потому что этот marker
+    существовал и у fixed-minute/UTC-day реализации.
     *   Обычный клиент без явного key override получает candidate set из
         gateway-owned `GOOGLE_AI_NORMAL_KEY_ENVS`. Явный
         `default_env_var_name`, `reserve_key_envs` или `candidate_key_ids`
@@ -136,10 +140,12 @@ supabase/migrations/20260803074500_google_ai_rolling_windows_pacific_rpd.sql
 
 1. `google_ai_limiter_capabilities().limiter_contract ==
    google_ai_project_model_atomic_v1`;
-2. пять активных redacted key metadata rows и полный model registry;
-3. reserve-smoke внутри транзакции с `ROLLBACK` — без provider send;
-4. Supabase advisors без замечаний по `google_ai_*`;
-5. dedicated URL/service-key pair во всех Fly/Kaggle consumers.
+2. `google_ai_reserve` возвращает
+   `bucket_strategy=rolling_60s_pacific_day_v2` во всех success/deny ветках;
+3. шесть активных redacted key metadata rows и полный model registry;
+4. reserve-smoke внутри транзакции с `ROLLBACK` — без provider send;
+5. Supabase advisors без замечаний по `google_ai_*`;
+6. dedicated URL/service-key pair во всех Fly/Kaggle consumers.
 
 Старые migrations 002/008 ниже остаются только для истории существующего
 legacy-проекта и не являются целевым production deployment.

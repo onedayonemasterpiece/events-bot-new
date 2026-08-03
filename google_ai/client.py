@@ -62,6 +62,7 @@ class ReserveResult:
     retry_after_ms: Optional[int] = None
     quota_scope: Optional[str] = None
     limiter_contract: Optional[str] = None
+    bucket_strategy: Optional[str] = None
 
 
 @dataclass
@@ -230,6 +231,10 @@ class GoogleAIClient:
     # when the database proves it aggregates and locks by Cloud project/model.
     # Older key/model-only RPCs omit this marker and are rejected fail-closed.
     REQUIRED_LIMITER_CONTRACT = "google_ai_project_model_atomic_v1"
+    # The atomic v1 contract predates rolling-window/Pacific-day accounting.
+    # Require the strategy marker as a second, fail-closed schema capability so
+    # an old fixed-minute/UTC-day RPC cannot be accepted after this rollout.
+    REQUIRED_BUCKET_STRATEGY = "rolling_60s_pacific_day_v2"
     EXTERNAL_ACCOUNTING_COMPAT_ENV = "GOOGLE_AI_EXTERNAL_ACCOUNTING_COMPAT"
     _EXTERNAL_TERMINAL_STATUSES = frozenset(
         {
@@ -799,6 +804,7 @@ class GoogleAIClient:
     @classmethod
     def _reserve_result_from_data(cls, data: dict[str, Any]) -> "ReserveResult":
         limiter_contract = str(data.get("limiter_contract") or "").strip() or None
+        bucket_strategy = str(data.get("bucket_strategy") or "").strip() or None
         quota_scope = str(data.get("quota_scope") or "").strip() or None
         raw_ok = bool(data.get("ok", False))
         ok = raw_ok
@@ -813,6 +819,18 @@ class GoogleAIClient:
                 "google_ai.reserve_contract_rejected required=%s received=%s",
                 cls.REQUIRED_LIMITER_CONTRACT,
                 limiter_contract or "<missing>",
+            )
+            ok = False
+        elif ok and bucket_strategy != cls.REQUIRED_BUCKET_STRATEGY:
+            blocked_reason = (
+                "limiter_bucket_strategy_missing"
+                if bucket_strategy is None
+                else "limiter_bucket_strategy_incompatible"
+            )
+            logger.critical(
+                "google_ai.reserve_bucket_strategy_rejected required=%s received=%s",
+                cls.REQUIRED_BUCKET_STRATEGY,
+                bucket_strategy or "<missing>",
             )
             ok = False
         elif ok and quota_scope is None:
@@ -839,6 +857,7 @@ class GoogleAIClient:
             retry_after_ms=data.get("retry_after_ms"),
             quota_scope=quota_scope,
             limiter_contract=limiter_contract,
+            bucket_strategy=bucket_strategy,
         )
 
     async def _run_reserve_rpc(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -1205,11 +1224,15 @@ class GoogleAIClient:
             ) from exc
 
         if not last_result.ok:
-            if (last_result.blocked_reason or "").startswith("limiter_contract_"):
+            if (last_result.blocked_reason or "").startswith(
+                ("limiter_contract_", "limiter_bucket_strategy_")
+            ):
                 raise ReservationError(
-                    "external reservation requires limiter contract "
-                    f"{self.REQUIRED_LIMITER_CONTRACT}; received "
-                    f"{last_result.limiter_contract or '<missing>'}"
+                    "external reservation requires limiter contract/strategy "
+                    f"{self.REQUIRED_LIMITER_CONTRACT}/"
+                    f"{self.REQUIRED_BUCKET_STRATEGY}; received "
+                    f"{last_result.limiter_contract or '<missing>'}/"
+                    f"{last_result.bucket_strategy or '<missing>'}"
                 )
             raise RateLimitError(
                 blocked_reason=last_result.blocked_reason or "unknown",

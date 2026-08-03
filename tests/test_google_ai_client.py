@@ -21,6 +21,7 @@ from google_ai.client import (
 from google_ai.exceptions import ProviderError, RateLimitError, ReservationError
 
 _ATOMIC_LIMITER_CONTRACT = GoogleAIClient.REQUIRED_LIMITER_CONTRACT
+_ROLLING_BUCKET_STRATEGY = GoogleAIClient.REQUIRED_BUCKET_STRATEGY
 
 
 class _FakeModel:
@@ -90,14 +91,22 @@ class _FakeSupabaseClient:
             "key_alias": "unexpected-unscoped-key",
             "quota_scope": "google:test-project",
             "limiter_contract": _ATOMIC_LIMITER_CONTRACT,
+            "bucket_strategy": _ROLLING_BUCKET_STRATEGY,
         }
         return SimpleNamespace(execute=lambda: SimpleNamespace(data=data))
 
 
 class _StrictExternalSupabase:
-    def __init__(self, rows, *, limiter_contract=_ATOMIC_LIMITER_CONTRACT):
+    def __init__(
+        self,
+        rows,
+        *,
+        limiter_contract=_ATOMIC_LIMITER_CONTRACT,
+        bucket_strategy=_ROLLING_BUCKET_STRATEGY,
+    ):
         self.rows = rows
         self.limiter_contract = limiter_contract
+        self.bucket_strategy = bucket_strategy
         self.rpc_calls: list[tuple[str, dict]] = []
 
     def table(self, _name: str):
@@ -117,6 +126,7 @@ class _StrictExternalSupabase:
                 "day_bucket": "2026-07-31",
                 "quota_scope": "google:test-project",
                 "limiter_contract": self.limiter_contract,
+                "bucket_strategy": self.bucket_strategy,
             }
         else:
             data = None
@@ -403,6 +413,7 @@ async def test_reserve_success_fails_closed_without_required_atomic_contract(
             "env_var_name": "GOOGLE_API_KEY",
             "quota_scope": "google:test-project",
             "limiter_contract": limiter_contract,
+            "bucket_strategy": _ROLLING_BUCKET_STRATEGY,
         },
     )
     client = GoogleAIClient(supabase_client=supabase, consumer="parallel_agent")
@@ -440,6 +451,7 @@ async def test_reserve_accepts_versioned_project_scope_atomic_contract() -> None
             "env_var_name": "GOOGLE_API_KEY",
             "quota_scope": "google:cloud-project-a",
             "limiter_contract": _ATOMIC_LIMITER_CONTRACT,
+            "bucket_strategy": _ROLLING_BUCKET_STRATEGY,
         },
     )
     client = GoogleAIClient(supabase_client=supabase, consumer="parallel_agent")
@@ -457,6 +469,36 @@ async def test_reserve_accepts_versioned_project_scope_atomic_contract() -> None
     assert reserve.api_key_id == "key-a"
     assert reserve.quota_scope == "google:cloud-project-a"
     assert reserve.limiter_contract == _ATOMIC_LIMITER_CONTRACT
+    assert reserve.bucket_strategy == _ROLLING_BUCKET_STRATEGY
+
+
+@pytest.mark.parametrize(
+    ("bucket_strategy", "blocked_reason"),
+    [
+        (None, "limiter_bucket_strategy_missing"),
+        ("fixed_minute_utc_day_v1", "limiter_bucket_strategy_incompatible"),
+    ],
+)
+def test_reserve_success_fails_closed_without_required_bucket_strategy(
+    bucket_strategy: str | None,
+    blocked_reason: str,
+) -> None:
+    reserve = GoogleAIClient._reserve_result_from_data(
+        {
+            "ok": True,
+            "api_key_id": "key-a",
+            "env_var_name": "GOOGLE_API_KEY",
+            "quota_scope": "google:test-project",
+            "limiter_contract": _ATOMIC_LIMITER_CONTRACT,
+            "bucket_strategy": bucket_strategy,
+        }
+    )
+
+    assert reserve.ok is False
+    assert reserve.blocked_reason == blocked_reason
+    assert reserve.api_key_id is None
+    assert reserve.env_var_name is None
+    assert reserve.bucket_strategy == bucket_strategy
 
 
 def test_reserve_rejects_contract_response_without_quota_scope() -> None:
@@ -466,6 +508,7 @@ def test_reserve_rejects_contract_response_without_quota_scope() -> None:
             "api_key_id": "key-a",
             "env_var_name": "GOOGLE_API_KEY",
             "limiter_contract": _ATOMIC_LIMITER_CONTRACT,
+            "bucket_strategy": _ROLLING_BUCKET_STRATEGY,
         }
     )
 
@@ -846,6 +889,7 @@ class _OverflowFakeSupabase:
                 "api_key_id": "id-key3",
                 "quota_scope": "google:test-project",
                 "limiter_contract": _ATOMIC_LIMITER_CONTRACT,
+                "bucket_strategy": _ROLLING_BUCKET_STRATEGY,
             }
         elif has_spare:  # spare present but still exhausted
             data = {"ok": False, "blocked_reason": "rpd", "api_key_id": None}
@@ -1083,6 +1127,7 @@ class _NormalPoolSupabase:
                 "env_var_name": env,
                 "quota_scope": row["quota_scope"],
                 "limiter_contract": _ATOMIC_LIMITER_CONTRACT,
+                "bucket_strategy": _ROLLING_BUCKET_STRATEGY,
             }
         return SimpleNamespace(execute=lambda d=data: SimpleNamespace(data=d))
 
@@ -1461,6 +1506,7 @@ async def test_embed_content_async_reserves_before_provider_call(monkeypatch):
             "key_alias": "embedding-key",
             "quota_scope": "google:test-project",
             "limiter_contract": _ATOMIC_LIMITER_CONTRACT,
+            "bucket_strategy": _ROLLING_BUCKET_STRATEGY,
         },
     )
     client = GoogleAIClient(
@@ -1595,6 +1641,31 @@ async def test_external_call_reservation_rejects_unversioned_limiter_contract():
     )
 
     with pytest.raises(ReservationError, match="requires limiter contract"):
+        await client.reserve_external_call(
+            model="antigravity-preview-05-2026",
+            reserved_tpm=10,
+            key_envs=["GOOGLE_ANTIGRAVITY_KEY_A"],
+        )
+
+
+@pytest.mark.asyncio
+async def test_external_call_reservation_rejects_old_bucket_strategy():
+    supabase = _StrictExternalSupabase(
+        [
+            {
+                "id": "key-a",
+                "env_var_name": "GOOGLE_ANTIGRAVITY_KEY_A",
+                "priority": 1,
+            }
+        ],
+        bucket_strategy="fixed_minute_utc_day_v1",
+    )
+    client = GoogleAIClient(
+        supabase_client=supabase,
+        consumer="festival_antigravity",
+    )
+
+    with pytest.raises(ReservationError, match="requires limiter contract/strategy"):
         await client.reserve_external_call(
             model="antigravity-preview-05-2026",
             reserved_tpm=10,
