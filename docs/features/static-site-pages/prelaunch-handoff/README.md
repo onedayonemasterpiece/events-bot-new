@@ -1,134 +1,214 @@
-# Handoff: полноэкранный prelaunch «Полюбить Калининград Анонсы»
+# Handoff и визуальный контракт: prelaunch «Полюбить Калининград Анонсы»
 
-> Основная каноническая документация поведения: [`../prelaunch.md`](../prelaunch.md).
-> Этот файл — implementation/review prompt для PR №296 и не создаёт вторую landing page.
+> Каноническое продуктовое и release-поведение описано в [`../prelaunch.md`](../prelaunch.md).
+> Этот документ фиксирует визуальную декомпозицию референса, физическую модель плиток и проверяемый implementation contract для PR №296.
 
-## Задача кодового агента
+## Статус итерации
 
-Переработать функциональный prelaunch baseline ветки `agent/prelaunch-landing-20260803` в полноэкранную кинематографичную композицию по `reference/target-desktop.webp`. Не потерять Supabase, RLS, RPC, consent, honeypot, resilient transport, indexing и immutable secret-candidate contracts.
+Вторая визуальная итерация устраняет главный дефект первого кандидата: изображение больше не может проявляться в межплиточных швах. Сетка, стеклянные поверхности и подложка теперь разделены физически:
+
+1. непрерывное PWA-изображение находится на background layer;
+2. непрозрачный seam mask находится над изображением, но под плитками;
+3. сама плитка остаётся прозрачной;
+4. матовое стекло, blur, кромка и направленный блик живут на `::before` плитки;
+5. микрофактура матовой поверхности живёт на `::after`;
+6. анимация меняет только стеклянную поверхность, но никогда не opacity всей плитки.
+
+Это обязательный инвариант. Возврат к `opacity: var(--veil)` на `.prelaunch__tile` считается визуальной регрессией: при таком подходе фон снова проступает через швы и пропадает ощущение отдельных стеклянных модулей.
 
 ## Source of truth
 
-- визуальная геометрия и итоговый acceptance screenshot: `reference/target-desktop.webp`;
-- направляющий автономный пример: `prototype/`;
-- production PWA asset: `site/public/assets/pwa/announcements-brand-v2-512.png`;
-- источник альтернативной приложенной иконки: `../auto-present/scenario-assets/PWA-icon.png`;
-- reference-копия для сравнения: `reference/PWA-icon.webp`;
-- функциональный baseline: `site/src/components/PrelaunchLanding.astro`;
-- production/release contract: `../prelaunch.md`.
+- основной визуальный референс: [`reference/target-desktop.webp`](reference/target-desktop.webp);
+- референс исходного PWA-образа: [`reference/PWA-icon.webp`](reference/PWA-icon.webp);
+- production asset: `site/public/assets/pwa/announcements-brand-v2-512.png`;
+- альтернативный исходник в документации: `../auto-present/scenario-assets/PWA-icon.png`;
+- реализация: `site/src/components/PrelaunchLanding.astro`;
+- motion layer: `site/src/styles/prelaunch-motion.css`;
+- browser evidence: `site/scripts/check-prelaunch-browser.mjs`.
 
-Reference WebP не заменяют production asset.
+Reference WebP предназначены для сравнения и не подменяют production asset.
 
-## Точный текст видимой страницы
+## Калибровка относительно референса
+
+Browser gate включает отдельный viewport `1200×1200`, соответствующий квадратной композиции референса. В нём зафиксированы ориентиры, допускающие небольшой браузерный антиалиасинг:
+
+| Элемент | Ориентир |
+| --- | --- |
+| первая вертикальная граница плитки | `x ≈ 169 px` |
+| первая горизонтальная граница плитки | `y ≈ 110 px` |
+| начало H1 | `x ≈ 125 px`, `y ≈ 315 px` |
+| PWA-проекция | ширина `≈ 1200 px`, верх `≈ 0 px` |
+| заголовок формы | `y ≈ 990 px` |
+| ряд input/button | `y ≈ 1028–1086 px` |
+| декоративная звезда | нижний правый сектор, центр `≈ 1058×1058 px` |
+
+Калибровка нужна не для пиксельного hard-code всей страницы, а чтобы очередная итерация не уехала обратно в произвольную двухколоночную композицию.
+
+## Архитектура сцены
+
+| Z | Слой | Назначение |
+| --- | --- | --- |
+| 0 | `.prelaunch__background` | тёмная основа и одно непрерывное PWA-изображение |
+| 1a | `.prelaunch__mosaic::before` | полностью непрозрачные тёмные межплиточные швы |
+| 1b | `.prelaunch__tile` | 72 независимые поверхности стекла |
+| 2 | `.prelaunch__atmosphere` | верхнеправый источник света, кольцо, виньетка, пыль и искры |
+| 3 | `.prelaunch__foreground` | бренд, H1, объяснение сервиса и рабочая форма |
+
+Foreground не использует `mix-blend-mode`. Декоративные слои имеют `aria-hidden` и `pointer-events:none`.
+
+## Геометрия плиток
+
+Desktop-сцена использует 9 колонок × 8 строк. Мозаика шире viewport, но в квадратном acceptance viewport начинается практически от левой границы, как в референсе.
+
+```css
+--tile-width: clamp(150px, 14.05vw, 232px);
+--tile-height: clamp(166px, 15.525vw, 256px);
+--tile-gap: clamp(8px, .72vw, 13px);
+```
+
+Плитки слегка вытянуты по вертикали — это соответствует фактической геометрии референса, хотя визуально они воспринимаются как квадратные модули. На mobile используется 6 колонок × 12 строк при тех же 72 DOM-элементах.
+
+Радиусы варьируются детерминированно в пределах `12–17 px`. Это создаёт очень небольшую нерегулярность и не превращает сцену в хаотичную кладку.
+
+## Непрозрачные швы
+
+Шов рисуется отдельной repeating-gradient mask:
+
+```css
+.prelaunch__mosaic::before {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 var(--tile-width),
+      #07090c var(--tile-width) var(--tile-pitch-x)
+    ),
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 var(--tile-height),
+      #07090c var(--tile-height) var(--tile-pitch-y)
+    );
+}
+```
+
+Запрещено:
+
+- оставлять реальный CSS `gap` прозрачным до background image;
+- использовать общий полупрозрачный слой над всей сеткой;
+- гасить всю плитку через opacity;
+- нарезать PWA-изображение на отдельные tile-файлы.
+
+## Физическая модель стекла
+
+### `sealed`
+
+Почти закрытая тёмная матовая плитка:
+
+- cover `0.94`;
+- blur около `8 px`;
+- низкая насыщенность и brightness;
+- минимальная верхняя кромка;
+- глубокая, но мягкая нижняя тень.
+
+### `dim`
+
+Основная матовая стеклянная поверхность:
+
+- cover `0.76`;
+- blur около `5 px`;
+- часть цвета подложки читается;
+- выражена верхняя светлая кромка;
+- присутствует микрофактура без цифрового шума.
+
+### `revealed`
+
+Окно, через которое читается PWA-образ:
+
+- cover около `0.38`;
+- blur около `2.1 px`;
+- высокая насыщенность подложки;
+- более заметная кромка и подъём над швом;
+- изображение всё равно проходит через слой стекла, а не выглядит вырезанной дыркой.
+
+### Направленно освещённые плитки
+
+Для зоны `light` применяются отдельные matte/blur overrides. Плитки справа сверху могут быть светлее, но остаются размытыми: свет должен выглядеть отражённым стеклом, а не резким фрагментом кожаной текстуры.
+
+Три детерминированных `data-glint` выделяют отдельные углы и кромки. Они не должны мигать и не являются отдельным состоянием анимации.
+
+## Освещение
+
+Главный источник расположен справа сверху, примерно в `86% 15%` сцены. Свет строится из нескольких компонентов:
+
+- тёплый radial gradient;
+- большое частично выходящее за viewport кольцо;
+- локальные glint-кромки у нескольких плиток;
+- редкие световые частицы;
+- общая виньетка, сохраняющая читаемость foreground слева.
+
+Нельзя заменять это одним равномерным `box-shadow` или однотонным оранжевым overlay.
+
+## Подложка и типографика PWA
+
+PWA-изображение не является отдельной карточкой. В квадратном viewport оно имеет ширину примерно `100vw`, начинается у верхней границы и непрерывно проходит под сеткой. Такое положение совмещает с референсом:
+
+- малый wordmark в центральной зоне;
+- крупное слово «Анонсы» в нижней половине;
+- округлую кожаную кромку справа и снизу.
+
+Тёмные overlay-градиенты гасят светлый внешний фон изображения и удерживают контраст текста.
+
+## Foreground
+
+Видимый текст остаётся неизменным:
 
 - бренд: «Полюбить Калининград Анонсы»;
 - H1: «Запуск 1 сентября»;
-- объяснение: «Персонализированный сервис анонсов и навигатор по культурным и просветительским событиям Калининградской области»;
-- заголовок формы: «Напомнить о запуске»;
-- placeholder: «E-mail»;
-- кнопка: «Напомнить о запуске»;
-- consent и status-копирайт остаются purpose-limited: одно письмо о запуске.
+- описание: «Персонализированный сервис анонсов и навигатор по культурным и просветительским событиям Калининградской области»;
+- форма: «Напомнить о запуске»;
+- placeholder: «E-mail».
 
-## Слои и z-index
-
-| Порядок | Слой | Ответственность |
-| --- | --- | --- |
-| 0 | background | тёмная основа и одно непрерывное PWA-изображение |
-| 1 | mosaic | 72 крупные плитки на весь viewport |
-| 2 | atmosphere | виньетка, мягкий медный halo, noise и редкие искры |
-| 3 | foreground | бренд, H1, текст и рабочая форма |
-
-Foreground не использует blend mode. Декоративные слои имеют `aria-hidden` и `pointer-events:none`.
-
-## Геометрия и стекло
-
-- Desktop: фиксированная квадратная tile size через `clamp`, сетка шире viewport и слегка сдвинута, чтобы края не выглядели рамкой.
-- Mobile: те же 72 элемента, 6 колонок, без DOM-подмены.
-- Межплиточный шов 7–13 px, скругление 10–17 px, тонкая кромка и inset-depth.
-- `sealed`: почти закрытая плитка, cover около `0.94`.
-- `dim`: читается слабый цвет, cover около `0.70`.
-- `revealed`: PWA-изображение различимо, cover около `0.28`.
-
-Один background `<img>` остаётся непрерывным под плитками; запрещено резать картинку на tile-файлы или превращать её в отдельную правую карточку.
+На desktop строки описания закреплены через отдельные block-span. На mobile те же span переходят в inline flow с пробелами и естественно переносятся — запрещено склеивать слова при скрытии `<br>`.
 
 ## Motion contract
 
-- меняются небольшие группы 2–5 плиток;
-- интервал выбора 1,8–3,6 секунды;
-- easing 4,2–8,1 секунды;
-- предыдущая группа не выбирается в следующем цикле;
-- анимация останавливается при hidden document и `prefers-reduced-motion: reduce`;
-- нет LED-вспышек, частого мерцания и layout-анимаций.
+- меняется одна группа из `2–5` плиток;
+- новый выбор происходит через `1.8–3.6 s`;
+- переход длится `4.2–8.1 s`;
+- предыдущая группа не выбирается немедленно снова;
+- зоны `leather` и `light` имеют более высокий шанс выбора, зона `quiet` остаётся спокойнее;
+- document visibility и `prefers-reduced-motion: reduce` останавливают изменения;
+- layout, швы и opacity самого tile element не анимируются.
 
-## Responsive contract
+## Browser evidence
 
-Проверить минимум `320×900`, `390×844`, `768×1024`, `1024×768`, `1440×900`, `1920×1080`.
+`check-prelaunch-browser.mjs` создаёт для каждого viewport:
 
-- Desktop: бренд сверху слева, H1 в средней части, форма у нижней границы.
-- Mobile: фон и мозаика остаются сценой; H1 переносится; форма в одну колонку; страница может вертикально прокручиваться на коротком экране.
-- `100svh` — минимум, а не фиксированная высота с обрезанием.
-- Ни один viewport не имеет горизонтального overflow.
+- PNG screenshot;
+- полный DOM snapshot;
+- JSON со сценой и computed styles.
 
-## Supabase — не менять контракт
+Проверяемые viewport:
 
-Форма вызывает только:
+- `1200×1200` — прямое сравнение с референсом;
+- `1440×900` — desktop landscape;
+- `390×844` — mobile.
 
-`public.register_prelaunch_notification_v1`
+Дополнительно отдельный no-preference context доказывает, что за первый цикл меняются только `2–5` плиток и шов остаётся непрозрачным.
 
-через `getResilientDataClient` и общий Supabase ↔ Yandex relay. Сохраняются:
+Автоматический workflow `.github/workflows/prelaunch-visual-review.yml` прикладывает screenshots, DOM, scene JSON и обе reference WebP одним artifact.
 
-- `personalization.prelaunch_launch_subscription`;
-- RLS и запрет browser table CRUD;
-- publishable key, никогда не service role;
-- явный checkbox consent `launch-2026-09-01-v1`;
-- server-side honeypot `p_website` с одинаковым public success shape;
-- нормализованный unique email;
-- idempotent transport replay;
-- Kaliningrad-day capacity и retention contract.
-
-Не переносить `subscribe_site_launch_v1` или миграцию из альтернативного lab prototype.
-
-## SEO / GEO / indexing
-
-- один видимый H1, русский `lang`, title/description, canonical и OG/Twitter metadata;
-- JSON-LD `WebSite`, `WebPage`, `Service`, Калининград и Калининградская область;
-- production prelaunch: индексируется только `/`;
-- secret candidate: `noindex,nofollow,noarchive,nosnippet`, `no-referrer`, base-prefixed canonical;
-- `prelaunch_mode` наследуется из checked production manifest и записывается вместе с `public_surface`.
-
-## Accessibility / performance
-
-- skip link, label, native email semantics, keyboard focus, `aria-live` status;
-- status не полагается только на цвет;
-- projection имеет явные width/height, background copy декоративна;
-- анимация меняет composited opacity, не геометрию;
-- reduced motion статичен и тестируется браузером.
-
-## Файлы реализации
-
-- `site/src/components/PrelaunchLanding.astro`
-- `site/src/layouts/PrelaunchLayout.astro`
-- `site/src/styles/prelaunch-motion.css`
-- `site/scripts/build-secret-candidate.mjs`
-- `site/scripts/check-secret-candidate.mjs`
-- `site/scripts/check-prelaunch-browser.mjs`
-- `site/tests/prelaunch-landing.test.mjs`
-- `docs/features/static-site-pages/prelaunch.md`
-- `CHANGELOG.md`
-
-## Проверки
+## Команды
 
 ```bash
 npm --prefix site run test:static-release
 PUBLIC_PRELAUNCH_MODE=on npm --prefix site run build
+python3 -m http.server 4173 --directory site/dist
 npm --prefix site run check:prelaunch-browser -- \
-  --url http://127.0.0.1:4321/ \
-  --artifact-dir ../artifacts/codex/prelaunch/browser-local
+  --url http://127.0.0.1:4173/ \
+  --artifact-dir ../artifacts/prelaunch-browser
 ```
 
-Если pinned Chromium уже установлен вне стандартного Playwright cache, передать его явно через `PRELAUNCH_CHROMIUM_EXECUTABLE_PATH`.
-
-После checked production build:
+После визуального принятия и checked production build:
 
 ```bash
 npm --prefix site run build:secret-candidate
@@ -136,16 +216,17 @@ npm --prefix site run check:secret-candidate
 npm --prefix site run plan:secret-candidate
 ```
 
-Только после local browser gates, exact object plan и anonymous-list preflight допускается immutable publish. Bearer URL не коммитится и отправляется только в согласованное место.
+Immutable candidate публикуется только после просмотра artifact и зелёных functional/browser gates. Production root и stable ICS при этом не изменяются.
 
 ## Definition of Done
 
-- PR №296 содержит handoff, code, docs и changelog;
-- PWA image непрерывен под полноэкранной сеткой;
-- три состояния и slow sparse motion подтверждены;
-- desktop/mobile/reduced-motion browser gate зелёный;
-- RPC/RLS/consent/honeypot/replay сохранены и live RPC проверен после миграции;
-- secret candidate содержит prelaunch root и прошёл hash/MIME/noindex проверки;
-- immutable bearer URL открыт с desktop/mobile;
-- URL отправлен reply к согласованному Telegram message;
-- итоговый отчёт содержит SHA, команды, screenshots, public smoke и Telegram receipt ID без секретов.
+- изображение нигде не видно между плитками;
+- tile base прозрачен, а стекло реализовано псевдоэлементом с backdrop-filter;
+- `sealed`, `dim`, `revealed` различаются одновременно по cover, blur, saturation, brightness, edge и matte texture;
+- верхнеправый свет формирует направленные кромки и матовые отражения;
+- квадратная композиция удерживает reference coordinates;
+- desktop и mobile не имеют horizontal overflow;
+- reduced motion статичен;
+- DOM/screenshot/computed-style evidence опубликованы в GitHub Actions artifact;
+- Supabase/RLS/RPC/consent/honeypot/replay и indexing contracts не изменены;
+- после приёмки создан новый immutable secret candidate с новым SHA.
