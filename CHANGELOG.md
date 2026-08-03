@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Added the isolated `/lab/launch/tile-mosaic/` launch candidate: a responsive
+  72-tile physical mosaic with replaceable imagery, reduced-motion behavior,
+  static SEO/GEO metadata and an accessible email form. The form uses the
+  shared resilient personalization transport and a closed Supabase table with
+  an anonymous, selected-once RPC; the production home and indexing remain
+  unchanged.
+
 - Added the clean main-based audience-collections shadow contour: source-grounded
   facts v3, review receipts and warm cache, immutable Telegram/VK/parser replay,
   full-catalog product snapshot/monitor and StaticSiteBuilder artifacts. The

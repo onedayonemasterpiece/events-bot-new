@@ -73,6 +73,7 @@ test('operation catalog owns semantics and rejects unknown mutations', () => {
   assert.equal(policyForOperation(classifyBackendOperation(`${direct}/auth/v1/callback?code=x`, { method: 'GET' })), 'selected-once');
   assert.equal(policyForOperation(classifyBackendOperation(`${direct}/rest/v1/rpc/focus_auth_get_delivery_receipt_v1`, { method: 'POST' })), 'safe-read');
   assert.equal(policyForOperation(classifyBackendOperation(`${direct}/rest/v1/rpc/submit_focus_group_feedback_v2`, { method: 'POST' })), 'idempotent-replay');
+  assert.equal(policyForOperation(classifyBackendOperation(`${direct}/rest/v1/rpc/subscribe_site_launch_v1`, { method: 'POST' })), 'selected-once');
   const telemetry = classifyBackendOperation(`${direct}/rest/v1/rpc/focus_auth_record_client_outcome_v1`, { method: 'POST' });
   assert.equal(telemetry.semantics, 'disposable');
   assert.equal(policyForOperation(telemetry), 'idempotent-replay');

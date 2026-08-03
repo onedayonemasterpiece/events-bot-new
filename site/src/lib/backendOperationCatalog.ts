@@ -50,6 +50,7 @@ const DISPOSABLE_RPCS = new Set([
 const SELECTED_ONCE_RPCS = new Set([
   'record_event_search_feedback_v1',
   'set_saved_event_state_v1',
+  'subscribe_site_launch_v1',
 ]);
 
 function methodOf(input: RequestInfo | URL, init?: RequestInit): string {

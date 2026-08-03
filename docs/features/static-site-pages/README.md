@@ -5,6 +5,13 @@
 > **Core fallback:** страницы событий работают без авторизации; optional Yandex/email identity, smart search and personalization are separate enhancements. Core event DB never moves to Supabase.
 > **Current release plan:** [production profile, atomic promotion and 10-day Telegraph cutover](release-plan.md).
 
+## Launch tile mosaic candidate
+
+The isolated [tile mosaic launch placeholder](launch-tile-mosaic-placeholder.md)
+lives only at `/lab/launch/tile-mosaic/`. It is a noindex review candidate with
+a 72-tile responsive scene and an RPC-only launch-notification form; it does not
+replace the production home page or authorize root promotion.
+
 ## Focus-group product prototype (2026-07-27)
 
 The isolated focus-group branch adds page/product mechanics for a later UI
