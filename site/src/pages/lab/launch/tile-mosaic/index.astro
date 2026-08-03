@@ -1,0 +1,86 @@
+---
+import TileMosaicLaunch from '../../../../components/launch/TileMosaicLaunch.astro';
+
+const title = 'Полюбить Калининград Анонсы — запуск 1 сентября 2026';
+const description = 'Новая афиша культурных и просветительских событий Калининграда и Калининградской области с персонализированными рекомендациями.';
+const siteOrigin = (import.meta.env.PUBLIC_SITE_ORIGIN || 'https://kenigevents.ru').replace(/\/+$/u, '');
+const baseUrl = import.meta.env.BASE_URL || '/';
+const withBase = (path: string) => `${baseUrl.replace(/\/+$/u, '')}/${path.replace(/^\/+|\/+$/gu, '')}`;
+const canonicalUrl = `${siteOrigin}/lab/launch/tile-mosaic/`;
+const launchImagePath = withBase('/assets/launch/PWA-icon.png');
+const imageUrl = `${siteOrigin}${launchImagePath}`;
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebSite',
+      '@id': `${siteOrigin}/#website`,
+      url: `${siteOrigin}/`,
+      name: 'Полюбить Калининград Анонсы',
+      inLanguage: 'ru',
+    },
+    {
+      '@type': 'WebPage',
+      '@id': `${canonicalUrl}#webpage`,
+      url: canonicalUrl,
+      name: title,
+      description,
+      inLanguage: 'ru',
+      isPartOf: { '@id': `${siteOrigin}/#website` },
+      datePublished: '2026-09-01',
+      about: { '@id': `${canonicalUrl}#service` },
+    },
+    {
+      '@type': 'Service',
+      '@id': `${canonicalUrl}#service`,
+      name: 'Полюбить Калининград Анонсы',
+      description: 'Афиша мероприятий и персонализированные рекомендации о культурных и просветительских событиях Калининграда и Калининградской области.',
+      areaServed: [
+        { '@type': 'City', name: 'Калининград' },
+        { '@type': 'AdministrativeArea', name: 'Калининградская область' },
+      ],
+      serviceType: 'Афиша мероприятий и рекомендации событий',
+      availableChannel: {
+        '@type': 'ServiceChannel',
+        serviceUrl: canonicalUrl,
+      },
+    },
+  ],
+};
+---
+
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <link rel="canonical" href={canonicalUrl} />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="ru_RU" />
+    <meta property="og:site_name" content="Полюбить Калининград Анонсы" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:image" content={imageUrl} />
+    <meta property="og:image:alt" content="Полюбить Калининград Анонсы" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={imageUrl} />
+    <link rel="icon" href={withBase('/favicon.svg')} />
+    <script type="application/ld+json" set:html={JSON.stringify(structuredData)}></script>
+  </head>
+  <body>
+    <TileMosaicLaunch imageSrc={launchImagePath} focalX={0.5} focalY={0.5} />
+  </body>
+</html>
+
+<style is:global>
+  html { color-scheme: dark; background: #080a0b; }
+  html, body { min-width: 320px; min-height: 100%; margin: 0; }
+  body { overflow-x: hidden; }
+  button, input { font: inherit; }
+</style>

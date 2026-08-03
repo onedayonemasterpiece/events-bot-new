@@ -1,0 +1,725 @@
+---
+import AnnouncementsLockup from '../brand/AnnouncementsLockup.astro';
+
+interface Props {
+  imageSrc?: string;
+  focalX?: number;
+  focalY?: number;
+}
+
+const baseUrl = import.meta.env.BASE_URL || '/';
+const withBase = (path: string) => `${baseUrl.replace(/\/+$/u, '')}/${path.replace(/^\/+|\/+$/gu, '')}`;
+const {
+  imageSrc = withBase('/assets/launch/PWA-icon.png'),
+  focalX = 0.5,
+  focalY = 0.5,
+} = Astro.props;
+
+const normalizedFocalX = Math.min(1, Math.max(0, Number.isFinite(focalX) ? focalX : 0.5));
+const normalizedFocalY = Math.min(1, Math.max(0, Number.isFinite(focalY) ? focalY : 0.5));
+const tiles = Array.from({ length: 72 }, (_, index) => index);
+---
+
+<main class="launch" data-tile-mosaic-launch data-seed="20260901">
+  <header class="launch__header">
+    <a class="launch__brand" href={withBase('/')} aria-label="Полюбить Калининград Анонсы — на главную">
+      <AnnouncementsLockup variant="desktop" />
+    </a>
+    <p class="launch__status"><span aria-hidden="true"></span> Скоро открытие</p>
+  </header>
+
+  <div class="launch__layout">
+    <section class="launch__copy" aria-labelledby="launch-title">
+      <p class="launch__eyebrow">Новая афиша Калининграда</p>
+      <h1 id="launch-title">Встречайтесь<br />с городом<br />по-новому</h1>
+      <p class="launch__date">
+        Стартуем <time datetime="2026-09-01">1 сентября 2026 года</time>
+      </p>
+      <p class="launch__description">
+        «Полюбить Калининград Анонсы» — афиша мероприятий о культурных и
+        просветительских событиях Калининграда и Калининградской области.
+        Соберём интересное и предложим персонализированные рекомендации.
+      </p>
+
+      <form class="subscribe" data-launch-subscribe-form>
+        <div class="subscribe__trap" aria-hidden="true">
+          <label for="launch-company">Название компании</label>
+          <input id="launch-company" name="company" type="text" tabindex="-1" autocomplete="off" />
+        </div>
+        <label class="subscribe__label" for="launch-email">Email для напоминания</label>
+        <div class="subscribe__row">
+          <input
+            class="subscribe__input"
+            id="launch-email"
+            name="email"
+            type="email"
+            inputmode="email"
+            autocomplete="email"
+            placeholder="Ваш email"
+            aria-describedby="launch-form-status launch-privacy"
+            required
+          />
+          <button class="subscribe__button" type="submit" data-idle-label="Сообщить мне">
+            <span data-button-label>Сообщить мне</span>
+          </button>
+        </div>
+        <p class="subscribe__status" id="launch-form-status" role="status" aria-live="polite"></p>
+        <p class="subscribe__privacy" id="launch-privacy">
+          Отправляя email, вы соглашаетесь получить одно письмо о запуске. Без спама.
+        </p>
+      </form>
+    </section>
+
+    <section class="mosaic" aria-label="Мозаичное изображение проекта">
+      <div class="mosaic__halo" aria-hidden="true"></div>
+      <div class="mosaic__squircle" aria-hidden="true">
+        <div class="mosaic__projection">
+          <img
+            class="mosaic__image"
+            data-mosaic-image
+            src={imageSrc}
+            alt=""
+            decoding="async"
+            style={`object-position:${normalizedFocalX * 100}% ${normalizedFocalY * 100}%`}
+          />
+        </div>
+      </div>
+      <div class="mosaic__grid" aria-hidden="true">
+        {tiles.map((index) => (
+          <span
+            class="mosaic__tile"
+            data-tile-index={index}
+            data-state="sleeping"
+            style={`--tile-delay:${(index % 9) * -0.13}s;--tile-depth:${(index % 5) + 1}px`}
+          ></span>
+        ))}
+      </div>
+      <div class="mosaic__noise" aria-hidden="true"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+  import { getResilientDataClient } from '../../lib/resilientDataClient';
+
+  const supabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
+  const supabaseRelayUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || '').replace(/\/+$/u, '');
+  const supabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
+  const siteBaseUrl = import.meta.env.BASE_URL || '/';
+
+  (() => {
+    const root = document.querySelector('[data-tile-mosaic-launch]');
+    if (!(root instanceof HTMLElement)) return;
+
+    const image = root.querySelector('[data-mosaic-image]');
+    const mosaic = root.querySelector('.mosaic');
+    const tileElements = Array.from(root.querySelectorAll('.mosaic__tile'));
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+    const clampUnit = (value, fallback = 0.5) => {
+      if (value === null || value === undefined || value === '') return fallback;
+      const number = Number(value);
+      return Number.isFinite(number) ? Math.min(1, Math.max(0, number)) : fallback;
+    };
+
+    const validImageUrl = (candidate) => {
+      if (typeof candidate !== 'string' || !candidate.trim()) return null;
+      try {
+        const trimmed = candidate.trim();
+        if (trimmed.startsWith('//')) return null;
+        const absolute = /^[a-z][a-z\d+.-]*:/iu.test(trimmed);
+        const previewBase = new URL(siteBaseUrl, window.location.origin);
+        const parsed = absolute
+          ? new URL(trimmed)
+          : new URL(trimmed.replace(/^\/+/, ''), previewBase);
+        const allowed = parsed.origin === window.location.origin || parsed.protocol === 'https:';
+        const basePath = previewBase.pathname.replace(/\/+$/u, '');
+        const staysInPreview = parsed.origin !== window.location.origin
+          || !basePath
+          || parsed.pathname === basePath
+          || parsed.pathname.startsWith(`${basePath}/`);
+        if (!allowed || !staysInPreview || parsed.username || parsed.password) return null;
+        return parsed.href;
+      } catch {
+        return null;
+      }
+    };
+
+    const setImage = ({ src, focalX, focalY } = {}) => {
+      if (!(image instanceof HTMLImageElement)) return false;
+      const safeSrc = validImageUrl(src);
+      if (!safeSrc) return false;
+      image.src = safeSrc;
+      const x = clampUnit(focalX, 0.5);
+      const y = clampUnit(focalY, 0.5);
+      image.style.objectPosition = `${x * 100}% ${y * 100}%`;
+      return true;
+    };
+
+    const query = new URLSearchParams(window.location.search);
+    if (query.has('mosaicImage')) {
+      setImage({
+        src: query.get('mosaicImage'),
+        focalX: query.get('focalX'),
+        focalY: query.get('focalY'),
+      });
+    }
+    window.addEventListener('tile-mosaic:set-image', (event) => {
+      if (event instanceof CustomEvent) setImage(event.detail);
+    });
+
+    let seed = Number(root.dataset.seed) || 20260901;
+    const random = () => {
+      seed |= 0;
+      seed = (seed + 0x6D2B79F5) | 0;
+      let value = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
+      return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+    };
+
+    const initialStates = ['sealed', 'dim', 'sleeping', 'dim', 'revealed', 'sleeping'];
+    tileElements.forEach((tile, index) => {
+      if (!(tile instanceof HTMLElement)) return;
+      const state = reducedMotion.matches
+        ? initialStates[(index * 5 + Math.floor(index / 6)) % initialStates.length]
+        : initialStates[Math.floor(random() * initialStates.length)];
+      tile.dataset.state = state;
+    });
+
+    const recent = new Map();
+    let cycle = 0;
+    let tileTimer = 0;
+    let lightFrame = 0;
+    let pointerX = 0.5;
+    let pointerY = 0.45;
+    let pointerInfluence = 0;
+
+    const animateTiles = () => {
+      cycle += 1;
+      const candidates = tileElements.filter((_, index) => cycle - (recent.get(index) || -10) > 2);
+      const changeCount = 1 + Math.floor(random() * 4);
+      const states = tileElements.map((tile) => tile instanceof HTMLElement ? tile.dataset.state : 'sealed');
+      let visibleCount = states.filter((state) => state === 'revealed' || state === 'glint').length;
+      let glintCount = states.filter((state) => state === 'glint').length;
+
+      for (let changed = 0; changed < changeCount && candidates.length; changed += 1) {
+        const candidateIndex = Math.floor(random() * candidates.length);
+        const tile = candidates.splice(candidateIndex, 1)[0];
+        if (!(tile instanceof HTMLElement)) continue;
+        const index = Number(tile.dataset.tileIndex);
+        const chance = random();
+        let nextState = chance < 0.34 ? 'sealed' : chance < 0.64 ? 'dim' : 'sleeping';
+        if (chance > 0.82 && visibleCount < Math.floor(tileElements.length * 0.32)) {
+          nextState = chance > 0.96 && glintCount < 3 ? 'glint' : 'revealed';
+          visibleCount += 1;
+          if (nextState === 'glint') glintCount += 1;
+        }
+        tile.dataset.state = nextState;
+        recent.set(index, cycle);
+      }
+      tileTimer = window.setTimeout(animateTiles, 1200 + random() * 1600);
+    };
+
+    const moveLight = (now) => {
+      if (!(mosaic instanceof HTMLElement)) return;
+      const autoX = 0.52 + Math.sin(now / 13200) * 0.26 + Math.cos(now / 9100) * 0.07;
+      const autoY = 0.46 + Math.cos(now / 15800) * 0.24;
+      pointerInfluence *= 0.985;
+      const influence = Math.min(0.18, pointerInfluence);
+      const lightX = autoX * (1 - influence) + pointerX * influence;
+      const lightY = autoY * (1 - influence) + pointerY * influence;
+      mosaic.style.setProperty('--light-x', `${lightX * 100}%`);
+      mosaic.style.setProperty('--light-y', `${lightY * 100}%`);
+      lightFrame = window.requestAnimationFrame(moveLight);
+    };
+
+    const startMotion = () => {
+      window.clearTimeout(tileTimer);
+      window.cancelAnimationFrame(lightFrame);
+      if (reducedMotion.matches) {
+        if (mosaic instanceof HTMLElement) {
+          mosaic.style.setProperty('--light-x', '58%');
+          mosaic.style.setProperty('--light-y', '38%');
+        }
+        return;
+      }
+      tileTimer = window.setTimeout(animateTiles, 1600);
+      lightFrame = window.requestAnimationFrame(moveLight);
+    };
+
+    if (mosaic instanceof HTMLElement) {
+      mosaic.addEventListener('pointermove', (event) => {
+        if (reducedMotion.matches) return;
+        const bounds = mosaic.getBoundingClientRect();
+        pointerX = clampUnit((event.clientX - bounds.left) / bounds.width);
+        pointerY = clampUnit((event.clientY - bounds.top) / bounds.height);
+        pointerInfluence = 0.18;
+      }, { passive: true });
+      mosaic.addEventListener('pointerleave', () => { pointerInfluence = 0; }, { passive: true });
+    }
+    reducedMotion.addEventListener?.('change', startMotion);
+    startMotion();
+
+    const form = root.querySelector('[data-launch-subscribe-form]');
+    if (!(form instanceof HTMLFormElement)) return;
+    const emailInput = form.elements.namedItem('email');
+    const honeypot = form.elements.namedItem('company');
+    const button = form.querySelector('button[type="submit"]');
+    const buttonLabel = form.querySelector('[data-button-label]');
+    const status = form.querySelector('[role="status"]');
+
+    const setFormState = (state, message = '') => {
+      form.dataset.state = state;
+      if (button instanceof HTMLButtonElement) {
+        button.disabled = state === 'submitting';
+        button.toggleAttribute('aria-busy', state === 'submitting');
+      }
+      if (emailInput instanceof HTMLInputElement) {
+        emailInput.disabled = state === 'submitting';
+        emailInput.setAttribute('aria-invalid', state === 'error' ? 'true' : 'false');
+      }
+      if (buttonLabel) buttonLabel.textContent = state === 'submitting' ? 'Отправляем…' : state === 'success' ? 'Готово' : 'Сообщить мне';
+      if (status) status.textContent = message;
+    };
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!(emailInput instanceof HTMLInputElement) || !emailInput.reportValidity()) return;
+      if (honeypot instanceof HTMLInputElement && honeypot.value) {
+        setFormState('success', 'Спасибо! Мы сообщим о запуске.');
+        return;
+      }
+
+      const email = emailInput.value.trim().toLowerCase();
+      if (!supabaseUrl || !supabaseKey) {
+        setFormState('error', 'Подписка временно недоступна. Email сохранён в поле — попробуйте позже.');
+        return;
+      }
+
+      setFormState('submitting', 'Отправляем email…');
+      try {
+        const dataClient = getResilientDataClient({
+          directUrl: supabaseUrl,
+          relayUrl: supabaseRelayUrl,
+          publishableKey: supabaseKey,
+        });
+        const response = await dataClient.request(`${supabaseUrl}/rest/v1/rpc/subscribe_site_launch_v1`, {
+          method: 'POST',
+          headers: {
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            p_email: email,
+            p_source: 'tile-mosaic-launch',
+            p_page_path: window.location.pathname,
+            p_locale: document.documentElement.lang || 'ru',
+          }),
+        });
+        if (!response.ok) {
+          setFormState('error', response.status >= 400 && response.status < 500
+            ? 'Проверьте email и попробуйте ещё раз.'
+            : 'Не удалось подтвердить подписку. Email сохранён в поле — попробуйте позже.');
+          return;
+        }
+        const result = await response.json().catch(() => null);
+        const subscription = Array.isArray(result) ? result[0] : result;
+        if (subscription?.accepted !== true || subscription?.status !== 'subscribed') {
+          throw new Error('RPC response contract mismatch');
+        }
+        emailInput.value = '';
+        setFormState('success', 'Готово! Напомним о запуске 1 сентября.');
+      } catch {
+        setFormState('error', 'Не удалось подтвердить подписку. Email сохранён в поле — попробуйте позже.');
+      }
+    });
+  })();
+</script>
+
+<style>
+  @property --tile-cover-alpha { syntax: '<number>'; inherits: true; initial-value: .66; }
+  @property --tile-image-saturation { syntax: '<number>'; inherits: true; initial-value: .72; }
+  @property --tile-image-brightness { syntax: '<number>'; inherits: true; initial-value: .68; }
+  @property --tile-blur { syntax: '<length>'; inherits: true; initial-value: 2px; }
+  @property --tile-glint-alpha { syntax: '<number>'; inherits: true; initial-value: .03; }
+  @property --tile-edge-alpha { syntax: '<number>'; inherits: true; initial-value: .08; }
+
+  .launch {
+    --ink: #f8f0e7;
+    --muted: #aaa39b;
+    --ember: #ef7446;
+    box-sizing: border-box;
+    min-height: 100svh;
+    overflow: hidden;
+    color: var(--ink);
+    background:
+      radial-gradient(circle at 78% 36%, rgb(108 43 25 / .18), transparent 30%),
+      radial-gradient(circle at 18% 76%, rgb(89 69 51 / .13), transparent 32%),
+      #080a0b;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    isolation: isolate;
+  }
+
+  .launch *, .launch *::before, .launch *::after { box-sizing: border-box; }
+
+  .launch__header {
+    position: relative;
+    z-index: 10;
+    display: grid;
+    grid-template-columns: minmax(0, 42%) minmax(0, 58%);
+    align-items: start;
+    min-height: 92px;
+    padding: clamp(26px, 3.5vw, 54px) clamp(28px, 4.1vw, 68px) 0;
+    pointer-events: none;
+  }
+
+  .launch__brand {
+    width: min(225px, 72%);
+    color: var(--ink);
+    text-decoration: none;
+    pointer-events: auto;
+  }
+
+  .launch__brand :global(.announcements-lockup) { display: grid; gap: 5px; }
+  .launch__brand :global(.announcements-lockup__endorsement) {
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    opacity: .65;
+  }
+  .launch__brand :global(.announcements-lockup__wordmark) { display: block; width: 100%; height: auto; color: currentColor; }
+
+  .launch__status {
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 2px 0 0;
+    color: #d5ccc3;
+    font-size: 11px;
+    font-weight: 760;
+    letter-spacing: .17em;
+    text-transform: uppercase;
+  }
+
+  .launch__status span {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--ember);
+    box-shadow: 0 0 16px rgb(239 116 70 / .75);
+  }
+
+  .launch__layout {
+    display: grid;
+    grid-template-columns: minmax(0, 42%) minmax(0, 58%);
+    min-height: calc(100svh - 92px);
+  }
+
+  .launch__copy {
+    position: relative;
+    z-index: 5;
+    align-self: end;
+    max-width: 700px;
+    padding: 36px clamp(28px, 4.1vw, 68px) clamp(38px, 5.2vh, 78px);
+  }
+
+  .launch__eyebrow {
+    margin: 0 0 18px;
+    color: #bc765d;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+  }
+
+  .launch h1 {
+    max-width: 630px;
+    margin: 0;
+    color: #fbf6f0;
+    font-size: clamp(54px, 5.2vw, 100px);
+    font-weight: 590;
+    letter-spacing: -.065em;
+    line-height: .88;
+    text-wrap: balance;
+  }
+
+  .launch__date {
+    margin: clamp(24px, 3.5vh, 40px) 0 0;
+    color: #e9dfd6;
+    font-size: clamp(15px, 1.05vw, 18px);
+    font-weight: 680;
+  }
+
+  .launch__description {
+    max-width: 590px;
+    margin: 13px 0 0;
+    color: var(--muted);
+    font-size: clamp(14px, .94vw, 17px);
+    line-height: 1.55;
+  }
+
+  .subscribe { position: relative; max-width: 590px; margin-top: 24px; }
+  .subscribe__label {
+    display: block;
+    margin-bottom: 9px;
+    color: #d9d0c7;
+    font-size: 12px;
+    font-weight: 720;
+    letter-spacing: .04em;
+  }
+  .subscribe__row { display: flex; gap: 9px; }
+  .subscribe__input, .subscribe__button {
+    min-height: 54px;
+    border-radius: 4px;
+    font: inherit;
+  }
+  .subscribe__input {
+    min-width: 0;
+    flex: 1 1 auto;
+    border: 1px solid rgb(255 255 255 / .17);
+    padding: 0 18px;
+    color: #fbf6f0;
+    background: rgb(255 255 255 / .055);
+    outline: none;
+  }
+  .subscribe__input::placeholder { color: #7f7b77; }
+  .subscribe__input:hover { border-color: rgb(255 255 255 / .3); }
+  .subscribe__input:focus-visible {
+    border-color: #f39772;
+    box-shadow: 0 0 0 3px rgb(239 116 70 / .2);
+  }
+  .subscribe__input[aria-invalid="true"] { border-color: #ef8e80; }
+  .subscribe__button {
+    flex: 0 0 auto;
+    border: 1px solid #ff986f;
+    padding: 0 24px;
+    color: #1b0e0a;
+    background: linear-gradient(180deg, #ff966c, #e6663b);
+    box-shadow: 0 10px 28px rgb(226 83 38 / .2), inset 0 1px rgb(255 255 255 / .35);
+    font-weight: 780;
+    cursor: pointer;
+    transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+  }
+  .subscribe__button:hover { filter: brightness(1.07); transform: translateY(-1px); }
+  .subscribe__button:active { transform: translateY(1px); }
+  .subscribe__button:focus-visible { outline: 3px solid rgb(255 255 255 / .78); outline-offset: 3px; }
+  .subscribe__button:disabled { cursor: wait; filter: saturate(.5); opacity: .78; transform: none; }
+  .subscribe__status { min-height: 20px; margin: 8px 0 0; color: #c9c2bb; font-size: 12px; line-height: 1.4; }
+  .subscribe[data-state="success"] .subscribe__status { color: #9dd0af; }
+  .subscribe[data-state="error"] .subscribe__status { color: #f3a69c; }
+  .subscribe__privacy { margin: 2px 0 0; color: #918b85; font-size: 12px; line-height: 1.45; }
+  .subscribe__trap {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+    clip-path: inset(50%) !important;
+    white-space: nowrap !important;
+  }
+
+  .mosaic {
+    --light-x: 58%;
+    --light-y: 38%;
+    position: relative;
+    align-self: stretch;
+    min-width: 0;
+    min-height: 650px;
+    margin-top: -92px;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at var(--light-x) var(--light-y), rgb(233 116 72 / .14), transparent 32%),
+      linear-gradient(110deg, transparent 0 22%, rgb(255 255 255 / .016) 45%, transparent 69%);
+  }
+
+  .mosaic::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    background: radial-gradient(ellipse at center, transparent 30%, rgb(3 5 6 / .15) 60%, rgb(3 5 6 / .84) 108%);
+    pointer-events: none;
+  }
+
+  .mosaic__halo {
+    position: absolute;
+    z-index: 0;
+    top: 13%;
+    left: 6%;
+    width: 94%;
+    aspect-ratio: 1.25;
+    border-radius: 42%;
+    background: rgb(194 67 29 / .16);
+    filter: blur(70px);
+    transform: translate3d(calc((var(--light-x) - 50%) * .05), calc((var(--light-y) - 50%) * .04), 0);
+  }
+
+  .mosaic__squircle {
+    position: absolute;
+    z-index: 1;
+    top: 12%;
+    right: -15%;
+    width: min(48vw, 820px);
+    aspect-ratio: 1;
+    overflow: hidden;
+    border: 1px solid rgb(255 155 112 / .12);
+    border-radius: 34%;
+    background: #1b0d09;
+    box-shadow:
+      inset 0 0 80px rgb(0 0 0 / .62),
+      -20px 25px 90px rgb(183 59 24 / .13),
+      0 0 0 12px rgb(255 255 255 / .01);
+    transform: rotate(-2.8deg);
+  }
+
+  .mosaic__projection, .mosaic__image { width: 100%; height: 100%; }
+  .mosaic__projection::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(145deg, rgb(255 187 133 / .2), transparent 35%),
+      radial-gradient(circle at 70% 65%, transparent, rgb(25 5 0 / .47));
+    mix-blend-mode: multiply;
+  }
+  .mosaic__image { display: block; object-fit: cover; filter: saturate(.84) contrast(1.07) brightness(.72) sepia(.08); }
+
+  .mosaic__grid {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-template-rows: repeat(6, minmax(0, 1fr));
+    gap: clamp(2px, .22vw, 4px);
+    padding: 2px;
+    perspective: 900px;
+  }
+
+  .mosaic__tile {
+    --tile-cover-alpha: .66;
+    --tile-image-saturation: .72;
+    --tile-image-brightness: .68;
+    --tile-blur: 2px;
+    --tile-glint-alpha: .03;
+    --tile-edge-alpha: .08;
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    border: 1px solid rgb(255 255 255 / .025);
+    border-radius: clamp(3px, .44vw, 8px);
+    background: rgb(6 8 9 / .2);
+    transform: translateZ(var(--tile-depth));
+    transition:
+      --tile-cover-alpha 4.8s cubic-bezier(.4, 0, .2, 1) var(--tile-delay),
+      --tile-image-saturation 4.8s ease-in-out var(--tile-delay),
+      --tile-image-brightness 4.8s ease-in-out var(--tile-delay),
+      --tile-blur 4.8s ease-in-out var(--tile-delay),
+      --tile-glint-alpha 4.8s ease-in-out var(--tile-delay),
+      --tile-edge-alpha 4.8s ease-in-out var(--tile-delay);
+  }
+
+  .mosaic__tile::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background:
+      radial-gradient(circle at var(--light-x) var(--light-y), rgb(255 151 91 / var(--tile-glint-alpha)), transparent 58%),
+      linear-gradient(145deg, rgb(255 255 255 / var(--tile-edge-alpha)), transparent 30%),
+      repeating-linear-gradient(37deg, transparent 0 3px, rgb(255 255 255 / .012) 4px, transparent 5px),
+      rgb(8 10 11 / var(--tile-cover-alpha));
+    box-shadow:
+      inset 1px 1px 0 rgb(255 255 255 / .055),
+      inset -1px -1px 0 rgb(0 0 0 / .72),
+      inset 0 0 18px rgb(0 0 0 / .74),
+      0 2px 7px rgb(0 0 0 / .55);
+    -webkit-backdrop-filter: blur(var(--tile-blur)) saturate(var(--tile-image-saturation)) brightness(var(--tile-image-brightness));
+    backdrop-filter: blur(var(--tile-blur)) saturate(var(--tile-image-saturation)) brightness(var(--tile-image-brightness));
+  }
+
+  .mosaic__tile[data-state="sealed"] { --tile-cover-alpha: .94; --tile-image-saturation: .25; --tile-image-brightness: .38; --tile-blur: 5px; --tile-glint-alpha: .015; --tile-edge-alpha: .045; }
+  .mosaic__tile[data-state="dim"] { --tile-cover-alpha: .78; --tile-image-saturation: .54; --tile-image-brightness: .56; --tile-blur: 3px; --tile-glint-alpha: .025; --tile-edge-alpha: .07; }
+  .mosaic__tile[data-state="revealed"] { --tile-cover-alpha: .42; --tile-image-saturation: .92; --tile-image-brightness: .92; --tile-blur: .8px; --tile-glint-alpha: .075; --tile-edge-alpha: .13; }
+  .mosaic__tile[data-state="glint"] { --tile-cover-alpha: .16; --tile-image-saturation: 1.05; --tile-image-brightness: 1.13; --tile-blur: 0px; --tile-glint-alpha: .42; --tile-edge-alpha: .24; }
+  .mosaic__tile[data-state="sleeping"] { --tile-cover-alpha: .66; --tile-image-saturation: .72; --tile-image-brightness: .68; --tile-blur: 2px; --tile-glint-alpha: .03; --tile-edge-alpha: .08; }
+
+  .mosaic__noise {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    opacity: .18;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.34'/%3E%3C/svg%3E");
+    mix-blend-mode: soft-light;
+  }
+
+  @media (max-width: 900px) {
+    .launch { min-width: 0; overflow-x: clip; }
+    .launch__header {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      min-height: 72px;
+      padding: 20px clamp(16px, 5vw, 28px) 10px;
+    }
+    .launch__brand { width: min(170px, 54vw); }
+    .launch__brand :global(.announcements-lockup__endorsement) { font-size: 8px; }
+    .launch__status { gap: 7px; margin: 0; font-size: 8px; letter-spacing: .12em; white-space: nowrap; }
+    .launch__status span { width: 6px; height: 6px; }
+    .launch__layout { display: flex; flex-direction: column; min-height: calc(100svh - 72px); }
+    .mosaic {
+      order: 1;
+      flex: 0 0 auto;
+      width: 100%;
+      height: clamp(300px, 43svh, 440px);
+      min-height: 0;
+      margin-top: 0;
+    }
+    .mosaic__grid {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      grid-template-rows: repeat(12, minmax(0, 1fr));
+      gap: 3px;
+    }
+    .mosaic__squircle {
+      top: 5%;
+      right: -9%;
+      width: min(92vw, 470px);
+      border-radius: 31%;
+    }
+    .mosaic__halo { top: 7%; left: 4%; width: 96%; }
+    .launch__copy {
+      order: 2;
+      align-self: auto;
+      width: 100%;
+      max-width: none;
+      padding: clamp(38px, 7vh, 66px) clamp(16px, 5vw, 28px) 44px;
+    }
+    .launch__eyebrow { margin-bottom: 14px; }
+    .launch h1 { max-width: 760px; font-size: clamp(48px, 11.2vw, 84px); line-height: .9; }
+    .launch__date { margin-top: 25px; }
+    .launch__description { max-width: 670px; font-size: 15px; }
+    .subscribe { max-width: 670px; }
+    .subscribe__row { flex-direction: column; }
+    .subscribe__input, .subscribe__button { width: 100%; }
+    .subscribe__button { min-height: 56px; }
+  }
+
+  @media (max-width: 359px) {
+    .launch__header { padding-inline: 14px; }
+    .launch__brand { width: 145px; }
+    .launch__status { font-size: 7px; }
+    .mosaic { height: 300px; }
+    .launch__copy { padding-inline: 14px; }
+    .launch h1 { font-size: 47px; letter-spacing: -.07em; }
+    .launch__description { font-size: 14px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mosaic__tile { transition: none; }
+    .subscribe__button { transition: none; }
+  }
+</style>
