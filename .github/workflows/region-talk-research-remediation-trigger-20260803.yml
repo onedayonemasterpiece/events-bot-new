@@ -1,4 +1,4 @@
-name: Materialize Region Talk terminal remediation on PR
+name: Diagnose Region Talk terminal remediation on PR
 
 on:
   pull_request:
@@ -11,15 +11,15 @@ on:
       - '.tmp/region-talk-terminal-remediation/**'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: region-talk-terminal-remediation-materialize-20260803
+  group: region-talk-terminal-remediation-diagnostic-20260803
   cancel-in-progress: false
 
 jobs:
-  materialize:
-    name: Decode, validate and commit terminal remediation
+  diagnose:
+    name: Materialize ephemerally and report importer rejections
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -38,11 +38,50 @@ jobs:
           data_b64="$(sed -n "s/^[[:space:]]*DATA_B64='\(.*\)'$/\1/p" "$source_workflow")"
           test -n "$script_b64"
           test -n "$data_b64"
-          printf '%s' "$script_b64" | base64 --decode > /tmp/apply_rt_final.py
+          printf '%s' "$script_b64" | base64 --decode > /tmp/apply_rt_final.original.py
           printf '%s' "$data_b64" | base64 --decode > .tmp/region-talk-terminal-remediation/data.bin
+          python -m py_compile /tmp/apply_rt_final.original.py
+
+      - name: Disable only the terminal importer assertion for diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+
+          source = Path('/tmp/apply_rt_final.original.py')
+          target = Path('/tmp/apply_rt_final.py')
+          tree = ast.parse(source.read_text(encoding='utf-8'))
+          removed = 0
+
+          class DiagnosticTransformer(ast.NodeTransformer):
+              def visit_Assert(self, node):
+                  global removed
+                  message = node.msg.value if isinstance(node.msg, ast.Constant) else ''
+                  if message == 'terminal payloads fail current importer semantic validation':
+                      removed += 1
+                      return ast.copy_location(
+                          ast.Expr(
+                              value=ast.Call(
+                                  func=ast.Name(id='print', ctx=ast.Load()),
+                                  args=[ast.Constant(value='diagnostic: terminal importer assertion deferred')],
+                                  keywords=[],
+                              )
+                          ),
+                          node,
+                      )
+                  return node
+
+          tree = DiagnosticTransformer().visit(tree)
+          ast.fix_missing_locations(tree)
+          if removed != 1:
+              raise SystemExit(f'expected exactly one terminal importer assertion, found {removed}')
+          target.write_text(ast.unparse(tree) + '\n', encoding='utf-8')
+          PY
           python -m py_compile /tmp/apply_rt_final.py
 
-      - name: Materialize terminal successors and remediation plan
+      - name: Materialize into ephemeral checkout
         shell: bash
         run: |
           set -euo pipefail
@@ -51,36 +90,68 @@ jobs:
             --archive "$PWD/.tmp/region-talk-terminal-remediation/part-00" \
             --blob "$PWD/.tmp/region-talk-terminal-remediation/data.bin"
 
-      - name: Validate repository result
+      - name: Run current importer and emit row-level errors
+        id: importer
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install --disable-pip-version-check -q jsonschema pytest
-          pytest -q \
-            tests/test_region_talk_external_publication_import.py \
-            tests/test_region_talk_external_research_contract.py
-          python -m py_compile scripts/region_talk_external_publication_import.py
-          git diff --check
+          python -m pip install --disable-pip-version-check -q jsonschema
+          mkdir -p /tmp/rt-remediation-diagnostic
+          cp /tmp/apply_rt_final.original.py /tmp/rt-remediation-diagnostic/
 
-      - name: Commit materialized result and remove one-shot transport
+          status=0
+          while IFS= read -r input_path; do
+            name="$(basename "$input_path" .json)"
+            report="/tmp/rt-remediation-diagnostic/${name}.validation.json"
+            if ! python scripts/region_talk_external_publication_import.py \
+              "$input_path" --report "$report"; then
+              status=1
+            fi
+          done < <(find docs/features/region-talk-channel -maxdepth 1 -type f \
+            -name 'region-talk-external-research-result-region-talk-external-2026-08-02-*.json' \
+            | sort)
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          reports = sorted(Path('/tmp/rt-remediation-diagnostic').glob('*.validation.json'))
+          summary = {'reports': [], 'rejected_total': 0, 'conflict_total': 0}
+          for path in reports:
+              payload = json.loads(path.read_text(encoding='utf-8'))
+              rejected = payload.get('rejected') or []
+              conflicts = payload.get('conflicts') or []
+              row = {
+                  'report': path.name,
+                  'request_id': (payload.get('batch') or {}).get('request_id'),
+                  'valid_count': len(payload.get('valid_ids') or []),
+                  'rejected_count': len(rejected),
+                  'conflict_count': len(conflicts),
+                  'rejected': rejected,
+                  'conflicts': conflicts,
+              }
+              summary['reports'].append(row)
+              summary['rejected_total'] += len(rejected)
+              summary['conflict_total'] += len(conflicts)
+          out = Path('/tmp/rt-remediation-diagnostic/summary.json')
+          out.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          print(json.dumps(summary, ensure_ascii=False, indent=2))
+          PY
+
+          cp docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-08-02-*.json \
+            /tmp/rt-remediation-diagnostic/ 2>/dev/null || true
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Upload diagnostic reports and generated successors
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: region-talk-terminal-remediation-diagnostic-${{ github.run_id }}
+          path: /tmp/rt-remediation-diagnostic
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Fail after preserving diagnostics
+        if: steps.importer.outputs.status != '0'
         shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add . ':!.codex/**'
-          git rm -f \
-            .github/workflows/region-talk-research-remediation-export-20260802.yml \
-            .github/workflows/region-talk-research-remediation-trigger-20260803.yml
-          git rm -rf .tmp/region-talk-terminal-remediation
-          git diff --cached --check
-          git commit -m 'Finalize Region Talk research terminal decisions'
-          git push origin HEAD:agent/region-talk-research-terminal-remediation-20260802
-
-          {
-            echo '### Region Talk terminal remediation materialized'
-            echo
-            echo '- source: embedded checked-in materializer and archive'
-            echo '- tests: terminal research contract and importer regression'
-            echo '- one-shot workflows and transport removed from final diff'
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: exit 1
