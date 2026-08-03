@@ -1,0 +1,89 @@
+---
+import Breadcrumbs from './Breadcrumbs.astro';
+import EventCard from './EventCard.astro';
+import type { ResolvedGastronomyCollection } from '../lib/staticCollections';
+import { siteHomeHref, withBase } from '../lib/events';
+
+interface Props { collection: ResolvedGastronomyCollection; }
+const { collection } = Astro.props;
+const months = new Intl.DateTimeFormat('ru-RU', { month:'long', year:'numeric', timeZone:'UTC' });
+const grouped = new Map<string, typeof collection.future>();
+for (const item of collection.future) {
+  const key = item.event.start_date.slice(0, 7);
+  grouped.set(key, [...(grouped.get(key) || []), item]);
+}
+const publicationStatus = collection.publicationStatus;
+const collectionState = collection.lifecycle === 'last_good'
+  ? 'last-good'
+  : collection.lifecycle === 'blocked' ? 'blocked'
+    : collection.lifecycle === 'recent_empty' || collection.lifecycle === 'dormant' ? 'empty' : 'ready';
+const stateCopy = collection.lifecycle === 'blocked'
+  ? 'Состав подборки проходит проверку. Мы не показываем неподтверждённые события как пустой или готовый результат.'
+  : collection.lifecycle === 'low_supply'
+    ? 'Сейчас подтверждено немного будущих событий. Страница сохранена и обновится после появления новых дат.'
+    : collection.lifecycle === 'recent_empty'
+      ? 'Новых дат пока нет. Ниже сохранены недавно прошедшие подтверждённые события.'
+      : collection.lifecycle === 'dormant'
+        ? 'Новых подтверждённых дат пока нет.'
+        : collection.lifecycle === 'last_good'
+          ? 'Показываем последнюю успешно проверенную версию, пока обновление данных восстанавливается.'
+          : null;
+---
+<main
+  id="main"
+  data-static-collection-page
+  data-collection-label="gastronomy"
+  data-publication-status={publicationStatus}
+  data-collection-state={collectionState}
+  data-catalog-hash={collection.manifest.catalog_hash}
+  data-manifest-hash={collection.manifest.manifest_hash}
+>
+  <div class="page-shell page-shell--gastronomy">
+    <Breadcrumbs parents={[{ label:'Афиша', href:siteHomeHref() }, { label:'Подборки', href:withBase('/podborki/') }]} current="Гастрономия" />
+    <section class="section-card"><div class="section-card__inner">
+      <p class="eyebrow">Проверенная подборка</p>
+      <h1>Гастрономические события Калининграда и области</h1>
+      <p class="lead">Дегустации, гастроужины, фестивали еды и другие события, где гастрономия — центр программы.</p>
+      {stateCopy && <p class="collection-state" role="status">{stateCopy}</p>}
+    </div></section>
+
+    {[...grouped.entries()].map(([key, items]) => (
+      <section class="section-card collection-month" aria-labelledby={`month-${key}`}>
+        <div class="section-card__inner">
+          <h2 id={`month-${key}`}>{months.format(new Date(`${key}-01T00:00:00Z`))}</h2>
+          <div class="cards-grid">
+            {items.map(({ event, familyId }) => (
+              <div data-collection-event data-event-id={event.id} data-family-id={familyId}>
+                <EventCard event={event} mobileFlowMedia />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    ))}
+
+    {collection.recent.length > 0 && (
+      <section class="section-card collection-month" aria-labelledby="recent-gastronomy">
+        <div class="section-card__inner">
+          <p class="eyebrow">Недавно прошло</p>
+          <h2 id="recent-gastronomy">Недавние гастрономические события</h2>
+          <div class="cards-grid">
+            {collection.recent.map(({ event, familyId }) => (
+              <div data-collection-event data-event-id={event.id} data-family-id={familyId}>
+                <EventCard event={event} mobileFlowMedia />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    )}
+  </div>
+</main>
+
+<style>
+  .page-shell--gastronomy { display:grid; gap:1rem; }
+  .collection-state { max-width:64ch; padding:.85rem 1rem; border-radius:1rem; background:var(--color-surface-soft, #f4f1ea); }
+  .collection-month h2 { text-transform:capitalize; }
+  [data-collection-event] { min-width:0; }
+  @media (max-width:759px) { .page-shell--gastronomy .cards-grid { grid-template-columns:minmax(0, 1fr); } }
+</style>
