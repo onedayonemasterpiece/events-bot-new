@@ -1,9 +1,8 @@
-name: Diagnose Region Talk terminal remediation on PR
+name: Inspect Region Talk remediation materializer heredoc
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: [main]
     types: [opened, synchronize, reopened]
     paths:
       - '.github/workflows/region-talk-research-remediation-trigger-20260803.yml'
@@ -12,197 +11,84 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: region-talk-terminal-remediation-diagnostic-20260803
-  cancel-in-progress: false
-
 jobs:
-  diagnose:
-    name: Materialize ephemerally and persist importer diagnostics
+  inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 10
     steps:
-      - name: Check out exact remediation branch
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: agent/region-talk-research-terminal-remediation-20260802
           fetch-depth: 0
 
-      - name: Extract embedded materializer exactly
+      - name: Inspect exact heredoc structure
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           import base64
-          import gzip
+          import json
           from pathlib import Path
 
           source = Path('.github/workflows/region-talk-research-remediation-export-20260802.yml')
           lines = source.read_text(encoding='utf-8').splitlines()
-          starts = [
-              index for index, line in enumerate(lines)
-              if "cat > /tmp/apply.b64 <<'B64'" in line
+          start_hits = [
+              {'index': i, 'repr': repr(line), 'length': len(line)}
+              for i, line in enumerate(lines)
+              if 'apply.b64' in line or "<<'B64'" in line
           ]
-          if len(starts) != 1:
-              raise SystemExit(f'expected one materializer heredoc, found {len(starts)}')
-          start = starts[0]
-          ends = [
-              index for index in range(start + 1, len(lines))
-              if lines[index].strip() == 'B64'
+          end_hits = [
+              {'index': i, 'repr': repr(line), 'length': len(line)}
+              for i, line in enumerate(lines)
+              if line.strip() == 'B64'
           ]
-          if not ends:
-              raise SystemExit('materializer heredoc end marker not found')
-          end = ends[0]
-          encoded = ''.join(line.strip() for line in lines[start + 1:end] if line.strip())
-          compressed = base64.b64decode(encoded, validate=True)
-          if compressed[:2] != b'\x1f\x8b':
-              raise SystemExit(f'unexpected compressed magic: {compressed[:8].hex()}')
-          script = gzip.decompress(compressed)
-          target = Path('/tmp/apply_rt_final.original.py')
-          target.write_bytes(script)
-          print(
-              f'extracted materializer encoded={len(encoded)} '
-              f'compressed={len(compressed)} script={len(script)}'
-          )
-          PY
-          python -m py_compile /tmp/apply_rt_final.original.py
-
-      - name: Disable only the terminal importer assertion for diagnostics
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import ast
-          from pathlib import Path
-
-          source = Path('/tmp/apply_rt_final.original.py')
-          target = Path('/tmp/apply_rt_final.py')
-          tree = ast.parse(source.read_text(encoding='utf-8'))
-          removed = 0
-
-          class DiagnosticTransformer(ast.NodeTransformer):
-              def visit_Assert(self, node):
-                  global removed
-                  message = node.msg.value if isinstance(node.msg, ast.Constant) else ''
-                  if message == 'terminal payloads fail current importer semantic validation':
-                      removed += 1
-                      return ast.copy_location(
-                          ast.Expr(
-                              value=ast.Call(
-                                  func=ast.Name(id='print', ctx=ast.Load()),
-                                  args=[ast.Constant(value='diagnostic: terminal importer assertion deferred')],
-                                  keywords=[],
-                              )
-                          ),
-                          node,
-                      )
-                  return node
-
-          tree = DiagnosticTransformer().visit(tree)
-          ast.fix_missing_locations(tree)
-          if removed != 1:
-              raise SystemExit(f'expected exactly one terminal importer assertion, found {removed}')
-          target.write_text(ast.unparse(tree) + '\n', encoding='utf-8')
-          PY
-          python -m py_compile /tmp/apply_rt_final.py
-
-      - name: Materialize successors into ephemeral checkout
-        shell: bash
-        run: |
-          set -euo pipefail
-          python /tmp/apply_rt_final.py \
-            --repo "$PWD" \
-            --archive "$PWD/.tmp/region-talk-terminal-remediation/part-00"
-
-      - name: Run current importer and build row-level summary
-        id: importer
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m pip install --disable-pip-version-check -q jsonschema
-          work=/tmp/rt-remediation-diagnostic
-          mkdir -p "$work"
-          cp /tmp/apply_rt_final.original.py "$work/"
-
-          status=0
-          for input_path in \
-            docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-08-02-191600.json \
-            docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-08-02-191601.json \
-            docs/features/region-talk-channel/region-talk-external-research-result-region-talk-external-2026-08-02-191602.json
-          do
-            test -f "$input_path"
-            name="$(basename "$input_path" .json)"
-            report="$work/${name}.validation.json"
-            if ! python scripts/region_talk_external_publication_import.py \
-              "$input_path" --report "$report"; then
-              status=1
-            fi
-          done
-
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          work = Path('/tmp/rt-remediation-diagnostic')
-          reports = sorted(work.glob('*.validation.json'))
-          summary = {
-              'schema_version': 'region_talk_terminal_remediation_diagnostic.v1',
-              'reports': [],
-              'rejected_total': 0,
-              'conflict_total': 0,
+          result = {
+              'line_count': len(lines),
+              'start_hits': start_hits,
+              'end_hits': end_hits,
+              'source_size': source.stat().st_size,
           }
-          for path in reports:
-              payload = json.loads(path.read_text(encoding='utf-8'))
-              rejected = payload.get('rejected') or []
-              conflicts = payload.get('conflicts') or []
-              row = {
-                  'report': path.name,
-                  'request_id': (payload.get('batch') or {}).get('request_id'),
-                  'valid_count': len(payload.get('valid_ids') or []),
-                  'rejected_count': len(rejected),
-                  'conflict_count': len(conflicts),
-                  'rejected': rejected,
-                  'conflicts': conflicts,
-              }
-              summary['reports'].append(row)
-              summary['rejected_total'] += len(rejected)
-              summary['conflict_total'] += len(conflicts)
-          out = work / 'summary.json'
-          out.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-          print(json.dumps(summary, ensure_ascii=False, indent=2))
+          if start_hits and end_hits:
+              start = start_hits[0]['index']
+              end = next((item['index'] for item in end_hits if item['index'] > start), None)
+              result['selected_start'] = start
+              result['selected_end'] = end
+              if end is not None:
+                  data_lines = lines[start + 1:end]
+                  encoded = ''.join(line.strip() for line in data_lines if line.strip())
+                  result['data_line_count'] = len(data_lines)
+                  result['encoded_length'] = len(encoded)
+                  result['encoded_prefix'] = encoded[:32]
+                  result['encoded_suffix'] = encoded[-32:]
+                  try:
+                      decoded = base64.b64decode(encoded, validate=False)
+                      result['decoded_length_non_strict'] = len(decoded)
+                      result['decoded_prefix_hex'] = decoded[:16].hex()
+                  except Exception as exc:
+                      result['decode_non_strict_error'] = f'{type(exc).__name__}: {exc}'
+                  try:
+                      decoded = base64.b64decode(encoded, validate=True)
+                      result['decoded_length_strict'] = len(decoded)
+                      result['decoded_strict_prefix_hex'] = decoded[:16].hex()
+                  except Exception as exc:
+                      result['decode_strict_error'] = f'{type(exc).__name__}: {exc}'
+          target = Path('.tmp/region-talk-terminal-remediation/heredoc-inspection-20260803.json')
+          target.parent.mkdir(parents=True, exist_ok=True)
+          target.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          print(json.dumps(result, ensure_ascii=False, indent=2))
           PY
 
-          echo "status=$status" >> "$GITHUB_OUTPUT"
-
-      - name: Persist diagnostic summary in branch
-        if: ${{ always() }}
+      - name: Commit inspection receipt
         shell: bash
         run: |
           set -euo pipefail
-          source=/tmp/rt-remediation-diagnostic/summary.json
-          test -f "$source"
-          target=.tmp/region-talk-terminal-remediation/diagnostic-summary-20260803.json
-          cp "$source" "$target"
+          target=.tmp/region-talk-terminal-remediation/heredoc-inspection-20260803.json
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -f "$target"
           if git diff --cached --quiet; then
-            echo 'diagnostic summary already current'
+            echo 'inspection receipt already current'
           else
-            git commit -m 'Record Region Talk terminal importer diagnostics'
+            git commit -m 'Record Region Talk materializer heredoc inspection'
             git push origin HEAD:agent/region-talk-research-terminal-remediation-20260802
           fi
-
-      - name: Upload full diagnostic reports
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: region-talk-terminal-remediation-diagnostic-${{ github.run_id }}
-          path: /tmp/rt-remediation-diagnostic
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Fail after preserving diagnostics
-        if: steps.importer.outputs.status != '0'
-        shell: bash
-        run: exit 1
