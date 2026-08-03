@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-03-yandex-cloud-reaper-service-suspension.md`
+  - Scope: account-transfer suspension of KenigEvents API Gateways, email
+    triggers and the Postbox feedback YDB.
+  - Must not regress: post-transfer acceptance inventories every cloud folder;
+    committed live gateways/triggers must be active, email YDB stays bounded at
+    10 RCU/s, and Region Talk is never re-enabled by this recovery.
+
 - `INC-2026-08-03-ydb-request-unit-billing.md`
   - Scope: Region Talk YDB account ownership, RU throttling, wide metric reads,
     scheduled/watchdog catch-up and migration integrity.

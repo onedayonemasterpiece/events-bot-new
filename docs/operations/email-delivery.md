@@ -61,7 +61,42 @@ statement collision during the guarded first attempt.
 
 Public NotiSend documentation does not document a webhook signature. A NotiSend webhook body is therefore only an untrusted signal: it may be size/schema/dedup checked and recorded, but it cannot update delivery state or suppression until an authenticated `GET /v1/email/messages/:id` lookup verifies the provider state. The live Postbox-specific V2 boundary uses an IAM-authenticated YDS consumer to compute a versioned recipient HMAC; a service-only Supabase RPC correlates it to the exact persisted Postbox `messageId` and DB-owned identity before applying an idempotent transition or suppression. Transactional application sending remains disabled because the scheduler/worker, notification-channel alerts and gradual warm-up gate are separate release work.
 
-## Live provider state (2026-07-12)
+## Live provider state (2026-08-03)
+
+On 2026-08-03, after the Yandex Cloud account/organization transfer,
+`yc.iam.reaper` stopped all four KenigEvents API Gateways, paused all five email
+triggers and stopped the dedicated `kenigevents-email-events` database. The
+accepted resources were restored explicitly: the database is `RUNNING` with
+zero provisioned RCU, a hard 10 RCU/s ceiling and deletion protection; all four
+gateways and all five intended triggers are `ACTIVE`; repeated read-only relay
+and focus-connectivity probes return HTTP 200. Region Talk and the obsolete KGD80
+Postbox database were not changed. The application `global`, `transactional` and
+`recommendation` Supabase switches remained disabled with `dry_run_only=true`,
+so resuming the infrastructure could not release outbound user mail.
+
+The Postbox feedback DLQ contained 162 retained messages during this audit. The
+count pre-dates the 03:49 UTC reaper suspension (134 were already visible on
+2026-08-02 and growth ended before the transfer event) and belongs to the known
+focus OTP correlation issue in
+[`INC-2026-07-30-focus-email-otp-false-success`](../reports/incidents/INC-2026-07-30-focus-email-otp-false-success.md).
+Do not purge or bulk-replay that queue as an account-transfer recovery step.
+
+Account/billing transfer acceptance is fail-closed:
+
+1. inventory all folders in the target cloud and classify every `STOPPED`,
+   `PAUSED` or otherwise non-active resource before mutation;
+2. restore only resources whose committed desired state is live; never start an
+   unrelated database merely because it exists;
+3. verify the Supabase outbound switches and dry-run gates before resuming
+   traffic-bearing triggers;
+4. require `ACTIVE` Functions/Triggers in the inbound reconciler, `ACTIVE` API
+   Gateways, bounded `RUNNING` email YDB, safe HTTP read probes and one successful
+   IMAP collector invocation;
+5. preserve queues and DLQs until their age/correlation contract is understood;
+6. keep Region Talk outside this procedure.
+
+Canonical incident/regression contract:
+[`INC-2026-08-03-yandex-cloud-reaper-service-suspension`](../reports/incidents/INC-2026-08-03-yandex-cloud-reaper-service-suspension.md).
 
 - SpaceWeb retains `info@kenigevents.ru` and `dmarc@kenigevents.ru`; public MX,
   combined root SPF, SpaceWeb DKIM and monitoring DMARC resolve without changing

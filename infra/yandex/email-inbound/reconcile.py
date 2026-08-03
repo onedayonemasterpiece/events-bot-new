@@ -170,19 +170,21 @@ def load_inventory(path: Path) -> dict[str, Any]:
     return value
 
 
-def _names(inventory: Mapping[str, Any], collection: str) -> set[str] | None:
+def _resources_by_name(
+    inventory: Mapping[str, Any], collection: str
+) -> dict[str, Mapping[str, Any]] | None:
     rows = inventory.get(collection)
     if rows is None:
         return None
     if not isinstance(rows, list):
         raise ReconcileError(f"inventory_collection_invalid:{collection}")
-    names = set()
+    resources: dict[str, Mapping[str, Any]] = {}
     for row in rows:
         if isinstance(row, str):
-            names.add(row)
+            resources[row] = {"name": row}
         elif isinstance(row, Mapping) and row.get("name"):
-            names.add(str(row["name"]))
-    return names
+            resources[str(row["name"])] = row
+    return resources
 
 
 def plan(
@@ -238,9 +240,22 @@ def plan(
         "triggers": "trigger",
     }
     for collection, kind in kind_names.items():
-        observed = _names(inventory, collection)
+        observed = _resources_by_name(inventory, collection)
         for name in manifest[collection]:
             if observed is not None and name in observed:
+                if collection in {"functions", "triggers"}:
+                    runtime_status = str(observed[name].get("status") or "UNKNOWN").upper()
+                    if runtime_status != "ACTIVE":
+                        actions.append(
+                            Action(
+                                kind,
+                                name,
+                                "drift",
+                                f"resource exists but runtime status is {runtime_status}; "
+                                "manual recovery and acceptance checks are required",
+                            )
+                        )
+                        continue
                 actions.append(Action(kind, name, "ready", "resource exists"))
                 continue
             if collection in create_templates:
