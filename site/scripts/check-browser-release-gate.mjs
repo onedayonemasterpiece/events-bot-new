@@ -204,6 +204,14 @@ export function staticSpecimenCandidates(root, basePath, routes) {
   return candidates.sort((left, right) => Number(!/-6408\/$/u.test(left.route)) - Number(!/-6408\/$/u.test(right.route)));
 }
 
+export function assertRequiredPreviewBrowserJourney(candidates, sourceEventId = 6408, targetEventId = 6407) {
+  const sourceSuffix = new RegExp(`-${sourceEventId}/$`, 'u');
+  const targetSuffix = new RegExp(`-${targetEventId}/$`, 'u');
+  const journey = candidates.find((candidate) => sourceSuffix.test(candidate.route) && targetSuffix.test(candidate.targetPath));
+  invariant(journey, `clean preview fixture is missing deterministic multi-image recommendation journey ${sourceEventId} -> ${targetEventId}`);
+  return journey;
+}
+
 function singleImageSpecimen(root, basePath, routes) {
   return routes.find((route) => {
     const html = readFileSync(routeFile(root, basePath, route), 'utf8');
@@ -282,7 +290,7 @@ async function chooseSpecimen(browser, origin, candidates) {
   throw new Error('Browser release gate failed: no real event pair exercises a multi-image gallery recommendation');
 }
 
-async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
+export async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
   await page.waitForFunction((cardSelector) => Array.from(document.querySelectorAll(cardSelector))
     .filter((card) => !card.hidden)
     .every((card) => {
@@ -333,6 +341,7 @@ async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
       objectFit,
       imageOpacity: image ? Number(getComputedStyle(image).opacity || 1) : 0,
       imageVisibility: image ? getComputedStyle(image).visibility : '',
+      imageDisplay: image ? getComputedStyle(image).display : '',
       imageLoaded: Boolean(image?.complete && image?.naturalWidth > 0 && shell?.classList.contains('is-image-loaded')),
       imageMissing: Boolean(shell?.classList.contains('is-image-missing')),
       fallbackVisible: fallback ? (() => {
@@ -353,16 +362,20 @@ async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
   invariant(metrics.length >= expectedCount, `${selector} has ${metrics.length} cards, expected at least ${expectedCount}`);
   for (const item of metrics) {
     invariant(item.shell && item.shell.width > 100 && item.shell.height > 80, `card ${item.id} has invalid media shell geometry`);
-    invariant(item.image && item.image.left >= item.shell.left - 1 && item.image.right <= item.shell.right + 1, `card ${item.id} image escapes its shell`);
+    invariant(item.image, `card ${item.id} has no measurable image element`);
     invariant(item.variant === 'split-actions' && item.tabIndex === '0', `card ${item.id} bypasses canonical split EventCard behavior`);
     invariant(item.href && item.href === item.titleHref && item.href === item.mediaHref, `card ${item.id} has divergent canonical links`);
     invariant(item.actions.like === 1 && item.actions.dislike === 1 && item.actions.share === 1, `card ${item.id} has a non-canonical action set`);
     invariant(item.imageLoaded || item.imageMissing, `card ${item.id} media never reached loaded or missing state`);
     if (item.imageLoaded) {
+      invariant(item.image.left >= item.shell.left - 1 && item.image.right <= item.shell.right + 1, `card ${item.id} loaded image escapes its shell`);
       invariant(!item.fallbackVisible, `card ${item.id} exposes fallback text behind a loaded ${item.objectFit} image`);
       invariant(item.imageOpacity > 0.99 && item.imageVisibility === 'visible', `card ${item.id} loaded image is not paint-visible`);
     }
-    if (item.imageMissing) invariant(item.fallbackVisible, `card ${item.id} lost its fallback after image failure`);
+    if (item.imageMissing) {
+      invariant(item.imageDisplay === 'none', `card ${item.id} keeps a failed image paint layer above its fallback`);
+      invariant(item.fallbackVisible, `card ${item.id} lost its fallback after image failure`);
+    }
     // The serialized treatment is the source-of-truth contract produced by
     // resolveRelatedCardMediaTreatment(). Classified OCR/documents may cover
     // only inside their explicit 20% budget. Unknown/error media has no
@@ -448,7 +461,10 @@ async function assertRealCardEnter(page, origin, route, zoneSelector) {
   const expected = new URL(href, page.url()).href;
   await card.focus();
   await Promise.all([
-    page.waitForURL((url) => url.href === expected, { timeout: 12_000 }),
+    // Remote event media can keep the load event open after the new document
+    // and canonical route are already established. The acceptance contract is
+    // navigation plus the destination event shell, not third-party/CDN idle.
+    page.waitForURL((url) => url.href === expected, { timeout: 12_000, waitUntil:'domcontentloaded' }),
     page.keyboard.press('Enter'),
   ]);
   invariant(page.url() === expected && await page.locator('[data-desktop-clean-event]').count() === 1, `real Enter navigation failed in ${zoneSelector}`);
@@ -496,10 +512,12 @@ async function clickInertCurrentEventPoint(page) {
 }
 
 async function clickInertWithin(page, selector, label) {
-  const scope = page.locator(selector).first();
-  invariant(await scope.count() === 1, `${label} scope is missing`);
-  await scope.evaluate((element) => element.scrollIntoView({ block:'nearest', inline:'nearest' }));
-  const point = await scope.evaluate((element) => {
+  const scopeCount = await page.evaluate((scopeSelector) => document.querySelectorAll(scopeSelector).length, selector);
+  invariant(scopeCount >= 1, `${label} scope is missing`);
+  const point = await page.evaluate(({ scopeSelector }) => {
+    const element = document.querySelector(scopeSelector);
+    if (!element) return null;
+    element.scrollIntoView({ block:'nearest', inline:'nearest' });
     const rect = element.getBoundingClientRect();
     const blocked = 'a,button,input,textarea,select,[contenteditable="true"]';
     for (let y = Math.max(1, Math.ceil(rect.top + 3)); y <= Math.min(innerHeight - 2, Math.floor(rect.bottom - 3)); y += 8) {
@@ -509,7 +527,7 @@ async function clickInertWithin(page, selector, label) {
       }
     }
     return null;
-  });
+  }, { scopeSelector:selector });
   invariant(point, `could not find a real inert pointer point inside ${label}`);
   await page.mouse.click(point.x, point.y);
   return point;
@@ -960,6 +978,7 @@ async function runBrowserGate({ root, basePath, origin, browser, artifactDir = '
         media_height:item.shell.height,
         image_loaded:item.imageLoaded,
         image_missing:item.imageMissing,
+        image_display:item.imageDisplay,
         fallback_visible:item.fallbackVisible,
       })),
       related_cards: related.length, continuation_cards: continuation.length,
