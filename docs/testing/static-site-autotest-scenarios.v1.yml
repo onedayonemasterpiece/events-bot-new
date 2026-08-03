@@ -1,8 +1,9 @@
 schema: static_site_autotest_scenarios.v1
 status: canonical_strategy_seed
-updated_at: '2026-08-02'
+updated_at: '2026-08-03'
 strategy: docs/operations/static-site-autotest-strategy.md
 release_gates: docs/features/static-site-pages/release-autotest-gates.md
+auth_session_fixture: docs/testing/static-site-auth-session-fixture.md
 implementation_prompt: docs/testing/static-site-autotest-codex-prompt.md
 
 outcomes:
@@ -23,6 +24,50 @@ platforms:
   ios:
     layer: L2
     runner: appium_xcuitest_ios_simulator
+
+auth_modes:
+  anonymous:
+    real_jwt: false
+    product_otp_issue: forbidden
+    external_mail: forbidden
+  mocked_ui:
+    real_jwt: false
+    backend_claims: forbidden
+    product_otp_issue: forbidden
+    external_mail: forbidden
+  session_fixture:
+    real_jwt: true
+    credential: fresh_admin_issued_one_time
+    default_scope: worker
+    product_otp_issue: forbidden
+    external_mail: forbidden
+    real_mail_fallback: forbidden
+  admin_otp_ui:
+    real_jwt: true
+    credential: fresh_admin_issued_one_time
+    product_otp_issue: forbidden
+    external_mail: forbidden
+  real_mail_otp:
+    real_jwt: true
+    product_otp_issue: exactly_one_per_full_journey
+    external_mail: exactly_one_matching_message
+  yandex_oauth:
+    real_jwt: true
+    external_mail: forbidden
+
+auth_fixture_contract:
+  fixed_allowlisted_personas: required
+  new_unique_identity_per_routine_run: forbidden
+  session_state_in_github_secret: forbidden
+  auth_state_artifact_or_cache_upload: forbidden
+  service_or_admin_key_in_browser: forbidden
+  fixed_otp_or_production_bypass: forbidden
+  self_issued_jwt: forbidden
+  refresh_token_shared_between_parallel_workers: forbidden
+  session_fixture_real_mail_fallback: forbidden
+  unexpected_session_fixture_product_otp: FAIL_AUTH_FIXTURE_UNEXPECTED_OTP
+  unexpected_session_fixture_mail: FAIL_AUTH_FIXTURE_UNEXPECTED_MAIL
+  fixture_unavailable: BLOCKED_AUTH_FIXTURE
 
 suites:
   pr-fast:
@@ -132,13 +177,46 @@ scenarios:
       pull_request: false_until_implemented
       release: false_until_implemented
 
+  auth.session_fixture:
+    title: Fresh no-mail Supabase session fixture for authenticated business scenarios
+    status: planned_generic_contract_focus_specific_admin_issuer_exists
+    contract: docs/testing/static-site-auth-session-fixture.md
+    layers: [L1, L2]
+    platforms: [browser, android, ios]
+    trigger_tags: [auth-session, supabase-connectivity]
+    cost: medium
+    auth_mode: session_fixture
+    side_effects: one_admin_credential_one_verify_zero_product_otp_zero_external_mail
+    target: deployed_https_exact_repo_sha
+    session_scope:
+      browser: worker
+      android: job
+      ios: job
+    acceptance:
+      real_supabase_session: required
+      auth_get_user_or_protected_probe: required
+      reload_or_second_context: required
+      product_otp_issue_count: 0
+      external_mail_send_count: 0
+      external_mail_receipt_count: 0
+      real_mail_fallback: forbidden
+      state_artifact_upload: forbidden
+      cleanup_and_redaction: required
+    evidence: restricted_auth_fixture_receipt_without_tokens_or_state
+    blocking:
+      pull_request: affected_authenticated_scope_after_implementation
+      release: true_for_authenticated_scenarios_after_implementation
+
   personal.for_me_page:
     title: Authenticated pre-generated personal page is available without data leakage
     status: planned
+    contract: docs/testing/static-site-auth-session-fixture.md
     layers: [L0, L1]
     platforms: [browser]
-    trigger_tags: [personalization, supabase-connectivity, static-route]
+    trigger_tags: [personalization, auth-session, supabase-connectivity, static-route]
     cost: medium
+    auth_mode: session_fixture
+    depends_on: [auth.session_fixture]
     side_effects: controlled_read_only_or_idempotent
     evidence: restricted_authenticated_summary
     blocking:
@@ -150,8 +228,9 @@ scenarios:
     status: partial
     layers: [L0, L1]
     platforms: [browser]
-    trigger_tags: [supabase-connectivity, yandex-relay, auth-otp, personalization]
+    trigger_tags: [supabase-connectivity, yandex-relay, auth-session, personalization]
     cost: low
+    auth_mode: anonymous
     side_effects: read_only
     evidence: sanitized_network_summary
     blocking:
@@ -161,10 +240,13 @@ scenarios:
   personalization.core_journey:
     title: Personalization ordering, feedback and persistence
     status: planned
+    contract: docs/testing/static-site-auth-session-fixture.md
     layers: [L0, L1]
     platforms: [browser]
-    trigger_tags: [personalization, static-data, static-route]
+    trigger_tags: [personalization, auth-session, static-data, static-route]
     cost: medium
+    auth_mode: session_fixture
+    depends_on: [auth.session_fixture]
     side_effects: idempotent_test_identity
     evidence: restricted_authenticated_summary
     blocking:
@@ -177,9 +259,10 @@ scenarios:
     contract: docs/features/static-site-pages/smart-vector-search/README.md
     layers: [L0, L1]
     platforms: [browser]
-    trigger_tags: [smart-search, auth-otp, static-route, mobile-input]
+    trigger_tags: [smart-search, auth-session, static-route, mobile-input]
     cost: low
-    side_effects: none_search_post_count_must_remain_zero
+    auth_mode: anonymous
+    side_effects: none_search_post_count_and_product_otp_count_must_remain_zero
     evidence: network_counter_and_ui_assertions
     blocking:
       pull_request: false_until_implemented
@@ -189,11 +272,14 @@ scenarios:
     title: Authenticated Search submits once and renders the versioned result contract
     status: partial_existing_mocked_no_live_backend_acceptance
     contract: docs/features/static-site-pages/smart-vector-search/README.md
+    auth_contract: docs/testing/static-site-auth-session-fixture.md
     layers: [L0, L1]
     platforms: [browser]
-    trigger_tags: [smart-search, auth-otp, supabase-connectivity, static-route]
+    trigger_tags: [smart-search, auth-session, supabase-connectivity, static-route]
     cost: medium
-    side_effects: fake_provider_or_fixed_test_identity
+    auth_mode: session_fixture
+    depends_on: [auth.session_fixture]
+    side_effects: fake_provider_or_fixed_test_identity_zero_product_otp_zero_external_mail
     evidence: schema_network_cards_feedback_and_cleanup
     blocking:
       pull_request: affected_scope_after_contract_activation
@@ -203,13 +289,16 @@ scenarios:
     title: Protected live Search reaches Auth, Edge, pgvector, cache and real EventCards
     status: planned
     contract: docs/features/static-site-pages/smart-vector-search/README.md
+    auth_contract: docs/testing/static-site-auth-session-fixture.md
     layers: [L1]
     platforms: [browser]
-    trigger_tags: [smart-search, supabase-connectivity, yandex-relay, auth-otp]
+    trigger_tags: [smart-search, auth-session, supabase-connectivity, yandex-relay]
     cost: medium
-    side_effects: protected_fixed_identity_cached_query
+    auth_mode: session_fixture
+    depends_on: [auth.session_fixture]
+    side_effects: protected_fixed_identity_cached_query_zero_product_otp_zero_external_mail
     target: deployed_https_exact_repo_sha
-    evidence: restricted_request_stage_and_render_summary
+    evidence: restricted_request_stage_auth_fixture_and_render_summary
     blocking:
       pull_request: false_until_implemented
       release: true_after_implementation
@@ -218,13 +307,16 @@ scenarios:
     title: Protected cold Search proves embedding, vector and verifier-or-degraded behavior
     status: planned
     contract: docs/features/static-site-pages/smart-vector-search/README.md
+    auth_contract: docs/testing/static-site-auth-session-fixture.md
     layers: [L1]
     platforms: [browser]
-    trigger_tags: [smart-search, supabase-connectivity, yandex-relay]
+    trigger_tags: [smart-search, auth-session, supabase-connectivity, yandex-relay]
     cost: high
-    side_effects: bounded_provider_calls_and_cold_quota
+    auth_mode: session_fixture
+    depends_on: [auth.session_fixture]
+    side_effects: bounded_provider_calls_and_cold_quota_zero_product_otp_zero_external_mail
     target: deployed_https_exact_repo_sha
-    evidence: restricted_provider_vector_policy_receipt
+    evidence: restricted_provider_vector_policy_and_auth_fixture_receipt
     blocking:
       pull_request: protected_manual_or_release_only
       release: true_after_implementation
@@ -233,12 +325,15 @@ scenarios:
     title: Repeated compatible Search is a true result-cache hit with zero provider and cold-quota delta
     status: planned
     contract: docs/features/static-site-pages/smart-vector-search/README.md
+    auth_contract: docs/testing/static-site-auth-session-fixture.md
     layers: [L0, L1]
     platforms: [browser]
-    trigger_tags: [smart-search, static-data, supabase-connectivity]
+    trigger_tags: [smart-search, auth-session, static-data, supabase-connectivity]
     cost: medium
-    side_effects: idempotent_test_identity
-    evidence: cache_provider_vector_and_quota_counters
+    auth_mode: session_fixture
+    depends_on: [auth.session_fixture]
+    side_effects: idempotent_test_identity_zero_product_otp_zero_external_mail
+    evidence: cache_provider_vector_quota_and_auth_fixture_counters
     blocking:
       pull_request: false_until_implemented
       release: true_after_implementation
@@ -261,13 +356,16 @@ scenarios:
     title: Cost-bearing Search preselects one healthy direct or relay route without duplicate dispatch
     status: planned
     contract: docs/features/static-site-pages/smart-vector-search/README.md
+    auth_contract: docs/testing/static-site-auth-session-fixture.md
     layers: [L0, L1, L2]
     platforms: [browser, android, ios]
-    trigger_tags: [smart-search, supabase-connectivity, yandex-relay, mobile-input]
+    trigger_tags: [smart-search, auth-session, supabase-connectivity, yandex-relay, mobile-input]
     cost: high
-    side_effects: fake_provider_or_cached_query_only
+    auth_mode: session_fixture
+    depends_on: [auth.session_fixture]
+    side_effects: fake_provider_or_cached_query_only_zero_product_otp_zero_external_mail
     selection: browser_full_matrix_mobile_representative
-    evidence: sanitized_route_and_post_count_summary
+    evidence: sanitized_route_post_count_and_auth_fixture_summary
     blocking:
       pull_request: direct_transport_contract_change_after_implementation
       release: true_after_implementation
@@ -276,12 +374,15 @@ scenarios:
     title: Rolling user quotas, idempotency, concurrency and global admission contain automated abuse
     status: partial_existing_fixed_bucket_and_sql_idempotency_only
     contract: docs/features/static-site-pages/smart-vector-search/README.md
+    auth_contract: docs/testing/static-site-auth-session-fixture.md
     layers: [L0, L1]
     platforms: [browser]
-    trigger_tags: [smart-search, supabase-connectivity]
+    trigger_tags: [smart-search, auth-session, supabase-connectivity]
     cost: medium
-    side_effects: transactional_fixture_or_staging_load_only
-    evidence: quota_concurrency_retry_after_and_circuit_report
+    auth_mode: session_fixture
+    depends_on: [auth.session_fixture]
+    side_effects: transactional_fixture_or_staging_load_only_zero_product_otp_zero_external_mail
+    evidence: quota_concurrency_retry_after_circuit_and_auth_fixture_report
     blocking:
       pull_request: affected_scope_after_contract_activation
       release: true_after_implementation
@@ -344,6 +445,7 @@ scenarios:
     platforms: [browser, android, ios]
     trigger_tags: [auth-otp, mobile-input, supabase-connectivity, yandex-relay]
     cost: high
+    auth_mode: real_mail_otp
     side_effects: protected_real_email_and_idempotent_membership
     target: deployed_https_exact_repo_sha
     isolation: external-focus-email-otp
@@ -389,6 +491,7 @@ scenarios:
     platforms: [ios]
     trigger_tags: [auth-otp, mobile-input, safari-first-run, appium-ownership]
     cost: high
+    auth_mode: anonymous
     side_effects: forbidden_issue_verify_registration_must_remain_0_0_0
     target: deployed_https_exact_repo_sha
     isolation: external-focus-email-otp
@@ -409,9 +512,11 @@ scenarios:
       ios: planned_after_mobile_otp
     layers: [L0, L1, L2]
     platforms: [android, ios]
-    trigger_tags: [pwa-system, mobile-input, auth-otp]
+    trigger_tags: [pwa-system, mobile-input, auth-session]
     cost: high
-    side_effects: simulator_install_state
+    auth_mode: session_fixture
+    depends_on: [auth.session_fixture]
+    side_effects: simulator_install_state_zero_product_otp_zero_external_mail_unless_auth_subscenario_selected
     target: deployed_https_exact_repo_sha
     evidence: native_ui_screenshots_video_allowed_without_real_otp
     blocking:
@@ -457,3 +562,13 @@ policies:
   background_outcome_may_be_reported_as_pass: false
   mandatory_background_must_be_terminal_before_release: true
   planned_scenario_blocks_release: false
+  real_otp_for_ordinary_authenticated_business_scenario: forbidden
+  session_fixture_product_otp_issue_count: 0
+  session_fixture_external_mail_send_count: 0
+  session_fixture_external_mail_receipt_count: 0
+  session_fixture_real_mail_fallback: forbidden
+  session_fixture_state_artifact_or_cache_upload: forbidden
+  persistent_serialized_session_secret: forbidden
+  fixed_otp_production_bypass: forbidden
+  service_or_admin_key_in_browser: forbidden
+  shared_refresh_token_across_parallel_jobs: forbidden
