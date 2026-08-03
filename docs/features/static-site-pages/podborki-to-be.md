@@ -1768,6 +1768,16 @@ admission/routing blocker**, а не доказанный semantic/product fail 
 source-grounded facts, `0` warm collection calls/writes, совпадающие
 facts/receipts/product hashes и отсутствие duplicate rows.
 
+Повтор после limiter release выполнен на clean-main integration 2026-08-03.
+Telegram и VK first pass завершились, а warm сохранил `0` collection
+calls/sends/writes, точную event/source привязку, один и тот же hash collection
+decisions и один и тот же product normalized SHA `0ac8638e…`; product остался
+`WATCH`, не `FAIL`. Их повторная мутация ограничена общими prose/age полями и
+не затрагивает collection plane, поэтому она вынесена в отдельную
+[issue #297](https://github.com/onedayonemasterpiece/events-bot-new/issues/297).
+Parser принят как `PASS_WITH_OPERATIONAL_METADATA`: на warm меняется только
+`EventSource.imported_at`.
+
 ## 13. Итог
 
 Гипотеза владельца в основном подтверждается:
@@ -1894,3 +1904,29 @@ Flash-Lite RPD без DB mutation. Failed first receipt теперь не зап
 Поэтому post-ingestion snapshots, clean main integration и Fly canary честно
 BLOCKED; публикация по-прежнему BLOCKED. Канонические hashes/receipts:
 [integration report](../../../.codex/integration/static-collection-facts-v3-INTEGRATION_REPORT.md).
+
+### Post-limiter clean-main shadow, 2026-08-03
+
+Предыдущий абзац фиксирует состояние старой stacked-ветки. В новой clean-main
+integration source-grounded код перенесён выборочно поверх актуального limiter,
+а post-ingestion Gate E уже принят. Полный current/future audience universe
+составил `62` кандидата с `62` точными primary-source bindings: `2` фактически
+оценены facts v3, `60` явно deferred shared limiter/provider capacity, `0`
+остались unprocessed. Identical warm для двух применённых rows дал `0` calls,
+`0` sends, `0` writes и пустой Event/EventSource diff.
+
+Provider-free product snapshot покрывает экспортированный current/future
+каталог из `377` событий и сохраняет publication `blocked`. Поскольку обе
+оценённые строки дали audience `unknown`, фактические family counts сейчас
+нулевые и monitor корректно возвращает `WATCH`: это полное доказательство
+accounting/coverage, но ещё не доказательство достаточной наполняемости и не
+основание для публикации. Канонический отчёт новой интеграции:
+[audience clean-main integration report](../../../.codex/integration/static-collections-audience-main-INTEGRATION_REPORT.md).
+
+Kaggle `StaticSiteBuilder` затем завершил exhaustive preview slice на тех же
+`377` событиях: kernel `COMPLETE`, BGE/QA `PASS`, `0` semantic/product provider
+calls, product `WATCH`, а проверенный архив содержит `377` discovery documents.
+Удалённый product artifact не притворяется самостоятельным coverage receipt:
+его coverage=`unknown`, тогда как точные `62 = 2 + 60 + 0` закреплены в
+отдельном локальном hash-bound coverage/product snapshot; normalized visible
+SHA обоих product outputs совпадает.
