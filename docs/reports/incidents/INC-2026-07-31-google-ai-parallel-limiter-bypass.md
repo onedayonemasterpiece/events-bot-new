@@ -128,6 +128,23 @@ no Antigravity limiter bypass was found.
   was an internal admission/routing blocker in a production-unfaithful replay:
   Gemini 3.5 had separate headroom but was absent from that stage's model chain.
   This was neither a semantic failure nor proof of external unavailability.
+- 2026-08-03 08:07 UTC — PR `#285`, main SHA
+  `eef11833bf75e42f65ddac1a13550796f4add620`, reached Fly release `1892` after
+  the rolling/Pacific migration and updated `event-search` Edge Function were
+  deployed. `/healthz` returned ready/200 and the three local fallback flags
+  remained `0`.
+- 2026-08-03 08:17 UTC — no-extra-probe ledger reconciliation of natural
+  production work showed four post-release attempts, all with non-null
+  `quota_scope`, and no logical request with two attempts in the same scope.
+  Release inspection also found a remaining rollout hole: the RPC returned the
+  new `bucket_strategy`, but Python and Edge accepted only the older atomic
+  contract marker and did not validate or retain the strategy field.
+- 2026-08-03 08:22–08:28 UTC — PR `#289` closed that hole and merged as main
+  SHA `fa39093bcb497461ab8c8e206e3b42454662721c`. The updated Edge Function and
+  Fly release `1893` were deployed from exact `origin/main`. A natural bot call
+  then logged and finalized one reservation with non-null key/scope and exact
+  `bucket_strategy=rolling_60s_pacific_day_v2`; no diagnostic provider call was
+  issued for acceptance.
 
 ## Root Cause
 
@@ -292,7 +309,7 @@ no Antigravity limiter bypass was found.
 - [ ] Add runtime alert for any successful provider call lacking `api_key_id`,
   `minute_bucket` or `used_after`.
 - [ ] Reconcile or sweep stale/overreserved counters without refunding sent RPD.
-- [ ] Apply and verify
+- [x] Apply and verify
   `20260803074500_google_ai_rolling_windows_pacific_rpd.sql`, deploy Edge/Fly
   from an `origin/main`-reachable SHA, and perform a no-extra-probe bounded
   attempt/429 reconciliation.
@@ -334,6 +351,34 @@ project inventory plus bounded production reconciliation are recorded.
   `festival_antigravity`; repeated provider result `403 permission_denied`
   across two registered projects/modes is an external eligibility blocker, not
   an internal quota denial
+- 2026-08-03 hardening release:
+  - migration `20260803074500_google_ai_rolling_windows_pacific_rpd.sql` applied
+    to the canonical limiter project; live function inspection contains both
+    the rolling strategy and `America/Los_Angeles` day boundary, with zero
+    recent daily-counter mismatches;
+  - Supabase `event-search` deployed twice: first for scope-aware 429 handling,
+    then for mandatory bucket-strategy validation;
+  - Fly releases `1892`/`1893` deployed from exact main SHAs
+    `eef11833bf75e42f65ddac1a13550796f4add620` and
+    `fa39093bcb497461ab8c8e206e3b42454662721c`; release `1893` is healthy and
+    `/app/.static-site-repo-sha` equals the latter SHA;
+  - incident contract tests: `104` focused Python PASS, `20` Edge/occurrence
+    Node PASS, `155` wider gateway/Telegram/Guide PASS; static provider audit
+    PASS over `901` files with `allowlisted_debt=0`, `unapproved=0`,
+    `unreadable_files=0`;
+  - GitHub `python-ci` PASS for PR `#289`. The unrelated static browser job
+    remains red on the pre-existing `card 6407 image escapes its shell`
+    geometry assertion; neither limiter PR changed site layout/data;
+  - final natural production window after release `1893`: `1` succeeded
+    attempt, `0` null scopes and `0` duplicate same-scope attempts. Runtime log
+    contains the required rolling strategy marker on reserve and a matching
+    successful terminal record.
+
+The code, database and deployed runtime hardening are complete. The incident
+remains `open` only because the operator-verifiable API-key → Google Cloud
+project mapping is still unavailable; conservative `google:unmapped-shared`
+grouping therefore remains in force and may under-use otherwise independent
+projects, but cannot over-admit the grouped keys.
 
 ## Prevention
 
