@@ -2972,6 +2972,254 @@ def region_talk_state_backend_requested() -> str:
     return (os.getenv("REGION_TALK_STATE_BACKEND") or "json").strip().lower() or "json"
 
 
+class RegionTalkYdbBudgetExceeded(RuntimeError):
+    pass
+
+
+class RegionTalkYdbCostBudget:
+    """Self-contained Kaggle cost ledger; the kernel source is packed alone."""
+
+    def __init__(self, label: str) -> None:
+        self.label = label
+        self.queries = self.rows_read = self.bytes_read = 0
+        self.rows_written = self.bytes_written = 0
+        self.max_queries = getenv_int("REGION_TALK_YDB_BUDGET_MAX_QUERIES", 64)
+        self.max_rows_read = getenv_int("REGION_TALK_YDB_BUDGET_MAX_ROWS_READ", 5000)
+        self.max_bytes_read = getenv_int("REGION_TALK_YDB_BUDGET_MAX_BYTES_READ", 32 * 1024 * 1024)
+        self.max_rows_written = getenv_int("REGION_TALK_YDB_BUDGET_MAX_ROWS_WRITTEN", 1000)
+        self.max_bytes_written = getenv_int("REGION_TALK_YDB_BUDGET_MAX_BYTES_WRITTEN", 16 * 1024 * 1024)
+        self.max_estimated_io_ru = getenv_int("REGION_TALK_YDB_BUDGET_MAX_ESTIMATED_IO_RU", 8000)
+
+    @property
+    def estimated_io_ru(self) -> int:
+        read_ops = max(self.rows_read, (self.bytes_read + 4095) // 4096)
+        write_ops = max(self.rows_written, (self.bytes_written + 1023) // 1024)
+        return read_ops + (2 * write_ops)
+
+    def _check(self, operation: str) -> None:
+        checks = (
+            ("queries", self.queries, self.max_queries),
+            ("rows_read", self.rows_read, self.max_rows_read),
+            ("bytes_read", self.bytes_read, self.max_bytes_read),
+            ("rows_written", self.rows_written, self.max_rows_written),
+            ("bytes_written", self.bytes_written, self.max_bytes_written),
+            ("estimated_io_ru", self.estimated_io_ru, self.max_estimated_io_ru),
+        )
+        for metric, value, limit in checks:
+            if limit > 0 and value > limit:
+                raise RegionTalkYdbBudgetExceeded(
+                    f"region_talk_ydb_budget_exceeded:{metric}:operation={operation}:value={value}:limit={limit}"
+                )
+
+    def before_query(self, operation: str) -> None:
+        self.queries += 1
+        self._check(operation)
+
+    def record_read(self, operation: str, rows: list[Any]) -> None:
+        self.rows_read += len(rows)
+        self.bytes_read += sum(
+            len(str(getattr(row, "payload_json", "") or "").encode("utf-8"))
+            for row in rows
+        )
+        self._check(operation)
+
+    def record_write(self, operation: str, rows: list[tuple[str, str, dict[str, Any]]]) -> None:
+        self.rows_written += len(rows)
+        self.bytes_written += sum(
+            len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+            for _pk, _kind, payload in rows
+        )
+        self._check(operation)
+
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "schema_version": "region-talk-ydb-cost-ledger-v1",
+            "label": self.label,
+            "queries": self.queries,
+            "rows_read": self.rows_read,
+            "bytes_read": self.bytes_read,
+            "rows_written": self.rows_written,
+            "bytes_written": self.bytes_written,
+            "estimated_io_ru_floor": self.estimated_io_ru,
+            "exact_billed_ru_available": False,
+        }
+
+
+_ACTIVE_YDB_COST_BUDGET: RegionTalkYdbCostBudget | None = None
+_YDB_WRITE_FINGERPRINTS: dict[str, str] = {}
+_YDB_VOLATILE_WRITE_FIELDS = frozenset({"run_id", "updated_at", "last_seen_run_id", "online_update_stage"})
+YDB_POST_LINK_DUE_STATUSES = {
+    "", "pending_fetch", "retry_fetch", "fetch_error", "retry_wait_entity_cache",
+    "bge_ready_rescore", "fetched",
+}
+YDB_READ_MODEL_SCHEMA_VERSION = "region-talk-ydb-read-model-v1"
+YDB_WORK_QUEUE_SCHEMA_VERSION = "region-talk-ydb-work-queue-v2"
+YDB_WORK_CURSOR_SCHEMA_VERSION = "region-talk-ydb-work-cursor-v2"
+YDB_READ_MODEL_DECISION_METRICS = (
+    "post_link_queue_exact_ready_total", "post_link_queue_bge_ready_rescore_total",
+    "post_link_queue_source_terminal_cleanup_total", "image_pending_total",
+    "image_scoring_retry_total", "image_contract_rescore_backlog_total",
+    "image_vlm_backlog_total", "image_actionable_work_total",
+    "bge_missing_current_sample_total", "bge_immediate_pair_backlog_total",
+    "finalizer_pending_url_total", "publication_unsent_confirmed_total",
+    "publication_onboarding_pending_unsent_total", "publication_source_evidence_backlog_total",
+)
+
+
+class RegionTalkYdbReadModelUnavailable(RuntimeError):
+    pass
+
+
+def region_talk_ydb_read_model_mode() -> str:
+    mode = str(os.getenv("REGION_TALK_YDB_READ_MODEL_MODE") or "required").strip().lower()
+    if mode not in {"required", "shadow", "legacy"}:
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:invalid_cutover_mode")
+    return mode
+
+
+def region_talk_ydb_legacy_fallback_allowed() -> bool:
+    return (
+        region_talk_ydb_read_model_mode() in {"shadow", "legacy"}
+        and getenv_bool("REGION_TALK_YDB_ALLOW_LEGACY_BROAD_READ_FALLBACK", False)
+    )
+
+
+def region_talk_ydb_read_model_paths(cfg: dict[str, str]) -> tuple[str, str]:
+    root = cfg["database"].rstrip("/")
+    prefix = re.sub(r"[^A-Za-z0-9_]+", "_", str(cfg.get("namespace") or "region_talk_compact")).strip("_")
+    if not prefix:
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:namespace_missing")
+    return root + "/" + prefix + "_work_queue_v2", root + "/" + prefix + "_read_model_v1"
+
+
+def region_talk_ydb_work_cursor_path(work_table_path: str) -> str:
+    if not str(work_table_path).endswith("_work_queue_v2"):
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:work_table_version_mismatch")
+    return str(work_table_path)[:-len("_work_queue_v2")] + "_work_cursor_v2"
+
+
+def _region_talk_ydb_first(row: dict[str, Any], fields: Iterable[str]) -> str:
+    for field in fields:
+        value = str(row.get(field) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def region_talk_ydb_work_spec(
+    collection_name: str,
+    row: dict[str, Any],
+) -> tuple[str, str, str, str] | None:
+    """Standalone copy of the shared typed-work classification contract."""
+
+    if collection_name == "unified_source_queue":
+        status = _region_talk_ydb_first(row, ("source_queue_status", "queue_status", "fetch_status")) or "pending_scan"
+        if status not in {"pending_scan", "needs_rescan_or_retry", "retry", "error"} and not status.startswith("skipped_telegram_unresolved"):
+            return None
+        key = _region_talk_ydb_first(row, ("canonical_source_key", "source_queue_id", "source_id"))
+        return ("source", status, key, "source_queue_item:" + key) if key else None
+    if collection_name == "post_link_queue":
+        status = _region_talk_ydb_first(row, ("post_link_status", "fetch_status")) or "pending_fetch"
+        if status not in {"pending_fetch", "retry_fetch", "fetch_error", "retry_wait_entity_cache", "bge_ready_rescore"}:
+            return None
+        key = _region_talk_ydb_first(row, ("post_link_queue_id", "post_url", "keyword_hit_post_url"))
+        return ("post_link", status, key, "post_link_queue_item:" + key) if key else None
+    if collection_name == "image_candidate_queue":
+        status = _region_talk_ydb_first(row, ("image_queue_status", "image_quality_decision")) or "needs_actual_image_fetch"
+        if status not in {"needs_actual_image_fetch", "selected_for_next_image_batch", "scoring_retry", "image_analysis_in_progress", "needs_visual_review"}:
+            return None
+        key = _region_talk_ydb_first(row, ("image_queue_id", "post_url", "post_id"))
+        return ("image", status, key, "image_queue_item:" + key) if key else None
+    if collection_name == "candidate_memory":
+        status = _region_talk_ydb_first(row, ("vector_gate_status", "text_vector_fusion_status", "current_stage"))
+        if status not in {"vector_defer_wait_bge_m3", "missing_bge_m3_enrichment", "dual_model_vector_enrichment_pending"}:
+            return None
+        key = _region_talk_ydb_first(row, ("candidate_memory_id", "post_id", "post_url"))
+        return ("bge", status, key, "candidate_memory_item:" + key) if key else None
+    if collection_name == "publication_candidate_queue":
+        status = _region_talk_ydb_first(row, ("publication_status", "publication_candidate_status")) or "pending"
+        sent = str(row.get("sent_to_chat") or "").lower() == "true"
+        if sent or status in {"rejected", "published", "sent_to_chat", "expired"} or status.startswith("operator_rejected"):
+            return None
+        key = _region_talk_ydb_first(row, ("publication_candidate_id", "post_url", "post_id"))
+        return ("publication", status, key, "publication_candidate_item:" + key) if key else None
+    return None
+
+
+def region_talk_ydb_generation(state: dict[str, Any]) -> str:
+    raw = f"{str(state.get('run_id') or '').strip()}\n{str(state.get('updated_at') or '').strip()}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def validate_region_talk_ydb_read_model(payload: Any, *, require_ready: bool = True) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:payload_missing")
+    if payload.get("schema_version") != YDB_READ_MODEL_SCHEMA_VERSION:
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:schema_mismatch")
+    if payload.get("work_queue_schema_version") != YDB_WORK_QUEUE_SCHEMA_VERSION:
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:work_schema_mismatch")
+    if require_ready and payload.get("cutover_state") != "ready":
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:not_ready")
+    if require_ready and payload.get("work_queue_complete") is not True:
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:work_queue_incomplete")
+    if not str(payload.get("generation") or ""):
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:generation_missing")
+    metrics = payload.get("metrics")
+    if not isinstance(metrics, dict) or any(key not in metrics for key in YDB_READ_MODEL_DECISION_METRICS):
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:decision_metrics_incomplete")
+    return payload
+
+
+def region_talk_ydb_cost_snapshot() -> dict[str, Any]:
+    return _ACTIVE_YDB_COST_BUDGET.snapshot() if _ACTIVE_YDB_COST_BUDGET is not None else {}
+
+
+def ydb_payload_change_fingerprint(kind: str, payload: dict[str, Any]) -> str:
+    stable = {key: value for key, value in payload.items() if key not in _YDB_VOLATILE_WRITE_FIELDS}
+    raw = json.dumps([kind, stable], ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def ydb_changed_rows(
+    rows: list[tuple[str, str, dict[str, Any]]],
+) -> tuple[list[tuple[str, str, dict[str, Any]]], dict[str, str]]:
+    """Deduplicate stable PKs and omit product-identical repeats in this run."""
+
+    latest: dict[str, tuple[str, str, dict[str, Any]]] = {}
+    order: list[str] = []
+    for row in rows:
+        pk = str(row[0])
+        if pk not in latest:
+            order.append(pk)
+        latest[pk] = row
+    changed: list[tuple[str, str, dict[str, Any]]] = []
+    fingerprints: dict[str, str] = {}
+    for pk in order:
+        row = latest[pk]
+        fingerprint = ydb_payload_change_fingerprint(row[1], row[2])
+        if _YDB_WRITE_FINGERPRINTS.get(pk) == fingerprint:
+            continue
+        changed.append(row)
+        fingerprints[pk] = fingerprint
+    return changed, fingerprints
+
+
+def remember_ydb_written_fingerprints(fingerprints: dict[str, str]) -> None:
+    _YDB_WRITE_FINGERPRINTS.update(fingerprints)
+
+
+def validate_region_talk_ydb_identity(database: str) -> None:
+    """Fail closed on a complete-path mismatch without leaking either path."""
+
+    actual = str(database or "").strip().rstrip("/")
+    expected = str(os.getenv("REGION_TALK_YDB_EXPECTED_DATABASE") or "").strip().rstrip("/")
+    required = getenv_bool("REGION_TALK_YDB_REQUIRE_EXPECTED_DATABASE", False)
+    if required and not expected:
+        raise RuntimeError("region_talk_ydb_identity:expected_database_missing")
+    if expected and actual != expected:
+        raise RuntimeError("region_talk_ydb_identity:expected_database_mismatch")
+
+
 def ydb_config_status() -> dict[str, str]:
     endpoint = (os.getenv("REGION_TALK_YDB_ENDPOINT") or "").strip()
     database = (os.getenv("REGION_TALK_YDB_DATABASE") or "").strip()
@@ -2990,6 +3238,9 @@ def ydb_table_plan() -> str:
     return ";".join([
         "region_talk_state_kv(compact)", "region_talk_sources(compact)", "region_talk_processed_posts(compact)",
         "region_talk_image_metrics(compact)", "region_talk_run_metrics(compact)",
+        "region_talk_work_queue_v2(typed,due,bounded)",
+        "region_talk_work_cursor_v2(serializable,leased)",
+        "region_talk_read_model_v1(counters)",
     ])
 
 
@@ -3593,6 +3844,11 @@ def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
         },
         "queue_cursors": build_queue_cursor_state(state, source_queue, image_queue),
         "run_funnel_metrics": state.get("run_funnel_metrics") or {},
+        "_ydb_materialized_work_claims": list(state.get("_ydb_materialized_work_claims") or []),
+        "_ydb_materialized_projection_input_complete": state.get(
+            "_ydb_materialized_projection_input_complete", True,
+        ) is True,
+        "ydb_read_model_generation": str(state.get("ydb_read_model_generation") or ""),
     }
 
 
@@ -3702,7 +3958,11 @@ def ydb_credentials(ydb: Any) -> Any:
 
 
 def ydb_connect() -> tuple[Any, Any, dict[str, str]]:
+    global _ACTIVE_YDB_COST_BUDGET
     cfg = ydb_config_status()
+    validate_region_talk_ydb_identity(cfg["database"])
+    if _ACTIVE_YDB_COST_BUDGET is None:
+        _ACTIVE_YDB_COST_BUDGET = RegionTalkYdbCostBudget("region_talk_candidate_report")
     ydb = ensure_ydb_module()
     driver = ydb.Driver(endpoint=cfg["endpoint"], database=cfg["database"], credentials=ydb_credentials(ydb))
     driver.wait(timeout=getenv_int("REGION_TALK_YDB_CONNECT_TIMEOUT_SECONDS", 20), fail_fast=True)
@@ -3799,6 +4059,728 @@ def ensure_ydb_kv_table(ydb: Any, session: Any, table_path: str) -> None:
         .with_primary_key("pk")
     )
     session.create_table(table_path, desc)
+
+
+def ensure_region_talk_ydb_read_model_tables(
+    session: Any,
+    work_table_path: str,
+    read_model_table_path: str,
+) -> None:
+    """Create projections whose PK order is the due/keyset access path."""
+
+    cursor_table_path = region_talk_ydb_work_cursor_path(work_table_path)
+    for table_path, ddl in (
+        (work_table_path, f"""CREATE TABLE IF NOT EXISTS `{work_table_path}` (
+  generation Utf8 NOT NULL, queue_name Utf8 NOT NULL, status Utf8 NOT NULL,
+  due_at Utf8 NOT NULL, priority Uint64 NOT NULL, item_key Utf8 NOT NULL,
+  state_pk Utf8, payload_json Json, updated_at Utf8,
+  PRIMARY KEY (generation, queue_name, due_at, priority, status, item_key)
+);"""),
+        (cursor_table_path, f"""CREATE TABLE IF NOT EXISTS `{cursor_table_path}` (
+  generation Utf8 NOT NULL, queue_name Utf8 NOT NULL,
+  expected_count Uint64 NOT NULL, consumed_count Uint64 NOT NULL,
+  cursor_due_at Utf8 NOT NULL, cursor_priority Uint64 NOT NULL,
+  cursor_status Utf8 NOT NULL, cursor_item_key Utf8 NOT NULL,
+  claim_due_at Utf8, claim_priority Uint64, claim_status Utf8, claim_item_key Utf8,
+  claim_count Uint64, lease_owner Utf8, lease_token Utf8, lease_expires_at Utf8,
+  updated_at Utf8,
+  PRIMARY KEY (generation, queue_name)
+);"""),
+        (read_model_table_path, f"""CREATE TABLE IF NOT EXISTS `{read_model_table_path}` (
+  model_name Utf8 NOT NULL, schema_version Utf8, generation Utf8,
+  cutover_state Utf8, payload_json Json, updated_at Utf8,
+  PRIMARY KEY (model_name)
+);"""),
+    ):
+        try:
+            session.describe_table(table_path)
+        except Exception:
+            if _ACTIVE_YDB_COST_BUDGET is not None:
+                _ACTIVE_YDB_COST_BUDGET.before_query("candidate.read_model.ensure_schema")
+            session.execute_scheme(ddl)
+
+
+def ydb_select_current_read_model(
+    session: Any,
+    ydb: Any,
+    table_path: str,
+) -> dict[str, Any]:
+    if _ACTIVE_YDB_COST_BUDGET is not None:
+        _ACTIVE_YDB_COST_BUDGET.before_query("candidate.read_model.current")
+    result_sets = session.transaction(ydb.SnapshotReadOnly()).execute(
+        f"SELECT payload_json FROM `{table_path}` WHERE model_name = 'current';",
+        commit_tx=True,
+        settings=ydb_request_settings(ydb),
+    )
+    rows = result_sets[0].rows if result_sets else []
+    if _ACTIVE_YDB_COST_BUDGET is not None:
+        _ACTIVE_YDB_COST_BUDGET.record_read("candidate.read_model.current", rows)
+    if not rows:
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:current_missing")
+    raw = rows[0].payload_json
+    payload = json.loads(raw) if isinstance(raw, str) else dict(raw or {})
+    return validate_region_talk_ydb_read_model(payload)
+
+
+def region_talk_ydb_work_claim_query(
+    work_table_path: str,
+    cursor_table_path: str,
+    *,
+    limit: int,
+) -> str:
+    """One serializable claim statement; committed cursor moves only on ACK."""
+
+    maximum = max(1, int(limit))
+    return f"""
+DECLARE $generation AS Utf8; DECLARE $queue_name AS Utf8;
+DECLARE $expected_count AS Uint64; DECLARE $due_cutoff AS Utf8;
+DECLARE $now AS Utf8; DECLARE $lease_owner AS Utf8;
+DECLARE $lease_token AS Utf8; DECLARE $lease_expires_at AS Utf8;
+$current = SELECT * FROM `{cursor_table_path}`
+  WHERE generation = $generation AND queue_name = $queue_name;
+$available_cursor = SELECT * FROM $current
+  WHERE expected_count = $expected_count
+    AND (COALESCE(lease_token, '') = '' OR COALESCE(lease_expires_at, '') <= $now);
+$page = SELECT w.* FROM `{work_table_path}` AS w
+  CROSS JOIN $available_cursor AS c
+  WHERE w.generation = $generation AND w.queue_name = $queue_name
+    AND w.due_at <= $due_cutoff
+    AND (
+      w.due_at > c.cursor_due_at
+      OR (w.due_at = c.cursor_due_at AND w.priority > c.cursor_priority)
+      OR (w.due_at = c.cursor_due_at AND w.priority = c.cursor_priority AND w.status > c.cursor_status)
+      OR (w.due_at = c.cursor_due_at AND w.priority = c.cursor_priority AND w.status = c.cursor_status AND w.item_key > c.cursor_item_key)
+    )
+  ORDER BY w.generation, w.queue_name, w.due_at, w.priority, w.status, w.item_key
+  LIMIT {maximum};
+$claim_end = SELECT * FROM $page
+  ORDER BY generation DESC, queue_name DESC, due_at DESC, priority DESC, status DESC, item_key DESC
+  LIMIT 1;
+$page_count = SELECT COUNT(*) AS value FROM $page;
+UPSERT INTO `{cursor_table_path}`
+  (generation, queue_name, expected_count, consumed_count,
+   cursor_due_at, cursor_priority, cursor_status, cursor_item_key,
+   claim_due_at, claim_priority, claim_status, claim_item_key, claim_count,
+   lease_owner, lease_token, lease_expires_at, updated_at)
+SELECT c.generation, c.queue_name, c.expected_count, c.consumed_count,
+       c.cursor_due_at, c.cursor_priority, c.cursor_status, c.cursor_item_key,
+       p.due_at, p.priority, p.status, p.item_key, pc.value,
+       $lease_owner, $lease_token, $lease_expires_at, $now
+FROM $available_cursor AS c CROSS JOIN $claim_end AS p CROSS JOIN $page_count AS pc;
+SELECT * FROM $current;
+SELECT * FROM $page
+ORDER BY generation, queue_name, due_at, priority, status, item_key;
+"""
+
+
+def region_talk_ydb_work_ack_query(cursor_table_path: str) -> str:
+    return f"""
+DECLARE $generation AS Utf8; DECLARE $queue_name AS Utf8;
+DECLARE $lease_owner AS Utf8; DECLARE $lease_token AS Utf8; DECLARE $now AS Utf8;
+$claim = SELECT * FROM `{cursor_table_path}`
+  WHERE generation = $generation AND queue_name = $queue_name
+    AND COALESCE(lease_owner, '') = $lease_owner
+    AND COALESCE(lease_token, '') = $lease_token
+    AND COALESCE(lease_expires_at, '') > $now
+    AND consumed_count + COALESCE(claim_count, 0ul) <= expected_count;
+UPSERT INTO `{cursor_table_path}`
+  (generation, queue_name, expected_count, consumed_count,
+   cursor_due_at, cursor_priority, cursor_status, cursor_item_key,
+   claim_due_at, claim_priority, claim_status, claim_item_key, claim_count,
+   lease_owner, lease_token, lease_expires_at, updated_at)
+SELECT generation, queue_name, expected_count, consumed_count + COALESCE(claim_count, 0ul),
+       COALESCE(claim_due_at, ''), COALESCE(claim_priority, 0ul),
+       COALESCE(claim_status, ''), COALESCE(claim_item_key, ''),
+       NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, $now
+FROM $claim;
+SELECT * FROM $claim;
+"""
+
+
+def region_talk_ydb_work_key(row: dict[str, Any]) -> tuple[str, int, str, str]:
+    return (
+        str(row.get("due_at") or ""), int(row.get("priority") or 0),
+        str(row.get("status") or ""), str(row.get("item_key") or ""),
+    )
+
+
+def region_talk_ydb_due_page_from_rows(
+    rows: Iterable[dict[str, Any]],
+    *,
+    generation: str,
+    queue_name: str,
+    due_cutoff: str,
+    cursor: tuple[str, int, str, str] = ("", 0, "", ""),
+    limit: int,
+) -> list[dict[str, Any]]:
+    """Pure reference for the v2 YQL keyset/due predicate."""
+
+    return sorted(
+        [
+            row for row in rows
+            if str(row.get("generation") or "") == generation
+            and str(row.get("queue_name") or "") == queue_name
+            and str(row.get("due_at") or "") <= str(due_cutoff)
+            and region_talk_ydb_work_key(row) > cursor
+        ],
+        key=region_talk_ydb_work_key,
+    )[:max(1, int(limit))]
+
+
+def _region_talk_ydb_claim_row(row: Any) -> dict[str, Any]:
+    return {
+        "generation": str(getattr(row, "generation", "") or ""),
+        "queue_name": str(getattr(row, "queue_name", "") or ""),
+        "expected_count": int(getattr(row, "expected_count", 0) or 0),
+        "consumed_count": int(getattr(row, "consumed_count", 0) or 0),
+        "cursor_due_at": str(getattr(row, "cursor_due_at", "") or ""),
+        "cursor_priority": int(getattr(row, "cursor_priority", 0) or 0),
+        "cursor_status": str(getattr(row, "cursor_status", "") or ""),
+        "cursor_item_key": str(getattr(row, "cursor_item_key", "") or ""),
+        "lease_owner": str(getattr(row, "lease_owner", "") or ""),
+        "lease_token": str(getattr(row, "lease_token", "") or ""),
+        "lease_expires_at": str(getattr(row, "lease_expires_at", "") or ""),
+    }
+
+
+def ydb_select_materialized_work(
+    session: Any,
+    ydb: Any,
+    table_path: str,
+    *,
+    generation: str,
+    queue_names: Iterable[str],
+    limit_per_queue: int,
+    read_model: dict[str, Any],
+    due_cutoff: str,
+    lease_owner: str,
+    lease_seconds: int = 900,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Atomically claim bounded due pages without advancing their cursors."""
+
+    out: list[dict[str, Any]] = []
+    claims: list[dict[str, Any]] = []
+    maximum = max(1, int(limit_per_queue))
+    settings = ydb_request_settings(ydb)
+    cursor_table_path = region_talk_ydb_work_cursor_path(table_path)
+    model = validate_region_talk_ydb_read_model(read_model)
+    if str(model.get("generation") or "") != str(generation):
+        raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:generation_mismatch")
+    work_counts = model.get("work_counts") or {}
+    expected_counts = model.get("expected_work_counts") or {}
+    now = utc_now_iso()
+    lease_expiry = datetime.fromtimestamp(
+        time.time() + max(30, int(lease_seconds)), tz=timezone.utc,
+    ).isoformat().replace("+00:00", "Z")
+    for queue_name in queue_names:
+        if not re.fullmatch(r"[a-z_]+", str(queue_name)):
+            raise ValueError("unsafe Region Talk work queue name")
+        expected_count = int(expected_counts.get(queue_name, 0) or 0)
+        if int(work_counts.get(queue_name, 0) or 0) != expected_count:
+            raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:queue_count_mismatch")
+        token = hashlib.sha256(
+            f"{generation}\n{queue_name}\n{lease_owner}\n{time.time_ns()}\n{random.random()}".encode("utf-8")
+        ).hexdigest()
+        query = session.prepare(region_talk_ydb_work_claim_query(
+            table_path, cursor_table_path, limit=maximum,
+        ), settings=settings)
+        if _ACTIVE_YDB_COST_BUDGET is not None:
+            _ACTIVE_YDB_COST_BUDGET.before_query("candidate.read_model.work_claim:" + queue_name)
+        result_sets = session.transaction(ydb.SerializableReadWrite()).execute(
+            query,
+            {
+                "$generation": generation, "$queue_name": queue_name,
+                "$expected_count": expected_count, "$due_cutoff": str(due_cutoff),
+                "$now": now, "$lease_owner": str(lease_owner), "$lease_token": token,
+                "$lease_expires_at": lease_expiry,
+            },
+            commit_tx=True,
+            settings=settings,
+        )
+        cursor_rows = result_sets[0].rows if result_sets else []
+        rows = result_sets[1].rows if len(result_sets) > 1 else []
+        if _ACTIVE_YDB_COST_BUDGET is not None:
+            _ACTIVE_YDB_COST_BUDGET.record_read("candidate.read_model.work_claim:" + queue_name, [*cursor_rows, *rows])
+        if len(cursor_rows) != 1:
+            raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:cursor_missing")
+        cursor = _region_talk_ydb_claim_row(cursor_rows[0])
+        if cursor["expected_count"] != expected_count or cursor["generation"] != generation or cursor["queue_name"] != queue_name:
+            raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:cursor_model_mismatch")
+        if cursor["lease_token"] and cursor["lease_expires_at"] > now:
+            raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:work_lease_busy")
+        if cursor["consumed_count"] > expected_count or len(rows) > expected_count - cursor["consumed_count"]:
+            raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:work_queue_overflow")
+        for row in rows:
+            if str(row.generation) != generation or str(row.queue_name) != queue_name or str(row.due_at or "") > str(due_cutoff):
+                raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:claimed_row_mismatch")
+            out.append({
+                "generation": str(row.generation),
+                "queue_name": str(row.queue_name),
+                "status": str(row.status),
+                "due_at": str(row.due_at or ""),
+                "priority": int(row.priority or 0),
+                "item_key": str(row.item_key),
+                "state_pk": str(row.state_pk or ""),
+                "payload_json": getattr(row, "payload_json", "") or "",
+                "updated_at": str(getattr(row, "updated_at", "") or ""),
+            })
+        if rows:
+            last = out[-1]
+            claims.append({
+                "schema_version": YDB_WORK_CURSOR_SCHEMA_VERSION,
+                "generation": generation, "queue_name": queue_name,
+                "expected_count": expected_count, "consumed_count": cursor["consumed_count"],
+                "claim_count": len(rows), "claim_end": {
+                    "due_at": last["due_at"], "priority": last["priority"],
+                    "status": last["status"], "item_key": last["item_key"],
+                },
+                "lease_owner": str(lease_owner), "lease_token": token,
+                "lease_expires_at": lease_expiry, "due_cutoff": str(due_cutoff),
+            })
+    return out, claims
+
+
+def ydb_ack_materialized_work_claims(
+    session: Any,
+    ydb: Any,
+    work_table_path: str,
+    claims: Iterable[dict[str, Any]],
+) -> int:
+    """ACK exact live tokens; expired/replaced owners cannot move a cursor."""
+
+    cursor_table_path = region_talk_ydb_work_cursor_path(work_table_path)
+    settings = ydb_request_settings(ydb)
+    acknowledged = 0
+    for claim in claims:
+        if not isinstance(claim, dict) or claim.get("schema_version") != YDB_WORK_CURSOR_SCHEMA_VERSION:
+            raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:claim_schema_mismatch")
+        if _ACTIVE_YDB_COST_BUDGET is not None:
+            _ACTIVE_YDB_COST_BUDGET.before_query("candidate.read_model.work_ack")
+        query = session.prepare(region_talk_ydb_work_ack_query(cursor_table_path), settings=settings)
+        result_sets = session.transaction(ydb.SerializableReadWrite()).execute(
+            query,
+            {
+                "$generation": str(claim.get("generation") or ""),
+                "$queue_name": str(claim.get("queue_name") or ""),
+                "$lease_owner": str(claim.get("lease_owner") or ""),
+                "$lease_token": str(claim.get("lease_token") or ""),
+                "$now": utc_now_iso(),
+            },
+            commit_tx=True,
+            settings=settings,
+        )
+        rows = result_sets[0].rows if result_sets else []
+        if _ACTIVE_YDB_COST_BUDGET is not None:
+            _ACTIVE_YDB_COST_BUDGET.record_read("candidate.read_model.work_ack", rows)
+        if len(rows) != 1:
+            raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:stale_work_claim")
+        row = rows[0]
+        if (
+            str(getattr(row, "lease_owner", "") or "") != str(claim.get("lease_owner") or "")
+            or str(getattr(row, "lease_token", "") or "") != str(claim.get("lease_token") or "")
+            or int(getattr(row, "claim_count", 0) or 0) != int(claim.get("claim_count") or 0)
+        ):
+            raise RegionTalkYdbReadModelUnavailable("region_talk_ydb_read_model:stale_work_claim")
+        acknowledged += 1
+    return acknowledged
+
+
+def hydrate_region_talk_state_from_materialized_work(
+    data: dict[str, Any],
+    work_rows: list[dict[str, Any]],
+    state_items: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Hydrate only actionable rows returned by typed pages and point joins."""
+
+    out = dict(data)
+    collections: dict[str, dict[str, Any]] = {
+        "unified_source_queue": {}, "post_link_queue": {},
+        "image_candidate_queue": {}, "candidate_memory": {},
+        "publication_candidate_queue": {}, "processed_posts": {},
+        "text_vector_enrichment": {}, "telegram_entity_cache": {},
+    }
+    for pk, item in state_items.items():
+        if not isinstance(item, dict):
+            continue
+        if pk.startswith("source_queue_item:"):
+            target, key = "unified_source_queue", str(item.get("canonical_source_key") or pk.split(":", 1)[1])
+        elif pk.startswith("post_link_queue_item:"):
+            target, key = "post_link_queue", str(item.get("post_link_queue_id") or item.get("post_url") or pk.split(":", 1)[1])
+        elif pk.startswith("image_queue_item:"):
+            target, key = "image_candidate_queue", str(item.get("image_queue_id") or item.get("post_url") or pk.split(":", 1)[1])
+        elif pk.startswith("candidate_memory_item:"):
+            target, key = "candidate_memory", str(item.get("candidate_memory_id") or item.get("post_id") or item.get("post_url") or pk.split(":", 1)[1])
+            item = {**item, "_row_level_candidate_memory_loaded": "true"}
+        elif pk.startswith("publication_candidate_item:"):
+            target, key = "publication_candidate_queue", str(item.get("publication_candidate_id") or item.get("post_url") or pk.split(":", 1)[1])
+        elif pk.startswith("processed_post_item:"):
+            target, key = "processed_posts", durable_processed_post_key(item) or pk.split(":", 1)[1]
+        elif pk.startswith("text_vector_enrichment_item:"):
+            target, key = "text_vector_enrichment", str(item.get("text_vector_enrichment_id") or item.get("post_id") or pk.split(":", 1)[1])
+        elif pk.startswith("telegram_entity_cache_item:"):
+            target, key = "telegram_entity_cache", str(item.get("entity_cache_key") or item.get("username") or pk.split(":", 1)[1])
+        else:
+            continue
+        if key:
+            collections[target][key] = item
+    for key, value in collections.items():
+        out[key] = value
+    out["posts"] = collections["processed_posts"]
+    out["sources"] = collections["unified_source_queue"]
+    out["region_talk_sources"] = collections["unified_source_queue"]
+    out["ydb_materialized_work_rows_loaded"] = len(work_rows)
+    out["ydb_materialized_state_point_rows_loaded"] = len(state_items)
+    out["ydb_read_path"] = "typed_work_queue_plus_point_join"
+    return out
+
+
+def build_region_talk_ydb_materialized_projection(
+    state: dict[str, Any],
+    *,
+    max_per_queue: int,
+    cutover_state: str = "ready",
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Build the standalone-kernel equivalent of the shared v2 projection."""
+
+    generation = region_talk_ydb_generation(state)
+    maximum = max(1, int(max_per_queue))
+    collections = (
+        ("unified_source_queue", "source"),
+        ("post_link_queue", "post_link"),
+        ("image_candidate_queue", "image"),
+        ("candidate_memory", "bge"),
+        ("publication_candidate_queue", "publication"),
+    )
+    work_rows: list[dict[str, Any]] = []
+    expected_queue_counts: dict[str, int] = {}
+    for collection, collection_queue_name in collections:
+        values = state.get(collection)
+        items = values.values() if isinstance(values, dict) else (values if isinstance(values, list) else [])
+        candidates: list[dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            spec = region_talk_ydb_work_spec(collection, item)
+            if spec is None:
+                continue
+            queue_name, status, key, state_pk = spec
+            priority = 0
+            for field in ("priority", "queue_order", "queue_seq", "image_queue_order", "list_order"):
+                try:
+                    priority = max(0, int(float(item.get(field) or 0)))
+                    if priority:
+                        break
+                except (TypeError, ValueError):
+                    continue
+            due_at = str(item.get("next_fetch_after") or item.get("retry_after") or item.get("next_attempt_after") or item.get("updated_at") or "")
+            candidates.append({
+                "generation": generation, "queue_name": queue_name,
+                "status": status,
+                "due_at": due_at, "priority": priority, "item_key": key,
+                "state_pk": state_pk,
+                "payload_json": json.dumps({
+                    field: item.get(field) for field in (
+                        "canonical_source_key", "post_url", "post_id", "source_id",
+                        "candidate_memory_id", "publication_candidate_id", "image_queue_id",
+                    ) if item.get(field) not in (None, "")
+                }, ensure_ascii=False, sort_keys=True),
+                "updated_at": str(state.get("updated_at") or ""),
+            })
+        expected_queue_counts[collection_queue_name] = len(candidates)
+        work_rows.extend(sorted(
+            candidates,
+            key=lambda row: (row["due_at"], row["priority"], row["status"], row["item_key"]),
+        )[:maximum])
+    queue_counts: dict[str, int] = {}
+    status_counts: dict[tuple[str, str], int] = {}
+    for row in work_rows:
+        queue_counts[row["queue_name"]] = queue_counts.get(row["queue_name"], 0) + 1
+        pair = (row["queue_name"], row["status"])
+        status_counts[pair] = status_counts.get(pair, 0) + 1
+    # The queue is capped, counters are not. Aggregate the full in-memory state
+    # once so the read model never reports a page limit as population truth.
+    def full_rows(name: str) -> list[dict[str, Any]]:
+        value = state.get(name)
+        if isinstance(value, dict):
+            return [row for row in value.values() if isinstance(row, dict)]
+        if isinstance(value, list):
+            return [row for row in value if isinstance(row, dict)]
+        return []
+    post_status_counts: dict[str, int] = {}
+    for item in full_rows("post_link_queue"):
+        status = str(item.get("post_link_status") or item.get("fetch_status") or "pending_fetch")
+        post_status_counts[status] = post_status_counts.get(status, 0) + 1
+    image_status_counts: dict[str, int] = {}
+    for item in full_rows("image_candidate_queue"):
+        status = str(item.get("image_queue_status") or item.get("image_quality_decision") or "needs_actual_image_fetch")
+        image_status_counts[status] = image_status_counts.get(status, 0) + 1
+    bge_total = sum(
+        1 for item in full_rows("candidate_memory")
+        if str(item.get("vector_gate_status") or item.get("text_vector_fusion_status") or item.get("current_stage") or "")
+        in {"vector_defer_wait_bge_m3", "missing_bge_m3_enrichment", "dual_model_vector_enrichment_pending"}
+    )
+    active_publications = [
+        item for item in full_rows("publication_candidate_queue")
+        if str(item.get("sent_to_chat") or "").lower() != "true"
+        and str(item.get("publication_status") or item.get("publication_candidate_status") or "")
+        not in {"rejected", "published", "sent_to_chat", "expired"}
+        and not str(item.get("publication_status") or item.get("publication_candidate_status") or "").startswith("operator_rejected")
+    ]
+    publication_status_counts: dict[str, int] = {}
+    for item in active_publications:
+        status = str(item.get("publication_status") or item.get("publication_candidate_status") or "pending")
+        publication_status_counts[status] = publication_status_counts.get(status, 0) + 1
+    metrics = {}
+    for source in (state.get("all_time_metrics"), state.get("run_funnel_metrics")):
+        if isinstance(source, dict):
+            metrics.update(source)
+    metrics.update({
+        "post_link_queue_exact_ready_total": sum(post_status_counts.get(status, 0) for status in {"pending_fetch", "retry_fetch", "fetch_error", "retry_wait_entity_cache"}),
+        "post_link_queue_bge_ready_rescore_total": post_status_counts.get("bge_ready_rescore", 0),
+        "post_link_queue_source_terminal_cleanup_total": 0,
+        "image_pending_total": sum(image_status_counts.get(status, 0) for status in {"", "needs_actual_image_fetch", "selected_for_next_image_batch"}),
+        "image_scoring_retry_total": image_status_counts.get("scoring_retry", 0),
+        "image_contract_rescore_backlog_total": 0,
+        "image_vlm_backlog_total": image_status_counts.get("needs_visual_review", 0),
+        "bge_missing_current_sample_total": bge_total,
+        "bge_immediate_pair_backlog_total": bge_total,
+        "finalizer_pending_url_total": len(active_publications),
+        "publication_unsent_confirmed_total": sum(publication_status_counts.get(status, 0) for status in {"gemini_accept", "llm_confirmed"}),
+        "publication_onboarding_pending_unsent_total": sum(publication_status_counts.get(status, 0) for status in {"gemini_accept", "needs_source_profile", "needs_review"}),
+        "publication_source_evidence_backlog_total": sum(publication_status_counts.get(status, 0) for status in {"needs_source_evidence", "needs_source_profile"}),
+    })
+    metrics["image_actionable_work_total"] = metrics["image_pending_total"] + metrics["image_scoring_retry_total"] + metrics["image_vlm_backlog_total"]
+    for key in YDB_READ_MODEL_DECISION_METRICS:
+        metrics.setdefault(key, 0)
+    population = lambda name: len(state.get(name) or {}) if isinstance(state.get(name), (dict, list)) else 0
+    previous_population = state.get("ydb_read_model_population_totals")
+    if not isinstance(previous_population, dict):
+        previous_population = {}
+    current_population = {
+        "sources": population("unified_source_queue"),
+        "processed_posts": population("processed_posts") or population("posts"),
+        "candidate_memory": population("candidate_memory"),
+        "images": population("image_candidate_queue"),
+        "publications": population("publication_candidate_queue"),
+        "post_links": population("post_link_queue"),
+    }
+    population_totals = {
+        key: max(int(previous_population.get(key) or 0), value)
+        for key, value in current_population.items()
+    }
+    source_rows = full_rows("unified_source_queue")
+    source_queue_max_seq = max([
+        int(float(row.get("queue_seq") or row.get("queue_order") or 0)) for row in source_rows
+    ] + [int(state.get("ydb_read_model_source_queue_max_seq") or 0)])
+    source_queue_max_order = max([
+        int(float(row.get("queue_order") or 0)) for row in source_rows
+    ] + [int(state.get("ydb_read_model_source_queue_max_order") or 0)])
+    counts_complete = all(queue_counts.get(name, 0) == expected_queue_counts.get(name, 0) for name in expected_queue_counts)
+    input_complete = state.get("_ydb_materialized_projection_input_complete", True) is True
+    complete = counts_complete and input_complete
+    read_model = {
+        "schema_version": YDB_READ_MODEL_SCHEMA_VERSION,
+        "work_queue_schema_version": YDB_WORK_QUEUE_SCHEMA_VERSION,
+        "model_name": "current", "cutover_state": cutover_state if complete else (
+            "blocked_overflow" if not counts_complete else "blocked_incomplete_input"
+        ),
+        "generation": generation, "source_run_id": str(state.get("run_id") or ""),
+        "updated_at": str(state.get("updated_at") or ""),
+        "work_counts": queue_counts, "expected_work_counts": expected_queue_counts,
+        "work_queue_complete": complete, "work_total": len(work_rows),
+        "work_queue_input_complete": input_complete,
+        "source_queue_max_seq": source_queue_max_seq,
+        "source_queue_max_order": source_queue_max_order,
+        "population_totals": population_totals,
+        "metrics": metrics,
+    }
+    return work_rows, validate_region_talk_ydb_read_model(
+        read_model,
+        require_ready=cutover_state == "ready",
+    )
+
+
+def write_region_talk_ydb_materialized_projection(
+    driver: Any,
+    session: Any,
+    ydb: Any,
+    work_table_path: str,
+    read_model_table_path: str,
+    state: dict[str, Any],
+    *,
+    max_per_queue: int,
+    cutover_state: str,
+) -> tuple[int, dict[str, Any]]:
+    """Publish generation rows first and the current pointer last."""
+
+    ensure_region_talk_ydb_read_model_tables(session, work_table_path, read_model_table_path)
+    work_rows, read_model = build_region_talk_ydb_materialized_projection(
+        state, max_per_queue=max_per_queue, cutover_state=cutover_state,
+    )
+    if work_rows:
+        columns = (
+            ydb.BulkUpsertColumns()
+            .add_column("generation", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+            .add_column("queue_name", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+            .add_column("status", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+            .add_column("due_at", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+            .add_column("priority", ydb.OptionalType(ydb.PrimitiveType.Uint64))
+            .add_column("item_key", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+            .add_column("state_pk", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+            .add_column("payload_json", ydb.OptionalType(ydb.PrimitiveType.Json))
+            .add_column("updated_at", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+        )
+        chunk_size = max(1, min(200, getenv_int("REGION_TALK_YDB_READ_MODEL_WRITE_CHUNK_SIZE", 100)))
+        for start in range(0, len(work_rows), chunk_size):
+            chunk = work_rows[start:start + chunk_size]
+            if _ACTIVE_YDB_COST_BUDGET is not None:
+                _ACTIVE_YDB_COST_BUDGET.before_query("candidate.read_model.work_upsert")
+                _ACTIVE_YDB_COST_BUDGET.record_write(
+                    "candidate.read_model.work_upsert",
+                    [(row["item_key"], row["queue_name"], row) for row in chunk],
+                )
+            driver.table_client.bulk_upsert(work_table_path, chunk, columns)
+    cursor_table_path = region_talk_ydb_work_cursor_path(work_table_path)
+    cursor_rows = [
+        {
+            "generation": read_model["generation"], "queue_name": queue_name,
+            "expected_count": int(expected_count or 0), "consumed_count": 0,
+            "cursor_due_at": "", "cursor_priority": 0,
+            "cursor_status": "", "cursor_item_key": "",
+            "updated_at": read_model["updated_at"],
+        }
+        for queue_name, expected_count in sorted((read_model.get("expected_work_counts") or {}).items())
+    ]
+    cursor_columns = (
+        ydb.BulkUpsertColumns()
+        .add_column("generation", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+        .add_column("queue_name", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+        .add_column("expected_count", ydb.OptionalType(ydb.PrimitiveType.Uint64))
+        .add_column("consumed_count", ydb.OptionalType(ydb.PrimitiveType.Uint64))
+        .add_column("cursor_due_at", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+        .add_column("cursor_priority", ydb.OptionalType(ydb.PrimitiveType.Uint64))
+        .add_column("cursor_status", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+        .add_column("cursor_item_key", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+        .add_column("updated_at", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+    )
+    if _ACTIVE_YDB_COST_BUDGET is not None:
+        _ACTIVE_YDB_COST_BUDGET.before_query("candidate.read_model.cursor_seed")
+        _ACTIVE_YDB_COST_BUDGET.record_write(
+            "candidate.read_model.cursor_seed",
+            [(row["queue_name"], "work_cursor", row) for row in cursor_rows],
+        )
+    if cursor_rows:
+        driver.table_client.bulk_upsert(cursor_table_path, cursor_rows, cursor_columns)
+    if _ACTIVE_YDB_COST_BUDGET is not None:
+        _ACTIVE_YDB_COST_BUDGET.before_query("candidate.read_model.publish")
+        _ACTIVE_YDB_COST_BUDGET.record_write("candidate.read_model.publish", [("current", "read_model", read_model)])
+    query = session.prepare(f"""
+DECLARE $schema_version AS Utf8; DECLARE $generation AS Utf8;
+DECLARE $cutover_state AS Utf8; DECLARE $payload_json AS Json; DECLARE $updated_at AS Utf8;
+UPSERT INTO `{read_model_table_path}`
+(model_name, schema_version, generation, cutover_state, payload_json, updated_at)
+VALUES ('current', $schema_version, $generation, $cutover_state, $payload_json, $updated_at);
+""")
+    session.transaction(ydb.SerializableReadWrite()).execute(query, {
+        "$schema_version": YDB_READ_MODEL_SCHEMA_VERSION,
+        "$generation": read_model["generation"], "$cutover_state": read_model["cutover_state"],
+        "$payload_json": json.dumps(read_model, ensure_ascii=False, sort_keys=True),
+        "$updated_at": read_model["updated_at"],
+    }, commit_tx=True)
+    return len(work_rows), read_model
+
+
+def region_talk_ydb_projection_lifecycle_policy(
+    state: dict[str, Any],
+    *,
+    publish_ready: bool,
+) -> str:
+    """Choose one safe pointer lifecycle before any persistent mutation."""
+
+    input_complete = state.get("_ydb_materialized_projection_input_complete", True) is True
+    claims = list(state.get("_ydb_materialized_work_claims") or [])
+    if input_complete:
+        if claims:
+            raise RegionTalkYdbReadModelUnavailable(
+                "region_talk_ydb_read_model:complete_input_has_consumer_claims"
+            )
+        return "publish_complete_generation"
+    if publish_ready:
+        raise RegionTalkYdbReadModelUnavailable(
+            "region_talk_ydb_read_model:partial_input_ready_publish_forbidden"
+        )
+    generation = str(state.get("ydb_read_model_generation") or "")
+    if not generation:
+        raise RegionTalkYdbReadModelUnavailable(
+            "region_talk_ydb_read_model:consumer_generation_missing"
+        )
+    claim_generations = {str(claim.get("generation") or "") for claim in claims}
+    if claim_generations and claim_generations != {generation}:
+        raise RegionTalkYdbReadModelUnavailable(
+            "region_talk_ydb_read_model:claim_generation_mismatch"
+        )
+    return "ack_existing_generation"
+
+
+def finalize_region_talk_ydb_materialized_lifecycle(
+    driver: Any,
+    session: Any,
+    ydb: Any,
+    work_table_path: str,
+    read_model_table_path: str,
+    state: dict[str, Any],
+    *,
+    max_per_queue: int,
+    publish_ready: bool,
+) -> dict[str, Any]:
+    """Publish complete producer input or ACK a bounded consumer page, never both."""
+
+    policy = region_talk_ydb_projection_lifecycle_policy(
+        state, publish_ready=publish_ready,
+    )
+    if policy == "publish_complete_generation":
+        rows_written, model = write_region_talk_ydb_materialized_projection(
+            driver,
+            session,
+            ydb,
+            work_table_path,
+            read_model_table_path,
+            state,
+            max_per_queue=max_per_queue,
+            cutover_state="ready" if publish_ready else "shadow",
+        )
+        return {
+            "mode": policy,
+            "rows_written": rows_written,
+            "generation": str(model.get("generation") or ""),
+            "claims_acked": 0,
+        }
+
+    claims = list(state.get("_ydb_materialized_work_claims") or [])
+    generation = str(state.get("ydb_read_model_generation") or "")
+    if not generation:
+        raise RegionTalkYdbReadModelUnavailable(
+            "region_talk_ydb_read_model:consumer_generation_missing"
+        )
+    if claims:
+        claim_generations = {str(claim.get("generation") or "") for claim in claims}
+        if len(claim_generations) != 1 or "" in claim_generations:
+            raise RegionTalkYdbReadModelUnavailable(
+                "region_talk_ydb_read_model:claim_generation_mismatch"
+            )
+        if next(iter(claim_generations)) != generation:
+            raise RegionTalkYdbReadModelUnavailable(
+                "region_talk_ydb_read_model:claim_generation_mismatch"
+            )
+    claims_acked = ydb_ack_materialized_work_claims(
+        session, ydb, work_table_path, claims,
+    )
+    return {
+        "mode": policy,
+        "rows_written": 0,
+        "generation": generation,
+        "claims_acked": claims_acked,
+    }
 
 
 
@@ -5315,6 +6297,9 @@ def close_region_talk_runtime_clients(status: Any | None = None) -> None:
 
 
 def ydb_upsert_json(session: Any, ydb: Any, table_path: str, pk: str, kind: str, payload: dict[str, Any], updated_at: str, *, timeout_seconds: int | None = None) -> None:
+    if _ACTIVE_YDB_COST_BUDGET is not None:
+        _ACTIVE_YDB_COST_BUDGET.before_query(f"candidate.write:{kind}")
+        _ACTIVE_YDB_COST_BUDGET.record_write(f"candidate.write:{kind}", [(pk, kind, payload)])
     settings = ydb_request_settings(ydb, timeout_seconds=timeout_seconds)
     query = session.prepare(f"""
 DECLARE $pk AS Utf8;
@@ -5347,8 +6332,12 @@ VALUES ($pk, $kind, $payload_json, $updated_at);
     written = 0
     chunk_size = max(1, int(chunk_size or 100))
     for start in range(0, len(rows), chunk_size):
+        chunk = rows[start:start + chunk_size]
+        if _ACTIVE_YDB_COST_BUDGET is not None:
+            _ACTIVE_YDB_COST_BUDGET.before_query("candidate.transactional_upsert")
+            _ACTIVE_YDB_COST_BUDGET.record_write("candidate.transactional_upsert", chunk)
         tx = session.transaction(ydb.SerializableReadWrite())
-        for pk, kind, payload in rows[start:start + chunk_size]:
+        for pk, kind, payload in chunk:
             tx.execute(query, {"$pk": pk, "$kind": kind, "$payload_json": json.dumps(payload, ensure_ascii=False), "$updated_at": updated_at}, commit_tx=False, settings=settings)
             written += 1
         tx.commit(settings=settings)
@@ -5371,6 +6360,9 @@ def ydb_bulk_upsert_json_many(
     """
     if not rows:
         return 0
+    rows, pending_fingerprints = ydb_changed_rows(rows)
+    if not rows:
+        return 0
     column_types = (
         ydb.BulkUpsertColumns()
         .add_column("pk", ydb.OptionalType(ydb.PrimitiveType.Utf8))
@@ -5391,7 +6383,17 @@ def ydb_bulk_upsert_json_many(
     chunk_size = max(1, int(chunk_size or 500))
     for start in range(0, len(bulk_rows), chunk_size):
         chunk = bulk_rows[start:start + chunk_size]
+        if _ACTIVE_YDB_COST_BUDGET is not None:
+            budget_rows = [
+                (str(row["pk"]), str(row["kind"]), json.loads(str(row["payload_json"])))
+                for row in chunk
+            ]
+            _ACTIVE_YDB_COST_BUDGET.before_query("candidate.bulk_upsert")
+            _ACTIVE_YDB_COST_BUDGET.record_write("candidate.bulk_upsert", budget_rows)
         driver.table_client.bulk_upsert(table_path, chunk, column_types)
+        remember_ydb_written_fingerprints({
+            str(row["pk"]): pending_fingerprints[str(row["pk"])] for row in chunk
+        })
         written += len(chunk)
     return written
 
@@ -5420,6 +6422,8 @@ def ydb_select_kind_items(
     current_tx = session.transaction(ydb.SnapshotReadOnly()) if current else None
     try:
         while len(out) < max_items:
+            if _ACTIVE_YDB_COST_BUDGET is not None:
+                _ACTIVE_YDB_COST_BUDGET.before_query(f"candidate.kind:{kind}")
             query = session.prepare(f"""
 DECLARE $prefix AS Utf8;
 DECLARE $prefix_upper AS Utf8;
@@ -5437,6 +6441,8 @@ LIMIT {min(page_size, max_items - len(out))};
                 settings=settings,
             )
             rows = result_sets[0].rows if result_sets else []
+            if _ACTIVE_YDB_COST_BUDGET is not None:
+                _ACTIVE_YDB_COST_BUDGET.record_read(f"candidate.kind:{kind}", rows)
             if not rows:
                 break
             for row in rows:
@@ -5466,6 +6472,122 @@ LIMIT {min(page_size, max_items - len(out))};
     return out
 
 
+def ydb_select_pk_items(
+    session: Any,
+    ydb: Any,
+    table_path: str,
+    pks: Iterable[str],
+    *,
+    chunk_size: int = 100,
+) -> dict[str, dict[str, Any]]:
+    """Point-read an explicit stable-key working set in bounded chunks."""
+
+    keys = list(dict.fromkeys(str(pk) for pk in pks if str(pk)))
+    out: dict[str, dict[str, Any]] = {}
+    settings = ydb_request_settings(ydb)
+    chunk_size = max(1, min(500, int(chunk_size)))
+    query = session.prepare(f"""
+DECLARE $keys AS List<Struct<pk:Utf8>>;
+SELECT state.pk AS pk, state.payload_json AS payload_json, state.updated_at AS updated_at
+FROM `{table_path}` AS state
+INNER JOIN AS_TABLE($keys) AS wanted ON state.pk = wanted.pk;
+""", settings=settings)
+    for start in range(0, len(keys), chunk_size):
+        chunk = keys[start:start + chunk_size]
+        if _ACTIVE_YDB_COST_BUDGET is not None:
+            _ACTIVE_YDB_COST_BUDGET.before_query("candidate.point_read")
+        result_sets = session.transaction(ydb.SnapshotReadOnly()).execute(
+            query,
+            {"$keys": [{"pk": pk} for pk in chunk]},
+            commit_tx=True,
+            settings=settings,
+        )
+        rows = result_sets[0].rows if result_sets else []
+        if _ACTIVE_YDB_COST_BUDGET is not None:
+            _ACTIVE_YDB_COST_BUDGET.record_read("candidate.point_read", rows)
+        for row in rows:
+            pk = str(row.pk)
+            payload = row.payload_json
+            item = json.loads(payload) if isinstance(payload, str) else dict(payload or {})
+            if isinstance(item, dict):
+                item.setdefault("_ydb_pk", pk)
+                item.setdefault("_ydb_updated_at", str(getattr(row, "updated_at", "") or ""))
+                out[pk] = item
+    return out
+
+
+def ydb_select_due_kind_items(
+    session: Any,
+    ydb: Any,
+    table_path: str,
+    kind: str,
+    *,
+    status_fields: tuple[str, ...],
+    due_statuses: set[str],
+    limit: int,
+    max_scan_rows: int,
+) -> dict[str, dict[str, Any]]:
+    """Read one bounded keyset page, stopping before a historical full scan.
+
+    The current compact KV has no typed status index.  This compatibility
+    reader therefore caps *scanned* rows as well as returned work.  The typed
+    due-index migration can later replace its query without changing callers.
+    """
+
+    if not re.fullmatch(r"[A-Za-z0-9_:-]+", kind):
+        raise ValueError(f"unsafe YDB kind: {kind!r}")
+    scan_ceiling = max(1, int(max_scan_rows))
+    wanted = min(max(1, int(limit)), scan_ceiling)
+    page_size = max(1, min(100, wanted, scan_ceiling))
+    prefix = kind + ":"
+    prefix_upper = kind + ";"
+    after = prefix
+    scanned = 0
+    out: dict[str, dict[str, Any]] = {}
+    settings = ydb_request_settings(ydb)
+    while len(out) < wanted and scanned < scan_ceiling:
+        current_limit = min(page_size, scan_ceiling - scanned)
+        query = session.prepare(f"""
+DECLARE $prefix AS Utf8;
+DECLARE $prefix_upper AS Utf8;
+DECLARE $after AS Utf8;
+SELECT pk, payload_json, updated_at FROM `{table_path}`
+WHERE pk >= $prefix AND pk < $prefix_upper AND pk > $after
+ORDER BY pk LIMIT {current_limit};
+""", settings=settings)
+        if _ACTIVE_YDB_COST_BUDGET is not None:
+            _ACTIVE_YDB_COST_BUDGET.before_query(f"candidate.due_page:{kind}")
+        result_sets = session.transaction(ydb.SnapshotReadOnly()).execute(
+            query,
+            {"$prefix": prefix, "$prefix_upper": prefix_upper, "$after": after},
+            commit_tx=True,
+            settings=settings,
+        )
+        rows = result_sets[0].rows if result_sets else []
+        if _ACTIVE_YDB_COST_BUDGET is not None:
+            _ACTIVE_YDB_COST_BUDGET.record_read(f"candidate.due_page:{kind}", rows)
+        if not rows:
+            break
+        scanned += len(rows)
+        for row in rows:
+            after = str(row.pk)
+            payload = row.payload_json
+            item = json.loads(payload) if isinstance(payload, str) else dict(payload or {})
+            if not isinstance(item, dict):
+                continue
+            status = next((str(item.get(field) or "") for field in status_fields if item.get(field) not in (None, "")), "")
+            if status not in due_statuses:
+                continue
+            item.setdefault("_ydb_pk", after)
+            item.setdefault("_ydb_updated_at", str(getattr(row, "updated_at", "") or ""))
+            out[after] = item
+            if len(out) >= wanted:
+                break
+        if len(rows) < current_limit:
+            break
+    return out
+
+
 def ydb_select_kind_items_current_complete(
     session: Any,
     ydb: Any,
@@ -5489,12 +6611,16 @@ def ydb_select_kind_items_current_complete(
 
 def ydb_select_latest_state(session: Any, ydb: Any, table_path: str) -> dict[str, Any]:
     settings = ydb_request_settings(ydb)
+    if _ACTIVE_YDB_COST_BUDGET is not None:
+        _ACTIVE_YDB_COST_BUDGET.before_query("candidate.latest_state")
     result_sets = session.transaction(ydb.StaleReadOnly()).execute(
         f"SELECT payload_json FROM `{table_path}` WHERE pk = 'latest_state';",
         commit_tx=True,
         settings=settings,
     )
     rows = result_sets[0].rows if result_sets else []
+    if _ACTIVE_YDB_COST_BUDGET is not None:
+        _ACTIVE_YDB_COST_BUDGET.record_read("candidate.latest_state", rows)
     if not rows:
         return {}
     payload = rows[0].payload_json
@@ -5746,6 +6872,68 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
             def op(session: Any) -> dict[str, Any]:
                 ensure_ydb_kv_table(ydb, session, table_path)
                 data0 = ydb_select_latest_state(session, ydb, table_path)
+                work_table_path, read_model_table_path = region_talk_ydb_read_model_paths(cfg)
+                try:
+                    read_model = ydb_select_current_read_model(session, ydb, read_model_table_path)
+                    lease_owner = str(os.getenv("REGION_TALK_RUN_ID") or f"candidate-{os.getpid()}")
+                    work_rows, work_claims = ydb_select_materialized_work(
+                        session,
+                        ydb,
+                        work_table_path,
+                        generation=str(read_model["generation"]),
+                        queue_names=("source", "post_link", "image", "bge", "publication"),
+                        limit_per_queue=getenv_int("REGION_TALK_YDB_READ_MODEL_PAGE_LIMIT", 200),
+                        read_model=read_model,
+                        due_cutoff=utc_now_iso(),
+                        lease_owner=lease_owner,
+                        lease_seconds=getenv_int("REGION_TALK_YDB_WORK_LEASE_SECONDS", 900),
+                    )
+                    state_pks = {str(row.get("state_pk") or "") for row in work_rows if str(row.get("state_pk") or "")}
+                    state_items = ydb_select_pk_items(session, ydb, table_path, state_pks)
+                    # A second bounded lookup brings only dependencies of the
+                    # active rows (source/post/vector/cache), never a kind.
+                    related_pks: set[str] = set()
+                    for item in state_items.values():
+                        source_key = str(item.get("canonical_source_key") or item.get("source_key") or "").strip()
+                        if source_key:
+                            related_pks.add("source_queue_item:" + source_key)
+                        post_key = durable_processed_post_key(item)
+                        if post_key:
+                            related_pks.add("processed_post_item:" + post_key)
+                        for identifier in {
+                            str(item.get("candidate_memory_id") or ""),
+                            str(item.get("text_vector_enrichment_id") or ""),
+                            str(item.get("post_id") or ""),
+                        }:
+                            if identifier:
+                                related_pks.add("candidate_memory_item:" + identifier)
+                                related_pks.add("text_vector_enrichment_item:" + identifier)
+                        username = str(item.get("username") or item.get("recommended_username") or "").strip().lstrip("@").lower()
+                        if username:
+                            related_pks.add("telegram_entity_cache_item:telegram:username:" + username)
+                    related_pks.difference_update(state_items)
+                    if related_pks:
+                        state_items.update(ydb_select_pk_items(session, ydb, table_path, related_pks))
+                    data0 = hydrate_region_talk_state_from_materialized_work(data0, work_rows, state_items)
+                    data0["ydb_read_model_schema_version"] = read_model["schema_version"]
+                    data0["ydb_work_queue_schema_version"] = read_model["work_queue_schema_version"]
+                    data0["ydb_read_model_generation"] = read_model["generation"]
+                    data0["ydb_read_model_population_totals"] = read_model.get("population_totals") or {}
+                    data0["ydb_read_model_source_queue_max_seq"] = int(read_model.get("source_queue_max_seq") or 0)
+                    data0["ydb_read_model_source_queue_max_order"] = int(read_model.get("source_queue_max_order") or 0)
+                    data0["ydb_read_model_metrics"] = read_model.get("metrics") or {}
+                    data0["_ydb_materialized_work_claims"] = work_claims
+                    # A due page is intentionally partial product state. It
+                    # must never be republished as a complete/ready projection.
+                    data0["_ydb_materialized_projection_input_complete"] = False
+                    return data0
+                except RegionTalkYdbBudgetExceeded:
+                    raise
+                except Exception as exc:
+                    if not region_talk_ydb_legacy_fallback_allowed():
+                        raise RegionTalkYdbReadModelUnavailable(
+                            "region_talk_ydb_read_model:required_start_state_unavailable"
+                        ) from exc
                 # Merge row-level queue items written by parallel notebooks (e.g. ImageDiagnostic).
                 image_items = ydb_select_kind_items(session, ydb, table_path, "image_queue_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
                 source_queue_full_read_limit = max(
@@ -6037,6 +7225,8 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                     if attempt > 1:
                         meta["ydb_state_load_attempts"] = attempt
                     break
+                except RegionTalkYdbBudgetExceeded:
+                    raise
                 except Exception as exc:
                     last_exc = exc
                     meta.update({
@@ -6051,7 +7241,7 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                         time.sleep(backoff_seconds * attempt)
             driver.stop(timeout=5)
             if not isinstance(data, dict) or not data:
-                meta.update({"ydb_read_status": "empty", "previous_state_loaded": "false", "increment_state_loaded": "false", "previous_state_source": "ydb:" + table_path})
+                meta.update({"ydb_read_status": "empty", "previous_state_loaded": "false", "increment_state_loaded": "false", "previous_state_source": "ydb:" + table_path, "ydb_cost_budget": region_talk_ydb_cost_snapshot()})
                 return {}, meta
             # ``posts`` in older compact snapshots may still be keyed by a
             # fetch-path post_id while row-level processed rows are already
@@ -6071,14 +7261,14 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
             raw = json.dumps(data, ensure_ascii=False, sort_keys=True).encode("utf-8")
             state_hash = hashlib.sha256(raw).hexdigest()
             data["_loaded_from_path"] = "ydb:" + table_path + "#latest_state"
-            meta.update({"ydb_read_status": "ok", "previous_state_loaded": "true", "increment_state_loaded": "true", "previous_state_source": "ydb:" + table_path, "increment_state_path": "ydb:" + table_path, "previous_state_run_id": data.get("run_id", ""), "previous_run_id": data.get("run_id", ""), "previous_state_hash": state_hash, "state_schema_version_previous": data.get("state_schema_version", ""), "previous_seen_post_count": len(data.get("processed_posts") or data.get("posts") or {}), "previous_candidate_memory_count": len(data.get("candidate_memory") or {}), "ydb_table_path": table_path, "ydb_state_mode": "compact_kv"})
+            meta.update({"ydb_read_status": "ok", "previous_state_loaded": "true", "increment_state_loaded": "true", "previous_state_source": "ydb:" + table_path, "increment_state_path": "ydb:" + table_path, "previous_state_run_id": data.get("run_id", ""), "previous_run_id": data.get("run_id", ""), "previous_state_hash": state_hash, "state_schema_version_previous": data.get("state_schema_version", ""), "previous_seen_post_count": len(data.get("processed_posts") or data.get("posts") or {}), "previous_candidate_memory_count": len(data.get("candidate_memory") or {}), "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_cost_budget": region_talk_ydb_cost_snapshot()})
             return data, meta
         except Exception as exc:
             try:
                 driver.stop(timeout=5)
             except Exception:
                 pass
-            meta.update({"ydb_read_status": "error", "ydb_error": f"{type(exc).__name__}: {str(exc)[:220]}"})
+            meta.update({"ydb_read_status": "error", "ydb_error": f"{type(exc).__name__}: {str(exc)[:220]}", "ydb_cost_budget": region_talk_ydb_cost_snapshot()})
             return {}, meta
     path = Path(snapshot)
     try:
@@ -6102,10 +7292,34 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
         return {**meta, "ydb_write_status": "missing_config", "state_write_status": "error", "state_write_error": "missing " + cfg["missing"]}
     snapshot = (os.getenv("REGION_TALK_YDB_STATE_SNAPSHOT_FILE") or "").strip()
     if not snapshot:
+        publish_ready = getenv_bool("REGION_TALK_YDB_READ_MODEL_PUBLISH_READY", False)
+        try:
+            projection_lifecycle = region_talk_ydb_projection_lifecycle_policy(
+                state, publish_ready=publish_ready,
+            )
+        except RegionTalkYdbReadModelUnavailable as exc:
+            return {
+                **meta,
+                "ydb_write_status": "error",
+                "state_write_status": "error",
+                "state_write_error": f"{type(exc).__name__}: {str(exc)[:220]}",
+                "ydb_projection_lifecycle": "rejected_before_connect",
+            }
         try:
             ydb, driver, cfg = ydb_connect()
             table_path = ydb_kv_table_path(cfg)
+            work_table_path, read_model_table_path = region_talk_ydb_read_model_paths(cfg)
             compact = compact_region_talk_state_for_ydb(state)
+            # Validate projection completeness before any YDB mutation.  An
+            # overfull queue must not advance latest_state and then publish an
+            # incomplete work generation.
+            projection_max_per_queue = getenv_int("REGION_TALK_YDB_READ_MODEL_MAX_PER_QUEUE", 200)
+            if projection_lifecycle == "publish_complete_generation":
+                build_region_talk_ydb_materialized_projection(
+                    state,
+                    max_per_queue=projection_max_per_queue,
+                    cutover_state="ready" if publish_ready else "shadow",
+                )
             checkpoint = compact_region_talk_checkpoint_for_ydb(compact)
             updated_at = str(compact.get("updated_at") or utc_now_iso())
             payload = json.dumps(checkpoint, ensure_ascii=False, sort_keys=True)
@@ -6161,7 +7375,7 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                         if key:
                             row_items.append(("image_queue_item:" + key, "image_queue_item", item))
                 processed_snapshot_items = processed_post_snapshot_row_items(
-                    compact,
+                    state,
                     skip_row_rewrite=skip_row_rewrite,
                 )
                 # New/refetched posts are already written online with run_id,
@@ -6227,12 +7441,26 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                     updated_at,
                     chunk_size=getenv_int("REGION_TALK_YDB_SNAPSHOT_BULK_CHUNK_SIZE", 500),
                 )
+                materialized_lifecycle = finalize_region_talk_ydb_materialized_lifecycle(
+                    driver,
+                    session,
+                    ydb,
+                    work_table_path,
+                    read_model_table_path,
+                    compact,
+                    max_per_queue=projection_max_per_queue,
+                    publish_ready=publish_ready,
+                )
+                compact["_ydb_projection_lifecycle"] = materialized_lifecycle["mode"]
+                compact["_ydb_materialized_work_rows_written"] = materialized_lifecycle["rows_written"]
+                compact["_ydb_read_model_generation"] = materialized_lifecycle["generation"]
+                compact["_ydb_materialized_work_claims_acked"] = materialized_lifecycle["claims_acked"]
                 compact["_ydb_pruned_legacy_queue_payload_rows"] = ydb_prune_legacy_queue_payloads(session, ydb, table_path)
                 compact["_ydb_retention_pruned_rows"] = ydb_prune_compact_retention(session, ydb, table_path)
             pool.retry_operation_sync(op, retry_settings=state_retry_settings)
             driver.stop(timeout=5)
             row_kind_counts = compact.get("_ydb_row_kind_counts_written") or {}
-            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": checkpoint.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_checkpoint_payload_bytes": len(payload.encode("utf-8")), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_retention_pruned_rows": json.dumps(compact.get("_ydb_retention_pruned_rows", {}), ensure_ascii=False, sort_keys=True), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_source_candidates": len(compact.get("source_candidates") or {}), "ydb_compact_source_edges": len(compact.get("source_edges") or {}), "ydb_compact_comment_discovery": len(compact.get("comment_discovery") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_publication_candidate_queue": len(compact.get("publication_candidate_queue") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_processed_post_items_written": compact.get("_ydb_row_level_processed_post_items_written", 0), "ydb_row_level_candidate_memory_items_written": row_kind_counts.get("candidate_memory_item", 0), "ydb_row_level_source_candidate_items_written": row_kind_counts.get("source_candidate_item", 0), "ydb_row_level_source_edge_items_written": row_kind_counts.get("source_edge_item", 0), "ydb_row_level_comment_link_items_written": row_kind_counts.get("comment_link_item", 0), "ydb_row_level_source_queue_items_written": row_kind_counts.get("source_queue_item", 0), "ydb_row_level_image_queue_items_written": row_kind_counts.get("image_queue_item", 0), "ydb_row_level_publication_candidate_items_written": compact.get("_ydb_row_level_publication_candidate_items_written", 0), "ydb_queue_cursor_items_written": row_kind_counts.get("queue_cursor", 0), "ydb_row_level_items_written": compact.get("_ydb_row_level_items_written", 0)}
+            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": checkpoint.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_checkpoint_payload_bytes": len(payload.encode("utf-8")), "ydb_read_model_schema_version": YDB_READ_MODEL_SCHEMA_VERSION, "ydb_work_queue_schema_version": YDB_WORK_QUEUE_SCHEMA_VERSION, "ydb_read_model_generation": compact.get("_ydb_read_model_generation", ""), "ydb_projection_lifecycle": compact.get("_ydb_projection_lifecycle", ""), "ydb_materialized_work_claims_acked": compact.get("_ydb_materialized_work_claims_acked", 0), "ydb_materialized_work_rows_written": compact.get("_ydb_materialized_work_rows_written", 0), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_retention_pruned_rows": json.dumps(compact.get("_ydb_retention_pruned_rows", {}), ensure_ascii=False, sort_keys=True), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_source_candidates": len(compact.get("source_candidates") or {}), "ydb_compact_source_edges": len(compact.get("source_edges") or {}), "ydb_compact_comment_discovery": len(compact.get("comment_discovery") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_publication_candidate_queue": len(compact.get("publication_candidate_queue") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_processed_post_items_written": compact.get("_ydb_row_level_processed_post_items_written", 0), "ydb_row_level_candidate_memory_items_written": row_kind_counts.get("candidate_memory_item", 0), "ydb_row_level_source_candidate_items_written": row_kind_counts.get("source_candidate_item", 0), "ydb_row_level_source_edge_items_written": row_kind_counts.get("source_edge_item", 0), "ydb_row_level_comment_link_items_written": row_kind_counts.get("comment_link_item", 0), "ydb_row_level_source_queue_items_written": row_kind_counts.get("source_queue_item", 0), "ydb_row_level_image_queue_items_written": row_kind_counts.get("image_queue_item", 0), "ydb_row_level_publication_candidate_items_written": compact.get("_ydb_row_level_publication_candidate_items_written", 0), "ydb_queue_cursor_items_written": row_kind_counts.get("queue_cursor", 0), "ydb_row_level_items_written": compact.get("_ydb_row_level_items_written", 0)}
         except Exception as exc:
             return {**meta, "ydb_write_status": "error", "state_write_status": "error", "state_write_error": f"{type(exc).__name__}: {str(exc)[:220]}"}
     try:
@@ -9199,8 +10427,17 @@ def build_unified_source_queue(
         return parsed if parsed > 0 else 0
 
     source_queue_read_truncated = str(previous_state.get("ydb_row_level_source_queue_items_truncated") or "").lower() == "true"
+    materialized_queue_mode = previous_state.get("ydb_read_path") == "typed_work_queue_plus_point_join"
 
     def require_full_queue_read(reason: str) -> None:
+        if materialized_queue_mode:
+            population = previous_state.get("ydb_read_model_population_totals") or {}
+            if int(population.get("sources") or 0) > 0 and int(previous_state.get("ydb_read_model_source_queue_max_seq") or 0) <= 0:
+                raise RuntimeError(
+                    "materialized source queue is missing its authoritative max sequence; "
+                    f"unsafe repair/admission refused ({reason})"
+                )
+            return
         if source_queue_read_truncated or str(previous_state.get("ydb_source_queue_full_read_complete") or "true").lower() == "false":
             raise RuntimeError(
                 "source queue admission sequence requires a full YDB source_queue_item read; "
@@ -9236,8 +10473,14 @@ def build_unified_source_queue(
     queue_seq_missing_repaired = 0
     queue_seq_duplicate_repaired = 0
     used_queue_seqs: set[int] = set()
-    max_queue_seq = max([queue_positive_int(rec.get("queue_seq")) for rec in entries.values()] or [0])
-    max_queue_order = max([queue_positive_int(rec.get("queue_order")) for rec in entries.values()] or [0])
+    max_queue_seq = max(
+        [queue_positive_int(rec.get("queue_seq")) for rec in entries.values()]
+        + [queue_positive_int(previous_state.get("ydb_read_model_source_queue_max_seq"))]
+    )
+    max_queue_order = max(
+        [queue_positive_int(rec.get("queue_order")) for rec in entries.values()]
+        + [queue_positive_int(previous_state.get("ydb_read_model_source_queue_max_order"))]
+    )
     for key, rec in sorted(entries.items(), key=lambda item: (queue_positive_int(item[1].get("queue_order")) or 999999999, item[0])):
         seq = queue_positive_int(rec.get("queue_seq"))
         if seq > 0 and seq not in used_queue_seqs:
@@ -14339,12 +15582,22 @@ def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | Non
             ensure_ydb_kv_table(ydb, session, table_path)
             rows: list[dict[str, Any]] = []
             for kind in selected_kinds:
-                scan_limit = (
-                    getenv_int("REGION_TALK_POST_LINK_QUEUE_SCAN_LIMIT", 5000)
-                    if kind == "post_link_queue_item"
-                    else max(1, limit * 3)
-                )
-                items = ydb_select_kind_items(session, ydb, table_path, kind, limit=max(1, scan_limit))
+                if kind == "post_link_queue_item":
+                    items = ydb_select_due_kind_items(
+                        session,
+                        ydb,
+                        table_path,
+                        kind,
+                        status_fields=("post_link_status", "fetch_status"),
+                        due_statuses=set(YDB_POST_LINK_DUE_STATUSES),
+                        limit=max(1, limit * 3),
+                        max_scan_rows=getenv_int("REGION_TALK_YDB_DUE_PAGE_SCAN_MAX_ROWS", 200),
+                    )
+                else:
+                    items = ydb_select_kind_items(
+                        session, ydb, table_path, kind,
+                        limit=max(1, min(100, limit * 3)),
+                    )
                 for pk, payload in items.items():
                     if not isinstance(payload, dict):
                         continue
@@ -14357,15 +15610,25 @@ def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | Non
             # source ledger before selecting exact-fetch work so rejected
             # sources are terminalized instead of consuming Telegram calls.
             source_by_key: dict[str, dict[str, Any]] = {}
+            source_keys = {
+                str(row.get("canonical_source_key") or row.get("source_key") or "").strip()
+                for row in rows
+                if str(row.get("canonical_source_key") or row.get("source_key") or "").strip()
+            }
+            source_items = ydb_select_pk_items(
+                session,
+                ydb,
+                table_path,
+                [
+                    f"{source_kind}:{source_key}"
+                    for source_key in sorted(source_keys)
+                    for source_kind in ("source_queue_item", "source_status_item", "online_source_item")
+                ],
+            )
             for source_kind in ("source_queue_item", "source_status_item", "online_source_item"):
-                source_items = ydb_select_kind_items(
-                    session,
-                    ydb,
-                    table_path,
-                    source_kind,
-                    limit=getenv_int("REGION_TALK_YDB_SOURCE_QUEUE_FULL_READ_LIMIT", 20000),
-                )
-                for source in source_items.values():
+                for pk, source in source_items.items():
+                    if not pk.startswith(source_kind + ":"):
+                        continue
                     key = str(source.get("canonical_source_key") or "").strip()
                     if not key:
                         continue
@@ -14388,22 +15651,29 @@ def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | Non
                         if field in source:
                             row[field] = source.get(field)
             if "post_link_queue_item" in selected_kinds:
-                processed_items = ydb_select_kind_items(
-                    session, ydb, table_path, "processed_post_item",
-                    limit=getenv_int("REGION_TALK_YDB_MAX_PROCESSED_POST_ROWS", 20000),
-                )
-                vector_items = ydb_select_kind_items(
-                    session, ydb, table_path, "text_vector_enrichment_item",
-                    limit=getenv_int("REGION_TALK_YDB_VECTOR_METRIC_READ_LIMIT", 20000),
-                )
-                publication_items = ydb_select_kind_items(
-                    session, ydb, table_path, "publication_candidate_item",
-                    limit=getenv_int("REGION_TALK_YDB_MAX_PUBLICATION_ROWS", 5000),
-                )
-                candidate_items = ydb_select_kind_items(
-                    session, ydb, table_path, "candidate_memory_item",
-                    limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000),
-                )
+                related_pks: set[str] = set()
+                for row in rows:
+                    post_key = durable_processed_post_key(row)
+                    post_url = canonical_post_url_for_storage(row.get("post_url"))
+                    identifiers = {
+                        str(row.get("post_id") or ""),
+                        str(row.get("candidate_memory_id") or ""),
+                        str(row.get("text_vector_enrichment_id") or ""),
+                    }
+                    if post_key:
+                        related_pks.add("processed_post_item:" + post_key)
+                    if post_url:
+                        related_pks.add("publication_candidate_item:" + post_url)
+                        related_pks.add("candidate_memory_item:" + post_url)
+                    for identifier in identifiers:
+                        if identifier:
+                            related_pks.add("candidate_memory_item:" + identifier)
+                            related_pks.add("text_vector_enrichment_item:" + identifier)
+                related_items = ydb_select_pk_items(session, ydb, table_path, related_pks)
+                processed_items = {pk: row for pk, row in related_items.items() if pk.startswith("processed_post_item:")}
+                vector_items = {pk: row for pk, row in related_items.items() if pk.startswith("text_vector_enrichment_item:")}
+                publication_items = {pk: row for pk, row in related_items.items() if pk.startswith("publication_candidate_item:")}
+                candidate_items = {pk: row for pk, row in related_items.items() if pk.startswith("candidate_memory_item:")}
                 rows = promote_bge_ready_exact_rows(
                     rows,
                     list(processed_items.values()),
@@ -14479,6 +15749,8 @@ def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | Non
             return rows, cached_handles
         raw_rows, cached_handles = pool.retry_operation_sync(op)
         driver.stop(timeout=5)
+    except RegionTalkYdbBudgetExceeded:
+        raise
     except Exception:
         return []
     return candidate_link_rows_for_fetch(raw_rows, limit, cached_entity_handles=cached_handles)
@@ -19612,6 +20884,11 @@ def build_report(
         "run_id": run_id,
         "state_schema_version": "region-talk-state-v2",
         "updated_at": run_now,
+        "_ydb_materialized_work_claims": list(previous_state.get("_ydb_materialized_work_claims") or []),
+        "_ydb_materialized_projection_input_complete": previous_state.get(
+            "_ydb_materialized_projection_input_complete", True,
+        ) is True,
+        "ydb_read_model_generation": str(previous_state.get("ydb_read_model_generation") or ""),
         "posts": updated_posts_state,
         "discovered_sources": updated_discovered_state,
         "source_candidates": {str(r.get("source_candidate_id") or r.get("canonical_source_key") or r.get("canonical_url") or r.get("normalized_url")): r for r in source_frontier_unique if r.get("source_candidate_id") or r.get("canonical_source_key") or r.get("canonical_url") or r.get("normalized_url")},

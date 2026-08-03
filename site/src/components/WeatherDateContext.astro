@@ -1,0 +1,147 @@
+---
+import { withBase } from '../lib/events';
+import type { WeatherRouteKind } from '../lib/weatherCalendar';
+
+interface Props {
+  date: string;
+  dateLabel: string;
+  routeKind: WeatherRouteKind;
+  compact?: boolean;
+  surface?: 'desktop' | 'mobile';
+}
+
+const { date, dateLabel, routeKind, compact = false, surface = 'desktop' } = Astro.props;
+const enabled = String(import.meta.env.PUBLIC_WEATHER_CALENDAR_ENABLED || '0') === '1';
+const pointerPath = withBase('/data/weather/v1/current.json');
+const iconBase = withBase('/assets/weather');
+---
+{enabled ? (
+  <aside
+    class:list={['weather-date-context', compact && 'weather-date-context--compact']}
+    data-weather-date-context
+    data-weather-enabled="true"
+    data-weather-date={date}
+    data-weather-date-label={dateLabel}
+    data-weather-route-kind={routeKind}
+    data-weather-pointer={pointerPath}
+    data-weather-icon-base={iconBase}
+    data-weather-surface={surface}
+    data-weather-state="loading"
+    aria-label={`Погода на ${dateLabel}`}
+    aria-busy="true"
+  />
+) : null}
+
+<style is:global>
+  .weather-date-context[hidden] { display: none !important; }
+  .weather-date-context {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    min-height: 74px;
+    margin: 12px 0 14px;
+    padding: 12px 16px 10px;
+    border: 1px solid color-mix(in srgb, var(--ke-color-ink, #221a14) 13%, transparent);
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--ke-color-canvas, #fffaf2) 88%, #dbeaf0);
+    color: var(--ke-color-ink, #221a14);
+  }
+  .weather-date-context[data-weather-state="loading"] { visibility: hidden; }
+  .weather-date-context[data-weather-quality="degraded"] {
+    border-style: dashed;
+  }
+  .weather-date-context__body {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 24px;
+  }
+  .weather-date-context__location {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .weather-date-context__icon {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+    display: inline-block;
+    background: currentColor;
+    -webkit-mask: var(--weather-icon) center / contain no-repeat;
+    mask: var(--weather-icon) center / contain no-repeat;
+  }
+  .weather-date-context__location > .weather-date-context__icon { color: #276b73; }
+  .weather-date-context__location-copy { min-width: 0; display: grid; gap: 1px; }
+  .weather-date-context__location-copy strong {
+    overflow: hidden;
+    font: 800 0.82rem/1.1 Inter, ui-sans-serif, system-ui, sans-serif;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .weather-date-context__condition {
+    color: var(--ke-color-muted, #6d6259);
+    font: 650 0.72rem/1.1 Inter, ui-sans-serif, system-ui, sans-serif;
+  }
+  .weather-date-context__temperature {
+    margin-left: auto;
+    font: 850 0.95rem/1 Inter, ui-sans-serif, system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .weather-date-context__water {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: #276b73;
+    font: 760 0.72rem/1 Inter, ui-sans-serif, system-ui, sans-serif;
+    white-space: nowrap;
+  }
+  .weather-date-context__water .weather-date-context__icon { width: 15px; height: 15px; flex-basis: 15px; }
+  .weather-date-context__meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    color: var(--ke-color-muted, #6d6259);
+    font: 650 0.68rem/1.2 Inter, ui-sans-serif, system-ui, sans-serif;
+  }
+  .weather-date-context__meta a { color: inherit; text-underline-offset: 2px; }
+  .weather-date-context__meta a::before { content: "· "; text-decoration: none; }
+  .weather-date-context--compact {
+    min-height: 108px;
+    margin: 8px 0 0;
+    padding: 9px 10px 8px;
+    border-radius: 12px;
+  }
+  .weather-date-context--compact .weather-date-context__body { grid-template-columns: 1fr; gap: 7px; }
+  .weather-date-context--compact .weather-date-context__meta { margin-top: 6px; font-size: 0.62rem; }
+
+  @media (max-width: 720px) {
+    .ke-listing-shell > .weather-date-context[data-weather-surface="desktop"] { display: none !important; }
+    .weather-date-context {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 10px 12px 9px;
+      border-width: 1px 0;
+      border-radius: 0;
+      background: rgba(226, 239, 239, .58);
+      min-height: 116px;
+    }
+    .weather-date-context__body { grid-template-columns: 1fr; gap: 7px; }
+    .weather-date-context__location { min-height: 28px; }
+    .weather-date-context__location-copy strong { font-size: 0.78rem; }
+    .weather-date-context__condition { font-size: 0.66rem; }
+    .weather-date-context__temperature { font-size: 0.88rem; }
+    .weather-date-context__meta { margin-top: 7px; font-size: 0.62rem; }
+    .weather-date-context--compact { padding-block: 8px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .weather-date-context, .weather-date-context * { transition: none !important; animation: none !important; }
+  }
+</style>
+
+<script>
+  import { hydrateWeatherDateContexts } from '../lib/weatherCalendarRuntime';
+  void hydrateWeatherDateContexts();
+</script>

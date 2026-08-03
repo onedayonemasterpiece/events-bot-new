@@ -1,4 +1,5 @@
 ---
+import PersonalizationRuntime from '../../../components/personalization/PersonalizationRuntime.astro';
 import FocusConnectivityDiagnostic from '../../../components/FocusConnectivityDiagnostic.astro';
 import { absoluteUrl, IS_SECRET_CANDIDATE } from '../../../lib/events';
 
@@ -23,6 +24,7 @@ const robots = IS_SECRET_CANDIDATE
     <meta name="description" content="Сравнение прямого и устойчивого соединения с устройства участника фокус-группы." />
   </head>
   <body>
+    <PersonalizationRuntime />
     <FocusConnectivityDiagnostic supabaseUrl={supabaseUrl} relayUrl={relayUrl} publishableKey={publishableKey} />
   </body>
 </html>

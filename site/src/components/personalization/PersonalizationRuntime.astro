@@ -1,0 +1,66 @@
+---
+import { resolvePersonalizationRuntimeMode } from '../../lib/personalization/runtime-mode.ts';
+import { resolveRouteSurfaceV1 } from '../../lib/personalization/surface-policy.ts';
+import { buildPersonalizationTestSnapshotV1 } from '../../lib/personalization/test-api.ts';
+import { buildTargetPresenterPlanV1 } from '../../lib/personalization/presenter-plan.ts';
+
+interface Props {
+  pathname?: string;
+  staticOnlyReason?: string;
+}
+
+const pathname = Astro.props.pathname || Astro.url.pathname;
+const requestedMode = import.meta.env.PUBLIC_P13N_RUNTIME_MODE;
+const siteMode = import.meta.env.PUBLIC_SITE_MODE || 'preview';
+const mode = resolvePersonalizationRuntimeMode(requestedMode, siteMode);
+const route = resolveRouteSurfaceV1(pathname);
+const staticOnlyReason = Astro.props.staticOnlyReason || route.staticOnlyReason || undefined;
+const targetShadowPlan = mode.mode === 'local-shadow' ? buildTargetPresenterPlanV1({
+  policyId: route.policy.id,
+  currentOrder: [],
+  targetRanks: [],
+  frozenIds: [],
+}) : null;
+const testSnapshot = mode.mode === 'off' ? undefined : JSON.stringify(buildPersonalizationTestSnapshotV1({
+  mode: mode.mode,
+  route,
+  diagnosticCodes: [mode.diagnostic, 'p13n_runtime.single_marker'],
+  targetShadowPlan,
+  networkCounters: null,
+}));
+---
+
+<span
+  hidden
+  aria-hidden="true"
+  data-p13n-runtime-marker="p13n-runtime-v1"
+  data-p13n-mode={mode.mode}
+  data-p13n-mode-diagnostic={mode.diagnostic}
+  data-p13n-page-family={route.pageFamily}
+  data-p13n-surface={route.surfaceId}
+  data-p13n-policy={route.policy.id}
+  data-p13n-policy-version={route.policy.registryVersion}
+  data-p13n-static-only-reason={staticOnlyReason}
+  data-p13n-surface-diagnostic={route.diagnostic}
+  data-p13n-test-snapshot={testSnapshot}
+></span>
+
+<script is:inline>
+  const markers = Array.from(document.querySelectorAll('[data-p13n-runtime-marker="p13n-runtime-v1"]'));
+  if (markers.length === 1) {
+    const marker = markers[0];
+    if (marker.dataset.p13nMode !== 'off' && marker.dataset.p13nTestSnapshot) {
+      try {
+        const snapshot = JSON.parse(marker.dataset.p13nTestSnapshot);
+        const supplied = window.__KENIGEVENTS_P13N_NETWORK_COUNTERS_V1__;
+        if (supplied && typeof supplied === 'object') {
+          const bounded = (value) => Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
+          snapshot.network_request_counters = {
+            total: bounded(supplied.total), reads: bounded(supplied.reads), writes: bounded(supplied.writes), harness_supplied: true,
+          };
+        }
+        window.__KENIGEVENTS_P13N_TEST_V1__ = Object.freeze(snapshot);
+      } catch (_) {}
+    }
+  }
+</script>

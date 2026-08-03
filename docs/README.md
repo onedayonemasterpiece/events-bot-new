@@ -5,6 +5,12 @@
 ## Быстрый роутинг (для агентов)
 
 - Машиночитаемая карта: `docs/routes.yml`
+- Статический сайт: `docs/features/static-site-pages/README.md`
+  - подборки и гастрономия: `podborki.md`, `gastronomy-collection.md`;
+  - персонализация: `personalizaion/personalization-to-be.md` и Wave 0;
+  - погода: `weather-calendar.md`;
+  - фокус-группа и обычный онбординг — отдельные контракты.
+- Автотесты статического сайта: `docs/operations/static-site-autotest-strategy.md` и `docs/testing/static-site-auth-session-fixture.md`.
 - Список фич: `docs/features/README.md`
 
 ## Канонические разделы

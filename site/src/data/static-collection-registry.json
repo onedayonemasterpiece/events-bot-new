@@ -1,0 +1,95 @@
+{
+  "schema_version": "static-collection-registry-v1",
+  "entries": [
+    {
+      "key": "free",
+      "title": "Бесплатные события",
+      "description": "События со входом без оплаты, подтверждённым в каталоге.",
+      "path": "/podborki/besplatnye-sobytiya/",
+      "status": "repair",
+      "catalog": true,
+      "navigation": true,
+      "sitemap": false
+    },
+    {
+      "key": "exhibitions",
+      "title": "Выставки",
+      "description": "Выставки и экспозиции из актуальной афиши.",
+      "path": "/vystavki/",
+      "status": "public",
+      "catalog": true,
+      "navigation": false,
+      "sitemap": true
+    },
+    {
+      "key": "festivals",
+      "title": "Фестивали",
+      "description": "Фестивальные программы Калининграда и области.",
+      "path": "/festivali/",
+      "status": "public",
+      "catalog": true,
+      "navigation": false,
+      "sitemap": true
+    },
+    {
+      "key": "popular",
+      "title": "Популярное",
+      "description": "События с самым высоким подтверждённым интересом аудитории.",
+      "path": "/populyarnoe/",
+      "status": "public",
+      "catalog": true,
+      "navigation": false,
+      "sitemap": true
+    },
+    {
+      "key": "gastronomy",
+      "title": "Гастрономические события",
+      "description": "Дегустации, гастроужины и другие события, где еда — центр программы.",
+      "path": "/podborki/gastronomiya/",
+      "status": "repair",
+      "catalog": true,
+      "navigation": true,
+      "sitemap": false
+    },
+    {
+      "key": "unusual",
+      "title": "Необычные события",
+      "description": "Подборка восстанавливается после проверки состава.",
+      "path": "/neobychnoe/",
+      "status": "repair",
+      "catalog": true,
+      "navigation": true,
+      "sitemap": false
+    },
+    {
+      "key": "cinema",
+      "title": "Кино",
+      "description": "Подборка запланирована, но ещё не публикуется.",
+      "path": null,
+      "status": "deferred",
+      "catalog": true,
+      "navigation": false,
+      "sitemap": false
+    },
+    {
+      "key": "kids",
+      "title": "Детям",
+      "description": "Скрыто до завершения проверки качества.",
+      "path": "/search/?collection=kids",
+      "status": "blocked",
+      "catalog": false,
+      "navigation": false,
+      "sitemap": false
+    },
+    {
+      "key": "guests",
+      "title": "Гастроли",
+      "description": "Скрыто до появления подтверждённого состава.",
+      "path": null,
+      "status": "blocked",
+      "catalog": false,
+      "navigation": false,
+      "sitemap": false
+    }
+  ]
+}

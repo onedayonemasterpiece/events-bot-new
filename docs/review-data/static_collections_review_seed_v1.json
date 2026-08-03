@@ -25,7 +25,7 @@
     "document_version": "collection-semantics-doc-v1",
     "generator_command": "python3 scripts/build_static_collections_review_seed.py --seed docs/review-data/static_collections_review_seed_v1.json --source-review-index docs/review-data/static-collections-source-reviews-v1/index.json --snapshot artifacts/codex/static-collections-pr-a/static-collections-evidence-snapshot-v1.json --output /tmp/static_collections_review_seed_v1.json",
     "score_artifact_status": "pending_pr_b",
-    "policy_sha256": "9c35da76b772e023ecce071e1971593de6c30df967c1fc130b230bcacc0bb660",
+    "policy_sha256": "0b35276aa81b1808b70a5549fbfa6f839c5f1de365c2219349d317b7400d0f68",
     "source_review_index_sha256": "82d0c5ddd824af46aa0e64dd65ae4fdb814f2c7541d5166d408f71ad1db16649",
     "extracted_at": "2026-08-02T09:10:18.144847Z",
     "extraction_repo_sha": "f1a732fce6003dc24bcf38b012072951be85e5e6",

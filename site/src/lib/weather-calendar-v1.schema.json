@@ -1,0 +1,267 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenigevents.ru/schemas/weather-calendar-v1.schema.json",
+  "title": "KenigEvents weather calendar immutable snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "snapshot_id",
+    "generated_at",
+    "valid_until",
+    "timezone",
+    "provider",
+    "location_revision",
+    "days",
+    "errors"
+  ],
+  "properties": {
+    "schema": {
+      "const": "weather-calendar-v1"
+    },
+    "snapshot_id": {
+      "type": "string",
+      "pattern": "^weather-[A-Za-z0-9._-]{8,120}$"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "valid_until": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "timezone": {
+      "const": "Europe/Kaliningrad"
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "attribution_url"
+      ],
+      "properties": {
+        "name": {
+          "const": "Open-Meteo"
+        },
+        "attribution_url": {
+          "const": "https://open-meteo.com/"
+        }
+      }
+    },
+    "location_revision": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{8,160}$"
+    },
+    "days": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 7,
+      "items": {
+        "$ref": "#/$defs/day"
+      }
+    },
+    "errors": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/error"
+      }
+    }
+  },
+  "$defs": {
+    "day": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "date"
+      ],
+      "minProperties": 2,
+      "properties": {
+        "date": {
+          "type": "string",
+          "format": "date"
+        },
+        "kaliningrad": {
+          "$ref": "#/$defs/airLocation"
+        },
+        "coast": {
+          "$ref": "#/$defs/coastLocation"
+        }
+      }
+    },
+    "airLocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "source_updated_at"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "fresh",
+            "degraded"
+          ]
+        },
+        "temperature_day_min_c": {
+          "type": "number",
+          "minimum": -80,
+          "maximum": 60
+        },
+        "temperature_day_max_c": {
+          "type": "number",
+          "minimum": -80,
+          "maximum": 60
+        },
+        "weather_code": {
+          "type": "integer",
+          "enum": [
+            0,
+            1,
+            2,
+            3,
+            45,
+            48,
+            51,
+            53,
+            55,
+            56,
+            57,
+            61,
+            63,
+            65,
+            66,
+            67,
+            71,
+            73,
+            75,
+            77,
+            80,
+            81,
+            82,
+            85,
+            86,
+            95,
+            96,
+            99
+          ]
+        },
+        "wind_day_max_m_s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 120
+        },
+        "source_updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "coastLocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "source_updated_at"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "fresh",
+            "degraded"
+          ]
+        },
+        "temperature_day_min_c": {
+          "type": "number",
+          "minimum": -80,
+          "maximum": 60
+        },
+        "temperature_day_max_c": {
+          "type": "number",
+          "minimum": -80,
+          "maximum": 60
+        },
+        "weather_code": {
+          "type": "integer",
+          "enum": [
+            0,
+            1,
+            2,
+            3,
+            45,
+            48,
+            51,
+            53,
+            55,
+            56,
+            57,
+            61,
+            63,
+            65,
+            66,
+            67,
+            71,
+            73,
+            75,
+            77,
+            80,
+            81,
+            82,
+            85,
+            86,
+            95,
+            96,
+            99
+          ]
+        },
+        "wind_day_max_m_s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 120
+        },
+        "sea_surface_temperature_c": {
+          "type": "number",
+          "minimum": -5,
+          "maximum": 40
+        },
+        "wave_height_day_max_m": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 30
+        },
+        "show_water_temperature": {
+          "type": "boolean"
+        },
+        "source_updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "code"
+      ],
+      "properties": {
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z0-9_:-]{2,80}$"
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 240
+        }
+      }
+    }
+  }
+}

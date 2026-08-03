@@ -8,6 +8,7 @@ import ListingWeekendTimeNav from './ListingWeekendTimeNav.astro';
 import WeekendEditorialTimeline from './WeekendEditorialTimeline.astro';
 import WeekendRangeNav from './WeekendRangeNav.astro';
 import ListingPersonalFilter from '../ListingPersonalFilter.astro';
+import WeatherDateContext from '../WeatherDateContext.astro';
 import MobileListingRailSurface from './MobileListingRailSurface.astro';
 
 interface WeekendLink { href?: string | null; label: string; }
@@ -33,7 +34,12 @@ function dayDateLabel(date: string): string {
     <ListingWeekendTimeNav days={days.map((day) => ({ key: day.key as 'sat' | 'sun', short: day.key === 'sat' ? 'Сб' : 'Вс', dateLabel: dayDateLabel(day.date), groups: day.groups }))} />
   </ListingDiscoveryRail>
   <MobileListingRailSurface
-    sections={days.map((day) => ({ id:`weekend-${day.key}`, title:`${day.title}, ${dayDateLabel(day.date)}`, events:day.events }))}
+    sections={days.map((day) => ({
+      id:`weekend-${day.key}`,
+      title:`${day.title}, ${dayDateLabel(day.date)}`,
+      events:day.events,
+      weather:{ date:day.date, dateLabel:`${day.title.toLowerCase()}, ${dayDateLabel(day.date)}`, routeKind:'weekend' as const },
+    }))}
     occurrenceMode="per-date"
     title="Выходные"
     meta={`${dateLabel} · ${events.length} ${eventCountLabel(events.length)}`}
@@ -52,11 +58,14 @@ function dayDateLabel(date: string): string {
       <div class="ke-weekend-heads__time" aria-hidden="true"></div>
       {days.map((day) => (
         <header class:list={['ke-weekend-day__head', `ke-weekend-day__head--${day.key}`]} id={`weekend-${day.key}-label`} data-weekend-day-summary={day.key}>
-          <div class="ke-weekend-day__head-main">
-            <b class="ke-weekend-weekday-chip">{day.key === 'sat' ? 'Сб' : 'Вс'}</b>
-            <div><span class="ke-weekend-day__label">{day.title}</span><p>{dayDateLabel(day.date)}</p></div>
+          <div class="ke-weekend-day__summary-line">
+            <div class="ke-weekend-day__head-main">
+              <b class="ke-weekend-weekday-chip">{day.key === 'sat' ? 'Сб' : 'Вс'}</b>
+              <div><span class="ke-weekend-day__label">{day.title}</span><p>{dayDateLabel(day.date)}</p></div>
+            </div>
+            <span class="ke-weekend-day__count" data-weekend-day-count={day.key} data-weekend-day-count-value={day.events.length}>{day.events.length} {eventCountLabel(day.events.length)}</span>
           </div>
-          <span class="ke-weekend-day__count" data-weekend-day-count={day.key} data-weekend-day-count-value={day.events.length}>{day.events.length} {eventCountLabel(day.events.length)}</span>
+          <WeatherDateContext date={day.date} dateLabel={`${day.title.toLowerCase()}, ${dayDateLabel(day.date)}`} routeKind="weekend" compact surface="desktop" />
         </header>
       ))}
     </div>
@@ -78,6 +87,24 @@ function dayDateLabel(date: string): string {
   </div>
   <ListingPersonalFilter total={events.length} label="на выходных" version={2} placement="floating" />
 </div>
+
+<style is:global>
+  .ke-weekend-day__head:has(.weather-date-context) {
+    display: grid;
+    align-items: stretch;
+    gap: 0;
+  }
+  .ke-weekend-day__summary-line {
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--ke-space-3);
+  }
+  @media (max-width: 720px) {
+    .ke-weekend-day__head:has(.weather-date-context) { display: flex; }
+  }
+</style>
 
 <script>
   const weekendRoot = document.querySelector('[data-date-listing="weekend"]');

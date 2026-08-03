@@ -22,6 +22,7 @@
     "exhibitions": {"strategy": "exact_topic_type", "publication": "shadow"},
     "science_pop": {"strategy": "exact_topic", "publication": "shadow"},
     "popular": {"strategy": "existing_ranking", "publication": "shadow"},
+    "gastronomy": {"strategy": "source_grounded_exact_ids", "policy_version": "gastronomy_v1", "deduplicate_by": "occurrence_family", "publication": "blocked", "runtime_status": "checked_manifest_required"},
     "guests_russia": {"strategy": "grounded_people_fact", "publication": "shadow"},
     "guests_foreign": {"strategy": "grounded_people_fact", "publication": "shadow"},
     "unusual": {

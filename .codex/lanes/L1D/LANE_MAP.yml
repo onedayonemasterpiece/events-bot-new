@@ -1,0 +1,37 @@
+mode: serial_integrator
+repo: /home/dev/projects/events-bot-new
+base_ref: d0c3f7d7fc08edc475ae20217115b0b370f3f135
+base_branch: integration/static-site-unified-20260803
+integration_branch: agent/static-unified/l1d-ydb-consumer-lifecycle
+global_constraints:
+  - no live YDB reads, writes, DDL, scheduler/RU changes, deploy, or catch-up
+  - partial typed consumers never replace the sole current read-model pointer
+  - do not modify site/src, CHANGELOG.md, or docs/routes.yml
+verification_owner: L1D serial integrator
+stop_conditions:
+  - partial input can publish ready or blocked/shadow over current
+  - ACK occurs before durable consumer state writes
+  - a two-run consumer cannot reach the next deterministic page
+lanes:
+  - id: L1D
+    role: worker
+    requirement_ids: [R01, R02, R03, R04]
+    target: Region Talk partial-consumer pointer/ACK lifecycle correction
+    depends_on: [L1C]
+    execution_mode: serial_after_dependency
+    branch: agent/static-unified/l1d-ydb-consumer-lifecycle
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-unified-20260803/l1d-ydb
+    writable_files:
+      - kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py
+      - tests/test_region_talk_ydb_read_model.py
+      - docs/features/region-talk-channel/ydb-schema.md
+      - docs/reports/incidents/INC-2026-08-03-ydb-request-unit-billing.md
+      - .codex/lanes/L1D/LANE_MAP.yml
+      - .codex/lanes/L1D/RESULTS.md
+    forbidden_files:
+      - site/src
+      - CHANGELOG.md
+      - docs/routes.yml
+    expected_output: disjoint lifecycle fix, deterministic multi-run regression, docs, results
+    verification_scope: targeted_local_no_live_ydb
+    status: committed

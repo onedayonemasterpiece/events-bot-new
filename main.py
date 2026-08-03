@@ -22403,6 +22403,42 @@ async def _copy_same_day_linked_tg_publication(
         await session.commit()
 
 
+async def _enqueue_static_site_after_vk_publication(
+    db: Database,
+    events: Sequence[Event],
+    *,
+    vk_url: str,
+) -> None:
+    """Coalesce a static refresh after a managed VK URL may become public.
+
+    The exporter independently requires a ``published`` event_publication live
+    URL, so a postponed/stored-only post still fails closed.  The small delay
+    lets the owned-publication resolver persist that live ledger first, while a
+    later recovered live id calls this seam again.
+    """
+
+    if not _env_flag("ENABLE_STATIC_SITE_KAGGLE_BUILDER"):
+        return
+    event_ids = _same_day_publish_group_ids(events)
+    if not event_ids:
+        return
+    revisions = {
+        int(event.id): event_public_revision(event)
+        for event in events
+        if getattr(event, "id", None) in event_ids
+    }
+    url_marker = content_hash(str(vk_url or ""))[:16]
+    await enqueue_static_site_build_request(
+        db,
+        reason="vk_publication_live",
+        event_ids=event_ids,
+        event_revisions=revisions,
+        correlation_id=f"vk-publication-live:{event_ids[0]}:{url_marker}",
+        delay_seconds=max(0, _env_int("STATIC_SITE_VK_PUBLICATION_REFRESH_DELAY_SECONDS", 300)),
+        trigger="vk_publication_live",
+    )
+
+
 async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) -> None:
     if vk_group_blocked.get("wall.post", 0.0) > _time.time() and not _vk_user_token():
         raise VKPermissionError(None, "permission error")
@@ -22442,7 +22478,7 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
     # A postponed VK item may receive a different id at the exact moment it is
     # published.  Recover the unique live projection before hash/idempotency
     # checks so a stale stored id cannot create a duplicate wall post.
-    await _recover_managed_vk_live_url(db, ev, bot=bot)
+    recovered_live_url = await _recover_managed_vk_live_url(db, ev, bot=bot)
     # VK source post should track its own hash; `content_hash` is used by Telegraph (HTML).
     description_for_vk = (getattr(ev, "description", None) or "").strip()
     # Defense-in-depth (INC-2026-05-17): a leaked stringified provider SDK response
@@ -22490,6 +22526,12 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
                 vk_url=existing_vk_post_url,
                 vk_source_hash=new_hash,
             )
+            if recovered_live_url:
+                await _enqueue_static_site_after_vk_publication(
+                    db,
+                    same_day_group,
+                    vk_url=str(ev.source_vk_post_url or existing_vk_post_url),
+                )
             return
         if post_exists:
             logging.warning(
@@ -22534,6 +22576,11 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
             covered_event_ids=_same_day_publish_group_ids(same_day_group),
             vk_url=vk_url,
             vk_source_hash=new_hash,
+        )
+        await _enqueue_static_site_after_vk_publication(
+            db,
+            same_day_group,
+            vk_url=vk_url,
         )
         logline("VK", event_id, "event done", url=vk_url)
         if bot and event_for_notice:

@@ -140,6 +140,12 @@ export interface PreviewParticipant {
   evidence_url?: string | null;
 }
 
+export interface EventQuestionCta {
+  provider: 'vk';
+  url: string;
+  source: 'partner_post' | 'managed_afisha_post';
+}
+
 export interface PreviewEvent {
   id: number;
   title: string;
@@ -176,6 +182,8 @@ export interface PreviewEvent {
   source_url: string | null;
   source_urls?: string[];
   source_count?: number;
+  /** Build-time-only link to an already-published VK event post. */
+  question_cta?: EventQuestionCta | null;
   telegraph_url: string | null;
   image_url: string | null;
   image_alt: string;

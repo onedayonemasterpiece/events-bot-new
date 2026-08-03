@@ -1,6 +1,6 @@
 ---
 name: static-site-autotest
-description: "Use for any KenigEvents static-site QA, browser E2E, Android Emulator, iOS Simulator, PWA, focus OTP, Supabase/Yandex connectivity, page/data release gate, screenshot evidence or autotest analysis task. Selects only the risk-relevant scenarios and requires ChatGPT-launchable, ChatGPT-readable sanitized evidence."
+description: "Use for any KenigEvents static-site QA, browser E2E, Android Emulator, iOS Simulator, PWA, authenticated session fixture, focus OTP, Supabase/Yandex connectivity, page/data release gate, screenshot evidence or autotest analysis task. Selects only the risk-relevant scenarios and requires ChatGPT-launchable, ChatGPT-readable sanitized evidence."
 ---
 
 # Static Site Autotest
@@ -11,13 +11,14 @@ Open these before changing or running static-site tests:
 
 1. `docs/operations/static-site-autotest-strategy.md`;
 2. `docs/testing/static-site-autotest-scenarios.v1.yml`;
-3. `docs/features/static-site-pages/release-autotest-gates.md`;
-4. `docs/operations/static-site-qa-chatgpt-control-plane.md`;
-5. `docs/features/static-site-pages/release-plan.md`;
-6. `docs/operations/e2e-scenarios.md`;
-7. feature-specific docs and incident records for the affected surface.
+3. `docs/testing/static-site-auth-session-fixture.md`;
+4. `docs/features/static-site-pages/release-autotest-gates.md`;
+5. `docs/operations/static-site-qa-chatgpt-control-plane.md`;
+6. `docs/features/static-site-pages/release-plan.md`;
+7. `docs/operations/e2e-scenarios.md`;
+8. feature-specific docs and incident records for the affected surface.
 
-For focus-group OTP additionally open:
+For focus-group real-mail OTP additionally open:
 
 - `docs/testing/external-focus-email-otp.md`;
 - `docs/features/static-site-focus-group/README.md`;
@@ -30,6 +31,11 @@ of [`references/mobile-otp-acceptance.md`](references/mobile-otp-acceptance.md).
 Fault control must be build-bound at the resilient transport `fetchImpl`
 boundary before singleton construction; late `window.fetch` changes are only
 diagnostic instrumentation.
+
+The zero-mail executable contracts live in
+`site/e2e/auth-session-fixture/`: `session-fixture.mjs` owns per-scope real
+Supabase sessions, `noMailFaultMatrix.ts` owns the Auth/Search/personalization/
+focus route matrix, and `registry-lint.mjs` prevents auth-mode or focus-v5 drift.
 
 For a new Android/iOS browser-tab implementation or an Appium failure, read
 [`references/mobile-otp-acceptance.md`](references/mobile-otp-acceptance.md).
@@ -45,26 +51,88 @@ ChatGPT launch boundary from the control-plane document; a UI-only
 ## Required workflow
 
 1. Identify exact changed files, target SHA/build and affected page/data families.
-2. Assign trigger tags from the canonical scenario registry.
+2. Assign trigger tags and explicit `auth_mode` from the canonical scenario registry.
 3. Select the cheapest evidence layer that can detect the risk:
    - L0 contracts first;
    - L1 browser for runtime/layout/catalog;
    - L2 Android/iOS only for mobile-system behavior or representative high-risk specimens;
    - L3 only when simulator evidence is inherently insufficient.
-4. State the selected scenarios and explicit `not_applicable` reasons before a
+4. For a function after login, use `session_fixture` by default. Do not run a
+   real-mail OTP merely because the scenario requires an authenticated user.
+5. State the selected scenarios and explicit `not_applicable` reasons before a
    release decision. Do not run the full matrix by reflex.
-5. Run blocking checks synchronously. A heavy advisory workflow may be started
+6. Run blocking checks synchronously. A heavy advisory workflow may be started
    in background only under the documented policy.
-6. A background run is reported as `STARTED_BACKGROUND` with run ID/URL, SHA,
+7. A background run is reported as `STARTED_BACKGROUND` with run ID/URL, SHA,
    target and suite. Never call it PASS before terminal evidence.
-7. Every implemented scenario must retain a safe project-level launch path from
+8. Every implemented scenario must retain a safe project-level launch path from
    ChatGPT without Codex. Prefer the validated canonical issue-comment gateway
    plus the same reusable workflow used by `workflow_dispatch`; never assume a
    specific connector exposes workflow dispatch.
-8. Produce or preserve the canonical sanitized evidence package and
+9. Produce or preserve the canonical sanitized evidence package and
    `qa-summary.json` so ChatGPT can inspect the run without the code agent.
-9. Update scenario status, release companion, feature docs and changelog when an
-   implementation moves from planned/partial to implemented.
+10. Update scenario status, release companion, feature docs and changelog when
+    an implementation moves from planned/partial to implemented.
+
+## Auth mode boundary
+
+Every identity-sensitive scenario must use one registry mode:
+
+- `anonymous` — no session;
+- `anonymous_session` — real Supabase anonymous JWT with `is_anonymous=true`,
+  no email/OTP and no raffle eligibility;
+- `mocked_ui` — visual/component state only, no backend claims;
+- `session_fixture` — real Supabase session without product OTP or mail;
+- `admin_otp_ui` — real OTP UI/verify with fresh admin credential, no delivery;
+- `real_mail_otp` — real issue, delivery, receipt and verify;
+- `yandex_oauth` — real Yandex redirect/consent/callback.
+
+Do not blur claims between modes. A mocked signed-in UI cannot prove JWT/RLS;
+a session fixture cannot prove email delivery; a Search test does not need to
+repeat real-mail OTP.
+
+Focus v5 feedback is `anonymous_session`, not `session_fixture` and not a local
+marker pretending to be identity. The marker opens the site; the anonymous
+Supabase subject owns feedback/personalization/artifact rows; verified email or
+Yandex is required only for recovery/raffle and must link or audibly merge the
+same pre-auth data.
+
+## Authenticated session fixture boundary
+
+Use `session_fixture` for Search, personal pages, personalization, verified-user
+feedback, saved state and other functions whose subject begins after login.
+Focus-v5 anonymous feedback is the explicit `anonymous_session` exception.
+
+Required contract:
+
+- trusted setup chooses only a fixed allowlisted E2E persona;
+- issue one fresh admin-generated one-time link/OTP without external delivery;
+- complete ordinary Supabase callback/verify and obtain a real user session;
+- prove `auth.getUser` or an authenticated protected probe;
+- scope session state to one worker/job/device;
+- create a separate session for every parallel worker/job;
+- keep state only in `$RUNNER_TEMP` or equivalent ephemeral storage;
+- require `POST /auth/v1/otp = 0`;
+- require external mail send/receipt `0/0`;
+- delete state and pass redaction in `finally`.
+
+Fixture failure is `BLOCKED_AUTH_FIXTURE`. Never recover it by sending a real
+OTP. Never silently downgrade to `mocked_ui`.
+
+Forbidden:
+
+- `authorized=true`, fake user or focus participation marker as live Auth E2E;
+- fixed OTP or email-specific production bypass;
+- serialized Supabase session in GitHub Secrets;
+- shared refresh token/session state across parallel workers/jobs;
+- service-role/admin key in browser, Appium, localStorage, URL or artifact;
+- self-issued JWT;
+- auth state in cache, artifacts or job outputs;
+- trace/HAR during credential bootstrap;
+- arbitrary persona or redirect accepted from untrusted PR input.
+
+Until an OIDC broker exists, keep the minimal issuer step in a protected trusted
+Environment and ensure later browser/test steps never receive the admin secret.
 
 ## Platform boundary
 
@@ -74,6 +142,10 @@ ChatGPT launch boundary from the control-plane document; a UI-only
 - Use Android/iOS for system keyboard, install UI, Launcher/SpringBoard,
   Share Sheet, standalone/lifecycle and selected mobile-critical journeys.
 - Pin/record runner, OS, browser, simulator/emulator, Appium and driver versions.
+- An authenticated Android/iOS job receives its own one-time credential/session;
+  do not copy the browser worker's state or refresh token to a device job.
+- Direct JS token injection is not platform acceptance; prefer ordinary
+  callback/verify in the same browser storage area used by the scenario.
 
 ## ChatGPT launch boundary
 
@@ -83,7 +155,8 @@ ChatGPT launch boundary from the control-plane document; a UI-only
 - Validate canonical issue, actor permission, registry scenario/platform,
   exact target allowlist and full SHA before checkout or side effects.
 - Never parse commands through `eval` or execute arbitrary refs/shell text.
-- Protected OTP still requires Environment approval and global concurrency.
+- Protected OTP and privileged session issuer steps require Environment approval
+  and bounded concurrency appropriate to their side effects.
 - Serialize commands per canonical issue and deduplicate an identical comment
   posted inside the prior run's accepted-to-terminal time bracket. A queued
   duplicate must link the prior run and create no new OTP job; the same command
@@ -93,13 +166,13 @@ ChatGPT launch boundary from the control-plane document; a UI-only
 - Build terminal comments from downloaded, redaction-gated `qa-summary.json`;
   reusable-workflow success is not a scenario result.
 
-## Focus OTP boundary
+## Focus real-mail OTP boundary
 
 - Modify the existing isolated harness; do not create a competing test.
 - Preserve exact target SHA, one OTP issue, one verify, one participant
   registration and returning-state assertions.
 - Browser/Android/iOS real-mail variants are sequential while one mailbox is shared.
-- No service key, fixed OTP, bypass or blind resend.
+- No service key in browser, fixed OTP, bypass or blind resend.
 - For real OTP, never retain email, OTP, raw mail, cookies, JWT, HAR, trace or video.
 - Upload only after fail-closed redaction audit.
 - Android/iOS are not complete until a real emulator/simulator run reaches a
@@ -114,9 +187,9 @@ ChatGPT launch boundary from the control-plane document; a UI-only
   coordinate calibration, raw hierarchy dumps or JS value assignment.
 - Let Appium own boot/shutdown of the exact shutdown simulator UDID. Do not use
   external Simulator boot/open/defaults or menu/`Cmd-K` keyboard rescues.
-- Before an iOS real-mail run require the side-effect-free control email,
-  control numeric and product email keyboard preflight. A visible Safari
-  first-run dialog is `BLOCKED_SAFARI_FIRST_RUN_UI`, never a keyboard verdict.
+- Use the embedded side-effect-free control email/numeric/product keyboard
+  preflight after direct iOS harness changes. A visible Safari first-run dialog
+  is `BLOCKED_SAFARI_FIRST_RUN_UI`, never a keyboard verdict.
 - Capture a safe device screenshot immediately after Safari launch and again
   after at most 20 seconds without the expected marker. After every native
   action, verify a real state transition; two unchanged actions stop blind
@@ -133,6 +206,11 @@ ChatGPT launch boundary from the control-plane document; a UI-only
 - planned scenario represented as implemented PASS;
 - background run silently ignored;
 - implemented scenario has no safe ChatGPT launch path;
-- unsafe evidence or failed redaction;
+- unsafe evidence or failed cleanup/redaction;
 - one mailbox used by parallel real OTP jobs;
+- ordinary authenticated business scenario unexpectedly sent OTP/mail;
+- session fixture automatically fell back to real mail;
+- auth state/session token persisted in secret, artifact, cache or job output;
+- one refresh token/session state shared by parallel workers/jobs;
+- service/admin credential exposed to browser or untrusted PR code;
 - full-catalog emulator scope without an explicit exceptional rationale.

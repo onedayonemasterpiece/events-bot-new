@@ -8,6 +8,8 @@ import MobileToastRegion from '../components/MobileToastRegion.astro';
 import PwaTelemetry from '../components/PwaTelemetry.astro';
 import Reference4MobileMenu from '../components/Reference4MobileMenu.astro';
 import StaticSiteAuthRuntime from '../components/auth/StaticSiteAuthRuntime.astro';
+import PersonalizationRuntime from '../components/personalization/PersonalizationRuntime.astro';
+import StandardOnboardingPlacementContext from '../components/onboarding/StandardOnboardingPlacementContext.astro';
 import UnusualUnreadRuntime from '../components/UnusualUnreadRuntime.astro';
 import '../styles/design-system.css';
 import { BASE_PATH, getCurrentDate, IS_PRODUCTION, IS_SECRET_CANDIDATE, siteHomeHref, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
@@ -2507,9 +2509,11 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       </div>
     </header>
     <MobileToastRegion />
+    <PersonalizationRuntime pathname={Astro.url.pathname} />
     <StaticSiteAuthRuntime />
     <UnusualUnreadRuntime />
     <slot />
+    <StandardOnboardingPlacementContext pathname={Astro.url.pathname} />
     {focusPageFamily && (
       <FocusGroupLabPanel
         pageFamily={focusPageFamily}
@@ -2941,7 +2945,11 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         }
 
         function boundedProfileIds(value, limit) {
-          return unique(toArray(value).map(asId).filter((id) => Number.isSafeInteger(id) && id > 0)).slice(-limit);
+          return unique(toArray(value).map(asId).filter((id) => (
+            /^\d+$/u.test(id)
+            && Number.isSafeInteger(Number(id))
+            && Number(id) > 0
+          ))).slice(-limit);
         }
 
         function boundedProfileMap(value, limit) {
@@ -5044,19 +5052,102 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           return Boolean(target.closest('a, button, input, textarea, select, summary, [role="button"], [data-native-share], [data-feedback-action], [data-not-interested-plate]'));
         }
 
+        // Standard EventCard bodies deliberately arbitrate single navigation
+        // against a mouse double-click / touch double-tap.  Rails keep their
+        // own swipe/overpull state machine and are never admitted here.
+        const CARD_TAP_WINDOW_MS = 280;
+        const CARD_DRAG_SLOP_PX = 10;
+        const cardTapState = new WeakMap();
+        let activeCardPointer = null;
+
+        function standardGestureCard(target) {
+          const card = target?.closest?.('[data-event-card][data-card-href]');
+          if (!card || card.closest('[data-mobile-listing-rails]')) return null;
+          return card;
+        }
+
+        function clearPendingCardTap(card) {
+          const state = cardTapState.get(card);
+          if (state?.timer) window.clearTimeout(state.timer);
+          cardTapState.delete(card);
+        }
+
+        function setCardLikeTrue(card) {
+          const like = card.querySelector('[data-feedback-action="like"]');
+          if (!like || like.getAttribute('aria-pressed') === 'true') return false;
+          like.click();
+          card.dataset.cardGestureResult = 'liked';
+          window.dispatchEvent(new CustomEvent('kenigevents:event-card-double-like', {
+            detail: { eventId: Number(card.dataset.eventId || 0) || null },
+          }));
+          return true;
+        }
+
+        document.addEventListener('pointerdown', (event) => {
+          if (event.button !== 0 || isCardInteractiveTarget(event.target)) return;
+          const card = standardGestureCard(event.target);
+          if (!card) return;
+          activeCardPointer = {
+            card,
+            pointerId: event.pointerId,
+            x: event.clientX,
+            y: event.clientY,
+            scrollX: window.scrollX,
+            scrollY: window.scrollY,
+            moved: false,
+          };
+        }, { passive: true });
+
+        document.addEventListener('pointermove', (event) => {
+          if (!activeCardPointer || activeCardPointer.pointerId !== event.pointerId) return;
+          if (Math.hypot(event.clientX - activeCardPointer.x, event.clientY - activeCardPointer.y) > CARD_DRAG_SLOP_PX) {
+            activeCardPointer.moved = true;
+          }
+        }, { passive: true });
+
+        document.addEventListener('pointercancel', (event) => {
+          if (activeCardPointer?.pointerId === event.pointerId) activeCardPointer = null;
+        }, { passive: true });
+
         document.addEventListener('click', (event) => {
-          const card = event.target.closest('[data-card-href]');
+          const card = standardGestureCard(event.target);
           if (!card || isCardInteractiveTarget(event.target)) return;
           const href = card.dataset.cardHref;
           if (!href) return;
           event.preventDefault();
-          location.href = href;
+          const pointer = activeCardPointer?.card === card ? activeCardPointer : null;
+          activeCardPointer = null;
+          const dragged = Boolean(pointer && (
+            pointer.moved
+            || Math.abs(window.scrollX - pointer.scrollX) > CARD_DRAG_SLOP_PX
+            || Math.abs(window.scrollY - pointer.scrollY) > CARD_DRAG_SLOP_PX
+          ));
+          if (dragged) {
+            clearPendingCardTap(card);
+            card.dataset.cardGestureResult = 'drag-cancelled';
+            return;
+          }
+          const pending = cardTapState.get(card);
+          const now = window.performance.now();
+          if (pending && now - pending.startedAt <= CARD_TAP_WINDOW_MS) {
+            clearPendingCardTap(card);
+            setCardLikeTrue(card);
+            return;
+          }
+          clearPendingCardTap(card);
+          const timer = window.setTimeout(() => {
+            cardTapState.delete(card);
+            card.dataset.cardGestureResult = 'navigated';
+            location.href = href;
+          }, CARD_TAP_WINDOW_MS);
+          cardTapState.set(card, { timer, startedAt: now });
         });
 
         document.addEventListener('keydown', (event) => {
-          const card = event.target.closest('[data-card-href]');
+          const card = standardGestureCard(event.target);
           if (!card || event.target !== card) return;
           if (event.key === 'Enter') {
+            clearPendingCardTap(card);
             const href = card.dataset.cardHref;
             if (href) location.href = href;
           }

@@ -56,6 +56,10 @@ def missing_autonomy_config(env: Mapping[str, str] | None = None) -> list[str]:
     groups: tuple[tuple[str, ...], ...] = (
         ("REGION_TALK_YDB_ENDPOINT",),
         ("REGION_TALK_YDB_DATABASE",),
+        # The complete expected path contains the cloud/folder owner.  It is
+        # mandatory rather than an optional comparison hint: without it a
+        # stale secret can silently move autonomous reads to another account.
+        ("REGION_TALK_YDB_EXPECTED_DATABASE",),
         ("REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON",),
         ("KAGGLE_USERNAME",),
         ("KAGGLE_KEY",),
@@ -303,6 +307,18 @@ async def run_region_talk_scheduled(
         child_env = os.environ.copy()
         child_env["REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL"] = "1"
         child_env["REGION_TALK_ALLOW_LOCAL_YC_FALLBACK"] = "0"
+        child_env["REGION_TALK_YDB_REQUIRE_EXPECTED_DATABASE"] = "1"
+        # These application-side ceilings are deliberately incompatible with
+        # the historical 20k-per-kind materialization.  Autonomous scheduling
+        # stays disabled until the remaining consumers fit a bounded canary.
+        child_env.setdefault("REGION_TALK_YDB_BUDGET_MAX_QUERIES", "64")
+        child_env.setdefault("REGION_TALK_YDB_BUDGET_MAX_ROWS_READ", "5000")
+        child_env.setdefault("REGION_TALK_YDB_BUDGET_MAX_BYTES_READ", str(32 * 1024 * 1024))
+        child_env.setdefault("REGION_TALK_YDB_BUDGET_MAX_ROWS_WRITTEN", "1000")
+        child_env.setdefault("REGION_TALK_YDB_BUDGET_MAX_BYTES_WRITTEN", str(16 * 1024 * 1024))
+        child_env.setdefault("REGION_TALK_YDB_BUDGET_MAX_ESTIMATED_IO_RU", "8000")
+        child_env.setdefault("REGION_TALK_YDB_READ_MODEL_MODE", "required")
+        child_env.setdefault("REGION_TALK_YDB_ALLOW_LEGACY_BROAD_READ_FALLBACK", "0")
         # Human sessions are outside the Region Talk functional pipeline.
         # Strip them even when an operator shell inherited either variable:
         # delivery/discovery may use only their explicitly role-scoped
