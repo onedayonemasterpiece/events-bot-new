@@ -25,6 +25,12 @@
 *   **Dedicated Supabase Database**:
     *   Таблицы `google_ai_*` хранят лимиты/счётчики/аудит. Схема описана в `docs/architecture/eve-arch-phase-1.md`.
     *   *Примечание:* Сами ключи хранятся в ENV, а Supabase возвращает имя переменной окружения для выбранного ключа.
+    *   Все шесть production API keys оператором подтверждены как ключи шести
+        разных Google Cloud projects. Поэтому registry содержит шесть разных
+        redacted `quota_scope`; объединять их в один общий scope нельзя — это
+        искусственно суммирует независимые RPM/TPM/RPD и лишает gateway
+        доступной ёмкости. Сам limiter не пытается угадывать Cloud project по
+        значению секрета: mapping является явной operator-owned metadata.
 *   **Supabase RPC (`google_ai_reserve`)**: Резервирование лимитов. Оно является
     атомарным между процессами только для версии
     `google_ai_project_model_atomic_v1`. Каноническая self-contained схема —

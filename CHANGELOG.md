@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fixed the Google AI registry after operator confirmation that all six API
+  keys belong to different Google Cloud projects: each key now has an
+  independent redacted `quota_scope`, while historical attempts and any 429
+  cooldown are rebound to the actual source key's project scope.
+
 - Fixed shared Google AI quota integrity across Fly, Kaggle and Edge: rolling
   60-second RPM/TPM admission, Pacific-day RPD, quota-scope/model cooldown after
   provider 429, fail-closed metadata and dedicated-ledger resolution, and

@@ -145,6 +145,18 @@ no Antigravity limiter bypass was found.
   then logged and finalized one reservation with non-null key/scope and exact
   `bucket_strategy=rolling_60s_pacific_day_v2`; no diagnostic provider call was
   issued for acceptance.
+- 2026-08-03 08:47 UTC — the operator explicitly confirmed that all six API
+  keys belong to six different Google Cloud projects. This invalidated the
+  temporary KEY1–5 `google:unmapped-shared` grouping: safe against over-admission
+  but architecturally wrong because it pooled independent project quotas and
+  could starve five otherwise healthy lanes.
+- 2026-08-03 08:50 UTC — migration
+  `20260803084716_google_ai_distinct_project_scopes.sql` split the live registry
+  into six redacted scopes. It also rebound historical requests/attempts and
+  source-key 429 cooldowns, so the rolling 60-second window was not reset by the
+  metadata correction. Live verification returned `6` active keys, `6` active
+  scopes, `0` active `unmapped-shared` rows and `0` attribution mismatches. The
+  migration dry-run and apply did not call Google.
 
 ## Root Cause
 
@@ -249,10 +261,11 @@ no Antigravity limiter bypass was found.
 - Production vector sync was changed locally to use the shared embedding gateway
   instead of direct REST/retries, and its Fly schedule was disabled pending the
   atomic rollout gate.
-- The dedicated schema and conservative registry are live; all five keys remain
-  in one `google:unmapped-shared` scope until a project mapping is proved.
-- The sixth operator-confirmed fresh key is registered in its own redacted
-  scope and its Fly secret is staged for the gateway-owned normal pool. Smart
+- The initial conservative KEY1–5 grouping was a temporary uncertainty policy,
+  not the intended architecture. Operator confirmation on 2026-08-03 superseded
+  it: all six keys now have independent redacted scopes, while secrets and raw
+  Cloud project identifiers remain outside the ledger.
+- All six Fly secrets participate in the gateway-owned normal pool. Smart
   Update is only a consumer of that pool and contains no key rotation list.
 - Current-day counters were imported before cutover, so the new ledger does not
   incorrectly treat 2026-07-31 as an unused day. In particular, the shared
@@ -292,6 +305,9 @@ no Antigravity limiter bypass was found.
   to the older atomic contract marker. This prevents an old fixed-minute/UTC-day
   RPC from being accepted merely because both versions share the v1 project
   scope contract name.
+- Split all six operator-confirmed Cloud projects into independent scopes and
+  rebound stored attempt/request/cooldown attribution to the source key. This
+  preserves each project's real capacity without resetting rolling usage.
 
 ## Follow-up Actions
 
@@ -300,8 +316,9 @@ no Antigravity limiter bypass was found.
 - [x] Add a conservative redacted key registry without secret values.
 - [x] Migrate/disable Universal Festival Parser, AfishaThumb, benchmarks and
   smokes that called Google directly.
-- [ ] Replace `google:unmapped-shared` with verified per-project scopes only
-  after key → Google Cloud project evidence is available.
+- [x] Replace `google:unmapped-shared` after operator confirmation that all six
+  keys belong to different Google Cloud projects; verify six active scopes and
+  zero attribution mismatches.
 - [ ] Deploy the runtime/Edge cutover from an `origin/main`-reachable SHA and
   distribute the dedicated limiter pair to every encrypted Kaggle payload.
 - [x] Add static CI policy for unapproved provider paths and stale embedded
@@ -374,11 +391,10 @@ project inventory plus bounded production reconciliation are recorded.
     contains the required rolling strategy marker on reserve and a matching
     successful terminal record.
 
-The code, database and deployed runtime hardening are complete. The incident
-remains `open` only because the operator-verifiable API-key → Google Cloud
-project mapping is still unavailable; conservative `google:unmapped-shared`
-grouping therefore remains in force and may under-use otherwise independent
-projects, but cannot over-admit the grouped keys.
+The code/database/runtime hardening and live six-project correction are
+complete. The incident remains `open` only until the durable scope-split
+migration and this corrected audit are reachable from `origin/main`; the
+operator mapping blocker itself is resolved.
 
 ## Prevention
 
