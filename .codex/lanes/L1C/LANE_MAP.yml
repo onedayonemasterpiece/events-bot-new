@@ -1,0 +1,40 @@
+mode: serial_integrator
+repo: /home/dev/projects/events-bot-new
+base_ref: f8dbe224ed8aded5d2067d377bea5387b5635a7e
+base_branch: integration/static-site-unified-20260803
+integration_branch: agent/static-unified/l1c-ydb-projection-lease
+global_constraints:
+  - scheduler and catch-up remain disabled
+  - no live YDB reads, writes, DDL, deploys, or RU throttle changes
+  - do not modify site/src, CHANGELOG.md, or docs/routes.yml
+  - immutable generation rows; current pointer remains generation-first and pointer-last
+verification_owner: L1C serial integrator
+stop_conditions:
+  - any test path attempts a live YDB connection
+  - a partial or overflow projection can validate as ready
+  - a claim can advance the committed cursor without an exact live-token ACK
+lanes:
+  - id: L1C
+    role: worker
+    requirement_ids: [R01, R02, R03, R04, R05, R06]
+    target: Region Talk CandidateReport v2 due queue and atomic cursor lease correction
+    depends_on: [L1B]
+    execution_mode: serial_after_dependency
+    branch: agent/static-unified/l1c-ydb-projection-lease
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-unified-20260803/l1c-ydb
+    writable_files:
+      - scripts/region_talk_ydb_read_model.py
+      - scripts/region_talk_ydb_read_model_cutover.py
+      - kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py
+      - tests/test_region_talk_ydb_read_model.py
+      - docs/features/region-talk-channel/ydb-schema.md
+      - docs/reports/incidents/INC-2026-08-03-ydb-request-unit-billing.md
+      - .codex/lanes/L1C/LANE_MAP.yml
+      - .codex/lanes/L1C/RESULTS.md
+    forbidden_files:
+      - site/src
+      - CHANGELOG.md
+      - docs/routes.yml
+    expected_output: committed v2 classification, due claim/ACK protocol, regressions, docs, and RESULTS.md
+    verification_scope: targeted_local_no_live_ydb
+    status: in_progress

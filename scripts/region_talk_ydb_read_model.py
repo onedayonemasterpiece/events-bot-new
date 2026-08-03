@@ -1,11 +1,14 @@
 """Versioned, bounded Region Talk YDB work queue and counter read model.
 
-The historical compact KV remains the product ledger.  This module adds two
+The historical compact KV remains the product ledger.  This module adds three
 small projections whose primary keys match the normal access patterns:
 
-* ``*_work_queue_v1`` stores only actionable work.  Its key starts with the
-  immutable generation and queue name, so a due-page is a bounded key-prefix
-  read rather than a population scan.
+* ``*_work_queue_v2`` stores only actionable work.  Its key starts with the
+  immutable generation, queue name and due time, so a due-page is a bounded
+  key-prefix/range read rather than a population scan.
+* ``*_work_cursor_v2`` stores the committed keyset cursor and one renewable
+  claim lease per immutable generation/queue.  A claim never advances the
+  committed cursor; only a token-checked ACK does.
 * ``*_read_model_v1`` stores one validated counter/observability row.
 
 The projection is replace-by-generation.  Writers publish all rows for a new
@@ -27,7 +30,8 @@ from scripts.region_talk_ydb_cost import YdbCostBudget, payload_size_bytes
 
 
 READ_MODEL_SCHEMA_VERSION = "region-talk-ydb-read-model-v1"
-WORK_QUEUE_SCHEMA_VERSION = "region-talk-ydb-work-queue-v1"
+WORK_QUEUE_SCHEMA_VERSION = "region-talk-ydb-work-queue-v2"
+WORK_CURSOR_SCHEMA_VERSION = "region-talk-ydb-work-cursor-v2"
 READ_MODEL_NAME = "current"
 CUTOVER_MODES = frozenset({"required", "shadow", "legacy"})
 
@@ -68,9 +72,15 @@ def table_paths(database: str, namespace: str) -> tuple[str, str]:
         raise ValueError("region_talk_ydb_read_model:database_missing")
     prefix = _safe_name(namespace)
     return (
-        f"{root}/{prefix}_work_queue_v1",
+        f"{root}/{prefix}_work_queue_v2",
         f"{root}/{prefix}_read_model_v1",
     )
+
+
+def cursor_table_path(work_table_path: str) -> str:
+    if not str(work_table_path).endswith("_work_queue_v2"):
+        raise ValueError("region_talk_ydb_read_model:work_table_version_mismatch")
+    return str(work_table_path)[:-len("_work_queue_v2")] + "_work_cursor_v2"
 
 
 def cutover_mode(env: Mapping[str, str] | None = None) -> str:
@@ -230,7 +240,7 @@ def build_work_items(
                 state_pk=state_pk,
                 payload=payload,
             )
-            candidates.append(((work.priority, work.due_at, work.item_key), work))
+            candidates.append(((work.due_at, work.priority, work.status, work.item_key), work))
         for _sort, work in sorted(candidates, key=lambda item: item[0])[:maximum]:
             selected.append(work)
             per_queue[work.queue_name] += 1
@@ -328,7 +338,9 @@ def build_read_model(
             1 for row in _rows(state.get(collection))
             if _work_spec(collection, row) is not None
         )
-    complete = all(counts[name] == expected_counts[name] for name in collection_queue.values())
+    counts_complete = all(counts[name] == expected_counts[name] for name in collection_queue.values())
+    input_complete = state.get("_ydb_materialized_projection_input_complete", True) is True
+    complete = counts_complete and input_complete
     previous_population = state.get("ydb_read_model_population_totals")
     if not isinstance(previous_population, dict):
         previous_population = {}
@@ -362,13 +374,16 @@ def build_read_model(
         "schema_version": READ_MODEL_SCHEMA_VERSION,
         "work_queue_schema_version": WORK_QUEUE_SCHEMA_VERSION,
         "model_name": READ_MODEL_NAME,
-        "cutover_state": cutover_state if complete else "blocked_overflow",
+        "cutover_state": cutover_state if complete else (
+            "blocked_overflow" if not counts_complete else "blocked_incomplete_input"
+        ),
         "generation": generation,
         "source_run_id": str(state.get("run_id") or ""),
         "updated_at": str(state.get("updated_at") or ""),
         "work_counts": dict(sorted(counts.items())),
         "expected_work_counts": dict(sorted(expected_counts.items())),
         "work_queue_complete": complete,
+        "work_queue_input_complete": input_complete,
         "work_total": len(work),
         "source_queue_max_seq": source_queue_max_seq,
         "source_queue_max_order": source_queue_max_order,
@@ -410,7 +425,30 @@ def work_table_ddl(table_path: str) -> str:
   state_pk Utf8,
   payload_json Json,
   updated_at Utf8,
-  PRIMARY KEY (generation, queue_name, status, due_at, priority, item_key)
+  PRIMARY KEY (generation, queue_name, due_at, priority, status, item_key)
+);"""
+
+
+def work_cursor_table_ddl(table_path: str) -> str:
+    return f"""CREATE TABLE IF NOT EXISTS `{table_path}` (
+  generation Utf8 NOT NULL,
+  queue_name Utf8 NOT NULL,
+  expected_count Uint64 NOT NULL,
+  consumed_count Uint64 NOT NULL,
+  cursor_due_at Utf8 NOT NULL,
+  cursor_priority Uint64 NOT NULL,
+  cursor_status Utf8 NOT NULL,
+  cursor_item_key Utf8 NOT NULL,
+  claim_due_at Utf8,
+  claim_priority Uint64,
+  claim_status Utf8,
+  claim_item_key Utf8,
+  claim_count Uint64,
+  lease_owner Utf8,
+  lease_token Utf8,
+  lease_expires_at Utf8,
+  updated_at Utf8,
+  PRIMARY KEY (generation, queue_name)
 );"""
 
 
@@ -433,10 +471,22 @@ def read_model_query(table_path: str) -> str:
 def work_page_query(table_path: str, *, limit: int) -> str:
     return f"""DECLARE $generation AS Utf8;
 DECLARE $queue_name AS Utf8;
+DECLARE $due_cutoff AS Utf8;
+DECLARE $cursor_due_at AS Utf8;
+DECLARE $cursor_priority AS Uint64;
+DECLARE $cursor_status AS Utf8;
+DECLARE $cursor_item_key AS Utf8;
 SELECT generation, queue_name, status, due_at, priority, item_key, state_pk, payload_json, updated_at
 FROM `{table_path}`
 WHERE generation = $generation AND queue_name = $queue_name
-ORDER BY generation, queue_name, status, due_at, priority, item_key
+  AND due_at <= $due_cutoff
+  AND (
+    due_at > $cursor_due_at
+    OR (due_at = $cursor_due_at AND priority > $cursor_priority)
+    OR (due_at = $cursor_due_at AND priority = $cursor_priority AND status > $cursor_status)
+    OR (due_at = $cursor_due_at AND priority = $cursor_priority AND status = $cursor_status AND item_key > $cursor_item_key)
+  )
+ORDER BY generation, queue_name, due_at, priority, status, item_key
 LIMIT {max(1, int(limit))};"""
 
 
@@ -475,6 +525,8 @@ def read_work_page(
     queue_name: str,
     limit: int,
     budget: YdbCostBudget,
+    due_cutoff: str = "9999-12-31T23:59:59Z",
+    cursor: tuple[str, int, str, str] = ("", 0, "", ""),
 ) -> list[dict[str, Any]]:
     maximum = max(1, int(limit))
 
@@ -483,7 +535,15 @@ def read_work_page(
         query = session.prepare(work_page_query(table_path, limit=maximum))
         result_sets = session.transaction(ydb.SnapshotReadOnly()).execute(
             query,
-            {"$generation": generation, "$queue_name": queue_name},
+            {
+                "$generation": generation,
+                "$queue_name": queue_name,
+                "$due_cutoff": str(due_cutoff),
+                "$cursor_due_at": str(cursor[0]),
+                "$cursor_priority": max(0, int(cursor[1])),
+                "$cursor_status": str(cursor[2]),
+                "$cursor_item_key": str(cursor[3]),
+            },
             commit_tx=True,
         )
         rows = result_sets[0].rows if result_sets else []

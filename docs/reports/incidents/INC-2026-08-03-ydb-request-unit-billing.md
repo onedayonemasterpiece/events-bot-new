@@ -164,7 +164,7 @@ cost accumulated.
       slice now uses a bounded keyset due-page plus point reads for exact-post
       work; the start-of-run product reconstruction and full orchestrator metric
       population remain intentionally blocked by the 5,000-row default budget.
-      A v1 typed work/read projection is now implemented in shadow: required
+      A v2 typed work/read projection is now implemented in shadow: required
       CandidateReport startup uses bounded work pages plus PK point joins and
       required orchestrator observability uses one counter row. The producer
       computes exact counters from full in-memory state and rejects truncated
@@ -240,13 +240,27 @@ its scan ceiling while a legacy full materialization trips the cost budget.
 No production YDB request, throttle change, scheduler enablement or catch-up was
 performed for this slice.
 
-### Typed read-model shadow added on 2026-08-03
+### Typed read-model v2 shadow correction added on 2026-08-03
 
-Schema `region-talk-ydb-work-queue-v1` materializes active work in typed columns
-and orders the primary key by generation/queue/status/due/priority/item. Schema
+Schema `region-talk-ydb-work-queue-v2` materializes active work in typed columns
+and orders the primary key by generation/queue/due/priority/status/item. Schema
+`region-talk-ydb-work-cursor-v2` stores the committed cursor and one claim lease
+per generation/queue. Claim and ACK use serializable read-write transactions;
+claim stores an owner/token/expiry and exact page end without advancing the
+cursor, while ACK compare-and-sets the live token before advancing it. An
+expired claim replays from the unchanged cursor, so a crash cannot skip a page.
+The due predicate is explicit (`due_at <= cutoff`) and the due-first key order
+prevents future work in one status from starving due work in another. Schema
 `region-talk-ydb-read-model-v1` stores a single validated counter pointer. A
 ready pointer is published last, only after all generation rows exist; missing,
 wrong-version, incomplete and overflow pointers fail closed.
+
+The CandidateReport producer now uses the exact shared classification aliases
+for both expected counts and emitted work: `queue_status`/`fetch_status`,
+`image_quality_decision`, `text_vector_fusion_status` and
+`publication_candidate_status` are covered. Synthetic divergence regression
+tests prove those aliases cannot produce a false `ready`. A state reconstructed
+from a bounded due page is marked incomplete and cannot be republished ready.
 
 Normal `required` reads do not fall through to legacy scans. Compatibility is
 available only when both a `shadow|legacy` mode and
@@ -255,6 +269,10 @@ uses the L1 cost budget. Regression tests create 20,000 historical post-link
 rows with 100 actionable rows, assert the producer reports the exact 100 while
 the normal reader requests a bounded page and hydrates only point keys, and
 assert both CandidateReport and orchestrator population readers remain unused.
+Additional v2 regressions cover deterministic multi-page traversal without
+starvation, expired-lease replay, serializable claim mode, active foreign lease
+rejection, token-checked ACK/stale-owner rejection, queue/model count mismatch,
+overflow and partial-input fail-closed publication.
 
 CandidateReport's default publication state is `shadow`, not `ready`. The
 offline cutover planner performs no YDB calls. No production read/write,
