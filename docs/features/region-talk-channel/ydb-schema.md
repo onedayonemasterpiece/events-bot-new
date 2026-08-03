@@ -27,9 +27,11 @@ Production ownership after the 2026-08-03 billing incident:
   explicit operator decision.
 
 The former database
-`/ru-central1/b1goifscr17duurhullj/etnrao7p6gh6il6b4qv9` is quarantined at
-0 RU/s. It is migration evidence only and must never be selected by name-based
-fallback, Fly configuration, Kaggle configuration, or GitHub Actions.
+`/ru-central1/b1goifscr17duurhullj/etnrao7p6gh6il6b4qv9` was deleted after the
+owner explicitly approved deletion and Yandex Cloud operation
+`etndquiisa371hgl8p7r` completed. Direct lookup returns `Not Found`. Its path
+must never be selected by name-based fallback, Fly configuration, Kaggle
+configuration, or GitHub Actions.
 
 For semi-manual live product runs, `REGION_TALK_STATE_BACKEND=ydb` is a
 fail-fast contract, not a preference. CandidateReport/ImageDiagnostic launchers
