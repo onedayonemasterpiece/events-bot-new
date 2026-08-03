@@ -1,8 +1,9 @@
 schema: static_site_autotest_scenarios.v1
 status: canonical_strategy_seed
-updated_at: '2026-08-02'
+updated_at: '2026-08-03'
 strategy: docs/operations/static-site-autotest-strategy.md
 release_gates: docs/features/static-site-pages/release-autotest-gates.md
+reliability_contract: docs/operations/yandex-dependency-resilience.md
 implementation_prompt: docs/testing/static-site-autotest-codex-prompt.md
 
 outcomes:
@@ -23,6 +24,9 @@ platforms:
   ios:
     layer: L2
     runner: appium_xcuitest_ios_simulator
+  server:
+    layer: L0
+    runner: unit_integration_staging_fixture
 
 suites:
   pr-fast:
@@ -33,6 +37,8 @@ suites:
   catalog:
     mode: background_advisory
   mobile-critical:
+    mode: selector_defined
+  reliability:
     mode: selector_defined
   release:
     mode: blocking
@@ -158,6 +164,79 @@ scenarios:
       pull_request: affected_scope
       release: true_for_connectivity_changes
 
+  connectivity.yandex_partial_outage_truth:
+    title: Direct core path remains usable while Yandex relay and control endpoints fail with truthful degraded communication
+    status: partial_current_diagnostic_requires_copy_and_classification_hardening
+    contract: docs/operations/yandex-dependency-resilience.md
+    layers: [L0, L1, L2]
+    platforms: [browser, android, ios]
+    trigger_tags: [supabase-connectivity, yandex-relay, yandex-sidecar, static-route]
+    cost: medium
+    side_effects: read_only
+    fault_profile: client_yandex_relay_and_control_unreachable
+    selection: browser_full_matrix_mobile_representative
+    evidence: capability_states_final_route_summary_class_and_sanitized_receipt
+    acceptance:
+      direct_auth_data: required_ok
+      relay_auth_data: required_network_failure
+      ydb_control: required_network_failure
+      resilient_auth_data: required_ok_via_direct
+      global_yandex_outage_claim: forbidden
+      confirmed_action_resubmit_instruction: forbidden
+    blocking:
+      pull_request: affected_scope_after_implementation
+      release: true_for_diagnostic_or_yandex_dependency_copy_changes_after_implementation
+
+  diagnostics.yandex_dependency_labels:
+    title: Diagnostic labels distinguish relay, YDB control, OAuth and core product availability
+    status: planned
+    contract: docs/operations/yandex-dependency-resilience.md
+    layers: [L0, L1, L2]
+    platforms: [browser, android, ios]
+    trigger_tags: [yandex-relay, yandex-sidecar, yandex-oauth, static-route, visual-layout]
+    cost: medium
+    side_effects: none
+    evidence: aria_copy_summary_class_receipt_and_mobile_screenshots
+    blocking:
+      pull_request: false_until_implemented
+      release: true_after_implementation_for_diagnostic_changes
+
+  transport.both_client_routes_unreachable:
+    title: Both direct and relay client routes fail without false success or selected-once dispatch
+    status: planned
+    contract: docs/operations/yandex-dependency-resilience.md
+    layers: [L0, L1, L2]
+    platforms: [browser, android, ios]
+    trigger_tags: [supabase-connectivity, yandex-relay, auth-otp, personalization, durable-outbox]
+    cost: high
+    side_effects: no_mail_selected_once_dispatch_must_remain_zero
+    fault_profile: both_client_routes_unreachable
+    evidence: fault_activation_zero_dispatch_local_continuity_and_message_class
+    acceptance:
+      selected_once_dispatches: 0
+      real_mail_count: 0
+      false_success: 0
+      static_navigation: available
+      pending_state: durable_when_operation_is_idempotent
+    blocking:
+      pull_request: false_until_implemented
+      release: true_after_implementation_for_auth_or_write_paths
+
+  transport.supabase_upstream_unavailable:
+    title: Shared Supabase upstream failure degrades both direct and relay without false relay recovery
+    status: planned
+    contract: docs/operations/yandex-dependency-resilience.md
+    layers: [L0, L1]
+    platforms: [browser]
+    trigger_tags: [supabase-connectivity, yandex-relay, auth-otp, personalization]
+    cost: medium
+    side_effects: no_mail_selected_once_dispatch_bounded_by_contract
+    fault_profile: supabase_upstream_unavailable
+    evidence: direct_relay_upstream_failure_and_no_false_recovered_outcome
+    blocking:
+      pull_request: false_until_implemented
+      release: true_after_implementation_for_shared_upstream_sensitive_changes
+
   personalization.core_journey:
     title: Personalization ordering, feedback and persistence
     status: planned
@@ -170,6 +249,117 @@ scenarios:
     blocking:
       pull_request: false_until_implemented
       release: false_until_implemented
+
+  personalization.ydb_projection_outage:
+    title: Primary personalization action commits while YDB analytics projection remains durable pending
+    status: planned
+    contract: docs/operations/yandex-dependency-resilience.md
+    layers: [L0, L1]
+    platforms: [server, browser]
+    trigger_tags: [personalization, yandex-sidecar, durable-outbox]
+    cost: medium
+    side_effects: idempotent_test_identity
+    fault_profile: ydb_analytics_unavailable
+    evidence: primary_ack_outbox_pending_user_message_and_no_route_health_mutation
+    acceptance:
+      primary_action_effects: 1
+      primary_action_rollback: 0
+      ydb_projection_state: pending
+      false_data_loss_message: 0
+    blocking:
+      pull_request: false_until_implemented
+      release: true_after_remote_personalization_implementation
+
+  personalization.outbox_reconnect_exactly_once:
+    title: Reload and reconnect flush one logical action to one primary effect and one analytics projection
+    status: planned
+    contract: docs/operations/yandex-dependency-resilience.md
+    layers: [L0, L1, L2]
+    platforms: [browser, android, ios]
+    trigger_tags: [personalization, durable-outbox, supabase-connectivity, yandex-sidecar]
+    cost: high
+    side_effects: idempotent_test_identity
+    evidence: stable_action_id_reload_queue_flush_primary_and_projection_counts
+    acceptance:
+      primary_action_effects: 1
+      analytics_projection_effects: 1
+      duplicate_effects: 0
+      silent_eviction: 0
+    blocking:
+      pull_request: false_until_implemented
+      release: true_after_remote_personalization_implementation
+
+  focus.feedback.partial_component_delivery:
+    title: Focus feedback reports text and screenshot component receipts without false aggregate success
+    status: planned
+    contract: docs/operations/yandex-dependency-resilience.md
+    layers: [L0, L1, L2]
+    platforms: [browser, android, ios]
+    trigger_tags: [focus-feedback, partial-delivery, durable-outbox, mobile-input]
+    cost: high
+    side_effects: idempotent_fixed_test_identity_and_private_object_fixture
+    fault_profile: screenshot_storage_unavailable_text_primary_available
+    evidence: component_receipts_user_copy_reload_and_reconnect_counts
+    acceptance:
+      text_feedback_effects: 1
+      screenshot_state: retryable_pending
+      aggregate_all_sent_message: forbidden
+      retry_uses_same_action_id: required
+    blocking:
+      pull_request: false_until_implemented
+      release: true_after_feedback_component_implementation
+
+  auth.yandex_oauth_unavailable_email_fallback:
+    title: Yandex OAuth outage leaves email OTP available and reconciles ambiguous callbacks
+    status: planned
+    contract: docs/operations/yandex-dependency-resilience.md
+    layers: [L0, L1, L2]
+    platforms: [browser, android, ios]
+    trigger_tags: [auth-otp, yandex-oauth, mobile-input]
+    cost: high
+    side_effects: protected_fixed_identity_no_duplicate_oauth_attempt
+    evidence: provider_failure_copy_email_fallback_session_reconciliation
+    blocking:
+      pull_request: false_until_implemented
+      release: true_after_implementation_for_oauth_or_auth_changes
+
+  email.postbox_unavailable_durable_outbox:
+    title: Transactional email remains durably queued during Postbox outage without false sent status or duplicate send
+    status: planned
+    contract: docs/operations/yandex-dependency-resilience.md
+    layers: [L0, L1]
+    platforms: [server]
+    trigger_tags: [provider-mail, durable-outbox, yandex-sidecar]
+    cost: medium
+    side_effects: fake_provider_or_protected_fixed_recipient
+    evidence: outbox_lease_provider_acceptance_ambiguous_reconciliation_and_delivery_state
+    acceptance:
+      durable_outbox_rows: 1
+      false_sent_before_provider_acceptance: 0
+      duplicate_provider_dispatch: 0
+      ydb_required_for_send_eligibility: false
+    blocking:
+      pull_request: false_until_implemented
+      release: true_after_implementation_for_transactional_mail_changes
+
+  inbound.yandex_pipeline_unavailable_replay:
+    title: Yandex inbound processing outage retains SpaceWeb original and replays once through cursor queue and DLQ
+    status: planned
+    contract: docs/operations/yandex-dependency-resilience.md
+    layers: [L0, L1]
+    platforms: [server]
+    trigger_tags: [provider-mail, durable-outbox, yandex-sidecar]
+    cost: medium
+    side_effects: controlled_mailbox_fixture
+    evidence: mailbox_uid_cursor_ymaq_dlq_idempotency_and_replay_receipt
+    acceptance:
+      original_mail_retained: true
+      seen_flag_mutated: false
+      normalized_effects_after_replay: 1
+      duplicate_effects: 0
+    blocking:
+      pull_request: false_until_implemented
+      release: true_after_implementation_for_inbound_pipeline_changes
 
   search.anonymous_auth_gate:
     title: Anonymous Search is visible but never dispatched before explicit authentication
@@ -375,7 +565,7 @@ scenarios:
       ios: planned_after_mobile_otp
     layers: [L0, L1, L2]
     platforms: [android, ios]
-    trigger_tags: [pwa-system, mobile-input, auth-otp]
+    trigger_tags: [pwa-system, mobile-input, auth-otp, durable-outbox]
     cost: high
     side_effects: simulator_install_state
     target: deployed_https_exact_repo_sha
@@ -423,3 +613,10 @@ policies:
   background_outcome_may_be_reported_as_pass: false
   mandatory_background_must_be_terminal_before_release: true
   planned_scenario_blocks_release: false
+  user_visible_sent_requires_durable_primary_or_provider_ack: true
+  ydb_projection_failure_may_roll_back_core_action: false
+  ydb_or_control_success_may_ack_primary_action: false
+  blind_retry_after_ambiguous_selected_once_dispatch: false
+  partial_component_failure_may_be_reported_as_aggregate_success: false
+  local_or_server_outbox_silent_eviction: forbidden
+  global_yandex_outage_claim_from_partial_endpoint_failure: forbidden
