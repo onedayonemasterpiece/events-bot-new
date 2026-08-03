@@ -1,0 +1,257 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenigevents.ru/schemas/static-collection-facts-v3-real-data-report-v1.json",
+  "title": "Static collection facts v3 real-data replay report",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "repo_sha",
+    "generator_command",
+    "mode",
+    "primary_only",
+    "facts_policy_version",
+    "adjudication_schema_version",
+    "started_at",
+    "finished_at",
+    "db_snapshot",
+    "selection",
+    "plan",
+    "execution",
+    "logical_diff"
+  ],
+  "properties": {
+    "schema_version": {"const": "static-collection-facts-v3-real-data-report-v1"},
+    "repo_sha": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|unknown)$"},
+    "generator_command": {"type": "string", "minLength": 1},
+    "mode": {"enum": ["plan", "evaluate", "apply"]},
+    "primary_only": {"type": "boolean"},
+    "facts_policy_version": {"type": "string", "minLength": 1},
+    "adjudication_schema_version": {"type": "string", "minLength": 1},
+    "started_at": {"type": "string", "format": "date-time"},
+    "finished_at": {"type": "string", "format": "date-time"},
+    "db_snapshot": {"$ref": "#/$defs/dbSnapshot"},
+    "selection": {"$ref": "#/$defs/selection"},
+    "plan": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/plannedEvent"}
+    },
+    "execution": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/execution"}
+      ]
+    },
+    "logical_diff": {"$ref": "#/$defs/logicalDiff"}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "idArray": {
+      "type": "array",
+      "items": {"type": "integer", "minimum": 1},
+      "uniqueItems": true
+    },
+    "reasonArray": {
+      "type": "array",
+      "items": {"enum": ["admission", "audience", "people"]},
+      "uniqueItems": true
+    },
+    "dbSnapshot": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256_before",
+        "sha256_after",
+        "quick_check_before",
+        "quick_check_after"
+      ],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256_before": {"$ref": "#/$defs/sha256"},
+        "sha256_after": {"$ref": "#/$defs/sha256"},
+        "quick_check_before": {"const": "ok"},
+        "quick_check_after": {"const": "ok"}
+      },
+      "additionalProperties": false
+    },
+    "selection": {
+      "type": "object",
+      "required": [
+        "current_date",
+        "reasons",
+        "requested_event_ids",
+        "resolved_event_ids",
+        "unresolved_event_ids",
+        "eligible_event_count",
+        "selected_event_count",
+        "selection_truncated",
+        "omitted_event_ids",
+        "max_sources_per_event",
+        "requested_source_ids",
+        "requested_source_bindings"
+      ],
+      "properties": {
+        "current_date": {"type": "string", "format": "date"},
+        "reasons": {"$ref": "#/$defs/reasonArray"},
+        "requested_event_ids": {"$ref": "#/$defs/idArray"},
+        "resolved_event_ids": {"$ref": "#/$defs/idArray"},
+        "unresolved_event_ids": {"$ref": "#/$defs/idArray"},
+        "eligible_event_count": {"type": "integer", "minimum": 0},
+        "selected_event_count": {"type": "integer", "minimum": 0},
+        "selection_truncated": {"type": "boolean"},
+        "omitted_event_ids": {"$ref": "#/$defs/idArray"},
+        "max_sources_per_event": {"type": "integer", "minimum": 1, "maximum": 4},
+        "requested_source_ids": {"$ref": "#/$defs/idArray"},
+        "requested_source_bindings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["event_id", "source_id"],
+            "properties": {
+              "event_id": {"type": "integer", "minimum": 1},
+              "source_id": {"type": "integer", "minimum": 1}
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "plannedEvent": {
+      "type": "object",
+      "required": ["event_id", "reasons", "source_ids", "unselected_source_ids"],
+      "properties": {
+        "event_id": {"type": "integer", "minimum": 1},
+        "reasons": {"$ref": "#/$defs/reasonArray"},
+        "source_ids": {"$ref": "#/$defs/idArray"},
+        "unselected_source_ids": {"$ref": "#/$defs/idArray"}
+      },
+      "additionalProperties": false
+    },
+    "logicalDiff": {
+      "type": "object",
+      "required": [
+        "sha256_before",
+        "sha256_after",
+        "changed_event_ids",
+        "changed_event_source_ids",
+        "selected_event_allowlist_ok"
+      ],
+      "properties": {
+        "sha256_before": {"$ref": "#/$defs/sha256"},
+        "sha256_after": {"$ref": "#/$defs/sha256"},
+        "changed_event_ids": {"$ref": "#/$defs/idArray"},
+        "changed_event_source_ids": {"$ref": "#/$defs/idArray"},
+        "selected_event_allowlist_ok": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "execution": {
+      "type": "object",
+      "required": [
+        "attempted_sources",
+        "provider_calls",
+        "physical_sends",
+        "physical_sends_complete",
+        "writes",
+        "cached_sources",
+        "deferred_sources",
+        "evaluated_sources",
+        "applied_sources",
+        "unchanged_sources",
+        "events"
+      ],
+      "properties": {
+        "attempted_sources": {"type": "integer", "minimum": 0},
+        "provider_calls": {"type": "integer", "minimum": 0},
+        "physical_sends": {"type": "integer", "minimum": 0},
+        "physical_sends_complete": {"type": "boolean"},
+        "writes": {"type": "integer", "minimum": 0},
+        "cached_sources": {"type": "integer", "minimum": 0},
+        "deferred_sources": {"type": "integer", "minimum": 0},
+        "evaluated_sources": {"type": "integer", "minimum": 0},
+        "applied_sources": {"type": "integer", "minimum": 0},
+        "unchanged_sources": {"type": "integer", "minimum": 0},
+        "events": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/eventExecution"}
+        }
+      },
+      "additionalProperties": false
+    },
+    "eventExecution": {
+      "type": "object",
+      "required": [
+        "event_id",
+        "reasons",
+        "selected_source_ids",
+        "unselected_source_ids",
+        "sources"
+      ],
+      "properties": {
+        "event_id": {"type": "integer", "minimum": 1},
+        "reasons": {"$ref": "#/$defs/reasonArray"},
+        "selected_source_ids": {"$ref": "#/$defs/idArray"},
+        "unselected_source_ids": {"$ref": "#/$defs/idArray"},
+        "sources": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/sourceExecution"}
+        }
+      },
+      "additionalProperties": false
+    },
+    "sourceExecution": {
+      "type": "object",
+      "required": ["source_id", "provider_called", "write_status", "changed_keys", "status"],
+      "properties": {
+        "source_id": {"type": "integer", "minimum": 1},
+        "input_hash": {"$ref": "#/$defs/sha256"},
+        "provider_called": {"type": "boolean"},
+        "write_status": {
+          "enum": ["none", "cached_noop", "not_requested", "committed", "noop", "rejected_forbidden_diff"]
+        },
+        "changed_keys": {
+          "type": "array",
+          "items": {"type": "string"},
+          "uniqueItems": true
+        },
+        "status": {"enum": ["missing", "cached", "deferred", "evaluated", "applied", "unchanged"]},
+        "deferred_reason": {"type": "string", "minLength": 1},
+        "trace": {"$ref": "#/$defs/trace"},
+        "validated_outcomes": {"type": ["object", "null"]},
+        "legacy_projection": {"type": "object"}
+      },
+      "additionalProperties": false
+    },
+    "trace": {
+      "type": "object",
+      "required": [
+        "logical_calls",
+        "physical_sends",
+        "requested_model",
+        "actual_model_path",
+        "fallback_used",
+        "attempts",
+        "rate_limit_waits",
+        "input_tokens",
+        "output_tokens",
+        "latency_sec",
+        "statuses"
+      ],
+      "properties": {
+        "logical_calls": {"type": "integer", "minimum": 0, "maximum": 1},
+        "physical_sends": {"type": ["integer", "null"], "minimum": 0},
+        "requested_model": {"type": ["string", "null"]},
+        "actual_model_path": {"type": ["string", "null"]},
+        "fallback_used": {"type": "boolean"},
+        "attempts": {"type": "integer", "minimum": 0},
+        "rate_limit_waits": {"type": "integer", "minimum": 0},
+        "input_tokens": {"type": "integer", "minimum": 0},
+        "output_tokens": {"type": "integer", "minimum": 0},
+        "latency_sec": {"type": "number", "minimum": 0},
+        "statuses": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    }
+  }
+}

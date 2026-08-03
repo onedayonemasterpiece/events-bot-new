@@ -39,6 +39,17 @@ The isolated [amber-artifact placement research](amber-artifact-easter-egg.md)
 compares a true rail-tail easter egg with an after-medallion challenger without
 changing the accepted calendar renderer.
 
+### Static collections quality gate
+
+Подборки развиваются по [плану качества](static-collections-quality-plan.md) и
+[E2E runbook](static-collections-e2e-runbook.md). PR A перенёс ошибочно
+названный provisional `gold` в
+[`docs/review-data/`](../../review-data/README.md), ввёл ontology v2,
+source-bound receipts и occurrence-family IDs. Обычный CI использует
+`--mode review`; PR-B `strict` с owner gold и score artifacts ещё не выполнен.
+Все новые semantic labels и `/detyam/` projection остаются `blocked`; routes,
+navigation и sitemap этим data-contract изменением не включаются.
+
 The [`festival calendar timeline`](festival-timeline.md) is now part of the
 checked production generator and extends the same shell with a Fly
 SQLite-backed July–December 2026 festival directory. It owns the

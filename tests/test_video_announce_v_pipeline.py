@@ -1625,6 +1625,39 @@ async def test_prefetch_scene_images_uses_normal_policy_for_yandex_bucket(monkey
 
 
 @pytest.mark.asyncio
+async def test_prefetch_scene_images_falls_back_to_yandex_origin_on_cdn_tls_failure(
+    monkeypatch, tmp_path
+):
+    scenario = VideoAnnounceScenario(db=None, bot=_DummyBot(), chat_id=0, user_id=0)
+    cdn_url = "https://static.kenigevents.ru/p/image/v2/aa/poster.webp"
+    origin_url = (
+        "https://storage.yandexcloud.net/kenigevents.ru/"
+        "p/image/v2/aa/poster.webp"
+    )
+    payload = {"scenes": [{"images": [cdn_url]}]}
+    calls: list[str] = []
+
+    class _Resp:
+        status_code = 200
+        content = b"origin-image"
+
+    async def _fake_http_call(_label, _method, url, **_kwargs):
+        calls.append(url)
+        if url == cdn_url:
+            raise RuntimeError("certificate verify failed: hostname mismatch")
+        assert url == origin_url
+        return _Resp()
+
+    monkeypatch.setattr("video_announce.scenario.http_call", _fake_http_call)
+
+    await scenario._prefetch_scene_images(payload, tmp_path, max_images_per_scene=3)
+
+    assert calls == [cdn_url, origin_url]
+    assert (tmp_path / "assets" / "posters" / "scene_1_1.webp").read_bytes() == b"origin-image"
+    assert payload["scenes"][0]["images"] == ["scene_1_1.webp"]
+
+
+@pytest.mark.asyncio
 async def test_prefetch_scene_images_uses_fast_policy_for_catbox(monkeypatch, tmp_path):
     scenario = VideoAnnounceScenario(db=None, bot=_DummyBot(), chat_id=0, user_id=0)
     payload = {

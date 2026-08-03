@@ -37,10 +37,14 @@ def full_inventory(value: dict) -> dict:
         "service_accounts": [{"name": name} for name in value["service_accounts"]],
         "kms_keys": [{"name": name} for name in value["kms_keys"]],
         "buckets": [{"name": name} for name in value["buckets"]],
-        "functions": [{"name": name} for name in value["functions"]],
+        "functions": [
+            {"name": name, "status": "ACTIVE"} for name in value["functions"]
+        ],
         "lockbox_secrets": [{"name": name} for name in value["lockbox_secrets"]],
         "queues": [{"name": name} for name in value["queues"]],
-        "triggers": [{"name": name} for name in value["triggers"]],
+        "triggers": [
+            {"name": name, "status": "ACTIVE"} for name in value["triggers"]
+        ],
     }
 
 
@@ -49,6 +53,40 @@ def test_all_present_plan_is_idempotent(tmp_path: Path) -> None:
     actions = reconcile.plan(value, full_inventory(value), yc="yc")
     assert actions
     assert {action.status for action in actions} == {"ready"}
+
+
+def test_present_but_paused_trigger_is_reported_as_drift(tmp_path: Path) -> None:
+    value = manifest(tmp_path)
+    inventory = full_inventory(value)
+    inventory["triggers"][0]["status"] = "PAUSED"
+
+    actions = reconcile.plan(value, inventory, yc="yc")
+
+    trigger = next(
+        action
+        for action in actions
+        if action.kind == "trigger" and action.name == value["triggers"][0]
+    )
+    assert trigger.status == "drift"
+    assert "PAUSED" in trigger.reason
+    assert trigger.command == ()
+
+
+def test_present_but_inactive_function_is_reported_as_drift(tmp_path: Path) -> None:
+    value = manifest(tmp_path)
+    inventory = full_inventory(value)
+    inventory["functions"][0]["status"] = "STOPPED"
+
+    actions = reconcile.plan(value, inventory, yc="yc")
+
+    function = next(
+        action
+        for action in actions
+        if action.kind == "function" and action.name == value["functions"][0]
+    )
+    assert function.status == "drift"
+    assert "STOPPED" in function.reason
+    assert function.command == ()
 
 
 def test_missing_folder_is_only_first_stage(tmp_path: Path) -> None:

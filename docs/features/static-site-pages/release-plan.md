@@ -18,13 +18,12 @@
 | Telegraph dual-run/public resolver | Missing | D0/D10 outward switch и запрет create/recreate после cutover не доказаны |
 | UI/product acceptance | Partial | Frozen public desktop/mobile passed; real OAuth/Edge owner-session smoke и product owner sign-off ещё нужны |
 
-Текущий operational blocker: нормальный Fly → Kaggle запуск останавливается до
-старта kernel с `400 INVALID_ARGUMENT: Invalid token` при создании временного
-private input dataset. Для визуальной приёмки разрешён только документированный
-host fallback: тот же immutable snapshot, чистый main SHA, production exporter,
-fingerprint/result validation и публикация исключительно secret/noindex
-архива. Такой кандидат не закрывает Kaggle status-ledger, promotion/rollback
-или canonical-root gates.
+Исторический Fly → Kaggle blocker `400 INVALID_ARGUMENT: Invalid token` снят:
+production run от 2026-08-03 создал private input dataset, запустил kernel и
+прошёл status-ledger/lease lifecycle. Текущий operational blocker полного
+checked candidate — независимый Chromium-дефект event `6407`, issue #300.
+Host fallback больше не является единственным рабочим путём и не должен
+использоваться для обхода этого browser gate.
 | Schedule freshness | Blocked | Актуальный rail+bus snapshot/manifest и failed-refresh drill не приложены |
 | Production root promotion/rollback | Implemented default-off; live blocked | Два полных page-only bucket + ALB state machine, inactive-only reconcile, exact readback, stable smoke и rollback реализованы; buckets/ALB/SWS/DNS ещё не созданы, apply не запускался |
 
@@ -60,18 +59,19 @@ publisher против подготовленного inventory. `apply`, DNS и
 - bearer URL is excluded from Git and was sent only to topic `548`, messages
   `725–726`.
 
-This closes the secret visual-review lane only. Normal Fly → Kaggle remains
-blocked at private-dataset creation (`400 INVALID_ARGUMENT: Invalid token`);
-real owner-session Yandex OAuth/Edge Search, schedule freshness, root atomic
-promotion and rollback remain open.
+This historical run closed the secret visual-review lane only. The later
+2026-08-03 production canary proved normal Fly → Kaggle dataset creation and
+ledger lifecycle. Real owner-session Yandex OAuth/Edge Search, schedule
+freshness, root atomic promotion and rollback remain open; the current checked
+candidate is additionally blocked by issue #300.
 
 ## Static selections data-prep track, 2026-08-01
 
 Этот track добавлен в общий release plan, чтобы реализация подборок не осталась
 только в исследовательском документе или side-ветке. Исходные требования
 неизменно хранятся в [`podborki.md`](podborki.md), полный анализ и product/data
-решения — в [`podborki-to-be.md`](podborki-to-be.md). Реализация подготовлена в
-Изначальная implementation-ветка —
+решения — в [`podborki-to-be.md`](podborki-to-be.md). Изначальная
+implementation-ветка —
 `integration/static-collections-data-prep-20260801`. Код достиг
 `origin/main` через PR #182 (`6c870d178b6b22474b56743a36a4b65252c1daa5`) и
 развёрнут вместе с актуальным main
@@ -84,10 +84,12 @@ gates.
 | Gate | Статус | Evidence/граница |
 |---|---|---|
 | Production data audit | Done, read-only | Fly SQLite 2026-08-01; `integrity_check=ok`; 6 approved clubs/13 grounded relations, 8 theatre organizations, 6 venue pilots; runtime не хардкодит counts |
+| Quality PR A | Done in draft PR #222, fail-closed | ontology v2; provisional seed отделён от owner gold; EventSource quotes, receipt/index/snapshot parity и occurrence families проверяются `--mode review`; 4648/6871/7103 удалены из неподтверждённых positives; 6871 имеет occurrence receipt; supply shortfalls остаются warnings |
 | Club registry refresh | Live; catch-up draining | durable `interest_club_relation` outbox, one successor, evaluation history, provider-deferred retry, shadow discovery, inclusive six-calendar-month v2 projection; 80 exact six-month candidates поставлены в outbox, provider-deferred хвост остаётся durable и не стирает accepted relation |
 | Place/organization registry | Done in code | checked-in exact registry, separate theatre/venue roles, 8 official theatres, 6 venue candidates, structured membership reasons |
-| Admission/audience/people facts | Done in code | nullable source-bound `Event.collection_decisions`; candidate-only strict LLM schema; `unknown` preserves truth; `Event.is_free` remains compatible bool; no prose `ticket_status` free inference |
-| Shared collection BGE | Live cold canary running | evidence-only `collection_semantics_v1`, one float32 BGE-M3 cache, prototype-independent event reuse, one `collection-batch-v1.json`; compute обязателен для production-candidate независимо от Unusual publication flag; run указан ниже |
+| Admission/audience/people facts v2 | Live baseline | nullable source-bound `Event.collection_decisions`; `Event.is_free` remains compatible bool; no prose `ticket_status` free inference |
+| Audience facts v3 implementation | Shadow data plane delivered; checked candidate blocked by #300 | clean-main PR #299 merged as `f44f7fc66` and deployed in Fly release 1894. Prior Gate B/D remain valid; post-limiter Gate E PASS; full shadow is `62 = 2 evaluated + 60 deferred + 0 unprocessed` over 377 events. Production bounded apply was 6/6 and identical warm was 0 calls/sends/writes; six calls used six independent project scopes. Event 7402 produced one grounded child/family/kids family, product WATCH. StaticSiteBuilder collection/BGE/product plane passed with 0 provider calls, but the later Chromium root gate reproduced the pre-existing event 6407 geometry defect tracked in issue #300; no candidate receipt or promotion occurred. Publication remains blocked. See [clean-main integration report](../../../.codex/integration/static-collections-audience-main-INTEGRATION_REPORT.md) |
+| Shared collection BGE | Production canary PASS for compute | evidence-only `collection_semantics_v1`, one float32 BGE-M3 cache, prototype-independent event reuse, one `collection-batch-v1.json`; production run processed 377 events with BGE/QA PASS, 0 provider calls, 0 additional external requests and `supabase_core_reads=0`; semantic heads remain blocked without owner gold |
 | Static scheduling | Done in code | strict trailing `latest Smart Update + 15m`, one running + one pending successor; operator/calendar remain immediate |
 | Data handoff | Done in code | `collection-batch-v1.json`, `venue-pages-v1.json`, `interest-clubs-static-v2.json`; exact IDs/status/hashes only, Astro does not redefine membership |
 | Cinema/festivals boundary | Preserved | no cinema source additions/changes; no festival extraction/page changes |
@@ -148,7 +150,45 @@ SHAs, merge reconciliation and final checks live in
 `.codex/integration/static-collections-data-prep-20260801-INTEGRATION_REPORT.md`.
 Local tests do not substitute for the real Kaggle gate.
 
+### Audience facts-v3 merge/deploy evidence, 2026-08-03
+
+- PR #299 merged into `origin/main` as
+  `f44f7fc66ce6f833b7412796de1fb36f53cacec0`;
+- Fly release `1894`, image digest
+  `sha256:1fb79eb04f714429d34529205bd5f171b8719af279d06f42f9539412ac07807b`;
+- bounded facts apply/warm: `6/6` applied, then `0/0/0` provider
+  calls/physical sends/writes with empty Event/EventSource diff;
+- limiter ledger: six terminal successful requests and attempts, six distinct
+  key IDs and six distinct project `quota_scope`, all finalized with usage;
+- product snapshot: `WATCH`, one grounded family in child/family/kids, joint
+  empty, provider calls `0`, semantic publication `BLOCKED`;
+- vector barrier `ops_run=5159`: complete for 377 events, 754 unchanged skips,
+  provider calls `0`;
+- StaticSiteBuilder collection plane: exact main SHA, 377 events, BGE/QA PASS,
+  product WATCH, `supabase_core_reads=0`;
+- overall candidate terminal: failed only in the later, independent Chromium
+  root gate on the already filed event 6407 geometry defect
+  ([issue #300](https://github.com/onedayonemasterpiece/events-bot-new/issues/300));
+  exact lease released and terminal `report_written` present; candidate receipt,
+  secret publication and root promotion did not advance;
+- runtime regression: SQLite `quick_check=ok`, Fly `1/1` passing, five health
+  probes `200` in `0.140-0.223 s`, webhook `200`, no disk-full/proxy-candidate
+  errors.
+
+This is a `PASS_WITH_NON_COLLECTION_BROWSER_BLOCKER` for collection extraction,
+warm-cache, project quota routing and product monitoring. It is not a successful
+checked-candidate release, and it does not permit PR B, routes, navigation,
+sitemap or semantic publication.
+
 ### Обязательная последовательность до UI и public rollout
+
+Исторический stacked-набор #207/#222/#233/#234 закрыт как superseded после
+селективного переноса в clean-main PR #299. Поэтому его старый merge-order
+больше не является инструкцией выпуска. Следующий отдельный PR B не начинается
+с thresholds: provisional seed → independent owner review → owner gold → frozen
+calibration/temporal holdout → all-event scores/prototype winners →
+family-weighted metrics → strict gate. До этих artifacts strict ожидаемо FAIL,
+публикация semantic pages остаётся blocked.
 
 1. Merge candidate into a fresh main-based integration only after the final diff
    audit; retain the generated-manifest boundary and both additive migrations.
@@ -160,9 +200,10 @@ Local tests do not substitute for the real Kaggle gate.
    build. Require complete catalog coverage, `provider_calls=0`, unchanged event
    re-encode `0`, exact cache/receipt/batch hashes, no second notebook and no new
    Supabase core reads.
-4. Keep Unusual/science/strong-impressions/medieval heads blocked until
-   owner-approved gold and evidence-only recalibration. An old related-v1 canary
-   cannot approve the new document contract.
+4. Keep Unusual/science-pop/research-in-action/strong-impressions/medieval and
+   audience-v2 heads blocked. PR A review gate не заменяет PR-B owner gold,
+   all-event scores, temporal holdout и evidence-only recalibration; old
+   related-v1 canary не принимает новый document contract.
 5. Produce an immutable noindex secret candidate containing the exact manifests.
    Verify 8 theatres, all currently eligible approved clubs, the 6 venue pilots,
    admission corrections/review abstentions and per-label failure states.

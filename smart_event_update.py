@@ -266,6 +266,8 @@ def _is_smart_update_facts_stage(label: str | None) -> bool:
 
 def _resolve_smart_update_model(label: str | None) -> str:
     label_l = (label or "").strip().lower()
+    if label_l == "collection_candidate_adjudication":
+        return SMART_UPDATE_MODEL
     if SMART_UPDATE_FORCE_STAGED_GEMINI:
         if _is_smart_update_facts_stage(label):
             return SMART_UPDATE_FACTS_MODEL
@@ -627,8 +629,8 @@ class EventCandidate:
     collection_semantic_decisions: dict[str, Any] | None = None
 
 
-STATIC_COLLECTION_FACTS_POLICY_VERSION = "static-collection-facts-v2"
-STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION = "static-collection-adjudication-v1"
+STATIC_COLLECTION_FACTS_POLICY_VERSION = "static-collection-facts-v3"
+STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION = "static-collection-adjudication-v2"
 
 _ADMISSION_VALUES = {"confirmed_free", "confirmed_paid", "unknown"}
 _ADMISSION_REASON_CODES = {
@@ -641,11 +643,34 @@ _ADMISSION_REASON_CODES = {
     "insufficient_evidence",
     "conflicting_evidence",
 }
-_AUDIENCE_VALUES = {"kids", "family", "none", "unknown"}
-_AUDIENCE_REASON_CODES = {
-    "explicit_target_audience",
+_COLLECTION_FACT_VALUES = {"confirmed", "denied", "unknown"}
+_CHILD_DIRECTED_REASON_CODES = {
+    "explicit_child_audience",
+    "explicit_child_spectators",
+    "explicit_child_participants",
+    "explicit_adults_only",
+    "explicit_age_exclusion",
+    "explicit_parents_only",
+    "insufficient_evidence",
+    "conflicting_evidence",
+}
+_FAMILY_SUITABLE_REASON_CODES = {
+    "explicit_family_invitation",
+    "explicit_children_and_adults",
     "explicit_family_format",
-    "explicit_adult_only",
+    "explicit_adults_only",
+    "explicit_children_only",
+    "explicit_parents_only",
+    "insufficient_evidence",
+    "conflicting_evidence",
+}
+_JOINT_FAMILY_ACTIVITY_REASON_CODES = {
+    "explicit_joint_task",
+    "explicit_parent_child_team",
+    "explicit_joint_practice",
+    "explicit_no_joint_activity",
+    "explicit_adults_only",
+    "explicit_parents_only",
     "insufficient_evidence",
     "conflicting_evidence",
 }
@@ -677,13 +702,35 @@ COLLECTION_ADJUDICATION_JSON_SCHEMA: dict[str, Any] = {
             "required": ["value", "evidence_quote", "reason_code"],
             "additionalProperties": False,
         },
-        "audience_decision": {
+        "child_directed_decision": {
             "type": "object",
             "properties": {
-                "value": {"type": "string", "enum": sorted(_AUDIENCE_VALUES)},
+                "value": {"type": "string", "enum": sorted(_COLLECTION_FACT_VALUES)},
                 "confidence": {"type": "number", "minimum": 0, "maximum": 1},
                 "evidence_quote": {"type": "string"},
-                "reason_code": {"type": "string", "enum": sorted(_AUDIENCE_REASON_CODES)},
+                "reason_code": {"type": "string", "enum": sorted(_CHILD_DIRECTED_REASON_CODES)},
+            },
+            "required": ["value", "confidence", "evidence_quote", "reason_code"],
+            "additionalProperties": False,
+        },
+        "family_suitable_decision": {
+            "type": "object",
+            "properties": {
+                "value": {"type": "string", "enum": sorted(_COLLECTION_FACT_VALUES)},
+                "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                "evidence_quote": {"type": "string"},
+                "reason_code": {"type": "string", "enum": sorted(_FAMILY_SUITABLE_REASON_CODES)},
+            },
+            "required": ["value", "confidence", "evidence_quote", "reason_code"],
+            "additionalProperties": False,
+        },
+        "joint_family_activity_decision": {
+            "type": "object",
+            "properties": {
+                "value": {"type": "string", "enum": sorted(_COLLECTION_FACT_VALUES)},
+                "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                "evidence_quote": {"type": "string"},
+                "reason_code": {"type": "string", "enum": sorted(_JOINT_FAMILY_ACTIVITY_REASON_CODES)},
             },
             "required": ["value", "confidence", "evidence_quote", "reason_code"],
             "additionalProperties": False,
@@ -717,7 +764,9 @@ COLLECTION_ADJUDICATION_JSON_SCHEMA: dict[str, Any] = {
     "required": [
         "schema_version",
         "admission_decision",
-        "audience_decision",
+        "child_directed_decision",
+        "family_suitable_decision",
+        "joint_family_activity_decision",
         "people_appearances",
     ],
     "additionalProperties": False,
@@ -847,10 +896,41 @@ def route_collection_adjudication_reasons(
             for value in (getattr(existing_event, "topics", None) or [])
         )
     bge = {str(value or "").strip().casefold() for value in candidate.collection_bge_signals}
+    audience_text = " ".join(
+        str(value or "").casefold().replace("ё", "е")
+        for value in (
+            candidate.title,
+            candidate.source_text,
+            candidate.occurrence_scope_text,
+            candidate.raw_excerpt,
+        )
+        if value
+    )
+    # Recall only. These phrases may route the single adjudication call, but
+    # never become evidence without the strict source-bound model verdict.
+    broad_audience_text_signal = bool(
+        re.search(
+            r"(?iu)(?:\bдля\s+(?:детей|ребят|школьников|всей\s+семьи)\b|"
+            r"\bвсей\s+семьей\b|"
+            r"\bдетск\w*\s+(?:спектакл\w*|шоу|заняти\w*|мастер-класс\w*)\b|"
+            r"\bдетям\s+и\s+взрослым\b|\bродител\w*\s+(?:и|с)\s+дет\w*\b|"
+            r"\bсемейн\w*\s+команд\w*\b|\bвместе\s+с\s+ребенк\w*\b)",
+            audience_text,
+        )
+    )
     if (
         topics & {"FAMILY", "KIDS_SCHOOL"}
         or bge & {"audience:kids", "audience:family"}
-        or "audience_decision" in existing_decisions
+        or broad_audience_text_signal
+        or any(
+            key in existing_decisions
+            for key in (
+                "audience_decision",
+                "child_directed_decision",
+                "family_suitable_decision",
+                "joint_family_activity_decision",
+            )
+        )
     ):
         reasons.add("audience")
     if (
@@ -876,55 +956,170 @@ def _exact_collection_quote(quote: Any, corpus: str, *, required: bool) -> str |
     return clean if clean in corpus else None
 
 
-def _audience_quote_supports_value(value: str, quote: str, reason: str) -> bool:
-    """Narrow entailment guard for an already semantic audience verdict.
+def _collection_fact_quote_supports_value(
+    fact_key: str,
+    value: str,
+    quote: str,
+    reason: str,
+) -> bool:
+    """Reject narrow, known non-entailing quote shapes after the LLM verdict.
 
-    The LLM still owns audience meaning. This check only rejects a quoted
-    phrase whose grammatical role cannot support the selected value, e.g. the
-    children are authors of displayed work rather than invitees to the event.
+    This is deliberately a safety validator, not a keyword classifier. The
+    model still owns meaning; these checks only ensure that a selected exact
+    quote can grammatically support the selected ontology-v2 fact.
     """
 
     normalized = " ".join(str(quote or "").casefold().replace("ё", "е").split())
     if value == "unknown":
         return not normalized and reason in {"insufficient_evidence", "conflicting_evidence"}
-    if value == "none":
-        return bool(normalized) and reason == "explicit_adult_only"
-    if value == "family":
-        if reason not in {"explicit_family_format", "explicit_target_audience"}:
+
+    explicit_adults_only = bool(
+        re.search(r"\bтолько\s+для\s+(?:взрослых|родителей)\b", normalized)
+        or re.search(r"\bбез\s+детей\b", normalized)
+        or re.search(r"\bдет\w*\s+не\s+допуска", normalized)
+    )
+    if value == "denied":
+        if reason == "explicit_adults_only":
+            return explicit_adults_only
+        if reason == "explicit_parents_only":
+            return bool(re.search(r"\bтолько\s+для\s+родителей\b", normalized))
+        if reason == "explicit_age_exclusion":
+            return bool(
+                re.search(r"\b(?:без\s+детей|дет\w*\s+не\s+допуска|участие\s+дет\w*\s+запрещ)", normalized)
+            )
+        if reason == "explicit_children_only":
+            return bool(re.search(r"\bтолько\s+для\s+детей\b", normalized))
+        if reason == "explicit_no_joint_activity":
+            return bool(
+                re.search(r"\bвзросл\w*\s+только\s+сопровожда", normalized)
+                or re.search(r"\bдет\w*\s+выполня\w*\s+(?:задани\w*\s+)?самостоятельно\b", normalized)
+            )
+        return False
+
+    if value != "confirmed":
+        return False
+    if fact_key == "child_directed_decision":
+        if reason not in {
+            "explicit_child_audience",
+            "explicit_child_spectators",
+            "explicit_child_participants",
+        }:
             return False
-        joint_family = bool(
-            re.search(r"\b(?:для\s+)?вс(?:ей|я|ю)\s+семь", normalized)
-            or re.search(r"\bродител\w*\s*[+и]\s*ребен", normalized)
+        # Meaning remains LLM-owned.  These are only narrow guards for known
+        # non-entailing routing signals; requiring one of a small keyword list
+        # here would incorrectly reject valid wording such as «интересно и
+        # детям, и взрослым».
+        age_only = bool(
+            re.fullmatch(
+                r"(?:(?:возрастн\w*\s+(?:ограничени\w*|ценз)\s*[:\-]?\s*)?"
+                r"(?:0|3|6|12|16|18)\s*\+|от\s+\d{1,2}\s+лет)",
+                normalized,
+            )
         )
-        child_and_adult = bool(
-            re.search(r"\b(?:дет|ребен|юных?)\w*", normalized)
-            and re.search(r"\b(?:взросл|родител)\w*", normalized)
-        )
-        explicit_family_format = bool(
+        child_author_only = bool(
             re.search(
-                r"\bсемейн\w*\s+(?:шоу|мюзикл|мастер-класс|турнир|праздник|"
-                r"фестиваль|программ\w*|заняти\w*|спектакл\w*)\b",
+                r"\b(?:работ\w*|картин\w*|рисунк\w*|произведени\w*)\s+"
+                r"(?:юных|детск\w*|детей|школьник\w*)\s+(?:автор|художник)\w*\b",
                 normalized,
             )
             or re.search(
-                r"\b(?:шоу|мюзикл|мастер-класс|турнир|праздник|фестиваль|"
-                r"программ\w*|заняти\w*|спектакл\w*)[^.;:]{0,30}\bсемейн\w*",
+                r"\bглазами\s+(?:юных|маленьких)\s+(?:автор|художник)\w*\b",
                 normalized,
             )
+            or re.search(
+                r"\b(?:рисунк\w*|работ\w*|картин\w*)\s+"
+                r"(?:учащих\w*|воспитанник\w*|школьник\w*|детей)\b",
+                normalized,
+            )
+            or re.search(
+                r"\bвыставк\w*\s+(?:творческ\w*\s+)?(?:работ\w*|рисунк\w*)\s+"
+                r"(?:воспитанник\w*|учащих\w*|школьник\w*|детей)\b",
+                normalized,
+            )
+        ) and not re.search(
+            r"\b(?:для\s+дет|приглаша\w*\s+дет|детям\s+и\s+взросл|"
+            r"детей\s+и\s+родител|маленьк\w*\s+(?:зрител|участник))\w*",
+            normalized,
         )
-        return joint_family or child_and_adult or explicit_family_format
-    if value == "kids":
-        if reason != "explicit_target_audience":
+        return bool(normalized) and not age_only and not child_author_only
+    if fact_key == "family_suitable_decision":
+        if reason not in {
+            "explicit_family_invitation",
+            "explicit_children_and_adults",
+            "explicit_family_format",
+        }:
             return False
-        return bool(
-            re.search(r"(?:/|\b)для[-_/\s]+дет", normalized)
-            or re.search(r"(?:/|\b)dlya[-_/]+dete", normalized)
-            or "театрдлядетей" in normalized
-            or re.search(r"\bдетск\w*(?:\s+[\w-]+){0,2}\s+(?:зон\w*|клуб\w*|"
-                         r"спектакл\w*|шоу|программ\w*|заняти\w*|мастер-класс\w*)\b", normalized)
-            or re.search(r"\b(?:маленьк\w*\s+зрител|помочь\s+ребен|для\s+ребен)", normalized)
+        vague_family_only = bool(
+            re.fullmatch(
+                r"(?:уютн\w*\s+)?семейн\w*\s+(?:атмосфер\w*|тематик\w*)[.!]?",
+                normalized,
+            )
+            or re.fullmatch(r"семейн\w*\s+турнир\w*[.!]?", normalized)
         )
+        parents_only = bool(re.search(r"\bтолько\s+для\s+родителей\b", normalized))
+        return bool(normalized) and not vague_family_only and not parents_only
+    if fact_key == "joint_family_activity_decision":
+        if reason not in {
+            "explicit_joint_task",
+            "explicit_parent_child_team",
+            "explicit_joint_practice",
+        }:
+            return False
+        adult_child = bool(
+            re.search(r"\b(?:родител|взросл)\w*", normalized)
+            and re.search(r"\b(?:дет|ребен)\w*", normalized)
+        )
+        joint_action = bool(
+            re.search(
+                r"\b(?:вместе|совместно)\b.{0,80}\b(?:создад|сдела|выполн|собер|"
+                r"нарису|приготов|пройдут|практик|задани|маршрут)\w*",
+                normalized,
+            )
+            or re.search(r"\b(?:общ\w*|совместн\w*)\s+(?:работ|задани|практик|маршрут)\w*\b", normalized)
+            or (
+                re.search(r"\bсемейн\w*\s+команд\w*\b", normalized)
+                and adult_child
+            )
+            or (
+                re.search(r"\bпарн\w*\s+(?:упражнени|задани|практик)\w*\b", normalized)
+                and adult_child
+            )
+        )
+        return adult_child and joint_action
     return False
+
+
+def _validate_collection_fact_decision(
+    payload: Any,
+    *,
+    fact_key: str,
+    allowed_reasons: set[str],
+    source_corpus: str,
+) -> dict[str, Any] | None:
+    if not _strict_keys(payload, {"value", "confidence", "evidence_quote", "reason_code"}):
+        return None
+    value = payload.get("value")
+    reason = payload.get("reason_code")
+    confidence = payload.get("confidence")
+    if (
+        value not in _COLLECTION_FACT_VALUES
+        or reason not in allowed_reasons
+        or isinstance(confidence, bool)
+        or not isinstance(confidence, (int, float))
+        or not 0 <= float(confidence) <= 1
+    ):
+        return None
+    quote = _exact_collection_quote(
+        payload.get("evidence_quote"), source_corpus, required=value != "unknown"
+    )
+    if quote is None or not _collection_fact_quote_supports_value(fact_key, value, quote, reason):
+        return None
+    return {
+        "value": value,
+        "confidence": float(confidence),
+        "evidence_quote": quote,
+        "reason_code": reason,
+    }
 
 
 def validate_collection_adjudication_output(
@@ -941,7 +1136,14 @@ def validate_collection_adjudication_output(
 
     if not _strict_keys(
         payload,
-        {"schema_version", "admission_decision", "audience_decision", "people_appearances"},
+        {
+            "schema_version",
+            "admission_decision",
+            "child_directed_decision",
+            "family_suitable_decision",
+            "joint_family_activity_decision",
+            "people_appearances",
+        },
     ):
         return None
     if payload.get("schema_version") != STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION:
@@ -966,24 +1168,29 @@ def validate_collection_adjudication_output(
     if aquote is None:
         return None
 
-    audience = payload.get("audience_decision")
-    if not _strict_keys(audience, {"value", "confidence", "evidence_quote", "reason_code"}):
-        return None
-    uvalue = audience.get("value")
-    ureason = audience.get("reason_code")
-    confidence = audience.get("confidence")
-    if (
-        uvalue not in _AUDIENCE_VALUES
-        or ureason not in _AUDIENCE_REASON_CODES
-        or isinstance(confidence, bool)
-        or not isinstance(confidence, (int, float))
-        or not 0 <= float(confidence) <= 1
-    ):
-        return None
-    uquote = _exact_collection_quote(
-        audience.get("evidence_quote"), source_corpus, required=uvalue != "unknown"
+    child = _validate_collection_fact_decision(
+        payload.get("child_directed_decision"),
+        fact_key="child_directed_decision",
+        allowed_reasons=_CHILD_DIRECTED_REASON_CODES,
+        source_corpus=source_corpus,
     )
-    if uquote is None or not _audience_quote_supports_value(uvalue, uquote, ureason):
+    family = _validate_collection_fact_decision(
+        payload.get("family_suitable_decision"),
+        fact_key="family_suitable_decision",
+        allowed_reasons=_FAMILY_SUITABLE_REASON_CODES,
+        source_corpus=source_corpus,
+    )
+    joint = _validate_collection_fact_decision(
+        payload.get("joint_family_activity_decision"),
+        fact_key="joint_family_activity_decision",
+        allowed_reasons=_JOINT_FAMILY_ACTIVITY_REASON_CODES,
+        source_corpus=source_corpus,
+    )
+    if child is None or family is None or joint is None:
+        return None
+    if joint["value"] == "confirmed" and (
+        child["value"] != "confirmed" or family["value"] != "confirmed"
+    ):
         return None
 
     people = payload.get("people_appearances")
@@ -1038,12 +1245,9 @@ def validate_collection_adjudication_output(
             "evidence_quote": aquote,
             "reason_code": areason,
         },
-        "audience_decision": {
-            "value": uvalue,
-            "confidence": float(confidence),
-            "evidence_quote": uquote,
-            "reason_code": ureason,
-        },
+        "child_directed_decision": child,
+        "family_suitable_decision": family,
+        "joint_family_activity_decision": joint,
         "people_appearances": clean_people,
     }
 
@@ -1073,6 +1277,123 @@ def _decision_wins(existing: Mapping[str, Any] | None, incoming: Mapping[str, An
     return bool(new_time and (old_time is None or new_time > old_time))
 
 
+def project_legacy_audience_decision(validated: Mapping[str, Any]) -> dict[str, Any]:
+    """Derive the legacy audience value without another semantic call."""
+
+    child = validated.get("child_directed_decision")
+    family = validated.get("family_suitable_decision")
+    if isinstance(family, Mapping) and family.get("value") == "confirmed":
+        source = family
+        value = "family"
+    elif isinstance(child, Mapping) and child.get("value") == "confirmed":
+        source = child
+        value = "kids"
+    elif (
+        isinstance(child, Mapping)
+        and isinstance(family, Mapping)
+        and child.get("value") == "denied"
+        and family.get("value") == "denied"
+        and child.get("reason_code") == "explicit_adults_only"
+        and family.get("reason_code") == "explicit_adults_only"
+    ):
+        source = child
+        value = "none"
+    else:
+        return {
+            "value": "unknown",
+            "confidence": 0.0,
+            "evidence_quote": "",
+            "reason_code": "insufficient_evidence",
+            "derived_from_facts_v3": True,
+        }
+    return {
+        "value": value,
+        "confidence": float(source.get("confidence") or 0.0),
+        "evidence_quote": str(source.get("evidence_quote") or ""),
+        "reason_code": str(source.get("reason_code") or ""),
+        "derived_from_facts_v3": True,
+    }
+
+
+def collection_adjudication_cached_payload(
+    decisions: Mapping[str, Any] | None,
+    *,
+    input_hash: str,
+    source_id: int | None = None,
+    source_url: str | None = None,
+) -> dict[str, Any] | None:
+    """Return a validated warm-replay payload from the bounded receipt cache."""
+
+    if not isinstance(decisions, Mapping) or not input_hash:
+        return None
+    receipts = decisions.get("evaluation_receipts")
+    if not isinstance(receipts, list):
+        return None
+    for receipt in reversed(receipts):
+        if not isinstance(receipt, Mapping):
+            continue
+        if receipt.get("input_hash") != input_hash:
+            continue
+        if receipt.get("policy_version") != STATIC_COLLECTION_FACTS_POLICY_VERSION:
+            continue
+        if receipt.get("schema_version") != STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION:
+            continue
+        if source_id is not None and int(receipt.get("source_id") or 0) != int(source_id):
+            continue
+        if source_id is None and source_url is not None and str(receipt.get("source_url") or "") != str(source_url):
+            continue
+        payload = receipt.get("payload")
+        if isinstance(payload, Mapping):
+            return json.loads(json.dumps(dict(payload)))
+    return None
+
+
+def collection_decision_hash_covers(
+    decisions: Mapping[str, Any] | None,
+    *,
+    reasons: Iterable[str],
+    input_hash: str,
+    source_id: int | None = None,
+    source_url: str | None = None,
+) -> bool:
+    """Reusable coverage contract for Smart Update and bounded backfills.
+
+    A receipt covers even an all-unknown valid evaluation. Legacy facts-v2
+    audience rows alone never count as coverage for the three facts-v3 keys.
+    """
+
+    if collection_adjudication_cached_payload(
+        decisions,
+        input_hash=input_hash,
+        source_id=source_id,
+        source_url=source_url,
+    ) is not None:
+        return True
+    if not isinstance(decisions, Mapping):
+        return False
+    requested = {str(reason or "").strip().lower() for reason in reasons}
+    if "admission" in requested:
+        item = decisions.get("admission_decision")
+        if not isinstance(item, Mapping) or item.get("input_hash") != input_hash:
+            return False
+    if "audience" in requested:
+        for key in (
+            "child_directed_decision",
+            "family_suitable_decision",
+            "joint_family_activity_decision",
+        ):
+            item = decisions.get(key)
+            if not isinstance(item, Mapping) or item.get("input_hash") != input_hash:
+                return False
+    if "people" in requested:
+        people = decisions.get("people_appearances")
+        if not isinstance(people, list) or not people:
+            return False
+        if any(not isinstance(item, Mapping) or item.get("input_hash") != input_hash for item in people):
+            return False
+    return bool(requested & {"admission", "audience", "people"})
+
+
 def deep_merge_collection_decisions(
     existing: Mapping[str, Any] | None,
     incoming: Mapping[str, Any] | None,
@@ -1083,7 +1404,13 @@ def deep_merge_collection_decisions(
     if not isinstance(incoming, Mapping):
         return result
     changed = False
-    for key in ("admission_decision", "audience_decision"):
+    for key in (
+        "admission_decision",
+        "child_directed_decision",
+        "family_suitable_decision",
+        "joint_family_activity_decision",
+        "audience_decision",
+    ):
         item = incoming.get(key)
         if not isinstance(item, Mapping) or item.get("value") == "unknown":
             continue
@@ -1140,6 +1467,56 @@ def _collection_provenance(
     }
 
 
+def _collection_apply_reasons(reasons: Iterable[str] | None) -> set[str]:
+    if reasons is None:
+        return {"admission", "audience", "people"}
+    requested = {str(value or "").strip().lower() for value in reasons}
+    explicit = requested & {"admission", "audience", "people"}
+    if explicit:
+        return explicit
+    # Existing conflict/changed/backfill-only callers historically evaluate
+    # the complete compact payload. Preserve that default behavior.
+    return {"admission", "audience", "people"}
+
+
+def _collection_receipt(
+    validated: Mapping[str, Any],
+    provenance: Mapping[str, Any],
+) -> dict[str, Any]:
+    return {
+        "source_id": int(provenance.get("source_id") or 0),
+        "source_url": str(provenance.get("source_url") or ""),
+        "source_type": str(provenance.get("source_type") or ""),
+        "source_trust": str(provenance.get("source_trust") or ""),
+        "input_hash": str(provenance.get("input_hash") or ""),
+        "policy_version": STATIC_COLLECTION_FACTS_POLICY_VERSION,
+        "schema_version": STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION,
+        "evaluated_at": str(provenance.get("decided_at") or ""),
+        "manual_lock": bool(provenance.get("manual_lock")),
+        "payload": json.loads(json.dumps(dict(validated))),
+    }
+
+
+def _merge_collection_receipt(
+    decisions: dict[str, Any],
+    receipt: Mapping[str, Any],
+    *,
+    maximum: int = 24,
+) -> bool:
+    current = [
+        dict(item)
+        for item in (decisions.get("evaluation_receipts") or [])
+        if isinstance(item, Mapping)
+    ]
+    key = (int(receipt.get("source_id") or 0), str(receipt.get("input_hash") or ""))
+    for item in current:
+        if (int(item.get("source_id") or 0), str(item.get("input_hash") or "")) == key:
+            return False
+    current.append(dict(receipt))
+    decisions["evaluation_receipts"] = current[-max(1, int(maximum)) :]
+    return True
+
+
 def apply_collection_decisions(
     event: Event,
     provider_payload: Any,
@@ -1149,6 +1526,7 @@ def apply_collection_decisions(
     input_hash: str,
     decided_at: datetime | None = None,
     manual_lock: bool = False,
+    reasons: Iterable[str] | None = None,
 ) -> bool:
     """Validate, merge and materialize decisions for an attached same-event source."""
 
@@ -1162,28 +1540,64 @@ def apply_collection_decisions(
     )
     if validated is None:
         return False
+    # Facts-v3 publication evidence must survive attachment as source-native
+    # text. A quote found only in raw_excerpt/OCR/candidate scope is not enough
+    # to persist any v3 payload.
+    persisted_source_text = str(source.source_text or "")
+    for key, allowed_reasons in (
+        ("child_directed_decision", _CHILD_DIRECTED_REASON_CODES),
+        ("family_suitable_decision", _FAMILY_SUITABLE_REASON_CODES),
+        ("joint_family_activity_decision", _JOINT_FAMILY_ACTIVITY_REASON_CODES),
+    ):
+        if _validate_collection_fact_decision(
+            validated.get(key),
+            fact_key=key,
+            allowed_reasons=allowed_reasons,
+            source_corpus=persisted_source_text,
+        ) is None:
+            return False
     provenance = _collection_provenance(
         source,
         input_hash=input_hash,
         decided_at=decided_at or datetime.now(timezone.utc),
         manual_lock=manual_lock,
     )
-    incoming = {
-        "schema_version": STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION,
-        "admission_decision": {**validated["admission_decision"], **provenance},
-        "audience_decision": {**validated["audience_decision"], **provenance},
-        "people_appearances": [
+    selected_reasons = _collection_apply_reasons(reasons)
+    incoming: dict[str, Any] = {"schema_version": STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION}
+    if "admission" in selected_reasons:
+        incoming["admission_decision"] = {**validated["admission_decision"], **provenance}
+    if "audience" in selected_reasons:
+        for key in (
+            "child_directed_decision",
+            "family_suitable_decision",
+            "joint_family_activity_decision",
+        ):
+            incoming[key] = {**validated[key], **provenance}
+        legacy_projection = project_legacy_audience_decision(validated)
+        incoming["audience_decision"] = {**legacy_projection, **provenance}
+    if "people" in selected_reasons:
+        incoming["people_appearances"] = [
             {**item, **provenance} for item in validated["people_appearances"]
-        ],
-    }
+        ]
     before = dict(event.collection_decisions or {})
     merged = deep_merge_collection_decisions(before, incoming)
+    receipt_added = _merge_collection_receipt(
+        merged,
+        _collection_receipt(validated, provenance),
+    )
+    if receipt_added:
+        merged["schema_version"] = STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION
     if merged == before:
         return False
     # Whole-value reassignment is intentional: JSON is not MutableDict-backed.
     event.collection_decisions = merged
     admission = merged.get("admission_decision")
-    if isinstance(admission, Mapping):
+    if (
+        "admission" in selected_reasons
+        and validated["admission_decision"].get("value") != "unknown"
+        and isinstance(admission, Mapping)
+        and admission.get("input_hash") == input_hash
+    ):
         if admission.get("value") == "confirmed_free":
             event.is_free = True
         elif admission.get("value") == "confirmed_paid":
@@ -1200,18 +1614,27 @@ async def adjudicate_collection_candidate(candidate: EventCandidate) -> dict[str
     if request is None or SMART_UPDATE_LLM_DISABLED:
         return None
     prompt = (
-        "Ты проверяешь только три факта КОНКРЕТНОГО события. Верни JSON строго по схеме.\n"
+        "Ты проверяешь только факты КОНКРЕТНОГО события. Верни JSON строго по схеме.\n"
         "Каждая непустая evidence_quote должна быть точной непрерывной цитатой из source_corpus.\n"
         "Admission: ticket_status, наличие продажи или ссылки без явной цены/платного входа не доказывает paid; "
         "необязательный донат может быть confirmed_free.\n"
-        "Audience: age_restriction, topics и BGE — только candidate signals, никогда не доказательство kids/family. "
-        "kids означает, что само событие/занятие прямо предназначено детям или детским зрителям/участникам. "
-        "family означает совместное участие или посещение детей и взрослых/родителей. Недостаточны слова "
-        "'семья', 'семейный', 'близкие', 'семейная атмосфера', тема семьи/беременности/соцподдержки, "
-        "а также популярность артиста у детей, если источник не приглашает детей на это событие. "
-        "Для таких случаев верни unknown; не расширяй смысл рекламной фразы.\n"
+        "Audience facts оцени независимо. child_directed=confirmed только когда ребёнок прямо назван целевым "
+        "зрителем или участником. family_suitable=confirmed только когда дети и взрослые/родители прямо "
+        "приглашены вместе. joint_family_activity=confirmed только когда взрослый и ребёнок вместе выполняют "
+        "одну практику, задачу, маршрут или участвуют одной командой. Joint confirmed требует также confirmed "
+        "child_directed и family_suitable, каждый с точной подтверждающей цитатой.\n"
+        "denied разрешён только при явной отрицательной фразе источника (например, только для взрослых/"
+        "родителей, без детей); отсутствие положительного доказательства всегда unknown, не denied.\n"
+        "Age restriction, topics и BGE — только routing signals, никогда не evidence. Недостаточны: один рейтинг "
+        "0+/6+/12+, детские авторы работ, тема семьи, parents-only встреча, 'семейная атмосфера', популярность "
+        "артиста у детей и 'семейный турнир' без явного состава взрослый+ребёнок и общей деятельности. "
+        "Не расширяй смысл рекламной фразы.\n"
         "People: mentioned не равно confirmed; не выводи происхождение по имени. Для non-unknown origin_scope "
         "нужна отдельная точная origin_evidence_quote.\n"
+        "candidate_reasons задаёт область проверки. Если admission отсутствует, верни admission unknown; "
+        "если audience отсутствует, верни все три audience facts unknown; если people отсутствует, верни "
+        "people_appearances=[]. Служебные backfill/changed/conflict сами по себе не расширяют область. "
+        "Ответ должен быть компактным: не перечисляй людей вне reason=people.\n"
         "При сомнении верни unknown/пустой список. Не пиши публичный текст.\n\n"
         f"Данные:\n{json.dumps(request, ensure_ascii=False)}"
     )
@@ -1219,7 +1642,7 @@ async def adjudicate_collection_candidate(candidate: EventCandidate) -> dict[str
         raw = await _ask_gemma_json(
             prompt,
             COLLECTION_ADJUDICATION_JSON_SCHEMA,
-            max_tokens=700,
+            max_tokens=1100,
             label="collection_candidate_adjudication",
         )
     except Exception:
@@ -8314,6 +8737,7 @@ async def _ask_gemma_json_unbounded(
     # GoogleAIClient already retries retryable provider failures. Keep the
     # Smart Update wrapper to a single outer attempt by default so one failing
     # stage cannot expand into 3 x 3 provider calls; override via env for probes.
+    single_primary_send = label == "collection_candidate_adjudication"
     max_tries = int(os.getenv("SMART_UPDATE_GEMMA_RETRIES", "1"))
     base_sleep = float(os.getenv("SMART_UPDATE_GEMMA_RETRY_BASE_SEC", "1.0"))
     # When we are rate-limited, prefer waiting (do not count it as a "try") to
@@ -8321,6 +8745,8 @@ async def _ask_gemma_json_unbounded(
     rl_max_wait_sec = float(os.getenv("SMART_UPDATE_GEMMA_RATE_LIMIT_MAX_WAIT_SEC", "180") or "180")
     rl_max_wait_sec = max(0.0, min(rl_max_wait_sec, 1800.0))
     max_tries = max(1, min(max_tries, 5))
+    if single_primary_send:
+        max_tries = 1
     base_sleep = max(0.1, min(base_sleep, 10.0))
     client = _get_gemma_client()
     model = _resolve_smart_update_model(label)
@@ -8345,15 +8771,19 @@ async def _ask_gemma_json_unbounded(
             in {"1", "true", "yes", "on"}
         )
     json_gen_cfg = _smart_update_gemma_generation_config(temperature=0)
-    if _GEMMA_JSON_MIME_SUPPORTED:
+    if _GEMMA_JSON_MIME_SUPPORTED and not single_primary_send:
         json_gen_cfg["response_mime_type"] = "application/json"
-    native_schema_enabled = _smart_update_native_schema_enabled(label)
+    native_schema_enabled = (
+        True if single_primary_send else _smart_update_native_schema_enabled(label)
+    )
     native_gen_cfg = {
         **_smart_update_gemma_generation_config(temperature=0),
         "response_mime_type": "application/json",
         "response_schema": _gemma_native_response_schema(schema),
     }
-    prompt_schema_fallback_enabled = _smart_update_prompt_schema_fallback_enabled(label)
+    prompt_schema_fallback_enabled = (
+        False if single_primary_send else _smart_update_prompt_schema_fallback_enabled(label)
+    )
     trace_record = _start_llm_trace_record(
         "json",
         label,
@@ -8361,7 +8791,32 @@ async def _ask_gemma_json_unbounded(
         max_tokens=max_tokens,
         native_schema_enabled=native_schema_enabled,
         prompt_schema_fallback_enabled=prompt_schema_fallback_enabled,
+        physical_sends=0,
+        actual_models=[],
+        token_usage={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+        primary_send_limit=1 if single_primary_send else None,
     )
+
+    def record_physical_send(metadata: Mapping[str, Any] | None = None, *, fallback: bool = False) -> None:
+        if trace_record is None:
+            return
+        trace_record["physical_sends"] = int(trace_record.get("physical_sends") or 0) + 1
+        actual_model = "gpt-4o" if fallback else str(
+            (metadata or {}).get("provider_model_name")
+            or (metadata or {}).get("requested_model")
+            or model
+        )
+        models = trace_record.setdefault("actual_models", [])
+        if actual_model and isinstance(models, list):
+            models.append(actual_model)
+
+    def record_usage(usage: Any) -> None:
+        if trace_record is not None:
+            trace_record["token_usage"] = {
+                "input_tokens": int(getattr(usage, "input_tokens", 0) or 0),
+                "output_tokens": int(getattr(usage, "output_tokens", 0) or 0),
+                "total_tokens": int(getattr(usage, "total_tokens", 0) or 0),
+            }
 
     rl_deadline = time.monotonic() + rl_max_wait_sec
     attempt = 1
@@ -8380,6 +8835,29 @@ async def _ask_gemma_json_unbounded(
                     attempt,
                     max_tries,
                 )
+                if single_primary_send:
+                    try:
+                        raw_native, _usage = await client.generate_content_async(
+                            model=model,
+                            prompt=native_prompt,
+                            generation_config=native_gen_cfg,
+                            max_output_tokens=max_tokens,
+                            allow_model_fallback=False,
+                            max_provider_attempts=1,
+                            attempt_observer=record_physical_send,
+                        )
+                        record_usage(_usage)
+                        raw_last = raw_native or ""
+                        data_native = _extract_json(raw_last)
+                        if data_native is not None:
+                            _finish_llm_trace_record(trace_record, status="ok_native")
+                            return data_native
+                        last_exc = RuntimeError("gemma returned invalid json")
+                    except Exception as exc:
+                        last_exc = exc
+                        if trace_record is not None:
+                            trace_record["provider_errors"] = int(trace_record.get("provider_errors") or 0) + 1
+                    break
                 if native_schema_enabled:
                     try:
                         raw_native, _usage = await client.generate_content_async(
@@ -8389,6 +8867,8 @@ async def _ask_gemma_json_unbounded(
                             max_output_tokens=max_tokens,
                             fallback_models=_smart_update_fallback_models(label, model),
                         )
+                        record_physical_send({"requested_model": model})
+                        record_usage(_usage)
                         raw_last = raw_native or ""
                         data_native = _extract_json(raw_last)
                         if data_native is not None:
@@ -8429,7 +8909,11 @@ async def _ask_gemma_json_unbounded(
                             generation_config=json_gen_cfg,
                             max_output_tokens=max_tokens,
                             fallback_models=_smart_update_fallback_models(label, model),
+                            allow_model_fallback=not single_primary_send,
+                            max_provider_attempts=1 if single_primary_send else None,
                         )
+                        record_physical_send({"requested_model": model})
+                        record_usage(_usage)
                         break
                     except Exception as exc:
                         msg_l = str(exc).lower()
@@ -8465,7 +8949,11 @@ async def _ask_gemma_json_unbounded(
                         if _ProviderError is not None and isinstance(exc, _ProviderError):
                             if int(getattr(exc, "status_code", 0) or 0) == 429:
                                 retry_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
-                        if retry_ms > 0 and time.monotonic() < rl_deadline:
+                        if (
+                            not single_primary_send
+                            and retry_ms > 0
+                            and time.monotonic() < rl_deadline
+                        ):
                             if trace_record is not None:
                                 trace_record["rate_limit_waits"] = int(trace_record.get("rate_limit_waits") or 0) + 1
                             await asyncio.sleep(min(60.0, max(0.2, (retry_ms / 1000.0) + 0.2)))
@@ -8481,6 +8969,9 @@ async def _ask_gemma_json_unbounded(
                         status="ok_prompt_after_native" if native_schema_enabled else "ok",
                     )
                     return data
+                if single_primary_send:
+                    last_exc = RuntimeError("gemma returned invalid json")
+                    break
                 fix_prompt = (
                     "Исправь JSON под схему. Верни только JSON без markdown.\n"
                     f"Schema:\n{schema_text}\n\n"
@@ -8559,7 +9050,11 @@ async def _ask_gemma_json_unbounded(
                 if _ProviderError is not None and isinstance(exc, _ProviderError):
                     if int(getattr(exc, "status_code", 0) or 0) == 429:
                         retry_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
-                if retry_ms > 0 and time.monotonic() < rl_deadline:
+                if (
+                    not single_primary_send
+                    and retry_ms > 0
+                    and time.monotonic() < rl_deadline
+                ):
                     if trace_record is not None:
                         trace_record["rate_limit_waits"] = int(trace_record.get("rate_limit_waits") or 0) + 1
                     await asyncio.sleep(min(60.0, max(0.2, (retry_ms / 1000.0) + 0.2)))
@@ -8613,6 +9108,7 @@ async def _ask_gemma_json_unbounded(
             "type": "json_schema",
             "json_schema": {"name": _safe_openai_schema_name(label), "schema": schema},
         }
+        record_physical_send({"requested_model": "gpt-4o"}, fallback=True)
         raw_4o = await ask_4o(
             prompt,
             response_format=response_format,
@@ -11416,6 +11912,8 @@ def _trust_priority(level: str | None) -> int:
     if not level:
         return 2
     key = level.strip().lower()
+    if key == "official":
+        return 4
     if key == "high":
         return 3
     if key == "medium":
@@ -17258,15 +17756,23 @@ async def _smart_event_update_impl(
         match_event,
     )
     if candidate.collection_adjudication_reasons and candidate.collection_semantic_decisions is None:
-        try:
-            await adjudicate_collection_candidate(candidate)
-        except Exception:
-            logger.warning(
-                "smart_update: candidate collection adjudication failed source_type=%s source_url=%s",
-                candidate.source_type,
-                candidate.source_url,
-                exc_info=True,
-            )
+        cached_payload = collection_adjudication_cached_payload(
+            match_event.collection_decisions if match_event is not None else None,
+            input_hash=collection_adjudication_input_hash(candidate),
+            source_url=candidate.source_url,
+        )
+        if cached_payload is not None:
+            candidate.collection_semantic_decisions = cached_payload
+        else:
+            try:
+                await adjudicate_collection_candidate(candidate)
+            except Exception:
+                logger.warning(
+                    "smart_update: candidate collection adjudication failed source_type=%s source_url=%s",
+                    candidate.source_type,
+                    candidate.source_url,
+                    exc_info=True,
+                )
 
     if match_event is None:
         if candidate_location_unsupported_prose:
@@ -18151,6 +18657,7 @@ async def _smart_event_update_impl(
                     source=attached_collection_source,
                     source_corpus=_collection_source_corpus(candidate),
                     input_hash=collection_adjudication_input_hash(candidate),
+                    reasons=candidate.collection_adjudication_reasons,
                 )
             ):
                 session.add(new_event)
@@ -19480,6 +19987,7 @@ async def _smart_event_update_impl(
         attached_collection_source = await _attached_collection_source(
             session, event_db.id, candidate
         )
+        collection_is_free_before = event_db.is_free
         if (
             attached_collection_source is not None
             and candidate.collection_semantic_decisions is not None
@@ -19489,12 +19997,13 @@ async def _smart_event_update_impl(
                 source=attached_collection_source,
                 source_corpus=_collection_source_corpus(candidate),
                 input_hash=collection_adjudication_input_hash(candidate),
+                reasons=candidate.collection_adjudication_reasons,
             )
         ):
             updated_fields = True
             if "collection_decisions" not in updated_keys:
                 updated_keys.append("collection_decisions")
-            if "is_free" not in updated_keys:
+            if event_db.is_free != collection_is_free_before and "is_free" not in updated_keys:
                 updated_keys.append("is_free")
         if clean_source_text:
             if same_source:

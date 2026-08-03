@@ -1,0 +1,29 @@
+{
+  "schema_version": "static-collections-audience-live-regression-v1",
+  "status": "provisional_source_review_examples",
+  "as_of_date": "2026-08-03",
+  "publication_eligible": false,
+  "source": "docs/review-data/static_collections_review_seed_v1.json and corrected hash-bound receipts",
+  "collections": {
+    "child_directed": {
+      "must_include_event_ids": [7290],
+      "must_exclude_event_ids": [6562, 6737, 6797, 7102, 7258, 7307],
+      "notes": "7290 has a direct child/parent workshop invitation; the exclusions do not prove a child-directed audience."
+    },
+    "family_suitable": {
+      "must_include_event_ids": [6562, 7326, 7372],
+      "must_exclude_event_ids": [6737, 6797, 7102, 7258, 7290, 7307],
+      "notes": "Exact whole-family or parent/child invitations are required."
+    },
+    "joint_family_activity": {
+      "must_include_event_ids": [7372],
+      "must_exclude_event_ids": [6562, 6737, 6797, 7102, 7258, 7290, 7307, 7326],
+      "notes": "Family suitability alone does not prove adults and children participate together."
+    },
+    "kids": {
+      "must_include_event_ids": [6562, 7290, 7326, 7372],
+      "must_exclude_event_ids": [6737, 6797, 7102, 7258, 7307],
+      "notes": "Union of direct child-directed and family-suitable facts; never independent semantic truth."
+    }
+  }
+}

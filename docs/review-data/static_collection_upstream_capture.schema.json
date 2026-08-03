@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "static_collection_upstream_capture.schema.json",
+  "title": "Bounded static-collection upstream packet capture",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "adapter",
+    "production_handler",
+    "repo_sha",
+    "captured_at",
+    "source_url",
+    "source_type",
+    "canonical_serialization",
+    "payload_sha256",
+    "packet_count",
+    "payload",
+    "sanitization"
+  ],
+  "properties": {
+    "schema_version": {"const": "static-collection-upstream-capture-v1"},
+    "adapter": {"enum": ["telegram", "vk", "parser"]},
+    "production_handler": {
+      "enum": [
+        "source_parsing.telegram.handlers.process_telegram_results",
+        "vk_intake.persist_event_and_pages",
+        "source_parsing.handlers.process_source_events"
+      ]
+    },
+    "repo_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "captured_at": {"type": "string", "format": "date-time"},
+    "source_url": {"type": "string", "minLength": 1},
+    "source_type": {"type": "string", "minLength": 1},
+    "canonical_serialization": {"const": "json-utf8-sort-keys-compact-no-nan-v1"},
+    "payload_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "packet_count": {"const": 1},
+    "payload": {
+      "oneOf": [
+        {"$ref": "#/$defs/telegramPayload"},
+        {"$ref": "#/$defs/vkPayload"},
+        {"$ref": "#/$defs/parserPayload"}
+      ]
+    },
+    "sanitization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["credentials_policy", "binary_omissions"],
+      "properties": {
+        "credentials_policy": {"const": "fail-closed-no-credential-fields"},
+        "binary_omissions": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/binaryOmission"}
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"adapter": {"const": "telegram"}}},
+      "then": {
+        "properties": {
+          "production_handler": {"const": "source_parsing.telegram.handlers.process_telegram_results"},
+          "source_type": {"const": "telegram"},
+          "payload": {"$ref": "#/$defs/telegramPayload"},
+          "sanitization": {"properties": {"binary_omissions": {"maxItems": 0}}}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"adapter": {"const": "vk"}}},
+      "then": {
+        "properties": {
+          "production_handler": {"const": "vk_intake.persist_event_and_pages"},
+          "source_type": {"const": "vk"},
+          "payload": {"$ref": "#/$defs/vkPayload"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"adapter": {"const": "parser"}}},
+      "then": {
+        "properties": {
+          "production_handler": {"const": "source_parsing.handlers.process_source_events"},
+          "source_type": {"pattern": "^parser:.+"},
+          "payload": {"$ref": "#/$defs/parserPayload"},
+          "sanitization": {"properties": {"binary_omissions": {"maxItems": 0}}}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "telegramPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "run_id", "generated_at", "sources_meta", "messages", "stats"],
+      "properties": {
+        "schema_version": {},
+        "run_id": {"type": ["string", "null"]},
+        "generated_at": {"type": ["string", "null"]},
+        "sources_meta": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {"type": "object"}
+        },
+        "messages": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {"type": "object"}
+        },
+        "stats": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sources_total", "messages_scanned", "messages_with_events", "events_extracted"],
+          "properties": {
+            "sources_total": {"const": 1},
+            "messages_scanned": {"const": 1},
+            "messages_with_events": {"const": 1},
+            "events_extracted": {"type": "integer", "minimum": 1}
+          }
+        }
+      }
+    },
+    "vkPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_post_url", "draft", "photos"],
+      "properties": {
+        "source_post_url": {"type": "string", "minLength": 1},
+        "draft": {"$ref": "#/$defs/eventDraft"},
+        "photos": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "eventDraft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "poster_media"],
+      "properties": {
+        "title": {"type": "string", "minLength": 1},
+        "date": {"type": ["string", "null"]},
+        "time": {"type": ["string", "null"]},
+        "time_is_default": {"type": "boolean"},
+        "venue": {"type": ["string", "null"]},
+        "description": {"type": ["string", "null"]},
+        "festival": {"type": ["string", "null"]},
+        "location_address": {"type": ["string", "null"]},
+        "city": {"type": ["string", "null"]},
+        "ticket_price_min": {"type": ["integer", "null"]},
+        "ticket_price_max": {"type": ["integer", "null"]},
+        "event_type": {"type": ["string", "null"]},
+        "emoji": {"type": ["string", "null"]},
+        "end_date": {"type": ["string", "null"]},
+        "is_free": {"type": "boolean"},
+        "pushkin_card": {"type": "boolean"},
+        "links": {"type": ["array", "null"], "items": {"type": "string"}},
+        "source_text": {"type": ["string", "null"]},
+        "poster_media": {"type": "array", "items": {"$ref": "#/$defs/posterMedia"}},
+        "allow_raw_photo_fallback": {"type": "boolean"},
+        "poster_summary": {"type": ["string", "null"]},
+        "ocr_tokens_spent": {"type": "integer"},
+        "ocr_tokens_remaining": {"type": ["integer", "null"]},
+        "ocr_limit_notice": {"type": ["string", "null"]},
+        "search_digest": {"type": ["string", "null"]},
+        "reject_reason": {"type": ["string", "null"]}
+      }
+    },
+    "posterMedia": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name", "catbox_url", "supabase_url", "digest", "phash", "ocr_text", "ocr_title",
+        "prompt_tokens", "completion_tokens", "total_tokens", "data_omitted", "data_sha256",
+        "data_byte_count", "binary_was_available"
+      ],
+      "properties": {
+        "name": {"type": "string"},
+        "catbox_url": {"type": ["string", "null"]},
+        "supabase_url": {"type": ["string", "null"]},
+        "digest": {"type": ["string", "null"]},
+        "phash": {"type": ["string", "null"]},
+        "ocr_text": {"type": ["string", "null"]},
+        "ocr_title": {"type": ["string", "null"]},
+        "prompt_tokens": {"type": ["integer", "null"]},
+        "completion_tokens": {"type": ["integer", "null"]},
+        "total_tokens": {"type": ["integer", "null"]},
+        "data_omitted": {"const": true},
+        "data_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "data_byte_count": {"type": ["integer", "null"], "minimum": 0},
+        "binary_was_available": {"type": "boolean"}
+      }
+    },
+    "parserPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "event"],
+      "properties": {
+        "source": {"type": "string", "minLength": 1},
+        "event": {"$ref": "#/$defs/theatreEvent"}
+      }
+    },
+    "theatreEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "date_raw", "ticket_status", "url"],
+      "properties": {
+        "title": {"type": "string", "minLength": 1},
+        "date_raw": {"type": "string"},
+        "ticket_status": {"type": "string"},
+        "url": {"type": "string", "minLength": 1},
+        "photos": {"type": "array", "items": {"type": "string"}},
+        "description": {"type": "string"},
+        "pushkin_card": {"type": "boolean"},
+        "location": {"type": "string"},
+        "location_address": {"type": "string"},
+        "age_restriction": {"type": "string"},
+        "scene": {"type": "string"},
+        "source_type": {"type": "string"},
+        "parsed_date": {"type": ["string", "null"]},
+        "parsed_time": {"type": ["string", "null"]},
+        "end_date": {"type": ["string", "null"]},
+        "ticket_price_min": {"type": ["integer", "null"]},
+        "ticket_price_max": {"type": ["integer", "null"]}
+      }
+    },
+    "binaryOmission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["json_pointer", "sha256", "byte_count", "was_available"],
+      "properties": {
+        "json_pointer": {"type": "string", "pattern": "^/payload/draft/poster_media/[0-9]+/data$"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "byte_count": {"type": ["integer", "null"], "minimum": 0},
+        "was_available": {"type": "boolean"}
+      }
+    }
+  }
+}

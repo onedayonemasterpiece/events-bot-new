@@ -18,6 +18,27 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-03-yandex-cloud-reaper-service-suspension.md`
+  - Scope: account-transfer suspension of KenigEvents API Gateways, email
+    triggers and the Postbox feedback YDB.
+  - Must not regress: post-transfer acceptance inventories every cloud folder;
+    committed live gateways/triggers must be active, email YDB stays bounded at
+    10 RCU/s, and Region Talk is never re-enabled by this recovery.
+
+- `INC-2026-08-03-ydb-request-unit-billing.md`
+  - Scope: Region Talk YDB account ownership, RU throttling, wide metric reads,
+    scheduled/watchdog catch-up and migration integrity.
+  - Must not regress: production must match the exact expected database path;
+    re-enable requires a bounded RU canary; source/target migrations require
+    count plus ordered-export hash evidence.
+
+- `INC-2026-08-03-cherryflash-cdn-tls-retry-storm.md`
+  - Scope: CherryFlash poster prefetch/Kaggle render, general
+    `video_popular_review_watchdog`, and public `static.kenigevents.ru` TLS.
+  - Must not regress: a deterministic failed daily render stops after two
+    persisted failed sessions; CDN readiness requires the public certificate SAN
+    and strict poster/ICS requests; restoration requires one controlled catch-up.
+
 - `INC-2026-07-29-mtproto-proxy-desktop-disconnect.md`
   - Scope: host-level `vpn-server` MTProto container, TCP `1443`, Telegram DC connectivity, persistent application-log mount and bounded retention.
   - Must not regress: current-day proxy logs must survive container recreation; old rotations must stay bounded; closure requires a live listener, fresh Telegram DC handshake evidence, downstream connections and disk-usage evidence.

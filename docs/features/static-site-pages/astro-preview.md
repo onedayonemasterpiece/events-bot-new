@@ -34,6 +34,11 @@ PREVIEW_BUILD_ID=preview-<unique-id> npm --prefix site run check:preview
 PREVIEW_BUILD_ID=preview-<unique-id> npm --prefix site run check:unified-prototype
 ```
 
+`check:preview` treats a date listing without mobile event rows as valid only
+when the generated page retains the mobile rail shell and renders the explicit
+no-events marker as visible. This keeps empty current dates buildable without
+weakening the missing-markup regression check for non-empty listings.
+
 The reviewer enters through `/<id>/__preview/`; that hub owns the page-type
 inventory and links only targets inside the same prefix. It must state that the
 integrated Search visual is not acceptance of the live auth/backend journey.
@@ -641,6 +646,12 @@ Contract:
 
 - input data is a unique per-run private Kaggle dataset, matching the CherryFlash/session-dataset pattern;
 - the site source is uploaded as `site_source.tarball` (gzip tar content with a neutral extension) because Kaggle dataset ingestion auto-extracts `.tar.gz` and can break Astro dynamic route filenames;
+- the bundle also carries the exact repo-level
+  `docs/testing/transport-fault-profiles.v1.yml` contract resolved by preview
+  scripts as a sibling of `site/`; staging fails closed if it is missing;
+- preview provenance uses the runner-bound full `STATIC_SITE_REPO_SHA`; the
+  Kaggle archive is not treated as a Git checkout and cannot silently emit a
+  synthetic or short SHA;
 - the kernel extracts the site to `/tmp/kenigevents-static-site`, not read-only `/kaggle/src`;
 - Kaggle CPU currently provides Node 20, while Astro 6 requires Node `>=22.12.0`, so the kernel installs local `node@22.12.0` before build/check;
 - output is intentionally minimal: `<build_id>.tar.gz`, `static_site_build_result.json`, and the kernel log; `node_modules` is not left under `/kaggle/working`;

@@ -1,0 +1,17 @@
+{
+  "collections": {
+    "kids": {
+      "must_include_family_ids": ["family:kids-1", "family:kids-2"],
+      "must_exclude_event_ids": [999001],
+      "notes": "Living product examples; extend when a real false positive or false negative is found."
+    },
+    "science_pop": {
+      "must_include_family_ids": ["family:science-1"],
+      "must_exclude_event_ids": [999002]
+    },
+    "medieval": {
+      "must_include_family_ids": ["family:medieval-1"],
+      "must_exclude_event_ids": [999003]
+    }
+  }
+}

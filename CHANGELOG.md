@@ -9,6 +9,40 @@
 ### Fixed
 
 - Secret candidate теперь наследует `prelaunch_mode` проверенного production manifest и не подменяет prelaunch root обычной главной страницей.
+- Restored the production Supabase/focus API Gateways, isolated email triggers
+  and bounded Postbox feedback YDB after `yc.iam.reaper` suspended them during
+  the account-transfer window. Recovery verified outbound mail gates before
+  resume, preserved the pre-existing focus OTP DLQ and left Region Talk and the
+  obsolete KGD80 database untouched. The inbound reconciler now reports
+  non-`ACTIVE` Functions/Triggers as fail-closed drift instead of accepting their
+  existence as ready (`INC-2026-08-03-yandex-cloud-reaper-service-suspension`).
+
+- Fixed the Region Talk YDB billing runaway and wrong-account placement: disabled autonomous scheduling, migrated all five tables to the 1 GiB serverless database in `cloud-art-koder/default`, verified exact row counts and ordered-export hashes, switched Fly/GitHub database configuration, deleted the verified source database and three obsolete service accounts from the wrong account, removed the old GitHub WIF identity reference, kept the target at 0 RU/s, and added an exact expected-database preflight guard before any future scheduled run.
+
+- Fixed the CherryFlash `popular_review` retry storm: both startup catch-up and
+  the ten-minute watchdog stop after two persisted failed sessions for the same
+  local target date, keeping CDN/render outages bounded across restarts. Poster
+  prefetch also falls back from the strict-TLS CDN URL to the identical canonical
+  Yandex Object Storage object path without disabling certificate verification.
+
+- Added the clean main-based audience-collections shadow contour: source-grounded
+  facts v3, review receipts and warm cache, immutable Telegram/VK/parser replay,
+  full-catalog product snapshot/monitor and StaticSiteBuilder artifacts. The
+  current rolling/Pacific project-scoped Google limiter remains authoritative;
+  PR B, owner gold/calibration, Astro routes, navigation, sitemap and publication
+  remain blocked. The replay report now distinguishes an explicitly bounded
+  Telegram/VK prose-only warm drift from collection-plane changes, while still
+  requiring identical collection receipts/evidence and product output. The
+  committed Telegram and guide Kaggle notebooks were regenerated from that
+  exact central gateway so they cannot carry the pre-integration client snapshot.
+- Fixed StaticSiteBuilder Kaggle source packaging to carry the repo-level
+  transport-fault profile consumed by preview builds; staging now fails closed
+  instead of starting a remote build with that contract missing. Preview
+  provenance now uses the full runner-bound repo SHA rather than requiring a
+  `.git` directory inside the Kaggle archive. Preview validation also accepts a
+  listing without mobile rows only when its rendered no-events marker is
+  explicitly visible, so a genuinely empty production date does not fail the
+  Kaggle build while missing rail markup still fails closed.
 
 - Fixed the Google AI registry after operator confirmation that all six API
   keys belong to different Google Cloud projects: each key now has an

@@ -1,0 +1,94 @@
+name: Inspect Region Talk remediation materializer heredoc
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/region-talk-research-remediation-trigger-20260803.yml'
+      - '.github/workflows/region-talk-research-remediation-export-20260802.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/region-talk-research-terminal-remediation-20260802
+          fetch-depth: 0
+
+      - name: Inspect exact heredoc structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64
+          import json
+          from pathlib import Path
+
+          source = Path('.github/workflows/region-talk-research-remediation-export-20260802.yml')
+          lines = source.read_text(encoding='utf-8').splitlines()
+          start_hits = [
+              {'index': i, 'repr': repr(line), 'length': len(line)}
+              for i, line in enumerate(lines)
+              if 'apply.b64' in line or "<<'B64'" in line
+          ]
+          end_hits = [
+              {'index': i, 'repr': repr(line), 'length': len(line)}
+              for i, line in enumerate(lines)
+              if line.strip() == 'B64'
+          ]
+          result = {
+              'line_count': len(lines),
+              'start_hits': start_hits,
+              'end_hits': end_hits,
+              'source_size': source.stat().st_size,
+          }
+          if start_hits and end_hits:
+              start = start_hits[0]['index']
+              end = next((item['index'] for item in end_hits if item['index'] > start), None)
+              result['selected_start'] = start
+              result['selected_end'] = end
+              if end is not None:
+                  data_lines = lines[start + 1:end]
+                  encoded = ''.join(line.strip() for line in data_lines if line.strip())
+                  result['data_line_count'] = len(data_lines)
+                  result['encoded_length'] = len(encoded)
+                  result['encoded_prefix'] = encoded[:32]
+                  result['encoded_suffix'] = encoded[-32:]
+                  try:
+                      decoded = base64.b64decode(encoded, validate=False)
+                      result['decoded_length_non_strict'] = len(decoded)
+                      result['decoded_prefix_hex'] = decoded[:16].hex()
+                  except Exception as exc:
+                      result['decode_non_strict_error'] = f'{type(exc).__name__}: {exc}'
+                  try:
+                      decoded = base64.b64decode(encoded, validate=True)
+                      result['decoded_length_strict'] = len(decoded)
+                      result['decoded_strict_prefix_hex'] = decoded[:16].hex()
+                  except Exception as exc:
+                      result['decode_strict_error'] = f'{type(exc).__name__}: {exc}'
+          target = Path('.tmp/region-talk-terminal-remediation/heredoc-inspection-20260803.json')
+          target.parent.mkdir(parents=True, exist_ok=True)
+          target.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          print(json.dumps(result, ensure_ascii=False, indent=2))
+          PY
+
+      - name: Commit inspection receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          target=.tmp/region-talk-terminal-remediation/heredoc-inspection-20260803.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f "$target"
+          if git diff --cached --quiet; then
+            echo 'inspection receipt already current'
+          else
+            git commit -m 'Record Region Talk materializer heredoc inspection'
+            git push origin HEAD:agent/region-talk-research-terminal-remediation-20260802
+          fi

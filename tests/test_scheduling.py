@@ -1183,6 +1183,39 @@ async def test_popular_review_startup_catchup_retries_failed_local_handoff(
 
 
 @pytest.mark.asyncio
+async def test_popular_review_startup_catchup_stops_after_two_failed_sessions(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    _configure_popular_review_env(monkeypatch)
+    for suffix in (181, 182):
+        await _insert_popular_review_session(
+            db,
+            status="FAILED",
+            target_date="2026-04-12",
+            created_at=f"2026-04-12 08:{suffix - 180:02d}:00",
+            kaggle_dataset=f"zigomaro/cherryflash-session-{suffix}",
+            kaggle_kernel_ref="zigomaro/cherryflash",
+            error="{'status': 'ERROR'}",
+        )
+
+    calls: list[dict] = []
+
+    async def fake_run(_db, _bot, **kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_popular_review", fake_run)
+
+    dispatched = await scheduling._maybe_catch_up_popular_review_on_startup(
+        db, bot=object()
+    )
+
+    assert dispatched is False
+    assert calls == []
+
+
+@pytest.mark.asyncio
 async def test_popular_review_watchdog_retries_failed_remote_handoff(
     tmp_path, monkeypatch
 ):
@@ -1365,6 +1398,39 @@ async def test_popular_review_watchdog_skips_rendering_remote_handoff(
         kaggle_dataset="zigomaro/cherryflash-session-181",
         kaggle_kernel_ref="zigomaro/cherryflash",
     )
+
+    calls: list[dict] = []
+
+    async def fake_run(_db, _bot, **kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_popular_review", fake_run)
+
+    dispatched = await scheduling.maybe_dispatch_popular_review_watchdog(
+        db, bot=object()
+    )
+
+    assert dispatched is False
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_popular_review_watchdog_stops_after_two_failed_sessions(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    _configure_popular_review_env(monkeypatch)
+    for suffix in (181, 182):
+        await _insert_popular_review_session(
+            db,
+            status="FAILED",
+            target_date="2026-04-12",
+            created_at=f"2026-04-12 08:{suffix - 180:02d}:00",
+            kaggle_dataset=f"zigomaro/cherryflash-session-{suffix}",
+            kaggle_kernel_ref="zigomaro/cherryflash",
+            error="{'status': 'ERROR'}",
+        )
 
     calls: list[dict] = []
 

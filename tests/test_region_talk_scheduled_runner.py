@@ -16,6 +16,7 @@ def complete_env(tmp_path: Path) -> dict[str, str]:
     return {
         "REGION_TALK_YDB_ENDPOINT": "grpcs://ydb.example:2135",
         "REGION_TALK_YDB_DATABASE": "/ru-central1/example/db",
+        "REGION_TALK_YDB_EXPECTED_DATABASE": "/ru-central1/example/db",
         "REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON": "{}",
         "KAGGLE_USERNAME": "operator",
         "KAGGLE_KEY": "secret",
@@ -75,6 +76,16 @@ def test_scheduled_preflight_rejects_unknown_notification_transport(tmp_path: Pa
     env["REGION_TALK_NOTIFY_TRANSPORT"] = "generic_human_session"
 
     assert "REGION_TALK_NOTIFY_TRANSPORT(valid)" in runner.missing_autonomy_config(env)
+
+
+def test_scheduled_preflight_rejects_wrong_ydb_billing_account(tmp_path: Path) -> None:
+    env = complete_env(tmp_path)
+    env["REGION_TALK_YDB_DATABASE"] = "/ru-central1/wrong-cloud/stale-db"
+
+    missing = runner.missing_autonomy_config(env)
+
+    assert "REGION_TALK_YDB_DATABASE(expected_database_mismatch)" in missing
+    assert "wrong-cloud" not in " ".join(missing)
 
 
 def test_build_command_does_not_require_dotenv(monkeypatch, tmp_path: Path) -> None:

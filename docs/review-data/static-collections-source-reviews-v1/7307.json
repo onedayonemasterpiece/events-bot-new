@@ -1,0 +1,61 @@
+{
+  "schema_version": "static-collection-source-review-v1",
+  "receipt_id": "7307",
+  "reviewed_at": "2026-08-02T09:18:31.733493Z",
+  "status": "needs_source_review",
+  "event_ids": [
+    7307
+  ],
+  "issue": "Raw post confirms a family laser-tag tournament but does not explicitly establish adult-and-child joint participation; canonical title is non-descriptive.",
+  "canonical_before": [
+    {
+      "id": 7307,
+      "title": "Калининград",
+      "description": "Калининград | 8 августа | Стадион «Балтика»",
+      "date": "2026-08-08",
+      "time": "",
+      "location_name": "Стадион «Балтика»",
+      "location_address": null,
+      "city": "Калининград",
+      "event_type": null,
+      "linked_event_ids": "[]",
+      "identity_status": "canonical",
+      "merged_into_event_id": null
+    }
+  ],
+  "canonical_after": null,
+  "source_evidence": [
+    {
+      "event_id": 7307,
+      "source_ref": {
+        "source_id": 9745638,
+        "source_type": "telegram",
+        "source_url": "https://t.me/kldevents/2942",
+        "trust_level": null,
+        "source_chat_username": "kldevents",
+        "source_message_id": 2942,
+        "source_text_sha256": "ea7610811231a1eedf212b31d8bf6c6607515b3c98257011932cb74038459c00",
+        "source_record_sha256": "3c55db0aabf7a4d6e35fcaa139ba243137edc52020f974c3706aa252a3a05bd6",
+        "event_id": 7307,
+        "source_text_char_count": 783,
+        "source_ref_sha256": "fb14d504d4d6f076478f1457d0444390d00ee9b7b32dfe8ff03501e360c078fd"
+      },
+      "raw_source_quote": "Калининград | 8 августа | Стадион «Балтика»\n\n📍 Триатлон поколений\n🎟 8 августа\n📍 стадион «Балтика», #Калининград\n🆓🆓🆓🆓, по регистрации\n\nНа региональном фестивале «Триатлон поколений» команды проверят себя в физических, интеллектуальных и координационных испытаниях. В программе заявлены семейный турнир по лазертагу, забег РУТС, фитнес-фестиваль и обширная культурная программа. Для прохождения этапов и победы участникам понадобятся взаимопомощь, смекалка и командная работа.\n\n#8августа #8_августа #афишакалининград #фестиваль #турнир #бесплатно #Триатлонпоколений\n\n🔎 Подробнее Max · Вконтакте\n\nКалининград | 8 августа | Стадион «Балтика»\n\nНАЦИОНАЛЬНЫЕ ПРОЕКТЫ РОССИИ МОЛОДЁЖЬ и дети вместе с росмолодёжь ТРИАТЛОН ПОКОЛЕНИЙ молодёжный центр Калининград | 8 августа | Стадион «Балтика»",
+      "raw_source_quote_sha256": "ea7610811231a1eedf212b31d8bf6c6607515b3c98257011932cb74038459c00",
+      "canonical_sha256": "49c2d04a1c3ecdbd263c33da4f1627de9bdd8051efecd6384483892c4a2f942a",
+      "raw_source_quote_kind": "full",
+      "raw_source_quote_truncated": false,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 783,
+      "raw_source_quote_char_count": 783,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 0
+    }
+  ],
+  "family_decision": {
+    "seed_action": "exclude_from_audience_seed",
+    "family_id": "event:7307"
+  },
+  "scope_note": "Receipt repairs review/calibration inputs only; canonical production changes require the normal Smart Update/data-integrity path.",
+  "receipt_sha256": "5599013c151e29d5d5804acbf08ac1e4f454fbef80f2474b5605395b2e9b300f"
+}
