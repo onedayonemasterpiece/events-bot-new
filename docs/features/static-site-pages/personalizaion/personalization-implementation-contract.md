@@ -1,9 +1,9 @@
 # Персонализация KenigEvents: контракт реализации
 
-> **Статус:** нормативная техническая детализация к [`personalization-to-be.md`](personalization-to-be.md).  
-> **Дата среза:** 2026-08-02.  
-> **Применение:** обязательно для новых runtime, storage, transport, database и E2E-изменений персонализации.  
-> **Текущее состояние:** локальный prototype; production durable loop отсутствует.  
+> **Статус:** нормативная техническая детализация к [`personalization-to-be.md`](personalization-to-be.md).
+> **Дата среза:** 2026-08-02.
+> **Применение:** обязательно для новых runtime, storage, transport, database и E2E-изменений персонализации.
+> **Текущее состояние:** локальный prototype; production durable loop отсутствует.
 > **Юридическая зависимость:** remote-profile и server signal writes остаются выключенными до закрытия отдельного юридического/localization release-gate и синхронизации публичных документов.
 
 ## 1. Зачем нужен отдельный implementation contract

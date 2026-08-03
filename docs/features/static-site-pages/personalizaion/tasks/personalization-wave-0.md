@@ -1,7 +1,7 @@
 # Задание кодовому агенту: P13N-00 legacy quarantine + characterization + extraction
 
-> **Статус:** готово к исполнению после merge/rebase документационного PR.  
-> **Цель:** получить один импортируемый cross-page personalization runtime skeleton и доказанный surface inventory **без изменения пользовательского поведения и без remote writes**.  
+> **Статус:** готово к исполнению после merge/rebase документационного PR.
+> **Цель:** получить один импортируемый cross-page personalization runtime skeleton и доказанный surface inventory **без изменения пользовательского поведения и без remote writes**.
 > **Запрещено:** считать эту волну готовой персонализацией или превращать старую формулу в целевую модель.
 
 ## 1. Исходные документы

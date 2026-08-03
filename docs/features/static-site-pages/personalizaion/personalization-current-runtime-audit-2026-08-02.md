@@ -1,7 +1,7 @@
 # Аудит фактического runtime персонализации — 2026-08-02
 
-> **Scope:** `main@079a9dc7a6830925456116770f54b82a5fe59fb0`.  
-> **Основной runtime:** `site/src/layouts/EventLayout.astro`.  
+> **Scope:** `main@079a9dc7a6830925456116770f54b82a5fe59fb0`.
+> **Основной runtime:** `site/src/layouts/EventLayout.astro`.
 > **Вердикт:** полезный локальный prototype, но **NO-GO как основа durable production personalization без Wave 0–3**.
 
 ## 1. Что уже сделано хорошо и должно быть сохранено
