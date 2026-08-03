@@ -390,6 +390,147 @@ def test_materialized_partial_input_cannot_publish_ready_even_when_local_counts_
     assert model["work_queue_complete"] is False
 
 
+def test_partial_consumer_two_run_lifecycle_acks_without_replacing_ready_pointer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate = _load_candidate_module("region_talk_candidate_consumer_lifecycle_test")
+    generation = "ready-generation"
+    pointer = {"generation": generation, "cutover_state": "ready"}
+    rows = [
+        {"generation": generation, "queue_name": "source", "due_at": "", "priority": 0, "status": "pending_scan", "item_key": key}
+        for key in ("a", "b", "c")
+    ]
+    committed_cursor = ("", 0, "", "")
+    pointer_writes: list[dict] = []
+    acked_pages: list[list[str]] = []
+
+    def forbidden_pointer_write(*_args, **_kwargs):
+        pointer_writes.append({"unexpected": True})
+        raise AssertionError("partial consumer must not replace current pointer")
+
+    def ack_claims(_session, _ydb, _work_path, claims):
+        nonlocal committed_cursor
+        claims = list(claims)
+        if not claims:
+            return 0
+        assert len(claims) == 1
+        claim = claims[0]
+        assert claim["generation"] == pointer["generation"]
+        end = claim["claim_end"]
+        committed_cursor = (
+            end["due_at"], int(end["priority"]), end["status"], end["item_key"],
+        )
+        acked_pages.append(list(claim["item_keys"]))
+        return 1
+
+    monkeypatch.setattr(candidate, "write_region_talk_ydb_materialized_projection", forbidden_pointer_write)
+    monkeypatch.setattr(candidate, "ydb_ack_materialized_work_claims", ack_claims)
+
+    def claim_for(page):
+        if not page:
+            return []
+        end = page[-1]
+        return [{
+            "schema_version": candidate.YDB_WORK_CURSOR_SCHEMA_VERSION,
+            "generation": generation, "queue_name": "source",
+            "claim_count": len(page), "item_keys": [row["item_key"] for row in page],
+            "claim_end": {
+                "due_at": end["due_at"], "priority": end["priority"],
+                "status": end["status"], "item_key": end["item_key"],
+            },
+        }]
+
+    page1 = candidate.region_talk_ydb_due_page_from_rows(
+        rows, generation=generation, queue_name="source",
+        due_cutoff="2026-08-03T23:59:59Z", cursor=committed_cursor, limit=2,
+    )
+    first = candidate.finalize_region_talk_ydb_materialized_lifecycle(
+        None, None, None, "/db/work_queue_v2", "/db/read_model_v1",
+        {
+            "_ydb_materialized_projection_input_complete": False,
+            "_ydb_materialized_work_claims": claim_for(page1),
+            "ydb_read_model_generation": generation,
+        },
+        max_per_queue=2, publish_ready=False,
+    )
+    assert first == {
+        "mode": "ack_existing_generation", "rows_written": 0,
+        "generation": generation, "claims_acked": 1,
+    }
+    assert pointer == {"generation": generation, "cutover_state": "ready"}
+
+    page2 = candidate.region_talk_ydb_due_page_from_rows(
+        rows, generation=generation, queue_name="source",
+        due_cutoff="2026-08-03T23:59:59Z", cursor=committed_cursor, limit=2,
+    )
+    assert [row["item_key"] for row in page2] == ["c"]
+    second = candidate.finalize_region_talk_ydb_materialized_lifecycle(
+        None, None, None, "/db/work_queue_v2", "/db/read_model_v1",
+        {
+            "_ydb_materialized_projection_input_complete": False,
+            "_ydb_materialized_work_claims": claim_for(page2),
+            "ydb_read_model_generation": generation,
+        },
+        max_per_queue=2, publish_ready=False,
+    )
+    assert second["claims_acked"] == 1
+    assert acked_pages == [["a", "b"], ["c"]]
+
+    no_work = candidate.region_talk_ydb_due_page_from_rows(
+        rows, generation=generation, queue_name="source",
+        due_cutoff="2026-08-03T23:59:59Z", cursor=committed_cursor, limit=2,
+    )
+    assert no_work == []
+    final = candidate.finalize_region_talk_ydb_materialized_lifecycle(
+        None, None, None, "/db/work_queue_v2", "/db/read_model_v1",
+        {
+            "_ydb_materialized_projection_input_complete": False,
+            "_ydb_materialized_work_claims": [],
+            "ydb_read_model_generation": generation,
+        },
+        max_per_queue=2, publish_ready=False,
+    )
+    assert final["claims_acked"] == 0
+    assert final["generation"] == generation
+    assert pointer_writes == []
+    assert pointer["cutover_state"] == "ready"
+
+    before_acks = list(acked_pages)
+    with pytest.raises(candidate.RegionTalkYdbReadModelUnavailable, match="partial_input_ready_publish_forbidden"):
+        candidate.finalize_region_talk_ydb_materialized_lifecycle(
+            None, None, None, "/db/work_queue_v2", "/db/read_model_v1",
+            {
+                "_ydb_materialized_projection_input_complete": False,
+                "_ydb_materialized_work_claims": claim_for(page1),
+            },
+            max_per_queue=2, publish_ready=True,
+        )
+    assert acked_pages == before_acks
+    assert pointer_writes == []
+
+
+def test_partial_publish_ready_save_fails_before_ydb_connect_or_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate = _load_candidate_module("region_talk_candidate_partial_save_preflight_test")
+    connect = mock.Mock(side_effect=AssertionError("preflight must reject before connect"))
+    monkeypatch.setenv("REGION_TALK_YDB_READ_MODEL_PUBLISH_READY", "1")
+    monkeypatch.delenv("REGION_TALK_YDB_STATE_SNAPSHOT_FILE", raising=False)
+    monkeypatch.setattr(candidate, "ydb_config_status", lambda: {
+        "namespace": "region_talk_compact", "missing": "",
+    })
+    monkeypatch.setattr(candidate, "ydb_connect", connect)
+    result = candidate.save_region_talk_ydb_state(Path("/tmp/not-used"), {
+        "run_id": "partial", "updated_at": "2026-08-03T18:00:00Z",
+        "_ydb_materialized_projection_input_complete": False,
+        "_ydb_materialized_work_claims": [{"generation": "g"}],
+    })
+    assert result["state_write_status"] == "error"
+    assert result["ydb_projection_lifecycle"] == "rejected_before_connect"
+    assert "partial_input_ready_publish_forbidden" in result["state_write_error"]
+    connect.assert_not_called()
+
+
 def test_offline_cutover_plan_publishes_pointer_last_and_never_executes_live() -> None:
     from scripts.region_talk_ydb_read_model_cutover import build_plan
 

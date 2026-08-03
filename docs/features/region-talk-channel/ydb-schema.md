@@ -330,9 +330,15 @@ pointer is published. Each normal page is generation + queue scoped, applies an
 explicit UTC due cutoff, and is ordered by due/priority/status/item key. A
 cursor/model count mismatch, missing cursor, active foreign lease, overflow or
 stale ACK fails closed. A partial materialized start state is explicitly marked
-incomplete and cannot be republished as `ready`, even when its local counts fit
-under the page cap. The orchestrator reads the single counter pointer. Neither
-path calls the old
+incomplete and is a **consumer**, not a projection producer. After its durable
+row-level/checkpoint writes it may only ACK claims against the existing ready
+generation; it does not write work/cursor rows and does not replace the sole
+`current` pointer with a blocked or shadow model. The next run therefore claims
+the next page of the same immutable generation, and an empty final page leaves
+the ready pointer unchanged. Only a complete producer input may publish and
+swap a new generation. `PUBLISH_READY=1` plus partial input is rejected before
+YDB connect, ACK or pointer mutation. The orchestrator reads the single counter
+pointer. Neither path calls the old
 5k/20k kind readers. `scripts/region_talk_ydb_read_model_cutover.py` renders DDL
 for work + cursor rows and a generation-first/cursor-seed/pointer-last plan from
 a trusted full-state export; it has no live-write mode.

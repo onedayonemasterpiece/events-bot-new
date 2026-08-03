@@ -261,6 +261,12 @@ for both expected counts and emitted work: `queue_status`/`fetch_status`,
 `publication_candidate_status` are covered. Synthetic divergence regression
 tests prove those aliases cannot produce a false `ready`. A state reconstructed
 from a bounded due page is marked incomplete and cannot be republished ready.
+It follows an ACK-only consumer lifecycle: after its durable writes it advances
+only the token-checked cursor of the existing generation and leaves the sole
+ready `current` pointer unchanged. Thus the next run reads the next page instead
+of rejecting a blocked pointer. Empty-final-page saves ACK nothing and also
+leave the pointer unchanged. Only complete producer input can swap generations;
+partial input with `PUBLISH_READY=1` fails before connect/ACK/pointer mutation.
 
 Normal `required` reads do not fall through to legacy scans. Compatibility is
 available only when both a `shadow|legacy` mode and
@@ -273,6 +279,10 @@ Additional v2 regressions cover deterministic multi-page traversal without
 starvation, expired-lease replay, serializable claim mode, active foreign lease
 rejection, token-checked ACK/stale-owner rejection, queue/model count mismatch,
 overflow and partial-input fail-closed publication.
+The lifecycle regression additionally runs two consecutive bounded pages,
+proves the second starts after the first ACK, then proves final no-work behavior
+while the same ready pointer remains current. Expired claims still replay the
+unadvanced page.
 
 CandidateReport's default publication state is `shadow`, not `ready`. The
 offline cutover planner performs no YDB calls. No production read/write,

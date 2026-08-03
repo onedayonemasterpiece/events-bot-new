@@ -3848,6 +3848,7 @@ def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
         "_ydb_materialized_projection_input_complete": state.get(
             "_ydb_materialized_projection_input_complete", True,
         ) is True,
+        "ydb_read_model_generation": str(state.get("ydb_read_model_generation") or ""),
     }
 
 
@@ -4181,14 +4182,14 @@ $claim = SELECT * FROM `{cursor_table_path}`
     AND COALESCE(lease_owner, '') = $lease_owner
     AND COALESCE(lease_token, '') = $lease_token
     AND COALESCE(lease_expires_at, '') > $now
-    AND consumed_count + COALESCE(claim_count, 0) <= expected_count;
+    AND consumed_count + COALESCE(claim_count, 0ul) <= expected_count;
 UPSERT INTO `{cursor_table_path}`
   (generation, queue_name, expected_count, consumed_count,
    cursor_due_at, cursor_priority, cursor_status, cursor_item_key,
    claim_due_at, claim_priority, claim_status, claim_item_key, claim_count,
    lease_owner, lease_token, lease_expires_at, updated_at)
-SELECT generation, queue_name, expected_count, consumed_count + COALESCE(claim_count, 0),
-       COALESCE(claim_due_at, ''), COALESCE(claim_priority, 0u),
+SELECT generation, queue_name, expected_count, consumed_count + COALESCE(claim_count, 0ul),
+       COALESCE(claim_due_at, ''), COALESCE(claim_priority, 0ul),
        COALESCE(claim_status, ''), COALESCE(claim_item_key, ''),
        NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, $now
 FROM $claim;
@@ -4687,6 +4688,99 @@ VALUES ('current', $schema_version, $generation, $cutover_state, $payload_json, 
         "$updated_at": read_model["updated_at"],
     }, commit_tx=True)
     return len(work_rows), read_model
+
+
+def region_talk_ydb_projection_lifecycle_policy(
+    state: dict[str, Any],
+    *,
+    publish_ready: bool,
+) -> str:
+    """Choose one safe pointer lifecycle before any persistent mutation."""
+
+    input_complete = state.get("_ydb_materialized_projection_input_complete", True) is True
+    claims = list(state.get("_ydb_materialized_work_claims") or [])
+    if input_complete:
+        if claims:
+            raise RegionTalkYdbReadModelUnavailable(
+                "region_talk_ydb_read_model:complete_input_has_consumer_claims"
+            )
+        return "publish_complete_generation"
+    if publish_ready:
+        raise RegionTalkYdbReadModelUnavailable(
+            "region_talk_ydb_read_model:partial_input_ready_publish_forbidden"
+        )
+    generation = str(state.get("ydb_read_model_generation") or "")
+    if not generation:
+        raise RegionTalkYdbReadModelUnavailable(
+            "region_talk_ydb_read_model:consumer_generation_missing"
+        )
+    claim_generations = {str(claim.get("generation") or "") for claim in claims}
+    if claim_generations and claim_generations != {generation}:
+        raise RegionTalkYdbReadModelUnavailable(
+            "region_talk_ydb_read_model:claim_generation_mismatch"
+        )
+    return "ack_existing_generation"
+
+
+def finalize_region_talk_ydb_materialized_lifecycle(
+    driver: Any,
+    session: Any,
+    ydb: Any,
+    work_table_path: str,
+    read_model_table_path: str,
+    state: dict[str, Any],
+    *,
+    max_per_queue: int,
+    publish_ready: bool,
+) -> dict[str, Any]:
+    """Publish complete producer input or ACK a bounded consumer page, never both."""
+
+    policy = region_talk_ydb_projection_lifecycle_policy(
+        state, publish_ready=publish_ready,
+    )
+    if policy == "publish_complete_generation":
+        rows_written, model = write_region_talk_ydb_materialized_projection(
+            driver,
+            session,
+            ydb,
+            work_table_path,
+            read_model_table_path,
+            state,
+            max_per_queue=max_per_queue,
+            cutover_state="ready" if publish_ready else "shadow",
+        )
+        return {
+            "mode": policy,
+            "rows_written": rows_written,
+            "generation": str(model.get("generation") or ""),
+            "claims_acked": 0,
+        }
+
+    claims = list(state.get("_ydb_materialized_work_claims") or [])
+    generation = str(state.get("ydb_read_model_generation") or "")
+    if not generation:
+        raise RegionTalkYdbReadModelUnavailable(
+            "region_talk_ydb_read_model:consumer_generation_missing"
+        )
+    if claims:
+        claim_generations = {str(claim.get("generation") or "") for claim in claims}
+        if len(claim_generations) != 1 or "" in claim_generations:
+            raise RegionTalkYdbReadModelUnavailable(
+                "region_talk_ydb_read_model:claim_generation_mismatch"
+            )
+        if next(iter(claim_generations)) != generation:
+            raise RegionTalkYdbReadModelUnavailable(
+                "region_talk_ydb_read_model:claim_generation_mismatch"
+            )
+    claims_acked = ydb_ack_materialized_work_claims(
+        session, ydb, work_table_path, claims,
+    )
+    return {
+        "mode": policy,
+        "rows_written": 0,
+        "generation": generation,
+        "claims_acked": claims_acked,
+    }
 
 
 
@@ -7198,6 +7292,19 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
         return {**meta, "ydb_write_status": "missing_config", "state_write_status": "error", "state_write_error": "missing " + cfg["missing"]}
     snapshot = (os.getenv("REGION_TALK_YDB_STATE_SNAPSHOT_FILE") or "").strip()
     if not snapshot:
+        publish_ready = getenv_bool("REGION_TALK_YDB_READ_MODEL_PUBLISH_READY", False)
+        try:
+            projection_lifecycle = region_talk_ydb_projection_lifecycle_policy(
+                state, publish_ready=publish_ready,
+            )
+        except RegionTalkYdbReadModelUnavailable as exc:
+            return {
+                **meta,
+                "ydb_write_status": "error",
+                "state_write_status": "error",
+                "state_write_error": f"{type(exc).__name__}: {str(exc)[:220]}",
+                "ydb_projection_lifecycle": "rejected_before_connect",
+            }
         try:
             ydb, driver, cfg = ydb_connect()
             table_path = ydb_kv_table_path(cfg)
@@ -7207,14 +7314,12 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
             # overfull queue must not advance latest_state and then publish an
             # incomplete work generation.
             projection_max_per_queue = getenv_int("REGION_TALK_YDB_READ_MODEL_MAX_PER_QUEUE", 200)
-            projection_cutover_state = (
-                "ready" if getenv_bool("REGION_TALK_YDB_READ_MODEL_PUBLISH_READY", False) else "shadow"
-            )
-            build_region_talk_ydb_materialized_projection(
-                state,
-                max_per_queue=projection_max_per_queue,
-                cutover_state=projection_cutover_state,
-            )
+            if projection_lifecycle == "publish_complete_generation":
+                build_region_talk_ydb_materialized_projection(
+                    state,
+                    max_per_queue=projection_max_per_queue,
+                    cutover_state="ready" if publish_ready else "shadow",
+                )
             checkpoint = compact_region_talk_checkpoint_for_ydb(compact)
             updated_at = str(compact.get("updated_at") or utc_now_iso())
             payload = json.dumps(checkpoint, ensure_ascii=False, sort_keys=True)
@@ -7336,7 +7441,7 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                     updated_at,
                     chunk_size=getenv_int("REGION_TALK_YDB_SNAPSHOT_BULK_CHUNK_SIZE", 500),
                 )
-                materialized_rows, materialized_model = write_region_talk_ydb_materialized_projection(
+                materialized_lifecycle = finalize_region_talk_ydb_materialized_lifecycle(
                     driver,
                     session,
                     ydb,
@@ -7344,22 +7449,18 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                     read_model_table_path,
                     compact,
                     max_per_queue=projection_max_per_queue,
-                    cutover_state=projection_cutover_state,
+                    publish_ready=publish_ready,
                 )
-                compact["_ydb_materialized_work_rows_written"] = materialized_rows
-                compact["_ydb_read_model_generation"] = materialized_model.get("generation")
-                compact["_ydb_materialized_work_claims_acked"] = ydb_ack_materialized_work_claims(
-                    session,
-                    ydb,
-                    work_table_path,
-                    compact.get("_ydb_materialized_work_claims") or [],
-                )
+                compact["_ydb_projection_lifecycle"] = materialized_lifecycle["mode"]
+                compact["_ydb_materialized_work_rows_written"] = materialized_lifecycle["rows_written"]
+                compact["_ydb_read_model_generation"] = materialized_lifecycle["generation"]
+                compact["_ydb_materialized_work_claims_acked"] = materialized_lifecycle["claims_acked"]
                 compact["_ydb_pruned_legacy_queue_payload_rows"] = ydb_prune_legacy_queue_payloads(session, ydb, table_path)
                 compact["_ydb_retention_pruned_rows"] = ydb_prune_compact_retention(session, ydb, table_path)
             pool.retry_operation_sync(op, retry_settings=state_retry_settings)
             driver.stop(timeout=5)
             row_kind_counts = compact.get("_ydb_row_kind_counts_written") or {}
-            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": checkpoint.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_checkpoint_payload_bytes": len(payload.encode("utf-8")), "ydb_read_model_schema_version": YDB_READ_MODEL_SCHEMA_VERSION, "ydb_work_queue_schema_version": YDB_WORK_QUEUE_SCHEMA_VERSION, "ydb_read_model_generation": compact.get("_ydb_read_model_generation", ""), "ydb_materialized_work_rows_written": compact.get("_ydb_materialized_work_rows_written", 0), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_retention_pruned_rows": json.dumps(compact.get("_ydb_retention_pruned_rows", {}), ensure_ascii=False, sort_keys=True), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_source_candidates": len(compact.get("source_candidates") or {}), "ydb_compact_source_edges": len(compact.get("source_edges") or {}), "ydb_compact_comment_discovery": len(compact.get("comment_discovery") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_publication_candidate_queue": len(compact.get("publication_candidate_queue") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_processed_post_items_written": compact.get("_ydb_row_level_processed_post_items_written", 0), "ydb_row_level_candidate_memory_items_written": row_kind_counts.get("candidate_memory_item", 0), "ydb_row_level_source_candidate_items_written": row_kind_counts.get("source_candidate_item", 0), "ydb_row_level_source_edge_items_written": row_kind_counts.get("source_edge_item", 0), "ydb_row_level_comment_link_items_written": row_kind_counts.get("comment_link_item", 0), "ydb_row_level_source_queue_items_written": row_kind_counts.get("source_queue_item", 0), "ydb_row_level_image_queue_items_written": row_kind_counts.get("image_queue_item", 0), "ydb_row_level_publication_candidate_items_written": compact.get("_ydb_row_level_publication_candidate_items_written", 0), "ydb_queue_cursor_items_written": row_kind_counts.get("queue_cursor", 0), "ydb_row_level_items_written": compact.get("_ydb_row_level_items_written", 0)}
+            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": checkpoint.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_checkpoint_payload_bytes": len(payload.encode("utf-8")), "ydb_read_model_schema_version": YDB_READ_MODEL_SCHEMA_VERSION, "ydb_work_queue_schema_version": YDB_WORK_QUEUE_SCHEMA_VERSION, "ydb_read_model_generation": compact.get("_ydb_read_model_generation", ""), "ydb_projection_lifecycle": compact.get("_ydb_projection_lifecycle", ""), "ydb_materialized_work_claims_acked": compact.get("_ydb_materialized_work_claims_acked", 0), "ydb_materialized_work_rows_written": compact.get("_ydb_materialized_work_rows_written", 0), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_retention_pruned_rows": json.dumps(compact.get("_ydb_retention_pruned_rows", {}), ensure_ascii=False, sort_keys=True), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_source_candidates": len(compact.get("source_candidates") or {}), "ydb_compact_source_edges": len(compact.get("source_edges") or {}), "ydb_compact_comment_discovery": len(compact.get("comment_discovery") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_publication_candidate_queue": len(compact.get("publication_candidate_queue") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_processed_post_items_written": compact.get("_ydb_row_level_processed_post_items_written", 0), "ydb_row_level_candidate_memory_items_written": row_kind_counts.get("candidate_memory_item", 0), "ydb_row_level_source_candidate_items_written": row_kind_counts.get("source_candidate_item", 0), "ydb_row_level_source_edge_items_written": row_kind_counts.get("source_edge_item", 0), "ydb_row_level_comment_link_items_written": row_kind_counts.get("comment_link_item", 0), "ydb_row_level_source_queue_items_written": row_kind_counts.get("source_queue_item", 0), "ydb_row_level_image_queue_items_written": row_kind_counts.get("image_queue_item", 0), "ydb_row_level_publication_candidate_items_written": compact.get("_ydb_row_level_publication_candidate_items_written", 0), "ydb_queue_cursor_items_written": row_kind_counts.get("queue_cursor", 0), "ydb_row_level_items_written": compact.get("_ydb_row_level_items_written", 0)}
         except Exception as exc:
             return {**meta, "ydb_write_status": "error", "state_write_status": "error", "state_write_error": f"{type(exc).__name__}: {str(exc)[:220]}"}
     try:
@@ -20787,6 +20888,7 @@ def build_report(
         "_ydb_materialized_projection_input_complete": previous_state.get(
             "_ydb_materialized_projection_input_complete", True,
         ) is True,
+        "ydb_read_model_generation": str(previous_state.get("ydb_read_model_generation") or ""),
         "posts": updated_posts_state,
         "discovered_sources": updated_discovered_state,
         "source_candidates": {str(r.get("source_candidate_id") or r.get("canonical_source_key") or r.get("canonical_url") or r.get("normalized_url")): r for r in source_frontier_unique if r.get("source_candidate_id") or r.get("canonical_source_key") or r.get("canonical_url") or r.get("normalized_url")},
