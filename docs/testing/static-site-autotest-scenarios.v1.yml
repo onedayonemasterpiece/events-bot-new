@@ -200,7 +200,8 @@ scenarios:
       ios: job
     acceptance:
       real_supabase_session: required
-      auth_get_user_or_protected_probe: required
+      auth_get_user_and_protected_probe: required
+      protected_probe_requests: exactly_1_successful_read_only_rls_request
       reload_or_second_context: required
       product_otp_issue_count: 0
       external_mail_send_count: 0

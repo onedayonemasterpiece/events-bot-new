@@ -82,9 +82,11 @@ terminal runs закрыли browser-tab iOS acceptance и обе single-client-
 
 Реализован локальный generic harness `site/e2e/auth-session-fixture/`: он
 проверяет allowlist, per-worker/device isolation, штатный `verifyOtp`,
-`auth.getUser`, ephemeral storage state, cleanup/redaction и нулевые счётчики
-product OTP/mail. Рядом выполняются registry lint и deterministic no-mail fault
-matrix. Это **не** заменяет live acceptance на hosted allowlisted target.
+`auth.getUser`, обязательный JWT-bound read-only protected RLS probe, ephemeral
+storage state, cleanup/redaction и нулевые счётчики product OTP/mail. PASS
+невозможен без одного фактически выполненного успешного probe. Рядом выполняются
+registry lint и deterministic no-mail fault matrix. Это **не** заменяет live
+acceptance на hosted allowlisted target.
 
 Не существует и не должно считаться готовым:
 
@@ -438,7 +440,9 @@ admin link/OTP без доставки, проходит штатный Supabase
 ### 8.2 Обязательные свойства
 
 - настоящий `auth.getUser` и JWT, а не локальный boolean;
-- настоящий RLS/RPC/Edge behavior;
+- обязательный один успешный read-only `/rest/v1/*` probe с этим JWT,
+  publishable key и owner assertion; callback `true` без запроса запрещён;
+- настоящий RLS/RPC/Edge behavior в последующем бизнес-сценарии;
 - fixed allowlisted persona, а не новый email на каждый run;
 - fresh credential и session на каждый parallel worker/job;
 - state только в `$RUNNER_TEMP`/ephemeral storage;
@@ -733,11 +737,11 @@ protected real mail приняты terminal run `30747598046`.
 ### M4 — generic Auth session fixture
 
 Локальный generic harness, persona/target allowlist, per-scope isolation,
-`verifyOtp`/`auth.getUser`, ephemeral Playwright state, cleanup/redaction,
-registry lint и no-mail matrix реализованы. Остаются terminal live acceptance на
-hosted allowlisted target, protected issuer integration и доказательство второго
-browser context/device bootstrap; до этого registry честно маркирует milestone
-как partial, а не PASS.
+`verifyOtp`/`auth.getUser`, обязательный JWT-bound protected RLS probe,
+ephemeral Playwright state, cleanup/redaction, registry lint и no-mail matrix
+реализованы. Остаются terminal live acceptance на hosted allowlisted target,
+protected issuer integration и доказательство второго browser context/device
+bootstrap; до этого registry честно маркирует milestone как partial, а не PASS.
 
 ### M5 — подключение authorized business scenarios
 

@@ -101,6 +101,29 @@ function instrumentedFetch(fetchImpl, counters) {
   };
 }
 
+function protectedRlsProbeFetch(fetchImpl, { accessToken, publishableKey, supabaseUrl }, counters) {
+  const expectedOrigin = new URL(supabaseUrl).origin;
+  return async (input, init) => {
+    const request = input instanceof Request ? input : null;
+    const method = String(init?.method || request?.method || 'GET').toUpperCase();
+    const url = new URL(request?.url || String(input));
+    const headers = new Headers(request?.headers);
+    new Headers(init?.headers).forEach((value, name) => headers.set(name, value));
+    if (url.origin !== expectedOrigin || !url.pathname.startsWith('/rest/v1/')) {
+      throw blocked('PROTECTED_PROBE_TARGET_INVALID');
+    }
+    if (method !== 'GET') throw blocked('PROTECTED_PROBE_NOT_READ_ONLY');
+    if (headers.get('authorization') !== `Bearer ${accessToken}`
+      || headers.get('apikey') !== publishableKey) {
+      throw blocked('PROTECTED_PROBE_SESSION_HEADERS_INVALID');
+    }
+    counters.protectedProbeRequests += 1;
+    const response = await fetchImpl(input, init);
+    if (response?.ok) counters.protectedProbeSuccesses += 1;
+    return response;
+  };
+}
+
 function clientFactoryDefault({ supabaseUrl, key, fetchImpl, role }) {
   return createClient(supabaseUrl, key, {
     auth: {
@@ -148,6 +171,7 @@ export async function createAuthSessionFixture(options = {}) {
   const persona = resolvePersona(options.personaId, options.personas || {});
   const scopeKind = safeSegment(options.scopeKind || 'worker');
   if (!ALLOWED_SCOPE_KINDS.has(scopeKind)) throw blocked('SESSION_SCOPE_KIND_INVALID');
+  if (typeof options.protectedProbe !== 'function') throw blocked('PROTECTED_PROBE_REQUIRED');
   const scopeId = safeSegment(options.scopeId || randomUUID());
   const scopeKey = `${scopeKind}:${scopeId}`;
   if (activeScopes.has(scopeKey)) throw blocked('SESSION_SCOPE_ALREADY_ACTIVE');
@@ -159,6 +183,8 @@ export async function createAuthSessionFixture(options = {}) {
     productOtpIssues: 0,
     externalMailSends: 0,
     externalMailReceipts: 0,
+    protectedProbeRequests: 0,
+    protectedProbeSuccesses: 0,
   };
   const rawFetch = options.fetchImpl || globalThis.fetch?.bind(globalThis);
   if (typeof rawFetch !== 'function') {
@@ -240,15 +266,27 @@ export async function createAuthSessionFixture(options = {}) {
       throw blocked('IDENTITY_MISMATCH');
     }
 
-    let protectedProbe = true;
-    if (typeof options.protectedProbe === 'function') {
+    let protectedProbe = false;
+    try {
+      const probeFetch = protectedRlsProbeFetch(fetchImpl, {
+        accessToken: session.access_token,
+        publishableKey,
+        supabaseUrl,
+      }, counters);
       protectedProbe = await options.protectedProbe({
         accessToken: session.access_token,
         publishableKey,
         supabaseUrl,
-        fetchImpl,
+        fetchImpl: probeFetch,
+        userId: user.id,
       });
-      if (!protectedProbe) throw blocked('PROTECTED_PROBE_FAILED');
+    } catch (error) {
+      throw blocked('PROTECTED_PROBE_FAILED', error);
+    }
+    if (protectedProbe !== true
+      || counters.protectedProbeRequests !== 1
+      || counters.protectedProbeSuccesses !== 1) {
+      throw blocked('PROTECTED_PROBE_FAILED');
     }
     if (counters.productOtpIssues !== 0) throw blocked('UNEXPECTED_PRODUCT_OTP');
 
@@ -284,7 +322,8 @@ export async function createAuthSessionFixture(options = {}) {
       external_mail_send_count: counters.externalMailSends,
       external_mail_receipt_count: counters.externalMailReceipts,
       get_user_verified: true,
-      protected_probe_verified: Boolean(protectedProbe),
+      protected_probe_verified: true,
+      protected_probe_request_count: counters.protectedProbeRequests,
       storage_state_ephemeral: true,
       real_mail_fallback: 'forbidden',
       cleanup_status: 'PENDING',

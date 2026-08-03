@@ -86,8 +86,8 @@ selector до side effects.
 
 - принимает только allowlisted persona и HTTPS target origin;
 - выпускает fresh admin credential без `/auth/v1/otp` и внешней почты;
-- выполняет настоящий `verifyOtp`, затем `auth.getUser` и optional protected
-  probe;
+- выполняет настоящий `verifyOtp`, затем `auth.getUser` **и обязательный**
+  read-only protected RLS probe с созданным access token;
 - создаёт Playwright `storageState` с mode `0600` только во временной директории;
 - запрещает общий active scope и real-mail fallback;
 - удаляет state в `cleanup()` и возвращает только PII/token-free receipt.
@@ -207,8 +207,21 @@ max_product_otp_issues: 0
 max_external_email_sends: 0
 max_admin_credentials: 1_per_session_scope
 max_auth_verifies: 1_per_session_scope
+protected_rls_probe_requests: exactly_1_successful_read_only
 real_mail_fallback: forbidden
 ```
+
+`protectedProbe` является обязательной функцией сценария. Она получает только
+созданный user access token, publishable key, expected user ID и fixture-owned
+`fetchImpl`. Этот wrapper разрешает ровно read-only `GET /rest/v1/*` к тому
+же Supabase origin, требует точные `Authorization: Bearer <session JWT>` и
+`apikey`, а fixture выдаёт PASS только при одном выполненном успешном запросе и
+явном результате callback `true`. Возврат `true` без вызова wrapper, HTTP/RLS
+ошибка, запрос без session headers или вызов другого origin fail-closed.
+
+Сам сценарий обязан выбрать allowlisted owner-scoped view/table и проверить
+subject/owner в ответе. Публичный endpoint, который одинаково отвечает
+без JWT или для другого пользователя, не является protected RLS probe.
 
 Network recorder должен падать при неожиданном:
 
@@ -356,6 +369,7 @@ $RUNNER_TEMP/kenigevents-auth/<run-id>/<persona>-<worker>.json
 - `/auth/v1/otp` count;
 - external mail send/receipt count;
 - protected probe result;
+- protected probe request count (`1`, без URL/body/token);
 - cleanup result;
 - redaction result.
 
@@ -365,6 +379,10 @@ $RUNNER_TEMP/kenigevents-auth/<run-id>/<persona>-<worker>.json
 - `BLOCKED_AUTH_FIXTURE_ISSUER` — admin credential не выпущен;
 - `FAIL_AUTH_FIXTURE_REDIRECT` — credential ушёл за allowlisted target;
 - `FAIL_AUTH_FIXTURE_CALLBACK` — callback завершился без session;
+- `BLOCKED_AUTH_FIXTURE:PROTECTED_PROBE_REQUIRED` — сценарий не передал
+  обязательный protected RLS probe;
+- `BLOCKED_AUTH_FIXTURE:PROTECTED_PROBE_FAILED` — probe не выполнил один
+  успешный JWT-bound read-only RLS request или owner assertion не прошёл;
 - `FAIL_AUTH_FIXTURE_IDENTITY` — `getUser`/protected probe не совпал с persona;
 - `FAIL_AUTH_FIXTURE_UNEXPECTED_OTP` — замечен product OTP issue;
 - `FAIL_AUTH_FIXTURE_UNEXPECTED_MAIL` — замечена внешняя отправка/receipt;
@@ -387,8 +405,9 @@ Infrastructure retry разрешён только до выпуска credentia
 
 ### A1 — generic browser fixture
 
-- **реализовано локально:** общий issuer, fresh verify, `auth.getUser`, optional
-  protected probe, ephemeral Playwright storage state, active-scope isolation,
+- **реализовано локально:** общий issuer, fresh verify, `auth.getUser`,
+  обязательный fail-closed JWT-bound protected RLS read probe, ephemeral
+  Playwright storage state, active-scope isolation,
   `product OTP=0`, `external mail=0`, fail-closed cleanup/redaction;
 - **остаётся:** terminal exact-target browser receipt и neutral hosted callback,
   если конкретный target не принимает generated session state.
@@ -440,7 +459,7 @@ personalization само по себе не требует нового пись
 - [ ] сценарий имеет явный `auth_mode`;
 - [ ] `session_fixture` использует fresh one-time credential;
 - [ ] browser/device получил настоящую Supabase session;
-- [ ] `auth.getUser` или protected probe подтверждён;
+- [ ] `auth.getUser` **и** один JWT-bound protected RLS probe подтверждены;
 - [ ] state scoped к worker/job и не разделяется параллельно;
 - [ ] `/auth/v1/otp = 0`;
 - [ ] external mail send/receipt = `0/0`;
