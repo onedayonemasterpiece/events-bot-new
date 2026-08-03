@@ -6,13 +6,6 @@ on:
       - agent/region-talk-terminal-research-recovery-20260803
     paths:
       - '.github/workflows/region-talk-terminal-research-materialize.yml'
-  pull_request:
-    branches:
-      - main
-    types: [opened, synchronize, reopened]
-    paths:
-      - '.github/workflows/region-talk-terminal-research-materialize.yml'
-      - '.rt-upload/**'
 
 permissions:
   contents: write
@@ -33,13 +26,13 @@ jobs:
           ref: agent/region-talk-terminal-research-recovery-20260803
           fetch-depth: 0
 
-      - name: Reconstruct, verify and materialize
+      - name: Reconstruct and verify bundle
         shell: bash
         run: |
           set -euo pipefail
-          cat .rt-upload/chunk.000 .rt-upload/chunk.001 .rt-upload/chunk.002 \
-              .rt-upload/chunk.003 .rt-upload/chunk.004 .rt-upload/chunk.005 \
-              .rt-upload/tail \
+          test "$(find .rt-upload-v3 -maxdepth 1 -type f -name 'part.*' | wc -l)" -eq 5
+          cat .rt-upload-v3/part.* \
+            | tr -d '\r\n\t ' \
             | base64 --decode > /tmp/region-talk-terminal-research.zip
           echo '26aaecb3660a6fef621227e2c6587540db7f9ffaed709105569f39cd86620598  /tmp/region-talk-terminal-research.zip' \
             | sha256sum --check --strict
@@ -50,6 +43,11 @@ jobs:
           export SRC=/tmp/region-talk-terminal-research/region-talk-terminal-research-20260802
           (cd "$SRC" && sha256sum --check --strict SHA256SUMS.txt)
 
+      - name: Validate terminal research contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SRC=/tmp/region-talk-terminal-research/region-talk-terminal-research-20260802
           python - <<'PY'
           import json
           import os
@@ -62,35 +60,45 @@ jobs:
               'region-talk-external-research-result-region-talk-external-2026-08-02-191601.json',
               'region-talk-external-research-result-region-talk-external-2026-08-02-191602.json',
           ]
+          required_supports = {
+              'publisher.identity',
+              'publisher.audience',
+              'publisher.distinctive_value',
+              'publisher.locality',
+          }
           candidate_total = 0
           source_domains = set()
-          required_supports = {
-              'publisher.identity', 'publisher.audience',
-              'publisher.distinctive_value', 'publisher.locality',
-          }
           for name in names:
               payload = json.loads((src / name).read_text(encoding='utf-8'))
               assert payload['schema_version'] == 'region_talk_external_research.v1'
               for row in payload['candidates']:
-                  assert row['decision']['research_decision'] == 'candidate'
-                  assert row['decision']['downstream_readiness'] == 'candidate_report'
+                  assert row['decision'] == {
+                      **row['decision'],
+                      'research_decision': 'candidate',
+                      'downstream_readiness': 'candidate_report',
+                  }
                   assert row['uncertainties'] == []
                   assert row['publication']['access_status'] == 'full_text'
                   assert row['source_assessment']['scope'] == 'external'
                   policy = row['policy_classification']
-                  assert policy['product_policy_match'] and policy['language_policy_match']
+                  assert policy['research_match']
+                  assert policy['product_policy_match']
+                  assert policy['language_policy_match']
                   assert not policy['hard_exclusion_codes']
                   supports = {
-                      value for evidence in row['evidence']
+                      value
+                      for evidence in row['evidence']
                       for value in evidence.get('supports', [])
                   }
                   assert required_supports <= supports
-                  source_domains.add(row['publication']['source_domain'])
                   candidate_total += 1
+                  source_domains.add(row['publication']['source_domain'])
           assert candidate_total == 43
           assert len(source_domains) == 32
 
-          reconciliation = json.loads((src / 'region-talk-external-research-terminal-reconciliation-2026-08-02.json').read_text(encoding='utf-8'))
+          reconciliation = json.loads(
+              (src / 'region-talk-external-research-terminal-reconciliation-2026-08-02.json').read_text(encoding='utf-8')
+          )
           assert len(reconciliation['rows']) == 54
           assert reconciliation['before']['manual_review_required'] == 22
           assert reconciliation['after']['manual_review_required'] == 0
@@ -101,7 +109,9 @@ jobs:
               'manual_review_required_to_unresolved': 6,
           }
 
-          foundation = json.loads((src / 'region-talk-publisher-description-foundation-2026-08-02.json').read_text(encoding='utf-8'))
+          foundation = json.loads(
+              (src / 'region-talk-publisher-description-foundation-2026-08-02.json').read_text(encoding='utf-8')
+          )
           assert foundation['source_count'] == 32
           assert foundation['candidate_count'] == 43
           assert len(foundation['profiles']) == 32
@@ -117,8 +127,14 @@ jobs:
               assert marker in prompt
           PY
 
+      - name: Materialize repository files
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=/tmp/region-talk-terminal-research/region-talk-terminal-research-20260802
           feature_dir=docs/features/region-talk-channel
           report_dir=docs/reports
+
           cp "$SRC/external-publication-research.prompt.txt" "$feature_dir/external-publication-research.prompt.txt"
           cp "$SRC/region-talk-external-research-result-region-talk-external-2026-08-02-191600.json" "$feature_dir/"
           cp "$SRC/region-talk-external-research-result-region-talk-external-2026-08-02-191601.json" "$feature_dir/"
@@ -131,9 +147,8 @@ jobs:
           cp "$SRC/region-talk-external-research-terminal-review-2026-08-02.md" "$report_dir/"
 
           python - <<'PY'
-          import os
           from pathlib import Path
-          src = Path(os.environ['SRC'])
+          src = Path('/tmp/region-talk-terminal-research/region-talk-terminal-research-20260802')
           index = Path('docs/features/region-talk-channel/external-publication-research-results.md')
           heading = '## Terminal research successors — 2026-08-02'
           current = index.read_text(encoding='utf-8')
@@ -142,8 +157,7 @@ jobs:
               index.write_text(current.rstrip() + '\n\n' + section + '\n', encoding='utf-8')
           PY
 
-          git rm -r .rt-upload
-          git rm .github/workflows/region-talk-terminal-research-materialize.yml
+          git rm -r .rt-upload .rt-upload-v3
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add docs/features/region-talk-channel docs/reports
