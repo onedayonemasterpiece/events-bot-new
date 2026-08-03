@@ -50,6 +50,10 @@ cost accumulated.
   ordered CSV SHA-256 matched exactly for every table.
 - 2026-08-03 ~13:45 UTC — both databases returned to 0 RU/s. Fly secrets and the
   protected GitHub environment database variable were switched to the target.
+- 2026-08-03 ~13:55 UTC — the complete source-cloud serverless inventory was
+  checked. Its only Cloud Function is the unrelated
+  `pharmastaff-partnership-form`; there are no triggers or serverless
+  containers. The Pharmastaff mail function was intentionally left unchanged.
 
 ## Root Cause
 
@@ -97,6 +101,8 @@ cost accumulated.
 - source remains at 0 RU/s; target remains at 0 RU/s while scheduling is disabled;
 - Fly `/healthz` is ready and reports Region Talk plus watchdog disabled;
 - no production re-enable without a bounded RU canary and billing observation.
+- do not migrate or modify the unrelated `pharmastaff-partnership-form` Cloud
+  Function as part of this incident.
 
 ### Required evidence
 
@@ -127,6 +133,9 @@ cost accumulated.
 - [ ] Replace full row materialization for metrics with narrow indexed/counter
       reads and measure RU per complete cycle.
 - [ ] Run a manually approved canary with a hard RU/s ceiling and confirm billing.
+- [ ] Before autonomous use, add an application-side daily run/query budget;
+      billing budgets only notify and YDB's RU/s throttle is not a per-day
+      request counter. Keep the database at 0 RU/s until this is accepted.
 - [ ] After retention/owner approval, delete the quarantined source database and
       revoke its obsolete service-account key.
 - [ ] Move the GitHub WIF principal fully into the target organization; the
