@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- Changed the isolated tile-mosaic launch candidate to the reference-fidelity
+  v2 composition: viewport-height square desktop tiles, top-aligned overflowing
+  12×6 surface, opaque black grout, bounded brand-mask projection plus generic
+  photo cover, exact launch copy and square PWA mark, deeper material/form
+  styling, expressive seeded state distribution and no-scroll desktop regime.
+  Added a dedicated Chromium L1 acceptance runner for the required desktop,
+  mobile, temporal, projection and form-state evidence; the route remains an
+  immutable noindex lab preview and does not change the production root.
+
 - Added the isolated `/lab/launch/tile-mosaic/` launch candidate: a responsive
   72-tile physical mosaic with replaceable imagery, reduced-motion behavior,
   static SEO/GEO metadata and an accessible email form. The form uses the

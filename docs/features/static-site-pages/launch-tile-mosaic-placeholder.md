@@ -8,6 +8,13 @@
 >
 > **Launch date shown to visitors:** `2026-09-01` (1 сентября 2026 года).
 
+The first technical candidate at commit
+`8b22af29008456ec125b1404055a4283ddb2b57a` preserved the intended architecture
+but received a visual **NO-GO** (about 45% reference similarity). The v2 contract
+below is the geometry/composition correction. It remains pending visual
+acceptance until an exact-SHA L1 report and the required screenshots are
+inspected; implementation alone does not turn this status into GO.
+
 ## Scope and release boundary
 
 The candidate is a launch placeholder for **«Полюбить Калининград Анонсы»**.
@@ -65,9 +72,19 @@ modes and stay above decorative layers with stable contrast. The fallback when
 either effect is unsupported is an intact dark material surface, not missing
 content.
 
-The large image-bearing squircle belongs to the scene: it extends beyond the
-right edge on desktop, sits slightly above the vertical center, and receives
-an inset shadow and soft orange halo. It must not read as a separate card.
+The large image-bearing squircle belongs to the scene and receives an inset
+shadow and soft orange halo. In the default brand mode the complete leather
+form is bounded to approximately `14–80svh`, has a desktop maximum width and a
+real right inset; it must not grow into an off-screen pale arc or read as a
+separate card.
+
+Desktop geometry is height-led, not column-led. With `--mosaic-gap: 4px`, the
+tile edge is `calc((100svh - 5 * var(--mosaic-gap)) / 6)`. Six rows fill the
+viewport, the grid touches the top, and its first column begins around
+`36–37vw`. Twelve columns may and normally do continue past the right viewport
+edge. Fitting them into the nominal right column by narrowing the tiles is a
+contract violation. Gaps are a separate opaque near-black lattice layer; no
+pixel of the projection may be visible in grout.
 
 ## One projection, 72 real tiles
 
@@ -83,6 +100,18 @@ The same DOM is used at every viewport:
 - breakpoint changes CSS Grid only; it does not add, remove or reorder tiles;
 - grid and tiles are decorative (`aria-hidden="true"`) and are not focusable.
 
+The projection has two presentation modes over that same image element and
+tile set:
+
+- `brand` is the default for `PWA-icon.png`; it hides the source PNG's pale
+  outer square and presents only the bounded leather squircle;
+- `cover` is the generic mode for arbitrary photography and uses ordinary
+  cover plus a bounded focal point without inheriting the brand mask.
+
+A mode change must not create a second projection image, rebuild the tiles or
+weaken URL validation. The exact prop/query/event field used by the
+implementation is part of the browser acceptance contract.
+
 ### Tile-state contract
 
 Each tile owns one state and the corresponding CSS custom-property bundle.
@@ -92,7 +121,7 @@ Opacity is not the state model by itself.
 | --- | --- | ---: |
 | `sealed` | almost-black rough closed tile | `0.94` |
 | `dim` | weak projected color | `0.78` |
-| `sleeping` | neutral intermediate rest state | `0.66` |
+| `sleeping` | neutral intermediate rest state, counted with `dim` for distribution acceptance | `0.66` |
 | `revealed` | image is legible while material remains | `0.42` |
 | `glint` | short, locally bright reflection | `0.16` |
 
@@ -114,15 +143,25 @@ light source drifts slowly. A pointer may gently bias it and pointer exit
 returns to the automatic path. There is no LED-like flash, rapid oscillation
 or high-frequency randomized timer.
 
+Every stopped frame must remain intentionally composed. The blocking
+distribution bands are `sealed` 38–45%, `dim` plus `sleeping` 25–30%,
+`revealed` 22–28% and `glint` 3–5%. The surface must not use a visible
+repeating diagonal/carbon hatch. Roughness is irregular leather/metal grain;
+revealed tiles retain texture and legibility with roughly `0.5px` blur and
+near-neutral saturation/brightness, while deep seams, bevels, left-side grain,
+vignette and restrained ambience provide depth.
+
 ## Replaceable image API and URL safety
 
 The projection accepts all three equivalent entry points:
 
-1. Astro component prop `imageSrc`;
-2. query parameter `?mosaicImage=<URL>` (optional numeric `focalX`/`focalY`
-   query values use the same bounds as the event API);
+1. Astro component props `imageSrc` and `imageMode="brand|cover"`;
+2. query parameters `?mosaicImage=<URL>&mosaicMode=brand|cover` (optional
+   numeric `focalX`/`focalY` query values use the same bounds as the event
+   API);
 3. browser event `tile-mosaic:set-image` with
-   `{ src, focalX?, focalY? }` in `CustomEvent.detail`.
+   `{ src?, focalX?, focalY?, mode?: "brand" | "cover" }` in
+   `CustomEvent.detail`.
 
 Example:
 
@@ -133,6 +172,7 @@ window.dispatchEvent(
       src: "https://example.org/new-image.jpg",
       focalX: 0.5,
       focalY: 0.42,
+      mode: "cover",
     },
   }),
 );
@@ -155,15 +195,32 @@ validation is not permission to weaken those controls.
 
 ## Responsive composition
 
-### Desktop
+### Desktop (`min-width: 1024px` and `min-height: 760px`)
 
-- canvas height: at least `100svh`;
+- canvas height: exactly `100svh`, with no document vertical scroll;
 - page inset: `clamp(28px, 4.1vw, 68px)`;
-- content occupies roughly 40–43%; scene occupies 57–60%;
-- compact logo is upper-left and launch status is upper-right over the scene;
+- copy remains left while the independent mosaic surface starts around
+  `36–37vw` and intrudes into that space;
+- the upper-left mark is the square leather PWA icon, about 118–142 px, not the
+  text lockup;
+- launch status is exactly `СКОРО ЗАПУСК • 1 СЕНТЯБРЯ`;
 - main copy starts in the lower half of the left column;
-- H1 is about three lines and is constrained to roughly 590–630 px;
-- email and button share one row; the button is the warm visual accent.
+- H1 has the exact visible lines `Полюбить / Калининград / Анонсы`; there is no
+  eyebrow above it;
+- the visible orange tracked date is `1 СЕНТЯБРЯ`, while its `<time>` keeps
+  `datetime="2026-09-01"` and metadata retains the year;
+- the visible description has exactly four lines: `Персонализированный сервис
+  анонсов / и навигатор по культурным / и просветительским событиям /
+  Калининградской области`;
+- email and button share one row: input 320–368 px, button 245–265 px, 16 px
+  gap, both about 76–80 px high;
+- the email control has an envelope, cool glass depth and visible focus; its
+  accessible label is visually hidden;
+- the CTA uses a darker textured terracotta gradient, rounded material edge and
+  soft lower glow rather than a flat salmon fill.
+
+Low-height desktop/tablet layouts may return to document scrolling instead of
+clipping content.
 
 ### Mobile
 
@@ -175,10 +232,12 @@ column and both controls fill the available width. Tile count remains 72 while
 tile size adapts. At 320 px, no copy or decoration may cause horizontal
 overflow.
 
-Required viewports are `320`, `360`, `390`, `430`, `768`, `1024`, `1366`,
-`1440`, and `1920` px. The layout must also tolerate text zoom and viewport
-heights smaller than the design reference; `100svh` is a minimum rather than a
-content-clipping fixed height.
+Blocking mobile fixtures are `320×700`, `360×800`, `390×844` and `430×932`.
+They must retain all 72 tiles in a 6×12 grid, the semantic order above, usable
+full-width controls, and no horizontal overflow or overlap. The layout must
+also tolerate text zoom and viewport heights smaller than the design
+reference. A 768 px tablet viewport remains a regression specimen, not a v2
+reference-fidelity gate.
 
 ## Subscription data and browser behavior
 
@@ -308,16 +367,29 @@ public route and a separate release review.
 | Build | `npm --prefix site run build` succeeds with and without public Supabase env; project checks pass |
 | Route isolation | lab route exists; root, existing prototypes, sitemap and production outputs are unchanged |
 | DOM contract | exactly one projection image and 72 tiles; 12×6 desktop and 6×12 mobile computed grids |
-| Responsive | screenshots at all nine required widths; no horizontal overflow; text remains readable at 320 px |
-| Visual | physical depth, restrained light and continuous projection; no LED flicker or card-like detached squircle |
-| Image API | safe prop, same-origin query, HTTPS query and event work; malformed/unsafe schemes are rejected without CSS/HTML injection |
-| Motion | normal sparse cycles respect caps; reduced-motion is static and ignores pointer movement |
+| Responsive | desktop `1366×768`, `1440×900`, `1536×864`, `1672×941`, `1920×1080`; mobile `320×700`, `360×800`, `390×844`, `430×932`; measured no-scroll/no-overflow contract |
+| Visual | inspected handoff screenshots at `1672×941`, `1920×1080`, `390×844`; square tiles, opaque grout, physical depth, bounded brand squircle and no carbon hatch |
+| Image API | default PWA brand mode plus arbitrary photo `cover` and landscape focal point through the same engine; safe prop/query/event work and unsafe schemes preserve last-good image |
+| Motion | frames at 0, 5 and 10 seconds; sparse cycles respect caps; reduced-motion is static and ignores pointer movement |
 | Keyboard/a11y | tab/shift-tab, focus ring, label, announcements, submit and error recovery are verified |
 | Form | success, repeat/duplicate, invalid email, honeypot, rapid double-submit, selected-once ambiguous timeout/network error and missing env are exercised |
 | Data/security | normalized unique upsert; RLS on; direct `anon`/`authenticated` table writes fail; only intended RPC execute grant works; response has no enumeration fields |
 | SEO/GEO | static entities and launch date present; `WebSite`/`WebPage`/`Service` JSON-LD valid; no invented organization |
 | Noindex | robots meta is exact; route absent from sitemap; secret candidate stays non-indexable |
 | Browser fallback | no-backdrop-filter/blending fallback keeps content and form usable |
+
+The terminal L1 report records exact repository SHA and target, commands,
+viewport geometry, tile/gap/scroll measurements, state distribution, exact
+copy, console/page/network errors, screenshot paths and the human visual
+inspection verdict. Extra frames at 0/3/6/10/15 seconds are optional review
+material; the blocking handoff set is 0/5/10.
+
+This L1 Chromium evidence proves browser DOM/CSS/runtime behavior only. The
+registry scenarios `mobile.keyboard_inputs` and
+`mobile.page_family_specimens` remain planned L2 work. A desktop mobile
+viewport, Playwright WebKit or a human-opened phone link is not native
+Android/iOS evidence. Those planned scenarios do not block this isolated
+noindex candidate, but must be reconsidered before a public-route release.
 
 Before review delivery, run Astro build and project checks, capture desktop and
 mobile screenshots, compare proportions with the approved references, and

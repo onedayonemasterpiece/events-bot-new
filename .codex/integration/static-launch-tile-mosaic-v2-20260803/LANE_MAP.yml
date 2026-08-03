@@ -34,7 +34,7 @@ lanes:
     forbidden_files: [CHANGELOG.md, docs/**, supabase/**, site/tests/**]
     expected_output: committed implementation plus targeted build evidence
     verification_scope: targeted
-    status: planned
+    status: committed_and_merged
   - id: qa-v2
     role: worker
     effort: high
@@ -51,7 +51,7 @@ lanes:
     forbidden_files: [CHANGELOG.md, docs/**, supabase/**, site/src/components/**, site/src/pages/**]
     expected_output: committed L1 runner covering specified desktop/mobile/time/image/form contracts
     verification_scope: targeted
-    status: planned
+    status: committed_and_merged
   - id: docs-v2
     role: reviewer
     effort: medium
@@ -66,7 +66,7 @@ lanes:
     forbidden_files: ['**']
     expected_output: review notes delivered to integrator
     verification_scope: inspection_only
-    status: planned
+    status: completed_read_only
   - id: integration-v2
     role: merge_reviewer
     effort: high
@@ -76,8 +76,8 @@ lanes:
     execution_mode: serial_after_dependency
     branch: integration/static-launch-tile-mosaic-20260803
     worktree: /dev/shm/static-launch-mosaic-integration
-    writable_files: [CHANGELOG.md, docs/features/static-site-pages/launch-tile-mosaic-placeholder.md, .codex/integration/**]
+    writable_files: [CHANGELOG.md, docs/features/static-site-pages/launch-tile-mosaic-placeholder.md, docs/features/static-site-pages/prompts/tile-mosaic-launch-coding-agent.md, .codex/integration/**]
     forbidden_files: []
     expected_output: exact-SHA preview and closure report
     verification_scope: full_local
-    status: planned
+    status: in_progress

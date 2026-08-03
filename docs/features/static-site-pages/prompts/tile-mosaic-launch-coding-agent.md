@@ -72,6 +72,12 @@ grid, bevels/grout, noise, semantic UI, restrained bloom. The image is one
 
 - Desktop: 12 columns × 6 rows.
 - Mobile: 6 columns × 12 rows.
+- In the desktop reference regime (`min-width: 1024px` and
+  `min-height: 760px`), set the square tile edge from one sixth of viewport
+  height after five gaps. Start the grid at the top around `36–37vw`; let all
+  12 columns overflow right instead of narrowing them to fit a scene column.
+- Paint grout as a separate opaque near-black lattice. The projection must
+  never be visible between tiles.
 - The DOM collection stays the same across the breakpoint.
 - Tiles are decorative and hidden from assistive technology.
 - Every tile supports at least `sealed`, `dim`, `revealed`, and `glint`;
@@ -83,6 +89,10 @@ grid, bevels/grout, noise, semantic UI, restrained bloom. The image is one
   than 2–4 glints, and no immediate tile reselection.
 - Slowly move light independently; pointer input may gently bias it.
 - Never create fast blinking, LED-matrix behavior or high-frequency randomness.
+- Keep every stopped frame expressive: `sealed` 38–45%, `dim` plus `sleeping`
+  25–30%, `revealed` 22–28%, `glint` 3–5%. Do not use a visible repeating
+  diagonal/carbon hatch; use irregular leather/metal roughness, deep bevels
+  and seams instead.
 
 `backdrop-filter` and `mix-blend-mode` may create material/light effects, but
 keep content readable and supply a usable fallback. A tile using
@@ -93,10 +103,16 @@ not blend semantic text or controls.
 
 Support all of:
 
-1. Astro prop `imageSrc`;
-2. `?mosaicImage=<URL>`;
+1. Astro props `imageSrc` and `imageMode="brand|cover"`;
+2. `?mosaicImage=<URL>&mosaicMode=brand|cover`;
 3. `tile-mosaic:set-image` `CustomEvent` with
-   `{ src, focalX?, focalY? }`.
+   `{ src?, focalX?, focalY?, mode?: "brand" | "cover" }`.
+
+Default `brand` mode uses the canonical PWA image but hides its pale outer
+square and shows a complete bounded leather squircle around `14–80svh` with a
+desktop maximum width/right inset. Generic `cover` is an independent ordinary
+photo mode with focal point; it must not inherit the brand mask. Both modes use
+the same one-image/72-tile engine.
 
 Allow local/same-origin URLs and absolute HTTPS URLs only. Parse with the URL
 API; reject malformed values, credentials, unsafe schemes and cross-origin
@@ -106,17 +122,25 @@ make an arbitrary remote URL work.
 
 ### Layout
 
-Desktop uses at least `100svh`, `clamp(28px, 4.1vw, 68px)` page insets, a
-roughly 40–43% copy column and 57–60% scene. Place logo/status across the top,
-lower the main copy in the left column, keep the H1 near three lines with a
-590–630 px cap, and keep email/button in one row.
+Desktop `>=1024×760` is exactly `100svh` without document scrolling. Use the
+square PWA icon at upper-left (about 118–142 px), not the text lockup. Visible
+status is exactly `СКОРО ЗАПУСК • 1 СЕНТЯБРЯ`; H1 lines are exactly `Полюбить /
+Калининград / Анонсы`; remove the eyebrow. Show orange tracked `1 СЕНТЯБРЯ`
+with `<time datetime="2026-09-01">`. The visible description is exactly four
+lines: `Персонализированный сервис анонсов / и навигатор по культурным / и
+просветительским событиям / Калининградской области`.
+
+Keep email/button in one desktop row: input about 320–368 px, button 245–265
+px, gap 16 px and both controls about 76–80 px high. The accessible label is
+visually hidden. Put an envelope in the cool glass input; use a darker textured
+terracotta material/glow for the CTA.
 
 On mobile use this semantic order: logo/status, scene, H1, date, explanation,
 email, button, privacy. Scene height is roughly 42–47% of the first viewport;
 H1 uses `clamp(48px, 11.2vw, 84px)`; form controls are full-width in one
-column. Validate widths `320`, `360`, `390`, `430`, `768`, `1024`, `1366`,
-`1440`, and `1920` px. There must be no horizontal overflow at 320 px or any
-required viewport.
+column. Blocking mobile fixtures are `320×700`, `360×800`, `390×844`, and
+`430×932`; a 768 px tablet remains a regression specimen. There must be no
+horizontal overflow at any required viewport.
 
 ### Supabase subscription
 
@@ -208,7 +232,9 @@ Do not claim completion until all of the following are recorded:
 
 1. `npm --prefix site run build` passes.
 2. Relevant project checks and tests pass.
-3. Desktop and mobile screenshots are captured.
+3. Desktop screenshots exist at `1366×768`, `1440×900`, `1536×864`,
+   `1672×941`, `1920×1080`; mobile screenshots exist at `320×700`, `360×800`,
+   `390×844`, `430×932`.
 4. Proportions are compared against the approved references.
 5. Horizontal overflow is absent at every required width.
 6. Exactly 72 tiles and the expected 12×6 / 6×12 computed grids are verified.
@@ -227,6 +253,14 @@ Do not claim completion until all of the following are recorded:
 14. The build is published only as a secret, non-indexable candidate preview.
 15. Return the secret URL, exact build/repository SHA and screenshot set to the
     requested private review destination.
+16. Capture animation frames at 0, 5 and 10 seconds, including the required
+    handoff images at `1672×941`, `1920×1080` and `390×844`.
+17. Prove default PWA `brand` and an arbitrary photo `cover`/focal point through
+    the same projection engine.
+
+This is Chromium L1 browser evidence. The planned registry scenarios
+`mobile.keyboard_inputs` and `mobile.page_family_specimens` are L2 and must not
+be represented as passed by a desktop mobile viewport or Playwright WebKit.
 
 The secret URL is bearer review material: do not commit it or expose it in a
 public channel. Candidate publication is not root promotion.
