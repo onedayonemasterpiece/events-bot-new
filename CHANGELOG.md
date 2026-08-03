@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- Fixed the Region Talk YDB billing runaway and wrong-account placement: disabled autonomous scheduling, migrated all five tables to the 1 GiB serverless database in `cloud-art-koder/default`, verified exact row counts and ordered-export hashes, switched Fly/GitHub configuration, deleted the verified source database from the wrong account, kept the target at 0 RU/s, and added an exact expected-database preflight guard before any future scheduled run.
+- Fixed the Region Talk YDB billing runaway and wrong-account placement: disabled autonomous scheduling, migrated all five tables to the 1 GiB serverless database in `cloud-art-koder/default`, verified exact row counts and ordered-export hashes, switched Fly/GitHub database configuration, deleted the verified source database and three obsolete service accounts from the wrong account, removed the old GitHub WIF identity reference, kept the target at 0 RU/s, and added an exact expected-database preflight guard before any future scheduled run.
 
 - Fixed the CherryFlash `popular_review` retry storm: both startup catch-up and
   the ten-minute watchdog stop after two persisted failed sessions for the same
