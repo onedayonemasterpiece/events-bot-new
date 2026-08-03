@@ -1,10 +1,10 @@
 # INC-2026-07-31 Google AI Parallel Limiter Bypass
 
-Status: open
+Status: closed
 Severity: sev2
 Service: events-bot Google AI shared limiter / parallel agent, Fly, Kaggle and Edge consumers
 Opened: 2026-07-31
-Closed: —
+Closed: 2026-08-03
 Owners: events-bot maintainers
 Related incidents: `INC-2026-06-28-google-ai-gemma4-rpm-overrun.md`
 Related docs: `docs/features/llm-gateway/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -157,6 +157,9 @@ no Antigravity limiter bypass was found.
   metadata correction. Live verification returned `6` active keys, `6` active
   scopes, `0` active `unmapped-shared` rows and `0` attribution mismatches. The
   migration dry-run and apply did not call Google.
+- 2026-08-03 09:00 UTC — PR `#292` merged as main SHA
+  `0849a0ceb90696bd19934609f38df6db5c3a4356`, making the six-project mapping,
+  migration and regression contract durable in `origin/main`.
 
 ## Root Cause
 
@@ -335,11 +338,6 @@ no Antigravity limiter bypass was found.
 
 ## Release And Closure Evidence
 
-The evidence below describes the 2026-07-31 cutover and does **not** close the
-new 2026-08-03 acceptance findings. Incident status remains `open` until the
-new migration/runtime changes are main-reachable and the real key → Cloud
-project inventory plus bounded production reconciliation are recorded.
-
 - limiter deployed SHA: `6775815d` (introduced in Fly release 1823; included in
   active release 1833 / SHA `e39d536a` through current `origin/main` ancestry)
 - deploy path: canonical Supabase schema applied; clean manual Fly deploy from
@@ -390,11 +388,31 @@ project inventory plus bounded production reconciliation are recorded.
     attempt, `0` null scopes and `0` duplicate same-scope attempts. Runtime log
     contains the required rolling strategy marker on reserve and a matching
     successful terminal record.
+- six-project scope correction:
+  - the operator confirmed six distinct Google Cloud projects; the registry
+    now contains `6` active keys and `6` distinct redacted project scopes, with
+    `0` active `google:unmapped-shared` rows;
+  - migration `20260803084716_google_ai_distinct_project_scopes.sql`, SHA-256
+    `bcdd87a098ddf3add0b70e1b593b67d18a9f1bb13411d17b18f33dd77607cfde`,
+    completed through the Supabase Management API with HTTP `201` after a
+    rollback-only live rehearsal;
+  - post-apply verification found `0` request, attempt or cooldown scope
+    mismatches. No Google provider request was issued by rehearsal, apply or
+    verification;
+  - focused local regression suite: `88 passed`; PR `#292` `python-ci`: PASS.
+    Its unrelated static browser job reproduced the pre-existing
+    `card 6407 image escapes its shell` assertion; the PR did not touch the
+    static site or preview data;
+  - PR `#292` merged to `origin/main` as
+    `0849a0ceb90696bd19934609f38df6db5c3a4356`. The active Fly runtime SHA
+    `fa39093bcb497461ab8c8e206e3b42454662721c` is an ancestor of that main SHA;
+    no runtime redeploy was required because gateway clients read this registry
+    dynamically and the correction was already live.
 
 The code/database/runtime hardening and live six-project correction are
-complete. The incident remains `open` only until the durable scope-split
-migration and this corrected audit are reachable from `origin/main`; the
-operator mapping blocker itself is resolved.
+complete and durable in `origin/main`. Remaining unchecked follow-ups are
+non-blocking prevention/backlog work and do not weaken the mandatory shared
+admission boundary established and verified here.
 
 ## Prevention
 
