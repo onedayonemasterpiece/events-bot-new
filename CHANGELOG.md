@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Fixed the CherryFlash `popular_review` watchdog retry storm: after two
+  persisted failed sessions for the same local target date it stops launching
+  ten-minute Kaggle replacements, keeping CDN/render outages bounded.
+
 - Added the clean main-based audience-collections shadow contour: source-grounded
   facts v3, review receipts and warm cache, immutable Telegram/VK/parser replay,
   full-catalog product snapshot/monitor and StaticSiteBuilder artifacts. The
