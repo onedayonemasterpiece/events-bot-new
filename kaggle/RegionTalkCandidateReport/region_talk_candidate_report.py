@@ -4181,14 +4181,14 @@ $claim = SELECT * FROM `{cursor_table_path}`
     AND COALESCE(lease_owner, '') = $lease_owner
     AND COALESCE(lease_token, '') = $lease_token
     AND COALESCE(lease_expires_at, '') > $now
-    AND consumed_count + COALESCE(claim_count, 0) <= expected_count;
+    AND consumed_count + COALESCE(claim_count, 0ul) <= expected_count;
 UPSERT INTO `{cursor_table_path}`
   (generation, queue_name, expected_count, consumed_count,
    cursor_due_at, cursor_priority, cursor_status, cursor_item_key,
    claim_due_at, claim_priority, claim_status, claim_item_key, claim_count,
    lease_owner, lease_token, lease_expires_at, updated_at)
-SELECT generation, queue_name, expected_count, consumed_count + COALESCE(claim_count, 0),
-       COALESCE(claim_due_at, ''), COALESCE(claim_priority, 0u),
+SELECT generation, queue_name, expected_count, consumed_count + COALESCE(claim_count, 0ul),
+       COALESCE(claim_due_at, ''), COALESCE(claim_priority, 0ul),
        COALESCE(claim_status, ''), COALESCE(claim_item_key, ''),
        NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, $now
 FROM $claim;
