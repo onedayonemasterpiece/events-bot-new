@@ -1,8 +1,9 @@
 # Audience collections clean-main integration report
 
-Date: 2026-08-03  
-Branch: `integration/static-collections-audience-shadow-main-20260803`  
-Base at integration start: `origin/main@d5e58731a12b378a19bb9f175459b5b3cc153b7a`  
+Date: 2026-08-03
+Branch: `integration/static-collections-audience-shadow-main-20260803`
+Base at integration start: `origin/main@d5e58731a12b378a19bb9f175459b5b3cc153b7a`
+Rebased review base: `origin/main@81833f0156321fee90ab467fd0c4069de25309bf`
 Scope: data preparation and shadow acceptance only. PR B, owner gold, scores,
 thresholds, Astro routes, navigation, sitemap and semantic publication remain
 out of scope and blocked.
@@ -162,8 +163,9 @@ a production migration artifact.
 
 ## Deterministic verification
 
-- collection/facts/replay/product suite: `170 passed`;
-- limiter/project-scope suite: `112 passed`;
+- exact CI facts/merge/client/backfill suite: `145 passed`;
+- additional audience/replay/product/validator suite: `129 passed`;
+- limiter/project-scope/fallback/notebook contract suite: `148 passed`;
 - Node collection contract tests: `5 passed`;
 - StaticSiteBuilder handoff suite: `38 passed`;
 - full local Astro preview on the shadow data: `458` pages, `check:preview` PASS;

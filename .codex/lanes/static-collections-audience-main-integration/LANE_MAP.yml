@@ -1,6 +1,6 @@
 mode: serial_integrator_after_parallel_discovery
 repo: /home/dev/projects/events-bot-new
-base_ref: origin/main@d5e58731a12b378a19bb9f175459b5b3cc153b7a
+base_ref: origin/main@81833f0156321fee90ab467fd0c4069de25309bf
 base_branch: main
 integration_branch: integration/static-collections-audience-shadow-main-20260803
 global_constraints:
