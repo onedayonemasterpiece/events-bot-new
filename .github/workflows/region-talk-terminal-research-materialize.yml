@@ -6,6 +6,12 @@ on:
       - agent/region-talk-terminal-research-recovery-20260803
     paths:
       - '.github/workflows/region-talk-terminal-research-materialize.yml'
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/region-talk-terminal-research-materialize.yml'
 
 permissions:
   contents: write
@@ -72,11 +78,8 @@ jobs:
               payload = json.loads((src / name).read_text(encoding='utf-8'))
               assert payload['schema_version'] == 'region_talk_external_research.v1'
               for row in payload['candidates']:
-                  assert row['decision'] == {
-                      **row['decision'],
-                      'research_decision': 'candidate',
-                      'downstream_readiness': 'candidate_report',
-                  }
+                  assert row['decision']['research_decision'] == 'candidate'
+                  assert row['decision']['downstream_readiness'] == 'candidate_report'
                   assert row['uncertainties'] == []
                   assert row['publication']['access_status'] == 'full_text'
                   assert row['source_assessment']['scope'] == 'external'
