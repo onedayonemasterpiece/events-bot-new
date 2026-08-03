@@ -248,6 +248,25 @@ R1  — qualified_return
 
 ## 7. Фактическая отправная точка
 
+### 7.1. Inert route context/placement boundary in code
+
+`site/src/lib/onboarding/standard-placement-context.ts` is the released typed
+boundary between route families and a single `page_end` placement slot.
+`StandardOnboardingPlacementContext.astro` emits one hidden, script-free marker
+after page content in `EventLayout`; it performs no network/storage operation,
+does not select copy, and does not alter onboarding behavior. The closed context
+vocabulary is `home | listing | event_detail | search | personal | information`.
+
+The marker explicitly keeps `artifactProgram`, `clubProgram`, and
+`raffleProgram` at `disabled`. This is an inventory/placement seam, not a release
+of artifact hints, club membership, applications, prizes, or draw claims.
+`/fokus-gruppa/**` and `/zakrytaya-afisha/` remain a separate research product
+and must not contain this standard-onboarding runtime. Generated page-runtime
+inventory checks one inert marker/context/slot on each eligible standard HTML
+route, zero markers on the separate focus product, and fails if any gated
+programme is enabled. Labs and non-HTML JSON/ICS/SW/manifest outputs retain their
+explicit inventory exclusions.
+
 | Область | Release truth | Следствие |
 |---|---|---|
 | Home | `HomeHeroTalk → HomeQuickNav → HomeColdStartFeed` | Первая ценность возможна без welcome wall |

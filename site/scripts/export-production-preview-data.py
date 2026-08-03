@@ -1858,12 +1858,32 @@ def _question_cta_columns(con: sqlite3.Connection, table: str) -> set[str]:
         return set()
 
 
+def _question_cta_import_timestamp(value: Any) -> datetime | None:
+    """Accept only a persisted SQLite/ISO import timestamp as provenance."""
+
+    raw = clean_text(value)
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
 def _partner_question_vk_url(
     con: sqlite3.Connection,
     event_id: int,
     row: sqlite3.Row,
 ) -> str | None:
-    """Resolve only a partner-community post proven by organization ownership."""
+    """Resolve a partner post with owned-community and live-import provenance.
+
+    A URL stored on ``event`` is not publication evidence: it can be a draft,
+    postponed object or legacy/manual value.  The authoritative deterministic
+    proof is the canonical ``event_source`` row written by VK intake after it
+    read a public wall post.  That row must retain an import timestamp and the
+    exact owner/post ids extracted during intake.  Old/incomplete snapshots fail
+    closed and allow the published managed-Afisha fallback to run.
+    """
 
     creator_id = row_get(row, "creator_id")
     user_columns = _question_cta_columns(con, "user")
@@ -1896,22 +1916,46 @@ def _partner_question_vk_url(
     if not group_ids:
         return None
 
-    candidates = [row_get(row, "source_post_url")]
     source_columns = _question_cta_columns(con, "event_source")
-    if {"event_id", "source_url"}.issubset(source_columns):
+    provenance_columns = {
+        "event_id",
+        "source_type",
+        "source_url",
+        "source_chat_id",
+        "source_message_id",
+        "imported_at",
+    }
+    if not provenance_columns.issubset(source_columns):
+        return None
+    try:
+        sources = con.execute(
+            """
+            select source_type, source_url, source_chat_id,
+                   source_message_id, imported_at
+            from event_source where event_id=?
+            order by imported_at desc, rowid desc
+            """,
+            (event_id,),
+        ).fetchall()
+    except sqlite3.DatabaseError:
+        return None
+    for source in sources:
+        if clean_text(source[0]).casefold() != "vk" or not _question_cta_import_timestamp(source[4]):
+            continue
+        parsed = _question_cta_vk_post(source[1])
+        if not parsed or parsed[1] not in group_ids:
+            continue
         try:
-            candidates.extend(
-                source[0]
-                for source in con.execute(
-                    "select source_url from event_source where event_id=? order by rowid asc",
-                    (event_id,),
-                )
-            )
-        except sqlite3.DatabaseError:
-            pass
-    for candidate in candidates:
-        parsed = _question_cta_vk_post(candidate)
-        if parsed and parsed[1] in group_ids:
+            provenance_owner = abs(int(source[2]))
+            provenance_post = int(source[3])
+        except (TypeError, ValueError):
+            continue
+        url_match = VK_WALL_POST_RE.fullmatch(parsed[0])
+        if (
+            url_match
+            and provenance_owner == parsed[1]
+            and provenance_post == int(url_match.group("post"))
+        ):
             return parsed[0]
     return None
 

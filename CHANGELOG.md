@@ -19,10 +19,15 @@
   a 280 ms single navigation against desktop double-click/mobile double-tap to
   set the existing like state exactly once, including dynamically inserted cards.
 - Added the event question CTA contract and fail-closed VK resolver. Published
-  partner posts take precedence over published managed Afisha posts; scheduled,
-  stored and wrong-community URLs remain hidden. Event pages render the
+  partner posts take precedence only with exact VK-intake owner/post/timestamp
+  provenance; partner-looking raw, scheduled or stored URLs fall back to a
+  published managed Afisha post and otherwise remain hidden. Event pages render the
   SVGRepo-sourced “Остались вопросы?” block before recommendations, and a live
   managed VK publication schedules one coalesced Smart Update refresh.
+- Added the inert typed standard-onboarding route-context and `page_end` slot
+  marker plus generated inventory enforcement. It adds no runtime behavior and
+  keeps artifact, club and raffle programmes explicitly disabled; focus-group
+  routes remain outside the standard-onboarding boundary.
 - Added the checked `/podborki/` catalog and collection registry, including
   public/repair/blocked/deferred navigation policy and the exact-ID
   `gastronomy_v1` lifecycle. Blocked collections stay out of navigation and the

@@ -1,0 +1,21 @@
+---
+import { resolveStandardOnboardingPlacementContext } from '../../lib/onboarding/standard-placement-context.ts';
+
+interface Props {
+  pathname?: string;
+}
+
+const context = resolveStandardOnboardingPlacementContext(Astro.props.pathname || Astro.url.pathname);
+---
+
+<span
+  hidden
+  aria-hidden="true"
+  data-standard-onboarding-runtime={context.version}
+  data-standard-onboarding-context={context.routeContext}
+  data-standard-onboarding-slot={context.placementSlot}
+  data-standard-onboarding-mode={context.runtimeMode}
+  data-standard-onboarding-artifact-program={context.artifactProgram}
+  data-standard-onboarding-club-program={context.clubProgram}
+  data-standard-onboarding-raffle-program={context.raffleProgram}
+></span>

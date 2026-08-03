@@ -18,6 +18,20 @@ test('EventLayout mounts the target personalization runtime exactly once', async
   assert.doesNotMatch(layout, /personalization\/legacy\//u);
 });
 
+test('EventLayout exposes one inert standard-onboarding page-end context after content', async () => {
+  const [layout, component] = await Promise.all([
+    read('src/layouts/EventLayout.astro'),
+    read('src/components/onboarding/StandardOnboardingPlacementContext.astro'),
+  ]);
+  assert.equal(occurrences(layout, /<StandardOnboardingPlacementContext\b/gu), 1);
+  assert.equal(occurrences(layout, /import StandardOnboardingPlacementContext from/gu), 1);
+  assert.ok(layout.indexOf('<slot />') < layout.indexOf('<StandardOnboardingPlacementContext'));
+  assert.doesNotMatch(component, /<script|fetch\s*\(|localStorage|sessionStorage|indexedDB/iu);
+  assert.match(component, /data-standard-onboarding-artifact-program=\{context\.artifactProgram\}/u);
+  assert.match(component, /data-standard-onboarding-club-program=\{context\.clubProgram\}/u);
+  assert.match(component, /data-standard-onboarding-raffle-program=\{context\.raffleProgram\}/u);
+});
+
 test('standard card click arbitration is delegated and excludes controls, rails and drag', async () => {
   const layout = await read('src/layouts/EventLayout.astro');
   assert.match(layout, /const CARD_TAP_WINDOW_MS = 280/u);

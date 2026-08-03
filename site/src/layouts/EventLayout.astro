@@ -9,6 +9,7 @@ import PwaTelemetry from '../components/PwaTelemetry.astro';
 import Reference4MobileMenu from '../components/Reference4MobileMenu.astro';
 import StaticSiteAuthRuntime from '../components/auth/StaticSiteAuthRuntime.astro';
 import PersonalizationRuntime from '../components/personalization/PersonalizationRuntime.astro';
+import StandardOnboardingPlacementContext from '../components/onboarding/StandardOnboardingPlacementContext.astro';
 import UnusualUnreadRuntime from '../components/UnusualUnreadRuntime.astro';
 import '../styles/design-system.css';
 import { BASE_PATH, getCurrentDate, IS_PRODUCTION, IS_SECRET_CANDIDATE, siteHomeHref, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
@@ -2512,6 +2513,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
     <StaticSiteAuthRuntime />
     <UnusualUnreadRuntime />
     <slot />
+    <StandardOnboardingPlacementContext pathname={Astro.url.pathname} />
     {focusPageFamily && (
       <FocusGroupLabPanel
         pageFamily={focusPageFamily}

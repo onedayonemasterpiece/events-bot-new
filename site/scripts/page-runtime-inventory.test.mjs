@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { buildPageRuntimeInventory } from './check-page-runtime-inventory.mjs';
 
-const page = (extra='') => `<!doctype html><html><body><span data-p13n-runtime-marker="p13n-runtime-v1" data-p13n-static-only-reason="explicit"></span>${extra}<script>"data-static-site-auth-runtime"</script></body></html>`;
+const onboarding = '<span data-standard-onboarding-runtime="standard-onboarding-context-v1" data-standard-onboarding-context="information" data-standard-onboarding-slot="page_end" data-standard-onboarding-mode="inert" data-standard-onboarding-artifact-program="disabled" data-standard-onboarding-club-program="disabled" data-standard-onboarding-raffle-program="disabled"></span>';
+const page = (extra='', includeOnboarding=true) => `<!doctype html><html><body><span data-p13n-runtime-marker="p13n-runtime-v1" data-p13n-static-only-reason="explicit"></span>${extra}${includeOnboarding ? onboarding : ''}<script>"data-static-site-auth-runtime"</script></body></html>`;
 
 test('runtime inventory distinguishes shared, diagnostic, static and non-html routes', async () => {
   const root = await mkdtemp(join(tmpdir(), 'page-runtime-'));
@@ -21,8 +22,10 @@ test('runtime inventory distinguishes shared, diagnostic, static and non-html ro
   await writeFile(join(root,'event/item.ics'), 'BEGIN:VCALENDAR\nEND:VCALENDAR\n');
   await writeFile(join(root,'pwa-sw.js'), 'self.addEventListener("fetch",()=>{});');
   await writeFile(join(root,'manifest.webmanifest'), '{}');
+  await mkdir(join(root,'fokus-gruppa'), { recursive:true });
+  await writeFile(join(root,'fokus-gruppa/index.html'), page('<i data-static-site-auth-runtime></i>', false));
   const inventory = buildPageRuntimeInventory(root);
-  assert.equal(inventory.counts.shared_auth_transport, 1);
+  assert.equal(inventory.counts.shared_auth_transport, 2);
   assert.equal(inventory.counts.specialized_diagnostic_transport, 1);
   assert.equal(inventory.counts.explicit_static_only, 1);
   assert.equal(inventory.counts.excluded_lab_html, 1);
@@ -32,6 +35,10 @@ test('runtime inventory distinguishes shared, diagnostic, static and non-html ro
   assert.equal(inventory.counts.excluded_service_worker, 1);
   assert.equal(inventory.counts.excluded_webmanifest, 1);
   assert.equal(inventory.counts.excluded_lab_or_non_html, 6);
+  assert.equal(inventory.counts.standard_onboarding_eligible_html, 3);
+  assert.equal(inventory.counts.standard_onboarding_inert_ok, 3);
+  assert.equal(inventory.counts.standard_onboarding_focus_boundary_excluded, 1);
+  assert.equal(inventory.counts.standard_onboarding_failures, 0);
   assert.equal(inventory.counts.failures, 0);
 });
 
@@ -46,4 +53,13 @@ test('runtime inventory strips the generated preview-token directory from public
   assert.equal(inventory.pages.find((item) => item.relative_path.endsWith('events/index.html'))?.public_path, '/events/');
   assert.equal(inventory.counts.excluded_lab_or_non_html, 1);
   assert.equal(inventory.counts.failures, 0);
+});
+
+test('runtime inventory fails an enabled gated onboarding programme', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'page-runtime-onboarding-gate-'));
+  await mkdir(join(root, 'events'), { recursive:true });
+  await writeFile(join(root, 'events/index.html'), page().replace('data-standard-onboarding-artifact-program="disabled"', 'data-standard-onboarding-artifact-program="enabled"'));
+  const inventory = buildPageRuntimeInventory(root);
+  assert.equal(inventory.counts.standard_onboarding_failures, 1);
+  assert.match(inventory.pages[0].failures.join(','), /standard_onboarding_gated_program_enabled/u);
 });

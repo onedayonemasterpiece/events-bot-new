@@ -49,6 +49,14 @@ function exclusion(path, html, kind) {
   return null;
 }
 
+const STANDARD_ONBOARDING_CONTEXTS = new Set(['home', 'listing', 'event_detail', 'search', 'personal', 'information']);
+
+function standardOnboardingBoundary(path) {
+  if (path.startsWith('/fokus-gruppa/')) return 'separate-focus-group-product';
+  if (path === '/zakrytaya-afisha/') return 'separate-closed-focus-product';
+  return null;
+}
+
 export function buildPageRuntimeInventory(distRoot) {
   const pages = inventoryFiles(distRoot).map(({ file, kind }) => {
     const relativePath = relative(distRoot, file);
@@ -60,6 +68,15 @@ export function buildPageRuntimeInventory(distRoot) {
     const auth = attrs(markup, 'data-static-site-auth-runtime').length;
     const diagnostics = attrs(markup, 'data-focus-connectivity').length;
     const staticOnly = attrs(markup, 'data-p13n-static-only-reason').filter(Boolean);
+    const onboardingMarkers = attrs(markup, 'data-standard-onboarding-runtime');
+    const onboardingContexts = attrs(markup, 'data-standard-onboarding-context').filter(Boolean);
+    const onboardingSlots = attrs(markup, 'data-standard-onboarding-slot').filter(Boolean);
+    const onboardingModes = attrs(markup, 'data-standard-onboarding-mode').filter(Boolean);
+    const onboardingArtifact = attrs(markup, 'data-standard-onboarding-artifact-program').filter(Boolean);
+    const onboardingClub = attrs(markup, 'data-standard-onboarding-club-program').filter(Boolean);
+    const onboardingRaffle = attrs(markup, 'data-standard-onboarding-raffle-program').filter(Boolean);
+    const onboardingBoundary = kind === 'html' ? standardOnboardingBoundary(path) : null;
+    const onboardingEligible = kind === 'html' && !exclusionReason && !onboardingBoundary;
     let context = 'unclassified';
     if (exclusionReason) context = 'excluded';
     else if (auth === 1) context = 'shared-auth-resilient-transport';
@@ -70,11 +87,28 @@ export function buildPageRuntimeInventory(distRoot) {
     if (!exclusionReason && auth > 1) failures.push(`auth_runtime_count=${auth}`);
     if (!exclusionReason && diagnostics > 1) failures.push(`diagnostic_transport_count=${diagnostics}`);
     if (!exclusionReason && context === 'unclassified') failures.push('runtime_context_unclassified');
+    if (onboardingEligible && onboardingMarkers.length !== 1) failures.push(`standard_onboarding_runtime_count=${onboardingMarkers.length}`);
+    if (onboardingEligible && (onboardingContexts.length !== 1 || !STANDARD_ONBOARDING_CONTEXTS.has(onboardingContexts[0]))) failures.push('standard_onboarding_context_invalid');
+    if (onboardingEligible && (onboardingSlots.length !== 1 || onboardingSlots[0] !== 'page_end')) failures.push('standard_onboarding_slot_invalid');
+    if (onboardingEligible && (onboardingModes.length !== 1 || onboardingModes[0] !== 'inert')) failures.push('standard_onboarding_mode_not_inert');
+    if (onboardingEligible && [onboardingArtifact, onboardingClub, onboardingRaffle].some((values) => values.length !== 1 || values[0] !== 'disabled')) failures.push('standard_onboarding_gated_program_enabled');
+    if (onboardingBoundary && onboardingMarkers.length !== 0) failures.push('standard_onboarding_focus_boundary_violation');
     return {
       relative_path: relativePath.split(sep).join('/'), public_path:path,
       route_kind:kind,
       context, p13n_runtime_count:p13n, auth_runtime_count:auth,
       diagnostic_transport_count:diagnostics,
+      standard_onboarding_eligible:onboardingEligible,
+      standard_onboarding_boundary:onboardingBoundary,
+      standard_onboarding_runtime_count:onboardingMarkers.length,
+      standard_onboarding_context:onboardingContexts[0] || null,
+      standard_onboarding_slot:onboardingSlots[0] || null,
+      standard_onboarding_mode:onboardingModes[0] || null,
+      standard_onboarding_gated_programs:{
+        artifact:onboardingArtifact[0] || null,
+        club:onboardingClub[0] || null,
+        raffle:onboardingRaffle[0] || null,
+      },
       static_only_reason:staticOnly[0] || null,
       excluded:Boolean(exclusionReason), exclusion_reason:exclusionReason,
       status:failures.length ? 'fail' : (exclusionReason ? 'excluded' : 'ok'), failures,
@@ -94,6 +128,10 @@ export function buildPageRuntimeInventory(distRoot) {
       excluded_service_worker:pages.filter((page) => page.route_kind === 'service-worker-route').length,
       excluded_webmanifest:pages.filter((page) => page.route_kind === 'webmanifest-route').length,
       excluded_lab_or_non_html:pages.filter((page) => page.excluded).length,
+      standard_onboarding_eligible_html:pages.filter((page) => page.standard_onboarding_eligible).length,
+      standard_onboarding_inert_ok:pages.filter((page) => page.standard_onboarding_eligible && !page.failures.some((failure) => failure.startsWith('standard_onboarding_'))).length,
+      standard_onboarding_focus_boundary_excluded:pages.filter((page) => page.standard_onboarding_boundary).length,
+      standard_onboarding_failures:pages.filter((page) => page.failures.some((failure) => failure.startsWith('standard_onboarding_'))).length,
       failures:pages.filter((page) => page.status === 'fail').length,
     },
     pages,

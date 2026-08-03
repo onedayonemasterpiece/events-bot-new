@@ -1114,14 +1114,20 @@ question_cta?: {
 ```
 
 1. for an event created by a partner, use an exact VK wall post whose owner id
-   belongs to `organization.vk_source_group_ids` for that partner;
+   belongs to `organization.vk_source_group_ids` only when `event_source`
+   contains authoritative live-at-import provenance: `source_type='vk'`, a
+   non-empty `imported_at`, and `source_chat_id` / `source_message_id` exactly
+   matching the wall owner/post ids;
 2. otherwise use `event_publication.live_url` only when `platform='vk'`,
    `target='klgdevents'`, `status='published'`, and the owner is the configured
    Afisha group;
 3. otherwise export `question_cta: null` and render nothing.
 
+An `event.source_post_url` or partner-looking stored/scheduled URL is not
+publication evidence by itself. Missing/incomplete/mismatched import provenance
+falls through to the published managed-Afisha resolver and then to null.
 Arbitrary source URLs, a managed `stored_url`, postponed/scheduled rows, missing
-organization ownership, wrong groups and malformed links fail closed. A
+organization ownership, wrong groups and malformed links therefore fail closed. A
 successful/recovered managed VK publication coalesces `static_site_build:prod`
 with trigger `vk_publication_live`; the short delay lets the owned-publication
 resolver persist its live ledger before export.

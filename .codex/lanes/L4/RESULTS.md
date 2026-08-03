@@ -22,8 +22,13 @@ Status: **Done**
   pending pointer state; dynamically cloned cards use delegation.
 - **Done — exact CTA contract/resolver:** `question_cta?: { provider: "vk";
   url: string; source: "partner_post" | "managed_afisha_post" }`. Resolution is
-  exact partner-owned live post, then published managed Afisha live URL, then
-  null. Scheduled/stored/arbitrary/malformed/wrong-owner rows fail closed.
+  exact partner-owned post with matching VK-intake owner/post/import timestamp
+  provenance, then published managed Afisha live URL, then null. Raw,
+  scheduled/stored/arbitrary/malformed/wrong-owner rows fail closed.
+- **Done — inert standard-onboarding context slots:** typed route contexts expose
+  one script-free `page_end` placement marker on 385 eligible standard HTML
+  routes. Seven focus-product routes are explicitly outside the boundary;
+  artifact, club and raffle programmes remain `disabled` on every marker.
 - **Done — rebuild trigger:** successful or recovered managed VK live
   publication coalesces a delayed `static_site_build:prod` request with trigger
   `vk_publication_live`.
@@ -40,14 +45,19 @@ Status: **Done**
   inconsistent JSON import attributes on `listingMediaOverrides.json`.
 - L4 + P13N Node test bundle — PASS, 14/14.
 - `node scripts/check-personalization-source-guard.mjs` — PASS.
-- focused Python resolver / VK rebuild tests — PASS, 6/6.
+- focused Python question-resolver tests — PASS, 7/7, including a
+  partner-looking scheduled/stored URL falling through to managed Afisha and
+  missing/mismatched live-import provenance failing closed.
+- standard-onboarding typed context tests — PASS, 1/1; page/runtime source and
+  inventory contract tests — PASS, 8/8.
 - `node tests/event-card-double-like.playwright.mjs` — PASS.
 - `node tests/event-question-cta.playwright.mjs` — PASS.
 - `node tests/personalization-off.playwright.mjs` — PASS.
 - personalization route inventory — PASS, 392 eligible, 0 missing, 0
   duplicate, 0 unclassified/policy failures.
 - page runtime inventory — PASS, 392 eligible HTML, 737 explicit lab/non-HTML
-  exclusions, 0 failures.
+  exclusions, 0 failures; standard-onboarding sub-inventory: 385/385 inert
+  eligible routes, 7 separate focus-product routes, 0 failures.
 - `npm run check:preview` is not applicable to the plain `npm run build`
   artifact and correctly stopped with `No preview-* folder found in dist`; no
   preview-prefix deployment was performed.

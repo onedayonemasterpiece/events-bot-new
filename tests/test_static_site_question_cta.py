@@ -20,7 +20,10 @@ def question_db() -> sqlite3.Connection:
         create table event(id integer primary key, creator_id integer, source_post_url text);
         create table "user"(user_id integer primary key, is_partner integer, organization text);
         create table organization(name text primary key, vk_source_group_ids text);
-        create table event_source(id integer primary key, event_id integer, source_type text, source_url text);
+        create table event_source(
+          id integer primary key, event_id integer, source_type text, source_url text,
+          source_chat_id integer, source_message_id integer, imported_at text
+        );
         create table event_publication(
           id integer primary key, event_id integer, platform text, target text,
           status text, stored_url text, live_url text, resolved_at text
@@ -38,10 +41,38 @@ def event_row(con: sqlite3.Connection, event_id: int, creator_id: int, source_ur
     return con.execute("select * from event where id=?", (event_id,)).fetchone()
 
 
+def add_live_partner_source(
+    con: sqlite3.Connection,
+    event_id: int,
+    post_id: int,
+    *,
+    owner_id: int = 30777579,
+    imported_at: str | None = "2026-08-03T11:00:00Z",
+    source_chat_id: int | None = None,
+    source_message_id: int | None = None,
+) -> None:
+    con.execute(
+        """
+        insert into event_source(
+          event_id,source_type,source_url,source_chat_id,source_message_id,imported_at
+        ) values(?,?,?,?,?,?)
+        """,
+        (
+            event_id,
+            "vk",
+            f"https://vk.com/wall-{owner_id}_{post_id}",
+            owner_id if source_chat_id is None else source_chat_id,
+            post_id if source_message_id is None else source_message_id,
+            imported_at,
+        ),
+    )
+
+
 def test_partner_published_post_wins_over_managed_afisha(monkeypatch) -> None:
     monkeypatch.setenv("VK_EVENTS_GROUP_ID", "231920894")
     con = question_db()
     row = event_row(con, 1, 100, "https://vk.com/wall-30777579_44")
+    add_live_partner_source(con, 1, 44)
     con.execute(
         "insert into event_publication values(1,1,'vk','klgdevents','published',null,?,?)",
         ("https://vk.com/wall-231920894_77", "2026-08-03T12:00:00Z"),
@@ -58,10 +89,7 @@ def test_partner_source_must_belong_to_declared_partner_community(monkeypatch) -
     monkeypatch.setenv("VK_EVENTS_GROUP_ID", "231920894")
     con = question_db()
     row = event_row(con, 2, 100, "https://vk.com/wall-999_2")
-    con.execute(
-        "insert into event_source(event_id,source_type,source_url) values(2,'vk',?)",
-        ("https://vk.com/wall-30777579_45",),
-    )
+    add_live_partner_source(con, 2, 45)
 
     assert EXPORTER.event_question_cta(con, 2, row) == {
         "provider": "vk",
@@ -106,6 +134,41 @@ def test_scheduled_stored_or_wrong_group_managed_urls_fail_closed(monkeypatch) -
 
     assert EXPORTER.event_question_cta(con, 4, scheduled) is None
     assert EXPORTER.event_question_cta(con, 5, wrong_group) is None
+
+
+def test_partner_looking_stored_or_unproven_url_falls_back_to_managed(monkeypatch) -> None:
+    monkeypatch.setenv("VK_EVENTS_GROUP_ID", "231920894")
+    con = question_db()
+    row = event_row(con, 6, 100, "https://vk.com/wall-30777579_60")
+    # A partner-looking stored/scheduled value is explicitly not live evidence.
+    con.execute(
+        "insert into event_publication values(6,6,'vk','partner_source','scheduled',?,null,?)",
+        ("https://vk.com/wall-30777579_60", "2026-08-03T11:00:00Z"),
+    )
+    con.execute(
+        "insert into event_publication values(7,6,'vk','klgdevents','published',null,?,?)",
+        ("https://vk.com/wall-231920894_61", "2026-08-03T12:00:00Z"),
+    )
+
+    assert EXPORTER.event_question_cta(con, 6, row) == {
+        "provider": "vk",
+        "url": "https://vk.com/wall-231920894_61",
+        "source": "managed_afisha_post",
+    }
+
+
+def test_partner_source_without_exact_live_import_provenance_fails_closed() -> None:
+    con = question_db()
+    missing_timestamp = event_row(con, 7, 100, "https://vk.com/wall-30777579_70")
+    add_live_partner_source(con, 7, 70, imported_at=None)
+    mismatched_ids = event_row(con, 8, 100, "https://vk.com/wall-30777579_80")
+    add_live_partner_source(con, 8, 80, source_message_id=81)
+    malformed_timestamp = event_row(con, 9, 100, "https://vk.com/wall-30777579_90")
+    add_live_partner_source(con, 9, 90, imported_at="not-a-timestamp")
+
+    assert EXPORTER.event_question_cta(con, 7, missing_timestamp) is None
+    assert EXPORTER.event_question_cta(con, 8, mismatched_ids) is None
+    assert EXPORTER.event_question_cta(con, 9, malformed_timestamp) is None
 
 
 def test_old_snapshot_without_publication_contract_fails_closed() -> None:
