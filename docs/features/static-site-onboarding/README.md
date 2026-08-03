@@ -1,775 +1,1023 @@
 # Онбоардинг стандартного пользователя KenigEvents
 
-> **Статус:** strategy draft v0.1 / product discovery; не implementation contract и не описание уже выпущенного поведения.
-> **Дата среза репозитория:** 2026-08-03.
-> **Проверенная база:** `main@eef11833bf75e42f65ddac1a13550796f4add620`.
-> **Аудитория:** обычный посетитель KenigEvents — новый или вернувшийся, анонимный или авторизованный.
-> **Явно исключено:** специальная программа фокус-группы, её исследовательские задания, feedback-обязательства, конкурс, leaderboard и prize mechanics.
-> **Research companion:** [prompt для глубокого исследования](deep-research-prompt.md).
+> **Статус:** evidence-consolidated strategy v0.3 / product decision; не
+> implementation contract и не описание уже выпущенного production behavior.  
+> **Дата:** 2026-08-03.  
+> **Проверенный репозиторный baseline:**
+> `main@09fcde9012b30d0c3b4a30d35f45e3c9858b096c`.  
+> **Аудитория:** обычный новый или вернувшийся посетитель; не участник
+> фокус-группы.  
+> **Выбранный вариант:**
+> [A — сдержанный utility-first contextual onboarding](strategy-options.md).  
+> **Hero-talk dependency:** канонический пакет `docs/features/hero-talk/` в
+> stacked PR [#291](https://github.com/onedayonemasterpiece/events-bot-new/pull/291),
+> ветка
+> [`agent/hero-talk-chain-research-20260803`](https://github.com/onedayonemasterpiece/events-bot-new/blob/agent/hero-talk-chain-research-20260803/docs/features/hero-talk/README.md).  
+> **Согласование:**
+> [корректировка стратегии по канонике Hero-talk](hero-talk-alignment-2026-08-03.md).  
+> **Исследования:**
+> [Gemini](research/gemini-deep-research-2026-08-03.txt),
+> [ChatGPT](research/chatgpt-deep-research-2026-08-03.txt),
+> [критическая консолидация](research/research-synthesis-2026-08-03.md).  
+> **Research brief:** [исходный prompt](deep-research-prompt.md).
 
-## 1. Назначение
+## 1. Итоговое решение
 
-Этот документ начинает отдельную стратегию онбоардинга обычного пользователя.
-Он отвечает не на вопрос «какой тур показать при первом открытии», а на вопрос:
+KenigEvents не нужен самостоятельный «онбординг-продукт» в виде обязательного
+тура, welcome-wall, checklist, missions или процента завершения. Нужна система
+редких контекстных сообщений поверх уже полезного static-first сайта.
 
-> Как помочь человеку постепенно освоить полезные возможности афиши в тот момент,
-> когда каждая из них решает его текущую задачу, не задерживая выбор события и не
-> заставляя регистрироваться, устанавливать приложение или давать разрешения?
-
-Стратегия должна быть связана с:
-
-- общей продуктовой задачей сайта — быстро найти жизнеспособное событие;
-- будущим редакционным стилем всех коммуникаций;
-- целевой персонализацией и её объяснимостью;
-- Hero Talk и Page-end Talk как поверхностями сообщений;
-- артефактами-пасхалками как необязательным слоем исследования;
-- будущей стратегией удержания и возвратности;
-- promo campaigns, но без смешения редакционного продвижения, обучения и
-  utility-коммуникаций в одну неразличимую механику.
-
-## 2. Решение в одном абзаце
-
-KenigEvents не нужен обязательный линейный тур. Базовая модель — **контекстный
-progressive onboarding поверх реальных пользовательских задач**. Сайт сначала
-должен дать полезный общий выбор без входа и настройки, затем — в подходящий
-момент — познакомить с одной следующей функцией, показать непосредственный
-результат действия и перестать объяснять уже освоенное. Hero Talk и Page-end
-Talk являются placement-поверхностями, а не отдельными видами онбоардинга:
-сообщение об одной функции может появиться в любой из них по правилам
-релевантности и частоты. Артефакты могут мягко расширять исследование сайта и
-дать первую точную подсказку, но не должны скрывать обязательное обучение,
-заменять основные CTA или становиться условием полезности. Вход, PWA,
-уведомления, email и синхронизация предлагаются только после доказанной пользы и
-каждый раз как отдельный добровольный upgrade.
-
-## 3. Фактическая отправная точка репозитория
-
-### 3.1. Что уже есть в `main`
-
-| Область | Фактическое состояние | Следствие для онбоардинга |
-|---|---|---|
-| Главная | [`index.astro`](../../../site/src/pages/index.astro) строит композицию `HomeHeroTalk → HomeQuickNav → HomeColdStartFeed` | Начальная ориентация уже встроена в полезную страницу; отдельный welcome-screen не нужен |
-| Hero Talk | [`HomeHeroTalk.astro`](../../../site/src/components/HomeHeroTalk.astro) — статический hero с обещанием сервиса, CTA «Что сегодня» и «Найти событие», плюс одно событие | Это реальный компонент, но пока не message-orchestration engine, не state machine и не кросс-страничный канал |
-| Cold start | [`HomeColdStartFeed.astro`](../../../site/src/components/HomeColdStartFeed.astro) показывает до 30 событий и остаётся полезным без входа и внешнего backend | Нельзя ставить настройку интересов перед первой ценностью |
-| Локальная реакция | Та же лента локально меняет порядок при наличии совместимых сигналов `ke_personalization_profile` | После действия можно показать честный feedback echo: что изменилось и как это отменить |
-| Карточка события | [`EventCard.astro`](../../../site/src/components/EventCard.astro) содержит `Не интересно`, like, share и, где допустимо, `В календарь` | Главные учебные моменты находятся рядом с действием, а не в общем туре |
-| Персонализация | [целевая система](../static-site-pages/personalizaion/personalization-to-be.md) требует static-first fallback, активацию после осмысленного действия, объяснимость и отделение campaign/easter-egg noise | Онбоардинг не должен создавать фиктивные сигналы интереса и не должен выдавать старый rerank за обученную модель |
-| Сохранения | [favorites/calendar contract](../event-favorites-calendar/README.md) разделяет сохранение, календарь, like, `Не интересно`, email и уведомления | Одно действие не даёт согласия на другое; тексты обязаны точно называть результат |
-| Пасхалки | [общая каноника](../static-site-easter-eggs/README.md) задаёт конечную культурную коллекцию, а [amber research](../static-site-pages/amber-artifact-easter-egg.md) проверяет noindex-прототип | Пасхалка — optional reinforcement, а не обязательный учебный checkpoint |
-| Фокус-группа | [отдельная программа](../static-site-focus-group/README.md) содержит orientation mission, feedback и исследовательские privileges | Это источник наблюдений, но не шаблон стандартного пользовательского пути |
-| Promo campaigns | [действующий campaign layer](../promo-campaigns/README.md) уже имеет activity/surface/cap/audit model | Talk placements желательно подключать к общему control plane, сохраняя раздельные purpose и метрики |
-
-### 3.2. Чего пока нет как законченной системы
-
-- канонического реестра пользовательских возможностей и признаков их освоения;
-- общего state machine `не видел → понял → попробовал → успешно использовал →
-  освоил`;
-- динамического Hero Talk/Page-end Talk resolver с приоритетами, caps,
-  cooldown, dismissal и конфликтами с promo/critical messages;
-- единого определения первой ценности и продуктовой активации обычного
-  пользователя;
-- доказанного момента предложения входа, PWA, напоминаний и Push;
-- разделённой аналитики onboarding, retention, promo campaign и easter-egg
-  exposure;
-- принятого набора текстов в будущем редакционном стиле;
-- экспериментального evidence, что подсказки улучшают освоение, а не замедляют
-  выбор события.
-
-Следовательно, текущий `HomeHeroTalk` нельзя называть готовой системой
-онбоардинга. Это хороший исходный placement и value proposition.
-
-## 4. Границы: стандартный пользователь ≠ участник исследования
-
-Стандартный посетитель ничего не обязан «проходить». Для него запрещено без
-отдельного продуктового решения:
-
-- показывать программу шагов и процент её завершения;
-- давать баллы за использование функций;
-- связывать качество отзыва, NPS, likes, invites или глубину просмотра с
-  наградой;
-- требовать orientation mission;
-- удерживать функцию до выполнения другого действия;
-- использовать конкурсную коллекцию фокус-группы;
-- просить feedback как условие доступа;
-- считать регистрацию, установку PWA или разрешение Push успешным завершением
-  онбоардинга.
-
-У обычного пользователя может быть добровольное исследование, коллекция и
-подсказки, но сайт остаётся полноценной афишей и без них.
-
-## 5. Главная пользовательская работа и критерий первой ценности
-
-Основная job-to-be-done:
-
-> Найти достаточно подходящее актуальное событие, быстро понять когда, где, на
-> каких условиях оно проходит и принять решение, что делать дальше.
-
-### 5.1. Первая ценность
-
-Минимальное доказательство первой ценности — не просмотр onboarding-message, а
-**понятное решение по реальному событию**. Оно может быть положительным или
-отрицательным:
-
-- открыть карточку из даты, поиска, подборки или deep link и изучить основные
-  факты;
-- сохранить/добавить в календарь;
-- отметить «понравилось» или «не интересно»;
-- поделиться;
-- перейти к билету/регистрации, когда такой CTA есть;
-- осознанно вернуться к выдаче и продолжить поиск.
-
-`page_view`, длительность сессии, scroll depth и закрытие подсказки сами по себе
-не доказывают ценность.
-
-### 5.2. Product activation — пока гипотеза
-
-Для исследования предлагается проверить составной event
-`first_useful_event_decision`:
+Она работает по правилу:
 
 ```text
-пользователь открыл актуальное событие из discovery surface
-AND
-либо совершил явное event action,
-либо вернулся в выдачу и открыл другой релевантный candidate
+сначала реальная пользовательская задача и доступный контент
+→ затем помощь только при наблюдаемой потребности
+→ после действия — точный результат и Undo/следующий путь
+→ освоенное перестаёт продвигаться
+→ continuity upgrade предлагается только после созданной ценности
 ```
 
-Это не окончательная North Star. Deep research должен проверить, не лучше ли для
-афиши считать активацией календарное сохранение, ticket/registration intent,
-повторный полезный визит либо более мягкую комбинацию.
+Первая задача сайта — помочь найти и понять жизнеспособное событие. Онбординг не
+должен превращать эту задачу в демонстрацию возможностей интерфейса.
+
+После изучения каноники Hero-talk уточнено важное архитектурное решение:
+
+```text
+онбординг определяет, что и когда допустимо объяснять;
+Hero-talk определяет, как связно и контекстно доставить такое сообщение.
+```
+
+Основные решения:
+
+1. Cold/unknown visitor получает полезную статическую первую сцену Hero-talk,
+   доступную до profile/runtime state.
+2. Typed briefing, cursor semantics, optional tile media и coherent chains —
+   грамматика самого Hero-talk, а не отдельный «расширенный» вариант
+   онбординга.
+3. На один page journey продвигается не больше одной новой capability и
+   сохраняется один основной CTA-path; Hero-talk chain при этом может содержать
+   несколько связанных nodes.
+4. Inline recovery и immediate action echo важнее feature promotion.
+5. Page-end Hero-talk использует точный контекст страницы; onboarding/continuity
+   upgrade появляется там только после antecedent value.
+6. Login, identity sync, PWA, reminders и permissions появляются только после
+   созданной ценности, фактического release и platform eligibility.
+7. Utility, onboarding, editorial, promo и artifact имеют разные purpose,
+   state, metrics и consent boundaries.
+8. Артефакты не входят в onboarding MVP и не обучают core capabilities.
+9. Focus-group missions, feedback obligations, leaderboard и prize mechanics не
+   переносятся обычному пользователю.
+
+## 2. Нормативная иерархия и граница ответственности
+
+При конфликте используются, в порядке убывания приоритета:
+
+1. актуальные явные решения владельца продукта;
+2. фактический код и release truth текущего `main`;
+3. каноническая продуктовая модель Hero-talk;
+4. эта стратегия онбординга;
+5. критическая консолидация исследований;
+6. исходные исследования и исторические прототипы.
+
+### 2.1. Что принадлежит onboarding strategy
+
+- capability registry;
+- release/route/platform prerequisites;
+- eligibility конкретной capability;
+- competency state;
+- success/failure evidence;
+- `unknown_external_outcome`;
+- dismissal, cooldown и suppression;
+- mastery и versioned reintroduction;
+- truthfulness `result_claim`;
+- retention handoff;
+- запрет taste pollution;
+- capability-specific KPI и guardrails.
+
+### 2.2. Что принадлежит Hero-talk
+
+- placements `home_hero` и семейство `*_page_end`;
+- typed briefing по смысловым fragments;
+- cursor semantics;
+- optional square-tile media;
+- narrative graph, nodes, bridges и open loops;
+- exact page/event/festival/club context;
+- bounded cross-session thread state;
+- greeting/local-identity/current-context families;
+- generation-time phrase packs и critics;
+- immutable compiled served plan;
+- runtime selection готового static plan;
+- chain-level frequency, coherence и editorial quality.
+
+### 2.3. Что принадлежит владельцу действия
+
+Компонент/контур конкретной capability отвечает за:
+
+- непосредственную операцию;
+- local error/recovery;
+- immediate action confirmation;
+- Undo;
+- ambiguous-timeout handling;
+- доступный status/alert;
+- reconciliation и alternate path.
+
+Hero-talk может продолжить подтверждённый результат, но не создаёт второе
+противоречащее подтверждение.
+
+### 2.4. Что принадлежит promo/editorial origin
+
+Editorial programme или promo campaign поставляет кандидатов в общий Hero-talk
+compiler. Она не получает ownership над onboarding state, safety, consent или
+первой ценностью и не создаёт отдельный `Campaign Talk`.
+
+## 3. Почему основой оставлено исследование ChatGPT
+
+Оба исследования сходятся по направлению. ChatGPT-исследование остаётся основным
+из-за более точного repo audit и работы с неопределённостью:
+
+- различает implemented, candidate, target, open PR и research;
+- не выдаёт local rerank за production recommendation loop;
+- использует staged outcomes вместо одного неоднородного activation event;
+- задаёт capability-specific success evidence;
+- отделяет Page-end eligibility от одного scroll depth;
+- маркирует numeric thresholds как priors;
+- учитывает low-traffic MDE, A/A, SRM и underpowered interpretation;
+- включает accessibility, legal/data boundaries и release dependencies.
+
+Из Gemini приняты concise verdict, `explicit_event_decision` как FV2 proxy,
+action-result copy, запрет checklist/FOMO/bundled consent и сценарный банк.
+Отклонены claims об обязательном Edge SSR, уже существующем Hero dismissal и
+отсутствии live-region в текущем shell.
+
+Каноника Hero-talk дополнительно исправила обе исследовательские рамки там, где
+они рассматривали Hero прежде всего как placement/banner, а не как единый
+chain-first product mechanism.
+
+## 4. Фактическая отправная точка
+
+| Область | Release truth | Следствие для стратегии |
+|---|---|---|
+| Home | `index.astro` строит `HomeHeroTalk → HomeQuickNav → HomeColdStartFeed` | Первая ценность достижима без welcome screen |
+| Current `HomeHeroTalk.astro` | Статический Astro-компонент с двумя CTA и event preview; нет compiler/thread/page-end | Это временное наполнение целевой Hero-talk зоны и rollback, не отдельный вечный продукт |
+| Canonical Hero-talk package | Docs/release-design track в stacked PR #291; runtime остаётся `NO-GO` | Presentation/chain ownership берётся из Hero-talk, но не выдаётся за production |
+| Cold-start feed | До 30 статических событий; local JS может rerank по `ke_personalization_profile` | Нет profile setup wall; copy говорит только о локальном порядке |
+| Toast/live region | `MobileToastRegion.astro` имеет polite/assertive regions, persistent action/error и pause на focus/pointer/touch | Переиспользовать для допустимых global echoes; не строить параллельный toast engine |
+| Event actions | Like, `Не интересно`, share и calendar affordance присутствуют | Основное обучение находится рядом с действием |
+| Search | Intent field виден анонимно; submit ведёт в Yandex PKCE; acceptance не завершён | Не обещать anonymous production-ready smart search |
+| Favorites/calendar | R15 candidate и deployed schema; real Yandex browser acceptance остаётся gate | Не писать финальный onboarding copy до решения semantics |
+| Personalization | Target static-first hybrid описан; learning loop не завершён | Никаких «мы узнали ваши интересы» без фактического evidence |
+| Identity sync | Partial/design; email/linking/merge не production-complete | Sync candidate остаётся `blocked_dependency` |
+| PWA | CTA зависит от browser eligibility | Не показывать недоступную кнопку и не обещать полный offline |
+| Utility/promo Push | Planned/release-gated и purpose-separated | Не продвигать до выпуска |
+| Артефакты | Product discovery/noindex research | Отдельный post-release cultural track |
+| Focus group | Отдельный research cohort | Не является шаблоном standard-user journey |
+
+## 5. Пользовательский результат: staged model
+
+Не существует одного глобального `onboarding_completed` и одной универсальной
+activation North Star.
+
+```text
+FV1 — qualified_event_understanding
+      человек получил достаточно фактов, чтобы принять решение;
+
+FV2 — explicit_event_decision
+      save/calendar/hide/like/share/ticket intent либо осознанное продолжение;
+
+C1  — capability_success
+      конкретное действие завершилось и его реальный результат показан;
+
+C2  — continuity_value
+      результат найден или полезен за пределами текущего экрана;
+
+R1  — qualified_return
+      следующий визит снова привёл к полезному event decision.
+```
+
+`explicit_event_decision` — основной оперативный FV2 proxy, но компоненты
+анализируются отдельно:
+
+- like не равен save;
+- share-sheet invocation не равен отправке;
+- ICS download не равен external calendar import;
+- outbound ticket click не равен покупке;
+- `Не интересно` может быть полезным квалифицированным решением.
+
+Нельзя автоматически выводить:
+
+- comprehension из dwell/scroll;
+- attendance из save/ticket click;
+- mastery из exposure;
+- удовлетворённость из long session;
+- consent из account/PWA;
+- return value из notification open;
+- persona из Hero-talk engagement.
 
 ## 6. Продуктовые инварианты
 
-1. **Ценность до объяснения.** Общая лента, дата, поиск и карточка доступны до
-   настройки, входа и согласий.
-2. **Одна новая возможность за раз.** В один момент интерфейс продвигает не
-   больше одного следующего действия.
-3. **Обучение в контексте.** Подсказка появляется рядом с задачей или после
-   действия, а не заранее перечисляет весь функционал.
-4. **Показывать результат.** После действия пользователь получает краткое,
-   правдивое подтверждение: что изменилось, где найти результат и как отменить.
-5. **Освоенное не объясняется снова.** Успешное повторное использование
-   подавляет базовую подсказку до изменения функции или явного запроса помощи.
-6. **Dismissal уважается.** Закрытие, `Не сейчас` и `Больше не показывать` имеют
-   разные, предсказуемые последствия.
-7. **Никаких admission walls.** Login, email, PWA и permissions — только
-   добровольные continuity upgrades.
-8. **Purpose separation.** Like, hide, calendar, favorite, reminder, utility
-   Push, promo Push, email и marketing не склеиваются.
-9. **Static/no-JS fallback полезен.** Отказ runtime/storage/backend скрывает
-   обучающий слой, но не основной контент и навигацию.
-10. **Доступность не бонус.** Touch, keyboard, screen reader, reduced motion,
-    no-hover и zoom получают эквивалентное действие и объяснение.
-11. **Нет скрытого профилирования ради текста.** Golden persona может позднее
-    слегка менять лексику, но не смысл, права, факты или давление.
-12. **Onboarding noise не становится taste signal.** Показ/клик по подсказке,
-    кампании или пасхалке не должен автоматически означать интерес к теме
-    события.
-13. **Меньше — допустимый результат.** Если affordance и copy уже понятны,
-    лучший onboarding может состоять в отсутствии дополнительного сообщения.
+1. **Static-first value.** Facts, links, navigation и first useful Hero scene не
+   ждут profile, analytics или onboarding state.
+2. **No admission wall.** Тур, login, email, PWA и permissions не стоят перед
+   первой ценностью.
+3. **One capability, not one literal node.** За page journey продвигается одна
+   новая capability и один основной CTA-path; coherent Hero-talk chain может
+   содержать несколько смысловых nodes.
+4. **Locality first.** Ошибка, recovery и reversible result показываются рядом с
+   действием; global toast используется только при отсутствии устойчивого
+   inline места или page-wide результате.
+5. **Truthful result.** Copy описывает только подтверждённый current release.
+6. **Capability-specific evidence.** У функций разные success/failure и
+   `unknown_external_outcome`.
+7. **Dismissal is valid.** `Закрыть`, `Не сейчас`, `Больше не показывать` и
+   permission denial имеют разные состояния.
+8. **No nagging.** Permanent dismissal не отменяется cosmetic copy, route или
+   campaign change.
+9. **Purpose separation.** Onboarding, utility, editorial, promo и artifact не
+   наследуют consent, success, taste или suppression друг друга.
+10. **No taste pollution.** Hero-talk exposure, campaign click и artifact find
+    не становятся автоматически preference signal.
+11. **Accessibility parity.** Keyboard, screen reader, zoom/reflow, no-hover,
+    reduced motion и no-JS получают эквивалентную core value.
+12. **No persona pressure.** Persona pack не меняет urgency, refusal, CTA,
+    result claim, caps, consent или rights.
+13. **Null treatment allowed.** Если IA/label решает задачу, feature-discovery
+    candidate не создаётся.
+14. **No runtime LLM.** Runtime выбирает готовый static served plan; генерация и
+    critics работают до публикации.
+15. **Bounded conversation.** Hero-talk thread state не является полным
+    разговором, taste profile или CRM memory.
 
-## 7. Не линейная воронка, а лестница полезности
+## 7. Journey model
 
-### Этап 0. Ориентация без обязательств
+### 7.1. Home cold start
 
-**Состояние:** первый визит или неизвестная история устройства.
+```text
+Hero-talk / home_hero:
+useful generic first scene
+→ optional short greeting/current-context node
+→ Today / Search / event CTA
+→ HomeQuickNav
+→ cold-start feed
+```
 
-**Задача:** за несколько секунд объяснить, что это за сервис и куда начать.
+Правила:
 
-**Подход:**
+- first scene находится в static HTML;
+- chain может иметь длину один;
+- допустимы daypart greeting, local identity, today/weekend и service
+  orientation families;
+- до activation не используются persona packs, return delta и inferred
+  interests;
+- нет feature-selling, profile setup или permission prompt;
+- typed motion не задерживает CTA и начало ленты;
+- reduced motion/no-JS получают полный статический смысл.
 
-- Hero Talk даёт одно обещание и не более двух intent CTA;
-- дата/поиск/быстрые маршруты видны сразу;
-- холодная лента уже содержит реальные события;
-- нет overlay, modal, checklist, email или permission prompt;
-- посетитель, пришедший по deep link, не отправляется на главную «пройти
-  знакомство».
+Success diagnostic — открыт task route или актуальное событие. Scroll и Hero
+exposure сами по себе не success.
 
-**Признак успеха:** переход к discovery surface или чтение конкретного события.
+### 7.2. Date-led journey
 
-### Этап 1. Первый осмысленный выбор
+Постоянные date controls и названия страниц являются основным обучением.
+Пульсация share/save на первой карточке без evidence реальной проблемы запрещена.
 
-**Состояние:** пользователь открыл дату, поиск, подборку, фестиваль или событие.
+Hero-talk page-end может продолжить exact date/collection context, но
+feature-discovery capability предлагается только при её собственной eligibility.
 
-**Задача:** помочь понять контент и выбрать следующий объект.
+### 7.3. Search-led journey
 
-**Допустимое обучение:**
+- до submit: label и живые примеры запроса;
+- при current auth gate: честное point-of-intent explanation;
+- loading/progress/error: inline status;
+- zero result: один recovery block с refinement и normal exit;
+- fallback discovery явно не называется точным result;
+- Hero-talk empty/search page-end не утверждает, что запрос понят, если runtime
+  завершился ошибкой.
 
-- короткое route-aware объяснение фильтра или формата списка;
-- пример поискового запроса только в Search;
-- на event detail — понятная иерархия фактов без отдельной подсказки, если UI
-  самодостаточен;
-- Page-end Talk может предложить естественное продолжение после прочитанного,
-  но не до основных фактов и CTA.
+До production acceptance Search не становится обязательной capability.
 
-**Не делать:** объяснять like, календарь, PWA, «Для меня» и пасхалки одновременно.
+### 7.4. Direct event deep link
 
-### Этап 2. Первый явный сигнал
+Home orientation не вставляется. Сначала facts/lifecycle, затем primary event
+CTA и secondary actions. Immediate echo появляется после действия.
 
-**Состояние:** человек уже просмотрел несколько кандидатов либо использовал
-like/`Не интересно`.
+Hero-talk `event_page_end` знает exact event/festival/club/occurrence/action
+context, предлагает одну следующую задачу и не дублирует `Похожие события` или
+card feed.
 
-**Задача:** показать, что действие было принято и имеет ограниченное понятное
-следствие.
+Уход после получения нужных facts остаётся допустимым outcome.
 
-**Пример результата:**
+### 7.5. Returning anonymous
 
-- `Не интересно` → событие скрыто/понижено согласно фактическому contract;
-- like → сохранён соответствующий signal, но не обещана посещаемость;
-- локальный rerank → честно сказано, что порядок уточнён по локальным оценкам;
-- доступна отмена или переход к объяснению.
+При сохранённом local state может быть доступен тихий Page-end/return candidate.
+При потере storage интерфейс fail quiet: generic first scene вместо полного
+повтора всех prompts или выдуманного продолжения.
 
-**Признак успеха:** пользователь понимает разницу между положительным сигналом,
-скрытием и сохранением.
+`Пока вас не было` разрешается только при валидном meaningful-visit watermark и
+согласованном `served_delta_id`; без identity остаётся device-local.
 
-### Этап 3. Сохранение намерения
+### 7.6. Authorized saved-state return
 
-**Состояние:** возникло событие, которое пользователь не хочет потерять.
+Пользователь приходит за сохранённым. Onboarding ограничивается
+lifecycle/status/recovery. Promo и «познакомьтесь с сайтом» не вытесняют utility.
 
-**Задача:** научить календарю/сохранениям на реальном намерении.
+Cross-device Hero thread и onboarding state имеют разные schemas/owners.
 
-**Подход:**
+### 7.7. Mobile/PWA и desktop/keyboard
 
-- действие предлагается на карточке и event detail;
-- подтверждение точно говорит, куда попало событие;
-- если загружен ICS, нельзя утверждать, что внешнее приложение действительно
-  сохранило запись;
-- email и reminder не включаются автоматически;
-- вход предлагается только как способ восстановления/синхронизации уже
-  созданной ценности.
+PWA offer существует только при captured browser eligibility и antecedent value.
+Desktop не получает mobile install copy. Keyboard help не зависит от hover и
+появляется только после keyboard intent или explicit Help.
 
-**Признак успеха:** повторное открытие сохранённого состояния или осознанное
-удаление без потери другого независимого состояния.
+## 8. Competency state
 
-### Этап 4. Управляемая персонализация
-
-**Состояние:** есть минимум несколько интерпретируемых явных сигналов либо
-пользователь сам открыл «Для меня».
-
-**Задача:** познакомить с персональной выдачей без магии и переобещания.
-
-**Подход:**
-
-- показать, что изменился только порядок/часть выдачи;
-- дать `Почему это`, редактирование интересов, обычную ленту и reset;
-- отдельно показать достаточность сигналов;
-- не создавать server profile до разрешённой активации из целевого contract;
-- не использовать campaign/artifact actions как вкус пользователя.
-
-**Признак успеха:** пользователь может объяснить и исправить хотя бы одну
-причину рекомендации.
-
-### Этап 5. Continuity upgrade
-
-**Состояние:** пользователь уже получил пользу: сохранил событие, вернулся,
-настроил интересы или регулярно открывает афишу.
-
-**Задача:** предложить удобный способ не потерять пользу.
-
-**Возможности по отдельности:**
-
-- вход/привязка identity — синхронизация и восстановление;
-- PWA — быстрый возврат;
-- utility reminder — не пропустить конкретное сохранённое событие;
-- email — только для явного transactional purpose;
-- promo Push — отдельный marketing/promo choice и отдельная стратегия.
-
-**Правило:** отказ — нормальный успешный исход; core experience не ухудшается.
-
-### Этап 6. Необязательное исследование
-
-**Состояние:** пользователь уже понимает обычные карточки и основные действия.
-
-**Задача:** открыть дополнительный слой региональных историй и редких функций.
-
-**Подход:**
-
-- Hero Talk или Page-end Talk один раз рассказывает, что на сайте есть
-  артефакты;
-- для первого артефакта допустима точная честная подсказка, чтобы обучение не
-  превращалось в непрозрачную загадку;
-- дальнейшие подсказки запрашиваются добровольно;
-- находка открывает историю и обычный связанный маршрут к событию/подборке;
-- отсутствие находки ничего не блокирует;
-- никакой обязательной регистрации, streak, потери прогресса или материального
-  приза в стандартном MVP.
-
-**Признак успеха:** осмысленное исследование дополнительной поверхности без
-ухудшения event decision metrics.
-
-### Этап 7. Завершение онбоардинга и handoff
-
-Для каждой возможности онбоардинг заканчивается отдельно после доказанного
-успешного использования. Пользователь не получает глобальный статус «прошёл
-онбоардинг».
-
-Retention может получить только минимальный handoff:
-
-- какая пользовательская ценность уже доказана;
-- какие функции освоены;
-- что пользователь явно сохранил;
-- какие purpose permissions/consents реально даны;
-- какие сообщения отклонены;
-- какие каналы доступны.
-
-Retention не имеет права повторно выдавать onboarding exposure за согласие на
-рассылку или promo.
-
-## 8. Модель освоения возможности
-
-Для каждой `capability_id` предлагается отдельное состояние:
+Для каждой `capability_id` хранится отдельное compact state:
 
 ```text
 unknown
-  -> eligible        # функция релевантна текущей задаче
-  -> exposed         # подсказка действительно была доступна
-  -> attempted       # пользователь начал действие
-  -> succeeded       # продукт подтвердил результат
-  -> repeated        # успешное использование в другом контексте/визите
-  -> mastered        # базовое объяснение больше не требуется
+  → eligible
+  → exposed                 # delivery diagnostic, не competence
+  → attempted
+  → succeeded
+  → repeated
+  → mastered
 
-eligible|exposed
-  -> dismissed       # закрыто или отложено
+из любого релевантного состояния:
+  → dismissed_until
+  → dismissed_permanently
+  → failed_recoverable
+  → blocked_dependency
+  → deprecated
 
 mastered
-  -> needs_reintroduction  # только после существенного изменения функции,
-                            # долгого перерыва или явного запроса помощи
+  → needs_reintroduction(version_delta)
 ```
 
-### 8.1. Что не является доказательством освоения
-
-- сообщение было вставлено в DOM;
-- пользователь прокрутил мимо;
-- прошёл таймер;
-- кликнул закрыть;
-- случайно коснулся control;
-- дал browser permission;
-- открыл страницу после внешнего deep link.
-
-### 8.2. Что может быть доказательством
-
-- операция завершилась и UI показал проверяемое состояние;
-- пользователь потом нашёл результат в целевой поверхности;
-- повторил действие в другом визите;
-- использовал undo/settings без дополнительной подсказки;
-- явно запросил и прочитал объяснение `Почему это`.
-
-## 9. Матрица ключевых возможностей
-
-| `capability_id` | Когда учить | Лучший формат | Success evidence | Когда подавлять |
-|---|---|---|---|---|
-| `date_navigation` | первый неопределённый вход | Hero Talk + постоянные CTA | открыт Today/Tomorrow/Weekend/date | direct deep link или повторное использование |
-| `event_search` | сформулирован запрос/нет подходящего в ленте | inline example в Search; один Hero/Page-end переход | непустой query и осмысленный result/empty-state action | пользователь уже уверенно ищет |
-| `event_facts` | первый event detail | прежде всего хороший IA; подсказка только при доказанной проблеме | ключевые факты доступны/следующий action | UI самодостаточен |
-| `not_interested` | после нескольких кандидатов или явного отказа | inline label + result echo + undo | событие исключено/понижено по contract | один успешный use и понятный undo |
-| `like` | когда есть понравившийся candidate | action label + result echo | accepted reaction; count/state согласованы | после repeated use |
-| `calendar_save` | при конкретном планируемом событии | рядом с CTA + confirmation | download/save-state подтверждены в пределах реального contract | событие не calendar-eligible |
-| `saved_events` | после первого durable/local save | confirmation link или Page-end Talk | пользователь открыл сохранённый список | нет сохранений |
-| `share` | после оценки события | видимый action; без обучающего pressure | share sheet/copy result | API недоступен или пользователь уже использовал |
-| `for_me` | 2+ интерпретируемых сигналов или явный интерес | Hero/Page-end capability message | открыт editor/why, изменено preference | данных мало, feature flag off |
-| `why_this` | при персональном порядке | inline explain control | объяснение открыто и доступно исправление | выдача общая |
-| `identity_sync` | после локальной ценности, которую можно потерять | calm value-based prompt | identity linked и state reconciled | нет ценности для sync; отказ/cooldown |
-| `pwa_install` | после полезного возврата/нескольких визитов | browser-eligible CTA, не modal trap | browser install outcome | unsupported, denied, already installed |
-| `utility_reminder` | после явного save конкретного события | event-scoped offer | отдельный consent/subscription | нет save, событие уже прошло |
-| `promo_push` | не onboarding; только отдельная promo strategy | отдельный disclosure/opt-in | promo consent | всегда отделено от utility reminder |
-| `artifact_collection` | после core competence или deliberate exploration | optional Hero/Page-end hint + accessible find | first verified find/story open | critical flow, first seconds, fatigue |
-
-Матрица должна быть связана с фактически выпущенными feature flags. Нельзя
-обучать будущему разделению `calendar_saved`/`favorite_saved`, reminder delivery
-или cross-device sync до реальной реализации и release gate.
-
-## 10. Hero Talk и Page-end Talk
-
-### 10.1. Это placements, а не типы продукта
-
-Не вводятся отдельные компоненты `Onboarding Talk` и `Campaign Talk`.
-
-- **Hero Talk** — placement в верхней hero-зоне: ориентация, текущий контекст,
-  одно следующее действие.
-- **Page-end Talk** — тихое продолжение после основной ценности: следующий
-  полезный шаг, объяснение результата, добровольное углубление.
-
-Содержание классифицируется независимо:
-
-```text
-intent:
-  service_orientation
-  capability_guidance
-  action_confirmation
-  personalization_explanation
-  return_context
-  editorial_discovery
-  artifact_hint
-  campaign_message
-  lifecycle_or_safety
-
-source:
-  system
-  editorial
-  promo_campaign
-  festival_or_event_context
-```
-
-Сообщение о функции — `capability_guidance`, показанное в Hero или Page-end Talk.
-Сообщение фестивальной кампании — `campaign_message` в тех же placements. В
-будущем evergreen-фразы могут жить как системная campaign/activity ради общего
-control plane, но их purpose, аналитика и приоритет не должны смешиваться с
-коммерческим/редакционным promo. Это отдельный предмет архитектурного решения.
-
-### 10.2. Предлагаемый приоритет
-
-В одном placement одновременно выбирается одно доминирующее сообщение:
-
-1. lifecycle/safety и критическая актуальность события;
-2. результат только что совершённого действия;
-3. помощь текущей пользовательской задаче;
-4. релевантное capability guidance;
-5. return/continuity context;
-6. editorial discovery;
-7. promo campaign;
-8. artifact hint.
-
-Promo не перекрывает safety, факты и прямой результат действия. Artifact hint не
-занимает первую ориентацию нового посетителя и не конкурирует с ticket/calendar
-CTA.
-
-### 10.3. Минимальная модель сообщения
-
-```text
-message_id
-message_version
-placement_allowlist[]
-intent
-source_type
-capability_id?
-campaign_id?
-artifact_id?
-priority
-eligibility_rules
-suppression_rules
-frequency_cap
-cooldown
-expires_at?
-copy_family
-primary_action?
-secondary_action?
-success_event?
-editorial_review_state
-experiment_id?
-```
-
-### 10.4. Decision order
-
-```text
-1. Проверить актуальность build, feature flags и route.
-2. Применить hard safety/lifecycle gates.
-3. Определить текущую user task и уже доказанную competency.
-4. Исключить сообщения после success, dismissal, cap, cooldown и expiry.
-5. Исключить purpose/consent conflicts.
-6. Разрешить конфликт onboarding / retention / promo / artifact.
-7. Выбрать максимум одно сообщение на placement.
-8. Отрендерить доступный static fallback либо ничего.
-9. Считать success только по продуктовой операции, не по exposure.
-```
-
-## 11. Роль артефактов-пасхалок в обучении
-
-Артефакты могут:
-
-- дать повод открыть новую page family;
-- показать, что сайт содержит региональные истории, а не только карточки;
-- мягко познакомить с коллекцией, «Моё» или объяснением находки;
-- закрепить уже показанную функцию через добровольное исследование;
-- поддержать конечный сюжет фестиваля/кампании.
-
-Артефакты не могут:
-
-- быть единственным способом узнать о ключевой функции;
-- прятать обязательный control или legal information;
-- маскироваться под event badge, partner logo или рекомендацию;
-- занимать event impression ordinal;
-- менять taste profile только фактом находки;
-- требовать точного наведения, hover, движения, звука или второго устройства;
-- давать стандартному пользователю prize advantage, streak или страх потери;
-- перемещаться при reload ради повторного engagement.
-
-### Первый артефакт как tutorial к самой механике
-
-Допустимый вариант:
-
-1. после первой доказанной event value один Hero/Page-end message говорит, что
-   есть небольшие региональные артефакты;
-2. пользователь может отказаться либо открыть правила;
-3. первая подсказка называет точную page family и понятное место;
-4. объект доступен touch/keyboard/screen reader и статичен при reduced motion;
-5. находка открывает короткую source-grounded историю;
-6. следующий шаг и login необязательны.
-
-Это обучение **механике артефактов**, а не скрытый учебник остальных функций.
-
-## 12. Редакционный стиль onboarding-copy
-
-Точная voice system будет принята отдельной стратегией. Онбоардинг заранее
-задаёт функциональные требования к тексту.
-
-### 12.1. Базовые свойства
-
-- дружелюбно, спокойно, конкретно;
-- лёгкая ирония допустима только там, где она не обесценивает ошибку,
-  accessibility need, отказ или потерю данных;
-- короткая конструкция `действие → результат`;
-- литературный русский без канцелярита и инфантильной геймификации;
-- никакого заявления «мы вас знаем»;
-- никакой ложной срочности, shame, FOMO и оценки «правильности» поведения;
-- один термин для одной функции на всех поверхностях;
-- semantic copy одинакова для Golden personas; возможен лишь ограниченный
-  стилистический variant, прошедший ту же редакционную проверку.
-
-### 12.2. Рабочие примеры, не финальный copy deck
-
-| Ситуация | Допустимое направление |
-|---|---|
-| Первый вход | `Сначала выберите день. Лента уже работает без входа.` |
-| Search | `Можно искать не только название: попробуйте «лекция у моря» или «с ребёнком в субботу».` |
-| Первый сигнал | `Запомнили эту оценку. Порядок может стать точнее — всё можно изменить.` |
-| Hide | `Убрали событие из ваших рекомендаций. Отменить можно сразу.` |
-| Calendar | `Файл календаря готов. Напоминания и письма этим не включаются.` |
-| Personalization | `Пара подсказок уже есть. В «Для меня» видно, почему меняется порядок.` |
-| Identity | `Хотите не потерять сохранённое при смене устройства? Войти можно и позже.` |
-| PWA | `Часто возвращаетесь? «Анонсы» можно добавить на главный экран.` |
-| Artifact | `На сайте спрятаны маленькие истории о регионе. Первая подсказка — без загадок.` |
-
-### 12.3. Запрещённые конструкции
-
-- `Пройдите 5 шагов, чтобы начать`;
-- `Настройте профиль, иначе рекомендации будут хуже`;
-- `Осталось совсем немного` без реальной пользовательской цели;
-- `Не упустите шанс` для permission/install/login;
-- `Мы поняли, что вы любите…` при слабых сигналах;
-- `Разрешите уведомления, чтобы продолжить`;
-- `Соберите всё, иначе прогресс сгорит`;
-- юмор в сообщении об ошибке, отмене, недоставленном письме или accessibility.
-
-## 13. Связь с удержанием и возвратностью
-
-Onboarding и retention могут использовать общий message delivery/control plane,
-но различаются целью.
-
-| Контур | Вопрос | Допустимый trigger |
+| Переход | Допустимое evidence | Запрещённый proxy |
 |---|---|---|
-| Onboarding | `Как безопасно освоить полезную функцию сейчас?` | текущая задача и competency gap |
-| Utility return | `Как вернуться к уже сохранённой ценности?` | явный save/reminder/PWA choice |
-| Retention | `Есть ли новая релевантная ценность для возврата?` | доказанная прошлая ценность + отдельная стратегия/caps |
-| Promo | `Нужно ли дать дополнительный охват кампании?` | active campaign/activity + disclosure/caps |
-| Artifact | `Есть ли добровольная новая глава исследования?` | campaign state + user eligibility/fatigue |
+| `unknown → eligible` | Release flag, route, event/platform prerequisites | Первый page view |
+| `eligible → exposed` | Served message действительно доступен по renderer contract | Скрытый DOM node |
+| `exposed → attempted` | User activation конкретного CTA/control | Scroll, dwell, hover |
+| `attempted → succeeded` | Confirmed local/server/browser result | Открытый permission dialog |
+| `succeeded → repeated` | Другой subject/session/context | Replay одного action |
+| `repeated → mastered` | Capability-owned fixture: повтор без help либо explicit permanent suppression | Простое закрытие |
+| `mastered → needs_reintroduction` | Semantic capability/version change | Cosmetic copy change |
 
-### Handoff contract
+Порог mastery — capability-owned hypothesis, не универсальное число.
 
-Onboarding может передать:
+### Anonymous → authorized
+
+Сливаются explicit success/dismissal и current version state. Authenticated
+explicit action имеет приоритет; raw exposure, browsing и Hero thread text не
+переносятся. До production-complete merge capability остаётся
+`blocked_dependency`.
+
+## 9. Capability registry: baseline
+
+| Capability | Когда допустимо обучение | Surface | Success evidence | Release boundary |
+|---|---|---|---|---|
+| Today/Tomorrow/Weekend | Route существует | Persistent IA; optional generic Hero orientation | Route open/usable listing | Current static routes |
+| Date navigation | Availability manifest | Inline labels | Enabled date selected | Current calendar contract |
+| Event facts/lifecycle | Event detail | IA; hint только после research evidence | Correct task outcome | Current event pages |
+| Like | Released handler | Label + local echo | State toggled | Не называть save |
+| `Не интересно` | Reversible behavior released | Inline echo + Undo | Hide/downrank + Undo | Copy совпадает со scope |
+| Share | API/copy available | Action only; later feature-discovery candidate | Sheet invoked или copy success раздельно | Не заявлять отправку |
+| Calendar/ICS/save | После owner decision | Action + exact echo | Durable state и download различаются | BLOCKED semantics/acceptance |
+| `Мои события` | Existing saved state | Echo link / Hero-talk page-end | Result retrieved | Browser acceptance |
+| Search | После production acceptance | Inline label/recovery; optional feature-discovery chain | Valid request/result/refinement | BLOCKED acceptance |
+| `Для меня` | Actual compatible signals | Quiet inline / personal-feed page-end | Surface/control understood | Target not production-complete |
+| `Почему это` | Actual explainable factor | On-demand inline disclosure | Factor understood/changed | BLOCKED factor source |
+| Identity sync | Local durable value + released merge | Page-end/settings | Auth + idempotent merge | BLOCKED linking |
+| PWA | Browser eligibility + meaningful mobile use | Page-end | `appinstalled`/valid decline | No offline overclaim |
+| Utility reminder | Saved eligible event + released delivery | Saved settings / page-end explanation | Purpose choice saved | BLOCKED delivery |
+| Promo Push | Никогда не onboarding | Separate campaign settings | Separate opt-in | Planned only |
+| Artifact | Post-release core value | Separate cultural invitation / artifact hint | Find/story; downstream separate | Rights/provenance/model BLOCKED |
+
+## 10. Интеграция с каноническим Hero-talk
+
+### 10.1. Канонические placements и intent
+
+Hero-talk — один продукт:
 
 ```text
-subject_scope              # device/local или authorized subject
-capability_id
-competency_state
-last_success_at
-last_dismissed_at
-onboarding_version
-proven_value_kind
-saved_subject_ids (bounded references only)
-explicit_channel_choices
+home_hero
+event_page_end
+collection_page_end
+date_listing_page_end
+search_page_end
+personal_feed_page_end
+club_page_end
 ```
 
-Он не передаёт inferred sensitive traits, raw clickstream, полный search history
-или фиктивный consent.
+Onboarding candidate имеет каноническую форму:
 
-## 14. Измерение качества
+```yaml
+intent: feature_discovery
+origin: system
+capability_id: <capability>
+capability_version: <version>
+eligibility_receipt: <bounded evidence>
+success_contract: <capability-specific>
+suppression_contract: <capability-specific>
+```
 
-### 14.1. Основные outcome metrics
+Не создаются отдельные продукты `Onboarding Talk`, `Return Talk` или
+`Campaign Talk`.
 
-- time to first useful event decision;
-- доля новых пользователей с первым полезным решением без помощи;
-- успешное первое использование конкретной функции после eligibility;
-- повторное самостоятельное использование функции;
-- открытие сохранённого события/списка в следующем визите;
-- исправление/undo неверного действия;
-- понятность различий like / hide / calendar / reminder / promo.
-
-### 14.2. Guardrails
-
-- time to event facts и ticket/registration CTA не ухудшается;
-- bounce/abandonment на первой странице не растёт;
-- prompt dismissal, rage/repeat clicks и accidental undo не растут;
-- отказ от login/PWA/permission не ухудшает core experience;
-- no-JS, backend outage и storage denial сохраняют полезность;
-- keyboard/screen-reader completion не хуже pointer path;
-- event-card like, calendar и share не каннибализируются артефактом;
-- promo exposure не вытесняет onboarding safety/help;
-- worst-group результаты проверяются отдельно, а не скрываются средним.
-
-### 14.3. Не оптимизировать
-
-- число показанных подсказок;
-- «completion rate» общего тура;
-- время на сайте любой ценой;
-- число browser permissions;
-- PWA installs без последующей полезности;
-- raw artifact collection;
-- количество созданных профилей;
-- только положительные reactions.
-
-### 14.4. Эксперименты
-
-Каждая существенная подсказка требует собственного treatment/holdout, а не
-одного пакета «онбоардинг включён». При низком трафике предпочтительны:
-
-- последовательные маленькие эксперименты;
-- качественные moderated sessions;
-- task-based usability;
-- exact event-level funnel;
-- A/A и instrumentation validation;
-- заранее заданные stop/kill rules;
-- отсутствие ложной причинной уверенности при недостаточной мощности.
-
-## 15. Хранение и приватность: предварительный контракт
-
-До архитектурного и legal review предлагается хранить только компактное
-versioned состояние, необходимое для suppression и continuity:
+### 10.2. Двухступенчатое разрешение
 
 ```text
-ke_onboarding_state_v1
-{
-  schema_version,
-  strategy_version,
-  capabilities: {
-    <capability_id>: {
-      state,
-      exposures_bounded,
-      last_exposed_at,
-      last_success_at,
-      dismissed_until?,
-      message_version?
-    }
-  }
-}
+1. onboarding capability engine
+   определяет eligibility/result/suppression candidate
+
+2. Hero-talk compiler
+   объединяет candidate с greeting/current-context/editorial/campaign inputs,
+   применяет page/entity/thread context,
+   строит coherent chain и immutable phrase pack
+
+3. Hero-talk runtime
+   выбирает только готовый static served plan
+
+4. capability owner
+   выполняет действие и возвращает success/failure evidence
+
+5. onboarding state
+   обновляет competency/mastery/suppression
+```
+
+Hero-talk не может самостоятельно решить, что capability освоена, и не может
+обойти `blocked_dependency`.
+
+### 10.3. One-capability chain
+
+Ограничение «одна новая возможность» применяется к смыслу chain, а не к числу
+фраз:
+
+```text
+eligible
+→ contextual hint
+→ attempted
+→ confirmed result
+→ where to find result
+→ mastered/suppressed
+```
+
+Chain сохраняет один topic anchor и один основной CTA-path. Нельзя в одной
+последовательности учить Search, PWA и reminders.
+
+### 10.4. Priority constraints
+
+Полный cross-purpose arbitration принадлежит Hero-talk. Онбординг накладывает
+обязательные ограничения:
+
+1. lifecycle/safety и direct error выше feature discovery;
+2. immediate confirmation/Undo выше следующей capability;
+3. cold/unknown first scene остаётся полезной и generic;
+4. campaign/artifact не маскируются под help;
+5. feature discovery не конфликтует с transactional CTA;
+6. inaccessible equivalent означает exclusion candidate;
+7. unprovable result claim означает exclusion candidate.
+
+### 10.5. Постоянный реестр «Что умеет сайт»
+
+Контекстные подсказки не являются единственным способом узнать о функции.
+Нужен постоянный accessible registry/help surface:
+
+- список реально выпущенных capabilities;
+- простое объяснение результата;
+- prerequisites и ограничения;
+- ссылка на настройку/помощь;
+- возможность повторно запросить explanation после mastery/dismissal;
+- отсутствие progress, points и completion framing.
+
+Этот registry принадлежит onboarding track; Hero-talk может ссылаться на него.
+
+## 11. Hero-talk presentation и варианты стратегии
+
+### 11.1. Нормативная grammar
+
+Любой production Hero-talk имеет:
+
+- semantic typed briefing, не медленную посимвольную печать;
+- первый полезный fragment сразу;
+- finite cursor semantics;
+- links, появляющиеся атомарно;
+- immediate completion/pause на hover/focus/pointerdown без блокировки first tap;
+- optional exact-source tile mosaic;
+- text-only fallback при media failure;
+- coherent chain вместо random slogan rotation;
+- static no-JS/reduced-motion equivalent;
+- один связный screen-reader text, не fragment-by-fragment announcement.
+
+Это не differentiator варианта B.
+
+### 11.2. Вариант A
+
+Выбранный baseline использует ту же grammar, но консервативную программу:
+
+- single scene или короткая handwritten owner-reviewed chain;
+- generic greeting/local identity/current context;
+- одна capability feature-discovery chain после eligibility;
+- без cross-session personalized/editorial campaign arcs;
+- current static `HomeHeroTalk` сохраняется как rollback.
+
+### 11.3. Вариант B
+
+Challenger добавляет после соответствующих HT stages:
+
+- bounded cross-session threads;
+- return delta;
+- finite persona packs и explicit-interest overlay после activation;
+- event/festival/club arcs;
+- own editorial campaign programmes;
+- richer open-loop/resolution chains;
+- novelty-aware experiment and independent kill switches.
+
+Подробное сравнение: [strategy-options.md](strategy-options.md).
+
+## 12. Page-end policy
+
+Hero-talk page-end является одним механизмом с разновидностями по page family.
+Он знает exact page/entity/action context и не дублирует canonical continuation
+cards.
+
+### 12.1. Общий контекстный Page-end
+
+Editorial/event/festival/club continuation может быть eligible по завершённому
+page context, даже без onboarding capability:
+
+```text
+прочитано событие фестиваля
+→ в программе есть связанное продолжение
+→ открыть программу
+```
+
+Это не считается onboarding exposure.
+
+### 12.2. Onboarding/continuity Page-end
+
+Для feature discovery, identity, PWA, reminder и открытия result surface нужен
+antecedent:
+
+- explicit event decision;
+- confirmed successful action;
+- saved state;
+- completed recovery;
+- actual compatible personalization signal;
+- explicit Help.
+
+Один scroll/IntersectionObserver не создаёт eligibility. Observer может доказать
+qualified visibility уже выбранного served plan, но не пользовательскую ценность.
+
+### 12.3. Порядок на странице
+
+```text
+main page content
+→ canonical recommendations/continuation
+→ page-end Hero-talk
+→ focus-group NPS when enabled
+→ footer
+```
+
+Page-end не превращается в ещё один card feed.
+
+## 13. Immediate action echo и Hero-talk continuation
+
+Immediate result принадлежит action owner:
+
+```text
+user action
+→ exact local/server/browser outcome
+→ inline echo or existing global live region
+→ Undo / alternate path
+```
+
+Hero-talk может использовать подтверждённый outcome как `result_echo` bridge:
+
+```text
+Событие сохранено.
+→ Где его найти.
+→ Отдельно настроить reminder, если delivery released.
 ```
 
 Ограничения:
 
-- deterministic byte/entry caps и TTL;
-- нет полного журнала страниц, запросов или scroll path;
-- local state не выдаётся за identity или server truth;
-- authorized merge возможен только по отдельному idempotent contract;
-- reset персонализации, logout, удаление account и сброс onboarding — разные
-  действия с явной семантикой;
-- внешняя analytics telemetry включается только в допустимом purpose-контуре;
-- campaign/artifact exposure хранится отдельно либо явно маркируется, чтобы не
-  попадать в interest profile.
+- Hero-talk не дублирует уже видимый echo без добавления нового полезного шага;
+- ambiguous timeout не становится success;
+- save не становится Push consent;
+- ICS download не становится external import;
+- failure сохраняет core content;
+- result node имеет один primary CTA.
 
-## 16. Предварительный rollout
+Для immediate echoes переиспользуется существующий `MobileToastRegion` только
+там, где нет лучшего inline slot или result page-wide.
 
-### Wave 0 — карта пути и доказательство instrumentation
+## 14. Hero thread state и return delta
 
-- утвердить `first_useful_event_decision` или замену;
-- составить route × capability × current implementation inventory;
-- определить признаки success/mastery;
-- построить sanitized local event model и data-quality checks;
-- не менять UI.
+Hero-talk thread state хранится отдельно от onboarding competency:
 
-### Wave 1 — value-first baseline
+```json
+{
+  "thread_id": "ht_...",
+  "last_node_ids": ["n3", "n2"],
+  "open_loop_id": "festival-kantata-education",
+  "last_action": "opened_event",
+  "meaningful_visit_watermark": "...",
+  "expires_at": "..."
+}
+```
 
-- принять канонический first-visit Hero Talk;
-- проверить Today/Search/deep-link paths;
-- убрать конкурирующие prompts;
-- добавить только точные action confirmations для уже работающих действий;
-- провести accessibility/usability baseline.
+Правила:
 
-### Wave 2 — reactions и объяснимый local rerank
+- не хранить полный свободный текст разговора;
+- последние и предпоследние node IDs — bounded;
+- open loop продолжать только при валидных facts/lifecycle;
+- потеря state → generic first scene;
+- thread interaction не становится taste signal;
+- onboarding dismissal не превращается в CRM suppression другого purpose;
+- anonymous state device-local;
+- cross-device continuation только после production identity contract.
 
-- JIT-подсказка после реального exploration;
-- result echo, undo и переход к объяснению;
-- competency suppression;
-- holdout по каждому message family.
+Сцена `Пока вас не было` не является самостоятельной onboarding capability.
+Count и destination list строятся из одного `served_delta_id`, с exact hide,
+lifecycle и profile projection. Background tab не обновляет meaningful watermark.
 
-### Wave 3 — save, «Моё» и continuity
+## 15. Редакционный стиль и Golden personas
 
-- учить только фактически выпущенной модели save/calendar;
-- показать место результата;
-- предложить identity/PWA после ценности;
-- не включать reminder/email/Push автоматически.
+Онбординг наследует общий редакционный стиль и добавляет строгий semantic
+contract:
 
-### Wave 4 — «Для меня»
+- взрослая дружелюбная литературная речь;
+- конкретное `действие → фактический результат`;
+- равноправный отказ;
+- единые термины like/save/calendar/reminder;
+- нет fake urgency, FOMO, shame, guilt и bundled consent;
+- нет «мы знаем вас» при слабых signals;
+- ирония запрещена в error, state loss, permission denial, cancellation,
+  reschedule, accessibility и sensitive context.
 
-- eligibility по достаточным сигналам;
-- `Почему это`, editor, ordinary-feed fallback и reset;
-- отделение campaign/artifact noise;
-- worst-group/model quality gate.
+### Golden-persona packs
 
-### Wave 5 — артефакты как reinforcement
+Канонический Hero-talk допускает finite human-reviewed persona packs после
+activation. Для onboarding сохраняются инварианты:
 
-- права/provenance и campaign control plane;
-- одна конечная коллекция;
-- первая точная подсказка;
-- event-conversion and accessibility guardrails;
-- no prize/streak в standard-user MVP.
+Persona pack может менять:
 
-### Wave 6 — handoff в retention
+- литературную формулировку;
+- длину/ритм;
+- допустимый topic framing;
+- choice из заранее утверждённых variants.
 
-- только после отдельной retention strategy;
-- purpose/channel/cadence boundaries;
-- utility reminders отдельно от promo Push;
-- onboarding messages прекращаются после mastery.
+Persona pack не может менять:
 
-## 17. Release gates
+- eligibility и success evidence;
+- urgency и pressure;
+- CTA/refusal;
+- result claim;
+- cap/cooldown;
+- права/consent;
+- safety/lifecycle wording;
+- число продвигаемых capabilities.
 
-Стандартный onboarding остаётся `NO-GO` как единая production-система, пока не
-закрыты:
+Публичные persona labels запрещены. Уникальная LLM-реплика на человека не
+создаётся.
 
-1. owner decision по первой ценности/activation;
-2. current-feature inventory без обучения незапущенным функциям;
-3. message registry и arbitration rules;
-4. caps/cooldown/dismissal/mastery semantics;
-5. static/no-JS/backend-off fallback;
-6. accessibility и reduced-motion acceptance;
-7. privacy/storage/telemetry review;
-8. editorial style и copy quality gate;
-9. treatment/holdout и data-quality plan;
-10. конфликтные сценарии onboarding × promo × retention × artifact;
-11. mobile/desktop/deep-link route matrix;
-12. rollback/kill switch без деградации основной афиши.
+### Copy pipeline
 
-## 18. Открытые решения владельца
+```text
+author / generation brief
+→ product/release fact lock
+→ terminology check
+→ accessibility review
+→ legal/purpose review where applicable
+→ editorial-style critic
+→ chain critic
+→ pressure/ambiguity lint
+→ human approval
+→ immutable versioned pack
+→ canary / kill switch
+```
 
-1. Какое действие считать первой доказанной ценностью: event open, explicit
-   decision, calendar save, ticket intent или repeat visit?
-2. Должен ли первый Hero Talk всегда оставаться service orientation, либо после
-   нескольких визитов полностью передаётся contextual messages?
-3. Нужен ли Page-end Talk на всех длинных страницах или только в выбранных page
-   families?
-4. Evergreen onboarding messages должны быть `system campaign` в общем promo
-   control plane или отдельным registry с общим renderer/scheduler?
-5. Какое окончательное имя и IA получит `Моё` / `Мои события`?
-6. Когда предлагать PWA: после второго визита, после save или по совокупному
-   evidence?
-7. Допустим ли anonymous cross-session onboarding state до activation и какой
-   срок хранения?
-8. Нужна ли явная страница `Как работает сайт`, если contextual onboarding
-   достаточен?
-9. Какая первая production-коллекция артефактов имеет подтверждённые факты,
-   изображения и права?
-10. Какие lexical variants разрешены Golden personas без фрагментации шаблонов?
-11. Какие минимальные volumes позволяют A/B, а где сразу нужен qualitative
-    evidence?
-12. Какие функции должны иметь постоянный видимый affordance и вообще не
-    нуждаться в proactive onboarding?
+## 16. Артефакты
 
-## 19. Следующий шаг
+Артефакты не входят в onboarding MVP и не являются evidence competency.
+Допустимы только как отдельный cultural track после core value.
 
-Запустить [глубокое исследование](deep-research-prompt.md), затем обновить этот
-документ не общими «best practices», а:
+Возможные формы:
 
-- evidence-backed journey;
-- проверенными механизмами и анти-паттернами;
-- точным capability/message registry;
-- набором русскоязычных copy families;
-- KPI/experiment plan;
-- принятыми owner decisions;
-- implementation waves и автотестами.
+1. bounded mini-collection;
+2. static editorial cultural route без progress;
+3. after-action decorative object после non-interference proof.
+
+Запрещено:
+
+- prerequisite для calendar, Search, `Для меня` или account;
+- event badge/quality mark disguise;
+- login, prize, streak, loss или opaque first clue;
+- find/completion как activation/mastery;
+- artifact action как taste signal;
+- hover/motion/precision/second-device dependency;
+- перенос focus-group contest model.
+
+Если Hero-talk показывает `artifact_hint`, первая подсказка точная и
+добровольная, а cultural track имеет отдельный ledger, provenance, rights,
+freshness, archive и accessible equivalent.
+
+## 17. Measurement
+
+### 17.1. Onboarding outcomes
+
+- qualified event decision rate с component metrics;
+- median/p75 time to first event decision;
+- capability success / attempts;
+- recovery success;
+- useful negative decision и continued discovery;
+- saved continuity;
+- qualified return 7/28 days;
+- explanation calibration;
+- accessibility task success.
+
+### 17.2. Hero-talk integration outcomes
+
+Hero-talk CTR не является primary outcome. Для feature-discovery chains:
+
+- eligible session → capability attempt;
+- attempt → confirmed success;
+- success → where-to-find result;
+- repeated independent use;
+- mastery/suppression correctness;
+- downstream event detail/action through any path;
+- chain dismiss/fatigue;
+- first-value and core CTA non-inferiority.
+
+Exposure считается qualified delivery diagnostic, но не comprehension,
+competence, preference или consent.
+
+### 17.3. Guardrails
+
+- time to event/detail/facts non-inferior;
+- core CTA non-inferior;
+- accidental action/undo не растут;
+- prompt/chain burden минимален;
+- permanent dismissal respected;
+- no-JS/backend/storage failure сохраняют core;
+- duplicate announcements и focus obstruction отсутствуют;
+- campaign/artifact не вытесняют utility;
+- thread/open-loop claims точны;
+- data quality: dedup, invalid transitions, missing IDs, SRM.
+
+### 17.4. Не оптимизировать
+
+- tour/onboarding completion;
+- Hero-talk CTR;
+- число scenes/prompts;
+- dwell/scroll depth;
+- raw permission grants;
+- PWA install без qualified return;
+- profile creation;
+- artifact completion;
+- только positive reactions.
+
+### 17.5. Экспериментальный порядок
+
+```text
+instrumentation-only A/A
+→ SRM/dedup/missingness validation
+→ moderated task/a11y study
+→ one isolated capability/message treatment
+→ predeclared denominator/MDE/guardrails/kill
+→ sequential canary or sufficient fixed sample
+→ novelty-aware observation
+→ honest underpowered conclusion
+```
+
+Assignment unit — device/subject, не page view.
+
+## 18. Privacy, storage и accessibility
+
+### 18.1. Onboarding state
+
+```text
+capability_id
+capability_version
+current_state
+success_count_bucket
+last_success_bucket
+last_message_version
+suppression_mode / dismissed_until
+blocked_dependency?
+strategy_version
+```
+
+### 18.2. Hero-talk thread state
+
+Хранится отдельно и bounded:
+
+```text
+thread_id
+last_node_ids[0..2]
+open_loop_id?
+last_action?
+meaningful_visit_watermark?
+expires_at
+thread_schema_version
+```
+
+Нельзя объединять два домена в raw clickstream или «историю разговора».
+
+Exposure diagnostics имеют короткий TTL и отдельный purpose. Retention получает
+capability state, antecedent value и explicit channel choice; не получает raw
+exposures, scroll/dwell, Hero thread text, artifact action как taste или inferred
+persona.
+
+### 18.3. Failure behavior
+
+- localStorage reset → generic static first scene, не полный повтор prompts;
+- JS/backend/analytics failure → dynamic candidates исчезают;
+- phrase-pack/compiler failure → deterministic/last-good generic pack;
+- ambiguous write → reconciliation, не false success;
+- identity merge failure → auth и merge показываются отдельно;
+- campaign pause не отключает safety/help;
+- logout, reset personalization, reset onboarding, reset Hero thread и delete
+  account — разные действия.
+
+### 18.4. Accessibility gate
+
+- first useful text присутствует без typed animation;
+- keyboard/pointer interaction не блокируется текущей фразой;
+- first tap открывает link;
+- cursor terminal и finite;
+- screen reader получает связный final text;
+- no fragment-by-fragment announcements;
+- focus не скрыт Hero/Page-end/toast;
+- 200–400% zoom/reflow и 320 CSS px;
+- reduced motion, no-hover, no-audio;
+- optional media имеет correct alt либо исключено из tree;
+- action message с CTA не исчезает по timer;
+- Page-end остаётся в document order и не overlay.
+
+Presentation-specific acceptance принадлежит Hero-talk testing track;
+onboarding проверяет integration с capability state.
+
+## 19. Rollout и зависимость от Hero-talk release track
+
+Onboarding action echo и local recovery могут развиваться до Hero-talk engine.
+Feature discovery через Hero-talk не реализуется отдельным renderer.
+
+### O-0 — truth and problem evidence
+
+- route × capability × release inventory;
+- task/a11y baseline;
+- функции, которым hint не нужен;
+- owner decision calendar/save semantics;
+- staged outcomes и A/A design;
+- alignment с HT-0;
+- UI не меняется.
+
+### O-1 — one reversible action
+
+- exact inline/global echo decision;
+- Undo;
+- existing live-region integration;
+- state-transition fixtures;
+- no-JS/core fallback;
+- one-capability canary и kill switch.
+
+### O-2 — local recovery
+
+- Search только после acceptance;
+- zero-result/refinement;
+- action failure/ambiguous outcome;
+- task success/abandon guardrails.
+
+### O-3 — Hero-talk static and chain baseline dependency
+
+Hero-talk track должен закрыть:
+
+```text
+HT-1 static single-scene baseline
+→ HT-2 deterministic handwritten chains
+→ HT-4 contextual page-end
+```
+
+Onboarding не дублирует эти implementation slices.
+
+### O-4 — Hero-talk onboarding integration
+
+Соответствует HT-5:
+
+- capability eligibility/success из onboarding registry;
+- one capability per chain;
+- immediate result boundary;
+- where-to-find-result;
+- mastered suppression;
+- dismissal/cooldown;
+- exposure not taste/competence;
+- integration fixtures and kill switch.
+
+### O-5 — released continuity upgrades
+
+Только после собственных product release gates:
+
+- identity sync;
+- PWA eligibility;
+- `Почему это`/interest editor;
+- utility reminder;
+- separate promo consent.
+
+Hero-talk персональный/return delivery требует HT-6.
+
+### O-6 — chain-rich/editorial challenger
+
+- variant B bounded return/personal arcs — HT-6;
+- own editorial campaign arcs — HT-7;
+- image mosaic only after HT-8;
+- controlled comparison — HT-10;
+- cultural track отдельно.
+
+Narrative chain как таковая не является O-6: basic chain-first grammar уже
+входит в Hero-talk baseline.
+
+## 20. Регистрируемые integration scenarios
+
+Onboarding registry хранит только capability/integration scenarios:
+
+```text
+onboarding.static_first_value
+onboarding.one_capability_per_journey
+onboarding.action_echo_undo
+onboarding.action_echo_existing_live_region
+onboarding.no_duplicate_result_echo
+onboarding.dismissal_permanent
+onboarding.cooldown_cross_page
+onboarding.storage_reset_fail_quiet
+onboarding.capability_version_reintroduction
+onboarding.blocked_dependency_not_promoted
+onboarding.anonymous_authorized_merge
+onboarding.no_js_core_value
+onboarding.keyboard_focus_not_obscured
+onboarding.screen_reader_status
+onboarding.permission_denial_valid
+onboarding.pwa_event_eligibility
+onboarding.purpose_separation
+onboarding.campaign_not_help
+onboarding.artifact_not_event
+onboarding.artifact_not_taste_signal
+onboarding.exposure_not_competence
+onboarding.experiment_srm
+onboarding.hero_talk_candidate_eligibility
+onboarding.hero_talk_one_capability_per_chain
+onboarding.hero_talk_mastery_suppression
+onboarding.hero_talk_result_context_no_duplicate_echo
+onboarding.hero_talk_thread_not_competency
+onboarding.page_end_feature_requires_antecedent
+onboarding.what_site_can_do_manual_help
+```
+
+Следующие классы принадлежат Hero-talk testing, а не onboarding:
+
+```text
+typed fragments and cursor semantics
+chain graph/coherence/bridges
+random-rotation prohibition
+mosaic/media lifecycle
+viewport compiler
+phrase-pack reproducibility
+page-context packets
+served_delta consistency
+```
+
+Имена пока strategy registry, не утверждение о реализованном runner.
+
+## 21. BLOCKED owner/release decisions
+
+1. Семантика `like`, `favorite_saved`, `calendar_saved`, ICS и итоговое имя
+   `Моё`/`Мои события`.
+2. Production acceptance Search.
+3. Production-complete anonymous→authorized merge.
+4. Фактические personalization factors для `Почему это`.
+5. Utility reminder delivery/lifecycle.
+6. Promo Push consent/delivery.
+7. Legal applicability и документы рекомендательных технологий/ПД.
+8. Baseline traffic, conversion components и MDE feasibility.
+9. Artifact purpose, owner, rights/provenance и first curated set.
+10. Owner-approved HT-1 first-scene families.
+11. Какие short feature-discovery chains входят в variant A.
+12. Допуск variant B только после HT-6/HT-7/HT-10 evidence.
+13. Permanent `Что умеет сайт` IA и ownership.
+14. Hero thread reset/retention/cross-device contract.
+
+До закрытия dependency capability остаётся `blocked_dependency`; onboarding copy
+не может обещать её результат.
+
+## 22. Источники и производные документы
+
+- [Согласование с каноникой Hero-talk](hero-talk-alignment-2026-08-03.md).
+- [Вариант A, challenger B и cultural layer C](strategy-options.md).
+- [Hero-talk PR #291](https://github.com/onedayonemasterpiece/events-bot-new/pull/291).
+- [Критическая консолидация исследований](research/research-synthesis-2026-08-03.md).
+- [Индекс и hashes исходных исследований](research/README.md).
+- [Gemini — полный текст](research/gemini-deep-research-2026-08-03.txt).
+- [ChatGPT — полный текст](research/chatgpt-deep-research-2026-08-03.txt).
+- [Prompt глубокого исследования](deep-research-prompt.md).
+
+Strategy v0.2 сохранена в Git history и superseded этой v0.3.
