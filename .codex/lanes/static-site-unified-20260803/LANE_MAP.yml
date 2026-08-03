@@ -1,0 +1,116 @@
+mode: phased_worktree_workers
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/main@0bc8482dcda5cf16a89f312f9791ecbb6d0e9a3a
+base_branch: main
+integration_branch: integration/static-site-unified-20260803
+global_constraints:
+  - preserve dirty root checkout and commit 12ad425e9
+  - no routine OTP email
+  - no Region Talk YDB enable before bounded canary
+  - docs and CHANGELOG required before integration closure
+  - common EventLayout, docs/routes.yml and CHANGELOG owned by integrator
+verification_owner: root
+stop_conditions:
+  - selected-once duplicate dispatch
+  - secret or PII leak
+  - YDB account mismatch or cost ceiling breach
+  - production publish from dirty/non-main source
+lanes:
+  - id: L0
+    role: worker
+    requirement_ids: [R0a]
+    target: StaticSiteBuilder incident recovery
+    depends_on: []
+    execution_mode: serial_first
+    branch: agent/static-unified/l0-builder-incident
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-unified-20260803/l0-builder
+    writable_files: [static_site_release.py, scripts/run_static_site_builder_kaggle.py, kaggle/StaticSiteBuilder, docs/reports/incidents, docs/operations/kaggle-static-site-builder.md]
+    forbidden_files: [site/src, CHANGELOG.md, docs/routes.yml]
+    expected_output: committed incident fix plus evidence and RESULTS.md
+    verification_scope: full_local_and_live_canary
+    effort: high_max_available
+    status: spawned
+  - id: L1
+    role: worker
+    requirement_ids: [RYDB]
+    target: bounded YDB read model and cost gates
+    depends_on: [L0 diagnosis]
+    execution_mode: parallel
+    branch: agent/static-unified/l1-ydb-compaction
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-unified-20260803/l1-ydb
+    writable_files: [kaggle/RegionTalkCandidateReport, scripts/region_talk_orchestrator.py, scripts/region_talk_ydb_compact.py, docs/reports/incidents/INC-2026-08-03-ydb-request-unit-billing.md, tests]
+    forbidden_files: [site/src, CHANGELOG.md, docs/routes.yml]
+    expected_output: committed code/tests/docs and RESULTS.md; scheduler remains off
+    verification_scope: full_local_no_live_writes
+    effort: high_max_available
+    status: spawned
+  - id: L2
+    role: worker
+    requirement_ids: [R5, R6, R7, R8]
+    target: no-mail auth fixture and shared transport/focus/onboarding contracts
+    depends_on: [L0 diagnosis]
+    execution_mode: parallel
+    branch: agent/static-unified/l2-auth-transport-focus
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-unified-20260803/l2-auth
+    writable_files: [.codex/skills/static-site-autotest, docs/testing, docs/operations/static-site-autotest-strategy.md, docs/operations/yandex-dependency-resilience.md, docs/features/static-site-pages/focus-group*, docs/features/static-site-onboarding, site/e2e]
+    forbidden_files: [site/src/layouts/EventLayout.astro, CHANGELOG.md, docs/routes.yml]
+    expected_output: committed implementation/contracts/tests and RESULTS.md
+    verification_scope: full_local_no_real_mail
+    effort: high_max_available
+    status: spawned
+  - id: L3
+    role: worker
+    requirement_ids: [R3]
+    target: P13N-00 behavior-preserving quarantine and route inventory
+    depends_on: [L0 diagnosis]
+    execution_mode: parallel
+    branch: agent/static-unified/l3-p13n00
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-unified-20260803/l3-p13n
+    writable_files: [site/src/lib/personalization, site/src/components/personalization, site/scripts/check-personalization-route-inventory.mjs, docs/features/static-site-pages/personalizaion, tests]
+    forbidden_files: [site/src/layouts/EventLayout.astro, CHANGELOG.md, docs/routes.yml]
+    expected_output: committed pure contracts/tests/docs and RESULTS.md; EventLayout mount handed to integrator
+    verification_scope: full_local
+    effort: high
+    status: spawned
+  - id: L5
+    role: worker
+    requirement_ids: [R2]
+    target: collection catalog, registry and gastronomy
+    depends_on: [L0 diagnosis]
+    execution_mode: parallel
+    branch: agent/static-unified/l5-collections
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-unified-20260803/l5-collections
+    writable_files: [collection policies/manifests/routes/components/tests, docs/features/static-site-pages]
+    forbidden_files: [site/src/layouts/EventLayout.astro, CHANGELOG.md, docs/routes.yml]
+    expected_output: committed data plane/UI/tests/docs and RESULTS.md
+    verification_scope: full_local
+    effort: high
+    status: spawned
+  - id: L6
+    role: worker
+    requirement_ids: [R4]
+    target: weather calendar contract, static consumer and SVG set
+    depends_on: [L0 diagnosis]
+    execution_mode: parallel
+    branch: agent/static-unified/l6-weather
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-unified-20260803/l6-weather
+    writable_files: [site/src/components/weather, site/src/lib/weather, site/public/assets/weather, docs/features/static-site-pages/weather-calendar.md, tests]
+    forbidden_files: [site/src/layouts/EventLayout.astro, CHANGELOG.md, docs/routes.yml]
+    expected_output: committed consumer/contracts/icons/tests/docs and RESULTS.md; producer handoff if external repo blocks
+    verification_scope: full_local_no_external_publish
+    effort: high
+    status: spawned
+  - id: L4
+    role: worker
+    requirement_ids: [R0b, R1]
+    target: shared runtime, double-like and VK question CTA
+    depends_on: [L2, L3]
+    execution_mode: serial_after_dependency
+    branch: agent/static-unified/l4-page-runtime
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-unified-20260803/l4-runtime
+    writable_files: [site/src/layouts/EventLayout.astro, site/src/components, site/scripts/export-production-preview-data.py, main.py, tests]
+    forbidden_files: [CHANGELOG.md, docs/routes.yml]
+    expected_output: committed implementation/tests/docs and RESULTS.md
+    verification_scope: full_local
+    effort: high
+    status: planned
