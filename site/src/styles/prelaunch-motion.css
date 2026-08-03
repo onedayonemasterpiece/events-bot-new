@@ -1,0 +1,19 @@
+.prelaunch__tile {
+  /* Animate a real composited property. Changing only a custom property inside
+     rgba() is discrete in some browsers and would break the cinematic fade. */
+  opacity: var(--veil);
+  background:
+    radial-gradient(circle at 32% 22%, rgba(255, 227, 194, var(--shine)), transparent 65%),
+    rgb(7, 13, 12) !important;
+  transition:
+    opacity var(--speed) cubic-bezier(.45, 0, .25, 1) var(--delay),
+    backdrop-filter var(--speed) cubic-bezier(.45, 0, .25, 1) var(--delay),
+    box-shadow var(--speed) cubic-bezier(.45, 0, .25, 1) var(--delay) !important;
+  will-change: opacity, backdrop-filter !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prelaunch__tile {
+    transition: none !important;
+  }
+}
