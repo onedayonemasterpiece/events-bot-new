@@ -47,7 +47,7 @@
 - `docs/features/static-personal-announcements/README.md` — umbrella release map для static-site персональных анонсов: F1–F17, owners, stages, global decisions и канонические feature homes
 - `docs/features/static-site-pages/README.md` — static-first event pages на `kenigevents.ru`; production promotion пока blocked, текущий план и 10-дневный Telegraph cutover — `release-plan.md`, acceptance inventory — `test-scenarios.md`
 - `docs/features/hero-talk/README.md` — единый typed-briefing механизм для home hero и page-end: приветствия, контекст, narrative chains, generation-time LLM phrase packs, персонализация, onboarding/campaign integration, release и GitHub Actions contracts
-- `docs/features/static-site-onboarding/README.md` — strategy draft контекстного онбоардинга стандартного пользователя: progressive learning, Hero/Page-end Talk, артефакты, competency state и handoff в retention
+- `docs/features/static-site-onboarding/README.md` — evidence-consolidated strategy v0.3 стандартного пользователя: capability truth, contextual onboarding, интеграция с каноническим Hero-talk, competency state и handoff в retention
 - `docs/features/event-people/README.md` — отдельный mobile/desktop блок участников, fail-closed static export и person-like contract
 - `docs/features/unsigned-personalization/README.md` — mixed personalization family: local anonymous preview, pgvector related/search canary, remote telemetry/profile pending
 - `docs/features/site-user-identity/README.md` — Yandex/verified-email identity, sessions and anonymous→authenticated profile linking; post-release VK message-code extension: `docs/features/site-user-identity/vk-message-link.md`
