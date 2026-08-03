@@ -1,6 +1,6 @@
 # План production-релиза статических страниц событий
 
-> **Срез:** 2026-08-01
+> **Срез:** 2026-08-02
 > **Решение:** `NO-GO` для переключения event pages на canonical root прямо сейчас.
 > **Scope:** production-контур статических страниц событий и переход event-detail
 > с Telegraph. Полный релиз всех F1–F17 персональных анонсов остаётся отдельным
@@ -234,6 +234,68 @@ or block candidate promotion; it must never silently publish a disabled/empty
 replacement. The open Unusual incident
 [`INC-2026-08-01-unusual-feed-disabled-by-config`](../../reports/incidents/INC-2026-08-01-unusual-feed-disabled-by-config.md)
 remains the regression contract until a current accepted route exists.
+
+## Weather context track, 2026-08-02
+
+Полный product/data/UX contract находится в
+[`weather-calendar.md`](weather-calendar.md). Этот track фиксирует добавление
+погоды на календарные листинги и температуры поверхности воды на Побережье,
+только когда отображаемое значение строго выше `+16,0 °C`.
+
+Текущий статус — **analysis complete, implementation not started**. Погодный
+track не изменяет общий `NO-GO` canonical-root и не считается реализованным по
+наличию документа или макета.
+
+### Принятые границы
+
+| Gate | Статус | Решение/граница |
+|---|---|---|
+| Product value | Done | один компактный date-level context уменьшает неопределённость при выборе город/побережье; погода не повторяется в event cards |
+| UI placement | Done in design | desktop: между `ListingPageHeader` и discovery/timeline; mobile: после page head и до feed head; weekend — отдельный прогноз для субботы и воскресенья |
+| Locations | Logical names accepted; exact records pending | `Калининград` и `Побережье`; production IDs/coordinates нужно экспортировать read-only из БД `cat-weather-new`, приблизительный hardcode запрещён |
+| Kotopogoda reuse | Audited | переиспользуются provider/retry/cache/location semantics; direct SQLite read и page-view call к bot runtime запрещены |
+| Forecast horizon | Design accepted; producer missing | текущие `forecast_days=2` недостаточны; отдельный exporter должен давать date-keyed horizon до 7 дней без молчаливого изменения Telegram output |
+| Water threshold | Done in design | producer вычисляет `round_half_up(value_c, 1) > 16.0`; `+16,0°` скрыто, `+16,1°` показано; Astro не переопределяет float-rule |
+| Fresh first-party artifact | Not started | immutable `weather-calendar-v1` snapshot + atomic `current.json`; last-good сохраняется, hard expiry скрывает stale UI |
+| Build isolation | Required | weather refresh не запускает полный StaticSiteBuilder/Kaggle build и не меняет event catalog |
+| Browser/provider boundary | Required | consumer читает first-party artifact; прямые browser calls к Open-Meteo запрещены |
+| Attribution/usage | Open | перед production принять актуальные Open-Meteo attribution, usage limits и commercial/non-commercial mode |
+| Astro/UI/runtime | Not started | `WeatherDateContext`, date/weekend integration, PWA expiry, a11y/CLS/browser gates отсутствуют |
+| Promo «Поехать на море с комфортом» | Backlog only | отдельный `editorial_route`, не event, не входит в counts/timeline/ICS/JSON-LD/sitemap; требует weather + official transport gates и отдельного owner decision |
+
+### Обязательная последовательность
+
+1. Сделать точный read-only export production records «Калининград» и
+   «Побережье» из «Котопогоды», зафиксировать revision/hash и не копировать
+   координаты вручную.
+2. Заморозить `weather-calendar-v1` JSON Schema и обязательные fixtures:
+   `+16,0°` hidden, `+16,1°` visible, partial/stale/malformed, date outside
+   horizon, разные суббота/воскресенье и archived `/segodnya/`.
+3. В `cat-weather-new` или отдельном совместимом producer реализовать 7-day
+   Weather + Marine export, immutable upload, atomic pointer, per-location
+   timestamps, retry/last-good/hard-expiry и provider accounting.
+4. В events site добавить только progressive consumer. Без JS/данных сохраняется
+   полный полезный event listing; погода не меняет ranking/filter/counts.
+5. Проверить pinned immutable candidate на `320/390/720/1366`, no overflow,
+   accessible text, no date mismatch, CLS `<=0.05`, zero third-party weather
+   requests и корректный PWA stale-cache отказ.
+6. Выполнить отдельный live producer → pointer smoke, принять attribution/usage,
+   затем включить default-off bounded canary минимум на семь дней с одними
+   выходными.
+7. Промо-маршрут не реализовывать в этом track. Он открывается отдельной задачей
+   только после принятого weather MVP и свежего официального rail contract.
+
+### NO-GO / rollback
+
+Public weather остаётся `NO-GO`, если не доказана точная listing-date ↔ forecast-
+date связь, отсутствует atomic pointer/readback, stale snapshot может
+показываться бесконечно, consumer обращается к third-party provider, weather
+refresh запускает полный site build, нет attribution/usage acceptance либо
+морская модель описана как фактический замер/гарантия безопасности пляжа.
+
+Rollback после будущего canary — выключить weather consumer flag и сохранить
+обычный статический список событий. Rollback не требует rebuild event catalog и
+не должен удалять последний корректный immutable weather snapshot.
 
 ## Где находится release truth
 
