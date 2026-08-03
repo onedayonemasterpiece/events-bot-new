@@ -18,6 +18,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-03-static-site-builder-failure-storm.md`
+  - Scope: StaticSiteBuilder mutable-catalog preview gates, Kaggle terminal
+    evidence, retry/reconciliation and immutable secret-candidate adoption.
+  - Must not regress: a Popular selection with no occurrence family is valid;
+    selected linked families collapse to one card with the actual repeat count;
+    closure requires an exact-SHA terminal canary and an immutable receipt,
+    without production-root promotion.
+
 - `INC-2026-08-03-yandex-cloud-reaper-service-suspension.md`
   - Scope: account-transfer suspension of KenigEvents API Gateways, email
     triggers and the Postbox feedback YDB.

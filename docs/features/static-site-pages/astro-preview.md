@@ -39,6 +39,15 @@ when the generated page retains the mobile rail shell and renders the explicit
 no-events marker as visible. This keeps empty current dates buildable without
 weakening the missing-markup regression check for non-empty listings.
 
+Popular occurrence validation is likewise driven by the ranked catalog rather
+than a hard-coded fixture. A selection with no repeated-date family is valid.
+When a selected event has `other_date_ids`, the gate requires its actual
+distinct repeat count in the temporal label and fails if a linked occurrence is
+also rendered as a second desktop card. Never restore a literal requirement
+such as `ещё 1 показ`: production catalog composition is mutable. This is the
+regression contract for
+[`INC-2026-08-03-static-site-builder-failure-storm`](../../reports/incidents/INC-2026-08-03-static-site-builder-failure-storm.md).
+
 The reviewer enters through `/<id>/__preview/`; that hub owns the page-type
 inventory and links only targets inside the same prefix. It must state that the
 integrated Search visual is not acceptance of the live auth/backend journey.
