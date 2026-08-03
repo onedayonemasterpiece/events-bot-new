@@ -1,13 +1,14 @@
 # Static-collection facts v3: bounded operator runbook
 
-Status: **implemented in a stacked draft; semantic publication and production
-apply are blocked until the real-data quality gate passes**.
+Status: **implemented on the clean-main shadow integration; semantic
+publication remains blocked and production apply is limited to the bounded
+post-merge canary**.
 
 Canonical design:
 
 - [`static-collections-smart-update-facts-v3-implementation.md`](../features/static-site-pages/static-collections-smart-update-facts-v3-implementation.md)
 - [`static-collections-smart-update-facts-v3-real-data-acceptance.md`](../features/static-site-pages/static-collections-smart-update-facts-v3-real-data-acceptance.md)
-- [integration report](../../.codex/integration/static-collection-facts-v3-INTEGRATION_REPORT.md)
+- [clean-main integration report](../../.codex/integration/static-collections-audience-main-INTEGRATION_REPORT.md)
 
 ## Safety boundary
 
@@ -20,6 +21,12 @@ prose, identity, `EventSource`, links or posters.
 
 Never use legacy v2 `audience_decision` as v3 truth. Never enable Astro routes,
 navigation, sitemap, manifests or public collection labels from this runbook.
+
+The committed Telegram Monitor and Guide Excursions notebooks serialize the
+central `google_ai` gateway. Any change to `google_ai/client.py` must regenerate
+both notebooks through their service `_sync_notebook_entrypoint` builders and
+pass `scripts/inspect/audit_google_ai_provider_paths.py --root .`; an old
+embedded snapshot is a fail-closed CI error, not allowlisted debt.
 
 ## 1. Fresh Fly snapshot
 

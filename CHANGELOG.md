@@ -9,7 +9,9 @@
   PR B, owner gold/calibration, Astro routes, navigation, sitemap and publication
   remain blocked. The replay report now distinguishes an explicitly bounded
   Telegram/VK prose-only warm drift from collection-plane changes, while still
-  requiring identical collection receipts/evidence and product output.
+  requiring identical collection receipts/evidence and product output. The
+  committed Telegram and guide Kaggle notebooks were regenerated from that
+  exact central gateway so they cannot carry the pre-integration client snapshot.
 - Fixed StaticSiteBuilder Kaggle source packaging to carry the repo-level
   transport-fault profile consumed by preview builds; staging now fails closed
   instead of starting a remote build with that contract missing. Preview
