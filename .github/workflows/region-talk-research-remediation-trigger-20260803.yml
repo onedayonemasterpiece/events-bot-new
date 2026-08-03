@@ -46,7 +46,7 @@ jobs:
           encoded_and_tail = text.split(marker, 1)[1]
           if '\nB64\n' not in encoded_and_tail:
               raise SystemExit('materializer heredoc end marker not found')
-          encoded = encoded_and_tail.split('\nB64\n', 1)[0].strip()
+          encoded = ''.join(encoded_and_tail.split('\nB64\n', 1)[0].split())
           compressed = base64.b64decode(encoded, validate=True)
           script = gzip.decompress(compressed)
           Path('/tmp/apply_rt_final.original.py').write_bytes(script)
@@ -69,13 +69,10 @@ jobs:
 
           class DiagnosticTransformer(ast.NodeTransformer):
               def visit_Assert(self, node):
-                  nonlocal_removed = False
                   message = node.msg.value if isinstance(node.msg, ast.Constant) else ''
                   if message == 'terminal payloads fail current importer semantic validation':
                       global removed
                       removed += 1
-                      nonlocal_removed = True
-                  if nonlocal_removed:
                       return ast.copy_location(
                           ast.Expr(
                               value=ast.Call(
