@@ -1,0 +1,78 @@
+name: Smart Search public probe
+
+on:
+  push:
+    branches: [integration/smart-search-live-e2e-20260803]
+    paths: [.github/workflows/smart-search-public-probe.yml]
+  pull_request:
+    branches: [main]
+    paths: [.github/workflows/smart-search-public-probe.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Probe production and immutable fault surfaces
+        env:
+          OUTPUT: ${{ runner.temp }}/smart-search-public-probe.json
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, re, urllib.error, urllib.request
+
+          targets = {
+              "production": "https://kenigevents.ru/poisk/",
+              "direct_down": "https://kenigevents.ru/preview-20260802-transport-direct-unreachable-routefix-3e892bd5/poisk/",
+              "relay_down": "https://kenigevents.ru/preview-20260803-transport-relay-unreachable-592ffb2d/poisk/",
+          }
+
+          def read(url):
+              request = urllib.request.Request(url, headers={"User-Agent": "KenigEvents-Smart-Search-Probe/1"})
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      return response.status, response.headers.get("content-type", ""), response.read(2_000_000)
+              except urllib.error.HTTPError as error:
+                  return error.code, error.headers.get("content-type", ""), error.read(64_000)
+              except Exception as error:
+                  return None, "", str(type(error).__name__).encode()
+
+          out = {"schema_version": 1, "targets": {}}
+          for name, url in targets.items():
+              status, content_type, body = read(url)
+              text = body.decode("utf-8", "replace")
+              prefix = "/" + url.split("/", 3)[3].split("/", 1)[0] + "/" if "/preview-" in url else "/"
+              metadata_url = "https://kenigevents.ru" + (prefix if prefix != "/" else "/") + "preview-build.json"
+              metadata_status, _, metadata_body = read(metadata_url)
+              try:
+                  metadata = json.loads(metadata_body)
+              except Exception:
+                  metadata = None
+              out["targets"][name] = {
+                  "url_path": urllib.request.urlparse(url).path,
+                  "status": status,
+                  "content_type": content_type.split(";", 1)[0],
+                  "bytes": len(body),
+                  "html_sha256": hashlib.sha256(body).hexdigest(),
+                  "search_root_count": len(re.findall(r"data-authorized-search(?:=|\\s|>)", text)),
+                  "search_enabled": bool(re.search(r'data-search-enabled=["\\\']true["\\\']', text)),
+                  "search_transport": (re.search(r'data-search-transport=["\\\']([^"\\\']+)', text) or [None, None])[1],
+                  "has_search_input": "data-search-input" in text,
+                  "has_search_submit": "data-search-submit" in text,
+                  "metadata_status": metadata_status,
+                  "repo_sha": metadata.get("repo_sha") if isinstance(metadata, dict) else None,
+                  "fault_profile": metadata.get("transportFaultProfile", "normal") if isinstance(metadata, dict) else None,
+                  "fault_registry_digest": metadata.get("transportFaultRegistryDigest") if isinstance(metadata, dict) else None,
+              }
+          with open(os.environ["OUTPUT"], "w", encoding="utf-8") as file:
+              json.dump(out, file, ensure_ascii=False, indent=2)
+              file.write("\n")
+          print(json.dumps(out, ensure_ascii=False, indent=2))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: smart-search-public-probe-${{ github.run_id }}
+          path: ${{ runner.temp }}/smart-search-public-probe.json
+          retention-days: 7
+          if-no-files-found: error
