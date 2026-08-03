@@ -59,6 +59,11 @@ cost accumulated.
   `etndquiisa371hgl8p7r` deleted source database `etnrao7p6gh6il6b4qv9`.
   Direct lookup returned `Not Found`; the unrelated `pharmastaff-forms` and
   `kotopogoda-content` databases remained untouched.
+- 2026-08-03 14:20 UTC — under a separate explicit owner request, deletion
+  protection was disabled for unrelated database `kotopogoda-content`, and
+  operation `etnak5qntmv84d86adlb` deleted it. Direct lookup returned
+  `Not Found`; `pharmastaff-forms` remained the only database in the source
+  folder.
 
 ## Root Cause
 
@@ -134,7 +139,8 @@ cost accumulated.
 - Added an exact-database preflight guard and made the durable Fly scheduler
   default disabled.
 - Deleted the verified source database from the wrong account after explicit
-  owner approval; preserved unrelated Pharmastaff and Kotopogoda databases.
+  owner approval. Preserved `pharmastaff-forms`; `kotopogoda-content` was later
+  deleted only under a separate explicit owner request.
 
 ## Follow-up Actions
 
