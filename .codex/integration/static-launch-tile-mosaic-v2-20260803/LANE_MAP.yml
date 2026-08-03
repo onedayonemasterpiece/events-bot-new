@@ -53,31 +53,30 @@ lanes:
     verification_scope: targeted
     status: planned
   - id: docs-v2
-    role: worker
+    role: reviewer
     effort: medium
-    requirement_ids: [R23]
-    target: canonical visual contract and acceptance matrix update
+    requirement_ids: []
+    review_requirement_ids: [R23]
+    target: read-only canonical visual-contract review
     depends_on: []
     execution_mode: parallel
-    branch: agent/static-launch-tile-mosaic-v2/docs
-    worktree: /dev/shm/tile-mosaic-v2-docs
-    writable_files:
-      - docs/features/static-site-pages/launch-tile-mosaic-placeholder.md
-      - .codex/lanes/docs-v2/RESULTS.md
-    forbidden_files: [CHANGELOG.md, site/**, supabase/**]
-    expected_output: committed canonical documentation update
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['**']
+    expected_output: review notes delivered to integrator
     verification_scope: inspection_only
     status: planned
   - id: integration-v2
     role: merge_reviewer
     effort: high
-    requirement_ids: [R24]
+    requirement_ids: [R23, R24]
     target: integration, changelog, build/browser review, preview deploy, Telegram handoff
     depends_on: [ui-v2, qa-v2, docs-v2]
     execution_mode: serial_after_dependency
     branch: integration/static-launch-tile-mosaic-20260803
     worktree: /dev/shm/static-launch-mosaic-integration
-    writable_files: [CHANGELOG.md, .codex/integration/**]
+    writable_files: [CHANGELOG.md, docs/features/static-site-pages/launch-tile-mosaic-placeholder.md, .codex/integration/**]
     forbidden_files: []
     expected_output: exact-SHA preview and closure report
     verification_scope: full_local
