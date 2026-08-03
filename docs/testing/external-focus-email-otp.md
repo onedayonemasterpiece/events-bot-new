@@ -128,8 +128,24 @@ The immutable preview under test records repository SHA
 
 The Android/iOS pair closes the first mobile transport-failure release cell.
 It proves client-path fallback when direct Supabase is unavailable; it does not
-claim Supabase-upstream outage survival or the relay-unavailable/both-down
-profiles, which remain separate cells.
+by itself claim Supabase-upstream outage survival or the relay-unavailable/
+both-down profiles, which are evaluated as separate cells.
+
+The reciprocal relay-outage cell uses immutable preview SHA
+`592ffb2d5a68615b65481ee1acea65b728af8d8d`:
+
+- Android [run 30772957771](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30772957771):
+  terminal PASS, one mail, exact `1/1/1`, registration `200`, issue/verify/
+  registration all direct, two relay fault hits, returning state and redaction
+  PASS;
+- iOS [run 30773125445](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30773125445):
+  terminal PASS with all control/product keyboards, obstruction-free Safari,
+  one mail, exact `1/1/1`, registration `200`, all mandatory routes direct,
+  four relay fault hits, returning state and redaction PASS.
+
+Together with the direct-outage pair, this closes both single-client-route
+failover directions on Android and iOS. It still does not claim that OTP can be
+delivered when both client routes or the shared Supabase upstream are down.
 
 The Ubuntu Android job explicitly enables and verifies `/dev/kvm` before
 booting API 35. Unaccelerated x86 emulation is a blocked infrastructure result,
