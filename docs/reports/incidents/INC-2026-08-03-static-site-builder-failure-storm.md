@@ -1,10 +1,10 @@
 # INC-2026-08-03-static-site-builder-failure-storm StaticSiteBuilder failure storm
 
-Status: open
+Status: closed
 Severity: sev2
 Service: KenigEvents static-site secret-candidate builder
 Opened: 2026-08-03
-Closed: —
+Closed: 2026-08-03
 Owners: static-site release pipeline
 Related incidents: —
 Related docs: `docs/features/static-site-pages/astro-preview.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -75,6 +75,34 @@ family.
   incident hold before their next due time. The worker had already dequeued the
   operator row before that transaction and launched one stale-SHA retry at
   19:50 UTC; it remained the sole active run and no additional run was started.
+- 2026-08-03 20:23 UTC — PR #317 merged the manifest-bound festival gate to
+  `origin/main` as `6c7970207c9c5c597d8175b69dcafca115cc0502`.
+- 2026-08-03 20:27 UTC — the canonical main-only Fly deploy completed on
+  machine version `1904`, image
+  `deployment-01KZ4MS14C0C89AX9Q5NEVF7J6`; the in-container repository marker
+  matched the full main SHA and `/healthz` was ready with no issues.
+- 2026-08-03 20:38 UTC — the already-launched stale-SHA retry terminated at its
+  browser gate. At 20:39 UTC its exact-owner row `47663` was held only after the
+  terminal ledger state was verified, then the operator issued the one fixed-SHA
+  closure request. The existing row was requeued rather than creating a second
+  owner.
+- 2026-08-03 20:41 UTC — exact-main run
+  `static-site:production-secret-20260803T224034-4493aaed:1814d7f84627`
+  started from snapshot `snapshot-20260803T204042-34de319bb2` and input
+  fingerprint `724be4edcc6aa0f8f9aff526e742bdb5592c654b86d464acfa9405392ff722a0`.
+- 2026-08-03 21:16–21:28 UTC — the production-root and secret-candidate
+  Chromium gates passed, the archive was verified, resources were released,
+  and the durable Kaggle ledger reached `done/report`, 100%, error `null`.
+- 2026-08-03 22:10 UTC — the host wrapper reached its 5,400-second timeout only
+  after the successful Kaggle output and immutable candidate upload. The retry
+  adopted that exact result at 22:13 UTC; it did not launch another kernel or
+  issue another operator request. Create conflicts were accepted only for the
+  already-written immutable objects, followed by unconditional full readback.
+- 2026-08-03 22:51 UTC — full readback completed and the atomic SQLite compare-
+  and-swap advanced the durable candidate to the exact fixed run. Job `47663`
+  finished `done`, its active claim cleared and its prior timeout error cleared.
+  The unrelated 2026-08-04 calendar-rollover job remained pending and was not
+  repurposed for incident closure.
 
 ## Root Cause
 
@@ -98,9 +126,10 @@ family.
    date. On 2026-08-03 the source ledger still contained 21 accepted rows while
    the release manifest and rendered page correctly contained 18 active cards.
 
-The earlier 22 failures were not assigned this assertion as a shared root
+The earlier 22 failures were not assigned these assertions as a shared root
 cause: the durable ledger places them in earlier build/export/browser stages.
-The latest five failures form the current reproducible blocker addressed here.
+The initial five-run preview cluster and the follow-up exact-main festival
+browser failure are the reproducible blockers addressed here.
 
 ## Contributing Factors
 
@@ -154,7 +183,10 @@ The latest five failures form the current reproducible blocker addressed here.
 
 - Failed candidates were not adopted. The durable pointer continued to resolve
   to the 2026-08-02 successful candidate and the public root was not promoted.
-- No OTP, production row or publication state was mutated during diagnosis.
+- Diagnosis was read-only. Closure mutations were limited to the documented
+  incident holds, the single exact-main request/requeue, its immutable candidate
+  publication and the final candidate-pointer compare-and-swap. No OTP flow or
+  public-root publication was authorized.
 
 ## Corrective Actions
 
@@ -186,22 +218,65 @@ The latest five failures form the current reproducible blocker addressed here.
   builder status so the ledger is actionable without a separate log download.
 - [ ] Static-site owner: evaluate a deterministic-failure circuit breaker for
   same-SHA/same-fingerprint retries after this incident is restored.
-- [ ] Release owner: merge to `origin/main`, run the exact-SHA no-publish canary
-  and record the resulting immutable candidate receipt.
+- [x] Release owner: merge to `origin/main`, deploy the exact SHA, run the
+  no-root-promotion canary and record the resulting immutable candidate receipt.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending merge to `origin/main`; no root promotion authorized
-- regression checks: targeted occurrence tests, browser behavior tests,
-  generated preview check and full local Chromium release gate pass; exact-SHA
-  canary pending
-- post-deploy verification: pending terminal ledger success and immutable
-  review receipt
+- **Main/deploy:** PR #317 is merged and the deployed SHA is
+  `6c7970207c9c5c597d8175b69dcafca115cc0502`, reachable from `origin/main`.
+  Deployment used `scripts/deploy_fly_main.sh --remote-only`; Fly machine
+  version `1904` reported the same full SHA. Root promotion remained disabled.
+- **Local L0/L1 truth:** the focused Chromium release-gate suite passed `12/12`.
+  The reconstructed production tree passed the relevant 1,124-event desktop
+  contract and the complete local Chromium release gate, including exactly 18
+  manifest-declared active festival cards with zero broken images or overflow
+  at desktop and mobile sizes. The broader sparse local build subsequently hit
+  an unrelated empty interest-club projection guard; that result was not
+  represented as a green full production build. The exact production canary
+  below is the authoritative end-to-end acceptance.
+- **Kaggle terminal:** build `production-secret-20260803T224034-4493aaed`, run
+  `static-site:production-secret-20260803T224034-4493aaed:1814d7f84627`, repo
+  SHA `6c7970207c9c5c597d8175b69dcafca115cc0502`, snapshot
+  `snapshot-20260803T204042-34de319bb2` (SHA-256
+  `bc95d27b354574b53eb540e82c52973a5099a17bffe9e3083768251da0717649`),
+  input fingerprint
+  `724be4edcc6aa0f8f9aff526e742bdb5592c654b86d464acfa9405392ff722a0`.
+  The ledger finished `done/report` at `2026-08-03T21:28:50.137141Z`, 100%,
+  error `null`; both browser gates and all candidate manifest checks were `ok`.
+- **Artifact/receipt:** result SHA-256
+  `e7e3a1457199382ca255a8c1861f087926ae957bcb51cacd0bf9e0e83f5a844c`;
+  counts were 395 events, 1,124 event pages, 3,299 files, 3,010 pages and
+  652,859,326 result bytes. The atomic candidate receipt was verified at
+  `2026-08-03T22:51:24.678337Z`; `--show-current-review` returned
+  `current_review_ready` for the same run, SHA, snapshot and result.
+- **Independent immutable readback:** the candidate prefix contains exactly
+  3,305 objects / 674,467,502 bytes. Its single manifest object has SHA-256
+  `ae4430e6e24f3560903d9ae5a98de0c18bbf5d4ffb563bfe5705395d3b2f95c8`,
+  exactly matching the durable receipt; all eight manifest checks are `ok`.
+  The bearer token is intentionally omitted; only its SHA-256
+  `b2b83c7b3364ef350115f4c30f6c9e1a375b7c28f1cd55e50e1292380969392c`
+  is retained. The public candidate returned HTTP 200 with private/no-store,
+  `noindex`, `noarchive` and `no-referrer` protections.
+- **Non-mutation and health:** production root SHA-256 remained
+  `28b345b51bb72ca2d0633ebeefff6725e06759650f401832f0cb3809a4be3e69`
+  (5,589 bytes, unchanged ETag), and stable `ics/6408.ics` remained
+  `e1ccd3ce252977f1ad48e7705bf2e18a76c59cb3702d29415c2d9ad98f2a3902`
+  (927 bytes, unchanged ETag). The receipt records `root_mutation=false` and
+  `stable_ics_mutation=false`; `ENABLE_STATIC_SITE_ROOT_PROMOTION` was false.
+  Final `/healthz` was ready with `issues=[]`, and `/data` retained about 52%
+  free space.
+- **Evidence bundle:** redacted receipts, ledger state, independent storage and
+  public probes, pre/post public hashes, deploy verification and local browser
+  output are under
+  `artifacts/codex/INC-2026-08-03-static-site-builder-failure-storm/closure/`.
 
 ## Prevention
 
-The release gate now derives its expectation from the selected events instead
-of a fixture literal. This keeps catalog evolution from failing a valid build
-while preserving fail-closed checks for actual linked-family duplication and
-missing repeat summaries.
+The release gates now derive mutable Popular and festival expectations from
+their checked build inputs instead of fixture literals: selected occurrence
+families for Popular and the hash-bound release manifest for the active
+festival inventory. Catalog evolution no longer fails a valid build, while
+linked-family duplication, missing repeat summaries, wrong projection source,
+invalid count ordering, DOM/image parity and visual geometry remain
+fail-closed.
