@@ -1,0 +1,37 @@
+name: Smart Search apply implementation patch
+
+on:
+  push:
+    branches: [integration/smart-search-live-e2e-20260803]
+    paths: [.github/smart-search-implementation.patch]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: smart-search-implementation-patch
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: integration/smart-search-live-e2e-20260803
+          fetch-depth: 0
+      - name: Apply reviewed implementation patch and remove one-shot scaffolding
+        run: |
+          set -euo pipefail
+          git apply --check .github/smart-search-implementation.patch
+          git apply .github/smart-search-implementation.patch
+          rm -f \
+            .github/smart-search-implementation.patch \
+            .github/workflows/smart-search-source-export.yml \
+            .github/workflows/smart-search-apply-patch.yml
+          git config user.name 'codex-agent'
+          git config user.email 'codex-agent@example.local'
+          git add -A
+          git diff --cached --check
+          git commit -m 'Implement live Smart Search E2E and transport matrix'
+          git push origin HEAD:integration/smart-search-live-e2e-20260803
