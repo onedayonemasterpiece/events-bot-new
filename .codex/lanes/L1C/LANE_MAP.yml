@@ -37,4 +37,4 @@ lanes:
       - docs/routes.yml
     expected_output: committed v2 classification, due claim/ACK protocol, regressions, docs, and RESULTS.md
     verification_scope: targeted_local_no_live_ydb
-    status: in_progress
+    status: committed
