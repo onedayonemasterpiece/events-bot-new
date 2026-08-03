@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "name": "matte_soft_v1",
+  "display_name": "Matte Soft",
+  "description": "Dry, soft matte study with more selective optical blur and low geometry.",
+  "seed_offset": 28457,
+  "matte": {
+    "strength": 0.31,
+    "micro_contrast": 0.86,
+    "macro_contrast": 0.7,
+    "desaturate": 0.055,
+    "brightness": 0.975,
+    "roughness_haze": 0.26
+  },
+  "blur": {
+    "fraction": 0.24,
+    "min_px": 0.55,
+    "max_px": 1.65,
+    "states": [
+      "dim",
+      "sleeping",
+      "revealed"
+    ]
+  },
+  "geometry": {
+    "active_fraction": 0.28,
+    "max_rotation_degrees": 0.1,
+    "max_tilt_degrees": 0.34,
+    "max_depth_px": 1.5,
+    "max_corner_lift_px": 1.15,
+    "max_shift_px": 0.42,
+    "inset_px": 2.0
+  },
+  "corner_light": {
+    "fraction": 0.14,
+    "strength": 0.13,
+    "radius": 0.58,
+    "color": [
+      252,
+      145,
+      92
+    ]
+  },
+  "edge": {
+    "highlight_alpha": 0.18,
+    "shadow_alpha": 0.54,
+    "outline_alpha": 0.045,
+    "radius_ratio": 0.055
+  },
+  "shadow": {
+    "alpha": 0.44,
+    "blur_px": 4.5,
+    "offset_x_px": 2.0,
+    "offset_y_px": 3.0
+  },
+  "global": {
+    "vignette_delta": 0.045,
+    "grain_strength": 0.5,
+    "warm_glow_multiplier": 0.82
+  }
+}

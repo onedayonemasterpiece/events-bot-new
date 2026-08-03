@@ -1,0 +1,44 @@
+{
+  "checks": {
+    "dark_mass": true,
+    "dimensions": true,
+    "dynamic_range": true,
+    "entropy": true,
+    "file_size": true,
+    "highlights_bounded": true,
+    "midtones_present": true,
+    "not_flat": true
+  },
+  "generated_at": "2026-08-03T18:50:46Z",
+  "image": {
+    "height": 1080,
+    "path": "microtilt-v1.png",
+    "sha256": "f4d6dcf2e8bb04492a4c0fd17b9412df648aada88d6582de9cce67858f5526e0",
+    "size_bytes": 1906576,
+    "width": 1920
+  },
+  "metrics": {
+    "channel_means": [
+      24.8377,
+      20.3186,
+      18.4971
+    ],
+    "channel_stddev": [
+      30.6915,
+      25.6032,
+      26.2818
+    ],
+    "dark_fraction": 0.80572,
+    "dynamic_range": 202,
+    "entropy": 5.696853,
+    "highlight_fraction": 0.0,
+    "midtone_fraction": 0.066356
+  },
+  "plan": {
+    "legacy_sha256": null,
+    "path": "kafel-classic-v1.png.plan.json",
+    "sha256": "79db292c695a749ddf7c51fe6e843fb47b761297c05a5636475ed6f3ded20212"
+  },
+  "schema_version": 1,
+  "status": "pass"
+}

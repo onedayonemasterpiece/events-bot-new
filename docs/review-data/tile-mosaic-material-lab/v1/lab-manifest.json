@@ -1,0 +1,37 @@
+{
+  "baseline_mode": "frozen-golden",
+  "baseline_plan": "kafel-classic-v1.png.plan.json",
+  "contact_sheet": {
+    "path": "contact-sheet.jpg",
+    "sha256": "b81bb7818cba4fa1389cc99c185724349fd0b81b0b8c28bd9f874dd6191ec09a"
+  },
+  "generated_at": "2026-08-03T18:50:46Z",
+  "lab": "tile-mosaic-material-lab",
+  "outputs": [
+    {
+      "name": "kafel_classic_v1",
+      "path": "kafel-classic-v1.png",
+      "sha256": "f30f78c0b585de4022ca35758a89bc7d643cf224212fd3a67b47170611ea71e7",
+      "validation": "pass"
+    },
+    {
+      "name": "reference_balanced_v1",
+      "path": "reference-balanced-v1.png",
+      "sha256": "15cfd193c71982b379b24ae4a0aea0167fa5d94b4de87bc55d7fe845076f7e4f",
+      "validation": "pass"
+    },
+    {
+      "name": "matte_soft_v1",
+      "path": "matte-soft-v1.png",
+      "sha256": "16ab281233e2cf46bd969284d599c1cc3dce6b2dc53d17d6ce670cdf07c34357",
+      "validation": "pass"
+    },
+    {
+      "name": "microtilt_v1",
+      "path": "microtilt-v1.png",
+      "sha256": "f4d6dcf2e8bb04492a4c0fd17b9412df648aada88d6582de9cce67858f5526e0",
+      "validation": "pass"
+    }
+  ],
+  "schema_version": 1
+}

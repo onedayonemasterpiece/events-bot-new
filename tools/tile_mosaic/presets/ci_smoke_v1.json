@@ -1,0 +1,219 @@
+{
+  "schema_version": 1,
+  "name": "ci_smoke_v1",
+  "description": "Reduced-resolution deterministic CI smoke; not a review or production profile.",
+  "seed": 20260901,
+  "canvas": {
+    "width": 960,
+    "height": 540,
+    "background_rgb": [
+      3,
+      5,
+      6
+    ],
+    "vignette": 0.42
+  },
+  "grid": {
+    "columns": 12,
+    "rows": 6,
+    "gap_ratio": 0.035,
+    "tile_thickness": 0.12,
+    "bevel_radius": 0.055,
+    "corner_radius_ratio": 0.055,
+    "texture_tile_px": 128
+  },
+  "camera": {
+    "overscan": 0.018,
+    "offset_x": 0.0,
+    "offset_y": 0.0,
+    "tilt_x_degrees": 0.9,
+    "tilt_y_degrees": -0.35,
+    "ortho": true
+  },
+  "geometry_jitter": {
+    "depth": 0.026,
+    "tilt_degrees": 0.28,
+    "rotation_degrees": 0.12,
+    "brightness": 0.045,
+    "active_fraction": 1.0,
+    "corner_lift": 0.0
+  },
+  "material": {
+    "base_roughness": 0.8,
+    "micro_scale": 74.0,
+    "micro_strength": 0.11,
+    "macro_scale": 5.2,
+    "macro_strength": 0.07,
+    "roughness_variation": 0.075,
+    "coat_weight": 0.035,
+    "coat_roughness": 0.52,
+    "side_rgb": [
+      0.011,
+      0.014,
+      0.016
+    ],
+    "grout_rgb": [
+      0.006,
+      0.008,
+      0.009
+    ],
+    "corner_highlight_fraction": 0.0,
+    "corner_highlight_strength": 0.0,
+    "corner_highlight_radius": 0.42
+  },
+  "states": {
+    "sealed": {
+      "fraction": 0.42,
+      "brightness": 0.37,
+      "saturation": 0.28,
+      "contrast": 0.94,
+      "roughness": 0.91,
+      "blur_px": 4.6,
+      "image_mix": 0.11,
+      "veil_alpha": 0.63,
+      "veil_rgb": [
+        4,
+        6,
+        7
+      ],
+      "glint": 0.01,
+      "local_blur_fraction": 0.0,
+      "local_blur_extra_px": 0.0
+    },
+    "dim": {
+      "fraction": 0.15,
+      "brightness": 0.64,
+      "saturation": 0.52,
+      "contrast": 0.96,
+      "roughness": 0.87,
+      "blur_px": 2.7,
+      "image_mix": 0.48,
+      "veil_alpha": 0.32,
+      "veil_rgb": [
+        5,
+        7,
+        8
+      ],
+      "glint": 0.025,
+      "local_blur_fraction": 0.0,
+      "local_blur_extra_px": 0.0
+    },
+    "sleeping": {
+      "fraction": 0.12,
+      "brightness": 0.78,
+      "saturation": 0.72,
+      "contrast": 0.98,
+      "roughness": 0.83,
+      "blur_px": 1.45,
+      "image_mix": 0.67,
+      "veil_alpha": 0.2,
+      "veil_rgb": [
+        5,
+        7,
+        8
+      ],
+      "glint": 0.04,
+      "local_blur_fraction": 0.0,
+      "local_blur_extra_px": 0.0
+    },
+    "revealed": {
+      "fraction": 0.27,
+      "brightness": 0.96,
+      "saturation": 0.92,
+      "contrast": 1.0,
+      "roughness": 0.76,
+      "blur_px": 0.45,
+      "image_mix": 0.93,
+      "veil_alpha": 0.055,
+      "veil_rgb": [
+        5,
+        7,
+        8
+      ],
+      "glint": 0.09,
+      "local_blur_fraction": 0.0,
+      "local_blur_extra_px": 0.0
+    },
+    "glint": {
+      "fraction": 0.04,
+      "brightness": 1.08,
+      "saturation": 0.98,
+      "contrast": 1.02,
+      "roughness": 0.54,
+      "blur_px": 0.0,
+      "image_mix": 0.99,
+      "veil_alpha": 0.0,
+      "veil_rgb": [
+        5,
+        7,
+        8
+      ],
+      "glint": 0.46,
+      "coat_weight": 0.16,
+      "coat_roughness": 0.28,
+      "local_blur_fraction": 0.0,
+      "local_blur_extra_px": 0.0
+    }
+  },
+  "lighting": {
+    "key": {
+      "type": "AREA",
+      "energy": 980.0,
+      "size": 4.8,
+      "position": [
+        4.6,
+        -3.8,
+        7.8
+      ],
+      "color": [
+        1.0,
+        0.34,
+        0.14
+      ],
+      "screen_position": [
+        0.69,
+        0.36
+      ],
+      "screen_radius": 0.46,
+      "screen_strength": 0.115
+    },
+    "fill": {
+      "type": "AREA",
+      "energy": 430.0,
+      "size": 6.0,
+      "position": [
+        -5.0,
+        -1.8,
+        5.3
+      ],
+      "color": [
+        0.2,
+        0.29,
+        0.36
+      ]
+    },
+    "rim": {
+      "type": "AREA",
+      "energy": 610.0,
+      "size": 3.8,
+      "position": [
+        1.4,
+        4.8,
+        6.2
+      ],
+      "color": [
+        0.92,
+        0.34,
+        0.16
+      ]
+    }
+  },
+  "render": {
+    "engine": "BLENDER_EEVEE_NEXT",
+    "samples": 16,
+    "transparent": false,
+    "file_format": "PNG",
+    "color_mode": "RGB",
+    "compression": 18
+  }
+}
