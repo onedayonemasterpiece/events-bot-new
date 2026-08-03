@@ -46,6 +46,7 @@ jobs:
               raise SystemExit('Expected Blender engine block was not found')
           path.write_text(text.replace(old, new), encoding='utf-8')
           PY
+          python -m pip install --disable-pip-version-check 'Pillow==12.2.0'
           python -m compileall -q tools/tile_mosaic tests/test_tile_mosaic_*.py
           python -m unittest discover -s tests -p 'test_tile_mosaic_*.py' -v
 
