@@ -23,6 +23,7 @@ function reservation(overrides = {}) {
     day_bucket: "2026-07-31",
     quota_scope: "google:test-project",
     limiter_contract: "google_ai_project_model_atomic_v1",
+    bucket_strategy: "rolling_60s_pacific_day_v2",
     ...overrides,
   };
 }
@@ -367,6 +368,42 @@ test("incompatible limiter contract and missing quota scope both fail closed", a
     assert.equal(
       backend.calls.some((call) => call.name === "google_ai_mark_sent"),
       false,
+    );
+  }
+});
+
+test("missing or incompatible bucket strategy fails closed", async () => {
+  for (const invalid of [
+    { bucket_strategy: undefined },
+    { bucket_strategy: "fixed_minute_utc_day_v1" },
+  ]) {
+    let sent = false;
+    const backend = fakeBackend({
+      responses: {
+        google_ai_reserve: reservation(invalid),
+        google_ai_finalize: null,
+      },
+    });
+    await assert.rejects(
+      withSharedGoogleQuotaAttempt(
+        runOptions(backend, async () => {
+          sent = true;
+          return { value: "unexpected" };
+        }),
+      ),
+      (error) =>
+        error instanceof SharedGoogleQuotaError &&
+        error.stage === "metadata" &&
+        error.message.startsWith("shared_google_bucket_strategy_"),
+    );
+    assert.equal(sent, false);
+    assert.equal(
+      backend.calls.some((call) => call.name === "google_ai_mark_sent"),
+      false,
+    );
+    assert.equal(
+      backend.calls.some((call) => call.name === "google_ai_finalize"),
+      true,
     );
   }
 });

@@ -9,6 +9,10 @@
   Gemini 3.1 Flash Lite → Gemini 3.5 Flash Lite → Gemma 4 chain; committed
   Telegram/Guide notebooks and remote launchers require the same ledger, and
   the static provider-path audit rejects stale embedded gateway snapshots.
+  Python and Edge consumers also reject successful reservations unless the RPC
+  proves the `rolling_60s_pacific_day_v2` bucket strategy, preventing an old
+  fixed-minute/UTC-day implementation from satisfying only the older atomic
+  contract marker.
 
 - Added deterministic, build-bound static-site transport fault profiles at the
   `ResilientSupabaseTransport` fetch boundary. Fault previews isolate route
