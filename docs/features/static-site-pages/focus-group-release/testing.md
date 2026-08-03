@@ -12,7 +12,8 @@
 
 Текущий `npm --prefix site run test:focus-group-product` объединяет unit/source
 контракты onboarding, Auth, feedback, page-family mapping, PWA и артефактов.
-Это полезный baseline, но он не является полноценным browser E2E оценки страниц.
+Это полезный baseline, но он не является полноценным browser E2E оценки страниц
+и не проверяет anonymous focus identity.
 
 ### Фактическое покрытие оценки страниц
 
@@ -25,6 +26,8 @@
 | UI после ответа | Рабочий компонент подсвечивает выбранную кнопку и пишет общий status | Нет состояния `Ваша оценка: N · Изменить`; число не проверяется browser-тестом |
 | Новая версия страницы | Нет реализации | Нет сообщения об обновлении, старой оценки, повторно открытой шкалы и отдельной DB revision |
 | Общий NPS | `FocusGroupFeedback.astro` содержит prototype panel, а source-тест проверяет наличие строк | Prototype ничего не отправляет, не смонтирован в production flow и не имеет server schema |
+| Anonymous feedback | Нет silent anonymous session | Текущий Lab panel требует Supabase session и предлагает подтвердить участие |
+| Identity upgrade | Есть отдельные email/Yandex функции | Нет теста anonymous → verified с тем же subject и сохранёнными данными |
 
 ### Критическая текущая граница
 
@@ -38,8 +41,12 @@
 `page_revision` и не имеет отдельного `service_nps` scope. Уникальность
 гарантируется по `client_request_id`, а не по page/service revision.
 
-Следовательно, автотесты из следующего раздела нельзя считать реализованными до
-изменения state model, UI и schema.
+Отдельный разрыв — отсутствие silent anonymous Supabase session. Локальная
+focus marker показывает Lab-блок, но текущий `requireSession()` не даёт отправить
+score/text/screenshot без подтверждённого или иного Supabase user session.
+
+Следовательно, автотесты из следующих разделов нельзя считать реализованными до
+изменения state model, UI, anonymous-session flow и schema.
 
 ## 2. Три уровня тестов
 
@@ -56,14 +63,20 @@ Android Emulator и iOS Simulator не должны открывать сотн�
 ### 3.1. `focus-group-contract.yml`
 
 Новый быстрый workflow без секретов. Запускается на PR/push, когда изменены focus
-UI, marker, page score, service NPS, feedback, artifacts, PWA, Auth или
-соответствующие миграции.
+UI, marker, anonymous session, identity linking, page score, service NPS,
+feedback, artifacts, PWA, Auth или соответствующие миграции.
 
 Проверяет:
 
 - существующие `test:focus-group-product`, `test:resilient-client` и OTP unit tests;
 - default locked state и отсутствие flash открытой афиши без метки;
 - fixed cutoff `2026-08-31 18:00 Europe/Kaliningrad`;
+- invite создаёт/reuses один anonymous subject;
+- reload/reinvite не создаёт вторую anonymous user row;
+- anonymous session не отображается как verified login;
+- anonymous participant может отправить page score, service NPS, text и screenshot;
+- anonymous participant всегда имеет raffle eligibility `false`;
+- email/Yandex upgrade сохраняет subject/data или проходит idempotent merge;
 - route matrix всех поддерживаемых page families;
 - один Lab-блок после main content и перед footer;
 - ровно 11 значений `0–10`, без default selection;
@@ -77,9 +90,10 @@ UI, marker, page score, service NPS, feedback, artifacts, PWA, Auth или
   странице;
 - text/screenshot остаются optional secondary actions;
 - idempotent outbox и storage bounds;
-- local marker не создаёт raffle eligibility;
+- local marker или anonymous JWT не создают raffle eligibility;
 - collection содержит 12 IDs, а threshold равен 10;
 - chances ограничены `1…3`;
+- schema/RLS различают anonymous и permanent identity;
 - schema/RLS не открывают raw feedback и screenshot посторонним;
 - machine registry и [`status.md`](status.md) не расходятся.
 
@@ -97,8 +111,18 @@ UI, marker, page score, service NPS, feedback, artifacts, PWA, Auth или
 - [Android PASS](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30747598046)
 - [iOS `FAIL_MOBILE_KEYBOARD`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30754894934)
 
-Перед seed browser и Android повторяются на финальном target. Для iPhone нужен
-один terminal поддерживаемый identity path:
+Перед seed browser и Android повторяются на финальном target. Новый обязательный
+вариант journey начинается уже с anonymous focus session:
+
+```text
+anonymous subject
+→ накопленный page score/feedback
+→ email verification или Yandex linking
+→ тот же subject/data
+→ verified participant registration
+```
+
+Для iPhone нужен один terminal поддерживаемый identity path:
 
 - исправленный OTP с реальной keyboard/input acceptance; либо
 - magic link; либо
@@ -119,33 +143,38 @@ Browser проходит один synthetic journey:
 
 ```text
 без метки → видна только заглушка
-приглашение → метка → обычный интерфейс
-reload → доступ сохраняется
+приглашение → marker → один anonymous Supabase subject → обычный интерфейс
+reload/reinvite → тот же anonymous subject
+anonymous personalization/action state работает
 матрица page families → один Lab-блок перед footer
-page score 0–10 → немедленное сохранение → «Ваша оценка: N»
+anonymous page score 0–10 → немедленное сохранение → «Ваша оценка: N»
 reload той же revision → сохранённое число
 fixture новой revision → сообщение «Страница обновилась» + прежняя оценка + scale
 оценка новой revision → две исторические revision, один current answer
 переход в другой page family → независимый score
-общий NPS в participant hub → отдельный service_nps row
-общий комментарий → не меняет page score
-text + screenshot по кнопкам
-offline → outbox → online → ровно одна запись
+anonymous общий NPS в participant hub → отдельный service_nps row
+anonymous text + screenshot → private owner-scoped row/object
+offline/no session → outbox → session/online → ровно одна запись
+anonymous artifact receipts → progress 10/12
+anonymous raffle eligibility=false
+email/Yandex upgrade → same subject или audited merge
+после upgrade прежние scores/feedback/artifacts сохранены
+verified participant registration → eligibility/chances вычисляются
 Share / Calendar / Не интересно / Для меня
-synthetic artifact receipts → progress 10/12
-без Auth → raffle eligibility false
-с test identity → eligibility/chances вычисляются
-read-only запрос видит непротиворечивые данные
-cleanup test participant/feedback/artifacts
+read-only запрос видит непротиворечивые anonymous/verified данные
+cleanup test participant/anonymous user/feedback/artifacts
 ```
 
 Android/iOS проверяют только:
 
+- invite → marker → anonymous subject reuse;
 - usable viewport и native keyboard/input;
 - install/add-to-home-screen и standalone return;
+- anonymous session/marker сохраняются после standalone relaunch;
 - share/calendar system handoff на одном specimen;
 - шкалу page score и feedback sheet без перекрытия системной клавиатурой;
-- открытие общего NPS по ссылке из Lab-блока.
+- открытие общего NPS по ссылке из Lab-блока;
+- один supported identity upgrade path без потери прежних данных.
 
 Workflow не проводит реальный розыгрыш и не отправляет письма участникам.
 
@@ -163,10 +192,13 @@ Workflow не проводит реальный розыгрыш и не отп�
 
 - 12-item collection version;
 - threshold `10`;
-- verified participant;
-- минимум один `page_score`;
+- verified permanent participant;
+- `is_anonymous=false`;
+- минимум один `page_score`, включая score, полученный до identity upgrade;
 - общий NPS не является дополнительным eligibility gate;
 - chances: base + text + screenshot, max 3;
+- anonymous subjects без upgrade исключены;
+- merged anonymous data не задублировано;
 - immutable snapshot hash;
 - winner + reserve;
 - повтор того же snapshot возвращает тот же результат;
@@ -186,9 +218,45 @@ artifacts не нужны.
 
 Требуется queryability, а не оформление регулярного отчёта.
 
-## 5. Точные тесты оценок и NPS
+## 5. Точные тесты anonymous participation
 
-### 5.1. Contract/unit state machine
+### 5.1. Anonymous session/unit contract
+
+| ID | Вход | Ожидаемый результат |
+|---|---|---|
+| `FG-ANON-U01` | Валидный invite, Supabase session отсутствует | Создаётся одна anonymous session, marker остаётся active |
+| `FG-ANON-U02` | Reload с marker и anonymous session | Новый user не создаётся, `auth.uid()` тот же |
+| `FG-ANON-U03` | Повторный invite на том же устройстве | Subject переиспользуется, progress не сбрасывается |
+| `FG-ANON-U04` | Anonymous JWT | UI показывает «участие не подтверждено», не `Вошли как ID` |
+| `FG-ANON-U05` | Anonymous user вызывает participant registration | Typed ineligible/verification-required, participant row не создаётся |
+| `FG-ANON-U06` | Supabase недоступен | Marker открывает сайт, action queued, session retry bounded |
+| `FG-ANON-U07` | Anonymous user старше retention без activity | Controlled cleanup удаляет orphan, active user не удаляется |
+
+### 5.2. Anonymous feedback contract
+
+| ID | Сценарий | Ожидаемый результат |
+|---|---|---|
+| `FG-ANON-F01` | Anonymous page score | Owner row создаётся, Auth wall не показывается |
+| `FG-ANON-F02` | Anonymous service NPS | Отдельная owner row, page score не меняется |
+| `FG-ANON-F03` | Anonymous text | Accepted private feedback row |
+| `FG-ANON-F04` | Anonymous screenshot | Upload только в `<auth.uid()>/...`, private read boundary |
+| `FG-ANON-F05` | Один action replay direct/relay | Ровно одна DB row |
+| `FG-ANON-F06` | Anonymous score + no verified identity | Feedback учитывается в исследовании, raffle eligibility=false |
+
+### 5.3. Identity upgrade contract
+
+| ID | Сценарий | Ожидаемый результат |
+|---|---|---|
+| `FG-LINK-U01` | Anonymous user подтверждает новый email | User ID сохраняется, `is_anonymous=false`, data на месте |
+| `FG-LINK-U02` | Anonymous user связывает Яндекс | Один user/participant, data на месте |
+| `FG-LINK-U03` | Email уже принадлежит permanent account | Audited merge, no duplicate scores/artifacts/actions |
+| `FG-LINK-U04` | Upgrade повторён после ambiguous response | Idempotent current identity, no second participant |
+| `FG-LINK-U05` | До upgrade было 10/12 + page score + text | После upgrade eligibility/chances используют прежние receipts |
+| `FG-LINK-U06` | Upgrade после cutoff | Identity может сохраниться, но raffle snapshot не меняется |
+
+## 6. Точные тесты оценок и NPS
+
+### 6.1. Contract/unit state machine
 
 | ID | Вход | Ожидаемое состояние |
 |---|---|---|
@@ -203,7 +271,7 @@ artifacts не нужны.
 | `FG-SERVICE-U02` | `service-r2=6`, page score отсутствует | Page scale остаётся unanswered |
 | `FG-SERVICE-U03` | Изменение service NPS | Обновляется только текущая service revision |
 
-### 5.2. Placement matrix
+### 6.2. Placement matrix
 
 Browser-тест открывает по одному route каждого поддерживаемого family:
 
@@ -226,7 +294,7 @@ favorites
 for_me
 ```
 
-На каждом route с активной focus marker:
+На каждом route с активной focus marker и anonymous subject:
 
 - ровно один `[data-focus-lab-panel]`;
 - он видим;
@@ -234,15 +302,16 @@ for_me
 - содержит `Lab`;
 - содержит либо шкалу текущей revision, либо явное сохранённое число;
 - не перекрывается bottom navigation;
+- не требует verified identity для score/text/screenshot;
 - на excluded routes `/fokus-gruppa/**`, `/lab/**`, `/partners/**` page score не
   монтируется.
 
-### 5.3. Revision browser journey
+### 6.3. Revision browser journey
 
-1. Открыть specimen `home-r3`.
+1. Открыть specimen `home-r3` как anonymous focus participant.
 2. Выбрать `7`.
 3. Дождаться `Ваша оценка: 7`.
-4. Reload — состояние сохраняется.
+4. Reload — session/subject и состояние сохраняются.
 5. Открыть тот же rendered specimen с `home-r4`.
 6. Увидеть:
 
@@ -255,20 +324,23 @@ for_me
 8. Выбрать `9`.
 9. Проверить `Ваша оценка новой версии: 9`.
 10. Read-only DB assertion: одна current row для `home-r4`, историческая row
-    `home-r3` сохранена, дубля одного `client_request_id` нет.
+    `home-r3` сохранена, subject anonymous, дубля `client_request_id` нет.
+11. Подтвердить identity и повторить DB assertion: обе rows остались у того же
+    или merged permanent subject.
 
-### 5.4. Общий NPS journey
+### 6.4. Общий NPS journey
 
-1. Открыть `/zakrytaya-afisha/#obshchiy-nps`.
+1. Открыть `/zakrytaya-afisha/#obshchiy-nps` как anonymous participant.
 2. Убедиться, что виден один `Lab · Общий NPS сервиса`.
-3. Выбрать значение без submit.
+3. Выбрать значение без submit и без Auth wall.
 4. Увидеть `Ваша общая оценка: N · Изменить`.
 5. Добавить текст `Что в целом неудобно или чего не хватает?`.
 6. Проверить отдельную `service_nps` запись и независимость от page scores.
-7. Перейти на обычную страницу: page score остаётся своим, общий NPS не
+7. Подтвердить email/Яндекс: общий NPS и комментарий остаются на месте.
+8. Перейти на обычную страницу: page score остаётся своим, общий NPS не
    появляется вторым обязательным вопросом.
 
-## 6. Остальные сценарии
+## 7. Остальные сценарии
 
 ### A. Soft gate
 
@@ -276,56 +348,58 @@ for_me
 |---|---|---|---|
 | `FG-ACCESS-01` | Без метки при первом paint видна только актуальная заглушка | browser | да |
 | `FG-ACCESS-02` | Main UI hidden/inert и не достижим с keyboard/screen reader | browser/a11y | да |
-| `FG-ACCESS-03` | Invite записывает метку, удаляет fragment и открывает интерфейс | browser | да |
-| `FG-ACCESS-04` | Метка переживает reload/PWA и не удаляется сбросом «Для меня» | browser + Android | да |
+| `FG-ACCESS-03` | Invite записывает marker, создаёт/reuses anonymous subject, удаляет fragment и открывает интерфейс | browser | да |
+| `FG-ACCESS-04` | Marker/subject переживают reload/PWA и не удаляются сбросом «Для меня» | browser + Android | да |
 | `FG-ACCESS-05` | В 18:00 31 августа eligibility закрывается | controlled clock + DB | да |
-| `FG-ACCESS-06` | Ручной обход gate не создаёт Auth/raffle eligibility | contract | да |
+| `FG-ACCESS-06` | Ручной обход gate не создаёт anonymous subject или raffle eligibility сам по себе | contract | да |
 
-### B. Auth
+### B. Identity
 
 | ID | Сценарий | Где | Seed blocking |
 |---|---|---|---|
-| `FG-AUTH-01` | Browser real email identity | protected workflow | да |
-| `FG-AUTH-02` | Android real email identity | protected workflow | да |
-| `FG-AUTH-03` | iPhone real supported identity path | protected native path | да |
-| `FG-AUTH-04` | Яндекс создаёт одного participant | protected journey | да |
-| `FG-AUTH-05` | Marker without Auth can test but eligibility=false | browser + DB | да |
-| `FG-AUTH-06` | Repeat registration idempotent; cap boundary safe | DB integration | до расширения |
+| `FG-AUTH-01` | Browser real email upgrade from anonymous subject | protected workflow | да |
+| `FG-AUTH-02` | Android real email upgrade from anonymous subject | protected workflow | да |
+| `FG-AUTH-03` | iPhone real supported identity upgrade path | protected native path | да |
+| `FG-AUTH-04` | Яндекс linking создаёт одного permanent participant | protected journey | да |
+| `FG-AUTH-05` | Anonymous subject can test/write feedback but eligibility=false | browser + DB | да |
+| `FG-AUTH-06` | Repeat registration/merge idempotent; cap boundary safe | DB integration | до расширения |
 
 ### C. PWA и функции
 
 | ID | Сценарий | Где | Seed blocking |
 |---|---|---|---|
-| `FG-PWA-01` | Android install → home icon → standalone relaunch | Android | да |
-| `FG-PWA-02` | iPhone honest Add to Home Screen path | iOS/manual automation | да |
+| `FG-PWA-01` | Android install → home icon → standalone relaunch, same anonymous subject | Android | да |
+| `FG-PWA-02` | iPhone honest Add to Home Screen path, marker/subject preserved | iOS/manual automation | да |
 | `FG-USE-01` | Share opens supported system/native path | browser + mobile specimen | да |
 | `FG-USE-02` | Calendar action produces valid handoff/ICS | browser + mobile specimen | да |
-| `FG-USE-03` | «Не интересно» persists and can be undone | browser | да |
-| `FG-USE-04` | «Для меня» visibly changes/clarifies ordering | browser | да |
+| `FG-USE-03` | «Не интересно» persists, affects anonymous personalization and can be undone | browser | да |
+| `FG-USE-04` | «Для меня» visibly changes/clarifies anonymous ordering | browser | да |
 
 ### D. Artifacts, statistics and draw
 
 | ID | Сценарий | Где | Seed blocking |
 |---|---|---|---|
 | `FG-EGG-01` | Frozen collection has exact 12 IDs | contract | да |
-| `FG-EGG-02` | Same artifact is receipted once | DB integration | да |
-| `FG-EGG-03` | 9/12 is ineligible; 10/12 is eligible | DB integration | да |
-| `FG-STATS-01` | Read-only query separates page scores, service NPS, text, screenshot, artifacts and chances | operator integration | да |
-| `FG-STATS-02` | Query contains no raw email/OTP/IP/User-Agent unless explicitly private | contract | да |
-| `FG-DRAW-01` | One base + text + screenshot = max 3 chances | DB/unit | да |
+| `FG-EGG-02` | Same artifact is receipted once under anonymous/permanent subject | DB integration | да |
+| `FG-EGG-03` | 9/12 is ineligible; anonymous 10/12 remains ineligible; verified 10/12 is eligible | DB integration | да |
+| `FG-EGG-04` | Anonymous receipts survive identity link/merge without duplicate | DB integration | да |
+| `FG-STATS-01` | Read-only query separates anonymous/verified subjects, page scores, service NPS, text, screenshot, artifacts and chances | operator integration | да |
+| `FG-STATS-02` | Chat-safe query contains no raw email/OTP/IP/User-Agent | contract | да |
+| `FG-DRAW-01` | One base + text + screenshot = max 3 chances after verification | DB/unit | да |
 | `FG-DRAW-02` | Dry draw is deterministic for same snapshot | protected workflow | да |
 | `FG-DRAW-03` | Winner and reserve are distinct | protected workflow | да |
 | `FG-DRAW-04` | 3-day response deadline and reserve promotion | workflow/unit | до final draw |
 | `FG-MAIL-01` | Winner email can be sent to test mailbox | protected dry run | до final draw |
 | `FG-MAIL-02` | Thank-you/final winner mailing can target verified cohort once | protected dry run | до final draw |
 
-## 7. Evidence
+## 8. Evidence
 
 Каждый blocking live run фиксирует:
 
 - exact 40-character repository SHA;
 - immutable target URL/build identity;
 - scenario/platform;
+- anonymous user created/reused/merged counters без user UUID в artifact;
 - terminal outcome;
 - sanitized counters;
 - cleanup result.
