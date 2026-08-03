@@ -1,0 +1,771 @@
+Доказательная стратегия постепенного освоения KenigEvents
+Исследование выполнено по приложенному продуктовому брифу о contextual onboarding, progressive disclosure, feature discovery, прозрачности рекомендаций, PWA/permission prompts, доступности и этике behavioral design для KenigEvents. 
+ Срез репозитория и внешних источников: 3 августа 2026 года. Не заданными остаются фактический объём трафика, текущая аналитическая схема, базовые конверсии, юридическое лицо — оператор сайта, состав команды, ставки подрядчиков и подтверждённый production-релиз статического сайта; поэтому численные пороги, бюджет и длительности ниже являются плановыми диапазонами, а не установленными фактами.
+
+Исполнительный вывод
+KenigEvents не нужен самостоятельный «онбординг-продукт» в виде тура, tutorial wall, чеклиста или цепочки обязательных подсказок. Нужна система управления редкими контекстными сообщениями поверх уже полезного static-first интерфейса. Её задача — не провести человека по функциям, а сократить путь от намерения к осознанному решению по событию, а затем объяснить результат только того действия, которое пользователь уже совершил или явно пытается совершить.
+
+На main@09fcde9012b30d0c3b4a30d35f45e3c9858b096c главная уже строится как HomeHeroTalk → HomeQuickNav → HomeColdStartFeed; в статическом HTML присутствует полезная лента до 30 актуальных событий, а локальный JavaScript лишь переставляет карточки при наличии совместимого browser-профиля. Следовательно, ценность до входа и без runtime уже архитектурно достижима, а текущую локальную перестановку нельзя называть обученной моделью или кросс-девайсным профилем.
+
+Главное продуктовое решение:
+
+Сохранить статическую ориентацию в Hero; добавить небольшой capability registry, action echoes и Page-end Talk; не строить tour engine; не предлагать login, PWA или permissions до доказанной пользовательской пользы; не использовать артефакты как обязательное обучение.
+
+Вердикт по механизмам
+Механизм	Решение	Уверенность	Основание	Условие остановки или отката
+Статическое ценностное обещание	Proceed	Высокая	Уже встроено в полезную главную, имеет два task-oriented CTA и не требует состояния	Убрать или переписать, если comprehension-тест показывает неверное понимание локальной персонализации либо Hero ухудшает нахождение первого события
+Динамический Hero Talk	Narrow	Средняя	Hero — сильная и дорогая по вниманию зона; goal-directed пользователи склонны игнорировать крупные блоки, не связанные с задачей, а повторяющийся динамический блок рискует стать «баннером» 
+Откатить динамику, если растёт время до первого события, падают переходы в даты/поиск или пользователи не могут воспроизвести смысл сообщения
+Page-end Talk	Proceed, как тихий post-value слой	Средне-высокая	Он появляется после основной выдачи и меньше конкурирует с core CTA	Отключить intent, если он не даёт downstream capability success либо создаёт повторные визиты только к промо, а не к событиям
+Inline hints	Proceed выборочно	Высокая	Подсказка рядом с точкой решения лучше сохраняет контекст; Search/error/status должны оставаться локальными, что уже зафиксировано в mobile-shell contract	Убрать hint, если label без него проходит comprehension/task test или hint увеличивает ошибочные действия
+Action confirmations	Proceed	Высокая	Статус действия должен быть доступно объявлен без переноса фокуса; это соответствует WCAG 4.1.3 
+Откатить глобальный toast к inline echo, если теряется контекст, дублируется screen-reader announcement или нельзя немедленно отменить действие
+Coachmarks/tooltips	Defer; разрешить только точечные эксперименты	Средне-высокая	Transient help требует dismissible, hoverable и persistent поведения; overlays могут закрывать keyboard focus 
+Немедленный kill при перекрытии CTA/фокуса, повторном показе после dismissal, невозможности пройти без hover или росте accidental actions
+Checklist/progress	Reject для обычного пользователя	Высокая	Он подменяет поиск события задачей «закончить интерфейс», создаёт completion bias и противоречит brief constraints	Возвращать к рассмотрению только для отдельной добровольной обучающей среды, не связанной с доступом, наградами или обычным journey
+Login, PWA и permission prompts	Narrow, строго после value event	Высокая	Notification prompts имеют низкий grant rate при неуместном показе; browser research и platform guidance рекомендуют контекст, понятную пользу и user gesture 
+Kill при росте denial, repeated prompt exposure, блокировке core flow или любой связке «сохранить → автоматически подписаться»
+Artifact-led discovery	Defer как post-release cultural pilot	Высокая	Канонический документ прямо маркирует production-код как отсутствующий и требует отдельного измеримого post-release track	Не запускать, если невозможно отделить его impression ledger от событий, обеспечить точную подсказку и доказать non-inferiority core CTA
+Contextual reintroduction	Narrow	Средняя	Полезно после version change, длительного lapse или подтверждённой неудачи, но не после обычного отказа	Kill при показе после permanent dismissal, permission denial или подтверждённого mastery без изменения функции
+
+Рекомендуемое определение результата
+Не следует считать активацией открытие страницы, scroll depth, закрытие подсказки, разрешение Push или создание аккаунта. Рекомендуется staged-модель:
+
+First value: пользователь получил достаточно фактов об актуальном событии, чтобы принять осознанное положительное или отрицательное решение.
+Capability success: пользователь успешно выполнил конкретное действие и увидел его фактический результат.
+Continuity: результат сохранил полезность за пределами текущего экрана — например, событие доступно в календаре/сохранённом состоянии либо запрос был успешно уточнён.
+Qualified return: пользователь вернулся в разумное окно и снова совершил полезное event decision, а не просто открыл сайт из уведомления.
+Отказ от события, Не интересно, zero-result recovery и permission denial являются допустимыми результатами, если человек сохраняет контроль и может продолжить основную задачу.
+
+Репозиторный baseline и конфликтующие истины
+Проверенный срез
+Последний обнаруженный commit main на дату исследования — 09fcde9012b30d0c3b4a30d35f45e3c9858b096c, созданный 3 августа 2026 года. Все утверждения о коде ниже относятся именно к этому SHA, если не указан другой ref.
+
+PR #235 остаётся открытым и неслитым. Его собственное описание говорит, что production Push, calendar email и Android connector не включаются, а runtime двухзонного Favorites и Push остаётся release gate. Поэтому он является только planned context.
+
+PR #270 также открыт и не слит; он формирует research-led implementation contract, но прямо не меняет application runtime, database migration или production behavior. Его нельзя использовать как доказательство выпущенной кросс-страничной персонализации.
+
+Аудит текущего состояния
+Capability	Реализация на проверенном main	Release truth	Текущий текст/поведение	Владение состоянием	Telemetry truth	Gap	Основной риск
+Главная	site/src/pages/index.astro	Реальный код текущего кандидата	Hero, quick nav, cold-start feed	Статическая сборка; локальный rerank отдельно	Не доказана полная product analytics chain	Нет message orchestration	Считать candidate production rollout
+Hero Talk	site/src/components/HomeHeroTalk.astro	Реальный статический компонент	«Куда пойти — без лишнего шума», «Что сегодня», «Найти событие»	Нет отдельного onboarding state	Нет evidence компетентности	Нет registry/arbitration/caps	Promo takeover и повторяющаяся «говорящая шапка»
+Cold-start feed	HomeColdStartFeed.astro	Реальный код	До 30 событий; fallback без входа	ke_personalization_profile в localStorage	Локальные data attrs, не доказанный end-to-end ledger	Неизвестно, как качество rerank проверяется на обычном пользователе	Выдать локальную формулу за ML
+Facts и действия карточки	EventCard.astro	Реальный код	Название, дата/время, статус, место; like, Не интересно, share, calendar где допустимо	Комбинация статического DOM и browser handlers	Есть action hooks, но не доказан privacy-safe product ledger	Неясная семантика like versus favorite/save	Tooltip overload и случайная навигация
+Search	authorized-event-search.md и runtime	Backend и UI частично реализованы; production UX требует immutable-candidate acceptance	Natural-language intent; auth после submit	Supabase/Yandex session; query TTL	Backend progress, quota и request semantics описаны	Anonymous result path и production acceptance ограничены	Учить «умному поиску» до выпуска и создавать login wall
+Personalization	target blueprint	Не production truth	Целевая explainable system	Target: Supabase SOR; browser cache	Полный learning loop отсутствует	Нет завершённого action→profile→new-feed proof	Сильные объяснения несуществующей модели
+Favorites/calendar	R15 candidate + deployed schema	Частично реализовано; real Yandex browser acceptance — gate	Текущий main описывает общий saved-event contract и отдельные calendar_saved/favorite_saved источники	Supabase owner-only state; anonymous local until linking	ICS click не доказывает external save	Нужна единая продуктовая семантика	Смешение like, favorite, calendar и reminder
+Identity sync	site-user-identity	Partial/design	Yandex login/logout существует на Search; email/linking не завершены	Supabase Auth target owner	Merge audit — целевой контракт	Нет production-complete identity merge	Повтор onboarding на новом устройстве; ошибочное обещание sync
+PWA install	Mobile-shell contract	Компонентная механика описана как реализованная, но зависит от browser event	Скрытая кнопка у footer только после beforeinstallprompt	Ephemeral browser eligibility	Install outcome ограничен platform event	Нет кросс-браузерной гарантии	Показ недоступной функции или повторное давление
+Utility reminders	Документация и PR #235	Planned/open PR	Отдельный utility purpose	Target Supabase/outbox	Production delivery не реализована	Consent, scheduler, lifecycle gates	Смешение с promo Push
+Promo Push	PR #235 / promo model	Planned context	Отдельный promo_push consent	Campaign activity/outbox target	Canary only planned	Не production	Маскировка marketing под onboarding
+Артефакты	Product discovery docs	Production-кода нет	Конечная добровольная культурная коллекция	Нужен отдельный ledger	Holdout и downstream event value требуются	Нет first-class model	Pageview farming, IP/freshness, competition with CTA
+Focus programme	Отдельные docs	Research context only	Tasks, feedback, возможные incentives	Отдельный cohort	Не применимо к стандартному пользователю	Нельзя переносить mechanics	Incentive contamination и coercion
+Page-end Talk	Канонического компонента не обнаружено	Hypothesis	Нет подтверждённого production behavior	Нет	Нет	Требуется новый placement contract	Создать второй конкурирующий communication engine
+
+Расхождения, требующие явного owner decision
+Первое существенное расхождение касается календаря и избранного. Документ на main говорит об одном durable saved-event state, но одновременно описывает отдельные calendar_saved и favorite_saved источники. Открытый PR #235 формулирует более выраженное двухзонное представление — Мой календарь и Понравилось. Нельзя писать onboarding copy, пока владелец не определит, является ли «В календарь» сохранением внутри продукта, загрузкой ICS, обоими действиями или составным flow.
+
+Второе расхождение — видимость Search versus requirement «без входа». Текущий Search contract позволяет анонимно сформулировать запрос, но отправка ведёт к Yandex PKCE, поскольку anonymous quota равна нулю. Это допустимый point-of-intent gate только после того, как человек сам выразил поисковое намерение; его нельзя представлять как общедоступный безусловный поиск.
+
+Третье — локальный rerank уже меняет порядок home-карточек, но целевая документация подчёркивает отсутствие законченного learning loop. Объяснение должно говорить только о проверяемом действии: «порядок на этом устройстве уточнён по вашим оценкам», а не «мы изучили ваши интересы».
+
+Где исходный draft недостаточно доказан
+Положение draft	Проблема	Исправление
+Составной first_useful_event_decision как activation	Не доказано, что открытие второго кандидата сопоставимо по ценности с save, ticket intent или полезным отрицательным решением	Разделить first value, action success, continuity и qualified return
+«Открыл event detail» как возможная ценность	Открытие не доказывает понимание фактов	В usability study проверять correct recall даты, места, статуса и следующего действия
+Один общий линейный state machine	Разные capability имеют разную observability: share intent, external calendar import и ticket purchase часто не подтверждаемы	Использовать capability-specific success evidence и unknown_external_outcome
+Универсальные caps без данных	Любые точные N показов / X дней до baseline являются priors	Внести caps как owner-configurable hypothesis и снижать их по умолчанию
+Hero как регулярная обучающая поверхность	Повторное изменение сильной hero-зоны может ухудшить ориентацию и приобрести свойства баннера	Защитить статическую orientation; динамику разрешать только после first value и редко
+Артефакт как способ feature discovery	Нет evidence, что культурная коллекция улучшает освоение основных действий	Первый пилот использовать для cultural exploration, не обучения core capability
+Exposure как шаг освоения	Показ не означает восприятия, понимания или competence	exposed хранить только как delivery diagnostic
+Dismissal как слабая пауза	Повтор после явного отказа создаёт nagging	Разделить close, Не сейчас, permanent dismiss и permission denial
+Browser storage как достаточная память	Очистка storage и новое устройство создадут повторные cold-start prompts	Fail quiet: при неизвестном state показывать не больше статической orientation, а не весь onboarding заново
+Golden personas для lexical variants	Нет доказательств, что persona-specific tone улучшит понимание; есть риск неравного давления	Один semantic copy contract, максимум нейтральные formality variants без изменения CTA или urgency
+Page-end и Hero без общего arbitration	Два placements могут показать конкурирующие intents	Один resolver и registry, но отдельные state/purpose domains
+PWA/Push как retention handoff по факту визита	Посещение не доказывает ожидаемую пользу канала	Требовать antecedent: save/calendar/reminder intent и platform eligibility
+
+Доказательная база и исследовательский протокол
+Исследовательские цели и гипотезы
+Главная цель — определить минимальную систему интерфейсных, текстовых и state-management изменений, которая увеличивает долю осознанных решений по актуальным событиям и успешность использования полезных функций без ухудшения времени до первой ценности, автономии, доступности и static-first fallback.
+
+Возможные гипотезы следует выбирать не по привлекательности механизма, а по наличию observable prerequisite и надёжного outcome:
+
+Тип гипотезы	Пример	Когда выбирать	Что опровергает
+Comprehension	Явные labels даты, статуса и действий позволяют обойтись без coachmark	Есть ошибки чтения карточки	Пользователи правильно выполняют task и без изменения
+Contextual guidance	Inline hint после первой попытки повышает success Search recovery	Есть observable failed attempt	Hint не меняет recovery либо увеличивает abandon
+Action echo	Сообщение «скрыто / отменить» улучшает контроль над Не интересно	Есть reversible action	Undo не находят либо message дублирует понятное состояние
+Progressive capability	Calendar guidance полезна после явного planning intent	Есть eligibility и релевантное событие	Увеличиваются accidental downloads или нет сохранённой ценности
+Explainability	Краткое «Почему это» улучшает calibrated understanding	Ранжирование действительно использует объяснимые signals	Доверие растёт, но понимание становится менее точным
+Return upgrade	PWA/reminder offer после repeated save повышает полезный возврат	Канал и lifecycle реализованы	Растёт permission denial, но qualified return не меняется
+Null hypothesis	Дополнительная подсказка не нужна	Label/IA уже могут решить проблему	Проверяется в каждой wave по умолчанию
+
+Сильное объяснение рекомендаций нельзя считать универсально полезным: обзоры показывают разнообразие целей и форм представления, непоследовательность evaluation practice и ограниченную репрезентативность участников исследований. Поэтому KenigEvents должен измерять не абстрактное «доверие», а правильность mental model и способность управлять конкретным сигналом. 
+
+План поиска литературы
+Блок	Базы и официальные источники	Основные запросы на русском и английском	Включение	Исключение	Выход
+Progressive disclosure	ACM DL, IEEE Xplore, Scopus, Web of Science, Google Scholar	progressive disclosure, just-in-time guidance, contextual onboarding, feature discovery, «контекстные подсказки»	Peer-reviewed HCI; field studies; интерфейсные эксперименты	SEO-списки и vendor claims без метода	Evidence table: population, task, effect, limitation
+Cognitive load/interruption	ACM, APA PsycINFO, PubMed, CHI/CSCW	notification interruption, task switching cost, cognitive load transient UI	Field/lab studies с task outcome	Исследования без сопоставимого interactive task	Правила timing и one-message limit
+Reactance/autonomy	PsycINFO, Sage, ScienceDirect	psychological reactance interface, autonomy-supportive language, forced choice UX	Эксперименты с поведением и perceived autonomy	Только attitude survey без поведения — как слабое evidence	Copy и dismissal safeguards
+Habituation/banner blindness	ACM, HCI journals, eye-tracking	banner blindness goal directed, tooltip fatigue, habituation prompts	Eye-tracking, repeated exposure, task context	Рекламные case studies без design	Suppression и placement rules
+Recommender transparency	ACM RecSys, UMAP, Springer, arXiv как supplement	explainable recommender user control, why recommended, profile transparency	Systematic reviews, user studies	Claims о trust без calibrated understanding	Почему это contract
+Permissions/PWA	Chrome, Mozilla, MDN, web.dev, Apple/WebKit	notification permission user gesture, beforeinstallprompt, PWA install promotion	Official browser guidance и large-scale telemetry	Growth blogs	Eligibility и one-shot prompt policy
+Accessibility	W3C/WAI, WCAG 2.2, ARIA APG, российские стандарты	status message, focus not obscured, content on hover, target size, «доступность интернет-ресурсов»	Normative/official material	Неофициальные checklists как единственная опора	Acceptance matrix
+Dark patterns	ACM, OECD/FTC/EDPB where relevant, legal/HCI reviews	nagging, confirmshaming, obstruction, deceptive consent	Systematic reviews и regulatory guidance	«Conversion hacks»	Threat model
+Novelty/experiments	Microsoft Research, KDD, experimentation literature	novelty effect online experiments, SRM, A/A, sequential testing	Papers с formal methods и production evidence	Post-hoc case claims	Experiment protocol
+Россия: право	Официальное опубликование, КонсультантПлюс как актуализированный справочный источник, Роскомнадзор	149-ФЗ 10.2-2, 152-ФЗ, обезличивание, рекомендательные технологии	Действующая редакция и официальные акты	Юридические блоги как основание решения	Legal review checklist
+
+Для каждого источника следует хранить дату доступа, DOI или официальный документ, тип evidence, population, setting, наблюдаемый эффект, доверительный интервал при наличии, ограничения и transferability. Необходимо проводить forward/backward citation chasing для ключевых systematic reviews и обновлять поиск перед каждой major release wave.
+
+Синтез литературы
+Исследования banner blindness показывают, что заметность блока не гарантирует восприятия, особенно когда пользователь выполняет конкретную задачу и классифицирует блок как нерелевантный. Это поддерживает решение защищать Hero orientation от частых campaign/onboarding substitutions и считать переход по Hero CTA, а не exposure, единственным поведенческим сигналом. 
+
+Large-scale Chrome telemetry показала исторически низкую долю разрешений на notification prompts и продемонстрировала, что более тихий UI может существенно уменьшить ненужные взаимодействия при небольшом влиянии на grant rate. Это не доказывает, что KenigEvents получит те же числа, но делает immediate permission prompt неприемлемым default. 
+
+Platform guidance согласуется с этим выводом: разрешение следует запрашивать после понятной пользы и user gesture, а custom PWA install affordance показывать только после фактического beforeinstallprompt; событие ограничено доступностью браузера и одним вызовом prompt() на сохранённый event. 
+
+WCAG требует программно объявлять status messages без ненужного переноса фокуса, не скрывать keyboard focus авторскими overlays и обеспечивать transient help dismissible, hoverable и persistent. Минимальный нормативный pointer target в WCAG 2.2 составляет 24×24 CSS px или эквивалентное spacing, тогда как текущий repo contract разумно использует более консервативные 44×44 px для touch controls. 
+
+Обзоры explainable recommenders подтверждают, что explanations могут служить разным целям — transparency, control, effectiveness, trust — и не должны оцениваться одной метрикой. Исследования также предупреждают, что опубликованные user studies часто охватывают нерепрезентативные аудитории. Поэтому объяснение KenigEvents должно быть коротким, фактическим, контролируемым и проверяться на корректность понимания у реальных journey types, а не только на liking. 
+
+Методы, данные и выборка
+Рекомендуется mixed-methods sequential design:
+
+Поток	Источник	Выборка	Инструмент	Outcome
+Repo/contract audit	main, PR, docs, generated fixtures	Полный inventory релевантных routes/components	Traceability matrix	Release truth и blocked capabilities
+Moderated usability	Новые жители, returning visitors, tourists; набор по journey, не по стереотипным persona	5–8 участников на ключевой wave; расширение до saturation	Task protocol, think-aloud, comprehension probes	Errors, task success, mental model
+Accessibility evaluation	Keyboard-only, screen-reader, zoom/reflow, reduced motion	Минимум 2 screen-reader/browser combinations и независимый экспертный audit	WCAG checklist + task scripts	Blocking violations
+Intercept interviews	Реальные посетители после event decision	15–25 интервью по мере насыщения	Короткий structured guide	Почему действие было полезным/неполезным
+Diary/return study	Пользователи с save/calendar/reminder intent	10–20 на 2–4 недели	Event-based diary	Continuity и return context
+Instrumentation pilot	Internal/consented canary	Сначала A/A, затем 5–10% traffic	Versioned event schema	Dedup, SRM, missingness
+Online experiment	Реальный traffic	По MDE, не по календарю	Один isolated treatment	Causal estimate с guardrails
+Synthetic/fixture QA	Generated event states	Полный fixture matrix	Playwright/unit/schema tests	Deterministic contracts
+
+Нельзя выводить сегменты «турист», «новый житель» или «семья» из косвенной clickstream-модели без доказательств. Journey context следует определять по route/intent — deep link, date page, Search submit, saved-state return — либо спрашивать добровольно в исследовании.
+
+Методы анализа и надёжность
+Количественный анализ должен заранее фиксировать denominator, window и assignment unit. Для бинарных outcomes применимы difference in proportions или logistic regression с pre-specified covariates; для time-to-event — survival analysis или robust quantile comparison; для repeated users — cluster-robust errors или user-level aggregation. Множественные secondary metrics следует маркировать exploratory либо контролировать false discovery rate.
+
+Качественные данные анализируются двойным кодированием части корпуса: сначала open coding, затем согласованный codebook по темам orientation, misread fact, action uncertainty, reactance, recovery, trust calibration, accessibility barrier. Полезно сообщать не только intercoder agreement, но и причины разногласий. Triangulation считается достигнутой, когда telemetry, task observation и interview explanation поддерживают один вывод; одна метрика не заменяет две другие.
+
+Надёжность обеспечивают frozen fixtures, versioned copy IDs, reproducible query log, preregistered hypotheses, A/A validation, source freshness review и negative-case analysis. Synthetic QA доказывает поведение состояния, но не пользовательскую полезность; moderated study доказывает обнаруженные проблемы, но не population effect; underpowered A/B не доказывает отсутствие эффекта.
+
+Evidence matrix продуктов и механизмов
+Наблюдаемый факт отделён от переноса в KenigEvents; «strength» оценивает источник, а не качество продукта.
+
+Product/context	Наблюдаемый факт	Transferable	Непереносимое/риск	Evidence strength
+Eventbrite, event discovery	Discover поддерживает поиск, сортировку по relevance/date, фильтры, like/share и follow organizer	Сначала discovery и event decision, затем follow	Account/social graph и ticket commerce не нужны до first value	Средняя: official help 
+Meetup, local events	Search и filters по дате, типу, расстоянию; saved/attending доступны в Your events	Явные date/filter routes и единый saved hub	Membership semantics нельзя копировать: RSVP автоматически включает group membership	Средняя 
+Meetup notifications	Каналы и topics управляются отдельно; часть сообщений batch/deduplicate; компания утверждает пользу более редких сообщений	Purpose-specific settings и anti-noise	Не считать vendor statement causal evidence для KenigEvents	Средняя/слабая 
+Yandex Afisha	Event/venue surfaces показывают факты, цену и favorite affordance	Facts и action должны быть видимы без tutorial	Нельзя переносить commercial ranking или discounts как urgency	Слабая: observable public surface 
+Culture.ru Afisha	Event page показывает дату, площадку, возраст и стоимость в явном factual block	Facts-first event comprehension	Государственная editorial model не доказывает пригодность персонализации	Средняя 
+Airbnb wishlists	Heart сохраняет объект в именованный список с исходными датами; список можно обновить	Action-result clarity и context preservation	Collaborative planning и lodging availability отличаются от афиши	Средняя 
+Google Maps Lists	Save создаёт lists, которые доступны на разных устройствах и могут работать offline	Отдельный saved object и ясный downstream location	Place list не равен calendar event lifecycle	Средняя 
+Apple News	Follow, favorite, block и stop suggesting имеют разные результаты; notifications включаются отдельно по channels	Явный negative control и отдельный channel opt-in	Continuous news feed не равен time-bound events	Высокая для observable behavior 
+Yahoo News	Interests, blocked publishers и keywords управляются и отменяются	Editor/control surface	Требование выбрать минимум пять интересов — плохой cold-start pattern для KenigEvents	Средняя 
+ABC News	Followed topics создают отдельный For You, управление доступно позже	Персональный раздел можно предложить после intent	Login requirement нельзя ставить перед общей афишей	Средняя 
+Microsoft News	Interests и Not interested доступны рядом с content card	Contextual negative feedback	Desktop feed и account ecosystem не сопоставимы с static-first regional site	Средняя 
+Spotify Taste Profile	Можно исключить track/playlist из влияния на рекомендации, не скрывая доступ к контенту	Отличать «не показывать объект» от «не использовать как taste signal»	Streaming frequency и long-term profile отличаются от events	Высокая: official product/support 
+Chrome notification prompt	Large-scale telemetry показывает prompt fatigue и эффект quieter UI	Не вызывать permission до value/gesture	Chrome aggregate rates не являются прогнозом KenigEvents	Высокая: large-scale peer-reviewed field data 
+Browser PWA install	Custom install CTA зависит от beforeinstallprompt и user action	Repo’s hidden-until-eligible approach корректен	Нельзя обещать install всем browser/device combinations	Высокая: platform docs 
+Penn Museum/Bloomberg Connects	Guide предлагает map, stories и accessibility features; использование продолжимо вне музея	Cultural layer с captions, transcripts, zoom и font controls	Install/app dependency не должна блокировать веб-путь	Средняя 
+New York Transit Museum	Citywide scavenger hunt связывает physical places с историческими историями и badges	Bounded cultural narrative	Badges и 50-site scale слишком велики для onboarding MVP	Средняя 
+Crystal Bridges digital guide	Browser path доступен без установки; старые standalone apps сняты и перестают обновляться	Web-first fallback и content maintenance plan	Отдельное приложение создаёт lifecycle debt	Высокая для operational lesson 
+Cultural Pass app	App объединяет event discovery и stamps; публичный отзыв сообщает об ошибочных временах и скрытой preregistration information	Артефакт не должен затмевать event facts	Один app-store review — только negative signal, не causal evidence	Низкая, но релевантная negative case 
+
+Вывод из matrix — inference: устойчивые переносимые решения связаны не с «обучением интерфейсу», а с ясной семантикой действий, раздельными каналами, доступным управлением и сохранением контекста. Коллекционные механики работают как дополнительный сюжет, но создают maintenance, accessibility и semantic-integrity риски.
+
+Продуктовая стратегия, journeys и competency model
+Первая ценность и активация
+Кандидат	Достоинство	Bias и missing evidence	Инструментирование	Guardrail
+Event detail comprehension	Близко к основной работе афиши	Нельзя надёжно вывести из page view	Task probe; optional micro-survey; возврат к listing	Не увеличивать time-to-first-detail
+Первое explicit event decision	Учитывает positive и negative choice	Like может быть слабым social signal, share — external intent	Typed action event + context	Не считать accidental click
+Calendar/save	Сильный continuity signal	Исключает пользователей, которым достаточно билета, share или отрицательного решения	Desired-state success; ICS only как transport	Не объявлять ICS click сохранением
+Ticket/registration intent	Близко к реальному attendance funnel	External destination, возможен missing callback; платные события получают преимущество	Outbound CTA intent, не purchase	Бесплатные события не должны обесцениваться
+Qualified repeat visit	Показывает return value	Медленный outcome; зависит от event supply и seasonality	User/device cohort return	Не оптимизировать notification open
+Составной metric	Охватывает разные journeys	Сложнее интерпретировать и может скрыть regressions	Separate components + declared aggregation	Всегда публиковать component metrics
+
+Рекомендация — не выбирать один бинарный activation event. Использовать staged definition:
+
+text
+Копировать
+FV1: qualified_event_understanding
+FV2: explicit_event_decision
+C1: capability_success
+C2: continuity_value
+R1: qualified_return
+qualified_event_understanding нельзя собирать как постоянный intrusive survey. В продуктовой telemetry его proxy — открытие detail с последующим осмысленным действием или возвратом к discovery; истинную comprehension следует периодически проверять task research.
+
+Journey maps
+Journey	Намерение	Текущая ценность	Следующая eligible capability	Message/placement	Success evidence	Suppression	Retention handoff
+Home cold start	«Что вообще есть?»	Статический Hero + общая лента	Today/date или Search	Static Hero; без proactive hint	Открыт route или event	После первого выбора Hero остаётся статическим	Нет handoff до decision
+/segodnya/ или date-led	«Что доступно в этот день?»	Материализованная дата	Weekend/date navigation либо event detail	Persistent IA; не Talk	Выбрана дата или event	Не подсвечивать после повторного использования	Save/reminder только после подходящего event
+Search-led	«Найти конкретное»	Поле intent; текущий auth gate после submit	Query formulation/recovery	Inline examples и error state	Valid submit/result/refinement	После успешных двух запросов	Saved search только после выпуска и explicit request
+Direct event deep link	«Проверить это событие»	Facts и CTA	Calendar/share/save в контексте	Inline labels; action echo после действия	Action success или conscious return	Не показывать home orientation	Lifecycle reminder после save, отдельно
+Festival/collection	«Посмотреть программу»	Контекстная коллекция	Date/filter/event detail	Editorial context, не onboarding takeover	Event decision	Campaign caps отдельно	Festival updates только с отдельным purpose
+Returning anonymous	«Продолжить выбор»	Local state, если сохранился	Для меня/explanation после actual signals	Page-end или quiet inline	Открыта персональная surface	Permanent after mastery	Optional sync после durable-value need
+Authorized saved-state return	«Найти сохранённое»	Saved-events utility surface	Lifecycle status, reminder preferences	Inline state/status	Просмотр/изменение saved state	Help on demand	Utility return, не marketing
+Mobile/PWA	«Быстро вернуться с телефона»	Mobile shell, eligible install button	Install only after beforeinstallprompt	Page-end install affordance	appinstalled или explicit decline	До нового browser eligibility event	Standalone use; Push отдельно
+Desktop/keyboard	«Работать без touch»	Links/buttons и focus order	Shortcut/help только после keyboard intent и release	Help/inline, не hover-only tooltip	Task success keyboard-only	После use/mastery	Никакого mobile-specific prompt
+
+Competency state machine
+Единая форма состояния допустима, но evidence должно быть capability-specific:
+
+text
+Копировать
+unknown
+  → eligible
+  → exposed
+  → attempted
+  → succeeded
+  → repeated
+  → mastered
+
+Из любого состояния:
+  → dismissed_until
+  → dismissed_permanently
+  → failed_recoverable
+  → blocked_dependency
+  → deprecated
+
+После изменения контракта:
+  mastered → needs_reintroduction(version_delta)
+
+При anonymous→authorized:
+  merge strongest explicit state; не переносить raw exposure history.
+Переход	Допустимое доказательство	Запрещённый proxy
+unknown → eligible	Release flag, route context, event eligibility, platform capability	Первый page view сам по себе
+eligible → exposed	Message действительно вставлен и видим по deterministic renderer contract	DOM создан вне viewport
+exposed → attempted	User activation конкретного CTA/control	Scroll, hover, dwell
+attempted → succeeded	Confirmed state mutation или завершённый local action	Permission dialog открылся
+succeeded → repeated	Отдельное успешное действие в другой сессии/событии	Повторная доставка одного event
+repeated → mastered	Два успеха без help/recovery за установленное окно либо explicit «понятно, больше не показывать»	Закрытие подсказки
+* → dismissed_until	Не сейчас	Потеря фокуса
+* → dismissed_permanently	Явное Больше не показывать	Permission denial без соответствующей channel policy
+failed → eligible	Исправлена recoverable причина и cooldown завершён	Мгновенный повтор prompt
+mastered → needs_reintroduction	Semantic/version change, заметно меняющий действие или результат	Cosmetic copy change
+Anonymous merge	Максимум explicit success/dismissal по version; authenticated explicit action имеет приоритет	Слияние raw browsing/exposure log
+
+Feature-learning matrix
+Capability	Prerequisite	Момент и placement	Message intent	Success/failure evidence	Cap/cooldown/suppression	A11y/static fallback	KPI и guardrail	Release dependency
+Today/Tomorrow/Weekend	Route доступен	Persistent quick nav; без prompt	Orientation	Route open; non-empty listing	Не требует state	Обычные ссылки	Time to relevant listing	Released materialized routes
+Date navigation	Availability manifest	Inline calendar labels	Capability guidance	Enabled date selected	Suppress after first success	Keyboard arrows/links; no-JS routes	Date task success; accidental empty-date activation	Current calendar contract
+Search	Search surface released	Label/examples до submit	Guidance	Valid request/result	No repeated hero promotion after use	Native form; inline status	Query success; auth abandon	Real candidate acceptance
+Zero-result recovery	Exact zero result	Inline under status	Recovery	Refined query/filter or conscious exit	One recovery block per request	role=status, normal links	Recovery rate; repeated dead ends	Search runtime
+Event facts/lifecycle	Event detail	IA/labels; no proactive hint unless research finds comprehension errors	Orientation/safety	Correct task recall; lifecycle CTA	None	Semantic HTML	Fact comprehension; ticket errors	Current event pages
+Like	Released handler	Label/icon; echo after action	Confirmation	State toggled	Echo once per action	aria-pressed; inline status	Successful toggles; accidental rate	Current card runtime
+Не интересно	Reversible hide released	Immediate inline echo + Undo	Confirmation/control	Card hidden/downranked; undo works	No promotional re-prompt	Focus preserved; live region	Undo discovery; mistaken hide	Current local profile contract
+Share	Web Share/copy available	On action only	Confirmation	Share sheet invoked or copy completed	No learning prompt after native success	Copy fallback	Share errors; no claims of completed share	Current card runtime
+Calendar/save	Exact semantics decided	At event/card; after action echo	Confirmation/continuity	Durable desired-state or ICS download, distinctly logged	Prompt at most after explicit planning intent	Native link/ICS; status	Saved value; accidental downloads	Owner decision + release gate
+Saved events / Моё	Existing saved state	Link in persistent navigation or action echo	Capability guidance	Page open and saved item found	Suppress after successful retrieval	Honest signed-out/backend-fail states	Retrieval success	Browser acceptance
+Для меня	Actual compatible signals	Quiet Page-end/inline after at least one meaningful signal	Personalization explanation	Surface open; controls understood	Max one proactive exposure per version; long cooldown	Static general feed remains	Calibrated understanding; no first-value regression	Target personalization not yet complete
+Почему это	Explainable actual scoring factors	On demand beside recommendation	Explanation	User can identify factor and change it	Never forced	Disclosure/normal page fallback	Explanation accuracy	Target model/source registry
+Interest editor	Released mutable profile	From Почему это or Personal page	Control	Desired change applied	No repeated promotion	Form labels/errors	Successful control; regret/undo	Target implementation
+Identity sync	Local durable value and released merge	At save/sync need, not global first visit	Continuity	Auth + idempotent merge	Suppress after decline; no nagging	Core remains anonymous	Merge success; duplicates	Identity linking incomplete
+PWA install	beforeinstallprompt captured; meaningful journey	Near page end	Return	appinstalled; decline is valid	One call per browser event; no custom repeat	Normal bookmark/browser path	Install only diagnostic; qualified return guardrail	Existing shell/browser eligibility
+Utility reminder	Saved eligible event; scheduler released	Saved-event settings	Return/utility	Purpose opt-in + preference saved	Channel-specific; no prompt after denial until user settings	Email/calendar alternative	Timely useful delivery; complaint rate	Not production
+Promo Push	Separate campaign and consent	Campaign settings, never onboarding	Promotion	Separate opt-in	Independent caps/kill switch	No effect on utility	Promo opt-in not onboarding KPI	Planned only
+Artifact hint	Core competency demonstrated; campaign active	Page-end or stable non-event slot	Cultural exploration	Hint opened/find; event downstream measured separately	One first hint, campaign hide	Exact textual path; no motion/hover dependency	Incremental event value; non-inferior core CTA	Post-release only
+Help/error recovery	Error or explicit Help	Inline/help page	Safety/recovery	Retry or alternate path	Persistent until resolved/dismissed	Assertive only for urgent errors	Recovery success	Per capability
+
+Любые численные caps в таблице являются конфигурационными defaults для исследования, а не доказанными нормами. До online evidence рекомендуется выбирать самый низкий показ: один proactive exposure на capability/version и отсутствие повторов после permanent dismissal.
+
+Архитектура сообщений, артефакты и редакционный framework
+Таксономия и registry
+Разделение из brief следует сохранить буквально:
+
+text
+Копировать
+placement = hero_talk | page_end_talk | inline | action_echo | help
+intent    = orientation | capability_guidance | confirmation |
+            personalization_explanation | return | editorial |
+            campaign | artifact_hint | safety
+source    = system | editorial | promo_campaign | event_context
+objective = first_value | competence | continuity | retention |
+            promotion | cultural_exploration
+Minimum message schema:
+
+Поле	Назначение
+message_id, schema_version, copy_version	Идемпотентность, audit и rollback
+placement, intent, source, objective	Не смешивать purpose
+capability_id, capability_version	Связь с competency state
+route_families, event_eligibility	Контекст
+prerequisites	Release, state, browser capability, consent
+headline, body, primary_cta, secondary_cta	Renderer-neutral content
+result_claim	Проверяемое обещание результата
+priority_class	Arbitration
+max_exposures, cooldown, expiry	Pressure control
+dismissal_mode	Session, until-date, permanent
+conflicts, exclusive_group	Исключение конкурирующих сообщений
+a11y_variant, no_js_fallback	Эквивалентность
+analytics_purpose, retention_ttl	Data minimization
+owner, reviewed_at, provenance	Editorial/legal audit
+kill_switch, feature_flag	Rollback
+
+Приоритет и арбитраж
+Priority	Intent	Допустимый placement	Правило
+100	Safety/lifecycle outage	Inline возле затронутого действия; Hero только при site-wide incident	Не смешивать с promo; persistent до resolution
+90	Direct action error/recovery	Inline/help	Сохраняет пользовательский контекст
+80	Confirmation/Undo	Action echo	Одно действие — одно подтверждение
+70	First-service orientation	Static Hero	Защищено для cold start; не заменяется campaign
+60	Personalization explanation	Inline/on-demand	Только при фактической персонализации
+50	Capability guidance	Inline или Page-end	Не больше одной next capability
+40	Return/continuity	Page-end	Только после antecedent value
+30	Editorial context	Hero или Page-end по route context	Не выдавать за personalized
+20	Promo campaign	Page-end; Hero только approved takeover после orientation eligibility	Отдельные metrics/caps
+10	Artifact hint	Page-end/stable cultural slot	Только после core value
+
+Hero и Page-end могут использовать общий renderer/control plane, но evergreen onboarding не должен быть promo_campaign. Рекомендуется отдельный system_message registry с тем же delivery engine. Иначе campaign pause, consent, attribution и success metrics начнут управлять orientation/competence сообщениями, а promotional exposure может ошибочно стать learning signal.
+
+Decision engine
+text
+Копировать
+resolveMessages(context, productState, capabilityState, campaignState):
+    candidates = registry.where(
+        released == true
+        and route_family matches
+        and prerequisites satisfied
+        and not expired
+        and not permanently dismissed
+        and cooldown elapsed
+        and exposure cap not reached
+    )
+
+    remove candidates whose result_claim cannot be proven by current release
+    remove return/channel candidates without prior value antecedent
+    remove campaign/artifact candidates when safety, error, confirmation
+        or protected first-orientation message is eligible
+    remove candidates conflicting with an active transactional CTA
+    remove candidates whose accessible equivalent is unavailable
+
+    hero = highest candidate allowed in hero,
+        but preserve static orientation for cold/unknown state
+    page_end = highest non-conflicting post-value candidate
+    inline/action_echo = resolved locally by capability owner
+
+    emit at most one proactive learning message per page
+    record delivery diagnostic separately from capability evidence
+При JavaScript, storage, backend или analytics failure dynamic candidates должны fail closed; static Hero, navigation, facts и actions остаются. Renderer не должен ждать profile resolution перед first paint.
+
+Роль Hero Talk
+В первый неизвестный визит Hero остаётся статической service orientation. Во второй визит он не должен автоматически «продвигать следующую функцию»: знание о пользователе может быть потеряно или ошибочно, а повторный посетитель часто приходит с прямой задачей. После нескольких доказанных returns Hero можно сделать editorial/contextual, но только если его изменение не уничтожает узнаваемый service promise.
+
+Promo takeover допустим лишь при одновременно выполненных условиях: orientation уже освоена или остаётся видима; campaign context релевантен route; CTA не маскирует рекламу под помощь; frequency cap ниже editorial messages; эксперимент показывает non-inferior first-value outcomes.
+
+Page-end Talk
+Page-end Talk — предпочтительная зона для continuity, тихого feature discovery, PWA install и artifact hint, потому что пользователь уже получил основную выдачу. Он не должен появляться просто по scroll depth. Eligibility следует определять по содержанию пути: наличие event decision, successful action, saved state или explicit help request.
+
+Артефакты
+Рекомендуемый bounded MVP:
+
+text
+Копировать
+Условия:
+- одна культурная мини-коллекция;
+- три объекта, а не пять, до proof of value;
+- без награды, leaderboard и share advantage;
+- без login;
+- отдельный exposure/find ledger;
+- первая подсказка точная;
+- один stable placement bundle;
+- archival end state.
+
+Flow:
+core event decision
+→ Page-end: «На этой странице спрятана история о…»
+→ «Показать место»
+→ точное textual/visual указание
+→ доступная находка
+→ короткая provenance-backed история
+→ необязательная связанная подборка
+→ «Скрыть эту коллекцию»
+Первая подсказка должна называть точную page family и место, например: «В конце календаря есть янтарный знак». Opaque challenge не проверяет продуктовое мастерство и может создавать искусственные pageviews.
+
+Альтернатива A — не использовать артефакты для обучения функциям; оставить их культурным reward после core journey. Это основная рекомендация.
+
+Альтернатива B — статический редакционный «маршрут по области» без hidden placements и progress tracking. Он обеспечивает культурное исследование с меньшими privacy, accessibility и maintenance рисками.
+
+Альтернатива C — after-action decorative artifact, который появляется после save/calendar, но не засчитывается как progress и не влияет на профиль. Этот вариант следует тестировать только после proof, что decoration не отвлекает от confirmation.
+
+Культурные guides показывают, что web/no-download fallback, accessibility features, provenance и content maintenance важнее game mechanics; снятие устаревших standalone museum apps иллюстрирует lifecycle debt. 
+
+Wireframe-level placement
+Surface	Mobile	Desktop	Keyboard/screen reader	No-JS
+Home Hero	Service promise, два CTA, один event preview	То же, без dynamic rotation	H1 и ссылки в естественном порядке	Полная статическая версия
+Listing top	Route title, dates/filters	Title и persistent navigation	Никакого autofocus; status отдельно	Обычные links/forms
+Listing page end	Один Page-end Talk после всех core cards	То же	В document order; не overlay	Статическая help/editorial link либо ничего
+Search	Field, label, examples, inline progress/error	То же	role=progressbar/status; focus остаётся на task	Базовый route/help; online Search может честно быть unavailable
+Event detail	Facts → primary event CTA → secondary actions	То же	Ясные labels, no hidden hover help	Facts, ticket link, ICS/share URL fallback
+Action echo	Inline возле action; toast только для global non-contextual result	Inline	aria-live, без autofocus; Undo — обычная кнопка	Browser navigation/download сообщает результат
+Для меня	Explanation summary + controls on demand	То же	Disclosure keyboard-operable	General static feed
+Saved events	Honest signed-out/loading/error states	То же	Focus not obscured by shell	Static explanation и navigation
+PWA install	Только Page-end после browser eligibility	Обычно не показывать без eligible event	Button и decline; no permission auto-open	Отсутствует без потери функции
+Artifact	Stable inline marker и exact text clue	Stable slot	Эквивалентная ссылка/история	Либо статическая история, либо слой полностью отсутствует
+
+Редакционный scorecard
+Каждая фраза получает оценку 0–2 по девяти осям; публикация разрешается при сумме не ниже 15/18 и нуле по правдивость, автономия или pressure risk запрещена:
+
+Ось	Проверка
+Понятность	Можно ли пересказать смысл после одного прочтения?
+Релевантность	Решает ли фраза текущую задачу?
+Правдивость	Подтверждает ли release реальный результат?
+Автономия	Есть ли равноправный отказ без наказания?
+Литературное качество	Живая взрослая речь без рекламного восторга
+Action-result clarity	Понятны действие и результат
+Терминологическая согласованность	Like, save, calendar, reminder не смешаны
+Accessibility	Не зависит от цвета, иконки, юмора, hover или sound
+Pressure risk	Нет FOMO, confirmshaming, ложной срочности или guilt
+
+Workflow: автор → product fact check → accessibility review → legal/purpose review для consent/channel copy → lint/LLM critic → human approval → versioned fixture → canary. LLM может находить двусмысленность, pressure words и терминологические расхождения, но не способен подтвердить production behavior или юридическую достаточность; final review остаётся человеческим.
+
+Примеры русскоязычных сообщений
+Trigger/placement	Сообщение и CTA	Почему этично	Риск неверного чтения	Запрещённая альтернатива
+Cold home/Hero	«Куда пойти — без лишнего шума. События Калининграда и области, которые можно посмотреть без входа». CTA: «Что сегодня»	Сразу описывает ценность и отсутствие gate	«Все события региона» может быть воспринято как полнота каталога	«Всё самое лучшее города уже знает вас»
+Cold home/Hero	«Есть конкретный план? Попробуйте поиск. Хотите осмотреться — начните с сегодняшнего дня».	Два равноправных journey	Search может требовать вход после submit	«Войдите, чтобы начать»
+Date listing	«Показаны события на субботу. Другую дату можно выбрать выше».	Factual orientation	Не говорить, что список исчерпывающий, если это не доказано	«Только сегодня — не упустите»
+Empty date	«На эту дату событий в текущей афише нет. Посмотрите соседние дни или поиск».	Ноль результатов не обвиняет пользователя	Каталог может обновиться	«Вы выбрали неудачный день»
+Search example	«Можно написать как обычно: “джаз вечером” или “куда с ребёнком в воскресенье”».	Учит форме запроса без auto-submit	Пример не гарантирует результат	«Мы точно найдём идеальный вариант»
+Search auth gate	«Запрос сохранён на этом устройстве на короткое время. Для выполнения умного поиска нужен вход через Яндекс».	Честно объясняет gate и scope	Нельзя обещать 30 минут, если TTL изменится	«Войдите, чтобы увидеть секретные события»
+Search loading	«Ищем события по смыслу запроса».	Описывает процесс без fake progress	Нельзя использовать simulated percentage	«ИИ уже почти выбрал лучшее именно для вас»
+Search zero result	«По этому запросу точных результатов нет. Можно убрать одно условие или посмотреть общую подборку».	Даёт recovery и exit	Fallback нельзя назвать результатом поиска	«Ничего не нашли? Попробуйте лучше»
+Event facts	«Перед решением проверьте дату, место и условия на странице организатора».	Safety-oriented	Может звучать как отказ от ответственности	«Информация гарантированно точна»
+Event cancelled	«Событие отменено. Ссылка организатора оставлена для уточнений».	Нейтрально сообщает lifecycle	Юмор здесь неуместен	«Планы рухнули, бывает»
+Event rescheduled	«Дата изменилась: теперь 18 августа, 19:00. Проверьте билет или регистрацию у организатора».	Показывает конкретное изменение	Нельзя скрывать прежнюю дату при спорном status	«Отличные новости: стало ещё удобнее»
+Like success/action echo	«Отметили как понравившееся». CTA: «Отменить»	Точный результат и undo	Не обещает save/sync	«Сохранили для вас»
+Like repeat	«Оценка снята».	Не драматизирует	Не путать с удалением из календаря	«Вы больше не любите это событие»
+Not interested	«Скрыли это событие из локальной выдачи». CTA: «Отменить»	Scope ограничен устройством/выдачей	Если hide global, copy нужно изменить	«Больше никогда не покажем ничего похожего»
+Not interested undo	«Событие снова может появляться в выдаче».	Не обещает точную позицию	«Вернулось на прежнее место» может быть неверно	«Мы простили вам отказ»
+Share invoked	«Открыли системное меню “Поделиться”».	Не заявляет completed share	Browser может отменить sheet	«Отправлено друзьям»
+Copy fallback	«Ссылка скопирована».	Проверяемый browser result	Нужен error fallback	«Все уже узнают об этом»
+ICS download	«Файл календаря скачан. Откройте его, чтобы добавить событие в выбранный календарь».	Не выдаёт download за import	Некоторые browser сразу открывают app	«Событие уже в вашем календаре»
+Durable save	«Событие сохранено в “Моих событиях”». CTA: «Открыть»	Ясное место результата	Только при подтверждённой server/local state	«Мы напомним автоматически»
+Save failure	«Сохранить не удалось. Событие и ссылка остаются доступны». CTA: «Повторить»	Core value не теряется	Не скрывать ambiguous timeout	«Что-то пошло не так, попробуйте ещё»
+Saved page signed out	«На этом устройстве нет доступных сохранений. Вход нужен только для синхронизированных событий».	Не создаёт mandatory login	Нужна точность о local saves	«Ваши события ждут после входа»
+Local profile echo	«Порядок уточнён по оценкам на этом устройстве». CTA: «Как это работает»	Честная локальность	Не говорить «ваши интересы» при слабых signals	«Алгоритм изучил ваш характер»
+Почему это	«Событие поднялось выше, потому что вы отмечали похожие темы. Это можно изменить». CTA: «Настроить»	Причина + control	Только если factor фактически использован	«Вы такой человек, которому это нравится»
+Generic popularity	«Это общая подборка, а не персональная рекомендация».	Calibrates model	Может быть избыточно на каждой карточке	«Для вас» без personalized source
+Interest editor save	«Настройки применены к персональной выдаче. Общая афиша не изменилась».	Scope boundary	Нельзя обещать мгновенный server update без contract	«Теперь мы знаем вас лучше»
+Identity sync offer	«Хотите видеть сохранённое на другом устройстве? Можно войти и синхронизировать». CTA: «Синхронизировать» / «Не сейчас»	Value antecedent и равный отказ	Merge ещё не production-complete	«Не потеряйте всё — войдите сейчас»
+Merge success	«Сохранённые события объединены. Повторы не добавлены». CTA: «Проверить»	Описывает merge result	Только после idempotent proof	«Мы перенесли всю историю»
+Merge partial failure	«Вход выполнен, но локальные оценки пока не синхронизированы. Афишей можно пользоваться как обычно».	Разделяет auth и merge	Нужна retry/help route	«Аккаунт сломан»
+PWA eligibility/Page-end	«Можно добавить “Анонсы” на экран телефона — сайт будет открываться как отдельное приложение». CTA: «Добавить»	Browser already signalled eligibility	Не обещает offline everything	«Установите, чтобы продолжить»
+PWA decline	«Хорошо. Сайт продолжит работать в браузере».	Нормализует отказ	Не нужно показывать confirmation каждый раз	«Может быть, вы передумаете?»
+Utility reminder offer	«Вы сохранили событие. Нужен отдельный напоминатель перед началом?» CTA: «Настроить» / «Нет»	Antecedent и отдельный purpose	Не открывать system permission сразу	«Разрешите уведомления, чтобы не пропустить жизнь»
+Permission denial	«Уведомления не включены. Событие остаётся сохранённым; можно использовать календарь».	Denial не failure	Не подсказывать обход browser setting без запроса	«Вы лишаете себя важных событий»
+Promo consent	«Это рекламные и фестивальные анонсы, не напоминания о сохранённых событиях». CTA: «Получать»	Purpose separation	Требует legal review	«Включить полезные уведомления»
+Page-end capability	«Уже выбрали несколько событий? В “Моих событиях” их проще проверить по датам». CTA: «Открыть»	Предлагается после actual saved state	Не показывать без saved items	«Вы почти закончили настройку»
+Artifact first hint	«После основной афиши здесь есть небольшая история о янтаре. Показать точное место?»	Добровольно и конкретно	Не маскировать как event property	«Найдите тайный знак, пока он не исчез»
+Artifact reveal	«Это культурная заметка, не свойство события и не реклама организатора». CTA: «Открыть историю»	Semantic separation	Copy может быть тяжёлым; нужен concise variant	«Особая метка рекомендованного события»
+Help/error	«Действие не выполнено. Ничего не списано и сохранённые события не изменены».	Safety и конкретный scope	Только если система это знает	«Упс! Попробуем ещё раз?»
+
+Лёгкая персонализация тона должна ограничиваться формальностью и длиной, например «Посмотреть» versus «Открыть подробнее», но не изменять urgency, доступность отказа, число prompts или обещаемый результат. Golden personas не должны выбирать более давящий copy.
+
+Измерение, эксперименты и график исследования
+Минимальная event taxonomy
+Event family	Пример полей	Retention/TTL
+Eligibility	capability_id, version, route_family, reason_code, release_sha	Агрегат; raw до 7–14 дней
+Exposure	message_id, placement, intent, visible_contract, experiment_id	Диагностический TTL; не taste signal
+Attempt	capability_id, action, event_id_hmac, input_mode	Strong action согласно purpose
+Success	result_type, state_revision, latency_bucket	Текущий state в SOR; de-identified analytics
+Mastery	success_count_bucket, last_help_version, mastery_version	Compact current state
+Dismissal	message_id, mode, until, version	До expiry/version; permanent until explicit reset
+Feature error	error_class, dependency, retryable, ambiguous_outcome	Короткий operational TTL
+Saved value	calendar_saved, favorite_saved, lifecycle_state	Supabase owner state
+Retention handoff	capability, antecedent_value, channel_offer	Purpose-specific
+Promo	campaign_id, activity_id, surface, consent_purpose	Отдельно от onboarding
+Artifact	collection_id, placement_bundle, find, provenance_version	Отдельный bounded ledger
+Experiment	assignment_unit, variant, assigned_at, exposure_eligible	До analysis + audit window
+
+Требуются idempotency keys, server timestamps, dedup по action/event/revision, schema validation, allowed-value registries, bot/internal traffic filter, missingness dashboards и checks, что exposure никогда автоматически не записывает preference. Raw permanent clickstream не нужен; для большинства diagnostics достаточно краткоживущих событий и агрегатов. Архитектура main уже задаёт Supabase как owner текущего identity/profile/saved state, YDB как analytics projection с TTL и browser localStorage как cache, а не SOR.
+
+KPI framework
+Metric	Definition/denominator/window	Source	Failure modes	Интерпретация
+Qualified event decision rate	Пользователи с explicit decision или продолжением релевантного поиска / eligible discovery users, session	Action ledger	Accidental actions; unequal event supply	Основной first-value outcome
+Time to first event decision	От landing до first qualified decision	Client/server timestamps	Background tab, clock skew	Использовать median/p75, не среднее
+Event fact comprehension	Correct date/place/status answers / research tasks	Usability study	Hawthorne effect	Периодический validation, не always-on
+Capability success rate	Confirmed success / attempts	Per capability	External outcome unobservable	Не смешивать capabilities
+Recovery success	Successful next step / recoverable failures	Search/action logs	Повторный бесполезный retry	Диагностирует help
+Useful negative decision	not_interested с continued discovery или stable suppression / negative attempts	Local/server state	Accidental hide	Не считать failure
+Saved continuity	Сохранённое событие найдено/использовано позже / successful saves	Saved state	Event cancellation	Outcome сохранения
+Qualified return	Return с новым event decision / eligible cohort, 7/28 days	Cohort aggregate	Seasonality, campaign traffic	Continuity, не notification open
+Explanation calibration	Пользователь правильно называет реальный factor и control	Task test	Social desirability	Важнее raw trust
+Permission denial rate	Denials / system prompts shown	Browser state	Browser auto-suppression	Guardrail, denial допустим
+Core CTA non-inferiority	Ticket/detail/calendar intent в treatment vs control	Experiment	Traffic mix	Обязательный guardrail
+Accessibility task success	Completed tasks / tested assistive-tech tasks	Test runs	Малый sample	Blocker, а не average metric
+Prompt burden	Proactive messages per eligible user/session	Message ledger	Missing exposure	Минимизировать
+Dismissal respect	Повторы после permanent dismissal	State audit	Storage reset	Должно быть 0 в пределах известного identity
+Data quality	Missing IDs, duplicate success, invalid transitions, SRM	Pipeline checks	Silent client failure	Release gate
+
+Нельзя оптимизировать количество prompts, onboarding completion, dwell time, scroll depth, raw permission grants, profile creation, collected signals или artifact completion как North Star.
+
+Экспериментальный план
+Сначала проводится instrumentation-only A/A: одинаковый интерфейс, случайное assignment, проверка SRM, balance, dedup, timestamp order, event loss и identical metric distributions. SRM является сигналом дефекта randomization, eligibility или collection; анализ causal effect при необъяснённом SRM недопустим. 
+
+Randomization unit — пользовательский anonymous device credential или authenticated subject, но не page view. Treatment assignment сохраняется между сессиями. Для cross-device экспериментов до production-complete identity merge лучше использовать device-level unit и прямо признать contamination.
+
+Каждый эксперимент меняет один механизм:
+
+Experiment	Control	Treatment	Primary outcome	Guardrails	Kill
+Calendar action echo	Текущий result	Exact action-result + Undo/Open saved	Successful retrieval of saved result	Accidental download, core CTA	Ambiguous or false result claims
+Search zero recovery	Existing zero state	One inline refinement block	Recovery success	Repeated queries, abandon	More failed requests or login confusion
+Local personalization explanation	Status text only	On-demand Как это работает	Calibrated understanding	First-value time	Users infer cross-device/ML profile incorrectly
+Page-end PWA offer	Existing eligible button behavior	Value-antecedent copy	Qualified standalone return	Denial/prompt burden	Offer appears without browser eligibility
+Artifact pilot	No artifact	Three-object bounded collection	Incremental downstream event decision	Core CTA/time-to-value	Non-inferiority breached
+
+Пример планирования мощности: при baseline outcome 20% для обнаружения роста до 25% при двухстороннем α=0,05 и power 80% требуется приблизительно 1 094 наблюдения на вариант; при baseline 10% и росте до 13% — около 1 774 на вариант. Это расчёт для независимых пропорций без поправок на clustering, sequential looks и attrition; реальная потребность может быть выше. Если трафик не обеспечивает sample, нельзя запускать «символический A/B» и затем объявлять победителя.
+
+При низком трафике приоритет таков: instrumentation validation → moderated tasks → within-subject prototype comparison с counterbalancing → sequential canary с pre-defined boundaries → долгий holdout только для одного зрелого изменения. Novelty и learning carryover требуют не оценивать эффект только по первым дням; treatment effect может меняться по мере освоения. 
+
+Underpowered-result template:
+
+«Оценка направления эффекта — X; интервал совместим как с небольшим вредом, так и с полезным эффектом. Данных недостаточно для causal rollout. Guardrails не показали/показали конкретный риск. Решение: оставить control, сузить canary либо собрать следующий заранее определённый блок данных».
+
+График и milestones
+Период	Работа	Milestone/решение
+Недели 1–2	Final repo audit, route/capability inventory, source refresh, analytics discovery	Baseline signed off; BLOCKED capabilities помечены
+Недели 3–4	Task interviews и accessibility walkthrough текущего интерфейса	Problem evidence; список функций, которым не нужна подсказка
+Недели 5–6	Activation definitions, event taxonomy, copy registry, prototypes	Owner decisions по save/calendar и Hero protection
+Недели 7–8	Prototype usability: action echo, Search recovery, Page-end	Go/no-go по каждому isolated mechanism
+Недели 9–10	Instrumentation implementation plan, frozen fixtures, A/A	Data-quality gate
+Недели 11–13	MVP canary одного механизма	Safety/guardrail review
+Недели 14–17	Novelty-aware observation или sequential blocks	Rollout/narrow/rollback
+Недели 18–20	Retention handoff study; optional artifact concept test	P1/P2 decisions
+После недели 20	Canonical strategy update и quarterly evidence refresh	Versioned strategy release
+
+2026-08
+Репозиторныйbaseline иобновлениелитературы
+Определение firstvalue и capabilityinventory
+2026-09
+Интервью, tasktests и accessibilityaudit
+Прототипы actionecho и Searchrecovery
+2026-10
+Message registry,schemas иinstrumentation A/A
+Frozen fixtures иdata-quality gates
+2026-11
+Ограниченный MVPcanary
+Guardrail review иrollback decision
+2026-12
+Longitudinalobservation иretention handoff
+Решение поPage-end и PWA
+2027-01
+Отдельный artifactconcept pilot либоотказ
+Редакция canonicalstrategy
+Исследование и внедрение contextual onboarding KenigEvents
+
+
+Показать код
+Этика, право, доступность и retention boundaries
+Правовые рамки
+Российская статья 10.2-2 закона об информации распространяется на технологии предоставления информации на основе сбора, систематизации и анализа сведений о предпочтениях пользователей и устанавливает обязанности владельца соответствующего информационного ресурса. Актуализированный источник указывает редакцию 149-ФЗ от 26 июня 2026 года. Применимость к конкретной реализации KenigEvents, содержание обязательных правил и уведомлений должны быть подтверждены российским юристом до production rollout персонализации. 
+
+Для персональных данных необходимо отдельно проверить правовые основания, локализацию, цели, сроки хранения, права субъекта, cross-border flows и роль каждого хранилища. Роскомнадзор в 2025 году утвердил обновлённые требования и методы обезличивания; факт наличия агрегатов или HMAC сам по себе не означает юридически достаточного обезличивания. 
+
+Onboarding copy не является заменой privacy notice, правилам рекомендательных технологий, consent interface или договору. Utility reminder, transactional lifecycle notice, promo Push, editorial email и marketing должны иметь раздельные purpose и suppression states.
+
+Threat model
+Threat	Затронутый пользователь	Mechanism	Prevention	Detection	Rollback
+Nagging	Отказавшийся от upgrade	Повтор prompt после decline	Permanent/dated suppression; cross-page registry	Repeat-after-dismiss metric	Global kill switch
+Deceptive consent	Все пользователи	Utility copy включает promo permission	Separate purpose IDs и тексты	Consent/action audit	Revoke affected campaign, remediate consent
+Persona pressure	Уязвимые/неправильно классифицированные	Более срочный tone variant	Один semantic copy contract	Variant pressure lint	Disable persona copy
+FOMO/loss aversion	Туристы, anxious users	«Не пропустите», countdown без факта	Запрет fake urgency	Editorial lint/complaints	Immediate copy rollback
+Inaccessible transient UI	Screen-reader/low vision	Disappearing toast/tooltip	WCAG status/disclosure contract	AT task tests	Inline persistent fallback
+Motion/hover dependency	Reduced-motion, keyboard, touch	Pulsing artifact/hover coachmark	Equivalent static control	Automated media-query tests	Disable animation/layer
+Focus obstruction	Keyboard/zoom	Sticky Talk/toast	Scroll padding, geometry tests	Focus path screenshot/Playwright	Hide overlay
+Accidental event navigation	Touch/keyboard	Nested card/action hit areas	Pointer cancellation, separate targets	Misclick/undo data	Revert placement
+Local-storage loss	Returning anonymous	Mastery and saves disappear	Unknown state fails quiet; clear local scope	Storage-reset scenarios	Static orientation only
+Bad identity merge	Cross-device user	Duplicate saves/conflicting negative state	Idempotent merge; explicit strong action wins	Merge reconciliation tests	Disable merge and preserve both snapshots
+Campaign disguised as help	Все	Promo message uses capability intent	Source disclosure and separate priority	Registry audit	Pause campaign
+Artifact disguised as event fact	Пользователь event detail	Marker inside card/meta	First-class artifact entity and label	Semantic DOM/test	Remove artifact surface
+Child/family sensitive inference	Families	Child query becomes durable profile	Sensitive-topic suppression and short-lived context	Profile feature audit	Purge derived signal
+Outage ambiguity	Пользователь action	Retry duplicates save/send	Idempotency keys; ambiguous outcome state	Duplicate and timeout checks	Fail closed, reconciliation
+Incorrect event freshness	Все	Gamified layer hides changed time/status	Canonical event facts always first; freshness gate	Lifecycle diff checks	Disable layer, show safety notice
+
+Dark-pattern scholarship подчёркивает, что проблема включает не только очевидный обман, но и интерфейсное давление, затруднение отказа и layered harms; mitigation требует proactive design governance, а не только финального copy review. 
+
+Accessibility acceptance
+Минимальный gate включает keyboard-only paths, screen readers, 200–400% zoom/reflow, 320 CSS px viewport, reduced motion, no-hover, no-audio, high contrast, browser text resizing и touch target checks. Focus не должен полностью скрываться sticky header/footer/Talk, а status messages должны объявляться без ненужного context change. 
+
+Для transient help обязательны Escape/dismiss control, сохранение содержимого при hover/focus, отсутствие таймера для сообщения с action и эквивалентный persistent help path. Ирония запрещена в error, permission denial, accessibility failure, state loss, cancellation/reschedule и sensitive-topic contexts.
+
+Retention handoff contract
+Onboarding конкретной capability заканчивается, когда пользователь дважды успешно использовал её без help/recovery либо явно попросил больше не объяснять. Retention получает только:
+
+text
+Копировать
+capability_id
+capability_version
+mastery_or_success_state
+last_success_bucket
+eligible_return_purpose
+explicit channel consent, если он существует
+Retention не получает raw exposures, dismissals других purposes, scroll/dwell, artifact interactions как taste signal, focus-group status или inferred persona.
+
+Границы:
+
+Purpose	Допустимый antecedent	Требуемое разрешение	Нельзя
+Utility return	Saved/calendar event	Channel-specific preference/permission	Добавлять promo
+Lifecycle update	Saved/registered relevant event	Правовое основание и product contract	Рекомендовать другие события внутри safety notice
+Editorial retention	Явный follow/subscription	Отдельная подписка	Выводить её из like
+Promo campaign	Отдельный explicit opt-in	promo_push/promo email purpose	Наследовать reminder consent
+PWA	Meaningful mobile use + browser eligibility	User install action	Считать install marketing consent
+Account sync	Local durable value	Auth/linking flow	Копировать raw history
+
+Lapsed user не должен получать повторный «welcome». Допустима одна контекстная reintroduction после semantic feature change или явной неудачи. Cancellation/reschedule всегда имеет приоритет над retention copy.
+
+Roadmap, бюджет, deliverables и repository diff-plan
+Roadmap
+Wave	Implementation slices	Research gate	Tests	Rollout/rollback	Explicit non-goals
+MVP	Capability registry doc; static Hero protection; action echo contract для like/hide/calendar; one Page-end renderer; dismissal state; minimal analytics schema	Current-state task test; owner decision по save/calendar; A/A	Schema, state transitions, no-JS, keyboard, screen reader, storage failure	One capability canary; per-message kill switch	Universal journey builder, CRM, real-time recommender, Push, artifacts
+P1	Search recovery; on-demand personalization explanation; saved-state retrieval guidance; PWA eligibility copy	Search production acceptance; calibrated-understanding test	Search fixtures, auth failure, reduced motion, SRM	Isolated experiments	Email automation, persona copy, cross-channel campaigns
+P2	Identity reintroduction after merge; utility reminder onboarding after delivery release; bounded cultural pilot	Identity/reminder production gates; artifact non-inferiority prototype	Merge, lifecycle, campaign isolation, provenance/a11y	Small cohort + holdout	Rewards, leaderboard, omnichannel orchestration, opaque scavenger hunt
+
+Бюджет
+Оценка в рублях без НДС; зависит от того, выполняет ли работу внутренняя команда.
+
+Статья	Низкий сценарий	Средний сценарий	Высокий сценарий
+Repo/product audit и traceability	120–250 тыс.	300–550 тыс.	700 тыс.–1,2 млн
+Literature/legal source review	80–180 тыс.	250–450 тыс.	600 тыс.–1 млн
+Moderated research и recruitment	150–300 тыс.	450–900 тыс.	1,2–2,2 млн
+Accessibility audit	100–220 тыс.	300–650 тыс.	800 тыс.–1,5 млн
+Prototyping/copy system	120–280 тыс.	350–750 тыс.	900 тыс.–1,6 млн
+Instrumentation/data QA	180–400 тыс.	600 тыс.–1,2 млн	1,5–3 млн
+MVP implementation/testing	300–700 тыс.	1–2 млн	2,5–5 млн
+Legal review	80–200 тыс.	250–600 тыс.	700 тыс.–1,5 млн
+Experiment operation/analysis	100–250 тыс.	350–750 тыс.	900 тыс.–1,8 млн
+Contingency	10%	15%	20%
+Итого	примерно 1,4–3,1 млн	4,4–8,7 млн	11,8–22,6 млн
+
+Низкий сценарий предполагает внутреннюю разработку, небольшой recruitment и один MVP mechanism. Средний — независимого исследователя, accessibility specialist, полноценную instrumentation wave и один online canary. Высокий включает несколько устройств/AT, внешнюю юридическую экспертизу, длительное longitudinal study и production hardening; он не требуется для первоначального MVP.
+
+Deliverables и форматы
+Deliverable	Формат
+Canonical strategy	Markdown в docs/features/static-site-onboarding/README.md
+Repo baseline	SHA-pinned audit table с paths и release states
+Capability registry	Versioned YAML/JSON Schema + human-readable Markdown
+Message registry	Schema, priority matrix, copy IDs, editorial preview
+State machine	Contract document + transition fixtures
+Analytics taxonomy	JSON Schema, field dictionary, TTL/purpose matrix
+Research package	Protocols, consent scripts, task guides, anonymized notes
+Experiment charter	Hypothesis, MDE, assignment, metrics, stop rules
+Accessibility package	WCAG mapping, test matrix, evidence captures
+Legal checklist	Data flow, purposes, recommender rules, unresolved decisions
+Decision log	ADR-style owner decisions и BLOCKED items
+Rollout package	Feature flags, canary criteria, dashboards, rollback checklist
+Executive report	PDF/HTML export при необходимости, без подмены canonical Markdown
+
+Owner decisions
+Решение	Варианты	Рекомендация	Evidence/reversibility	Deadline
+Semantics calendar/save	ICS transport; durable save; composed action	Явно разделить transport и in-product saved state	Высокая обратимость copy, низкая schema	До MVP copy
+Hero protection	Always static; conditional dynamic; campaign takeover	Static orientation для unknown/cold, редкая editorial dynamics позже	Легко откатить	До registry
+Page-end renderer	Separate component; shared renderer	Shared renderer, отдельный system registry	Средняя	MVP architecture
+Activation model	Single event; staged	Staged FV/C/R	Аналитически обратимо, но schema impact	До instrumentation
+Mastery threshold	Explicit; two successes; model	Two successes без help либо explicit permanent dismiss	Configurable	До state fixtures
+Anonymous suppression	Device-only; none; server identity	Device-only, fail quiet при reset	Privacy-safe	MVP
+Identity offer	Global; after save; from settings	После durable-value need	Identity incomplete	P1 gate
+PWA timing	First mobile visit; page end after value; settings only	Page end после value и browser eligibility	Strong platform evidence	P1
+Artifact purpose	Core learning; cultural layer; reject	Cultural layer или не внедрять	Highly reversible before code	P2
+Promo/Hero arbitration	Campaign owns Hero; protected orientation	Orientation protected	High ethical importance	Before campaigns
+Legal applicability	Self-assessment; counsel review	Counsel review before target personalization	Low reversibility after collection	Before production
+Analytics raw events	Permanent clickstream; bounded TTL; aggregates only	Bounded TTL + aggregates	Architecture-compatible	Before A/A
+
+Repository diff-plan
+В docs/features/static-site-onboarding/README.md следует:
+
+Заменить single activation hypothesis staged-моделью FV1/FV2/C1/C2/R1.
+Добавить exact baseline main@09fcde9012b30d0c3b4a30d35f45e3c9858b096c.
+Внести release-truth table с отдельными статусами implemented, candidate, accepted target, open PR, research, obsolete.
+Зафиксировать verdict table proceed | narrow | defer | reject.
+Добавить capability registry и competency state contract.
+Добавить Hero/Page-end arbitration, protected orientation и one-proactive-message rule.
+Разделить exposure, learning evidence, retention handoff и campaign/artifact ledgers.
+Внести copy scorecard и versioned specimen IDs.
+Добавить low-traffic experiment protocol, A/A, SRM, MDE и underpowered template.
+Добавить threat model, accessibility matrix и legal BLOCKED section.
+Удалить или пометить как priors все неподтверждённые численные thresholds.
+Явно перечислить capabilities, которые нельзя обучать до release.
+Отдельные contracts/schemas:
+
+text
+Копировать
+docs/features/static-site-onboarding/capability-registry.md
+docs/features/static-site-onboarding/message-orchestration.md
+docs/features/static-site-onboarding/competency-state.md
+docs/features/static-site-onboarding/measurement-contract.md
+docs/features/static-site-onboarding/copy-style-and-review.md
+docs/features/static-site-onboarding/experiment-charter.md
+
+schemas/onboarding-capability.schema.json
+schemas/onboarding-message.schema.json
+schemas/onboarding-state.schema.json
+schemas/onboarding-event.schema.json
+Обратные ссылки нужны из:
+
+text
+Копировать
+docs/features/static-site-pages/README.md
+docs/features/static-site-pages/personalizaion/personalization-to-be.md
+docs/architecture/personalization-data-ownership.md
+docs/features/event-favorites-calendar/README.md
+docs/features/site-user-identity/README.md
+docs/features/static-site-pages/mobile-shell.md
+docs/features/unsigned-personalization/authorized-event-search.md
+docs/features/static-site-easter-eggs/README.md
+docs/features/promo-campaigns/README.md
+Из focus-group документов нельзя копировать mission, prize, progress, feedback obligations, hidden cohort privileges или completion framing. Из open PR #235 нельзя копировать Push/calendar delivery как released capability; из PR #270 нельзя копировать target personalization runtime как production behavior.
+
+Регистрируемые tests/scenarios:
+
+text
+Копировать
+onboarding.static_first_value
+onboarding.hero_orientation_protected
+onboarding.one_proactive_message
+onboarding.action_echo_undo
+onboarding.dismissal_permanent
+onboarding.cooldown_cross_page
+onboarding.storage_reset_fail_quiet
+onboarding.capability_version_reintroduction
+onboarding.anonymous_authorized_merge
+onboarding.no_js_core_value
+onboarding.keyboard_focus_not_obscured
+onboarding.screen_reader_status
+onboarding.reduced_motion
+onboarding.permission_denial_valid
+onboarding.pwa_event_eligibility
+onboarding.purpose_separation
+onboarding.campaign_not_help
+onboarding.artifact_not_event
+onboarding.exposure_not_taste_signal
+onboarding.experiment_srm
+BLOCKED до owner/release decisions:
+
+text
+Копировать
+- единая семантика calendar/save/favorite;
+- production-complete Search acceptance;
+- production-complete identity merge;
+- target personalization factors и explanation source;
+- utility reminder delivery;
+- promo Push consent/delivery;
+- legal applicability и документы рекомендательных технологий;
+- production static-site rollout truth;
+- artifact MVP и provenance owner;
+- baseline traffic и MDE feasibility.
+Приоритетные официальные и первичные источники
+Русскоязычный нормативный слой: действующая статья 10.2-2 закона №149-ФЗ о рекомендательных технологиях; официальные акты Роскомнадзора об обезличивании; применимые положения закона №152-ФЗ; российский accessibility standard и WCAG mapping после юридико-технической проверки. 
+
+Англоязычный нормативный и platform слой: WCAG 2.2 Understanding documents по status messages, focus not obscured, hover/focus content, reflow и target size; MDN/web.dev по install и notification permissions; Chrome field research о permission prompts. 
+
+Академический слой: systematic reviews explainable recommender systems, user characteristics, transparency/control; studies interruption, banner blindness, reactance, novelty effects, SRM и online experimentation. 
+
+Практический официальный слой: Eventbrite и Meetup для event discovery/saved/notification boundaries; Apple News, Spotify, Microsoft и Yahoo для explicit control; museum/cultural guides для optional collection, accessibility и maintenance. Эти продукты являются источниками patterns и risks, но не доказательством causal effect в KenigEvents. 
+
+Краткая последовательность действий
+Приоритет	Решение
+Сначала	Утвердить staged first-value model и semantics save/calendar
+Затем	Зафиксировать capability registry, Hero protection и dismissal contract
+До разработки сообщений	Проверить текущий UI на task comprehension; удалить подсказки там, где достаточно улучшить label/IA
+Первый implementation slice	Action echoes и recovery для одной уже выпущенной capability
+До эксперимента	A/A, SRM, dedup, no-JS и accessibility gates
+После proof	Page-end continuity и PWA offer
+Только после release dependencies	Identity sync, utility reminder и recommendation explanation
+Отдельный post-release track	Артефакты; предпочтительный вариант — культурный слой, не обучение функции
