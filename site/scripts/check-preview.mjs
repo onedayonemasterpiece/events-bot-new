@@ -8,6 +8,8 @@ import busData from '../src/data/busTransportSchedules.json' with { type: 'json'
 import templateContract from '../src/data/eventTemplateContract.json' with { type: 'json' };
 import { resolveMobileListingRailMediaItems } from '../src/lib/mobileListingRailMedia.mjs';
 import { localPreviewRuntimePath } from './preview-asset-path.mjs';
+import { assertPopularOccurrenceCollapse } from './popular-occurrence-contract.mjs';
+import { assertRequiredPreviewBrowserJourney, staticSpecimenCandidates } from './check-browser-release-gate.mjs';
 
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
 const distDir = join(siteDir, 'dist');
@@ -69,6 +71,12 @@ if (festivalTimelineData.schema_version !== 'festival-timeline-static-v1') {
   throw new Error('Festival timeline projection schema is missing');
 }
 const previewBuild = JSON.parse(readFileSync(join(root, 'preview-build.json'), 'utf8'));
+const browserJourneyBasePath = String(previewBuild.basePath || `/${buildId}`).replace(/\/$/u, '');
+const browserJourneyRoutes = [6408, 6407]
+  .map((eventId) => eventsData.events.find((event) => Number(event.id) === eventId))
+  .filter(Boolean)
+  .map((event) => `${browserJourneyBasePath}/sobytiya/${event.slug}/`);
+assertRequiredPreviewBrowserJourney(staticSpecimenCandidates(root, browserJourneyBasePath, browserJourneyRoutes));
 const previewCurrentDate = String(previewBuild.currentDate || eventsData.build.current_date || '');
 const previewReferenceIso = String(previewBuild.referenceIso || eventsData.build.generated_at || '');
 const optionalScoreIsValid = (value) => value === null || value === undefined
@@ -363,10 +371,12 @@ const temporalLabels = [...popularDesktopGlobalHtml.matchAll(/data-listing-tempo
 if (temporalLabels.length !== popularDesktopIds.length || temporalLabels.some((label) => !label.trim())) {
   throw new Error('Popular desktop V28 cards must expose compact lifecycle/date context');
 }
-if (!popularDesktopGlobalHtml.includes('ещё 1 показ')) {
-  throw new Error('Popular desktop V28 must collapse repeated dates into one family card');
-}
 const popularEventById = new Map(eventsData.events.map((event) => [String(event.id), event]));
+assertPopularOccurrenceCollapse({
+  desktopIds: popularDesktopIds,
+  temporalLabels,
+  events: eventsData.events,
+});
 const popularReference = Date.parse(previewReferenceIso);
 const popularEligible = (event) => {
   if (!event || ['cancelled', 'postponed', 'duplicate', 'merged', 'deleted', 'inactive'].includes(String(event.lifecycle_status || '').toLowerCase())) return false;

@@ -9,6 +9,8 @@
 ### Fixed
 
 - Secret candidate теперь наследует `prelaunch_mode` проверенного production manifest и не подменяет prelaunch root обычной главной страницей.
+- Fixed the 2026-08-03 StaticSiteBuilder failure storm: preview validation now derives Popular repeated-occurrence expectations from the generated family data instead of a fixture literal, requires the deterministic multi-image recommendation specimen, and distinguishes loaded-image shell containment from a correctly hidden missing-image fallback. The Chromium release gate now keeps strict geometry for loaded media while accepting only a bounded visible fallback for failed media (`INC-2026-08-03-static-site-builder-failure-storm`).
+
 - Restored the production Supabase/focus API Gateways, isolated email triggers
   and bounded Postbox feedback YDB after `yc.iam.reaper` suspended them during
   the account-transfer window. Recovery verified outbound mail gates before
