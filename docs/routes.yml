@@ -371,6 +371,17 @@ features:
   static_site_pages:
     status: secret_candidate_pipeline_root_promotion_blocked
     docs: docs/features/static-site-pages/README.md
+    collections_catalog: docs/features/static-site-pages/podborki.md
+    gastronomy_collection: docs/features/static-site-pages/gastronomy-collection.md
+    personalization_target: docs/features/static-site-pages/personalizaion/personalization-to-be.md
+    personalization_traceability: docs/features/static-site-pages/personalizaion/personalization-research-traceability.md
+    personalization_wave_0: docs/features/static-site-pages/personalizaion/tasks/personalization-wave-0.md
+    weather_calendar: docs/features/static-site-pages/weather-calendar.md
+    focus_group_release: docs/features/static-site-pages/focus-group-release/README.md
+    standard_onboarding: docs/features/static-site-onboarding/README.md
+    auth_session_fixture: docs/testing/static-site-auth-session-fixture.md
+    autotest_strategy: docs/operations/static-site-autotest-strategy.md
+    yandex_dependency_resilience: docs/operations/yandex-dependency-resilience.md
     collections_original_requirements: docs/features/static-site-pages/podborki.md
     collections_extraction_and_product_plan: docs/features/static-site-pages/podborki-to-be.md
     collections_quality_plan: docs/features/static-site-pages/static-collections-quality-plan.md
