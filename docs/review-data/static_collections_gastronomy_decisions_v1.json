@@ -1,0 +1,13 @@
+{
+  "schema_version": "static-collection-gastronomy-decisions-v1",
+  "policy_version": "gastronomy_v1",
+  "status": "starter_not_owner_approved",
+  "reviewed_at": null,
+  "reviewer": null,
+  "notes": [
+    "This store is intentionally empty until the generated source-bound review queue is approved.",
+    "Do not add weak events to meet a supply target; core and co_core are the only membership roles.",
+    "The Astro page and public promotion are outside this data-preparation change."
+  ],
+  "decisions": []
+}
