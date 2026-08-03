@@ -487,19 +487,29 @@ Supabase Admin API.
 
 Routine reliability tests не используют внешний ящик. Исполняемый harness
 `site/e2e/auth-session-fixture/noMailFaultMatrix.ts` проверяет четыре независимых
-операции в профилях `normal`, `direct-down`, `relay-down`, `both-down`:
+операции в семи профилях: `normal`, недоступность direct, недоступность relay,
+недоступность обоих клиентских путей, общий отказ Supabase upstream,
+неоднозначность response body после dispatch и восстановление после reload:
 
 - Auth verify, Search и personalization — `selected-once`: маршрут выбирается
-  до dispatch, при двух недоступных маршрутах dispatch равен нулю;
+  до dispatch, при двух недоступных маршрутах dispatch равен нулю, а после
+  неоднозначного ответа автоматического replay нет;
 - focus feedback — `idempotent-replay`: повтор разрешён только с тем же
-  idempotency key;
+  idempotency key и приводит ровно к одному логическому эффекту;
+- общий upstream-отказ не считается успешным восстановлением через relay;
+- pending intent сериализуется, восстанавливается новым экземпляром transport и
+  после reconnect создаёт один dispatch/эффект; повторный flush committed intent
+  ничего не отправляет;
 - для каждой ячейки product OTP issue, provider mail send и receipt равны нулю;
+- receipt содержит только стабильные fault-коды, routes и счётчики; URL, request
+  body, action id, токены и заголовки авторизации не экспортируются;
 - отказ fixture или отсутствие allowlisted session заканчивается
   `BLOCKED_AUTH_FIXTURE`, без real-mail fallback.
 
 Матрица доказывает transport policy локально и детерминированно. Она не выдаёт
-fake session за live hosted acceptance и не закрывает provider-specific mail,
-OAuth либо мобильный keyboard contract.
+fake session или in-memory recovery journal за live hosted/product outbox
+acceptance и не закрывает provider-specific mail, OAuth, фактическую
+персистентность runtime либо мобильный keyboard contract.
 
 ## 9. Критические page/data scenarios
 

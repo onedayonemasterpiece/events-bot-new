@@ -225,8 +225,15 @@ scenarios:
     trigger_tags: [auth-session, supabase-connectivity, yandex-relay, personalization, smart-search, focus-feedback]
     cost: low
     auth_mode: anonymous
-    side_effects: zero_product_otp_zero_external_mail_zero_provider_calls
-    fault_profiles: [normal, client_supabase_direct_unreachable, client_yandex_relay_unreachable, both_client_routes_unreachable]
+    side_effects: zero_product_otp_zero_external_mail_zero_remote_writes
+    fault_profiles:
+      - normal
+      - client_supabase_direct_unreachable
+      - client_yandex_relay_unreachable
+      - both_client_routes_unreachable
+      - supabase_upstream_unavailable
+      - selected_once_response_body_ambiguous
+      - recovery_after_reload
     operations:
       auth.verify: selected-once
       functions.event-search: selected-once
@@ -235,7 +242,12 @@ scenarios:
     acceptance:
       selected_once_dispatches_per_operation: 0_or_1
       duplicate_dispatches: 0
+      duplicate_effects: 0
+      idempotent_effects_after_ambiguous_replay: 1
       both_routes_down_dispatches: 0
+      shared_upstream_false_relay_recovery: 0
+      reload_recovery_stable_action_effects: 1
+      sanitized_fault_activation_receipt: required
       product_otp_issue_count: 0
       external_mail_send_count: 0
       external_mail_receipt_count: 0
@@ -318,7 +330,7 @@ scenarios:
 
   transport.both_client_routes_unreachable:
     title: Both direct and relay client routes fail without false success or selected-once dispatch
-    status: planned
+    status: partial_deterministic_local_contract_live_surface_acceptance_pending
     contract: docs/operations/yandex-dependency-resilience.md
     layers: [L0, L1, L2]
     platforms: [browser, android, ios]
@@ -341,7 +353,7 @@ scenarios:
 
   transport.supabase_upstream_unavailable:
     title: Shared Supabase upstream failure degrades both direct and relay without false relay recovery
-    status: planned
+    status: partial_deterministic_local_contract_live_surface_acceptance_pending
     contract: docs/operations/yandex-dependency-resilience.md
     layers: [L0, L1]
     platforms: [browser]
@@ -352,6 +364,14 @@ scenarios:
     side_effects: no_mail_selected_once_dispatch_bounded_by_contract
     fault_profile: supabase_upstream_unavailable
     evidence: direct_relay_upstream_failure_and_no_false_recovered_outcome
+    acceptance:
+      selected_once_dispatches_per_operation: 1
+      idempotent_replay_dispatches_max: 2
+      durable_effects: 0
+      false_relay_recovery: 0
+      product_otp_issue_count: 0
+      external_mail_send_count: 0
+      external_mail_receipt_count: 0
     blocking:
       pull_request: false_until_implemented
       release: true_after_implementation_for_shared_upstream_sensitive_changes

@@ -167,7 +167,8 @@ analytics_projection: pending
 
 Статус на 2026-08-03: оба single-route-down направления приняты terminal
 Android/iOS тестами. `both_client_routes_unreachable` и
-`supabase_upstream_unavailable` остаются отдельными no-mail/degraded scenarios.
+`supabase_upstream_unavailable` теперь имеют исполняемый deterministic no-mail
+contract; live affected-surface/browser acceptance для них остаётся открытым.
 
 ### 5.2. YDB analytics/control
 
@@ -336,10 +337,16 @@ mobile viewport не заменяет simulator acceptance.
 
 Исполняемый локальный no-mail слой находится в
 `site/e2e/auth-session-fixture/noMailFaultMatrix.ts`; registry contract проверяет
-`site/e2e/auth-session-fixture/registry-lint.mjs`. Он покрывает четыре базовых
-route profiles для Auth/Search/personalization/focus и гарантирует нулевые
-product OTP/mail counters. Это transport-policy proof, а не подмена live hosted
-session acceptance или ещё planned provider/YDB/inbound scenarios.
+`site/e2e/auth-session-fixture/registry-lint.mjs`. Он покрывает семь профилей для
+Auth/Search/personalization/focus: normal, оба single-route-down, both-down,
+shared upstream, ambiguous response body и reload/recovery. Contract доказывает
+`selected-once dispatch <= 1`, один idempotent effect, отсутствие ложного relay
+recovery при общем upstream-отказе, сохранение stable pending intent через
+in-memory reload и нулевые product OTP/mail counters. Sanitized receipt содержит
+только fault-коды/routes/counters, без URL, request body, action id, токенов и
+authorization headers. Это transport-policy proof, а не подмена live hosted
+session, фактического product outbox или ещё planned provider/YDB/inbound
+acceptance.
 
 ## 9. Release gates
 
@@ -442,7 +449,7 @@ operation semantics, idempotency, acknowledgement и recovery. Любой выз
 | Relay unavailable → direct, Android/iOS OTP | terminal PASS |
 | Полевое наблюдение direct OK / Yandex relay+control unavailable | зафиксировано как valid degraded client-path evidence |
 | Both client routes unavailable | deterministic local no-mail matrix PASS; live affected-surface acceptance pending |
-| Shared Supabase upstream unavailable | planned, no-mail |
+| Shared Supabase upstream unavailable | deterministic local no-mail matrix PASS; live affected-surface acceptance pending |
 | YDB projection outage + durable recovery | contract закреплён; implementation audit/test требуется |
 | Focus feedback partial component delivery | contract закреплён; implementation/test требуется |
 | Yandex OAuth fallback | contract закреплён; acceptance требуется |
