@@ -1,7 +1,11 @@
 # Personalization data ownership
 
 > Status: **accepted release architecture with a post-release VK/152-FZ correction** (2026-07-13). Existing Supabase account/email storage still requires a separate localization/data-flow audit before it may be represented as 152-FZ compliant.
+>
 > Scope: static-site identity, personalization, favorites/calendar, email recommendations, transactional event email, analytics and comment-feedback sidecars.
+>
+> Normative reliability companion:
+> [Yandex dependency resilience](../operations/yandex-dependency-resilience.md).
 
 ## Decision
 
@@ -17,11 +21,8 @@ Email providers are transports and ingress surfaces, not additional systems of r
 
 - **SpaceWeb** owns the durable human/inbound mailbox `info@kenigevents.ru` and manual webmail/IMAP/SMTP access.
 - **Yandex serverless inbound pipeline** polls the retained SpaceWeb mailbox read-only by UID; its direct Mail Trigger address is canary-only. Functions, private storage and DLQs do not become identity, consent or subscription owners.
-- **Yandex Cloud Postbox** sends transactional account/event-lifecycle mail and
-  remains the capacity route for first/new or over-capacity Auth recipients.
-- **NotiSend** sends personal recommendations/announcements plus the narrow
-  returning/repeated/fixed-test Auth route. Supabase enforces one shared hard
-  ceiling of 200 unique NotiSend recipients.
+- **Yandex Cloud Postbox** sends transactional account/event-lifecycle mail and remains the capacity route for first/new or over-capacity Auth recipients.
+- **NotiSend** sends personal recommendations/announcements plus the narrow returning/repeated/fixed-test Auth route. Supabase enforces one shared hard ceiling of 200 unique NotiSend recipients.
 
 This decision follows the implementation already present in `origin/main`: Supabase Auth/Yandex, pgvector search, reaction counters and the personalization project boundary. There is no production YDB user-profile write path to migrate.
 
@@ -66,8 +67,10 @@ The post-release VK privacy vault is a scoped exception: it stores only VK subje
 1. Static HTML remains useful without Supabase/YDB.
 2. After consent, a same-origin endpoint validates actor, device credential, schema, payload and idempotency.
 3. Supabase transactionally updates bounded strong-action/current state and a profile revision.
-4. An asynchronous outbox projects de-identified analytics to YDB.
-5. YDB failure never blocks CTA/navigation or rolls back a user action.
+4. The same primary transaction creates or advances a durable analytics-outbox record.
+5. An asynchronous worker projects de-identified analytics to YDB.
+6. YDB failure never blocks CTA/navigation, changes primary acknowledgement or rolls back a user action.
+7. The user-visible success state is derived from the primary commit, never from the YDB projection attempt.
 
 ### Login and profile linking
 
@@ -77,6 +80,7 @@ The post-release VK privacy vault is a scoped exception: it stores only VK subje
 4. Merge compact snapshots/current state, not raw browsing history.
 5. Authenticated explicit actions win conflicts.
 6. Logout does not split the durable profile. Unlink/reset/delete are separate explicit operations.
+7. Yandex OAuth is one capability, not the whole Auth system: provider/network failure must leave verified-email OTP available where that route is healthy.
 
 ### Personal email announcement
 
@@ -96,10 +100,11 @@ The personal page itself is intentionally readable through a forwardable public 
 2. Sender revalidates the current event/account state, purpose-specific consent where required and suppression immediately before claim.
 3. Yandex Cloud Postbox sends from the verified transactional identity with `Reply-To: info@kenigevents.ru`.
 4. Provider events update send-critical delivery/suppression evidence in Supabase; YDB receives only the asynchronous de-identified projection.
+5. UI/operator states distinguish `queued`, `claimed`, `provider_accepted`, `delivered`, `retryable_failed`, `ambiguous` and `terminal_failed`.
+6. «Письмо отправлено» is forbidden before provider acceptance. A durable outbox row may be shown only as queued/scheduled.
+7. Ambiguous Postbox dispatch is not blindly repeated through Postbox or another provider; reconciliation or an explicit operator disposition is required first.
 
-Postbox is not a recommendation fallback. NotiSend is not a generic
-transactional fallback; its only transactional exception is the reviewed Auth
-repeat/fixed-test route selected before dispatch under the shared capacity gate.
+Postbox is not a recommendation fallback. NotiSend is not a generic transactional fallback; its only transactional exception is the reviewed Auth repeat/fixed-test route selected before dispatch under the shared capacity gate.
 
 ### Inbound email
 
@@ -108,10 +113,59 @@ repeat/fixed-test route selected before dispatch under the shared capacity gate.
 3. Intake stores an allowlisted normalized envelope only in private KMS-backed storage, then hands a minimized signed metadata/reference pointer through YMQ to an HMAC adapter and service-only Supabase receipt RPC. The retained SpaceWeb mailbox remains the authoritative original.
 4. Keyed idempotency prevents IMAP/timer/queue duplicates; bounded batches, YMQ redrive and a DLQ retain failures for controlled replay. The separate Mail Trigger technical address remains available for direct trigger/attachment canaries.
 5. Automation must not auto-reply or Bcc `info@kenigevents.ru` until explicit loop prevention exists. `dmarc@kenigevents.ru` is not forwarded into this pipeline.
+6. Yandex Functions/API Gateway/YMQ outage must not advance the authoritative cursor past an unacknowledged item or remove the mailbox original.
+7. Backlog age, oldest unprocessed UID and DLQ count are operator-visible; a zero downstream counter during outage is not interpreted as zero inbound mail.
 
 ### Event comment feedback
 
 The comment pipeline reads canonical event/source snapshots from Fly SQLite, keeps raw comments and processing state in the YDB sidecar, and exports a safe static manifest. Comment-feedback state does not become a competing user profile and cannot directly rewrite Smart Update facts or user interests.
+
+## Yandex capability and acknowledgement boundary
+
+Yandex availability is never represented by one global boolean. At minimum, runtime and evidence distinguish:
+
+| Capability | SOR / terminal acknowledgement | Outage semantics |
+|---|---|---|
+| Supabase relay on Yandex API Gateway | Supabase response + transport receipt | alternate client route only; relay failure does not imply Supabase failure |
+| YDB analytics | Supabase/approved primary action commit | projection remains durable pending; primary action stays committed |
+| YDB control | none; read-only diagnostic probe | degraded diagnostic signal only |
+| Yandex OAuth | Supabase Auth session | email OTP remains an independent fallback |
+| Yandex Cloud Postbox | Supabase send outbox + provider receipt | queued/retry/ambiguous state; no false sent acknowledgement |
+| Yandex inbound pipeline | SpaceWeb original + durable UID/cursor/receipt | retained original and controlled replay |
+| Object Storage/CDN | immutable manifest + object readback | failed candidate never replaces last-good |
+| E2E Mail Trigger | protected test artifact | test infrastructure may be BLOCKED without changing product state |
+
+General acknowledgement state machine:
+
+```text
+local_applied
+  -> queued
+  -> dispatching
+  -> committed
+  -> projecting
+  -> terminal_complete
+
+alternative states:
+  partially_committed
+  ambiguous
+  retryable_failed
+  terminal_failed
+  expired_with_user_notice
+```
+
+Rules:
+
+- every retryable logical command has one stable `action_id`/idempotency key;
+- payload is retained until `committed` or explicit terminal disposition;
+- selected-once commands are never automatically re-dispatched after an ambiguous post-dispatch failure;
+- composite operations expose component receipts instead of one aggregate success bit;
+- local/server outbox eviction or TTL expiry may not be silent;
+- reconnect/replay is single-flight, bounded and uses the same idempotency identity;
+- optional telemetry/control failures cannot mutate core route health;
+- diagnostic copy may say that a specific Yandex capability is degraded, but may not claim a global Yandex outage from partial endpoint evidence.
+
+The detailed runtime, UX, testing and release contract is normative in
+[Yandex dependency resilience](../operations/yandex-dependency-resilience.md).
 
 ## Forbidden designs
 
@@ -119,6 +173,8 @@ The comment pipeline reads canonical event/source snapshots from Fly SQLite, kee
 - Parallel YDB and Supabase subscription/suppression/outbox systems.
 - Cross-database transactions in the send-critical path.
 - YDB analytics used for send eligibility.
+- YDB/control/relay success used as acknowledgement of a primary action that the canonical store has not committed.
+- YDB analytics failure rolling back, hiding or marking a committed primary action as lost.
 - Browser direct writes to YDB or raw/private Supabase profile tables.
 - Plain email, bearer tokens or raw profile vectors in YDB analytics.
 - Raw VK IDs, VK message bodies, complete public friend lists or friendship edges in Supabase, YDB analytics, core Fly SQLite or static artifacts. The encrypted/HMAC VK identity and eligible pair edge may exist only in the isolated YDB personal-data contour.
@@ -127,47 +183,29 @@ The comment pipeline reads canonical event/source snapshots from Fly SQLite, kee
 - Full canonical event copies in Supabase/YDB.
 - Comment sentiment directly applied to a user profile without a separate product/ranking contract.
 - NotiSend treated as the consent, subscription, suppression or capacity source of truth.
-- More than 200 unique NotiSend recipients at launch, or a provider-only
-  over-limit check in place of an atomic Supabase admission gate.
-- Postbox used as a hidden recommendation fallback, or NotiSend used for
-  transactional mail outside the reviewed Auth repeat/test rule.
+- More than 200 unique NotiSend recipients at launch, or a provider-only over-limit check in place of an atomic Supabase admission gate.
+- Postbox used as a hidden recommendation fallback, or NotiSend used for transactional mail outside the reviewed Auth repeat/test rule.
+- A generic «sent/saved» UI state after a dispatch attempt but before primary/provider acknowledgement.
+- Blind provider/route switching after an ambiguous selected-once dispatch.
+- Composite feedback reported as wholly sent while a required component is pending or failed.
+- Silent local/server outbox eviction, TTL expiry or max-attempt drop.
 - Mail-trigger processing that removes the retained SpaceWeb mailbox copy, exposes attachments publicly or can create reply/Bcc loops.
 
 ## Static browser transport and storage boundary
 
-All browser access to the personalization Supabase uses one configuration-keyed
-`ResilientDataClient` singleton. The singleton owns route health/selection but
-is independent of Auth; `StaticSiteAuth` consumes it rather than defining the
-data route for the rest of the site. Direct and stateless-relay probes run in
-parallel, a healthy choice is cached briefly in `sessionStorage`, and no route
-is selected when both probes fail.
+All browser access to the personalization Supabase uses one configuration-keyed `ResilientDataClient` singleton. The singleton owns route health/selection but is independent of Auth; `StaticSiteAuth` consumes it rather than defining the data route for the rest of the site. Direct and stateless-relay probes run in parallel, a healthy choice is cached briefly in `sessionStorage`, and no route is selected when both probes fail.
 
 Every request declares one of three policies:
 
-- `safe-read`: side-effect-free reads, including explicitly read-only RPC POSTs,
-  may try the alternate healthy route once;
-- `selected-once`: OTP, Search and other non-idempotent/cost-bearing writes are
-  sent at most once; timeout after dispatch is ambiguous and never causes an
-  automatic resend;
-- `idempotent-replay`: retry/outbox is permitted only when the server contract
-  has a stable idempotency key or state-upsert uniqueness guarantee.
+- `safe-read`: side-effect-free reads, including explicitly read-only RPC POSTs, may try the alternate healthy route once;
+- `selected-once`: OTP, Search and other non-idempotent/cost-bearing writes are sent at most once; timeout after dispatch is ambiguous and never causes an automatic resend;
+- `idempotent-replay`: retry/outbox is permitted only when the server contract has a stable idempotency key or state-upsert uniqueness guarantee.
 
-The shared outbox is bounded (16 records, 12 KiB, 24-hour TTL, five attempts),
-uses IndexedDB with a compact localStorage fallback, deduplicates by explicit
-record id and preserves foreign channels without burning attempts. This is an
-egress/reliability mechanism, not a security boundary. RLS, server-side rate
-limits, schema validation, authentication and idempotency enforcement remain
-authoritative; client probes/cooldowns must never be represented as DDoS
-protection.
+The shared outbox is bounded (16 records, 12 KiB, 24-hour TTL, five attempts), uses IndexedDB with a compact localStorage fallback, deduplicates by explicit record id and preserves foreign channels without burning attempts. This is an egress/reliability mechanism, not a security boundary. RLS, server-side rate limits, schema validation, authentication and idempotency enforcement remain authoritative; client probes/cooldowns must never be represented as DDoS protection.
 
-KenigEvents-owned browser state has both per-key limits and an enforced aggregate
-budget of 64 KiB, excluding the Supabase-owned auth token. Profiles,
-feedback/search queues, reconciliation markers and personal-feed hints are
-capped and/or expiring. If many individually valid cache keys exceed the total,
-disposable queues/caches are evicted first while the current focus participation
-and compact personalization state are preserved. Full per-preview feed manifests
-and obsolete continuation caches are removed. Cleanup never reads, compacts or
-rewrites Supabase Auth storage.
+Bounds are capacity controls, not permission to discard user intent silently. If a record reaches TTL/attempt/capacity limits, it receives an explicit terminal disposition and user/operator recovery path. Disposable telemetry/cache is evicted before explicit current state or unacknowledged strong action.
+
+KenigEvents-owned browser state has both per-key limits and an enforced aggregate budget of 64 KiB, excluding the Supabase-owned auth token. Profiles, feedback/search queues, reconciliation markers and personal-feed hints are capped and/or expiring. If many individually valid cache keys exceed the total, disposable queues/caches are evicted first while the current focus participation and compact personalization state are preserved. Full per-preview feed manifests and obsolete continuation caches are removed. Cleanup never reads, compacts or rewrites Supabase Auth storage.
 
 ## Security gates
 
@@ -182,19 +220,10 @@ rewrites Supabase Auth storage.
 - The existing `ru-central1` YDB resource does not by itself establish compliance: privacy tables require an isolated IAM/KMS/audit/retention boundary, and broader Supabase PII flows remain a release/legal audit item.
 - Recommendation admission and every send claim fail closed above the 200-user launch ceiling.
 - Provider credentials and mailbox passwords stay in the approved secret manager and never enter Git, artifacts or application logs.
-- The browser may read only owner-scoped saved-event state and must mutate it
-  through the capped desired-state RPC; direct authenticated table DML is
-  forbidden. Expensive vector search, quota reservation and search audit RPCs
-  are service-role-only behind an Edge Function that first validates the caller
-  JWT and passes the verified `auth.users.id` to fixed-`search_path` wrappers.
-- The stateless relay is an explicit method/path allowlist, not a generic
-  Supabase proxy. The only Storage exception is authenticated upload/delete in
-  private bucket `focus-feedback`; Storage RLS remains authoritative. Unknown
-  RPC/functions, Auth admin, Realtime and other buckets fail closed.
-- Focus participant registration and page feedback are idempotent desired-state
-  RPCs routed through the same thin client. The participant projection has a
-  serialized 200-active-member ceiling; the one-time presentation backfill uses
-  a fixed cutoff and never infers communication consent from Auth history.
+- The browser may read only owner-scoped saved-event state and must mutate it through the capped desired-state RPC; direct authenticated table DML is forbidden. Expensive vector search, quota reservation and search audit RPCs are service-role-only behind an Edge Function that first validates the caller JWT and passes the verified `auth.users.id` to fixed-`search_path` wrappers.
+- The stateless relay is an explicit method/path allowlist, not a generic Supabase proxy. The only Storage exception is authenticated upload/delete in private bucket `focus-feedback`; Storage RLS remains authoritative. Unknown RPC/functions, Auth admin, Realtime and other buckets fail closed.
+- Focus participant registration and page feedback are idempotent desired-state RPCs routed through the same thin client. The participant projection has a serialized 200-active-member ceiling; the one-time presentation backfill uses a fixed cutoff and never infers communication consent from Auth history.
+- Sanitized evidence records dependency class, route, primary acknowledgement and component receipt, but never email, OTP, bearer token, free text or screenshot secret.
 
 ## Consequences for existing branches
 
@@ -202,9 +231,12 @@ rewrites Supabase Auth storage.
 - `feature/event-email-notifications-static-20260702` is directionally closer, but must be ported to a fresh branch and hardened against legacy Supabase env fallback, ordinary SHA email lookup, client-trusted event snapshots and broad grants.
 - Event-comment-feedback keeps YDB ownership for its independent sidecar.
 - No production profile migration is required because the conflicting YDB profile path was never enabled.
+- Any implementation that sends to Yandex without explicit capability, SOR, acknowledgement, idempotency and recovery classification is incomplete and cannot be promoted.
 
 ## Related documentation
 
+- [Yandex dependency resilience](../operations/yandex-dependency-resilience.md)
+- [Static-site autotest strategy](../operations/static-site-autotest-strategy.md)
 - [Anonymous/static-site personalization](../features/unsigned-personalization/README.md)
 - [Personal email announcements](../features/personal-email-announcements/README.md)
 - [Site user identity](../features/site-user-identity/README.md)
