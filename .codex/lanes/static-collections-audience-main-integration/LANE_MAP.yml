@@ -1,6 +1,6 @@
 mode: serial_integrator_after_parallel_discovery
 repo: /home/dev/projects/events-bot-new
-base_ref: origin/main@81833f0156321fee90ab467fd0c4069de25309bf
+base_ref: origin/main@f44f7fc66ce6f833b7412796de1fb36f53cacec0
 base_branch: main
 integration_branch: integration/static-collections-audience-shadow-main-20260803
 global_constraints:
@@ -77,4 +77,4 @@ lanes:
     expected_output: clean main-based PR with Gate-E and shadow evidence
     verification_scope: full_local_and_bounded_live
     effort: high
-    status: in_progress
+    status: completed

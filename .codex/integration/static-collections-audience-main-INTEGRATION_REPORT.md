@@ -8,6 +8,10 @@ Scope: data preparation and shadow acceptance only. PR B, owner gold, scores,
 thresholds, Astro routes, navigation, sitemap and semantic publication remain
 out of scope and blocked.
 
+Merged delivery: PR #299, `origin/main@f44f7fc66ce6f833b7412796de1fb36f53cacec0`.
+Production delivery: Fly release `1894`, image digest
+`sha256:1fb79eb04f714429d34529205bd5f171b8719af279d06f42f9539412ac07807b`.
+
 ## Result
 
 The source-grounded audience facts-v3 contour was selectively reapplied to
@@ -127,6 +131,57 @@ as independently embedded.
 This manual shadow run intentionally has no production callback/status dataset.
 Production ledger/lease assertions belong to the bounded post-merge Fly canary.
 
+## Post-merge Fly canary
+
+The collection data plane passed its bounded production apply/warm acceptance
+on six fresh exact event/source bindings (`7283`, `7344`, `7402`, `7404`,
+`7411`, `7415`):
+
+- apply: `6` attempted, `6` applied, `0` deferred, `6` provider calls,
+  `6` physical sends and `6` writes;
+- identical warm: `6` cached, `0` provider calls, `0` physical sends,
+  `0` writes and an empty Event/EventSource logical diff;
+- the six calls used six distinct API-key IDs and six distinct project quota
+  scopes under `google_ai_project_model_atomic_v1` and
+  `rolling_60s_pacific_day_v2`; all six requests/attempts reached terminal
+  `succeeded`, were finalized and recorded usage;
+- event `7402` was confirmed for both `child_directed` and
+  `family_suitable` with exact source quotes. The bounded product snapshot has
+  one child family, one family-suitable family and one `kids` union family;
+  `joint_family_activity` remains empty;
+- provider-free product quality is `WATCH`, never `FAIL`, with normalized SHA
+  `b91da9d559bbc3699a6958a36df572904adb022b3bdb012835167106a594dc05`;
+  semantic publication remains `BLOCKED` for the explicit missing-PR-B reason.
+
+The production StaticSiteBuilder then consumed the exact main SHA and snapshot
+`7bfd8f4714cef345293289a1411c004518686faa5a2a0d3a470b5b4849240074`.
+It completed preflight, the legacy preview contract, the `377`-event production
+root-form build, shared BGE compute and the collection product monitor:
+
+- BGE batch compute: PASS, provider calls `0`, additional external requests
+  `0`, Supabase core reads `0`;
+- product QA: PASS, product `WATCH`, the same normalized product SHA and the
+  same `1/1/0/1` audience family counts;
+- vector barrier `ops_run=5159`: complete, `377` events, `754` unchanged
+  embedding skips, provider calls `0`;
+- status ledger emitted `preflight_ok` and terminal `report_written`; the exact
+  `static_site:builder` lease was released at
+  `2026-08-03T12:41:03.197854+00:00`.
+
+The overall builder result is deliberately **not** recorded as success. Its
+production-root Chromium gate stopped on the already reproduced, unrelated
+event `6407` defect: `card 6407 image escapes its shell` (issue #300). This is
+the same baseline failure recorded by PR #299 CI and was explicitly excluded
+from this collection branch. Therefore no secret candidate receipt advanced,
+no candidate was published and no root promotion occurred. Repeating the same
+deterministic build without fixing #300 would add cost but no evidence.
+
+Runtime regressions remained green throughout and after the run: SQLite
+`quick_check=ok`, Fly machine check `1/1` passing, five external health probes
+returned `200` in `0.140-0.223 s`, webhook traffic returned `200`, and the
+post-deploy window contains no no-space, database-full or Fly proxy candidate
+errors.
+
 ## Artifact ledger
 
 Durable local base (not committed):
@@ -155,6 +210,7 @@ Durable local base (not committed):
 | `full-shadow/kaggle-v3b-output/static-collection-product-snapshot-v1.json` | `8cb194a57e530c7e1caeae31e9db9186d8ac5387fee8d3cd6bd414464f0cffa5` |
 | `full-shadow/kaggle-v3b-output/static-collections-product-quality.json` | `bd5383329fd085623063951cdfc8eaaff069cd544345ca5b90c395b23e11dfeb` |
 | `full-shadow/kaggle-v3b-output/qa-summary.json` | `cdba34136b8718620a1a98ea9292e2360d153b5cf356de8911dfd8a1ddb501c8` |
+| `fly-canary/fly-canary-acceptance-summary.json` | `e8799e824e18d5c08264d0d95f8304675c7e8800d5162999a63cd62927a5e7a3` |
 
 Disposable full-shadow SQLite SHA-256:
 `977386ab730887bc30ee8c74b07c0a8eb6161a507083a851f6a3fe5d2ce119f5`.
@@ -186,12 +242,16 @@ a production migration artifact.
 | Repeat immutable Telegram/VK/parser Gate E | Done | hash-bound acceptance receipt; issue #297 for unrelated drift |
 | Full current/future shadow coverage | Done with quality warning | 62 candidates = 2 evaluated + 60 deferred + 0 unprocessed |
 | StaticSiteBuilder product monitor | Done with quality warning | Kaggle `COMPLETE`, 377 events, BGE/QA PASS, product WATCH, 0 provider calls |
-| Clean PR and merge | Pending | after fixed Kaggle result and CI |
-| Bounded Fly canary from main-reachable SHA | Pending | only after merge |
+| Clean PR and merge | Done | PR #299 merged as `f44f7fc66`; Fly release 1894 |
+| Bounded Fly collection apply/warm | Done | 6/6 apply; identical warm 0 calls/sends/writes; six independent scopes |
+| Production StaticSiteBuilder collection/product plane | Done | exact main SHA; 377 events; BGE/QA PASS; product WATCH; 0 provider calls |
+| Checked secret candidate | Blocked outside collection scope | terminal browser gate reproduced issue #300 on event 6407; no receipt/promotion |
 | PR B / owner gold / scores / thresholds | Not started by design | excluded |
 | Astro routes/navigation/sitemap/publication | Not started by design | publication blocked |
 
 ## Integration lane closure
 
-Read-only mapping lanes are complete and superseded by this serial integration.
-The serial integrator owns final rebase, CI, merge and bounded Fly canary.
+Read-only mapping lanes and the serial integration are complete. Collection
+code, Gate E, full shadow accounting, merge/deploy and bounded production data
+acceptance are delivered. The remaining checked-candidate blocker is issue
+#300, not collection extraction. PR B and UI/publication remain separate work.
