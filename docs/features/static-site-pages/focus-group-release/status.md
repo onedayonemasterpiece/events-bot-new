@@ -22,34 +22,83 @@
 | Soft gate на всём статическом сайте | `MISSING` | Локальная метка существует только в focus flow; обычные страницы ещё не выключаются общей заглушкой |
 | Актуальная заглушка | `MISSING` | Нужен экран ожидания перед первым paint |
 | Invite/QR и очистка fragment | `PARTIAL` | Клиентская механика есть; нужен общий exact-target journey |
+| Silent anonymous Supabase session | `MISSING` | После invite не создаётся/не восстанавливается анонимный `auth.uid()` для server-owned feedback и progress |
+| Повторное использование anonymous subject | `MISSING` | Нет теста, что reload/reinvite не создаёт новую anonymous user row |
+| Anonymous personalization | `PARTIAL` | Локальный профиль и local-first actions существуют; durable anonymous materialization/linking в Supabase остаются частичными |
+| Anonymous page score/text/screenshot | `BLOCKED` | Текущий Lab panel вызывает `requireSession()` и просит подтвердить участие, если Supabase session отсутствует |
+| Anonymous service NPS | `MISSING` | Сам service NPS ещё prototype; anonymous write path также отсутствует |
+| Anonymous-to-email/Yandex upgrade | `MISSING` | Текущий Auth flow не доказывает повышение anonymous user с сохранением того же subject и данных |
+| Merge с существующим аккаунтом | `MISSING` | Нет идемпотентного anonymous → permanent merge и dedupe оценок/artifacts/actions |
+| Anonymous не участвует в розыгрыше | `PARTIAL` | Participant RPC требует verified identity, но нет E2E «feedback доступен, eligibility=false» |
 | Конец 31 августа в 18:00 | `BLOCKED` | В коде marker всё ещё использует rolling 30 days |
 | Route → page family mapping | `PARTIAL` | Unit-тест покрывает 16 типов URL и excluded routes, но не rendered visibility |
 | Lab-блок перед footer | `PARTIAL` | Shared layout монтирует компонент в правильном месте, но отдельного DOM/browser placement test нет |
-| Шкала `0–10` | `PARTIAL` | Рабочий Lab panel содержит 11 кнопок, но вопрос пока оценивает полезность и нет browser matrix |
+| Шкала `0–10` | `PARTIAL` | Рабочий Lab panel содержит 11 кнопок, но нет browser matrix и anonymous session flow |
 | Контроль уже поставленной оценки | `PARTIAL` | Unit-тест хранит score по family и разрешает изменение, UI подсвечивает ячейку; явного `Ваша оценка: N` нет |
 | Revision-aware повторная оценка | `MISSING` | Storage keyed только по family и TTL 24 часа; `page_revision` отсутствует в UI/RPC/DB |
 | Сообщение `Страница обновилась` | `MISSING` | Нет состояния с прежней оценкой и сразу открытой шкалой новой revision |
 | Общий NPS сервиса | `PROTOTYPE` | Prototype component и source assertion есть, но production mount/write/schema отсутствуют |
-| Текст и screenshot по кнопкам | `PARTIAL` | Рабочие issue/screenshot paths есть; их надо связать с page score и service NPS контекстом |
-| Offline/idempotent feedback | `PARTIAL` | Outbox и v2 RPC есть; нужен live round-trip на final target |
-| Browser real-mail OTP | `PARTIAL` | Workflow merged; прежний PASS есть, требуется повтор на финальном target |
-| Android real-mail OTP | `PARTIAL` | Workflow merged; прежний PASS есть, требуется повтор на финальном target |
+| Текст и screenshot по кнопкам | `PARTIAL` | Рабочие issue/screenshot paths есть; их надо связать с anonymous subject, page score и service NPS |
+| Offline/idempotent feedback | `PARTIAL` | Outbox и v2 RPC есть; нужен anonymous-session recovery и live round-trip на final target |
+| Browser real-mail OTP | `PARTIAL` | Workflow merged; прежний PASS есть, требуется повтор на финальном target и upgrade-from-anonymous scenario |
+| Android real-mail OTP | `PARTIAL` | Workflow merged; прежний PASS есть, требуется повтор на финальном target и upgrade-from-anonymous scenario |
 | iOS Safari identity | `BLOCKED` | Последний OTP run завершён `FAIL_MOBILE_KEYBOARD`; нужен рабочий OTP либо принятый magic-link/Яндекс fallback |
-| Яндекс Auth | `PARTIAL` | Код есть; нужен свежий consent round-trip на final target |
+| Яндекс Auth | `PARTIAL` | `linkIdentity()` существует; нужен свежий consent round-trip именно из anonymous focus session |
 | Verified participant + cap 200 | `PARTIAL` | Таблица/RLS/atomic cap есть; нужна live boundary-проверка и cleanup test rows |
-| PWA Android install/relaunch | `PARTIAL` | Install UI и component tests есть; нужен нативный E2E |
+| PWA Android install/relaunch | `PARTIAL` | Install UI и component tests есть; нужен нативный E2E с сохранением marker и anonymous session |
 | iPhone «На экран Домой» | `MISSING` | Нет принятого системного сценария |
-| Share / Calendar / Не интересно / Для меня | `PARTIAL` | Функции есть, но не собраны в один focus acceptance journey |
+| Share / Calendar / Не интересно / Для меня | `PARTIAL` | Функции есть, но не собраны в один anonymous focus acceptance journey |
 | 12 артефактов | `PARTIAL` | `FG-E01…FG-E12` определены в коде; большая часть остаётся prototype/local |
+| Anonymous artifact receipts | `MISSING` | Нет server receipts под anonymous subject и переноса после identity upgrade |
 | Server artifact receipts | `MISSING` | Нельзя доказуемо посчитать 10 из 12 и eligible pool |
 | Правила розыгрыша | `PARTIAL` | Product rules сформированы; требуется публикация versioned copy и implementation |
-| Weighted chances 1–3 | `MISSING` | Нет server projection base/text/screenshot chances |
+| Weighted chances 1–3 | `MISSING` | Нет server projection base/text/screenshot chances после identity upgrade |
 | Automatic draw + reserve | `MISSING` | Нет immutable snapshot и защищённого draw workflow |
 | Письмо победителю / 3 дня | `OPTIONAL` до seed | Логика зафиксирована; шаблон нужен до rehearsal розыгрыша |
 | Благодарность всем + победитель | `OPTIONAL` до seed | Отправляется после подтверждения финального победителя |
-| Извлекаемая статистика | `PARTIAL` | Auth, participant, feedback и PWA данные существуют; page revisions, service NPS, artifacts/chances неполны |
+| Извлекаемая статистика | `PARTIAL` | Auth, participant, feedback и PWA данные существуют; anonymous subjects/linking, revisions, service NPS, artifacts/chances неполны |
 | Scheduled report | `NOT REQUIRED` | Ежедневный JSON/Markdown workflow удалён из стратегии; данные запрашиваются read-only по необходимости |
-| Полный focus live workflow | `MISSING` | Нет одного synthetic exact-target journey с cleanup |
+| Полный focus live workflow | `MISSING` | Нет одного synthetic exact-target journey с anonymous → verified upgrade и cleanup |
+
+## Главный обнаруженный разрыв
+
+Продуктовое решение владельца однозначно:
+
+```text
+invite/QR
+→ сайт и feedback доступны без email/Яндекса
+→ подтверждение identity нужно только для розыгрыша и восстановления
+```
+
+Текущая реализация делает иначе. В `FocusGroupLabPanel.astro` отправка score и
+issue сначала вызывает `requireSession()`. Если session отсутствует, блок пишет
+`Чтобы отправить ответ, подтвердите участие` и показывает ссылку на Auth.
+
+Это не соответствует принятой модели. Сам local marker показывает Lab-блок, но
+не даёт server write identity. Поэтому нужен silent anonymous Supabase session,
+а не новый пользовательский login step.
+
+## Почему anonymous Supabase Auth — минимальный путь
+
+Существующий feedback backend уже построен вокруг:
+
+- `auth.uid()`;
+- роли `authenticated`;
+- owner-scoped private Storage path;
+- idempotent RPC v2;
+- RLS и rate limits.
+
+Supabase anonymous user также получает `auth.uid()` и JWT, но имеет
+`is_anonymous=true`. Поэтому можно переиспользовать существующие владельческие
+контракты, не создавая параллельную device-token систему.
+
+Нужно изменить не весь backend, а прежде всего:
+
+1. включить/проверить anonymous sign-ins в проекте;
+2. после invite создать/reuse одну anonymous session;
+3. отличать anonymous от verified в UI и raffle RPC;
+4. адаптировать email/Yandex flow к linking/merge текущего subject;
+5. добавить cleanup старых anonymous users по принятой retention policy.
 
 ## Что уже действительно тестируется
 
@@ -96,7 +145,7 @@ TTL = 24 hours
 не соответствует принятому контракту:
 
 ```text
-key = page_family + page_revision
+key = focus_subject + page_family + page_revision
 ответ действует до смены revision
 ```
 
@@ -106,8 +155,12 @@ key = page_family + page_revision
 source-проверкой подтверждает использование idempotent outbox, RPC v2, unique
 `client_request_id`, storage limits и online flush.
 
-Это не доказывает browser → network fault → одна production row; такой сценарий
-ещё нужен.
+Это не доказывает:
+
+- invite → anonymous session;
+- anonymous feedback write;
+- browser → network fault → одна production row;
+- сохранение данных после identity upgrade.
 
 ### Общий NPS
 
@@ -118,6 +171,24 @@ source-проверкой подтверждает использование id
 
 Prototype явно сообщает, что ничего не отправляет. Рабочий Lab panel и feedback
 RPC общего NPS не поддерживают.
+
+## Что нужно реализовать для anonymous participation
+
+1. `ensureFocusAnonymousSession()` после валидного invite и при открытии сайта с
+   marker.
+2. Явное состояние Auth runtime:
+   - `anonymous_focus`;
+   - `verified`;
+   - `signed_out/no_subject`;
+   - `error/pending`.
+3. Запрет показывать anonymous user как `Вошли как ID ...`.
+4. Page score, service NPS, text и screenshot через anonymous `auth.uid()`.
+5. Local outbox до появления session/transport.
+6. Email upgrade текущего anonymous user, а не параллельный `signInWithOtp` user.
+7. Yandex `linkIdentity()` из anonymous session.
+8. Merge в существующий permanent account с dedupe.
+9. Raffle projection проверяет verified/non-anonymous identity.
+10. Cleanup/retention старых anonymous users.
 
 ## Что нужно реализовать именно для оценок
 
@@ -144,7 +215,7 @@ RPC общего NPS не поддерживают.
 - email magic link и шестизначный OTP;
 - Яндекс через общий Supabase Auth controller;
 - resilient direct/relay transport;
-- idempotent participant registration;
+- idempotent verified participant registration;
 - atomic cap `200`.
 
 Основные файлы:
@@ -157,7 +228,7 @@ RPC общего NPS не поддерживают.
 
 ### Feedback backend
 
-Рабочий контур уже поддерживает:
+Рабочий контур уже поддерживает для существующей Supabase session:
 
 - `page_score` без revision;
 - текстовое `issue`;
@@ -188,13 +259,14 @@ RPC общего NPS не поддерживают.
 ## Короткий backlog до seed
 
 1. `FG-01` — общий soft gate, новая заглушка, fixed cutoff `31.08 18:00`.
-2. `FG-02` — page score: route matrix, numeric saved state, revision state и
-   точный Lab-текст обновления.
-3. `FG-03` — общий service NPS в participant hub и отдельное хранение.
-4. `FG-04` — final browser/Android/iPhone/Yandex identity acceptance.
-5. `FG-05` — native PWA return.
-6. `FG-06` — Share, Calendar, «Не интересно», «Для меня» journey.
-7. `FG-07` — server receipts для 12 артефактов, progress `10/12`.
-8. `FG-08` — queryable participant/page-score/service-NPS/artifact/chance data.
-9. `FG-09` — weighted pool, immutable draw, reserve and email lifecycle.
-10. `FG-10` — full rehearsal на exact immutable target с synthetic cleanup.
+2. `FG-02` — silent anonymous Supabase session и anonymous/verified UI states.
+3. `FG-03` — page score, text/screenshot и service NPS без identity wall.
+4. `FG-04` — page revision, numeric saved state и точный Lab-текст обновления.
+5. `FG-05` — anonymous → email/Yandex upgrade/merge без потери данных.
+6. `FG-06` — final browser/Android/iPhone/Yandex identity acceptance.
+7. `FG-07` — native PWA return с сохранением marker/anonymous subject.
+8. `FG-08` — Share, Calendar, «Не интересно», «Для меня» anonymous journey.
+9. `FG-09` — server receipts для 12 артефактов, progress `10/12`, перенос после linking.
+10. `FG-10` — queryable anonymous/verified/page-score/service-NPS/artifact/chance data.
+11. `FG-11` — weighted pool, immutable draw, reserve and email lifecycle.
+12. `FG-12` — full rehearsal на exact immutable target с synthetic cleanup.
