@@ -35,8 +35,9 @@ committed
 
 ## Head SHA
 
-Implementation commit: `c37dff17b`. This RESULTS metadata commit follows it;
-integrate the branch tip.
+Implementation commit: `c37dff17b`; official-YQL Uint64 literal hardening:
+`dcb4f6dbd`. This RESULTS metadata commit follows them; integrate the branch
+tip.
 
 ## Verification
 
