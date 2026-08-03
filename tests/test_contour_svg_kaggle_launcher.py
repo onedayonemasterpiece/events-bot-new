@@ -6,6 +6,15 @@ from scripts import run_contour_svg_kaggle_sample as launcher
 from scripts import run_contour_svg_neural_branch_kaggle as neural_launcher
 
 
+def _set_limiter_env(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "GOOGLE_AI_LIMITER_SUPABASE_URL", "https://limiter.supabase.co"
+    )
+    monkeypatch.setenv(
+        "GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY", "limiter-service-key"
+    )
+
+
 def test_secret_payload_adds_limiter_overflow_envs(monkeypatch) -> None:
     for name in [
         "GOOGLE_API_KEY",
@@ -22,6 +31,7 @@ def test_secret_payload_adds_limiter_overflow_envs(monkeypatch) -> None:
     monkeypatch.setenv("GOOGLE_API_KEY3", "tertiary")
     monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setenv("SUPABASE_KEY", "supabase-key")
+    _set_limiter_env(monkeypatch)
 
     payload = json.loads(launcher.build_secret_payload())
 
@@ -44,6 +54,7 @@ def test_secret_payload_respects_explicit_limiter_overflow_envs(monkeypatch) -> 
     monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setenv("SUPABASE_KEY", "supabase-key")
     monkeypatch.setenv("GOOGLE_AI_RESERVE_OVERFLOW_KEY_ENVS", "GOOGLE_API_KEY3")
+    _set_limiter_env(monkeypatch)
 
     payload = json.loads(launcher.build_secret_payload())
 
@@ -65,6 +76,7 @@ def test_secret_payload_derives_key4_limiter_overflow_env(monkeypatch) -> None:
     monkeypatch.setenv("GOOGLE_API_KEY4", "quaternary")
     monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setenv("SUPABASE_KEY", "supabase-key")
+    _set_limiter_env(monkeypatch)
 
     payload = json.loads(launcher.build_secret_payload())
 

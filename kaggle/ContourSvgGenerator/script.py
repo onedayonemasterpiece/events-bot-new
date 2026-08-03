@@ -159,7 +159,11 @@ def _load_encrypted_env(status_client) -> None:
             continue
         os.environ[env_name] = str(value)
         names.append(env_name)
-    required = ["GOOGLE_API_KEY", "SUPABASE_URL"]
+    required = [
+        "GOOGLE_API_KEY",
+        "GOOGLE_AI_LIMITER_SUPABASE_URL",
+        "GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY",
+    ]
     missing = [name for name in required if not (os.getenv(name) or "").strip()]
     if missing:
         raise RuntimeError(f"Encrypted secrets payload is missing required keys: {', '.join(missing)}")

@@ -261,9 +261,15 @@ def main() -> int:
 
         env = os.environ.copy()
         env.update(secrets)
-        env.setdefault("GOOGLE_AI_ALLOW_RESERVE_FALLBACK", "1")
-        env.setdefault("GOOGLE_AI_LOCAL_LIMITER_FALLBACK", "1")
-        env.setdefault("GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR", "1")
+        for name in (
+            "GOOGLE_AI_LIMITER_SUPABASE_URL",
+            "GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY",
+        ):
+            if not str(env.get(name) or "").strip():
+                raise RuntimeError(f"missing canonical limiter credential: {name}")
+        env["GOOGLE_AI_ALLOW_RESERVE_FALLBACK"] = "0"
+        env["GOOGLE_AI_LOCAL_LIMITER_FALLBACK"] = "0"
+        env["GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR"] = "0"
         env.setdefault("GOOGLE_AI_INCIDENT_NOTIFICATIONS", "0")
         env["EVENT_IDS"] = ",".join(str(x) for x in (config.get("event_ids") or []))
         env["LOLLIPOP_DATE_TAG"] = str(config.get("date_tag") or "")

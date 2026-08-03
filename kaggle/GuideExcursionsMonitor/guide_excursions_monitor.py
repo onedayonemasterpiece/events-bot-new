@@ -379,24 +379,7 @@ class _GuideSecretsProviderAdapter:
 def _build_supabase_client() -> Any | None:
     _bootstrap_repo_bundle()
     from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
-
-    def legacy_factory() -> Any | None:
-        if (os.getenv("SUPABASE_DISABLED") or "").strip() == "1":
-            return None
-        base_url = (os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
-        key = (os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY") or "").strip()
-        if not base_url or not key:
-            return None
-        from supabase import create_client
-        from supabase.client import ClientOptions
-
-        options = ClientOptions()
-        options.schema = (os.getenv("SUPABASE_SCHEMA") or "public").strip() or "public"
-        return create_client(base_url, key, options=options)
-
-    return build_google_ai_limiter_supabase_client(
-        fallback_factory=legacy_factory
-    )
+    return build_google_ai_limiter_supabase_client(require_configured=True)
 
 
 def _get_supabase_client() -> Any | None:
@@ -425,8 +408,8 @@ def _log_llm_gateway_once() -> None:
             f"timeout_retries={LLM_TIMEOUT_RETRY_ATTEMPTS} "
             f"announce_multi_full_timeout={ANNOUNCE_MULTI_FULL_TIMEOUT_SECONDS}s "
             f"provider_5xx_retries={LLM_PROVIDER_5XX_RETRY_ATTEMPTS} "
-            f"reserve_fallback={os.getenv('GOOGLE_AI_ALLOW_RESERVE_FALLBACK', '1')} "
-            f"local_fallback={os.getenv('GOOGLE_AI_LOCAL_LIMITER_FALLBACK', '1')}"
+            f"reserve_fallback={os.getenv('GOOGLE_AI_ALLOW_RESERVE_FALLBACK', '0')} "
+            f"local_fallback={os.getenv('GOOGLE_AI_LOCAL_LIMITER_FALLBACK', '0')}"
         ),
         flush=True,
     )

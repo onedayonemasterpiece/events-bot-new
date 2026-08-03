@@ -41,6 +41,15 @@
   `GoogleAIClient` и передавайте в encrypted payload dedicated пару
   `GOOGLE_AI_LIMITER_SUPABASE_URL` /
   `GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY`.
+- Dedicated пара обязательна для любого Kaggle payload, который может вызвать
+  Google model: Telegram/Guide monitoring, Lollipop Canary,
+  StaticSiteBuilder с Gemma/vector sync и Contour SVG. Отсутствие хотя бы одной
+  переменной завершает launcher/kernel до provider call; общие `SUPABASE_*` не
+  являются резервным limiter ledger.
+- Remote payload обязан явно сохранять
+  `GOOGLE_AI_ALLOW_RESERVE_FALLBACK=0`,
+  `GOOGLE_AI_LOCAL_LIMITER_FALLBACK=0` и
+  `GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR=0`.
 - Пример multi-source secrets в Kaggle: `kaggle/UniversalFestivalParser/src/secrets.py` (env → Kaggle Secrets → encrypted datasets).
 
 ## Telegram Auth Bundle для Kaggle (ручные запуски)

@@ -58,7 +58,7 @@ def test_former_debt_shape_is_no_longer_allowlisted(tmp_path: Path) -> None:
     assert report.summary["unapproved"] == 1
 
 
-def test_only_serialized_gateway_assignment_is_approved_in_notebook(tmp_path: Path) -> None:
+def test_stale_serialized_gateway_assignment_is_not_approved(tmp_path: Path) -> None:
     notebook = {
         "cells": [
             {
@@ -91,8 +91,41 @@ def test_only_serialized_gateway_assignment_is_approved_in_notebook(tmp_path: Pa
     report = audit.audit_repository(tmp_path)
 
     assert not report.passed
+    assert report.summary["approved_embedded_gateway"] == 0
+    assert report.summary["unapproved"] == 2
+
+
+def test_current_serialized_gateway_assignment_is_approved(tmp_path: Path) -> None:
+    client = "from google import genai\n"
+    limiter = "LIMITER = 'strict'\n"
+    _write(tmp_path, "google_ai/client.py", client)
+    _write(tmp_path, "google_ai/limiter_supabase.py", limiter)
+    notebook = {
+        "cells": [{
+            "cell_type": "code",
+            "metadata": {},
+            "outputs": [],
+            "execution_count": None,
+            "source": [
+                "_TG_EMBEDDED_GOOGLE_AI = "
+                + json.dumps({"client.py": client, "limiter_supabase.py": limiter})
+                + "\n"
+            ],
+        }],
+        "metadata": {},
+        "nbformat": 4,
+        "nbformat_minor": 5,
+    }
+    _write(
+        tmp_path,
+        "kaggle/TelegramMonitor/telegram_monitor.ipynb",
+        json.dumps(notebook),
+    )
+
+    report = audit.audit_repository(tmp_path)
+
+    assert report.passed
     assert report.summary["approved_embedded_gateway"] == 1
-    assert report.summary["unapproved"] == 1
 
 
 def test_invalid_notebook_fails_closed(tmp_path: Path) -> None:

@@ -1,6 +1,7 @@
 export type GoogleQuotaKeyRow = {
   id: string;
   env_var_name: string;
+  quota_scope: string;
   priority?: number | null;
 };
 
@@ -17,6 +18,7 @@ export type GoogleQuotaKey = {
   api_key_id: string;
   configured_env_name: string;
   limiter_env_name: string;
+  quota_scope: string;
 };
 
 export type GoogleTokenUsage = {
@@ -204,7 +206,8 @@ export async function resolveStrictGoogleQuotaPool(
   const byEnv = new Map<string, GoogleQuotaKeyRow>();
   for (const row of rows) {
     const envName = String(row?.env_var_name || "").trim();
-    if (!isUuid(row?.id) || !envName || !aliases.includes(envName)) continue;
+    const quotaScope = String(row?.quota_scope || "").trim();
+    if (!isUuid(row?.id) || !envName || !quotaScope || !aliases.includes(envName)) continue;
     byEnv.set(envName, row);
   }
 
@@ -225,6 +228,7 @@ export async function resolveStrictGoogleQuotaPool(
       api_key_id: row.id,
       configured_env_name: configuredName,
       limiter_env_name: row.env_var_name,
+      quota_scope: String(row.quota_scope).trim(),
     });
   }
   if (missing.length > 0 || pool.length !== configuredNames.length) {
@@ -366,6 +370,7 @@ export async function withSharedGoogleQuotaAttempt<T>(options: {
     !minuteBucket ||
     !dayBucket ||
     !quotaScope ||
+    quotaScope !== options.key.quota_scope ||
     limiterContract !== REQUIRED_LIMITER_CONTRACT
   ) {
     try {
@@ -484,6 +489,25 @@ export async function withSharedGoogleQuotaAttempt<T>(options: {
       `shared_google_finalize_failed:${errorMessage(error).slice(0, 160)}`,
       { cause: error },
     );
+  }
+
+  if (
+    typedProviderError &&
+    Number(typedProviderError.error_code || 0) === 429
+  ) {
+    try {
+      await options.backend.rpc("google_ai_report_provider_429", {
+        p_request_uid: lease.request_uid,
+        p_attempt_no: lease.attempt_no,
+        p_retry_after_ms: null,
+      });
+    } catch (error) {
+      throw new SharedGoogleQuotaError(
+        "finalize",
+        `shared_google_provider_429_report_failed:${errorMessage(error).slice(0, 160)}`,
+        { cause: error },
+      );
+    }
   }
 
   if (providerError) throw providerError;

@@ -316,7 +316,9 @@ function shouldTryNextGoogleKey(status: number): boolean {
 function shouldTryNextSharedQuotaKey(error: unknown): boolean {
   return error instanceof SharedGoogleQuotaError &&
     error.stage === "reserve" &&
-    ["rpm", "tpm", "rpd", "no_keys"].includes(error.blocked_reason || "");
+    ["rpm", "tpm", "rpd", "provider_429", "no_keys"].includes(
+      error.blocked_reason || "",
+    );
 }
 
 async function fetchWithTimeout(
@@ -426,7 +428,7 @@ function sharedGoogleQuotaBackend(
     async listActiveKeys(envNames: string[]) {
       const { data, error } = await service
         .from("google_ai_api_keys")
-        .select("id,env_var_name,priority")
+        .select("id,env_var_name,quota_scope,priority")
         .eq("is_active", true)
         .in("env_var_name", envNames)
         .order("priority", { ascending: true })
@@ -439,6 +441,7 @@ function sharedGoogleQuotaBackend(
       return (Array.isArray(data) ? data : []) as Array<{
         id: string;
         env_var_name: string;
+        quota_scope: string;
         priority?: number | null;
       }>;
     },
@@ -654,7 +657,9 @@ async function embedQuery(
     30000,
   );
   const errors: string[] = [];
+  const providerBlockedScopes = new Set<string>();
   for (const key of keys) {
+    if (providerBlockedScopes.has(key.quota_scope)) continue;
     try {
       const numericValues = await withSharedGoogleQuotaAttempt({
         backend: quotaBackend,
@@ -743,9 +748,20 @@ async function embedQuery(
     } catch (error) {
       const message = errorMessage(error).slice(0, 120);
       errors.push(`${key.limiter_env_name}:${message}`);
-      if (shouldTryNextSharedQuotaKey(error)) continue;
+      if (shouldTryNextSharedQuotaKey(error)) {
+        if (
+          error instanceof SharedGoogleQuotaError &&
+          error.blocked_reason === "provider_429"
+        ) {
+          providerBlockedScopes.add(key.quota_scope);
+        }
+        continue;
+      }
       if (error instanceof SharedGoogleQuotaError) throw error;
       if (error instanceof GoogleProviderAttemptError) {
+        if (Number(error.error_code) === 429) {
+          providerBlockedScopes.add(key.quota_scope);
+        }
         if (shouldTryNextGoogleKey(Number(error.error_code))) continue;
         throw error;
       }
@@ -1383,6 +1399,7 @@ async function llmVerify(
   const thinkingLevel = env("EVENT_SEARCH_LLM_THINKING_LEVEL", "MINIMAL");
 
   const attempts: LlmAttempt[] = [];
+  const providerBlockedScopesByModel = new Map<string, Set<string>>();
   let providerKeyCursor = 0;
   const runAttempt = async (
     model: string,
@@ -1397,8 +1414,12 @@ async function llmVerify(
       1,
       240000,
     );
+    const providerBlockedScopes = providerBlockedScopesByModel.get(model) ||
+      new Set<string>();
+    providerBlockedScopesByModel.set(model, providerBlockedScopes);
     for (let keyIndex = 0; keyIndex < llmKeys.length; keyIndex += 1) {
       const key = llmKeys[(providerKeyCursor + keyIndex) % llmKeys.length];
+      if (providerBlockedScopes.has(key.quota_scope)) continue;
       const startedAt = performance.now();
       try {
         const result = await withSharedGoogleQuotaAttempt({
@@ -1531,12 +1552,23 @@ async function llmVerify(
           compact_candidate_count: profile.compact_candidate_count,
           key_env: key.limiter_env_name,
         });
-        if (shouldTryNextSharedQuotaKey(error)) continue;
+        if (shouldTryNextSharedQuotaKey(error)) {
+          if (
+            error instanceof SharedGoogleQuotaError &&
+            error.blocked_reason === "provider_429"
+          ) {
+            providerBlockedScopes.add(key.quota_scope);
+          }
+          continue;
+        }
         if (error instanceof SharedGoogleQuotaError) return null;
         if (
           error instanceof GoogleProviderAttemptError &&
           shouldTryNextGoogleKey(Number(error.error_code))
         ) {
+          if (Number(error.error_code) === 429) {
+            providerBlockedScopes.add(key.quota_scope);
+          }
           continue;
         }
         if (

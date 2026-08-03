@@ -558,6 +558,8 @@ def build_runtime_secret_payload(args: argparse.Namespace) -> dict[str, str]:
         'PERSONALIZATION_SUPABASE_SECRET_KEY',
         'PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY',
         'PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY',
+        'GOOGLE_AI_LIMITER_SUPABASE_URL',
+        'GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY',
         # These are release gates, not credentials, but the Kaggle exporter and
         # Astro build both need the exact values selected by the Fly runtime.
         'ENABLE_INTEREST_CLUB_STATIC_PROJECTION',
@@ -573,6 +575,12 @@ def build_runtime_secret_payload(args: argparse.Namespace) -> dict[str, str]:
         missing.append(key_env)
     if args.sync_pgvector_vectors and not payload.get(embedding_key_env):
         missing.append(embedding_key_env)
+    if (args.gemma_related_verify or args.sync_pgvector_vectors) and not payload.get('GOOGLE_AI_LIMITER_SUPABASE_URL'):
+        missing.append('GOOGLE_AI_LIMITER_SUPABASE_URL')
+    if (
+        args.gemma_related_verify or args.sync_pgvector_vectors
+    ) and not payload.get('GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY'):
+        missing.append('GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY')
     if args.gemma_related_verify and not payload.get('SUPABASE_URL'):
         missing.append('SUPABASE_URL')
     if args.gemma_related_verify and not any(payload.get(name) for name in ('SUPABASE_SERVICE_KEY', 'SUPABASE_KEY', 'SUPABASE_SERVICE_ROLE_KEY')):

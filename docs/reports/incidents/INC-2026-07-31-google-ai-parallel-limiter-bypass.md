@@ -108,6 +108,26 @@ no Antigravity limiter bypass was found.
   Update. All observed calls contained consumer, key alias/env, quota scope,
   reservation and terminal metadata; KEY6 participated as a gateway lane, not
   as Smart Update-owned rotation.
+- 2026-08-03 — operator screenshots and live read-only reconciliation reopened
+  limiter acceptance. Active Fly release 1891 had all three local fallback
+  flags equal to `0`; its dedicated limiter URL hash matched the personalization
+  Supabase URL hash. A split ledger is therefore **not** the demonstrated cause
+  of current Fly traffic, contrary to the first external-audit hypothesis.
+- 2026-08-03 — live registry showed KEY1–5 conservatively grouped as
+  `google:unmapped-shared` and KEY6 in its operator-isolated scope. This is not
+  evidence that KEY1–5 belong to one Cloud project: it may over-throttle
+  distinct healthy projects, but does not over-admit them while grouped.
+- 2026-08-03 — attempt reconciliation found active defects: RPD used a UTC day
+  instead of Google's Pacific day; a logical provider-429 request could send on
+  as many as six key IDs without excluding sibling keys in the same
+  `quota_scope`; metadata lookup failure could widen a scoped lane; and
+  committed Telegram/Guide notebooks contained older embedded gateway code.
+  The Pacific-day count for Gemini 3.5/KEY3 was 95 sends and 94 successes,
+  closely matching the supplied dashboard.
+- 2026-08-03 — collections Gate E was reclassified. Its Gemini 3.1 `rpd` result
+  was an internal admission/routing blocker in a production-unfaithful replay:
+  Gemini 3.5 had separate headroom but was absent from that stage's model chain.
+  This was neither a semantic failure nor proof of external unavailability.
 
 ## Root Cause
 
@@ -132,6 +152,12 @@ no Antigravity limiter bypass was found.
    `2147483647` and RPD as `1500`, while the supplied dashboard showed
    `15000 TPM / 14000 RPD`. The limiter therefore could not stop the observed
    Gemma TPM overrun even when the RPC path itself was used.
+7. Daily admission used a UTC date although Gemini API daily quotas reset at
+   midnight Pacific Time. Near the boundary this can deny valid work too early
+   and admit a new UTC tranche before the provider reset.
+8. Provider-429 rotation excluded only the selected API-key row. Sibling keys
+   in the same Cloud-project `quota_scope` could receive duplicate physical
+   sends, and the provider result was not shared as a scope/model cooldown.
 
 ## Contributing Factors
 
@@ -235,6 +261,15 @@ no Antigravity limiter bypass was found.
 - Centralized ordinary key-pool ownership in `GoogleAIClient` through
   `GOOGLE_AI_NORMAL_KEY_ENVS`; reservation scans and provider-429 rotation are
   fail-fast and never sleep until a quota window resets.
+- Prepared the 2026-08-03 hardening: rolling 60-second RPM/TPM admission,
+  Pacific-day RPD, shared `quota_scope/model` provider-429 cooldown,
+  scope-aware rotation, fail-closed metadata resolution and remote
+  dedicated-ledger enforcement. Smart Update facts stages receive a bounded
+  3.1 Flash Lite → 3.5 Flash Lite → Gemma 4 model chain; unrelated writers do
+  not inherit it.
+- Regenerated Telegram/Guide notebooks from current gateway sources and made
+  the static audit reject stale embedded `client.py`/`limiter_supabase.py`
+  snapshots instead of trusting only the assignment name.
 
 ## Follow-up Actions
 
@@ -247,11 +282,24 @@ no Antigravity limiter bypass was found.
   after key → Google Cloud project evidence is available.
 - [ ] Deploy the runtime/Edge cutover from an `origin/main`-reachable SHA and
   distribute the dedicated limiter pair to every encrypted Kaggle payload.
-- [ ] Add static CI policy plus runtime alert for any successful provider call
-  lacking `api_key_id`, `minute_bucket` or `used_after`.
+- [x] Add static CI policy for unapproved provider paths and stale embedded
+  notebook gateways.
+- [ ] Add runtime alert for any successful provider call lacking `api_key_id`,
+  `minute_bucket` or `used_after`.
 - [ ] Reconcile or sweep stale/overreserved counters without refunding sent RPD.
+- [ ] Apply and verify
+  `20260803074500_google_ai_rolling_windows_pacific_rpd.sql`, deploy Edge/Fly
+  from an `origin/main`-reachable SHA, and perform a no-extra-probe bounded
+  attempt/429 reconciliation.
+- [ ] Repeat the two immutable collections Gate-E packets only after the
+  limiter release; do not recapture or retune facts-v3 prompts.
 
 ## Release And Closure Evidence
+
+The evidence below describes the 2026-07-31 cutover and does **not** close the
+new 2026-08-03 acceptance findings. Incident status remains `open` until the
+new migration/runtime changes are main-reachable and the real key → Cloud
+project inventory plus bounded production reconciliation are recorded.
 
 - limiter deployed SHA: `6775815d` (introduced in Fly release 1823; included in
   active release 1833 / SHA `e39d536a` through current `origin/main` ancestry)
