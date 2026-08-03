@@ -43,6 +43,18 @@ returning state and redaction PASS. The iOS receipt additionally proves the
 search-choice dialog was observed and dismissed exactly once and all control/product
 email/numeric keyboards passed.
 
+The reciprocal fault preview SHA
+`592ffb2d5a68615b65481ee1acea65b728af8d8d` has terminal
+`client_yandex_relay_unreachable` PASS receipts for Android
+[30772957771](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30772957771)
+and iOS
+[30773125445](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30773125445).
+Both artifacts again prove one mail and exact `1/1/1`, registration `200`,
+membership + returning state and redaction PASS, while issue, verify and
+registration each have one `direct` final outcome and no relay outcome. Thus
+both one-client-route-down directions are closed on both mobile platforms;
+the both-routes-down/no-mail degraded cell remains separate.
+
 The same scenario now has an explicit transport contract and immutable
 build-time fault profiles. The first faulted mobile release cell is
 `client_supabase_direct_unreachable`: direct Supabase probes are rejected

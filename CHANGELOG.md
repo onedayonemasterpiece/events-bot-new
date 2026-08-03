@@ -36,6 +36,11 @@
   `client_yandex_relay_unreachable`, issue, verify and registration must each
   have exactly one direct outcome and no relay outcome. The assertion is shared
   and unit-tested symmetrically with the existing direct-outage gate.
+- Recorded terminal relay-outage Android run `30772957771` and iOS run
+  `30773125445`. Both exact-SHA artifacts prove one mail and `1/1/1`, direct
+  routes for all mandatory operations, active relay faults, registration `200`,
+  returning membership and redaction PASS, closing both single-route-down
+  directions across both mobile platforms.
 
 - Changed iOS Safari OTP preflight to create a native-first Safari session,
   enable XCUITest `respectSystemAlerts`, close the bounded first-run sheet, and

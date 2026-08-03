@@ -212,6 +212,8 @@ scenarios:
       ios_blocked_safari_first_run_ui: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30754894934
       android_client_supabase_direct_unreachable: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30772062840
       ios_client_supabase_direct_unreachable: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30772233868
+      android_client_yandex_relay_unreachable: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30772957771
+      ios_client_yandex_relay_unreachable: https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30773125445
     blocking:
       pull_request: direct_contract_change_only
       release: true_for_auth_onboarding_or_mail_route_changes
