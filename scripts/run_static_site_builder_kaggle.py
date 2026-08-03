@@ -37,6 +37,9 @@ from static_site_release import (
     static_site_scratch_root,
 )
 KERNEL_SRC = ROOT / 'kaggle' / 'StaticSiteBuilder'
+SITE_SOURCE_REPO_CONTRACTS = (
+    Path('docs/testing/transport-fault-profiles.v1.yml'),
+)
 SITE_SRC = ROOT / 'site'
 ARTIFACT_ROOT = static_site_artifact_root(ROOT)
 SCRATCH_ROOT = static_site_scratch_root(ARTIFACT_ROOT)
@@ -385,6 +388,16 @@ def tar_site_source(site_dir: Path, archive_path: Path) -> None:
 
     with tarfile.open(archive_path, 'w:gz') as tar:
         tar.add(site_dir, arcname='site', filter=tar_filter)
+        # Build scripts execute from ``site/`` but some shared release
+        # contracts intentionally live at the repository root. Kaggle only
+        # receives this archive, so include those exact, non-secret contracts
+        # at their repository-relative paths instead of relying on the local
+        # checkout.
+        for relative_path in SITE_SOURCE_REPO_CONTRACTS:
+            source_path = ROOT / relative_path
+            if not source_path.is_file():
+                raise FileNotFoundError(source_path)
+            tar.add(source_path, arcname=relative_path.as_posix(), filter=tar_filter)
 
 
 def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:

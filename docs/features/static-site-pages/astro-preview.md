@@ -641,6 +641,9 @@ Contract:
 
 - input data is a unique per-run private Kaggle dataset, matching the CherryFlash/session-dataset pattern;
 - the site source is uploaded as `site_source.tarball` (gzip tar content with a neutral extension) because Kaggle dataset ingestion auto-extracts `.tar.gz` and can break Astro dynamic route filenames;
+- the bundle also carries the exact repo-level
+  `docs/testing/transport-fault-profiles.v1.yml` contract resolved by preview
+  scripts as a sibling of `site/`; staging fails closed if it is missing;
 - the kernel extracts the site to `/tmp/kenigevents-static-site`, not read-only `/kaggle/src`;
 - Kaggle CPU currently provides Node 20, while Astro 6 requires Node `>=22.12.0`, so the kernel installs local `node@22.12.0` before build/check;
 - output is intentionally minimal: `<build_id>.tar.gz`, `static_site_build_result.json`, and the kernel log; `node_modules` is not left under `/kaggle/working`;

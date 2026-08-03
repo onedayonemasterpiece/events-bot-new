@@ -10,6 +10,9 @@
   remain blocked. The replay report now distinguishes an explicitly bounded
   Telegram/VK prose-only warm drift from collection-plane changes, while still
   requiring identical collection receipts/evidence and product output.
+- Fixed StaticSiteBuilder Kaggle source packaging to carry the repo-level
+  transport-fault profile consumed by preview builds; staging now fails closed
+  instead of starting a remote build with that contract missing.
 
 - Fixed the Google AI registry after operator confirmation that all six API
   keys belong to different Google Cloud projects: each key now has an

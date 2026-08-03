@@ -5,10 +5,33 @@ import sys
 import json
 import importlib.util
 import sqlite3
+import tarfile
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
+
+def test_kaggle_site_source_bundle_includes_repo_level_transport_contract(
+    tmp_path: Path,
+) -> None:
+    from scripts import run_static_site_builder_kaggle as runner
+
+    site_dir = tmp_path / "site"
+    site_dir.mkdir()
+    (site_dir / "package.json").write_text("{}\n", encoding="utf-8")
+    archive = tmp_path / "site_source.tarball"
+
+    runner.tar_site_source(site_dir, archive)
+
+    with tarfile.open(archive, "r:gz") as bundle:
+        names = set(bundle.getnames())
+        contract = bundle.extractfile(
+            "docs/testing/transport-fault-profiles.v1.yml"
+        )
+        assert "site/package.json" in names
+        assert contract is not None
+        assert b"static_site_transport_fault_profiles.v1" in contract.read()
 
 
 def _arg_after(cmd: list[str], name: str) -> str:
