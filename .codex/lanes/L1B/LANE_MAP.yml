@@ -39,4 +39,4 @@ lanes:
       - docs/routes.yml
     expected_output: committed schema, cutover reader/writer, regression tests, and RESULTS.md
     verification_scope: full_local
-    status: planned
+    status: committed
