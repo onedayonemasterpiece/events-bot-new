@@ -3,7 +3,7 @@ name: Smart Search apply implementation patch
 on:
   push:
     branches: [integration/smart-search-live-e2e-20260803]
-    paths: [.github/smart-search-implementation.patch]
+    paths: [.github/smart-search-patch/ZZ-APPLY]
 
 permissions:
   contents: write
@@ -23,10 +23,11 @@ jobs:
       - name: Apply reviewed implementation patch and remove one-shot scaffolding
         run: |
           set -euo pipefail
-          git apply --check .github/smart-search-implementation.patch
-          git apply .github/smart-search-implementation.patch
-          rm -f \
-            .github/smart-search-implementation.patch \
+          cat .github/smart-search-patch/*.part > "${RUNNER_TEMP}/smart-search-implementation.patch"
+          git apply --check "${RUNNER_TEMP}/smart-search-implementation.patch"
+          git apply "${RUNNER_TEMP}/smart-search-implementation.patch"
+          rm -rf \
+            .github/smart-search-patch \
             .github/workflows/smart-search-source-export.yml \
             .github/workflows/smart-search-apply-patch.yml
           git config user.name 'codex-agent'
