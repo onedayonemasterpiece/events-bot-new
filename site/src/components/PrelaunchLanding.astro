@@ -1,0 +1,652 @@
+---
+import { withBase } from '../lib/events';
+
+const PRELAUNCH_LAUNCH_DATE = '2026-09-01';
+const veilPattern = [
+  .12, .54, .28, .7, .18, .43,
+  .62, .2, .47, .1, .74, .32,
+  .24, .66, .14, .5, .36, .78,
+  .57, .16, .72, .3, .09, .45,
+  .19, .63, .39, .76, .22, .52,
+  .68, .26, .48, .11, .6, .34,
+];
+const tiles = veilPattern.map((veil, index) => ({
+  veil,
+  speed: 2.8 + ((index * 17) % 23) / 10,
+  delay: -((index * 13) % 31) / 10,
+  blur: index % 5 === 0 ? 1.8 : index % 3 === 0 ? .8 : 0,
+}));
+---
+<main id="main" class="prelaunch" data-home-page data-prelaunch-page data-launch-date={PRELAUNCH_LAUNCH_DATE}>
+  <div class="prelaunch__halo prelaunch__halo--one" aria-hidden="true"></div>
+  <div class="prelaunch__halo prelaunch__halo--two" aria-hidden="true"></div>
+
+  <section class="prelaunch__shell" aria-labelledby="prelaunch-title">
+    <div class="prelaunch__copy">
+      <div class="prelaunch__brandline">
+        <span class="prelaunch__brandmark" aria-hidden="true"></span>
+        <span>Полюбить Калининград Анонсы</span>
+      </div>
+
+      <p class="prelaunch__date">
+        <span class="prelaunch__date-label">Открытие</span>
+        <time datetime="2026-09-01">1 сентября 2026</time>
+      </p>
+
+      <h1 id="prelaunch-title">События региона — ближе к вашим интересам.</h1>
+
+      <p class="prelaunch__lead">
+        1 сентября откроется персонализированный сервис анонсов и навигатор по культурным и просветительским событиям Калининградской области.
+      </p>
+      <p class="prelaunch__support">
+        Он поможет не просматривать всё подряд, а быстрее находить события, которые подходят именно вам. Сейчас сервис проходит финальное тестирование вместе с фокус-группой.
+      </p>
+
+      <section class="prelaunch__notify" aria-labelledby="notify-title">
+        <div class="prelaunch__notify-heading">
+          <div>
+            <p class="prelaunch__notify-kicker">Одно письмо. Только по делу.</p>
+            <h2 id="notify-title">Сообщить о запуске</h2>
+          </div>
+          <span class="prelaunch__notify-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" role="img">
+              <path d="M4.5 6.5h15v11h-15z" fill="none" stroke="currentColor" stroke-width="1.5" />
+              <path d="m5.3 7.3 6.7 5.1 6.7-5.1" fill="none" stroke="currentColor" stroke-width="1.5" />
+            </svg>
+          </span>
+        </div>
+        <p class="prelaunch__notify-copy">Оставьте email — 1 сентября отправим письмо со ссылкой на сервис.</p>
+
+        <form class="prelaunch-form" data-prelaunch-form novalidate>
+          <div class="prelaunch-form__row">
+            <label class="prelaunch-form__field">
+              <span>Email</span>
+              <input
+                type="email"
+                name="email"
+                inputmode="email"
+                autocomplete="email"
+                maxlength="254"
+                placeholder="name@example.ru"
+                aria-describedby="prelaunch-consent prelaunch-status"
+                required
+              />
+            </label>
+            <button type="submit" data-prelaunch-submit>
+              <span data-prelaunch-submit-label>Напомнить мне</span>
+              <span class="prelaunch-form__arrow" aria-hidden="true">↗</span>
+            </button>
+          </div>
+
+          <label class="prelaunch-form__consent" id="prelaunch-consent">
+            <input type="checkbox" name="consent" required />
+            <span>Согласен получить одно письмо о запуске. Email будет использован только для этого уведомления.</span>
+          </label>
+
+          <label class="prelaunch-form__trap" aria-hidden="true">
+            <span>Ваш сайт</span>
+            <input type="text" name="website" tabindex="-1" autocomplete="off" />
+          </label>
+
+          <p class="prelaunch-form__status" id="prelaunch-status" data-prelaunch-status role="status" aria-live="polite"></p>
+          <noscript><p class="prelaunch-form__noscript">Для отправки формы нужен JavaScript.</p></noscript>
+        </form>
+      </section>
+    </div>
+
+    <figure class="prelaunch__visual">
+      <div class="prelaunch__frame">
+        <img
+          src={withBase('/assets/pwa/announcements-brand-v2-512.png')}
+          width="512"
+          height="512"
+          alt="Логотип «Полюбить Калининград Анонсы»"
+          decoding="async"
+          fetchpriority="high"
+        />
+        <div class="prelaunch__mosaic" aria-hidden="true" data-prelaunch-mosaic>
+          {tiles.map((tile, index) => (
+            <span
+              class="prelaunch__tile"
+              data-prelaunch-tile
+              data-index={index}
+              style={`--veil:${tile.veil};--speed:${tile.speed}s;--delay:${tile.delay}s;--blur:${tile.blur}px;`}
+            ></span>
+          ))}
+        </div>
+        <div class="prelaunch__frame-light" aria-hidden="true"></div>
+      </div>
+      <figcaption>
+        <span>Персональная афиша</span>
+        <span aria-hidden="true">·</span>
+        <span>Калининградская область</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <footer class="prelaunch__footer">
+    <span>Культурные и просветительские события региона</span>
+    <span class="prelaunch__footer-rule" aria-hidden="true"></span>
+    <time datetime="2026-09-01">Запуск 01.09.2026</time>
+  </footer>
+</main>
+
+<script>
+  import { getResilientDataClient } from '../lib/resilientDataClient';
+  import { parseSupabaseTransportError } from '../lib/resilientSupabaseTransport';
+
+  const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const tiles = Array.from(document.querySelectorAll<HTMLElement>('[data-prelaunch-tile]'));
+  let mosaicTimer = 0;
+
+  const randomBetween = (minimum: number, maximum: number) => minimum + Math.random() * (maximum - minimum);
+
+  function stopMosaic(): void {
+    if (!mosaicTimer) return;
+    window.clearTimeout(mosaicTimer);
+    mosaicTimer = 0;
+  }
+
+  function scheduleMosaic(): void {
+    stopMosaic();
+    if (motionQuery.matches || document.hidden || tiles.length === 0) return;
+    mosaicTimer = window.setTimeout(() => {
+      const changes = Math.max(2, Math.floor(randomBetween(2, 7)));
+      const candidates = [...tiles].sort(() => Math.random() - .5).slice(0, changes);
+      for (const tile of candidates) {
+        const current = Number.parseFloat(tile.style.getPropertyValue('--veil')) || .4;
+        const next = current > .55 ? randomBetween(.07, .42) : randomBetween(.38, .79);
+        tile.style.setProperty('--veil', next.toFixed(3));
+        tile.style.setProperty('--blur', `${randomBetween(0, 2.2).toFixed(2)}px`);
+        tile.style.setProperty('--shine', randomBetween(0, .11).toFixed(3));
+        tile.style.setProperty('--speed', `${randomBetween(2.7, 5.8).toFixed(2)}s`);
+      }
+      scheduleMosaic();
+    }, randomBetween(1150, 2500));
+  }
+
+  document.addEventListener('visibilitychange', scheduleMosaic);
+  motionQuery.addEventListener?.('change', scheduleMosaic);
+  scheduleMosaic();
+
+  const form = document.querySelector<HTMLFormElement>('[data-prelaunch-form]');
+  const status = document.querySelector<HTMLElement>('[data-prelaunch-status]');
+  const submit = document.querySelector<HTMLButtonElement>('[data-prelaunch-submit]');
+  const submitLabel = document.querySelector<HTMLElement>('[data-prelaunch-submit-label]');
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
+
+  function announce(kind: 'idle' | 'success' | 'error', message: string): void {
+    if (!status) return;
+    status.dataset.kind = kind;
+    status.textContent = message;
+  }
+
+  function setSubmitting(active: boolean): void {
+    if (!submit || !submitLabel) return;
+    submit.disabled = active;
+    submit.setAttribute('aria-busy', String(active));
+    submitLabel.textContent = active ? 'Сохраняем…' : 'Напомнить мне';
+  }
+
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    announce('idle', '');
+
+    const data = new FormData(form);
+    const email = String(data.get('email') || '').trim().toLocaleLowerCase('ru-RU');
+    const consent = data.get('consent') === 'on';
+    const website = String(data.get('website') || '').trim();
+    const emailInput = form.elements.namedItem('email') as HTMLInputElement | null;
+    const consentInput = form.elements.namedItem('consent') as HTMLInputElement | null;
+
+    if (!email || email.length > 254 || !emailPattern.test(email)) {
+      announce('error', 'Проверьте адрес электронной почты.');
+      emailInput?.focus();
+      return;
+    }
+    if (!consent) {
+      announce('error', 'Подтвердите согласие на одно письмо о запуске.');
+      consentInput?.focus();
+      return;
+    }
+
+    const directUrl = String(import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
+    const relayUrl = String(import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || '').replace(/\/+$/u, '');
+    const publishableKey = String(import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '');
+    if (!directUrl || !publishableKey) {
+      announce('error', 'Форма временно недоступна. Попробуйте ещё раз немного позже.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const client = getResilientDataClient({
+        directUrl,
+        relayUrl,
+        publishableKey,
+        routeCacheNamespace: 'prelaunch-notification-v1',
+      });
+      const response = await client.request(
+        `${directUrl}/rest/v1/rpc/register_prelaunch_notification_v1`,
+        {
+          method: 'POST',
+          cache: 'no-store',
+          credentials: 'omit',
+          headers: {
+            apikey: publishableKey,
+            Authorization: `Bearer ${publishableKey}`,
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            p_email: email,
+            p_source: 'prelaunch_home',
+            p_consent_version: 'launch-2026-09-01-v1',
+            p_website: website,
+          }),
+        },
+      );
+      const payload = await response.json().catch(() => null) as { accepted?: boolean; status?: string } | null;
+      if (!response.ok) throw new Error(`prelaunch_signup_http_${response.status}`);
+      if (!payload || payload.accepted !== true) {
+        throw new Error(payload?.status === 'daily_capacity_reached'
+          ? 'prelaunch_signup_capacity'
+          : 'prelaunch_signup_rejected');
+      }
+      form.reset();
+      try { window.localStorage.setItem('ke_prelaunch_notification_v1', 'registered'); } catch { /* UX hint only. */ }
+      announce('success', 'Готово. 1 сентября отправим одно письмо со ссылкой на сервис.');
+    } catch (error) {
+      const transport = parseSupabaseTransportError(error);
+      if (transport?.code === 'ambiguous') {
+        announce('error', 'Связь прервалась. Повторите отправку — второй записи не появится.');
+      } else if (String((error as Error)?.message || '').includes('capacity')) {
+        announce('error', 'Сейчас слишком много запросов. Попробуйте ещё раз позже.');
+      } else {
+        announce('error', 'Не удалось сохранить email. Проверьте соединение и повторите отправку.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  });
+</script>
+
+<style>
+  .prelaunch {
+    position: relative;
+    isolation: isolate;
+    min-height: 100vh;
+    padding: clamp(1rem, 2vw, 1.75rem) clamp(1rem, 4vw, 4.5rem) 1.25rem;
+    display: grid;
+    grid-template-rows: 1fr auto;
+    overflow: hidden;
+  }
+  .prelaunch__halo {
+    position: absolute;
+    z-index: -1;
+    width: 42rem;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    filter: blur(85px);
+    opacity: .16;
+    pointer-events: none;
+  }
+  .prelaunch__halo--one { right: -15rem; top: -16rem; background: #ba7244; }
+  .prelaunch__halo--two { left: -22rem; bottom: -22rem; background: #4c7565; }
+
+  .prelaunch__shell {
+    width: min(1260px, 100%);
+    margin: auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1.02fr) minmax(360px, .98fr);
+    align-items: center;
+    gap: clamp(3rem, 7vw, 7.5rem);
+    padding-block: clamp(2.25rem, 8vh, 7rem);
+  }
+  .prelaunch__copy { max-width: 42rem; }
+  .prelaunch__brandline {
+    display: inline-flex;
+    align-items: center;
+    gap: .72rem;
+    margin-bottom: clamp(2.6rem, 6vh, 5.5rem);
+    color: rgba(245, 239, 230, .78);
+    font-size: .74rem;
+    font-weight: 650;
+    letter-spacing: .16em;
+    line-height: 1.3;
+    text-transform: uppercase;
+  }
+  .prelaunch__brandmark {
+    width: .7rem;
+    aspect-ratio: 1;
+    border: 1px solid rgba(240, 200, 158, .72);
+    background: rgba(215, 160, 106, .14);
+    box-shadow: 0 0 24px rgba(215,160,106,.23);
+  }
+  .prelaunch__date {
+    display: inline-flex;
+    align-items: center;
+    gap: .8rem;
+    margin: 0 0 1.5rem;
+    padding: .45rem .72rem .45rem .48rem;
+    border: 1px solid var(--prelaunch-line);
+    border-radius: 999px;
+    background: rgba(255,255,255,.025);
+    color: var(--prelaunch-copper-soft);
+    font-size: .76rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    box-shadow: inset 0 1px rgba(255,255,255,.045);
+  }
+  .prelaunch__date-label {
+    padding: .28rem .55rem;
+    border-radius: 999px;
+    background: rgba(215,160,106,.14);
+    color: #f7ddc1;
+  }
+  .prelaunch h1 {
+    max-width: 13ch;
+    margin: 0;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(3.05rem, 6.3vw, 6.65rem);
+    font-weight: 400;
+    line-height: .94;
+    letter-spacing: -.052em;
+    text-wrap: balance;
+  }
+  .prelaunch__lead {
+    max-width: 38rem;
+    margin: clamp(1.8rem, 4vh, 2.8rem) 0 0;
+    color: #ebe3d8;
+    font-size: clamp(1.08rem, 1.55vw, 1.34rem);
+    line-height: 1.58;
+    text-wrap: pretty;
+  }
+  .prelaunch__support {
+    max-width: 38rem;
+    margin: .9rem 0 0;
+    color: var(--prelaunch-muted);
+    font-size: .98rem;
+    line-height: 1.68;
+    text-wrap: pretty;
+  }
+
+  .prelaunch__notify {
+    max-width: 39rem;
+    margin-top: clamp(2rem, 4.8vh, 3.25rem);
+    padding: clamp(1.15rem, 2.4vw, 1.65rem);
+    border: 1px solid var(--prelaunch-line);
+    border-radius: 1.4rem;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,.052), rgba(255,255,255,.018)),
+      var(--prelaunch-surface);
+    box-shadow: 0 24px 70px rgba(0,0,0,.24), inset 0 1px rgba(255,255,255,.05);
+    backdrop-filter: blur(22px) saturate(115%);
+  }
+  .prelaunch__notify-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .prelaunch__notify-kicker {
+    margin: 0 0 .25rem;
+    color: var(--prelaunch-copper-soft);
+    font-size: .69rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+  .prelaunch__notify h2 {
+    margin: 0;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(1.45rem, 2.3vw, 2rem);
+    font-weight: 400;
+    letter-spacing: -.025em;
+  }
+  .prelaunch__notify-icon {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    aspect-ratio: 1;
+    border: 1px solid var(--prelaunch-line);
+    border-radius: 50%;
+    color: var(--prelaunch-copper-soft);
+  }
+  .prelaunch__notify-icon svg { width: 1.15rem; }
+  .prelaunch__notify-copy {
+    margin: .55rem 0 1.05rem;
+    color: var(--prelaunch-muted);
+    font-size: .9rem;
+  }
+  .prelaunch-form__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: .65rem;
+  }
+  .prelaunch-form__field {
+    display: grid;
+    gap: .38rem;
+    min-width: 0;
+  }
+  .prelaunch-form__field > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .prelaunch-form input[type="email"] {
+    width: 100%;
+    min-height: 3.25rem;
+    padding: .75rem 1rem;
+    border: 1px solid rgba(239,223,201,.22);
+    border-radius: .82rem;
+    background: rgba(4,8,7,.56);
+    color: var(--prelaunch-text);
+    caret-color: var(--prelaunch-copper-soft);
+    box-shadow: inset 0 1px 8px rgba(0,0,0,.13);
+  }
+  .prelaunch-form input[type="email"]::placeholder { color: rgba(187,181,170,.55); }
+  .prelaunch-form input[type="email"]:focus { border-color: rgba(240,200,158,.62); outline: none; }
+  .prelaunch-form button {
+    min-height: 3.25rem;
+    padding: .75rem 1.05rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .8rem;
+    border: 0;
+    border-radius: .82rem;
+    background: linear-gradient(135deg, #efd0ad, #c98c55);
+    color: #21150d;
+    font-size: .88rem;
+    font-weight: 760;
+    cursor: pointer;
+    box-shadow: 0 12px 32px rgba(198,132,75,.19), inset 0 1px rgba(255,255,255,.45);
+    transition: transform .2s ease, filter .2s ease, box-shadow .2s ease;
+  }
+  .prelaunch-form button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+    box-shadow: 0 16px 36px rgba(198,132,75,.26), inset 0 1px rgba(255,255,255,.5);
+  }
+  .prelaunch-form button:disabled { cursor: progress; opacity: .72; }
+  .prelaunch-form__arrow { font-size: 1.05rem; line-height: 1; }
+  .prelaunch-form__consent {
+    display: grid;
+    grid-template-columns: 1rem 1fr;
+    align-items: start;
+    gap: .58rem;
+    margin-top: .8rem;
+    color: rgba(187,181,170,.82);
+    font-size: .72rem;
+    line-height: 1.48;
+    cursor: pointer;
+  }
+  .prelaunch-form__consent input {
+    width: .95rem;
+    height: .95rem;
+    margin: .14rem 0 0;
+    accent-color: var(--prelaunch-copper);
+  }
+  .prelaunch-form__trap {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0,0,0,0) !important;
+    white-space: nowrap !important;
+  }
+  .prelaunch-form__status,
+  .prelaunch-form__noscript {
+    min-height: 1.35rem;
+    margin: .7rem 0 0;
+    font-size: .78rem;
+    line-height: 1.45;
+  }
+  .prelaunch-form__status:empty { margin-top: 0; min-height: 0; }
+  .prelaunch-form__status[data-kind="success"] { color: var(--prelaunch-success); }
+  .prelaunch-form__status[data-kind="error"],
+  .prelaunch-form__noscript { color: var(--prelaunch-error); }
+
+  .prelaunch__visual {
+    position: relative;
+    width: min(100%, 38rem);
+    margin: 0;
+    justify-self: end;
+  }
+  .prelaunch__frame {
+    position: relative;
+    aspect-ratio: 1;
+    overflow: hidden;
+    border: 1px solid rgba(239,223,201,.18);
+    border-radius: clamp(1.2rem, 3vw, 2.5rem);
+    background: #130e0b;
+    box-shadow:
+      0 44px 100px rgba(0,0,0,.47),
+      0 0 0 10px rgba(255,255,255,.012),
+      inset 0 1px rgba(255,255,255,.12);
+    transform: rotate(.65deg);
+  }
+  .prelaunch__frame > img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scale(1.012);
+    filter: saturate(.86) contrast(1.04) brightness(.88);
+  }
+  .prelaunch__mosaic {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    grid-template-rows: repeat(6, 1fr);
+  }
+  .prelaunch__tile {
+    --shine: 0;
+    position: relative;
+    border-right: 1px solid rgba(255,255,255,.045);
+    border-bottom: 1px solid rgba(255,255,255,.04);
+    background:
+      radial-gradient(circle at 32% 22%, rgba(255,227,194,var(--shine)), transparent 65%),
+      rgba(7, 13, 12, var(--veil));
+    backdrop-filter: blur(var(--blur)) saturate(.78);
+    box-shadow: inset 0 0 24px rgba(0,0,0,.07);
+    transition:
+      background-color var(--speed) cubic-bezier(.45,0,.25,1) var(--delay),
+      backdrop-filter var(--speed) cubic-bezier(.45,0,.25,1) var(--delay),
+      box-shadow var(--speed) cubic-bezier(.45,0,.25,1) var(--delay);
+    will-change: background-color, backdrop-filter;
+  }
+  .prelaunch__frame-light {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(122deg, rgba(255,255,255,.1), transparent 21%, transparent 73%, rgba(218,165,111,.07)),
+      radial-gradient(circle at 62% 15%, rgba(255,226,195,.09), transparent 28%);
+    mix-blend-mode: screen;
+  }
+  .prelaunch__visual::before {
+    content: "";
+    position: absolute;
+    inset: 12% -5% -7% 18%;
+    z-index: -1;
+    border-radius: 42%;
+    background: rgba(190,124,71,.15);
+    filter: blur(54px);
+  }
+  .prelaunch__visual figcaption {
+    display: flex;
+    justify-content: center;
+    gap: .55rem;
+    margin-top: 1.05rem;
+    color: rgba(187,181,170,.6);
+    font-size: .68rem;
+    font-weight: 650;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+
+  .prelaunch__footer {
+    width: min(1260px, 100%);
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    color: rgba(187,181,170,.53);
+    font-size: .66rem;
+    font-weight: 650;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+  }
+  .prelaunch__footer-rule { flex: 1; height: 1px; background: rgba(239,223,201,.1); }
+
+  @media (max-width: 960px) {
+    .prelaunch { padding-inline: clamp(1rem, 5vw, 2.5rem); }
+    .prelaunch__shell {
+      grid-template-columns: 1fr;
+      gap: 3.2rem;
+      padding-block: 3rem 2.5rem;
+    }
+    .prelaunch__copy { max-width: 47rem; }
+    .prelaunch__brandline { margin-bottom: 3rem; }
+    .prelaunch h1 { max-width: 12ch; font-size: clamp(3.4rem, 10vw, 6.4rem); }
+    .prelaunch__visual { width: min(88vw, 36rem); justify-self: center; }
+  }
+
+  @media (max-width: 620px) {
+    .prelaunch { min-height: auto; padding: .85rem .85rem 1rem; }
+    .prelaunch__shell { padding-block: 1.5rem 2rem; gap: 2.4rem; }
+    .prelaunch__brandline {
+      margin-bottom: 2.4rem;
+      font-size: .63rem;
+      letter-spacing: .12em;
+    }
+    .prelaunch__date { margin-bottom: 1.1rem; font-size: .67rem; }
+    .prelaunch h1 { max-width: 11ch; font-size: clamp(3rem, 16vw, 4.5rem); line-height: .95; }
+    .prelaunch__lead { margin-top: 1.45rem; font-size: 1rem; line-height: 1.54; }
+    .prelaunch__support { font-size: .9rem; line-height: 1.6; }
+    .prelaunch__notify { margin-top: 1.8rem; padding: 1rem; border-radius: 1.15rem; }
+    .prelaunch-form__row { grid-template-columns: 1fr; }
+    .prelaunch-form button { width: 100%; }
+    .prelaunch__visual { width: min(100%, 31rem); }
+    .prelaunch__frame { border-radius: 1.45rem; transform: none; }
+    .prelaunch__visual figcaption { flex-wrap: wrap; font-size: .58rem; letter-spacing: .08em; }
+    .prelaunch__footer { align-items: flex-start; flex-direction: column; gap: .45rem; line-height: 1.5; }
+    .prelaunch__footer-rule { width: 100%; flex: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .prelaunch__tile,
+    .prelaunch-form button { transition: none; }
+    .prelaunch__frame { transform: none; }
+  }
+</style>
