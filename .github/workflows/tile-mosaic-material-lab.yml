@@ -1,0 +1,442 @@
+name: Tile mosaic material lab
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_url:
+        description: Optional arbitrary HTTP(S) source for the direct-input smoke. The golden Kaliningrad source is still reproduced separately.
+        required: false
+        default: ""
+      expected_source_sha256:
+        description: Optional SHA-256 gate for source_url
+        required: false
+        default: ""
+      focal_x:
+        description: Horizontal focal point for the arbitrary-input smoke, 0..1
+        required: true
+        default: "0.50"
+      focal_y:
+        description: Vertical focal point for the arbitrary-input smoke, 0..1
+        required: true
+        default: "0.50"
+      blender_engine:
+        description: Blender renderer for the physical Reference Balanced specimen
+        required: true
+        type: choice
+        options: [eevee, cycles]
+        default: eevee
+  pull_request:
+    branches:
+      - feature/static-launch-tile-mosaic-20260803
+    paths:
+      - .github/workflows/tile-mosaic-material-lab.yml
+      - tools/tile_mosaic/**
+      - tests/test_tile_mosaic_*.py
+      - docs/features/static-site-pages/tile-mosaic-material-generator.md
+      - docs/review-data/tile-mosaic-material-lab/**
+
+# Same-repository PRs may publish deterministic review evidence back to their
+# own laboratory branch. The commit step is guarded and becomes a no-op once
+# byte-identical outputs are present.
+permissions:
+  contents: write
+
+concurrency:
+  group: tile-mosaic-material-lab-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  PILLOW_VERSION: "12.2.0"
+  BLENDER_VERSION: "4.0.2"
+  BLENDER_ARCHIVE: blender-4.0.2-linux-x64.tar.xz
+  BLENDER_SHA256: 5583a5588736da8858c522ef17fff5d73be59c47a6fe91ad29c6f3263e22086a
+  REVIEW_DIR: docs/review-data/tile-mosaic-material-lab/v1
+  # Manifest timestamps are review-contract data, not wall-clock state.
+  SOURCE_DATE_EPOCH: "1785783046"
+  GOLDEN_SOURCE_URL: https://yantarbereg.ru/upload/iblock/fd6/fd602200e983ca21b625d4e377a5fe25.jpg
+  GOLDEN_SOURCE_FALLBACK_URL: https://ssko.ru/upload/iblock/cba/%D0%9D%D0%B0%D0%B1%D0%B5%D1%80%D0%B5%D0%B6%D0%BD%D0%B0%D1%8F.jpg
+  GOLDEN_SOURCE_SHA256: cd4dd11f40599a6109494a49bfd33a1b9a4f62f4e7e7518d5808e5dc77e5f1e8
+  GOLDEN_KAFEL_SHA256: f30f78c0b585de4022ca35758a89bc7d643cf224212fd3a67b47170611ea71e7
+  GOLDEN_REFERENCE_BALANCED_SHA256: 15cfd193c71982b379b24ae4a0aea0167fa5d94b4de87bc55d7fe845076f7e4f
+  GOLDEN_MATTE_SOFT_SHA256: 16ab281233e2cf46bd969284d599c1cc3dce6b2dc53d17d6ce670cdf07c34357
+  GOLDEN_MICROTILT_SHA256: f4d6dcf2e8bb04492a4c0fd17b9412df648aada88d6582de9cce67858f5526e0
+  GOLDEN_CONTACT_SHEET_SHA256: b81bb7818cba4fa1389cc99c185724349fd0b81b0b8c28bd9f874dd6191ec09a
+
+jobs:
+  unit-golden-and-direct:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    outputs:
+      physical-source-available: ${{ steps.golden-source.outputs.physical_source_available }}
+
+    steps:
+      - name: Checkout exact laboratory branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install pinned renderer dependency
+        run: python -m pip install --disable-pip-version-check "Pillow==${PILLOW_VERSION}"
+
+      - name: Compile and unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q tools/tile_mosaic tests/test_tile_mosaic_*.py
+          python -m unittest discover -s tests -p 'test_tile_mosaic_*.py' -v
+
+      - name: Download bounded golden-source candidates
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/source-candidates
+          : > artifacts/source-candidates/download-ledger.tsv
+
+          download_candidate() {
+            local index="$1"
+            local url="$2"
+            local destination="artifacts/source-candidates/${index}.jpg"
+            local status="failed"
+            for transport in curl wget; do
+              rm -f "${destination}"
+              if [[ "${transport}" == "curl" ]]; then
+                if curl --fail --location --http1.1 --compressed \
+                  --connect-timeout 20 --max-time 120 \
+                  --retry 5 --retry-delay 3 --retry-all-errors \
+                  --header 'User-Agent: Mozilla/5.0 (events-bot tile-mosaic material lab)' \
+                  --header 'Accept: image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8' \
+                  --header 'Referer: https://yantarbereg.ru/' \
+                  "${url}" --output "${destination}"; then
+                  status="curl"
+                  break
+                fi
+              else
+                if wget --quiet --timeout=120 --tries=4 \
+                  --user-agent='Mozilla/5.0 (events-bot tile-mosaic material lab)' \
+                  --referer='https://yantarbereg.ru/' \
+                  --output-document="${destination}" "${url}"; then
+                  status="wget"
+                  break
+                fi
+              fi
+            done
+            if [[ -s "${destination}" ]]; then
+              python -c 'from pathlib import Path; import sys; from PIL import Image, ImageOps; p=Path(sys.argv[1]); im=Image.open(p); ImageOps.exif_transpose(im).verify(); print(f"verified image: {p} ({p.stat().st_size} bytes)")' "${destination}"
+              printf '%s\t%s\t%s\t%s\n' "${index}" "${status}" "$(sha256sum "${destination}" | cut -d' ' -f1)" "${url}" \
+                | tee -a artifacts/source-candidates/download-ledger.tsv
+            else
+              printf '%s\tfailed\t-\t%s\n' "${index}" "${url}" \
+                | tee -a artifacts/source-candidates/download-ledger.tsv
+              rm -f "${destination}"
+            fi
+          }
+
+          download_candidate 01 "${GOLDEN_SOURCE_URL}"
+          download_candidate 02 "${GOLDEN_SOURCE_FALLBACK_URL}"
+
+      - name: Reproduce exact Kafel Classic baseline
+        id: golden-source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/review-seed artifacts/candidate-attempts
+          selected=""
+          for source in artifacts/source-candidates/*.jpg; do
+            [[ -f "${source}" ]] || continue
+            candidate="artifacts/candidate-attempts/$(basename "${source}" .jpg)-kafel.png"
+            rm -rf artifacts/candidate-work
+            python -m tools.tile_mosaic.generate \
+              --input "${source}" \
+              --output "${candidate}" \
+              --preset tools/tile_mosaic/presets/kafel_classic_v1.json \
+              --plan "${REVIEW_DIR}/kafel-classic-v1.png.plan.json" \
+              --backend pillow \
+              --work-dir artifacts/candidate-work
+            candidate_sha="$(sha256sum "${candidate}" | cut -d' ' -f1)"
+            source_sha="$(sha256sum "${source}" | cut -d' ' -f1)"
+            printf '%s\t%s\t%s\n' "${source}" "${source_sha}" "${candidate_sha}" \
+              | tee -a artifacts/candidate-attempts/render-ledger.tsv
+            if [[ "${candidate_sha}" == "${GOLDEN_KAFEL_SHA256}" ]]; then
+              selected="${source}"
+              cp "${candidate}" artifacts/review-seed/kafel-classic-v1.png
+              cp "${candidate}.manifest.json" artifacts/review-seed/kafel-classic-v1.png.manifest.json
+              python -m tools.tile_mosaic.evidence \
+                --manifest artifacts/review-seed/kafel-classic-v1.png.manifest.json \
+                --input-reference golden-source.jpg \
+                --output-name kafel-classic-v1.png \
+                --plan-name kafel-classic-v1.png.plan.json >/dev/null
+              break
+            fi
+          done
+
+          if [[ -n "${selected}" ]]; then
+            cp "${selected}" artifacts/review-seed/golden-source.jpg
+            echo "selected_source=${selected}" >> "${GITHUB_OUTPUT}"
+            echo "physical_source_available=true" >> "${GITHUB_OUTPUT}"
+            echo "Selected ${selected}; raw SHA $(sha256sum "${selected}" | cut -d' ' -f1)"
+          elif [[ -f "${REVIEW_DIR}/kafel-classic-v1.png" ]] && \
+               echo "${GOLDEN_KAFEL_SHA256}  ${REVIEW_DIR}/kafel-classic-v1.png" | sha256sum --check --strict; then
+            echo "Remote source unavailable; using the already committed exact Kafel Classic golden."
+            cp "${REVIEW_DIR}/kafel-classic-v1.png" artifacts/review-seed/kafel-classic-v1.png
+            if [[ -f "${REVIEW_DIR}/kafel-classic-v1.png.manifest.json" ]]; then
+              cp "${REVIEW_DIR}/kafel-classic-v1.png.manifest.json" artifacts/review-seed/kafel-classic-v1.png.manifest.json
+            else
+              echo "Committed golden is missing its provenance manifest." >&2
+              exit 1
+            fi
+            echo "physical_source_available=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "No downloaded source reproduced the frozen Kafel Classic hash and no exact committed golden exists." >&2
+            cat artifacts/source-candidates/download-ledger.tsv >&2 || true
+            cat artifacts/candidate-attempts/render-ledger.tsv >&2 || true
+            exit 1
+          fi
+
+      - name: Build bounded laboratory iteration
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf artifacts/review-package
+          python -m tools.tile_mosaic.lab \
+            --frozen-base-render artifacts/review-seed/kafel-classic-v1.png \
+            --frozen-base-plan "${REVIEW_DIR}/kafel-classic-v1.png.plan.json" \
+            --output-dir artifacts/review-package
+          if [[ -f artifacts/review-seed/golden-source.jpg ]]; then
+            cp artifacts/review-seed/golden-source.jpg artifacts/review-package/golden-source.jpg
+          fi
+
+          cat > artifacts/review-package/golden-sha256.txt <<EOF
+          ${GOLDEN_KAFEL_SHA256}  kafel-classic-v1.png
+          ${GOLDEN_REFERENCE_BALANCED_SHA256}  reference-balanced-v1.png
+          ${GOLDEN_MATTE_SOFT_SHA256}  matte-soft-v1.png
+          ${GOLDEN_MICROTILT_SHA256}  microtilt-v1.png
+          ${GOLDEN_CONTACT_SHEET_SHA256}  contact-sheet.jpg
+          EOF
+          sed -i 's/^          //' artifacts/review-package/golden-sha256.txt
+          (cd artifacts/review-package && sha256sum --check --strict golden-sha256.txt)
+
+      - name: Prepare arbitrary-input smoke source
+        shell: bash
+        env:
+          SOURCE_URL: ${{ inputs.source_url || '' }}
+          EXPECTED_SOURCE_SHA256: ${{ inputs.expected_source_sha256 || '' }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/direct-source
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${SOURCE_URL}" ]]; then
+            curl --fail --location --retry 4 --retry-all-errors \
+              --header 'User-Agent: events-bot-tile-mosaic-material-lab/2.0' \
+              "${SOURCE_URL}" --output artifacts/direct-source/source.jpg
+            if [[ -n "${EXPECTED_SOURCE_SHA256}" ]]; then
+              echo "${EXPECTED_SOURCE_SHA256}  artifacts/direct-source/source.jpg" | sha256sum --check --strict
+            fi
+          else
+            cp site/public/assets/launch/PWA-icon.png artifacts/direct-source/source.png
+          fi
+          sha256sum artifacts/direct-source/source.* | tee artifacts/direct-source/source.sha256
+
+      - name: Direct arbitrary-input smoke
+        shell: bash
+        env:
+          FOCAL_X: ${{ inputs.focal_x || '0.50' }}
+          FOCAL_Y: ${{ inputs.focal_y || '0.50' }}
+        run: |
+          set -euo pipefail
+          SOURCE_PATH="$(find artifacts/direct-source -maxdepth 1 -type f ! -name '*.sha256' | head -n 1)"
+          mkdir -p artifacts/direct-smoke
+          python -m tools.tile_mosaic.generate \
+            --input "${SOURCE_PATH}" \
+            --output artifacts/direct-smoke/kafel-ci.png \
+            --preset tools/tile_mosaic/presets/ci_smoke_v1.json \
+            --backend pillow \
+            --focal-x "${FOCAL_X}" \
+            --focal-y "${FOCAL_Y}" \
+            --seed 20260901 \
+            --work-dir artifacts/direct-smoke/work
+          python -m tools.tile_mosaic.validate_render \
+            --image artifacts/direct-smoke/kafel-ci.png \
+            --plan artifacts/direct-smoke/kafel-ci.png.plan.json \
+            --report artifacts/direct-smoke/kafel-ci.validation.json
+          python -m tools.tile_mosaic.refine_render \
+            --base-render artifacts/direct-smoke/kafel-ci.png \
+            --base-plan artifacts/direct-smoke/kafel-ci.png.plan.json \
+            --profile tools/tile_mosaic/refinements/reference_balanced_v1.json \
+            --output artifacts/direct-smoke/reference-balanced-ci.png
+          python -m tools.tile_mosaic.validate_render \
+            --image artifacts/direct-smoke/reference-balanced-ci.png \
+            --plan artifacts/direct-smoke/kafel-ci.png.plan.json \
+            --report artifacts/direct-smoke/reference-balanced-ci.validation.json
+
+      - name: Publish review package to laboratory branch
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          mkdir -p "${REVIEW_DIR}"
+          for path in \
+            kafel-classic-v1.png \
+            kafel-classic-v1.png.manifest.json \
+            kafel-classic-v1.validation.json \
+            reference-balanced-v1.png \
+            reference-balanced-v1.png.manifest.json \
+            reference-balanced-v1.validation.json \
+            matte-soft-v1.png \
+            matte-soft-v1.png.manifest.json \
+            matte-soft-v1.validation.json \
+            microtilt-v1.png \
+            microtilt-v1.png.manifest.json \
+            microtilt-v1.validation.json \
+            contact-sheet.jpg \
+            lab-manifest.json \
+            golden-sha256.txt; do
+            install -m 0644 "artifacts/review-package/${path}" "${REVIEW_DIR}/${path}"
+          done
+
+          git add "${REVIEW_DIR}"
+          if git diff --cached --quiet; then
+            echo "Committed laboratory evidence is already byte-identical."
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'test(tile-mosaic): record material lab v1 evidence [tile-mosaic-evidence]'
+          git push origin "HEAD:${HEAD_BRANCH}"
+
+      - name: Artifact inventory
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          find artifacts -type f -printf '%P\t%s bytes\n' | sort | tee artifacts/inventory.txt
+
+      - name: Upload deterministic lab evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tile-mosaic-material-lab-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 21
+
+  blender-physical:
+    needs: unit-golden-and-direct
+    if: needs.unit-golden-and-direct.outputs.physical-source-available == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout exact PR SHA
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install pinned renderer dependency
+        run: python -m pip install --disable-pip-version-check "Pillow==${PILLOW_VERSION}"
+
+      - name: Download golden source artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tile-mosaic-material-lab-${{ github.sha }}
+          path: upstream-artifact
+
+      - name: Cache Blender
+        id: blender-cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/blender-${{ env.BLENDER_VERSION }}
+          key: blender-linux-x64-${{ env.BLENDER_VERSION }}-${{ env.BLENDER_SHA256 }}
+
+      - name: Download checksum-pinned Blender
+        if: steps.blender-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ".cache/blender-${BLENDER_VERSION}"
+          curl --fail --location --retry 4 --retry-all-errors \
+            "https://download.blender.org/release/Blender4.0/${BLENDER_ARCHIVE}" \
+            --output "/tmp/${BLENDER_ARCHIVE}"
+          echo "${BLENDER_SHA256}  /tmp/${BLENDER_ARCHIVE}" | sha256sum --check --strict
+          tar -xf "/tmp/${BLENDER_ARCHIVE}" \
+            -C ".cache/blender-${BLENDER_VERSION}" \
+            --strip-components=1
+
+      - name: Verify Blender
+        run: .cache/blender-${BLENDER_VERSION}/blender --version
+
+      - name: Render Reference Balanced in Blender
+        shell: bash
+        env:
+          BLENDER_ENGINE: ${{ inputs.blender_engine || 'eevee' }}
+        run: |
+          set -euo pipefail
+          SOURCE_PATH="upstream-artifact/review-package/golden-source.jpg"
+          test -s "${SOURCE_PATH}"
+          mkdir -p artifacts/blender
+          python -m tools.tile_mosaic.generate \
+            --input "${SOURCE_PATH}" \
+            --output artifacts/blender/reference-balanced-blender.png \
+            --preset tools/tile_mosaic/presets/reference_balanced_v1.json \
+            --backend blender \
+            --blender-bin ".cache/blender-${BLENDER_VERSION}/blender" \
+            --engine "${BLENDER_ENGINE}" \
+            --focal-x 0.58 \
+            --focal-y 0.44 \
+            --seed 20260901 \
+            --timeout-seconds 2100 \
+            --work-dir artifacts/blender/work
+          python -m tools.tile_mosaic.validate_render \
+            --image artifacts/blender/reference-balanced-blender.png \
+            --plan artifacts/blender/reference-balanced-blender.png.plan.json \
+            --report artifacts/blender/reference-balanced-blender.validation.json
+
+      - name: Render matching fast preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_PATH="upstream-artifact/review-package/golden-source.jpg"
+          python -m tools.tile_mosaic.generate \
+            --input "${SOURCE_PATH}" \
+            --output artifacts/blender/reference-balanced-pillow.png \
+            --preset tools/tile_mosaic/presets/reference_balanced_v1.json \
+            --backend pillow \
+            --focal-x 0.58 \
+            --focal-y 0.44 \
+            --seed 20260901 \
+            --work-dir artifacts/blender/pillow-work
+          python -m tools.tile_mosaic.contact_sheet \
+            --item 'Pillow planner preview=artifacts/blender/reference-balanced-pillow.png' \
+            --item 'Blender physical render=artifacts/blender/reference-balanced-blender.png' \
+            --output artifacts/blender/pillow-vs-blender.jpg \
+            --columns 2 --cell-width 960
+
+      - name: Artifact inventory
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          find artifacts -type f -printf '%P\t%s bytes\n' | sort | tee artifacts/inventory.txt
+
+      - name: Upload Blender scene and render evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tile-mosaic-blender-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 21

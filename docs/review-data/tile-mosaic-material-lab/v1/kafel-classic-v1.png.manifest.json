@@ -1,0 +1,54 @@
+{
+  "backend": "pillow",
+  "backend_result": {
+    "backend": "pillow",
+    "gap_px": 5.9087,
+    "height": 1080,
+    "output": "kafel-classic-v1.png",
+    "tile_size_px": 168.8212,
+    "width": 1920
+  },
+  "generated_at": "2026-08-03T18:50:46Z",
+  "generator": "events-bot tile-mosaic material lab",
+  "generator_version": "2.0.0",
+  "input": {
+    "crop_box": [
+      0,
+      52,
+      1200,
+      652
+    ],
+    "reference": "golden-source.jpg",
+    "sha256": "cd4dd11f40599a6109494a49bfd33a1b9a4f62f4e7e7518d5808e5dc77e5f1e8",
+    "source_height": 799,
+    "source_width": 1200
+  },
+  "output": {
+    "height": 1080,
+    "path": "kafel-classic-v1.png",
+    "sha256": "f30f78c0b585de4022ca35758a89bc7d643cf224212fd3a67b47170611ea71e7",
+    "size_bytes": 1972777,
+    "width": 1920
+  },
+  "plan": {
+    "input_path": "kafel-classic-v1.png.plan.json",
+    "legacy_sha256": null,
+    "path": "kafel-classic-v1.png.plan.json",
+    "seed": 20260901,
+    "sha256": "79db292c695a749ddf7c51fe6e843fb47b761297c05a5636475ed6f3ded20212",
+    "source": "frozen",
+    "state_counts": {
+      "dim": 11,
+      "glint": 3,
+      "revealed": 19,
+      "sealed": 30,
+      "sleeping": 9
+    }
+  },
+  "preset": {
+    "name": "kafel_classic_v1",
+    "path": "presets/kafel_classic_v1.json",
+    "sha256": "3aa63e7f12b93fc995f52bf48f3f2580ffaa1072d33da2e12616a47a3d3f2213"
+  },
+  "schema_version": 2
+}

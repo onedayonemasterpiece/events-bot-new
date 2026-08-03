@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "name": "microtilt_v1",
+  "display_name": "Microtilt",
+  "description": "More tactile sparse corner lifts and depth response, intentionally still subtle.",
+  "seed_offset": 39119,
+  "matte": {
+    "strength": 0.22,
+    "micro_contrast": 0.82,
+    "macro_contrast": 0.64,
+    "desaturate": 0.018,
+    "brightness": 0.995,
+    "roughness_haze": 0.17
+  },
+  "blur": {
+    "fraction": 0.13,
+    "min_px": 0.3,
+    "max_px": 1.05,
+    "states": [
+      "dim",
+      "sleeping",
+      "revealed"
+    ]
+  },
+  "geometry": {
+    "active_fraction": 0.62,
+    "max_rotation_degrees": 0.28,
+    "max_tilt_degrees": 0.92,
+    "max_depth_px": 4.0,
+    "max_corner_lift_px": 3.6,
+    "max_shift_px": 1.15,
+    "inset_px": 2.0
+  },
+  "corner_light": {
+    "fraction": 0.25,
+    "strength": 0.23,
+    "radius": 0.39,
+    "color": [
+      255,
+      128,
+      68
+    ]
+  },
+  "edge": {
+    "highlight_alpha": 0.25,
+    "shadow_alpha": 0.64,
+    "outline_alpha": 0.06,
+    "radius_ratio": 0.055
+  },
+  "shadow": {
+    "alpha": 0.54,
+    "blur_px": 4.2,
+    "offset_x_px": 2.4,
+    "offset_y_px": 3.4
+  },
+  "global": {
+    "vignette_delta": 0.018,
+    "grain_strength": 0.43,
+    "warm_glow_multiplier": 0.96
+  }
+}
