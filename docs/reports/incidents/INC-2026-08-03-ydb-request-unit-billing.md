@@ -64,6 +64,12 @@ cost accumulated.
   operation `etnak5qntmv84d86adlb` deleted it. Direct lookup returned
   `Not Found`; `pharmastaff-forms` remained the only database in the source
   folder.
+- 2026-08-03 14:30 UTC — after explicit owner approval, obsolete service
+  accounts `cat-weather-ydb-runtime`, `region-talk-discovery-runtime`, and
+  `region-talk-gh-actions-importer` were deleted. All three returned
+  `Not Found`. The protected GitHub environment's old
+  `YANDEX_WIF_SERVICE_ACCOUNT_ID` variable was removed so imports fail closed;
+  `farmpersonal-deploy` and `sa-pharmastaff-forms` remained untouched.
 
 ## Root Cause
 
@@ -121,7 +127,8 @@ cost accumulated.
   folder/cloud ID plus throttle state;
 - row-count and ordered-export hash comparison;
 - Fly runtime database/service-account identity and health response;
-- GitHub protected-environment database variable;
+- GitHub protected-environment database variable and absence of any deleted
+  old-account WIF service-account reference;
 - deployed SHA reachable from `origin/main` for the durable guard/config change.
 
 ## Immediate Mitigation
@@ -141,6 +148,8 @@ cost accumulated.
 - Deleted the verified source database from the wrong account after explicit
   owner approval. Preserved `pharmastaff-forms`; `kotopogoda-content` was later
   deleted only under a separate explicit owner request.
+- Deleted the three explicitly approved obsolete service accounts and removed
+  the old GitHub WIF service-account ID from the protected environment.
 
 ## Follow-up Actions
 
@@ -152,10 +161,10 @@ cost accumulated.
       billing budgets only notify and YDB's RU/s throttle is not a per-day
       request counter. Keep the database at 0 RU/s until this is accepted.
 - [x] Delete the verified source database after owner approval.
-- [ ] Revoke the obsolete source service-account key after moving the GitHub WIF
-      principal fully into the target organization.
-- [ ] Move the GitHub WIF principal fully into the target organization; the
-      current cross-organization database-scoped binding is a migration bridge.
+- [x] Delete obsolete old-account runtime and GitHub importer identities; none
+      had long-lived authorized, access, or API keys at deletion time.
+- [ ] Before re-enabling GitHub imports, create a new target-organization WIF
+      identity and restore the protected environment only with that identity.
 
 ## Release And Closure Evidence
 
