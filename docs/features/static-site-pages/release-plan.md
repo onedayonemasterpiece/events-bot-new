@@ -1,10 +1,71 @@
 # План production-релиза статических страниц событий
 
-> **Срез:** 2026-08-01
+> **Срез:** 2026-08-03
 > **Решение:** `NO-GO` для переключения event pages на canonical root прямо сейчас.
 > **Scope:** production-контур статических страниц событий и переход event-detail
 > с Telegraph. Полный релиз всех F1–F17 персональных анонсов остаётся отдельным
 > umbrella-gate в [Static personal announcements](../static-personal-announcements/README.md).
+>
+> **Обязательные companions:**
+> [release autotest gates](release-autotest-gates.md),
+> [стратегия автотестирования](../../operations/static-site-autotest-strategy.md)
+> и [Yandex dependency resilience](../../operations/yandex-dependency-resilience.md).
+
+## Yandex dependency reliability gate, 2026-08-03
+
+Этот gate добавлен в основной release plan после полевого наблюдения участника
+фокус-группы. На физическом iPhone в Mobile Safari прямой Supabase Auth/Data был
+доступен, Yandex relay Auth/Data и YDB control/API Gateway не отвечали, а
+resilient Auth/Data успешно выбрали direct route.
+
+Правильная интерпретация — **частичный отказ клиентского пути к конкретным
+Yandex capabilities**, а не доказанное глобальное падение всего Yandex. Release
+и пользовательский интерфейс обязаны различать как минимум:
+
+- Supabase relay на Yandex API Gateway;
+- YDB analytics/control;
+- Yandex OAuth;
+- Yandex Cloud Postbox;
+- Yandex inbound pipeline;
+- Object Storage/CDN;
+- закрытый E2E Mail Trigger.
+
+Текущее evidence:
+
+| Reliability cell | Статус |
+|---|---|
+| direct Supabase недоступен → Yandex relay, Android/iOS OTP | terminal PASS: 30772062840 / 30772233868 |
+| Yandex relay недоступен → direct Supabase, Android/iOS OTP | terminal PASS: 30772957771 / 30773125445 |
+| field direct OK / relay+YDB control unavailable | valid degraded client-path evidence; core functions remain available through direct |
+| both client routes unavailable | planned no-mail/degraded scenario |
+| shared Supabase upstream unavailable | planned no-mail/degraded scenario |
+| YDB projection outage + durable recovery | contract fixed; implementation audit and executable acceptance required |
+| focus feedback partial text/screenshot delivery | contract fixed; implementation and acceptance required |
+| Yandex OAuth unavailable → email fallback | planned acceptance |
+| Postbox/inbound pipeline outage and replay | server outbox/reconciliation acceptance required |
+
+Обязательные release-инварианты:
+
+1. Пользовательский success показывается только после durable acknowledgement
+   канонического владельца данных; попытка `fetch` или YDB projection не являются
+   подтверждением основной операции.
+2. Отказ YDB analytics/control не откатывает like/hide/feedback и не меняет
+   здоровье независимого direct/relay product route.
+3. Pending payload не удаляется до acknowledgement либо явного terminal
+   disposition; reconnect/replay использует stable idempotency key.
+4. Selected-once после ambiguous dispatch не повторяется автоматически через
+   другой route/provider.
+5. Составная операция имеет component receipts: текст может быть committed, а
+   screenshot — pending; общий false success запрещён.
+6. Диагностика сообщает `CORE_AVAILABLE_DIRECT_YANDEX_DEGRADED`, а не «Яндекс
+   не работает», и не просит повторять уже подтверждённое действие.
+7. Last-good release/profile projection сохраняется при Yandex/storage/provider
+   outage.
+
+До реализации и terminal evidence новых capabilities они остаются `planned`, но
+любая комплексная доработка соответствующего flow обязана включить эти gates до
+production rollout. Полный нормативный contract:
+[Yandex dependency resilience](../../operations/yandex-dependency-resilience.md).
 
 ## Текущий ledger, 2026-07-27
 
@@ -16,6 +77,7 @@
 | Stable URL/lifecycle registry | Missing | Persisted canonical identity, aliases, redirects/410 и cleanup apply ещё не закрыты |
 | Freshness/outbox | Partial | Coalesced build/outbox реализованы, но presentation-day freshness и failure drill отсутствуют |
 | Telegraph dual-run/public resolver | Missing | D0/D10 outward switch и запрет create/recreate после cutover не доказаны |
+| Yandex dependency/data durability | Partial | Single-client-route Supabase failover закрыт на Android/iOS; both-down, upstream, YDB projection, feedback partial delivery, OAuth/Postbox/inbound recovery ещё требуют implementation/evidence |
 | UI/product acceptance | Partial | Frozen public desktop/mobile passed; real OAuth/Edge owner-session smoke и product owner sign-off ещё нужны |
 
 Текущий operational blocker: нормальный Fly → Kaggle запуск останавливается до
@@ -415,6 +477,11 @@ Production canary клубов по интересам от 2026-07-17 не ме
 6. **Acceptance evidence:** автоматизируемый RC subset из
    [test-scenarios.md](test-scenarios.md) прошёл на clean main-reachable SHA; native
    share/calendar/maps/unfurl проверки приложены вручную там, где mocks недостаточны.
+7. **Yandex dependency/data durability:** изменённые relay/YDB/OAuth/Postbox/
+   inbound/storage capabilities имеют точный SOR/acknowledgement/idempotency
+   contract, truthful degraded UX, durable pending/replay и terminal scenarios из
+   [scenario registry](../../testing/static-site-autotest-scenarios.v1.yml). Принятое
+   основное действие не теряется и не откатывается при отказе sidecar/provider.
 
 Release owner фиксирует точные `T0` и `T0+10 days` в UTC и
 `Europe/Kaliningrad`, production SHA, snapshot id, build id, manifest hash и rollback
@@ -465,15 +532,19 @@ STATIC_SITE_CANARY_PERCENT=0..100
 - preview/noindex/canonical leakage `0`;
 - freshness p95 `<=30 min`, max `<=60 min` после due time;
 - broken outward links `0`;
+- false user-visible sent/saved acknowledgement `0`;
+- accepted primary action lost because of Yandex/YDB sidecar outage `0`;
+- duplicate provider/selected-once dispatch after ambiguous outcome `0`;
+- unexplained pending/outbox expiry or silent eviction `0`;
 - `telegraph_create_attempts_after_cutover=0` и
   `telegraph_recreate_attempts_after_cutover=0`.
 
 До D10 rollback возвращает outward mode в `telegraph`/`dual` и current static pointer
 на last-good. После D10 emergency rollback может временно вернуть `create_edit`, но
 только явным операторским решением и bounded backfill пропущенных eligible events.
-Ни один rollback не очищает legacy Telegraph fields.
+Ни один rollback не очищает legacy Telegraph fields или durable pending outbox.
 
-## Top-5 задач, которые можно запускать сейчас
+## Top-6 задач, которые можно запускать сейчас
 
 Задачи не включают проектирование UI листингов или event detail.
 
@@ -484,10 +555,17 @@ STATIC_SITE_CANARY_PERCENT=0..100
 | P0-3 | **Stable event URL и lifecycle registry** | может идти параллельно P0-1; нужен P0-4 | persisted slug; aliases; redirect/410/retention rules; merge/delete/update idempotence; sitemap содержит только canonical eligible URLs |
 | P0-4 | **Telegraph dual-run и public-link resolver** | P0-1..3 | три режима tested; static URL только после readiness; downstream не зависит от Telegraph; D10 создаёт/recreate `0`; legacy URLs сохранены |
 | P0-5 | **Observability и automated acceptance pack** | contracts можно начать сразу; full E2E после P0-1/2 | catalog/freshness/resolver metrics; `ADD-CUTOVER-*` + release subset automated; 72-hour gate report; rollback drill evidence |
+| P0-6 | **Yandex capability degradation и отсутствие потерь** | общий reliability contract; затем вместе с каждой feature implementation | direct/relay + sidecar/provider taxonomy; durable acknowledgement/outbox; component receipts; truthful degraded copy; browser deterministic matrix; Android/iOS critical samples; no-mail both-down/upstream |
 
 ## Test/evidence contract
 
-Канонический каталог сценариев: [test-scenarios.md](test-scenarios.md).
+Канонический каталог event-page сценариев: [test-scenarios.md](test-scenarios.md).
+Machine-readable общий registry:
+[static-site-autotest-scenarios.v1.yml](../../testing/static-site-autotest-scenarios.v1.yml).
+Нормативные способы доказательства:
+[release autotest gates](release-autotest-gates.md),
+[стратегия автотестирования](../../operations/static-site-autotest-strategy.md) и
+[Yandex dependency resilience](../../operations/yandex-dependency-resilience.md).
 
 Важно: наличие ID не означает, что сценарий реализован или пройден. На дату среза:
 
@@ -500,6 +578,9 @@ STATIC_SITE_CANARY_PERCENT=0..100
   contract из 9 tests, не Astro/public-site release E2E;
 - `tests/e2e/features/static_site_personalization.feature` имеет `@draft` и пока не
   имеет Behave step definitions;
+- single-route mobile OTP failover закрыт terminal evidence, но both-down,
+  shared-upstream, YDB projection, focus partial delivery, OAuth/Postbox/inbound
+  recovery остаются planned до реализации;
 - atomic promotion/rollback, production-root browser/HTTP, 10-day cutover и native
   device flows ещё требуют реализации/evidence.
 
@@ -512,7 +593,7 @@ STATIC_SITE_CANARY_PERCENT=0..100
 Research-механика может проверяться до D10 только в явно включённом immutable
 noindex/secret candidate и не входит в current static-page GO. Обычный
 production/root обязан fail-closed. Production-включение возможно только после
-стабильного D10 и отдельного RC. Механика не меняет текущий Top-5. План: product research →
+стабильного D10 и отдельного RC. Механика не меняет текущий Top-6. План: product research →
 owner decisions → clickable accessible prototype → first-class egg/progress and
 `site_easter_egg` promo-activity architecture → scheduler shadow/admin report →
 одна non-prize collection canary с holdout и automatic stop rules → ship/narrow/stop
