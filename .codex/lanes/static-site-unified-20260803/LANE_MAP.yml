@@ -29,7 +29,7 @@ lanes:
     expected_output: committed incident fix plus evidence and RESULTS.md
     verification_scope: full_local_and_live_canary
     effort: high_max_available
-    status: partial_first_canary_failed_stale_old_sha_retry_running_local_fix_validating
+    status: complete_exact_main_canary_receipt_verified_incident_closed
   - id: L1
     role: worker
     requirement_ids: [RYDB]

@@ -3,7 +3,7 @@
 ## Base and isolation
 
 - Initial base: `origin/main@0bc8482dcda5cf16a89f312f9791ecbb6d0e9a3a`.
-- Current main merged into integration: `5c359f30fcdae1fd64b1dedc547aa8e0981a60e3`.
+- Current main merged into integration: `7efa00560725334d16cc06c1e47b858b258e4370`.
 - Integration branch: `integration/static-site-unified-20260803`.
 - Dirty root checkout and local commit `12ad425e9` were preserved without edits.
 - Real OTP/mail sends in this integration: **0**.
@@ -12,7 +12,7 @@
 
 | Lane | Requirements | Status | Integrated head/evidence |
 |---|---|---|---|
-| L0 | R0a | PR #315 merged; exact-main canary exposed a second deterministic browser assertion | `5c359f30f`; first canary failed at festival-count gate, local fix/revalidation in progress |
+| L0 | R0a | incident closed after exact-main terminal candidate receipt | PR #315 + #317 fixes; PR #319 closure; `origin/main@7efa00560` |
 | L1 + L1B + L1C + L1D | RYDB | merged locally; live enable blocked | `34e0250ee`, `.codex/lanes/L1{,B,C,D}/RESULTS.md` |
 | L2 + L2B + L2C | R5/R6/R7/R8 | merged locally; deterministic acceptance complete | `74897060d`, `.codex/lanes/L2{,B,C}/RESULTS.md` |
 | L3 | R3 | merged locally and mounted by L4 | `976f34e69` lineage, `.codex/lanes/L3/RESULTS.md` |
@@ -23,6 +23,12 @@
 
 ## Integrated acceptance evidence
 
+- StaticSiteBuilder exact-main canary
+  `static-site:production-secret-20260803T224034-4493aaed:1814d7f84627`
+  passed both Chromium gates and reached terminal `done/report`. Independent
+  immutable readback verified 3,305 objects / 674,467,502 bytes; candidate CAS
+  completed with public root and stable ICS unchanged. Incident closure is on
+  `origin/main` via PR #319.
 - Baseline preview build/check passed before lanes were merged.
 - External OTP harness unit suite: **65/65**, no mailbox or OTP issue call.
 - Auth fixture + resilient transport + seven-profile matrix: prior combined
@@ -59,7 +65,7 @@
 | ID | Status | Evidence | Remaining gate/risk |
 |---|---|---|---|
 | RYDB | Partial | typed queue/counters, due cursor/lease, ACK-only consumer lifecycle, exact guard, budgets and 20k tests | no scheduler/RU enable before live YQL/server-RU validation, async complete-producer coverage, alert, approved slot and 24-hour observation |
-| R0a | Partial | PR #315 merged and exact-main build reached Chromium; failure reduced to stale hard-coded festival count | data-aware festival fix must pass full local gate, merge/deploy, then obtain a new terminal successful candidate receipt and close incident |
+| R0a | Done | PR #315/#317 merged; exact-main canary `…224034…:1814d7f84627` passed both Chromium gates, immutable readback and candidate CAS; PR #319 closed the incident | root promotion remains a separate explicit gate and was not performed |
 | R0b | Done | 392-page final integrated inventory and desktop/mobile gesture browser acceptance | none for implementation |
 | R1 | Done | live-import partner provenance, published managed fallback, UI, SVG provenance and coalesced rebuild tests | publication-trigger production observation follows normal release |
 | R2 | Done | checked catalog/manifest/navigation and gastronomy lifecycle | data-blocked collections remain unpublished; the explicit gastronomy repair route stays reachable/noindex by lifecycle policy |
@@ -73,9 +79,9 @@
 
 ## Release ordering
 
-1. Builder fix: PR #315 merged; first exact-main canary found a stale festival
-   selector. A dequeue/hold race launched one old-SHA retry; deterministic local
-   fix and incident closure remain in progress without another manual run.
+1. Builder recovery complete: PR #315 and follow-up PR #317 are merged; exact
+   SHA `6c797020…` passed the single no-root-promotion canary, immutable receipt
+   and public non-mutation checks. PR #319 closed the incident on `main`.
 2. Auth/transport + P13N-00 + shared runtime/CTA + collections/weather consumer:
    open draft PR #316, with final combined validation/review running on its
    latest metadata commit.
