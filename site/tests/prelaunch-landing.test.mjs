@@ -68,10 +68,11 @@ test('artifact policy indexes only the root and hides every other HTML page', ()
   }
 });
 
-test('landing source uses the approved brand asset and purpose-limited resilient signup RPC', () => {
+test('landing source keeps functional contracts and the reference-bound glass scene', () => {
   const landing = source('site/src/components/PrelaunchLanding.astro');
   const layout = source('site/src/layouts/PrelaunchLayout.astro');
   const motion = source('site/src/styles/prelaunch-motion.css');
+  const browser = source('site/scripts/check-prelaunch-browser.mjs');
   const catalog = source('site/src/lib/backendOperationCatalog.ts');
 
   assert.match(landing, /announcements-brand-v2-512\.png/u);
@@ -87,12 +88,41 @@ test('landing source uses the approved brand asset and purpose-limited resilient
   assert.match(landing, /prelaunch__foreground/u);
   assert.match(landing, /length: 72/u);
   assert.match(landing, /data-state/u);
-  assert.match(landing, /'sealed', 'dim', 'revealed'/u);
+  assert.match(landing, /data-zone/u);
+  assert.match(landing, /data-glint/u);
+  assert.match(landing, /repeating-linear-gradient/u);
+  assert.match(landing, /--tile-height:\s*clamp\(166px, 15\.525vw, 256px\)/u);
+  assert.match(landing, /\.prelaunch__tile\s*\{[\s\S]*?background:\s*transparent;[\s\S]*?opacity:\s*1;/u);
+  assert.match(landing, /\.prelaunch__tile::before[\s\S]*?backdrop-filter:/u);
+  assert.match(landing, /radial-gradient\(circle at 86% 15%/u);
+
+  const rowsMatch = /const tileStateRows = \[([\s\S]*?)\] as const;/u.exec(landing);
+  assert.ok(rowsMatch, 'deterministic tile state rows must be explicit');
+  const rows = [...rowsMatch[1].matchAll(/'([sdr]{9})'/gu)].map((match) => match[1]);
+  assert.equal(rows.length, 8);
+  const states = rows.join('');
+  assert.equal(states.length, 72);
+  assert.equal([...states].filter((state) => state === 's').length, 30);
+  assert.equal([...states].filter((state) => state === 'd').length, 23);
+  assert.equal([...states].filter((state) => state === 'r').length, 19);
+
   assert.match(layout, /content=\{robots\}/u);
   assert.match(layout, /prelaunch-motion\.css/u);
-  assert.match(motion, /opacity:\s*var\(--veil\)/u);
-  assert.match(motion, /transition:[\s\S]*opacity var\(--speed\)/u);
+  assert.match(motion, /\.prelaunch__tile::before/u);
+  assert.match(motion, /background-color var\(--speed\)/u);
+  assert.match(motion, /backdrop-filter var\(--speed\)/u);
+  assert.match(motion, /\.prelaunch__tile::after[\s\S]*opacity var\(--speed\)/u);
   assert.match(motion, /prefers-reduced-motion/u);
+  assert.doesNotMatch(motion, /\.prelaunch__tile\s*\{[\s\S]*?opacity:\s*var\(--veil\)/u);
+
+  assert.match(browser, /reference-square/u);
+  assert.match(browser, /page\.content\(\)/u);
+  assert.match(browser, /writeFileSync/u);
+  assert.match(browser, /repeating-linear-gradient/u);
+  assert.match(browser, /glass alpha order is not sealed > dim > revealed/u);
+  assert.match(browser, /whole-tile opacity/u);
+  assert.match(browser, /reference-square: first seam/u);
+  assert.match(browser, /tile aspect/u);
   assert.match(catalog, /'register_prelaunch_notification_v1'/u);
 });
 
