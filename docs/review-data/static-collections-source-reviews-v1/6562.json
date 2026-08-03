@@ -1,0 +1,63 @@
+{
+  "schema_version": "static-collection-source-review-v1",
+  "receipt_id": "6562",
+  "reviewed_at": "2026-08-02T16:28:11.268351Z",
+  "status": "corrected",
+  "event_ids": [
+    6562
+  ],
+  "issue": "The provisional family hard-negative contradicted the exact invitation «Приходите всей семьёй!».",
+  "canonical_before": [
+    {
+      "id": 6562,
+      "title": "Ревущий лев, поющий лось",
+      "description": "> Выставка «Ревущий лев, поющий лось»\n\nЭкспозиция приурочена к 130-летнему юбилею одного из старейших зоопарков страны и раскрывает анималистическую тематику в искусстве с разных сторон и неожиданных ракурсов. В центре внимания — образы животных, представленные через разнообразные художественные формы и исторические материалы. 🐾\n\n### Анималистика в искусстве\nВыставка демонстрирует животных в различных видах искусства. Среди ключевых экспонатов представлена скульптура Артура Штайнера «Материнская любовь» (1933–1944 гг.), переданная из зоопарка в 2017 году.\n\n### Архивные свидетельства\nПосетители могут ознакомиться с предметами, отражающими историю зоопарка:\n- советские открытки;\n- исторические плакаты зоопарка, знакомые старшему поколению.\n\n### Справочная информация\n- Цена: 150–250 ₽\n- Справочный телефон: +7 (4012) 46-71-43",
+      "date": "2026-07-01",
+      "time": "",
+      "location_name": "Музей Изобразительных искусств",
+      "location_address": "Ленинский проспект 83",
+      "city": "Калининград",
+      "event_type": "выставка",
+      "linked_event_ids": "[]",
+      "identity_status": "canonical",
+      "merged_into_event_id": null
+    }
+  ],
+  "canonical_after": null,
+  "source_evidence": [
+    {
+      "event_id": 6562,
+      "source_ref": {
+        "source_id": 7734705,
+        "source_type": "telegram",
+        "source_url": "https://t.me/kulturnaya_chaika/7956",
+        "trust_level": "medium",
+        "source_chat_username": "kulturnaya_chaika",
+        "source_message_id": 7956,
+        "source_text_sha256": "275d4fa5888ed03d3e7a4f305cc7e7847aba20108c5fdb5bfe02ee43f5f5fc84",
+        "source_record_sha256": "d6b78da7bf07c1d0fd5a7614c2c0cbcc7655bd88cb0e91f60cbbfd9c2f7ab6bf",
+        "event_id": 6562,
+        "source_text_char_count": 891,
+        "source_ref_sha256": "72af912f3cf20a29775d9d5a5fef0a42932d6c6cc23db983f1d4d1e7fd573cc6"
+      },
+      "raw_source_quote": "Выставка «Ревущий лев, поющий лось»\n\n🗓️ до #2_августа\n📍 Ленинский пр-кт 83\n\nРады сообщить о продлении выставки «Ревущий лев, поющий лось», организованной Калининградским музеем изобразительных искусств совместно с Калининградским зоопарком. Экспозиция, посвященная 130-летнему юбилею одного из старейших зоопарков нашей страны, продолжит свою работу до 2 августа.\n\nНе упустите шанс увидеть удивительные экспонаты и погрузиться в мир природы и искусства. Содержание выставки призвано продемонстрировать анималистическую тематику с разных сторон и порой неожиданных ракурсов. Здесь и животные в разных видах искусства, и открытки из советского прошлого, и плакаты зоопарка, которые узнает старшее поколение.\n\nПриходите всей семьёй!\n\nСтоимость билетов: стандартный – 250 рублей; студенческий – 200 рублей; школьный, пенсионный – 150 рублей. Справки – по телефону: +7 (4012) 46-71-43.\n\n#выставка",
+      "raw_source_quote_sha256": "275d4fa5888ed03d3e7a4f305cc7e7847aba20108c5fdb5bfe02ee43f5f5fc84",
+      "canonical_sha256": "a9185934c8bf4a15f24e9e88b0217b3271b17298523e7a8d7377ffe5112657e1",
+      "raw_source_quote_kind": "full",
+      "raw_source_quote_truncated": false,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 891,
+      "raw_source_quote_char_count": 891,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 0
+    }
+  ],
+  "semantic_review_decision": {
+    "family_suitable": "move_hard_negative_to_positive",
+    "family_suitable_reason_code": "explicit_whole_family_invitation",
+    "child_directed": "keep_existing_hard_negative",
+    "joint_family_activity": "keep_existing_hard_negative"
+  },
+  "scope_note": "Receipt corrects provisional semantic review truth only; it does not mutate the canonical event or authorize publication.",
+  "receipt_sha256": "3451dddf9fd52025ab594a429c3bfc72317e2f4ee6d95bc2e2f9126bb4703130"
+}

@@ -1,0 +1,65 @@
+{
+  "schema_version": "static-collection-source-review-v1",
+  "receipt_id": "7326",
+  "reviewed_at": "2026-08-02T09:18:31.733493Z",
+  "status": "pass",
+  "event_ids": [
+    7326
+  ],
+  "issue": "Raw VK source explicitly invites the whole family and states that the workshop is interesting to children and adults.",
+  "canonical_before": [
+    {
+      "id": 7326,
+      "title": "Мастер-класс «Городской скетчинг»",
+      "description": "Скетчинг — это искусство быстрых и выразительных зарисовок. Вдохновением для участников станет пространство торгового центра и его живая атмосфера.\n\nВедущий мастер-класса — методист студии графики Творческих мастерских филиала Третьяковской галереи. ✍️",
+      "date": "2026-08-01",
+      "time": "12:00",
+      "location_name": "ТРЦ «Европа», атриум",
+      "location_address": null,
+      "city": "Калининград",
+      "event_type": "мастер-класс",
+      "linked_event_ids": "[7325]",
+      "identity_status": "canonical",
+      "merged_into_event_id": null
+    }
+  ],
+  "canonical_after": null,
+  "source_evidence": [
+    {
+      "event_id": 7326,
+      "source_ref": {
+        "source_id": 9745691,
+        "source_type": "vk",
+        "source_url": "https://vk.com/wall-212760444_5772",
+        "trust_level": null,
+        "source_chat_username": null,
+        "source_message_id": 5772,
+        "source_text_sha256": "fd0a6013f995db7ca4c03ee76f14626b7136c4cc90deca6003805eb329fcb231",
+        "source_record_sha256": "06d8da0f71483274217064b2f5f1a9373a2e99a310973bff9cea58fcf8a4d796",
+        "event_id": 7326,
+        "source_text_char_count": 719,
+        "source_ref_sha256": "81c0b73c665fce59d8f7ba07c936358ea356d95a81825823b0922087809acafc"
+      },
+      "raw_source_quote": "Городской скетчинг✏🎨\n\n31 июля и 1 августа приглашаем на мастер-классы «Городской скетчинг» от калининградского филиала Третьяковской галереи в ТРЦ «Европа».\n\nСкетчинг — это искусство быстрых и выразительных зарисовок, способ увидеть красоту в повседневности. На мастер-классе вдохновением для участников станет само пространство торгового центра и его живая атмосфера. Под руководством методиста студии графики Творческих мастерских филиала Третьяковской галереи участники будут создавать быстрые наброски всего, что происходит вокруг.\n\n⌚Расписание сеансов:\n12:00–13:00\n13:30–14:30\n15:00–16:00\n16:00–17:00\n\n📍 ТРЦ «Европа», атриум\nВозраст: 6+\nВход свободный.\n\nПриходите всей семьёй — будет интересно и детям, и взрослым!",
+      "raw_source_quote_sha256": "fd0a6013f995db7ca4c03ee76f14626b7136c4cc90deca6003805eb329fcb231",
+      "canonical_sha256": "fd2dfebc07caf3fc33c9e773d9140b6bded76f8469bb1e68bb0dd4ee85fbb798",
+      "raw_source_quote_kind": "full",
+      "raw_source_quote_truncated": false,
+      "raw_source_quote_start_char": 0,
+      "raw_source_quote_end_char": 719,
+      "raw_source_quote_char_count": 719,
+      "raw_source_quote_omitted_prefix_chars": 0,
+      "raw_source_quote_omitted_suffix_chars": 0
+    }
+  ],
+  "family_decision": {
+    "seed_action": "keep_family_suitable_only",
+    "family_id": "linked:7325",
+    "occurrence_member_ids": [
+      7325,
+      7326
+    ]
+  },
+  "scope_note": "Receipt repairs review/calibration inputs only; canonical production changes require the normal Smart Update/data-integrity path.",
+  "receipt_sha256": "9c00a4b74d4c6bf80d85202634f163d18ce4f5c2fc785962d2a596d6877ee678"
+}

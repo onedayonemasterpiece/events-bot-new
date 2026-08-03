@@ -37,6 +37,9 @@ from static_site_release import (
     static_site_scratch_root,
 )
 KERNEL_SRC = ROOT / 'kaggle' / 'StaticSiteBuilder'
+SITE_SOURCE_REPO_CONTRACTS = (
+    Path('docs/testing/transport-fault-profiles.v1.yml'),
+)
 SITE_SRC = ROOT / 'site'
 ARTIFACT_ROOT = static_site_artifact_root(ROOT)
 SCRATCH_ROOT = static_site_scratch_root(ARTIFACT_ROOT)
@@ -188,8 +191,29 @@ def persist_semantic_outputs(
             ('unusual_events_last_good.json', args.unusual_last_good, 'last_good_sha256'),
         ])
     if collection_semantic_compute_required(args):
+        product_parent = Path(args.collection_product_snapshot).parent
         outputs.extend([
             ('collection-batch-v1.json', args.collection_batch, 'collection_batch_sha256'),
+            (
+                'static-collection-product-snapshot-v1.json',
+                args.collection_product_snapshot,
+                'collection_product_snapshot_sha256',
+            ),
+            (
+                'static-collections-product-quality.json',
+                str(product_parent / 'static-collections-product-quality.json'),
+                'collection_product_quality_report_sha256',
+            ),
+            (
+                'static-collections-product-quality.md',
+                str(product_parent / 'static-collections-product-quality.md'),
+                'collection_product_quality_markdown_sha256',
+            ),
+            (
+                'qa-summary.json',
+                str(product_parent / 'qa-summary.json'),
+                'collection_product_quality_qa_summary_sha256',
+            ),
             (
                 'collection-batch-last-good.json',
                 args.collection_batch_last_good,
@@ -268,8 +292,24 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
                 or int(semantic.get('event_count') or -1) <= 0
                 or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('artifact_sha256') or ''))
                 or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('collection_batch_sha256') or ''))
+                or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('collection_product_snapshot_sha256') or ''))
+                or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('collection_product_input_fingerprint') or ''))
+                or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('collection_product_normalized_output_sha256') or ''))
+                or int(semantic.get('collection_product_provider_calls', -1)) != 0
+                or semantic.get('collection_product_quality_status') not in {'HEALTHY', 'WATCH'}
+                or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('collection_product_quality_report_sha256') or ''))
+                or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('collection_product_quality_markdown_sha256') or ''))
+                or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('collection_product_quality_qa_summary_sha256') or ''))
             ):
                 raise RuntimeError('Kaggle collection semantic result metadata mismatch')
+            for filename, hash_key in (
+                ('static-collections-product-quality.json', 'collection_product_quality_report_sha256'),
+                ('static-collections-product-quality.md', 'collection_product_quality_markdown_sha256'),
+                ('qa-summary.json', 'collection_product_quality_qa_summary_sha256'),
+            ):
+                report_path = out_dir / filename
+                if not report_path.is_file() or sha256_file(report_path) != semantic.get(hash_key):
+                    raise RuntimeError(f'Kaggle collection product-quality output mismatch: {filename}')
         elif args.related_mode == 'bge' or getattr(args, 'unusual_enabled', False):
             semantic = result.get('semantic')
             if (
@@ -336,6 +376,22 @@ def resolve_build_template(value: str | None, build_id: str) -> str | None:
     return resolved
 
 
+def resolve_repo_sha(value: str | None) -> str:
+    configured = str(value or '').strip().lower()
+    if not configured:
+        completed = subprocess.run(
+            ['git', 'rev-parse', 'HEAD'],
+            cwd=str(ROOT),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        configured = completed.stdout.strip().lower()
+    if not re.fullmatch(r'[0-9a-f]{40}', configured):
+        raise ValueError('static-site builder requires a full 40-character repo SHA')
+    return configured
+
+
 def tar_site_source(site_dir: Path, archive_path: Path) -> None:
     def tar_filter(info: tarfile.TarInfo) -> tarfile.TarInfo | None:
         parts = Path(info.name).parts
@@ -348,6 +404,16 @@ def tar_site_source(site_dir: Path, archive_path: Path) -> None:
 
     with tarfile.open(archive_path, 'w:gz') as tar:
         tar.add(site_dir, arcname='site', filter=tar_filter)
+        # Build scripts execute from ``site/`` but some shared release
+        # contracts intentionally live at the repository root. Kaggle only
+        # receives this archive, so include those exact, non-secret contracts
+        # at their repository-relative paths instead of relying on the local
+        # checkout.
+        for relative_path in SITE_SOURCE_REPO_CONTRACTS:
+            source_path = ROOT / relative_path
+            if not source_path.is_file():
+                raise FileNotFoundError(source_path)
+            tar.add(source_path, arcname=relative_path.as_posix(), filter=tar_filter)
 
 
 def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
@@ -369,6 +435,13 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
             service_share_renderer,
             staged_site / 'scripts' / service_share_renderer.name,
         )
+    collection_product_quality = ROOT / 'scripts' / 'check_static_collections_product_quality.py'
+    if not collection_product_quality.is_file():
+        raise FileNotFoundError(collection_product_quality)
+    shutil.copy2(
+        collection_product_quality,
+        staged_site / 'scripts' / collection_product_quality.name,
+    )
     if args.db and not args.export_in_kaggle:
         exporter = staged_site / 'scripts' / 'export-production-preview-data.py'
         cmd = [
@@ -413,6 +486,12 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
                 str(staged_site / 'src' / 'data' / 'collection-batch-v1.json'),
                 '--collection-batch-last-good',
                 str(Path(getattr(args, 'collection_batch_last_good', ARTIFACT_ROOT / 'collection-batch-last-good.json')).resolve()),
+                '--collection-product-snapshot-output',
+                str(staged_site / 'src' / 'data' / 'static-collection-product-snapshot-v1.json'),
+                '--collection-product-source-scope',
+                str(getattr(args, 'collection_product_source_scope', 'static-site-builder-export')),
+                '--collection-product-evidence-trust-scope',
+                str(getattr(args, 'collection_product_evidence_trust_scope', 'all')),
             ])
         if args.profile != 'preview':
             cmd.extend([
@@ -781,6 +860,9 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'unusual_last_good_filename': 'unusual_events_last_good.json',
         'collection_batch_filename': 'collection-batch-v1.json',
         'collection_batch_last_good_filename': 'collection-batch-last-good.json',
+        'collection_product_snapshot_filename': 'static-collection-product-snapshot-v1.json',
+        'collection_product_source_scope': str(getattr(args, 'collection_product_source_scope', 'static-site-builder-export')),
+        'collection_product_evidence_trust_scope': str(getattr(args, 'collection_product_evidence_trust_scope', 'all')),
         'related_mode': args.related_mode,
         'related_corpus_revision': args.related_corpus_revision or None,
         'related_response_max_bytes': getattr(args, 'related_response_max_bytes', 256 * 1024),
@@ -1015,6 +1097,9 @@ def main() -> int:
     parser.add_argument('--unusual-last-good', default=os.getenv('STATIC_SITE_UNUSUAL_LAST_GOOD', str(ARTIFACT_ROOT / 'unusual_events_last_good.json')))
     parser.add_argument('--collection-batch', default=os.getenv('STATIC_SITE_COLLECTION_BATCH', str(ARTIFACT_ROOT / 'collection-batch-v1.json')))
     parser.add_argument('--collection-batch-last-good', default=os.getenv('STATIC_SITE_COLLECTION_LAST_GOOD', str(ARTIFACT_ROOT / 'collection-batch-last-good.json')))
+    parser.add_argument('--collection-product-snapshot', default=os.getenv('STATIC_SITE_COLLECTION_PRODUCT_SNAPSHOT', str(ARTIFACT_ROOT / 'static-collection-product-snapshot-v1.json')))
+    parser.add_argument('--collection-product-source-scope', default=os.getenv('STATIC_SITE_COLLECTION_PRODUCT_SOURCE_SCOPE', 'static-site-builder-export'), help='Provenance label for the exact source DB snapshot/stage')
+    parser.add_argument('--collection-product-evidence-trust-scope', choices=['all', 'trusted'], default=os.getenv('STATIC_SITE_COLLECTION_PRODUCT_EVIDENCE_TRUST_SCOPE', 'all'))
     parser.add_argument('--collection-semantic-compute', action='store_true', default=(os.getenv('STATIC_SITE_COLLECTION_SEMANTIC_COMPUTE', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
     parser.add_argument('--unusual-enabled', action='store_true', default=(os.getenv('STATIC_SITE_UNUSUAL_ENABLED', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
     parser.add_argument('--unusual-migration', action='store_true', default=(os.getenv('STATIC_SITE_UNUSUAL_MIGRATION', '1').strip().lower() in {'1', 'true', 'yes', 'on'}))
@@ -1029,6 +1114,7 @@ def main() -> int:
     parser.add_argument('--expected-dataset-ref', default='', help='Durable input dataset identity required for adoption')
     parser.add_argument('--keep-staging', action='store_true')
     args = parser.parse_args()
+    args.repo_sha = resolve_repo_sha(args.repo_sha)
     clock = resolve_build_clock(
         current_date=args.current_date or None,
         current_datetime=args.current_datetime or None,

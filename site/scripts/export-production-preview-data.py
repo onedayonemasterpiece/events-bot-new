@@ -5921,6 +5921,58 @@ def build_collection_semantic_outputs(
     }
 
 
+def build_collection_product_output(
+    con: sqlite3.Connection,
+    *,
+    events: list[dict[str, Any]],
+    collection_decisions_by_id: dict[int, Any],
+    current_date: str,
+    generated_at: str,
+    source_scope: str,
+    evidence_trust_scope: str,
+    output_path: Path,
+) -> dict[str, Any]:
+    """Project facts-v3 after semantic compute; never invoke a classifier."""
+
+    import static_collection_product_snapshot as product_snapshot_module
+
+    product_sources_by_event = product_snapshot_module.load_source_records(
+        con,
+        event_ids=[int(event["id"]) for event in events],
+    )
+    product_snapshot = product_snapshot_module.build_product_snapshot(
+        events,
+        collection_decisions_by_id=collection_decisions_by_id,
+        source_records_by_event=product_sources_by_event,
+        current_date=current_date,
+        generated_at=generated_at,
+        source_scope=source_scope,
+        evidence_trust_scope=evidence_trust_scope,
+    )
+    validation = product_snapshot_module.validate_product_snapshot(product_snapshot)
+    if not validation.get("valid"):
+        raise RuntimeError(
+            "collection product snapshot validation failed: "
+            + "; ".join(validation.get("errors") or [])
+        )
+    product_snapshot_module.write_product_snapshot(output_path, product_snapshot)
+    return {
+        "collection_product_snapshot_sha256": hashlib.sha256(
+            output_path.read_bytes()
+        ).hexdigest(),
+        "collection_product_snapshot_contract_sha256": product_snapshot.get(
+            "snapshot_sha256"
+        ),
+        "collection_product_input_fingerprint": product_snapshot.get(
+            "input_fingerprint"
+        ),
+        "collection_product_normalized_output_sha256": product_snapshot.get(
+            "normalized_output_sha256"
+        ),
+        "collection_product_provider_calls": 0,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", required=True, help="Path to production SQLite snapshot")
@@ -6018,6 +6070,26 @@ def main() -> int:
         "--collection-batch-last-good",
         default=os.getenv("STATIC_SITE_COLLECTION_LAST_GOOD", ""),
         help="Reserved durable last-good path; promotion occurs only after a ready quality gate.",
+    )
+    parser.add_argument(
+        "--collection-product-snapshot-output",
+        default=os.getenv("STATIC_SITE_COLLECTION_PRODUCT_SNAPSHOT", ""),
+        help="Facts-v3 product-monitor snapshot emitted after the shared collection pass.",
+    )
+    parser.add_argument(
+        "--collection-product-source-scope",
+        default=os.getenv(
+            "STATIC_SITE_COLLECTION_PRODUCT_SOURCE_SCOPE",
+            "static-site-builder-export",
+        ),
+        help="Provenance label for the source DB snapshot/stage.",
+    )
+    parser.add_argument(
+        "--collection-product-evidence-trust-scope",
+        choices=["all", "trusted"],
+        default=os.getenv(
+            "STATIC_SITE_COLLECTION_PRODUCT_EVIDENCE_TRUST_SCOPE", "all"
+        ),
     )
     parser.add_argument(
         "--unusual-cache",
@@ -6312,6 +6384,25 @@ def main() -> int:
             batch_size=max(1, int(args.bge_batch_size)),
             collection_batch_output=collection_batch_output,
         )
+        product_snapshot_output = (
+            Path(args.collection_product_snapshot_output)
+            if args.collection_product_snapshot_output
+            else out_dir / "static-collection-product-snapshot-v1.json"
+        )
+        product_result = build_collection_product_output(
+            con,
+            events=events,
+            collection_decisions_by_id=collection_decisions_by_id,
+            current_date=effective_date,
+            generated_at=generated_at,
+            source_scope=args.collection_product_source_scope,
+            evidence_trust_scope=args.collection_product_evidence_trust_scope,
+            output_path=product_snapshot_output,
+        )
+        semantic_result = {
+            **semantic_result,
+            **product_result,
+        }
         _atomic_write_json(out_dir / "static-semantic-build-result.json", semantic_result)
     elif args.related_mode == "bge" or args.unusual_enabled:
         if not re.fullmatch(r"[0-9a-f]{40}", str(args.bge_model_revision or "")):

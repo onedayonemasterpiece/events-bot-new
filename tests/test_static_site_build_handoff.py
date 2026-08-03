@@ -5,10 +5,58 @@ import sys
 import json
 import importlib.util
 import sqlite3
+import tarfile
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
+
+def test_kaggle_site_source_bundle_includes_repo_level_transport_contract(
+    tmp_path: Path,
+) -> None:
+    from scripts import run_static_site_builder_kaggle as runner
+
+    site_dir = tmp_path / "site"
+    site_dir.mkdir()
+    (site_dir / "package.json").write_text("{}\n", encoding="utf-8")
+    archive = tmp_path / "site_source.tarball"
+
+    runner.tar_site_source(site_dir, archive)
+
+    with tarfile.open(archive, "r:gz") as bundle:
+        names = set(bundle.getnames())
+        contract = bundle.extractfile(
+            "docs/testing/transport-fault-profiles.v1.yml"
+        )
+        assert "site/package.json" in names
+        assert contract is not None
+        assert b"static_site_transport_fault_profiles.v1" in contract.read()
+
+
+def test_kaggle_preview_provenance_uses_runner_bound_full_repo_sha(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scripts import run_static_site_builder_kaggle as runner
+
+    monkeypatch.setattr(
+        runner.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(stdout="a" * 40 + "\n"),
+    )
+    assert runner.resolve_repo_sha("") == "a" * 40
+    assert runner.resolve_repo_sha("B" * 40) == "b" * 40
+    with pytest.raises(ValueError, match="full 40-character repo SHA"):
+        runner.resolve_repo_sha("short")
+
+    preview_builder = (runner.ROOT / "site/scripts/build-preview.mjs").read_text(
+        encoding="utf-8"
+    )
+    kernel = (runner.KERNEL_SRC / "static_site_builder.py").read_text(
+        encoding="utf-8"
+    )
+    assert "process.env.STATIC_SITE_REPO_SHA" in preview_builder
+    assert "env['STATIC_SITE_REPO_SHA'] = repo_sha" in kernel
 
 
 def _arg_after(cmd: list[str], name: str) -> str:

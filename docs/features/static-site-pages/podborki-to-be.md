@@ -2,10 +2,41 @@
 
 Статус: **анализ завершён; data-prep MVP слит в main, развёрнут и получил
 production backfill; real Kaggle cold canary запущен, но terminal cold/warm
-acceptance ещё не закрыт**, обновлён 2026-08-01.
+acceptance ещё не закрыт; PR A ontology/source-review contract реализован
+fail-closed**, обновлён 2026-08-02.
 Исходные требования и последующие уточнения владельца сохранены в [`podborki.md`](./podborki.md).
 
 ## 0. Состояние реализации data-prep MVP
+
+### 0.1. Quality PR A (2026-08-02)
+
+Ошибочно названный provisional `gold` удалён из `tests/fixtures` и перенесён в
+`docs/review-data/static_collections_review_seed_v1.json`. Это по-прежнему не
+owner gold и не разрешение на публикацию. `static_collection_policy.v2.json`
+разделяет `child_directed`, `family_suitable`, `joint_family_activity`,
+`science_pop` и `research_in_action`, сохраняет строгие
+`strong_impressions`/`medieval` и оставляет все semantic heads `blocked`.
+
+Все строки seed получили `family_id`, `occurrence_date`, EventSource refs,
+raw quote и hash model document. Известные дефекты 5757, 6696/6766, 6878,
+7307, 7326 и повторные families зафиксированы отдельными hash-bound receipts.
+Неразрешённые строки исключены из supply; 7326 оставлен только как
+`family_suitable` по прямой исходной цитате. CI запускает промежуточный
+`--mode review`: он проверяет миграцию/provenance/families, но не требует
+будущие PR-B owner gold, scores и winning prototypes. Публичные routes,
+navigation/sitemap, киноисточники и фестивальный track не менялись.
+
+После критического review draft PR #222 данные ужесточены без перехода к PR B.
+4648 удалён из `science_pop` и `family_suitable` positives; 6871 удалён из
+semantic supply и привязан отдельным receipt к occurrence source на 2026-08-08;
+7103 удалён из `strong_impressions`, потому что raw source не обещает участнику
+интенсивную практику. Festival parent rows исключены, самостоятельные child
+events допускаются только с occurrence-specific evidence, а festival
+extraction/pages остаются вне scope. Seed/index snapshot hash, index/receipt
+identity, обязательный receipt set, source-ref hashes и full/excerpt truncation
+metadata теперь fail-closed проверяются. `--mode review` проходит с 0 errors;
+supply остаётся warning, а `--mode strict` ожидаемо не проходит без PR-B owner
+gold/scores/prototypes.
 
 Исходная реализация подготовлена в ветке
 `integration/static-collections-data-prep-20260801`, слита PR #182 и развёрнута
@@ -1450,7 +1481,10 @@ grounded LLM decision. Gold ведётся отдельно для `KIDS_SCHOOL`
 только для родителей/педагогов, детское слово в названии места, generic family
 wording и взрослые вечерние форматы.
 
-Это не большая ML-платформа. Нужны один policy JSON, один общий gold JSON и один generated batch manifest. Особые тесты «Необычного», клубов, популярного и персонализации остаются своими, потому что проверяют другое поведение.
+Это не большая ML-платформа. Нужны один policy JSON, отдельные provisional
+review seed и owner-approved gold, а также один generated batch manifest.
+Особые тесты «Необычного», клубов, популярного и персонализации остаются
+своими, потому что проверяют другое поведение.
 
 ## 11. Эффективная очередь реализации
 
@@ -1466,12 +1500,14 @@ wording и взрослые вечерние форматы.
 
 Один компактный набор source contracts:
 
-- `site/scripts/static_collection_policy.v1.json` — стратегия, thresholds,
-  minimum supply и publication default всех labels;
+- `site/scripts/static_collection_policy.v2.json` — единые ontology-v2
+  definitions, стратегия, minimum supply и fail-closed publication state;
 - `site/scripts/static_collection_prototypes.v1.json` — namespaced prototypes и
   hard negatives для `unusual/science/strong_impressions/medieval`;
-- `tests/fixtures/static_collections_gold_v1.json` — gold и отдельный
-  high-recall audience gold;
+- `docs/review-data/static_collections_review_seed_v1.json` — provisional
+  source-bound review seed, не gold и не publication truth;
+- будущий `tests/fixtures/static_collections_owner_gold_v1.json` — отдельный
+  immutable owner-approved calibration input, создаваемый только после review;
 - `site/scripts/static_place_org_registry.v1.json` — общий stable ID/slug,
   `kind=place|organization`, exact aliases/facts/source bindings, medallion и
   flags `official_theatre`, `venue_page_candidate`, `medieval_site`; в первой
@@ -1732,6 +1768,16 @@ admission/routing blocker**, а не доказанный semantic/product fail 
 source-grounded facts, `0` warm collection calls/writes, совпадающие
 facts/receipts/product hashes и отсутствие duplicate rows.
 
+Повтор после limiter release выполнен на clean-main integration 2026-08-03.
+Telegram и VK first pass завершились, а warm сохранил `0` collection
+calls/sends/writes, точную event/source привязку, один и тот же hash collection
+decisions и один и тот же product normalized SHA `0ac8638e…`; product остался
+`WATCH`, не `FAIL`. Их повторная мутация ограничена общими prose/age полями и
+не затрагивает collection plane, поэтому она вынесена в отдельную
+[issue #297](https://github.com/onedayonemasterpiece/events-bot-new/issues/297).
+Parser принят как `PASS_WITH_OPERATIONAL_METADATA`: на warm меняется только
+`EventSource.imported_at`.
+
 ## 13. Итог
 
 Гипотеза владельца в основном подтверждается:
@@ -1784,3 +1830,103 @@ facts/receipts/product hashes и отсутствие duplicate rows.
    клубов, без нового сервиса.
 
 Это даёт меньше разрозненных решений, повторное использование уже оплаченной исследовательской работы и fail-closed качество выборки.
+
+## 14. Facts-v3 product snapshot для pre-publication проверки
+
+В data-prep ветке реализован один adapter на уже существующей границе
+`export-production-preview-data.py` → `StaticSiteBuilder`. Он читает только
+сохранённые `Event.collection_decisions` facts-v3 и привязанные `EventSource`,
+не вызывает provider/BGE и не классифицирует события повторно. Результат
+`static-collection-product-snapshot-v1.json` содержит current/future events,
+mutual occurrence families, прямой organizer из `organizer_names`, exact-source
+provenance и отдельные `child_directed`, `family_suitable`,
+`joint_family_activity`, `kids` (`child OR family`). Legacy audience decision и
+перенос факта между связанными показами запрещены.
+
+Snapshot всегда остаётся `shadow|experimental` с
+`publication.status=blocked`. Верхний contract фиксирует
+`facts_policy_version=static-collection-facts-v3`, stage provenance
+`source_scope`, отдельный `evidence_trust_scope`, `input_fingerprint`,
+`normalized_output_sha256`, artifact hash и `provider_calls=0`. Malformed
+confirmed facts не скрываются, а помечаются blocked/needs-source-review, поэтому
+product-quality runner fail-closed обнаруживает source-grounding дефект.
+
+После apply, warm и normal-ingestion стадий строятся отдельные snapshot artifacts
+и запускается один и тот же product runner. Без owner-accepted baseline итог
+честно остаётся `WATCH`. Warm equivalence определяется по одинаковым
+`input_fingerprint` и PR #234 runner `normalized_output_sha256` (adapter
+сохраняет тот же visible-view hash); `snapshot_sha256` может
+отличаться из-за `generated_at`. Эта реализация не добавляет owner gold,
+thresholds, scores, schedule, Astro routes, navigation или sitemap.
+
+### Фактическая приёмка 2026-08-02
+
+После correction PR A полный 50-source primary-only Gate B прошёл: exact
+quotes/source bindings 100%, false confirmed hard negatives 0, recall
+child/family/joint — 11/12, 8/9 и 1/1. Затем Gate D был повторён на новой
+production-копии с fixed cohort из 20 strict-valid bindings: 6797 исключён до
+plan, replacement 6521 присутствовал в исходном списке, first apply применил
+20/20, identical warm дал нулевые provider calls, physical sends, writes и
+changed event/source IDs. Повторный evaluate не оплачивался: его evidence уже
+даёт Gate B. Gate D теперь PASS.
+
+Локальный product snapshot после first apply и warm имеет одинаковые
+`input_fingerprint=330d57ea…` и
+`normalized_output_sha256=fc4fe807…`. Monitor: child 11 HEALTHY, family 7
+HEALTHY, kids-union 15 HEALTHY, joint 0 WATCH; дополнительные WATCH — только
+отсутствующий owner-accepted baseline и пустая непубличная joint-выборка.
+StaticSiteBuilder теперь сразу после snapshot запускает тот же monitor и
+сохраняет `static-collections-product-quality.json`, Markdown и
+`qa-summary.json`; `WATCH` не блокирует, `FAIL` сохраняется и блокирует build.
+Реальный Kaggle preview на SHA `6365395e…` подтвердил этот участок:
+product `WATCH`, QA `PASS`, 0 FAIL, provider calls 0, normalized output
+`0ac8638e…`; все три отчёта скачаны и hash-проверены. Уже после этого
+`npm run check:preview` остановил общий bounded preview на unrelated mobile-rail
+canary 4211, отсутствующем в 50-event slice. Mobile scope не исправлялся и
+третий build ради обхода guard не запускался.
+GitHub live-product job намеренно остаётся выключенным, пока workflow не получает
+реальный builder artifact. Поэтому product evidence остаётся PARTIAL до
+post-ingestion first/warm pair и полноценного не-bounded builder canary.
+
+Для будущих прогонов добавлен маленький manual capture-only seam с закрытым
+`static-collection-upstream-capture-v1`: один sanitized packet, production
+handler, repo SHA, actual timestamp, source binding и canonical payload SHA;
+никаких таблиц, массового аудита, production mutation или публикации. Уже
+получены настоящие VK `EventDraft` и Yantar Hall `TheatreEvent`. Parser first
+PASS, но warm обновляет `EventSource.imported_at`; VK replay дошёл до
+occurrence review и fail-closed остановился на shared RPD без DB mutation.
+Telegram Monitoring run завершён без конкурирующего S22 запуска; selected
+source-faithful capture `kulturnaya_chaika/8140` прошёл eventness/create bundle,
+но existing `create_bundle_grounding` fail-closed остановился на shared
+Flash-Lite RPD без DB mutation. Failed first receipt теперь не запускает warm.
+Эти adjacent/external blockers не обходятся prompt/model/identity патчами в
+#233.
+Поэтому post-ingestion snapshots, clean main integration и Fly canary честно
+BLOCKED; публикация по-прежнему BLOCKED. Канонические hashes/receipts:
+[integration report](../../../.codex/integration/static-collection-facts-v3-INTEGRATION_REPORT.md).
+
+### Post-limiter clean-main shadow, 2026-08-03
+
+Предыдущий абзац фиксирует состояние старой stacked-ветки. В новой clean-main
+integration source-grounded код перенесён выборочно поверх актуального limiter,
+а post-ingestion Gate E уже принят. Полный current/future audience universe
+составил `62` кандидата с `62` точными primary-source bindings: `2` фактически
+оценены facts v3, `60` явно deferred shared limiter/provider capacity, `0`
+остались unprocessed. Identical warm для двух применённых rows дал `0` calls,
+`0` sends, `0` writes и пустой Event/EventSource diff.
+
+Provider-free product snapshot покрывает экспортированный current/future
+каталог из `377` событий и сохраняет publication `blocked`. Поскольку обе
+оценённые строки дали audience `unknown`, фактические family counts сейчас
+нулевые и monitor корректно возвращает `WATCH`: это полное доказательство
+accounting/coverage, но ещё не доказательство достаточной наполняемости и не
+основание для публикации. Канонический отчёт новой интеграции:
+[audience clean-main integration report](../../../.codex/integration/static-collections-audience-main-INTEGRATION_REPORT.md).
+
+Kaggle `StaticSiteBuilder` затем завершил exhaustive preview slice на тех же
+`377` событиях: kernel `COMPLETE`, BGE/QA `PASS`, `0` semantic/product provider
+calls, product `WATCH`, а проверенный архив содержит `377` discovery documents.
+Удалённый product artifact не притворяется самостоятельным coverage receipt:
+его coverage=`unknown`, тогда как точные `62 = 2 + 60 + 0` закреплены в
+отдельном локальном hash-bound coverage/product snapshot; normalized visible
+SHA обоих product outputs совпадает.

@@ -145,7 +145,9 @@ for (const route of listingRoutes) {
     if (!normalizedCss.includes(contract)) throw new Error(`Listing route ${route} misses compiled desktop geometry contract ${contract}`);
   }
   if (!html.includes('class="ke-listing-page')) throw new Error(`Listing route ${route} misses the shared listing-page root`);
-  if (!html.includes('data-mobile-listing-rails') || !html.includes('data-mobile-listing-row')) {
+  const emptyListingTag = html.match(/<div[^>]*\bdata-listing-no-events\b[^>]*>/u)?.[0] || '';
+  const isDeclaredEmpty = Boolean(emptyListingTag) && !/\shidden(?:\s|>)/u.test(emptyListingTag);
+  if (!html.includes('data-mobile-listing-rails') || (!html.includes('data-mobile-listing-row') && !isDeclaredEmpty)) {
     throw new Error(`Listing route ${route} misses the tracked accepted mobile event rail`);
   }
   for (const contract of [

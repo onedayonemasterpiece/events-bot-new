@@ -1,0 +1,80 @@
+mode: serial_integrator_after_parallel_discovery
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/main@81833f0156321fee90ab467fd0c4069de25309bf
+base_branch: main
+integration_branch: integration/static-collections-audience-shadow-main-20260803
+global_constraints:
+  - current main is authoritative for google_ai/client.py and limiter contracts
+  - preserve rolling_60s_pacific_day_v2, six independent scopes, scope-aware 429 handling, and facts-stage fallback routing
+  - do not start PR B, owner gold, scoring/calibration, Astro routes, navigation, sitemap, or publication
+  - reuse immutable Gate-E packets; do not recapture more convenient sources
+  - do not repeat the paid 50-source Gate B unless semantics change
+verification_owner: root serial integrator
+stop_conditions:
+  - any attempted provider call without shared limiter reservation
+  - collection prompt/model/definition/validator semantic drift requiring paid Gate B rerun
+  - immutable packet evidence is missing or cannot be hash-verified
+  - product monitor reports FAIL
+lanes:
+  - id: map-pr233
+    role: planner
+    requirement_ids: []
+    supports: [R01, R02, R03]
+    target: exact selective port and limiter conflict map
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: shared-read-only
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: selective integration plan and test inventory
+    verification_scope: inspection_only
+    effort: medium
+    status: completed
+  - id: map-gate-e
+    role: planner
+    requirement_ids: [R04, R05, R06]
+    target: immutable Telegram/VK/parser first-warm replay contract
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: shared-read-only
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: packet locations, commands, mutation allowances, acceptance checks
+    verification_scope: inspection_only
+    effort: medium
+    status: completed
+  - id: map-shadow-canary
+    role: planner
+    requirement_ids: [R07, R09]
+    target: full current/future shadow snapshot and bounded Fly canary
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: shared-read-only
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: exact commands, provider/cost boundary, artifacts and release evidence
+    verification_scope: inspection_only
+    effort: high
+    status: completed
+  - id: serial-integrator
+    role: merge_reviewer
+    requirement_ids: [R01, R02, R03, R08, R10]
+    target: selective code integration, tests, PR, merge and end-to-end acceptance orchestration
+    depends_on: [map-pr233, map-gate-e, map-shadow-canary]
+    execution_mode: serial_after_dependency
+    branch: integration/static-collections-audience-shadow-main-20260803
+    worktree: /dev/shm/static-collections-audience-shadow-main
+    writable_files:
+      - collection-specific implementation, tests, workflows and canonical docs
+      - .codex/lanes/static-collections-audience-main-integration/*
+      - .codex/integration/static-collections-audience-main-INTEGRATION_REPORT.md
+    forbidden_files:
+      - wholesale replacement of google_ai/client.py
+      - Astro routes, navigation, sitemap and publication code
+    expected_output: clean main-based PR with Gate-E and shadow evidence
+    verification_scope: full_local_and_bounded_live
+    effort: high
+    status: in_progress

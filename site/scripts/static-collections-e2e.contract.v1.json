@@ -1,0 +1,107 @@
+{
+  "schema_version": "static-collections-e2e-contract-v1",
+  "description": "Expected route state; this file is a test contract, never a membership source.",
+  "sitemap_path": "/sitemap-index.xml",
+  "require_sitemap": true,
+  "navigation_entrypoint": "/",
+  "navigation_selector": "[data-static-collection-nav] a[href]",
+  "require_navigation_contract": true,
+  "routes": [
+    {
+      "label": "free",
+      "path": "/besplatno/",
+      "state": "shadow",
+      "navigation": false,
+      "sitemap": false,
+      "minimum_cards": 1,
+      "enabled": false,
+      "note": "Enable and set actual state in the Astro route PR."
+    },
+    {
+      "label": "kids",
+      "path": "/detyam/",
+      "state": "blocked",
+      "navigation": false,
+      "sitemap": false,
+      "minimum_cards": 1,
+      "enabled": false,
+      "note": "Public union of grounded child_directed and family_suitable."
+    },
+    {
+      "label": "performances",
+      "path": "/spektakli/",
+      "state": "blocked",
+      "navigation": false,
+      "sitemap": false,
+      "minimum_cards": 0,
+      "enabled": false,
+      "note": "Enable after type coverage and family/link integrity gates."
+    },
+    {
+      "label": "science_pop",
+      "path": "/nauchpop/",
+      "state": "blocked",
+      "navigation": false,
+      "sitemap": false,
+      "minimum_cards": 1,
+      "enabled": false,
+      "note": "Enable after grounded review and Astro implementation."
+    },
+    {
+      "label": "unusual",
+      "path": "/neobychnoe/",
+      "state": "blocked",
+      "navigation": false,
+      "sitemap": false,
+      "minimum_cards": 0,
+      "enabled": true
+    },
+    {
+      "label": "research_in_action",
+      "path": "/nauka/",
+      "state": "blocked",
+      "navigation": false,
+      "sitemap": false,
+      "minimum_cards": 0,
+      "enabled": true
+    },
+    {
+      "label": "strong_impressions",
+      "path": "/silnye-vpechatleniya/",
+      "state": "blocked",
+      "navigation": false,
+      "sitemap": false,
+      "minimum_cards": 0,
+      "enabled": true
+    },
+    {
+      "label": "medieval",
+      "path": "/zamki-rycari-srednevekove/",
+      "state": "blocked",
+      "navigation": false,
+      "sitemap": false,
+      "minimum_cards": 0,
+      "enabled": true
+    },
+    {
+      "label": "guests_russia",
+      "path": "/gosti-iz-rossii/",
+      "state": "blocked",
+      "navigation": false,
+      "sitemap": false,
+      "minimum_cards": 0,
+      "enabled": false,
+      "note": "Enable after people backfill and product naming decision."
+    },
+    {
+      "label": "guests_foreign",
+      "path": "/zarubezhnye-gosti/",
+      "state": "blocked",
+      "navigation": false,
+      "sitemap": false,
+      "minimum_cards": 0,
+      "enabled": false,
+      "note": "Enable after people backfill and unique-guest audit."
+    }
+  ]
+}

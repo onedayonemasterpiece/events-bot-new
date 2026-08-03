@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import json
+import sys
+from types import SimpleNamespace
+
 import pytest
 
 import smart_event_update as sut
@@ -11,6 +15,8 @@ from smart_event_update import (
     adjudicate_collection_candidate,
     build_collection_adjudication_request,
     collection_adjudication_input_hash,
+    get_smart_update_llm_trace,
+    reset_smart_update_llm_trace,
     route_collection_adjudication_reasons,
     validate_collection_adjudication_output,
 )
@@ -21,9 +27,15 @@ def _payload(
     admission_value: str = "unknown",
     admission_quote: str = "",
     admission_reason: str = "insufficient_evidence",
-    audience_value: str = "unknown",
-    audience_quote: str = "",
-    audience_reason: str = "insufficient_evidence",
+    child_value: str = "unknown",
+    child_quote: str = "",
+    child_reason: str = "insufficient_evidence",
+    family_value: str = "unknown",
+    family_quote: str = "",
+    family_reason: str = "insufficient_evidence",
+    joint_value: str = "unknown",
+    joint_quote: str = "",
+    joint_reason: str = "insufficient_evidence",
     people: list[dict] | None = None,
 ) -> dict:
     return {
@@ -33,11 +45,23 @@ def _payload(
             "evidence_quote": admission_quote,
             "reason_code": admission_reason,
         },
-        "audience_decision": {
-            "value": audience_value,
-            "confidence": 0.9 if audience_value != "unknown" else 0.0,
-            "evidence_quote": audience_quote,
-            "reason_code": audience_reason,
+        "child_directed_decision": {
+            "value": child_value,
+            "confidence": 0.9 if child_value != "unknown" else 0.0,
+            "evidence_quote": child_quote,
+            "reason_code": child_reason,
+        },
+        "family_suitable_decision": {
+            "value": family_value,
+            "confidence": 0.9 if family_value != "unknown" else 0.0,
+            "evidence_quote": family_quote,
+            "reason_code": family_reason,
+        },
+        "joint_family_activity_decision": {
+            "value": joint_value,
+            "confidence": 0.9 if joint_value != "unknown" else 0.0,
+            "evidence_quote": joint_quote,
+            "reason_code": joint_reason,
         },
         "people_appearances": people or [],
     }
@@ -47,7 +71,7 @@ def _candidate(**kwargs) -> EventCandidate:
     values = {
         "source_type": "telegram",
         "source_url": "https://t.me/example/10",
-        "source_text": "Вход бесплатный. Событие для всей семьи.",
+        "source_text": "Описание события.",
         "title": "Событие",
         "date": "2026-08-10",
         "time": "18:00",
@@ -81,6 +105,15 @@ def test_collection_input_hash_is_bound_to_semantic_policy(monkeypatch):
     assert collection_adjudication_input_hash(candidate) != current
 
 
+def test_collection_model_route_stays_on_gemma_even_during_staged_gemini(monkeypatch):
+    monkeypatch.setattr(sut, "SMART_UPDATE_FORCE_STAGED_GEMINI", True)
+    monkeypatch.setattr(sut, "SMART_UPDATE_WRITER_MODEL", "gemini-3.1-flash-lite")
+    monkeypatch.setattr(sut, "SMART_UPDATE_MODEL", "gemma-4-31b-it")
+    assert sut._resolve_smart_update_model("collection_candidate_adjudication") == (
+        "gemma-4-31b-it"
+    )
+
+
 def test_production_router_covers_corrections_and_signal_candidates_not_ticket_status_alone():
     assert route_collection_adjudication_reasons(
         _candidate(source_text="Билеты уже в продаже.", ticket_status="available")
@@ -93,6 +126,16 @@ def test_production_router_covers_corrections_and_signal_candidates_not_ticket_s
     assert route_collection_adjudication_reasons(
         _candidate(topics=["PERSONALITIES"])
     ) == ["people"]
+    assert route_collection_adjudication_reasons(
+        _candidate(source_text="Родители и дети вместе создадут общую работу.")
+    ) == ["audience"]
+    for spelling in ("Приходите всей семьёй", "Приходите всей семьей"):
+        assert route_collection_adjudication_reasons(
+            _candidate(source_text=spelling)
+        ) == ["audience"]
+    assert route_collection_adjudication_reasons(
+        _candidate(source_text="Приходите на концерт")
+    ) == []
 
     paid_correction_target = Event(
         id=7,
@@ -108,13 +151,30 @@ def test_production_router_covers_corrections_and_signal_candidates_not_ticket_s
         _candidate(is_free=False, ticket_price_min=500), paid_correction_target
     ) == ["admission"]
 
+    for existing_key in (
+        "audience_decision",
+        "child_directed_decision",
+        "family_suitable_decision",
+        "joint_family_activity_decision",
+    ):
+        existing = Event(
+            id=8,
+            title="T",
+            description="D",
+            date="2026-08-10",
+            time="18:00",
+            location_name="L",
+            source_text="S",
+            collection_decisions={existing_key: {"value": "unknown"}},
+        )
+        assert route_collection_adjudication_reasons(_candidate(), existing) == ["audience"]
 
-@pytest.mark.parametrize("signal_reason", ["age_rating_signal", "topic_signal", "bge_signal"])
-def test_audience_hard_negatives_fail_closed(signal_reason):
+
+def test_age_only_claim_fails_closed():
     payload = _payload(
-        audience_value="kids",
-        audience_quote="6+",
-        audience_reason=signal_reason,
+        child_value="confirmed",
+        child_quote="6+",
+        child_reason="explicit_child_audience",
     )
     assert validate_collection_adjudication_output(
         payload,
@@ -122,16 +182,16 @@ def test_audience_hard_negatives_fail_closed(signal_reason):
     ) is None
 
 
-def test_grounded_audience_requires_exact_source_quote():
+def test_grounded_family_requires_exact_source_quote_and_rejects_whole_payload():
     payload = _payload(
-        audience_value="family",
-        audience_quote="для всей семьи",
-        audience_reason="explicit_family_format",
+        family_value="confirmed",
+        family_quote="для всей семьи",
+        family_reason="explicit_family_invitation",
     )
     assert validate_collection_adjudication_output(
         payload, source_corpus="Событие для всей семьи."
     ) is not None
-    payload["audience_decision"]["evidence_quote"] = "семейное событие"
+    payload["family_suitable_decision"]["evidence_quote"] = "семейное событие"
     assert validate_collection_adjudication_output(
         payload, source_corpus="Событие для всей семьи."
     ) is None
@@ -139,32 +199,46 @@ def test_grounded_audience_requires_exact_source_quote():
 
 def test_audience_quote_role_guard_rejects_child_authors_and_vague_family_copy():
     child_author = _payload(
-        audience_value="kids",
-        audience_quote="глазами юных художников",
-        audience_reason="explicit_target_audience",
+        child_value="confirmed",
+        child_quote="глазами юных художников",
+        child_reason="explicit_child_audience",
     )
     assert validate_collection_adjudication_output(
         child_author,
         source_corpus="Выставка глазами юных художников.",
     ) is None
 
+    for quote in (
+        "16 рисунков учащихся",
+        "выставка творческих работ воспитанников Детской художественной школы",
+    ):
+        child_author = _payload(
+            child_value="confirmed",
+            child_quote=quote,
+            child_reason="explicit_child_participants",
+        )
+        assert validate_collection_adjudication_output(
+            child_author,
+            source_corpus=f"Работает {quote}.",
+        ) is None
+
     vague_family = _payload(
-        audience_value="family",
-        audience_quote="семейная атмосфера",
-        audience_reason="explicit_family_format",
+        family_value="confirmed",
+        family_quote="семейная атмосфера",
+        family_reason="explicit_family_format",
     )
     assert validate_collection_adjudication_output(
         vague_family,
         source_corpus="Вас ждёт семейная атмосфера.",
     ) is None
 
-    explicit_joint = _payload(
-        audience_value="family",
-        audience_quote="интересно и детям, и взрослым",
-        audience_reason="explicit_family_format",
+    explicit_family = _payload(
+        family_value="confirmed",
+        family_quote="интересно и детям, и взрослым",
+        family_reason="explicit_children_and_adults",
     )
     assert validate_collection_adjudication_output(
-        explicit_joint,
+        explicit_family,
         source_corpus="Будет интересно и детям, и взрослым.",
     ) is not None
 
@@ -175,9 +249,9 @@ def test_audience_quote_role_guard_rejects_child_authors_and_vague_family_copy()
         "в Детском книжном клубе",
     ):
         direct_kids = _payload(
-            audience_value="kids",
-            audience_quote=quote,
-            audience_reason="explicit_target_audience",
+            child_value="confirmed",
+            child_quote=quote,
+            child_reason="explicit_child_audience",
         )
         assert validate_collection_adjudication_output(
             direct_kids,
@@ -186,14 +260,201 @@ def test_audience_quote_role_guard_rejects_child_authors_and_vague_family_copy()
 
     family_title = "Столярный мастер-класс «Человек – пиктограмма (семейный)»"
     direct_family = _payload(
-        audience_value="family",
-        audience_quote=family_title,
-        audience_reason="explicit_family_format",
+        family_value="confirmed",
+        family_quote=family_title,
+        family_reason="explicit_family_format",
     )
     assert validate_collection_adjudication_output(
         direct_family,
         source_corpus=family_title,
     ) is not None
+
+
+def test_child_theatre_confirms_child_without_inventing_joint_activity():
+    corpus = "Приглашаем на детский кукольный спектакль."
+    result = validate_collection_adjudication_output(
+        _payload(
+            child_value="confirmed",
+            child_quote="детский кукольный спектакль",
+            child_reason="explicit_child_spectators",
+        ),
+        source_corpus=corpus,
+    )
+    assert result is not None
+    assert result["child_directed_decision"]["value"] == "confirmed"
+    assert result["joint_family_activity_decision"]["value"] == "unknown"
+
+
+def test_explicit_family_invitation_confirms_family_independently():
+    corpus = "Приходите всей семьёй — будет интересно детям и взрослым."
+    result = validate_collection_adjudication_output(
+        _payload(
+            family_value="confirmed",
+            family_quote="Приходите всей семьёй",
+            family_reason="explicit_family_invitation",
+        ),
+        source_corpus=corpus,
+    )
+    assert result is not None
+    assert result["family_suitable_decision"]["value"] == "confirmed"
+    assert result["child_directed_decision"]["value"] == "unknown"
+
+
+def test_real_7326_family_wording_is_not_rejected_by_a_second_keyword_classifier():
+    corpus = "Приходите всей семьёй — будет интересно и детям, и взрослым! Вход свободный."
+    result = validate_collection_adjudication_output(
+        _payload(
+            admission_value="confirmed_free",
+            admission_quote="Вход свободный.",
+            admission_reason="explicit_free_admission",
+            child_value="confirmed",
+            child_quote="будет интересно и детям, и взрослым!",
+            child_reason="explicit_child_audience",
+            family_value="confirmed",
+            family_quote="Приходите всей семьёй — будет интересно и детям, и взрослым!",
+            family_reason="explicit_family_invitation",
+        ),
+        source_corpus=corpus,
+    )
+    assert result is not None
+    assert result["child_directed_decision"]["value"] == "confirmed"
+    assert result["family_suitable_decision"]["value"] == "confirmed"
+    assert result["joint_family_activity_decision"]["value"] == "unknown"
+
+
+def test_joint_parent_child_practice_requires_three_independent_grounded_facts():
+    corpus = (
+        "Мастер-класс для детей и родителей. "
+        "Родитель и ребёнок вместе создадут одну общую работу."
+    )
+    result = validate_collection_adjudication_output(
+        _payload(
+            child_value="confirmed",
+            child_quote="для детей",
+            child_reason="explicit_child_participants",
+            family_value="confirmed",
+            family_quote="для детей и родителей",
+            family_reason="explicit_children_and_adults",
+            joint_value="confirmed",
+            joint_quote="Родитель и ребёнок вместе создадут одну общую работу",
+            joint_reason="explicit_joint_task",
+        ),
+        source_corpus=corpus,
+    )
+    assert result is not None
+    assert {
+        result[key]["value"]
+        for key in (
+            "child_directed_decision",
+            "family_suitable_decision",
+            "joint_family_activity_decision",
+        )
+    } == {"confirmed"}
+
+
+def test_real_joint_parent_child_pair_exercises_are_valid_joint_evidence():
+    corpus = (
+        "Для детей от 7 лет — увлекательное путешествие в мир йоги. "
+        "Приглашаем провести утро всей семьей. "
+        "Парные упражнения — простые асаны и поддержки «родитель + ребенок»."
+    )
+    result = validate_collection_adjudication_output(
+        _payload(
+            child_value="confirmed",
+            child_quote="Для детей от 7 лет — увлекательное путешествие в мир йоги",
+            child_reason="explicit_child_audience",
+            family_value="confirmed",
+            family_quote="Приглашаем провести утро всей семьей",
+            family_reason="explicit_family_invitation",
+            joint_value="confirmed",
+            joint_quote="Парные упражнения — простые асаны и поддержки «родитель + ребенок»",
+            joint_reason="explicit_parent_child_team",
+        ),
+        source_corpus=corpus,
+    )
+    assert result is not None
+    assert result["joint_family_activity_decision"]["value"] == "confirmed"
+
+
+def test_parents_only_can_be_denied_only_from_explicit_negative_quote():
+    corpus = "Встреча только для родителей, без детей."
+    result = validate_collection_adjudication_output(
+        _payload(
+            child_value="denied",
+            child_quote="только для родителей",
+            child_reason="explicit_parents_only",
+            family_value="denied",
+            family_quote="только для родителей",
+            family_reason="explicit_parents_only",
+            joint_value="denied",
+            joint_quote="только для родителей",
+            joint_reason="explicit_parents_only",
+        ),
+        source_corpus=corpus,
+    )
+    assert result is not None
+
+    missing_proof = _payload(
+        child_value="denied",
+        child_quote="обычная встреча",
+        child_reason="explicit_parents_only",
+    )
+    assert validate_collection_adjudication_output(
+        missing_proof, source_corpus="Это обычная встреча."
+    ) is None
+
+
+def test_family_tournament_does_not_prove_joint_activity():
+    payload = _payload(
+        child_value="confirmed",
+        child_quote="для детей",
+        child_reason="explicit_child_participants",
+        family_value="confirmed",
+        family_quote="Семейный турнир",
+        family_reason="explicit_family_format",
+        joint_value="confirmed",
+        joint_quote="Семейный турнир",
+        joint_reason="explicit_parent_child_team",
+    )
+    assert validate_collection_adjudication_output(
+        payload,
+        source_corpus="Семейный турнир для детей.",
+    ) is None
+
+    bare_family_claim = _payload(
+        family_value="confirmed",
+        family_quote="Семейный турнир",
+        family_reason="explicit_family_format",
+    )
+    assert validate_collection_adjudication_output(
+        bare_family_claim,
+        source_corpus="Семейный турнир.",
+    ) is None
+
+
+def test_impossible_joint_combination_rejects_entire_payload():
+    corpus = "Родитель и ребёнок вместе создадут общую работу."
+    payload = _payload(
+        joint_value="confirmed",
+        joint_quote="Родитель и ребёнок вместе создадут общую работу",
+        joint_reason="explicit_joint_task",
+    )
+    assert validate_collection_adjudication_output(payload, source_corpus=corpus) is None
+
+
+def test_one_valid_fact_and_two_unknown_is_accepted_independently():
+    corpus = "Приглашаем детей на спектакль."
+    result = validate_collection_adjudication_output(
+        _payload(
+            child_value="confirmed",
+            child_quote="Приглашаем детей",
+            child_reason="explicit_child_audience",
+        ),
+        source_corpus=corpus,
+    )
+    assert result is not None
+    assert result["child_directed_decision"]["value"] == "confirmed"
+    assert result["family_suitable_decision"]["value"] == "unknown"
 
 
 def test_ticket_sale_alone_is_not_confirmed_paid_but_optional_donation_can_be_free():
@@ -270,15 +531,19 @@ async def test_audience_prompt_rejects_family_theme_and_child_popularity_as_proo
     candidate = _candidate(collection_adjudication_reasons=["audience"])
     captured = {}
 
-    async def provider(prompt, *_args, **_kwargs):
+    async def provider(prompt, *_args, **kwargs):
         captured["prompt"] = prompt
+        captured["max_tokens"] = kwargs.get("max_tokens")
         return _payload()
 
     monkeypatch.setattr(sut, "SMART_UPDATE_LLM_DISABLED", False)
     monkeypatch.setattr(sut, "_ask_gemma_json", provider)
     assert await adjudicate_collection_candidate(candidate) is not None
-    assert "совместное участие или посещение детей и взрослых" in captured["prompt"]
+    assert "дети и взрослые/родители прямо приглашены вместе" in captured["prompt"]
     assert "популярность артиста у детей" in captured["prompt"]
+    assert "отсутствие положительного доказательства всегда unknown, не denied" in captured["prompt"]
+    assert "candidate_reasons задаёт область проверки" in captured["prompt"]
+    assert captured["max_tokens"] == 1100
 
 
 @pytest.mark.asyncio
@@ -297,3 +562,80 @@ async def test_irrelevant_candidate_never_calls_provider(monkeypatch):
     monkeypatch.setattr(sut, "SMART_UPDATE_LLM_DISABLED", False)
     monkeypatch.setattr(sut, "_ask_gemma_json", forbidden_provider)
     assert await adjudicate_collection_candidate(candidate) is None
+
+
+@pytest.mark.asyncio
+async def test_collection_stage_failed_primary_counts_send_and_uses_exactly_one_4o_fallback(
+    monkeypatch,
+):
+    class FailingPrimary:
+        def __init__(self):
+            self.calls = []
+
+        async def generate_content_async(self, **kwargs):
+            self.calls.append(kwargs)
+            kwargs["attempt_observer"](
+                {
+                    "attempt_no": 1,
+                    "requested_model": kwargs["model"],
+                    "provider_model_name": "models/gemma-4-31b-it",
+                }
+            )
+            raise RuntimeError("forced primary failure")
+
+    primary = FailingPrimary()
+    fallback_calls = []
+
+    async def ask_4o(*args, **kwargs):
+        fallback_calls.append((args, kwargs))
+        return json.dumps(_payload(), ensure_ascii=False)
+
+    async def notify(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(sut, "_get_gemma_client", lambda: primary)
+    monkeypatch.setenv("SMART_UPDATE_4O_FALLBACK", "1")
+    monkeypatch.delenv("SMART_UPDATE_4O_FALLBACK_MAX_PER_HOUR", raising=False)
+    monkeypatch.setitem(
+        sys.modules,
+        "main",
+        SimpleNamespace(ask_4o=ask_4o, notify_llm_incident=notify),
+    )
+    reset_smart_update_llm_trace()
+    result = await sut._ask_gemma_json_unbounded(
+        "prompt",
+        sut.COLLECTION_ADJUDICATION_JSON_SCHEMA,
+        max_tokens=1000,
+        label="collection_candidate_adjudication",
+    )
+    assert result == _payload()
+    assert len(primary.calls) == 1
+    assert primary.calls[0]["allow_model_fallback"] is False
+    assert primary.calls[0]["max_provider_attempts"] == 1
+    assert primary.calls[0]["generation_config"]["response_schema"]
+    assert len(fallback_calls) == 1
+    trace = get_smart_update_llm_trace()[-1]
+    assert trace["physical_sends"] == 2
+    assert trace["actual_models"] == ["models/gemma-4-31b-it", "gpt-4o"]
+    assert trace["status"] == "ok_4o_fallback"
+
+
+@pytest.mark.asyncio
+async def test_collection_stage_rejects_paraphrased_whole_provider_payload(monkeypatch):
+    candidate = _candidate(
+        source_text="Приходите всей семьёй.",
+        collection_adjudication_reasons=["audience"],
+    )
+    paraphrased = _payload(
+        family_value="confirmed",
+        family_quote="Приглашаем всю семью",
+        family_reason="explicit_family_invitation",
+    )
+
+    async def provider(*_args, **_kwargs):
+        return paraphrased
+
+    monkeypatch.setattr(sut, "SMART_UPDATE_LLM_DISABLED", False)
+    monkeypatch.setattr(sut, "_ask_gemma_json", provider)
+    assert await adjudicate_collection_candidate(candidate) is None
+    assert candidate.collection_semantic_decisions is None

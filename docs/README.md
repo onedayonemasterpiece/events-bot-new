@@ -32,6 +32,9 @@
   `docs/operations/static-site-qa-chatgpt-control-plane.md`,
   `docs/testing/static-site-autotest-scenarios.v1.yml`,
   `docs/testing/static-site-autotest-codex-prompt.md`
+- Минимальный продуктовый мониторинг статических подборок — health,
+  living semantic examples и stability baseline:
+  `docs/testing/static-collections-product-quality-autotests.md`
 - Kaggle static-site builder / publisher protocol: `docs/operations/kaggle-static-site-builder.md`
 - Default-off two-bucket/ALB atomic root publisher and setup/rollback runbook:
   `docs/operations/static-site-atomic-root.md`
@@ -43,6 +46,7 @@
 - Telegram link inspection через Telethon: `docs/operations/telegram-link-inspection.md`
 - LLM: `docs/llm/` (промпты, формат запросов, классификатор тем)
 - Справочники: `docs/reference/` (локации, праздники, шаблоны)
+- Редакционные review-наборы и source receipts: `docs/review-data/` (не production truth)
 - Пайплайны/парсеры (каноника): `docs/features/source-parsing/` (в `docs/pipelines/` остаются redirect‑stub’ы для старых ссылок)
 - Фичи: `docs/features/`
 - Interest clubs implementation RC, identity ADR and gated release plan: `docs/features/interest-clubs/README.md`

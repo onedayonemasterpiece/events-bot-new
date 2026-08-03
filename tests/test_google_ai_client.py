@@ -17,6 +17,7 @@ from google_ai.client import (
     ExternalCallLease,
     RequestContext,
     ReserveResult,
+    UsageInfo,
 )
 from google_ai.exceptions import ProviderError, RateLimitError, ReservationError
 
@@ -283,6 +284,46 @@ def test_requested_gemma_model_stays_first_in_model_chain():
         "gemma-3-27b",
         "gemma-4-26b-a4b",
     ]
+
+
+@pytest.mark.asyncio
+async def test_per_call_single_send_disables_retry_and_model_fallback(monkeypatch):
+    client = GoogleAIClient()
+    client.max_retries = 3
+    client.fallback_models = ["gemini-3.1-flash-lite"]
+    calls: list[str] = []
+    observed: list[dict] = []
+
+    async def fake_attempt_generate(*, ctx, attempt_no, attempt_observer, **_kwargs):
+        calls.append(ctx.model)
+        attempt_observer(
+            {
+                "attempt_no": attempt_no,
+                "requested_model": ctx.requested_model,
+                "provider_model_name": ctx.provider_model_name,
+            }
+        )
+        raise ProviderError(
+            error_type="ServerError",
+            error_message="forced failure",
+            retryable=True,
+            status_code=503,
+        )
+
+    monkeypatch.setattr(client, "_attempt_generate", fake_attempt_generate)
+    with pytest.raises(ProviderError):
+        await client.generate_content_async(
+            model="gemma-4-31b-it",
+            prompt="bounded",
+            max_output_tokens=1000,
+            allow_model_fallback=False,
+            max_provider_attempts=1,
+            attempt_observer=observed.append,
+        )
+
+    assert calls == ["gemma-4-31b"]
+    assert len(observed) == 1
+    assert observed[0]["provider_model_name"] == "models/gemma-4-31b-it"
 
 
 @pytest.mark.asyncio
@@ -1329,12 +1370,77 @@ async def test_normal_pool_does_not_rotate_inside_same_quota_scope(
             model="gemini-3.1-flash-lite",
             prompt="same provider project",
             max_output_tokens=16,
+            max_provider_attempts=3,
         )
 
     assert calls == 1
     assert [call["name"] for call in supabase.rpc_calls] == [
         "google_ai_report_provider_429"
     ]
+
+
+@pytest.mark.asyncio
+async def test_single_send_cap_reports_provider_429_without_rotation_or_model_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _NORMAL_POOL_ENV_CANDIDATE_CACHE.clear()
+    _NORMAL_POOL_CURSOR.clear()
+    supabase = _NormalPoolSupabase()
+    client = GoogleAIClient(
+        supabase_client=supabase,
+        consumer="smart_update",
+        reserve_key_envs=["GOOGLE_API_KEY4", "GOOGLE_API_KEY5"],
+        reserve_overflow_key_envs=[],
+    )
+    calls: list[str] = []
+
+    async def fake_attempt_generate(*, ctx, **_kwargs):
+        calls.append(ctx.requested_model)
+        ctx.api_key_id = "id-key4"
+        ctx.quota_scope = "google:project-a"
+        raise ProviderError(
+            error_type="ClientError",
+            error_message="429 RESOURCE_EXHAUSTED",
+            retryable=True,
+            status_code=429,
+        )
+
+    monkeypatch.setattr(client, "_attempt_generate", fake_attempt_generate)
+    with pytest.raises(ProviderError):
+        await client.generate_content_async(
+            model="gemini-3.1-flash-lite",
+            fallback_models=["gemini-3.5-flash-lite"],
+            prompt="one physical send",
+            max_output_tokens=16,
+            max_provider_attempts=1,
+        )
+
+    assert calls == ["gemini-3.1-flash-lite"]
+    assert [call["name"] for call in supabase.rpc_calls] == [
+        "google_ai_report_provider_429"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_per_call_model_fallback_opt_out_wins_over_explicit_chain(monkeypatch):
+    client = GoogleAIClient()
+    calls: list[str] = []
+
+    async def fake_attempt_generate(*, ctx, **_kwargs):
+        calls.append(ctx.requested_model)
+        raise RateLimitError(blocked_reason="rpd", model=ctx.model)
+
+    monkeypatch.setattr(client, "_attempt_generate", fake_attempt_generate)
+    with pytest.raises(RateLimitError):
+        await client.generate_content_async(
+            model="gemini-3.1-flash-lite",
+            fallback_models=["gemini-3.5-flash-lite"],
+            allow_model_fallback=False,
+            prompt="stay on primary",
+            max_output_tokens=16,
+        )
+
+    assert calls == ["gemini-3.1-flash-lite"]
 
 
 @pytest.mark.asyncio
@@ -1908,3 +2014,73 @@ async def test_cancelled_sent_attempt_is_finalized_before_cancellation_propagate
     assert finalized[0]["attempt_no"] == 2
     assert finalized[0]["error"].error_type == "cancelled"
     assert finalized[0]["error"].retryable is False
+
+
+@pytest.mark.asyncio
+async def test_real_attempt_observer_runs_after_mark_sent_before_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = GoogleAIClient(supabase_client=_FakeSupabaseClient())
+    ctx = RequestContext(
+        request_uid="00000000-0000-4000-8000-000000000005",
+        consumer="collection_candidate_adjudication",
+        account_name=None,
+        model="gemma-4-31b",
+        requested_model="gemma-4-31b-it",
+        provider_model="gemma-4-31b",
+        provider_model_name="models/gemma-4-31b-it",
+        reserved_tpm=1000,
+    )
+    order: list[str] = []
+    observed: list[dict] = []
+
+    async def fake_reserve(*_args, **_kwargs):
+        return ReserveResult(
+            ok=True,
+            api_key_id="key-id",
+            env_var_name="GOOGLE_API_KEY",
+            quota_scope="google:test-project",
+        )
+
+    async def fake_mark_sent(*_args, **_kwargs):
+        order.append("sent")
+
+    async def fake_provider(**_kwargs):
+        order.append("provider")
+        return "{}", UsageInfo(input_tokens=10, output_tokens=1, total_tokens=11)
+
+    async def fake_finalize(**_kwargs):
+        order.append("finalized")
+
+    def observe(payload):
+        order.append("observed")
+        observed.append(payload)
+
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setattr(client, "_reserve", fake_reserve)
+    monkeypatch.setattr(client, "_mark_sent", fake_mark_sent)
+    monkeypatch.setattr(client, "_call_provider", fake_provider)
+    monkeypatch.setattr(client, "_finalize", fake_finalize)
+
+    text, usage = await client._attempt_generate(
+        ctx=ctx,
+        attempt_no=1,
+        prompt="bounded",
+        generation_config={"temperature": 0},
+        safety_settings=None,
+        max_output_tokens=1000,
+        candidate_key_ids=None,
+        attempt_observer=observe,
+    )
+
+    assert text == "{}"
+    assert usage.total_tokens == 11
+    assert order == ["sent", "observed", "provider", "finalized"]
+    assert observed == [
+        {
+            "attempt_no": 1,
+            "requested_model": "gemma-4-31b-it",
+            "provider_model": "gemma-4-31b",
+            "provider_model_name": "models/gemma-4-31b-it",
+        }
+    ]

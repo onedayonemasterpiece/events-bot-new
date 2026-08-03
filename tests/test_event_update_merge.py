@@ -16,7 +16,10 @@ from smart_event_update import (
     STATIC_COLLECTION_ADJUDICATION_SCHEMA_VERSION,
     EventCandidate,
     apply_collection_decisions,
+    collection_adjudication_cached_payload,
+    collection_decision_hash_covers,
     deep_merge_collection_decisions,
+    project_legacy_audience_decision,
     smart_event_update,
 )
 
@@ -35,13 +38,19 @@ def _event(*, event_id: int = 1, is_free: bool = False, decisions=None) -> Event
     )
 
 
-def _source(*, event_id: int = 1, source_id: int = 10, trust: str = "medium") -> EventSource:
+def _source(
+    *,
+    event_id: int = 1,
+    source_id: int = 10,
+    trust: str = "medium",
+    source_text: str = "",
+) -> EventSource:
     return EventSource(
         id=source_id,
         event_id=event_id,
         source_type="telegram",
         source_url=f"https://t.me/example/{source_id}",
-        source_text="",
+        source_text=source_text,
         trust_level=trust,
     )
 
@@ -51,9 +60,15 @@ def _payload(
     quote: str,
     reason: str,
     *,
-    audience_value: str = "unknown",
-    audience_quote: str = "",
-    audience_reason: str = "insufficient_evidence",
+    child_value: str = "unknown",
+    child_quote: str = "",
+    child_reason: str = "insufficient_evidence",
+    family_value: str = "unknown",
+    family_quote: str = "",
+    family_reason: str = "insufficient_evidence",
+    joint_value: str = "unknown",
+    joint_quote: str = "",
+    joint_reason: str = "insufficient_evidence",
     people=None,
 ) -> dict:
     return {
@@ -63,11 +78,23 @@ def _payload(
             "evidence_quote": quote,
             "reason_code": reason,
         },
-        "audience_decision": {
-            "value": audience_value,
-            "confidence": 0.9 if audience_value != "unknown" else 0.0,
-            "evidence_quote": audience_quote,
-            "reason_code": audience_reason,
+        "child_directed_decision": {
+            "value": child_value,
+            "confidence": 0.9 if child_value != "unknown" else 0.0,
+            "evidence_quote": child_quote,
+            "reason_code": child_reason,
+        },
+        "family_suitable_decision": {
+            "value": family_value,
+            "confidence": 0.9 if family_value != "unknown" else 0.0,
+            "evidence_quote": family_quote,
+            "reason_code": family_reason,
+        },
+        "joint_family_activity_decision": {
+            "value": joint_value,
+            "confidence": 0.9 if joint_value != "unknown" else 0.0,
+            "evidence_quote": joint_quote,
+            "reason_code": joint_reason,
         },
         "people_appearances": people or [],
     }
@@ -112,8 +139,7 @@ def test_admission_materialization_is_bidirectional_and_unknown_preserves_prior(
     assert event.is_free is False
 
     unknown = _payload("unknown", "", "insufficient_evidence")
-    before = event.collection_decisions
-    assert not _apply(
+    assert _apply(
         event,
         unknown,
         source=_source(source_id=12, trust="high"),
@@ -121,7 +147,8 @@ def test_admission_materialization_is_bidirectional_and_unknown_preserves_prior(
         digest="unknown",
         when="2026-08-01T12:00:00",
     )
-    assert event.collection_decisions == before
+    assert event.collection_decisions["admission_decision"]["value"] == "confirmed_paid"
+    assert event.collection_decisions["evaluation_receipts"][-1]["input_hash"] == "unknown"
     assert event.is_free is False
 
     false_event = _event(event_id=2, is_free=False)
@@ -150,15 +177,17 @@ def test_admission_conflict_uses_trust_recency_lock_and_same_hash_noop():
     )
     paid = _payload("confirmed_paid", "Вход 500 рублей", "explicit_price")
     # Lower trust cannot replace a confirmed value.
-    assert not _apply(
+    assert _apply(
         event, paid, source=_source(source_id=2, trust="low"), corpus="Вход 500 рублей.",
         digest="low-paid", when="2026-08-01T12:00:00",
     )
+    assert event.is_free is True
     # Equal trust must be strictly newer.
-    assert not _apply(
+    assert _apply(
         event, paid, source=_source(source_id=3, trust="high"), corpus="Вход 500 рублей.",
         digest="old-paid", when="2026-08-01T09:00:00",
     )
+    assert event.is_free is True
     assert _apply(
         event, paid, source=_source(source_id=4, trust="high"), corpus="Вход 500 рублей.",
         digest="new-paid", when="2026-08-01T13:00:00",
@@ -170,7 +199,7 @@ def test_admission_conflict_uses_trust_recency_lock_and_same_hash_noop():
         locked, free, source=_source(event_id=2, source_id=5, trust="low"),
         corpus="Вход бесплатный.", digest="locked", when="2026-08-01T10:00:00", lock=True,
     )
-    assert not _apply(
+    assert _apply(
         locked, paid, source=_source(event_id=2, source_id=6, trust="high"),
         corpus="Вход 500 рублей.", digest="paid-after-lock", when="2026-08-02T10:00:00",
     )
@@ -232,6 +261,223 @@ def test_people_mention_never_retracts_confirmed_appearance():
         ]
     }
     assert deep_merge_collection_decisions(existing, mention) == existing
+
+
+def test_legacy_projection_is_deterministic_and_never_requires_a_second_call():
+    family = _payload(
+        "unknown",
+        "",
+        "insufficient_evidence",
+        family_value="confirmed",
+        family_quote="для всей семьи",
+        family_reason="explicit_family_invitation",
+    )
+    child = _payload(
+        "unknown",
+        "",
+        "insufficient_evidence",
+        child_value="confirmed",
+        child_quote="для детей",
+        child_reason="explicit_child_audience",
+    )
+    adults = _payload(
+        "unknown",
+        "",
+        "insufficient_evidence",
+        child_value="denied",
+        child_quote="только для взрослых",
+        child_reason="explicit_adults_only",
+        family_value="denied",
+        family_quote="только для взрослых",
+        family_reason="explicit_adults_only",
+    )
+    assert project_legacy_audience_decision(family)["value"] == "family"
+    assert project_legacy_audience_decision(child)["value"] == "kids"
+    assert project_legacy_audience_decision(adults)["value"] == "none"
+    assert project_legacy_audience_decision(_payload("unknown", "", "insufficient_evidence"))[
+        "value"
+    ] == "unknown"
+    assert project_legacy_audience_decision(family)["derived_from_facts_v3"] is True
+
+
+def test_audience_only_apply_keeps_admission_people_and_is_free_untouched():
+    corpus = "Вход бесплатный. Приглашаем детей на спектакль. Выступит Анна."
+    payload = _payload(
+        "confirmed_free",
+        "Вход бесплатный",
+        "explicit_free_admission",
+        child_value="confirmed",
+        child_quote="Приглашаем детей",
+        child_reason="explicit_child_audience",
+        people=[
+            {
+                "name": "Анна",
+                "role": "performer",
+                "appearance": "confirmed",
+                "origin_scope": "unknown",
+                "evidence_quote": "Выступит Анна",
+                "origin_evidence_quote": "",
+                "reason_code": "explicit_future_participation",
+            }
+        ],
+    )
+    event = _event(
+        is_free=False,
+        decisions={
+            "admission_decision": {
+                "value": "confirmed_free",
+                "input_hash": "older-admission",
+            }
+        },
+    )
+    source = _source(source_text=corpus)
+    assert apply_collection_decisions(
+        event,
+        payload,
+        source=source,
+        source_corpus=corpus,
+        input_hash="audience-only",
+        reasons=["audience"],
+    )
+    assert event.is_free is False
+    assert event.collection_decisions["admission_decision"]["input_hash"] == "older-admission"
+    assert "people_appearances" not in event.collection_decisions
+    assert event.collection_decisions["child_directed_decision"]["value"] == "confirmed"
+    assert event.collection_decisions["audience_decision"]["value"] == "kids"
+    assert event.collection_decisions["audience_decision"]["derived_from_facts_v3"] is True
+
+
+def test_apply_revalidates_v3_quote_against_persisted_event_source_text():
+    candidate_corpus = "Приглашаем детей на спектакль."
+    payload = _payload(
+        "unknown",
+        "",
+        "insufficient_evidence",
+        child_value="confirmed",
+        child_quote="Приглашаем детей",
+        child_reason="explicit_child_audience",
+    )
+    event = _event()
+    assert not apply_collection_decisions(
+        event,
+        payload,
+        source=_source(source_text="Другая сохранённая версия источника."),
+        source_corpus=candidate_corpus,
+        input_hash="source-mismatch",
+        reasons=["audience"],
+    )
+    assert event.collection_decisions is None
+
+
+def test_all_unknown_receipt_is_bounded_cache_and_same_hash_is_noop():
+    payload = _payload("unknown", "", "insufficient_evidence")
+    event = _event()
+    source = _source(source_text="Нейтральное описание события.")
+    assert apply_collection_decisions(
+        event,
+        payload,
+        source=source,
+        source_corpus=source.source_text or "",
+        input_hash="same-all-unknown",
+        reasons=["audience"],
+    )
+    assert collection_decision_hash_covers(
+        event.collection_decisions,
+        reasons=["audience"],
+        input_hash="same-all-unknown",
+        source_id=source.id,
+    )
+    assert collection_adjudication_cached_payload(
+        event.collection_decisions,
+        input_hash="same-all-unknown",
+        source_id=source.id,
+    ) == payload
+    before = event.collection_decisions
+    assert not apply_collection_decisions(
+        event,
+        payload,
+        source=source,
+        source_corpus=source.source_text or "",
+        input_hash="same-all-unknown",
+        reasons=["audience"],
+    )
+    assert event.collection_decisions == before
+
+
+def test_official_trust_and_manual_lock_apply_independently_per_v3_key():
+    event = _event()
+    child_corpus = "Приглашаем детей на спектакль."
+    child = _payload(
+        "unknown",
+        "",
+        "insufficient_evidence",
+        child_value="confirmed",
+        child_quote="Приглашаем детей",
+        child_reason="explicit_child_audience",
+    )
+    assert _apply(
+        event,
+        child,
+        source=_source(source_id=11, trust="official", source_text=child_corpus),
+        corpus=child_corpus,
+        digest="official-child",
+        when="2026-08-01T10:00:00",
+    )
+
+    mixed_corpus = "Только для взрослых. Приходите всей семьёй."
+    mixed = _payload(
+        "unknown",
+        "",
+        "insufficient_evidence",
+        child_value="denied",
+        child_quote="Только для взрослых",
+        child_reason="explicit_adults_only",
+        family_value="confirmed",
+        family_quote="Приходите всей семьёй",
+        family_reason="explicit_family_invitation",
+    )
+    assert _apply(
+        event,
+        mixed,
+        source=_source(source_id=12, trust="high", source_text=mixed_corpus),
+        corpus=mixed_corpus,
+        digest="high-mixed",
+        when="2026-08-02T10:00:00",
+    )
+    assert event.collection_decisions["child_directed_decision"]["value"] == "confirmed"
+    assert event.collection_decisions["family_suitable_decision"]["value"] == "confirmed"
+
+    locked_event = _event(event_id=2)
+    assert _apply(
+        locked_event,
+        child,
+        source=_source(event_id=2, source_id=21, trust="low", source_text=child_corpus),
+        corpus=child_corpus,
+        digest="locked-child",
+        when="2026-08-01T10:00:00",
+        lock=True,
+    )
+    denied_corpus = "Только для взрослых."
+    denied = _payload(
+        "unknown",
+        "",
+        "insufficient_evidence",
+        child_value="denied",
+        child_quote="Только для взрослых",
+        child_reason="explicit_adults_only",
+        family_value="denied",
+        family_quote="Только для взрослых",
+        family_reason="explicit_adults_only",
+    )
+    assert _apply(
+        locked_event,
+        denied,
+        source=_source(event_id=2, source_id=22, trust="official", source_text=denied_corpus),
+        corpus=denied_corpus,
+        digest="official-denied",
+        when="2026-08-03T10:00:00",
+    )
+    assert locked_event.collection_decisions["child_directed_decision"]["value"] == "confirmed"
 
 
 @pytest.mark.asyncio
@@ -302,7 +548,10 @@ async def test_smart_update_unknown_keeps_legacy_free_then_ordinary_merge_correc
             stored = await session.get(Event, created.event_id)
             assert stored is not None
             assert stored.is_free is True
-            assert stored.collection_decisions is None
+            assert stored.collection_decisions is not None
+            assert stored.collection_decisions["evaluation_receipts"][0]["payload"][
+                "admission_decision"
+            ]["value"] == "unknown"
 
         paid = _payload("confirmed_paid", "Вход 500 рублей", "explicit_price")
         merged = await smart_event_update(

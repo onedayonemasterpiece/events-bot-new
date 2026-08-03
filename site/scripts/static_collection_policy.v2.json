@@ -1,0 +1,112 @@
+{
+  "schema_version": "static-collection-policy-v2",
+  "policy_version": "static-collection-ontology-v2",
+  "document_kind": "collection_semantics_v1",
+  "document_version": "collection-semantics-doc-v1",
+  "facts_policy_compatibility": {
+    "current_runtime": "static-collection-facts-v2",
+    "required_for_ontology_v2": "static-collection-facts-v3",
+    "status": "incompatible_blocked",
+    "note": "PR A defines review ontology only. Runtime adjudication and re-backfill are PR C work; stale scalar kids/family decisions cannot publish ontology-v2 labels."
+  },
+  "publication_default": "blocked",
+  "semantic_quality_gate": {
+    "minimum_positives": 15,
+    "minimum_hard_negatives": 20,
+    "minimum_recall": 0.8,
+    "maximum_hard_negative_fpr": 0.05
+  },
+  "audience_recall_gate": {
+    "minimum_recall": 0.95,
+    "publication_truth": "source_grounded_independent_audience_decisions_v2"
+  },
+  "definitions": {
+    "child_directed": {
+      "definition_id": "ontology-v2.child_directed",
+      "definition": "Ребёнок является прямым целевым зрителем или участником программы.",
+      "insufficient_evidence": ["возрастной рейтинг", "детская тема", "детские авторы"]
+    },
+    "family_suitable": {
+      "definition_id": "ontology-v2.family_suitable",
+      "definition": "Взрослые и дети прямо приглашены на совместное посещение.",
+      "insufficient_evidence": ["слово семейный без формата", "встреча только для родителей", "семейная атмосфера"]
+    },
+    "joint_family_activity": {
+      "definition_id": "ontology-v2.joint_family_activity",
+      "definition": "Взрослый и ребёнок выполняют общую практику или задание.",
+      "insufficient_evidence": ["совместное присутствие", "детская программа с сопровождающим взрослым"]
+    },
+    "science_pop": {
+      "definition_id": "ontology-v2.science_pop",
+      "definition": "Доказательное объяснение науки, научная лекция или документалистика, либо демонстрация объяснённого явления.",
+      "insufficient_evidence": ["научная лексика", "обычная историческая выставка", "развлекательное шоу без объяснения"]
+    },
+    "research_in_action": {
+      "definition_id": "ontology-v2.research_in_action",
+      "definition": "Научный метод, первичные данные или источники, полевая работа, устройство эксперимента либо исследовательская практика являются содержанием события.",
+      "insufficient_evidence": ["метафорическое исследование", "биография без метода", "архивные предметы без исследовательского процесса"]
+    },
+    "strong_impressions": {
+      "definition_id": "ontology-v2.strong_impressions",
+      "definition": "Редкий доступ, иммерсивная смена роли, физически или эмоционально интенсивный маршрут либо редкая site-specific практика с личным участием.",
+      "insufficient_evidence": ["обычный мастер-класс", "йога", "публичный спортивный день", "концерт со свечами", "рекламная яркость"]
+    },
+    "medieval": {
+      "definition_id": "ontology-v2.medieval",
+      "definition": "Средневековье, рыцарская культура, замок как предмет программы, викинги либо living history являются содержанием события.",
+      "insufficient_evidence": ["старый замок как площадка", "фэнтези", "один средневековый номер", "другой исторический период"]
+    }
+  },
+  "public_projections": {
+    "kids": {
+      "route": "/detyam/",
+      "operation": "union",
+      "members": ["child_directed", "family_suitable"],
+      "deduplicate_by": "occurrence_family",
+      "facets": {"joint_family_activity": "Делать вместе"},
+      "publication": "blocked"
+    }
+  },
+  "labels": {
+    "free": {"strategy": "fact", "publication": "shadow"},
+    "kids": {"strategy": "derived_union", "definition_ref": "public_projections.kids", "publication": "blocked"},
+    "theatre": {"strategy": "exact_registry", "publication": "shadow"},
+    "performances": {"strategy": "exact_topic_type", "publication": "shadow"},
+    "exhibitions": {"strategy": "exact_topic_type", "publication": "shadow"},
+    "popular": {"strategy": "existing_ranking", "publication": "shadow"},
+    "guests_russia": {"strategy": "grounded_people_fact", "publication": "shadow"},
+    "guests_foreign": {"strategy": "grounded_people_fact", "publication": "shadow"},
+    "unusual": {
+      "strategy": "semantic_bge", "positive_prefix": "unusual.positive.", "negative_prefix": "unusual.hard_negative.",
+      "minimum_positive_similarity": 0.42, "minimum_margin": 0.02, "publication": "blocked"
+    },
+    "science_pop": {
+      "strategy": "semantic_bge", "definition_ref": "ontology-v2.science_pop", "positive_prefix": "science_pop.positive.", "negative_prefix": "science_pop.hard_negative.",
+      "minimum_positive_similarity": 0.42, "minimum_margin": 0.02, "publication": "blocked", "runtime_status": "pending_pr_b_prototypes_and_pr_c_adjudication"
+    },
+    "research_in_action": {
+      "strategy": "semantic_bge", "definition_ref": "ontology-v2.research_in_action", "positive_prefix": "research_in_action.positive.", "negative_prefix": "research_in_action.hard_negative.",
+      "minimum_positive_similarity": 0.42, "minimum_margin": 0.02, "publication": "blocked", "runtime_status": "pending_pr_b_prototypes_and_pr_c_adjudication"
+    },
+    "strong_impressions": {
+      "strategy": "semantic_bge", "definition_ref": "ontology-v2.strong_impressions", "positive_prefix": "strong_impressions.positive.", "negative_prefix": "strong_impressions.hard_negative.",
+      "minimum_positive_similarity": 0.42, "minimum_margin": 0.02, "publication": "blocked"
+    },
+    "medieval": {
+      "strategy": "semantic_bge", "definition_ref": "ontology-v2.medieval", "positive_prefix": "medieval.positive.", "negative_prefix": "medieval.hard_negative.",
+      "minimum_positive_similarity": 0.42, "minimum_margin": 0.02, "publication": "blocked"
+    },
+    "child_directed": {
+      "strategy": "semantic_bge_recall", "definition_ref": "ontology-v2.child_directed", "positive_prefix": "child_directed.positive.", "negative_prefix": "child_directed.hard_negative.",
+      "minimum_positive_similarity": 0.38, "minimum_margin": -0.01, "publication": "blocked", "publication_truth": "grounded_audience_decision"
+    },
+    "family_suitable": {
+      "strategy": "semantic_bge_recall", "definition_ref": "ontology-v2.family_suitable", "positive_prefix": "family_suitable.positive.", "negative_prefix": "family_suitable.hard_negative.",
+      "minimum_positive_similarity": 0.38, "minimum_margin": -0.01, "publication": "blocked", "publication_truth": "grounded_audience_decision"
+    },
+    "joint_family_activity": {
+      "strategy": "semantic_bge_recall", "definition_ref": "ontology-v2.joint_family_activity", "positive_prefix": "joint_family_activity.positive.", "negative_prefix": "joint_family_activity.hard_negative.",
+      "minimum_positive_similarity": 0.38, "minimum_margin": -0.01, "publication": "blocked", "publication_truth": "grounded_audience_decision"
+    }
+  }
+}

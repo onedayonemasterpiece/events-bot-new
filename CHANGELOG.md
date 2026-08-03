@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+- Added the clean main-based audience-collections shadow contour: source-grounded
+  facts v3, review receipts and warm cache, immutable Telegram/VK/parser replay,
+  full-catalog product snapshot/monitor and StaticSiteBuilder artifacts. The
+  current rolling/Pacific project-scoped Google limiter remains authoritative;
+  PR B, owner gold/calibration, Astro routes, navigation, sitemap and publication
+  remain blocked. The replay report now distinguishes an explicitly bounded
+  Telegram/VK prose-only warm drift from collection-plane changes, while still
+  requiring identical collection receipts/evidence and product output. The
+  committed Telegram and guide Kaggle notebooks were regenerated from that
+  exact central gateway so they cannot carry the pre-integration client snapshot.
+- Fixed StaticSiteBuilder Kaggle source packaging to carry the repo-level
+  transport-fault profile consumed by preview builds; staging now fails closed
+  instead of starting a remote build with that contract missing. Preview
+  provenance now uses the full runner-bound repo SHA rather than requiring a
+  `.git` directory inside the Kaggle archive. Preview validation also accepts a
+  listing without mobile rows only when its rendered no-events marker is
+  explicitly visible, so a genuinely empty production date does not fail the
+  Kaggle build while missing rail markup still fails closed.
+
 - Fixed the Google AI registry after operator confirmation that all six API
   keys belong to different Google Cloud projects: each key now has an
   independent redacted `quota_scope`, while historical attempts and any 429
