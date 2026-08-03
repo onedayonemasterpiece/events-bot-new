@@ -55,7 +55,9 @@ function rootOnlySitemap(siteOrigin) {
 }
 
 function rootOnlyRobots(siteOrigin) {
-  return `User-agent: *\nAllow: /$\nDisallow: /\nSitemap: ${siteOrigin}/sitemap.xml\n`;
+  // The holder's own CSS, JS and brand artwork must remain crawlable so search
+  // engines can render the indexable root. These are assets, never HTML pages.
+  return `User-agent: *\nAllow: /$\nAllow: /_astro/\nAllow: /assets/\nAllow: /sitemap.xml\nDisallow: /\nSitemap: ${siteOrigin}/sitemap.xml\n`;
 }
 
 export function applyPrelaunchArtifactPolicy(distDir, { enabled, siteOrigin }) {
@@ -103,7 +105,7 @@ export function assertPrelaunchArtifactPolicy(distDir, { siteOrigin }) {
 
   const expectedRobots = rootOnlyRobots(origin);
   if (readFileSync(join(distDir, 'robots.txt'), 'utf8') !== expectedRobots) {
-    throw new Error('Prelaunch robots.txt does not allow only the root');
+    throw new Error('Prelaunch robots.txt does not allow only the root HTML and its technical assets');
   }
   const sitemap = readFileSync(join(distDir, 'sitemap.xml'), 'utf8');
   const locations = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/gu)].map((match) => match[1]);
