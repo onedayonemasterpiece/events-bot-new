@@ -57,7 +57,7 @@ test('artifact policy indexes only the root and hides every other HTML page', ()
     );
     assert.equal(
       readFileSync(join(root, 'robots.txt'), 'utf8'),
-      'User-agent: *\nAllow: /$\nDisallow: /\nSitemap: https://kenigevents.ru/sitemap.xml\n',
+      'User-agent: *\nAllow: /$\nAllow: /_astro/\nAllow: /assets/\nAllow: /sitemap.xml\nDisallow: /\nSitemap: https://kenigevents.ru/sitemap.xml\n',
     );
     assert.deepEqual(assertPrelaunchArtifactPolicy(root, { siteOrigin: 'https://kenigevents.ru' }), {
       htmlCount: 2,
@@ -71,6 +71,7 @@ test('artifact policy indexes only the root and hides every other HTML page', ()
 test('landing source uses the approved brand asset and purpose-limited resilient signup RPC', () => {
   const landing = source('site/src/components/PrelaunchLanding.astro');
   const layout = source('site/src/layouts/PrelaunchLayout.astro');
+  const motion = source('site/src/styles/prelaunch-motion.css');
   const catalog = source('site/src/lib/backendOperationCatalog.ts');
 
   assert.match(landing, /announcements-brand-v2-512\.png/u);
@@ -81,6 +82,10 @@ test('landing source uses the approved brand asset and purpose-limited resilient
   assert.match(landing, /launch-2026-09-01-v1/u);
   assert.match(landing, /prefers-reduced-motion/u);
   assert.match(layout, /content=\{robots\}/u);
+  assert.match(layout, /prelaunch-motion\.css/u);
+  assert.match(motion, /opacity:\s*var\(--veil\)/u);
+  assert.match(motion, /transition:[\s\S]*opacity var\(--speed\)/u);
+  assert.match(motion, /prefers-reduced-motion/u);
   assert.match(catalog, /'register_prelaunch_notification_v1'/u);
 });
 
