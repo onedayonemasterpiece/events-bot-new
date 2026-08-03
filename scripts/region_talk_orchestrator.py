@@ -42,6 +42,12 @@ from scripts.region_talk_goal_notify import (  # noqa: E402
     ydb_table_path,
     ydb_token,
 )
+from scripts.region_talk_ydb_cost import (  # noqa: E402
+    YdbCostBudget,
+    YdbCostBudgetExceeded,
+    payload_size_bytes,
+    validate_expected_database,
+)
 
 
 ACTIVE_KERNEL_STATUSES = {"RUNNING", "PENDING", "QUEUED", "INITIALIZING"}
@@ -74,6 +80,14 @@ POST_LINK_TERMINAL_STATUSES = {
 MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_STATE_BACKEND": "ydb",
     "REGION_TALK_REQUIRE_YDB_STATE": "1",
+    "REGION_TALK_YDB_REQUIRE_EXPECTED_DATABASE": "1",
+    "REGION_TALK_YDB_BUDGET_MAX_QUERIES": "64",
+    "REGION_TALK_YDB_BUDGET_MAX_ROWS_READ": "5000",
+    "REGION_TALK_YDB_BUDGET_MAX_BYTES_READ": str(32 * 1024 * 1024),
+    "REGION_TALK_YDB_BUDGET_MAX_ROWS_WRITTEN": "1000",
+    "REGION_TALK_YDB_BUDGET_MAX_BYTES_WRITTEN": str(16 * 1024 * 1024),
+    "REGION_TALK_YDB_BUDGET_MAX_ESTIMATED_IO_RU": "8000",
+    "REGION_TALK_YDB_DUE_PAGE_SCAN_MAX_ROWS": "200",
     "REGION_TALK_TEXT_EMBEDDING_MODEL_IDS": "intfloat/multilingual-e5-base",
     "REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS": "0",
     "REGION_TALK_EXTERNAL_BGE_M3_FUSION_ENABLED": "1",
@@ -327,7 +341,15 @@ def _orchestrator_kind_limit(kind: str, requested_limit: int) -> int:
     return max(1, min(max(1, int(requested_limit)), cap))
 
 
-def read_kind_rows(pool: Any, ydb: Any, table: str, kind: str, limit: int) -> list[dict[str, Any]]:
+def read_kind_rows(
+    pool: Any,
+    ydb: Any,
+    table: str,
+    kind: str,
+    limit: int,
+    *,
+    budget: YdbCostBudget | None = None,
+) -> list[dict[str, Any]]:
     """Strongly read current metric rows; callers use limit+1 for completeness."""
 
     if not re.fullmatch(r"[A-Za-z0-9_:-]+", kind):
@@ -343,6 +365,8 @@ def read_kind_rows(pool: Any, ydb: Any, table: str, kind: str, limit: int) -> li
         tx = session.transaction(ydb.SnapshotReadOnly())
         try:
             while len(out) < max_items:
+                if budget is not None:
+                    budget.before_query(f"orchestrator.kind:{kind}")
                 query_text = (
                     "DECLARE $prefix AS Utf8; DECLARE $prefix_upper AS Utf8; DECLARE $after AS Utf8; "
                     f"SELECT pk, payload_json, updated_at FROM `{table}` "
@@ -356,6 +380,12 @@ def read_kind_rows(pool: Any, ydb: Any, table: str, kind: str, limit: int) -> li
                     commit_tx=False,
                 )
                 rows = result_sets[0].rows if result_sets else []
+                if budget is not None:
+                    budget.record_read(
+                        f"orchestrator.kind:{kind}",
+                        len(rows),
+                        sum(payload_size_bytes(getattr(raw, "payload_json", "")) for raw in rows),
+                    )
                 if not rows:
                     break
                 for raw in rows:
@@ -370,6 +400,8 @@ def read_kind_rows(pool: Any, ydb: Any, table: str, kind: str, limit: int) -> li
                     break
             tx.commit()
             return out
+        except YdbCostBudgetExceeded:
+            raise
         except Exception:
             try:
                 tx.rollback()
@@ -380,7 +412,14 @@ def read_kind_rows(pool: Any, ydb: Any, table: str, kind: str, limit: int) -> li
     return list(pool.retry_operation_sync(op) or [])
 
 
-def read_text_vector_metric_rows(pool: Any, ydb: Any, table: str, limit: int) -> list[dict[str, Any]]:
+def read_text_vector_metric_rows(
+    pool: Any,
+    ydb: Any,
+    table: str,
+    limit: int,
+    *,
+    budget: YdbCostBudget | None = None,
+) -> list[dict[str, Any]]:
     """Read vector metadata without materializing dense embedding arrays."""
     max_items = max(1, int(limit))
     page_size = max(1, min(500, _env_int("REGION_TALK_YDB_SELECT_PAGE_SIZE", 200), max_items))
@@ -393,6 +432,8 @@ def read_text_vector_metric_rows(pool: Any, ydb: Any, table: str, limit: int) ->
     )
     out: list[dict[str, Any]] = []
     while len(out) < max_items:
+        if budget is not None:
+            budget.before_query("orchestrator.kind:text_vector_enrichment_item")
         query_text = (
             "DECLARE $prefix AS Utf8; DECLARE $prefix_upper AS Utf8; DECLARE $after AS Utf8; "
             f"SELECT pk, updated_at AS `_row_updated_at`, {projections} FROM `{table}` "
@@ -409,6 +450,15 @@ def read_text_vector_metric_rows(pool: Any, ydb: Any, table: str, limit: int) ->
             )
 
         rows = pool.retry_operation_sync(op)[0].rows
+        if budget is not None:
+            budget.record_read(
+                "orchestrator.kind:text_vector_enrichment_item",
+                len(rows),
+                sum(
+                    payload_size_bytes({field: getattr(row, field, None) for field in TEXT_VECTOR_METRIC_FIELDS})
+                    for row in rows
+                ),
+            )
         if not rows:
             break
         for row in rows:
@@ -3800,8 +3850,14 @@ def _open_ydb_driver(
 
 def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_yc_fallback: bool = False) -> dict[str, Any]:
     ydb = ensure_ydb_module()
+    budget = YdbCostBudget.from_env(label="region_talk_orchestrator_cycle")
 
     endpoint, database = ydb_endpoint_database(allow_yc_fallback=allow_yc_fallback)
+    validate_expected_database(
+        database,
+        require_expected=(os.getenv("REGION_TALK_YDB_REQUIRE_EXPECTED_DATABASE") or "0").strip().lower()
+        in {"1", "true", "yes", "on"},
+    )
     driver = _open_ydb_driver(
         ydb,
         endpoint=endpoint,
@@ -3842,9 +3898,9 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         for kind in kinds:
             kind_limit = _orchestrator_kind_limit(kind, limit)
             loaded = (
-                read_text_vector_metric_rows(pool, ydb, table, kind_limit + 1)
+                read_text_vector_metric_rows(pool, ydb, table, kind_limit + 1, budget=budget)
                 if kind == "text_vector_enrichment_item"
-                else read_kind_rows(pool, ydb, table, kind, kind_limit + 1)
+                else read_kind_rows(pool, ydb, table, kind, kind_limit + 1, budget=budget)
             )
             if len(loaded) > kind_limit:
                 truncated_kinds.append(kind)
@@ -3853,8 +3909,14 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         ensure_decision_metric_reads_complete(truncated_kinds)
         latest_query = f"SELECT pk, payload_json, updated_at FROM `{table}` WHERE pk IN ('latest_state', 'latest_business_heartbeat', 'latest_business_heartbeat:bge_m3_enrichment', 'latest_business_heartbeat:image_diagnostic');"
         def read_latest_rows(session: Any) -> dict[str, dict[str, Any]]:
+            budget.before_query("orchestrator.latest_state")
             result_sets = session.transaction(ydb.SnapshotReadOnly()).execute(latest_query, commit_tx=True)
             rows = result_sets[0].rows if result_sets else []
+            budget.record_read(
+                "orchestrator.latest_state",
+                len(rows),
+                sum(payload_size_bytes(getattr(row, "payload_json", "")) for row in rows),
+            )
             out: dict[str, dict[str, Any]] = {}
             for row in rows:
                 payload = row.payload_json
@@ -3874,9 +3936,10 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
                 f"vk_video_url, rutube_url, pipeline_status FROM `{evidence_table}` "
                 f"ORDER BY record_id LIMIT {evidence_limit};"
             )
+            budget.before_query("orchestrator.external_blogger_evidence")
             result_sets = session.transaction(ydb.SnapshotReadOnly()).execute(query, commit_tx=True)
             rows = result_sets[0].rows if result_sets else []
-            return [{
+            result = [{
                 "record_id": getattr(row, "record_id", None),
                 "confirmation_status": getattr(row, "confirmation_status", None),
                 "region_relation_status": getattr(row, "region_relation_status", None),
@@ -3886,9 +3949,17 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
                 "rutube_url": getattr(row, "rutube_url", None),
                 "pipeline_status": getattr(row, "pipeline_status", None),
             } for row in rows]
+            budget.record_read(
+                "orchestrator.external_blogger_evidence",
+                len(result),
+                sum(payload_size_bytes(row) for row in result),
+            )
+            return result
         try:
             external_blogger_evidence_rows = pool.retry_operation_sync(read_external_evidence)
             external_blogger_evidence_read_ok = True
+        except YdbCostBudgetExceeded:
+            raise
         except Exception:
             # Registry observability must not make the whole orchestrator blind
             # if the separately managed stable table is temporarily missing.
@@ -4393,6 +4464,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         ) * 100)),
         "bge_stale_maintenance_backlog_total": _safe_int(bge_collect_stats.get("existing_stale_rescore")),
         "bge_stale_maintenance_selected_sample_total": _safe_int(bge_collect_stats.get("selected_stale_rescore")),
+        "ydb_cost_budget": budget.snapshot(),
         **_heartbeat_metric_fields("candidate", latest_rows.get("latest_business_heartbeat")),
         **_heartbeat_metric_fields("bge", latest_rows.get("latest_business_heartbeat:bge_m3_enrichment")),
         **_heartbeat_metric_fields("image", latest_rows.get("latest_business_heartbeat:image_diagnostic")),

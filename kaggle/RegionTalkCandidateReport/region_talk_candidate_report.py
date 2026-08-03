@@ -2972,6 +2972,138 @@ def region_talk_state_backend_requested() -> str:
     return (os.getenv("REGION_TALK_STATE_BACKEND") or "json").strip().lower() or "json"
 
 
+class RegionTalkYdbBudgetExceeded(RuntimeError):
+    pass
+
+
+class RegionTalkYdbCostBudget:
+    """Self-contained Kaggle cost ledger; the kernel source is packed alone."""
+
+    def __init__(self, label: str) -> None:
+        self.label = label
+        self.queries = self.rows_read = self.bytes_read = 0
+        self.rows_written = self.bytes_written = 0
+        self.max_queries = getenv_int("REGION_TALK_YDB_BUDGET_MAX_QUERIES", 64)
+        self.max_rows_read = getenv_int("REGION_TALK_YDB_BUDGET_MAX_ROWS_READ", 5000)
+        self.max_bytes_read = getenv_int("REGION_TALK_YDB_BUDGET_MAX_BYTES_READ", 32 * 1024 * 1024)
+        self.max_rows_written = getenv_int("REGION_TALK_YDB_BUDGET_MAX_ROWS_WRITTEN", 1000)
+        self.max_bytes_written = getenv_int("REGION_TALK_YDB_BUDGET_MAX_BYTES_WRITTEN", 16 * 1024 * 1024)
+        self.max_estimated_io_ru = getenv_int("REGION_TALK_YDB_BUDGET_MAX_ESTIMATED_IO_RU", 8000)
+
+    @property
+    def estimated_io_ru(self) -> int:
+        read_ops = max(self.rows_read, (self.bytes_read + 4095) // 4096)
+        write_ops = max(self.rows_written, (self.bytes_written + 1023) // 1024)
+        return read_ops + (2 * write_ops)
+
+    def _check(self, operation: str) -> None:
+        checks = (
+            ("queries", self.queries, self.max_queries),
+            ("rows_read", self.rows_read, self.max_rows_read),
+            ("bytes_read", self.bytes_read, self.max_bytes_read),
+            ("rows_written", self.rows_written, self.max_rows_written),
+            ("bytes_written", self.bytes_written, self.max_bytes_written),
+            ("estimated_io_ru", self.estimated_io_ru, self.max_estimated_io_ru),
+        )
+        for metric, value, limit in checks:
+            if limit > 0 and value > limit:
+                raise RegionTalkYdbBudgetExceeded(
+                    f"region_talk_ydb_budget_exceeded:{metric}:operation={operation}:value={value}:limit={limit}"
+                )
+
+    def before_query(self, operation: str) -> None:
+        self.queries += 1
+        self._check(operation)
+
+    def record_read(self, operation: str, rows: list[Any]) -> None:
+        self.rows_read += len(rows)
+        self.bytes_read += sum(
+            len(str(getattr(row, "payload_json", "") or "").encode("utf-8"))
+            for row in rows
+        )
+        self._check(operation)
+
+    def record_write(self, operation: str, rows: list[tuple[str, str, dict[str, Any]]]) -> None:
+        self.rows_written += len(rows)
+        self.bytes_written += sum(
+            len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+            for _pk, _kind, payload in rows
+        )
+        self._check(operation)
+
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "schema_version": "region-talk-ydb-cost-ledger-v1",
+            "label": self.label,
+            "queries": self.queries,
+            "rows_read": self.rows_read,
+            "bytes_read": self.bytes_read,
+            "rows_written": self.rows_written,
+            "bytes_written": self.bytes_written,
+            "estimated_io_ru_floor": self.estimated_io_ru,
+            "exact_billed_ru_available": False,
+        }
+
+
+_ACTIVE_YDB_COST_BUDGET: RegionTalkYdbCostBudget | None = None
+_YDB_WRITE_FINGERPRINTS: dict[str, str] = {}
+_YDB_VOLATILE_WRITE_FIELDS = frozenset({"run_id", "updated_at", "last_seen_run_id", "online_update_stage"})
+YDB_POST_LINK_DUE_STATUSES = {
+    "", "pending_fetch", "retry_fetch", "fetch_error", "retry_wait_entity_cache",
+    "bge_ready_rescore", "fetched",
+}
+
+
+def region_talk_ydb_cost_snapshot() -> dict[str, Any]:
+    return _ACTIVE_YDB_COST_BUDGET.snapshot() if _ACTIVE_YDB_COST_BUDGET is not None else {}
+
+
+def ydb_payload_change_fingerprint(kind: str, payload: dict[str, Any]) -> str:
+    stable = {key: value for key, value in payload.items() if key not in _YDB_VOLATILE_WRITE_FIELDS}
+    raw = json.dumps([kind, stable], ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def ydb_changed_rows(
+    rows: list[tuple[str, str, dict[str, Any]]],
+) -> tuple[list[tuple[str, str, dict[str, Any]]], dict[str, str]]:
+    """Deduplicate stable PKs and omit product-identical repeats in this run."""
+
+    latest: dict[str, tuple[str, str, dict[str, Any]]] = {}
+    order: list[str] = []
+    for row in rows:
+        pk = str(row[0])
+        if pk not in latest:
+            order.append(pk)
+        latest[pk] = row
+    changed: list[tuple[str, str, dict[str, Any]]] = []
+    fingerprints: dict[str, str] = {}
+    for pk in order:
+        row = latest[pk]
+        fingerprint = ydb_payload_change_fingerprint(row[1], row[2])
+        if _YDB_WRITE_FINGERPRINTS.get(pk) == fingerprint:
+            continue
+        changed.append(row)
+        fingerprints[pk] = fingerprint
+    return changed, fingerprints
+
+
+def remember_ydb_written_fingerprints(fingerprints: dict[str, str]) -> None:
+    _YDB_WRITE_FINGERPRINTS.update(fingerprints)
+
+
+def validate_region_talk_ydb_identity(database: str) -> None:
+    """Fail closed on a complete-path mismatch without leaking either path."""
+
+    actual = str(database or "").strip().rstrip("/")
+    expected = str(os.getenv("REGION_TALK_YDB_EXPECTED_DATABASE") or "").strip().rstrip("/")
+    required = getenv_bool("REGION_TALK_YDB_REQUIRE_EXPECTED_DATABASE", False)
+    if required and not expected:
+        raise RuntimeError("region_talk_ydb_identity:expected_database_missing")
+    if expected and actual != expected:
+        raise RuntimeError("region_talk_ydb_identity:expected_database_mismatch")
+
+
 def ydb_config_status() -> dict[str, str]:
     endpoint = (os.getenv("REGION_TALK_YDB_ENDPOINT") or "").strip()
     database = (os.getenv("REGION_TALK_YDB_DATABASE") or "").strip()
@@ -3702,7 +3834,11 @@ def ydb_credentials(ydb: Any) -> Any:
 
 
 def ydb_connect() -> tuple[Any, Any, dict[str, str]]:
+    global _ACTIVE_YDB_COST_BUDGET
     cfg = ydb_config_status()
+    validate_region_talk_ydb_identity(cfg["database"])
+    if _ACTIVE_YDB_COST_BUDGET is None:
+        _ACTIVE_YDB_COST_BUDGET = RegionTalkYdbCostBudget("region_talk_candidate_report")
     ydb = ensure_ydb_module()
     driver = ydb.Driver(endpoint=cfg["endpoint"], database=cfg["database"], credentials=ydb_credentials(ydb))
     driver.wait(timeout=getenv_int("REGION_TALK_YDB_CONNECT_TIMEOUT_SECONDS", 20), fail_fast=True)
@@ -5315,6 +5451,9 @@ def close_region_talk_runtime_clients(status: Any | None = None) -> None:
 
 
 def ydb_upsert_json(session: Any, ydb: Any, table_path: str, pk: str, kind: str, payload: dict[str, Any], updated_at: str, *, timeout_seconds: int | None = None) -> None:
+    if _ACTIVE_YDB_COST_BUDGET is not None:
+        _ACTIVE_YDB_COST_BUDGET.before_query(f"candidate.write:{kind}")
+        _ACTIVE_YDB_COST_BUDGET.record_write(f"candidate.write:{kind}", [(pk, kind, payload)])
     settings = ydb_request_settings(ydb, timeout_seconds=timeout_seconds)
     query = session.prepare(f"""
 DECLARE $pk AS Utf8;
@@ -5347,8 +5486,12 @@ VALUES ($pk, $kind, $payload_json, $updated_at);
     written = 0
     chunk_size = max(1, int(chunk_size or 100))
     for start in range(0, len(rows), chunk_size):
+        chunk = rows[start:start + chunk_size]
+        if _ACTIVE_YDB_COST_BUDGET is not None:
+            _ACTIVE_YDB_COST_BUDGET.before_query("candidate.transactional_upsert")
+            _ACTIVE_YDB_COST_BUDGET.record_write("candidate.transactional_upsert", chunk)
         tx = session.transaction(ydb.SerializableReadWrite())
-        for pk, kind, payload in rows[start:start + chunk_size]:
+        for pk, kind, payload in chunk:
             tx.execute(query, {"$pk": pk, "$kind": kind, "$payload_json": json.dumps(payload, ensure_ascii=False), "$updated_at": updated_at}, commit_tx=False, settings=settings)
             written += 1
         tx.commit(settings=settings)
@@ -5371,6 +5514,9 @@ def ydb_bulk_upsert_json_many(
     """
     if not rows:
         return 0
+    rows, pending_fingerprints = ydb_changed_rows(rows)
+    if not rows:
+        return 0
     column_types = (
         ydb.BulkUpsertColumns()
         .add_column("pk", ydb.OptionalType(ydb.PrimitiveType.Utf8))
@@ -5391,7 +5537,17 @@ def ydb_bulk_upsert_json_many(
     chunk_size = max(1, int(chunk_size or 500))
     for start in range(0, len(bulk_rows), chunk_size):
         chunk = bulk_rows[start:start + chunk_size]
+        if _ACTIVE_YDB_COST_BUDGET is not None:
+            budget_rows = [
+                (str(row["pk"]), str(row["kind"]), json.loads(str(row["payload_json"])))
+                for row in chunk
+            ]
+            _ACTIVE_YDB_COST_BUDGET.before_query("candidate.bulk_upsert")
+            _ACTIVE_YDB_COST_BUDGET.record_write("candidate.bulk_upsert", budget_rows)
         driver.table_client.bulk_upsert(table_path, chunk, column_types)
+        remember_ydb_written_fingerprints({
+            str(row["pk"]): pending_fingerprints[str(row["pk"])] for row in chunk
+        })
         written += len(chunk)
     return written
 
@@ -5420,6 +5576,8 @@ def ydb_select_kind_items(
     current_tx = session.transaction(ydb.SnapshotReadOnly()) if current else None
     try:
         while len(out) < max_items:
+            if _ACTIVE_YDB_COST_BUDGET is not None:
+                _ACTIVE_YDB_COST_BUDGET.before_query(f"candidate.kind:{kind}")
             query = session.prepare(f"""
 DECLARE $prefix AS Utf8;
 DECLARE $prefix_upper AS Utf8;
@@ -5437,6 +5595,8 @@ LIMIT {min(page_size, max_items - len(out))};
                 settings=settings,
             )
             rows = result_sets[0].rows if result_sets else []
+            if _ACTIVE_YDB_COST_BUDGET is not None:
+                _ACTIVE_YDB_COST_BUDGET.record_read(f"candidate.kind:{kind}", rows)
             if not rows:
                 break
             for row in rows:
@@ -5466,6 +5626,122 @@ LIMIT {min(page_size, max_items - len(out))};
     return out
 
 
+def ydb_select_pk_items(
+    session: Any,
+    ydb: Any,
+    table_path: str,
+    pks: Iterable[str],
+    *,
+    chunk_size: int = 100,
+) -> dict[str, dict[str, Any]]:
+    """Point-read an explicit stable-key working set in bounded chunks."""
+
+    keys = list(dict.fromkeys(str(pk) for pk in pks if str(pk)))
+    out: dict[str, dict[str, Any]] = {}
+    settings = ydb_request_settings(ydb)
+    chunk_size = max(1, min(500, int(chunk_size)))
+    query = session.prepare(f"""
+DECLARE $keys AS List<Struct<pk:Utf8>>;
+SELECT state.pk AS pk, state.payload_json AS payload_json, state.updated_at AS updated_at
+FROM `{table_path}` AS state
+INNER JOIN AS_TABLE($keys) AS wanted ON state.pk = wanted.pk;
+""", settings=settings)
+    for start in range(0, len(keys), chunk_size):
+        chunk = keys[start:start + chunk_size]
+        if _ACTIVE_YDB_COST_BUDGET is not None:
+            _ACTIVE_YDB_COST_BUDGET.before_query("candidate.point_read")
+        result_sets = session.transaction(ydb.SnapshotReadOnly()).execute(
+            query,
+            {"$keys": [{"pk": pk} for pk in chunk]},
+            commit_tx=True,
+            settings=settings,
+        )
+        rows = result_sets[0].rows if result_sets else []
+        if _ACTIVE_YDB_COST_BUDGET is not None:
+            _ACTIVE_YDB_COST_BUDGET.record_read("candidate.point_read", rows)
+        for row in rows:
+            pk = str(row.pk)
+            payload = row.payload_json
+            item = json.loads(payload) if isinstance(payload, str) else dict(payload or {})
+            if isinstance(item, dict):
+                item.setdefault("_ydb_pk", pk)
+                item.setdefault("_ydb_updated_at", str(getattr(row, "updated_at", "") or ""))
+                out[pk] = item
+    return out
+
+
+def ydb_select_due_kind_items(
+    session: Any,
+    ydb: Any,
+    table_path: str,
+    kind: str,
+    *,
+    status_fields: tuple[str, ...],
+    due_statuses: set[str],
+    limit: int,
+    max_scan_rows: int,
+) -> dict[str, dict[str, Any]]:
+    """Read one bounded keyset page, stopping before a historical full scan.
+
+    The current compact KV has no typed status index.  This compatibility
+    reader therefore caps *scanned* rows as well as returned work.  The typed
+    due-index migration can later replace its query without changing callers.
+    """
+
+    if not re.fullmatch(r"[A-Za-z0-9_:-]+", kind):
+        raise ValueError(f"unsafe YDB kind: {kind!r}")
+    scan_ceiling = max(1, int(max_scan_rows))
+    wanted = min(max(1, int(limit)), scan_ceiling)
+    page_size = max(1, min(100, wanted, scan_ceiling))
+    prefix = kind + ":"
+    prefix_upper = kind + ";"
+    after = prefix
+    scanned = 0
+    out: dict[str, dict[str, Any]] = {}
+    settings = ydb_request_settings(ydb)
+    while len(out) < wanted and scanned < scan_ceiling:
+        current_limit = min(page_size, scan_ceiling - scanned)
+        query = session.prepare(f"""
+DECLARE $prefix AS Utf8;
+DECLARE $prefix_upper AS Utf8;
+DECLARE $after AS Utf8;
+SELECT pk, payload_json, updated_at FROM `{table_path}`
+WHERE pk >= $prefix AND pk < $prefix_upper AND pk > $after
+ORDER BY pk LIMIT {current_limit};
+""", settings=settings)
+        if _ACTIVE_YDB_COST_BUDGET is not None:
+            _ACTIVE_YDB_COST_BUDGET.before_query(f"candidate.due_page:{kind}")
+        result_sets = session.transaction(ydb.SnapshotReadOnly()).execute(
+            query,
+            {"$prefix": prefix, "$prefix_upper": prefix_upper, "$after": after},
+            commit_tx=True,
+            settings=settings,
+        )
+        rows = result_sets[0].rows if result_sets else []
+        if _ACTIVE_YDB_COST_BUDGET is not None:
+            _ACTIVE_YDB_COST_BUDGET.record_read(f"candidate.due_page:{kind}", rows)
+        if not rows:
+            break
+        scanned += len(rows)
+        for row in rows:
+            after = str(row.pk)
+            payload = row.payload_json
+            item = json.loads(payload) if isinstance(payload, str) else dict(payload or {})
+            if not isinstance(item, dict):
+                continue
+            status = next((str(item.get(field) or "") for field in status_fields if item.get(field) not in (None, "")), "")
+            if status not in due_statuses:
+                continue
+            item.setdefault("_ydb_pk", after)
+            item.setdefault("_ydb_updated_at", str(getattr(row, "updated_at", "") or ""))
+            out[after] = item
+            if len(out) >= wanted:
+                break
+        if len(rows) < current_limit:
+            break
+    return out
+
+
 def ydb_select_kind_items_current_complete(
     session: Any,
     ydb: Any,
@@ -5489,12 +5765,16 @@ def ydb_select_kind_items_current_complete(
 
 def ydb_select_latest_state(session: Any, ydb: Any, table_path: str) -> dict[str, Any]:
     settings = ydb_request_settings(ydb)
+    if _ACTIVE_YDB_COST_BUDGET is not None:
+        _ACTIVE_YDB_COST_BUDGET.before_query("candidate.latest_state")
     result_sets = session.transaction(ydb.StaleReadOnly()).execute(
         f"SELECT payload_json FROM `{table_path}` WHERE pk = 'latest_state';",
         commit_tx=True,
         settings=settings,
     )
     rows = result_sets[0].rows if result_sets else []
+    if _ACTIVE_YDB_COST_BUDGET is not None:
+        _ACTIVE_YDB_COST_BUDGET.record_read("candidate.latest_state", rows)
     if not rows:
         return {}
     payload = rows[0].payload_json
@@ -6037,6 +6317,8 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                     if attempt > 1:
                         meta["ydb_state_load_attempts"] = attempt
                     break
+                except RegionTalkYdbBudgetExceeded:
+                    raise
                 except Exception as exc:
                     last_exc = exc
                     meta.update({
@@ -6051,7 +6333,7 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                         time.sleep(backoff_seconds * attempt)
             driver.stop(timeout=5)
             if not isinstance(data, dict) or not data:
-                meta.update({"ydb_read_status": "empty", "previous_state_loaded": "false", "increment_state_loaded": "false", "previous_state_source": "ydb:" + table_path})
+                meta.update({"ydb_read_status": "empty", "previous_state_loaded": "false", "increment_state_loaded": "false", "previous_state_source": "ydb:" + table_path, "ydb_cost_budget": region_talk_ydb_cost_snapshot()})
                 return {}, meta
             # ``posts`` in older compact snapshots may still be keyed by a
             # fetch-path post_id while row-level processed rows are already
@@ -6071,14 +6353,14 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
             raw = json.dumps(data, ensure_ascii=False, sort_keys=True).encode("utf-8")
             state_hash = hashlib.sha256(raw).hexdigest()
             data["_loaded_from_path"] = "ydb:" + table_path + "#latest_state"
-            meta.update({"ydb_read_status": "ok", "previous_state_loaded": "true", "increment_state_loaded": "true", "previous_state_source": "ydb:" + table_path, "increment_state_path": "ydb:" + table_path, "previous_state_run_id": data.get("run_id", ""), "previous_run_id": data.get("run_id", ""), "previous_state_hash": state_hash, "state_schema_version_previous": data.get("state_schema_version", ""), "previous_seen_post_count": len(data.get("processed_posts") or data.get("posts") or {}), "previous_candidate_memory_count": len(data.get("candidate_memory") or {}), "ydb_table_path": table_path, "ydb_state_mode": "compact_kv"})
+            meta.update({"ydb_read_status": "ok", "previous_state_loaded": "true", "increment_state_loaded": "true", "previous_state_source": "ydb:" + table_path, "increment_state_path": "ydb:" + table_path, "previous_state_run_id": data.get("run_id", ""), "previous_run_id": data.get("run_id", ""), "previous_state_hash": state_hash, "state_schema_version_previous": data.get("state_schema_version", ""), "previous_seen_post_count": len(data.get("processed_posts") or data.get("posts") or {}), "previous_candidate_memory_count": len(data.get("candidate_memory") or {}), "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_cost_budget": region_talk_ydb_cost_snapshot()})
             return data, meta
         except Exception as exc:
             try:
                 driver.stop(timeout=5)
             except Exception:
                 pass
-            meta.update({"ydb_read_status": "error", "ydb_error": f"{type(exc).__name__}: {str(exc)[:220]}"})
+            meta.update({"ydb_read_status": "error", "ydb_error": f"{type(exc).__name__}: {str(exc)[:220]}", "ydb_cost_budget": region_talk_ydb_cost_snapshot()})
             return {}, meta
     path = Path(snapshot)
     try:
@@ -14339,12 +14621,22 @@ def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | Non
             ensure_ydb_kv_table(ydb, session, table_path)
             rows: list[dict[str, Any]] = []
             for kind in selected_kinds:
-                scan_limit = (
-                    getenv_int("REGION_TALK_POST_LINK_QUEUE_SCAN_LIMIT", 5000)
-                    if kind == "post_link_queue_item"
-                    else max(1, limit * 3)
-                )
-                items = ydb_select_kind_items(session, ydb, table_path, kind, limit=max(1, scan_limit))
+                if kind == "post_link_queue_item":
+                    items = ydb_select_due_kind_items(
+                        session,
+                        ydb,
+                        table_path,
+                        kind,
+                        status_fields=("post_link_status", "fetch_status"),
+                        due_statuses=set(YDB_POST_LINK_DUE_STATUSES),
+                        limit=max(1, limit * 3),
+                        max_scan_rows=getenv_int("REGION_TALK_YDB_DUE_PAGE_SCAN_MAX_ROWS", 200),
+                    )
+                else:
+                    items = ydb_select_kind_items(
+                        session, ydb, table_path, kind,
+                        limit=max(1, min(100, limit * 3)),
+                    )
                 for pk, payload in items.items():
                     if not isinstance(payload, dict):
                         continue
@@ -14357,15 +14649,25 @@ def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | Non
             # source ledger before selecting exact-fetch work so rejected
             # sources are terminalized instead of consuming Telegram calls.
             source_by_key: dict[str, dict[str, Any]] = {}
+            source_keys = {
+                str(row.get("canonical_source_key") or row.get("source_key") or "").strip()
+                for row in rows
+                if str(row.get("canonical_source_key") or row.get("source_key") or "").strip()
+            }
+            source_items = ydb_select_pk_items(
+                session,
+                ydb,
+                table_path,
+                [
+                    f"{source_kind}:{source_key}"
+                    for source_key in sorted(source_keys)
+                    for source_kind in ("source_queue_item", "source_status_item", "online_source_item")
+                ],
+            )
             for source_kind in ("source_queue_item", "source_status_item", "online_source_item"):
-                source_items = ydb_select_kind_items(
-                    session,
-                    ydb,
-                    table_path,
-                    source_kind,
-                    limit=getenv_int("REGION_TALK_YDB_SOURCE_QUEUE_FULL_READ_LIMIT", 20000),
-                )
-                for source in source_items.values():
+                for pk, source in source_items.items():
+                    if not pk.startswith(source_kind + ":"):
+                        continue
                     key = str(source.get("canonical_source_key") or "").strip()
                     if not key:
                         continue
@@ -14388,22 +14690,29 @@ def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | Non
                         if field in source:
                             row[field] = source.get(field)
             if "post_link_queue_item" in selected_kinds:
-                processed_items = ydb_select_kind_items(
-                    session, ydb, table_path, "processed_post_item",
-                    limit=getenv_int("REGION_TALK_YDB_MAX_PROCESSED_POST_ROWS", 20000),
-                )
-                vector_items = ydb_select_kind_items(
-                    session, ydb, table_path, "text_vector_enrichment_item",
-                    limit=getenv_int("REGION_TALK_YDB_VECTOR_METRIC_READ_LIMIT", 20000),
-                )
-                publication_items = ydb_select_kind_items(
-                    session, ydb, table_path, "publication_candidate_item",
-                    limit=getenv_int("REGION_TALK_YDB_MAX_PUBLICATION_ROWS", 5000),
-                )
-                candidate_items = ydb_select_kind_items(
-                    session, ydb, table_path, "candidate_memory_item",
-                    limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000),
-                )
+                related_pks: set[str] = set()
+                for row in rows:
+                    post_key = durable_processed_post_key(row)
+                    post_url = canonical_post_url_for_storage(row.get("post_url"))
+                    identifiers = {
+                        str(row.get("post_id") or ""),
+                        str(row.get("candidate_memory_id") or ""),
+                        str(row.get("text_vector_enrichment_id") or ""),
+                    }
+                    if post_key:
+                        related_pks.add("processed_post_item:" + post_key)
+                    if post_url:
+                        related_pks.add("publication_candidate_item:" + post_url)
+                        related_pks.add("candidate_memory_item:" + post_url)
+                    for identifier in identifiers:
+                        if identifier:
+                            related_pks.add("candidate_memory_item:" + identifier)
+                            related_pks.add("text_vector_enrichment_item:" + identifier)
+                related_items = ydb_select_pk_items(session, ydb, table_path, related_pks)
+                processed_items = {pk: row for pk, row in related_items.items() if pk.startswith("processed_post_item:")}
+                vector_items = {pk: row for pk, row in related_items.items() if pk.startswith("text_vector_enrichment_item:")}
+                publication_items = {pk: row for pk, row in related_items.items() if pk.startswith("publication_candidate_item:")}
+                candidate_items = {pk: row for pk, row in related_items.items() if pk.startswith("candidate_memory_item:")}
                 rows = promote_bge_ready_exact_rows(
                     rows,
                     list(processed_items.values()),
@@ -14479,6 +14788,8 @@ def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | Non
             return rows, cached_handles
         raw_rows, cached_handles = pool.retry_operation_sync(op)
         driver.stop(timeout=5)
+    except RegionTalkYdbBudgetExceeded:
+        raise
     except Exception:
         return []
     return candidate_link_rows_for_fetch(raw_rows, limit, cached_entity_handles=cached_handles)

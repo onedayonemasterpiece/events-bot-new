@@ -302,6 +302,12 @@ def preflight_ydb_access() -> None:
             "requires REGION_TALK_YDB_ENDPOINT/REGION_TALK_YDB_DATABASE before "
             "pushing a Kaggle run; refusing json_fallback live run"
         )
+    expected_database = (os.environ.get("REGION_TALK_YDB_EXPECTED_DATABASE") or "").strip().rstrip("/")
+    require_expected = getenv_bool("REGION_TALK_YDB_REQUIRE_EXPECTED_DATABASE", False)
+    if require_expected and not expected_database:
+        raise RuntimeError("Region Talk YDB preflight failed: expected_database_missing")
+    if expected_database and database.rstrip("/") != expected_database:
+        raise RuntimeError("Region Talk YDB preflight failed: expected_database_mismatch")
     if getenv_bool("REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL", False) and not (os.environ.get("REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON") or "").strip():
         if getenv_bool("REGION_TALK_ALLOW_KAGGLE_YDB_SECRET", False):
             print("[region-talk-kaggle] YDB local preflight skipped: explicit REGION_TALK_ALLOW_KAGGLE_YDB_SECRET=1; Kaggle notebook must load REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON from UserSecretsClient", flush=True)
@@ -372,7 +378,16 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_KAGGLE_SECRET_NAMES": os.environ.get("REGION_TALK_KAGGLE_SECRET_NAMES", ""),
         "REGION_TALK_YDB_ENDPOINT": os.environ.get("REGION_TALK_YDB_ENDPOINT", ""),
         "REGION_TALK_YDB_DATABASE": os.environ.get("REGION_TALK_YDB_DATABASE", ""),
+        "REGION_TALK_YDB_EXPECTED_DATABASE": os.environ.get("REGION_TALK_YDB_EXPECTED_DATABASE", ""),
+        "REGION_TALK_YDB_REQUIRE_EXPECTED_DATABASE": os.environ.get("REGION_TALK_YDB_REQUIRE_EXPECTED_DATABASE", "1"),
         "REGION_TALK_YDB_NAMESPACE": os.environ.get("REGION_TALK_YDB_NAMESPACE", "region_talk_compact"),
+        "REGION_TALK_YDB_BUDGET_MAX_QUERIES": os.environ.get("REGION_TALK_YDB_BUDGET_MAX_QUERIES", "64"),
+        "REGION_TALK_YDB_BUDGET_MAX_ROWS_READ": os.environ.get("REGION_TALK_YDB_BUDGET_MAX_ROWS_READ", "5000"),
+        "REGION_TALK_YDB_BUDGET_MAX_BYTES_READ": os.environ.get("REGION_TALK_YDB_BUDGET_MAX_BYTES_READ", str(32 * 1024 * 1024)),
+        "REGION_TALK_YDB_BUDGET_MAX_ROWS_WRITTEN": os.environ.get("REGION_TALK_YDB_BUDGET_MAX_ROWS_WRITTEN", "1000"),
+        "REGION_TALK_YDB_BUDGET_MAX_BYTES_WRITTEN": os.environ.get("REGION_TALK_YDB_BUDGET_MAX_BYTES_WRITTEN", str(16 * 1024 * 1024)),
+        "REGION_TALK_YDB_BUDGET_MAX_ESTIMATED_IO_RU": os.environ.get("REGION_TALK_YDB_BUDGET_MAX_ESTIMATED_IO_RU", "8000"),
+        "REGION_TALK_YDB_DUE_PAGE_SCAN_MAX_ROWS": os.environ.get("REGION_TALK_YDB_DUE_PAGE_SCAN_MAX_ROWS", "200"),
         "REGION_TALK_YDB_STATE_SNAPSHOT_FILE": os.environ.get("REGION_TALK_YDB_STATE_SNAPSHOT_FILE", ""),
         "REGION_TALK_YDB_MAX_POST_ROWS": os.environ.get("REGION_TALK_YDB_MAX_POST_ROWS", "20000"),
         "REGION_TALK_YDB_MAX_SOURCE_ROWS": os.environ.get("REGION_TALK_YDB_MAX_SOURCE_ROWS", "5000"),

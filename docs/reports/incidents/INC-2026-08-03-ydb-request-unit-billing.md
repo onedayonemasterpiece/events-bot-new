@@ -154,8 +154,16 @@ cost accumulated.
 ## Follow-up Actions
 
 - [ ] Add a YDB RU budget/alert before any scheduler re-enable.
-- [ ] Replace full row materialization for metrics with narrow indexed/counter
-      reads and measure RU per complete cycle.
+- [x] Add a fail-closed application-side per-process ledger for YDB query count,
+      rows/bytes read, rows/bytes written and the documented YQL I/O RU floor.
+      This is not a billing alert and does not replace server-side RU
+      observation: YQL CPU may make actual billed RU higher than the client I/O
+      floor.
+- [ ] Replace all full row materialization for metrics with typed indexed/counter
+      reads and measure exact server-side RU per complete cycle. The first safe
+      slice now uses a bounded keyset due-page plus point reads for exact-post
+      work; the start-of-run product reconstruction and full orchestrator metric
+      population remain intentionally blocked by the 5,000-row default budget.
 - [ ] Run a manually approved canary with a hard RU/s ceiling and confirm billing.
 - [ ] Before autonomous use, add an application-side daily run/query budget;
       billing budgets only notify and YDB's RU/s throttle is not a per-day
@@ -187,3 +195,41 @@ cloud/database produces a stable fail-closed preflight marker without leaking
 paths. The source database is deleted; the scheduler remains disabled and the
 target remains at 0 RU/s until a separate bounded-cost acceptance explicitly
 raises its limit.
+
+### Application-side cost gate added on 2026-08-03
+
+The scheduled wrapper, local orchestrator, Kaggle launcher/CandidateReport and
+one-time compactor now share the following fail-closed contract:
+
+- autonomous preflight requires `REGION_TALK_YDB_EXPECTED_DATABASE`; exact
+  equality covers the complete cloud/database owner path and mismatch errors do
+  not print either path;
+- each orchestrator/CandidateReport process has hard ceilings for queries,
+  rows/bytes read, rows/bytes written and estimated YQL I/O RU. Default
+  autonomous ceilings are `64` queries, `5,000` read rows, `32 MiB` read,
+  `1,000` written rows, `16 MiB` written and `8,000` estimated I/O RU;
+- exceeding any ceiling aborts before the next request or immediately after the
+  bounded response; a cost exception is not treated as a transient retry;
+- exact-post acquisition reads at most a bounded keyset compatibility page
+  (`200` scanned rows by default) and point-reads only referenced source/post/
+  vector/candidate/publication keys instead of scanning 20,000-row populations;
+- repeated BulkUpsert payloads with the same stable PK and unchanged product
+  fields are removed inside one CandidateReport process. Cross-process
+  change-detection remains a typed-table/CDC follow-up;
+- the compactor has explicit CLI ceilings, preserves writer-watermark and
+  count/identity validation, and requires the exact expected database even in
+  dry-run mode.
+
+The I/O estimate follows the official YQL pricing model: reads use the larger of
+row count and 4 KiB blocks, writes use twice the larger of row count and 1 KiB
+blocks. Actual billed RU is the greater of I/O and CPU cost, so the ledger calls
+this value `estimated_io_ru_floor`, never exact RU. References:
+[YQL RU calculation](https://yandex.cloud/en/docs/ydb/pricing/ru-yql),
+[serverless pricing](https://yandex.cloud/en/docs/ydb/pricing/serverless).
+
+Regression fixtures cover the incident migration counts (`2`, `9`, `231`,
+`266`, `58,046`), exact old/new owner paths, disabled scheduler/0 RU/s state,
+and a synthetic 20,000-row queue proving that the bounded due reader stops at
+its scan ceiling while a legacy full materialization trips the cost budget.
+No production YDB request, throttle change, scheduler enablement or catch-up was
+performed for this slice.
