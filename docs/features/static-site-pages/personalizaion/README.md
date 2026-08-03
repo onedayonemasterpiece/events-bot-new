@@ -9,9 +9,11 @@
 2. [`personalization-to-be.md`](personalization-to-be.md) — **главная целевая продуктовая, исследовательская и модельная архитектура**.
 3. [`personalization-research-traceability.md`](personalization-research-traceability.md) — нормативная трассировка всех целевых наработок в реализационные волны и guard против подмены исследований legacy-кодом.
 4. [`personalization-implementation-contract.md`](personalization-implementation-contract.md) — техническая детализация целевой системы: единый runtime, surface policy, компактное хранение, транспорт, физическая модель БД, rollout и release gates. Он заполняет инженерные пробелы, но не может менять продуктовый или модельный смысл `personalization-to-be.md`.
-5. [`personalization-current-runtime-audit-2026-08-02.md`](personalization-current-runtime-audit-2026-08-02.md) — аудит фактического runtime в `main` и список расхождений, которые нельзя переносить в production.
-6. [`tasks/personalization-wave-0.md`](tasks/personalization-wave-0.md) — готовое задание кодовому агенту на первый безопасный реализационный PR.
-7. [`implementation-status.yml`](implementation-status.yml) — машиночитаемый контроль волн, зависимостей и доказательств.
+5. [`longitudinal-e2e-personalization.md`](longitudinal-e2e-personalization.md) — сценарный пакет длительного surfing/E2E: повторные визиты, golden personas, profile horizons, DOM-трансформация, GitHub Actions evidence и калибровка модели.
+6. [`personalization-test-report-template.md`](personalization-test-report-template.md) — формат сводного отчёта: planned vs actual, persona scorecards, timeline профиля, factor ablation, hard invariants и next-iteration plan.
+7. [`personalization-current-runtime-audit-2026-08-02.md`](personalization-current-runtime-audit-2026-08-02.md) — аудит фактического runtime в `main` и список расхождений, которые нельзя переносить в production.
+8. [`tasks/personalization-wave-0.md`](tasks/personalization-wave-0.md) — готовое задание кодовому агенту на первый безопасный реализационный PR.
+9. [`implementation-status.yml`](implementation-status.yml) — машиночитаемый контроль волн, зависимостей и доказательств.
 
 ## Машиночитаемые контракты
 
@@ -28,7 +30,7 @@ JSON-файлы в этом пакете являются **контрактны
 2. Утверждённый юридический/localization release-gate — только для права, оснований обработки, локализации и публичных документов.
 3. `personalization-to-be.md` — продуктовая, исследовательская и модельная цель.
 4. `personalization-implementation-contract.md` — способ технической реализации цели; он не может переопределять пункт 3.
-5. `personalization-research-traceability.md` и `implementation-status.yml` — контроль полноты и доказательств.
+5. `personalization-research-traceability.md`, longitudinal E2E/report docs и `implementation-status.yml` — контроль полноты, качества и доказательств.
 6. Старые `unsigned-personalization`, prototype, demo и фактические скрипты — только migration evidence и источник characterization tests.
 
 Если целевой документ оставляет вопрос открытым, ответ нельзя молча брать из старого кода. Он фиксируется как hypothesis/owner/legal decision и закрывается исследованием, benchmark или отдельным решением.
