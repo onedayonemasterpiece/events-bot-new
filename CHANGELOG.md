@@ -4,6 +4,9 @@
 
 - Added a protected, one-shot read-only Smart Update production health audit
   workflow contract, sanitized evidence bundle and operator runbook.
+- Fixed the audit product sampler so touched events without an observed source
+  type are retained in the sanitized `unknown` stratum instead of blocking the
+  evidence bundle.
 
 - Fixed StaticSiteBuilder exact-output recovery starvation: when a timed-out
   host wrapper still owns a verified remote handoff, incoming Smart Update
