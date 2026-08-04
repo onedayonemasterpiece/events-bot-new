@@ -1,0 +1,225 @@
+name: Volunteer monitor smoke
+
+on:
+  pull_request:
+    paths:
+      - "volunteer_monitor/**"
+      - "scripts/run_volunteer_monitor.py"
+      - "kaggle/VolunteerMonitor/**"
+      - "tests/test_dobro_volunteer_monitor.py"
+      - "tests/test_festival_source_search.py"
+      - "tests/fixtures/volunteer_monitor/**"
+      - ".github/workflows/volunteer-monitor-smoke.yml"
+  workflow_dispatch:
+    inputs:
+      executor:
+        description: "Read-only live-canary executor"
+        type: choice
+        required: true
+        default: direct
+        options:
+          - fixture-only
+          - direct
+          - kaggle
+      max_items:
+        description: "Maximum Dobro.ru detail pages"
+        type: string
+        required: true
+        default: "120"
+  schedule:
+    - cron: "45 13 * * *" # 15:45 Europe/Kaliningrad (UTC+2)
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunteer-monitor-smoke-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install bounded test dependencies
+        run: python -m pip install --disable-pip-version-check pytest beautifulsoup4 requests
+
+      - name: Run fixture and free-search policy tests
+        run: |
+          set -euo pipefail
+          PYTHONPATH=. pytest -q \
+            tests/test_dobro_volunteer_monitor.py \
+            tests/test_festival_source_search.py
+          PYTHONPATH=. python scripts/run_volunteer_monitor.py \
+            --mode fixture \
+            --search-html tests/fixtures/volunteer_monitor/search.html \
+            --event-map tests/fixtures/volunteer_monitor/event-map.json \
+            --today 2026-08-04 \
+            --max-items 20 \
+            --output "$RUNNER_TEMP/volunteer-monitor-fixture.json"
+
+      - name: Upload fixture receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: volunteer-monitor-fixture-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/volunteer-monitor-fixture.json
+          if-no-files-found: error
+          retention-days: 14
+
+  direct-live-canary:
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.executor == 'direct')
+    needs: fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install monitor dependencies
+        run: |
+          python -m pip install --disable-pip-version-check beautifulsoup4 requests playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Run read-only live canary
+        env:
+          VOLUNTEER_MONITOR_PERMISSION_REFERENCE: ${{ vars.VOLUNTEER_MONITOR_PERMISSION_REFERENCE }}
+          MAX_ITEMS: ${{ github.event_name == 'workflow_dispatch' && inputs.max_items || '120' }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/volunteer-monitor-evidence"
+          PYTHONPATH=. python scripts/run_volunteer_monitor.py \
+            --mode live_canary \
+            --output "$RUNNER_TEMP/volunteer-monitor-live.json" \
+            --evidence-dir "$RUNNER_TEMP/volunteer-monitor-evidence" \
+            --max-items "$MAX_ITEMS" \
+            --max-more-clicks 40
+
+      - name: Upload live receipt and failure evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: volunteer-monitor-live-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/volunteer-monitor-live.json
+            ${{ runner.temp }}/volunteer-monitor-evidence
+          if-no-files-found: warn
+          retention-days: 14
+
+  kaggle-live-canary:
+    if: github.event_name == 'workflow_dispatch' && inputs.executor == 'kaggle'
+    needs: fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: volunteer-monitor-canary
+    env:
+      KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+      KERNEL_SLUG: ${{ vars.VOLUNTEER_KAGGLE_KERNEL_SLUG }}
+      MAX_ITEMS: ${{ inputs.max_items }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Require explicit Kaggle identity
+        run: |
+          set -euo pipefail
+          test -n "$KAGGLE_API_TOKEN"
+          test -n "$KERNEL_SLUG"
+
+      - name: Install official Kaggle CLI
+        run: python -m pip install --disable-pip-version-check "kaggle>=2,<3"
+
+      - name: Build a self-contained private kernel source
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/volunteer-monitor-kernel"
+          rm -rf "$stage"
+          mkdir -p "$stage"
+          cp kaggle/VolunteerMonitor/kernel-metadata.example.json "$stage/kernel-metadata.json"
+          python - "$stage" <<'PY'
+          import base64, io, json, os, sys, zipfile
+          from pathlib import Path
+
+          stage = Path(sys.argv[1])
+          package = Path("volunteer_monitor")
+          buffer = io.BytesIO()
+          with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+              for path in sorted(package.glob("*.py")):
+                  archive.write(path, f"volunteer_monitor/{path.name}")
+          runtime_b64 = base64.b64encode(buffer.getvalue()).decode("ascii")
+          template = Path("kaggle/VolunteerMonitor/volunteer_monitor.py").read_text(encoding="utf-8")
+          max_items = str(max(1, min(int(os.environ["MAX_ITEMS"]), 250)))
+          rendered = template.replace("__RUNTIME_ZIP_B64__", runtime_b64).replace("__MAX_ITEMS__", max_items)
+          (stage / "volunteer_monitor.py").write_text(rendered, encoding="utf-8")
+
+          metadata_path = stage / "kernel-metadata.json"
+          metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+          metadata["id"] = os.environ["KERNEL_SLUG"]
+          metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Push and run private Kaggle kernel
+        run: kaggle kernels push -p "$RUNNER_TEMP/volunteer-monitor-kernel" --timeout 900
+
+      - name: Poll terminal status
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            status="$(kaggle kernels status "$KERNEL_SLUG" 2>&1 | tr '[:upper:]' '[:lower:]')"
+            echo "$status"
+            if grep -Eq 'complete|completed' <<<"$status"; then exit 0; fi
+            if grep -Eq 'error|failed|cancel' <<<"$status"; then exit 1; fi
+            sleep 30
+          done
+          echo "Kaggle kernel did not reach terminal state" >&2
+          exit 1
+
+      - name: Download and validate Kaggle output
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/volunteer-monitor-kaggle-output"
+          kaggle kernels output "$KERNEL_SLUG" \
+            -p "$RUNNER_TEMP/volunteer-monitor-kaggle-output" --force
+          python - "$RUNNER_TEMP/volunteer-monitor-kaggle-output" <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          result_path = root / "volunteer-monitor-result.json"
+          receipt_path = root / "volunteer-monitor-receipt.json"
+          result = json.loads(result_path.read_text(encoding="utf-8"))
+          receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+          actual = hashlib.sha256(result_path.read_bytes()).hexdigest()
+          assert receipt["status"] == "success"
+          assert receipt["result_sha256"] == actual
+          assert result["schema_version"] == "volunteer-monitor-result-v1"
+          PY
+
+      - name: Upload Kaggle output
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: volunteer-monitor-kaggle-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/volunteer-monitor-kaggle-output
+          if-no-files-found: warn
+          retention-days: 14
