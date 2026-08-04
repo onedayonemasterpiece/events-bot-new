@@ -25,7 +25,7 @@ jobs:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       AUDIT_WINDOW_HOURS: "24"
       AUDIT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-      AUDIT_SCRIPT_SHA256: f17df2f752c2c37031c761511637d0ea5a0d398dfe96ac7a63c9bec78228817e
+      AUDIT_SCRIPT_SHA256: fe5f06c03bf843a24d3d0344e9bbf2973d9d715058c905a1a4e7fb3030155b4c
     steps:
       - name: Checkout exact audit branch
         uses: actions/checkout@v4
