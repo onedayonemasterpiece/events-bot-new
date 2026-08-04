@@ -13,6 +13,7 @@ from enum import Enum
 import hashlib
 import json
 import re
+import unicodedata
 from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -966,10 +967,15 @@ def canonicalize_identity_url(
     path = path.rstrip("/") or "/"
     query = _canonical_query(parts.query)
     fragment = ""
-    if preserve_ticket_fragment and host.endswith("tretyakovgallery.ru"):
+    if host.endswith("tretyakovgallery.ru"):
         raw_fragment = str(parts.fragment or "").strip()
-        if raw_fragment.casefold() in {"buy", "/buy"}:
-            fragment = raw_fragment.casefold()
+        route = re.sub(r"/{2,}", "/", raw_fragment.lstrip("/"))
+        if route.casefold() == "buy" or re.fullmatch(
+            r"(?i)buy/event/[^/]+/[^/]+/[^/]+", route
+        ):
+            # A Tretyakov SPA fragment is the direct ticket/slot identity, not
+            # an analytics fragment. #buy and #/buy converge to #/buy.
+            fragment = "/" + route
     return urlunsplit(("https", host, path, query, fragment))
 
 
@@ -985,9 +991,87 @@ def _canonical_query(raw_query: str, *, ignored: set[str] | None = None) -> str:
 
 
 def input_packet_fingerprint(value: Any) -> str:
-    """SHA-256 of the exact caller packet before Smart Update mutates it."""
+    """SHA-256 of stable source-packet inputs before Smart Update mutates them.
 
-    payload = _fingerprint_value(value)
+    Provider metrics, token counts, generated prose/semantic decisions and the
+    fingerprint field itself are intentionally excluded. Poster identity uses
+    stable byte hashes (with a hashed URL fallback), never OCR/provider output.
+    """
+
+    if hasattr(value, "source_type") and hasattr(value, "source_text"):
+        stable_scalar_fields = (
+            "title",
+            "date",
+            "time",
+            "time_is_default",
+            "end_date",
+            "end_date_is_inferred",
+            "festival",
+            "festival_context",
+            "festival_full",
+            "festival_source",
+            "festival_series",
+            "location_name",
+            "location_address",
+            "city",
+            "ticket_price_min",
+            "ticket_price_max",
+            "ticket_status",
+            "age_restriction",
+            "age_restriction_is_structured",
+            "event_type",
+            "is_free",
+            "pushkin_card",
+            "source_chat_username",
+            "source_chat_id",
+            "source_message_id",
+            "creator_id",
+            "trust_level",
+        )
+        posters = []
+        for poster in list(getattr(value, "posters", None) or []):
+            digest = (
+                getattr(poster, "raw_sha256", None)
+                or getattr(poster, "sha256", None)
+                or getattr(poster, "phash", None)
+            )
+            if digest:
+                posters.append(str(digest).strip().lower())
+                continue
+            fallback_url = (
+                getattr(poster, "supabase_url", None)
+                or getattr(poster, "catbox_url", None)
+            )
+            canonical_fallback = canonicalize_identity_url(fallback_url)
+            if canonical_fallback:
+                posters.append("url_sha256:" + hashlib.sha256(canonical_fallback.encode("utf-8")).hexdigest())
+        payload = {
+            "canonical_source_url": canonicalize_identity_url(getattr(value, "source_url", None)),
+            "source_type": str(getattr(value, "source_type", "") or "").strip().lower(),
+            "source_role": _normalize_source_role(getattr(value, "source_role", None)),
+            "source_text": _normalized_packet_text(getattr(value, "source_text", None)),
+            "raw_excerpt": _normalized_packet_text(getattr(value, "raw_excerpt", None)),
+            "ticket_link": canonicalize_identity_url(
+                getattr(value, "ticket_link", None), preserve_ticket_fragment=True
+            ),
+            "festival_dedup_links": sorted(
+                filter(None, (canonicalize_identity_url(item) for item in (getattr(value, "festival_dedup_links", None) or [])))
+            ),
+            "poster_hashes": sorted(set(posters)),
+            "poster_scope_hashes": sorted(
+                str(item).strip().lower()
+                for item in (getattr(value, "poster_scope_hashes", None) or [])
+                if str(item or "").strip()
+            ),
+            "links_payload": _fingerprint_value(getattr(value, "links_payload", None)),
+            "organizer_names": sorted(str(item).strip() for item in (getattr(value, "organizer_names", None) or []) if str(item or "").strip()),
+            "structured": {
+                name: _fingerprint_value(getattr(value, name, None))
+                for name in stable_scalar_fields
+            },
+        }
+    else:
+        payload = _fingerprint_value(value)
     encoded = json.dumps(
         payload,
         ensure_ascii=False,
@@ -995,6 +1079,15 @@ def input_packet_fingerprint(value: Any) -> str:
         separators=(",", ":"),
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _normalized_packet_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = unicodedata.normalize("NFC", str(value)).replace("\r\n", "\n").replace("\r", "\n")
+    text = "\n".join(re.sub(r"[ \t]+", " ", line).strip() for line in text.split("\n"))
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    return text or None
 
 
 def _fingerprint_value(value: Any) -> Any:

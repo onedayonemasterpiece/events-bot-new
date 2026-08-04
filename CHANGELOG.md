@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Fixed the Smart Update identity/source recurrence from 2026-08-04: production
+  merge gating is fail-closed before domain side effects, direct and contextual
+  source roles use canonical URL ownership, and identical Telegram/VK packets
+  stop as a pre-provider `noop_exact_source_replay`. Added the narrowly
+  whitelisted, transactional and idempotent production repair for Events 3864,
+  7024, 7244 and 7435 while preserving Event 7151 as a no-change control.
+
 - Added a protected, one-shot read-only Smart Update production health audit
   workflow contract, sanitized evidence bundle and operator runbook.
 - Fixed the audit product sampler so touched events without an observed source

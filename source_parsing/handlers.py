@@ -37,6 +37,7 @@ from poster_media import PosterMedia, is_supabase_storage_url, process_media
 from kaggle_registry import list_jobs, remove_job
 from video_announce.kaggle_client import KaggleClient
 from models import Event, EventSource
+from smart_update_identity import canonicalize_identity_url
 from telegram_sources import canonicalize_tg_url
 
 logger = logging.getLogger(__name__)
@@ -543,11 +544,16 @@ async def attach_parser_source_to_exact_existing(
             None,
         )
         if existing is None:
+            canonical_source_url = canonicalize_identity_url(source_url)
+            if not canonical_source_url:
+                return False
             session.add(
                 EventSource(
                     event_id=int(event_id),
                     source_type=f"parser:{str(source_name).strip().lower()}",
                     source_url=source_url,
+                    canonical_source_url=canonical_source_url,
+                    source_role="identity_bearing",
                     source_text=(event.description or "").strip() or None,
                     imported_at=datetime.now(timezone.utc),
                     trust_level="high",
@@ -555,6 +561,11 @@ async def attach_parser_source_to_exact_existing(
             )
         else:
             existing.source_type = f"parser:{str(source_name).strip().lower()}"
+            canonical_source_url = canonicalize_identity_url(source_url)
+            if not canonical_source_url:
+                return False
+            existing.canonical_source_url = canonical_source_url
+            existing.source_role = "identity_bearing"
             if event.description and not existing.source_text:
                 existing.source_text = event.description.strip()
             if not existing.trust_level:

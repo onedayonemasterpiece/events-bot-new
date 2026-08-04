@@ -20,6 +20,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from sqlalchemy import and_, delete, or_, select
+from sqlalchemy.exc import IntegrityError
 
 from db import Database
 from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
@@ -11381,13 +11382,13 @@ async def _ensure_legacy_event_sources(session, event: Event | None) -> int:
                 source_type=_infer_source_type_from_url(url),
                 source_url=url,
                 canonical_source_url=canonicalize_identity_url(url),
-                source_role="legacy_unclassified",
+                source_role=None,
                 source_fingerprint=input_packet_fingerprint(
                     {
                         "event_id": int(event.id),
                         "source_url": url,
                         "source_text": clean_source_text or "",
-                        "source_role": "legacy_unclassified",
+                        "source_role": None,
                     }
                 ),
                 source_text=clean_source_text,
@@ -11521,13 +11522,13 @@ async def _ensure_legacy_description_fact(
             source_type="legacy",
             source_url=legacy_url,
             canonical_source_url=legacy_url,
-            source_role="legacy_snapshot",
+            source_role="context_only",
             source_fingerprint=input_packet_fingerprint(
                 {
                     "event_id": int(event.id),
                     "source_url": legacy_url,
                     "source_text": snapshot,
-                    "source_role": "legacy_snapshot",
+                    "source_role": "context_only",
                 }
             ),
             source_text=snapshot,
@@ -15926,6 +15927,30 @@ async def smart_event_update(
                 event_id=exc.existing_event_id,
                 reason="source_binding_conflict",
             )
+        except IntegrityError as exc:
+            # The partial unique indexes are the authoritative cross-process
+            # source ownership guard. Translate only their race failure; every
+            # unrelated integrity error remains visible to the caller.
+            message = str(getattr(exc, "orig", exc) or "").casefold()
+            if "event_source.canonical_source_url" not in message:
+                raise
+            canonical = canonicalize_identity_url(candidate.source_url)
+            owner_id: int | None = None
+            if canonical:
+                async with db.raw_conn() as conn:
+                    cursor = await conn.execute(
+                        "SELECT event_id FROM event_source WHERE canonical_source_url=? "
+                        "AND source_role='identity_bearing' ORDER BY id LIMIT 1",
+                        (canonical,),
+                    )
+                    row = await cursor.fetchone()
+                    await cursor.close()
+                    owner_id = int(row[0]) if row and row[0] is not None else None
+            return SmartUpdateResult(
+                status="review_required",
+                event_id=owner_id,
+                reason="source_binding_conflict",
+            )
 
 
 def _candidate_source_role(candidate: EventCandidate) -> str:
@@ -15961,7 +15986,9 @@ async def _exact_input_noop_event_id(
         return (event_ids[0] if event_ids else None), False
     except Exception:
         logger.warning("smart_update: exact input noop lookup failed", exc_info=True)
-        return None, False
+        # Observer failure cannot authorize LLM work or domain writes: the
+        # binding may already exist and must be reviewed once storage recovers.
+        return None, True
 
 
 async def _apply_holiday_festival_mapping(db: Database, event_id: int) -> bool:

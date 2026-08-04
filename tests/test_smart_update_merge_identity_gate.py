@@ -7,7 +7,15 @@ from sqlalchemy import func, select
 
 import smart_event_update as su
 from db import Database
-from models import Event, EventIdentityDecisionLog, EventPoster, EventSource
+from models import (
+    Event,
+    EventIdentityDecisionLog,
+    EventPoster,
+    EventSource,
+    EventSourceFact,
+    FestivalQueueItem,
+    JobOutbox,
+)
 from smart_event_update import EventCandidate, smart_event_update
 from smart_update_identity import (
     IdentityGateAction,
@@ -526,6 +534,47 @@ async def test_boyko_exhibition_regression_merge_gate_blocks_side_effects(tmp_pa
         assert logs[-1].decision == "skip_merge_side_effects"
         assert logs[-1].decision_payload["stage"] == "merge_identity_gate"
         assert logs[-1].decision_payload["would_skip_side_effects"] is True
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_merge_gate_internal_error_enforce_is_zero_side_effect_fail_closed(
+    tmp_path, monkeypatch
+) -> None:
+    db = Database(str(tmp_path / "gate-error.sqlite"))
+    await db.init()
+    try:
+        await _seed_boyko_lecture(db)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", su.IdentityGateMode.OFF)
+        monkeypatch.setattr(su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", su.IdentityGateMode.ENFORCE)
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+
+        async def _gate_error(*_args, **_kwargs):
+            raise RuntimeError("synthetic identity gate failure")
+
+        monkeypatch.setattr(su, "_llm_merge_identity_gate", _gate_error)
+        async with db.get_session() as session:
+            event_before = await session.get(Event, 5077)
+            assert event_before is not None
+            event_snapshot = (event_before.title, event_before.description, event_before.date, event_before.time, event_before.event_type)
+
+        result = await smart_event_update(
+            db, _boyko_exhibition_candidate(), check_source_url=False, schedule_tasks=True
+        )
+        assert result.status == "skipped_identity_gate"
+        assert result.created is False and result.merged is False
+
+        async with db.get_session() as session:
+            event_after = await session.get(Event, 5077)
+            assert event_after is not None
+            assert (event_after.title, event_after.description, event_after.date, event_after.time, event_after.event_type) == event_snapshot
+            for model in (EventSource, EventSourceFact, EventPoster, FestivalQueueItem, JobOutbox):
+                assert int(await session.scalar(select(func.count()).select_from(model))) == 0
+            decisions = (await session.execute(select(EventIdentityDecisionLog))).scalars().all()
+            assert len(decisions) == 1
+            assert decisions[0].decision_payload["fail_safe"] is True
     finally:
         await db.close()
 

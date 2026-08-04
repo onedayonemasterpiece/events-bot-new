@@ -6,6 +6,7 @@ import types
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 import smart_event_update as su
 from db import Database
@@ -38,6 +39,19 @@ def test_identity_url_canonicalizer_normalizes_social_variants_and_preserves_tic
         "https://tickets.tretyakovgallery.ru/events/abc?utm_medium=social#/buy",
         preserve_ticket_fragment=True,
     ) == "https://tickets.tretyakovgallery.ru/events/abc#/buy"
+    ticket_48801 = canonicalize_identity_url(
+        "https://kaliningrad.tretyakovgallery.ru/tickets/#buy/event/48801/2026-08-09/14:00:00",
+        preserve_ticket_fragment=True,
+    )
+    assert ticket_48801 == canonicalize_identity_url(
+        "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/48801/2026-08-09/14:00:00",
+        preserve_ticket_fragment=True,
+    )
+    ticket_48636 = canonicalize_identity_url(
+        "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/48636/2026-08-09/17:00:00",
+        preserve_ticket_fragment=True,
+    )
+    assert ticket_48801 != ticket_48636
 
 
 def test_merge_gate_fails_closed_without_valid_llm_and_context_cannot_assert_same_event() -> None:
@@ -114,6 +128,17 @@ async def test_event_source_schema_is_additive_and_unique_index_is_conflict_safe
         assert {"canonical_source_url", "source_role", "source_fingerprint"} <= cols
         assert "ux_event_source_event_canonical" in indexes
         assert "ux_event_source_identity_canonical" in indexes
+        async with fresh.raw_conn() as conn:
+            with pytest.raises(sqlite3.IntegrityError):
+                await conn.execute(
+                    "INSERT INTO event_source(event_id,source_type,source_url,source_role) "
+                    "VALUES(1,'telegram','https://t.me/x/1','invalid')"
+                )
+            with pytest.raises(sqlite3.IntegrityError):
+                await conn.execute(
+                    "INSERT INTO event_source(event_id,source_type,source_url,source_role) "
+                    "VALUES(1,'telegram','https://t.me/x/1','identity_bearing')"
+                )
     finally:
         await fresh.close()
 
@@ -167,7 +192,16 @@ async def test_event_source_schema_is_additive_and_unique_index_is_conflict_safe
 
 
 @pytest.mark.asyncio
-async def test_exact_input_packet_returns_noop_before_llm_or_writes(tmp_path, monkeypatch) -> None:
+@pytest.mark.parametrize(
+    ("source_type", "source_url"),
+    [
+        ("telegram", "https://telegram.me/noop_test/44?utm_source=test"),
+        ("vk", "https://m.vk.com/feed?w=wall-123_456&utm_source=test"),
+    ],
+)
+async def test_exact_input_packet_returns_noop_before_llm_or_writes(
+    tmp_path, monkeypatch, source_type: str, source_url: str
+) -> None:
     db = Database(str(tmp_path / "noop.sqlite"))
     await db.init()
     try:
@@ -176,8 +210,8 @@ async def test_exact_input_packet_returns_noop_before_llm_or_writes(tmp_path, mo
         monkeypatch.setattr(su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", IdentityGateMode.OFF)
         monkeypatch.setattr(su, "_classify_topics", _no_topics)
         candidate_values = dict(
-            source_type="telegram",
-            source_url="https://telegram.me/noop_test/44?utm_source=test",
+            source_type=source_type,
+            source_url=source_url,
             source_text="Концерт 1 сентября в 19:00 в Доме искусств.",
             title="Концерт",
             date="2026-09-01",
@@ -210,12 +244,124 @@ async def test_exact_input_packet_returns_noop_before_llm_or_writes(tmp_path, mo
         async with db.get_session() as session:
             source = (await session.execute(select(EventSource))).scalar_one()
             event_count = int((await session.execute(select(func.count(Event.id)))).scalar_one())
-        assert source.canonical_source_url == "https://t.me/noop_test/44"
+        assert source.canonical_source_url == canonicalize_identity_url(source_url)
         assert source.source_role == "identity_bearing"
         assert source.source_fingerprint
         assert event_count == 1
     finally:
         await db.close()
+
+
+def test_packet_fingerprint_ignores_provider_metrics_but_detects_real_edit() -> None:
+    base = EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/edited_packet/7?single=1",
+        source_text="Анонс события\r\nНачало в 19:00",
+        title="Событие",
+        date="2026-09-02",
+        time="19:00",
+        metrics={"request_id": "first", "prompt_tokens": 99},
+        collection_semantic_decisions={"provider_output": "first"},
+    )
+    retry = EventCandidate(
+        source_type="telegram",
+        source_url="https://telegram.me/s/EDITED_PACKET/7?utm_source=x",
+        source_text="Анонс события\nНачало в 19:00",
+        title="Событие",
+        date="2026-09-02",
+        time="19:00",
+        metrics={"request_id": "second", "prompt_tokens": 501},
+        collection_semantic_decisions={"provider_output": "second"},
+    )
+    edited = EventCandidate(
+        source_type="telegram",
+        source_url=base.source_url,
+        source_text="Анонс события\nНачало перенесено на 20:00",
+        title="Событие",
+        date="2026-09-02",
+        time="20:00",
+    )
+    assert input_packet_fingerprint(base) == input_packet_fingerprint(retry)
+    assert input_packet_fingerprint(base) != input_packet_fingerprint(edited)
+
+
+@pytest.mark.asyncio
+async def test_tretyakov_direct_ticket_identity_cannot_cross_bind_screenings(tmp_path) -> None:
+    db = Database(str(tmp_path / "tretyakov-bindings.sqlite"))
+    await db.init()
+    try:
+        url_14 = canonicalize_identity_url(
+            "https://kaliningrad.tretyakovgallery.ru/tickets/#buy/event/48801/2026-08-09/14:00:00"
+        )
+        url_17 = canonicalize_identity_url(
+            "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/48636/2026-08-09/17:00:00"
+        )
+        assert url_14 and url_17 and url_14 != url_17
+        async with db.get_session() as session:
+            films = []
+            for title, time in (("Право женщин на море", "14:00"), ("Кагуя", "17:00")):
+                event = Event(
+                    title=title,
+                    description="Кинопоказ",
+                    source_text="Официальный билет",
+                    date="2026-08-09",
+                    time=time,
+                    location_name="Третьяковская галерея",
+                )
+                session.add(event)
+                await session.flush()
+                films.append(event)
+            session.add(
+                EventSource(
+                    event_id=int(films[0].id), source_type="parser:tretyakov",
+                    source_url=url_14, canonical_source_url=url_14,
+                    source_role="identity_bearing",
+                )
+            )
+            session.add(
+                EventSource(
+                    event_id=int(films[1].id), source_type="parser:tretyakov",
+                    source_url=url_17, canonical_source_url=url_17,
+                    source_role="identity_bearing",
+                )
+            )
+            await session.commit()
+
+        async with db.get_session() as session:
+            session.add(
+                EventSource(
+                    event_id=int(films[1].id), source_type="parser:tretyakov",
+                    source_url=url_14 + "?variant=wrong", canonical_source_url=url_14,
+                    source_role="identity_bearing",
+                )
+            )
+            with pytest.raises(IntegrityError):
+                await session.commit()
+            await session.rollback()
+    finally:
+        await db.close()
+
+
+def test_pianissimo_concert_and_long_exhibition_are_review_not_merge() -> None:
+    verdict = build_merge_identity_gate_verdict(
+        {
+            "title": "Фестиваль Pianissimo: Константин Хачикян",
+            "date": "2026-08-07", "time": "20:00", "event_type": "концерт",
+            "ticket_link": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-08-07/20:00:00",
+        },
+        {
+            "id": 3216, "title": "Великие учителя", "date": "2026-04-09",
+            "end_date": "2026-09-27", "time": "", "event_type": "выставка",
+        },
+        mode=IdentityGateMode.ENFORCE,
+        llm_data={
+            "action": "allow_merge", "relation": "same_event", "confidence": 0.99,
+            "reason_code": "same_venue",
+        },
+        blocking_conflicts=["title", "occurrence", "event_type", "ticket_link"],
+    )
+    assert verdict.action is MergeIdentityAction.REVIEW_REQUIRED
+    assert verdict.should_skip_side_effects
 
 
 @pytest.mark.asyncio

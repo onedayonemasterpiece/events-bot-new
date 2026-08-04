@@ -160,7 +160,53 @@ must re-render the calendar line even when the event body itself is unchanged.
 - `SMART_UPDATE_G4_SPLIT_CREATE=1` — экспериментальный вариант `g4-split-create-v2-rich-facts` для миграции на Gemma 4: create-path не вызывает тяжёлый `create_bundle`, а делает quality-critical `rich_facts_extract` с секциями фактов, ответственный `split_description_writer` для основного Telegraph/body текста и лёгкий `split_derived_fields` для `short_description` / `search_digest`. По умолчанию выключен; `rich_facts_extract` остаётся тяжёлым fact-ledger этапом и может откатиться с native schema на prompt-schema. Основной writer не запускает повторный prompt-schema вызов, пока явно не задан `SMART_UPDATE_G4_SPLIT_CREATE_PROMPT_FALLBACK=1`; лёгкий `split_derived_fields` может откатиться на prompt-schema. Split-create стадии отключают legacy 4o fallback, чтобы Gemma 4 benchmark оставался model-clean. Основной writer ограничен `SMART_UPDATE_G4_DESCRIPTION_WRITER_TIMEOUT_SEC` (default `90`), derived stage — `SMART_UPDATE_G4_DERIVED_FIELDS_TIMEOUT_SEC` (default `20`). Если description writer недоступен после успешного извлечения фактов, create использует bounded fact-ledger fallback вместо старого многошагового fact-first/rewrite/reflow каскада. Для лекций/паблик-токов `rich_facts_extract` обязан сохранять каждый блок `ИМЯ` + роль как отдельный named-roster fact; `split_description_writer` обязан включать такие факты в narrative и не сворачивать участников в категории вроде «краеведы/учёные/эксперты». Если draft writer попал под logistics reject, Smart Update делает LLM-pass `split_description_writer_remove_logistics`, чтобы убрать повтор даты/адреса/билетов без потери фактов, и только потом переходит к fallback.
 - `SMART_UPDATE_IDENTITY_GATE=off|shadow|enforce` — create-path identity gate after the widened-recall `_llm_dedup_adjudicator` and before a new event row is created. `off` is the default and does nothing. `shadow` builds/logs a structured verdict but never changes behavior. `enforce` may veto create on narrow deterministic evidence (same source identity, same ticket+slot, same poster identity) or vector identity evidence from `related_v1`/`search_v3`; it never auto-merges. If the gate itself errors in `enforce`, Smart Update fails safe with `skipped_identity_gate` instead of creating or merging automatically. Vector recall is controlled by `SMART_UPDATE_IDENTITY_VECTOR_RECALL`, `SMART_UPDATE_IDENTITY_VECTOR_TOP_K`, `SMART_UPDATE_IDENTITY_VECTOR_MIN_SIMILARITY`, `SMART_UPDATE_IDENTITY_VECTOR_TIMEOUT_SECONDS`, `SMART_UPDATE_IDENTITY_EMBEDDING_MODEL`, `SMART_UPDATE_IDENTITY_EMBEDDING_DIM`, and `SMART_UPDATE_IDENTITY_GOOGLE_KEY_ENV`.
 - `SMART_UPDATE_MERGE_IDENTITY_GATE=off|shadow|enforce` — merge-path identity gate after final `match_event` selection and before any merge side effects (`event` fields, `event_source`, posters, facts, outbox/jobs). This is a separate LLM-first decision-only stage: the model classifies the candidate vs existing row as `same_event` / `source_update` / `related_but_distinct` / `festival_context_sibling` / `unsafe_to_merge`, and `enforce` returns `skipped_identity_gate` for unsafe/review verdicts instead of mutating the matched row. Deterministic code is limited to narrow fail-closed structural rails (for example single-slot lecture vs long-running exhibition with unrelated title/type) and does not replace the LLM semantic decision. Decisions are persisted to `event_identity_decision_log` with `decision_payload.stage=merge_identity_gate`.
+- Production runs both identity gates in `enforce`. A merge verdict with any
+  blocking conflict, `related_but_distinct`, `festival_context_sibling`,
+  `unsafe_to_merge`, `review_required`, malformed/unavailable provider output,
+  or an internal gate error fails closed before Event, EventSource, facts,
+  posters, festival queue or publication/outbox writes. The append-only identity
+  decision log is the only permitted write for a rejected/reviewed decision.
 - After switching the identity gate to `enforce`, production should also enable the read-only `/vystavki/` acceptance audit with `ENABLE_EXHIBITION_DUPLICATE_AUDIT=1`; it records `ops_run(kind='exhibition_duplicate_audit')` and fails/alerts on high-confidence public exhibition duplicate pairs during the 14-day rollout window.
+
+### Canonical source identity and exact replay
+
+Every newly accepted Smart Update source carries three additive identity
+attributes on `EventSource`:
+
+- `canonical_source_url` — presentation/tracking variants converge, while a
+  semantic ticket SPA route remains part of the identity;
+- `source_role=identity_bearing|context_only` — a direct event/slot source is
+  exclusive to one event identity, while an explicitly classified programme or
+  festival overview may be contextual for several children;
+- `source_fingerprint` — stable SHA-256 of the pre-normalization input packet.
+
+Canonicalization collapses Telegram host, `/s/`, `?single`, case and trailing
+slash variants; removes tracking parameters; normalizes `#buy` and `#/buy`
+ticket routes without erasing ticket event ID/date/time; and keeps distinct
+ticket IDs distinct. A nonblank identity-bearing canonical source is protected
+by the SQLite partial uniqueness invariant. Legacy rows stay unclassified until
+an evidence-backed intake/repair touches them; shared historical sources are
+never blanket reclassified.
+
+New Smart Update, exact official-parser, VK cancellation and multi-event
+Telegram source writes always provide a canonical URL and an explicit role.
+Renderer-only reconstruction of legacy provenance is explicitly
+`context_only`; legacy migration rows may remain `NULL` rather than being
+guessed into an identity role.
+
+`context_only` never participates in SAME_EVENT matching and cannot authorize
+changes to title, occurrence, type, location, ticket/price or festival identity.
+It may be attached only as explicitly grounded non-identity provenance.
+
+Before the first provider call or database write, Smart Update fingerprints the
+canonical URL, source type, normalized original text, message/post identity,
+stable media hashes and meaningful structured input fields. Processing-time
+timestamps, request IDs and generated/provider output are excluded. When the
+same canonical source is already accepted on the same event with the identical
+fingerprint, Smart Update returns `noop_exact_source_replay` with zero provider,
+Event, source/fact/poster/age and outbox work. A changed packet at the same URL
+continues normally; an ambiguous or cross-event identity binding goes to
+`review_required` rather than being treated as replay.
   For read-only rollout evidence independent of the scheduler, run `python3 scripts/inspect/audit_identity_gate_rollout.py --db /data/db.sqlite --since-days 14 --format both`; it reports decision/veto/fail-safe/vector-error counts from `event_identity_decision_log` and env-readiness booleans without printing secrets. Low-risk vector recall failures that are allowed to continue are still persisted in `decision_payload.suppressed_vector_error` and counted as vector errors.
 
 Канонический контракт и детали реализации:

@@ -950,6 +950,27 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_event_source_fingerprint "
                 "ON event_source(source_fingerprint)"
             )
+            # Classified source rows must be complete and role-valid. Legacy
+            # rows may remain NULL until an evidence-backed intake/repair
+            # classifies them; arbitrary role strings or blank canonical
+            # identities may not bypass the partial unique indexes.
+            await conn.execute(
+                "CREATE TRIGGER IF NOT EXISTS trg_event_source_identity_insert "
+                "BEFORE INSERT ON event_source FOR EACH ROW WHEN "
+                "(NEW.source_role IS NOT NULL AND NEW.source_role NOT IN ('identity_bearing','context_only')) "
+                "OR (NEW.source_role IN ('identity_bearing','context_only') "
+                "AND TRIM(COALESCE(NEW.canonical_source_url,''))='') "
+                "BEGIN SELECT RAISE(ABORT,'event_source_identity_contract'); END"
+            )
+            await conn.execute(
+                "CREATE TRIGGER IF NOT EXISTS trg_event_source_identity_update "
+                "BEFORE UPDATE OF event_id,canonical_source_url,source_role ON event_source "
+                "FOR EACH ROW WHEN "
+                "(NEW.source_role IS NOT NULL AND NEW.source_role NOT IN ('identity_bearing','context_only')) "
+                "OR (NEW.source_role IN ('identity_bearing','context_only') "
+                "AND TRIM(COALESCE(NEW.canonical_source_url,''))='') "
+                "BEGIN SELECT RAISE(ABORT,'event_source_identity_contract'); END"
+            )
             event_conflict_cursor = await conn.execute(
                 "SELECT event_id, canonical_source_url FROM event_source "
                 "WHERE canonical_source_url IS NOT NULL AND canonical_source_url<>'' "

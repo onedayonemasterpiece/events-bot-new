@@ -19964,6 +19964,7 @@ async def update_telegraph_event_page(
         if not ev:
             return None
         from models import EventMediaAsset, EventPoster, EventSource, EventSourceFact
+        from smart_update_identity import canonicalize_identity_url
         # Backfill legacy single-source fields into event_source so Telegraph footer
         # shows a meaningful "Источников: N" even for older events.
         try:
@@ -20002,6 +20003,10 @@ async def update_telegraph_event_page(
                         event_id=event_id,
                         source_type=_infer_type(url),
                         source_url=url,
+                        canonical_source_url=canonicalize_identity_url(url),
+                        # Renderer-side legacy provenance is context, never an
+                        # identity-bearing source for merge decisions.
+                        source_role="context_only",
                         source_text=(getattr(ev, "source_text", None) or "")[:4000],
                         imported_at=now,
                     )
