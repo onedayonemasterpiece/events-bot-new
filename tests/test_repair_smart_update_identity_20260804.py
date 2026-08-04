@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 from pathlib import Path
 import sqlite3
 
@@ -21,10 +22,11 @@ def _make_db(path: Path) -> None:
         """
         CREATE TABLE event (
           id INTEGER PRIMARY KEY, title TEXT, date TEXT, time TEXT, ticket_link TEXT,
+          end_date TEXT, location_name TEXT, location_address TEXT, city TEXT,
           description TEXT, short_description TEXT, search_digest TEXT,
           event_type TEXT, topics TEXT, festival TEXT,
           source_text TEXT, source_texts TEXT, telegraph_url TEXT, telegraph_path TEXT,
-          ics_url TEXT, is_free INTEGER, ticket_price_min INTEGER, ticket_price_max INTEGER,
+          ics_url TEXT, is_free INTEGER, ticket_price_min INTEGER, ticket_price_max INTEGER, ticket_status TEXT,
           photo_urls TEXT, photo_count INTEGER, preview_3d_url TEXT, silent INTEGER DEFAULT 0,
           age_restriction TEXT, age_restriction_status TEXT,
           age_restriction_provenance TEXT, age_restriction_source_url TEXT,
@@ -48,7 +50,7 @@ def _make_db(path: Path) -> None:
           id INTEGER PRIMARY KEY, event_id INTEGER, task TEXT, status TEXT
         );
         CREATE TABLE event_identity_decision_log (
-          id INTEGER PRIMARY KEY, event_id INTEGER, source_type TEXT,
+          id INTEGER PRIMARY KEY, event_id INTEGER, source_type TEXT, source_url TEXT,
           decision TEXT, decision_reason TEXT, decision_payload TEXT
         );
         """
@@ -63,18 +65,24 @@ def _make_db(path: Path) -> None:
     ]
     for event_id, title, date, time, ticket in events:
         con.execute(
-            "INSERT INTO event(id,title,date,time,ticket_link,description,short_description,search_digest,event_type,topics,festival,source_text,source_texts,telegraph_url,telegraph_path,ics_url,is_free,ticket_price_min,ticket_price_max,photo_urls,photo_count,preview_3d_url,silent,age_restriction_status) VALUES(?,?,?,?,?,'direct description','direct short','direct digest','other','[]',NULL,'legacy','[]',?,?,?,0,1500,2000,'[]',0,'preview',0,'conflict')",
+            "INSERT INTO event(id,title,date,time,ticket_link,end_date,location_name,location_address,city,description,short_description,search_digest,event_type,topics,festival,source_text,source_texts,telegraph_url,telegraph_path,ics_url,is_free,ticket_price_min,ticket_price_max,ticket_status,photo_urls,photo_count,preview_3d_url,silent,age_restriction_status) VALUES(?,?,?,?,?,NULL,'Филиал Третьяковской галереи, Парадная наб. 3, Калининград','Парадная наб. 3','Калининград','direct description','direct short','direct digest','other','[]',NULL,'legacy','[]',?,?,?,0,1500,2000,'available','[]',0,'preview',0,'conflict')",
             (event_id, title, date, time, ticket, f"https://telegra.ph/{event_id}", str(event_id), f"https://ics/{event_id}"),
         )
     con.execute("UPDATE event SET telegraph_path='Velikie-uchitelya-04-13' WHERE id=3864")
     con.execute("UPDATE event SET description='Pianissimo concert', short_description='Pianissimo', search_digest='Pianissimo Khachikyan', event_type='концерт', topics='[\"CONCERTS\",\"EXHIBITIONS\"]', festival='Pianissimo', age_restriction='12+' WHERE id=3864")
+    repair.PIANISSIMO_TEXT_HASHES = {
+        "description": hashlib.sha256(b"Pianissimo concert").hexdigest(),
+        "short_description": hashlib.sha256(b"Pianissimo").hexdigest(),
+        "search_digest": hashlib.sha256(b"Pianissimo Khachikyan").hexdigest(),
+    }
     con.execute(
         "UPDATE event SET age_restriction_source_url=? WHERE id=7024",
         (repair.WOMEN_SEA_URL,),
     )
     con.execute("UPDATE event SET is_free=1 WHERE id=7244")
     con.execute(
-        "INSERT INTO event_identity_decision_log(id,event_id,source_type,decision,decision_reason,decision_payload) VALUES(2979,7435,'telegram','allow_merge','same_event_update','{\"relation\":\"same_event\",\"blocking_conflicts\":[]}')"
+        "INSERT INTO event_identity_decision_log(id,event_id,source_type,source_url,decision,decision_reason,decision_payload) VALUES(2979,7435,'telegram',?,'allow_merge','same_event_update','{\"relation\":\"same_event\",\"blocking_conflicts\":[]}')",
+        (repair.SIGNAL_TG_URL,),
     )
 
     expected_events = {
@@ -91,6 +99,11 @@ def _make_db(path: Path) -> None:
         9404562: repair.WOMEN_SEA_URL,
         9573730: repair.WOMEN_SEA_URL,
         10971967: repair.URBAN_CONTEXT_URL,
+        10949059: repair.SIGNAL_VK_URL,
+        10971966: repair.SIGNAL_TG_URL,
+        8618622: repair.URBAN_CONTEXT_URL,
+        9404519: repair.URBAN_CONTEXT_URL,
+        9745653: repair.URBAN_CONTEXT_URL,
     }
     for source_id, event_id in expected_events.items():
         url = source_urls.get(source_id, f"https://source.invalid/{source_id}")

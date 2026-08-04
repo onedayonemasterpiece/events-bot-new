@@ -29,8 +29,16 @@ PIANISSIMO_URL = "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46
 KAGUYA_URL = "https://kaliningrad.tretyakovgallery.ru/tickets/#buy/event/48636/2026-08-09/17:00:00"
 WOMEN_SEA_URL = "https://kaliningrad.tretyakovgallery.ru/tickets/#buy/event/48801/2026-08-09/14:00:00"
 URBAN_CONTEXT_URL = "https://t.me/urban_literature/15"
+SIGNAL_VK_URL = "https://vk.com/wall-211997788_3125"
+SIGNAL_TG_URL = "https://t.me/signalkld/11527"
 
-EVENT_IDS = frozenset({3216, 3864, 4827, 4828, 4830, 4831, 5269, 5294, 5296, 5297, 5298, 5316, 7024, 7244, 7435})
+PIANISSIMO_TEXT_HASHES = {
+    "description": "3c4fa9b14361b3178c7a23184048efb6ba4341fa092b4707c82f4047ee41d05f",
+    "short_description": "7a8db64aa5e512a95582a1e76b6c9af32ae05aacb0377590e8a9c1c731294e42",
+    "search_digest": "91bb2142b6f3b0a2ef533f2c8fd6b6238a9b9afc5a6176d116ab590aa14f5455",
+}
+
+EVENT_IDS = frozenset({3216, 3864, 4827, 4828, 4830, 4831, 5269, 5294, 5296, 5297, 5298, 5316, 6818, 7024, 7035, 7244, 7310, 7435})
 NEGATIVE_CONTROL_EVENT_ID = 7151
 
 MOVE_SOURCE = {713970: 3216}
@@ -63,6 +71,9 @@ CONTEXT_SOURCES = {
     10903286: 7024,
     10903285: 7244,
     10971967: 7435,
+    8618622: 6818,
+    9404519: 7035,
+    9745653: 7310,
 }
 TOUCHED_SOURCE_IDS = frozenset({*MOVE_SOURCE, *DELETE_SOURCES, *IDENTITY_SOURCES, *CONTEXT_SOURCES})
 
@@ -144,7 +155,7 @@ def _require_schema(con: sqlite3.Connection) -> None:
         "event_source_fact": {"id", "event_id", "source_id", "fact"},
         "eventposter": {"id", "event_id", "review_status", "review_reason", "duplicate_of_id", "supabase_url", "raw_sha256", "display_order"},
         "joboutbox": {"id", "event_id", "task", "status"},
-        "event_identity_decision_log": {"id", "event_id", "source_type", "decision", "decision_reason", "decision_payload"},
+        "event_identity_decision_log": {"id", "event_id", "source_type", "source_url", "decision", "decision_reason", "decision_payload"},
     }
     for table, columns in required.items():
         existing = set(_table_columns(con, table))
@@ -278,21 +289,36 @@ def _assert_initial(con: sqlite3.Connection) -> None:
     # media projection are replaced. Raw prose never leaves this process.
     for field in ("description", "short_description", "search_digest"):
         value = str(e3864[field] or "")
-        if "великие учителя" in value.casefold():
-            raise RepairBlocked(f"event_anchor_mismatch:3864:{field}_contaminated")
+        if _sha(value) != PIANISSIMO_TEXT_HASHES[field]:
+            raise RepairBlocked(f"event_anchor_mismatch:3864:{field}_evidence_hash")
     if str(e3864["event_type"] or "") != "концерт" or str(e3864["festival"] or "") != "Pianissimo":
         raise RepairBlocked("event_anchor_mismatch:3864:semantic_identity")
     if str(e3864["age_restriction"] or "") != "12+":
         raise RepairBlocked("event_anchor_mismatch:3864:age")
+    if (
+        str(e3864["end_date"] or "")
+        or str(e3864["location_name"] or "") != "Филиал Третьяковской галереи, Парадная наб. 3, Калининград"
+        or str(e3864["location_address"] or "") != "Парадная наб. 3"
+        or str(e3864["city"] or "") != "Калининград"
+        or int(e3864["is_free"] or 0) != 0
+        or (e3864["ticket_price_min"], e3864["ticket_price_max"]) != (1500, 2000)
+        or str(e3864["ticket_status"] or "") != "available"
+    ):
+        raise RepairBlocked("event_anchor_mismatch:3864:public_semantics")
 
     # Event 7435 is option 5 only when the recorded merge decision independently
     # says same-event with no blocking conflicts. The direct VK/TG sources below
     # remain identity-bearing; the umbrella post alone becomes context-only.
     decision = con.execute(
-        "SELECT id,decision,decision_reason,decision_payload FROM event_identity_decision_log "
+        "SELECT id,source_url,decision,decision_reason,decision_payload FROM event_identity_decision_log "
         "WHERE event_id=7435 AND source_type='telegram' ORDER BY id DESC LIMIT 1"
     ).fetchone()
-    if decision is None or decision["decision"] != "allow_merge" or decision["decision_reason"] != "same_event_update":
+    if (
+        decision is None
+        or _canonical_url(decision["source_url"]) != _canonical_url(SIGNAL_TG_URL)
+        or decision["decision"] != "allow_merge"
+        or decision["decision_reason"] != "same_event_update"
+    ):
         raise RepairBlocked("event_7435_identity_evidence_missing")
     try:
         decision_payload = json.loads(str(decision["decision_payload"] or "{}"))
@@ -313,6 +339,23 @@ def _assert_initial(con: sqlite3.Connection) -> None:
         row = _source(con, sid)
         if row is None or int(row["event_id"]) != event_id:
             raise RepairBlocked(f"source_precondition_mismatch:{sid}")
+
+    exact_source_urls = {
+        2377812: PIANISSIMO_URL,
+        9404476: KAGUYA_URL,
+        9404562: WOMEN_SEA_URL,
+        9573730: WOMEN_SEA_URL,
+        10949059: SIGNAL_VK_URL,
+        10971966: SIGNAL_TG_URL,
+        10971967: URBAN_CONTEXT_URL,
+        8618622: URBAN_CONTEXT_URL,
+        9404519: URBAN_CONTEXT_URL,
+        9745653: URBAN_CONTEXT_URL,
+    }
+    for source_id, expected_url in exact_source_urls.items():
+        row = _source(con, source_id)
+        if row is None or _canonical_url(row["source_url"]) != _canonical_url(expected_url):
+            raise RepairBlocked(f"source_url_precondition_mismatch:{source_id}")
 
     for source_id, destination in DUPLICATE_SOURCES.items():
         source = _source(con, source_id)

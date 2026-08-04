@@ -197,6 +197,10 @@ guessed into an identity role.
 `context_only` never participates in SAME_EVENT matching and cannot authorize
 changes to title, occurrence, type, location, ticket/price or festival identity.
 It may be attached only as explicitly grounded non-identity provenance.
+Canonical-NULL legacy rows are excluded from source-URL force matching. Newly
+reconstructed legacy provenance is written explicitly as `context_only`; it can
+no longer bypass the identity-bearing uniqueness contract or become a raw-URL
+merge anchor.
 
 Before the first provider call or database write, Smart Update fingerprints the
 canonical URL, source type, normalized original text, message/post identity,

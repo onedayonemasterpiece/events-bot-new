@@ -129,7 +129,12 @@ Telegraph remains on `Velikie-uchitelya-04-13`, Pianissimo has a distinct
 Telegraph binding, and the two screening bindings are present. Aggregate/static
 projections are rebuilt only after release. Event `7435` is resolved as a
 standalone event only when its persisted same-event decision has no blocking
-conflicts; the festival programme source alone becomes `context_only`.
+conflicts and is correlated to the direct `signalkld/11527` source. The
+`urban_literature/15` programme URL is exact-matched and classified
+`context_only` on its four known child bindings (`6818`, `7035`, `7310`,
+`7435`), never as SAME_EVENT evidence. Preserved Pianissimo prose is pinned to
+the reviewed production evidence hashes; all direct ticket/source URLs and
+remaining public anchors must match exactly before any write.
 
 ## Follow-up Actions
 

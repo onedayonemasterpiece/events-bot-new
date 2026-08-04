@@ -11370,7 +11370,13 @@ async def _ensure_legacy_event_sources(session, event: Event | None) -> int:
             await session.execute(
                 select(EventSource.id).where(
                     EventSource.event_id == event.id,
-                    EventSource.source_url == url,
+                    or_(
+                        EventSource.canonical_source_url == canonicalize_identity_url(url),
+                        and_(
+                            EventSource.canonical_source_url.is_(None),
+                            EventSource.source_url == url,
+                        ),
+                    ),
                 )
             )
         ).scalar_one_or_none()
@@ -11382,13 +11388,15 @@ async def _ensure_legacy_event_sources(session, event: Event | None) -> int:
                 source_type=_infer_source_type_from_url(url),
                 source_url=url,
                 canonical_source_url=canonicalize_identity_url(url),
-                source_role=None,
+                # This is reconstructed legacy provenance, not direct evidence
+                # allowed to assert SAME_EVENT.
+                source_role="context_only",
                 source_fingerprint=input_packet_fingerprint(
                     {
                         "event_id": int(event.id),
                         "source_url": url,
                         "source_text": clean_source_text or "",
-                        "source_role": None,
+                        "source_role": "context_only",
                     }
                 ),
                 source_text=clean_source_text,
@@ -14773,16 +14781,8 @@ async def _match_existing_event_by_event_source_url(
             select(Event)
             .join(EventSource, EventSource.event_id == Event.id)
             .where(
-                or_(
-                    and_(
-                        EventSource.canonical_source_url == canonical_source_url,
-                        EventSource.source_role == "identity_bearing",
-                    ),
-                    and_(
-                        EventSource.canonical_source_url.is_(None),
-                        EventSource.source_url == source_url,
-                    ),
-                )
+                EventSource.canonical_source_url == canonical_source_url,
+                EventSource.source_role == "identity_bearing",
             )
         )
         if candidate.source_type:
