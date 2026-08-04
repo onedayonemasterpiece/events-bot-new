@@ -49,7 +49,7 @@ jobs:
           {
             "status": "missing_secret",
             "required_secret": "FLY_API_TOKEN",
-            "required_scope": "read app status plus Machines SSH/SFTP for events-bot-new-wngqia",
+            "required_scope": "app-scoped SSH/SFTP access to events-bot-new-wngqia",
             "not_required": ["deploy", "restart", "secrets write", "database write", "provider send"],
             "production_mutation": false
           }
@@ -59,7 +59,7 @@ jobs:
 
           Production readback did not run because `FLY_API_TOKEN` is unavailable to this same-repository pull-request workflow.
 
-          Required access: a GitHub Actions secret named `FLY_API_TOKEN` whose Fly token can read app `events-bot-new-wngqia` and open Machines SSH/SFTP. Deploy, restart, secret mutation, provider requests, queue mutation and database writes are not required.
+          Required access: a GitHub Actions secret named `FLY_API_TOKEN` containing a short-lived app-scoped Fly SSH token for `events-bot-new-wngqia`. Deploy, restart, secret mutation, provider requests, queue mutation and database writes are not required.
           MD
             echo "available=false" >> "$GITHUB_OUTPUT"
           else
@@ -74,39 +74,9 @@ jobs:
           curl -fsSL https://fly.io/install.sh | sh
           echo "$HOME/.fly/bin" >> "$GITHUB_PATH"
 
-      - name: Resolve active production machine
-        if: steps.access.outputs.available == 'true'
-        id: machine
-        shell: bash
-        run: |
-          set -euo pipefail
-          "$HOME/.fly/bin/flyctl" auth whoami >/dev/null
-          "$HOME/.fly/bin/flyctl" machine list --app "$FLY_APP_NAME" --json > /tmp/fly-machines.json
-          python - <<'PY'
-          import json, os
-          from pathlib import Path
-          rows = json.loads(Path('/tmp/fly-machines.json').read_text())
-          if isinstance(rows, dict):
-              rows = rows.get('machines') or rows.get('data') or []
-          started = [r for r in rows if str(r.get('state') or '').lower() in {'started','running'}]
-          if len(started) != 1:
-              raise SystemExit(f'expected exactly one started production machine, found {len(started)}')
-          machine_id = str(started[0].get('id') or '')
-          if not machine_id:
-              raise SystemExit('started machine has no id')
-          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
-              fh.write(f'machine_id={machine_id}\n')
-          safe = []
-          for row in rows:
-              safe.append({k: row.get(k) for k in ('id','name','state','region','instance_id','version','created_at','updated_at') if k in row})
-          Path('audit-output/fly-machines.json').write_text(json.dumps(safe, indent=2), encoding='utf-8')
-          PY
-
       - name: Run one-shot read-only probe inside Fly machine
         if: steps.access.outputs.available == 'true'
         shell: bash
-        env:
-          MACHINE_ID: ${{ steps.machine.outputs.machine_id }}
         run: |
           set -euo pipefail
           FLYCTL="$HOME/.fly/bin/flyctl"
@@ -116,23 +86,23 @@ jobs:
           REMOTE_MD="/tmp/${AUDIT_ID}.md"
           REMOTE_EXCERPTS="/tmp/${AUDIT_ID}.txt"
           cleanup_remote() {
-            "$FLYCTL" ssh console --app "$FLY_APP_NAME" --machine "$MACHINE_ID" --pty=false --command \
+            "$FLYCTL" ssh console --app "$FLY_APP_NAME" --pty=false --command \
               "rm -f '$REMOTE_SCRIPT' '$REMOTE_JSON' '$REMOTE_MD' '$REMOTE_EXCERPTS' /tmp/smart-update-audit-*.sqlite" \
               >/dev/null 2>&1 || true
           }
           trap cleanup_remote EXIT
 
           "$FLYCTL" ssh sftp put /tmp/smart-update-health-audit.py "$REMOTE_SCRIPT" \
-            --app "$FLY_APP_NAME" --machine "$MACHINE_ID" --quiet
-          "$FLYCTL" ssh console --app "$FLY_APP_NAME" --machine "$MACHINE_ID" --pty=false --command \
+            --app "$FLY_APP_NAME" --quiet
+          "$FLYCTL" ssh console --app "$FLY_APP_NAME" --pty=false --command \
             "cd /app && PYTHONPATH=/app python '$REMOTE_SCRIPT' --output '$REMOTE_JSON' --markdown '$REMOTE_MD' --excerpts '$REMOTE_EXCERPTS' --window-hours '$AUDIT_WINDOW_HOURS' --app '$FLY_APP_NAME' --repo-sha '$AUDIT_HEAD_SHA'"
 
           "$FLYCTL" ssh sftp get "$REMOTE_JSON" audit-output/smart-update-health.json \
-            --app "$FLY_APP_NAME" --machine "$MACHINE_ID" --quiet
+            --app "$FLY_APP_NAME" --quiet
           "$FLYCTL" ssh sftp get "$REMOTE_MD" audit-output/smart-update-health.md \
-            --app "$FLY_APP_NAME" --machine "$MACHINE_ID" --quiet
+            --app "$FLY_APP_NAME" --quiet
           "$FLYCTL" ssh sftp get "$REMOTE_EXCERPTS" audit-output/smart-update-sanitized-excerpts.txt \
-            --app "$FLY_APP_NAME" --machine "$MACHINE_ID" --quiet
+            --app "$FLY_APP_NAME" --quiet
           test -s audit-output/smart-update-health.json
           test -s audit-output/smart-update-health.md
           cat audit-output/smart-update-health.md >> "$GITHUB_STEP_SUMMARY"
@@ -142,7 +112,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -f /tmp/fly-machines.json /tmp/smart-update-health-audit.py
+          rm -f /tmp/smart-update-health-audit.py
           if [[ ! -f audit-output/smart-update-health.md ]]; then
             cat > audit-output/smart-update-health.md <<'MD'
           # Smart Update production health audit
