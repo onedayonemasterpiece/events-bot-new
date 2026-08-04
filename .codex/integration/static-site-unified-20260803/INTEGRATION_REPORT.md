@@ -3,7 +3,9 @@
 ## Base and isolation
 
 - Initial base: `origin/main@0bc8482dcda5cf16a89f312f9791ecbb6d0e9a3a`.
-- Current main merged into integration: `7efa00560725334d16cc06c1e47b858b258e4370`.
+- Main baseline merged before final integration: `7efa00560725334d16cc06c1e47b858b258e4370`.
+- Delivered integration merge: PR #316,
+  `origin/main@4e0e2b15ea3074d8bc374d51356c1341b9b4f12b`.
 - Integration branch: `integration/static-site-unified-20260803`.
 - Dirty root checkout and local commit `12ad425e9` were preserved without edits.
 - Real OTP/mail sends in this integration: **0**.
@@ -29,6 +31,12 @@
   immutable readback verified 3,305 objects / 674,467,502 bytes; candidate CAS
   completed with public root and stable ICS unchanged. Incident closure is on
   `origin/main` via PR #319.
+- Post-merge delivery used a clean exact-main worktree. Fly machine v1905 and
+  its in-container marker both report `4e0e2b15ea3074d8bc374d51356c1341b9b4f12b`;
+  public/loopback health are ready with no issues. The already-running calendar
+  rollover was allowed to reach atomic candidate acceptance before deploy;
+  zero new static builds were triggered and the final active/pending count was
+  zero.
 - Baseline preview build/check passed before lanes were merged.
 - External OTP harness unit suite: **65/65**, no mailbox or OTP issue call.
 - Auth fixture + resilient transport + seven-profile matrix: prior combined
@@ -83,8 +91,9 @@
    SHA `6c797020…` passed the single no-root-promotion canary, immutable receipt
    and public non-mutation checks. PR #319 closed the incident on `main`.
 2. Auth/transport + P13N-00 + shared runtime/CTA + collections/weather consumer:
-   open PR #316, CLEAN with all required checks green and no auto-merge request;
-   final combined requirement audit found no Done overclaim.
+   PR #316 merged as `4e0e2b15e` after all required checks and the final
+   requirement audit passed; exact-main Fly deploy and health verification
+   completed without launching another static build.
 3. Weather producer: cat-weather-new draft PR #4 directly on `main`, all checks
    green; prerequisite repair PR #3 is merged.
 4. YDB code may merge disabled, but live DDL/cutover/scheduler/RU changes require
