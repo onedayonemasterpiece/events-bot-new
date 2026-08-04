@@ -10,6 +10,12 @@ from smart_event_update import EventCandidate, smart_event_update
 from smart_update_identity import IdentityVectorEvidence
 
 
+@pytest.fixture(autouse=True)
+def _allow_historical_incident_replays(monkeypatch):
+    """The fixtures preserve incident dates and must exercise identity, not age."""
+    monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+
 async def _no_topics(*_args, **_kwargs):
     return None
 

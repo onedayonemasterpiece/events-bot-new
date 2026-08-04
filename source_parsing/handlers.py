@@ -37,7 +37,7 @@ from poster_media import PosterMedia, is_supabase_storage_url, process_media
 from kaggle_registry import list_jobs, remove_job
 from video_announce.kaggle_client import KaggleClient
 from models import Event, EventSource
-from telegram_sources import canonicalize_tg_url
+from smart_update_identity import canonicalize_identity_url
 
 logger = logging.getLogger(__name__)
 
@@ -286,17 +286,7 @@ def _event_telegraph_url(event) -> str | None:
 
 
 def _normalize_source_url_for_match(url: str | None) -> str | None:
-    if not url:
-        return None
-    value = str(url).strip()
-    if not value:
-        return None
-    canonical_tg = canonicalize_tg_url(value)
-    if canonical_tg:
-        value = canonical_tg
-    if value.startswith("http://") or value.startswith("https://"):
-        value = value.rstrip("/")
-    return value
+    return canonicalize_identity_url(url)
 
 
 def _extract_host(url: str | None) -> str:
@@ -542,12 +532,30 @@ async def attach_parser_source_to_exact_existing(
             ),
             None,
         )
+        canonical_source_url = canonicalize_identity_url(source_url)
+        if not canonical_source_url:
+            return False
+        conflicting_owner = (
+            await session.execute(
+                select(EventSource.event_id).where(
+                    EventSource.canonical_source_url == canonical_source_url,
+                    EventSource.source_role == "identity_bearing",
+                    EventSource.event_id != int(event_id),
+                ).limit(1)
+            )
+        ).scalar_one_or_none()
+        if conflicting_owner is not None:
+            # Fall through to the ordinary Smart Update path, which records a
+            # source_binding_conflict review instead of reassigning ownership.
+            return False
         if existing is None:
             session.add(
                 EventSource(
                     event_id=int(event_id),
                     source_type=f"parser:{str(source_name).strip().lower()}",
                     source_url=source_url,
+                    canonical_source_url=canonical_source_url,
+                    source_role="identity_bearing",
                     source_text=(event.description or "").strip() or None,
                     imported_at=datetime.now(timezone.utc),
                     trust_level="high",
@@ -555,6 +563,8 @@ async def attach_parser_source_to_exact_existing(
             )
         else:
             existing.source_type = f"parser:{str(source_name).strip().lower()}"
+            existing.canonical_source_url = canonical_source_url
+            existing.source_role = "identity_bearing"
             if event.description and not existing.source_text:
                 existing.source_text = event.description.strip()
             if not existing.trust_level:
