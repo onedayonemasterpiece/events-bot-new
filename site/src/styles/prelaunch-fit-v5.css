@@ -1,0 +1,19 @@
+/* The supplied 1200×1200 reference keeps the PWA artwork anchored near the
+   top of the scene; the glass map—not a vertical image offset—hides its upper
+   leather area. This places the embedded wordmark in the intended centre. */
+
+@media (min-width: 821px) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__background::after {
+    width: min(100vw, 1320px);
+    left: 54%;
+    top: -7vh;
+  }
+}
+
+@media (min-width: 821px) and (min-height: 1000px) and (max-aspect-ratio: 5 / 4) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__background::after {
+    width: 100vw;
+    left: 50%;
+    top: 0;
+  }
+}
