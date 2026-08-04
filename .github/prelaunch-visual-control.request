@@ -1,4 +1,4 @@
-request_id=visual-20260804T165000Z-r15
+request_id=visual-20260804T165500Z-r16
 target_branch=agent/prelaunch-landing-20260803
-target_sha=756c212e1b4d79f319e9fdc4e87b42d269b87d85
+target_sha=6059a6efbe949349a81763aa01d775d4425914ea
 publish_browser=0
