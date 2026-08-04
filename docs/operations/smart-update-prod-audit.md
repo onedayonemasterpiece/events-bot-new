@@ -95,9 +95,8 @@ Do not substitute an organization read token, personal token, deploy token or
 The workflow accepts only:
 
 - `hours`: positive integer, default `24`, within the workflow's fixed bound;
-- `end_utc`: optional strict RFC 3339 UTC instant (`YYYY-MM-DDTHH:MM:SSZ`). An
-  empty value is resolved once to the runner's current UTC time;
-- `expected_repo_sha`: required, lowercase/uppercase-insensitive exact 40-hex
+- `end_utc`: required strict RFC 3339 UTC instant (`YYYY-MM-DDTHH:MM:SSZ`);
+- `expected_repo_sha`: required, lowercase exact 40-hex
   commit SHA.
 
 The resolved window is half-open: **`[end_utc - hours, end_utc)`**. The resolved
@@ -255,7 +254,7 @@ create/merge and source types. Each row has only:
 - stable redacted source-URL hash;
 - lifecycle/identity status.
 
-Exact warm-replay rows are a distinct `sample_kind=warm_replay` stratum and do
+Exact warm-replay rows are a distinct `sample_kind=exact_warm_replay` stratum and do
 not consume the meaning of ordinary create/merge rows. A raw source URL or
 source text is never included, even when hashing it internally.
 
@@ -268,6 +267,10 @@ source text is never included, even when hashing it internally.
 - If the exact same packet is not observed at least twice inside the window,
   warm-replay status is `indeterminate`, not “no mutation” or “replay passed”.
   The warm-replay stratum is still present with an empty/indeterminate reason.
+- An exact-ticket-slot lookup or `final_transaction_duplicate_probe` is reported
+  only as replay-candidate/duplicate-probe evidence. Neither proves that the
+  identical input packet was replayed, so neither may populate a verified warm
+  sample by itself.
 - These limitations may yield `WATCH`, but present logs still count as an
   available mandatory source. Missing/inaccessible runtime logs yield
   `BLOCKED_OBSERVER_ACCESS`.
@@ -321,7 +324,7 @@ the Markdown report:
 |---|---|
 | `PASS` | all mandatory observer sources and both SHAs are present; integrity/health gates pass; no critical or watch finding remains |
 | `WATCH` | all mandatory sources are present, but non-critical degradation, retry/staleness, evidence gap covered by an explicit limitation, or follow-up risk exists |
-| `FAIL` | evidence proves an unhealthy/integrity condition, critical false merge, ambiguous auto-merge, failed `quick_check`, unsafe mutation/replay signal, or redaction-policy failure |
+| `FAIL` | evidence proves an unhealthy/integrity condition, exact deployed SHA differs from the tested main SHA, critical false merge, ambiguous auto-merge, failed `quick_check`, unsafe mutation/replay signal, or redaction-policy failure |
 | `BLOCKED_OBSERVER_ACCESS` | the observer cannot establish the required production evidence; this is never converted to `PASS` |
 
 The workflow **must** classify `BLOCKED_OBSERVER_ACCESS` and finish non-zero if
@@ -356,6 +359,7 @@ SECRET=FLY_API_TOKEN_SMART_UPDATE_AUDIT
 WORKFLOW=smart-update-prod-audit.yml
 TOKEN_NAME="smart-update-prod-audit-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 CLEANED=0
+CLEANING=0
 
 export PATH="$HOME/.fly/bin:$PATH"
 set -a
@@ -363,20 +367,71 @@ source /home/dev/.config/fly/release.env
 set +a
 
 cleanup() {
-  if [ "$CLEANED" -eq 1 ]; then return; fi
-  CLEANED=1
-  set +e
-  gh secret delete "$SECRET" --env "$ENVIRONMENT" --repo "$REPO"
-  mapfile -t token_ids < <(
-    flyctl tokens list --app "$APP" 2>/dev/null |
-      awk -v name="$TOKEN_NAME" '$2 == name { print $1 }'
-  )
-  if [ "${#token_ids[@]}" -gt 0 ]; then
-    flyctl tokens revoke "${token_ids[@]}"
+  [ "$CLEANED" -eq 1 ] && return 0
+  [ "$CLEANING" -eq 0 ] || return 1
+  CLEANING=1
+  local rc=0 secret_inventory token_inventory verify_inventory
+
+  if ! secret_inventory="$(gh secret list --env "$ENVIRONMENT" \
+      --repo "$REPO" --json name --jq '.[].name')"; then
+    echo "Cannot inventory Environment secrets during cleanup" >&2
+    rc=1
+  elif grep -Fxq "$SECRET" <<<"$secret_inventory"; then
+    if ! gh secret delete "$SECRET" --env "$ENVIRONMENT" \
+        --repo "$REPO" >/dev/null; then
+      echo "Cannot delete audit Environment secret" >&2
+      rc=1
+    fi
   fi
-  set -e
+
+  if ! token_inventory="$(flyctl tokens list --app "$APP" 2>/dev/null)"; then
+    echo "Cannot inventory Fly tokens during cleanup" >&2
+    rc=1
+  else
+    mapfile -t token_ids < <(awk -F '│' -v name="$TOKEN_NAME" '
+      function trim(s) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", s); return s }
+      NF >= 5 && trim($2) == name { print trim($1) }
+    ' <<<"$token_inventory")
+    if [ "${#token_ids[@]}" -gt 0 ] &&
+       ! flyctl tokens revoke "${token_ids[@]}" >/dev/null; then
+      echo "Cannot revoke audit Fly token" >&2
+      rc=1
+    fi
+  fi
+
+  # Fail closed: an inventory/auth/network failure is not equivalent to absence.
+  if ! secret_inventory="$(gh secret list --env "$ENVIRONMENT" \
+      --repo "$REPO" --json name --jq '.[].name')"; then
+    echo "Cannot verify Environment secret deletion" >&2
+    rc=1
+  elif grep -Fxq "$SECRET" <<<"$secret_inventory"; then
+    echo "Environment secret deletion was not verified" >&2
+    rc=1
+  fi
+  if ! verify_inventory="$(flyctl tokens list --app "$APP" 2>/dev/null)"; then
+    echo "Cannot verify Fly token revocation" >&2
+    rc=1
+  elif ! awk -F '│' -v name="$TOKEN_NAME" '
+      function trim(s) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", s); return s }
+      NF >= 5 && trim($2) == name { seen=1; if (trim($5) == "") active=1 }
+      END { exit !(seen && !active) }
+    ' <<<"$verify_inventory"; then
+    echo "Fly token revocation was not verified" >&2
+    rc=1
+  fi
+
+  CLEANING=0
+  if [ "$rc" -eq 0 ]; then CLEANED=1; fi
+  return "$rc"
 }
-trap cleanup EXIT INT TERM
+on_exit() {
+  local original_rc=$?
+  trap - EXIT INT TERM
+  cleanup || exit 97
+  exit "$original_rc"
+}
+trap on_exit EXIT
+trap 'exit 130' INT TERM
 
 # stdout of flyctl is only the token and goes directly to GitHub encryption.
 flyctl tokens create ssh \
@@ -433,19 +488,8 @@ printf 'run_id=%s\ntested_sha=%s\nclassification=%s\nartifact_digest=%s\n' \
   "$RUN_ID" "$TESTED_SHA" "$CLASSIFICATION" "$ARTIFACT_DIGEST"
 
 # Terminal cleanup is mandatory even for WATCH/FAIL/BLOCKED.
-cleanup
+cleanup || exit 97
 trap - EXIT INT TERM
-
-if gh secret list --env "$ENVIRONMENT" --repo "$REPO" \
-     --json name --jq '.[].name' | grep -Fxq "$SECRET"; then
-  echo "Environment secret deletion was not verified" >&2
-  exit 1
-fi
-if flyctl tokens list --app "$APP" 2>/dev/null |
-     awk -v name="$TOKEN_NAME" '$2 == name && NF < 11 { found=1 } END { exit !found }'; then
-  echo "Fly token still appears active" >&2
-  exit 1
-fi
 exit "$WATCH_RC"
 ```
 
@@ -453,8 +497,9 @@ The exact-name token lookup is piped through `awk`, so the token inventory's
 creator metadata is not printed. The token ID is non-secret revocation metadata;
 the token value is never stored. The active-row verification relies on flyctl's
 current five-column table (`ID`, `Name`, `Created By`, `Expires At`, `Revoked
-At`) and the token name intentionally contains no spaces. If flyctl changes that
-format, inspect only the exact-name row and confirm a non-empty `Revoked At`
+At`) and the token name intentionally contains no spaces. Cleanup fails closed
+unless the exact-name row exists with a non-empty `Revoked At`; if flyctl changes
+that format, inspect only the exact-name row and confirm a non-empty `Revoked At`
 without copying creator metadata into evidence. If the terminal shell is
 interrupted, the trap deletes the Environment secret and revokes every
 exact-name match. If cleanup reports an error, do not treat expiry as

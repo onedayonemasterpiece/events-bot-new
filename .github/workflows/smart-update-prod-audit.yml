@@ -85,6 +85,19 @@ jobs:
         with:
           version: 0.4.78
 
+      - name: Verify checked-out immutable SHA
+        if: steps.preflight.outputs.allowed == 'true'
+        shell: bash
+        env:
+          REQUEST_SHA: ${{ inputs.expected_repo_sha }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "${actual_sha}" != "${REQUEST_SHA}" || "${actual_sha}" != "${GITHUB_SHA}" ]]; then
+            echo "::error title=Audit checkout rejected::Checked-out SHA is not the exact dispatch/main SHA."
+            exit 1
+          fi
+
       - name: Check public health without credentials
         id: public_health
         if: steps.preflight.outputs.allowed == 'true'
@@ -320,9 +333,12 @@ jobs:
               if not isinstance(access, dict) or not access_keys.issubset(access) or not all(isinstance(access[key], bool) for key in access_keys):
                   raise RuntimeError("observer_access_missing")
               missing_access = not all(access[key] for key in access_keys)
-              sha_missing = manifest.get("in_container_sha") != tested_sha
+              deployed_sha = manifest.get("in_container_sha")
+              sha_missing = not isinstance(deployed_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", deployed_sha)
               if (missing_access or sha_missing) and classification != "BLOCKED_OBSERVER_ACCESS":
                   raise RuntimeError("observer_access_not_blocked")
+              if not sha_missing and deployed_sha != tested_sha and classification != "FAIL":
+                  raise ValueError("deployed_sha_mismatch_not_failed")
               if classification != "BLOCKED_OBSERVER_ACCESS":
                   for key in ("fly_identity", "schema_hash", "table_inventory", "commands", "queries", "window"):
                       if key not in manifest or not manifest[key]:
@@ -362,7 +378,7 @@ jobs:
               envelope = make_fallback("BLOCKED_OBSERVER_ACCESS", "observer_access_contract_violation")
               classification, exit_code = validate_and_write(envelope)
           except Exception:
-              envelope = make_fallback("FAIL", "evidence_validation_failed")
+              envelope = make_fallback("BLOCKED_OBSERVER_ACCESS", "evidence_validation_failed")
               classification, exit_code = validate_and_write(envelope)
 
           actual_names = {path.name for path in out_dir.iterdir() if path.is_file() and not path.is_symlink()}
@@ -382,7 +398,7 @@ jobs:
         if: always() && steps.evidence.outcome == 'success'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: smart-update-prod-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          name: smart-update-prod-audit-${{ github.sha }}-${{ github.run_id }}
           path: ${{ runner.temp }}/smart-update-prod-audit-evidence/
           if-no-files-found: error
           retention-days: 14

@@ -48,11 +48,13 @@ EVIDENCE_FILES = (
 PUBLIC_EVENT_FIELDS = frozenset(
     {
         "title", "description", "short_description", "search_digest", "date",
-        "end_date", "time", "location_name", "location_address", "city",
-        "ticket_link", "ticket_status", "is_free", "price", "age_restriction",
-        "topics", "photo_urls", "festival", "festival_series",
+        "end_date", "time", "time_is_default", "location_name", "location_address",
+        "address", "city", "ticket_link", "ticket_status", "ticket_price_min",
+        "ticket_price_max", "is_free", "price", "age_restriction", "event_type",
+        "emoji", "topics", "photo_urls", "festival", "festival_series",
     }
 )
+PROSE_EVENT_FIELDS = frozenset({"title", "description", "short_description", "search_digest"})
 TERMINAL_KAGGLE = frozenset(
     {"done", "complete", "completed", "success", "succeeded", "failed", "error", "cancelled", "canceled"}
 )
@@ -138,6 +140,8 @@ class QueryRecorder:
 
     def execute(self, connection: sqlite3.Connection, label: str, sql: str, params: Sequence[Any] = ()):
         normalized = " ".join(sql.split())
+        if not re.match(r"^(?:SELECT|PRAGMA)\b", normalized, re.I):
+            raise ValueError("non_read_only_sql_rejected")
         self.items.append({"engine": "sqlite", "label": label, "statement": normalized})
         return connection.execute(sql, params)
 
@@ -202,15 +206,15 @@ def extract_changed_fields(payload: Any) -> set[str]:
 
 def identity_bucket(decision: Any) -> str:
     value = safe_token(decision)
-    if any(x in value for x in ("pending_review", "manual_review", "review", "ambiguous")):
+    if value in {"review_required", "pending_review"} or any(x in value for x in ("manual_review", "review", "ambiguous")):
         return "review"
-    if any(x in value for x in ("reject", "veto", "skip")):
+    if value in {"veto_create", "skip_merge_side_effects"} or any(x in value for x in ("reject", "veto", "skip")):
         return "reject"
     if "conflict" in value:
         return "conflict"
-    if any(x in value for x in ("merge", "match", "existing")):
+    if value in {"allow_merge", "allow_safe_metadata_only"} or any(x in value for x in ("merge", "match", "existing")):
         return "merge"
-    if any(x in value for x in ("create", "new")):
+    if value == "allow_create" or any(x in value for x in ("create", "new")):
         return "create"
     return "other"
 
@@ -248,7 +252,12 @@ def collect_database(
 ) -> tuple[dict[str, Any], dict[int, dict[str, Any]], dict[str, Any], list[dict[str, str]], bool]:
     metrics: dict[str, Any] = {}
     sample_state: dict[int, dict[str, Any]] = {}
-    manifest_db: dict[str, Any] = {"uri": DB_URI, "query_only": True, "consistent_read_transaction": True}
+    manifest_db: dict[str, Any] = {
+        "uri": DB_URI,
+        "query_only": True,
+        "temp_store": "MEMORY",
+        "consistent_read_transaction": True,
+    }
     qr = QueryRecorder()
     available = False
     connection: sqlite3.Connection | None = None
@@ -256,6 +265,7 @@ def collect_database(
         connection = sqlite3.connect(db_uri, uri=True, timeout=10)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA query_only=ON")
+        connection.execute("PRAGMA temp_store=MEMORY")
         connection.execute("BEGIN")
         quick = [str(r[0]) for r in qr.execute(connection, "integrity.quick_check", "PRAGMA quick_check").fetchall()]
         metrics["quick_check"] = quick
@@ -332,6 +342,7 @@ def collect_database(
         identity_counts: collections.Counter[str] = collections.Counter()
         critical_false_merges = 0
         ambiguous_auto_merges = 0
+        final_duplicate_probes = 0
         if "event_identity_decision_log" in columns:
             required = {"event_id", "decision", "created_at"}
             if required.issubset(columns["event_identity_decision_log"]):
@@ -352,6 +363,29 @@ def collect_database(
                     decision = str(row["decision"] or "")
                     bucket = identity_bucket(decision)
                     identity_counts[bucket] += 1
+                    payload: Mapping[str, Any] = {}
+                    if "decision_payload" in row.keys() and row["decision_payload"]:
+                        try:
+                            decoded = json.loads(row["decision_payload"]) if isinstance(row["decision_payload"], str) else row["decision_payload"]
+                        except (TypeError, ValueError, json.JSONDecodeError):
+                            decoded = {}
+                        if isinstance(decoded, Mapping):
+                            payload = decoded
+                    relation_raw = payload.get("relation")
+                    if not relation_raw and isinstance(payload.get("verdict"), Mapping):
+                        relation_raw = payload["verdict"].get("relation")
+                    relation = safe_token(relation_raw) if relation_raw else None
+                    blocking_conflicts = payload.get("blocking_conflicts")
+                    if isinstance(blocking_conflicts, str):
+                        try:
+                            blocking_conflicts = json.loads(blocking_conflicts)
+                        except (ValueError, json.JSONDecodeError):
+                            blocking_conflicts = None
+                    conflict_evidence = relation in {
+                        "related_but_distinct", "festival_context_sibling", "unsafe_to_merge"
+                    } or bool(blocking_conflicts)
+                    if conflict_evidence:
+                        identity_counts["conflict"] += 1
                     event_id = int(row["event_id"]) if row["event_id"] is not None else None
                     if event_id is not None:
                         state = sample_state.setdefault(event_id, {"source_types": set(), "source_url_hashes": set(), "changed_fields": set()})
@@ -360,15 +394,22 @@ def collect_database(
                             state["source_types"].add(safe_token(row["source_type"]))
                         if "source_url" in row.keys() and row["source_url"]:
                             state["source_url_hashes"].add(stable_alias("url", row["source_url"]))
-                        if "decision_payload" in row.keys():
-                            state["changed_fields"].update(extract_changed_fields(row["decision_payload"]))
+                        if payload:
+                            state["changed_fields"].update(extract_changed_fields(payload))
                     evidence = " ".join(
                         str(row[key] or "") for key in ("decision", "decision_reason", "decision_payload") if key in row.keys()
                     ).lower()
+                    if "final_transaction_duplicate_probe" in evidence:
+                        final_duplicate_probes += 1
                     is_merge = bucket == "merge"
-                    if is_merge and any(x in evidence for x in ("critical_false_merge", "false_merge", "hard_veto", "anchor_conflict", "identity_conflict")):
+                    if is_merge and (
+                        conflict_evidence
+                        or any(x in evidence for x in ("critical_false_merge", "false_merge", "hard_veto", "anchor_conflict", "identity_conflict"))
+                    ):
                         critical_false_merges += 1
-                    if is_merge and any(x in evidence for x in ("ambiguous", "ambiguity", "uncertain", "pending_review")):
+                    ambiguous_evidence = any(x in evidence for x in ("ambiguous", "ambiguity", "uncertain", "pending_review"))
+                    ambiguous_relation = relation in {"unknown", "unsafe_to_merge", "related_but_distinct", "festival_context_sibling"}
+                    if is_merge and (ambiguous_evidence or ambiguous_relation):
                         ambiguous_auto_merges += 1
             else:
                 add_gap(gaps, "database", "identity_decision_columns_missing")
@@ -377,6 +418,7 @@ def collect_database(
             "by_outcome": {name: int(identity_counts.get(name, 0)) for name in ("create", "merge", "review", "reject", "conflict", "other")},
             "critical_false_merge_evidence": critical_false_merges,
             "ambiguous_auto_merge_evidence": ambiguous_auto_merges,
+            "final_transaction_duplicate_probe_evidence": final_duplicate_probes,
         }
 
         changed = {str(event_id): sorted(state.get("changed_fields", set())) for event_id, state in sample_state.items() if state.get("changed_fields")}
@@ -430,6 +472,7 @@ def collect_database(
 
         if touched and "event" in columns:
             status_cols = [c for c in ("age_restriction_status", "age_assessment_status", "collection_decisions") if c in columns["event"]]
+            collection_presence = collections.Counter()
             for group in chunks(touched):
                 marks = ",".join("?" for _ in group)
                 if status_cols:
@@ -447,30 +490,92 @@ def collect_database(
                         if "age_assessment_status" in row.keys():
                             domain["age"].setdefault("event_by_status", collections.Counter())[safe_token(row["age_assessment_status"])] += 1
                         if "collection_decisions" in row.keys() and row["collection_decisions"]:
+                            collection_presence["present"] += 1
                             try:
                                 value = json.loads(row["collection_decisions"]) if isinstance(row["collection_decisions"], str) else row["collection_decisions"]
                             except (TypeError, ValueError, json.JSONDecodeError):
                                 value = None
+                                collection_presence["invalid"] += 1
                             counter = domain["collection"].setdefault("decision_statuses", collections.Counter())
                             _count_nested_statuses(value, counter)
+                        elif "collection_decisions" in row.keys():
+                            collection_presence["missing"] += 1
+            if "collection_decisions" in status_cols:
+                domain["collection"]["evidence_presence"] = dict(sorted(collection_presence.items()))
+                domain["collection"]["explicit_error_ledger"] = "not_persisted"
+                add_gap(gaps, "collection", "explicit_error_ledger_not_persisted")
         for values in domain.values():
             for key, value in list(values.items()):
                 if isinstance(value, collections.Counter):
                     values[key] = dict(sorted(value.items()))
 
-        if "event_media_pair_review" in columns and {"event_id", "status"}.issubset(columns["event_media_pair_review"]):
-            counter = collections.Counter()
+        if "eventposter" in columns and {"event_id"}.issubset(columns["eventposter"]):
+            poster_statuses: dict[str, collections.Counter[str]] = {
+                "review_status": collections.Counter(),
+                "media_semantic_status": collections.Counter(),
+            }
+            available_status_cols = [name for name in poster_statuses if name in columns["eventposter"]]
             for group in chunks(touched):
                 marks = ",".join("?" for _ in group)
-                for row in qr.execute(connection, "media_pair_review.for_touched", f"SELECT status,COUNT(*) AS n FROM event_media_pair_review WHERE event_id IN ({marks}) GROUP BY status", tuple(group)).fetchall():
-                    counter[safe_token(row["status"])] += int(row["n"])
+                if available_status_cols:
+                    for row in qr.execute(
+                        connection,
+                        "eventposter.status_for_touched",
+                        f"SELECT {','.join(available_status_cols)},COUNT(*) AS n FROM eventposter WHERE event_id IN ({marks}) GROUP BY {','.join(available_status_cols)}",
+                        tuple(group),
+                    ).fetchall():
+                        for col in available_status_cols:
+                            poster_statuses[col][safe_token(row[col])] += int(row["n"])
+            domain["media"]["eventposter_by_status"] = {
+                name: dict(sorted(counter.items())) for name, counter in poster_statuses.items() if name in available_status_cols
+            }
+            if "image_geometry_id" in columns["eventposter"] and "event_image_geometry" in columns and {"id", "status"}.issubset(columns["event_image_geometry"]):
+                geometry = collections.Counter()
+                for group in chunks(touched):
+                    marks = ",".join("?" for _ in group)
+                    for row in qr.execute(
+                        connection,
+                        "event_image_geometry.status_for_touched",
+                        f"SELECT g.status,COUNT(DISTINCT g.id) AS n FROM event_image_geometry g JOIN eventposter p ON p.image_geometry_id=g.id WHERE p.event_id IN ({marks}) GROUP BY g.status",
+                        tuple(group),
+                    ).fetchall():
+                        geometry[safe_token(row["status"])] += int(row["n"])
+                domain["media"]["image_geometry_by_status"] = dict(sorted(geometry.items()))
+        else:
+            add_gap(gaps, "media", "eventposter_schema_missing")
+
+        if "event_media_pair_review" in columns and {"event_id", "status"}.issubset(columns["event_media_pair_review"]):
+            counter = collections.Counter()
+            pair_errors = collections.Counter()
+            for group in chunks(touched):
+                marks = ",".join("?" for _ in group)
+                pair_cols = ["status"] + (["last_error"] if "last_error" in columns["event_media_pair_review"] else [])
+                for row in qr.execute(connection, "media_pair_review.for_touched", f"SELECT {','.join(pair_cols)} FROM event_media_pair_review WHERE event_id IN ({marks})", tuple(group)).fetchall():
+                    status = safe_token(row["status"])
+                    counter[status] += 1
+                    if "last_error" in row.keys() and row["last_error"]:
+                        pair_errors[safe_error_signature(row["last_error"])] += 1
             domain["media"]["pair_review_by_status"] = dict(sorted(counter.items()))
+            domain["media"]["pair_review_redacted_errors"] = [
+                {"signature": signature, "count": count} for signature, count in sorted(pair_errors.items())
+            ]
+        if "event_media_asset" in columns and {"event_id", "kind"}.issubset(columns["event_media_asset"]):
+            assets = collections.Counter()
+            for group in chunks(touched):
+                marks = ",".join("?" for _ in group)
+                for row in qr.execute(connection, "event_media_asset.count_for_touched", f"SELECT kind,COUNT(*) AS n FROM event_media_asset WHERE event_id IN ({marks}) GROUP BY kind", tuple(group)).fetchall():
+                    assets[safe_token(row["kind"])] += int(row["n"])
+            domain["media"]["assets_by_kind"] = dict(sorted(assets.items()))
         metrics["touched_event_downstream_domains"] = domain
 
         static: dict[str, Any] = {"state_table_present": "static_site_build_state" in columns}
         active_run_ids: list[str] = []
         if "static_site_build_state" in columns:
-            safe_cols = [c for c in ("release_channel", "schema_version", "last_success_at", "active_job_id", "active_run_id", "active_claimed_at", "updated_at") if c in columns["static_site_build_state"]]
+            safe_cols = [c for c in (
+                "release_channel", "schema_version", "last_success_at", "last_success_fingerprint",
+                "last_success_run_id", "active_job_id", "active_run_id", "active_fingerprint",
+                "active_effective_date", "active_claimed_at", "updated_at",
+            ) if c in columns["static_site_build_state"]]
             rows = qr.execute(connection, "static_site.state", f"SELECT {','.join(safe_cols)} FROM static_site_build_state ORDER BY release_channel").fetchall()
             states = []
             latest_import = max((parse_utc(r["imported_at"]) for r in import_rows), default=None)
@@ -483,8 +588,12 @@ def collect_database(
                     "release_channel": safe_token(row["release_channel"]),
                     "schema_version": safe_token(row["schema_version"]) if "schema_version" in row.keys() else None,
                     "last_success_at": utc_iso(last_success) if last_success else None,
+                    "last_success_fingerprint_present": bool("last_success_fingerprint" in row.keys() and row["last_success_fingerprint"]),
+                    "last_success_run_present": bool("last_success_run_id" in row.keys() and row["last_success_run_id"]),
                     "active_job_id": int(row["active_job_id"]) if "active_job_id" in row.keys() and row["active_job_id"] is not None else None,
                     "active_run_alias": stable_alias("run", raw_active_run),
+                    "active_fingerprint_present": bool("active_fingerprint" in row.keys() and row["active_fingerprint"]),
+                    "active_effective_date": safe_token(row["active_effective_date"], max_len=32) if "active_effective_date" in row.keys() and row["active_effective_date"] else None,
                     "active_claimed_at": utc_iso(parse_utc(row["active_claimed_at"])) if "active_claimed_at" in row.keys() and parse_utc(row["active_claimed_at"]) else None,
                     "candidate_lag_seconds": max(0, int((latest_import - last_success).total_seconds())) if latest_import and last_success else None,
                 })
@@ -493,6 +602,34 @@ def collect_database(
             add_gap(gaps, "database", "static_site_build_state_missing")
         active_static_jobs = [r for r in outbox_rows if safe_token(r["task"]) == "static_site_build" and safe_token(r["status"]) in {"pending", "running"}]
         static["active_jobs_for_touched_events"] = len(active_static_jobs)
+        state_job_ids = sorted({
+            int(state["active_job_id"]) for state in static.get("states", [])
+            if state.get("active_job_id") is not None
+        })
+        static["active_state_jobs"] = []
+        if state_job_ids and "joboutbox" in columns and {"id", "task", "status"}.issubset(columns["joboutbox"]):
+            for group in chunks(state_job_ids):
+                marks = ",".join("?" for _ in group)
+                job_cols = [c for c in ("id", "task", "status", "attempts", "updated_at", "next_run_at") if c in columns["joboutbox"]]
+                for row in qr.execute(connection, "static_site.active_state_job", f"SELECT {','.join(job_cols)} FROM joboutbox WHERE id IN ({marks})", tuple(group)).fetchall():
+                    static["active_state_jobs"].append({
+                        "job_id": int(row["id"]),
+                        "task": safe_token(row["task"]),
+                        "status": safe_token(row["status"]),
+                        "attempts": int(row["attempts"] or 0) if "attempts" in row.keys() else None,
+                        "updated_at": utc_iso(parse_utc(row["updated_at"])) if "updated_at" in row.keys() and parse_utc(row["updated_at"]) else None,
+                        "next_run_at": utc_iso(parse_utc(row["next_run_at"])) if "next_run_at" in row.keys() and parse_utc(row["next_run_at"]) else None,
+                    })
+        if "static_site_build_history" in columns and {"release_channel", "outcome", "created_at"}.issubset(columns["static_site_build_history"]):
+            history = qr.execute(
+                connection,
+                "static_site.recent_history",
+                "SELECT release_channel,outcome,created_at FROM static_site_build_history WHERE julianday(created_at)>=julianday(?) AND julianday(created_at)<julianday(?) ORDER BY julianday(created_at) DESC LIMIT 1000",
+                (start_s, end_s),
+            ).fetchall()
+            static["history_by_outcome"] = dict(sorted(collections.Counter(safe_token(row["outcome"]) for row in history).items()))
+        else:
+            static["history_by_outcome"] = {}
         metrics["static_site_build"] = static
 
         ledger: dict[str, Any] = {"table_present": "kaggle_run_ledger" in columns}
@@ -506,12 +643,14 @@ def collect_database(
             if active_run_ids and "run_id" in columns["kaggle_run_ledger"]:
                 for group in [active_run_ids[i : i + 100] for i in range(0, len(active_run_ids), 100)]:
                     marks = ",".join("?" for _ in group)
-                    remote_cols = [c for c in ("run_id", "status", "phase", "updated_at", "last_heartbeat_at", "terminal_at") if c in columns["kaggle_run_ledger"]]
+                    remote_cols = [c for c in ("run_id", "status", "phase", "kernel_ref", "dataset_ref", "updated_at", "last_heartbeat_at", "terminal_at") if c in columns["kaggle_run_ledger"]]
                     for remote in qr.execute(connection, "kaggle.active_static_remote_handoff", f"SELECT {','.join(remote_cols)} FROM kaggle_run_ledger WHERE run_id IN ({marks})", tuple(group)).fetchall():
                         remote_handoffs.append({
                             "run_alias": stable_alias("run", remote["run_id"]),
                             "status": safe_token(remote["status"]) if "status" in remote.keys() else "unknown",
                             "phase": safe_token(remote["phase"]) if "phase" in remote.keys() else "unknown",
+                            "kernel_handoff_present": bool("kernel_ref" in remote.keys() and remote["kernel_ref"]),
+                            "dataset_handoff_present": bool("dataset_ref" in remote.keys() and remote["dataset_ref"]),
                             "terminal": bool(("terminal_at" in remote.keys() and remote["terminal_at"]) or ("status" in remote.keys() and safe_token(remote["status"]) in TERMINAL_KAGGLE)),
                             "last_heartbeat_at": utc_iso(parse_utc(remote["last_heartbeat_at"])) if "last_heartbeat_at" in remote.keys() and parse_utc(remote["last_heartbeat_at"]) else None,
                         })
@@ -546,7 +685,12 @@ def parse_log_timestamp(line: str) -> dt.datetime | None:
     return parse_utc(match.group(1).replace(",", ".")) if match else None
 
 
-def collect_runtime_logs(start: dt.datetime, end: dt.datetime, gaps: list[dict[str, str]]) -> tuple[dict[str, Any], str, bool]:
+def collect_runtime_logs(
+    start: dt.datetime,
+    end: dt.datetime,
+    gaps: list[dict[str, str]],
+    touched_event_ids: set[int] | None = None,
+) -> tuple[dict[str, Any], str, bool]:
     log_dir = os.environ.get("RUNTIME_LOG_DIR") or "/data/runtime_logs"
     basename = os.environ.get("RUNTIME_LOG_BASENAME") or "events-bot.log"
     paths = sorted(glob.glob(os.path.join(log_dir, basename + "*")))
@@ -566,29 +710,68 @@ def collect_runtime_logs(start: dt.datetime, end: dt.datetime, gaps: list[dict[s
     mutations: collections.Counter[tuple[int, str]] = collections.Counter()
     event_outcomes: dict[int, str] = {}
     event_source_types: dict[int, str] = {}
+    job_key_to_event: dict[str, int] = {}
     excerpts: list[str] = []
+    seen_records: set[str] = set()
     parsed_in_window = 0
+    readable_files = 0
     earliest: dt.datetime | None = None
     latest: dt.datetime | None = None
+    local_offset = dt.datetime.now().astimezone().utcoffset()
+    local_offset_seconds = int(local_offset.total_seconds()) if local_offset is not None else None
+    timezone_verified_utc = local_offset_seconds == 0
+    if not timezone_verified_utc:
+        add_gap(gaps, "runtime_logs", "container_timezone_not_utc")
     for path in paths:
         try:
             handle = open(path, "r", encoding="utf-8", errors="replace")
         except OSError:
             continue
+        readable_files += 1
+        current_in_window = False
+        current_relevant = False
+        current_stage = "unknown"
         with handle:
             for raw in handle:
                 line = raw[:65536]
                 timestamp = parse_log_timestamp(line)
-                if timestamp is None or not (start <= timestamp < end):
+                if timestamp is None:
+                    if current_in_window and current_relevant:
+                        cls_match = re.search(r"\b([A-Z][A-Za-z0-9_]{1,60}(?:Error|Exception|Timeout))\b", line)
+                        if cls_match:
+                            exceptions[(cls_match.group(1), current_stage)] += 1
                     continue
+                current_in_window = start <= timestamp < end
+                current_relevant = False
+                current_stage = "unknown"
+                if not current_in_window:
+                    continue
+                record_digest = hashlib.sha256(line.encode("utf-8", errors="replace")).hexdigest()
+                if record_digest in seen_records:
+                    continue
+                seen_records.add(record_digest)
                 parsed_in_window += 1
                 earliest = timestamp if earliest is None or timestamp < earliest else earliest
                 latest = timestamp if latest is None or timestamp > latest else latest
                 lower = line.lower()
-                if "smart_update" not in lower and not any(x in lower for x in ("outbox", " enq ", "enqueue")):
+                if "smart_update" not in lower and not any(x in lower for x in (
+                    "outbox", " enq ", "enqueue", "run [e", "run pick", "run done",
+                    "job timed out", "exact ticket slot lookup",
+                )):
                     continue
+                current_relevant = True
                 event_match = EVENT_ID_RE.search(line)
+                if not event_match:
+                    event_match = re.search(r"\bowner_eid[=: ]+(\d{1,12})\b", line, re.I)
+                if not event_match:
+                    event_match = re.search(r"\[E(\d{1,12})\]", line, re.I)
                 event_id = int(event_match.group(1)) if event_match else None
+                raw_job_key_match = re.search(r"\b(?:job_key|key)[=: ]+([a-zA-Z0-9_.:-]{1,160})", line, re.I)
+                raw_job_key = raw_job_key_match.group(1) if raw_job_key_match else None
+                if event_id is None and raw_job_key:
+                    event_id = job_key_to_event.get(raw_job_key)
+                if event_id is not None and raw_job_key:
+                    job_key_to_event[raw_job_key] = event_id
                 if event_id is not None:
                     touched_ids.add(event_id)
                 source_match = re.search(r"\bsource_type[=: ]+([a-zA-Z0-9_.:-]{1,40})", line)
@@ -606,8 +789,8 @@ def collect_runtime_logs(start: dt.datetime, end: dt.datetime, gaps: list[dict[s
                     "created": ("smart_update.created", "status=created"),
                     "merged": ("status=merged",),
                     "no_op": ("smart_update.no_op", "smart_update.no-op", "status=no_op", "status=no-op", "status=skipped_nochange"),
-                    "reject": ("smart_update.rejected", "smart_update.invalid", "smart_update.skip", "status=rejected"),
-                    "pending_review": ("pending_review", "pending-review"),
+                    "reject": ("smart_update.reject", "smart_update.invalid", "smart_update.skip", "status=rejected"),
+                    "pending_review": ("pending_review", "pending-review", "review_required", "action=review_required"),
                 }
                 for outcome, needles in terminal_map.items():
                     if any(n in lower for n in needles):
@@ -620,14 +803,24 @@ def collect_runtime_logs(start: dt.datetime, end: dt.datetime, gaps: list[dict[s
                     counters["retries"] += 1
                 if "timeout" in lower or "timed out" in lower:
                     counters["timeouts"] += 1
-                if "anchor_conflict" in lower or "anchor conflict" in lower:
+                if "anchor_conflict" in lower or "anchor conflict" in lower or "blocking_conflicts" in lower:
                     counters["anchor_conflicts"] += 1
-                if "hard_veto" in lower or "hard veto" in lower:
+                if any(marker in lower for marker in ("hard_veto", "hard veto", "veto_create", "skip_merge_side_effects")):
                     counters["hard_veto"] += 1
-                if "exact_packet" in lower or "exact-packet" in lower or "warm_replay" in lower or "warm replay" in lower:
+                verified_replay = any(marker in lower for marker in (
+                    "exact_packet_replay", "exact-packet replay", "warm_replay_verified",
+                ))
+                replay_candidate = any(marker in lower for marker in (
+                    "exact ticket slot lookup", "final_transaction_duplicate_probe",
+                ))
+                if verified_replay:
                     counters["exact_packet_replay"] += 1
                     if event_id is not None:
                         counters[f"warm_event:{event_id}"] += 1
+                elif replay_candidate:
+                    counters["exact_packet_replay_candidate"] += 1
+                    if event_id is not None:
+                        counters[f"warm_candidate_event:{event_id}"] += 1
                 changed_on_line: set[str] = set()
                 field_match = re.search(r"\b(?:changed_field|field)[=: ]+([a-z_]{2,40})", lower)
                 if field_match and field_match.group(1) in PUBLIC_EVENT_FIELDS:
@@ -640,17 +833,24 @@ def collect_runtime_logs(start: dt.datetime, end: dt.datetime, gaps: list[dict[s
                         mutations[(event_id, field)] += 1
                 cls_match = re.search(r"\b([A-Z][A-Za-z0-9_]{1,60}(?:Error|Exception|Timeout))\b", line)
                 stage_match = re.search(r"\b(?:stage|label)[=: ]+([a-zA-Z0-9_.:-]{1,80})", line)
+                if stage_match:
+                    current_stage = safe_token(stage_match.group(1))
                 if cls_match:
                     stage = safe_token(stage_match.group(1)) if stage_match else "unknown"
                     exceptions[(cls_match.group(1), stage)] += 1
                     kind = "smart_update.exception"
-                if any(x in lower for x in ("outbox", "enqueue", " enq ")):
-                    task_match = re.search(r"\btask[=: ]+([a-zA-Z0-9_.:-]{1,60})", line)
-                    task = safe_token(task_match.group(1)) if task_match else "unknown"
-                    state = "enqueue" if any(x in lower for x in ("enqueue", " enq ", "queued")) else (
-                        "terminal_error" if "error" in lower or "failed" in lower else "terminal_done" if "done" in lower or "success" in lower else "observed"
+                if any(x in lower for x in ("outbox", "enqueue", " enq ", "run [e", "run pick", "run done")):
+                    task_match = re.search(r"\b(?:task|job_key|key)[=: ]+([a-zA-Z0-9_.:-]{1,160})", line)
+                    raw_task = task_match.group(1) if task_match else "unknown"
+                    task = safe_token(raw_task.split(":", 1)[0])
+                    is_enq = " enq " in lower or "enqueue" in lower
+                    state = ("enqueue_skipped" if is_enq and "skipped" in lower else "enqueue") if is_enq else (
+                        "running" if "run pick" in lower or ("run [e" in lower and " start" in lower) else
+                        "terminal_error" if "error" in lower or "failed" in lower or "timed out" in lower else
+                        "terminal_done" if "run done" in lower or ("run [e" in lower and " done" in lower) or "success" in lower else "observed"
                     )
-                    downstream[(task, state)] += 1
+                    if event_id is not None and (touched_event_ids is None or event_id in touched_event_ids):
+                        downstream[(task, state)] += 1
                 if kind and len(excerpts) < 200:
                     parts = [utc_iso(timestamp), kind, f"source_type={source_type}"]
                     if event_id is not None:
@@ -662,9 +862,13 @@ def collect_runtime_logs(start: dt.datetime, end: dt.datetime, gaps: list[dict[s
                     if stage_match:
                         parts.append(f"stage={safe_token(stage_match.group(1))}")
                     excerpts.append(" ".join(parts))
-    repeated = sum(1 for count in mutations.values() if count > 1)
+    prose_mutation_events = {
+        event_id for (event_id, field), count in mutations.items()
+        if field in PROSE_EVENT_FIELDS and count > 1
+    }
+    repeated = len(prose_mutation_events)
     counters["repeated_prose_mutations"] = repeated
-    available = bool(inventory and parsed_in_window)
+    available = bool(inventory and readable_files and parsed_in_window and timezone_verified_utc)
     if not inventory:
         add_gap(gaps, "runtime_logs", "events_bot_log_files_missing")
     elif not parsed_in_window:
@@ -672,21 +876,28 @@ def collect_runtime_logs(start: dt.datetime, end: dt.datetime, gaps: list[dict[s
     metrics = {
         "inventory": inventory,
         "window_records": parsed_in_window,
+        "deduplicated_record_count": len(seen_records),
+        "container_timezone_utc_offset_seconds": local_offset_seconds,
+        "container_timezone_verified_utc": timezone_verified_utc,
         "observed_first_utc": utc_iso(earliest) if earliest else None,
         "observed_last_utc": utc_iso(latest) if latest else None,
         "smart_update": {
             "starts": counters["starts"],
             "terminal_outcomes": {name: int(outcomes.get(name, 0)) for name in ("created", "merged", "no_op", "reject", "pending_review")},
+            "start_terminal_imbalance": counters["starts"] - sum(outcomes.values()),
+            "start_terminal_pairing": "not_guaranteed_no_universal_correlation_id",
             "correlation_aliases": sorted(correlations),
             "exceptions_by_class_stage": [{"exception_class": key[0], "stage": key[1], "count": count} for key, count in sorted(exceptions.items())],
             "retries": counters["retries"], "timeouts": counters["timeouts"],
             "anchor_conflicts": counters["anchor_conflicts"], "hard_veto": counters["hard_veto"],
             "exact_packet_replay": counters["exact_packet_replay"],
+            "exact_packet_replay_candidates": counters["exact_packet_replay_candidate"],
             "repeated_prose_mutations": counters["repeated_prose_mutations"],
         },
         "downstream_for_observed_event_ids": [{"task": key[0], "state": key[1], "count": count} for key, count in sorted(downstream.items())],
         "observed_touched_event_id_count": len(touched_ids),
         "warm_replay_event_ids": sorted(int(key.split(":", 1)[1]) for key in counters if key.startswith("warm_event:")),
+        "warm_replay_candidate_event_ids": sorted(int(key.split(":", 1)[1]) for key in counters if key.startswith("warm_candidate_event:")),
         "public_field_changes_by_event": [
             {
                 "event_id": event_id,
@@ -711,16 +922,20 @@ def collect_runtime_logs(start: dt.datetime, end: dt.datetime, gaps: list[dict[s
 
 def command_capacity(gaps: list[dict[str, str]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
-    for name, argv in (("df", ["df", "-Pk", "/data"]), ("du", ["du", "-sk", "/data"])):
+    for name, argv in (
+        ("df_data", ["df", "-Pk", "/data"]),
+        ("du_data", ["du", "-sk", "/data"]),
+        ("du_runtime_logs", ["du", "-sk", os.environ.get("RUNTIME_LOG_DIR") or "/data/runtime_logs"]),
+    ):
         try:
             proc = subprocess.run(argv, capture_output=True, text=True, timeout=30, check=False)
             lines = proc.stdout.strip().splitlines()
             if proc.returncode != 0 or not lines:
                 raise OSError(f"{name}_failed")
-            if name == "df" and len(lines) >= 2:
+            if name == "df_data" and len(lines) >= 2:
                 fields = lines[-1].split()
                 result[name] = {"blocks_1k": int(fields[-5]), "used_1k": int(fields[-4]), "available_1k": int(fields[-3]), "capacity": fields[-2]}
-            elif name == "du":
+            elif name.startswith("du_"):
                 result[name] = {"used_1k": int(lines[-1].split()[0])}
         except (OSError, ValueError, subprocess.SubprocessError):
             add_gap(gaps, "capacity", f"{name}_unavailable")
@@ -780,21 +995,12 @@ def internal_health(gaps: list[dict[str, str]]) -> tuple[dict[str, Any], bool]:
 
 
 def deployed_identity(expected_sha: str, gaps: list[dict[str, str]]) -> tuple[dict[str, Any], str | None, bool]:
-    candidates: list[tuple[str, str]] = []
-    for env_name in ("APP_REPO_SHA", "GIT_SHA", "RELEASE_SHA", "SOURCE_VERSION", "STATIC_SITE_REPO_SHA"):
-        value = os.environ.get(env_name, "").strip().lower()
-        if value:
-            candidates.append((f"env:{env_name}", value))
-    configured_revision_path = os.environ.get("STATIC_SITE_IMAGE_REPO_SHA_FILE", "").strip()
-    revision_paths = [p for p in (configured_revision_path, "/app/.static-site-repo-sha", "/app/.repo-sha", "/app/REVISION") if p]
-    for path in revision_paths:
-        try:
-            value = Path(path).read_text(encoding="utf-8").strip().lower()
-        except OSError:
-            continue
-        if value:
-            candidates.append((f"file:{path}", value))
-    exact = next(((source, value) for source, value in candidates if re.fullmatch(r"[0-9a-f]{40}", value)), None)
+    path = "/app/.static-site-repo-sha"
+    try:
+        value = Path(path).read_text(encoding="utf-8").strip().lower()
+    except OSError:
+        value = ""
+    exact = (f"file:{path}", value) if re.fullmatch(r"[0-9a-f]{40}", value) else None
     sha = exact[1] if exact else None
     if sha is None:
         add_gap(gaps, "exact_deployed_sha", "exact_sha_unavailable")
@@ -807,6 +1013,9 @@ def deployed_identity(expected_sha: str, gaps: list[dict[str, str]]) -> tuple[di
         "app": safe_token(os.environ.get("FLY_APP_NAME"), default="unavailable"),
         "matches_expected": bool(sha and sha == expected_sha),
     }
+    for field in ("machine_id", "machine_version", "image_identity"):
+        if identity[field] == "unavailable":
+            add_gap(gaps, "fly_identity", f"{field}_unavailable")
     return identity, sha, sha is not None
 
 
@@ -856,10 +1065,45 @@ def collect_limiter(start: dt.datetime, end: dt.datetime, gaps: list[dict[str, s
         ]
         queries.append({"engine": "postgrest_select", "table": "google_ai_request_attempts", "filter": "started_at in [start_utc,end_utc)"})
         attempts, truncated_attempts = postgrest_get(base_url, key, "google_ai_request_attempts", attempt_params)
+        active_request_params = [
+            ("select", "request_uid,consumer,model,status,quota_scope,meta,created_at,updated_at,finalized_at"),
+            ("created_at", "lt." + end_s),
+            ("or", f"(finalized_at.is.null,finalized_at.gt.{end_s})"),
+            ("order", "created_at.asc"),
+        ]
+        queries.append({"engine": "postgrest_select", "table": "google_ai_requests", "filter": "created_at < end_utc and (finalized_at is null or finalized_at > end_utc)"})
+        active_requests, truncated_active_requests = postgrest_get(base_url, key, "google_ai_requests", active_request_params)
+        active_attempt_params = [
+            ("select", "request_uid,attempt_no,status,quota_scope,started_at,completed_at"),
+            ("started_at", "lt." + end_s),
+            ("or", f"(completed_at.is.null,completed_at.gt.{end_s})"),
+            ("order", "started_at.asc"),
+        ]
+        queries.append({"engine": "postgrest_select", "table": "google_ai_request_attempts", "filter": "started_at < end_utc and (completed_at is null or completed_at > end_utc)"})
+        active_attempts, truncated_active_attempts = postgrest_get(base_url, key, "google_ai_request_attempts", active_attempt_params)
+
+        known_request_uids = {str(row.get("request_uid") or "") for row in requests}
+        missing_request_uids = sorted({
+            str(row.get("request_uid") or "") for row in attempts
+            if row.get("request_uid") and str(row.get("request_uid")) not in known_request_uids
+        })
+        context_requests: list[dict[str, Any]] = []
+        for offset in range(0, len(missing_request_uids), 50):
+            group = missing_request_uids[offset : offset + 50]
+            params = [
+                ("select", "request_uid,consumer,model,meta"),
+                ("request_uid", "in.(" + ",".join(group) + ")"),
+            ]
+            rows, truncated_context = postgrest_get(base_url, key, "google_ai_requests", params, max_rows=1000)
+            context_requests.extend(rows)
+            if truncated_context:
+                add_gap(gaps, "limiter_ledger", "attempt_context_rows_truncated")
+        if missing_request_uids:
+            queries.append({"engine": "postgrest_select", "table": "google_ai_requests", "filter": "request_uid in attempt-window references"})
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError, ValueError, json.JSONDecodeError):
         add_gap(gaps, "limiter_ledger", "select_access_failed")
         return {"available": False}, False, queries
-    if truncated_requests or truncated_attempts:
+    if truncated_requests or truncated_attempts or truncated_active_requests or truncated_active_attempts:
         add_gap(gaps, "limiter_ledger", "window_rows_truncated")
     request_context_by_uid: dict[str, tuple[str, str, str]] = {}
     request_groups = collections.Counter()
@@ -868,12 +1112,15 @@ def collect_limiter(start: dt.datetime, end: dt.datetime, gaps: list[dict[str, s
     multi_attempt = 0
     unfinalized = 0
     unfinished_by_status: collections.Counter[str] = collections.Counter()
-    for row in requests:
+    window_request_uids = {str(row.get("request_uid") or "") for row in requests}
+    for row in [*requests, *context_requests]:
         meta = row.get("meta") if isinstance(row.get("meta"), Mapping) else {}
-        operation = safe_token(meta.get("operation") or meta.get("label") or meta.get("stage"), default="unspecified")
+        operation = safe_token(meta.get("operation") or meta.get("label") or meta.get("stage"), default="unknown")
         uid = str(row.get("request_uid") or "")
         consumer, model, status = safe_token(row.get("consumer")), safe_token(row.get("model")), safe_token(row.get("status"))
         request_context_by_uid[uid] = (consumer, operation, model)
+        if uid not in window_request_uids:
+            continue
         request_groups[(consumer, operation, model, status)] += 1
         finalized["finalized" if row.get("finalized_at") else "unfinalized"] += 1
         unfinalized += 0 if row.get("finalized_at") else 1
@@ -885,12 +1132,14 @@ def collect_limiter(start: dt.datetime, end: dt.datetime, gaps: list[dict[str, s
         if int(row.get("attempts") or 0) > 1:
             multi_attempt += 1
     attempt_groups = collections.Counter()
+    attempt_finalized = collections.Counter()
     failure_kinds = collections.Counter()
     attempts_by_request_scope = collections.Counter()
     for row in attempts:
         uid = str(row.get("request_uid") or "")
-        consumer, operation, model = request_context_by_uid.get(uid, ("unknown", "unspecified", "unknown"))
+        consumer, operation, model = request_context_by_uid.get(uid, ("unknown", "unknown", "unknown"))
         status = safe_token(row.get("status"))
+        attempt_finalized["finalized" if row.get("completed_at") else "unfinalized"] += 1
         scope = stable_alias("scope", row.get("quota_scope")) or "scope_unknown"
         scopes.add(scope)
         attempt_groups[(consumer, operation, model, status)] += 1
@@ -906,28 +1155,53 @@ def collect_limiter(start: dt.datetime, end: dt.datetime, gaps: list[dict[str, s
             failure_kinds["admission_denied"] += 1
     logical_multi_same_scope = sum(1 for count in attempts_by_request_scope.values() if count > 1)
     cooldowns: list[dict[str, Any]] = []
+    expired_cooldowns_in_window = 0
     try:
-        params = [("select", "quota_scope,model,blocked_until,reason"), ("blocked_until", "gt." + end_s), ("order", "blocked_until.asc")]
-        queries.append({"engine": "postgrest_select", "table": "google_ai_provider_cooldowns", "filter": "blocked_until > end_utc"})
+        params = [
+            ("select", "quota_scope,model,blocked_until,reason,updated_at"),
+            ("updated_at", "lt." + end_s),
+            ("blocked_until", "gt." + end_s),
+            ("order", "blocked_until.asc"),
+        ]
+        queries.append({"engine": "postgrest_select", "table": "google_ai_provider_cooldowns", "filter": "updated_at < end_utc and blocked_until > end_utc"})
         rows, _ = postgrest_get(base_url, key, "google_ai_provider_cooldowns", params, max_rows=1000)
         cooldowns = [{"quota_scope_alias": stable_alias("scope", r.get("quota_scope")), "model": safe_token(r.get("model")), "blocked_until": utc_iso(parse_utc(r.get("blocked_until"))) if parse_utc(r.get("blocked_until")) else None, "reason": safe_token(r.get("reason"))} for r in rows]
+        window_params = [
+            ("select", "quota_scope,model,blocked_until,reason,updated_at"),
+            ("updated_at", "gte." + start_s), ("updated_at", "lt." + end_s),
+        ]
+        queries.append({"engine": "postgrest_select", "table": "google_ai_provider_cooldowns", "filter": "updated_at in [start_utc,end_utc)"})
+        cooldown_window_rows, _ = postgrest_get(base_url, key, "google_ai_provider_cooldowns", window_params, max_rows=1000)
+        expired_cooldowns_in_window = sum(
+            1 for row in cooldown_window_rows
+            if parse_utc(row.get("blocked_until")) is not None and parse_utc(row.get("blocked_until")) <= end
+        )
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError, ValueError, json.JSONDecodeError):
         add_gap(gaps, "limiter_ledger", "cooldown_select_unavailable")
+        return {"available": False}, False, queries
+    active_request_statuses = collections.Counter(safe_token(row.get("status")) for row in active_requests)
+    active_attempt_statuses = collections.Counter(safe_token(row.get("status")) for row in active_attempts)
+    unfinished_reservations = len(active_requests) + len(active_attempts)
     metrics = {
         "available": True,
         "requests_total": len(requests),
         "attempts_total": len(attempts),
         "requests_by_consumer_operation_model_status": [{"consumer": k[0], "operation": k[1], "model": k[2], "status": k[3], "count": n} for k, n in sorted(request_groups.items())],
         "attempts_by_consumer_operation_model_status": [{"consumer": k[0], "operation": k[1], "model": k[2], "status": k[3], "count": n} for k, n in sorted(attempt_groups.items())],
-        "finalization": {"finalized": finalized["finalized"], "unfinalized": finalized["unfinalized"]},
+        "request_finalization": {"finalized": finalized["finalized"], "unfinalized": finalized["unfinalized"]},
+        "attempt_finalization": {"finalized": attempt_finalized["finalized"], "unfinalized": attempt_finalized["unfinalized"]},
         "failure_classes": {name: int(failure_kinds.get(name, 0)) for name in ("provider_429", "timeout", "provider_5xx", "admission_denied")},
         "distinct_quota_scopes": len(scopes), "quota_scope_aliases": sorted(scopes),
         "logical_requests_with_multiple_attempts": multi_attempt,
         "logical_requests_with_multiple_physical_attempts_in_one_scope": logical_multi_same_scope,
-        "unfinished_reservations": unfinalized,
-        "unfinished_reservations_by_status": dict(sorted(unfinished_by_status.items())),
+        "unfinished_reservations": unfinished_reservations,
+        "unfinished_reservations_by_status": {
+            "requests": dict(sorted(active_request_statuses.items())),
+            "attempts": dict(sorted(active_attempt_statuses.items())),
+        },
         "active_cooldowns": cooldowns,
-        "truncated": truncated_requests or truncated_attempts,
+        "expired_cooldowns_updated_in_window": expired_cooldowns_in_window,
+        "truncated": truncated_requests or truncated_attempts or truncated_active_requests or truncated_active_attempts,
     }
     return metrics, True, queries
 
@@ -966,6 +1240,17 @@ def make_samples(sample_state: dict[int, dict[str, Any]], log_metrics: Mapping[s
             "source_url_hash": hashes[0] if hashes else None,
             "lifecycle_status": safe_token(state.get("lifecycle_status")),
             "identity_status": safe_token(state.get("identity_status")),
+        }, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+    if not warm_ids and len(lines) < 20:
+        lines.append(json.dumps({
+            "sample_kind": "exact_warm_replay",
+            "event_id": None,
+            "decision": "indeterminate",
+            "changed_field_names": [],
+            "source_type": "unknown",
+            "source_url_hash": None,
+            "lifecycle_status": "not_observed",
+            "identity_status": "indeterminate",
         }, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
     return "\n".join(lines) + ("\n" if lines else "")
 
@@ -1058,7 +1343,7 @@ def build_bundle(args: argparse.Namespace) -> dict[str, Any]:
     health, health_ready = internal_health(gaps)
     capacity = command_capacity(gaps)
     db_metrics, sample_state, manifest_db, sqlite_queries, db_available = collect_database(start, end, gaps)
-    log_metrics, excerpts, logs_available = collect_runtime_logs(start, end, gaps)
+    log_metrics, excerpts, logs_available = collect_runtime_logs(start, end, gaps, set(sample_state))
     for item in log_metrics.get("safe_event_evidence", []):
         event_id = int(item["event_id"])
         state = sample_state.setdefault(event_id, {"source_types": set(), "source_url_hashes": set(), "changed_fields": set()})
@@ -1096,6 +1381,12 @@ def build_bundle(args: argparse.Namespace) -> dict[str, Any]:
         finding("WATCH", "stale_outbox_work", {"count": stale_total})
     if log_metrics.get("smart_update", {}).get("timeouts", 0):
         finding("WATCH", "smart_update_timeouts_observed", {"count": log_metrics["smart_update"]["timeouts"]})
+    if not log_metrics.get("smart_update", {}).get("exact_packet_replay", 0):
+        finding(
+            "WATCH",
+            "exact_packet_replay_unverified",
+            {"candidate_count": int(log_metrics.get("smart_update", {}).get("exact_packet_replay_candidates", 0))},
+        )
     if limiter_metrics.get("unfinished_reservations", 0) or limiter_metrics.get("active_cooldowns"):
         finding("WATCH", "limiter_unfinished_or_cooldown", {"unfinished_reservations": limiter_metrics.get("unfinished_reservations", 0), "active_cooldowns": len(limiter_metrics.get("active_cooldowns", []))})
     if gaps:
@@ -1162,12 +1453,18 @@ def build_bundle(args: argparse.Namespace) -> dict[str, Any]:
         "schema": "smart_update_prod_audit_manifest_v1",
         "repo_sha": expected_sha, "in_container_sha": in_container_sha,
         "fly_identity": identity,
-        "utc_window": {"start_utc": utc_iso(start), "end_utc": utc_iso(end)},
+        "window": {"start_utc": utc_iso(start), "end_utc": utc_iso(end), "hours": args.hours},
         "schema_hash": manifest_db.get("schema_hash"),
         "table_inventory": manifest_db.get("table_inventory", []),
-        "database_access": {k: manifest_db.get(k) for k in ("uri", "query_only", "consistent_read_transaction", "quick_check")},
+        "database_access": {k: manifest_db.get(k) for k in ("uri", "query_only", "temp_store", "consistent_read_transaction", "quick_check")},
         "evidence_policy": "restricted",
-        "commands": ["GET public /healthz (workflow evidence)", "GET http://127.0.0.1:{8080,8000}/healthz", "df -Pk /data", "du -sk /data", "sqlite read-only transaction", "PostgREST GET/SELECT dedicated limiter ledger"],
+        "commands": [
+            "public_healthz_https_get", "loopback_healthz_get",
+            "read_deployed_sha_identity", "inventory_fly_runtime_identity",
+            "df_data_read", "du_data_read", "du_runtime_logs_read",
+            "inventory_runtime_log_files", "scan_runtime_logs_exact_utc_window",
+            "sqlite_mode_ro_read_transaction", "postgrest_limiter_select_get",
+        ],
         "queries": sqlite_queries + limiter_queries,
         "artifact_sha256": {name: sha256_text(content) for name, content in sorted(files.items())},
         "manifest_self_hash": "excluded_self_reference",
