@@ -79,7 +79,7 @@ def classify(report: dict[str, Any]) -> list[dict[str, Any]]:
     logs = report["logs"]
     su = logs["smart_update"]
     runtime = logs["runtime_symptoms"]
-    limiter = report["google_ai_limiter"]
+    limiter = report["google_ai_limiter"]; now = parse_time(report.get("window", {}).get("end_utc")) or dt.datetime.now(UTC)
 
     def add(sev: str, category: str, code: str, evidence: Any, impact: str) -> None:
         findings.append({"severity": sev, "category": category, "code": code, "evidence": evidence, "impact": impact})
