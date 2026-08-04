@@ -1,4 +1,4 @@
-/* Visual calibration after the first global-light run.
+/* Visual calibration after the global-light and mobile-scale evidence runs.
  *
  * `--scene-light` is a uniform wash per pane whose intensity follows distance
  * from one external source. It never paints a corner hotspot inside a pane.
@@ -12,8 +12,8 @@ body .prelaunch[data-prelaunch-page] .prelaunch__tile::before,
 body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-glint="true"]::before {
   background-image:
     linear-gradient(
-      rgb(255 224 198 / var(--scene-light)),
-      rgb(255 224 198 / var(--scene-light))
+      rgb(255 230 207 / var(--scene-light)),
+      rgb(255 230 207 / var(--scene-light))
     ),
     linear-gradient(
       180deg,
@@ -25,52 +25,109 @@ body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-glint="true"]::before
   background-blend-mode: screen, normal;
 }
 
-/* Desktop source field: the visible right edge is columns six and seven of the
- * 9-column scene. Uniform pane washes create one contiguous falloff while dark
- * seams remain intact. */
+/* Desktop source field: a broad continuous falloff across the visible right
+ * edge. Texture suppression comes from the stronger frosted light material,
+ * while the warm wash supplies the positive source itself. */
 body .prelaunch[data-prelaunch-page] .prelaunch__tile:nth-child(-n + 27):nth-child(9n + 7) {
-  --scene-light: .28;
+  --scene-light: .44;
 }
 
 body .prelaunch[data-prelaunch-page] .prelaunch__tile:nth-child(-n + 27):nth-child(9n + 6) {
-  --scene-light: .16;
+  --scene-light: .28;
 }
 
 body .prelaunch[data-prelaunch-page] .prelaunch__tile:nth-child(-n + 18):nth-child(9n + 8) {
-  --scene-light: .38;
+  --scene-light: .54;
 }
 
 body .prelaunch[data-prelaunch-page] .prelaunch__tile:nth-child(n + 28):nth-child(-n + 36):nth-child(9n + 7) {
-  --scene-light: .1;
+  --scene-light: .16;
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-zone="light"][data-state="sealed"] {
+  --cover: .84;
+  --blur-base: 28px;
+  --saturation: .3;
+  --brightness: 1.12;
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-zone="light"][data-state="dim"] {
+  --cover: .72;
+  --blur-base: 25px;
+  --saturation: .36;
+  --brightness: 1.14;
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-zone="light"][data-state="revealed"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-zone="light"][data-state="revealed"][data-index="14"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-zone="light"][data-state="revealed"][data-index="23"] {
+  --cover: .63;
+  --blur-base: 22px;
+  --saturation: .4;
+  --brightness: 1.17;
 }
 
 @media (max-width: 820px) {
   /* The phone/tablet crop shows columns three and four at its right edge. */
   body .prelaunch[data-prelaunch-page] .prelaunch__tile:nth-child(-n + 36):nth-child(9n + 4) {
-    --scene-light: .25;
+    --scene-light: .39;
   }
 
   body .prelaunch[data-prelaunch-page] .prelaunch__tile:nth-child(-n + 27):nth-child(9n + 3) {
-    --scene-light: .12;
+    --scene-light: .19;
   }
 
   body .prelaunch[data-prelaunch-page] .prelaunch__tile:nth-child(-n + 27):nth-child(9n + 5) {
-    --scene-light: .34;
+    --scene-light: .5;
   }
 }
 
 @media (max-width: 599px) {
-  /* Keep the monumental crop, but centre the intrinsic wordmark and move the
-   leather edge below the explanatory copy. */
+  /* Centre the intrinsic wordmark, keep the monumental crop and move the
+   leather edge out of the explanatory copy field. */
   body .prelaunch[data-prelaunch-page] .prelaunch__background::after {
+    width: min(142vw, 570px);
     left: 50%;
-    top: clamp(124px, 24.5vh, 210px);
+    top: clamp(132px, 25.5vh, 218px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__background::before {
+    background:
+      linear-gradient(
+        180deg,
+        rgba(7, 9, 12, .5) 0%,
+        rgba(7, 9, 12, .64) 31%,
+        rgba(7, 9, 12, .28) 43%,
+        rgba(7, 9, 12, .2) 72%,
+        rgba(7, 9, 12, .67) 100%
+      ),
+      linear-gradient(90deg, rgba(7, 9, 12, .55), transparent 74%, rgba(7, 9, 12, .13));
+  }
+
+  /* Eight deliberately clear windows reveal the scaled wordmark. They form one
+   coherent central field rather than random holes across the phone. */
+  body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-index="37"],
+  body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-index="38"],
+  body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-index="46"],
+  body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-index="47"],
+  body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-index="48"],
+  body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-index="55"],
+  body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-index="56"],
+  body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-index="57"] {
+    --cover: .31;
+    --blur-base: 2.6px;
+    --saturation: .88;
+    --brightness: .96;
+    --edge: .18;
+    --edge-highlight: .14;
+    --matte: .27;
   }
 }
 
 @media (max-width: 599px) and (max-height: 680px) {
   body .prelaunch[data-prelaunch-page] .prelaunch__background::after {
+    width: 142vw;
     left: 50%;
-    top: clamp(94px, 21.5vh, 132px);
+    top: clamp(98px, 22.5vh, 136px);
   }
 }
