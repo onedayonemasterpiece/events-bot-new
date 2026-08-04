@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
-
 ROOT = Path(__file__).resolve().parents[1]
 DOC_ROOT = ROOT / "docs" / "features" / "static-site-pages" / "personalizaion"
 SCHEMA_ROOT = DOC_ROOT / "schemas"
@@ -27,6 +26,10 @@ def property_names(value: Any) -> Iterable[str]:
     elif isinstance(value, list):
         for child in value:
             yield from property_names(child)
+
+
+def read_doc(name: str) -> str:
+    return (DOC_ROOT / name).read_text(encoding="utf-8")
 
 
 def test_personalization_document_index_is_complete() -> None:
@@ -54,8 +57,8 @@ def test_personalization_document_index_is_complete() -> None:
 
 
 def test_target_research_precedence_and_legacy_quarantine_are_explicit() -> None:
-    index = (DOC_ROOT / "README.md").read_text(encoding="utf-8")
-    traceability = (DOC_ROOT / "personalization-research-traceability.md").read_text(encoding="utf-8")
+    index = read_doc("README.md")
+    traceability = read_doc("personalization-research-traceability.md")
     wave_zero = (DOC_ROOT / "tasks" / "personalization-wave-0.md").read_text(encoding="utf-8")
     compact_wave_zero = " ".join(wave_zero.split())
 
@@ -89,9 +92,9 @@ def test_target_research_precedence_and_legacy_quarantine_are_explicit() -> None
 
 
 def test_identity_linking_methodology_blocks_account_cross_contamination() -> None:
-    text = (DOC_ROOT / "identity-linking-personalization.md").read_text(encoding="utf-8")
+    text = read_doc("identity-linking-personalization.md")
     required_fragments = [
-        "Authorization сама по себе не является activation event".replace("Authorization", "Авторизация"),
+        "Авторизация сама по себе не является activation event",
         "Account switch не наследует профиль предыдущего account",
         "Authenticated explicit state выигрывает конфликт",
         "Anonymous → существующий account, medium/high conflict",
@@ -99,15 +102,15 @@ def test_identity_linking_methodology_blocks_account_cross_contamination() -> No
         "previous_account_epoch != new_account_epoch",
         "pending account A outbox is not replayed into account B",
         "two devices create two durable personalities",
-        "raw_history_copied": false".replace('"raw_history_copied": false', '"raw_history_copied": false'),
+        '"raw_history_copied": false',
     ]
     missing = [fragment for fragment in required_fragments if fragment not in text]
     assert not missing, f"identity-linking guard is incomplete: {missing}"
 
 
 def test_longitudinal_and_temporal_testing_guard_primary_metric_and_db_time() -> None:
-    longitudinal = (DOC_ROOT / "longitudinal-e2e-personalization.md").read_text(encoding="utf-8")
-    temporal = (DOC_ROOT / "temporal-profile-simulation.md").read_text(encoding="utf-8")
+    longitudinal = read_doc("longitudinal-e2e-personalization.md")
+    temporal = read_doc("temporal-profile-simulation.md")
     required_longitudinal = [
         "P(first relevant event within 30 cards) >= 0.95",
         "cards_to_first_relevant_p95 <= 30",
@@ -136,7 +139,7 @@ def test_longitudinal_and_temporal_testing_guard_primary_metric_and_db_time() ->
 
 
 def test_focus_group_questionnaire_is_optional_and_non_sensitive() -> None:
-    text = (DOC_ROOT / "focus-group-interest-questionnaire-prompt.md").read_text(encoding="utf-8")
+    text = read_doc("focus-group-interest-questionnaire-prompt.md")
     required_fragments = [
         "Анкета целесообразна",
         "не должна становиться источником чувствительного профилирования",
@@ -160,15 +163,7 @@ def test_browser_state_schema_keeps_one_compact_bounded_state() -> None:
     assert projection["properties"]["sensitive_facets_present"]["const"] is False
     assert projection["properties"]["horizons"]["additionalProperties"] is False
 
-    forbidden = {
-        "anon_id",
-        "email",
-        "raw_event_log",
-        "raw_history",
-        "session_id",
-        "subject_id",
-        "token",
-    }
+    forbidden = {"anon_id", "email", "raw_event_log", "raw_history", "session_id", "subject_id", "token"}
     present = forbidden.intersection(property_names(schema))
     assert not present, f"browser state schema exposes forbidden durable fields: {sorted(present)}"
 
@@ -183,16 +178,7 @@ def test_action_batch_is_bounded_idempotent_and_does_not_trust_subject_fields() 
     assert action["properties"]["id"]["$ref"] == "#/$defs/uuid"
     assert action["properties"]["seq"]["minimum"] == 1
 
-    forbidden = {
-        "anon_id",
-        "bearer_token",
-        "email",
-        "full_profile",
-        "profile",
-        "session_id",
-        "subject_id",
-        "user_id",
-    }
+    forbidden = {"anon_id", "bearer_token", "email", "full_profile", "profile", "session_id", "subject_id", "user_id"}
     present = forbidden.intersection(property_names(schema))
     assert not present, f"action payload trusts or duplicates forbidden identity/profile fields: {sorted(present)}"
 
@@ -200,14 +186,7 @@ def test_action_batch_is_bounded_idempotent_and_does_not_trust_subject_fields() 
 def test_profile_projection_is_sparse_versioned_and_sensitive_fail_closed() -> None:
     schema = load_json(SCHEMA_ROOT / "personalization-profile-projection-v1.schema.json")
     required = set(schema["required"])
-    assert {
-        "revision",
-        "etag",
-        "compatibility",
-        "horizons",
-        "explicit_authoritative",
-        "sensitive_facets_present",
-    }.issubset(required)
+    assert {"revision", "etag", "compatibility", "horizons", "explicit_authoritative", "sensitive_facets_present"}.issubset(required)
     assert schema["properties"]["sensitive_facets_present"]["const"] is False
     assert schema["$defs"]["horizon"]["properties"]["facets"]["maxItems"] <= 48
     assert schema["properties"]["explicit_authoritative"]["properties"]["states"]["maxItems"] <= 384
@@ -249,7 +228,7 @@ def test_surface_registry_fails_static_and_never_reranks_calendar_primary() -> N
 
 
 def test_normative_contract_keeps_storage_and_transport_hard_gates() -> None:
-    text = (DOC_ROOT / "personalization-implementation-contract.md").read_text(encoding="utf-8")
+    text = read_doc("personalization-implementation-contract.md")
     required_fragments = [
         "steady-state target | `<= 24 KiB`",
         "aggregate emergency ceiling",
@@ -278,11 +257,7 @@ def test_wave_zero_forbids_remote_or_product_behavior_changes() -> None:
 
 
 def run_contract_tests() -> list[str]:
-    tests = sorted(
-        (name, value)
-        for name, value in globals().items()
-        if name.startswith("test_") and callable(value)
-    )
+    tests = sorted((name, value) for name, value in globals().items() if name.startswith("test_") and callable(value))
     for _, test_function in tests:
         test_function()
     return [name for name, _ in tests]
