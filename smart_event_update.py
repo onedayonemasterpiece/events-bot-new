@@ -14759,7 +14759,7 @@ async def _match_existing_event_by_event_source_url(
     db: Database,
     candidate: EventCandidate,
 ) -> Event | None:
-    """Best-effort idempotency when check_source_url=False.
+    """Best-effort identity convergence for source-aware retries.
 
     Some flows intentionally re-run Smart Update for the same source_url (e.g. monitoring retries,
     deferred processing). We still want to converge on the same event instead of creating duplicates.
@@ -17151,44 +17151,11 @@ async def _smart_event_update_impl(
             force_silent_due_to_date_risk = True
             poster_filter_facts.append(note)
 
-    if check_source_url and candidate.source_url:
-        timing = (os.getenv("SMART_UPDATE_DEBUG_TIMING") or "").strip().lower() in {"1", "true", "yes"}
-        t0 = time.monotonic() if timing else 0.0
-        exists = None
-        # Keep this fast: avoid ORM session/engine initialization for a simple lookup.
-        try:
-            async with db.raw_conn() as conn:
-                if candidate.source_type:
-                    cur = await conn.execute(
-                        "SELECT 1 FROM event_source WHERE source_type=? AND source_url=? LIMIT 1",
-                        (candidate.source_type, candidate.source_url),
-                    )
-                else:
-                    cur = await conn.execute(
-                        "SELECT 1 FROM event_source WHERE source_url=? LIMIT 1",
-                        (candidate.source_url,),
-                    )
-                exists = await cur.fetchone()
-        except Exception:
-            logger.warning(
-                "smart_update: source_url idempotency check failed (fallback to full flow)",
-                exc_info=True,
-            )
-            exists = None
-        if timing:
-            logger.info(
-                "smart_update.timing idempotency_check_ms=%d source_type=%s",
-                int((time.monotonic() - t0) * 1000),
-                candidate.source_type,
-            )
-        if exists:
-            logger.info(
-                "smart_update.skip reason=source_url_exists source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(candidate.title),
-            )
-            return SmartUpdateResult(status="skipped_same_source_url", reason="source_url_exists")
+    # Raw-URL existence is deliberately not an idempotency verdict. Exact
+    # immutable retries have already returned above by packet fingerprint. The
+    # same canonical URL with a changed packet must continue into identity
+    # matching/gating so a real source edit can be applied; cross-event owners
+    # are still rejected by the role-aware binding guard and DB invariant.
 
     cand_start, cand_end = _candidate_date_range(candidate)
     if not cand_start or not cand_end:

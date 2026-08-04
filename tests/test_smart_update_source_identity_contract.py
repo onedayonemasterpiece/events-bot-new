@@ -286,6 +286,59 @@ def test_packet_fingerprint_ignores_provider_metrics_but_detects_real_edit() -> 
 
 
 @pytest.mark.asyncio
+async def test_edited_packet_same_url_continues_real_update(tmp_path, monkeypatch) -> None:
+    db = Database(str(tmp_path / "edited-packet.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", su.IdentityGateMode.OFF)
+        monkeypatch.setattr(su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", su.IdentityGateMode.OFF)
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        source_url = "https://t.me/edited_packet/7?single=1"
+        first_packet = EventCandidate(
+            source_type="telegram",
+            source_url=source_url,
+            source_text="Концерт 2 сентября в 19:00 в Доме искусств.",
+            title="Событие с редактируемым анонсом",
+            date="2026-09-02",
+            time="19:00",
+            location_name="Дом искусств",
+            city="Калининград",
+            event_type="концерт",
+        )
+        first = await su.smart_event_update(db, first_packet, schedule_tasks=False)
+        assert first.status == "created"
+
+        edited_packet = EventCandidate(
+            source_type="telegram",
+            source_url="https://telegram.me/s/EDITED_PACKET/7?utm_source=edit",
+            source_text="Концерт 2 сентября в 19:00 в Доме искусств. Добавлена программа вечера.",
+            title="Событие с редактируемым анонсом",
+            date="2026-09-02",
+            time="19:00",
+            location_name="Дом искусств",
+            city="Калининград",
+            event_type="концерт",
+        )
+        edited_fingerprint = input_packet_fingerprint(edited_packet)
+        second = await su.smart_event_update(db, edited_packet, schedule_tasks=False)
+
+        assert second.status == "merged"
+        assert second.event_id == first.event_id
+        assert second.status not in {"noop_exact_source_replay", "skipped_same_source_url"}
+        async with db.get_session() as session:
+            source = (
+                await session.execute(
+                    select(EventSource).where(EventSource.event_id == int(first.event_id or 0))
+                )
+            ).scalar_one()
+        assert source.source_fingerprint == edited_fingerprint
+        assert source.source_text == edited_packet.source_text
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_tretyakov_direct_ticket_identity_cannot_cross_bind_screenings(tmp_path) -> None:
     db = Database(str(tmp_path / "tretyakov-bindings.sqlite"))
     await db.init()
