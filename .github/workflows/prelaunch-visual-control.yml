@@ -1,9 +1,8 @@
 name: Prelaunch visual control
 
-# This control workflow exists on a clean, mergeable PR. Updating the request
-# file launches a pull_request run that checks out and validates an exact SHA
-# from the long-lived prelaunch branch. This is the supported indirect trigger
-# for integrations that can write GitHub files but cannot call workflow_dispatch.
+# Updating the request file launches a mergeable pull_request run that checks
+# an exact SHA from the long-lived prelaunch branch. This is the supported
+# indirect trigger for integrations without direct workflow_dispatch access.
 on:
   pull_request:
     types: [opened, synchronize, reopened]
@@ -21,7 +20,7 @@ concurrency:
 jobs:
   browser-evidence:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - name: Checkout control request
         uses: actions/checkout@v4
@@ -99,7 +98,7 @@ jobs:
           cat /tmp/prelaunch-http.log
           exit 1
 
-      - name: Capture screenshots, DOM and computed glass evidence
+      - name: Capture visual and no-scroll evidence
         id: visual_gate
         shell: bash
         env:
@@ -108,11 +107,17 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/prelaunch-browser/reference
+
           set +e
           npm --prefix site run check:prelaunch-browser -- \
             --url http://127.0.0.1:4173/ \
             --artifact-dir ../artifacts/prelaunch-browser
-          gate_status=$?
+          visual_status=$?
+
+          node site/scripts/check-prelaunch-viewport-fit.mjs \
+            --url http://127.0.0.1:4173/ \
+            --artifact-dir artifacts/prelaunch-browser
+          fit_status=$?
           set -e
 
           cp docs/features/static-site-pages/prelaunch-handoff/reference/target-desktop.webp \
@@ -120,17 +125,25 @@ jobs:
           cp docs/features/static-site-pages/prelaunch-handoff/reference/PWA-icon.webp \
             artifacts/prelaunch-browser/reference/PWA-icon.webp
           printf '%s\n' "$TARGET_SHA" > artifacts/prelaunch-browser/repository-sha.txt
+
+          combined_status=0
+          if [[ "$visual_status" -ne 0 || "$fit_status" -ne 0 ]]; then
+            combined_status=1
+          fi
+
           cat > artifacts/prelaunch-browser/control-receipt.json <<EOF
           {
-            "schema_version": "prelaunch_visual_control_receipt_v1",
+            "schema_version": "prelaunch_visual_control_receipt_v2",
             "request_id": "$REQUEST_ID",
             "target_sha": "$TARGET_SHA",
             "control_run_id": "$GITHUB_RUN_ID",
             "control_run_attempt": "$GITHUB_RUN_ATTEMPT",
-            "visual_gate_exit_code": $gate_status
+            "visual_gate_exit_code": $visual_status,
+            "viewport_fit_exit_code": $fit_status,
+            "combined_exit_code": $combined_status
           }
           EOF
-          exit "$gate_status"
+          exit "$combined_status"
 
       - name: Stop local server
         if: always()
