@@ -16,6 +16,9 @@ Read first:
 - `email_control/scheduler.py`
 - `docs/operations/email-delivery.md`
 - `docs/reports/incidents/INC-2026-07-30-focus-email-otp-false-success.md`
+- `docs/README.md`
+- `docs/routes.yml`
+- `docs/reports/incidents/README.md`
 
 ## Non-negotiable safety boundaries
 
@@ -27,6 +30,8 @@ Read first:
 - Do not enable global, transactional or recommendation outbound switches unless the existing product release plan separately authorizes it.
 - Do not touch Region Talk, the obsolete KGD80 Postbox database, unrelated Yandex folders or unrelated queues.
 - All production mutations require exact before/after evidence and an explicit rollback command.
+- Do not claim that a stored suppression is enforced by the direct Auth hook unless a pre-network admission test proves it.
+- Do not approximate suppression by `user_id` when the protected identity is an email HMAC; account deletion, email change and profile switching make that unsafe.
 
 ## Required work
 
@@ -45,6 +50,16 @@ Read first:
 4. Parse the migration with a PostgreSQL parser.
 5. In an isolated PostgreSQL/Supabase-compatible test database, apply the prerequisite migrations plus the new migration and execute `supabase/tests/email_postbox_auth_feedback_contract.sql` in rollback mode.
 6. Fix any defect found; do not weaken assertions to obtain green checks.
+7. Complete canonical documentation routing before merge:
+   - add the runbook under `sections.operations` in `docs/routes.yml`;
+   - add the new incident under `sections.reports` in `docs/routes.yml`;
+   - add the incident to `docs/reports/incidents/README.md` as an active regression contract;
+   - link the runbook and incident from the relevant Postbox section of `docs/operations/email-delivery.md` without duplicating the runbook;
+   - keep the `docs/README.md` route added by the implementation branch;
+   - parse `docs/routes.yml` and verify every changed relative Markdown link.
+8. Audit the suppression boundary separately. The implementation records authenticated `hard_bounce`, `complaint` and `unsubscribe` suppressions. That alone does not prove the direct focus Auth hook checks them before a future provider network call. Either:
+   - implement an explicit PII-free, versioned recipient-HMAC admission boundary for direct Auth and cover first-send/repeat/email-change cases without exposing the HMAC key unnecessarily; or
+   - record a named unresolved blocker and keep the incident open. Never infer email suppression from user ID alone.
 
 ### B. Prepare production migration evidence
 
@@ -133,6 +148,7 @@ Run controlled production canaries:
 - ordinary transactional outbox: submitted → delivered;
 - exact duplicate event: `duplicate`, no second transition;
 - controlled hard-bounce/complaint fixtures: correct suppression, followed by the established fixture cleanup procedure;
+- where direct Auth suppression enforcement is implemented, a repeated send to the suppressed exact email identity is rejected before any provider network call, while an explicit legitimate email change is not blocked by unrelated user-ID history;
 - unchanged monitor state: no alert storm;
 - alarm clear: one recovery notification.
 
@@ -142,6 +158,7 @@ Close the incident only when:
 - DLQ is zero, or every remaining item has an explicit evidence blocker and owner before retention expiry;
 - `postbox_missing_correlation_count=0`;
 - no unexplained unbound correlation remains;
+- direct Auth suppression is either proven pre-network or retained as an explicit blocker with the incident open;
 - all production identities, migration versions, Function version, Fly release, test commands and evidence hashes are committed to the incident document;
 - the final branch is merged to `main` and the deployed SHA is reachable from `main`.
 
@@ -157,9 +174,10 @@ Return:
 - exact DLQ inventory and event-type histogram;
 - legacy registration totals and manifest hash;
 - replay totals: applied, duplicate, pending, conflict/error, remaining;
-- suppression changes by reason;
+- suppression changes by reason and direct-Auth pre-network enforcement status;
 - canary results;
 - monitor delta/recovery evidence;
+- documentation routing/link checks;
 - remaining blockers, with no claim of closure unless every closure gate passes.
 
 ---
