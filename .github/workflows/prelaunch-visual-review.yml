@@ -1,6 +1,9 @@
 name: Prelaunch visual review
 
 on:
+  push:
+    branches:
+      - agent/prelaunch-landing-20260803
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
@@ -69,14 +72,18 @@ jobs:
       - name: Capture screenshots, DOM and computed glass evidence
         run: |
           mkdir -p artifacts/prelaunch-browser/reference
+          set +e
           npm --prefix site run check:prelaunch-browser -- \
             --url http://127.0.0.1:4173/ \
             --artifact-dir ../artifacts/prelaunch-browser
+          gate_status=$?
+          set -e
           cp docs/features/static-site-pages/prelaunch-handoff/reference/target-desktop.webp \
             artifacts/prelaunch-browser/reference/target-desktop.webp
           cp docs/features/static-site-pages/prelaunch-handoff/reference/PWA-icon.webp \
             artifacts/prelaunch-browser/reference/PWA-icon.webp
           git rev-parse HEAD > artifacts/prelaunch-browser/repository-sha.txt
+          exit "$gate_status"
 
       - name: Stop local server
         if: always()
