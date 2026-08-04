@@ -43,6 +43,7 @@ def test_personalization_document_index_is_complete() -> None:
         DOC_ROOT / "longitudinal-e2e-personalization.md",
         DOC_ROOT / "temporal-profile-simulation.md",
         DOC_ROOT / "personalization-test-report-template.md",
+        DOC_ROOT / "personal-selection-quality-feedback.md",
         DOC_ROOT / "focus-group-interest-questionnaire-prompt.md",
         DOC_ROOT / "personalization-current-runtime-audit-2026-08-02.md",
         DOC_ROOT / "implementation-status.yml",
@@ -136,6 +137,34 @@ def test_longitudinal_and_temporal_testing_guard_primary_metric_and_db_time() ->
     ]
     missing_temporal = [fragment for fragment in required_temporal if fragment not in temporal]
     assert not missing_temporal, f"temporal DB simulation plan is incomplete: {missing_temporal}"
+
+
+def test_selection_quality_feedback_is_contextual_provenanced_and_not_profile_training() -> None:
+    text = read_doc("personal-selection-quality-feedback.md")
+    required_fragments = [
+        "personal_selection_quality_feedback_v1",
+        "P(first relevant event within 30 cards) >= 0.95",
+        "Где встретилось первое событие, куда вам действительно захотелось бы пойти?",
+        "Насколько полезной была эта подборка?",
+        "trigger=end_of_list",
+        "trigger=sampled_success_session",
+        "served_list_id",
+        "profile_revision",
+        "catalog_revision",
+        "quality_feedback != automatic interest mutation",
+        "pNPS",
+        "P13N-QF4",
+        "feedback не изменяет профиль автоматически",
+    ]
+    missing = [fragment for fragment in required_fragments if fragment not in text]
+    assert not missing, f"selection quality feedback contract is incomplete: {missing}"
+
+    forbidden_claims = [
+        "score 0–10 — единственная метрика качества",
+        "feedback автоматически изменяет профиль",
+    ]
+    present = [fragment for fragment in forbidden_claims if fragment in text]
+    assert not present, f"selection quality feedback contains forbidden direct-training claims: {present}"
 
 
 def test_focus_group_questionnaire_is_optional_and_non_sensitive() -> None:
