@@ -1,0 +1,165 @@
+name: Temporary Smart Update production health audit
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - ".github/workflows/smart-update-prod-health-audit.yml"
+      - ".github/audit-payload/smart-update-health.part*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: temporary-smart-update-health-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: read-only Fly logs and SQLite audit
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      FLY_APP_NAME: events-bot-new-wngqia
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      AUDIT_WINDOW_HOURS: "24"
+      AUDIT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      AUDIT_SCRIPT_SHA256: f17df2f752c2c37031c761511637d0ea5a0d398dfe96ac7a63c9bec78228817e
+    steps:
+      - name: Checkout exact audit branch
+        uses: actions/checkout@v4
+
+      - name: Reconstruct and verify one-shot probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/audit-payload/smart-update-health.part* > /tmp/smart-update-health-audit.py
+          echo "$AUDIT_SCRIPT_SHA256  /tmp/smart-update-health-audit.py" | sha256sum -c -
+          python -m py_compile /tmp/smart-update-health-audit.py
+
+      - name: Establish access boundary
+        id: access
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit-output
+          if [[ -z "${FLY_API_TOKEN:-}" ]]; then
+            cat > audit-output/access.json <<'JSON'
+          {
+            "status": "missing_secret",
+            "required_secret": "FLY_API_TOKEN",
+            "required_scope": "read app status plus Machines SSH/SFTP for events-bot-new-wngqia",
+            "not_required": ["deploy", "restart", "secrets write", "database write", "provider send"],
+            "production_mutation": false
+          }
+          JSON
+            cat > audit-output/smart-update-health.md <<'MD'
+          # Smart Update production health audit
+
+          Production readback did not run because `FLY_API_TOKEN` is unavailable to this same-repository pull-request workflow.
+
+          Required access: a GitHub Actions secret named `FLY_API_TOKEN` whose Fly token can read app `events-bot-new-wngqia` and open Machines SSH/SFTP. Deploy, restart, secret mutation, provider requests, queue mutation and database writes are not required.
+          MD
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install flyctl
+        if: steps.access.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://fly.io/install.sh | sh
+          echo "$HOME/.fly/bin" >> "$GITHUB_PATH"
+
+      - name: Resolve active production machine
+        if: steps.access.outputs.available == 'true'
+        id: machine
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$HOME/.fly/bin/flyctl" auth whoami >/dev/null
+          "$HOME/.fly/bin/flyctl" machine list --app "$FLY_APP_NAME" --json > /tmp/fly-machines.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          rows = json.loads(Path('/tmp/fly-machines.json').read_text())
+          if isinstance(rows, dict):
+              rows = rows.get('machines') or rows.get('data') or []
+          started = [r for r in rows if str(r.get('state') or '').lower() in {'started','running'}]
+          if len(started) != 1:
+              raise SystemExit(f'expected exactly one started production machine, found {len(started)}')
+          machine_id = str(started[0].get('id') or '')
+          if not machine_id:
+              raise SystemExit('started machine has no id')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
+              fh.write(f'machine_id={machine_id}\n')
+          safe = []
+          for row in rows:
+              safe.append({k: row.get(k) for k in ('id','name','state','region','instance_id','version','created_at','updated_at') if k in row})
+          Path('audit-output/fly-machines.json').write_text(json.dumps(safe, indent=2), encoding='utf-8')
+          PY
+
+      - name: Run one-shot read-only probe inside Fly machine
+        if: steps.access.outputs.available == 'true'
+        shell: bash
+        env:
+          MACHINE_ID: ${{ steps.machine.outputs.machine_id }}
+        run: |
+          set -euo pipefail
+          FLYCTL="$HOME/.fly/bin/flyctl"
+          AUDIT_ID="smart-update-health-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          REMOTE_SCRIPT="/tmp/${AUDIT_ID}.py"
+          REMOTE_JSON="/tmp/${AUDIT_ID}.json"
+          REMOTE_MD="/tmp/${AUDIT_ID}.md"
+          REMOTE_EXCERPTS="/tmp/${AUDIT_ID}.txt"
+          cleanup_remote() {
+            "$FLYCTL" ssh console --app "$FLY_APP_NAME" --machine "$MACHINE_ID" --pty=false --command \
+              "rm -f '$REMOTE_SCRIPT' '$REMOTE_JSON' '$REMOTE_MD' '$REMOTE_EXCERPTS' /tmp/smart-update-audit-*.sqlite" \
+              >/dev/null 2>&1 || true
+          }
+          trap cleanup_remote EXIT
+
+          "$FLYCTL" ssh sftp put /tmp/smart-update-health-audit.py "$REMOTE_SCRIPT" \
+            --app "$FLY_APP_NAME" --machine "$MACHINE_ID" --quiet
+          "$FLYCTL" ssh console --app "$FLY_APP_NAME" --machine "$MACHINE_ID" --pty=false --command \
+            "cd /app && PYTHONPATH=/app python '$REMOTE_SCRIPT' --output '$REMOTE_JSON' --markdown '$REMOTE_MD' --excerpts '$REMOTE_EXCERPTS' --window-hours '$AUDIT_WINDOW_HOURS' --app '$FLY_APP_NAME' --repo-sha '$AUDIT_HEAD_SHA'"
+
+          "$FLYCTL" ssh sftp get "$REMOTE_JSON" audit-output/smart-update-health.json \
+            --app "$FLY_APP_NAME" --machine "$MACHINE_ID" --quiet
+          "$FLYCTL" ssh sftp get "$REMOTE_MD" audit-output/smart-update-health.md \
+            --app "$FLY_APP_NAME" --machine "$MACHINE_ID" --quiet
+          "$FLYCTL" ssh sftp get "$REMOTE_EXCERPTS" audit-output/smart-update-sanitized-excerpts.txt \
+            --app "$FLY_APP_NAME" --machine "$MACHINE_ID" --quiet
+          test -s audit-output/smart-update-health.json
+          test -s audit-output/smart-update-health.md
+          cat audit-output/smart-update-health.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify sanitized artifact boundary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/fly-machines.json /tmp/smart-update-health-audit.py
+          if [[ ! -f audit-output/smart-update-health.md ]]; then
+            cat > audit-output/smart-update-health.md <<'MD'
+          # Smart Update production health audit
+
+          The one-shot audit did not produce a terminal sanitized report. Inspect workflow step logs. No raw production database or runtime-log file is uploaded.
+          MD
+          fi
+          if find audit-output -type f \( -name '*.sqlite' -o -name '*.db' -o -name 'events-bot.log*' -o -name '*.tgz' \) | grep -q .; then
+            echo "Unsafe raw production artifact detected" >&2
+            exit 1
+          fi
+
+      - name: Upload sanitized audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-update-prod-health-${{ github.run_id }}-${{ github.run_attempt }}
+          path: audit-output/
+          if-no-files-found: error
+          retention-days: 3
