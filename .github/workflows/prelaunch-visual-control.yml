@@ -98,7 +98,7 @@ jobs:
           cat /tmp/prelaunch-http.log
           exit 1
 
-      - name: Capture visual and no-scroll evidence
+      - name: Capture visual, no-scroll and light-model evidence
         id: visual_gate
         shell: bash
         env:
@@ -118,6 +118,11 @@ jobs:
             --url http://127.0.0.1:4173/ \
             --artifact-dir artifacts/prelaunch-browser
           fit_status=$?
+
+          node site/scripts/check-prelaunch-light-model.mjs \
+            --url http://127.0.0.1:4173/ \
+            --artifact-dir artifacts/prelaunch-browser
+          light_status=$?
           set -e
 
           cp docs/features/static-site-pages/prelaunch-handoff/reference/target-desktop.webp \
@@ -127,19 +132,20 @@ jobs:
           printf '%s\n' "$TARGET_SHA" > artifacts/prelaunch-browser/repository-sha.txt
 
           combined_status=0
-          if [[ "$visual_status" -ne 0 || "$fit_status" -ne 0 ]]; then
+          if [[ "$visual_status" -ne 0 || "$fit_status" -ne 0 || "$light_status" -ne 0 ]]; then
             combined_status=1
           fi
 
           cat > artifacts/prelaunch-browser/control-receipt.json <<EOF
           {
-            "schema_version": "prelaunch_visual_control_receipt_v2",
+            "schema_version": "prelaunch_visual_control_receipt_v3",
             "request_id": "$REQUEST_ID",
             "target_sha": "$TARGET_SHA",
             "control_run_id": "$GITHUB_RUN_ID",
             "control_run_attempt": "$GITHUB_RUN_ATTEMPT",
             "visual_gate_exit_code": $visual_status,
             "viewport_fit_exit_code": $fit_status,
+            "light_model_exit_code": $light_status,
             "combined_exit_code": $combined_status
           }
           EOF
