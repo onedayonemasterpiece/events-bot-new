@@ -1,6 +1,14 @@
+/*
+ * Prelaunch visual calibration.
+ *
+ * Product invariants:
+ * - the page is a single-screen launch card, not a scrollable landing;
+ * - one continuous brand object sits below an opaque-seam glass mosaic;
+ * - the copy field stays dark and calm while the image reveals mostly right/below;
+ * - only the glass surface changes state; tile geometry and seams never fade.
+ */
+
 .prelaunch__tile::before {
-  /* Keep the tile geometry and the opaque inter-tile seam static. Only the
-     glass surface changes, so the background never flashes through the gaps. */
   transition:
     background-color var(--speed) cubic-bezier(.45, 0, .22, 1) var(--delay),
     -webkit-backdrop-filter var(--speed) cubic-bezier(.45, 0, .22, 1) var(--delay),
@@ -15,19 +23,19 @@
   will-change: opacity;
 }
 
-/*
- * Reference-calibration layer.
- *
- * The production PWA asset currently has a different internal crop/wordmark
- * from the approved prelaunch reference. Reuse the canonical reference image
- * already versioned with the handoff and let Vite fingerprint it. This keeps
- * the correction CSS-only and avoids a second binary copy in site/public.
- */
 .prelaunch[data-prelaunch-page] {
   --prelaunch-reference-image:
     url('../../../docs/features/static-site-pages/prelaunch-handoff/reference/PWA-icon.webp');
+  width: 100%;
+  height: 100svh;
+  height: 100dvh;
+  min-height: 0;
+  max-height: 100dvh;
+  overflow: hidden;
 }
 
+/* The production PNG remains in the DOM for loading/fallback contracts. The
+   approved handoff asset supplies the exact leather object and wordmark crop. */
 .prelaunch[data-prelaunch-page] .prelaunch__projection {
   opacity: 0;
 }
@@ -36,16 +44,28 @@
   content: "";
   position: absolute;
   z-index: 0;
-  width: clamp(980px, 100vw, 1760px);
+  width: min(82vw, 1180px);
   aspect-ratio: 1;
-  left: 50%;
-  top: 0;
+  left: 60%;
+  top: 33%;
   transform: translateX(-50%);
+  background: var(--prelaunch-reference-image) center / 100% 100% no-repeat;
+  filter: saturate(.9) contrast(1.04) brightness(.76);
+}
+
+.prelaunch[data-prelaunch-page] .prelaunch__background::before {
+  z-index: 1;
   background:
-    var(--prelaunch-reference-image)
-    center / 100% 100%
-    no-repeat;
-  filter: saturate(.88) contrast(1.06) brightness(.82);
+    linear-gradient(90deg,
+      rgba(7, 9, 12, .86) 0%,
+      rgba(7, 9, 12, .68) 24%,
+      rgba(7, 9, 12, .22) 58%,
+      rgba(7, 9, 12, .32) 100%),
+    linear-gradient(180deg,
+      rgba(7, 9, 12, .5) 0%,
+      rgba(7, 9, 12, .14) 32%,
+      rgba(7, 9, 12, .18) 74%,
+      rgba(7, 9, 12, .62) 100%);
 }
 
 .prelaunch[data-prelaunch-page] .prelaunch__brand-icon img {
@@ -56,106 +76,585 @@
   content: "";
   position: absolute;
   inset: 0;
-  background:
-    var(--prelaunch-reference-image)
-    center / 116% 116%
-    no-repeat;
+  background: var(--prelaunch-reference-image) center / 116% 116% no-repeat;
 }
 
-/* Square/reference composition: align the brand and hero to the approved
-   2048×2048 mock while retaining fluid sizing. */
+/* Mosaic geometry: roughly seven modules across the viewport. The DOM keeps
+   nine columns so the scene extends beyond the right edge without exposing a
+   boundary. Tiles are genuinely square; the seam is a separate opaque layer. */
+.prelaunch[data-prelaunch-page] .prelaunch__mosaic {
+  --tile-width: clamp(146px, 14.08vw, 228px);
+  --tile-height: var(--tile-width);
+  --tile-gap: clamp(7px, .62vw, 10px);
+  --tile-pitch-x: calc(var(--tile-width) + var(--tile-gap));
+  --tile-pitch-y: calc(var(--tile-height) + var(--tile-gap));
+  top: calc(var(--tile-width) * -.47);
+  left: -2px;
+  grid-template-columns: repeat(9, var(--tile-width));
+  grid-template-rows: repeat(8, var(--tile-height));
+  gap: var(--tile-gap);
+}
+
+.prelaunch[data-prelaunch-page] .prelaunch__mosaic::before {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 var(--tile-width),
+      #07090c var(--tile-width) var(--tile-pitch-x)
+    ),
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 var(--tile-height),
+      #07090c var(--tile-height) var(--tile-pitch-y)
+    );
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .66));
+}
+
+.prelaunch[data-prelaunch-page] .prelaunch__tile {
+  --cover: .78;
+  --blur-base: 7px;
+  --saturation: .56;
+  --brightness: .8;
+  --edge: .12;
+  --edge-highlight: .11;
+  --glow: .06;
+  --matte: .22;
+  --shadow-alpha: .28;
+  border-radius: clamp(10px, calc(var(--tile-radius, 14px) * .82), 14px);
+  background: transparent;
+  opacity: 1;
+}
+
+.prelaunch[data-prelaunch-page] .prelaunch__tile::before {
+  border: 1px solid rgb(238 228 219 / var(--edge));
+  background-color: rgb(10 13 17 / var(--cover));
+  background-image:
+    linear-gradient(145deg,
+      rgba(255, 255, 255, .06) 0%,
+      rgba(255, 255, 255, .012) 22%,
+      transparent 52%,
+      rgba(0, 0, 0, .13) 100%),
+    radial-gradient(circle at var(--spec-x, 84%) var(--spec-y, 12%),
+      rgb(255 205 169 / var(--glow)),
+      transparent 44%);
+  -webkit-backdrop-filter:
+    blur(calc(var(--blur-base) + var(--blur-bias, 0px)))
+    saturate(var(--saturation))
+    brightness(var(--brightness));
+  backdrop-filter:
+    blur(calc(var(--blur-base) + var(--blur-bias, 0px)))
+    saturate(var(--saturation))
+    brightness(var(--brightness));
+  box-shadow:
+    inset 1px 1px 0 rgb(255 255 255 / var(--edge-highlight)),
+    inset -1px -1px 0 rgba(0, 0, 0, .42),
+    inset 0 0 18px rgba(0, 0, 0, .06),
+    0 2px 6px rgb(0 0 0 / var(--shadow-alpha));
+}
+
+.prelaunch[data-prelaunch-page] .prelaunch__tile::after {
+  opacity: calc(var(--matte) + var(--matte-bias, 0));
+  background-image:
+    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, .11) 0 1px, transparent 1.2px),
+    radial-gradient(circle at 73% 67%, rgba(255, 255, 255, .065) 0 1px, transparent 1.15px),
+    linear-gradient(128deg, rgba(255, 255, 255, .03), transparent 44%, rgba(0, 0, 0, .07));
+  background-size: 23px 25px, 31px 29px, 100% 100%;
+  mix-blend-mode: soft-light;
+}
+
+.prelaunch[data-prelaunch-page] .prelaunch__tile[data-state="sealed"] {
+  --cover: .94;
+  --blur-base: 11px;
+  --saturation: .32;
+  --brightness: .7;
+  --edge: .055;
+  --edge-highlight: .045;
+  --glow: .018;
+  --matte: .14;
+  --shadow-alpha: .24;
+}
+
+.prelaunch[data-prelaunch-page] .prelaunch__tile[data-state="dim"] {
+  --cover: .76;
+  --blur-base: 7.5px;
+  --saturation: .54;
+  --brightness: .8;
+  --edge: .12;
+  --edge-highlight: .105;
+  --glow: .065;
+  --matte: .24;
+  --shadow-alpha: .28;
+}
+
+/* Most source `revealed` cells are intentionally rendered as frosted/dim.
+   Only six windows below are truly clear, keeping the product mostly hidden. */
+.prelaunch[data-prelaunch-page] .prelaunch__tile[data-state="revealed"] {
+  --cover: .7;
+  --blur-base: 6.2px;
+  --saturation: .62;
+  --brightness: .83;
+  --edge: .14;
+  --edge-highlight: .12;
+  --glow: .08;
+  --matte: .25;
+  --shadow-alpha: .3;
+}
+
+.prelaunch[data-prelaunch-page] .prelaunch__tile[data-state="revealed"][data-index="14"],
+.prelaunch[data-prelaunch-page] .prelaunch__tile[data-state="revealed"][data-index="23"],
+.prelaunch[data-prelaunch-page] .prelaunch__tile[data-state="revealed"][data-index="31"],
+.prelaunch[data-prelaunch-page] .prelaunch__tile[data-state="revealed"][data-index="39"],
+.prelaunch[data-prelaunch-page] .prelaunch__tile[data-state="revealed"][data-index="48"],
+.prelaunch[data-prelaunch-page] .prelaunch__tile[data-state="revealed"][data-index="57"] {
+  --cover: .3;
+  --blur-base: 2.4px;
+  --saturation: .88;
+  --brightness: .94;
+  --edge: .19;
+  --edge-highlight: .16;
+  --glow: .14;
+  --matte: .29;
+  --shadow-alpha: .34;
+}
+
+/* Quiet/content-side tiles remain darker even in the intermediate state. */
+.prelaunch[data-prelaunch-page] .prelaunch__tile[data-zone="quiet"][data-state="dim"] {
+  --cover: .87;
+  --blur-base: 9px;
+  --saturation: .4;
+  --brightness: .74;
+  --edge: .075;
+  --edge-highlight: .06;
+  --glow: .025;
+  --matte: .17;
+}
+
+/* Upper-right light is diffuse: brighter and more frosted, never a sharp hole. */
+.prelaunch[data-prelaunch-page] .prelaunch__tile[data-zone="light"][data-state="dim"],
+.prelaunch[data-prelaunch-page] .prelaunch__tile[data-zone="light"][data-state="revealed"] {
+  --blur-base: 12px;
+  --saturation: .48;
+  --brightness: .98;
+  --edge: .17;
+  --edge-highlight: .15;
+  --glow: .17;
+  --matte: .31;
+}
+
+.prelaunch[data-prelaunch-page] .prelaunch__tile[data-glint="true"]::before {
+  border-color: rgba(255, 205, 171, .38);
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 247, 238, .22),
+    inset -1px -1px 0 rgba(0, 0, 0, .4),
+    0 0 15px rgba(235, 148, 101, .09),
+    0 3px 8px rgba(0, 0, 0, .3);
+}
+
+.prelaunch[data-prelaunch-page] .prelaunch__atmosphere {
+  background:
+    radial-gradient(circle at 86% 13%,
+      rgba(255, 209, 178, .27) 0%,
+      rgba(222, 151, 112, .15) 13%,
+      transparent 34%),
+    radial-gradient(circle at 62% 57%, rgba(170, 75, 40, .07), transparent 31%),
+    linear-gradient(90deg, rgba(3, 5, 8, .37), transparent 43%, rgba(3, 5, 8, .03) 70%, rgba(3, 5, 8, .22));
+}
+
+.prelaunch[data-prelaunch-page] .prelaunch__atmosphere::before {
+  width: min(57vw, 860px);
+  right: -31vw;
+  top: 6vh;
+  border-width: clamp(42px, 5.8vw, 88px);
+  opacity: .62;
+}
+
+.prelaunch[data-prelaunch-page] .prelaunch__spark--three {
+  display: none;
+}
+
+/* Single-screen foreground. The form is an actual bottom grid row, not a
+   translated block, so it cannot drift outside short landscape viewports. */
 .prelaunch[data-prelaunch-page] .prelaunch__foreground {
-  padding-top: clamp(52px, 6.7vh, 82px);
+  box-sizing: border-box;
+  width: min(1440px, 100%);
+  height: 100svh;
+  height: 100dvh;
+  min-height: 0;
+  max-height: 100dvh;
+  padding:
+    clamp(32px, 6.4vh, 66px)
+    clamp(32px, 8.8vw, 128px)
+    clamp(22px, 4.5vh, 46px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.prelaunch[data-prelaunch-page] .prelaunch__brand-icon {
+  width: clamp(66px, min(7.2vw, 11.5vh), 100px);
 }
 
 .prelaunch[data-prelaunch-page] .prelaunch__brand p {
-  font-size: clamp(1.18rem, 2.28vw, 2.2rem);
+  font-size: clamp(1.08rem, min(2.25vw, 3.8vh), 2.15rem);
   font-weight: 590;
   letter-spacing: -.032em;
+  line-height: .95;
+}
+
+.prelaunch[data-prelaunch-page] .prelaunch__copy {
+  align-self: start;
+  margin-top: clamp(42px, 9.5vh, 96px);
+  max-width: 1120px;
 }
 
 .prelaunch[data-prelaunch-page] .prelaunch__copy h1 {
-  font-size: clamp(4.15rem, 6.25vw, 7rem);
+  max-width: none;
+  font-size: clamp(3.9rem, min(7vw, 12.5vh), 7rem);
   font-weight: 520;
-  letter-spacing: -.052em;
+  line-height: .91;
+  letter-spacing: -.055em;
+  white-space: nowrap;
 }
 
 .prelaunch[data-prelaunch-page] .prelaunch__copy p {
-  max-width: 30rem;
-  margin-top: clamp(34px, 3.8vh, 48px);
+  max-width: 31rem;
+  margin-top: clamp(18px, 3.1vh, 32px);
+  font-size: clamp(1rem, min(1.65vw, 3.05vh), 1.66rem);
+  line-height: 1.35;
 }
 
 .prelaunch[data-prelaunch-page] .prelaunch__notify {
-  width: min(590px, 64vw);
-  transform: translateY(-36px);
+  width: min(760px, 64vw);
+  margin: 0;
+  transform: none;
 }
 
 .prelaunch[data-prelaunch-page] .prelaunch__notify h2 {
-  font-size: clamp(1rem, 1.45vw, 1.2rem);
+  margin-bottom: clamp(9px, 1.5vh, 16px);
+  font-size: clamp(.92rem, min(1.2vw, 2.2vh), 1.14rem);
+}
+
+.prelaunch[data-prelaunch-page] .prelaunch-form__row {
+  grid-template-columns: minmax(230px, 1fr) auto;
+  gap: clamp(9px, .9vw, 13px);
+}
+
+.prelaunch[data-prelaunch-page] .prelaunch-form input[type="email"],
+.prelaunch[data-prelaunch-page] .prelaunch-form button {
+  min-height: clamp(48px, 6.3vh, 60px);
 }
 
 .prelaunch[data-prelaunch-page] .prelaunch-form button {
-  padding-inline: clamp(18px, 1.55vw, 25px);
-  font-weight: 520;
+  padding-inline: clamp(22px, 2.5vw, 36px);
+  font-weight: 590;
 }
 
-/* Wide landscape needs a little more vertical separation than the square
-   source composition, but keeps the corrected typography and brand asset. */
-@media (min-width: 821px) and (min-aspect-ratio: 4 / 3) {
-  .prelaunch[data-prelaunch-page] .prelaunch__foreground {
-    padding-top: clamp(48px, 7.2vh, 70px);
-    padding-inline: clamp(96px, 8.8vw, 132px);
-  }
-
-  .prelaunch[data-prelaunch-page] .prelaunch__copy {
-    margin-top: clamp(56px, 8.4vh, 92px);
-  }
-
-  .prelaunch[data-prelaunch-page] .prelaunch__copy h1 {
-    font-size: clamp(4.5rem, 6.45vw, 6.4rem);
-  }
-
-  .prelaunch[data-prelaunch-page] .prelaunch__copy p {
-    max-width: 30rem;
-    margin-top: clamp(24px, 3.2vh, 34px);
-  }
-
-  .prelaunch[data-prelaunch-page] .prelaunch__notify {
-    width: min(570px, 48vw);
-    transform: translateY(-18px);
-  }
+.prelaunch[data-prelaunch-page] .prelaunch-form__consent {
+  margin-top: clamp(6px, 1vh, 9px);
+  font-size: clamp(.62rem, min(.78vw, 1.45vh), .72rem);
+  color: rgba(224, 211, 199, .7);
 }
 
-@media (max-width: 820px) {
-  .prelaunch[data-prelaunch-page] .prelaunch__background::after {
-    width: 180vw;
-    left: 60%;
-    top: 18vh;
-    filter: saturate(.86) contrast(1.04) brightness(.78);
+.prelaunch[data-prelaunch-page] .prelaunch-form__status,
+.prelaunch[data-prelaunch-page] .prelaunch-form__noscript {
+  min-height: 0;
+  margin-top: 5px;
+  font-size: .72rem;
+}
+
+/* Short desktop/tablet landscapes: reduce vertical rhythm, never introduce a
+   scroll fallback. */
+@media (min-width: 821px) and (max-height: 780px) {
+  .prelaunch[data-prelaunch-page] .prelaunch__foreground {
+    padding-top: clamp(24px, 5vh, 38px);
+    padding-bottom: clamp(16px, 3.2vh, 26px);
   }
 
-  .prelaunch[data-prelaunch-page] .prelaunch__foreground {
-    padding-top: clamp(22px, 5.5vw, 34px);
+  .prelaunch[data-prelaunch-page] .prelaunch__brand-icon {
+    width: clamp(58px, 8.8vh, 72px);
   }
 
   .prelaunch[data-prelaunch-page] .prelaunch__brand p {
-    font-size: clamp(.95rem, 4.6vw, 1.22rem);
-    font-weight: 600;
+    font-size: clamp(1rem, 3.2vh, 1.35rem);
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__copy {
+    margin-top: clamp(24px, 6.4vh, 50px);
   }
 
   .prelaunch[data-prelaunch-page] .prelaunch__copy h1 {
-    font-size: clamp(3.15rem, 14vw, 4.8rem);
-    font-weight: 540;
+    font-size: clamp(3.6rem, min(6.6vw, 12.2vh), 5.9rem);
   }
 
   .prelaunch[data-prelaunch-page] .prelaunch__copy p {
-    max-width: 29ch;
-    margin-top: 20px;
+    max-width: 29rem;
+    margin-top: clamp(12px, 2.2vh, 20px);
+    font-size: clamp(.94rem, min(1.5vw, 2.8vh), 1.32rem);
+    line-height: 1.3;
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__notify {
+    width: min(700px, 61vw);
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__notify h2 {
+    margin-bottom: 7px;
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch-form input[type="email"],
+  .prelaunch[data-prelaunch-page] .prelaunch-form button {
+    min-height: clamp(44px, 6.8vh, 52px);
+  }
+}
+
+/* Tablet portrait and narrow landscape retain one-screen composition. */
+@media (min-width: 600px) and (max-width: 820px) {
+  .prelaunch[data-prelaunch-page] .prelaunch__foreground {
+    padding: clamp(24px, 4.5vh, 38px) clamp(28px, 7vw, 54px) clamp(18px, 3vh, 28px);
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__copy {
+    margin-top: clamp(34px, 7vh, 62px);
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__copy h1 {
+    max-width: 10ch;
+    white-space: normal;
+    font-size: clamp(3.5rem, min(10vw, 10vh), 5.3rem);
   }
 
   .prelaunch[data-prelaunch-page] .prelaunch__notify {
     width: 100%;
+  }
+}
+
+/* Mobile: four visible square columns, a raised hero, and a compact but fully
+   legible stacked form. The complete experience stays inside 100dvh down to
+   320×568; no `overflow-y:auto` escape hatch is allowed. */
+@media (max-width: 599px) {
+  .prelaunch[data-prelaunch-page] {
+    height: 100svh;
+    height: 100dvh;
+    min-height: 0;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__background::after {
+    width: 146vw;
+    left: 66%;
+    top: 36%;
+    filter: saturate(.86) contrast(1.04) brightness(.68);
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__background::before {
+    background:
+      linear-gradient(180deg,
+        rgba(7, 9, 12, .45) 0%,
+        rgba(7, 9, 12, .2) 31%,
+        rgba(7, 9, 12, .5) 64%,
+        rgba(7, 9, 12, .82) 100%),
+      linear-gradient(90deg, rgba(7, 9, 12, .55), transparent 72%, rgba(7, 9, 12, .18));
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__mosaic {
+    --tile-gap: clamp(6px, 1.8vw, 8px);
+    --tile-width: calc((100vw - (3 * var(--tile-gap))) / 4);
+    --tile-height: var(--tile-width);
+    --tile-pitch-x: calc(var(--tile-width) + var(--tile-gap));
+    --tile-pitch-y: calc(var(--tile-height) + var(--tile-gap));
+    top: calc(var(--tile-width) * -.42);
+    left: 0;
+    grid-template-columns: repeat(6, var(--tile-width));
+    grid-template-rows: repeat(12, var(--tile-height));
+    gap: var(--tile-gap);
     transform: none;
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__tile {
+    border-radius: clamp(9px, 3vw, 12px);
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__atmosphere {
+    background:
+      radial-gradient(circle at 88% 12%, rgba(255, 204, 170, .19), transparent 29%),
+      linear-gradient(180deg, rgba(3, 5, 8, .08), rgba(3, 5, 8, .12) 48%, rgba(3, 5, 8, .54));
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__atmosphere::before {
+    width: 90vw;
+    right: -55vw;
+    top: 6vh;
+    border-width: 36px;
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__foreground {
+    height: 100svh;
+    height: 100dvh;
+    min-height: 0;
+    max-height: 100dvh;
+    padding:
+      clamp(14px, 3.4vh, 24px)
+      clamp(16px, 5.5vw, 24px)
+      clamp(10px, 2.4vh, 18px);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    overflow: hidden;
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__brand {
+    gap: clamp(9px, 2.8vw, 13px);
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__brand-icon {
+    width: clamp(44px, min(14vw, 8.2vh), 62px);
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__brand p {
+    font-size: clamp(.82rem, min(4.3vw, 2.7vh), 1.08rem);
+    font-weight: 610;
+    line-height: .92;
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__copy {
+    align-self: start;
+    margin-top: clamp(34px, 9.5vh, 78px);
+    max-width: 100%;
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__copy h1 {
+    max-width: 8ch;
+    white-space: normal;
+    font-size: clamp(2.62rem, min(13.4vw, 9.5vh), 4rem);
+    line-height: .9;
+    letter-spacing: -.052em;
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__copy p {
+    max-width: 28ch;
+    margin-top: clamp(12px, 2.2vh, 20px);
+    font-size: clamp(.8rem, min(4vw, 2.35vh), 1rem);
+    line-height: 1.28;
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__copy p span {
+    display: inline;
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__copy p span + span::before {
+    content: " ";
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__notify {
+    width: 100%;
+    margin: 0;
+    transform: none;
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__notify h2 {
+    margin-bottom: clamp(6px, 1.2vh, 10px);
+    font-size: clamp(.76rem, min(3.7vw, 2vh), .94rem);
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch-form__row {
+    grid-template-columns: 1fr;
+    gap: clamp(5px, 1.1vh, 8px);
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch-form input[type="email"],
+  .prelaunch[data-prelaunch-page] .prelaunch-form button {
+    width: 100%;
+    min-height: clamp(40px, 5.8vh, 50px);
+    border-radius: 9px;
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch-form input[type="email"] {
+    padding-inline: clamp(14px, 4vw, 19px);
+    font-size: clamp(.8rem, 3.8vw, .96rem);
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch-form button {
+    padding-inline: 14px;
+    font-size: clamp(.78rem, 3.8vw, .96rem);
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch-form__consent {
+    grid-template-columns: 13px minmax(0, 1fr);
+    gap: 6px;
+    margin-top: clamp(4px, .85vh, 7px);
+    font-size: clamp(.54rem, min(2.45vw, 1.35vh), .64rem);
+    line-height: 1.25;
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch-form__consent input {
+    width: 13px;
+    height: 13px;
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch-form__status,
+  .prelaunch[data-prelaunch-page] .prelaunch-form__noscript {
+    margin-top: 3px;
+    font-size: clamp(.55rem, 2.5vw, .66rem);
+    line-height: 1.2;
+  }
+}
+
+/* Very short phones and landscape browser windows receive a deliberately
+   compact rhythm, still preserving all content and the consent line. */
+@media (max-width: 599px) and (max-height: 680px) {
+  .prelaunch[data-prelaunch-page] .prelaunch__foreground {
+    padding-top: 10px;
+    padding-bottom: 8px;
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__brand-icon {
+    width: clamp(40px, 7.6vh, 48px);
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__brand p {
+    font-size: clamp(.75rem, 2.55vh, .91rem);
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__copy {
+    margin-top: clamp(22px, 6.6vh, 38px);
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__copy h1 {
+    font-size: clamp(2.38rem, min(13vw, 8.6vh), 3.15rem);
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__copy p {
+    max-width: 29ch;
+    margin-top: 8px;
+    font-size: clamp(.72rem, min(3.75vw, 2.1vh), .84rem);
+    line-height: 1.2;
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__notify h2 {
+    margin-bottom: 4px;
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch-form__row {
+    gap: 4px;
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch-form input[type="email"],
+  .prelaunch[data-prelaunch-page] .prelaunch-form button {
+    min-height: clamp(36px, 7.2vh, 42px);
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch-form__consent {
+    margin-top: 3px;
+    font-size: clamp(.5rem, min(2.25vw, 1.25vh), .57rem);
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .prelaunch[data-prelaunch-page] .prelaunch__tile[data-state="sealed"]::before {
+    background-color: rgba(10, 13, 17, .98);
+  }
+
+  .prelaunch[data-prelaunch-page] .prelaunch__tile[data-state="dim"]::before,
+  .prelaunch[data-prelaunch-page] .prelaunch__tile[data-state="revealed"]::before {
+    background-color: rgba(10, 13, 17, .82);
   }
 }
 
