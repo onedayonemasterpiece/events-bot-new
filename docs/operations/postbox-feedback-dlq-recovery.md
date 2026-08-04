@@ -55,7 +55,7 @@ A unique provider-message constraint fails closed on duplicate or cross-source r
 6. applies `hard_bounce`, `complaint` and transactional `unsubscribe` suppression;
 7. returns `applied`, `duplicate` or `correlation_pending`.
 
-The old RPC name `email_record_postbox_event_v2` is retained as a compatibility wrapper over v3. This makes migration-before-Function-deploy and Function-before-migration ordering safe: the currently deployed consumer immediately receives unified semantics after the migration.
+The old RPC name `email_record_postbox_event_v2` is retained as a compatibility wrapper over v3. Apply the migration first: the currently deployed consumer may continue calling v2 and immediately receives the unified semantics without a Function redeploy. A future consumer may call v3 explicitly only after the migration exists; deploying such a consumer before the migration is not safe.
 
 ## Auth feedback state
 
@@ -68,6 +68,17 @@ Postbox Auth attempts gain a delivery projection separate from provider API acce
 - `terminal_failed`.
 
 `Open`, `Click` and `Subscription` remain provider events but do not downgrade delivery state. Terminal failure is not overwritten by a later delivery event. Exact duplicate `eventId` values remain no-ops.
+
+## Suppression boundary
+
+The migration records authenticated `hard_bounce`, `complaint` and transactional `unsubscribe` suppressions by exact versioned recipient HMAC. This proves storage of provider suppression evidence, but it does not by itself prove that the direct focus Auth hook rejects a future send before provider network I/O.
+
+Incident closure therefore requires one of two explicit outcomes:
+
+- implement and test a PII-free, versioned recipient-HMAC admission boundary for direct Auth, including first-send, repeat-send and legitimate email-change cases; or
+- retain direct Auth suppression enforcement as a named blocker and keep the incident open.
+
+Never substitute user-ID history for email-identity suppression: account deletion, email change and profile switching make that unsafe.
 
 ## Health and notifications
 
@@ -187,6 +198,7 @@ The incident is not closed until all are true:
 - ordinary transactional outbox canary still reaches `delivered`;
 - exact event replay returns `duplicate` with no second state transition;
 - controlled hard-bounce/complaint fixtures apply the expected suppression and are then removed according to the existing fixture procedure;
+- direct Auth suppression is either proven before provider network I/O for the exact email identity or retained as an explicit blocker with the incident open;
 - `postbox_missing_correlation_count=0`;
 - no unexplained unbound correlation remains;
 - retained DLQ is zero, or every remaining message has an explicit owner/evidence blocker recorded before retention expiry;
