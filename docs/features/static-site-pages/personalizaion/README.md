@@ -13,10 +13,11 @@
 6. [`longitudinal-e2e-personalization.md`](longitudinal-e2e-personalization.md) — сценарный пакет длительного surfing/E2E: повторные визиты, golden personas, profile horizons, DOM-трансформация, GitHub Actions evidence и калибровка модели.
 7. [`temporal-profile-simulation.md`](temporal-profile-simulation.md) — методология synthetic time в offline replay и staging DB/primary-store simulation для проверки session/short/mid/long horizons без ожидания реальных месяцев.
 8. [`personalization-test-report-template.md`](personalization-test-report-template.md) — формат сводного отчёта: planned vs actual, persona scorecards, timeline профиля, factor ablation, hard invariants и next-iteration plan.
-9. [`focus-group-interest-questionnaire-prompt.md`](focus-group-interest-questionnaire-prompt.md) — prompt для отдельной проработки optional анкеты фокус-группы по интересам и ограничениям.
-10. [`personalization-current-runtime-audit-2026-08-02.md`](personalization-current-runtime-audit-2026-08-02.md) — аудит фактического runtime в `main` и список расхождений, которые нельзя переносить в production.
-11. [`tasks/personalization-wave-0.md`](tasks/personalization-wave-0.md) — готовое задание кодовому агенту на первый безопасный реализационный PR.
-12. [`implementation-status.yml`](implementation-status.yml) — машиночитаемый контроль волн, зависимостей и доказательств.
+9. [`personal-selection-quality-feedback.md`](personal-selection-quality-feedback.md) — нормативная механика оценки конкретной персональной выдачи: first relevant within 30, score 0–10, reason codes, served-list provenance, trigger-bias control и калибровочный backlog.
+10. [`focus-group-interest-questionnaire-prompt.md`](focus-group-interest-questionnaire-prompt.md) — prompt для отдельной проработки optional анкеты фокус-группы по интересам и ограничениям.
+11. [`personalization-current-runtime-audit-2026-08-02.md`](personalization-current-runtime-audit-2026-08-02.md) — аудит фактического runtime в `main` и список расхождений, которые нельзя переносить в production.
+12. [`tasks/personalization-wave-0.md`](tasks/personalization-wave-0.md) — готовое задание кодовому агенту на первый безопасный реализационный PR.
+13. [`implementation-status.yml`](implementation-status.yml) — машиночитаемый контроль волн, зависимостей и доказательств.
 
 ## Машиночитаемые контракты
 
@@ -33,7 +34,7 @@ JSON-файлы в этом пакете являются **контрактны
 2. Утверждённый юридический/localization release-gate — только для права, оснований обработки, локализации и публичных документов.
 3. `personalization-to-be.md` — продуктовая, исследовательская и модельная цель.
 4. `personalization-implementation-contract.md` — способ технической реализации цели; он не может переопределять пункт 3.
-5. `personalization-research-traceability.md`, identity/linking, longitudinal/temporal E2E/report docs и `implementation-status.yml` — контроль полноты, качества и доказательств.
+5. `personalization-research-traceability.md`, identity/linking, longitudinal/temporal E2E, quality-feedback/report docs и `implementation-status.yml` — контроль полноты, качества и доказательств.
 6. Старые `unsigned-personalization`, prototype, demo и фактические скрипты — только migration evidence и источник characterization tests.
 
 Если целевой документ оставляет вопрос открытым, ответ нельзя молча брать из старого кода. Он фиксируется как hypothesis/owner/legal decision и закрывается исследованием, benchmark или отдельным решением.
