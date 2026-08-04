@@ -11,9 +11,10 @@
 - входа/выхода;
 - просмотра состояния персонализации;
 - управления интересами и reset;
-- просмотра сохранённых и скрытых событий;
 - копирования диагностической информации;
 - future privacy/account actions.
+
+Сохранённые и скрытые события **не входят в профиль**. Они остаются в отдельной пользовательской поверхности `Избранное`, которая является единственным местом их просмотра, восстановления и удаления.
 
 Рекомендуемый route для обсуждения:
 
@@ -35,6 +36,8 @@
 
 Профиль решает это без превращения всего сайта в приложение: страница остаётся статической оболочкой с client hydration.
 
+`Избранное` при этом сохраняет самостоятельную продуктовую роль и не растворяется в account settings.
+
 ## 3. Mobile navigation
 
 В мобильном меню под биркой показывать не `Выйти`, а:
@@ -47,7 +50,8 @@
 
 - signed-out: `Профиль` ведёт на страницу с предложением войти и объяснением локального режима;
 - signed-in: `Профиль` ведёт на страницу статуса аккаунта и персонализации;
-- quick logout из основного меню убрать, чтобы не смешивать navigation и account management.
+- quick logout из основного меню убрать, чтобы не смешивать navigation и account management;
+- `Избранное` остаётся отдельным пунктом/разделом навигации и не переносится внутрь профиля.
 
 ## 4. Desktop navigation
 
@@ -57,7 +61,9 @@ Desktop допускает маленький account popover, но только
 - `Открыть профиль`;
 - возможно `Выйти`, если не перегружает UX.
 
-Все сложные действия — интересы, reset, diagnostics, saved/hidden, privacy — находятся на полной странице профиля. Popover не должен становиться вторым полноценным центром управления.
+Все сложные действия — интересы, reset, diagnostics и privacy — находятся на полной странице профиля. Popover не должен становиться вторым полноценным центром управления.
+
+`Избранное` остаётся отдельной полноэкранной utility surface, одинаково доступной на desktop и mobile.
 
 ## 5. Содержание страницы
 
@@ -83,14 +89,21 @@ YDB не участвует в обычной проверке Supabase session.
 - CTA `Настроить интересы`;
 - CTA `Сбросить персональные рекомендации`.
 
-### 5.3 Действия и коллекции
+### 5.3 Граница с «Избранным»
 
-Ссылки:
+Профиль не показывает карточки, счётчики, списки или controls сохранённых и скрытых событий.
 
-- `Сохранённые события`;
-- `Скрытые / Не интересно`;
-- future `Мои подборки`;
-- future raffle/activity status.
+Отдельный раздел `Избранное` владеет двумя пользовательскими коллекциями:
+
+- `Сохранённые`;
+- `Скрытые / Не интересно` с восстановлением события.
+
+Обе коллекции могут использовать общий local/server current state, но не дублируются в профиле. Это сохраняет простую информационную архитектуру:
+
+```text
+Профиль   = аккаунт, интересы, синхронизация, диагностика, privacy
+Избранное = сохранённые и скрытые события
+```
 
 ### 5.4 Диагностика
 
@@ -153,6 +166,8 @@ last error classes
 | `pending-actions` | `Есть действия, ожидающие отправки` | Outbox state shown honestly. |
 | `reset-pending` | `Сброс применён на устройстве; подтверждаем на сервере` | Late replay blocked by reset epoch. |
 
+Эти состояния описывают аккаунт и профиль интересов. Состояние коллекций `Избранного` отображается на самой странице `Избранное`, а не в профиле.
+
 ## 7. Storage ecology
 
 Profile page must not introduce large local storage. It may read the shared personalization envelope and display a summarized view.
@@ -161,6 +176,7 @@ Rules:
 
 - no durable profile-specific debug log;
 - no full event manifest in profile storage;
+- no local duplicate of saved/hidden collections for rendering profile page;
 - no stored diagnostic history except optional one latest redacted copy with short TTL;
 - no raw PII in localStorage;
 - localStorage aggregate budget remains 64 KiB for KenigEvents-owned keys;
@@ -204,6 +220,8 @@ Profile must support:
 - no hover-only controls;
 - no hidden logout under visual-only affordance.
 
+`Избранное` отдельно должно обеспечивать keyboard-accessible переключение между сохранёнными и скрытыми событиями и доступное восстановление скрытого события.
+
 ## 10. Autotests
 
 Minimum scenarios:
@@ -219,6 +237,9 @@ profile.reset_marks_epoch_and_blocks_late_replay
 profile.logout_does_not_delete_profile
 profile.storage_budget_enforced
 profile.no_backend_on_read_when_cached
+profile.does_not_render_saved_or_hidden_collections
+favorites.owns_saved_and_hidden_collections
+favorites.hidden_restore_flow
 focus.feedback_attaches_diagnostics_bundle
 focus.feedback_component_receipts_are_truthful
 ```
@@ -230,13 +251,14 @@ Evidence:
 - localStorage/IndexedDB redacted summary;
 - network request count;
 - route health summary;
-- screenshot for mobile menu/profile states.
+- screenshot for mobile menu/profile/favorites states.
 
 ## 11. Non-goals
 
 - Full admin interface for feedback analysis.
 - Public profile page.
 - Social network profile import.
+- Browsing or managing saved/hidden events inside the profile.
 - Editing PII or raffle data before legal/product flow is approved.
 - Supabase profile cache.
 - Remote profile writes before localization/legal gate.
