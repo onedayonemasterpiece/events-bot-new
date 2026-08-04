@@ -24,8 +24,10 @@ jobs:
       FLY_APP_NAME: events-bot-new-wngqia
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       AUDIT_WINDOW_HOURS: "24"
+      AUDIT_END_UTC: "2026-08-04T04:56:00Z"
       AUDIT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       AUDIT_SCRIPT_SHA256: fe5f06c03bf843a24d3d0344e9bbf2973d9d715058c905a1a4e7fb3030155b4c
+      AUDIT_PATCHED_SCRIPT_SHA256: cbf133d4e9a6ab3f12df651b1d2ce4651fbee8405d0611b811f0c194a4244f92
     steps:
       - name: Checkout exact audit branch
         uses: actions/checkout@v4
@@ -36,6 +38,17 @@ jobs:
           set -euo pipefail
           cat .github/audit-payload/smart-update-health.part* > /tmp/smart-update-health-audit.py
           echo "$AUDIT_SCRIPT_SHA256  /tmp/smart-update-health-audit.py" | sha256sum -c -
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("/tmp/smart-update-health-audit.py")
+          text = path.read_text(encoding="utf-8")
+          needle = "    now = dt.datetime.now(UTC)\n"
+          replacement = '    now = parse_time(os.getenv("SMART_UPDATE_AUDIT_END_UTC")) or dt.datetime.now(UTC)\n'
+          if text.count(needle) != 1:
+              raise SystemExit("fixed-window patch target must occur exactly once")
+          path.write_text(text.replace(needle, replacement), encoding="utf-8")
+          PY
+          echo "$AUDIT_PATCHED_SCRIPT_SHA256  /tmp/smart-update-health-audit.py" | sha256sum -c -
           python -m py_compile /tmp/smart-update-health-audit.py
 
       - name: Establish access boundary
@@ -51,7 +64,8 @@ jobs:
             "required_secret": "FLY_API_TOKEN",
             "required_scope": "app-scoped SSH/SFTP access to events-bot-new-wngqia",
             "not_required": ["deploy", "restart", "secrets write", "database write", "provider send"],
-            "production_mutation": false
+            "production_mutation": false,
+            "fixed_window_utc": "2026-08-03T04:56:00Z/2026-08-04T04:56:00Z"
           }
           JSON
             cat > audit-output/smart-update-health.md <<'MD'
@@ -95,7 +109,7 @@ jobs:
           "$FLYCTL" ssh sftp put /tmp/smart-update-health-audit.py "$REMOTE_SCRIPT" \
             --app "$FLY_APP_NAME" --quiet
           "$FLYCTL" ssh console --app "$FLY_APP_NAME" --pty=false --command \
-            "cd /app && PYTHONPATH=/app python '$REMOTE_SCRIPT' --output '$REMOTE_JSON' --markdown '$REMOTE_MD' --excerpts '$REMOTE_EXCERPTS' --window-hours '$AUDIT_WINDOW_HOURS' --app '$FLY_APP_NAME' --repo-sha '$AUDIT_HEAD_SHA'"
+            "cd /app && SMART_UPDATE_AUDIT_END_UTC='$AUDIT_END_UTC' PYTHONPATH=/app python '$REMOTE_SCRIPT' --output '$REMOTE_JSON' --markdown '$REMOTE_MD' --excerpts '$REMOTE_EXCERPTS' --window-hours '$AUDIT_WINDOW_HOURS' --app '$FLY_APP_NAME' --repo-sha '$AUDIT_HEAD_SHA'"
 
           "$FLYCTL" ssh sftp get "$REMOTE_JSON" audit-output/smart-update-health.json \
             --app "$FLY_APP_NAME" --quiet
