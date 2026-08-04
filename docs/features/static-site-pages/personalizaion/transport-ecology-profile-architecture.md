@@ -177,9 +177,10 @@ Never silently evict:
 |---|---|---|
 | Состояние входа | Supabase session snapshot | Показывает статус и способ входа; YDB не нужен для обычной сессии. |
 | Профиль интересов | local projection + optional YDB refresh | Сначала показывает cached/local, затем обновляет не чаще policy. |
-| Сохранённые / скрытые | local exact state + server current state when available | Показывает текущий scope: «на этом устройстве» или «синхронизировано». |
 | Диагностика | generated on demand | Копирует redacted diagnostic bundle без email/JWT/body. |
 | Управление | local + server actions | Выйти, сбросить персонализацию, удалить/запросить данные — отдельные действия. |
+
+Сохранённые и скрытые события в профиль не входят: ими владеет отдельная поверхность `Избранное`.
 
 ### 6.2 Mobile menu
 
@@ -194,8 +195,9 @@ Never silently evict:
 - статус входа;
 - войти / выйти;
 - сброс персонализации;
-- диагностическая информация;
-- ссылки на сохранённое и скрытое.
+- диагностическая информация.
+
+`Избранное` остаётся отдельным пунктом/разделом навигации и не переносится внутрь профиля.
 
 ### 6.3 Desktop
 
@@ -203,7 +205,8 @@ Desktop contract:
 
 - account button / avatar может открывать small popover только для быстрых действий: статус, «Открыть профиль», «Выйти»;
 - full settings, interests, diagnostics, reset/delete живут на полноценной странице `/profil/`;
-- popover не становится вторым местом управления персонализацией.
+- popover не становится вторым местом управления персонализацией;
+- `Избранное` остаётся отдельной полноэкранной utility surface.
 
 ### 6.4 Online или cached
 
@@ -221,6 +224,22 @@ static-only
 - «На этом устройстве»;
 - «Показываем сохранённую копию; обновим позже»;
 - «Персонализация сброшена».
+
+### 6.5 Граница с «Избранным»
+
+Информационная архитектура фиксируется так:
+
+```text
+Профиль   = аккаунт, интересы, синхронизация, диагностика, privacy
+Избранное = сохранённые и скрытые события
+```
+
+`Избранное` содержит отдельные представления:
+
+- `Сохранённые`;
+- `Скрытые / Не интересно` с восстановлением.
+
+Профиль не отображает карточки, списки, счётчики или controls этих коллекций и не создаёт их локальные копии для собственного UI.
 
 ## 7. Диагностическая информация
 
@@ -319,7 +338,8 @@ Rules:
 - no full profile rewrite per page;
 - no full event copies;
 - no raw profile in Supabase;
-- public social counters are folded into static CDN manifest.
+- public social counters are folded into static CDN manifest;
+- `social_current` обслуживает `Избранное`, а не профиль пользователя.
 
 ## 9. Transport and action semantics
 
@@ -387,7 +407,7 @@ p13n.commit_success_response_lost
 p13n.vpn_toggle_route_change
 ```
 
-### 10.3 Profile page
+### 10.3 Profile and favorites surfaces
 
 ```text
 profile.mobile_menu_links_to_profile_not_logout
@@ -398,6 +418,9 @@ profile.static_only_state
 profile.copy_diagnostics_redacted
 profile.reset_blocks_late_replay
 profile.storage_budget_enforced
+profile.does_not_render_saved_or_hidden_collections
+favorites.owns_saved_and_hidden_collections
+favorites.hidden_restore_flow
 ```
 
 ### 10.4 Focus feedback diagnostics
@@ -444,6 +467,7 @@ Evidence bundle:
 - No production remote personalization writes.
 - No Supabase profile cache.
 - No full user dashboard/admin UI for feedback review.
+- No browsing or managing saved/hidden events inside the profile.
 - No second canonical event store.
 - No page-level server ranking.
 - No infinite clickstream.
@@ -452,6 +476,6 @@ Evidence bundle:
 
 1. Update canonical ownership ADR from Supabase-primary to dual-plane/YDB-primary for PII+p13n+social state.
 2. Update implementation status with this decision and block PR #295 merge unless rewritten.
-3. Add `/profil/` product/UX contract.
-4. Extend scenario registry with zero-backend navigation, slow transport, profile, diagnostics, and feedback-component tests.
+3. Add `/profil/` product/UX contract and preserve `Избранное` as the sole saved/hidden surface.
+4. Extend scenario registry with zero-backend navigation, slow transport, profile/favorites boundary, diagnostics, and feedback-component tests.
 5. Implement only local profile page skeleton and diagnostic copy first; no remote writes.
