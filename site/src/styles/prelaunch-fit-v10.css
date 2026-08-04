@@ -110,27 +110,6 @@ body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-zone="light"][data-st
   --matte: .36;
 }
 
-/* The square mockup keeps the large artwork aligned from the top. Wide screens
- * need a different crop: the leather object begins below the launch copy and
- * its wordmark no longer crosses the H1. */
-@media (min-width: 821px) and (min-aspect-ratio: 5 / 4) {
-  body .prelaunch[data-prelaunch-page] .prelaunch__background::after {
-    width: min(92vw, 1540px);
-    left: 59%;
-    top: 34%;
-    clip-path: inset(6.2% 6.2% 7% 6.2% round 11%);
-    filter: saturate(.9) contrast(1.045) brightness(.76);
-  }
-
-  body .prelaunch[data-prelaunch-page] .prelaunch__copy {
-    margin-top: clamp(58px, 10.4vh, 104px);
-  }
-
-  body .prelaunch[data-prelaunch-page] .prelaunch__copy p {
-    margin-top: clamp(26px, 3.2vh, 36px);
-  }
-}
-
 /* Mobile uses a deliberately enlarged crop of the same object. This makes the
  * two wordmark tiers read as one coherent image behind the central windows,
  * instead of showing a small full icon or unrelated fragments. */
