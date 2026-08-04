@@ -36,6 +36,11 @@ def test_personalization_document_index_is_complete() -> None:
         DOC_ROOT / "personalization-to-be.md",
         DOC_ROOT / "personalization-research-traceability.md",
         DOC_ROOT / "personalization-implementation-contract.md",
+        DOC_ROOT / "identity-linking-personalization.md",
+        DOC_ROOT / "longitudinal-e2e-personalization.md",
+        DOC_ROOT / "temporal-profile-simulation.md",
+        DOC_ROOT / "personalization-test-report-template.md",
+        DOC_ROOT / "focus-group-interest-questionnaire-prompt.md",
         DOC_ROOT / "personalization-current-runtime-audit-2026-08-02.md",
         DOC_ROOT / "implementation-status.yml",
         DOC_ROOT / "tasks" / "personalization-wave-0.md",
@@ -81,6 +86,68 @@ def test_target_research_precedence_and_legacy_quarantine_are_explicit() -> None
     assert "`not target quality`" in wave_zero
     assert "research-delta review" in wave_zero
     assert "не выводи продуктовую истину из EventLayout" in compact_wave_zero
+
+
+def test_identity_linking_methodology_blocks_account_cross_contamination() -> None:
+    text = (DOC_ROOT / "identity-linking-personalization.md").read_text(encoding="utf-8")
+    required_fragments = [
+        "Authorization сама по себе не является activation event".replace("Authorization", "Авторизация"),
+        "Account switch не наследует профиль предыдущего account",
+        "Authenticated explicit state выигрывает конфликт",
+        "Anonymous → существующий account, medium/high conflict",
+        "account_wins_with_device_overlay",
+        "previous_account_epoch != new_account_epoch",
+        "pending account A outbox is not replayed into account B",
+        "two devices create two durable personalities",
+        "raw_history_copied": false".replace('"raw_history_copied": false', '"raw_history_copied": false'),
+    ]
+    missing = [fragment for fragment in required_fragments if fragment not in text]
+    assert not missing, f"identity-linking guard is incomplete: {missing}"
+
+
+def test_longitudinal_and_temporal_testing_guard_primary_metric_and_db_time() -> None:
+    longitudinal = (DOC_ROOT / "longitudinal-e2e-personalization.md").read_text(encoding="utf-8")
+    temporal = (DOC_ROOT / "temporal-profile-simulation.md").read_text(encoding="utf-8")
+    required_longitudinal = [
+        "P(first relevant event within 30 cards) >= 0.95",
+        "cards_to_first_relevant_p95 <= 30",
+        "science_learning_local",
+        "family_weekend_curator",
+        "campaign_artifact_hunter",
+        "sensitive_interaction_control",
+        "factor-ablation.json",
+        "DOM transformation evidence",
+    ]
+    missing_longitudinal = [fragment for fragment in required_longitudinal if fragment not in longitudinal]
+    assert not missing_longitudinal, f"longitudinal E2E plan lost required gates: {missing_longitudinal}"
+
+    required_temporal = [
+        "occurred_at",
+        "ingested_at",
+        "materializer_as_of",
+        "P13N_TEST_CLOCK_ENABLED=true",
+        "training_eligible=false",
+        "YDB analytics contour не используется как current profile SOR",
+        "long-term facet created from one weak signal",
+        "cleanup-report.json",
+    ]
+    missing_temporal = [fragment for fragment in required_temporal if fragment not in temporal]
+    assert not missing_temporal, f"temporal DB simulation plan is incomplete: {missing_temporal}"
+
+
+def test_focus_group_questionnaire_is_optional_and_non_sensitive() -> None:
+    text = (DOC_ROOT / "focus-group-interest-questionnaire-prompt.md").read_text(encoding="utf-8")
+    required_fragments = [
+        "Анкета целесообразна",
+        "не должна становиться источником чувствительного профилирования",
+        "Не спрашивать политические взгляды, религию, здоровье, этничность",
+        "persona — мягкая смесь + unknown",
+        "Развести вкусы и ограничения",
+        "optional focus-group research artifact",
+        "supporting evidence, а не production personalization proof",
+    ]
+    missing = [fragment for fragment in required_fragments if fragment not in text]
+    assert not missing, f"focus-group questionnaire prompt is unsafe or incomplete: {missing}"
 
 
 def test_browser_state_schema_keeps_one_compact_bounded_state() -> None:
