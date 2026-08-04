@@ -21,8 +21,9 @@ test('owner requirements define universal start, reading, help and cross-page ro
     'Universal re-entry',
     'Контекстный help',
     'NEXT EVENT и back route',
-    'Browser Back восстанавливают source card owner',
+    'Multi-page Enter route',
   ]) assert.match(model, new RegExp(phrase, 'u'));
+  assert.match(model, /Back.*source card owner/u);
 });
 
 test('artifact is an existing first-collection collectible, not a new keyboard entity', async () => {
