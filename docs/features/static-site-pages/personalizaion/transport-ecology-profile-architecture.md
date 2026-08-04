@@ -13,7 +13,7 @@
 Обязательные источники:
 
 1. [`../schedule-user-requirements.md`](../schedule-user-requirements.md) — календарные сохранения находятся в `Избранном`;
-2. [`../../../event-favorites-calendar/README.md`](../../../event-favorites-calendar/README.md) — текущий R15-контракт `/izbrannoe/`;
+2. [`../../event-favorites-calendar/README.md`](../../event-favorites-calendar/README.md) — текущий R15-контракт `/izbrannoe/`;
 3. [PR #235](https://github.com/onedayonemasterpiece/events-bot-new/pull/235) — открытый, ещё не слитый target двухзонного `Избранного`: `Мой календарь` + `Понравилось`;
 4. [`requirements.md`](requirements.md) — скрытые события находятся в `Подборки → Помечены «не интересует»`;
 5. [`personalization-implementation-contract.md`](personalization-implementation-contract.md) — exact-hide, undo и отдельная hidden recovery collection.
