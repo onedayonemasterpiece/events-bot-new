@@ -1,0 +1,100 @@
+    try:
+        parsed = dt.datetime.fromisoformat(raw)
+    except Exception:
+        for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+            try:
+                parsed = dt.datetime.strptime(raw, fmt)
+                break
+            except Exception:
+                continue
+        else:
+            return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def sanitize(text: str, limit: int = 1200) -> str:
+    text = URL_SECRET_RE.sub(lambda m: f"{m.group(1)}=<redacted>", text)
+    text = JWT_RE.sub("<jwt-redacted>", text)
+    text = EMAIL_RE.sub("<email-redacted>", text)
+    text = PHONE_RE.sub("<phone-redacted>", text)
+    text = LONG_SECRET_RE.sub("<long-token-redacted>", text)
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def short_hash(value: Any) -> str:
+    return hashlib.sha256(str(value).encode("utf-8", "replace")).hexdigest()[:12]
+
+
+def safe_json(path: str, value: Any) -> None:
+    Path(path).write_text(json.dumps(value, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+
+
+def table_set(conn: sqlite3.Connection) -> set[str]:
+    return {str(r[0]) for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'") if r[0]}
+
+
+def cols(conn: sqlite3.Connection, table: str) -> list[str]:
+    try:
+        return [str(r[1]) for r in conn.execute(f'PRAGMA table_info("{table}")')]
+    except sqlite3.Error:
+        return []
+
+
+def select_rows(conn: sqlite3.Connection, sql: str, params: Sequence[Any] = (), limit: int = 10000) -> list[dict[str, Any]]:
+    try:
+        cur = conn.execute(sql, params)
+        names = [x[0] for x in cur.description or []]
+        return [{names[i]: row[i] for i in range(len(names))} for row in list(cur.fetchmany(limit))]
+    except sqlite3.Error:
+        return []
+
+
+def recent_rows(conn: sqlite3.Connection, table: str, cutoff: dt.datetime, candidates: Sequence[str], limit: int = 10000) -> tuple[str | None, list[dict[str, Any]]]:
+    available = set(cols(conn, table))
+    ts_col = next((x for x in candidates if x in available), None)
+    if not ts_col:
+        return None, []
+    raw = select_rows(
+        conn,
+        f'SELECT * FROM "{table}" WHERE "{ts_col}" >= ? OR "{ts_col}" >= ? ORDER BY "{ts_col}" ASC',
+        (cutoff.isoformat(), cutoff.replace(tzinfo=None).isoformat(sep=" ")),
+        limit,
+    )
+    return ts_col, [r for r in raw if (parse_time(r.get(ts_col)) or dt.datetime.min.replace(tzinfo=UTC)) >= cutoff]
+
+
+def group(rows: Iterable[dict[str, Any]], fields: Sequence[str]) -> dict[str, int]:
+    out: collections.Counter[str] = collections.Counter()
+    for row in rows:
+        out[" | ".join(f"{f}={row.get(f) if row.get(f) not in (None, '') else '<null>'}" for f in fields)] += 1
+    return dict(out.most_common())
+
+
+def make_snapshot(source: Path) -> tuple[Path, dict[str, Any]]:
+    fd, name = tempfile.mkstemp(prefix="smart-update-audit-", suffix=".sqlite", dir="/tmp")
+    os.close(fd)
+    target = Path(name)
+    src = sqlite3.connect(f"file:{source.as_posix()}?mode=ro", uri=True, timeout=30)
+    dst = sqlite3.connect(str(target), timeout=30)
+    try:
+        src.backup(dst, pages=256, sleep=0.01)
+        quick = dst.execute("PRAGMA quick_check").fetchone()
+        return target, {
+            "quick_check": quick[0] if quick else None,
+            "bytes": target.stat().st_size,
+            "source_present": source.is_file(),
+        }
+    finally:
+        dst.close()
+        src.close()
+
+
+def json_list(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
