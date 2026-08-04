@@ -13,6 +13,8 @@ one logical action = one durable effect
 no false success before durable acknowledgement
 no silent outbox eviction
 no PII/tokens/raw feedback in diagnostics
+profile does not duplicate saved/hidden collections
+favorites is the sole saved/hidden user surface
 ```
 
 ## 2. Слои тестирования
@@ -49,6 +51,24 @@ storage growth <= 1 KiB
 ### `p13n.collections_20_pages_zero_backend`
 
 Same for подборки, popular, thematic surfaces and event detail related blocks.
+
+### `favorites.saved_hidden_navigation_zero_backend_when_cached`
+
+Steps:
+
+1. Open `Избранное` with compatible cached saved/hidden current state.
+2. Switch between `Сохранённые` and `Скрытые / Не интересно`.
+3. Open and return from several event cards without mutating state.
+
+Assertions:
+
+```text
+profile page is not opened or used as a collection renderer
+YDB requests == 0
+Supabase data/profile requests == 0
+saved and hidden collections are rendered only inside Favorites
+storage growth is bounded and no duplicate collection cache is created
+```
 
 ### `p13n.projection_refresh_once_per_session`
 
@@ -124,7 +144,7 @@ Assertions:
 - Sensitive profile/PII actions require fresh/step-up proof.
 - Logout does not erase personalization unless reset/delete is explicit.
 
-## 6. Profile page suite
+## 6. Profile and favorites suite
 
 ```text
 profile.mobile_menu_links_to_profile_not_logout
@@ -137,15 +157,23 @@ profile.reset_marks_epoch_and_blocks_late_replay
 profile.logout_does_not_delete_profile
 profile.storage_budget_enforced
 profile.no_backend_on_read_when_cached
+profile.does_not_render_saved_or_hidden_collections
+favorites.owns_saved_and_hidden_collections
+favorites.hidden_restore_flow
+favorites.profile_navigation_does_not_duplicate_state
 ```
 
 Assertions:
 
 - Mobile menu exposes `Профиль`, not hidden direct logout under the brand tag.
-- Profile page renders from local cache first.
+- Profile page renders account, interests, synchronization and diagnostics from local cache first.
+- Profile page contains no saved/hidden cards, lists, counters or collection controls.
+- `Избранное` is the sole surface for `Сохранённые` and `Скрытые / Не интересно`.
+- Hidden-event restoration is performed inside `Избранное` and updates the shared exact state once.
 - Diagnostic copy excludes email/JWT/OTP/raw body/user agent.
 - Reset creates epoch and blocks late offline replay.
 - Storage remains within 64 KiB KenigEvents-owned aggregate ceiling.
+- Opening profile after Favorites does not create a second local copy of saved/hidden collections.
 
 ## 7. Focus feedback suite
 
@@ -182,6 +210,7 @@ capacity.public_counter_hot_event
 capacity.materialization_coalescing
 capacity.no_pageview_firehose
 capacity.no_supabase_profile_cache
+capacity.no_profile_duplicate_of_favorites
 ```
 
 Required metrics:
@@ -202,6 +231,7 @@ Pass conditions before rollout:
 - p95 profile projection payload `<= 4 KiB`, hard `<= 8 KiB`;
 - p95 current state payload `<= 1.5–2 KiB`;
 - ordinary page view creates no YDB write/read;
+- profile page creates no second saved/hidden projection or manifest;
 - noncritical features shed before current state/reset/delete.
 
 ## 9. Evidence bundle
@@ -254,4 +284,6 @@ NO-GO if any is true:
 - feedback component partial failure is reported as full success;
 - diagnostics contain PII/secrets;
 - mobile profile menu still exposes logout as the primary account control;
+- profile renders or independently caches saved/hidden event collections;
+- `Избранное` is not the single recovery surface for hidden events;
 - no representative slow-channel Android/iOS evidence for changed mobile-critical flow.
