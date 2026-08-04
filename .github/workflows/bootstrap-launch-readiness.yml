@@ -1,12 +1,9 @@
 name: Bootstrap launch readiness dashboard
 
 on:
-  push:
-    branches:
-      - agent/launch-readiness-dashboard-20260804
-    paths:
-      - ".bootstrap/**"
-      - ".github/workflows/bootstrap-launch-readiness.yml"
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
 
 permissions:
   contents: write
@@ -17,12 +14,14 @@ concurrency:
 
 jobs:
   materialize:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/launch-readiness-dashboard-20260804'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout branch
+      - name: Checkout source branch
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
       - name: Materialize verified payload
@@ -36,6 +35,7 @@ jobs:
           rm -rf .bootstrap
           rm -f .github/workflows/bootstrap-launch-readiness.yml
           python3 scripts/generate_launch_readiness.py --check
+          python3 -m py_compile scripts/generate_launch_readiness.py
 
       - name: Commit dashboard
         shell: bash
@@ -44,5 +44,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "docs: add launch readiness dashboard"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git commit -m "docs: materialize launch readiness dashboard"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
