@@ -1,442 +1,1064 @@
-# Генеральная доработка статического сайта — контроль результата и follow-up для кодового агента
+# PROMPT для кодового агента — завершить генеральную доработку статического сайта и первую коллекцию из 7 артефактов
 
-Дата аудита: **2026-08-04**  
+Дата корректировки: **2026-08-04**  
 Репозиторий: `onedayonemasterpiece/events-bot-new`  
-Проверенный baseline: `main@ccafa55a2c23e4691738bf2aefc2e5384892668b`  
-Назначение документа: **исполняемый prompt/handoff для продолжения работы**, а не ещё один проектный обзор.
+Проверенный baseline на момент подготовки: `main@ccafa55a2c23e4691738bf2aefc2e5384892668b`  
+Режим работы: **реализация, интеграция, автотесты и публикация immutable review candidate**, а не дополнительный docs-only анализ.
 
-## 1. Цель следующей итерации
+> Этот документ полностью заменяет предыдущую версию handoff из этого файла.
+> Предыдущая версия ошибочно протащила модель anonymous-first feedback и ошибочно
+> отложила готовую первую коллекцию артефактов. Не использовать прежние выводы.
 
-Не переписывать уже сделанную интеграцию и не строить новый «универсальный фреймворк». Нужно:
+---
 
-1. доказать фактическое состояние Smart Update и публичного статического артефакта;
-2. исправить несоответствие каталога/навигации подборок каноническим требованиям;
-3. реализовать минимальный anonymous-first путь фокус-группы, который сейчас существует только в документации;
-4. закрыть практические hosted/live-gates транспорта и Yandex-деградации без лишних OTP-писем;
-5. довести до безопасных операторских gates уже подготовленные YDB и Weather контуры;
-6. честно закрыть или пометить superseded старые PR.
+## 0. Обязательный конечный результат
 
-Работать от свежего `origin/main` в чистых worktree. Старые ветки не сливать целиком: сначала сравнить их с текущим `main`, затем переносить только отсутствующие актуальные изменения.
+Нужно не ещё раз спроектировать систему и не закончить работой с выключенными
+флагами. Итог этой задачи — **работающая, включённая в review candidate версия
+статического сайта для фокус-группы**, которую владелец продукта сможет открыть
+по HTTPS-ссылке и проверить в разных браузерах.
 
-## 2. Нормативные источники
+К моменту handoff владельцу должны одновременно выполняться условия:
 
-Главные документы и evidence:
+1. приглашённый пользователь открывает сайт без обязательного входа;
+2. обратная связь, page score, общий NPS и всё, что относится к розыгрышу,
+   доступны только после авторизации по email или через Яндекс;
+3. приглашённый пользователь может поделиться ссылкой или QR-кодом, чтобы другой
+   человек тоже вошёл в фокус-группу;
+4. первая коллекция содержит **ровно 7 готовых артефактов** из указанного ниже
+   reference-каталога;
+5. все 7 артефактов реально размещены, находимы, имеют рабочие состояния,
+   изображения и описания; это не `coming soon`, не demo-заглушки и не пустые
+   ячейки;
+6. коллекция и первая находка вплетены в onboarding, а страница прогресса /
+   результата доступна из фокус-hub и из onboarding-перехода;
+7. описания всех 7 артефактов проверены по фактам, источникам, русскому языку и
+   принятому редакционному стилю проекта;
+8. базовые GitHub Actions завершились успешно **до** публикации review candidate;
+9. после публикации candidate прошёл public browser smoke, и только затем
+   владельцу передана секретная HTTPS-ссылка;
+10. public production root и стабильные ICS не промотируются без отдельного
+    прямого разрешения владельца.
 
-- `.codex/integration/static-site-unified-20260803/INTEGRATION_REPORT.md`;
-- `docs/features/static-site-pages/podborki.md`;
-- `docs/features/static-site-pages/gastronomy-collection.md`;
-- `docs/features/static-site-pages/personalizaion/personalization-to-be.md`;
-- `docs/features/static-site-pages/personalizaion/personalization-research-traceability.md`;
-- `docs/features/static-site-pages/personalizaion/implementation-status.yml`;
+**Полный розыгрыш, выбор победителя, alternate, уведомление победителя и выдача
+приза в эту задачу не входят.** Это не разрешает откладывать коллекцию,
+размещения, onboarding, авторизованный прогресс или страницу результата.
+
+---
+
+## 1. Последние решения владельца продукта — высший приоритет
+
+При любом конфликте использовать именно эти решения.
+
+### 1.1. Доступ и авторизация фокус-группы
+
+Правильная модель:
+
+```text
+валидное приглашение / QR
+→ локальная метка фокус-группы
+→ пользователь получает обычный сайт
+→ авторизация не обязательна для просмотра и использования афиши
+```
+
+Но:
+
+```text
+page score / текст / screenshot / общий NPS / участие в розыгрыше
+→ только после подтверждённой авторизации по email или через Яндекс
+```
+
+Дополнительно:
+
+```text
+приглашённый пользователь
+→ может открыть экран приглашения
+→ может поделиться ссылкой
+→ может показать или отправить QR-код
+→ новый пользователь проходит тот же вход в фокус-группу
+```
+
+Запрещено:
+
+- создавать silent anonymous Supabase Auth session ради feedback;
+- принимать anonymous `auth.uid()` как достаточную identity для feedback/NPS;
+- отправлять feedback, NPS или prize-related receipts до email/Yandex auth;
+- выдавать local marker за серверное участие в розыгрыше;
+- блокировать саму афишу требованием войти.
+
+### 1.2. Первая коллекция артефактов
+
+Фактический источник первой коллекции:
+
+```text
+/home/dev/projects/events-bot-new/
+  docs/features/static-site-pages/references/artefact-collection-1
+```
+
+Решение владельца:
+
+- в первой коллекции **7 артефактов**;
+- они уже подготовлены и не являются будущей гипотезой;
+- эта коллекция должна быть включена для фокус-группы;
+- артефакты являются важной частью продукта и onboarding;
+- должна быть доступна страница результата/коллекции;
+- для всех артефактов должны существовать полноценные описания;
+- описания должны пройти редакционную проверку;
+- коллекцию нельзя заменить функциональными badges, «миссиями» или 12
+  исследовательскими действиями.
+
+Каталог reference-материалов читать **из локального root checkout только
+read-only**. Если он не отслеживается Git, перенести нужные публичные assets и
+контент в чистый worktree осознанно, с SHA-256 и provenance; не делать `git add -A`
+в грязном root checkout.
+
+### 1.3. Review candidate
+
+Владельцу нужна ссылка на фактически собранный сайт, а не только PR.
+
+Ссылка передаётся только после:
+
+1. успешных базовых GitHub Actions;
+2. immutable build exact SHA;
+3. успешной публикации noindex candidate;
+4. public browser smoke этого же candidate;
+5. проверки, что candidate действительно содержит 7 артефактов и правильный
+   focus access/auth flow.
+
+---
+
+## 2. Нормативная иерархия
+
+При конфликте использовать источники в таком порядке:
+
+1. текущие решения владельца из раздела 1;
+2. содержимое
+   `docs/features/static-site-pages/references/artefact-collection-1`;
+3. фактический код и generated output свежего `origin/main`;
+4. совмещённые требования генеральной доработки;
+5. `docs/features/static-site-onboarding/README.md` и принятая связь onboarding →
+   первый артефакт → история → коллекция;
+6. `docs/features/hero-talk/README.md`, если он уже находится в актуальном
+   целевом baseline;
+7. документы фокус-группы после их исправления этой задачей;
+8. старые prototype/docs branches только как доноры отдельных решений.
+
+Следующие источники **не являются текущей продуктовой истиной**, если
+противоречат разделу 1:
+
+- PR `#250` и anonymous-first формулировки, попавшие из него в `main`;
+- текущий `focus-group-release-scenarios.v1.yml` с anonymous feedback;
+- `FOCUS_EGG_DEFINITIONS` на 12 функциональных «пасхалок»;
+- текущий `ARTIFACT_COLLECTION_SLOTS` на 5 ячеек;
+- stale branch `feature/static-site-artifacts-registry-20260727` с 8 draft
+  artifacts;
+- любые числа `12`, `10 из 12`, `8`, `5 из 8` применительно к первой текущей
+  коллекции, если они не содержатся в owner-approved reference-каталоге.
+
+---
+
+## 3. Фактическая отправная точка и конфликтующие реализации
+
+Перед изменениями воспроизвести и зафиксировать эти факты на свежем `main`.
+
+### 3.1. Focus access
+
+В текущем `FocusGroupInviteIntake.astro` уже есть полезная основа:
+
+- можно выбрать email;
+- можно выбрать Яндекс;
+- можно нажать `Продолжить без подтверждения`;
+- текст объясняет, что афиша откроется, а подтверждение понадобится позже.
+
+Это соответствует новому решению в части доступа к сайту и должно быть
+сохранено.
+
+Текущий `FocusGroupLabPanel.astro` уже вызывает `requireSession()` перед
+page score и issue submission. Это ближе к правильной модели, чем anonymous-first
+документы. Его надо довести до ясного auth-gated UX, а не заменять anonymous
+session.
+
+### 3.2. Ошибочные документы и scenario registry
+
+В `main` ошибочно записано, что anonymous user может:
+
+- ставить page score;
+- ставить общий NPS;
+- отправлять текст и screenshot;
+- создавать server artifact receipts.
+
+Эти утверждения есть как минимум в:
+
+- `docs/features/static-site-pages/focus-group.md`;
+- `docs/features/static-site-pages/focus-group-release/README.md`;
 - `docs/features/static-site-pages/focus-group-release/status.md`;
-- `docs/testing/static-site-auth-session-fixture.md`;
-- `docs/operations/static-site-autotest-strategy.md`;
-- `docs/testing/static-site-autotest-scenarios.v1.yml`;
-- `docs/operations/yandex-dependency-resilience.md`;
-- `docs/features/static-site-pages/weather-calendar.md`;
-- `docs/reports/incidents/INC-2026-08-03-static-site-builder-failure-storm.md`;
-- `docs/reports/incidents/INC-2026-08-03-ydb-request-unit-billing.md`.
+- `docs/features/static-site-pages/focus-group-release/nps-ui.md`;
+- `docs/features/static-site-pages/focus-group-release/testing.md`;
+- `docs/features/static-site-pages/focus-group-release/prize-rules.md`;
+- `docs/testing/focus-group-release-scenarios.v1.yml`;
+- связанных release/checklist документах;
+- открытом launch-readiness PR `#324`, если он ещё не исправлен/не слит.
 
-Связанные PR:
+Все они должны быть синхронно исправлены. Нельзя исправить только prose и
+оставить старую machine-readable truth.
 
-- основной merge: `events-bot-new#316`;
-- recovery starvation fix: `events-bot-new#321`;
-- незавершённый production-аудит Smart Update: `events-bot-new#322`;
-- gastronomy data-prep, который не попал в основной merge: `events-bot-new#314`;
-- weather producer: `onedayonemasterpiece/cat-weather-new#4`;
-- старые контрактные PR для disposition: `#250`, `#270`, `#287`, `#295`.
+### 3.3. Три несовместимые artifact-модели
 
-## 3. Итог аудита: что принято, а что нет
+На текущем baseline существуют три разные модели:
 
-| Контур | Вердикт | Фактическое состояние |
-|---|---|---|
-| Восстановление StaticSiteBuilder | `ACCEPTED_WITH_FOLLOWUP` | Exact-main candidate и browser gates были получены; starvation recovery исправлен в `#321`. Но свежая стабильность за сутки не доказана. |
-| Общий page runtime | `ACCEPTED` | Generated inventory подтверждает единый runtime на 392 eligible HTML-поверхностях с явными исключениями. |
-| Double click / double tap → like | `ACCEPTED` | Desktop, touch, dynamic cards, drag, nested controls и keyboard arbitration покрыты browser test. |
-| VK-блок «Остались вопросы?» | `ACCEPTED` | Resolver, fail-closed provenance, desktop/mobile placement и rebuild trigger реализованы. Нужна только обычная production-наблюдаемость после реальной публикации. |
-| P13N-00 | `ACCEPTED` | Legacy изолирован, runtime marker и route inventory добавлены без изменения production behavior, БД и remote writes. Следующие волны намеренно не начаты. |
-| Standard onboarding seam | `ACCEPTED_AS_SEAM_ONLY` | На общих страницах есть inert typed placement. Это не означает, что полный onboarding, артефакты, клуб и розыгрыш уже включены. |
-| Auth session fixture и локальная fault matrix | `ACCEPTED_LOCALLY` | No-mail fixture и deterministic direct/relay tests реализованы. Hosted browser/mobile и реальный product outbox ещё не доказаны. |
-| Подборки | `NOT_ACCEPTED_AS_DONE` | Есть базовый registry/catalog, но он неполный, расходится с `podborki.md`, а часть меню обходит registry. Gastronomy фактически заблокирована без approved data. |
-| Фокус-группа anonymous-first | `NOT_IMPLEMENTED` | Канонический контракт есть, но текущий `FocusGroupLabPanel.astro` всё ещё требует session/login перед feedback. |
-| Yandex resilience | `PARTIAL` | Контракт и локальные тесты есть. Hosted/provider/OAuth cells и capability-specific diagnostic acceptance не закрыты. |
-| Weather | `PARTIAL_DEFAULT_OFF` | Consumer и SVG-набор готовы; producer остаётся draft, live binding/provider/bucket и 7-day canary не выполнены. |
-| YDB compaction | `PARTIAL_DEFAULT_OFF` | Typed bounded queue/read model и tests готовы; live YQL/server RU, alert, scheduler slot и 24-hour observation отсутствуют. |
-| Публичная активация статического сайта | `UNPROVEN` | Acceptance candidate создан, но публичный root и stable ICS намеренно не промотировались. Последующая фактическая promotion/version не подтверждена. |
+1. `site/src/lib/artifacts.mjs` и `/artefakty/`:
+   - один `Янтарный космонавт`;
+   - всего 5 ячеек;
+   - четыре placeholder `future_*`;
+   - feature скрыта в ordinary production;
+2. `site/src/lib/focus-easter-eggs.ts` и
+   `/fokus-gruppa/kollektsiya/`:
+   - 12 функциональных achievements `FG-E01…FG-E12`;
+   - demo states и demo scoring;
+   - это не семь культурных артефактов;
+3. branch `feature/static-site-artifacts-registry-20260727`:
+   - 8 draft artifacts;
+   - route/registry prototype;
+   - источник может быть использован только как технический донор.
 
-## 4. Главные обнаруженные разрывы
+Нужно оставить **один канонический artifact domain для первой коллекции из 7
+объектов**, а не поддерживать три конкурирующие системы.
 
-### 4.1. Smart Update: workflow green не равен production health
+---
 
-PR `#322` подготовил read-only аудит, но production probe был **skipped**, потому что `FLY_API_TOKEN` был пуст. Значит:
+## 4. Режим выполнения и безопасность worktree
 
-- production SQLite и runtime logs не читались;
-- состояние Smart Update за сутки не классифицировано;
-- нельзя утверждать, что генератор сейчас стабилен;
-- нельзя утверждать, что merged site changes уже попали в публичный root.
+Работать от свежего `origin/main` в чистом worktree.
 
-### 4.2. `R2 Collections` был закрыт преждевременно
-
-`site/src/data/static-collection-registry.json` содержит только девять ключей:
-
-`free`, `exhibitions`, `festivals`, `popular`, `gastronomy`, `unusual`, `cinema`, `kids`, `guests`.
-
-Канонический документ требует учитывать существенно больше контуров, в том числе:
-
-`clubs`, `for_me`, `theatre`, `performances`, `science_pop`, `science`, `strong_impressions`, `russian_guests`, `foreign_guests`, `medieval`.
-
-Дополнительные фактические проблемы:
-
-1. `free` отмечен как `repair`, но мобильное главное меню содержит **безусловную** ссылку `/podborki/besplatnye-sobytiya/`.
-2. Проверенного Astro route по ожидаемому пути в текущем source tree не найдено. Это должно быть подтверждено build-route test, а не предположением.
-3. `clubs` находится в меню без registry-проекции и без общего six-month activity publication rule.
-4. `kids` присутствует как blocked search URL, хотя канонический документ говорит, что детская подборка реализована под другим названием; состояние не сверено с фактическим route/data contract.
-5. Тесты проверяют только четыре статуса и использование registry, но не полноту канонического набора и не существование target routes.
-6. Gastronomy UI и lifecycle-код существуют, однако checked data сейчас имеют:
-   - `audit_status=incomplete`;
-   - пустой `decisions`;
-   - `compute_status=blocked`;
-   - `publication_status=blocked`;
-   - `failure_reason=checked_audit_incomplete`.
-7. Lane L5 инспектировал gastronomy data-prep до появления актуального head. Сейчас PR `#314` имеет отдельный содержательный diff, который в `main` не интегрирован.
-
-### 4.3. Фокус-группа противоречит принятому продукту
-
-Принятая модель:
+Рекомендуемая ветка:
 
 ```text
-invite / QR
-→ сайт, local personalization и feedback доступны без email/Яндекса
-→ identity verification нужна для розыгрыша, восстановления и связи
+agent/static-site-focus-artifacts-v2-20260804
 ```
 
-Текущий runtime:
+Правила:
+
+- не изменять грязный root checkout;
+- reference-каталог из `/home/dev/projects/...` читать read-only;
+- старые ветки не сливать wholesale;
+- сначала `git range-diff` / `git diff` / file-level archaeology;
+- переносить только актуальные компоненты и контракты;
+- не запускать public-root promotion;
+- не отправлять реальные OTP-письма, если код самого OTP/mail/mobile-input не
+  менялся;
+- session fixture использовать для обычных authenticated E2E;
+- не включать live YDB scheduler/RU без отдельного canary contract;
+- не выдавать started/background/skipped workflow за PASS.
+
+Допустимо разделить код на несколько PR, но владелец должен получить **один
+интегрированный candidate exact SHA**. Нельзя закончить набором несобранных
+веток.
+
+---
+
+## 5. Фаза A — инвентаризация exact 7 артефактов
+
+Первое действие — прочитать весь каталог:
 
 ```text
-score / issue
-→ requireSession()
-→ при отсутствии session: «подтвердите участие»
+docs/features/static-site-pages/references/artefact-collection-1
 ```
 
-Это не частный test gap, а продуктовый blocker. Документация прямо помечает silent anonymous session, anonymous feedback и anonymous-to-verified upgrade как missing.
+Создать evidence-документ, например:
 
-### 4.4. Live-gates были честно отложены, но итоговый отчёт звучит шире фактической готовности
+```text
+docs/features/static-site-pages/artifacts/
+  collection-1-inventory-2026-08-04.md
+```
 
-Локальные tests подтверждают архитектуру, но не доказывают:
+В нём для каждого из 7 объектов зафиксировать:
 
-- hosted target и реальные RLS policies;
-- Android/iOS поведение общей transport-системы;
-- Yandex OAuth из anonymous focus session;
-- no-loss recovery на реальном product outbox;
-- server-side YDB RU и billing;
-- 7 continuous weather days;
-- фактический public root SHA после promotion.
+| Поле | Требование |
+|---|---|
+| `artifact_id` | immutable, kebab-case, без временного номера как identity |
+| public name | точное имя из reference, без придуманного ребрендинга |
+| collection order | 1…7 |
+| source files | exact relative paths |
+| source hashes | SHA-256 каждого входного файла |
+| visual asset | format, dimensions, alpha/background, source |
+| short description | для карточки/результата |
+| full story | для detail/dialog/page |
+| provenance | фактический источник истории |
+| rights status | confirmed / focus-candidate-only / blocker for public root |
+| placement | desktop/mobile/accessible anchor |
+| onboarding role | first hint / continuation / completion |
+| editorial result | PASS или точная правка |
 
-## 5. Обязательная последовательность работ
+Жёсткие проверки:
 
-### P0-A. Завершить read-only аудит Smart Update и статического артефакта
+- найдено ровно 7 artifact identities;
+- нет восьмого объекта из stale registry;
+- нет 12 функциональных achievements;
+- нет placeholder slots;
+- один и тот же объект не продублирован из-за разных изображений/названий;
+- ни один reference-файл не потерян без записанного disposition.
 
-Использовать PR `#322` как временный instrument, **не сливать его в `main`**.
+Если физическое содержимое каталога неожиданно не равно семи объектам, не
+переключаться на старый registry. Зафиксировать точный конфликт и определить,
+какой файл является duplicate/supporting asset, сохраняя owner truth `7`.
 
-1. Перед запуском выставить актуальное полностью завершённое 24-часовое окно. Не переиспользовать старое окно, если оно уже не соответствует моменту запуска.
-2. Добавить short-lived app-scoped `FLY_API_TOKEN` только на время probe.
-3. Выполнить read-only сбор:
-   - число Smart Update starts/completions/errors;
-   - stage/fingerprint clustering ошибок;
-   - median/p95 duration;
-   - количество imported/updated/deferred событий;
-   - очереди `static_site_build` по status/age/trigger;
-   - recovery/debounce/coalescing показатели;
-   - последний terminal successful build;
-   - candidate SHA/build id/object count;
-   - текущий public root SHA/version и факт promotion;
-   - LLM limiter rejects/waits/parallel reservations без секретов;
-   - sanitized warning/error excerpts.
-4. Сформировать однозначный verdict: `HEALTHY`, `DEGRADED` или `UNHEALTHY`. Зеленый Actions job без production probe не считается PASS.
-5. Проверить, что raw DB/logs/token/PII не вышли из Fly.
-6. После сохранения evidence удалить временный workflow/payload и закрыть `#322` как `completed-not-merged`.
-7. Не выполнять root promotion автоматически. Если новый candidate готов, отдельно отдать owner gate с exact SHA, route count, browser gates и diff summary.
+---
 
-**Acceptance:** есть датированный отчёт с фактическим production verdict и точной связкой `main SHA → builder release → candidate → public root`.
+## 6. Фаза B — единый registry и data contract
 
-### P0-B. Привести подборки, меню и routes к одному источнику истины
+Создать один canonical registry первой коллекции. Название файла выбирается по
+актуальной структуре проекта, например:
 
-Сделать отдельный PR от свежего `main`.
+```text
+site/src/data/artifact-collection-1.json
+```
 
-#### B1. Полный machine-readable registry
+Минимальная схема:
 
-Один checked registry должен перечислять **все** канонические collection keys, даже если они `blocked`, `deferred` или относятся к отдельному track. Минимальные поля:
+```ts
+type ArtifactCollection = {
+  schema_version: "artifact-collection-v1";
+  collection_id: string;
+  collection_version: string;
+  title: string;
+  summary: string;
+  artifact_ids: string[]; // exact length 7
+  artifacts: Array<{
+    artifact_id: string;
+    slug: string;
+    public_name: string;
+    short_description: string;
+    full_story: string;
+    source_label: string;
+    source_url?: string;
+    source_note?: string;
+    image: {
+      src: string;
+      width: number;
+      height: number;
+      alt: string;
+      provenance_ref: string;
+    };
+    placement_bundle: {
+      version: string;
+      mobile_anchor: string;
+      desktop_anchor: string;
+      accessible_anchor: string;
+    };
+    onboarding_role: "first" | "continuation" | "completion";
+  }>;
+};
+```
+
+Точные поля можно адаптировать к существующим conventions, но инварианты
+обязательны:
+
+- registry содержит 7 и только 7 элементов;
+- UI ничего не классифицирует по тексту;
+- все маршруты и placements используют exact IDs из registry;
+- один versioned collection source of truth;
+- no runtime LLM;
+- public JSON, если нужен, не раскрывает секретные placement coordinates;
+- private participant progress не попадает в CDN HTML/JSON;
+- generated validators fail closed при missing asset, duplicate ID, unknown
+  placement, пустой story или count != 7.
+
+Миграция legacy:
+
+- current `amber_cosmonaut` сопоставить с exact artifact identity из reference,
+  если это тот же объект;
+- старый localStorage мигрировать идемпотентно;
+- `FOCUS_EGG_DEFINITIONS` не использовать как artifact registry;
+- функциональные research achievements при необходимости оставить отдельными
+  telemetry/capability signals, но не показывать как артефакты коллекции;
+- старые 5/8/12 counts убрать из UI, docs, tests и scenario registry.
+
+---
+
+## 7. Фаза C — контент и редакционный аудит семи историй
+
+Проверить существование описания у каждого объекта, а не только title/hint.
+
+Для каждого из 7 нужны:
+
+1. короткое описание карточки;
+2. полная история;
+3. понятная связь с Калининградской областью;
+4. источник или provenance note;
+5. доступный alt text изображения;
+6. отсутствие недоказанных фактов;
+7. отсутствие искусственного рекламного восторга;
+8. естественный русский язык;
+9. отсутствие канцелярита, LLM-клише и повторяющихся шаблонных вступлений;
+10. ясный переход к следующему действию/коллекции без давления.
+
+Редакционная иерархия:
+
+1. если к моменту реализации существует owner-approved editorial style v1 или
+   общий versioned editorial package — использовать его;
+2. research brief `docs/editorial/README.md` сам по себе не объявлять финальным
+   стандартом;
+3. при отсутствии финального v1 использовать безопасное ядро: фактическая
+   точность, естественный русский, спокойная дружелюбность, конкретика,
+   локальная наблюдательность, минимум рекламных клише;
+4. не применять иронию к auth, NPS, privacy, ошибкам, недоступности или
+   prize-related состояниям.
+
+Создать отчёт редакционной проверки с exact before/after для изменённых фраз.
+Нельзя написать `style review passed` без проверки всех 7.
+
+---
+
+## 8. Фаза D — рабочие placements и находка
+
+Все 7 артефактов должны быть реально достижимы в candidate.
+
+Использовать placements из reference-каталога. Если reference содержит
+отдельные desktop/mobile варианты одного объекта, это один `artifact_id`, а не
+два элемента коллекции.
+
+Инварианты placement:
+
+- assignment стабилен в рамках collection/placement version;
+- reload не reroll-ит объект;
+- изменение порядка карточек не переносит объект случайно;
+- viewport switch не создаёт новую находку;
+- touch, mouse, keyboard и screen reader имеют эквивалентный путь;
+- hover, motion, точное наведение или второй девайс не обязательны;
+- `prefers-reduced-motion` не скрывает объект;
+- артефакт не перекрывает event facts, ticket CTA, navigation или feedback;
+- артефакт не выглядит как событие, медальон организатора или платная реклама;
+- найденное состояние остаётся доступным как `Найдено — открыть историю`;
+- повторная активация идемпотентна;
+- all-seven browser journey не содержит unreachable slot.
+
+Для каждого placement создать machine-readable inventory и browser test.
+
+---
+
+## 9. Фаза E — состояние коллекции и авторизация
+
+Нужно различать три состояния без anonymous Supabase Auth.
+
+### 9.1. Invited local, без email/Yandex
+
+Доступно:
+
+- весь сайт фокус-группы;
+- placements и истории артефактов;
+- локальный прогресс на этом устройстве;
+- страница коллекции;
+- приглашение другого пользователя через link/QR.
+
+Недоступно как server action:
+
+- page score;
+- text feedback;
+- screenshot upload;
+- service NPS;
+- prize eligibility/application;
+- server-owned collection receipt, используемый для розыгрыша.
+
+UI должен честно разделять:
+
+```text
+Найдено на этом устройстве
+```
+
+и
+
+```text
+Учтено в подтверждённом участии
+```
+
+До входа не показывать второе состояние.
+
+### 9.2. Verified email/Yandex
+
+После подтверждённого входа:
+
+- local finds мигрируют/синхронизируются идемпотентно;
+- появляется server-owned progress;
+- feedback и NPS разрешаются;
+- можно подготовить будущую raffle eligibility projection;
+- не создаётся автоматическая заявка или выигрыш.
+
+Минимальный server contract для artifact receipt:
+
+- owner = текущий verified `auth.uid()`;
+- unique `(collection_version, artifact_id, owner)`;
+- idempotency key;
+- exact placement/version;
+- server timestamp;
+- RLS owner-only read;
+- узкий RPC для записи;
+- direct/relay transport с idempotent replay;
+- no raw browsing history, pointer coordinates или arbitrary text.
+
+Перед созданием новой таблицы/RPC проверить существующие migrations и reuse
+возможного общего receipt/outbox contract. Не создавать второй transport stack.
+
+### 9.3. Sign-out и повторный вход
+
+- выход из аккаунта не удаляет local focus marker;
+- local collection остаётся доступна;
+- server progress не показывается как доступный без session;
+- повторный вход того же user восстанавливает server state;
+- другой user на том же браузере не наследует server progress первого;
+- local→server merge не создаёт duplicate receipts.
+
+---
+
+## 10. Фаза F — страница коллекции и страница результата
+
+Нужно устранить дублирование между:
+
+- `/artefakty/`;
+- `/fokus-gruppa/kollektsiya/`;
+- stale child route из branch на 8 объектов.
+
+Выбрать одну понятную IA над единым registry. Предпочтительный минимальный путь:
+
+```text
+/artefakty/                         — вход и текущая коллекция
+/artefakty/kollektsii/<slug>/       — прогресс и семь историй
+/zakrytaya-afisha/                  — summary + CTA в коллекцию
+/fokus-gruppa/kollektsiya/          — redirect/alias на canonical page
+```
+
+Адаптировать, если exact reference уже фиксирует другой route, но не оставлять
+две разные коллекции.
+
+Страница результата должна показывать:
+
+- название первой коллекции;
+- `N из 7`;
+- семь exact slots;
+- найденные элементы с изображением, названием и открытием истории;
+- ненайденные элементы в предусмотренном reference-состоянии;
+- local/server distinction;
+- auth CTA для синхронизации и prize-related participation;
+- отсутствие leaderboard/draw/winner simulation;
+- ссылку назад в афишу;
+- доступность с keyboard/screen reader;
+- responsive layout без horizontal overflow.
+
+Удалить:
+
+- `12 маршрутов`;
+- demo `2 из 11`;
+- participation score `18/40` как будто это текущий результат;
+- hardcoded `FG-E01`/`FG-E08` found;
+- `5 из 8` threshold;
+- placeholder `future_maritime`, `future_nature`, `future_city`, `future_taste`;
+- `Поделиться артефактом · скоро`, если share входит в готовый reference;
+  если share не предусмотрен, убрать кнопку, а не показывать сломанное обещание.
+
+---
+
+## 11. Фаза G — артефакты как обязательная часть onboarding
+
+Текущий `StandardOnboardingPlacementContext` — только inert seam. Этого
+недостаточно для focus candidate.
+
+Нужно реализовать рабочую bounded chain:
+
+```text
+пользователь получил базовую пользу от афиши
+→ спокойная точная подсказка о первом артефакте
+→ переход/достижение exact placement
+→ находка
+→ короткая история
+→ CTA «Открыть коллекцию»
+→ страница N из 7
+→ следующая подсказка без навязчивого tour
+```
+
+Требования:
+
+- без mandatory welcome wall;
+- без блокировки афиши;
+- одна новая задача за раз;
+- первая подсказка точная, а не загадка без ориентира;
+- dismiss/suppress сохраняется;
+- hint не повторяется на каждом page view;
+- artifact find не становится taste/personalization signal;
+- не выдавать Клуб друзей или розыгрыш за уже открытый, если их gates не
+  завершены;
+- использовать precompiled static copy; no runtime LLM;
+- focus candidate должен включать chain, а browser test должен её пройти.
+
+Если Hero-talk runtime ещё не реализован, не строить ради этой задачи весь HT-0…
+HT-10. Использовать существующую placement boundary и минимальный reusable
+renderer, совместимый с будущим Hero-talk, но реально работающий сейчас.
+
+---
+
+## 12. Фаза H — исправить focus flow без anonymous-first
+
+### 12.1. Intake
+
+Сохранить `Продолжить без подтверждения`, но исправить copy/state:
+
+- после skip пользователь получает сайт;
+- done-screen не обещает, что он уже может отправлять оценки или участвовать в
+  розыгрыше;
+- показать ненавязчивый путь `Подключить email или Яндекс позже`;
+- verified done-screen может сообщать о доступности feedback/NPS.
+
+### 12.2. Page score и issue feedback
+
+На supported pages:
+
+- local focus marker показывает Lab presence;
+- без verified session показывается compact locked state и CTA входа;
+- число нельзя принять локально и выдать за отправленное;
+- после session открывается шкала `0–10` и issue form;
+- idempotent outbox используется только для authenticated record;
+- при both routes down сохраняется честное pending authenticated action;
+- no anonymous user creation.
+
+Существующий `FocusGroupLabPanel.astro` можно переиспользовать, но убрать
+ложную модель, где UI сначала принимает действие, а потом неожиданно требует
+подтверждение. Auth boundary должна быть понятна до submit.
+
+### 12.3. Общий NPS
+
+Один настоящий service NPS block на `/zakrytaya-afisha/`:
+
+- только для verified email/Yandex participant;
+- не prototype «остаётся в текущей вкладке»;
+- отдельный `service_revision`;
+- шкала `0–10`;
+- optional comment;
+- idempotent server write;
+- не повторяется на каждой странице;
+- значение NPS не влияет на шанс/результат;
+- unverified participant видит auth CTA, но не форму отправки.
+
+### 12.4. Invite share / QR
+
+Должно работать и до, и после auth:
+
+- Web Share при наличии;
+- copy fallback;
+- рабочий QR;
+- ссылка содержит exact candidate/base path;
+- hash/token очищается из адресной строки после intake;
+- повторное приглашение не сбрасывает текущую сессию/прогресс;
+- share не влияет на результат фокус-группы;
+- browser test открывает созданную ссылку во втором context и подтверждает
+  вступление.
+
+### 12.5. Fixed cutoff
+
+Исправить rolling `30 days` в runtime. Источник истины:
+
+```text
+2026-08-31T18:00:00+02:00
+Europe/Kaliningrad
+```
+
+Проверить before/at/after boundary и PWA relaunch.
+
+---
+
+## 13. Фаза I — синхронно исправить документацию и machine-readable truth
+
+Повысить версию focus scenario registry, например `v6`.
+
+Обязательная semantics:
 
 ```yaml
-key: string
-product_status: public | repair | blocked | deferred | external_track
-route_status: emitted | missing | intentionally_absent
-path: string | null
-data_status: ready | incomplete | stale | unavailable | not_started
-catalog: boolean
-navigation: boolean
-sitemap: boolean
-last_evaluated_at: ISO-8601
-blockers: [stable_code]
-source_contract: string | null
+identity:
+  invited_local_can_use_site: true
+  anonymous_supabase_auth: forbidden
+  verified_provider_any_of: [email, custom:yandex]
+
+feedback:
+  page_score:
+    verified_identity_required: true
+  text:
+    verified_identity_required: true
+  screenshot:
+    verified_identity_required: true
+  service_nps:
+    verified_identity_required: true
+
+artifacts:
+  collection_count: 7
+  local_progress_before_auth: true
+  server_receipt_requires_verified_identity: true
+  full_collection_required_in_focus_candidate: true
+
+raffle:
+  verified_identity_required: true
+  implementation_state: deferred
+  winner_selection_state: deferred
 ```
 
-Не обязательно вводить сложную новую платформу. Допустим additive `v2` либо отдельный readiness projection, но каталог, меню и sitemap должны потреблять один authoritative result.
+Удалить/исправить сценарии:
 
-Обязательные ключи:
+- `anonymous.session_created`;
+- `anonymous.feedback_allowed`;
+- `anonymous_nps`;
+- `anonymous artifact server receipt`;
+- `anonymous_to_verified merge` как обязательную архитектуру Supabase Auth.
 
-- `free`;
-- `kids`;
-- `clubs`;
-- `festivals`;
-- `exhibitions`;
-- `popular`;
-- `unusual`;
-- `for_me`;
-- `cinema`;
-- `theatre`;
-- `performances`;
-- `science_pop`;
-- `science`;
-- `strong_impressions`;
-- `russian_guests`;
-- `foreign_guests`;
-- `medieval`;
-- `gastronomy`.
+Добавить сценарии:
 
-Семь типов festival pages пометить `external_track`; не строить их в этом PR.
+- `focus.access.invited_without_auth`;
+- `focus.auth.feedback_gate`;
+- `focus.auth.nps_gate`;
+- `focus.invite.share_link`;
+- `focus.invite.share_qr`;
+- `artifacts.collection.exact_seven`;
+- `artifacts.collection.all_reachable`;
+- `artifacts.collection.result_page`;
+- `artifacts.collection.local_progress`;
+- `artifacts.collection.verified_receipt`;
+- `artifacts.collection.local_to_verified_sync`;
+- `artifacts.onboarding.first_hint`;
+- `artifacts.onboarding.collection_handoff`;
+- `artifacts.editorial.seven_descriptions`;
+- `artifacts.accessibility.route_matrix`.
 
-#### B2. Route integrity
+Синхронно обновить release readiness/checklist. Не оставлять PR `#324` с
+`anonymous-first` как критическим путём.
 
-Добавить build-time test, который после реальной Astro build проверяет:
+Старый PR `#250` пометить superseded текущим owner decision, если он ещё открыт.
 
-- каждый `catalog=true`/`navigation=true` path разрешается в реально сгенерированный HTML route;
-- blocked/deferred entries не создают кликабельных ссылок;
-- нет безусловных collection links, обходящих registry;
-- sitemap содержит только `public + emitted`;
-- preview-prefix не ломает route matching;
-- canonical path и generated path совпадают.
+---
 
-Исправить `Reference4MobileMenu.astro`:
+## 14. Фаза J — остальные разрывы генеральной доработки
 
-- `free` не должен быть безусловной ссылкой;
-- `clubs` должен получать publication state из registry;
-- secondary collection menu и main menu используют одинаковую политику.
+Работу по артефактам и focus flow выполнить первой. Затем закрыть или честно
+развести остальные контуры.
 
-Для `free` принять одно простое решение по факту build:
+### 14.1. Smart Update / StaticSiteBuilder
 
-- если рабочая страница уже есть под другим canonical route — исправить registry/menu на неё;
-- если route отсутствует — собрать минимальную listing page из существующего normalized admission без нового LLM extraction;
-- если data contract недостаточен — убрать кликабельную ссылку и оставить честный `repair` до отдельного исправления.
+PR `#322` пока не доказал production health: Fly probe был skipped без
+`FLY_API_TOKEN`.
 
-Для `kids` найти фактическое название/route и синхронизировать его с registry. Не подменять отдельную детскую страницу query-string ссылкой без доказательства, что это и есть принятый продукт.
+Нужно:
 
-Для `clubs` добавить простое правило публикации: показывать клуб, если `last_observed_date` находится в пределах последних шести месяцев относительно build date. Источник — существующая projection, без сканирования внешних сайтов. Неактивные клубы исключаются из публичного каталога предсказуемо; данные не удаляются.
+1. получить/использовать app-scoped `FLY_API_TOKEN` через protected Actions
+   secret;
+2. завершить read-only аудит production SQLite и runtime logs за фиксированное
+   24-часовое окно;
+3. классифицировать запуски/ошибки/успехи и продуктовый результат;
+4. проверить отсутствие повторной failure storm/starvation;
+5. связать current main SHA, Fly SHA, candidate pointer и public root release;
+6. не делать root promotion в рамках аудита.
 
-#### B3. Gastronomy
+Если секрет отсутствует, назвать конкретный blocker и не писать `Smart Update
+healthy`. Это не должно блокировать локальную реализацию artifact candidate, но
+не позволяет объявить весь production-аудит закрытым.
 
-Не считать заблокированный scaffold готовой подборкой.
+### 14.2. Подборки
 
-1. Сравнить PR `#314` с текущим `main`.
-2. Перенести только отсутствующий актуальный data-prep contract: общий BGE head, candidate queue, exact source-bound review, owner decisions, family dedupe и fail-closed batch projection.
-3. Не сливать старую ветку целиком и не дублировать уже существующий Astro lifecycle.
-4. На свежем полном production snapshot выполнить один общий collection batch и получить реальную gastronomy candidate queue.
-5. Сформировать bounded owner-review artifact с positive, hard-negative и boundary families. Агент не выдумывает owner decisions.
-6. До завершения review оставить page `noindex` и `publication_status=blocked/shadow`.
-7. После owner-approved decisions сформировать exact-ID manifest, проверить family dedupe, cold/warm `provider_calls=0`, recent-six-month и last-good behavior.
+Сохранить checked registry, но устранить преждевременное `R2 Done`:
 
-**Acceptance:** registry покрывает полный канонический набор; каждый видимый link существует; navigation/catalog/sitemap не расходятся; gastronomy имеет реальную review queue либо честный owner blocker, а не пустой «готовый» scaffold.
+- привести registry к каноническому списку `podborki.md`;
+- все menu/catalog/sitemap surfaces должны читать registry;
+- free/clubs links не обходят registry;
+- каждый visible route существует в generated tree;
+- blocked/deferred entries не дают битые ссылки;
+- gastronomy не публикуется из пустого owner decision store;
+- актуальные части PR `#314` переносить file-level, не wholesale;
+- tests проверяют completeness, route existence и lifecycle.
 
-### P0-C. Реализовать минимальный anonymous-first focus path
+### 14.3. Transport / Yandex resilience
 
-Не пытаться в одном PR закончить весь розыгрыш, 12 артефактов и автоматическое определение победителя. Закрыть главный противоречащий продукту путь.
+- feedback/NPS/artifact receipts используют общий resilient transport;
+- no false success;
+- selected-once и idempotent-replay policies не смешиваются;
+- normal/direct-down/relay-down/both-down покрыты session fixture;
+- hosted critical smoke выполняется на exact candidate;
+- real OTP не используется для обычных feature tests.
 
-#### C1. Anonymous subject
+### 14.4. Weather и YDB
 
-1. После валидного invite и при активном focus marker вызвать `ensureFocusAnonymousSession()`.
-2. Reuse одной Supabase anonymous session при reload/reinvite/PWA relaunch.
-3. В Auth state различать:
-   - `anonymous_focus`;
-   - `verified`;
-   - `signed_out_no_subject`;
-   - `pending`;
-   - `error`.
-4. Anonymous session не должна отображаться как `Вошли как ID …`.
-5. При временной недоступности Supabase сайт и local personalization остаются доступны.
+Это отдельные operational tracks. Не использовать их незавершённость как повод
+оставить артефакты выключенными.
 
-#### C2. Feedback
+- Weather candidate может оставаться вне focus core только при честном отдельном
+  статусе; нельзя называть R4 complete, пока producer/canary не выполнены.
+- YDB scheduler/RU не включать без documented canary; нельзя называть live
+  compaction complete без server RU/observation.
 
-1. Page score и issue/text работают под anonymous `auth.uid()` и RLS.
-2. Screenshot использует private owner-scoped path.
-3. Action, созданное до session/transport, остаётся в bounded outbox и отправляется ровно один раз после recovery.
-4. Anonymous participant всегда имеет `raffle_eligibility=false`.
-5. Исправить deadline: фиксированный `2026-08-31 18:00 Europe/Kaliningrad`, а не rolling 30 days.
-6. Добавить один rendered route-matrix test: Lab panel ровно один раз после main content и до footer.
+---
 
-#### C3. Upgrade boundary
+## 15. Автотесты: обязательный минимум
 
-В этом же PR либо в непосредственно следующем bounded PR доказать хотя бы один путь:
+### 15.1. Быстрые contract/unit tests
+
+- registry parses;
+- exact artifact count = 7;
+- all IDs/slugs unique;
+- all assets exist and dimensions are valid;
+- all 7 short/full descriptions non-empty;
+- all 7 provenance records present;
+- no legacy `future_*` slots;
+- no `FG-E01…FG-E12` rendered as collection items;
+- no count 5/8/10/12 in current collection surfaces;
+- localStorage migration idempotent;
+- authenticated receipt idempotent;
+- fixed cutoff boundary;
+- scenario registry lint.
+
+### 15.2. Browser tests
+
+Desktop: `1440×900`  
+Mobile: `390×844`  
+Дополнительно: narrow `320px` и reduced motion.
+
+Обязательные journeys:
+
+1. invite → skip auth → site opens;
+2. unverified participant sees site and artifact onboarding;
+3. unverified participant cannot submit page score;
+4. unverified participant cannot submit service NPS;
+5. email/Yandex session fixture unlocks feedback/NPS;
+6. invite link copy works;
+7. QR encodes exact candidate invitation;
+8. second browser context joins through shared link;
+9. first artifact hint leads to actual placement;
+10. find opens story and collection;
+11. all seven placements can be reached;
+12. progress changes `0 → 7` without duplicates;
+13. reload preserves local progress;
+14. verified sync creates exactly seven server receipts;
+15. sign-out hides server state but keeps local collection;
+16. result page has no overflow, broken media or placeholder copy;
+17. keyboard and screen-reader names exist for all seven;
+18. no console error;
+19. no third-party runtime LLM/provider request;
+20. no accidental public indexability of focus candidate.
+
+### 15.3. Cross-browser GitHub Actions
+
+После базовой suite на exact build:
+
+- Chromium;
+- Firefox;
+- WebKit;
+
+Минимум:
+
+- invitation/access;
+- collection page;
+- one complete artifact journey;
+- seven-card/slot rendering;
+- auth gate;
+- share/copy fallback;
+- no horizontal overflow.
+
+Playwright WebKit не выдавать за physical iOS acceptance, но он обязателен как
+cross-browser browser-engine smoke. Native Android/iOS запускать только для
+изменённых system-level flows.
+
+### 15.4. Auth test policy
+
+Обычные authenticated tests:
 
 ```text
-anonymous focus user
-→ email или Yandex linkIdentity
-→ тот же subject/data сохранены
-→ verified participant может пройти eligibility gate
+session_fixture
+/auth/v1/otp = 0
+external mail = 0
 ```
 
-Если existing-account merge требует отдельной миграции, вынести его в отдельный PR, но не выдавать простой новый login user за completed upgrade.
+Real-mail OTP запускать только если изменены:
 
-Реальные OTP-письма не использовать для обычных тестов. `session_fixture` остаётся default. Один real-mail run допустим только если изменён сам OTP issue/delivery/mobile-input path.
+- OTP issue;
+- email delivery/routing/template;
+- code input;
+- callback/verify;
+- mobile keyboard/system flow.
 
-**Acceptance:** неподтверждённый участник по invite может отправить score и issue без login prompt; reload сохраняет subject; offline/recovery создаёт одну server row; eligibility остаётся false до verification.
+Если эти участки не менялись, итоговый receipt должен показать `0/0/0`.
 
-### P1-D. Hosted transport и Yandex degradation acceptance
+---
 
-На immutable hosted target, с no-mail session fixture, выполнить критическую матрицу для Auth/Data, Search, focus feedback и saved/personalization actions:
+## 16. GitHub Actions и публикация review candidate
 
-- normal;
-- direct unavailable / relay available;
-- relay unavailable / direct available;
-- both unavailable;
-- shared Supabase upstream unavailable;
-- body/decode ambiguity;
-- recovery after local queued action.
+Порядок обязателен.
 
-Обязательные инварианты:
+### Gate 1 — source/contract
 
-- `selected-once dispatch <= 1`;
-- при both-down dispatch `0`;
-- idempotent effect `=1`;
-- никакого false success;
-- local-first UI переживает reload;
-- sanitized receipt фиксирует реально активированный fault;
-- OTP/mail issue/send/receipt `0/0/0`, пока не тестируется OTP transport;
-- diagnostic page говорит о capabilities, а не просто «Яндекс не работает»;
-- при доступном direct и недоступном Yandex relay итог вроде `CORE_AVAILABLE_DIRECT_YANDEX_DEGRADED`, а не полный outage.
+До публикации candidate должны быть terminal PASS:
 
-Отдельно выполнить bounded Yandex OAuth round-trip из anonymous focus session после готовности C3. Не включать YDB, Postbox и Object Storage в один общий «Yandex status».
+- Python CI relevant scope;
+- Node/unit relevant scope;
+- artifact registry/content contract;
+- focus scenario registry lint;
+- Astro build;
+- `check:preview`;
+- page/runtime route inventory;
+- existing static browser release gate;
+- focused artifact/focus Chromium journey.
 
-### P1-E. Остаточное hardening StaticSiteBuilder
+Skipped required job = не PASS.
 
-После production-аудита, а не вместо него:
+### Gate 2 — immutable candidate
 
-1. Протянуть bounded command-output tail в terminal builder status для диагностики раннего deterministic failure.
-2. Добавить deterministic-failure circuit breaker для повторов с тем же `source SHA + failure fingerprint`, сохранив один coalesced pending build после изменения inputs.
-3. Не выключать обычные Smart Update events.
-4. Покрыть recovery/debounce/calendar rollover regression tests.
+После Gate 1:
 
-### P2-F. Weather producer и canary
+1. собрать exact head SHA;
+2. опубликовать immutable noindex secret candidate;
+3. включить в candidate все 7 артефактов и focus onboarding;
+4. не использовать default-off flag, который превращает страницу в
+   `недоступна в этой сборке`;
+5. записать build ID, source SHA, artifact registry hash, event snapshot hash;
+6. выполнить независимый readback;
+7. production root и stable ICS не менять.
 
-Работа ведётся в `onedayonemasterpiece/cat-weather-new` и затем в consumer repo.
+### Gate 3 — public candidate smoke
 
-1. Проверить и обновить draft PR `cat-weather-new#4` от текущего `main`.
-2. Не менять существующий Telegram weather product побочно.
-3. Закрыть owner/operator gates:
-   - точная production location binding и hashes;
-   - одобренный provider usage plan;
-   - versioned bucket/IAM/conditional writes;
-   - single-writer lease;
-   - non-public pointer-last smoke.
-4. Запустить семь непрерывных дней наблюдения, включая выходной.
-5. Собирать freshness, gaps, provider calls, retries, pointer conflicts, object/readback hashes.
-6. Consumer flag в `events-bot-new` остаётся `0` до PASS.
-7. После PASS выполнить отдельный bounded consumer canary на date/weekend surfaces и проверить browser cache/CLS/no-third-party-requests.
+На public HTTPS candidate:
 
-SVGRepo-набор и consumer UI уже сделаны; не пересобирать их без обнаруженной ошибки.
+- exact SHA marker совпадает;
+- root/invitation/collection routes отвечают 200;
+- `noindex,nofollow,noarchive,nosnippet`;
+- `no-referrer`;
+- assets загружаются;
+- seven-artifact contract проходит;
+- browser console/network clean;
+- Chromium/Firefox/WebKit smoke terminal PASS.
 
-### P2-G. YDB compact data plane — live gates
+### Gate 4 — owner handoff
 
-Не переписывать typed queue/read model. Закрыть только честно оставшиеся пункты:
+Только после Gate 3 финальный ответ владельцу содержит:
 
-1. Проверить complete-producer coverage всех обязательных writers/finalizers; partial generation не может стать current.
-2. Выполнить read-only/live YQL validation и получить server-side RU, а не только client ledger floor.
-3. Настроить billing alert и auto-abort budget.
-4. Подтвердить exact account/database guard.
-5. Cutover:
-   - freeze writers;
-   - watermark/count/hash;
-   - migration;
-   - parity;
-   - read-only canary;
-   - manual no-publish run;
-   - один scheduled slot;
-   - 24-hour observation.
-6. Scheduler/catch-up и RU throttle не включать до всех предыдущих PASS.
-7. Большие тексты/векторы не возвращать в горячий KV.
+- secret invitation URL;
+- direct collection/results URL в том же candidate;
+- PR URL;
+- exact commit SHA;
+- GitHub Actions run URLs;
+- short test summary;
+- exact statement: public root changed or unchanged;
+- known non-core live gates.
 
-Отчёт обязан содержать фактические queries/rows/bytes/server RU и стоимость canary.
+Bearer/token не коммитить в PR, docs, artifacts или logs. Передать владельцу
+отдельно в финальном сообщении.
 
-## 6. PR hygiene
+---
 
-Перед финальным отчётом:
+## 17. Запрещённые способы «закрыть» задачу
 
-- `#287`, `#295`, `#270`, `#250`: сравнить с текущим `main`; если содержательная часть уже интегрирована через `#316`, закрыть как `superseded by #316` с перечислением сохранённых residual gates;
-- `#314`: не закрывать до переноса актуального gastronomy data-prep либо явного replacement PR;
-- `#322`: временный audit PR не сливать; закрыть после evidence и удаления workflow;
-- `cat-weather-new#4`: оставить draft до operator/live gates;
-- не закрывать PR только потому, что он старый; сначала дать exact compare/disposition.
+Задача не считается выполненной, если результат — любой из вариантов:
 
-## 7. Что не входит в эту итерацию
+- docs-only PR;
+- registry с семью строками, но без placements;
+- placements есть, но candidate показывает `коллекция недоступна`;
+- один рабочий артефакт и шесть placeholder;
+- 12 функциональных achievements переименованы в 7 артефактов;
+- stale 8-item registry выдан за owner-approved collection;
+- описания не проверены;
+- NPS/feedback продолжают anonymous server writes;
+- site требует login до открытия афиши;
+- share/QR только нарисованы и не открывают второй context;
+- tests выполнены локально, но GitHub Actions красные/не запускались;
+- candidate опубликован до CI;
+- ссылка ведёт на старый SHA;
+- candidate link отсутствует;
+- `STARTED_BACKGROUND`, `SKIPPED`, open PR или mock считается PASS;
+- public root промотирован без разрешения.
 
-- P13N-01…P13N-06 и изменение модели персонализации;
-- новые веса, remote profile writes или новая персонализированная `/dlya-menya/` generation scheme;
-- семь визуальных типов festival pages;
-- editorial collections и их UI/нарратив;
-- полный raffle/draw/artifact programme;
-- автоматическая public root promotion без отдельного owner gate;
-- новый LLM extraction для `free`, если существующий admission contract достаточен;
-- переписывание transport layer, если hosted failures закрываются точечными исправлениями.
+---
 
-## 8. Рекомендуемое разбиение PR
+## 18. Рекомендуемое разбиение реализации
 
-1. **PR-A — production health evidence and disposition**  
-   Read-only audit, version chain, cleanup `#322`, без runtime mutation.
-2. **PR-B — collection registry truth and route integrity**  
-   Полный registry, menu/catalog/sitemap, free/kids/clubs reconciliation, route tests.
-3. **PR-C — gastronomy data-prep integration**  
-   Актуальная часть `#314`, production candidate queue, owner-review artifact.
-4. **PR-D — focus anonymous MVP**  
-   Anonymous session, feedback/outbox, eligibility false, fixed deadline, browser E2E.
-5. **PR-E — hosted transport/Yandex acceptance**  
-   Реальные fault cells и точечные runtime fixes.
-6. **PR-F/G — Weather и YDB live gates**  
-   Отдельные репозитории/операторские evidence; default-off до PASS.
-7. **PR-H — builder residual hardening**  
-   Output tail и deterministic circuit breaker после аудита.
+Без лишней архитектуры, но с управляемым diff.
 
-`EventLayout.astro`, `docs/routes.yml`, global navigation и `CHANGELOG.md` изменять последовательно, чтобы не потерять независимые workstreams.
+### PR A — исправление canonical focus truth
 
-## 9. Обязательные проверки
+- owner decisions;
+- docs/scenario registry v6;
+- fixed cutoff;
+- auth-gated feedback/NPS;
+- invite/share/QR tests;
+- исправление launch-readiness anonymous-first пунктов.
 
-Минимальный общий набор перед каждым merge:
+### PR B — exact seven-artifact collection
 
-- relevant unit/contract tests;
-- real Astro production-profile build;
-- generated route integrity;
-- page runtime inventory;
-- Playwright desktop `1440×900` и mobile `390×844` для затронутых UI;
-- no horizontal overflow;
-- no duplicate runtime/handlers;
-- preview/base-path route checks;
-- OTP/mail counters;
-- sanitized network trace при transport changes;
-- exact SHA и explicit list of live actions;
-- `git diff --check`.
+- source inventory/hashes;
+- registry/content/assets;
+- legacy migration;
+- placements;
+- collection/results page;
+- local + verified progress;
+- content/editorial report;
+- onboarding chain;
+- focused tests.
 
-Нельзя ставить `Done` только на основании source assertion или mocked unit test, когда requirement явно требует hosted/live evidence.
+### PR C — integration candidate
 
-## 10. Формат итогового отчёта кодового агента
+- merge fresh main;
+- reconcile shared layout/navigation;
+- full build/check;
+- GitHub Actions;
+- immutable candidate;
+- public cross-browser evidence;
+- owner handoff links.
 
-Итог должен содержать:
+Если изменения достаточно компактны, допустим один PR с отдельными commits, но
+обязателен один интегрированный exact-SHA candidate.
 
-1. таблицу `Done / Partial / Blocked / Owner gate` по разделам этого документа;
-2. ветки, PR, commit SHA и merge disposition;
-3. выполненные команды и результаты тестов;
-4. точное количество real OTP/mail sends;
-5. точное количество YDB live reads/writes/DDL/scheduler changes;
-6. public root/candidate/build SHA и факт promotion;
-7. ссылки на sanitized evidence artifacts;
-8. список оставшихся gates без формулировок «в целом готово»;
-9. подтверждение, что старые PR не были слиты целиком без compare.
+---
 
-Главный критерий завершения: пользовательская и операторская правда совпадает с labels в документации, registry и UI; заблокированный или непроверенный контур не выглядит опубликованным и готовым.
+## 19. Формат итогового отчёта кодового агента
+
+Не писать общий optimistic summary. Использовать точную структуру.
+
+```markdown
+# Итог
+
+## Exact identity
+- branch:
+- commit SHA:
+- PR:
+- candidate build ID:
+- candidate invitation URL:
+- candidate collection URL:
+
+## Seven artifacts
+| # | artifact_id | name | source hash | description | placement | browser |
+|---|---|---|---|---|---|---|
+| 1 | ... | ... | ... | PASS | PASS | PASS |
+...
+| 7 | ... | ... | ... | PASS | PASS | PASS |
+
+## Focus model
+- site without auth: PASS/FAIL
+- feedback requires email/Yandex: PASS/FAIL
+- NPS requires email/Yandex: PASS/FAIL
+- invite share link: PASS/FAIL
+- invite QR: PASS/FAIL
+- no anonymous Supabase Auth: PASS/FAIL
+
+## Onboarding
+- first hint:
+- first find:
+- story:
+- collection handoff:
+- result page:
+
+## GitHub Actions
+- run:
+- required jobs:
+- mail issue/verify/receipt:
+- Chromium/Firefox/WebKit:
+
+## Publication safety
+- candidate noindex:
+- public root mutation:
+- stable ICS mutation:
+
+## Remaining external gates
+- only genuinely external/non-core items
+```
+
+`PASS` должен сопровождаться exact evidence. Если candidate URL не создан или
+Gate 1–3 не прошли, итоговый статус — `NOT READY FOR OWNER REVIEW`, а не
+`готово`.
