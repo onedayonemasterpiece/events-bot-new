@@ -43,7 +43,7 @@ if (fit) {
 if (light) {
   // These legacy assertions describe the superseded per-pane coordinate-field
   // model and its old mobile artwork calibration. The product policy below
-  // rechecks one shared material and the enlarged coherent phone crop.
+  // rechecks one shared material and the fitted full-word phone crop.
   const supersededLightPolicy = /^(?:light-desktop|light-mobile|light-mobile-small): (?:panes use \d+ local light\/material coordinate fields|phone artwork (?:top|width) ratio .* is outside (?:\.14–\.24|1\.42–1\.52))/u;
   const unaccepted = (light.failures || []).filter((message) => !supersededLightPolicy.test(String(message)));
   check(unaccepted.length === 0, `light-model structural failures: ${unaccepted.join(' | ')}`);
@@ -88,8 +88,8 @@ for (const name of lightSceneFiles) {
   if (Number(scene.viewport?.width) <= 599) {
     const widthRatio = Number(scene.artworkWidth) / Number(scene.viewport.width);
     const topRatio = Number(scene.artworkTop) / Number(scene.viewport.height);
-    check(widthRatio >= 1.5 && widthRatio <= 1.6, `${name}: mobile artwork width ratio ${widthRatio.toFixed(3)}`);
-    check(topRatio >= .13 && topRatio <= .24, `${name}: mobile artwork top ratio ${topRatio.toFixed(3)}`);
+    check(widthRatio >= 1.24 && widthRatio <= 1.32, `${name}: mobile artwork width ratio ${widthRatio.toFixed(3)}`);
+    check(topRatio >= .2 && topRatio <= .31, `${name}: mobile artwork top ratio ${topRatio.toFixed(3)}`);
   }
 }
 
@@ -100,7 +100,7 @@ evidence.mobileSceneFiles = mobileSceneFiles;
 evidence.lightSceneFiles = lightSceneFiles;
 
 const result = {
-  schema_version: 'prelaunch_product_visual_policy_v2',
+  schema_version: 'prelaunch_product_visual_policy_v3',
   ok: failures.length === 0,
   artifact_dir: artifactDir,
   evidence,
