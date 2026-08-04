@@ -1,0 +1,47 @@
+/* Small acceptance corrections discovered from the 16-viewport evidence run.
+   Kept separate during review; consolidate into prelaunch-fit-v3.css before merge. */
+
+/* The circular light object exists in the reference but must remain atmospheric,
+   not read as a grey frame around the leather card. */
+body .prelaunch[data-prelaunch-page] .prelaunch__atmosphere::before {
+  border-color: rgba(255, 190, 151, .038);
+  opacity: .42;
+  filter: blur(1.4px);
+}
+
+/* Preserve a real bottom safety area, including checkbox text, on every
+   portrait phone. */
+@media (max-width: 599px) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__notify {
+    transform: translateY(-18px);
+  }
+}
+
+@media (max-width: 599px) and (max-height: 680px) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__notify {
+    transform: translateY(-16px);
+  }
+}
+
+/* Short phone-landscape viewports need ten extra pixels above the browser
+   chrome safe edge. */
+@media (orientation: landscape) and (min-width: 600px) and (max-height: 500px) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__notify {
+    transform: translateY(-12px);
+  }
+}
+
+/* Direct 1200×1200 calibration against the supplied source reference. */
+@media (min-height: 1000px) and (max-aspect-ratio: 5 / 4) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__brand {
+    transform: translateY(16px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__copy {
+    margin-top: clamp(118px, 11.5vh, 140px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__notify {
+    transform: translateY(-38px);
+  }
+}
