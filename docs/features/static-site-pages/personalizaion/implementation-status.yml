@@ -1,19 +1,27 @@
 schema_version: personalization-implementation-status-v1
-updated_at: '2026-08-02T20:55:00Z'
+updated_at: '2026-08-04T00:00:00Z'
 repository: onedayonemasterpiece/events-bot-new
 baseline:
   branch: main
-  sha: 079a9dc7a6830925456116770f54b82a5fe59fb0
+  sha: b15749e2af13d789bdcec8de286e35df39034f08
   state: local_prototype_not_production_loop
 canonical:
   requirements: docs/features/static-site-pages/personalizaion/requirements.md
   target: docs/features/static-site-pages/personalizaion/personalization-to-be.md
   research_traceability: docs/features/static-site-pages/personalizaion/personalization-research-traceability.md
   implementation_contract: docs/features/static-site-pages/personalizaion/personalization-implementation-contract.md
+  identity_linking: docs/features/static-site-pages/personalizaion/identity-linking-personalization.md
+  longitudinal_e2e: docs/features/static-site-pages/personalizaion/longitudinal-e2e-personalization.md
+  temporal_simulation: docs/features/static-site-pages/personalizaion/temporal-profile-simulation.md
+  report_template: docs/features/static-site-pages/personalizaion/personalization-test-report-template.md
+  focus_questionnaire_prompt: docs/features/static-site-pages/personalizaion/focus-group-interest-questionnaire-prompt.md
   current_audit: docs/features/static-site-pages/personalizaion/personalization-current-runtime-audit-2026-08-02.md
 source_precedence:
   product_and_model_target: personalization-to-be.md
   technical_detail: personalization-implementation-contract.md
+  identity_boundary: identity-linking-personalization.md
+  model_test_methodology: longitudinal-e2e-personalization.md
+  db_time_methodology: temporal-profile-simulation.md
   legacy_runtime: migration_and_characterization_only
   open_target_question: explicit_hypothesis_or_owner_legal_decision
   legacy_value_as_silent_default: forbidden
@@ -46,8 +54,48 @@ architecture_decisions:
   outbox: indexeddb_with_bounded_localstorage_fallback
   durable_api: same_origin_only
   primary_store: pending_localization_gate
+  ydb_analytics_as_profile_sor: forbidden
   raw_impression_rows_in_primary_store: forbidden
   ordinary_local_rerank_network_requests: 0
+identity_decisions:
+  login_as_activation: false
+  anonymous_to_new_account: import_compact_current_state
+  anonymous_to_existing_low_conflict: merge_with_account_explicit_wins
+  anonymous_to_existing_high_conflict: account_wins_with_device_overlay_or_quarantine
+  logout_deletes_durable_profile: false
+  account_switch_inherits_previous_state: false
+  pending_outbox_crosses_identity_boundary: false
+  multiple_devices_create_multiple_durable_personalities: false
+  raw_browsing_history_copied_on_link: false
+longitudinal_testing:
+  primary_metric: first_relevant_within_30_rate
+  primary_target: '>=0.95'
+  p95_cards_target: '<=30'
+  minimum_personas: 10
+  evidence_scope:
+    - repeated_visits
+    - profile_horizon_timeline
+    - dom_transformation
+    - factor_ablation
+    - storage_and_transport_health
+    - hard_invariants
+  report_template: personalization-test-report-template.md
+temporal_simulation:
+  offline_replay: allowed_before_db
+  db_backed_staging: requires_P13N_03_and_P13N_04
+  test_clock_in_production: forbidden
+  synthetic_actor_training_eligible: false
+  ydb_analytics_profile_proof: forbidden
+  controlled_clock_flag: P13N_TEST_CLOCK_ENABLED
+focus_group_questionnaire:
+  decision: useful_optional_research_artifact
+  production_profile_proof: false
+  sensitive_questions: forbidden
+  role:
+    - calibration_input
+    - judgement_labels
+    - golden_persona_validation
+    - cold_start_design
 budgets:
   browser_steady_target_kib: 24
   browser_forced_compaction_kib: 32
@@ -104,20 +152,22 @@ waves:
       - thematic_rerank_zero_network
       - search_popular_related_invariants
   - id: P13N-03
-    name: durable_transport
+    name: durable_transport_and_identity_epoch_binding
     state: blocked_by_P13N-02_and_legal_boundary
     production_effect: staging_only
     remote_writes: staging_only
     hard_gates:
       - bounded_indexeddb_outbox
+      - subject_epoch_bound_idempotency
       - idempotent_batch_ack_reconcile
+      - logout_and_account_switch_barriers
       - direct_supabase_down_relay_up
       - relay_down_direct_up
       - both_down_local_fallback
       - ambiguous_write_reconcile
       - no_false_202_ack
   - id: P13N-04
-    name: compact_primary_store
+    name: compact_primary_store_identity_link_and_test_time
     state: blocked_by_P13N-03_and_localization_decision
     production_effect: staging_only
     remote_writes: staging_only
@@ -127,6 +177,8 @@ waves:
       - no_per_impression_rows
       - retention_and_compaction
       - reset_purge_and_identity_link
+      - conflict_merge_audit
+      - test_only_temporal_import_and_cleanup
   - id: P13N-05
     name: materializer_projection_and_research_model
     state: blocked_by_P13N-04
@@ -135,6 +187,7 @@ waves:
     hard_gates:
       - coalesced_materialization
       - session_short_mid_long_horizons
+      - temporal_replay_and_db_backed_staging_pass
       - soft_persona_unknown_mass
       - sensitive_facets_absent
       - control_facets_hard_persona_soft_persona_hybrid_bake_off
@@ -143,17 +196,20 @@ waves:
       - immediate_overlay_reconciles
       - invalid_projection_fails_last_good
       - offline_replay_quality_gate
+      - factor_ablation_report
   - id: P13N-06
-    name: controlled_rollout
+    name: controlled_rollout_and_longitudinal_report
     state: blocked_by_P13N-05_legal_ops_product_signoff
     production_effect: staged_rollout
     remote_writes: cohort_then_general
     hard_gates:
       - focus_group_pass
+      - optional_questionnaire_processed_as_supporting_evidence
       - desktop_android_ios_critical_pass
       - storage_and_database_capacity_pass
       - registered_ab_with_guardrails
       - longitudinal_ui_db_materializer_next_feed_pass
+      - first_relevant_within_30_rate_target_met_by_persona_surface
       - zero_critical_personalization_defects
       - rollback_proven
       - owner_ui_product_signoff
@@ -176,6 +232,17 @@ required_evidence_per_pr:
   - tests_and_real_build
   - storage_bytes_before_after
   - sanitized_network_trace
+  - identity_epoch_and_merge_evidence_when_touched
+  - longitudinal_metrics_when_model_touched
+  - temporal_db_cleanup_when_time_simulation_touched
   - fault_matrix_results_when_transport_touched
   - explicit_not_run_or_blocked_items
   - rollback_or_no_production_effect_statement
+acceptance_controls:
+  legacy_policy_promoted_to_target: 0
+  target_scorer_from_legacy_reexport: 0
+  exact_hide_resurrection: 0
+  calendar_primary_chronology_mutation: 0
+  account_switch_cross_contamination: 0
+  synthetic_test_actor_training_eligible: false
+  ydb_analytics_as_profile_source_of_truth: 0
