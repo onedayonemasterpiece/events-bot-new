@@ -62,16 +62,14 @@ try {
             backgroundSize: surface.backgroundSize,
             backgroundPosition: surface.backgroundPosition,
             backgroundColor: surface.backgroundColor,
+            backdropFilter: surface.backdropFilter || surface.webkitBackdropFilter || '',
             boxShadow: surface.boxShadow,
           };
         });
         const number = (value) => Number.parseFloat(String(value || '0')) || 0;
-        const lightFields = tileSurfaces.map((tile) => [
-          tile.backgroundImage,
-          tile.backgroundAttachment,
-          tile.backgroundSize,
-          tile.backgroundPosition,
-        ].join('|'));
+        const gridColumns = String(mosaicStyle?.gridTemplateColumns || '')
+          .split(/\s+/u)
+          .filter(Boolean);
         return {
           viewport: { width: window.innerWidth, height: window.innerHeight },
           layerZ: {
@@ -87,10 +85,17 @@ try {
           artworkWidth: number(backgroundImage?.width),
           artworkTop: number(backgroundImage?.top),
           artworkLeft: number(backgroundImage?.left),
+          gridColumnCount: gridColumns.length,
           tileSurfaces,
           paneRadialCount: tileSurfaces.filter((tile) => tile.backgroundImage.includes('radial-gradient')).length,
           fixedPaneCount: tileSurfaces.filter((tile) => tile.backgroundAttachment.split(',')[0]?.trim() === 'fixed').length,
-          uniquePaneLightFieldCount: new Set(lightFields).size,
+          paneBackdropCount: tileSurfaces.filter((tile) => tile.backdropFilter && tile.backdropFilter !== 'none').length,
+          uniquePaneMaterialCount: new Set(tileSurfaces.map((tile) => [
+            tile.backgroundImage,
+            tile.backgroundAttachment,
+            tile.backgroundSize,
+            tile.backgroundPosition,
+          ].join('|'))).size,
           localGlintCount: tileSurfaces.filter((tile) => tile.glint).length,
         };
       });
@@ -111,7 +116,7 @@ try {
         localFailures,
       );
       check(
-        scene.sourceWidth >= viewport.width * .65,
+        scene.sourceWidth >= viewport.width * .75,
         `${viewport.name}: shared emitter is too small (${scene.sourceWidth}px)`,
         localFailures,
       );
@@ -121,28 +126,41 @@ try {
         localFailures,
       );
       check(
-        scene.paneRadialCount === 72 && scene.fixedPaneCount === 72,
-        `${viewport.name}: pane light is not one viewport-anchored field (radial=${scene.paneRadialCount}, fixed=${scene.fixedPaneCount})`,
+        scene.paneRadialCount === 0 && scene.fixedPaneCount === 0,
+        `${viewport.name}: a pane still paints its own spotlight (radial=${scene.paneRadialCount}, fixed=${scene.fixedPaneCount})`,
         localFailures,
       );
       check(
-        scene.uniquePaneLightFieldCount === 1,
-        `${viewport.name}: panes use ${scene.uniquePaneLightFieldCount} different light coordinate fields`,
+        scene.paneBackdropCount === 72,
+        `${viewport.name}: all panes must transmit the shared source through backdrop-filter (${scene.paneBackdropCount}/72)`,
+        localFailures,
+      );
+      check(
+        scene.uniquePaneMaterialCount === 1,
+        `${viewport.name}: panes use ${scene.uniquePaneMaterialCount} local light/material coordinate fields`,
         localFailures,
       );
       check(scene.localGlintCount === 3, `${viewport.name}: deterministic glint markers changed`, localFailures);
+
+      if (viewport.width <= 820) {
+        check(
+          scene.gridColumnCount === 9,
+          `${viewport.name}: semantic 9-column reveal map was reflowed to ${scene.gridColumnCount} columns`,
+          localFailures,
+        );
+      }
 
       if (viewport.width <= 599) {
         const widthRatio = scene.artworkWidth / viewport.width;
         const topRatio = scene.artworkTop / viewport.height;
         check(
-          widthRatio >= 1.07 && widthRatio <= 1.17,
-          `${viewport.name}: phone artwork width ratio ${widthRatio.toFixed(3)} is outside 1.07–1.17`,
+          widthRatio >= 1.42 && widthRatio <= 1.52,
+          `${viewport.name}: phone artwork width ratio ${widthRatio.toFixed(3)} is outside 1.42–1.52`,
           localFailures,
         );
         check(
-          topRatio >= .16 && topRatio <= .27,
-          `${viewport.name}: phone artwork top ratio ${topRatio.toFixed(3)} is outside .16–.27`,
+          topRatio >= .14 && topRatio <= .24,
+          `${viewport.name}: phone artwork top ratio ${topRatio.toFixed(3)} is outside .14–.24`,
           localFailures,
         );
       }
