@@ -226,7 +226,7 @@ begin
   ) then
     raise exception 'outbox receipt trigger did not register correlation';
   end if;
-  if public.email_record_postbox_event_v3(
+  v_status := public.email_record_postbox_event_v3(
     'postbox-outbox-delivery-1',
     'postbox-outbox-message-1',
     'delivered',
@@ -234,11 +234,14 @@ begin
     v_hmac_outbox,
     1,
     repeat('7', 64)
-  ) <> 'applied'
-     or (
-       select status from email_control.email_outbox where id = v_outbox
-     ) <> 'delivered' then
-    raise exception 'unified outbox delivery was not applied';
+  );
+  if v_status <> 'applied' then
+    raise exception 'unified outbox delivery event was not applied';
+  end if;
+  if (
+    select status from email_control.email_outbox where id = v_outbox
+  ) <> 'delivered' then
+    raise exception 'unified outbox delivery state was not projected';
   end if;
 
   insert into personalization.focus_auth_delivery_attempt (
