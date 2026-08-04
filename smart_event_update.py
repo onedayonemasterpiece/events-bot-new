@@ -55,7 +55,9 @@ from smart_update_identity import (
     IdentityVectorEvidence,
     build_merge_identity_gate_verdict,
     build_identity_gate_verdict,
+    canonicalize_identity_url,
     identity_gate_fail_safe_verdict,
+    input_packet_fingerprint,
     merge_identity_gate_fail_safe_verdict,
     parse_identity_gate_mode,
 )
@@ -567,6 +569,11 @@ class EventCandidate:
     source_type: str
     source_url: str | None
     source_text: str
+    # Only identity-bearing sources may participate in event matching. Linked
+    # roundups/program pages are provenance context and must use context_only.
+    source_role: str = "identity_bearing"
+    # Filled by Smart Update from the exact caller packet before normalization.
+    source_fingerprint: str | None = None
     title: str | None = None
     date: str | None = None
     time: str | None = None
@@ -1682,6 +1689,12 @@ class SmartUpdateResult:
     skipped_conflicts: list[str] = field(default_factory=list)
     reason: str | None = None
     queue_notes: list[str] = field(default_factory=list)
+
+
+class SourceBindingConflict(RuntimeError):
+    def __init__(self, existing_event_id: int):
+        super().__init__("source_binding_conflict")
+        self.existing_event_id = int(existing_event_id)
 
 
 def _bounded_organizer_names(*values: Any) -> list[str]:
@@ -11367,6 +11380,16 @@ async def _ensure_legacy_event_sources(session, event: Event | None) -> int:
                 event_id=event.id,
                 source_type=_infer_source_type_from_url(url),
                 source_url=url,
+                canonical_source_url=canonicalize_identity_url(url),
+                source_role="legacy_unclassified",
+                source_fingerprint=input_packet_fingerprint(
+                    {
+                        "event_id": int(event.id),
+                        "source_url": url,
+                        "source_text": clean_source_text or "",
+                        "source_role": "legacy_unclassified",
+                    }
+                ),
                 source_text=clean_source_text,
                 imported_at=now,
             )
@@ -11497,6 +11520,16 @@ async def _ensure_legacy_description_fact(
             event_id=int(event.id),
             source_type="legacy",
             source_url=legacy_url,
+            canonical_source_url=legacy_url,
+            source_role="legacy_snapshot",
+            source_fingerprint=input_packet_fingerprint(
+                {
+                    "event_id": int(event.id),
+                    "source_url": legacy_url,
+                    "source_text": snapshot,
+                    "source_role": "legacy_snapshot",
+                }
+            ),
             source_text=snapshot,
             imported_at=now,
             trust_level="high",
@@ -14726,7 +14759,10 @@ async def _match_existing_event_by_event_source_url(
     the match is unambiguous after basic anchor checks.
     """
     source_url = str(candidate.source_url or "").strip()
-    if not source_url:
+    canonical_source_url = canonicalize_identity_url(source_url)
+    if not source_url or not canonical_source_url:
+        return None
+    if _candidate_source_role(candidate) != "identity_bearing":
         return None
     if str(candidate.source_type or "").strip().lower().startswith("parser:"):
         return None
@@ -14735,7 +14771,18 @@ async def _match_existing_event_by_event_source_url(
         stmt = (
             select(Event)
             .join(EventSource, EventSource.event_id == Event.id)
-            .where(EventSource.source_url == source_url)
+            .where(
+                or_(
+                    and_(
+                        EventSource.canonical_source_url == canonical_source_url,
+                        EventSource.source_role == "identity_bearing",
+                    ),
+                    and_(
+                        EventSource.canonical_source_url.is_(None),
+                        EventSource.source_url == source_url,
+                    ),
+                )
+            )
         )
         if candidate.source_type:
             stmt = stmt.where(EventSource.source_type == candidate.source_type)
@@ -15865,13 +15912,56 @@ async def smart_event_update(
     schedule_kwargs: dict[str, Any] | None = None,
 ) -> SmartUpdateResult:
     async with _SMART_UPDATE_LOCK:
-        return await _smart_event_update_impl(
-            db,
-            candidate,
-            check_source_url=check_source_url,
-            schedule_tasks=schedule_tasks,
-            schedule_kwargs=schedule_kwargs,
-        )
+        try:
+            return await _smart_event_update_impl(
+                db,
+                candidate,
+                check_source_url=check_source_url,
+                schedule_tasks=schedule_tasks,
+                schedule_kwargs=schedule_kwargs,
+            )
+        except SourceBindingConflict as exc:
+            return SmartUpdateResult(
+                status="review_required",
+                event_id=exc.existing_event_id,
+                reason="source_binding_conflict",
+            )
+
+
+def _candidate_source_role(candidate: EventCandidate) -> str:
+    return (
+        "context_only"
+        if str(getattr(candidate, "source_role", "") or "").strip().lower() == "context_only"
+        else "identity_bearing"
+    )
+
+
+async def _exact_input_noop_event_id(
+    db: Database,
+    *,
+    canonical_source_url: str | None,
+    source_role: str,
+    source_fingerprint: str,
+) -> tuple[int | None, bool]:
+    if not canonical_source_url or not source_fingerprint:
+        return None, False
+    try:
+        async with db.raw_conn() as conn:
+            cursor = await conn.execute(
+                "SELECT DISTINCT event_id FROM event_source "
+                "WHERE canonical_source_url=? AND source_role=? AND source_fingerprint=? "
+                "ORDER BY event_id LIMIT 2",
+                (canonical_source_url, source_role, source_fingerprint),
+            )
+            rows = await cursor.fetchall()
+            await cursor.close()
+        event_ids = [int(row[0]) for row in rows if row and row[0] is not None]
+        if len(event_ids) > 1:
+            return None, True
+        return (event_ids[0] if event_ids else None), False
+    except Exception:
+        logger.warning("smart_update: exact input noop lookup failed", exc_info=True)
+        return None, False
 
 
 async def _apply_holiday_festival_mapping(db: Database, event_id: int) -> bool:
@@ -16090,12 +16180,56 @@ async def _smart_event_update_impl(
     schedule_tasks: bool = True,
     schedule_kwargs: dict[str, Any] | None = None,
 ) -> SmartUpdateResult:
-    canonical_source_url = canonicalize_tg_url(candidate.source_url)
+    # Capture the caller packet before any Smart Update normalization/mutation.
+    # An exact accepted retry can then stop before every LLM and domain write.
+    source_fingerprint = input_packet_fingerprint(candidate)
+    source_role = _candidate_source_role(candidate)
+    canonical_source_url = canonicalize_identity_url(candidate.source_url)
     if canonical_source_url:
         candidate.source_url = canonical_source_url
-    canonical_ticket_link = canonicalize_tg_url(candidate.ticket_link)
+    canonical_ticket_link = canonicalize_identity_url(
+        candidate.ticket_link,
+        preserve_ticket_fragment=True,
+    )
     if canonical_ticket_link:
         candidate.ticket_link = canonical_ticket_link
+    candidate.source_role = source_role
+    candidate.source_fingerprint = source_fingerprint
+    noop_event_id, noop_binding_conflict = await _exact_input_noop_event_id(
+        db,
+        canonical_source_url=canonical_source_url,
+        source_role=source_role,
+        source_fingerprint=source_fingerprint,
+    )
+    if noop_binding_conflict:
+        logger.warning(
+            "smart_update.replay_review reason=source_binding_conflict source_alias=%s",
+            hashlib.sha256(str(canonical_source_url or "").encode("utf-8")).hexdigest()[:12],
+        )
+        return SmartUpdateResult(status="review_required", reason="source_binding_conflict")
+    if noop_event_id is not None:
+        logger.info(
+            "smart_update.noop event_id=%s source_role=%s source_alias=%s fingerprint=%s",
+            noop_event_id,
+            source_role,
+            hashlib.sha256(str(canonical_source_url or "").encode("utf-8")).hexdigest()[:12],
+            source_fingerprint[:12],
+        )
+        return SmartUpdateResult(
+            status="noop_exact_source_replay",
+            event_id=noop_event_id,
+            reason="exact_input_packet",
+        )
+    if source_role == "context_only":
+        logger.info(
+            "smart_update.skip reason=context_only_source source_type=%s source_url=%s",
+            candidate.source_type,
+            candidate.source_url,
+        )
+        return SmartUpdateResult(
+            status="skipped_context_only",
+            reason="context_only_cannot_drive_identity",
+        )
     grounded_festival, dropped_kgd80 = ground_kgd80_festival(
         candidate.festival,
         source_evidence=(
@@ -16780,12 +16914,49 @@ async def _smart_event_update_impl(
             if note not in text_filter_facts:
                 text_filter_facts.append(note)
 
-    # Best-effort: if the source contains festival context (festival post OR event within a festival),
-    # enqueue it into the festival queue so operators can later run `/fest_queue` and build/update
-    # festival pages. This is intentionally deterministic (regex/signal-based), not another LLM call.
+    # Festival detection is pure here. Persistence is deferred until the event
+    # identity gate has accepted and the create/merge transaction has committed.
+    pending_festival_queue: dict[str, Any] | None = None
+
+    async def _persist_pending_festival_queue() -> None:
+        nonlocal pending_festival_queue
+        payload = pending_festival_queue
+        pending_festival_queue = None
+        if not payload:
+            return
+        try:
+            from festival_queue import enqueue_festival_source
+            from models import FestivalQueueItem
+
+            async with db.get_session() as _fest_session:
+                done_id = (
+                    await _fest_session.execute(
+                        select(FestivalQueueItem.id)
+                        .where(
+                            FestivalQueueItem.source_kind == payload["source_kind"],
+                            FestivalQueueItem.source_url == payload["source_url"],
+                            FestivalQueueItem.status == "done",
+                        )
+                        .limit(1)
+                    )
+                ).scalar_one_or_none()
+            if done_id is None:
+                item = await enqueue_festival_source(db, **payload)
+                msg = (
+                    f"🎪 Добавлено в фестивальную очередь: {payload['festival_context']} "
+                    f"{payload.get('festival_name') or payload.get('festival_full')} "
+                    f"(id={getattr(item, 'id', None)})"
+                )
+            else:
+                msg = f"🎪 Фестивальная очередь: уже done (id={done_id})"
+            text_filter_facts.append(msg)
+            _push_queue_note(msg)
+        except Exception:
+            logger.warning("smart_update: deferred festival_queue enqueue failed", exc_info=True)
+
+    # Pure deterministic routing (regex/signal-based), not another LLM call.
     try:
-        from festival_queue import detect_festival_context, enqueue_festival_source
-        from models import FestivalQueueItem
+        from festival_queue import detect_festival_context
 
         def _map_source_kind(source_type: str) -> str:
             st = (source_type or "").strip().lower()
@@ -16845,51 +17016,25 @@ async def _smart_event_update_impl(
                 if decision.dedup_links and not list(candidate.festival_dedup_links or []):
                     candidate.festival_dedup_links = list(decision.dedup_links)
 
-                source_kind = _map_source_kind(candidate.source_type)
-                async with db.get_session() as _fest_session:
-                    done_id = (
-                        await _fest_session.execute(
-                            select(FestivalQueueItem.id)
-                            .where(
-                                FestivalQueueItem.source_kind == source_kind,
-                                FestivalQueueItem.source_url == queue_url,
-                                FestivalQueueItem.status == "done",
-                            )
-                            .limit(1)
-                        )
-                    ).scalar_one_or_none()
-
-                if done_id is None:
-                    gid, pid = _parse_vk_ids(queue_url)
-                    item = await enqueue_festival_source(
-                        db,
-                        source_kind=source_kind,
-                        source_url=queue_url,
-                        source_text=clean_source_text or clean_raw_excerpt,
-                        festival_context=decision.context,
-                        festival_name=decision.festival,
-                        festival_full=decision.festival_full,
-                        festival_series=candidate.festival_series,
-                        dedup_links=decision.dedup_links,
-                        signals=decision.signals,
-                        source_chat_username=candidate.source_chat_username,
-                        source_chat_id=candidate.source_chat_id,
-                        source_message_id=candidate.source_message_id,
-                        source_group_id=gid,
-                        source_post_id=pid,
-                    )
-                    msg = (
-                        f"🎪 Добавлено в фестивальную очередь: {decision.context} "
-                        f"{decision.festival or decision.festival_full} (id={getattr(item, 'id', None)})"
-                    )
-                    text_filter_facts.append(msg)
-                    _push_queue_note(msg)
-                else:
-                    msg = f"🎪 Фестивальная очередь: уже done (id={done_id})"
-                    text_filter_facts.append(msg)
-                    _push_queue_note(msg)
+                gid, pid = _parse_vk_ids(queue_url)
+                pending_festival_queue = {
+                    "source_kind": _map_source_kind(candidate.source_type),
+                    "source_url": queue_url,
+                    "source_text": clean_source_text or clean_raw_excerpt,
+                    "festival_context": decision.context,
+                    "festival_name": decision.festival,
+                    "festival_full": decision.festival_full,
+                    "festival_series": candidate.festival_series,
+                    "dedup_links": decision.dedup_links,
+                    "signals": decision.signals,
+                    "source_chat_username": candidate.source_chat_username,
+                    "source_chat_id": candidate.source_chat_id,
+                    "source_message_id": candidate.source_message_id,
+                    "source_group_id": gid,
+                    "source_post_id": pid,
+                }
     except Exception:
-        logger.warning("smart_update: festival_queue enqueue failed", exc_info=True)
+        logger.warning("smart_update: festival_queue detection failed", exc_info=True)
 
     # If the source is detected as a festival/program post, it must not create/update events.
     # Some upstream extractors (notably Telegram Monitoring) may not populate `festival_context`,
@@ -17022,14 +17167,15 @@ async def _smart_event_update_impl(
     if not cand_start or not cand_end:
         return SmartUpdateResult(status="invalid", reason="invalid_date")
 
-    anchor_match = await _match_existing_event_by_source_anchor(db, candidate)
-    if anchor_match is None and (not check_source_url):
-        # When explicit idempotency is disabled (reprocessing allowed), still try to converge
-        # on an existing event that already has this source_url attached.
-        try:
-            anchor_match = await _match_existing_event_by_event_source_url(db, candidate)
-        except Exception:
-            logger.warning("smart_update: event_source_url anchor match failed", exc_info=True)
+    # A classified identity-bearing binding outranks legacy Event source fields.
+    # This prevents a shared/context URL from being rebound by fuzzy anchors.
+    try:
+        anchor_match = await _match_existing_event_by_event_source_url(db, candidate)
+    except Exception:
+        logger.warning("smart_update: event_source_url anchor match failed", exc_info=True)
+        anchor_match = None
+    if anchor_match is None:
+        anchor_match = await _match_existing_event_by_source_anchor(db, candidate)
     if anchor_match is not None:
         shortlist = [anchor_match]
         anchor_forced = True
@@ -18600,6 +18746,20 @@ async def _smart_event_update_impl(
             new_event.source_vk_post_url = candidate.source_url
 
         async with db.get_session() as session:
+            canonical_binding_url = canonicalize_identity_url(candidate.source_url)
+            if canonical_binding_url:
+                conflicting_binding = await _source_identity_binding_conflict(
+                    session,
+                    event_id=-1,
+                    canonical_source_url=canonical_binding_url,
+                    source_role=_candidate_source_role(candidate),
+                )
+                if conflicting_binding is not None:
+                    return SmartUpdateResult(
+                        status="review_required",
+                        event_id=conflicting_binding,
+                        reason="source_binding_conflict",
+                    )
             final_lo, final_hi = _candidate_date_range(candidate)
             if final_lo is not None and final_hi is not None:
                 final_stmt = select(Event).where(
@@ -18686,6 +18846,7 @@ async def _smart_event_update_impl(
                 await _record_source_facts(session, new_event.id, candidate, initial_records)
             await session.commit()
 
+        await _persist_pending_festival_queue()
         try:
             await _apply_holiday_festival_mapping(db, new_event.id)
         except Exception:
@@ -18792,7 +18953,16 @@ async def _smart_event_update_impl(
             conflicting["time"] = candidate.time
         if existing.location_name and candidate.location_name and not _location_matches(existing.location_name, candidate.location_name):
             conflicting["location_name"] = candidate.location_name
-        if existing.location_address and candidate.location_address and existing.location_address != candidate.location_address:
+        if (
+            existing.location_address
+            and candidate.location_address
+            and not _address_matches(
+                existing.location_address,
+                candidate.location_address,
+                city_a=getattr(existing, "city", None),
+                city_b=candidate.city,
+            )
+        ):
             conflicting["location_address"] = candidate.location_address
         if existing_end and cand_end and existing_end != cand_end:
             long_event = _is_long_event_type_value(
@@ -18925,6 +19095,20 @@ async def _smart_event_update_impl(
         event_db = await session.get(Event, existing.id)
         if not event_db:
             return SmartUpdateResult(status="error", reason="event_missing")
+        canonical_binding_url = canonicalize_identity_url(candidate.source_url)
+        if canonical_binding_url:
+            conflicting_binding = await _source_identity_binding_conflict(
+                session,
+                event_id=int(event_db.id or 0),
+                canonical_source_url=canonical_binding_url,
+                source_role=_candidate_source_role(candidate),
+            )
+            if conflicting_binding is not None:
+                return SmartUpdateResult(
+                    status="review_required",
+                    event_id=conflicting_binding,
+                    reason="source_binding_conflict",
+                )
         before_description = event_db.description or ""
         structured_age_decision = _candidate_age_decision(candidate)
         if structured_age_decision is not None:
@@ -20213,6 +20397,7 @@ async def _smart_event_update_impl(
             session.add(event_db)
         await session.commit()
 
+    await _persist_pending_festival_queue()
     if (updated_fields or added_posters or (added_sources and not same_source)) and not skip_topic_reclassify:
         await _classify_topics(db, existing.id)
 
@@ -20790,13 +20975,31 @@ async def _ensure_event_source(
 ) -> tuple[bool, bool]:
     if not event_id or not candidate.source_url:
         return False, False
+    canonical_source_url = canonicalize_identity_url(candidate.source_url)
+    source_role = _candidate_source_role(candidate)
+    if not canonical_source_url:
+        return False, False
+    conflicting_event_id = await _source_identity_binding_conflict(
+        session,
+        event_id=int(event_id),
+        canonical_source_url=canonical_source_url,
+        source_role=source_role,
+    )
+    if conflicting_event_id is not None:
+        raise SourceBindingConflict(conflicting_event_id)
     raw = _strip_private_use(candidate.source_text) or (candidate.source_text or "")
     clean_source_text = _strip_promo_lines(raw) or raw
     existing = (
         await session.execute(
             select(EventSource).where(
                 EventSource.event_id == event_id,
-                EventSource.source_url == candidate.source_url,
+                or_(
+                    EventSource.canonical_source_url == canonical_source_url,
+                    and_(
+                        EventSource.canonical_source_url.is_(None),
+                        EventSource.source_url == candidate.source_url,
+                    ),
+                ),
             )
         )
     ).scalar_one_or_none()
@@ -20814,6 +21017,16 @@ async def _ensure_event_source(
         if candidate.trust_level and not existing.trust_level:
             existing.trust_level = candidate.trust_level
             updated = True
+        if existing.canonical_source_url != canonical_source_url:
+            existing.canonical_source_url = canonical_source_url
+            updated = True
+        if existing.source_role != source_role:
+            existing.source_role = source_role
+            updated = True
+        if existing.source_fingerprint != candidate.source_fingerprint:
+            existing.source_fingerprint = candidate.source_fingerprint
+            existing.imported_at = datetime.now(timezone.utc)
+            updated = True
         if updated:
             session.add(existing)
         return False, True
@@ -20822,6 +21035,9 @@ async def _ensure_event_source(
             event_id=event_id,
             source_type=candidate.source_type,
             source_url=candidate.source_url,
+            canonical_source_url=canonical_source_url,
+            source_role=source_role,
+            source_fingerprint=candidate.source_fingerprint,
             source_chat_username=candidate.source_chat_username,
             source_chat_id=candidate.source_chat_id,
             source_message_id=candidate.source_message_id,
@@ -20843,6 +21059,29 @@ async def _ensure_event_source(
             exc_info=True,
         )
     return True, False
+
+
+async def _source_identity_binding_conflict(
+    session: Any,
+    *,
+    event_id: int,
+    canonical_source_url: str,
+    source_role: str,
+) -> int | None:
+    if source_role != "identity_bearing":
+        return None
+    row = (
+        await session.execute(
+            select(EventSource.event_id)
+            .where(
+                EventSource.canonical_source_url == canonical_source_url,
+                EventSource.source_role == "identity_bearing",
+                EventSource.event_id != int(event_id),
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return int(row) if row is not None else None
 
 
 async def _attached_collection_source(

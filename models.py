@@ -1070,6 +1070,8 @@ class EventSource(SQLModel, table=True):
     __table_args__ = (
         Index("ix_event_source_event", "event_id"),
         Index("ix_event_source_type_url", "source_type", "source_url"),
+        Index("ix_event_source_canonical_role", "canonical_source_url", "source_role"),
+        Index("ix_event_source_fingerprint", "source_fingerprint"),
         UniqueConstraint("event_id", "source_url", name="ux_event_source_event_url"),
     )
 
@@ -1077,6 +1079,11 @@ class EventSource(SQLModel, table=True):
     event_id: int = Field(foreign_key="event.id")
     source_type: str
     source_url: str
+    # Additive identity metadata. Legacy rows deliberately remain NULL until an
+    # intake boundary can classify them from explicit provenance.
+    canonical_source_url: Optional[str] = None
+    source_role: Optional[str] = None
+    source_fingerprint: Optional[str] = None
     source_chat_username: Optional[str] = None
     source_chat_id: Optional[int] = None
     source_message_id: Optional[int] = None
