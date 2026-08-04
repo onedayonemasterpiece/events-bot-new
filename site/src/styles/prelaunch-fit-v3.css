@@ -1,0 +1,320 @@
+/* Final product-fit layer for the one-screen prelaunch surface.
+   Imported after prelaunch-motion.css. Selectors intentionally outrank the
+   component-scoped responsive fallbacks without changing component logic. */
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+
+body .prelaunch[data-prelaunch-page] {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100svh !important;
+  height: 100dvh !important;
+  min-height: 0 !important;
+  max-height: 100dvh !important;
+  overflow: hidden !important;
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__foreground {
+  width: min(1440px, 100%) !important;
+  height: 100svh !important;
+  height: 100dvh !important;
+  min-height: 0 !important;
+  max-height: 100dvh !important;
+  overflow: hidden !important;
+}
+
+/* Use the approved leather object, but cut away the source image's light
+   studio background. The clip follows the actual rounded leather silhouette. */
+body .prelaunch[data-prelaunch-page] .prelaunch__background::after {
+  width: min(96vw, 1320px);
+  left: 52%;
+  top: 37%;
+  clip-path: inset(6.2% 6.2% 7% 6.2% round 11%);
+  filter: saturate(.92) contrast(1.05) brightness(.8);
+}
+
+/* Never let the directed-light glint turn a tile into an accidental hole. */
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-glint="true"]::before {
+  background-color: rgb(10 13 17 / var(--cover));
+}
+
+/* The central leather field is legible through coloured frosted glass without
+   turning the whole composition into an orange tiled wall. */
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-zone="leather"][data-state="dim"] {
+  --cover: .68;
+  --blur-base: 5.4px;
+  --saturation: .78;
+  --brightness: .91;
+  --edge: .14;
+  --edge-highlight: .12;
+  --glow: .08;
+  --matte: .25;
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-zone="leather"][data-state="revealed"] {
+  --cover: .66;
+  --blur-base: 4.6px;
+  --saturation: .82;
+  --brightness: .93;
+  --edge: .15;
+  --edge-highlight: .13;
+  --glow: .1;
+  --matte: .27;
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-state="revealed"][data-index="14"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-state="revealed"][data-index="23"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-state="revealed"][data-index="31"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-state="revealed"][data-index="39"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-state="revealed"][data-index="48"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-state="revealed"][data-index="57"] {
+  --cover: .28;
+  --blur-base: 2.2px;
+  --saturation: .9;
+  --brightness: .96;
+  --edge: .19;
+  --edge-highlight: .16;
+  --glow: .14;
+  --matte: .29;
+}
+
+/* Four editorial lines instead of an accidental fifth line. This also creates
+   the vertical room required by short desktop viewports. */
+body .prelaunch[data-prelaunch-page] .prelaunch__copy p {
+  max-width: 36rem;
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__notify {
+  transform: translateY(-14px);
+}
+
+@media (min-aspect-ratio: 5 / 4) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__background::after {
+    left: 54%;
+    top: 30%;
+  }
+}
+
+@media (min-width: 821px) and (max-height: 780px) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__foreground {
+    padding-top: clamp(20px, 4.4vh, 34px);
+    padding-bottom: clamp(10px, 2.2vh, 18px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__copy {
+    margin-top: clamp(20px, 5.4vh, 42px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__copy p {
+    max-width: 34rem;
+    margin-top: clamp(10px, 1.8vh, 16px);
+    font-size: clamp(.92rem, min(1.42vw, 2.55vh), 1.2rem);
+    line-height: 1.27;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__notify {
+    transform: translateY(-18px);
+  }
+}
+
+@media (min-width: 600px) and (max-width: 820px) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__copy p {
+    max-width: 34rem;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__notify {
+    transform: translateY(-14px);
+  }
+}
+
+@media (max-width: 599px) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__background::after {
+    width: 150vw;
+    left: 62%;
+    top: 40%;
+    clip-path: inset(6.2% 6.2% 7% 6.2% round 11%);
+    filter: saturate(.88) contrast(1.04) brightness(.7);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__tile {
+    border-radius: clamp(9px, calc(var(--tile-radius, 14px) * .72), 12px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__foreground {
+    padding:
+      clamp(12px, 2.8vh, 21px)
+      clamp(15px, 5.3vw, 23px)
+      clamp(8px, 1.8vh, 14px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__brand-icon {
+    width: clamp(42px, min(13vw, 7.5vh), 58px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__brand p {
+    font-size: clamp(.8rem, min(4.05vw, 2.5vh), 1rem);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__copy {
+    margin-top: clamp(22px, 6.5vh, 48px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__copy h1 {
+    max-width: 8.7ch;
+    font-size: clamp(2.3rem, min(11.6vw, 7.7vh), 3.25rem);
+    line-height: .91;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__copy p {
+    max-width: 31ch;
+    margin-top: clamp(9px, 1.7vh, 14px);
+    font-size: clamp(.78rem, min(3.55vw, 1.95vh), .9rem);
+    line-height: 1.23;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__notify {
+    transform: translateY(-12px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__notify h2 {
+    margin-bottom: clamp(4px, .8vh, 7px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch-form__row {
+    gap: clamp(4px, .75vh, 6px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch-form input[type="email"],
+  body .prelaunch[data-prelaunch-page] .prelaunch-form button {
+    min-height: clamp(37px, 5.2vh, 45px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch-form__consent {
+    margin-top: clamp(3px, .65vh, 5px);
+    font-size: clamp(.58rem, min(2.45vw, 1.22vh), .65rem);
+    line-height: 1.2;
+    color: rgba(228, 216, 205, .74);
+  }
+}
+
+@media (max-width: 599px) and (max-height: 680px) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__foreground {
+    padding-top: 8px;
+    padding-bottom: 6px;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__copy {
+    margin-top: clamp(14px, 4.4vh, 25px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__copy h1 {
+    font-size: clamp(2.12rem, min(11.3vw, 7.2vh), 2.8rem);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__copy p {
+    max-width: 32ch;
+    margin-top: 6px;
+    font-size: clamp(.72rem, min(3.45vw, 1.85vh), .82rem);
+    line-height: 1.17;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__notify {
+    transform: translateY(-9px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch-form input[type="email"],
+  body .prelaunch[data-prelaunch-page] .prelaunch-form button {
+    min-height: clamp(34px, 6.3vh, 39px);
+  }
+}
+
+/* Phone landscape: use the width that is available instead of crushing a
+   portrait stack into a 375–430px-high viewport. */
+@media (orientation: landscape) and (min-width: 600px) and (max-height: 500px) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__foreground {
+    width: 100% !important;
+    padding: clamp(10px, 3vh, 15px) clamp(18px, 3.5vw, 32px) clamp(8px, 2.4vh, 12px);
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(240px, .75fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    column-gap: clamp(22px, 4vw, 44px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__brand {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__brand-icon {
+    width: clamp(40px, 11vh, 50px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__brand p {
+    font-size: clamp(.78rem, 3.4vh, .98rem);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__copy {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: start;
+    margin-top: clamp(10px, 4.2vh, 18px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__copy h1 {
+    max-width: none;
+    white-space: nowrap;
+    font-size: clamp(2.25rem, 11.5vh, 3rem);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__copy p {
+    max-width: 39ch;
+    margin-top: clamp(6px, 2.5vh, 10px);
+    font-size: clamp(.7rem, 3.3vh, .82rem);
+    line-height: 1.18;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__notify {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    align-self: end;
+    width: 100%;
+    margin: 0;
+    transform: translateY(-2px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__notify h2 {
+    margin-bottom: 5px;
+    font-size: clamp(.72rem, 3.2vh, .88rem);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch-form__row {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch-form input[type="email"],
+  body .prelaunch[data-prelaunch-page] .prelaunch-form button {
+    width: 100%;
+    min-height: clamp(34px, 10.5vh, 42px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch-form__consent {
+    margin-top: 4px;
+    font-size: clamp(.52rem, 2.35vh, .61rem);
+    line-height: 1.15;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__background::after {
+    width: min(108vw, 900px);
+    left: 52%;
+    top: 18%;
+  }
+}
