@@ -20,6 +20,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: prelaunch-visual-review-${{ github.event.pull_request.number || github.ref }}
@@ -101,3 +102,24 @@ jobs:
           path: artifacts/prelaunch-browser
           if-no-files-found: error
           retention-days: 14
+
+      - name: Report visual run on PR 296
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          body=$(cat <<EOF
+          <!-- prelaunch-visual-evidence -->
+          **Prelaunch visual review**
+
+          - Run ID: \`${GITHUB_RUN_ID}\`
+          - SHA: \`${GITHUB_SHA}\`
+          - Job status: \`${JOB_STATUS}\`
+          - Artifact: \`prelaunch-visual-evidence-${GITHUB_RUN_ID}\`
+          - Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+          )
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/issues/296/comments" \
+            -f body="$body"
