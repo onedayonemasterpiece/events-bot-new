@@ -41,7 +41,10 @@ if (fit) {
 }
 
 if (light) {
-  const supersededLightPolicy = /^(?:light-desktop|light-mobile|light-mobile-small): (?:panes use \d+ local light\/material coordinate fields|phone artwork top ratio .* is outside \.14–\.24)/u;
+  // These legacy assertions describe the superseded per-pane coordinate-field
+  // model and its old mobile artwork calibration. The product policy below
+  // rechecks the accepted spatial material range and current phone ratios.
+  const supersededLightPolicy = /^(?:light-desktop|light-mobile|light-mobile-small): (?:panes use \d+ local light\/material coordinate fields|phone artwork (?:top|width) ratio .* is outside (?:\.14–\.24|1\.42–1\.52))/u;
   const unaccepted = (light.failures || []).filter((message) => !supersededLightPolicy.test(String(message)));
   check(unaccepted.length === 0, `light-model structural failures: ${unaccepted.join(' | ')}`);
 }
