@@ -110,6 +110,7 @@ async def test_requeue_preserves_remote_handoff_for_exact_active_claim(tmp_path)
         reason="startup catchup", event_ids=[12], correlation_id="startup"
     )
 
+    before = datetime.now(timezone.utc)
     action = await main.enqueue_job(
         db,
         12,
@@ -128,6 +129,70 @@ async def test_requeue_preserves_remote_handoff_for_exact_active_claim(tmp_path)
     assert row.payload["snapshot"] == failed_payload["snapshot"]
     assert row.payload["event_ids"] == [11, 12]
     assert row.payload["reasons"] == ["remote push", "startup catchup"]
+    assert _utc(row.next_run_at) >= before
+    assert _utc(row.next_run_at) <= datetime.now(timezone.utc)
+
+
+@pytest.mark.asyncio
+async def test_smart_update_does_not_debounce_exact_pending_remote_recovery(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    recovery_payload = make_request_payload(
+        reason="recover terminal output", event_ids=[31], correlation_id="remote-run"
+    )
+    recovery_payload["remote_handoff"] = {
+        "run_id": "static-site:recoverable-run",
+        "kernel_ref": "owner/static-site-builder",
+    }
+    async with db.get_session() as session:
+        row = JobOutbox(
+            event_id=31,
+            task=JobTask.static_site_build,
+            payload=recovery_payload,
+            status=JobStatus.pending,
+            coalesce_key="static_site_build:prod",
+            updated_at=now,
+            next_run_at=now + timedelta(minutes=15),
+        )
+        session.add(row)
+        await session.commit()
+        await session.refresh(row)
+        job_id = int(row.id)
+    with sqlite3.connect(db.path) as connection:
+        connection.execute(
+            """
+            INSERT OR REPLACE INTO static_site_build_state(
+                release_channel, schema_version, active_job_id, active_run_id,
+                active_claim_token, updated_at
+            ) VALUES('secret_preview', 'static_site_build_state_v1', ?, ?, ?, ?)
+            """,
+            (job_id, "static-site:recoverable-run", "recoverable-claim", now.isoformat()),
+        )
+
+    effect_at = now + timedelta(seconds=5)
+    action = await main.enqueue_job(
+        db,
+        32,
+        JobTask.static_site_build,
+        payload=make_request_payload(
+            reason="new Smart Update effect",
+            event_ids=[32],
+            effect_at=effect_at,
+            trigger="smart_update",
+        ),
+        coalesce_key="static_site_build:prod",
+        next_run_at=effect_at + timedelta(minutes=15),
+    )
+
+    assert action == "merged-rearmed"
+    async with db.get_session() as session:
+        recovered = await session.get(JobOutbox, job_id)
+    assert recovered is not None
+    assert recovered.payload["remote_handoff"] == recovery_payload["remote_handoff"]
+    assert recovered.payload["event_ids"] == [31, 32]
+    assert _utc(recovered.next_run_at) <= datetime.now(timezone.utc)
+    await db.close()
 
 
 @pytest.mark.asyncio

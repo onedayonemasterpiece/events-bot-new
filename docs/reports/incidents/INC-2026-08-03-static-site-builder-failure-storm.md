@@ -103,6 +103,13 @@ family.
   finished `done`, its active claim cleared and its prior timeout error cleared.
   The unrelated 2026-08-04 calendar-rollover job remained pending and was not
   repurposed for incident closure.
+- 2026-08-04 00:02–01:52 UTC — the next automatic calendar-rollover build also
+  reached terminal Kaggle success and uploaded its immutable candidate. Its
+  first host wrapper timed out during full readback; continuing Smart Update
+  effects then repeatedly moved the exact-output recovery row to the end of a
+  new 15-minute quiet window. A guarded due-now recovery preserved the exact
+  run/handoff, launched no new kernel, completed readback/CAS and exposed the
+  pending-row debounce starvation addressed by the follow-up regression.
 
 ## Root Cause
 
@@ -211,6 +218,10 @@ browser failure are the reproducible blockers addressed here.
   rendered counts, `rendered <= source`, and exact DOM card/image parity at both
   desktop and mobile sizes. The 21-card fallback remains only for the clean
   preview fixture that has no release manifest.
+- Keep an exact active remote-handoff recovery due immediately while merging
+  later Smart Update evidence into its payload. The ordinary trailing debounce
+  continues to apply only to a genuinely new pending build, not to adoption of
+  an already completed immutable output.
 
 ## Follow-up Actions
 
@@ -280,3 +291,8 @@ festival inventory. Catalog evolution no longer fails a valid build, while
 linked-family duplication, missing repeat summaries, wrong projection source,
 invalid count ordering, DOM/image parity and visual geometry remain
 fail-closed.
+
+The outbox coalescer also distinguishes a new build from an exact active
+remote-output recovery. New Smart Update effects cannot indefinitely postpone
+the latter, while their event/reason evidence remains merged for the next
+normal build decision.

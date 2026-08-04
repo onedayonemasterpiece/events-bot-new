@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed StaticSiteBuilder exact-output recovery starvation: when a timed-out
+  host wrapper still owns a verified remote handoff, incoming Smart Update
+  effects merge into that pending row without extending its adoption/readback
+  by another 15-minute debounce window. Ordinary new-build trailing debounce
+  remains unchanged.
+
 - Fixed the initial deterministic defects from the 2026-08-03
   StaticSiteBuilder failure storm: preview validation now derives Popular
   repeated-occurrence expectations from generated family data, requires the

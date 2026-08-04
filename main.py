@@ -14725,6 +14725,19 @@ async def _enqueue_static_site_build_atomic(
         await cursor.close()
         running = next((row for row in rows if row["status"] == "running"), None)
         pending = next((row for row in rows if row["status"] == "pending"), None)
+        state_cursor = await connection.execute(
+            """
+            SELECT active_job_id FROM static_site_build_state
+            WHERE release_channel='secret_preview'
+            """
+        )
+        active_state = await state_cursor.fetchone()
+        await state_cursor.close()
+        active_job_id = (
+            int(active_state["active_job_id"])
+            if active_state and active_state["active_job_id"]
+            else None
+        )
         if running is not None:
             updated_at = _sqlite_parse_datetime(running["updated_at"])
             stale_after = int(JOB_MAX_RUNTIME.get(JobTask.static_site_build, 5400))
@@ -14801,13 +14814,25 @@ async def _enqueue_static_site_build_atomic(
             old_payload = json.loads(pending["payload"] or "null")
             merged = merge_static_site_request_payload(old_payload, payload) if payload is not None else old_payload
             old_next = _sqlite_parse_datetime(pending["next_run_at"])
-            target = _static_site_coalesced_next_run(
-                old_next=old_next,
-                requested=requested,
-                incoming_payload=payload,
-                effect_payload=merged,
-                now=now,
-                incoming_immediate=immediate,
+            exact_remote_recovery = (
+                active_job_id == int(pending["id"])
+                and isinstance(old_payload, dict)
+                and isinstance(old_payload.get("remote_handoff"), dict)
+            )
+            # A timed-out host wrapper may leave a terminal Kaggle result in an
+            # exact-owner pending row. New Smart Update effects must merge into
+            # that row without repeatedly moving its adoption/readback 15
+            # minutes into the future. Once the recovery is picked, later
+            # effects merge into the running owner normally.
+            target = min(old_next, now) if exact_remote_recovery else (
+                _static_site_coalesced_next_run(
+                    old_next=old_next,
+                    requested=requested,
+                    incoming_payload=payload,
+                    effect_payload=merged,
+                    now=now,
+                    incoming_immediate=immediate,
+                )
             )
             await connection.execute(
                 "UPDATE joboutbox SET payload=?, next_run_at=?, updated_at=?, attempts=0, last_error=NULL WHERE id=? AND status='pending'",
@@ -14833,19 +14858,7 @@ async def _enqueue_static_site_build_atomic(
                 await connection.commit()
                 return "daily-already-requested"
             requeued_payload = encoded_payload
-            state_cursor = await connection.execute(
-                """
-                SELECT active_job_id FROM static_site_build_state
-                WHERE release_channel='secret_preview'
-                """
-            )
-            active_state = await state_cursor.fetchone()
-            await state_cursor.close()
-            active_job_id = (
-                int(active_state["active_job_id"])
-                if active_state and active_state["active_job_id"]
-                else None
-            )
+            exact_remote_recovery = False
             if active_job_id == int(prior["id"]):
                 try:
                     prior_payload = json.loads(prior["payload"] or "null")
@@ -14861,6 +14874,7 @@ async def _enqueue_static_site_build_atomic(
                     # needed by the adoption preflight.
                     merged = merge_static_site_request_payload(prior_payload, payload)
                     requeued_payload = json.dumps(merged, ensure_ascii=False)
+                    exact_remote_recovery = True
             await connection.execute(
                 """
                 UPDATE joboutbox SET event_id=?, payload=?, status='pending', attempts=0,
@@ -14869,7 +14883,7 @@ async def _enqueue_static_site_build_atomic(
                 (
                     event_id, requeued_payload, _sqlite_datetime(now),
                     _sqlite_datetime(
-                        _static_site_initial_next_run(
+                        now if exact_remote_recovery else _static_site_initial_next_run(
                             payload=payload,
                             requested=requested,
                             now=now,
