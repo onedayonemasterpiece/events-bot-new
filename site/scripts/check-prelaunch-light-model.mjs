@@ -58,11 +58,20 @@ try {
             index: Number(tile.getAttribute('data-index')),
             glint: tile.getAttribute('data-glint') === 'true',
             backgroundImage: surface.backgroundImage,
+            backgroundAttachment: surface.backgroundAttachment,
+            backgroundSize: surface.backgroundSize,
+            backgroundPosition: surface.backgroundPosition,
             backgroundColor: surface.backgroundColor,
             boxShadow: surface.boxShadow,
           };
         });
         const number = (value) => Number.parseFloat(String(value || '0')) || 0;
+        const lightFields = tileSurfaces.map((tile) => [
+          tile.backgroundImage,
+          tile.backgroundAttachment,
+          tile.backgroundSize,
+          tile.backgroundPosition,
+        ].join('|'));
         return {
           viewport: { width: window.innerWidth, height: window.innerHeight },
           layerZ: {
@@ -79,7 +88,9 @@ try {
           artworkTop: number(backgroundImage?.top),
           artworkLeft: number(backgroundImage?.left),
           tileSurfaces,
-          localRadialCount: tileSurfaces.filter((tile) => tile.backgroundImage.includes('radial-gradient')).length,
+          paneRadialCount: tileSurfaces.filter((tile) => tile.backgroundImage.includes('radial-gradient')).length,
+          fixedPaneCount: tileSurfaces.filter((tile) => tile.backgroundAttachment.split(',')[0]?.trim() === 'fixed').length,
+          uniquePaneLightFieldCount: new Set(lightFields).size,
           localGlintCount: tileSurfaces.filter((tile) => tile.glint).length,
         };
       });
@@ -110,8 +121,13 @@ try {
         localFailures,
       );
       check(
-        scene.localRadialCount === 0,
-        `${viewport.name}: ${scene.localRadialCount} panes still paint individual radial spotlights`,
+        scene.paneRadialCount === 72 && scene.fixedPaneCount === 72,
+        `${viewport.name}: pane light is not one viewport-anchored field (radial=${scene.paneRadialCount}, fixed=${scene.fixedPaneCount})`,
+        localFailures,
+      );
+      check(
+        scene.uniquePaneLightFieldCount === 1,
+        `${viewport.name}: panes use ${scene.uniquePaneLightFieldCount} different light coordinate fields`,
         localFailures,
       );
       check(scene.localGlintCount === 3, `${viewport.name}: deterministic glint markers changed`, localFailures);
