@@ -14,11 +14,22 @@ if (!url || !/^https?:\/\//u.test(url)) {
 }
 mkdirSync(artifactDir, { recursive: true });
 
+// The landing is a single-screen product surface. This matrix deliberately
+// includes short desktop and small-phone viewports where accidental scroll is
+// most likely to appear.
 const viewports = [
   { name: 'reference-square', width: 1200, height: 1200 },
+  { name: 'desktop-xl', width: 1920, height: 1080 },
   { name: 'desktop', width: 1440, height: 900 },
+  { name: 'desktop-short', width: 1366, height: 768 },
+  { name: 'desktop-compact', width: 1280, height: 720 },
+  { name: 'tablet', width: 1024, height: 768 },
+  { name: 'mobile-large', width: 430, height: 932 },
   { name: 'mobile', width: 390, height: 844 },
+  { name: 'mobile-compact', width: 375, height: 667 },
+  { name: 'mobile-small', width: 320, height: 568 },
 ];
+
 const executablePath = String(process.env.PRELAUNCH_CHROMIUM_EXECUTABLE_PATH || '').trim() || undefined;
 const browser = await chromium.launch({ headless: true, executablePath });
 const failures = [];
@@ -36,20 +47,59 @@ function alphaFromColor(value) {
 
 async function readScene(page) {
   return page.evaluate(() => {
+    const rectOf = (node) => {
+      if (!(node instanceof Element)) return null;
+      const rect = node.getBoundingClientRect();
+      return {
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      };
+    };
+    const alpha = (value) => {
+      if (value === 'transparent') return 0;
+      const match = /rgba\([^)]*[,\s]([\d.]+)\s*\)$/u.exec(value);
+      return match ? Number(match[1]) : 1;
+    };
+
     const root = document.querySelector('[data-prelaunch-page]');
     const projection = document.querySelector('.prelaunch__projection');
     const mosaic = document.querySelector('[data-prelaunch-mosaic]');
     const atmosphere = document.querySelector('.prelaunch__atmosphere');
     const foreground = document.querySelector('.prelaunch__foreground');
+    const brand = document.querySelector('.prelaunch__brand');
+    const copy = document.querySelector('.prelaunch__copy');
     const heading = document.querySelector('#prelaunch-title');
+    const description = document.querySelector('.prelaunch__copy p');
+    const notify = document.querySelector('.prelaunch__notify');
+    const consent = document.querySelector('.prelaunch-form__consent');
     const tiles = [...document.querySelectorAll('[data-prelaunch-tile]')];
     const email = document.querySelector('input[type="email"]');
     const button = document.querySelector('[data-prelaunch-submit]');
+
     const counts = tiles.reduce((out, tile) => {
       const state = tile.getAttribute('data-state') || 'missing';
       out[state] = (out[state] || 0) + 1;
       return out;
     }, {});
+
+    const tileSurfaces = tiles.map((tile) => {
+      const base = getComputedStyle(tile);
+      const glass = getComputedStyle(tile, '::before');
+      return {
+        index: Number(tile.getAttribute('data-index')),
+        state: tile.getAttribute('data-state'),
+        zone: tile.getAttribute('data-zone'),
+        tileOpacity: Number(base.opacity),
+        glassBackground: glass.backgroundColor,
+        glassAlpha: alpha(glass.backgroundColor),
+        backdropFilter: glass.backdropFilter || glass.webkitBackdropFilter || '',
+      };
+    });
+
     const stateSurface = Object.fromEntries(['sealed', 'dim', 'revealed'].map((state) => {
       const tile = tiles.find((candidate) => candidate.getAttribute('data-state') === state);
       if (!(tile instanceof HTMLElement)) return [state, null];
@@ -66,6 +116,7 @@ async function readScene(page) {
         matteOpacity: Number(matte.opacity),
       }];
     }));
+
     const first = tiles[0]?.getBoundingClientRect();
     const second = tiles[1]?.getBoundingClientRect();
     const nextRow = tiles[9]?.getBoundingClientRect();
@@ -76,9 +127,14 @@ async function readScene(page) {
     const image = projection instanceof HTMLImageElement
       ? { complete: projection.complete, naturalWidth: projection.naturalWidth }
       : { complete: false, naturalWidth: 0 };
-    const headingRect = heading?.getBoundingClientRect();
     const mosaicSeam = mosaic ? getComputedStyle(mosaic, '::before').backgroundImage : '';
-    const rect = projection?.getBoundingClientRect?.();
+    const scrolling = document.scrollingElement || document.documentElement;
+    const documentHeight = Math.max(
+      scrolling.scrollHeight,
+      document.documentElement.scrollHeight,
+      document.body?.scrollHeight || 0,
+    );
+
     return {
       layers: [root, projection, mosaic, atmosphere, foreground].every(Boolean),
       tileCount: tiles.length,
@@ -87,16 +143,20 @@ async function readScene(page) {
       zoneCount: new Set(tiles.map((tile) => tile.getAttribute('data-zone'))).size,
       radiiCount: radii.length,
       image,
-      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      documentHeight,
+      verticalOverflow: documentHeight - window.innerHeight,
+      horizontalOverflow: scrolling.scrollWidth - window.innerWidth,
+      scrollTop: scrolling.scrollTop,
       inputWidth: email?.getBoundingClientRect().width || 0,
       buttonWidth: button?.getBoundingClientRect().width || 0,
-      heading: headingRect ? {
-        top: headingRect.top,
-        left: headingRect.left,
-        right: headingRect.right,
-        bottom: headingRect.bottom,
-      } : null,
-      projection: rect ? { top: rect.top, left: rect.left, width: rect.width, height: rect.height } : null,
+      root: rectOf(root),
+      brand: rectOf(brand),
+      copy: rectOf(copy),
+      heading: rectOf(heading),
+      description: rectOf(description),
+      notify: rectOf(notify),
+      consent: rectOf(consent),
       firstTile: first ? {
         top: first.top,
         left: first.left,
@@ -110,6 +170,9 @@ async function readScene(page) {
       tileAspect,
       mosaicSeam,
       stateSurface,
+      tileSurfaces,
+      effectiveClearCount: tileSurfaces.filter((surface) => surface.glassAlpha <= .4).length,
+      effectiveMostlyClosedCount: tileSurfaces.filter((surface) => surface.glassAlpha >= .65).length,
       stateSnapshot: tiles.map((tile) => tile.getAttribute('data-state')),
     };
   });
@@ -121,22 +184,43 @@ function validateScene(scene, viewport, localFailures) {
   check(scene.tileCount === 72, `${prefix}: expected 72 tiles, got ${scene.tileCount}`, localFailures);
   check(
     scene.counts.sealed === 30 && scene.counts.dim === 23 && scene.counts.revealed === 19,
-    `${prefix}: deterministic glass scene changed ${JSON.stringify(scene.counts)}`,
+    `${prefix}: deterministic DOM scene changed ${JSON.stringify(scene.counts)}`,
     localFailures,
   );
   check(scene.glintCount === 3, `${prefix}: expected three directed-light glints, got ${scene.glintCount}`, localFailures);
   check(scene.zoneCount === 3, `${prefix}: expected quiet/light/leather motion zones`, localFailures);
   check(scene.radiiCount >= 3, `${prefix}: tile radii lost deliberate micro-variation`, localFailures);
-  check(scene.image.complete && scene.image.naturalWidth >= 512, `${prefix}: projection did not decode`, localFailures);
-  check(scene.overflow <= 1, `${prefix}: horizontal overflow ${scene.overflow}px`, localFailures);
-  check(scene.inputWidth >= 180 && scene.buttonWidth >= 150, `${prefix}: form control geometry collapsed`, localFailures);
+  check(scene.image.complete && scene.image.naturalWidth >= 512, `${prefix}: projection fallback did not decode`, localFailures);
+  check(scene.horizontalOverflow <= 1, `${prefix}: horizontal overflow ${scene.horizontalOverflow}px`, localFailures);
+  check(scene.verticalOverflow <= 1, `${prefix}: page scrolls by ${scene.verticalOverflow}px`, localFailures);
+  check(scene.scrollTop === 0, `${prefix}: page opened at scrollTop=${scene.scrollTop}`, localFailures);
+  check(scene.root && Math.abs(scene.root.height - scene.viewport.height) <= 1, `${prefix}: root height ${scene.root?.height} != viewport ${scene.viewport.height}`, localFailures);
+  check(scene.inputWidth >= 170 && scene.buttonWidth >= 150, `${prefix}: form control geometry collapsed`, localFailures);
   check(scene.heading && scene.heading.left >= 0 && scene.heading.top >= 0, `${prefix}: heading escaped viewport`, localFailures);
-  check(scene.gap >= 6 && scene.gap <= 16, `${prefix}: horizontal inter-tile seam is ${scene.gap}px`, localFailures);
-  check(scene.verticalGap >= 6 && scene.verticalGap <= 16, `${prefix}: vertical inter-tile seam is ${scene.verticalGap}px`, localFailures);
-  check(scene.tileAspect >= 1.04 && scene.tileAspect <= 1.14, `${prefix}: tile aspect ${scene.tileAspect} drifted from the reference`, localFailures);
+  check(scene.brand && scene.brand.top >= -1, `${prefix}: brand escaped viewport`, localFailures);
+  check(scene.notify && scene.notify.bottom <= scene.viewport.height + 1, `${prefix}: form bottom ${scene.notify?.bottom} exceeds viewport ${scene.viewport.height}`, localFailures);
+  check(scene.consent && scene.consent.bottom <= scene.viewport.height + 1, `${prefix}: consent bottom ${scene.consent?.bottom} exceeds viewport`, localFailures);
+  check(
+    scene.description && scene.notify && scene.description.bottom + 8 <= scene.notify.top,
+    `${prefix}: description overlaps form (${scene.description?.bottom} / ${scene.notify?.top})`,
+    localFailures,
+  );
+  check(scene.gap >= 5 && scene.gap <= 12, `${prefix}: horizontal inter-tile seam is ${scene.gap}px`, localFailures);
+  check(scene.verticalGap >= 5 && scene.verticalGap <= 12, `${prefix}: vertical inter-tile seam is ${scene.verticalGap}px`, localFailures);
+  check(scene.tileAspect >= .97 && scene.tileAspect <= 1.03, `${prefix}: tile aspect ${scene.tileAspect} is not square`, localFailures);
   check(
     scene.mosaicSeam.includes('repeating-linear-gradient'),
     `${prefix}: mosaic no longer paints an opaque seam above the projection`,
+    localFailures,
+  );
+  check(
+    scene.effectiveClearCount >= 4 && scene.effectiveClearCount <= 10,
+    `${prefix}: expected 4–10 genuinely clear windows, got ${scene.effectiveClearCount}`,
+    localFailures,
+  );
+  check(
+    scene.effectiveMostlyClosedCount >= 58,
+    `${prefix}: product is insufficiently hidden; mostly-closed tiles=${scene.effectiveMostlyClosedCount}`,
     localFailures,
   );
 
@@ -169,13 +253,19 @@ function validateScene(scene, viewport, localFailures) {
     );
   }
 
+  if (viewport.width <= 599) {
+    check(
+      scene.heading && scene.heading.top <= viewport.height * .48,
+      `${prefix}: mobile launch date appears too late at y=${scene.heading?.top}`,
+      localFailures,
+    );
+  }
+
   if (viewport.name === 'reference-square') {
-    check(scene.firstTile && scene.firstTile.right >= 160 && scene.firstTile.right <= 180, `reference-square: first seam x=${scene.firstTile?.right}`, localFailures);
-    check(scene.firstTile && scene.firstTile.bottom >= 100 && scene.firstTile.bottom <= 130, `reference-square: first seam y=${scene.firstTile?.bottom}`, localFailures);
-    check(scene.heading && scene.heading.left >= 110 && scene.heading.left <= 140, `reference-square: heading left=${scene.heading?.left}`, localFailures);
-    check(scene.heading && scene.heading.top >= 300 && scene.heading.top <= 335, `reference-square: heading top=${scene.heading?.top}`, localFailures);
-    check(scene.projection && scene.projection.width >= 1180 && scene.projection.width <= 1220, `reference-square: projection width=${scene.projection?.width}`, localFailures);
-    check(scene.projection && Math.abs(scene.projection.top) <= 2, `reference-square: projection top=${scene.projection?.top}`, localFailures);
+    check(scene.firstTile && scene.firstTile.right >= 155 && scene.firstTile.right <= 180, `reference-square: first seam x=${scene.firstTile?.right}`, localFailures);
+    check(scene.firstTile && scene.firstTile.bottom >= 75 && scene.firstTile.bottom <= 110, `reference-square: first seam y=${scene.firstTile?.bottom}`, localFailures);
+    check(scene.heading && scene.heading.left >= 105 && scene.heading.left <= 145, `reference-square: heading left=${scene.heading?.left}`, localFailures);
+    check(scene.heading && scene.heading.top >= 245 && scene.heading.top <= 360, `reference-square: heading top=${scene.heading?.top}`, localFailures);
   }
 }
 
@@ -194,7 +284,7 @@ try {
       await page.locator('[data-prelaunch-page]').waitFor({ state: 'visible' });
       const scene = await readScene(page);
 
-      await page.waitForTimeout(4200);
+      await page.waitForTimeout(300);
       const stateAfter = await page.locator('[data-prelaunch-tile]').evaluateAll((nodes) => (
         nodes.map((node) => node.getAttribute('data-state'))
       ));
