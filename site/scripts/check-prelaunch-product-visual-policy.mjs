@@ -43,7 +43,7 @@ if (fit) {
 if (light) {
   // These legacy assertions describe the superseded per-pane coordinate-field
   // model and its old mobile artwork calibration. The product policy below
-  // rechecks the accepted spatial material range and current phone ratios.
+  // rechecks one shared material and the enlarged coherent phone crop.
   const supersededLightPolicy = /^(?:light-desktop|light-mobile|light-mobile-small): (?:panes use \d+ local light\/material coordinate fields|phone artwork (?:top|width) ratio .* is outside (?:\.14–\.24|1\.42–1\.52))/u;
   const unaccepted = (light.failures || []).filter((message) => !supersededLightPolicy.test(String(message)));
   check(unaccepted.length === 0, `light-model structural failures: ${unaccepted.join(' | ')}`);
@@ -79,8 +79,8 @@ for (const name of lightSceneFiles) {
   check(Number(scene.paneRadialCount) === 0, `${name}: panes paint local radial spotlights`);
   check(Number(scene.fixedPaneCount) === 0, `${name}: panes use viewport-fixed local gradients`);
   check(Number(scene.paneBackdropCount) === 72, `${name}: not all panes transmit the shared source`);
-  check(Number(scene.uniquePaneMaterialCount) >= 2 && Number(scene.uniquePaneMaterialCount) <= 10,
-    `${name}: unexpected spatial material field count ${scene.uniquePaneMaterialCount}`);
+  check(Number(scene.uniquePaneMaterialCount) === 1,
+    `${name}: panes use ${scene.uniquePaneMaterialCount} local material coordinate fields instead of one shared neutral material`);
 
   if (Number(scene.viewport?.width) <= 820) {
     check(Number(scene.gridColumnCount) === 9, `${name}: semantic reveal map has ${scene.gridColumnCount} columns`);
@@ -88,8 +88,8 @@ for (const name of lightSceneFiles) {
   if (Number(scene.viewport?.width) <= 599) {
     const widthRatio = Number(scene.artworkWidth) / Number(scene.viewport.width);
     const topRatio = Number(scene.artworkTop) / Number(scene.viewport.height);
-    check(widthRatio >= 1.38 && widthRatio <= 1.46, `${name}: mobile artwork width ratio ${widthRatio.toFixed(3)}`);
-    check(topRatio >= .14 && topRatio <= .28, `${name}: mobile artwork top ratio ${topRatio.toFixed(3)}`);
+    check(widthRatio >= 1.5 && widthRatio <= 1.6, `${name}: mobile artwork width ratio ${widthRatio.toFixed(3)}`);
+    check(topRatio >= .13 && topRatio <= .24, `${name}: mobile artwork top ratio ${topRatio.toFixed(3)}`);
   }
 }
 
@@ -100,7 +100,7 @@ evidence.mobileSceneFiles = mobileSceneFiles;
 evidence.lightSceneFiles = lightSceneFiles;
 
 const result = {
-  schema_version: 'prelaunch_product_visual_policy_v1',
+  schema_version: 'prelaunch_product_visual_policy_v2',
   ok: failures.length === 0,
   artifact_dir: artifactDir,
   evidence,
