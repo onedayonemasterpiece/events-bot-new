@@ -490,6 +490,7 @@ async def test_boyko_exhibition_regression_merge_gate_blocks_side_effects(tmp_pa
     try:
         await _seed_boyko_lecture(db)
         monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
         monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", su.IdentityGateMode.OFF)
         monkeypatch.setattr(su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", su.IdentityGateMode.ENFORCE)
         monkeypatch.setattr(su, "_classify_topics", _no_topics)
@@ -547,6 +548,7 @@ async def test_merge_gate_internal_error_enforce_is_zero_side_effect_fail_closed
     try:
         await _seed_boyko_lecture(db)
         monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
         monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", su.IdentityGateMode.OFF)
         monkeypatch.setattr(su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", su.IdentityGateMode.ENFORCE)
         monkeypatch.setattr(su, "_classify_topics", _no_topics)

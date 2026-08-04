@@ -19991,19 +19991,36 @@ async def update_telegraph_event_page(
                         url,
                     )
                     continue
-                exists = await session.scalar(
-                    select(func.count())
-                    .select_from(EventSource)
-                    .where(EventSource.event_id == event_id, EventSource.source_url == url)
-                )
-                if exists:
+                canonical_source_url = canonicalize_identity_url(url)
+                if not canonical_source_url:
+                    continue
+                existing_source = (
+                    await session.execute(
+                        select(EventSource).where(
+                            EventSource.event_id == event_id,
+                            or_(
+                                EventSource.canonical_source_url == canonical_source_url,
+                                and_(
+                                    EventSource.canonical_source_url.is_(None),
+                                    EventSource.source_url == url,
+                                ),
+                            ),
+                        )
+                    )
+                ).scalars().first()
+                if existing_source:
+                    if not existing_source.canonical_source_url:
+                        existing_source.canonical_source_url = canonical_source_url
+                    if not existing_source.source_role:
+                        existing_source.source_role = "context_only"
+                    session.add(existing_source)
                     continue
                 session.add(
                     EventSource(
                         event_id=event_id,
                         source_type=_infer_type(url),
                         source_url=url,
-                        canonical_source_url=canonicalize_identity_url(url),
+                        canonical_source_url=canonical_source_url,
                         # Renderer-side legacy provenance is context, never an
                         # identity-bearing source for merge decisions.
                         source_role="context_only",

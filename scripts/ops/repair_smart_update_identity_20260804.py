@@ -67,10 +67,13 @@ CONTEXT_SOURCES = {
 TOUCHED_SOURCE_IDS = frozenset({*MOVE_SOURCE, *DELETE_SOURCES, *IDENTITY_SOURCES, *CONTEXT_SOURCES})
 
 MOVE_POSTERS = {6583: 3216}
+RETAIN_CONCERT_POSTER_ID = 15214
+RETAIN_CONCERT_POSTER_SHA256 = "f9dcb85a1238d6181d486827ea9d4b90b97326e875a5109d4c459f125f295b95"
 REJECT_POSTERS_3864 = frozenset({*range(6584, 6589), *range(14164, 14181), 18395, 18396})
 DELETE_POSTERS = frozenset({15555, 15915, 16554, 17132, 18588})
-TOUCHED_POSTER_IDS = frozenset({*MOVE_POSTERS, *REJECT_POSTERS_3864, *DELETE_POSTERS})
+TOUCHED_POSTER_IDS = frozenset({*MOVE_POSTERS, RETAIN_CONCERT_POSTER_ID, *REJECT_POSTERS_3864, *DELETE_POSTERS})
 PRICE_FACT_IDS = frozenset({142751, 142754, 146855})
+QUARANTINED_EVENT_IDS = (3216, 3864, 7024, 7244)
 
 TRACKING_KEYS = {"_openstat", "fbclid", "from", "gclid", "igshid", "mc_cid", "mc_eid", "ref", "source", "yclid"}
 
@@ -136,12 +139,12 @@ def _table_columns(con: sqlite3.Connection, table: str) -> list[str]:
 
 def _require_schema(con: sqlite3.Connection) -> None:
     required = {
-        "event": {"id", "title", "date", "time", "source_text", "source_texts", "telegraph_url", "telegraph_path"},
+        "event": {"id", "title", "date", "time", "source_text", "source_texts", "telegraph_url", "telegraph_path", "topics", "photo_urls", "photo_count", "preview_3d_url", "silent"},
         "event_source": {"id", "event_id", "source_url", "source_text", "canonical_source_url", "source_role", "source_fingerprint"},
         "event_source_fact": {"id", "event_id", "source_id", "fact"},
-        "eventposter": {"id", "event_id", "review_status", "review_reason"},
+        "eventposter": {"id", "event_id", "review_status", "review_reason", "duplicate_of_id", "supabase_url", "raw_sha256", "display_order"},
         "joboutbox": {"id", "event_id", "task", "status"},
-        "event_identity_decision_log": {"id", "event_id"},
+        "event_identity_decision_log": {"id", "event_id", "source_type", "decision", "decision_reason", "decision_payload"},
     }
     for table, columns in required.items():
         existing = set(_table_columns(con, table))
@@ -157,6 +160,16 @@ def _rows(con: sqlite3.Connection, table: str, where: str, params: Iterable[Any]
 
 def _rowset_hash(rows: Iterable[dict[str, Any]]) -> str:
     return _sha(_json(list(rows)))
+
+
+def _json_list(value: Any) -> list[Any]:
+    if isinstance(value, list):
+        return value
+    try:
+        parsed = json.loads(str(value or "[]"))
+    except (TypeError, ValueError):
+        return []
+    return parsed if isinstance(parsed, list) else []
 
 
 def _graph_hash(con: sqlite3.Connection, event_id: int) -> str:
@@ -206,10 +219,16 @@ def _is_final(con: sqlite3.Connection) -> bool:
         row = _source(con, sid)
         if row is None or int(row["event_id"]) != event_id or row["source_role"] != "context_only":
             return False
-    e3864, e7024, e7244 = (_event(con, eid) for eid in (3864, 7024, 7244))
+    e3216, e3864, e7024, e7244 = (_event(con, eid) for eid in (3216, 3864, 7024, 7244))
+    if str(e3216["telegraph_path"] or "") != "Velikie-uchitelya-04-13":
+        return False
     if str(e3864["title"]) != "Фестиваль Pianissimo: Константин Хачикян":
         return False
-    if e3864["telegraph_url"] is not None or e3864["telegraph_path"] is not None:
+    if str(e3864["telegraph_path"] or "") == "Velikie-uchitelya-04-13":
+        return False
+    if _json_list(e3864["topics"]) != ["CONCERTS"]:
+        return False
+    if int(e3864["photo_count"] or 0) != 1 or len(_json_list(e3864["photo_urls"])) != 1:
         return False
     if str(e7024["age_restriction"] or "") != "16+" or "48636" not in str(e7024["age_restriction_source_url"] or ""):
         return False
@@ -222,6 +241,15 @@ def _is_final(con: sqlite3.Connection) -> bool:
     if any(con.execute("SELECT 1 FROM eventposter WHERE id=?", (pid,)).fetchone() for pid in DELETE_POSTERS):
         return False
     if int(_one(con, "SELECT event_id FROM eventposter WHERE id=6583", ())[0]) != 3216:
+        return False
+    retained = _one(
+        con,
+        "SELECT event_id,review_status,duplicate_of_id,supabase_url FROM eventposter WHERE id=?",
+        (RETAIN_CONCERT_POSTER_ID,),
+    )
+    if int(retained["event_id"]) != 3864 or retained["review_status"] != "approved" or retained["duplicate_of_id"] is not None:
+        return False
+    if _json_list(e3864["photo_urls"]) != [str(retained["supabase_url"] or "")]:
         return False
     return True
 
@@ -242,6 +270,36 @@ def _assert_initial(con: sqlite3.Connection) -> None:
     _assert_anchor(_event(con, 7435), title="Хочу машину", date="2026-08-08", time="16:00")
     _event(con, 3216)
     _event(con, NEGATIVE_CONTROL_EVENT_ID)
+    if any(int(_event(con, eid)["silent"] or 0) != 0 for eid in QUARANTINED_EVENT_IDS):
+        raise RepairBlocked("event_quarantine_precondition_mismatch")
+
+    # Public semantic fields already grounded in the retained direct concert
+    # source remain byte-for-byte stable; only the contaminated title/topics and
+    # media projection are replaced. Raw prose never leaves this process.
+    for field in ("description", "short_description", "search_digest"):
+        value = str(e3864[field] or "")
+        if "великие учителя" in value.casefold():
+            raise RepairBlocked(f"event_anchor_mismatch:3864:{field}_contaminated")
+    if str(e3864["event_type"] or "") != "концерт" or str(e3864["festival"] or "") != "Pianissimo":
+        raise RepairBlocked("event_anchor_mismatch:3864:semantic_identity")
+    if str(e3864["age_restriction"] or "") != "12+":
+        raise RepairBlocked("event_anchor_mismatch:3864:age")
+
+    # Event 7435 is option 5 only when the recorded merge decision independently
+    # says same-event with no blocking conflicts. The direct VK/TG sources below
+    # remain identity-bearing; the umbrella post alone becomes context-only.
+    decision = con.execute(
+        "SELECT id,decision,decision_reason,decision_payload FROM event_identity_decision_log "
+        "WHERE event_id=7435 AND source_type='telegram' ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    if decision is None or decision["decision"] != "allow_merge" or decision["decision_reason"] != "same_event_update":
+        raise RepairBlocked("event_7435_identity_evidence_missing")
+    try:
+        decision_payload = json.loads(str(decision["decision_payload"] or "{}"))
+    except (TypeError, ValueError):
+        raise RepairBlocked("event_7435_identity_evidence_invalid")
+    if decision_payload.get("relation") != "same_event" or list(decision_payload.get("blocking_conflicts") or []):
+        raise RepairBlocked("event_7435_identity_evidence_conflicted")
 
     initial_source_events = {
         **{sid: 3864 for sid in DUPLICATE_SOURCES},
@@ -277,10 +335,20 @@ def _assert_initial(con: sqlite3.Connection) -> None:
         raise RepairBlocked("source_fact_precondition:10971967")
 
     poster_expect = {**{pid: 3864 for pid in MOVE_POSTERS}, **{pid: 3864 for pid in REJECT_POSTERS_3864}, 15555: 7024, 15915: 7024, 16554: 7244, 17132: 7244, 18588: 7244}
+    poster_expect[RETAIN_CONCERT_POSTER_ID] = 3864
     for poster_id, event_id in poster_expect.items():
         row = con.execute("SELECT event_id FROM eventposter WHERE id=?", (poster_id,)).fetchone()
         if row is None or int(row[0]) != event_id:
             raise RepairBlocked(f"poster_precondition_mismatch:{poster_id}")
+    retained = _one(
+        con,
+        "SELECT review_status,duplicate_of_id,supabase_url,raw_sha256 FROM eventposter WHERE id=?",
+        (RETAIN_CONCERT_POSTER_ID,),
+    )
+    if retained["review_status"] != "duplicate" or int(retained["duplicate_of_id"] or 0) != 14180:
+        raise RepairBlocked("poster_precondition_mismatch:15214:duplicate_model")
+    if str(retained["raw_sha256"] or "") != RETAIN_CONCERT_POSTER_SHA256 or not str(retained["supabase_url"] or ""):
+        raise RepairBlocked("poster_precondition_mismatch:15214:identity")
     actual_price_facts = {int(row[0]) for row in con.execute("SELECT id FROM event_source_fact WHERE event_id=7244 AND id IN (142751,142754,146855)")}
     if actual_price_facts != set(PRICE_FACT_IDS):
         raise RepairBlocked("price_fact_precondition_mismatch")
@@ -329,7 +397,7 @@ def _create_backup(con: sqlite3.Connection, before: dict[str, Any]) -> None:
     con.execute(f"CREATE TABLE IF NOT EXISTS {BACKUP_TABLE} (table_name TEXT NOT NULL, row_id INTEGER NOT NULL, row_json TEXT NOT NULL, row_sha256 TEXT NOT NULL, PRIMARY KEY(table_name,row_id))")
     con.execute(f"CREATE TABLE IF NOT EXISTS {META_TABLE} (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
     selections = {
-        "event": ("id IN (3864,7024,7244)", ()),
+        "event": ("id IN (3216,3864,7024,7244)", ()),
         "event_source": (f"id IN ({','.join('?' for _ in TOUCHED_SOURCE_IDS)})", tuple(sorted(TOUCHED_SOURCE_IDS))),
         "event_source_fact": (f"source_id IN ({','.join('?' for _ in TOUCHED_SOURCE_IDS)}) OR id IN (142751,142754,146855)", tuple(sorted(TOUCHED_SOURCE_IDS))),
         "eventposter": (f"id IN ({','.join('?' for _ in TOUCHED_POSTER_IDS)})", tuple(sorted(TOUCHED_POSTER_IDS))),
@@ -347,6 +415,119 @@ def _create_backup(con: sqlite3.Connection, before: dict[str, Any]) -> None:
     baseline_fk = len(con.execute("PRAGMA foreign_key_check").fetchall())
     con.execute(f"INSERT OR IGNORE INTO {META_TABLE}(key,value) VALUES('baseline_foreign_key_violation_count',?)", (str(baseline_fk),))
     con.execute(f"INSERT OR IGNORE INTO {META_TABLE}(key,value) VALUES('incident',?)", (INCIDENT,))
+    con.execute(f"INSERT OR IGNORE INTO {META_TABLE}(key,value) VALUES('quarantine_released','0')")
+
+
+def _backup_hash_state(con: sqlite3.Connection) -> dict[str, str | None]:
+    return {
+        f"{row['table_name']}:{int(row['row_id'])}": str(row["row_sha256"])
+        for row in con.execute(
+            f"SELECT table_name,row_id,row_sha256 FROM {BACKUP_TABLE} ORDER BY table_name,row_id"
+        )
+    }
+
+
+def _current_hash_state(
+    con: sqlite3.Connection, keys: Iterable[str]
+) -> dict[str, str | None]:
+    state: dict[str, str | None] = {}
+    for key in sorted(set(keys)):
+        table, raw_id = key.split(":", 1)
+        row = con.execute(f"SELECT * FROM {table} WHERE id=?", (int(raw_id),)).fetchone()
+        state[key] = _sha(_json(dict(row))) if row is not None else None
+    return state
+
+
+def _compact_hash_diff(
+    before: dict[str, str | None], after: dict[str, str | None]
+) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for key in sorted(set(before) | set(after)):
+        if before.get(key) == after.get(key):
+            continue
+        table, raw_id = key.split(":", 1)
+        bucket = grouped.setdefault(
+            table,
+            {"table": table, "changed_ids": [], "before": {}, "after": {}},
+        )
+        bucket["changed_ids"].append(int(raw_id))
+        bucket["before"][raw_id] = before.get(key)
+        bucket["after"][raw_id] = after.get(key)
+    result: list[dict[str, Any]] = []
+    for table in sorted(grouped):
+        bucket = grouped[table]
+        result.append(
+            {
+                "table": table,
+                "changed_ids": bucket["changed_ids"],
+                "before_state_sha256": _sha(_json(bucket["before"])),
+                "after_state_sha256": _sha(_json(bucket["after"])),
+            }
+        )
+    return result
+
+
+def _store_after_state(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    before = _backup_hash_state(con)
+    after = _current_hash_state(con, before)
+    con.execute(
+        f"INSERT INTO {META_TABLE}(key,value) VALUES('after_row_hashes',?) "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        (_json(after),),
+    )
+    return _compact_hash_diff(before, after)
+
+
+def _restore_backup_cas(con: sqlite3.Connection) -> dict[str, Any]:
+    row = con.execute(
+        f"SELECT value FROM {META_TABLE} WHERE key='after_row_hashes'"
+    ).fetchone()
+    if row is None:
+        raise RepairBlocked("rollback_after_state_missing")
+    expected_after = json.loads(str(row[0]))
+    current_after = _current_hash_state(con, expected_after)
+    if current_after != expected_after:
+        raise RepairBlocked("rollback_cas_mismatch")
+    backup_rows: dict[str, list[dict[str, Any]]] = {}
+    for item in con.execute(
+        f"SELECT table_name,row_json FROM {BACKUP_TABLE} ORDER BY table_name,row_id"
+    ):
+        backup_rows.setdefault(str(item["table_name"]), []).append(
+            json.loads(str(item["row_json"]))
+        )
+    for table in ("event_source_fact", "eventposter", "event_source"):
+        ids = [int(row["id"]) for row in backup_rows.get(table, [])]
+        if ids:
+            con.execute(
+                f"DELETE FROM {table} WHERE id IN ({','.join('?' for _ in ids)})",
+                tuple(ids),
+            )
+    for row_data in backup_rows.get("event", []):
+        columns = [key for key in row_data if key != "id"]
+        con.execute(
+            f"UPDATE event SET {','.join(f'{key}=?' for key in columns)} WHERE id=?",
+            tuple(row_data[key] for key in columns) + (int(row_data["id"]),),
+        )
+    for table in ("event_source", "event_source_fact", "eventposter"):
+        for row_data in backup_rows.get(table, []):
+            columns = list(row_data)
+            con.execute(
+                f"INSERT INTO {table}({','.join(columns)}) VALUES({','.join('?' for _ in columns)})",
+                tuple(row_data[key] for key in columns),
+            )
+    con.execute(
+        f"INSERT INTO {META_TABLE}(key,value) VALUES('quarantine_released','0') "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value"
+    )
+    _assert_initial(con)
+    if str(con.execute("PRAGMA quick_check").fetchone()[0]).lower() != "ok":
+        raise RepairBlocked("rollback_quick_check_failed")
+    return {
+        "restored_tables": sorted(backup_rows),
+        "restored_row_counts": {
+            table: len(rows) for table, rows in sorted(backup_rows.items())
+        },
+    }
 
 
 def _set_source_identity(con: sqlite3.Connection, source_id: int, event_id: int, role: str) -> None:
@@ -376,7 +557,9 @@ def _apply(con: sqlite3.Connection) -> list[dict[str, Any]]:
     # Move the confirmed exhibition source/facts/media as one identity graph.
     if con.execute("UPDATE event_source SET event_id=? WHERE id=? AND event_id=3864", (3216, 713970)).rowcount != 1:
         raise RepairBlocked("move_source_713970_failed")
-    con.execute("UPDATE event_source_fact SET event_id=3216 WHERE source_id=713970 AND event_id=3864")
+    fact_move = con.execute("UPDATE event_source_fact SET event_id=3216 WHERE source_id=713970 AND event_id=3864")
+    if fact_move.rowcount != 16:
+        raise RepairBlocked(f"move_source_fact_713970_count:{fact_move.rowcount}")
     if con.execute("UPDATE eventposter SET event_id=3216 WHERE id=6583 AND event_id=3864").rowcount != 1:
         raise RepairBlocked("move_poster_6583_failed")
     changes.append({"entity": "event_source", "id": 713970, "fields": ["event_id"], "from_event_id": 3864, "to_event_id": 3216})
@@ -412,28 +595,62 @@ def _apply(con: sqlite3.Connection) -> list[dict[str, Any]]:
         cur = con.execute(f"DELETE FROM eventposter WHERE id IN ({placeholders})", tuple(sorted(DELETE_POSTERS)))
         if cur.rowcount != len(DELETE_POSTERS):
             raise RepairBlocked(f"delete_poster_count:{cur.rowcount}")
+    retained = _one(con, "SELECT supabase_url FROM eventposter WHERE id=?", (RETAIN_CONCERT_POSTER_ID,))
+    retained_concert_url = str(retained["supabase_url"] or "")
+    cur = con.execute(
+        "UPDATE eventposter SET review_status='approved', duplicate_of_id=NULL, review_reason=?, display_order=0 "
+        "WHERE id=? AND event_id=3864",
+        (f"{INCIDENT}:direct_source_2377812", RETAIN_CONCERT_POSTER_ID),
+    )
+    if cur.rowcount != 1:
+        raise RepairBlocked("retain_poster_15214_failed")
+    exhibition_poster = _one(con, "SELECT supabase_url FROM eventposter WHERE id=6583", ())
+    exhibition_url = str(exhibition_poster["supabase_url"] or "")
+    if not exhibition_url:
+        raise RepairBlocked("move_poster_6583_url_missing")
+    con.execute(
+        "UPDATE eventposter SET review_status='approved', review_reason=? WHERE id=6583 AND event_id=3216",
+        (f"{INCIDENT}:confirmed_exhibition_source_713970",),
+    )
     changes.append({"entity": "eventposter", "ids": sorted(TOUCHED_POSTER_IDS), "fields": ["event_id", "review_status", "review_reason", "deleted_after_restricted_backup"]})
 
     text3864 = _direct_text(con, 2377812)
     text7024 = _direct_text(con, 9404476)
     text7244 = _direct_text(con, 9573730)
+    event3216 = _event(con, 3216)
+    exhibition_photos = [str(item) for item in _json_list(event3216["photo_urls"]) if str(item or "")]
+    if exhibition_url not in exhibition_photos:
+        exhibition_photos.append(exhibition_url)
     con.execute(
-        "UPDATE event SET title=?, source_text=?, source_texts=?, telegraph_url=NULL, telegraph_path=NULL WHERE id=3864",
-        ("Фестиваль Pianissimo: Константин Хачикян", text3864, _json([text3864])),
+        "UPDATE event SET telegraph_url='https://telegra.ph/Velikie-uchitelya-04-13', "
+        "telegraph_path='Velikie-uchitelya-04-13', photo_urls=?, photo_count=?, silent=1 WHERE id=3216",
+        (_json(exhibition_photos), len(exhibition_photos)),
     )
     con.execute(
-        "UPDATE event SET source_text=?, source_texts=?, age_restriction='16+', age_restriction_status='declared', age_restriction_provenance='official_direct_source', age_restriction_source_url=?, age_restriction_confidence=1.0 WHERE id=7024",
+        "UPDATE event SET title=?, source_text=?, source_texts=?, topics=?, photo_urls=?, photo_count=1, "
+        "preview_3d_url=NULL, telegraph_url=NULL, telegraph_path=NULL, silent=1 WHERE id=3864",
+        (
+            "Фестиваль Pianissimo: Константин Хачикян",
+            text3864,
+            _json([text3864]),
+            _json(["CONCERTS"]),
+            _json([retained_concert_url]),
+        ),
+    )
+    con.execute(
+        "UPDATE event SET source_text=?, source_texts=?, age_restriction='16+', age_restriction_status='declared', age_restriction_provenance='official_direct_source', age_restriction_source_url=?, age_restriction_confidence=1.0, silent=1 WHERE id=7024",
         (text7024, _json([text7024]), KAGUYA_URL),
     )
     con.execute(
-        "UPDATE event SET source_text=?, source_texts=?, is_free=1, ticket_price_min=NULL, ticket_price_max=NULL, age_restriction='12+', age_restriction_status='declared', age_restriction_provenance='official_direct_source', age_restriction_source_url=?, age_restriction_confidence=1.0 WHERE id=7244",
+        "UPDATE event SET source_text=?, source_texts=?, is_free=1, ticket_price_min=NULL, ticket_price_max=NULL, age_restriction='12+', age_restriction_status='declared', age_restriction_provenance='official_direct_source', age_restriction_source_url=?, age_restriction_confidence=1.0, silent=1 WHERE id=7244",
         (text7244, _json([text7244]), WOMEN_SEA_URL),
     )
     con.execute("DELETE FROM event_source_fact WHERE id IN (142751,142754,146855) AND event_id=7244")
     changes.extend([
-        {"entity": "event", "id": 3864, "fields": ["title", "source_text_sha256", "source_texts_sha256", "telegraph_url", "telegraph_path"]},
-        {"entity": "event", "id": 7024, "fields": ["source_text_sha256", "source_texts_sha256", "age_restriction", "age_restriction_status", "age_restriction_provenance", "age_restriction_source_url", "age_restriction_confidence"]},
-        {"entity": "event", "id": 7244, "fields": ["source_text_sha256", "source_texts_sha256", "is_free", "ticket_price_min", "ticket_price_max", "age_restriction", "age_restriction_status", "age_restriction_provenance", "age_restriction_source_url", "age_restriction_confidence"]},
+        {"entity": "event", "id": 3216, "fields": ["telegraph_url", "telegraph_path", "photo_urls_sha256", "photo_count", "silent"]},
+        {"entity": "event", "id": 3864, "fields": ["title", "source_text_sha256", "source_texts_sha256", "topics", "photo_urls_sha256", "photo_count", "preview_3d_url", "telegraph_url", "telegraph_path", "silent"]},
+        {"entity": "event", "id": 7024, "fields": ["source_text_sha256", "source_texts_sha256", "age_restriction", "age_restriction_status", "age_restriction_provenance", "age_restriction_source_url", "age_restriction_confidence", "silent"]},
+        {"entity": "event", "id": 7244, "fields": ["source_text_sha256", "source_texts_sha256", "is_free", "ticket_price_min", "ticket_price_max", "age_restriction", "age_restriction_status", "age_restriction_provenance", "age_restriction_source_url", "age_restriction_confidence", "silent"]},
         {"entity": "event_source_fact", "ids": sorted(PRICE_FACT_IDS), "fields": ["deleted_after_restricted_backup"]},
     ])
 
@@ -454,6 +671,13 @@ def _verify(con: sqlite3.Connection) -> dict[str, Any]:
     ).fetchone()[0])
     if touched_orphan_facts:
         raise RepairBlocked(f"touched_orphan_facts:{touched_orphan_facts}")
+    touched_fact_event_mismatch = int(con.execute(
+        f"SELECT COUNT(*) FROM event_source_fact f JOIN event_source s ON s.id=f.source_id "
+        f"WHERE f.source_id IN ({placeholders}) AND f.event_id<>s.event_id",
+        tuple(sorted(TOUCHED_SOURCE_IDS)),
+    ).fetchone()[0])
+    if touched_fact_event_mismatch:
+        raise RepairBlocked(f"touched_fact_event_mismatch:{touched_fact_event_mismatch}")
     global_orphan_facts = int(con.execute("SELECT COUNT(*) FROM event_source_fact f LEFT JOIN event_source s ON s.id=f.source_id WHERE s.id IS NULL").fetchone()[0])
     fk_count = len(con.execute("PRAGMA foreign_key_check").fetchall())
     quick = str(con.execute("PRAGMA quick_check").fetchone()[0])
@@ -472,20 +696,83 @@ def _verify(con: sqlite3.Connection) -> dict[str, Any]:
     stored_fk = con.execute(f"SELECT value FROM {META_TABLE} WHERE key='baseline_foreign_key_violation_count'").fetchone() if stored is not None else None
     if stored_fk is not None and fk_count > int(stored_fk[0]):
         raise RepairBlocked("foreign_key_violation_count_increased")
+    release_row = con.execute(
+        f"SELECT value FROM {META_TABLE} WHERE key='quarantine_released'"
+    ).fetchone() if stored is not None else None
     return {
         "quick_check": quick,
         "foreign_key_violation_count": fk_count,
         "foreign_key_violation_baseline": int(stored_fk[0]) if stored_fk is not None else None,
         "touched_orphan_facts": touched_orphan_facts,
+        "touched_fact_event_mismatch": touched_fact_event_mismatch,
         "global_orphan_fact_count": global_orphan_facts,
         "global_orphan_fact_baseline": int(stored_orphans[0]) if stored_orphans is not None else None,
         "indexes": sorted(indexes),
         "negative_control_event_id": NEGATIVE_CONTROL_EVENT_ID,
         "negative_control_graph_sha256": negative_hash,
+        "quarantine_released": bool(release_row and str(release_row[0]) == "1"),
+        "quarantined_event_ids": [
+            eid for eid in QUARANTINED_EVENT_IDS if int(_event(con, eid)["silent"] or 0) == 1
+        ],
     }
 
 
-def run(db_path: str, mode: str, *, confirm_7244_free: bool = False) -> dict[str, Any]:
+def _release_quarantine(
+    con: sqlite3.Connection, *, confirm_surfaces_ready: bool
+) -> dict[str, Any]:
+    if not _is_final(con):
+        raise RepairBlocked("release_repair_state_missing")
+    if not confirm_surfaces_ready:
+        raise RepairBlocked("manual_confirmation_required:affected_telegraph_surfaces")
+    e3216, e3864, e7024, e7244 = (
+        _event(con, eid) for eid in QUARANTINED_EVENT_IDS
+    )
+    if (
+        str(e3216["telegraph_path"] or "") != "Velikie-uchitelya-04-13"
+        or not str(e3216["telegraph_url"] or "")
+        or not str(e3864["telegraph_path"] or "")
+        or str(e3864["telegraph_path"] or "") == "Velikie-uchitelya-04-13"
+        or not str(e3864["telegraph_url"] or "")
+        or not str(e7024["telegraph_url"] or "")
+        or not str(e7244["telegraph_url"] or "")
+        or any(
+            not str(event["ics_url"] or "")
+            for event in (e3216, e3864, e7024, e7244)
+        )
+    ):
+        raise RepairBlocked("affected_public_bindings_not_ready")
+    still_silent = [
+        eid for eid, row in zip(QUARANTINED_EVENT_IDS, (e3216, e3864, e7024, e7244))
+        if int(row["silent"] or 0) == 1
+    ]
+    if not still_silent:
+        return {"released": False, "status": "noop", "event_ids": []}
+    if set(still_silent) != set(QUARANTINED_EVENT_IDS):
+        raise RepairBlocked("partial_quarantine_release_detected")
+    cur = con.execute(
+        f"UPDATE event SET silent=0 WHERE id IN ({','.join('?' for _ in QUARANTINED_EVENT_IDS)}) AND silent=1",
+        QUARANTINED_EVENT_IDS,
+    )
+    if cur.rowcount != len(QUARANTINED_EVENT_IDS):
+        raise RepairBlocked(f"quarantine_release_count:{cur.rowcount}")
+    con.execute(
+        f"INSERT INTO {META_TABLE}(key,value) VALUES('quarantine_released','1') "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value"
+    )
+    return {
+        "released": True,
+        "status": "released",
+        "event_ids": list(QUARANTINED_EVENT_IDS),
+    }
+
+
+def run(
+    db_path: str,
+    mode: str,
+    *,
+    confirm_7244_free: bool = False,
+    confirm_surfaces_ready: bool = False,
+) -> dict[str, Any]:
     uri = f"file:{Path(db_path).resolve()}?mode={'ro' if mode in {'dry-run', 'verify'} else 'rw'}"
     con = sqlite3.connect(uri, uri=True, isolation_level=None, timeout=30)
     con.row_factory = sqlite3.Row
@@ -497,6 +784,48 @@ def run(db_path: str, mode: str, *, confirm_7244_free: bool = False) -> dict[str
         if mode == "verify":
             verification = _verify(con)
             return {"incident": INCIDENT, "mode": mode, "status": "verified", "changed": False, "verification": verification, "snapshot": before}
+
+        if mode == "release":
+            con.execute("BEGIN IMMEDIATE")
+            try:
+                release = _release_quarantine(
+                    con, confirm_surfaces_ready=confirm_surfaces_ready
+                )
+                if release["released"]:
+                    hash_diff = _store_after_state(con)
+                    con.commit()
+                else:
+                    hash_diff = []
+                    con.rollback()
+                verification = _verify(con)
+            except Exception:
+                con.rollback()
+                raise
+            return {
+                "incident": INCIDENT,
+                "mode": mode,
+                "status": release["status"],
+                "changed": bool(release["released"]),
+                "event_ids": release["event_ids"],
+                "hash_diff": hash_diff,
+                "verification": verification,
+            }
+
+        if mode == "rollback":
+            con.execute("BEGIN IMMEDIATE")
+            try:
+                rollback = _restore_backup_cas(con)
+                con.commit()
+            except Exception:
+                con.rollback()
+                raise
+            return {
+                "incident": INCIDENT,
+                "mode": mode,
+                "status": "rolled_back",
+                "changed": True,
+                "rollback": rollback,
+            }
 
         final = _is_final(con)
         if not final:
@@ -521,15 +850,16 @@ def run(db_path: str, mode: str, *, confirm_7244_free: bool = False) -> dict[str
             _assert_initial(con)
             negative_before = _graph_hash(con, NEGATIVE_CONTROL_EVENT_ID)
             _create_backup(con, before)
-            diff = _apply(con)
+            operations = _apply(con)
             verification = _verify(con)
             if verification["negative_control_graph_sha256"] != negative_before:
                 raise RepairBlocked("negative_control_7151_changed_in_transaction")
+            hash_diff = _store_after_state(con)
             con.commit()
         except Exception:
             con.rollback()
             raise
-        return {"incident": INCIDENT, "mode": mode, "status": "applied", "changed": True, "diff": diff, "snapshot": before, "verification": verification}
+        return {"incident": INCIDENT, "mode": mode, "status": "applied", "changed": True, "operations": operations, "hash_diff": hash_diff, "snapshot": before, "verification": verification}
     finally:
         con.close()
 
@@ -551,17 +881,32 @@ def main() -> int:
     group.add_argument("--dry-run", action="store_true")
     group.add_argument("--apply", action="store_true")
     group.add_argument("--verify", action="store_true")
+    group.add_argument("--release", action="store_true")
+    group.add_argument("--rollback", action="store_true")
     parser.add_argument(
         "--confirm-7244-free",
         action="store_true",
         help="Confirm the operator rechecked the official 48801 source and accepted the free/no-price model",
     )
+    parser.add_argument(
+        "--confirm-surfaces-ready",
+        action="store_true",
+        help="Confirm affected Telegraph/ICS surfaces were directly verified before releasing quarantine",
+    )
     parser.add_argument("--db", default=os.getenv("DB_PATH", "/data/db.sqlite"))
     parser.add_argument("--output", default="-")
     args = parser.parse_args()
-    mode = "apply" if args.apply else "verify" if args.verify else "dry-run"
+    mode = (
+        "apply" if args.apply else "verify" if args.verify else
+        "release" if args.release else "rollback" if args.rollback else "dry-run"
+    )
     try:
-        result = run(str(args.db), mode, confirm_7244_free=bool(args.confirm_7244_free))
+        result = run(
+            str(args.db),
+            mode,
+            confirm_7244_free=bool(args.confirm_7244_free),
+            confirm_surfaces_ready=bool(args.confirm_surfaces_ready),
+        )
         _write_result(result, str(args.output))
         return 0
     except RepairBlocked as exc:

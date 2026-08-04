@@ -122,6 +122,15 @@ identifiers, user data, or a full production database.
 - [ ] Apply the idempotent whitelisted production repair only after exact-main
   code deploy and production dry-run approval.
 
+The incident repair keeps Events `3216`, `3864`, `7024`, and `7244` in the
+existing `silent` quarantine during data and Telegraph/ICS correction. Its
+`--release --confirm-surfaces-ready` mode is fail-closed until the exhibition
+Telegraph remains on `Velikie-uchitelya-04-13`, Pianissimo has a distinct
+Telegraph binding, and the two screening bindings are present. Aggregate/static
+projections are rebuilt only after release. Event `7435` is resolved as a
+standalone event only when its persisted same-event decision has no blocking
+conflicts; the festival programme source alone becomes `context_only`.
+
 ## Follow-up Actions
 
 - [ ] Close issue `#297` with immutable Telegram/VK replay evidence.
@@ -141,9 +150,13 @@ identifiers, user data, or a full production database.
 ## Rollback
 
 - A failed repair rolls back its single transaction.
-- Post-commit rollback restores only whitelisted rows with compare-and-swap
-  checks against recorded after-state hashes, removes only whitelisted rows/jobs
-  created by the repair, and rebuilds the same affected surfaces.
+- Post-commit rollback is `repair_smart_update_identity_20260804.py --rollback`.
+  It compares every backed-up whitelisted row with the sealed after-state
+  SHA-256 map, aborts on any concurrent change, restores only those exact rows
+  in one transaction, and runs the initial-state and `quick_check` guards.
+  After rollback, rebuild the same affected surfaces. Do not bypass a
+  `rollback_cas_mismatch`; investigate and explicitly reseal the expected
+  surface state instead.
 - Additive source-role columns and the uniqueness invariant remain in place.
 - Code rollback is a revert merged to `main` and an exact-main deploy. An
   emergency `enforce` to `shadow` change requires pausing affected automatic

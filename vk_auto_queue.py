@@ -260,7 +260,7 @@ async def _cancel_matching_event_from_notice(
     published_at: datetime | None,
 ) -> tuple[int | None, str | None]:
     """Try to find a matching event and mark it as cancelled/postponed (inactive)."""
-    from sqlalchemy import select
+    from sqlalchemy import and_, or_, select
     from models import Event, EventSource, EventSourceFact
     import main as main_mod
 
@@ -337,6 +337,21 @@ async def _cancel_matching_event_from_notice(
         if best_score < 2 and not title_hint:
             return None, f"low_confidence score={best_score} date={date_hint or ''}"
 
+        canonical_source_url = canonicalize_identity_url(str(source_url))
+        if not canonical_source_url:
+            return None, "invalid_source_identity"
+        conflicting_owner = (
+            await session.execute(
+                select(EventSource.event_id).where(
+                    EventSource.canonical_source_url == canonical_source_url,
+                    EventSource.source_role == "identity_bearing",
+                    EventSource.event_id != int(best.id),
+                ).limit(1)
+            )
+        ).scalar_one_or_none()
+        if conflicting_owner is not None:
+            return None, "review_required:source_binding_conflict"
+
         best.lifecycle_status = next_status
         session.add(best)
         await session.flush()
@@ -348,7 +363,13 @@ async def _cancel_matching_event_from_notice(
                 await session.execute(
                     select(EventSource).where(
                         EventSource.event_id == int(best.id),
-                        EventSource.source_url == str(source_url),
+                        or_(
+                            EventSource.canonical_source_url == canonical_source_url,
+                            and_(
+                                EventSource.canonical_source_url.is_(None),
+                                EventSource.source_url == str(source_url),
+                            ),
+                        ),
                     )
                 )
             )
@@ -356,9 +377,6 @@ async def _cancel_matching_event_from_notice(
             .first()
         )
         if src is None:
-            canonical_source_url = canonicalize_identity_url(str(source_url))
-            if not canonical_source_url:
-                return None, "invalid_source_identity"
             src = EventSource(
                 event_id=int(best.id),
                 source_type="vk_cancel",
@@ -371,9 +389,6 @@ async def _cancel_matching_event_from_notice(
             await session.flush()
         else:
             src.source_type = "vk_cancel"
-            canonical_source_url = canonicalize_identity_url(str(source_url))
-            if not canonical_source_url:
-                return None, "invalid_source_identity"
             src.canonical_source_url = canonical_source_url
             src.source_role = "identity_bearing"
             src.source_text = (notice_text or "")[:4000]
