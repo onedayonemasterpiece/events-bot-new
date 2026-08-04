@@ -1,0 +1,100 @@
+        if provider.get(code):
+            add("P1", "provider", code, provider.get(code), "Provider-stage abstention or fail-closed admission reduces throughput or quality.")
+    if su.get("downstream_failures"):
+        add("P1", "delivery", "post_commit_failures", su.get("downstream_failures"), "A canonical DB mutation may not converge to Telegraph/VK/ICS/static output.")
+    jobs = db.get("job_outbox", {}).get("affected_active_or_problem_rows") or []
+    errors = [x for x in jobs if str(x.get("status")) == "error"]
+    overdue = [x for x in jobs if str(x.get("status")) in {"pending", "running"} and (parse_time(x.get("next_run_at")) or now) < now - dt.timedelta(minutes=30)]
+    if errors:
+        add("P1", "outbox", "affected_outbox_errors", len(errors), "Public projections may be incomplete for events touched in the window.")
+    if overdue:
+        add("P1", "outbox", "affected_outbox_overdue", len(overdue), "Downstream convergence is delayed beyond a normal grace period.")
+    multi = db.get("integrity", {}).get("source_urls_linked_to_multiple_events") or []
+    if multi:
+        add("P1", "identity", "same_source_attached_to_multiple_events", len(multi), "A single source may have been split across multiple canonical events.")
+    exact = db.get("integrity", {}).get("future_exact_signature_duplicates") or []
+    if exact:
+        add("P1", "product_quality", "future_exact_signature_duplicates", len(exact), "Users may see duplicate event cards.")
+    if limiter.get("status") != "ok":
+        add("P1", "provider", "limiter_ledger_unhealthy", limiter, "Shared provider admission/accounting could not be verified.")
+    elif limiter.get("requests", {}).get("stale_reserved_unsent_over_30m"):
+        add("P1", "provider", "stale_unsent_reservations", limiter["requests"]["stale_reserved_unsent_over_30m"], "Limiter capacity or audit rows may remain stranded.")
+    starts = int(su.get("starts") or 0)
+    successes = int((su.get("terminal_counts") or {}).get("created", 0)) + int((su.get("terminal_counts") or {}).get("merged", 0))
+    if starts and successes == 0:
+        add("P1", "product_result", "runs_without_mutations", {"starts": starts, "terminal": su.get("terminal_counts")}, "Smart Update ran but produced no durable user-facing mutation.")
+    diff = int(su.get("uncorrelated_start_terminal_difference") or 0)
+    if abs(diff) >= 2:
+        add("P2", "observability", "start_terminal_imbalance", diff, "Some runs may be incomplete; logs lack a universal Smart Update correlation ID.")
+    pending = sum(int(v.get("pending_like_older_than_6h") or 0) for v in db.get("media", {}).values())
+    if pending:
+        add("P2", "media", "media_pending_over_6h", pending, "Some source media remains unavailable or unadjudicated.")
+    if logs.get("coverage_hours_inside_window", 0) < 20:
+        add("P2", "observability", "runtime_log_coverage_short", logs.get("coverage_hours_inside_window"), "The 24-hour log window is only partially evidenced.")
+    if not findings:
+        add("INFO", "overall", "no_blocking_symptoms_detected", {"starts": starts, "terminal": su.get("terminal_counts")}, "No blocking symptom was found in available evidence; semantic correctness still requires case review.")
+    rank = {"P0": 0, "P1": 1, "P2": 2, "INFO": 3}
+    return sorted(findings, key=lambda x: (rank.get(x["severity"], 9), x["category"], x["code"]))
+
+
+def markdown(report: dict[str, Any]) -> str:
+    w = report["window"]
+    su = report["logs"]["smart_update"]
+    db = report["database"]
+    limiter = report["google_ai_limiter"]
+    lines = [
+        "# Smart Update production health audit",
+        "",
+        f"- UTC window: `{w['start_utc']}` — `{w['end_utc']}`",
+        f"- App: `{report['app']}`",
+        f"- Requested repository SHA: `{report.get('repo_sha') or 'unknown'}`",
+        f"- SQLite quick_check: `{db.get('quick_check')}`",
+        f"- Loopback health: `{report.get('loopback_health', {}).get('ok')}`",
+        f"- Log coverage inside window: `{report['logs'].get('coverage_hours_inside_window')}` h",
+        "",
+        "## Product flow",
+        "",
+        f"- Smart Update starts: **{su.get('starts', 0)}**",
+        f"- Terminal outcomes: `{json.dumps(su.get('terminal_counts') or {}, ensure_ascii=False, sort_keys=True)}`",
+        f"- Durable EventSource imports: **{db.get('event_sources_imported', {}).get('count', 0)}** over **{db.get('event_sources_imported', {}).get('distinct_event_ids', 0)}** events",
+        f"- New Event rows: **{db.get('events_created', {}).get('count', 0)}**",
+        f"- Probable existing-event merges: **{len(db.get('event_sources_imported', {}).get('probable_merge_event_ids') or [])}**",
+        f"- New/updated source facts: **{db.get('facts', {}).get('count', 0)}**",
+        f"- Google limiter requests/attempts: **{limiter.get('requests', {}).get('count', 0)} / {limiter.get('attempts', {}).get('count', 0)}** (`{limiter.get('status')}`)",
+        "",
+        "## Stability and quality symptoms",
+        "",
+        f"- Provider: `{json.dumps(su.get('provider_symptoms') or {}, ensure_ascii=False, sort_keys=True)}`",
+        f"- Runtime: `{json.dumps(report['logs'].get('runtime_symptoms') or {}, ensure_ascii=False, sort_keys=True)}`",
+        f"- Downstream: `{json.dumps(su.get('downstream_failures') or {}, ensure_ascii=False, sort_keys=True)}`",
+        f"- Quality guards: `{json.dumps(su.get('quality_guard_activity') or {}, ensure_ascii=False, sort_keys=True)}`",
+        "",
+        "## Classified findings",
+        "",
+    ]
+    for item in report.get("findings") or []:
+        evidence = json.dumps(item["evidence"], ensure_ascii=False, sort_keys=True, default=str)
+        lines.append(f"- **{item['severity']} · {item['category']} · {item['code']}** — {item['impact']} Evidence: `{evidence[:900]}`")
+    lines += [
+        "",
+        "## Evidence boundary",
+        "",
+        "This one-shot probe used a consistent temporary SQLite backup and read-only Supabase selects. Raw SQLite and raw runtime logs did not leave the Fly machine. Only aggregates, event IDs/public titles needed for review, and sanitized warning/error excerpts are included. No provider request, deployment, restart, queue mutation, or production database write was performed.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def main() -> int:
+    args = parse_args()
+    now = dt.datetime.now(UTC)
+    cutoff = now - dt.timedelta(hours=max(1, args.window_hours))
+    snapshot: Path | None = None
+    try:
+        snapshot, snapshot_meta = make_snapshot(Path(args.db))
+        database = inspect_db(snapshot, cutoff, now)
+        logs, excerpts = inspect_logs(cutoff, now)
+        report: dict[str, Any] = {
+            "schema_version": "smart-update-production-health-audit.v1",
+            "generated_at": iso(dt.datetime.now(UTC)),
+            "app": args.app,
