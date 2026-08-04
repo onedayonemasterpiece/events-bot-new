@@ -1268,7 +1268,10 @@ def redaction_scan(files: Mapping[str, str]) -> dict[str, Any]:
         "jwt": re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}\b"),
         "telegram_or_vk_url": re.compile(r"https?://(?:t\.me|telegram\.me|vk\.com)/\S+", re.I),
         "email": re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I),
-        "phone": re.compile(r"(?<!\d)(?:\+7|8)[\s()\-]*\d{3}[\s()\-]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}(?!\d)"),
+        # A bare 11-digit JSON number can be a byte/count metric. Raw prose is
+        # never admitted to evidence, so require the unambiguous ``+7`` prefix
+        # or formatting after a domestic ``8`` before treating text as a phone.
+        "phone": re.compile(r"(?<!\d)(?:\+7[\s()\-]*|8[\s()\-]+)\d{3}[\s()\-]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}(?!\d)"),
         "prompt_completion_payload": re.compile(r'(?i)"(?:prompt|completion|source_text)"\s*:\s*"[^\"]+"'),
     }
     by_kind = {name: 0 for name in patterns}

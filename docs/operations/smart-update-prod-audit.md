@@ -316,6 +316,10 @@ to a suppression marker and re-scan. If a PII-free bundle cannot be proven, do
 not upload the unsafe payload: fail the workflow with a sanitized minimal error
 receipt. Artifact retention and access must reflect `restricted` evidence.
 
+Phone detection covers `+7` and formatted domestic `8` forms. Bare unquoted
+11-digit JSON numbers remain valid capacity/count metrics; raw prose is never
+admitted to evidence where that distinction would be ambiguous.
+
 `smart-update-prod-audit.md` is generated only from the sanitized JSON/JSONL
 artifacts. It must not quote raw DB rows or runtime lines.
 

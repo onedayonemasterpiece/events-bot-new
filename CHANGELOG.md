@@ -7,6 +7,9 @@
 - Fixed the audit product sampler so touched events without an observed source
   type are retained in the sanitized `unknown` stratum instead of blocking the
   evidence bundle.
+- Fixed the audit redaction gate to distinguish unquoted capacity byte counts
+  from phone-shaped text while retaining `+7` and formatted domestic-phone
+  detection.
 
 - Fixed StaticSiteBuilder exact-output recovery starvation: when a timed-out
   host wrapper still owns a verified remote handoff, incoming Smart Update

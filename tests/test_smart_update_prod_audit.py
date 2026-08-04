@@ -317,6 +317,10 @@ def test_adversarial_redaction_and_error_signatures_do_not_echo_values() -> None
     assert signature.startswith("TimeoutError:err_")
     assert "secret" not in signature and "https" not in signature and "123456" not in signature
 
+    numeric_capacity = AUDIT.redaction_scan({"metrics.json": '{"total_bytes":85899345920}\n'})
+    assert numeric_capacity["passed"] is True
+    assert numeric_capacity["violations_by_category"]["phone"] == 0
+
 
 def test_actual_workflow_extractor_accepts_a_real_auditor_envelope(tmp_path: Path, monkeypatch) -> None:
     sha = "a" * 40
