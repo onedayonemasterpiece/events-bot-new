@@ -1210,11 +1210,18 @@ def make_samples(sample_state: dict[int, dict[str, Any]], log_metrics: Mapping[s
     warm_ids = set(int(x) for x in log_metrics.get("warm_replay_event_ids", []) if isinstance(x, int))
     candidates = []
     # Deterministic stratification: one pass per decision/source pair, then fill.
-    ordered = sorted(sample_state.items(), key=lambda item: (str(item[1].get("decision", "other")), sorted(item[1].get("source_types", {"unknown"}))[0], item[0]))
+    def primary_source(state: Mapping[str, Any]) -> str:
+        sources = sorted(str(value) for value in state.get("source_types", set()) if value)
+        return sources[0] if sources else "unknown"
+
+    ordered = sorted(
+        sample_state.items(),
+        key=lambda item: (str(item[1].get("decision", "other")), primary_source(item[1]), item[0]),
+    )
     seen_strata: set[tuple[str, str]] = set()
     selected: list[tuple[int, dict[str, Any]]] = []
     for event_id, state in ordered:
-        source = sorted(x for x in state.get("source_types", set()) if x)[0] if state.get("source_types") else "unknown"
+        source = primary_source(state)
         stratum = (str(state.get("decision", "other")), source)
         if stratum not in seen_strata:
             selected.append((event_id, state)); seen_strata.add(stratum)

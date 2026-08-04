@@ -254,6 +254,10 @@ create/merge and source types. Each row has only:
 - stable redacted source-URL hash;
 - lifecycle/identity status.
 
+When runtime evidence identifies an event but does not carry a source type, the
+stratum is retained as `source_type=unknown`; an empty source set must never
+abort or suppress the restricted evidence bundle.
+
 Exact warm-replay rows are a distinct `sample_kind=exact_warm_replay` stratum and do
 not consume the meaning of ordinary create/merge rows. A raw source URL or
 source text is never included, even when hashing it internally.

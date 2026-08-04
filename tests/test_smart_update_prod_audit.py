@@ -200,6 +200,17 @@ def test_unverified_exact_replay_forces_watch_not_pass() -> None:
     assert any(item["code"] == "exact_packet_replay_unverified" for item in findings)
 
 
+def test_product_sample_without_observed_source_type_uses_unknown() -> None:
+    samples = AUDIT.make_samples(
+        {42: {"source_types": set(), "source_url_hashes": set(), "changed_fields": {"title"}, "decision": "observed"}},
+        {"warm_replay_event_ids": []},
+    )
+    rows = [json.loads(line) for line in samples.splitlines()]
+    assert rows[0]["event_id"] == 42
+    assert rows[0]["source_type"] == "unknown"
+    assert rows[0]["changed_field_names"] == ["title"]
+
+
 def test_query_recorder_rejects_mutating_sql() -> None:
     connection = sqlite3.connect(":memory:")
     recorder = AUDIT.QueryRecorder()
