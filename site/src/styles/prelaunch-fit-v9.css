@@ -104,8 +104,9 @@ body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-zone="light"][data-st
       linear-gradient(90deg, rgba(7, 9, 12, .55), transparent 74%, rgba(7, 9, 12, .13));
   }
 
-  /* Eight deliberately clear windows reveal the scaled wordmark. They form one
-   coherent central field rather than random holes across the phone. */
+  /* Eight deliberately clear windows reveal one coherent central wordmark
+   field. `!important` is intentional: earlier state/zone rules have greater
+   selector specificity and otherwise collapse this product-level mobile map. */
   body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-index="37"],
   body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-index="38"],
   body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-index="46"],
@@ -114,13 +115,13 @@ body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-zone="light"][data-st
   body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-index="55"],
   body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-index="56"],
   body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-index="57"] {
-    --cover: .31;
-    --blur-base: 2.6px;
-    --saturation: .88;
-    --brightness: .96;
-    --edge: .18;
-    --edge-highlight: .14;
-    --matte: .27;
+    --cover: .31 !important;
+    --blur-base: 2.6px !important;
+    --saturation: .88 !important;
+    --brightness: .96 !important;
+    --edge: .18 !important;
+    --edge-highlight: .14 !important;
+    --matte: .27 !important;
   }
 }
 
