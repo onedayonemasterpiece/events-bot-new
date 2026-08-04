@@ -1,0 +1,33 @@
+            "repo_sha": args.repo_sha,
+            "window": {"start_utc": iso(cutoff), "end_utc": iso(now), "hours": args.window_hours},
+            "runtime": {
+                "hostname": platform.node(),
+                "python": platform.python_version(),
+                "disk_data": shutil.disk_usage("/data")._asdict() if Path("/data").exists() else None,
+                "config": {k: os.getenv(k) for k in (
+                    "ENABLE_RUNTIME_FILE_LOGGING", "RUNTIME_LOG_RETENTION_HOURS", "RUNTIME_LOG_MAX_TOTAL_MB",
+                    "SMART_UPDATE_IDENTITY_GATE", "SMART_UPDATE_IDENTITY_VECTOR_RECALL", "SMART_UPDATE_FORCE_STAGED_GEMINI",
+                    "SMART_UPDATE_G4_SPLIT_CREATE", "SMART_UPDATE_GEMMA_NATIVE_SCHEMA", "GOOGLE_AI_ALLOW_RESERVE_FALLBACK",
+                    "GOOGLE_AI_LOCAL_LIMITER_FALLBACK", "GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR", "ENABLE_VK_AUTO_IMPORT",
+                    "ENABLE_STATIC_SITE_KAGGLE_BUILDER", "STATIC_SITE_MAX_DEBOUNCE_SECONDS")},
+                "release_markers": {k: os.getenv(k) for k in ("STATIC_SITE_IMAGE_REPO_SHA", "REPO_SHA", "GIT_SHA", "FLY_MACHINE_VERSION") if os.getenv(k)},
+                "snapshot": snapshot_meta,
+            },
+            "loopback_health": health(),
+            "database": database,
+            "logs": logs,
+            "google_ai_limiter": inspect_limiter(cutoff, now),
+        }
+        report["findings"] = classify(report)
+        safe_json(args.output, report)
+        Path(args.markdown).write_text(markdown(report), encoding="utf-8")
+        Path(args.excerpts).write_text("\n".join(excerpts) + ("\n" if excerpts else ""), encoding="utf-8")
+        print(json.dumps({"ok": True, "window": report["window"], "findings": collections.Counter(x["severity"] for x in report["findings"]), "starts": logs["smart_update"]["starts"], "terminal": logs["smart_update"]["terminal_counts"], "sources": database["event_sources_imported"]["count"]}, ensure_ascii=False, default=dict))
+        return 0
+    finally:
+        if snapshot is not None:
+            snapshot.unlink(missing_ok=True)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
