@@ -1,92 +1,39 @@
-# W2 Results — compact static related egress
+# W2 — production audit workflow
 
-## Scope
+## Implemented
 
-- Lane: `W2`
-- Requirement: `R04`
-- Base SHA: `cc7c213f5e49173b24029b00dabb1359c1f1059b`
-- Implementation head SHA: `ba3e6f53`
-- Branch: `agent/static-site-resilient-egress/W2`
+- Added `.github/workflows/smart-update-prod-audit.yml` as a manual-only,
+  protected-environment workflow with `contents: read` and non-cancelling global
+  concurrency.
+- Added fail-closed `main`/exact-SHA/input/app validation and exact-SHA checkout.
+- Pinned checkout, flyctl setup, flyctl CLI, and artifact upload versions.
+- Kept the Fly token scoped to the single SSH step; public `/healthz` runs first
+  without credentials.
+- Sends the reviewed audit program and validated base64-JSON arguments over stdin
+  to a fixed in-memory Python command. It does not deploy, restart, or create a
+  remote file.
+- Accepts only one sentinel envelope and exactly the nine requested evidence
+  files. The runner validates the envelope, inventory, UTF-8/JSON, redaction
+  patterns, observer-access gates, deployed SHA, and per-file SHA-256 values.
+- Generates a sanitized exact-inventory fallback bundle when observer access is
+  unavailable, uploads evidence before the terminal gate, and makes `FAIL` and
+  `BLOCKED_OBSERVER_ACCESS` non-successful outcomes while allowing `PASS`/`WATCH`.
+- Limits the Actions summary to classification, tested SHA, restricted-evidence
+  policy, and the upload action's SHA-256 digest.
 
-## Result
+## Evidence contract for integration
 
-Implemented the fail-closed compact pgvector retrieval path for static related
-rebuilds:
+The audit script must print exactly one line beginning with
+`SMART_UPDATE_AUDIT_BUNDLE_V1:` followed by base64-encoded JSON with exact
+top-level keys `classification`, `exit_code`, and `files`. `files` must contain
+exactly the nine requested filenames. `manifest.json.artifact_sha256` must map
+the eight non-manifest filenames to their lowercase SHA-256 values (the manifest
+is excluded to avoid a self-referential digest). `qa-summary.json` must include
+boolean `observer_access` keys `runtime_logs`, `database`, `limiter_ledger`, and
+`exact_deployed_sha`; `redaction-audit.json.passed` must be true.
 
-- added per-anchor RPC `event_related_candidates_compact_by_event_id_v1` with
-  exact `event_id`/`vector_similarity` projection;
-- revoked `PUBLIC`, `anon` and `authenticated`; granted only `service_role`;
-- switched the exporter away from the wide legacy RPC with no fallback;
-- bounded each response before JSON decode (default 256 KiB) and bounded full
-  rebuild aggregate response bytes (default 16 MiB);
-- recorded request, row, aggregate-byte and maximum-response counters in both
-  `preview-related.json` and Kaggle `static_site_build_result.json`;
-- kept valid cache hits at zero Supabase related retrieval calls;
-- rejected duplicate anchor ids before retrieval, and preserved whole-graph
-  recomputation (no unsafe changed-anchor-only update);
-- kept the full Astro build unchanged.
+## Validation
 
-## Evidence
-
-Commands run from the W2 worktree:
-
-```text
-uv run --with-requirements requirements.txt --with numpy pytest -q \
-  tests/test_static_site_pgvector_export.py \
-  tests/test_static_site_build_handoff.py \
-  tests/test_static_site_builder_preview_contract.py \
-  tests/test_static_site_unusual_builder_adapter.py
-# 55 passed in 3.67s
-
-uv run --with-requirements requirements.txt --with numpy pytest -q \
-  tests/test_static_site_content_projection.py \
-  tests/test_event_vector_sync.py \
-  tests/test_static_site_public_gate.py
-# 39 passed in 1.32s
-
-cd site && npm ci --no-audit --no-fund && npm run build
-# 466 pages built; completed successfully in 2m36s
-
-python3 -m py_compile \
-  site/scripts/export-production-preview-data.py \
-  kaggle/StaticSiteBuilder/static_site_builder.py \
-  scripts/run_static_site_builder_kaggle.py
-# passed
-
-uv run --with pglast python3 -c '<parse migration>'
-# pglast-ok
-
-git diff --check
-# passed
-```
-
-Test coverage includes golden graph parity with the legacy wide row shape,
-pre-decode oversized-body rejection, aggregate ceiling rejection, exact narrow
-projection, counters, build-receipt propagation, zero-call cache hit and
-pre-request duplicate-anchor rejection.
-
-`npx supabase@2.111.0 migration list --local` could not connect because this
-worktree has no running local Supabase/Postgres at `127.0.0.1:54322`. The SQL
-was still parsed with PostgreSQL `pglast`; live migration application belongs to
-integration/deploy.
-
-## Risks / follow-up
-
-- The migration must be applied before a pgvector static rebuild using this
-  commit; the exporter intentionally does not fall back to the wide RPC.
-- The 97.45% historical egress reduction remains an audit estimate until the
-  first live full rebuild receipt records real response bytes.
-- No batch RPC was introduced: per-anchor retrieval was retained to preserve
-  exact HNSW top-K semantics safely.
-- No production deploy or push was performed in this lane.
-
-## Changed files
-
-- `supabase/migrations/20260731174929_compact_static_related_candidates_v1.sql`
-- `site/scripts/export-production-preview-data.py`
-- `tests/test_static_site_pgvector_export.py`
-- `kaggle/StaticSiteBuilder/static_site_builder.py`
-- `scripts/run_static_site_builder_kaggle.py`
-- `docs/operations/kaggle-static-site-builder.md`
-- `CHANGELOG.md`
-- `.codex/lanes/W2/RESULTS.md`
+- `actionlint 1.7.12`: clean.
+- Local execution of the evidence extraction/fallback block: exact nine-file
+  inventory, blocked classification, and eight non-self manifest hashes passed.
