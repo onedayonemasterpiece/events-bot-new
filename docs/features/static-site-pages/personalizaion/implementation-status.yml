@@ -14,6 +14,7 @@ canonical:
   longitudinal_e2e: docs/features/static-site-pages/personalizaion/longitudinal-e2e-personalization.md
   temporal_simulation: docs/features/static-site-pages/personalizaion/temporal-profile-simulation.md
   report_template: docs/features/static-site-pages/personalizaion/personalization-test-report-template.md
+  selection_quality_feedback: docs/features/static-site-pages/personalizaion/personal-selection-quality-feedback.md
   focus_questionnaire_prompt: docs/features/static-site-pages/personalizaion/focus-group-interest-questionnaire-prompt.md
   current_audit: docs/features/static-site-pages/personalizaion/personalization-current-runtime-audit-2026-08-02.md
 source_precedence:
@@ -22,6 +23,7 @@ source_precedence:
   identity_boundary: identity-linking-personalization.md
   model_test_methodology: longitudinal-e2e-personalization.md
   db_time_methodology: temporal-profile-simulation.md
+  selection_quality_evaluation: personal-selection-quality-feedback.md
   legacy_runtime: migration_and_characterization_only
   open_target_question: explicit_hypothesis_or_owner_legal_decision
   legacy_value_as_silent_default: forbidden
@@ -80,6 +82,23 @@ longitudinal_testing:
     - storage_and_transport_health
     - hard_invariants
   report_template: personalization-test-report-template.md
+selection_quality_feedback:
+  decision: accepted_contextual_evaluation
+  contract: personal_selection_quality_feedback_v1
+  classic_product_nps: false
+  primary_question: first_relevant_bucket_within_30
+  secondary_score: quality_score_0_10
+  internal_pnps: secondary_only
+  direct_profile_training_effect: none
+  served_list_provenance_required: true
+  model_profile_catalog_surface_versions_required: true
+  end_of_list_and_sampled_success_triggers_separate: true
+  implementation_backlog:
+    - P13N-QF0_contract_and_fixtures
+    - P13N-QF1_ui_preview
+    - P13N-QF2_durable_submission
+    - P13N-QF3_evidence_and_reports
+    - P13N-QF4_focus_cohort_rollout
 temporal_simulation:
   offline_replay: allowed_before_db
   db_backed_staging: requires_P13N_03_and_P13N_04
@@ -197,6 +216,7 @@ waves:
       - invalid_projection_fails_last_good
       - offline_replay_quality_gate
       - factor_ablation_report
+      - selection_quality_feedback_contract_and_fixtures
   - id: P13N-06
     name: controlled_rollout_and_longitudinal_report
     state: blocked_by_P13N-05_legal_ops_product_signoff
@@ -205,6 +225,8 @@ waves:
     hard_gates:
       - focus_group_pass
       - optional_questionnaire_processed_as_supporting_evidence
+      - selection_quality_feedback_focus_cohort_pass
+      - selection_quality_feedback_bias_split_reported
       - desktop_android_ios_critical_pass
       - storage_and_database_capacity_pass
       - registered_ab_with_guardrails
@@ -234,6 +256,7 @@ required_evidence_per_pr:
   - sanitized_network_trace
   - identity_epoch_and_merge_evidence_when_touched
   - longitudinal_metrics_when_model_touched
+  - selection_quality_feedback_provenance_and_bias_split_when_touched
   - temporal_db_cleanup_when_time_simulation_touched
   - fault_matrix_results_when_transport_touched
   - explicit_not_run_or_blocked_items
@@ -246,3 +269,6 @@ acceptance_controls:
   account_switch_cross_contamination: 0
   synthetic_test_actor_training_eligible: false
   ydb_analytics_as_profile_source_of_truth: 0
+  quality_feedback_changes_profile_automatically: false
+  quality_feedback_without_served_list_provenance: 0
+  end_of_list_and_success_sampled_feedback_mixed_without_metadata: 0
