@@ -1,9 +1,9 @@
 name: Prelaunch visual review
 
-# Direct workflow_dispatch is retained for humans. ChatGPT can trigger the
-# same checked run indirectly by updating the nonce file below; that produces
-# a pull_request synchronize event whose run is discoverable by commit SHA.
 on:
+  push:
+    branches:
+      - agent/prelaunch-landing-20260803
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
@@ -29,7 +29,7 @@ concurrency:
 jobs:
   browser-evidence:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
