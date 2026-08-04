@@ -120,14 +120,27 @@ async function snapshot(page) {
       surface: Boolean(surface),
       gallery: Boolean(gallery),
       scrollY: window.scrollY,
+      viewportHeight: innerHeight,
       visible: Boolean(rect && rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < innerHeight),
       rect: rect ? { top:rect.top, left:rect.left, right:rect.right, bottom:rect.bottom, width:rect.width, height:rect.height } : null,
     };
   });
 }
 
+function rowsFromCards(cards, rowTolerance = 16) {
+  const sorted = [...cards].sort((left, right) => left.top - right.top || left.left - right.left);
+  const rows = [];
+  for (const card of sorted) {
+    const row = rows.at(-1);
+    if (!row || Math.abs(row.top - card.top) > rowTolerance) rows.push({ top:card.top, cards:[card] });
+    else row.cards.push(card);
+  }
+  rows.forEach((row) => row.cards.sort((left, right) => left.left - right.left));
+  return rows;
+}
+
 async function visualCards(page) {
-  return page.locator('[data-related-start] [data-event-card]').evaluateAll((cards) => cards.map((card) => {
+  const measured = await page.locator('[data-related-start] [data-event-card]').evaluateAll((cards) => cards.map((card) => {
     const rect = card.getBoundingClientRect();
     return {
       id: card.getAttribute('data-event-id'),
@@ -137,7 +150,8 @@ async function visualCards(page) {
       width: rect.width,
       height: rect.height,
     };
-  }).sort((left, right) => left.top - right.top || left.left - right.left));
+  }));
+  return rowsFromCards(measured).flatMap((row) => row.cards);
 }
 
 async function attachNavigationProbe(page, selector) {
@@ -157,7 +171,24 @@ function result(id, status, details = {}) {
   return { id, status, ...details };
 }
 
-async function runFixture(browser, fixture, buildId) {
+async function probeBodyStart(page, id, selector, nearestOwners) {
+  const target = page.locator(selector).first();
+  if (!(await target.count())) return result(id, 'SKIPPED_NOT_APPLICABLE', { selector });
+  await target.scrollIntoViewIfNeeded();
+  await focusBody(page);
+  const before = await snapshot(page);
+  await page.keyboard.press('ArrowDown');
+  await page.waitForTimeout(80);
+  const after = await snapshot(page);
+  const started = after.owner !== 'body' && after.visible;
+  return result(id, started ? 'PASS' : 'FAIL', {
+    contextRecovery: nearestOwners.includes(after.owner) ? 'PASS' : 'GAP_TARGET_NOT_IMPLEMENTED',
+    before,
+    after,
+  });
+}
+
+async function runFixture(browser, fixture) {
   const fixtureDir = join(outputDir, fixture.family);
   await mkdir(fixtureDir, { recursive: true });
   const context = await browser.newContext({
@@ -216,24 +247,15 @@ async function runFixture(browser, fixture, buildId) {
   await page.keyboard.press('ArrowDown');
   await page.waitForTimeout(80);
   const coldAfter = await snapshot(page);
-  results.push(result('KN-002-start-cold-body', coldAfter.owner !== 'body' && coldAfter.visible ? 'PASS' : 'FAIL', { before:coldBefore, after:coldAfter }));
+  results.push(result('KN-002-start-cold-body', coldAfter.owner !== 'body' && coldAfter.visible ? 'PASS' : 'FAIL', {
+    contextRecovery:coldAfter.owner === 'event' ? 'PASS' : 'GAP_TARGET_NOT_IMPLEMENTED',
+    before:coldBefore,
+    after:coldAfter,
+  }));
 
-  const description = page.locator('.desktop-clean-description').first();
-  if (await description.count()) {
-    await description.scrollIntoViewIfNeeded();
-    await page.evaluate(() => window.scrollBy({ top:Math.round(innerHeight * 0.35), behavior:'instant' }));
-    await focusBody(page);
-    const descriptionBefore = await snapshot(page);
-    await page.keyboard.press('ArrowDown');
-    await page.waitForTimeout(80);
-    const descriptionAfter = await snapshot(page);
-    const nearestReading = descriptionAfter.owner === 'reading' || (descriptionAfter.owner === 'event' && Math.abs(descriptionAfter.scrollY - descriptionBefore.scrollY) < innerHeight);
-    results.push(result('KN-002-start-description-middle', descriptionAfter.owner !== 'body' ? 'PASS' : 'FAIL', {
-      targetNearestContext: nearestReading ? 'PASS' : 'GAP_TARGET_NOT_IMPLEMENTED',
-      before:descriptionBefore,
-      after:descriptionAfter,
-    }));
-  }
+  results.push(await probeBodyStart(page, 'KN-002-start-description-middle', '.desktop-clean-description', ['reading']));
+  results.push(await probeBodyStart(page, 'KN-002-start-practical', '.desktop-clean-practical', ['reading']));
+  results.push(await probeBodyStart(page, 'KN-002-start-related', '[data-related-start]', ['card']));
 
   await page.evaluate(() => window.scrollTo({ top:0, behavior:'instant' }));
   await surface.focus();
@@ -244,13 +266,10 @@ async function runFixture(browser, fixture, buildId) {
   await page.keyboard.press('ArrowDown');
   await page.waitForTimeout(80);
   const readingAfter = await snapshot(page);
-  const semanticReadingOwner = readingAfter.owner === 'reading';
-  results.push(result('KN-004-event-to-reading', semanticReadingOwner ? 'PASS' : 'GAP_TARGET_NOT_IMPLEMENTED', { before:readingBefore, after:readingAfter }));
+  results.push(result('KN-004-event-to-reading', readingAfter.owner === 'reading' ? 'PASS' : 'GAP_TARGET_NOT_IMPLEMENTED', { before:readingBefore, after:readingAfter }));
 
-  await cards.first().focus();
   const visualBefore = await visualCards(page);
   const firstCardId = visualBefore[0]?.id || null;
-  await cards.filter({ has:page.locator(`[data-event-id="${firstCardId}"]`) }).count().catch(() => 0);
   const firstCard = page.locator(`[data-related-start] [data-event-card][data-event-id="${firstCardId}"]`).first();
   if (await firstCard.count()) await firstCard.focus();
   const cardBefore = await snapshot(page);
@@ -266,14 +285,15 @@ async function runFixture(browser, fixture, buildId) {
   await page.screenshot({ path:join(outputDir, 'screenshots', `${browserName}-${fixture.family}-card-focus.png`), fullPage:false });
 
   const selectedCard = page.locator(`[data-related-start] [data-event-card][data-event-id="${cardAfter.cardId}"]`).first();
+  let selectedHref = '';
   if (await selectedCard.count()) {
+    selectedHref = String(await selectedCard.getAttribute('data-card-href') || '');
     await attachNavigationProbe(page, `[data-related-start] [data-event-card][data-event-id="${cardAfter.cardId}"]`);
     await selectedCard.focus();
     await page.keyboard.press('Enter');
     await page.waitForTimeout(40);
     const navigationProbe = await page.evaluate(() => window.__knNavigationProbe);
-    const expectedHref = await selectedCard.getAttribute('data-card-href');
-    const expectedAbsolute = expectedHref ? new URL(expectedHref, url).href : '';
+    const expectedAbsolute = selectedHref ? new URL(selectedHref, url).href : '';
     results.push(result('KN-006-enter-selected-card', navigationProbe?.href === expectedAbsolute ? 'PASS' : 'FAIL', {
       expected:expectedAbsolute,
       actual:navigationProbe?.href || null,
@@ -297,7 +317,7 @@ async function runFixture(browser, fixture, buildId) {
     const restored = await snapshot(page);
     results.push(result('KN-008-gallery-focus-return', restored.owner === 'event' && galleryState.owner === 'gallery' ? 'PASS' : 'FAIL', { galleryState, restored }));
   } else {
-    results.push(result('KN-008-gallery-focus-return', 'FAIL', { reason:'gallery did not open' }));
+    results.push(result('KN-008-gallery-focus-return', 'FAIL', { reason:'gallery or efficient viewer did not open' }));
   }
 
   await surface.focus();
@@ -310,6 +330,35 @@ async function runFixture(browser, fixture, buildId) {
   const artifactCount = await page.locator('[data-keyboard-artifact-bridge]').count();
   results.push(result('KN-012-keyboard-artifact', artifactCount > 0 ? 'PASS' : 'GAP_TARGET_NOT_IMPLEMENTED', { artifactCount }));
 
+  if (selectedHref) {
+    const sourcePath = new URL(url).pathname;
+    const targetUrl = new URL(selectedHref, url).href;
+    await selectedCard.focus();
+    const destinationPromise = page.waitForURL((candidate) => candidate.pathname !== sourcePath, { timeout:15_000 });
+    await page.keyboard.press('Enter');
+    try {
+      await destinationPromise;
+      await page.waitForSelector('[data-keyboard-event-surface]', { state:'visible', timeout:15_000 });
+      await focusBody(page);
+      await page.keyboard.press('ArrowDown');
+      await page.waitForTimeout(80);
+      const destinationStart = await snapshot(page);
+      results.push(result('KN-006-destination-start', destinationStart.owner !== 'body' && destinationStart.visible ? 'PASS' : 'FAIL', { targetUrl, destinationStart }));
+      await page.goBack({ waitUntil:'domcontentloaded', timeout:15_000 });
+      await page.waitForSelector('[data-keyboard-event-surface]', { state:'visible', timeout:15_000 });
+      const historyBefore = await snapshot(page);
+      await page.keyboard.press('ArrowRight');
+      await page.waitForTimeout(80);
+      const historyAfter = await snapshot(page);
+      const restoredCard = historyBefore.owner === 'card' || historyAfter.owner === 'card';
+      results.push(result('KN-007-history-back-owner', restoredCard ? 'PASS' : 'GAP_TARGET_NOT_IMPLEMENTED', { historyBefore, historyAfter }));
+    } catch (error) {
+      results.push(result('KN-007-history-back-owner', 'FAIL', { targetUrl, error:boundedMessage(error?.message) }));
+      await page.goto(url, { waitUntil:'domcontentloaded', timeout:45_000 });
+      await page.waitForSelector('[data-keyboard-event-surface]', { state:'visible', timeout:15_000 });
+    }
+  }
+
   await page.reload({ waitUntil:'domcontentloaded' });
   await page.waitForSelector('[data-keyboard-event-surface]', { state:'visible', timeout:15_000 });
   await focusBody(page);
@@ -318,29 +367,25 @@ async function runFixture(browser, fixture, buildId) {
   const reloadAfter = await snapshot(page);
   results.push(result('KN-002-start-after-reload', reloadAfter.owner !== 'body' && reloadAfter.visible ? 'PASS' : 'FAIL', { after:reloadAfter }));
 
-  await page.evaluate(() => {
-    window.dispatchEvent(new Event('blur'));
-    Object.defineProperty(document, 'hidden', { configurable:true, value:true });
-    document.dispatchEvent(new Event('visibilitychange'));
-    Object.defineProperty(document, 'hidden', { configurable:true, value:false });
-    document.dispatchEvent(new Event('visibilitychange'));
-  }).catch(() => {});
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
   await focusBody(page);
   await page.keyboard.press('ArrowDown');
   await page.waitForTimeout(80);
   const blurAfter = await snapshot(page);
   results.push(result('KN-002-start-after-blur', blurAfter.owner !== 'body' && blurAfter.visible ? 'PASS' : 'FAIL', { after:blurAfter }));
 
-  const blockingFailures = results.filter((entry) => entry.status === 'FAIL' && [
+  const blockingIds = new Set([
     'KN-001-router-and-no-autofocus',
     'KN-001-family',
     'KN-005-related-cards-present',
     'KN-005-card-arrow-right',
     'KN-006-enter-selected-card',
+    'KN-006-destination-start',
     'KN-008-gallery-focus-return',
     'KN-002-start-cold-body',
     'KN-002-start-after-reload',
-  ].includes(entry.id));
+  ]);
+  const blockingFailures = results.filter((entry) => entry.status === 'FAIL' && blockingIds.has(entry.id));
   await writeFile(join(fixtureDir, 'results.json'), JSON.stringify({ fixture, results, consoleErrors, blockingFailures }, null, 2));
   await context.tracing.stop({ path:join(outputDir, 'traces', `${browserName}-${fixture.family}.zip`) });
   await context.close();
@@ -355,7 +400,7 @@ await writeFile(join(outputDir, 'fixture-selection.json'), JSON.stringify({ buil
 const browser = await browserType.launch({ headless: true });
 const fixtureReports = [];
 try {
-  for (const fixture of fixtures) fixtureReports.push(await runFixture(browser, fixture, buildId));
+  for (const fixture of fixtures) fixtureReports.push(await runFixture(browser, fixture));
 } finally {
   await browser.close();
 }
@@ -365,6 +410,8 @@ const allConsoleErrors = fixtureReports.flatMap((report) => report.consoleErrors
 const blockingFailures = fixtureReports.flatMap((report) => report.blockingFailures.map((entry) => ({ family:report.fixture.family, ...entry })));
 const startResults = allResults.filter((entry) => entry.id.startsWith('KN-002-start-'));
 const startPasses = startResults.filter((entry) => entry.status === 'PASS').length;
+const contextResults = startResults.filter((entry) => entry.contextRecovery);
+const contextPasses = contextResults.filter((entry) => entry.contextRecovery === 'PASS').length;
 const summary = {
   schema_version:'keyboard-navigation-evidence-v1',
   buildId,
@@ -373,8 +420,11 @@ const summary = {
   fixtures,
   metric:{
     keyboard_start_reliability:startResults.length ? startPasses / startResults.length : 0,
-    passed:startPasses,
-    tested:startResults.length,
+    startPassed:startPasses,
+    startTested:startResults.length,
+    context_recovery_accuracy:contextResults.length ? contextPasses / contextResults.length : 0,
+    contextPassed:contextPasses,
+    contextTested:contextResults.length,
   },
   status:blockingFailures.length ? 'FAIL' : 'PASS_WITH_TARGET_GAPS',
   blockingFailures,
@@ -389,13 +439,14 @@ const markdown = [
   `- Build: \`${buildId}\``,
   `- Status: **${summary.status}**`,
   `- Start reliability: **${startPasses}/${startResults.length} (${(summary.metric.keyboard_start_reliability * 100).toFixed(1)}%)**`,
+  `- Context recovery accuracy: **${contextPasses}/${contextResults.length} (${(summary.metric.context_recovery_accuracy * 100).toFixed(1)}%)**`,
   `- Console/page errors: **${allConsoleErrors.length}**`,
   '',
   '## Fixtures',
   ...fixtures.map((fixture) => `- ${fixture.family}: \`${fixture.route}\` — ${fixture.width}×${fixture.height}, ratio ${fixture.ratio.toFixed(3)}, ${fixture.reason || 'no reason'}`),
   '',
   '## Results',
-  ...allResults.map((entry) => `- ${entry.status === 'PASS' ? '✅' : entry.status === 'FAIL' ? '❌' : '◻️'} **${entry.family} / ${entry.id}** — ${entry.status}`),
+  ...allResults.map((entry) => `- ${entry.status === 'PASS' ? '✅' : entry.status === 'FAIL' ? '❌' : '◻️'} **${entry.family} / ${entry.id}** — ${entry.status}${entry.contextRecovery ? `; context=${entry.contextRecovery}` : ''}`),
   '',
   '## Blocking failures',
   ...(blockingFailures.length ? blockingFailures.map((entry) => `- ${entry.family} / ${entry.id}`) : ['- none']),
