@@ -1,0 +1,100 @@
+    records = 0
+
+    for path in files:
+        try:
+            fh = path.open("r", encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        with fh:
+            for line in fh:
+                m = LOG_RE.match(line.rstrip("\n"))
+                if not m:
+                    continue
+                ts = parse_log_ts(m)
+                if ts < cutoff or ts > now + dt.timedelta(minutes=5):
+                    continue
+                first = ts if first is None or ts < first else first
+                last = ts if last is None or ts > last else last
+                records += 1
+                msg = m.group("msg")
+                level = m.group("level")
+                if START_RE.search(msg):
+                    counts["starts"] += 1
+                    kv = {x.group("key"): x.group("value").strip("\"'") for x in KV_RE.finditer(msg)}
+                    if kv.get("source_type"):
+                        source_types[kv["source_type"]] += 1
+                for name, pattern in TERMINALS:
+                    if pattern.search(msg):
+                        terminal[name] += 1
+                        eid = EVENT_ID_RE.search(msg)
+                        if eid:
+                            event_ids[name].add(int(eid.group(1)))
+                        reason_m = re.search(r"\breason=([^\s]+)", msg)
+                        if reason_m:
+                            reasons[f"{name}:{reason_m.group(1)}"] += 1
+                        keys_m = re.search(r"\bupdated_keys=(\[[^\]]*\]|\([^\)]*\)|[^\s]+)", msg)
+                        if keys_m:
+                            for key in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", keys_m.group(1)):
+                                updated_keys[key] += 1
+                        break
+                for name, pattern in PROVIDER_PATTERNS.items():
+                    if pattern.search(msg):
+                        provider[name] += 1
+                for name, pattern in DOWNSTREAM_PATTERNS.items():
+                    if pattern.search(msg):
+                        downstream[name] += 1
+                for name, pattern in QUALITY_PATTERNS.items():
+                    if pattern.search(msg):
+                        quality[name] += 1
+                for name, pattern in RUNTIME_PATTERNS.items():
+                    if pattern.search(msg):
+                        runtime[name] += 1
+                if "JOB_EXECUTED" in msg or "JOB_ERROR" in msg or "JOB_MISSED" in msg:
+                    job_m = re.search(r"\bjob_id=([^\s]+)", msg)
+                    if job_m:
+                        sched[f"{job_m.group(1)}:{'error' if 'JOB_ERROR' in msg else 'missed' if 'JOB_MISSED' in msg else 'ok'}"] += 1
+                if ("smart_update" in msg.lower() or any(p.search(msg) for p in DOWNSTREAM_PATTERNS.values())) and level in {"WARNING", "ERROR", "CRITICAL"}:
+                    if len(excerpts) < 250:
+                        excerpts.append(f"{iso(ts)} {level} {sanitize(msg)}")
+    coverage_hours = ((last - first).total_seconds() / 3600.0) if first and last else 0.0
+    summary = {
+        "log_directory": str(log_dir),
+        "files": [{"name": p.name, "bytes": p.stat().st_size, "mtime_utc": iso(dt.datetime.fromtimestamp(p.stat().st_mtime, UTC))} for p in files],
+        "timestamp_assumption": "application log timestamps interpreted as UTC",
+        "first_record_at": iso(first),
+        "last_record_at": iso(last),
+        "coverage_hours_inside_window": round(coverage_hours, 3),
+        "record_count": records,
+        "smart_update": {
+            "starts": counts["starts"],
+            "terminal_counts": dict(terminal),
+            "terminal_total": sum(terminal.values()),
+            "uncorrelated_start_terminal_difference": counts["starts"] - sum(terminal.values()),
+            "source_types": dict(source_types.most_common()),
+            "reasons": dict(reasons.most_common()),
+            "updated_keys": dict(updated_keys.most_common()),
+            "event_ids_by_outcome": {k: sorted(v) for k, v in event_ids.items()},
+            "provider_symptoms": dict(provider),
+            "downstream_failures": dict(downstream),
+            "quality_guard_activity": dict(quality),
+        },
+        "runtime_symptoms": dict(runtime),
+        "scheduler_terminal_counts": dict(sched.most_common()),
+    }
+    return summary, excerpts
+
+
+def health() -> dict[str, Any]:
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8080/healthz", timeout=10) as resp:
+            raw = resp.read(2_000_000)
+            status = int(getattr(resp, "status", 200))
+        try:
+            body = json.loads(raw.decode("utf-8", "replace"))
+        except Exception:
+            body = raw.decode("utf-8", "replace")[:4000]
+        return {"ok": 200 <= status < 300, "status": status, "body": body}
+    except Exception as exc:
+        return {"ok": False, "error_type": type(exc).__name__, "error": sanitize(str(exc), 300)}
+
+
