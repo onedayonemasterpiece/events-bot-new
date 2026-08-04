@@ -1,0 +1,100 @@
+def response_rows(resp: Any) -> list[dict[str, Any]]:
+    data = getattr(resp, "data", None)
+    if isinstance(data, list):
+        return [dict(x) for x in data if isinstance(x, dict)]
+    if isinstance(data, dict):
+        return [dict(data)]
+    return []
+
+
+def inspect_limiter(cutoff: dt.datetime, now: dt.datetime) -> dict[str, Any]:
+    result: dict[str, Any] = {"status": "unavailable"}
+    try:
+        from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
+        client = build_google_ai_limiter_supabase_client(require_configured=True)
+        caps = getattr(client.rpc("google_ai_limiter_capabilities", {}).execute(), "data", None)
+        keys = response_rows(client.table("google_ai_api_keys").select("env_var_name,quota_scope,is_active,priority,updated_at").eq("provider", "google").order("priority").execute())
+        requests = response_rows(
+            client.table("google_ai_requests")
+            .select("request_uid,model,quota_scope,status,attempts,last_error_kind,last_error_code,sent_at,finalized_at,usage_total_tokens,provider_terminal_status,semantic_status,created_at,updated_at")
+            .eq("consumer", "smart_update")
+            .gte("created_at", iso(cutoff))
+            .order("created_at")
+            .limit(10000)
+            .execute()
+        )
+        ids = [str(r.get("request_uid")) for r in requests if r.get("request_uid")]
+        attempts: list[dict[str, Any]] = []
+        for offset in range(0, len(ids), 100):
+            attempts.extend(response_rows(
+                client.table("google_ai_request_attempts")
+                .select("request_uid,attempt_no,status,blocked_reason,retry_after_ms,quota_scope,usage_total_tokens,duration_ms,provider_status,provider_error_type,provider_error_code,provider_terminal_status,semantic_status,started_at,completed_at")
+                .in_("request_uid", ids[offset:offset+100])
+                .order("started_at")
+                .limit(10000)
+                .execute()
+            ))
+        stale = []
+        for row in requests:
+            when = parse_time(row.get("created_at"))
+            if str(row.get("status") or "") == "reserved" and not row.get("sent_at") and when and when < now - dt.timedelta(minutes=30):
+                stale.append(short_hash(row.get("request_uid")))
+        durations = [float(a["duration_ms"]) for a in attempts if isinstance(a.get("duration_ms"), (int, float))]
+        result = {
+            "status": "ok",
+            "capabilities": caps,
+            "registry": {
+                "active_key_count": sum(1 for k in keys if k.get("is_active")),
+                "active_scope_count": len({k.get("quota_scope") for k in keys if k.get("is_active") and k.get("quota_scope")}),
+                "rows": keys,
+            },
+            "requests": {
+                "count": len(requests),
+                "by_model_status": group(requests, ("model", "status")),
+                "by_scope_model": group(requests, ("quota_scope", "model")),
+                "by_terminal": group(requests, ("provider_terminal_status", "semantic_status")),
+                "sent": sum(1 for r in requests if r.get("sent_at")),
+                "finalized": sum(1 for r in requests if r.get("finalized_at")),
+                "stale_reserved_unsent_over_30m": len(stale),
+                "stale_request_hashes": stale[:50],
+            },
+            "attempts": {
+                "count": len(attempts),
+                "by_status": group(attempts, ("status",)),
+                "by_blocked_reason": group([a for a in attempts if a.get("blocked_reason")], ("blocked_reason",)),
+                "by_provider_error": group([a for a in attempts if a.get("provider_error_type") or a.get("provider_error_code")], ("provider_error_type", "provider_error_code")),
+                "by_terminal": group(attempts, ("provider_terminal_status", "semantic_status")),
+                "usage_total_tokens": sum(int(a.get("usage_total_tokens") or 0) for a in attempts),
+                "duration_ms": {"count": len(durations), "min": min(durations) if durations else None, "max": max(durations) if durations else None, "avg": sum(durations)/len(durations) if durations else None},
+            },
+        }
+    except Exception as exc:
+        result = {"status": "error", "error_type": type(exc).__name__, "error": sanitize(str(exc), 500)}
+    return result
+
+
+def classify(report: dict[str, Any]) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    db = report["database"]
+    logs = report["logs"]
+    su = logs["smart_update"]
+    runtime = logs["runtime_symptoms"]
+    limiter = report["google_ai_limiter"]
+
+    def add(sev: str, category: str, code: str, evidence: Any, impact: str) -> None:
+        findings.append({"severity": sev, "category": category, "code": code, "evidence": evidence, "impact": impact})
+
+    if db.get("quick_check") != "ok":
+        add("P0", "data_integrity", "sqlite_quick_check_not_ok", db.get("quick_check"), "Canonical SQLite state is not trustworthy.")
+    if runtime.get("oom"):
+        add("P0", "runtime", "oom", runtime.get("oom"), "The process may terminate during Smart Update or delivery work.")
+    if db.get("integrity", {}).get("orphan_event_sources"):
+        add("P0", "data_integrity", "orphan_event_sources", db["integrity"]["orphan_event_sources"], "Source provenance is detached from canonical events.")
+    if runtime.get("database_locked"):
+        add("P1", "database", "sqlite_lock_contention", runtime.get("database_locked"), "Canonical or outbox transactions may be delayed or retried.")
+    if runtime.get("disk_pressure"):
+        add("P1", "runtime", "disk_pressure", runtime.get("disk_pressure"), "SQLite durability or evidence retention may degrade.")
+    if runtime.get("scheduler_missed"):
+        add("P1", "scheduler", "scheduler_missed", runtime.get("scheduler_missed"), "Sources may not reach Smart Update on schedule.")
+    provider = su.get("provider_symptoms") or {}
+    for code in ("wall_clock_timeout", "limiter_or_reserve_unavailable", "fallback_4o_failed", "fallback_budget_exhausted"):
