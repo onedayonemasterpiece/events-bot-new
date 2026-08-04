@@ -94,7 +94,9 @@ jobs:
           python -m pytest -q
           email_control/tests/test_control_plane.py
           email_control/tests/test_worker.py
+          email_control/tests/test_postbox_monitor_state.py
           tests/test_email_postbox_events.py
+          tests/test_postbox_auth_feedback_migration.py
           tests/test_scheduling.py::test_runtime_health_status_reports_email_worker_and_monitor
       - name: Run Region Talk regression contracts
         run: python -m pytest -q tests/test_region_talk*.py
