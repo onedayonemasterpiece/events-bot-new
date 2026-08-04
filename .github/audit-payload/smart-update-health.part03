@@ -1,0 +1,100 @@
+            "pending_like_older_than_6h": old_pending,
+        }
+    out["media"] = media
+
+    outbox = {"present": "joboutbox" in tables}
+    if "joboutbox" in tables:
+        status_rows = conn.execute("SELECT status, COUNT(*) FROM joboutbox GROUP BY status").fetchall()
+        outbox["all_status_counts"] = {str(r[0]): int(r[1]) for r in status_rows}
+        _, recent_jobs = recent_rows(conn, "joboutbox", cutoff, ("updated_at", "created_at"), limit=20000)
+        outbox["recent_count"] = len(recent_jobs)
+        outbox["recent_by_task_status"] = group(recent_jobs, ("task", "status"))
+        affected = sorted(source_event_ids | event_ids_created)
+        active: list[dict[str, Any]] = []
+        if affected:
+            q = ",".join("?" for _ in affected)
+            active = select_rows(
+                conn,
+                f"SELECT id,event_id,task,status,attempts,last_error,last_result,updated_at,next_run_at FROM joboutbox WHERE event_id IN ({q}) AND status IN ('pending','running','error','paused') ORDER BY updated_at DESC",
+                affected,
+                limit=1000,
+            )
+        outbox["affected_active_or_problem_rows"] = [
+            {
+                "id": r.get("id"),
+                "event_id": r.get("event_id"),
+                "task": r.get("task"),
+                "status": r.get("status"),
+                "attempts": r.get("attempts"),
+                "last_error": sanitize(str(r.get("last_error") or ""), 300),
+                "updated_at": r.get("updated_at"),
+                "next_run_at": r.get("next_run_at"),
+            }
+            for r in active
+        ]
+    out["job_outbox"] = outbox
+
+    # Static delivery tables have changed names over time. Report every likely table.
+    static_tables: dict[str, Any] = {}
+    for table in sorted(t for t in tables if "static" in t and ("build" in t or "site" in t)):
+        table_cols = cols(conn, table)
+        status_col = next((x for x in ("status", "state", "phase") if x in table_cols), None)
+        updated_col = next((x for x in ("updated_at", "created_at", "finished_at", "started_at") if x in table_cols), None)
+        counts = {}
+        if status_col:
+            counts = {str(r[0]): int(r[1]) for r in conn.execute(f'SELECT "{status_col}", COUNT(*) FROM "{table}" GROUP BY "{status_col}"')}
+        recent_col, recent = recent_rows(conn, table, cutoff, tuple(x for x in (updated_col, "updated_at", "created_at", "finished_at") if x), limit=5000)
+        static_tables[table] = {"status_counts": counts, "recent_timestamp_column": recent_col, "recent_count": len(recent)}
+    out["static_delivery"] = static_tables
+
+    integrity: dict[str, Any] = {}
+    if "event_source" in tables and "event" in tables:
+        row = conn.execute("SELECT COUNT(*) FROM event_source s LEFT JOIN event e ON e.id=s.event_id WHERE e.id IS NULL").fetchone()
+        integrity["orphan_event_sources"] = int(row[0]) if row else 0
+        duplicates = select_rows(conn, "SELECT source_url, COUNT(DISTINCT event_id) AS n FROM event_source WHERE source_url IS NOT NULL AND source_url<>'' GROUP BY source_url HAVING COUNT(DISTINCT event_id)>1 ORDER BY n DESC LIMIT 100")
+        integrity["source_urls_linked_to_multiple_events"] = [{"source_url_hash": short_hash(r.get("source_url")), "event_count": r.get("n")} for r in duplicates]
+    if "event" in tables:
+        today = now.date().isoformat()
+        dups = select_rows(conn, "SELECT title,date,time,COALESCE(city,''),COUNT(*) AS n,GROUP_CONCAT(id) AS ids FROM event WHERE date>=? GROUP BY LOWER(TRIM(title)),date,TRIM(time),LOWER(TRIM(COALESCE(city,''))) HAVING COUNT(*)>1 ORDER BY n DESC LIMIT 100", (today,))
+        integrity["future_exact_signature_duplicates"] = [
+            {"title": str(r.get("title") or "")[:160], "date": r.get("date"), "time": r.get("time"), "city": r.get("COALESCE(city,'')"), "count": r.get("n"), "ids": r.get("ids")}
+            for r in dups
+        ]
+        if "photo_urls" in cols(conn, "event") and "photo_count" in cols(conn, "event"):
+            mismatches = []
+            for r in select_rows(conn, "SELECT id,photo_count,photo_urls FROM event WHERE date>=?", (today,), limit=10000):
+                if int(r.get("photo_count") or 0) != len(json_list(r.get("photo_urls"))):
+                    mismatches.append({"event_id": r.get("id"), "photo_count": r.get("photo_count"), "url_count": len(json_list(r.get("photo_urls")))})
+            integrity["future_photo_count_mismatches"] = mismatches[:100]
+    out["integrity"] = integrity
+    conn.close()
+    return out
+
+
+def parse_log_ts(match: re.Match[str]) -> dt.datetime:
+    raw = match.group("ts")
+    if match.group("ms"):
+        raw += "." + match.group("ms")
+    parsed = dt.datetime.fromisoformat(raw)
+    # Fly machine clock/logging is UTC in this deployment; record this assumption.
+    return parsed.replace(tzinfo=UTC)
+
+
+def inspect_logs(cutoff: dt.datetime, now: dt.datetime) -> tuple[dict[str, Any], list[str]]:
+    log_dir = Path((os.getenv("RUNTIME_LOG_DIR") or "/data/runtime_logs").strip() or "/data/runtime_logs")
+    base = (os.getenv("RUNTIME_LOG_BASENAME") or "events-bot.log").strip() or "events-bot.log"
+    files = sorted(Path(x) for x in glob.glob(str(log_dir / f"{base}*")) if Path(x).is_file())
+    counts = collections.Counter()
+    terminal = collections.Counter()
+    reasons = collections.Counter()
+    source_types = collections.Counter()
+    updated_keys = collections.Counter()
+    provider = collections.Counter()
+    downstream = collections.Counter()
+    quality = collections.Counter()
+    runtime = collections.Counter()
+    sched = collections.Counter()
+    event_ids = collections.defaultdict(set)
+    excerpts: list[str] = []
+    first: dt.datetime | None = None
+    last: dt.datetime | None = None
