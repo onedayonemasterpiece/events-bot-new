@@ -1,0 +1,100 @@
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, list) else []
+        except Exception:
+            return []
+    return []
+
+
+def inspect_db(path: Path, cutoff: dt.datetime, now: dt.datetime) -> dict[str, Any]:
+    conn = sqlite3.connect(str(path), timeout=30)
+    conn.row_factory = sqlite3.Row
+    tables = table_set(conn)
+    out: dict[str, Any] = {"tables": len(tables)}
+    quick = conn.execute("PRAGMA quick_check").fetchone()
+    out["quick_check"] = quick[0] if quick else None
+
+    event_ts, events = (None, [])
+    if "event" in tables:
+        event_ts, events = recent_rows(conn, "event", cutoff, ("added_at", "created_at", "updated_at"))
+    event_ids_created = {int(r["id"]) for r in events if r.get("id") is not None}
+    out["events_created"] = {
+        "timestamp_column": event_ts,
+        "count": len(events),
+        "by_type": group(events, ("event_type",)),
+        "by_city": group(events, ("city",)),
+        "items": [
+            {
+                "id": r.get("id"),
+                "title": str(r.get("title") or "")[:180],
+                "date": r.get("date"),
+                "time": r.get("time"),
+                "city": r.get("city"),
+                "telegraph_ready": bool(r.get("telegraph_url") or r.get("telegraph_path")),
+                "ics_ready": bool(r.get("ics_url") or r.get("ics_post_url")),
+                "photo_count": int(r.get("photo_count") or 0),
+            }
+            for r in events[:200]
+        ],
+    }
+
+    src_ts, sources = (None, [])
+    if "event_source" in tables:
+        src_ts, sources = recent_rows(conn, "event_source", cutoff, ("imported_at", "updated_at", "created_at"))
+    source_event_ids = {int(r["event_id"]) for r in sources if r.get("event_id") is not None}
+    out["event_sources_imported"] = {
+        "timestamp_column": src_ts,
+        "count": len(sources),
+        "distinct_event_ids": len(source_event_ids),
+        "by_source_type": group(sources, ("source_type",)),
+        "trust_levels": group(sources, ("trust_level",)),
+        "probable_created_event_ids": sorted(source_event_ids & event_ids_created),
+        "probable_merge_event_ids": sorted(source_event_ids - event_ids_created),
+    }
+
+    fact_ts, facts = (None, [])
+    if "event_source_fact" in tables:
+        fact_ts, facts = recent_rows(conn, "event_source_fact", cutoff, ("updated_at", "created_at", "extracted_at"))
+    out["facts"] = {
+        "timestamp_column": fact_ts,
+        "count": len(facts),
+        "distinct_events": len({r.get("event_id") for r in facts if r.get("event_id") is not None}),
+        "by_status": group(facts, ("status",)) if facts else {},
+    }
+
+    id_ts, identity = (None, [])
+    if "event_identity_decision_log" in tables:
+        id_ts, identity = recent_rows(conn, "event_identity_decision_log", cutoff, ("created_at", "decided_at", "updated_at"))
+    out["identity_decisions"] = {
+        "timestamp_column": id_ts,
+        "count": len(identity),
+        "by_action_reason": group(identity, ("action", "reason_code")) if identity else {},
+        "by_mode": group(identity, ("mode",)) if identity else {},
+    }
+
+    media: dict[str, Any] = {}
+    for table in ("eventposter", "event_media_asset", "event_media_review_job", "event_media_pair_review"):
+        if table not in tables:
+            continue
+        table_cols = cols(conn, table)
+        status_col = next((x for x in ("review_status", "status", "state") if x in table_cols), None)
+        created_col = next((x for x in ("created_at", "updated_at", "reviewed_at") if x in table_cols), None)
+        status_counts = {}
+        if status_col:
+            status_counts = {
+                str(r[0] if r[0] not in (None, "") else "<null>"): int(r[1])
+                for r in conn.execute(f'SELECT "{status_col}", COUNT(*) FROM "{table}" GROUP BY "{status_col}"')
+            }
+        recent_col, recent = recent_rows(conn, table, cutoff, ("updated_at", "created_at", "reviewed_at"), limit=20000)
+        old_pending = 0
+        if status_col and created_col:
+            placeholders = " OR ".join([f'LOWER(COALESCE("{status_col}",\'\')) LIKE ?' for _ in range(3)])
+            row = conn.execute(
+                f'SELECT COUNT(*) FROM "{table}" WHERE ({placeholders}) AND "{created_col}" < ?',
+                ("%pending%", "%queued%", "%review%", (now - dt.timedelta(hours=6)).replace(tzinfo=None).isoformat(sep=" ")),
+            ).fetchone()
+            old_pending = int(row[0]) if row else 0
+        media[table] = {
+            "status_column": status_col,
+            "status_counts": status_counts,
+            "recent_timestamp_column": recent_col,
+            "recent_count": len(recent),
