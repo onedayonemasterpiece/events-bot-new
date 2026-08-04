@@ -40,7 +40,7 @@ jobs:
           target_branch=$(sed -n 's/^target_branch=//p' "$request_file" | tail -n 1)
           target_sha=$(sed -n 's/^target_sha=//p' "$request_file" | tail -n 1)
 
-          [[ "$request_id" =~ ^[A-Za-z0-9._:-]{8,120}$ ]]
+          [[ "$request_id" =~ ^[A-Za-z0-9._-]{8,120}$ ]]
           [[ "$target_branch" == 'agent/prelaunch-landing-20260803' ]]
           [[ "$target_sha" =~ ^[0-9a-f]{40}$ ]]
 
@@ -144,7 +144,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: prelaunch-visual-control-${{ steps.request.outputs.request_id }}-${{ github.run_id }}
+          name: prelaunch-visual-control-${{ github.run_id }}
           path: artifacts/prelaunch-browser
           if-no-files-found: error
           retention-days: 14
