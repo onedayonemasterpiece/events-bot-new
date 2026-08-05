@@ -1,16 +1,23 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Mapping
 
 import requests
 
-from .dobro_adapter import extract_event_urls, is_in_target_region, parse_event_page
+from .dobro_adapter import VacancyTarget, extract_event_urls, is_in_target_region, parse_event_page
 from .playwright_live import discover_event_urls
 from .source_config import DobroSourceConfig
-from .types import MonitorResult, MonitorRunStatus, VolunteerOpportunity
+from .types import (
+    AvailabilityStatus,
+    MonitorResult,
+    MonitorRunStatus,
+    VolunteerOpportunity,
+    canonical_json_hash,
+)
 
 
 class MonitorTransportError(RuntimeError):
@@ -84,6 +91,51 @@ def _fetch(config: DobroSourceConfig, url: str) -> str:
     return response.text
 
 
+def _card_proves_region(card_text: str, region_name: str) -> bool:
+    target = " ".join(region_name.casefold().replace("ё", "е").split())
+    target_root = target.replace("область", "").replace("обл.", "").replace("обл", "").strip()
+    haystack = " ".join(card_text.casefold().replace("ё", "е").split())
+    return any(value and value in haystack for value in (target, target_root))
+
+
+def _apply_vacancy_inventory(
+    item: VolunteerOpportunity,
+    targets: tuple[VacancyTarget, ...],
+) -> VolunteerOpportunity:
+    if not targets:
+        return item
+    vacancy_ids = tuple(target.vacancy_id for target in targets)
+    application_urls = tuple(target.application_url for target in targets)
+    card_texts = tuple(target.card_text for target in targets if target.card_text)
+    semantic_hash = canonical_json_hash(
+        {
+            "parent_semantic_hash": item.semantic_hash,
+            "vacancy_ids": vacancy_ids,
+            "application_urls": application_urls,
+            "vacancy_card_texts": card_texts,
+        }
+    )
+    availability_hash = canonical_json_hash(
+        {
+            "parent_event_id": item.source_external_id,
+            "vacancy_ids": vacancy_ids,
+            "application_urls": application_urls,
+            "availability_status": AvailabilityStatus.OPEN.value,
+            "availability_reason": "active_vacancy_inventory",
+        }
+    )
+    return replace(
+        item,
+        vacancy_ids=vacancy_ids,
+        application_urls=application_urls,
+        vacancy_card_texts=card_texts,
+        availability_status=AvailabilityStatus.OPEN,
+        availability_reason="active_vacancy_inventory",
+        semantic_hash=semantic_hash,
+        availability_hash=availability_hash,
+    )
+
+
 async def run_live_monitor(
     *,
     config: DobroSourceConfig,
@@ -103,18 +155,28 @@ async def run_live_monitor(
         )
 
     selected = discovery.urls[: config.max_items]
+    selected_set = set(selected)
+    targets_by_event: dict[str, list[VacancyTarget]] = {}
+    for target in discovery.vacancies:
+        if target.event_url in selected_set:
+            targets_by_event.setdefault(target.event_url, []).append(target)
+
     opportunities: list[VolunteerOpportunity] = []
     warnings: list[str] = []
     outside_region = 0
     for url in selected:
+        targets = tuple(targets_by_event.get(url, ()))
         try:
             html = await asyncio.to_thread(_fetch, config, url)
             item = parse_event_page(html, source_url=url, checked_at=checked)
-            if not is_in_target_region(item, config.region_name):
+            region_proven = is_in_target_region(item, config.region_name) or any(
+                _card_proves_region(target.card_text, config.region_name) for target in targets
+            )
+            if not region_proven:
                 outside_region += 1
                 warnings.append(f"outside_target_region:{url}")
                 continue
-            opportunities.append(item)
+            opportunities.append(_apply_vacancy_inventory(item, targets))
         except Exception as exc:
             warnings.append(f"{url}: {type(exc).__name__}: {exc}")
 
