@@ -1,9 +1,23 @@
 from __future__ import annotations
 
+import json
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from . import playwright_discovery as _base
+from .dobro_adapter import VacancyTarget, extract_event_urls, extract_vacancy_targets
 from .source_config import DobroSourceConfig
+
+
+@dataclass(slots=True, frozen=True)
+class LiveDiscoveryResult:
+    urls: tuple[str, ...]
+    vacancies: tuple[VacancyTarget, ...]
+    region_proven: bool
+    available_filter_proven: bool
+    explicit_zero_supply: bool
+    load_more_clicks: int
 
 
 async def _scan_visible_exact_region_candidate(page: Any, region_name: str) -> Any | None:
@@ -33,14 +47,7 @@ async def _scan_visible_exact_region_candidate(page: Any, region_name: str) -> A
 
 
 async def _visible_exact_region_candidate(page: Any, region_name: str) -> Any | None:
-    """Wait for Dobro.ru's visible exact region option in a duplicated DOM.
-
-    Search suggestions are populated asynchronously after the input value is
-    committed. Failure evidence can therefore contain the option even though a
-    one-shot lookup immediately after `fill()` missed it. Polling remains
-    bounded to five seconds and accepts only the exact region-level label, not
-    city rows such as `Калининградская обл, г Советск`.
-    """
+    """Wait for Dobro.ru's visible exact region option in a duplicated DOM."""
 
     for _ in range(20):
         candidate = await _scan_visible_exact_region_candidate(page, region_name)
@@ -68,20 +75,12 @@ async def _vacancy_surface_ready(page: Any) -> bool:
 
 
 async def _activate_current_vacancy_surface(page: Any) -> bool:
-    """Activate Dobro.ru's current vacancy-only search surface.
-
-    The former `С доступными вакансиями` checkbox is no longer rendered in the
-    current search UI. Its product role is now an explicit Radix tab named
-    `Вакансии`. We require the tab to become active and then require the
-    asynchronous vacancy panel to expose application targets or an explicit
-    zero-result state. Detail pages independently decide OPEN/CLOSED/EXPIRED.
-    """
+    """Activate Dobro.ru's current vacancy-only search surface."""
 
     tab = page.get_by_role("tab", name="Вакансии", exact=True)
     try:
         if not await tab.count():
             raise _base.DiscoveryError("cannot find Dobro.ru vacancies tab")
-        # As with the region picker, duplicate hidden tab trees can exist.
         visible = None
         for index in range(min(await tab.count(), 10)):
             candidate = tab.nth(index)
@@ -112,15 +111,55 @@ async def _activate_current_vacancy_surface(page: Any) -> bool:
     raise _base.DiscoveryError("Dobro.ru vacancies tab did not become active")
 
 
-async def discover_event_urls(config: DobroSourceConfig):
-    # Install live-DOM compatibility resolvers only at this adapter boundary;
-    # fixtures and the source parser remain deterministic.
+def _write_enriched_receipt(config: DobroSourceConfig, result: LiveDiscoveryResult) -> None:
+    if config.evidence_dir is None:
+        return
+    root = Path(config.evidence_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "urls": list(result.urls),
+        "vacancy_count": len(result.vacancies),
+        "vacancies": [target.to_dict() for target in result.vacancies],
+        "region_proven": result.region_proven,
+        "available_filter_proven": result.available_filter_proven,
+        "explicit_zero_supply": result.explicit_zero_supply,
+        "load_more_clicks": result.load_more_clicks,
+    }
+    (root / "discovery-receipt.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+async def discover_event_urls(config: DobroSourceConfig) -> LiveDiscoveryResult:
+    """Run base navigation while retaining the current vacancy-grain inventory."""
+
+    latest_vacancies: list[VacancyTarget] = []
+
+    def capture_urls(html: str, *, base_url: str = "https://dobro.ru") -> list[str]:
+        nonlocal latest_vacancies
+        latest_vacancies = extract_vacancy_targets(html, base_url=base_url)
+        return extract_event_urls(html, base_url=base_url)
+
     original_region = _base._region_candidate
     original_available = _base._enable_available_vacancies
+    original_extract = _base.extract_event_urls
     _base._region_candidate = _visible_exact_region_candidate
     _base._enable_available_vacancies = _activate_current_vacancy_surface
+    _base.extract_event_urls = capture_urls
     try:
-        return await _base.discover_event_urls(config)
+        base_result = await _base.discover_event_urls(config)
+        result = LiveDiscoveryResult(
+            urls=base_result.urls,
+            vacancies=tuple(latest_vacancies),
+            region_proven=base_result.region_proven,
+            available_filter_proven=base_result.available_filter_proven,
+            explicit_zero_supply=base_result.explicit_zero_supply,
+            load_more_clicks=base_result.load_more_clicks,
+        )
+        _write_enriched_receipt(config, result)
+        return result
     finally:
         _base._region_candidate = original_region
         _base._enable_available_vacancies = original_available
+        _base.extract_event_urls = original_extract
