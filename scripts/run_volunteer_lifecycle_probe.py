@@ -2,9 +2,10 @@
 """Read-only lifecycle probe for reviewed historical Dobro.ru source pages.
 
 The active vacancy inventory proves OPEN. This separate bounded probe proves
-that the same detail parser still recognises CLOSED/EXPIRED source states. It
-accepts a rotating list rather than treating one historical page as a permanent
-fixture.
+that the same detail parser recognises at least one source-backed non-public
+state: explicit CLOSED or date-proven EXPIRED. Both remove the public volunteer
+link, while the exact reason remains preserved in the receipt. The probe accepts
+a rotating list rather than treating one historical page as a permanent fixture.
 """
 
 from __future__ import annotations
@@ -61,12 +62,14 @@ def main() -> int:
     counts = {status.value: 0 for status in AvailabilityStatus}
     for row in rows:
         counts[str(row["availability_status"])] += 1
+    non_open_count = counts["CLOSED"] + counts["EXPIRED"]
     payload: dict[str, object] = {
         "schema_version": "volunteer-lifecycle-probe-v1",
         "checked_at": checked_at.isoformat(),
         "requested_count": len(dict.fromkeys(args.url)),
         "parsed_count": len(rows),
         "status_counts": counts,
+        "non_open_count": non_open_count,
         "errors": errors,
         "rows": rows,
     }
@@ -83,13 +86,14 @@ def main() -> int:
                 "parsed_count": len(rows),
                 "CLOSED": counts["CLOSED"],
                 "EXPIRED": counts["EXPIRED"],
+                "non_open_count": non_open_count,
                 "errors": len(errors),
             },
             ensure_ascii=False,
         )
     )
-    if counts["CLOSED"] < 1:
-        print("no reviewed source currently proves CLOSED", file=sys.stderr)
+    if non_open_count < 1:
+        print("no reviewed source currently proves CLOSED or EXPIRED", file=sys.stderr)
         return 1
     return 0
 
