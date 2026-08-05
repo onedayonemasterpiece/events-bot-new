@@ -43,6 +43,18 @@ begin
   exception when check_violation then null;
   end;
 
+  begin
+    insert into email_control.postbox_message_correlation (
+      provider_message_id, source_kind, legacy_evidence_sha256, legacy_sent_at,
+      email_hmac, hmac_key_version, bound_at
+    ) values (
+      'partial-correlation-proof', 'legacy_auth', repeat('0', 64), now(),
+      null, 1, now()
+    );
+    raise exception 'partial correlation recipient proof passed its CHECK constraint';
+  exception when check_violation then null;
+  end;
+
   v_begin := public.focus_auth_begin_delivery_batch_v1(
     v_user,
     'signup',
