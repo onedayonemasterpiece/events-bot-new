@@ -1,0 +1,62 @@
+name: TO-BE documentation branch audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 5 * * 1"
+  pull_request:
+    paths:
+      - "docs/**"
+      - "scripts/audit_to_be_documentation.py"
+      - ".github/workflows/to-be-documentation-audit.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "scripts/audit_to_be_documentation.py"
+      - ".github/workflows/to-be-documentation-audit.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: to-be-documentation-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Refresh remote refs
+        run: git fetch --all --prune --no-tags
+
+      - name: Compile auditor
+        run: python3 -m py_compile scripts/audit_to_be_documentation.py
+
+      - name: Build advisory inventory
+        run: |
+          python3 scripts/audit_to_be_documentation.py \
+            --main-ref origin/main \
+            --output-md artifacts/docs/to-be-documentation-audit.md \
+            --output-json artifacts/docs/to-be-documentation-audit.json
+
+      - name: Publish summary
+        if: always()
+        run: |
+          if [[ -f artifacts/docs/to-be-documentation-audit.md ]]; then
+            cat artifacts/docs/to-be-documentation-audit.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: to-be-documentation-audit-${{ github.run_id }}
+          path: artifacts/docs/to-be-documentation-audit.*
+          if-no-files-found: error
+          retention-days: 30

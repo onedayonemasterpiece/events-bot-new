@@ -7,6 +7,9 @@
 - Машиночитаемая карта: `docs/routes.yml`
 - Статический сайт: `docs/features/static-site-pages/README.md`
   - аналитика и продуктовая статистика: `analytics/README.md`;
+  - хранение/retention/архив аналитики: `analytics/storage-retention-architecture.md`;
+  - карточки, чтение, CTA, Hero Talk и освоение сервиса: `analytics/product-measurement-extension.md`;
+  - реестр консолидации TO-BE из веток: `to-be-documentation-consolidation.md`;
   - подборки и гастрономия: `podborki.md`, `gastronomy-collection.md`;
   - персонализация: `personalizaion/personalization-to-be.md` и Wave 0;
   - погода: `weather-calendar.md`;
@@ -20,6 +23,12 @@
 - Personalization data ownership (Fly/Supabase/YDB/Object Storage): `docs/architecture/personalization-data-ownership.md`
 - Сквозная аналитика и продуктовая статистика статического сайта:
   `docs/features/static-site-pages/analytics/README.md`
+- Экологичное хранение, TTL и архив статистики:
+  `docs/features/static-site-pages/analytics/storage-retention-architecture.md`
+- Консолидация TO-BE-документации из рабочих веток:
+  `docs/features/static-site-pages/to-be-documentation-consolidation.md`
+- Hero Talk: `docs/features/hero-talk/README.md`
+- Волонтёрские заявки: `docs/features/static-site-pages/volunteer-recruitment/README.md`
 - Эксплуатация: `docs/operations/` (как запускать/поддерживать)
 - Workflow репозитория и worktree/branch policy: `docs/operations/repository-workflow.md`
 - Incident management / closure gate: `docs/operations/incident-management.md`
@@ -41,6 +50,8 @@
   `docs/operations/static-site-qa-chatgpt-control-plane.md`,
   `docs/testing/static-site-autotest-scenarios.v1.yml`,
   `docs/testing/static-site-autotest-codex-prompt.md`
+- Advisory branch audit TO-BE-документации:
+  `scripts/audit_to_be_documentation.py`, `.github/workflows/to-be-documentation-audit.yml`
 - Минимальный продуктовый мониторинг статических подборок — health,
   living semantic examples и stability baseline:
   `docs/testing/static-collections-product-quality-autotests.md`
@@ -88,3 +99,5 @@
 4. Новый production incident → добавь канонический record в `docs/reports/incidents/` по `TEMPLATE.md`, внеси его в incident index и убедись, что он пригоден для автоматического regression-check по ID.
 5. Принятое TO-BE-решение должно оперативно доехать до канонического документа в `main`, даже если runtime ещё не реализован. Документы в feature-ветке, PR body, комментарии и preview остаются WIP/evidence и не могут быть единственным источником требования.
 6. Общие определения аналитики, пользователей, сессий, consent, хранения, метрик и resource budgets не дублируются по фичам: feature-документы ссылаются на `docs/features/static-site-pages/analytics/README.md` и добавляют только feature-specific контракт.
+7. Нельзя выбирать канонику только по дате commit. Сверка owner decision, статуса документа, current runtime и конфликтов фиксируется в `docs/features/static-site-pages/to-be-documentation-consolidation.md`.
+8. Weekly `TO-BE documentation branch audit` — advisory guard. `unclassified_review_required` требует ручного решения и не разрешает автоматический merge ветки.

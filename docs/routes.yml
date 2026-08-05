@@ -842,6 +842,23 @@ features:
       - main.py
       - main_part2.py
 
+
+documentation_governance:
+  to_be_consolidation: docs/features/static-site-pages/to-be-documentation-consolidation.md
+  branch_auditor: scripts/audit_to_be_documentation.py
+  branch_audit_workflow: .github/workflows/to-be-documentation-audit.yml
+  static_site_analytics: docs/features/static-site-pages/analytics/README.md
+  analytics_storage_retention: docs/features/static-site-pages/analytics/storage-retention-architecture.md
+  analytics_product_measurement: docs/features/static-site-pages/analytics/product-measurement-extension.md
+  focus_group_current_contract: docs/features/static-site-pages/focus-group.md
+  auth_session_fixture: docs/testing/static-site-auth-session-fixture.md
+  hero_talk: docs/features/hero-talk/README.md
+  keyboard_navigation_v8: docs/features/static-site-pages/keyboard-event-navigation-v8-product-model.md
+  volunteer_recruitment: docs/features/static-site-pages/volunteer-recruitment/README.md
+  personalization_transport_profile: docs/features/static-site-pages/personalizaion/transport-ecology-profile-architecture.md
+  personalization_legal_gate: docs/features/static-site-pages/personalization-legal-release-gate-rf.md
+  event_reminders_target: docs/features/static-site-pages/event-reminders-calendar-strategy.md
+
 artifacts:
   root: artifacts/
   db: artifacts/db/
