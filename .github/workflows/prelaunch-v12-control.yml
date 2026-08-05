@@ -96,6 +96,10 @@ jobs:
           REQUEST_ID: ${{ steps.request.outputs.request_id }}
           TARGET_SHA: ${{ steps.request.outputs.target_sha }}
         run: |
+          # GitHub's bash wrapper enables errexit by default. Disable it for this
+          # aggregation step so every independent gate runs and the artifact
+          # always contains complete evidence, then fail once at the end.
+          set +e
           set -uo pipefail
           artifact_dir='artifacts/prelaunch-browser'
           mkdir -p "$artifact_dir/reference"
