@@ -1,6 +1,6 @@
 # Volunteer Monitor: implementation and live-acceptance status
 
-> **Status, 2026-08-05:** read-only `Добро.рф` source boundary, exact vacancy CTA extraction, fixture suite and real GitHub-hosted Chromium acceptance are green. Kaggle canary is blocked only by credential provisioning. Production SQLite apply, BGE/LLM target matching, `festival_queue` apply and public Astro UI are not implemented.
+> **Status, 2026-08-05:** read-only `Добро.рф` source boundary, exact vacancy CTA extraction, fixture suite and real GitHub-hosted Chromium acceptance are green. GitHub Environment and variable names for the Kaggle canary exist, but the provisioned `KAGGLE_API_TOKEN` value was rejected by Kaggle before any kernel could be created. Production SQLite apply, BGE/LLM target matching, `festival_queue` apply and public Astro UI are not implemented.
 > **Branch / PR:** `agent/volunteer-monitor-skeleton-20260804`, PR #335, stacked on the accepted docs contract PR #331.
 
 Related documents:
@@ -9,7 +9,7 @@ Related documents:
 - `test-plan.md` — fixture, dynamic live canary and browser E2E contract;
 - `implementation-handoff.md` — full W0–W6 implementation plan;
 - `search-and-kaggle-infrastructure.md` — free search and execution choices;
-- `code-agent-live-acceptance.md` — credential-only external task.
+- `code-agent-live-acceptance.md` — the one remaining credential-value task.
 
 ## 1. Implemented read-only source boundary
 
@@ -40,14 +40,14 @@ kaggle/VolunteerMonitor/
 
 Implemented behavior:
 
-- current Dobro.ru location UI with both observed cold-start states;
-- selection of `Калининградская обл`;
+- both observed cold-start states of the current Dobro.ru location UI;
+- exact selection of `Калининградская обл`;
 - current vacancy-only `Вакансии` tab;
-- asynchronous region suggestion and vacancy-card readiness;
+- asynchronous region-suggestion and vacancy-card readiness;
 - bounded `Показать еще` traversal;
 - extraction of `event_id`, `vacancy_id` and exact source CTA URL;
 - one parent-event fetch per selected parent, including multiple vacancies;
-- JSON-LD / visible-text enrichment from the parent event page;
+- JSON-LD and visible-text enrichment from the parent event page;
 - `OPEN / CLOSED / EXPIRED / UNKNOWN` lifecycle parsing;
 - active vacancy inventory as source-grounded OPEN evidence;
 - separate `semantic_hash` and `availability_hash`;
@@ -63,7 +63,7 @@ the source application destination.
 
 ## 2. Fixture evidence
 
-Latest fixture workflow:
+Established fixture workflow:
 
 ```text
 workflow: Volunteer monitor smoke
@@ -72,6 +72,10 @@ status:   SUCCESS
 pytest:   20 passed
 fixture:  PASS, 2 pages, 1 OPEN, 1 CLOSED
 ```
+
+The same fixture boundary remained green during every Kaggle-authentication
+attempt. The latest such run was `30992222431`; therefore the remote failure is
+not caused by source-parser, fixture or packaging regressions.
 
 Coverage includes:
 
@@ -85,10 +89,10 @@ Coverage includes:
 - separate semantic and availability hashes;
 - grounded free-search provider URL rules.
 
-The monitor tests run with `--noconftest` so this autonomous source boundary does
-not load the entire Telegram bot and unrelated dependencies.
+The monitor tests run with `--noconftest`, so this autonomous source boundary
+does not load the entire Telegram bot and unrelated dependencies.
 
-## 3. Accepted real live acceptance
+## 3. Accepted real direct live acceptance
 
 ### 3.1. Bounded PR acceptance
 
@@ -106,16 +110,16 @@ status:                    SUCCESS
 Observed source result:
 
 ```text
-parent pages selected:       24
-opportunities parsed:        24
-OPEN:                        24
-outside-region:               0
-transport/parser errors:      0
-accounted sources:           24 / 24
-vacancy records discovered: 162
+parent pages selected:        24
+opportunities parsed:         24
+OPEN:                         24
+outside-region:                0
+transport/parser errors:       0
+accounted sources:            24 / 24
+vacancy records discovered:  162
 parents with application URL: 24 / 24
-vacancy IDs retained:         48
-load-more clicks:              5
+vacancy IDs retained:          48
+load-more clicks:               5
 ```
 
 Historical lifecycle probe:
@@ -157,9 +161,9 @@ Accounting was exact:
 88 parsed + 12 outside-region + 1 error = 101 selected
 ```
 
-This result is `PARTIAL`, not failure. CI accepts `PARTIAL` only after the
-independent accounting validator proves that every selected source has exactly
-one terminal disposition.
+This result is `PARTIAL`, not a false success. CI accepts `PARTIAL` only after
+the independent accounting validator proves that every selected source has
+exactly one terminal disposition.
 
 ## 4. Current live Dobro.ru contract
 
@@ -181,7 +185,7 @@ Important corrections to the original hypothesis:
 - the previous `С доступными вакансиями` checkbox is absent;
 - its current product equivalent is the `Вакансии` tab;
 - location and vacancy results are asynchronous;
-- the DOM contains hidden/visible duplicate option trees;
+- the DOM contains hidden and visible duplicate option trees;
 - region selection may be reflected in URL state or only in the visible header
   location button;
 - the search surface is vacancy-grained, while event details are parent-grained.
@@ -189,7 +193,89 @@ Important corrections to the original hypothesis:
 Fixed sleeps are not readiness evidence. The monitor waits for an exact visible
 region option and for vacancy CTAs or an explicit zero-result source state.
 
-## 5. Opportunity identity
+## 5. Kaggle canary evidence
+
+### 5.1. GitHub settings boundary
+
+The following names are present and reach the Environment-scoped job:
+
+```text
+GitHub Environment: volunteer-monitor-canary
+Environment secret: KAGGLE_API_TOKEN
+Repository variable: VOLUNTEER_KAGGLE_KERNEL_SLUG=eventsbot/kenigevents-volunteer-monitor
+Repository variable: VOLUNTEER_KAGGLE_CANARY_ENABLED=true
+```
+
+The secret value was never printed or returned. GitHub masking confirmed that a
+non-empty value reached the runner. Presence of a secret name, however, is not
+proof that its value is a valid Kaggle credential.
+
+### 5.2. Failed authentication attempts
+
+Three bounded runs isolated the failure before kernel execution:
+
+```text
+run_id       job_id       result
+30991688290  92259199357  non-empty KAGGLE_API_TOKEN; `kernels push` rejected authentication
+30991985166  92260102142  repository legacy variables were absent; token path rejected again
+30992222431  92260913717  raw/JSON/quoted legacy normalization attempted; read-only API auth rejected
+```
+
+The third run used a read-only authentication probe before upload:
+
+```text
+kaggle kernels list -m --page-size 1
+```
+
+It failed before kernel packaging, `kernels push`, polling or output download.
+Consequently:
+
+```text
+Kaggle kernel created: no
+Kaggle execution run ID: none
+Kaggle result JSON: none
+Kaggle receipt JSON: none
+Kaggle output artifact: none
+SHA-256 parity check: not reachable
+```
+
+This evidence rules out the Dobro.ru selectors, result parser, fixture suite,
+runtime ZIP builder and Kaggle kernel body as the current blocker. The blocker
+is the credential value supplied under `KAGGLE_API_TOKEN`.
+
+### 5.3. Workflow state after the failed attempts
+
+Commit `747e298222720212850f53bcd11e08fab016a02b` leaves the canary ready for both
+supported authentication shapes:
+
+```text
+1. try KAGGLE_API_TOKEN as a current access token
+2. if rejected, try a safely prepared legacy username/key fallback
+3. fail before upload when both modes are rejected
+```
+
+Automatic Kaggle execution on every PR push is disabled to prevent repeated
+credential failures and wasted Actions minutes. Kaggle now runs only through
+`workflow_dispatch` with:
+
+```text
+executor = kaggle
+VOLUNTEER_KAGGLE_CANARY_ENABLED = true
+```
+
+### 5.4. Exact remaining external action
+
+Replace **only the value** of Environment secret `KAGGLE_API_TOKEN` with the raw,
+current Kaggle access token generated in Kaggle account settings. Do not place
+its name, a GitHub token, a filename, explanatory text, JSON wrapper or quotes in
+the value. Do not paste the token into chat or commit it anywhere.
+
+After replacement, no source-code or selector work is required. The current
+workflow first proves authentication read-only, then pushes the private kernel,
+polls terminal status, downloads output, validates the receipt SHA-256 and runs
+the same source-accounting validator as the direct canary.
+
+## 6. Opportunity identity
 
 The source inventory retains:
 
@@ -205,7 +291,7 @@ Several vacancy records may map to one parent event. The future Event/Festival
 projection may group them visually, but it must preserve exact vacancy IDs and
 source CTA destinations.
 
-## 6. Canary semantics
+## 7. Canary semantics
 
 Allowed terminal run states:
 
@@ -229,7 +315,7 @@ warnings, non-Dobro warning URLs, no OPEN opportunity under live supply, PASS
 with warnings, PARTIAL without warnings and empty success without explicit
 source zero-state evidence.
 
-## 7. Free official-festival source discovery
+## 8. Free official-festival source discovery
 
 Search is triggered only after no existing Event/Festival match and no explicit
 or known official URL.
@@ -262,20 +348,10 @@ operator-owned SearXNG JSON endpoint
 
 A search result never writes a festival destination directly.
 
-## 8. Execution ownership
+## 9. Execution ownership
 
 GitHub Actions owns fixtures, read-only direct acceptance, optional Kaggle
 canary and private evidence artifacts. It never writes production SQLite.
-
-The private Kaggle canary uses the same source package and result schema. It is
-automatically eligible after these settings exist:
-
-```text
-GitHub Environment: volunteer-monitor-canary
-Environment secret: KAGGLE_API_TOKEN
-Repository variable: VOLUNTEER_KAGGLE_KERNEL_SLUG=eventsbot/kenigevents-volunteer-monitor
-Repository variable: VOLUNTEER_KAGGLE_CANARY_ENABLED=true
-```
 
 Production ownership remains:
 
@@ -286,13 +362,6 @@ Fly durable job / immutable input
   -> Fly transactional SQLite apply
   -> StaticSiteBuilder only on public projection diff
 ```
-
-## 9. Only remaining code-agent task
-
-The code agent is not needed for code, selector repair, GitHub Actions runs,
-artifact analysis or documentation. Its task is restricted to creating the
-Environment and provisioning the one unavailable secret plus the two variables.
-The exact minimal instruction is stored in `code-agent-live-acceptance.md`.
 
 ## 10. Not yet implemented
 
@@ -310,4 +379,5 @@ This branch still does not provide:
 - generated-site removal after source closure;
 - production deployment.
 
-Those are the next implementation phase after Kaggle source parity is accepted.
+Those remain the next implementation phase after Kaggle source parity is
+actually proven, not merely after a secret name is created.
