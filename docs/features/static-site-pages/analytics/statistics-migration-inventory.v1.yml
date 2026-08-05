@@ -1,0 +1,102 @@
+schema_version: 1
+inventory_id: kenigevents.statistics-migration.v1
+status: accepted_to_be
+updated_at: 2026-08-05
+canonical_runtime: docs/features/static-site-pages/analytics/unified-statistics-runtime-architecture.md
+
+status_values:
+  - foundation_ready
+  - adapter_required
+  - ingest_required
+  - legacy_read_only_after_cutover
+  - blocked_by_product_decision
+
+emitters:
+  pwa_lifecycle:
+    current: bespoke_reliable_rpc_using_shared_outbox_and_resilient_transport
+    target_event: pwa_lifecycle
+    status: blocked_by_product_decision
+    blocker: explicit consent/lane decision before changing existing behavior
+    preserve:
+      - idempotent outbox
+      - direct_relay transport
+      - current backend compatibility during shadow
+
+  focus_feedback_nps:
+    current: authoritative feature storage and transport
+    target_event: action_receipt
+    status: adapter_required
+    rule: analytics receives accepted receipt/cohort only; no text or screenshot
+
+  favorites_calendar_like_share:
+    current: multiple feature paths and current-state stores
+    target_event: action_receipt
+    status: adapter_required
+    rule: terminal metric only from authoritative accepted current-state receipt
+
+  event_cta:
+    current: DOM click and external navigation paths
+    target_event: cta_stage
+    status: adapter_required
+    rule: provider success requires callback; otherwise terminal is external_navigation_started
+
+  card_visibility_and_listing_depth:
+    current: partial and feature-local
+    target_events: [card_visible, card_opened, session_summary]
+    status: adapter_required
+    rule: one deduped session accumulator; no observer tick firehose
+
+  event_description_depth:
+    current: no canonical emitter
+    target_event: description_checkpoint
+    status: adapter_required
+    rule: semantic checkpoints only
+
+  hero_talk_page_end:
+    current: feature-specific state
+    target_event: hero_talk_state
+    status: adapter_required
+    rule: chain/step/target ids only; no copy or raw URL
+
+  keyboard_navigation:
+    current: privacy-minimal feature telemetry
+    target_event: keyboard_state
+    status: adapter_required
+    preserve: [no_content, no_keystroke_text, desktop_eligibility_denominator]
+
+  search:
+    current: operational and product outcomes mixed
+    target_event: search_outcome
+    status: adapter_required
+    rule: raw query text and full URL are forbidden
+
+  personalization:
+    current: profile state, ranking evidence and quality evaluation
+    target_event: personalization_state
+    status: adapter_required
+    rule: product SOR remains separate; analytics stores versioned bounded outcomes
+
+  email_push_delivery:
+    current: provider receipts and monitor-specific logs
+    target_event: delivery_receipt
+    status: adapter_required
+    rule: no address, subject, body or provider payload
+
+  medallions_artifacts_volunteers_collections:
+    current: feature-specific adoption or no unified metrics
+    target_event: feature_state
+    status: adapter_required
+
+backend:
+  statistics_batch_ingest:
+    current: absent
+    status: ingest_required
+  ydb_compact_facts_and_aggregates:
+    current: absent_as_unified_runtime
+    status: ingest_required
+  parquet_archive_and_verified_delete:
+    current: absent_as_unified_runtime
+    status: ingest_required
+  legacy_cleanup:
+    current: not_started
+    status: legacy_read_only_after_cutover

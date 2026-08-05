@@ -1,228 +1,200 @@
-# Консолидация TO-BE-документации статического сайта
+# Консолидация TO-BE-документации из рабочих веток
 
-> **Статус:** принятый реестр приоритета и миграции требований.
-> **Дата среза:** 2026-08-05.
-> **База аудита:** `main@5082a502b9c2f4657742104b6ce543b87761a39d`.
-> **Область:** требования, стратегии, продуктовые решения, архитектурные контракты и тестовые модели статического сайта, которые существовали только в ветках или открытых PR.
-> **Не является:** разрешением слить старые ветки целиком, подтверждением готовности runtime или заменой feature-specific документов.
+> **Статус:** retrospective branch-to-main documentation debt закрыт для полного
+> remote snapshot 2026-08-05. Runtime implementation debt остаётся отдельным и
+> явно виден в feature contracts.  
+> **PR:** `#337` (`docs/to-be-consolidation-retention-20260805`).  
+> **Resolved ledger:**
+> [`to-be-branch-disposition-ledger.md`](to-be-branch-disposition-ledger.md) /
+> [`to-be-branch-disposition-ledger.manifest.json`](to-be-branch-disposition-ledger.manifest.json); полный machine ledger — `to-be-branch-disposition-ledger.json.gz`.
 
-## 1. Зачем нужен этот реестр
+## 1. Что теперь считается закрытым
 
-Принятое TO-BE-решение не должно оставаться только в рабочей ветке, PR body,
-комментарии или preview. При этом механическое правило «самый новый commit
-побеждает» опасно: поздняя ветка может быть исследованием, implementation
-scaffold, техническим донором или содержать более старую продуктовую модель.
-
-Поэтому консолидация выполняется не хронологическим копированием, а
-**семантической сверкой**:
-
-1. определить владельца требования и дату последнего явного решения;
-2. проверить более поздние owner corrections;
-3. разделить продуктовый смысл, архитектуру, implementation и evidence;
-4. найти несовместимые модели идентичности, хранения, consent, IA и готовности;
-5. перенести только совместимый нормативный срез;
-6. явно пометить superseded/conflict-blocked документы;
-7. оставить research и implementation evidence доступными, но не объявлять их
-   каноническим требованием.
-
-## 2. Иерархия источников
-
-При конфликте используется следующий порядок.
-
-1. **Более позднее явное решение владельца продукта**, если оно относится к
-   тому же вопросу и не было затем отменено.
-2. **Канонический accepted/owner-corrected документ в `main`.**
-3. **Более поздний accepted docs-only PR**, если его границы честно отделяют
-   TO-BE от реализации.
-4. **Фактический runtime в `main`** — источник current behavior и migration
-   constraints, но не способ отменить утверждённый TO-BE молча.
-5. **Implementation design / test scaffold** — нормативен только в своей
-   технической области и не меняет продуктовый смысл.
-6. **Исследование, consultant report, lab и preview** — evidence, а не решение.
-7. **Старые mixed/integration branches** — исторические доноры; wholesale merge
-   запрещён.
-
-Дата commit или `updated_at` — лишь сигнал для проверки, а не источник истины.
-
-## 3. Статусы реестра
-
-| Статус | Значение |
-|---|---|
-| `ported` | нормативный срез перенесён в `main` без старого unrelated diff |
-| `already_in_main` | актуальный смысл уже находится в каноническом документе |
-| `superseded` | существует более позднее решение; старое нельзя использовать |
-| `conflict_blocked` | есть критическое противоречие; merge запрещён до исправления |
-| `research_evidence` | полезное исследование без owner acceptance |
-| `implementation_only` | кодовый/test handoff, не продуктовый source of truth |
-| `historical_donor` | старый mixed branch, разрешено точечное чтение |
-| `owner_decision_required` | решение нельзя вывести из веток без владельца |
-
-## 4. Результат ручной сверки высокорисковых веток
-
-### 4.1 Фокус-группа и авторизация
-
-| Источник | Найденная модель | Решение |
-|---|---|---|
-| PR #323, `agent/static-site-general-follow-up-audit-20260804` | приглашение открывает сайт; feedback видим, но disabled до email/Яндекса; explicit auth CTA; anonymous server feedback и silent anonymous Auth запрещены | `ported`, это последнее owner-corrected решение |
-| PR #250 и ветки `docs/focus-group-release-control-*` | silent anonymous Supabase Auth, anonymous page score/NPS/text/screenshot, 12 артефактов и старый prize threshold | `superseded`; не переносить |
-| PR #324 launch dashboard | checklist содержит anonymous-first допущения из старой модели | `conflict_blocked`; dashboard должен быть регенерирован после замены требований |
-| текущий `docs/testing/static-site-auth-session-fixture.md` | сохранял режим `anonymous_session` для feedback/artifacts | исправлен: fixture остаётся no-mail способом получить реальную authenticated session, но не создаёт anonymous focus identity |
-
-Критическое решение:
+Полный remote audit на cutoff 2026-08-05 проверил 601 ветку. Для всех 218
+requirement-like/manual branches и 402 обнаруженных requirement-like paths
+зафиксирован явный verdict:
 
 ```text
-invite / QR
-  -> обычный сайт доступен без входа
-  -> feedback block виден
-  -> score / issue / screenshot / NPS disabled
-  -> explicit email or Yandex authentication
-  -> safe return to the same feedback context
-  -> authenticated idempotent writes
+canonical / ported
+superseded by later accepted decision
+historical or research evidence only
+implementation/incident evidence only
+backlog not accepted
+not accepted historical donor
 ```
 
-Нельзя автоматически пересчитать прежнее условие `10 из 12` на новую первую
-коллекцию из семи артефактов. Старые prize rules заблокированы до отдельного
-owner-approved rebaseline.
+Ни одна старая ветка больше не является неявным TO-BE source of truth. Это не
+означает механическое копирование каждого исторического Markdown-файла:
+research, reports, incidents, labs, prompts, implementation diaries и raw
+review artifacts остаются evidence. В `main` переносится только проверенное
+нормативное решение.
 
-### 4.2 Персонализация, профиль и владение данными
+## 2. Правило приоритета
 
-| Источник | Решение |
-|---|---|
-| PR #328, `docs/p13n-transport-profile-20260804` | `ported` как staged architecture: zero-backend navigation, browser projection cache, `/profil/`, Favorites и hidden recovery раздельно |
-| PR #295, Yandex resilience docs | `historical_donor`: полезны capability/SOR/ack/idempotency сценарии, но старая Supabase-primary/YDB-analytics модель не переносится целиком |
-| PR #270 | перенесены только отсутствовавшие extension docs: identity linking, temporal simulation, longitudinal E2E и report template |
-| PR #266 | `ported`: отдельный юридический/activation gate; это не юридическое заключение и не разрешение включить remote writes |
+При конфликте используется не «самый новый commit», а последовательность:
 
-Зафиксированная граница:
+1. более поздняя явная owner correction;
+2. принятое каноническое решение и актуальный release plan;
+3. совместимость с current runtime/SOR, privacy и reliability boundaries;
+4. более поздний совместимый requirement;
+5. research/lab/implementation/history как evidence.
+
+Commit date помогает найти кандидатов, но не разрешает противоречие.
+
+## 3. Разрешённые критические конфликты
+
+### Фокус-группа и авторизация
+
+Победило более позднее явное решение:
+
+- сайт можно просматривать без входа;
+- server-side feedback/NPS/prize participation требуют явной авторизации;
+- silent anonymous Auth и anonymous server feedback запрещены;
+- старые anonymous-first focus-control ветки и построенный на них dashboard
+  помечены superseded.
+
+### `Избранное`, hidden и профиль
+
+Каноническая граница:
+
+- `Избранное` — union calendar/favorite state;
+- calendar save и like не склеиваются;
+- hidden/not-interest recovery не переносится в профиль;
+- профиль владеет account, interests/personalization controls и diagnostics;
+- старые `Мои события`/profile-hidden варианты не импортированы.
+
+### Search
+
+Текущий authenticated Search contract побеждает ранние рекомендации о
+public-basic-search. Аналитические документы 2026-07-18 сохранены как product
+analysis, но не являются принятым требованием.
+
+### Персонализация и физическое хранение
+
+Supabase-primary historical telemetry/evaluation lake отвергнут. Каноника:
+
+- product SOR каждого домена остаётся отдельным;
+- weak browser observations агрегируются до отправки;
+- first-party ingest использует общий resilient direct/relay transport;
+- YDB хранит compact recent facts/aggregates с TTL;
+- Object Storage хранит verified Parquet history;
+- Supabase не становится raw analytics warehouse.
+
+### Сильные действия и клики
+
+`click` не равен successful save/registration/purchase/reminder. Strong metric
+появляется только из authoritative idempotent receipt. Browser visibility/click
+остаётся weak consent-gated observation.
+
+### Hero Talk
+
+Принят chain-first contextual contract с versioned chain/step/target и
+отдельными denominators для home Hero и page-end. Random isolated copy labs —
+evidence, не TO-BE.
+
+### Event age rating
+
+Принят nullable declared-only fact без default `0+`, с обязательной паритетностью
+на всех event-bearing public surfaces.
+
+### Автопрезентатор
+
+Owner-test vertical slice принят. Portable/public release остаётся `NO-GO` до
+Windows 10 evidence, rehearsal и fallback proof. Большие integration README и
+scenario diaries не интерпретируются как разрешение публичного показа.
+
+### Датированные planned activations
+
+Фиксированная social-brand activation 2026-07-30 не импортирована: planned date
+без current accepted runtime/evidence не становится действующей каноникой.
+
+## 4. Что перенесено/переписано в canonical package
+
+### Фокус, профиль, персонализация, reminders
+
+- [`focus-group.md`](focus-group.md) и
+  [`focus-group-release/README.md`](focus-group-release/README.md);
+- [`user-profile.md`](user-profile.md);
+- [`personalizaion/transport-ecology-profile-architecture.md`](personalizaion/transport-ecology-profile-architecture.md);
+- [`personalizaion/identity-linking-personalization.md`](personalizaion/identity-linking-personalization.md);
+- [`personalizaion/longitudinal-e2e-personalization.md`](personalizaion/longitudinal-e2e-personalization.md);
+- [`personalizaion/golden-personas-real-data-v0.md`](personalizaion/golden-personas-real-data-v0.md);
+- [`event-reminders-calendar-strategy.md`](event-reminders-calendar-strategy.md) и
+  [`event-action-onboarding.md`](event-action-onboarding.md);
+- calendar/reminder, auth fixture и personalization transport test plans.
+
+### Hero Talk, keyboard, volunteers
+
+- [`../hero-talk/README.md`](../hero-talk/README.md) и
+  [`hero-talk-release-track.md`](hero-talk-release-track.md);
+- keyboard v8 product/onboarding/test contracts;
+- [`volunteer-recruitment/README.md`](volunteer-recruitment/README.md) и its
+  test/handoff package.
+
+### Public site parity/release gates
+
+- [`event-age-rating.md`](event-age-rating.md);
+- [`responsive-navigation.md`](responsive-navigation.md);
+- [`seo-geo-release-optimization.md`](seo-geo-release-optimization.md);
+- [`medallion-visual-qa.md`](medallion-visual-qa.md);
+- [`auto-present/README.md`](auto-present/README.md).
+
+### Product statistics and content intelligence
+
+- [`analytics/README.md`](analytics/README.md);
+- [`analytics/product-measurement-extension.md`](analytics/product-measurement-extension.md);
+- [`analytics/storage-retention-architecture.md`](analytics/storage-retention-architecture.md);
+- [`analytics/unified-statistics-runtime-architecture.md`](analytics/unified-statistics-runtime-architecture.md);
+- machine catalog/schema/migration inventory;
+- [`../post-metrics/consolidated-event-engagement.md`](../post-metrics/consolidated-event-engagement.md);
+- [`../../llm/unusual-event-detection.md`](../../llm/unusual-event-detection.md).
+
+## 5. Единая статистика: документированный target и implementation truth
+
+На уровне требований контур теперь единый:
 
 ```text
-ordinary calendar/listing/event navigation:
-  YDB profile requests = 0
-  Supabase profile/data requests = 0
-
-browser projection:
-  default cache
-
-remote profile/action architecture:
-  staged until ownership + localization + legal gate
+feature adapter
+-> catalog + consent/privacy gate
+-> session compaction
+-> bounded idempotent outbox
+-> resilient direct/relay
+-> first-party ingest
+-> compact YDB facts/aggregates
+-> Parquet archive
+-> TTL / verified delete
 ```
 
-`Избранное`, hidden recovery и профиль не объединяются:
+Созданы:
 
-```text
-Избранное        = calendar_saved + favorite_saved
-Hidden recovery  = Подборки -> Помечены «не интересует»
-Профиль          = account + interests + diagnostics + management
-```
+- runtime architecture;
+- versioned event catalog;
+- JSON batch schema;
+- service-wide migration inventory;
+- browser client foundation и unit tests.
 
-### 4.3 Hero Talk, онбординг и клавиатура
+Но документационное принятие не переименовывает незавершённый runtime в готовый.
+Остаются implementation tasks: миграция emitters, first-party ingest, YDB
+projector/aggregates, Parquet archive/delete cycle и удаление legacy direct
+telemetry calls. Их exact scope зафиксирован в unified runtime document.
 
-| Источник | Решение |
-|---|---|
-| стандартный onboarding v0.4 | `already_in_main`; utility onboarding и artifact/club onboarding разделены |
-| PR #291 Hero Talk | `ported`: coherent narrative chains, `home_hero` и `page_end`, static served plans, no runtime LLM |
-| PR #330 Keyboard V8 | `ported`: owner-corrected reading route, recovery/help model, настоящий артефакт из фиксированной коллекции, privacy-minimal telemetry |
+## 6. Постоянный gate
 
-Hero Talk не становится вторым onboarding state machine. Onboarding владеет
-eligibility/competency/dismissal, Hero Talk — контекстной доставкой цепочки.
+Workflow теперь выполняет три шага:
 
-### 4.4 Волонтёры
+1. raw remote-branch inventory;
+2. применение reviewed branch/path ledger;
+3. full semantic evidence corpus для проверки.
 
-PR #331 перенесён как docs-only target contract:
+`reconcile_to_be_documentation_audit.py` падает, если появляется новая
+requirement-bearing branch/path без disposition или existing reviewed branch
+изменяет head вне разрешённой current-consolidation policy. Поэтому новый долг
+не скрывается за advisory ZIP.
 
-- ежедневный availability lifecycle заявок `Добро.рф`;
-- отдельный matching/research слой;
-- handoff отсутствующих festival-like заявок в `festival_queue` как raw URL;
-- запрет фабрикации официального URL фестиваля по названию;
-- label на карточках, detail content block и external application CTA;
-- smart canary без hardcoded event ID.
+## 7. Ограничение evidence
 
-Runtime, notebook, schema и публичный rollout этим переносом не объявляются
-готовыми.
-
-### 4.5 Favorites, reminders и Push
-
-PR #235 перенесён точечно:
-
-- target двухзонного `Избранного`: `Мой календарь` + `Понравилось`;
-- calendar save и like независимы;
-- utility reminders: T−24h и ровно один near kind;
-- promotional Web Push имеет отдельный purpose/consent;
-- ICS сохраняется; Postbox calendar email остаётся research; Android connector
-  — prototype;
-- test design не являѵтся PASS runtime.
-
-### 4.6 Исследования и implementation branches, которые не повышены
-
-| Источник | Статус | Причина |
-|---|---|---|
-| PR #252 Editorial collections | `research_evidence` | нужны sync, screenshot matrix и два product review |
-| PR #286 Editorial style workbench | `research_evidence` | living workbench, окончательный tone не выбран |
-| PR #314 Gastronomy data prep | `implementation_only` | owner decision store пуст, publication blocked |
-| PR #296, #313, #318 prelaunch/labs | `implementation_only` | кандидаты и визуальные эксперименты, не общий Не статического source |
-| PR #226 facts-v3 handoff | `superseded` | последующая реализация выборочно вошла через PR #299 |
-| PR #26 и старые umbrella/mixed branches | `historical_donor` | большой разошедшийся diff и устаревшие решения |
-| PR #38 medallions integration | `historical_donor` | implementation readiness и visual evidence; общий продуктовый контракт уже живёт в main |
-
-## 5. Что перенесено этим срезом
-
-### Новые канонические пакеты
-
-- `docs/features/hero-talk/*`;
-- `docs/features/static-site-pages/hero-talk-release-track.md`;
-- `docs/features/static-site-pages/keyboard-event-navigation-v8-*.md`;
-- `docs/testing/keyboard-event-navigation-scenarios.v2.yml`;
-- `docs/features/static-site-pages/volunteer-recruitment/*`;
-- `docs/features/static-site-pages/personalizaion/transport-ecology-profile-architecture.md`;
-- `docs/features/static-site-pages/user-profile.md`;
-- `docs/testing/personalization-transport-profile-test-plan.md`;
-- отсутствовавшие extension docs персонализации;
-- `personalization-legal-release-gate-rf.md`;
-- event reminder strategy/test companions.
-
-### Исправленные канонические документы
-
-- фокус-группа и её release companions;
-- auth session fixture;
-- индекс документации;
-- machine-readable route map.
-
-## 6. Автоматический branch audit
-
-`scripts/audit_to_be_documentation.py` выполняет полный advisory-инвентарь
-remote branches:
-
-1. перечисляет `refs/remotes/origin/*`;
-2. строит merge-base с `origin/main`;
-3. находит изменённые Markdown/YAML/JSON в `docs/`;
-4. извлекает heading, status/date hints и requirement-like markers;
-5. показывает absent/modified paths относительно main;
-6. связывает известные branches с ручным disposition ledger;
-7. выпускает Markdown и JSON.
-
-Скрипт **не выбирает победителя автоматически** и не делает branch merge.
-Неизвестная branch остаётся `unclassified_review_required`. Weekly workflow
-сохраняет полный отчёт как artifact; это защита от появления нового брошенного
-TO-BE-документа, а не автоматическая канонизация.
-
-## 7. Release/governance gates
-
-- Принятое TO-BE-решение должно быть в `main` до implementation handoff.
-- PR body не заменяет документ.
-- Новый feature-doc обязан быть зарегистрирован в `docs/routes.yml`.
-- При конфликте owner decision и старого implementation doc старый документ
-  получает явный superseded marker или redirect-stub.
-- Нельзя менять продуктовую модель под видом синхронизации документации.
-- Нельзя переносить runtime readiness claims без terminal evidence.
-- Unclassified requirement-bearing branch блокирует утверждение «документация
-  полностью консолидирована», но не блокирует unrelated code change.
-
-## 8. Следующий регулярный процесс
-
-1. Weekly branch audit.
-2. Немедленный audit после нового owner decision или крупного docs-only PR.
-3. Review `unclassified_review_required` вручную.
-4. Port accepted semantic slice в свежую main-based ветку.
-5. Оставить superseded/historical disposition в этом реестре.
-6. После merge закрыть или пометить старый PR, не удаляя evidence, пока он нужен
-   для истории.
+GitHub Actions run для этого PR не стартует из-за repository/account billing
+block. Поэтому код и schemas проверены локально, а workflow сохранён и
+fail-closed, но hosted-run evidence появится только после восстановления
+Actions. Это инфраструктурный blocker CI, а не причина оставлять документы вне
+GitHub.

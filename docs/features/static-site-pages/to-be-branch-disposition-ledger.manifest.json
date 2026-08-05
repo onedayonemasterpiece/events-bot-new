@@ -1,0 +1,16 @@
+{
+  "audit_main_sha": "58ffebbef6ccfe002a12f81fb5c5b87a0933b5dd",
+  "cutoff": "2026-08-05T08:45:06.239274+00:00",
+  "full_ledger_gzip": "to-be-branch-disposition-ledger.json.gz",
+  "gzip_bytes": 16732,
+  "gzip_sha256": "4da4256420e818c6d03756e1f7256b4c88fb71746f6aa6a744f2abdfdf52d161",
+  "ledger_id": "kenigevents.to-be-branch-disposition.2026-08-05.v1",
+  "remote_branches_scanned": 601,
+  "requirement_like_paths_in_ledger": 409,
+  "requirement_or_manual_branches": 218,
+  "schema_version": 1,
+  "uncompressed_bytes": 68411,
+  "uncompressed_sha256": "1043f7227aa0b86efbd26f4fc727f4608c5c100a29990d6d5f140e0b2fb5ac01",
+  "unresolved_branches": 0,
+  "unresolved_paths": 0
+}
