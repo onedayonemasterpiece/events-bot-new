@@ -9,6 +9,7 @@ from volunteer_monitor.dobro_adapter import (
     DobroParseError,
     canonicalize_event_url,
     extract_event_urls,
+    extract_vacancy_targets,
     is_in_target_region,
     parse_event_page,
     parse_russian_date_range,
@@ -43,6 +44,28 @@ def test_search_extracts_and_deduplicates_urls(fixture_dir) -> None:
         "https://dobro.ru/event/11719663",
         "https://dobro.ru/event/10176380",
     ]
+
+
+def test_current_vacancy_cta_retains_exact_application_identity() -> None:
+    html = """
+    <div class="vacancy-card">
+      <span>Офлайн</span><strong>Координатор волонтеров</strong>
+      <span>5 августа 2026</span><span>Калининградская обл</span>
+      <a href="/login/?__target_path=%2Fevent%2F10846049%2Fvacancy%2F11051648">Отправить заявку</a>
+      <a href="/login/?__target_path=%2Fevent%2F10846049%2Fvacancy%2F11051648"></a>
+    </div>
+    """
+    targets = extract_vacancy_targets(html)
+    assert len(targets) == 1
+    target = targets[0]
+    assert target.event_id == "10846049"
+    assert target.vacancy_id == "11051648"
+    assert target.event_url == "https://dobro.ru/event/10846049"
+    assert target.application_url == (
+        "https://dobro.ru/login/?__target_path=%2Fevent%2F10846049%2Fvacancy%2F11051648"
+    )
+    assert "Координатор волонтеров" in target.card_text
+    assert extract_event_urls(html) == ["https://dobro.ru/event/10846049"]
 
 
 @pytest.mark.parametrize(
