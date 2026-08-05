@@ -86,14 +86,18 @@ rotation requires an overlap/keyring migration and is not part of this incident.
 - PostgreSQL 17 isolated apply: CI bootstrap plus migrations
   `20260711203940`, `20260712072912`, `20260712083037`, `20260801222242`,
   `20260804190000` applied successfully, including the v1 privilege revocation.
-- Rollback-only SQL contract: `BEGIN / DO / ROLLBACK`, green after both new
-  migrations. It covers Auth/outbox/legacy correlation, cross-source collision,
+- Rollback-only SQL contract: `BEGIN / DO / ROLLBACK`, green after the new
+  migration apply and revocation cutover. It covers Auth/outbox/legacy
+  correlation, cross-source collision,
   exact/conflicting duplicates, 512-character receipt, 300-character event key,
   event count above 1000, suppression scope/version, atomic email change,
   immutable outbox identity, health and role privileges.
-- Focus/Postbox Python contract set: hook, consumer, infra and migration tests
-  are included in the ordinary email CI gate. Exact commands and final CI URLs
-  must be recorded here after the PR head is pushed.
+- Focus/Postbox Python contract set: hook, consumer, infra, DLQ recovery and
+  migration tests are included in the ordinary email CI gate. The final PR head
+  passed 93 exact email tests and the full email/inbound set passed 94 tests.
+- Final PR checks were green: [Postbox SQL contract](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30986778908/job/92243258576),
+  [Python CI](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30986778912/job/92243258953)
+  and [static browser release gate](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/30986778912/job/92243258881).
 - Read-only Yandex desired-state audit: active feedback consumer Function
   `d4enjcfg3h6nep4ij4fh`, version `d4ejof08mqck6sp1cn1h`, mounts both HMAC key
   and version from Lockbox secret `e6qeqbto7ticn9fsklgq`, immutable secret
@@ -110,16 +114,47 @@ runbook; absence of a value is a blocker, never an implied success.
 
 | Gate | Evidence |
 |---|---|
-| PR #333 reviewed head / merge SHA | pending |
-| logical backup path, SHA-256, `pg_restore --list`, restore drill | pending |
-| pre/post migration versions and queries | pending |
-| focus Auth Function version and sanitized config parity | pending |
-| Fly release and in-container SHA | pending |
-| exact DLQ queue/event/message inventory and histogram | pending |
-| sanitized legacy manifest SHA-256 and registrations | pending |
-| replay applied/duplicate/pending/error/remaining | pending |
-| direct Auth, transactional, duplicate, suppressive canaries | pending |
-| monitor delta/static/recovery notification evidence | pending |
+| PR #333 reviewed head / merge SHA | merged 2026-08-05 07:56 UTC as `183326628b01d7f3d2762df5e0215af7540473f4`; the same implementation lane continued with fail-closed proof constraint `cd3f3d419cf97d7c2fcba6d52e8e37aef1bad385`, reachable from `origin/main` as `eecc93e451f32a66363218d6fe8352d5e5b6dada` |
+| logical backup path, SHA-256, `pg_restore --list`, restore drill | `artifacts/codex/INC-2026-08-04-postbox-feedback-dlq-correlation/personalization-pre-postbox-20260805T074249Z.dump`, 6,188,260 bytes, SHA-256 `487ff4c0c5934e5c9e09e97d2c44403d1ca01e2b58299fd8665ed645641b23b2`; list SHA-256 `8757affc501f64ec8cd218b7b08b15e86082abeb8ef1f1745e4ee42e010ce31b`; vanilla PostgreSQL 17 restore is **blocked** because the provider extension `supabase_vault` is unavailable there, so restorable-backup proof is not yet satisfied |
+| pre/post migration versions and queries | precheck SHA-256 `73e84abeaa9170f689096925c8a450397032e2fadb3fca144020cfa0d3d2a8f6`: no accepted outbox/Auth Postbox rows, duplicate receipts or cross-source collisions; `20260804190000` is absent in production. No post-state: migration intentionally not applied |
+| focus Auth Function version and sanitized config parity | current feedback consumer `d4enjcfg3h6nep4ij4fh` / `d4ejof08mqck6sp1cn1h`; desired hook parity pins the same Lockbox version, but no new Function version was deployed because the database precondition is blocked |
+| Fly release and in-container SHA | release `1909`, machine `48e419df93e078`, image digest `sha256:5989aa44b0d9b6bfb265fd5e9e409068d12587878301eac645554a336ab66870`, `/app/.static-site-repo-sha` = `eecc93e451f32a66363218d6fe8352d5e5b6dada`; `/healthz` ready with DB, scheduler, email worker and email monitor all `ok` |
+| exact DLQ queue/event/message inventory and histogram | **blocked** until the classification RPC from the unapplied migration exists; no message was deleted |
+| sanitized legacy manifest SHA-256 and registrations | **blocked** by exact inventory/classification; none registered |
+| replay applied/duplicate/pending/error/remaining | not started; applied `0`, deleted `0`; migration/inventory gates remain blocked |
+| direct Auth, transactional, duplicate, suppressive canaries | not run; no authorization to change product switches or send production canaries, and the migration/Function cutover is blocked |
+| monitor delta/static/recovery notification evidence | Fly monitor implementation deployed; first scheduled run completed at 08:11:01 UTC in 1,935 ms. State file `/data/email-postbox-monitor-state.json` is mode `0600`, contains only the six documented keys, and records initialized `dlq_total=162` / `postbox_dlq_nonempty`. Delta/static/recovery transition evidence remains pending until a controlled queue transition |
+
+Sanitized serialized-run summary:
+`artifacts/codex/INC-2026-08-04-postbox-feedback-dlq-correlation/production-run-20260805T0805Z.json`,
+SHA-256 `44794282847956049ca04eb641fea492040a8c1025bde16dca925d9bbb9f130c`.
+
+## Production run status — 2026-08-05
+
+The implementation is delivered through PR #333 and its same-lane continuation,
+but the incident remains open. The serialized production sequence stopped before
+any database, Function, queue or switch mutation for these fail-closed reasons:
+
+1. The official Supabase Management Auth-config read returned HTTP `403` for
+   both available redacted credential lanes. The required `auth_config_read`
+   scope is unavailable, so the mandatory proof that the live Send Email Hook is
+   disabled could not be obtained.
+2. Standard Supabase migration dry-run is not isolated to this incident. The
+   initial checkout lacked remote-history version `20260803143000`; after a
+   temporary exact-history overlay it reported two unrelated Google AI
+   migrations plus `20260804190000` as pending. The overlay was removed and no
+   remote mutation was attempted.
+3. The logical backup and restore list exist, but the isolated restore drill
+   cannot complete on vanilla PostgreSQL 17 without the production provider's
+   `supabase_vault` extension.
+4. Exact DLQ classification depends on the unapplied service-only classifier
+   RPC. Replay, deletion, legacy registration and canaries therefore remain
+   prohibited.
+
+Current read-only Yandex evidence remains healthy: trigger
+`a1svvdcbe8pdoc8cv74a` is `ACTIVE`, the feedback consumer is the pinned version
+above, and its YDB is `RUNNING`. No retention, destination, DLQ or unrelated
+Yandex resource was changed.
 
 ## Rollback ownership
 
