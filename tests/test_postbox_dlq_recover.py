@@ -192,6 +192,26 @@ def test_replay_refuses_message_not_in_reviewed_inventory(monkeypatch):
     )
 
 
+def test_replay_environment_fails_before_receiving_without_consumer_config():
+    try:
+        recover._validate_replay_environment({})
+    except recover.RecoveryError as exc:
+        assert str(exc) == "replay_consumer_disabled"
+    else:
+        raise AssertionError("disabled replay consumer was accepted")
+
+    env = {"POSTBOX_EVENT_CONSUMER_ENABLED": "1"}
+    try:
+        recover._validate_replay_environment(env)
+    except recover.RecoveryError as exc:
+        assert str(exc) == "env_missing:postbox_expected_identity_id"
+    else:
+        raise AssertionError("incomplete replay environment was accepted")
+
+    env.update({name: "configured" for name in recover.REPLAY_REQUIRED_ENV})
+    recover._validate_replay_environment(env)
+
+
 def test_reviewed_inventory_binds_file_integrity_and_target_queue(tmp_path):
     unsigned = {
         "schema": recover.SCHEMA,

@@ -37,11 +37,32 @@ class RecoveryError(RuntimeError):
     pass
 
 
+REPLAY_REQUIRED_ENV = (
+    "POSTBOX_EXPECTED_IDENTITY_ID",
+    "POSTBOX_EXPECTED_CONFIGURATION_TAG",
+    "POSTBOX_EXPECTED_FROM_DOMAIN",
+    "EMAIL_ADDRESS_HMAC_KEY",
+    "EMAIL_ADDRESS_HMAC_KEY_VERSION",
+    "PERSONALIZATION_SUPABASE_URL",
+    "PERSONALIZATION_SUPABASE_SECRET_KEY",
+)
+
+
 def _required(name: str) -> str:
     value = str(os.environ.get(name) or "").strip()
     if not value:
         raise RecoveryError(f"env_missing:{name.lower()}")
     return value
+
+
+def _validate_replay_environment(env: Mapping[str, str]) -> None:
+    if str(env.get("POSTBOX_EVENT_CONSUMER_ENABLED") or "").strip().lower() not in {
+        "1", "true", "yes", "on"
+    }:
+        raise RecoveryError("replay_consumer_disabled")
+    for name in REPLAY_REQUIRED_ENV:
+        if not str(env.get(name) or "").strip():
+            raise RecoveryError(f"env_missing:{name.lower()}")
 
 
 def _sha(value: str | bytes) -> str:
@@ -440,6 +461,8 @@ def main() -> int:
     if args.visibility_seconds not in range(300, 901):
         raise RecoveryError("visibility_seconds_out_of_range")
     queue_url = _required("POSTBOX_DLQ_QUEUE_URL")
+    if args.mode == "replay":
+        _validate_replay_environment(os.environ)
     client = _sqs_client()
     if args.mode == "inventory":
         result = inventory(

@@ -5,6 +5,7 @@
 ### Fixed
 
 - Made the bounded Postbox DLQ inventory reconcile YMQ's documented approximate counters against ten empty long polls and the exact unique in-flight receipt set, including the provider's persistent stale-visible behavior.
+- Made Postbox DLQ replay fail before receiving a queue message unless the complete deployed consumer validation/HMAC environment is present and enabled.
 
 - Fixed the Postbox feedback/DLQ correlation implementation in PR #333 without
   creating a competing delivery path: transactional outbox, direct focus Auth

@@ -205,7 +205,12 @@ Build a read-only inventory before replay:
 The sum of all classifications must equal the immutable DLQ inventory. Approximate queue attributes alone are not sufficient.
 
 Use the bounded operator tool from a private environment containing the existing
-YMQ and Supabase secret variables. It drains only visibility for the snapshot,
+YMQ and Supabase secret variables. Replay additionally requires the exact
+non-secret validation settings and version-pinned HMAC secret references from
+the currently deployed `kenigevents-postbox-event-consumer` Function; copy them
+only into the process-local environment and never into an artifact or command
+log. The tool now validates this complete replay environment before receiving a
+queue message. It drains only visibility for the snapshot,
 deduplicates by queue/event/message identity, restores every receipt to visible
 in `finally`, and writes hashes/classifications only:
 
