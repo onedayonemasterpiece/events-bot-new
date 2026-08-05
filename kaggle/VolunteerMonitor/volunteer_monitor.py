@@ -82,7 +82,7 @@ async def _run() -> int:
 
         config = DobroSourceConfig(
             search_url="https://dobro.ru/search?d_c=1&d_s=1&t=e",
-            region_name="Калининградская область",
+            region_name="Калининградская обл",
             max_more_clicks=40,
             max_items=max(1, min(MAX_ITEMS, 250)),
             playwright_timeout_ms=30_000,
@@ -97,10 +97,11 @@ async def _run() -> int:
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
+        receipt_status = "partial" if payload["run_status"] == "PARTIAL" else "success"
         receipt = {
             "schema_version": "volunteer-monitor-kaggle-receipt-v1",
             "run_uid": run_uid,
-            "status": "success",
+            "status": receipt_status,
             "started_at": started_at.isoformat(),
             "completed_at": datetime.now(timezone.utc).isoformat(),
             "result_file": result_path.name,
