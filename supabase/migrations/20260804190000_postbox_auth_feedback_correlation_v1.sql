@@ -166,7 +166,8 @@ create table email_control.postbox_message_correlation (
       and source_kind in ('focus_auth', 'legacy_auth')
     )
     or (
-      length(email_hmac) between 43 and 128
+      email_hmac is not null
+      and length(email_hmac) between 43 and 128
       and hmac_key_version is not null
       and hmac_key_version > 0
       and bound_at is not null
