@@ -401,3 +401,33 @@ async def test_vk_persist_caller_does_not_convert_review_into_success(
         )
 
     assert side_effects == []
+
+
+def test_cross_vendor_specific_ticket_ids_remain_llm_first() -> None:
+    verdict = identity.build_merge_identity_gate_verdict(
+        {
+            "title": "Один концерт",
+            "date": "2026-09-10",
+            "time": "19:00",
+            "event_type": "концерт",
+            "ticket_link": "https://tickets-a.example/buy/event/100/2026-09-10/19:00:00",
+        },
+        {
+            "id": 100,
+            "title": "Один концерт",
+            "date": "2026-09-10",
+            "time": "19:00",
+            "event_type": "концерт",
+            "ticket_link": "https://tickets-b.example/buy/event/900/2026-09-10/19:00:00",
+        },
+        mode=IdentityGateMode.ENFORCE,
+        llm_data={
+            "action": "allow_merge",
+            "relation": "same_event",
+            "confidence": 0.99,
+            "reason_code": "same_event_two_vendors",
+        },
+    )
+
+    assert verdict.action is MergeIdentityAction.ALLOW_MERGE
+    assert not verdict.should_skip_side_effects

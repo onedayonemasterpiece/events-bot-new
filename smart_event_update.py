@@ -1691,6 +1691,8 @@ class SmartUpdateResult:
     skipped_conflicts: list[str] = field(default_factory=list)
     reason: str | None = None
     queue_notes: list[str] = field(default_factory=list)
+
+
 class SmartUpdateOutcomeKind(str, Enum):
     """Caller-facing outcome class; every unknown status fails closed."""
 

@@ -596,6 +596,10 @@ def build_merge_identity_gate_verdict(
     if (
         candidate_ticket_identity is not None
         and existing_ticket_identity is not None
+        # Cross-vendor ticket IDs may still describe one event; the LLM remains
+        # authoritative there. Only contradictory occurrence identities issued
+        # by the same vendor are a deterministic impossibility rail.
+        and candidate_ticket_identity[0] == existing_ticket_identity[0]
         and candidate_ticket_identity != existing_ticket_identity
     ):
         conflict = (

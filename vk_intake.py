@@ -4151,17 +4151,20 @@ async def persist_event_and_pages(
         candidate,
         check_source_url=False,
     )
+    if str(getattr(update_result, "status", "") or "").startswith("rejected_"):
+        # Preserve the established expected-rejection contract consumed by the
+        # VK queue. Identity review/skip outcomes use the generic fail-closed
+        # branch below and must never be reported as successful imports.
+        raise RuntimeError(
+            f"smart_update rejected: {getattr(update_result, 'status', None)} "
+            f"reason={getattr(update_result, 'reason', None)}"
+        )
     if not smart_update_result_allows_caller_side_effects(update_result):
         raise RuntimeError(
             "smart_update not accepted: "
             f"status={getattr(update_result, 'status', None)} "
             f"reason={getattr(update_result, 'reason', None)} "
             f"matched_event_id={getattr(update_result, 'event_id', None)}"
-        )
-    if str(getattr(update_result, "status", "") or "").startswith("rejected_"):
-        raise RuntimeError(
-            f"smart_update rejected: {getattr(update_result, 'status', None)} "
-            f"reason={getattr(update_result, 'reason', None)}"
         )
     if not getattr(update_result, "event_id", None):
         raise RuntimeError(
