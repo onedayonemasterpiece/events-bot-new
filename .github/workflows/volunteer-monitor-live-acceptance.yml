@@ -5,6 +5,7 @@ on:
     paths:
       - "volunteer_monitor/**"
       - "scripts/run_volunteer_monitor.py"
+      - "scripts/validate_volunteer_monitor_canary.py"
       - ".github/workflows/volunteer-monitor-live-acceptance.yml"
 
 permissions:
@@ -32,12 +33,13 @@ jobs:
           python -m pip install --disable-pip-version-check beautifulsoup4 requests playwright
           python -m playwright install --with-deps --only-shell chromium
 
-      - name: Run read-only live specimen
+      - name: Run and validate read-only live specimen
         env:
           VOLUNTEER_MONITOR_PERMISSION_REFERENCE: owner-requested-read-only-canary-20260805
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/volunteer-monitor-evidence"
+          set +e
           PYTHONPATH=. python scripts/run_volunteer_monitor.py \
             --mode live_canary \
             --output "$RUNNER_TEMP/volunteer-monitor-live.json" \
@@ -45,6 +47,16 @@ jobs:
             --max-items 24 \
             --max-more-clicks 12 \
             --detail-timeout-seconds 12
+          monitor_rc=$?
+          set -e
+          if [ "$monitor_rc" -eq 1 ]; then
+            exit 1
+          fi
+          if [ "$monitor_rc" -eq 2 ]; then
+            echo "::warning::Volunteer Monitor completed PARTIAL; validating exact source accounting"
+          fi
+          python scripts/validate_volunteer_monitor_canary.py \
+            "$RUNNER_TEMP/volunteer-monitor-live.json"
 
       - name: Upload live receipt and failure evidence
         if: always()
