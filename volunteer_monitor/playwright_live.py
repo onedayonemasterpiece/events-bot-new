@@ -50,14 +50,31 @@ async def _visible_exact_region_candidate(page: Any, region_name: str) -> Any | 
     return None
 
 
+async def _vacancy_surface_ready(page: Any) -> bool:
+    """Wait until vacancy cards or an explicit zero state replace the tab shell."""
+
+    application_links = page.locator("a[href*='__target_path'][href*='vacancy']")
+    for _ in range(48):
+        try:
+            if await application_links.count() > 0:
+                return True
+            body_text = await page.locator("body").inner_text()
+            if _base._explicit_zero_supply(body_text):
+                return True
+        except Exception:
+            pass
+        await page.wait_for_timeout(250)
+    return False
+
+
 async def _activate_current_vacancy_surface(page: Any) -> bool:
     """Activate Dobro.ru's current vacancy-only search surface.
 
     The former `С доступными вакансиями` checkbox is no longer rendered in the
     current search UI. Its product role is now an explicit Radix tab named
-    `Вакансии`. We require the tab to become active and still let every detail
-    page independently decide OPEN/CLOSED/EXPIRED, so this compatibility step
-    cannot turn a stale application into a public OPEN result.
+    `Вакансии`. We require the tab to become active and then require the
+    asynchronous vacancy panel to expose application targets or an explicit
+    zero-result state. Detail pages independently decide OPEN/CLOSED/EXPIRED.
     """
 
     tab = page.get_by_role("tab", name="Вакансии", exact=True)
@@ -82,9 +99,11 @@ async def _activate_current_vacancy_surface(page: Any) -> bool:
             aria_selected = (await visible.get_attribute("aria-selected") or "").casefold()
             data_state = (await visible.get_attribute("data-state") or "").casefold()
             if aria_selected == "true" or data_state == "active":
-                # Allow the tab panel to finish replacing all-search cards.
-                await page.wait_for_timeout(750)
-                return True
+                if await _vacancy_surface_ready(page):
+                    return True
+                raise _base.DiscoveryError(
+                    "Dobro.ru vacancies tab became active but its result panel did not settle"
+                )
             await page.wait_for_timeout(200)
     except _base.DiscoveryError:
         raise
