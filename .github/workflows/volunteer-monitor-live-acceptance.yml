@@ -5,6 +5,7 @@ on:
     paths:
       - "volunteer_monitor/**"
       - "scripts/run_volunteer_monitor.py"
+      - "scripts/run_volunteer_lifecycle_probe.py"
       - "scripts/validate_volunteer_monitor_canary.py"
       - ".github/workflows/volunteer-monitor-live-acceptance.yml"
 
@@ -58,6 +59,14 @@ jobs:
           python scripts/validate_volunteer_monitor_canary.py \
             "$RUNNER_TEMP/volunteer-monitor-live.json"
 
+      - name: Prove current CLOSED lifecycle parsing
+        run: |
+          set -euo pipefail
+          PYTHONPATH=. python scripts/run_volunteer_lifecycle_probe.py \
+            --url https://dobro.ru/event/11198832 \
+            --url https://dobro.ru/event/11662154 \
+            --output "$RUNNER_TEMP/volunteer-lifecycle-probe.json"
+
       - name: Upload live receipt and failure evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -65,6 +74,7 @@ jobs:
           name: volunteer-monitor-live-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/volunteer-monitor-live.json
+            ${{ runner.temp }}/volunteer-lifecycle-probe.json
             ${{ runner.temp }}/volunteer-monitor-evidence
           if-no-files-found: warn
           retention-days: 14
