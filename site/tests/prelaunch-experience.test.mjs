@@ -58,6 +58,6 @@ test('prelaunch enhancement binds adaptive grid and complete form states', () =>
 
 test('generated desktop and mobile lighting references are stored in the handoff', () => {
   const referenceDir = join(repoRoot, 'docs/features/static-site-pages/prelaunch-handoff/reference');
-  assert.equal(existsSync(join(referenceDir, 'generated-lighting-desktop-v1.png')), true);
-  assert.equal(existsSync(join(referenceDir, 'generated-lighting-mobile-v1.png')), true);
+  assert.equal(existsSync(join(referenceDir, 'generated-lighting-desktop-v1.webp')), true);
+  assert.equal(existsSync(join(referenceDir, 'generated-lighting-mobile-v1.webp')), true);
 });
