@@ -7,14 +7,20 @@ import '../styles/prelaunch-fit-v12.css';
 </script>
 
 <style is:global>
-  /*
-   * The reveal map is assigned after hydration. Keep its optical aperture as a
-   * direct material property rather than relying only on inherited custom
-   * properties: older fit layers are intentionally still present in the
-   * cascade and may otherwise re-close a mapped pane after extraction order is
-   * changed by Astro/Vite.
-   */
-  body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-window="true"]::before {
-    background-color: rgba(10, 13, 17, .28) !important;
+  /* The deterministic reveal map is assigned after hydration. In reduced-
+     motion mode the material must settle immediately rather than exposing a
+     several-second intermediate aperture to screenshots and assistive users. */
+  @media (prefers-reduced-motion: reduce) {
+    html body .prelaunch[data-prelaunch-page] .prelaunch__tile::before,
+    html body .prelaunch[data-prelaunch-page] .prelaunch__tile::after {
+      transition: none !important;
+    }
+  }
+
+  /* Preserve a true one-screen composition on short landscape phones. */
+  @media (orientation: landscape) and (min-width: 600px) and (max-height: 500px) {
+    html body .prelaunch[data-prelaunch-page] .prelaunch__notify {
+      transform: translateY(-12px);
+    }
   }
 </style>
