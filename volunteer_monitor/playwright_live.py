@@ -61,6 +61,24 @@ async def _visible_location_search_input(page: Any) -> Any | None:
     return None
 
 
+async def _visible_current_location_button(page: Any, location_name: str) -> Any | None:
+    expected = " ".join(location_name.split()).casefold()
+    locator = page.locator("button[data-slot='popover-anchor']:visible")
+    try:
+        count = min(await locator.count(), 20)
+    except Exception:
+        return None
+    for index in range(count):
+        candidate = locator.nth(index)
+        try:
+            text = " ".join((await candidate.inner_text()).split()).casefold()
+        except Exception:
+            continue
+        if text == expected:
+            return candidate
+    return None
+
+
 async def _open_current_location_filter(page: Any) -> bool:
     """Open either observed Dobro.ru location-entry state.
 
@@ -90,7 +108,6 @@ async def _open_current_location_filter(page: Any) -> bool:
                     page.get_by_text(current_title, exact=True),
                 ]
             )
-        locators.append(page.locator("button[data-slot='popover-anchor']"))
 
         clicked = False
         for locator in locators:
@@ -98,15 +115,19 @@ async def _open_current_location_filter(page: Any) -> bool:
             if candidate is None:
                 continue
             try:
-                if current_title and locator == locators[-1]:
-                    text = " ".join((await candidate.inner_text()).split())
-                    if text.casefold() != current_title.casefold():
-                        continue
                 await candidate.click()
                 clicked = True
                 break
             except Exception:
                 continue
+        if not clicked and current_title:
+            current_button = await _visible_current_location_button(page, current_title)
+            if current_button is not None:
+                try:
+                    await current_button.click()
+                    clicked = True
+                except Exception:
+                    pass
         if clicked:
             for _ in range(20):
                 if await _visible_location_search_input(page) is not None:
@@ -159,6 +180,8 @@ async def _select_region_live(page: Any, region_name: str) -> bool:
     target = " ".join(region_name.split()).casefold()
     if _current_location_title(page).casefold() == target:
         return True
+    if await _visible_current_location_button(page, region_name) is not None:
+        return True
 
     await _base._dismiss_cookie_banner(page)
     if not await _open_current_location_filter(page):
@@ -195,6 +218,8 @@ async def _select_region_live(page: Any, region_name: str) -> bool:
 
     for _ in range(48):
         if _current_location_title(page).casefold() == target:
+            return True
+        if await _visible_current_location_button(page, region_name) is not None:
             return True
         selected = await _base._selected_text(page)
         if target in selected:
