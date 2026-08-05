@@ -6,16 +6,7 @@ from . import playwright_discovery as _base
 from .source_config import DobroSourceConfig
 
 
-async def _visible_exact_region_candidate(page: Any, region_name: str) -> Any | None:
-    """Return the visible exact region option from Dobro.ru's duplicated DOM.
-
-    Dobro.ru currently keeps hidden and visible copies of picker options. A
-    locator's `.first` can therefore point at a hidden node even when a visible
-    exact option exists. Enumerating a bounded set of semantically eligible
-    nodes keeps the selector evidence-based and prevents a city option such as
-    `Калининградская обл, г Советск` from being accepted for the region row.
-    """
-
+async def _scan_visible_exact_region_candidate(page: Any, region_name: str) -> Any | None:
     expected = " ".join(region_name.split()).casefold()
     selectors = (
         "button:visible",
@@ -38,6 +29,24 @@ async def _visible_exact_region_candidate(page: Any, region_name: str) -> Any | 
                 continue
             if text == expected:
                 return node
+    return None
+
+
+async def _visible_exact_region_candidate(page: Any, region_name: str) -> Any | None:
+    """Wait for Dobro.ru's visible exact region option in a duplicated DOM.
+
+    Search suggestions are populated asynchronously after the input value is
+    committed. Failure evidence can therefore contain the option even though a
+    one-shot lookup immediately after `fill()` missed it. Polling remains
+    bounded to five seconds and accepts only the exact region-level label, not
+    city rows such as `Калининградская обл, г Советск`.
+    """
+
+    for _ in range(20):
+        candidate = await _scan_visible_exact_region_candidate(page, region_name)
+        if candidate is not None:
+            return candidate
+        await page.wait_for_timeout(250)
     return None
 
 
