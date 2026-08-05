@@ -8,7 +8,7 @@ from typing import Mapping
 import requests
 
 from .dobro_adapter import extract_event_urls, is_in_target_region, parse_event_page
-from .playwright_discovery import discover_event_urls
+from .playwright_live import discover_event_urls
 from .source_config import DobroSourceConfig
 from .types import MonitorResult, MonitorRunStatus, VolunteerOpportunity
 
