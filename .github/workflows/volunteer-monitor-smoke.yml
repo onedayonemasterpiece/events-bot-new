@@ -1,6 +1,5 @@
 name: Volunteer monitor smoke
 
-# Credentialed Kaggle acceptance trigger; no runtime semantic change.
 on:
   pull_request:
     paths:
@@ -143,6 +142,8 @@ jobs:
     environment: volunteer-monitor-canary
     env:
       KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+      KAGGLE_USERNAME: ${{ vars.KAGGLE_USERNAME }}
+      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
       KERNEL_SLUG: ${{ vars.VOLUNTEER_KAGGLE_KERNEL_SLUG }}
       MAX_ITEMS: ${{ github.event_name == 'workflow_dispatch' && inputs.max_items || '24' }}
     steps:
@@ -154,11 +155,20 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Require explicit Kaggle identity
+      - name: Select Kaggle authentication mode
         run: |
           set -euo pipefail
-          test -n "$KAGGLE_API_TOKEN"
           test -n "$KERNEL_SLUG"
+          if [ -n "${KAGGLE_USERNAME:-}" ] && [ -n "${KAGGLE_KEY:-}" ]; then
+            echo "KAGGLE_AUTH_MODE=legacy" >> "$GITHUB_ENV"
+            echo "Kaggle authentication mode: legacy username/key"
+          elif [ -n "${KAGGLE_API_TOKEN:-}" ]; then
+            echo "KAGGLE_AUTH_MODE=token" >> "$GITHUB_ENV"
+            echo "Kaggle authentication mode: access token"
+          else
+            echo "No usable Kaggle credential set is configured" >&2
+            exit 1
+          fi
 
       - name: Install official Kaggle CLI
         run: python -m pip install --disable-pip-version-check "kaggle>=2,<3"
@@ -193,12 +203,16 @@ jobs:
           PY
 
       - name: Push and run private Kaggle kernel
-        run: kaggle kernels push -p "$RUNNER_TEMP/volunteer-monitor-kernel" --timeout 900
+        run: |
+          set -euo pipefail
+          if [ "$KAGGLE_AUTH_MODE" = "legacy" ]; then unset KAGGLE_API_TOKEN; fi
+          kaggle kernels push -p "$RUNNER_TEMP/volunteer-monitor-kernel" --timeout 900
 
       - name: Poll terminal status
         shell: bash
         run: |
           set -euo pipefail
+          if [ "$KAGGLE_AUTH_MODE" = "legacy" ]; then unset KAGGLE_API_TOKEN; fi
           for attempt in $(seq 1 60); do
             status="$(kaggle kernels status "$KERNEL_SLUG" 2>&1 | tr '[:upper:]' '[:lower:]')"
             echo "$status"
@@ -212,6 +226,7 @@ jobs:
       - name: Download and validate Kaggle output
         run: |
           set -euo pipefail
+          if [ "$KAGGLE_AUTH_MODE" = "legacy" ]; then unset KAGGLE_API_TOKEN; fi
           mkdir -p "$RUNNER_TEMP/volunteer-monitor-kaggle-output"
           kaggle kernels output "$KERNEL_SLUG" \
             -p "$RUNNER_TEMP/volunteer-monitor-kaggle-output" --force
