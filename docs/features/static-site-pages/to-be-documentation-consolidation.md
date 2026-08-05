@@ -1,9 +1,9 @@
 # Консолидация TO-BE-документации статического сайта
 
-> **Статус:** принятый реестр приоритета и миграции требований.  
-> **Дата среза:** 2026-08-05.  
-> **База аудита:** `main@5082a502b9c2f4657742104b6ce543b87761a39d`.  
-> **Область:** требования, стратегии, продуктовые решения, архитектурные контракты и тестовые модели статического сайта, которые существовали только в ветках или открытых PR.  
+> **Статус:** принятый реестр приоритета и миграции требований.
+> **Дата среза:** 2026-08-05.
+> **База аудита:** `main@5082a502b9c2f4657742104b6ce543b87761a39d`.
+> **Область:** требования, стратегии, продуктовые решения, архитектурные контракты и тестовые модели статического сайта, которые существовали только в ветках или открытых PR.
 > **Не является:** разрешением слить старые ветки целиком, подтверждением готовности runtime или заменой feature-specific документов.
 
 ## 1. Зачем нужен этот реестр
@@ -90,7 +90,7 @@ owner-approved rebaseline.
 |---|---|
 | PR #328, `docs/p13n-transport-profile-20260804` | `ported` как staged architecture: zero-backend navigation, browser projection cache, `/profil/`, Favorites и hidden recovery раздельно |
 | PR #295, Yandex resilience docs | `historical_donor`: полезны capability/SOR/ack/idempotency сценарии, но старая Supabase-primary/YDB-analytics модель не переносится целиком |
-| PR #270 | перенесены только отсутствовавшие extension docs: identity linking, temporal simulation, longitudinal E2E, selection-quality feedback и report template |
+| PR #270 | перенесены только отсутствовавшие extension docs: identity linking, temporal simulation, longitudinal E2E и report template |
 | PR #266 | `ported`: отдельный юридический/activation gate; это не юридическое заключение и не разрешение включить remote writes |
 
 Зафиксированная граница:
@@ -150,7 +150,7 @@ PR #235 перенесён точечно:
 - promotional Web Push имеет отдельный purpose/consent;
 - ICS сохраняется; Postbox calendar email остаётся research; Android connector
   — prototype;
-- test design не является PASS runtime.
+- test design не являѵтся PASS runtime.
 
 ### 4.6 Исследования и implementation branches, которые не повышены
 
@@ -159,7 +159,7 @@ PR #235 перенесён точечно:
 | PR #252 Editorial collections | `research_evidence` | нужны sync, screenshot matrix и два product review |
 | PR #286 Editorial style workbench | `research_evidence` | living workbench, окончательный tone не выбран |
 | PR #314 Gastronomy data prep | `implementation_only` | owner decision store пуст, publication blocked |
-| PR #296, #313, #318 prelaunch/labs | `implementation_only` | кандидаты и визуальные эксперименты, не общий TO-BE source |
+| PR #296, #313, #318 prelaunch/labs | `implementation_only` | кандидаты и визуальные эксперименты, не общий Не статического source |
 | PR #226 facts-v3 handoff | `superseded` | последующая реализация выборочно вошла через PR #299 |
 | PR #26 и старые umbrella/mixed branches | `historical_donor` | большой разошедшийся diff и устаревшие решения |
 | PR #38 medallions integration | `historical_donor` | implementation readiness и visual evidence; общий продуктовый контракт уже живёт в main |
