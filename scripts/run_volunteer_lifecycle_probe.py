@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Read-only lifecycle probe for reviewed historical Dobro.ru source pages.
 
-The active vacancy inventory proves OPEN. This separate bounded probe proves
-that the same detail parser recognises at least one source-backed non-public
-state: explicit CLOSED or date-proven EXPIRED. Both remove the public volunteer
-link, while the exact reason remains preserved in the receipt. The probe accepts
-a rotating list rather than treating one historical page as a permanent fixture.
+The active vacancy inventory proves OPEN. This separate bounded probe verifies
+source-backed non-public lifecycle states with the same detail parser. Callers
+may require an exact state such as CLOSED instead of weakening acceptance to any
+non-open result. The URL list is rotating and remains source-reviewed.
 """
 
 from __future__ import annotations
@@ -27,15 +26,25 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--url", action="append", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--timeout-seconds", type=float, default=20.0)
+    parser.add_argument(
+        "--require-status",
+        action="append",
+        choices=[status.value for status in AvailabilityStatus],
+        default=[],
+        help="Require at least one parsed source row for each exact status",
+    )
     return parser
 
 
 def main() -> int:
     args = build_parser().parse_args()
     checked_at = datetime.now(timezone.utc)
+    requested_urls = tuple(dict.fromkeys(args.url))
+    required_statuses = tuple(dict.fromkeys(args.require_status))
     rows: list[dict[str, object]] = []
     errors: list[dict[str, str]] = []
-    for url in dict.fromkeys(args.url):
+
+    for url in requested_urls:
         try:
             response = requests.get(
                 url,
@@ -63,13 +72,17 @@ def main() -> int:
     for row in rows:
         counts[str(row["availability_status"])] += 1
     non_open_count = counts["CLOSED"] + counts["EXPIRED"]
+    missing_required = [status for status in required_statuses if counts[status] < 1]
+
     payload: dict[str, object] = {
         "schema_version": "volunteer-lifecycle-probe-v1",
         "checked_at": checked_at.isoformat(),
-        "requested_count": len(dict.fromkeys(args.url)),
+        "requested_count": len(requested_urls),
         "parsed_count": len(rows),
         "status_counts": counts,
         "non_open_count": non_open_count,
+        "required_statuses": list(required_statuses),
+        "missing_required_statuses": missing_required,
         "errors": errors,
         "rows": rows,
     }
@@ -87,12 +100,22 @@ def main() -> int:
                 "CLOSED": counts["CLOSED"],
                 "EXPIRED": counts["EXPIRED"],
                 "non_open_count": non_open_count,
+                "required_statuses": list(required_statuses),
+                "missing_required_statuses": missing_required,
                 "errors": len(errors),
             },
             ensure_ascii=False,
         )
     )
-    if non_open_count < 1:
+
+    if missing_required:
+        print(
+            "reviewed sources did not prove required status: "
+            + ", ".join(missing_required),
+            file=sys.stderr,
+        )
+        return 1
+    if not required_statuses and non_open_count < 1:
         print("no reviewed source currently proves CLOSED or EXPIRED", file=sys.stderr)
         return 1
     return 0
