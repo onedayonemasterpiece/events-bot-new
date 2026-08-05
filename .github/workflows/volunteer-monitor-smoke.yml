@@ -142,8 +142,6 @@ jobs:
     environment: volunteer-monitor-canary
     env:
       KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
-      KAGGLE_USERNAME: ${{ vars.KAGGLE_USERNAME }}
-      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
       KERNEL_SLUG: ${{ vars.VOLUNTEER_KAGGLE_KERNEL_SLUG }}
       MAX_ITEMS: ${{ github.event_name == 'workflow_dispatch' && inputs.max_items || '24' }}
     steps:
@@ -155,23 +153,57 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Select Kaggle authentication mode
+      - name: Normalize Kaggle credential without disclosure
+        shell: bash
         run: |
           set -euo pipefail
-          test -n "$KERNEL_SLUG"
-          if [ -n "${KAGGLE_USERNAME:-}" ] && [ -n "${KAGGLE_KEY:-}" ]; then
-            echo "KAGGLE_AUTH_MODE=legacy" >> "$GITHUB_ENV"
-            echo "Kaggle authentication mode: legacy username/key"
-          elif [ -n "${KAGGLE_API_TOKEN:-}" ]; then
-            echo "KAGGLE_AUTH_MODE=token" >> "$GITHUB_ENV"
-            echo "Kaggle authentication mode: access token"
-          else
-            echo "No usable Kaggle credential set is configured" >&2
-            exit 1
-          fi
+          python - <<'PY'
+          import json
+          import os
+          import sys
+
+          raw = os.environ.get("KAGGLE_API_TOKEN", "").strip()
+          slug = os.environ.get("KERNEL_SLUG", "").strip()
+          if not raw:
+              raise SystemExit("KAGGLE_API_TOKEN is empty")
+          if "/" not in slug:
+              raise SystemExit("KERNEL_SLUG must be owner/slug")
+
+          username = slug.split("/", 1)[0]
+          key = raw
+          try:
+              parsed = json.loads(raw)
+          except json.JSONDecodeError:
+              parsed = None
+
+          if isinstance(parsed, dict):
+              username = str(parsed.get("username") or username).strip()
+              key = str(parsed.get("key") or "").strip()
+          elif isinstance(parsed, str):
+              key = parsed.strip()
+
+          if not username or not key:
+              raise SystemExit("provisioned Kaggle credential has no usable username/key")
+
+          print(f"::add-mask::{key}")
+          github_env = os.environ["GITHUB_ENV"]
+          with open(github_env, "a", encoding="utf-8") as handle:
+              handle.write(f"KAGGLE_USERNAME={username}\n")
+              handle.write("KAGGLE_KEY<<KAGGLE_KEY_EOF\n")
+              handle.write(key + "\n")
+              handle.write("KAGGLE_KEY_EOF\n")
+              handle.write("KAGGLE_AUTH_MODE=legacy_compat\n")
+          print("Kaggle authentication mode: legacy compatibility")
+          PY
 
       - name: Install official Kaggle CLI
         run: python -m pip install --disable-pip-version-check "kaggle>=2,<3"
+
+      - name: Verify Kaggle API authentication
+        run: |
+          set -euo pipefail
+          unset KAGGLE_API_TOKEN
+          kaggle kernels list -m --page-size 1 >/dev/null
 
       - name: Build a self-contained private kernel source
         run: |
@@ -205,14 +237,14 @@ jobs:
       - name: Push and run private Kaggle kernel
         run: |
           set -euo pipefail
-          if [ "$KAGGLE_AUTH_MODE" = "legacy" ]; then unset KAGGLE_API_TOKEN; fi
+          unset KAGGLE_API_TOKEN
           kaggle kernels push -p "$RUNNER_TEMP/volunteer-monitor-kernel" --timeout 900
 
       - name: Poll terminal status
         shell: bash
         run: |
           set -euo pipefail
-          if [ "$KAGGLE_AUTH_MODE" = "legacy" ]; then unset KAGGLE_API_TOKEN; fi
+          unset KAGGLE_API_TOKEN
           for attempt in $(seq 1 60); do
             status="$(kaggle kernels status "$KERNEL_SLUG" 2>&1 | tr '[:upper:]' '[:lower:]')"
             echo "$status"
@@ -226,7 +258,7 @@ jobs:
       - name: Download and validate Kaggle output
         run: |
           set -euo pipefail
-          if [ "$KAGGLE_AUTH_MODE" = "legacy" ]; then unset KAGGLE_API_TOKEN; fi
+          unset KAGGLE_API_TOKEN
           mkdir -p "$RUNNER_TEMP/volunteer-monitor-kaggle-output"
           kaggle kernels output "$KERNEL_SLUG" \
             -p "$RUNNER_TEMP/volunteer-monitor-kaggle-output" --force
