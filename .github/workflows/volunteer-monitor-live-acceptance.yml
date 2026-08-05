@@ -59,7 +59,7 @@ jobs:
           python scripts/validate_volunteer_monitor_canary.py \
             "$RUNNER_TEMP/volunteer-monitor-live.json"
 
-      - name: Prove current CLOSED lifecycle parsing
+      - name: Prove current non-open lifecycle parsing
         run: |
           set -euo pipefail
           PYTHONPATH=. python scripts/run_volunteer_lifecycle_probe.py \
