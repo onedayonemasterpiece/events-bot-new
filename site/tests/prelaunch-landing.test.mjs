@@ -53,7 +53,7 @@ test('artifact policy indexes only the root and hides every other HTML page', ()
     assert.match(readFileSync(join(root, 'index.html'), 'utf8'), /content="index,follow"/u);
     assert.match(
       readFileSync(join(root, 'sobytiya', 'test', 'index.html'), 'utf8'),
-      new RegExp(`content="${PRELAUNCH_ROBOTS_DIRECTIVE}"`, 'u'),
+      new RegExp(`content="${PRELAUNCH_ROBOTS_DIRECTIVE}"`, 'u),
     );
     assert.equal(
       readFileSync(join(root, 'robots.txt'), 'utf8'),
@@ -118,11 +118,11 @@ test('landing source keeps functional contracts and the reference-bound glass sc
   assert.match(browser, /reference-square/u);
   assert.match(browser, /page\.content\(\)/u);
   assert.match(browser, /writeFileSync/u);
-  assert.match(browser, /repeating-linear-gradient/u);
-  assert.match(browser, /glass alpha order is not sealed > dim > revealed/u);
-  assert.match(browser, /whole-tile opacity/u);
-  assert.match(browser, /reference-square: first seam/u);
-  assert.match(browser, /tile aspect/u);
+  assert.match(browser, /corner masks/u);
+  assert.match(browser, /state alpha order/u);
+  assert.match(browser, /whole-pane opacity/u);
+  assert.match(browser, /shared light source/u);
+  assert.match(browser, /pane aspect/u);
   assert.match(catalog, /'register_prelaunch_notification_v1'/u);
 });
 
