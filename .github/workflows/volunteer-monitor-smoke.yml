@@ -134,8 +134,9 @@ jobs:
 
   kaggle-live-canary:
     if: >-
-      (github.event_name == 'workflow_dispatch' && inputs.executor == 'kaggle') ||
-      (github.event_name == 'pull_request' && vars.VOLUNTEER_KAGGLE_CANARY_ENABLED == 'true')
+      github.event_name == 'workflow_dispatch' &&
+      inputs.executor == 'kaggle' &&
+      vars.VOLUNTEER_KAGGLE_CANARY_ENABLED == 'true'
     needs: fixture
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -160,7 +161,6 @@ jobs:
           python - <<'PY'
           import json
           import os
-          import sys
 
           raw = os.environ.get("KAGGLE_API_TOKEN", "").strip()
           slug = os.environ.get("KERNEL_SLUG", "").strip()
