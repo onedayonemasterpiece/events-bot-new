@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+from pathlib import Path
 
 import pytest
 
@@ -19,6 +20,12 @@ from volunteer_monitor.types import AvailabilityStatus, MonitorRunStatus
 
 CHECKED_AT = datetime(2026, 8, 4, 12, 0, tzinfo=timezone.utc)
 TODAY = date(2026, 8, 4)
+
+
+@pytest.fixture
+def fixture_dir() -> Path:
+    """Keep the volunteer-monitor tests independent from the bot-wide conftest."""
+    return Path(__file__).parent / "fixtures" / "volunteer_monitor"
 
 
 def test_canonicalizes_only_dobro_event_urls() -> None:
