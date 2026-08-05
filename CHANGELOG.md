@@ -12,6 +12,10 @@
   canonical recovery/incident routes. Production migration, replay and canary
   evidence remain required before closing
   `INC-2026-08-04-postbox-feedback-dlq-correlation`.
+  The production continuation also fixes direct Auth Postbox authentication by
+  extracting `access_token` from the Yandex Python Function context instead of
+  stringifying the complete token object, with an exact request-header
+  regression test.
 
 - Fixed the Smart Update identity/source recurrence from 2026-08-04: production
   merge gating is fail-closed before domain side effects, direct and contextual

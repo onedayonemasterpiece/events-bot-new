@@ -177,6 +177,26 @@ def test_new_first_send_uses_postbox_and_persists_receipt():
     assert "focus-e2e@kenigevents.ru" not in json.dumps(admission)
 
 
+def test_postbox_uses_access_token_from_yandex_function_context():
+    raw, headers = signed(payload())
+    transport = FakeTransport()
+
+    hook.process(
+        raw,
+        headers,
+        context=SimpleNamespace(token={
+            "access_token": "iam-token-from-context",
+            "expires_in": 43_200,
+            "token_type": "Bearer",
+        }),
+        env=env(),
+        transport=transport,
+    )
+
+    postbox = next(call for call in transport.calls if "postbox.cloud.yandex.net" in call[1])
+    assert postbox[2]["X-YaCloud-SubjectToken"] == "iam-token-from-context"
+
+
 def test_returning_user_uses_notisend_subscriber_payment():
     old = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
     raw, headers = signed(payload(created_at=old))

@@ -71,7 +71,12 @@ The deterministic ZIP is written under ignored `artifacts/codex/`.
    reverified.
 2. Create the `kenigevents-focus-auth-mailer` service account with only
    `postbox.sender`; attach it to the Function so `context.token` supplies the
-   short-lived IAM token.
+   short-lived IAM token. In the Python runtime `context.token` is the
+   authentication object (`access_token`, `expires_in`, `token_type`), not the
+   token string itself. The provider request must use only its
+   `access_token` value in `X-YaCloud-SubjectToken`; stringifying the complete
+   object produces an invalid Postbox credential and a definitive provider
+   rejection.
 3. Provide secrets from Lockbox as Function secret environment variables:
    `SEND_EMAIL_HOOK_SECRET`, `EMAIL_ADDRESS_HMAC_KEY`,
    `PERSONALIZATION_SUPABASE_SECRET_KEY`,

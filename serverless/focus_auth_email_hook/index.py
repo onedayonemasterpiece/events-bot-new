@@ -59,6 +59,15 @@ def _required(env: Mapping[str, str], name: str) -> str:
     return value
 
 
+def _iam_access_token(context: Any) -> str:
+    token = getattr(context, "token", None)
+    if isinstance(token, Mapping):
+        token = token.get("access_token")
+    elif token is not None and not isinstance(token, str):
+        token = getattr(token, "access_token", None)
+    return str(token or "").strip()
+
+
 def _header(headers: Mapping[str, Any], name: str) -> str:
     wanted = name.lower()
     for key, value in headers.items():
@@ -602,7 +611,7 @@ def process(raw_body: bytes, headers: Mapping[str, Any], *, context: Any, env: M
         provider = "notisend" if notisend_admitted else "postbox"
         pending.append((spec, row, provider, send_ordinal))
 
-    iam_token = str(getattr(context, "token", "") or "").strip()
+    iam_token = _iam_access_token(context)
 
     def dispatch(item: tuple[dict[str, Any], Mapping[str, Any], str, int]) -> tuple[dict[str, Any], HookError | None, int]:
         spec, _row, provider, send_ordinal = item

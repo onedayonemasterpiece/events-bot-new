@@ -165,6 +165,27 @@ Current read-only Yandex evidence remains healthy: trigger
 above, and its YDB is `RUNNING`. No retention, destination, DLQ or unrelated
 Yandex resource was changed.
 
+### Serialized continuation and direct Auth canary finding
+
+The authorized continuation completed the compatible temporary-Supabase
+restore drill, selectively applied only migration `20260804190000`, repaired
+only that history version, reconciled the actual NotiSend provider counter and
+deployed the reviewed Auth Function boundary. The first fresh controlled
+Postbox canary then failed closed: the exact delivery ledger recorded one
+`postbox / definitive_reject`, the Auth request returned `500`, no verify or
+membership write occurred, no provider receipt/correlation was invented, and
+the Hook was immediately disabled.
+
+The failure exposed a separate runtime-contract defect in the reviewed hook.
+Yandex Python Functions provide `context.token` as an authentication object
+whose `access_token` field is the IAM token. The hook stringified the entire
+object and sent that representation as `X-YaCloud-SubjectToken`; Postbox
+correctly rejected it. The unit fixture had modeled `context.token` as a plain
+string and therefore missed the production shape. The regression now supplies
+the documented object form and asserts that only `access_token` reaches the
+Postbox header. Hook reactivation, a fresh controlled Postbox canary and the
+remaining DLQ recovery gates stay pending until that exact-main fix is deployed.
+
 ## Rollback ownership
 
 - SQL admission rollback: re-grant only
