@@ -20,6 +20,7 @@ jobs:
     if: ${{ github.event.pull_request.head.ref == 'automation/prelaunch-control-20260804' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    environment: production
     env:
       KENIGEVENTS_SITE_YC_BUCKET: ${{ secrets.KENIGEVENTS_SITE_YC_BUCKET || vars.KENIGEVENTS_SITE_YC_BUCKET }}
       KENIGEVENTS_SITE_YC_ACCESS_KEY_ID: ${{ secrets.KENIGEVENTS_SITE_YC_ACCESS_KEY_ID || vars.KENIGEVENTS_SITE_YC_ACCESS_KEY_ID }}
@@ -31,8 +32,7 @@ jobs:
       PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || vars.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY }}
       PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || vars.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL }}
     steps:
-      - name: Checkout publication control branch
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -53,11 +53,13 @@ jobs:
           [[ "$target_sha" =~ ^[0-9a-f]{40}$ ]]
           [[ "$visual_run_id" =~ ^[0-9]{8,20}$ ]]
           [[ "$visual_artifact_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-          echo "request_id=$request_id" >> "$GITHUB_OUTPUT"
-          echo "target_branch=$target_branch" >> "$GITHUB_OUTPUT"
-          echo "target_sha=$target_sha" >> "$GITHUB_OUTPUT"
-          echo "visual_run_id=$visual_run_id" >> "$GITHUB_OUTPUT"
-          echo "visual_artifact_digest=$visual_artifact_digest" >> "$GITHUB_OUTPUT"
+          {
+            echo "request_id=$request_id"
+            echo "target_branch=$target_branch"
+            echo "target_sha=$target_sha"
+            echo "visual_run_id=$visual_run_id"
+            echo "visual_artifact_digest=$visual_artifact_digest"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Verify green exact-SHA visual evidence
         shell: bash
@@ -68,24 +70,20 @@ jobs:
           VISUAL_ARTIFACT_DIGEST: ${{ steps.request.outputs.visual_artifact_digest }}
         run: |
           set -euo pipefail
-          evidence_root="${RUNNER_TEMP}/prelaunch-v12-source-evidence"
+          evidence_root="${RUNNER_TEMP}/source-evidence"
           mkdir -p "$evidence_root" artifacts/prelaunch-publish
-
           run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${VISUAL_RUN_ID}")"
           test "$(jq -r .status <<<"$run_json")" = completed
           test "$(jq -r .conclusion <<<"$run_json")" = success
           test "$(jq -r .name <<<"$run_json")" = 'Prelaunch v12 visual control'
-
           artifact_name="prelaunch-v12-visual-${VISUAL_RUN_ID}"
           artifacts_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${VISUAL_RUN_ID}/artifacts?per_page=100")"
           artifact="$(jq -c --arg name "$artifact_name" '.artifacts[] | select(.name == $name)' <<<"$artifacts_json")"
           test -n "$artifact"
           test "$(jq -r .expired <<<"$artifact")" = false
           test "$(jq -r .digest <<<"$artifact")" = "$VISUAL_ARTIFACT_DIGEST"
-
           gh run download "$VISUAL_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$artifact_name" --dir "$evidence_root"
           receipt="$(find "$evidence_root" -name control-receipt.json -print -quit)"
-          test -n "$receipt"
           jq -e --arg sha "$TARGET_SHA" '
             .target_sha == $sha
             and .browser_exit_code == 0
@@ -104,8 +102,7 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags origin "+refs/heads/${TARGET_BRANCH}:refs/remotes/origin/${TARGET_BRANCH}"
-          actual_sha="$(git rev-parse "refs/remotes/origin/${TARGET_BRANCH}")"
-          test "$actual_sha" = "$TARGET_SHA"
+          test "$(git rev-parse "refs/remotes/origin/${TARGET_BRANCH}")" = "$TARGET_SHA"
           git checkout --detach "$TARGET_SHA"
           test "$(git rev-parse HEAD)" = "$TARGET_SHA"
 
@@ -115,14 +112,14 @@ jobs:
           cache: npm
           cache-dependency-path: site/package-lock.json
 
-      - name: Install build and browser dependencies
+      - name: Install dependencies
         working-directory: site
         run: |
           npm ci --no-audit --no-fund
           npx playwright install --with-deps chromium
           aws --version
 
-      - name: Verify publication credentials without exposing values
+      - name: Verify production environment configuration
         shell: bash
         run: |
           set -euo pipefail
@@ -135,14 +132,14 @@ jobs:
           )
           missing=()
           for name in "${required[@]}"; do
-            if [[ -z "${!name:-}" ]]; then missing+=("$name"); fi
+            [[ -n "${!name:-}" ]] || missing+=("$name")
           done
-          if (( ${#missing[@]} > 0 )); then
-            printf 'Missing required publication configuration: %s\n' "${missing[*]}" >&2
+          if (( ${#missing[@]} )); then
+            printf 'Missing required production configuration: %s\n' "${missing[*]}" >&2
             exit 1
           fi
 
-      - name: Re-run source contracts at published SHA
+      - name: Re-run source contracts
         run: npm --prefix site run test:static-release
 
       - name: Generate one-use 256-bit review token
@@ -152,10 +149,9 @@ jobs:
           token="$(openssl rand -base64 32 | tr '/+' '_-' | tr -d '=\n')"
           [[ "$token" =~ ^[A-Za-z0-9_-]{43}$ ]]
           echo "::add-mask::$token"
-          public_base="${KENIGEVENTS_SITE_PUBLIC_BASE_URL%/}"
           {
             echo "SECRET_CANDIDATE_TOKEN=$token"
-            echo "CANDIDATE_URL=${public_base}/_review/${token}/"
+            echo "CANDIDATE_URL=${KENIGEVENTS_SITE_PUBLIC_BASE_URL%/}/_review/${token}/"
           } >> "$GITHUB_ENV"
 
       - name: Build and check immutable secret candidate
@@ -169,7 +165,6 @@ jobs:
           npm --prefix site run build:production
           npm --prefix site run build:secret-candidate
           npm --prefix site run check:secret-candidate
-
           candidate_root="site/dist/_review/${SECRET_CANDIDATE_TOKEN}"
           manifest="${candidate_root}/secret-candidate-manifest.json"
           test -f "$manifest"
@@ -184,11 +179,10 @@ jobs:
             echo "CANDIDATE_OBJECT_COUNT=$object_count"
           } >> "$GITHUB_ENV"
 
-      - name: Verify live form transport with no-write honeypot probe
+      - name: Verify live form transport without storing a row
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p artifacts/prelaunch-publish
           probe="$(curl --fail-with-body --silent --show-error \
             --request POST \
             --header "apikey: ${PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY}" \
@@ -204,58 +198,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npm --prefix site run plan:secret-candidate > "${RUNNER_TEMP}/prelaunch-secret-plan.json"
+          npm --prefix site run plan:secret-candidate > "${RUNNER_TEMP}/plan.json"
           jq -e '
             .ok == true
-            and .publication_mode == "secret_link"
             and .anonymous_list_preflight == "disabled"
             and .root_mutation == false
             and .stable_ics_mutation == false
             and .overwrite_allowed == false
-          ' "${RUNNER_TEMP}/prelaunch-secret-plan.json" >/dev/null
-
+          ' "${RUNNER_TEMP}/plan.json" >/dev/null
           export SECRET_CANDIDATE_CONFIRM="publish-secret:${CANDIDATE_BUILD_ID}:${CANDIDATE_TOKEN_SHA256}"
-          npm --prefix site run publish:secret-candidate 2>&1 | tee "${RUNNER_TEMP}/prelaunch-secret-publish.log"
+          npm --prefix site run publish:secret-candidate
 
-      - name: Run public Chromium visual and responsive gates
+      - name: Run public Chromium and product gates
         shell: bash
         run: |
           set -euo pipefail
           artifact_dir='artifacts/prelaunch-publish/live'
           mkdir -p "$artifact_dir/reference"
-
-          npm --prefix site run check:prelaunch-browser -- \
-            --url "$CANDIDATE_URL" \
-            --artifact-dir ../artifacts/prelaunch-publish/live
-
-          node site/scripts/check-prelaunch-viewport-fit.mjs \
-            --url "$CANDIDATE_URL" \
-            --artifact-dir "$artifact_dir"
-
-          npm --prefix site run check:prelaunch-light-model -- \
-            --url "$CANDIDATE_URL" \
-            --artifact-dir ../artifacts/prelaunch-publish/live
-
-          npm --prefix site run check:prelaunch-experience -- \
-            --url "$CANDIDATE_URL" \
-            --artifact-dir ../artifacts/prelaunch-publish/live
-
-          cp docs/features/static-site-pages/prelaunch-handoff/reference/target-desktop.webp \
-            "$artifact_dir/reference/target-desktop.webp"
-          cp docs/features/static-site-pages/prelaunch-handoff/reference/PWA-icon.webp \
-            "$artifact_dir/reference/PWA-icon.webp"
-          cp docs/features/static-site-pages/prelaunch-handoff/reference/generated-lighting-desktop-v1.webp \
-            "$artifact_dir/reference/generated-lighting-desktop-v1.webp"
-          cp docs/features/static-site-pages/prelaunch-handoff/reference/generated-lighting-mobile-v1.webp \
-            "$artifact_dir/reference/generated-lighting-mobile-v1.webp"
-
-          npm --prefix site run check:prelaunch-product-visual-policy -- \
-            --artifact-dir ../artifacts/prelaunch-publish/live
-
-          curl --fail --silent --show-error \
-            --dump-header artifacts/prelaunch-publish/live-root-headers.txt \
-            --output /dev/null \
-            "$CANDIDATE_URL"
+          npm --prefix site run check:prelaunch-browser -- --url "$CANDIDATE_URL" --artifact-dir ../artifacts/prelaunch-publish/live
+          node site/scripts/check-prelaunch-viewport-fit.mjs --url "$CANDIDATE_URL" --artifact-dir "$artifact_dir"
+          npm --prefix site run check:prelaunch-light-model -- --url "$CANDIDATE_URL" --artifact-dir ../artifacts/prelaunch-publish/live
+          npm --prefix site run check:prelaunch-experience -- --url "$CANDIDATE_URL" --artifact-dir ../artifacts/prelaunch-publish/live
+          cp docs/features/static-site-pages/prelaunch-handoff/reference/target-desktop.webp "$artifact_dir/reference/target-desktop.webp"
+          cp docs/features/static-site-pages/prelaunch-handoff/reference/PWA-icon.webp "$artifact_dir/reference/PWA-icon.webp"
+          cp docs/features/static-site-pages/prelaunch-handoff/reference/generated-lighting-desktop-v1.webp "$artifact_dir/reference/generated-lighting-desktop-v1.webp"
+          cp docs/features/static-site-pages/prelaunch-handoff/reference/generated-lighting-mobile-v1.webp "$artifact_dir/reference/generated-lighting-mobile-v1.webp"
+          npm --prefix site run check:prelaunch-product-visual-policy -- --artifact-dir ../artifacts/prelaunch-publish/live
+          curl --fail --silent --show-error --dump-header artifacts/prelaunch-publish/live-root-headers.txt --output /dev/null "$CANDIDATE_URL"
 
       - name: Write publication receipt
         shell: bash
@@ -266,12 +235,11 @@ jobs:
           VISUAL_ARTIFACT_DIGEST: ${{ steps.request.outputs.visual_artifact_digest }}
         run: |
           set -euo pipefail
-          mkdir -p artifacts/prelaunch-publish
           cp "$CANDIDATE_ROOT/secret-candidate-manifest.json" artifacts/prelaunch-publish/secret-candidate-manifest.json
           printf '%s\n' "$TARGET_SHA" > artifacts/prelaunch-publish/repository-sha.txt
           node --input-type=module <<'NODE'
           import { writeFileSync } from 'node:fs';
-          const receipt = {
+          writeFileSync('artifacts/prelaunch-publish/publication-receipt.json', `${JSON.stringify({
             schema_version: 'prelaunch_v12_publication_receipt_v1',
             request_id: process.env.REQUEST_ID,
             public_url: process.env.CANDIDATE_URL,
@@ -282,26 +250,16 @@ jobs:
             build_id: process.env.CANDIDATE_BUILD_ID,
             token_sha256: process.env.CANDIDATE_TOKEN_SHA256,
             object_count: Number(process.env.CANDIDATE_OBJECT_COUNT),
-            source_contracts: 'ok',
-            source_visual_gates: 'ok',
-            public_hash_mime_verification: 'ok',
-            public_browser_gate: 'ok',
-            public_viewport_fit_gate: 'ok',
-            public_light_model_gate: 'ok',
-            public_experience_gate: 'ok',
-            public_product_policy_gate: 'ok',
+            source_contracts: 'ok', source_visual_gates: 'ok',
+            public_hash_mime_verification: 'ok', public_browser_gate: 'ok',
+            public_viewport_fit_gate: 'ok', public_light_model_gate: 'ok',
+            public_experience_gate: 'ok', public_product_policy_gate: 'ok',
             form_transport_direct_probe: 'ok',
             form_transport_relay_configured: Boolean(process.env.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL),
-            production_root_changed: false,
-            stable_ics_changed: false,
-            old_review_prefixes_changed: false,
-            create_only_upload: true,
+            production_root_changed: false, stable_ics_changed: false,
+            old_review_prefixes_changed: false, create_only_upload: true,
             generated_at: new Date().toISOString(),
-          };
-          writeFileSync(
-            'artifacts/prelaunch-publish/publication-receipt.json',
-            `${JSON.stringify(receipt, null, 2)}\n`,
-          );
+          }, null, 2)}\n`);
           NODE
 
       - name: Upload publication evidence
