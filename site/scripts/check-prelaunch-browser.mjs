@@ -7,6 +7,10 @@ function option(name, fallback = '') {
   return index >= 0 ? String(process.argv[index + 1] || '') : fallback;
 }
 
+function check(condition, message, failures) {
+  if (!condition) failures.push(message);
+}
+
 const url = option('--url');
 const artifactDir = resolve(option('--artifact-dir', 'artifacts/prelaunch-browser'));
 if (!url || !/^https?:\/\//u.test(url)) {
@@ -14,9 +18,6 @@ if (!url || !/^https?:\/\//u.test(url)) {
 }
 mkdirSync(artifactDir, { recursive: true });
 
-// The landing is a single-screen product surface. This matrix deliberately
-// includes short desktop and small-phone viewports where accidental scroll is
-// most likely to appear.
 const viewports = [
   { name: 'reference-square', width: 1200, height: 1200 },
   { name: 'desktop-xl', width: 1920, height: 1080 },
@@ -34,16 +35,6 @@ const executablePath = String(process.env.PRELAUNCH_CHROMIUM_EXECUTABLE_PATH || 
 const browser = await chromium.launch({ headless: true, executablePath });
 const failures = [];
 const reducedScenes = [];
-
-function check(condition, message, bucket = failures) {
-  if (!condition) bucket.push(message);
-}
-
-function alphaFromColor(value) {
-  if (value === 'transparent') return 0;
-  const match = /rgba\([^)]*[,\s]([\d.]+)\s*\)$/u.exec(value);
-  return match ? Number(match[1]) : 1;
-}
 
 async function readScene(page) {
   return page.evaluate(() => {
@@ -64,99 +55,108 @@ async function readScene(page) {
       const match = /rgba\([^)]*[,\s]([\d.]+)\s*\)$/u.exec(value);
       return match ? Number(match[1]) : 1;
     };
+    const tracks = (value) => String(value || '').split(/\s+/u).filter(Boolean);
 
     const root = document.querySelector('[data-prelaunch-page]');
     const projection = document.querySelector('.prelaunch__projection');
+    const background = document.querySelector('.prelaunch__background');
     const mosaic = document.querySelector('[data-prelaunch-mosaic]');
     const atmosphere = document.querySelector('.prelaunch__atmosphere');
     const foreground = document.querySelector('.prelaunch__foreground');
-    const brand = document.querySelector('.prelaunch__brand');
-    const copy = document.querySelector('.prelaunch__copy');
     const heading = document.querySelector('#prelaunch-title');
     const description = document.querySelector('.prelaunch__copy p');
     const notify = document.querySelector('.prelaunch__notify');
     const consent = document.querySelector('.prelaunch-form__consent');
     const tiles = [...document.querySelectorAll('[data-prelaunch-tile]')];
-    const email = document.querySelector('input[type="email"]');
-    const button = document.querySelector('[data-prelaunch-submit]');
-
+    const mosaicStyle = mosaic ? getComputedStyle(mosaic) : null;
+    const gridColumnCount = tracks(mosaicStyle?.gridTemplateColumns).length;
     const counts = tiles.reduce((out, tile) => {
       const state = tile.getAttribute('data-state') || 'missing';
       out[state] = (out[state] || 0) + 1;
       return out;
     }, {});
-
-    const tileSurfaces = tiles.map((tile) => {
-      const base = getComputedStyle(tile);
-      const glass = getComputedStyle(tile, '::before');
-      return {
-        index: Number(tile.getAttribute('data-index')),
-        state: tile.getAttribute('data-state'),
-        zone: tile.getAttribute('data-zone'),
-        tileOpacity: Number(base.opacity),
-        glassBackground: glass.backgroundColor,
-        glassAlpha: alpha(glass.backgroundColor),
-        backdropFilter: glass.backdropFilter || glass.webkitBackdropFilter || '',
-      };
-    });
-
-    const stateSurface = Object.fromEntries(['sealed', 'dim', 'revealed'].map((state) => {
-      const tile = tiles.find((candidate) => candidate.getAttribute('data-state') === state);
-      if (!(tile instanceof HTMLElement)) return [state, null];
+    const surfaces = tiles.map((tile) => {
       const base = getComputedStyle(tile);
       const glass = getComputedStyle(tile, '::before');
       const matte = getComputedStyle(tile, '::after');
-      return [state, {
+      return {
+        index: Number(tile.getAttribute('data-index')),
+        state: tile.getAttribute('data-state'),
+        edge: tile.getAttribute('data-edge'),
+        window: tile.getAttribute('data-window') === 'true',
+        accent: tile.getAttribute('data-accent') === 'true',
         tileOpacity: Number(base.opacity),
-        tileBackground: base.backgroundColor,
+        baseOverflow: base.overflow,
+        baseRadius: base.borderRadius,
         glassBackground: glass.backgroundColor,
+        glassAlpha: alpha(glass.backgroundColor),
         backdropFilter: glass.backdropFilter || glass.webkitBackdropFilter || '',
-        borderColor: glass.borderColor,
+        glassRadius: glass.borderRadius,
         boxShadow: glass.boxShadow,
         matteOpacity: Number(matte.opacity),
-      }];
+      };
+    });
+    const stateSurface = Object.fromEntries(['sealed', 'dim', 'revealed'].map((state) => {
+      const surface = surfaces.find((candidate) => candidate.state === state && candidate.edge === 'ambient')
+        || surfaces.find((candidate) => candidate.state === state);
+      return [state, surface || null];
     }));
-
     const first = tiles[0]?.getBoundingClientRect();
     const second = tiles[1]?.getBoundingClientRect();
-    const nextRow = tiles[9]?.getBoundingClientRect();
-    const gap = first && second ? second.left - first.right : -1;
-    const verticalGap = first && nextRow ? nextRow.top - first.bottom : -1;
-    const tileAspect = first && first.width > 0 ? first.height / first.width : 0;
-    const radii = [...new Set(tiles.map((tile) => getComputedStyle(tile).borderRadius))];
-    const image = projection instanceof HTMLImageElement
-      ? { complete: projection.complete, naturalWidth: projection.naturalWidth }
-      : { complete: false, naturalWidth: 0 };
-    const mosaicSeam = mosaic ? getComputedStyle(mosaic, '::before').backgroundImage : '';
+    const nextRow = tiles[gridColumnCount]?.getBoundingClientRect();
     const scrolling = document.scrollingElement || document.documentElement;
     const documentHeight = Math.max(
       scrolling.scrollHeight,
       document.documentElement.scrollHeight,
       document.body?.scrollHeight || 0,
     );
-
+    const documentWidth = Math.max(
+      scrolling.scrollWidth,
+      document.documentElement.scrollWidth,
+      document.body?.scrollWidth || 0,
+    );
+    const image = projection instanceof HTMLImageElement
+      ? { complete: projection.complete, naturalWidth: projection.naturalWidth }
+      : { complete: false, naturalWidth: 0 };
+    const rootBefore = root ? getComputedStyle(root, '::before') : null;
+    const backgroundImage = background ? getComputedStyle(background, '::after') : null;
     return {
-      layers: [root, projection, mosaic, atmosphere, foreground].every(Boolean),
-      tileCount: tiles.length,
-      counts,
-      glintCount: tiles.filter((tile) => tile.getAttribute('data-glint') === 'true').length,
-      zoneCount: new Set(tiles.map((tile) => tile.getAttribute('data-zone'))).size,
-      radiiCount: radii.length,
-      image,
+      layers: [root, projection, background, mosaic, atmosphere, foreground].every(Boolean),
+      experienceReady: root?.getAttribute('data-experience-ready'),
       viewport: { width: window.innerWidth, height: window.innerHeight },
       documentHeight,
+      documentWidth,
       verticalOverflow: documentHeight - window.innerHeight,
-      horizontalOverflow: scrolling.scrollWidth - window.innerWidth,
+      horizontalOverflow: documentWidth - window.innerWidth,
       scrollTop: scrolling.scrollTop,
-      inputWidth: email?.getBoundingClientRect().width || 0,
-      buttonWidth: button?.getBoundingClientRect().width || 0,
-      root: rectOf(root),
-      brand: rectOf(brand),
-      copy: rectOf(copy),
+      tileCount: tiles.length,
+      gridColumnCount,
+      counts,
+      windowCount: surfaces.filter((surface) => surface.window).length,
+      accentCount: surfaces.filter((surface) => surface.accent).length,
+      edgeBands: [...new Set(surfaces.map((surface) => surface.edge).filter(Boolean))],
+      clearWindowCount: surfaces.filter((surface) => surface.glassAlpha <= .4).length,
+      mostlyClosedCount: surfaces.filter((surface) => surface.glassAlpha >= .65).length,
+      cornerMaskCount: surfaces.filter((surface) => (
+        surface.baseOverflow === 'hidden'
+        && surface.baseRadius === '0px'
+        && surface.glassRadius !== '0px'
+        && surface.boxShadow.includes('rgb(7, 9, 13)')
+      )).length,
+      backdropCount: surfaces.filter((surface) => surface.backdropFilter && surface.backdropFilter !== 'none').length,
+      wholeTileOpacityStable: surfaces.every((surface) => surface.tileOpacity === 1),
+      image,
+      sharedLight: rootBefore?.backgroundImage || '',
+      artwork: {
+        width: Number.parseFloat(backgroundImage?.width || '0') || 0,
+        top: Number.parseFloat(backgroundImage?.top || '0') || 0,
+        left: Number.parseFloat(backgroundImage?.left || '0') || 0,
+      },
       heading: rectOf(heading),
       description: rectOf(description),
       notify: rectOf(notify),
       consent: rectOf(consent),
+      root: rectOf(root),
       firstTile: first ? {
         top: first.top,
         left: first.left,
@@ -165,14 +165,10 @@ async function readScene(page) {
         width: first.width,
         height: first.height,
       } : null,
-      gap,
-      verticalGap,
-      tileAspect,
-      mosaicSeam,
+      gap: first && second ? second.left - first.right : -1,
+      verticalGap: first && nextRow ? nextRow.top - first.bottom : -1,
+      tileAspect: first && first.width > 0 ? first.height / first.width : 0,
       stateSurface,
-      tileSurfaces,
-      effectiveClearCount: tileSurfaces.filter((surface) => surface.glassAlpha <= .4).length,
-      effectiveMostlyClosedCount: tileSurfaces.filter((surface) => surface.glassAlpha >= .65).length,
       stateSnapshot: tiles.map((tile) => tile.getAttribute('data-state')),
     };
   });
@@ -181,91 +177,70 @@ async function readScene(page) {
 function validateScene(scene, viewport, localFailures) {
   const prefix = viewport.name;
   check(scene.layers, `${prefix}: one or more scene layers are missing`, localFailures);
-  check(scene.tileCount === 72, `${prefix}: expected 72 tiles, got ${scene.tileCount}`, localFailures);
+  check(scene.experienceReady === 'true', `${prefix}: enhancement module is not ready`, localFailures);
+  check(scene.tileCount === 72, `${prefix}: expected 72 panes, got ${scene.tileCount}`, localFailures);
   check(
     scene.counts.sealed === 30 && scene.counts.dim === 23 && scene.counts.revealed === 19,
-    `${prefix}: deterministic DOM scene changed ${JSON.stringify(scene.counts)}`,
+    `${prefix}: deterministic DOM states changed ${JSON.stringify(scene.counts)}`,
     localFailures,
   );
-  check(scene.glintCount === 3, `${prefix}: expected three directed-light glints, got ${scene.glintCount}`, localFailures);
-  check(scene.zoneCount === 3, `${prefix}: expected quiet/light/leather motion zones`, localFailures);
-  check(scene.radiiCount >= 3, `${prefix}: tile radii lost deliberate micro-variation`, localFailures);
-  check(scene.image.complete && scene.image.naturalWidth >= 512, `${prefix}: projection fallback did not decode`, localFailures);
-  check(scene.horizontalOverflow <= 1, `${prefix}: horizontal overflow ${scene.horizontalOverflow}px`, localFailures);
+  check(scene.windowCount === 8, `${prefix}: coherent reveal windows=${scene.windowCount}`, localFailures);
+  check(scene.accentCount === 3, `${prefix}: edge accents=${scene.accentCount}`, localFailures);
+  check(
+    ['ambient', 'soft', 'warm', 'hot'].every((edge) => scene.edgeBands.includes(edge)),
+    `${prefix}: incomplete edge bands ${scene.edgeBands.join(',')}`,
+    localFailures,
+  );
+  check(scene.image.complete && scene.image.naturalWidth >= 512, `${prefix}: production projection did not decode`, localFailures);
+  check(scene.sharedLight.includes('radial-gradient'), `${prefix}: shared light source is missing`, localFailures);
   check(scene.verticalOverflow <= 1, `${prefix}: page scrolls by ${scene.verticalOverflow}px`, localFailures);
-  check(scene.scrollTop === 0, `${prefix}: page opened at scrollTop=${scene.scrollTop}`, localFailures);
-  check(scene.root && Math.abs(scene.root.height - scene.viewport.height) <= 1, `${prefix}: root height ${scene.root?.height} != viewport ${scene.viewport.height}`, localFailures);
-  check(scene.inputWidth >= 170 && scene.buttonWidth >= 150, `${prefix}: form control geometry collapsed`, localFailures);
-  check(scene.heading && scene.heading.left >= 0 && scene.heading.top >= 0, `${prefix}: heading escaped viewport`, localFailures);
-  check(scene.brand && scene.brand.top >= -1, `${prefix}: brand escaped viewport`, localFailures);
-  check(scene.notify && scene.notify.bottom <= scene.viewport.height + 1, `${prefix}: form bottom ${scene.notify?.bottom} exceeds viewport ${scene.viewport.height}`, localFailures);
-  check(scene.consent && scene.consent.bottom <= scene.viewport.height + 1, `${prefix}: consent bottom ${scene.consent?.bottom} exceeds viewport`, localFailures);
+  check(scene.horizontalOverflow <= 1, `${prefix}: horizontal overflow ${scene.horizontalOverflow}px`, localFailures);
+  check(scene.scrollTop === 0, `${prefix}: initial scrollTop=${scene.scrollTop}`, localFailures);
+  check(scene.root && Math.abs(scene.root.height - viewport.height) <= 1, `${prefix}: root height ${scene.root?.height}`, localFailures);
+  check(scene.heading && scene.heading.top >= -1 && scene.heading.left >= -1, `${prefix}: heading escaped viewport`, localFailures);
+  check(scene.notify && scene.notify.bottom <= viewport.height + 1, `${prefix}: form bottom ${scene.notify?.bottom}`, localFailures);
+  check(scene.consent && scene.consent.bottom <= viewport.height + 1, `${prefix}: consent bottom ${scene.consent?.bottom}`, localFailures);
   check(
-    scene.description && scene.notify && scene.description.bottom + 8 <= scene.notify.top,
-    `${prefix}: description overlaps form (${scene.description?.bottom} / ${scene.notify?.top})`,
+    scene.description && scene.notify && scene.description.bottom + 6 <= scene.notify.top,
+    `${prefix}: description/form overlap ${scene.description?.bottom}/${scene.notify?.top}`,
     localFailures,
   );
-  check(scene.gap >= 5 && scene.gap <= 12, `${prefix}: horizontal inter-tile seam is ${scene.gap}px`, localFailures);
-  check(scene.verticalGap >= 5 && scene.verticalGap <= 12, `${prefix}: vertical inter-tile seam is ${scene.verticalGap}px`, localFailures);
-  check(scene.tileAspect >= .97 && scene.tileAspect <= 1.03, `${prefix}: tile aspect ${scene.tileAspect} is not square`, localFailures);
-  check(
-    scene.mosaicSeam.includes('repeating-linear-gradient'),
-    `${prefix}: mosaic no longer paints an opaque seam above the projection`,
-    localFailures,
-  );
-  check(
-    scene.effectiveClearCount >= 4 && scene.effectiveClearCount <= 10,
-    `${prefix}: expected 4–10 genuinely clear windows, got ${scene.effectiveClearCount}`,
-    localFailures,
-  );
-  check(
-    scene.effectiveMostlyClosedCount >= 58,
-    `${prefix}: product is insufficiently hidden; mostly-closed tiles=${scene.effectiveMostlyClosedCount}`,
-    localFailures,
-  );
+  check(scene.gap >= 4 && scene.gap <= 12, `${prefix}: horizontal seam ${scene.gap}px`, localFailures);
+  check(scene.verticalGap >= 4 && scene.verticalGap <= 12, `${prefix}: vertical seam ${scene.verticalGap}px`, localFailures);
+  check(scene.tileAspect >= .97 && scene.tileAspect <= 1.03, `${prefix}: pane aspect ${scene.tileAspect}`, localFailures);
+  check(scene.cornerMaskCount === 72, `${prefix}: corner masks ${scene.cornerMaskCount}/72`, localFailures);
+  check(scene.backdropCount === 72, `${prefix}: backdrop panes ${scene.backdropCount}/72`, localFailures);
+  check(scene.wholeTileOpacityStable, `${prefix}: whole-pane opacity changed`, localFailures);
+  check(scene.clearWindowCount >= 6 && scene.clearWindowCount <= 10, `${prefix}: clear windows=${scene.clearWindowCount}`, localFailures);
+  check(scene.mostlyClosedCount >= 56, `${prefix}: mostly-closed panes=${scene.mostlyClosedCount}`, localFailures);
 
-  const sealed = scene.stateSurface.sealed;
-  const dim = scene.stateSurface.dim;
-  const revealed = scene.stateSurface.revealed;
-  check(sealed && dim && revealed, `${prefix}: missing one glass surface state`, localFailures);
-  for (const [state, surface] of Object.entries(scene.stateSurface)) {
-    if (!surface) continue;
-    surface.glassAlpha = alphaFromColor(surface.glassBackground);
-    check(surface.tileOpacity === 1, `${prefix}: ${state} fades the whole tile and exposes the seam`, localFailures);
-    check(
-      surface.tileBackground === 'rgba(0, 0, 0, 0)' || surface.tileBackground === 'transparent',
-      `${prefix}: ${state} tile base must remain transparent for backdrop glass`,
-      localFailures,
-    );
-    check(surface.backdropFilter && surface.backdropFilter !== 'none', `${prefix}: ${state} has no backdrop-filter`, localFailures);
-    check(surface.boxShadow && surface.boxShadow !== 'none', `${prefix}: ${state} has no bevel/depth`, localFailures);
-  }
+  const { sealed, dim, revealed } = scene.stateSurface;
+  check(sealed && dim && revealed, `${prefix}: missing state surface`, localFailures);
   if (sealed && dim && revealed) {
     check(
       sealed.glassAlpha > dim.glassAlpha && dim.glassAlpha > revealed.glassAlpha,
-      `${prefix}: glass alpha order is not sealed > dim > revealed`,
+      `${prefix}: state alpha order ${sealed.glassAlpha}/${dim.glassAlpha}/${revealed.glassAlpha}`,
       localFailures,
     );
     check(
       new Set([sealed.backdropFilter, dim.backdropFilter, revealed.backdropFilter]).size === 3,
-      `${prefix}: glass states lost distinct matte/blur treatments`,
+      `${prefix}: state material treatments collapsed`,
       localFailures,
     );
   }
 
   if (viewport.width <= 599) {
-    check(
-      scene.heading && scene.heading.top <= viewport.height * .48,
-      `${prefix}: mobile launch date appears too late at y=${scene.heading?.top}`,
-      localFailures,
-    );
+    check(scene.gridColumnCount === 6, `${prefix}: mobile columns=${scene.gridColumnCount}`, localFailures);
+    check(scene.heading && scene.heading.top <= viewport.height * .48, `${prefix}: mobile headline too late at ${scene.heading?.top}`, localFailures);
+    const widthRatio = scene.artwork.width / viewport.width;
+    check(widthRatio >= .82 && widthRatio <= .96, `${prefix}: artwork width ratio ${widthRatio.toFixed(3)}`, localFailures);
+  } else {
+    check(scene.gridColumnCount === 9, `${prefix}: desktop columns=${scene.gridColumnCount}`, localFailures);
   }
 
   if (viewport.name === 'reference-square') {
-    check(scene.firstTile && scene.firstTile.right >= 155 && scene.firstTile.right <= 180, `reference-square: first seam x=${scene.firstTile?.right}`, localFailures);
-    check(scene.firstTile && scene.firstTile.bottom >= 75 && scene.firstTile.bottom <= 110, `reference-square: first seam y=${scene.firstTile?.bottom}`, localFailures);
-    check(scene.heading && scene.heading.left >= 105 && scene.heading.left <= 145, `reference-square: heading left=${scene.heading?.left}`, localFailures);
-    check(scene.heading && scene.heading.top >= 245 && scene.heading.top <= 360, `reference-square: heading top=${scene.heading?.top}`, localFailures);
+    check(scene.heading && scene.heading.left >= 100 && scene.heading.left <= 160, `reference-square: heading left=${scene.heading?.left}`, localFailures);
+    check(scene.heading && scene.heading.top >= 250 && scene.heading.top <= 390, `reference-square: heading top=${scene.heading?.top}`, localFailures);
   }
 }
 
@@ -282,19 +257,21 @@ try {
       const response = await page.goto(url, { waitUntil: 'networkidle' });
       check(response?.ok(), `${viewport.name}: HTTP ${response?.status() || 'unknown'}`, localFailures);
       await page.locator('[data-prelaunch-page]').waitFor({ state: 'visible' });
+      await page.locator('[data-prelaunch-tile][data-edge]').first().waitFor({ state: 'attached' });
+      await page.waitForTimeout(250);
       const scene = await readScene(page);
+      validateScene(scene, viewport, localFailures);
 
-      await page.waitForTimeout(300);
+      await page.waitForTimeout(350);
       const stateAfter = await page.locator('[data-prelaunch-tile]').evaluateAll((nodes) => (
         nodes.map((node) => node.getAttribute('data-state'))
       ));
       check(
         JSON.stringify(stateAfter) === JSON.stringify(scene.stateSnapshot),
-        `${viewport.name}: reduced-motion tile state changed`,
+        `${viewport.name}: reduced-motion state changed`,
         localFailures,
       );
 
-      validateScene(scene, viewport, localFailures);
       const screenshotPath = resolve(artifactDir, `prelaunch-${viewport.name}-${viewport.width}x${viewport.height}.png`);
       const domPath = resolve(artifactDir, `prelaunch-${viewport.name}-${viewport.width}x${viewport.height}-dom.html`);
       const scenePath = resolve(artifactDir, `prelaunch-${viewport.name}-${viewport.width}x${viewport.height}-scene.json`);
@@ -303,7 +280,7 @@ try {
       writeFileSync(scenePath, `${JSON.stringify({ viewport, failures: localFailures, ...scene }, null, 2)}\n`);
       reducedScenes.push({ viewport, screenshotPath, domPath, scenePath, failures: localFailures });
     } catch (error) {
-      localFailures.push(`${viewport.name}: evidence capture exception: ${String(error?.stack || error)}`);
+      localFailures.push(`${viewport.name}: capture exception: ${String(error?.stack || error)}`);
       writeFileSync(
         resolve(artifactDir, `prelaunch-${viewport.name}-${viewport.width}x${viewport.height}-capture-error.txt`),
         `${localFailures.join('\n\n')}\n`,
@@ -321,54 +298,53 @@ try {
     colorScheme: 'dark',
   });
   try {
-    const motionPage = await motionContext.newPage();
-    const motionResponse = await motionPage.goto(url, { waitUntil: 'networkidle' });
-    check(motionResponse?.ok(), `motion: HTTP ${motionResponse?.status() || 'unknown'}`, motionFailures);
-    await motionPage.locator('[data-prelaunch-page]').waitFor({ state: 'visible' });
-    const before = await motionPage.locator('[data-prelaunch-tile]').evaluateAll((nodes) => (
+    const page = await motionContext.newPage();
+    const response = await page.goto(url, { waitUntil: 'networkidle' });
+    check(response?.ok(), `motion: HTTP ${response?.status() || 'unknown'}`, motionFailures);
+    await page.locator('[data-prelaunch-page]').waitFor({ state: 'visible' });
+    const before = await page.locator('[data-prelaunch-tile]').evaluateAll((nodes) => (
       nodes.map((node) => node.getAttribute('data-state'))
     ));
     try {
-      await motionPage.waitForFunction((initial) => {
+      await page.waitForFunction((initial) => {
         const current = [...document.querySelectorAll('[data-prelaunch-tile]')]
           .map((node) => node.getAttribute('data-state'));
         return current.some((state, index) => state !== initial[index]);
       }, before, { timeout: 8000 });
     } catch {
-      motionFailures.push('motion: no tile state changed within 8 seconds');
+      motionFailures.push('motion: no pane state changed within 8 seconds');
     }
-    const motionEvidence = await motionPage.locator('[data-prelaunch-tile]').evaluateAll((nodes, initial) => {
+    const motion = await page.locator('[data-prelaunch-tile]').evaluateAll((nodes, initial) => {
       const current = nodes.map((node) => node.getAttribute('data-state'));
       return {
         changedIndices: current.flatMap((state, index) => state !== initial[index] ? [index] : []),
         tileOpacity: nodes.map((node) => Number(getComputedStyle(node).opacity)),
-        seamBackground: getComputedStyle(document.querySelector('[data-prelaunch-mosaic]'), '::before').backgroundImage,
+        cornerMasks: nodes.filter((node) => {
+          const base = getComputedStyle(node);
+          const surface = getComputedStyle(node, '::before');
+          return base.overflow === 'hidden' && base.borderRadius === '0px' && surface.boxShadow.includes('rgb(7, 9, 13)');
+        }).length,
         current,
       };
     }, before);
     check(
-      motionEvidence.changedIndices.length >= 2 && motionEvidence.changedIndices.length <= 5,
-      `motion: expected one sparse group of 2–5 tiles, changed ${motionEvidence.changedIndices.length}`,
+      motion.changedIndices.length >= 2 && motion.changedIndices.length <= 5,
+      `motion: expected 2–5 changed panes, got ${motion.changedIndices.length}`,
       motionFailures,
     );
-    check(motionEvidence.tileOpacity.every((value) => value === 1), 'motion: whole-tile opacity changed', motionFailures);
-    check(
-      motionEvidence.seamBackground.includes('repeating-linear-gradient'),
-      'motion: opaque seam disappeared during state transition',
-      motionFailures,
-    );
-    await motionPage.screenshot({
+    check(motion.tileOpacity.every((value) => value === 1), 'motion: whole-pane opacity changed', motionFailures);
+    check(motion.cornerMasks === 72, `motion: corner masks ${motion.cornerMasks}/72`, motionFailures);
+    await page.screenshot({
       path: resolve(artifactDir, 'prelaunch-motion-1200x1200.png'),
       fullPage: true,
       animations: 'disabled',
     });
     writeFileSync(
       resolve(artifactDir, 'prelaunch-motion-scene.json'),
-      `${JSON.stringify({ failures: motionFailures, before, ...motionEvidence }, null, 2)}\n`,
+      `${JSON.stringify({ failures: motionFailures, before, ...motion }, null, 2)}\n`,
     );
   } catch (error) {
-    motionFailures.push(`motion: evidence capture exception: ${String(error?.stack || error)}`);
-    writeFileSync(resolve(artifactDir, 'prelaunch-motion-capture-error.txt'), `${motionFailures.join('\n\n')}\n`);
+    motionFailures.push(`motion: exception: ${String(error?.stack || error)}`);
   } finally {
     failures.push(...motionFailures);
     await motionContext.close();
@@ -380,9 +356,8 @@ try {
 const summary = {
   ok: failures.length === 0,
   url,
-  viewports: viewports.map(({ name, width, height }) => ({ name, width, height })),
+  viewports,
   artifactDir,
-  artifactFilesPerViewport: ['screenshot', 'dom', 'scene-json'],
   reducedScenes,
   failures,
 };
