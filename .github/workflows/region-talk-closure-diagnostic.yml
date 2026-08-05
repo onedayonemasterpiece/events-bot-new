@@ -1,0 +1,51 @@
+name: Diagnose Region Talk standalone closure
+
+on:
+  push:
+    branches:
+      - agent/region-talk-transfer-package-20260805
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  closure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MIGRATOR_SHA256: 25f0b7c7aec495ab07f1457cf81c62d2f4a44c12415d1974affa775fd2cbba6d
+    steps:
+      - name: Check out control branch
+        uses: actions/checkout@v4
+        with:
+          path: control
+          fetch-depth: 1
+      - name: Check out exact source revision
+        uses: actions/checkout@v4
+        with:
+          ref: 5bbdb681623d5e4e0bff2133e487a6663c1a838a
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Reconstruct verified migration tool
+        run: |
+          cat control/tools/standalone-transfer-tool.part-* > /tmp/migrator.gz.b64
+          python - <<'PY'
+          import base64, gzip, hashlib, os
+          from pathlib import Path
+          payload = gzip.decompress(base64.b64decode(Path('/tmp/migrator.gz.b64').read_text()))
+          digest = hashlib.sha256(payload).hexdigest()
+          assert digest == os.environ['MIGRATOR_SHA256'], digest
+          Path('/tmp/migrate_from_events_bot.py').write_bytes(payload)
+          PY
+      - name: Apply the same narrow pytest-support patch
+        run: python control/tools/patch-migrator-pytest-support.py /tmp/migrate_from_events_bot.py
+      - name: Print exact parent chain to main.py
+        run: >-
+          python control/tools/diagnose-standalone-closure.py
+          --source source
+          --migrator /tmp/migrate_from_events_bot.py
