@@ -24,22 +24,24 @@ class FakeSqs:
             }
             for index, body in enumerate(bodies)
         ]
-        self.delivered = False
+        self.cursor = 0
         self.deleted = []
         self.restored = []
 
     def get_queue_attributes(self, **_kwargs):
-        visible = 0 if self.delivered else len(self.messages)
+        visible = len(self.messages) - self.cursor
         return {"Attributes": {
             "ApproximateNumberOfMessages": str(visible),
-            "ApproximateNumberOfMessagesNotVisible": str(len(self.messages) if self.delivered else 0),
+            "ApproximateNumberOfMessagesNotVisible": str(self.cursor),
         }}
 
     def receive_message(self, **kwargs):
-        if self.delivered:
+        if self.cursor >= len(self.messages):
             return {}
-        self.delivered = True
-        return {"Messages": self.messages[:kwargs["MaxNumberOfMessages"]]}
+        size = kwargs["MaxNumberOfMessages"]
+        result = self.messages[self.cursor:self.cursor + size]
+        self.cursor += len(result)
+        return {"Messages": result}
 
     def change_message_visibility_batch(self, **kwargs):
         self.restored.extend(item["ReceiptHandle"] for item in kwargs["Entries"])
@@ -94,7 +96,10 @@ def test_inventory_retains_malformed_body_as_stable_error(monkeypatch):
 
 def test_replay_deletes_only_success_and_releases_failure_tail(monkeypatch):
     sqs = FakeSqs([record("ok", "message-ok"), record("bad", "message-bad")])
-    outcomes = iter(({"applied": 1, "duplicates": 0}, recover.consumer.BatchError("batch_failed")))
+    outcomes = iter((
+        {"ok": True, "records": 1, "applied": 1, "duplicates": 0},
+        recover.consumer.BatchError("batch_failed"),
+    ))
 
     def process(*_args, **_kwargs):
         value = next(outcomes)
@@ -138,3 +143,27 @@ def test_replay_refuses_message_not_in_reviewed_inventory(monkeypatch):
     assert result["messages"][0]["stable_error_code"] == (
         "queue_message_not_in_reviewed_inventory"
     )
+
+
+def test_reviewed_inventory_binds_file_integrity_and_target_queue(tmp_path):
+    unsigned = {
+        "schema": recover.SCHEMA,
+        "queue_url_sha256": recover._sha("queue-a"),
+        "messages": [{
+            "queue_message_sha256": "a" * 64,
+            "body_sha256": "b" * 64,
+        }],
+    }
+    value = {**unsigned, "manifest_sha256": recover._sha(recover._canonical(unsigned))}
+    path = tmp_path / "inventory.json"
+    path.write_bytes(recover._canonical(value))
+    file_sha = recover._sha(path.read_bytes())
+    assert recover.load_reviewed_inventory(path, file_sha, "queue-a") == {
+        "a" * 64: "b" * 64
+    }
+    try:
+        recover.load_reviewed_inventory(path, file_sha, "queue-b")
+    except recover.RecoveryError as exc:
+        assert str(exc) == "inventory_queue_mismatch"
+    else:
+        raise AssertionError("queue mismatch was accepted")

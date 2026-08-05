@@ -156,9 +156,10 @@ Required pre-commit results:
 - browser roles cannot execute v3 or legacy-registration RPCs;
 - global/transactional/recommendation outbound switches remain in their reviewed state.
 
-The current production Supabase Send Email Hook is intentionally disabled and
-the pre-migration ledger must still show no live accepted direct-hook attempts.
-Reverify both facts immediately before apply. Under that required precondition,
+The current production Supabase Send Email Hook is intentionally disabled.
+Reverify that fact and the absence of concurrent direct-hook traffic immediately
+before apply; historic accepted rows are expected and are backfilled. Under that
+required precondition,
 `20260804190000_postbox_auth_feedback_correlation_v1.sql` atomically installs the
 batch admission/completion RPCs **and revokes** the suppression-free v1 admission
 from `service_role`; there is no ordinary migration state that leaves the bypass
