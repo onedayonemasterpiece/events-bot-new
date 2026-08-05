@@ -33,11 +33,12 @@ review instead of a generic failed/deferred state.
 ## LLM-first invariant
 
 Semantic identity remains an LLM-first decision. Deterministic code adds only
-one narrow impossibility rail: two different explicit ticket occurrence
-identities cannot be the same event card, even if the model returns
-`allow_merge`.
+one narrow impossibility rail: two different explicit occurrence identities
+issued by the same ticket vendor cannot be the same event card, even if the
+model returns `allow_merge`.
 
-Generic ticket landing pages, similar titles, venues and event types remain
+Cross-vendor ticket IDs may describe the same event and remain an LLM decision.
+Generic ticket landing pages, similar titles, venues and event types also remain
 semantic evidence for the LLM; they are not converted into deterministic merge
 rules.
 
@@ -47,6 +48,23 @@ A canonical identity-bearing source cannot be attached to a second event.
 Unclassified legacy (`source_role IS NULL` or blank) ownership on another event
 now forces review instead of being silently taken over. It is not
 mass-classified.
+
+## Validation
+
+Focused contract tests cover:
+
+- parser `review_required` with a diagnostic Event ID and zero caller-side
+  ticket, linked-event, Telegraph or publication effects;
+- VK identity rejection that cannot become a successful persisted import;
+- same-vendor conflicting ticket occurrences overriding an erroneous LLM
+  `allow_merge`;
+- cross-vendor ticket IDs remaining LLM-first;
+- legacy unknown source ownership forcing review while `context_only` remains
+  shareable;
+- unknown future result statuses failing closed.
+
+The focused test suite, Python compilation and `git diff --check` passed before
+the final product commit.
 
 ## Deferred architecture work
 
