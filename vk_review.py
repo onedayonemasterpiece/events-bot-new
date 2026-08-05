@@ -386,6 +386,7 @@ async def pick_next(
     prefer_oldest: bool = False,
     strict_chronological: bool = False,
     resume_locked: bool = True,
+    include_identity_reviews: bool = False,
 ) -> Optional[InboxPost]:
     """Select the next inbox item and lock it for the operator.
 
@@ -485,6 +486,32 @@ async def pick_next(
                     batch_id,
                 )
                 return post
+
+        # Identity reviews are deliberately excluded from scheduler/auto-import
+        # calls.  The operator UI opts in and receives the original carrier for
+        # an explicit decision or safe repeat, without losing evidence.
+        if include_identity_reviews:
+            cursor = await conn.execute(
+                """
+                WITH next AS (
+                    SELECT id FROM vk_inbox
+                    WHERE status='review_required'
+                    ORDER BY date ASC, id ASC
+                    LIMIT 1
+                )
+                UPDATE vk_inbox
+                SET status='locked', locked_by=?, locked_at=CURRENT_TIMESTAMP, review_batch=?
+                WHERE id=(SELECT id FROM next)
+                RETURNING id, group_id, post_id, date, text, matched_kw, has_date,
+                          status, review_batch, imported_event_id, event_ts_hint,
+                          COALESCE(owner_type, 'group')
+                """,
+                (operator_id, batch_id),
+            )
+            row = await cursor.fetchone()
+            if row:
+                await conn.commit()
+                return InboxPost(*row)
 
         selected_row = None
         final_bucket_name: Optional[str] = None

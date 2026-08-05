@@ -1052,7 +1052,11 @@ async def _process_vk_item(
             festival_series=item.festival_series,
         )
         result = await smart_event_update(db, candidate, check_source_url=False)
-        if smart_update_result_allows_caller_side_effects(result) and result.event_id:
+        if not smart_update_result_allows_caller_side_effects(result):
+            # A diagnostic event id may not turn an identity-gated candidate
+            # into a festival activity or any other downstream mutation.
+            continue
+        if result.event_id:
             created_events += 1
         else:
             program_only.append(ev)

@@ -6061,6 +6061,36 @@ async def process_telegram_results(
                     check_source_url=False,
                     schedule_kwargs={"skip_vk_sync": True},
                 )
+                if not smart_update_result_allows_caller_side_effects(result):
+                    if smart_update_result_requires_review(result):
+                        await persist_smart_update_review(
+                            db,
+                            result=result,
+                            candidate=candidate,
+                            pipeline="telegram_monitoring",
+                            carrier_ref=f"telegram:{int(source.id)}:{int(message_id)}",
+                        )
+                    await _mark_message_scanned(
+                        db,
+                        source_id=source.id,
+                        message_id=message_id,
+                        message_date=message_dt,
+                        status="review_required",
+                        events_extracted=0,
+                        events_imported=0,
+                        error=str(result.reason or result.status or "not_accepted"),
+                    )
+                    await _notify_done(
+                        status="skipped",
+                        reason=str(result.status or "not_accepted"),
+                        metrics_payload=None,
+                        popularity_payload=None,
+                        skip_breakdown_payload={str(result.status or "not_accepted"): 1},
+                        events_extracted_override=0,
+                        events_imported_override=0,
+                    )
+                    poster_bridge.pop(username, None)
+                    continue
                 if smart_update_result_allows_caller_side_effects(result) and result.event_id:
                     events_imported = 1
                     merged_event_ids.append(int(result.event_id))

@@ -16613,7 +16613,12 @@ async def build_short_vk_location(parts: Sequence[str]) -> str:
 
 async def _vkrev_show_next(chat_id: int, batch_id: str, operator_id: int, db: Database, bot: Bot) -> None:
     await get_tz_offset(db)
-    post = await vk_review.pick_next(db, operator_id, batch_id)
+    post = await vk_review.pick_next(
+        db,
+        operator_id,
+        batch_id,
+        include_identity_reviews=True,
+    )
     if not post:
         buttons = [
             [types.KeyboardButton(text=VK_BTN_ADD_SOURCE)],
