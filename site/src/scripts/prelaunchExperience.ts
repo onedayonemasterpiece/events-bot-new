@@ -124,6 +124,17 @@ function initializePrelaunchExperience(): void {
     window.addEventListener('resize', scheduleCalibration, { passive: true });
   }
 
+  // The underlying hero-talk motion mutates only data-state. Recompute the
+  // coherent reveal cluster after each sparse transition without observing the
+  // enhancement attributes themselves, avoiding a mutation loop.
+  const tileStateObserver = new MutationObserver(scheduleCalibration);
+  for (const tile of tiles) {
+    tileStateObserver.observe(tile, {
+      attributes: true,
+      attributeFilter: ['data-state'],
+    });
+  }
+
   const form = root.querySelector<HTMLFormElement>('[data-prelaunch-form]');
   if (!form || form.dataset.experienceBound === 'true') return;
   form.dataset.experienceBound = 'true';
