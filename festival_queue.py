@@ -906,7 +906,11 @@ async def _process_vk_item(
         }
 
     import main as main_mod
-    from smart_event_update import EventCandidate, smart_event_update
+    from smart_event_update import (
+        EventCandidate,
+        smart_event_update,
+        smart_update_result_allows_caller_side_effects,
+    )
 
     async with db.get_session() as session:
         fests = (await session.execute(select(Festival))).scalars().all()
@@ -1048,7 +1052,7 @@ async def _process_vk_item(
             festival_series=item.festival_series,
         )
         result = await smart_event_update(db, candidate, check_source_url=False)
-        if result.event_id:
+        if smart_update_result_allows_caller_side_effects(result) and result.event_id:
             created_events += 1
         else:
             program_only.append(ev)

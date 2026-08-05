@@ -11,10 +11,17 @@ from typing import Any, Iterable, Literal, Sequence
 from sqlalchemy import and_, func, select
 
 from db import Database
+from smart_event_update import SmartUpdateOutcomeKind, classify_smart_update_status
 from models import TicketSiteQueueItem
 from ops_run import finish_ops_run, start_ops_run
 
 logger = logging.getLogger(__name__)
+
+
+def _smart_update_outcome_is_accepted(status: str | None) -> bool:
+    """Keep queue state fail-closed for every future Smart Update status."""
+
+    return classify_smart_update_status(status) is not SmartUpdateOutcomeKind.NOT_ACCEPTED
 
 TicketSiteKind = Literal["pyramida", "dom_iskusstv", "qtickets"]
 
@@ -582,18 +589,18 @@ async def process_ticket_sites_queue(
                             photos=list(getattr(ev, "photos", None) or []),
                         )
                         report.processed += 1
-                        report.success += 1 if su_status in {"created", "merged"} else 0
-                        report.failed += 1 if su_status not in {"created", "merged"} else 0
+                        report.success += 1 if _smart_update_outcome_is_accepted(su_status) else 0
+                        report.failed += 1 if not _smart_update_outcome_is_accepted(su_status) else 0
                         await _mark_done(
                             item,
-                            status="active" if su_status in {"created", "merged"} else "error",
+                            status="active" if _smart_update_outcome_is_accepted(su_status) else "error",
                             result={
                                 "site_kind": "pyramida",
                                 "url": u,
                                 "smart_update_status": su_status,
                                 "event_id": ev_id,
                             },
-                            err=None if su_status in {"created", "merged"} else f"smart_update:{su_status}",
+                            err=None if _smart_update_outcome_is_accepted(su_status) else f"smart_update:{su_status}",
                         )
                 except Exception as exc:
                     logger.warning("ticket_sites_queue: pyramida failed", exc_info=True)
@@ -645,18 +652,18 @@ async def process_ticket_sites_queue(
                             photos=list(getattr(ev, "photos", None) or []),
                         )
                         report.processed += 1
-                        report.success += 1 if su_status in {"created", "merged"} else 0
-                        report.failed += 1 if su_status not in {"created", "merged"} else 0
+                        report.success += 1 if _smart_update_outcome_is_accepted(su_status) else 0
+                        report.failed += 1 if not _smart_update_outcome_is_accepted(su_status) else 0
                         await _mark_done(
                             item,
-                            status="active" if su_status in {"created", "merged"} else "error",
+                            status="active" if _smart_update_outcome_is_accepted(su_status) else "error",
                             result={
                                 "site_kind": "dom_iskusstv",
                                 "url": u,
                                 "smart_update_status": su_status,
                                 "event_id": ev_id,
                             },
-                            err=None if su_status in {"created", "merged"} else f"smart_update:{su_status}",
+                            err=None if _smart_update_outcome_is_accepted(su_status) else f"smart_update:{su_status}",
                         )
                 except Exception as exc:
                     logger.warning("ticket_sites_queue: dom_iskusstv failed", exc_info=True)
@@ -712,18 +719,18 @@ async def process_ticket_sites_queue(
                             photos=list(getattr(ev, "photos", None) or []),
                         )
                         report.processed += 1
-                        report.success += 1 if su_status in {"created", "merged"} else 0
-                        report.failed += 1 if su_status not in {"created", "merged"} else 0
+                        report.success += 1 if _smart_update_outcome_is_accepted(su_status) else 0
+                        report.failed += 1 if not _smart_update_outcome_is_accepted(su_status) else 0
                         await _mark_done(
                             item,
-                            status="active" if su_status in {"created", "merged"} else "error",
+                            status="active" if _smart_update_outcome_is_accepted(su_status) else "error",
                             result={
                                 "site_kind": "qtickets",
                                 "url": u,
                                 "smart_update_status": su_status,
                                 "event_id": ev_id,
                             },
-                            err=None if su_status in {"created", "merged"} else f"smart_update:{su_status}",
+                            err=None if _smart_update_outcome_is_accepted(su_status) else f"smart_update:{su_status}",
                         )
                 except Exception as exc:
                     logger.warning("ticket_sites_queue: qtickets failed", exc_info=True)

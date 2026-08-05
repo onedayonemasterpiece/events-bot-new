@@ -41,7 +41,15 @@ from models import (
     VideoAsset,
 )
 from source_parsing.date_utils import normalize_implicit_iso_date_to_anchor
-from smart_event_update import EventCandidate, PosterCandidate, SmartUpdateResult, smart_event_update
+from smart_event_update import (
+    EventCandidate,
+    PosterCandidate,
+    SmartUpdateResult,
+    persist_smart_update_review,
+    smart_event_update,
+    smart_update_result_allows_caller_side_effects,
+    smart_update_result_requires_review,
+)
 from smart_update_identity import canonicalize_identity_url, input_packet_fingerprint
 from telegram_sources import canonicalize_tg_url, normalize_tg_username, parse_tg_post_url
 from source_parsing.post_metrics import (
@@ -6053,7 +6061,7 @@ async def process_telegram_results(
                     check_source_url=False,
                     schedule_kwargs={"skip_vk_sync": True},
                 )
-                if result.event_id and result.status in {"created", "merged", "skipped_nochange"}:
+                if smart_update_result_allows_caller_side_effects(result) and result.event_id:
                     events_imported = 1
                     merged_event_ids.append(int(result.event_id))
                     report.events_merged += 1
@@ -6619,6 +6627,20 @@ async def process_telegram_results(
                         candidate,
                         check_source_url=False,
                     )
+                if not smart_update_result_allows_caller_side_effects(result):
+                    if smart_update_result_requires_review(result):
+                        await persist_smart_update_review(
+                            db,
+                            result=result,
+                            candidate=candidate,
+                            pipeline="telegram_monitoring",
+                            carrier_ref=f"telegram:{int(source.id)}:{int(message_id)}",
+                        )
+                    # A diagnostic matched id is never added to the source's
+                    # imported set and cannot trigger linked-source/outbox work.
+                    report.events_skipped += 1
+                    skip_breakdown[str(result.status or "not_accepted")] += 1
+                    continue
                 if (
                     result.status == "skipped_nochange"
                     and getattr(result, "event_id", None)

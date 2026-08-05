@@ -4081,6 +4081,7 @@ async def persist_event_and_pages(
     from smart_event_update import (
         EventCandidate,
         PosterCandidate,
+        SmartUpdateNotAcceptedError,
         smart_event_update,
         smart_update_result_allows_caller_side_effects,
     )
@@ -4160,12 +4161,7 @@ async def persist_event_and_pages(
             f"reason={getattr(update_result, 'reason', None)}"
         )
     if not smart_update_result_allows_caller_side_effects(update_result):
-        raise RuntimeError(
-            "smart_update not accepted: "
-            f"status={getattr(update_result, 'status', None)} "
-            f"reason={getattr(update_result, 'reason', None)} "
-            f"matched_event_id={getattr(update_result, 'event_id', None)}"
-        )
+        raise SmartUpdateNotAcceptedError(update_result, candidate)
     if not getattr(update_result, "event_id", None):
         raise RuntimeError(
             "smart_update returned no event_id: "

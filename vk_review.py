@@ -822,6 +822,36 @@ async def mark_rejected(db: Database, inbox_id: int) -> None:
         )
 
 
+async def mark_review_required(
+    db: Database,
+    inbox_id: int,
+    *,
+    reason_code: str | None,
+    diagnostic_event_id: int | None,
+    identity_decision_log_id: int | None,
+) -> None:
+    """Keep an identity-gated VK post visible and safely retryable."""
+
+    async with db.raw_conn() as conn:
+        async def _update() -> None:
+            await conn.execute(
+                """
+                UPDATE vk_inbox
+                SET status='review_required', locked_by=NULL, locked_at=NULL,
+                    review_batch=NULL, review_reason_code=?,
+                    review_diagnostic_event_id=?, identity_decision_log_id=?
+                WHERE id=?
+                """,
+                (reason_code, diagnostic_event_id, identity_decision_log_id, inbox_id),
+            )
+
+        await _run_locked_write(
+            conn,
+            _update,
+            description=f"mark_review_required inbox_id={inbox_id}",
+        )
+
+
 async def mark_pending(db: Database, inbox_id: int) -> None:
     """Return an inbox row back to the queue (clear lock and batch)."""
     async with db.raw_conn() as conn:

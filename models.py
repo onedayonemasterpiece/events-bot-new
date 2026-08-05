@@ -1121,6 +1121,36 @@ class EventIdentityDecisionLog(SQLModel, table=True):
     )
 
 
+class SmartUpdateReview(SQLModel, table=True):
+    """Small durable operator projection for identity-gated packets."""
+
+    __tablename__ = "smart_update_review"
+    __table_args__ = (
+        Index("ix_smart_update_review_state", "state", "updated_at"),
+        Index("ix_smart_update_review_identity", "identity_decision_log_id"),
+        UniqueConstraint("pipeline", "carrier_ref", name="ux_smart_update_review_carrier"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    pipeline: str
+    carrier_ref: Optional[str] = None
+    source_type: Optional[str] = None
+    source_url: Optional[str] = None
+    reason_code: Optional[str] = None
+    diagnostic_event_id: Optional[int] = Field(default=None, foreign_key="event.id")
+    identity_decision_log_id: Optional[int] = Field(
+        default=None, foreign_key="event_identity_decision_log.id"
+    )
+    state: str = "pending_review"
+    attempts: int = 0
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+
+
 class EventIdentityLock(SQLModel, table=True):
     __tablename__ = "event_identity_lock"
     __table_args__ = (

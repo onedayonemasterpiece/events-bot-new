@@ -17237,6 +17237,33 @@ async def _vkrev_import_flow(
                 db,
                 **persist_kwargs,
             )
+        except __import__("smart_event_update").SmartUpdateNotAcceptedError as exc:
+            from smart_event_update import (
+                persist_smart_update_review,
+                smart_update_result_requires_review,
+            )
+
+            if smart_update_result_requires_review(exc.result):
+                await persist_smart_update_review(
+                    db,
+                    result=exc.result,
+                    candidate=exc.candidate,
+                    pipeline="vk_review",
+                    carrier_ref=f"vk_inbox:{int(inbox_id)}",
+                )
+                await vk_review.mark_review_required(
+                    db,
+                    int(inbox_id),
+                    reason_code=exc.result.reason,
+                    diagnostic_event_id=exc.result.event_id,
+                    identity_decision_log_id=exc.result.identity_decision_id,
+                )
+                await bot.send_message(
+                    chat_id,
+                    "⚠️ Требуется identity review; VK-пост не импортирован и доступен для безопасного повтора.",
+                )
+                return
+            raise
         except Exception:
             elapsed = _time.monotonic() - start_time
             logging.exception(

@@ -1048,6 +1048,34 @@ class Database:
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_event_identity_decision_log_created ON event_identity_decision_log(created_at)"
             )
+            dbg("smart_update_review")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS smart_update_review(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pipeline TEXT NOT NULL,
+                    carrier_ref TEXT,
+                    source_type TEXT,
+                    source_url TEXT,
+                    reason_code TEXT,
+                    diagnostic_event_id INTEGER,
+                    identity_decision_log_id INTEGER,
+                    state TEXT NOT NULL DEFAULT 'pending_review',
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(pipeline, carrier_ref),
+                    FOREIGN KEY(diagnostic_event_id) REFERENCES event(id) ON DELETE SET NULL,
+                    FOREIGN KEY(identity_decision_log_id) REFERENCES event_identity_decision_log(id) ON DELETE SET NULL
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_smart_update_review_state ON smart_update_review(state, updated_at)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_smart_update_review_identity ON smart_update_review(identity_decision_log_id)"
+            )
             await conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS event_identity_lock(
@@ -2534,6 +2562,9 @@ class Database:
 
             await _add_column(conn, "vk_inbox", "event_ts_hint INTEGER")
             await _add_column(conn, "vk_inbox", "attempts INTEGER NOT NULL DEFAULT 0")
+            await _add_column(conn, "vk_inbox", "review_reason_code TEXT")
+            await _add_column(conn, "vk_inbox", "review_diagnostic_event_id INTEGER")
+            await _add_column(conn, "vk_inbox", "identity_decision_log_id INTEGER")
             # See vk_source.owner_type — default "group" preserves the
             # legacy contract for existing inbox rows.
             await _add_column(

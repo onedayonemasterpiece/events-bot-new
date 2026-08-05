@@ -49,6 +49,7 @@ from models import (
     EventSource,
     EventSourceFact,
     PosterOcrCache,
+    SmartUpdateReview,
 )
 from sections import MONTHS_RU
 from telegram_sources import canonicalize_tg_url
@@ -1691,6 +1692,9 @@ class SmartUpdateResult:
     skipped_conflicts: list[str] = field(default_factory=list)
     reason: str | None = None
     queue_notes: list[str] = field(default_factory=list)
+    # NOT_ACCEPTED outcomes may carry this only as diagnostic evidence.  It
+    # never authorizes a caller to perform event or publication side effects.
+    identity_decision_id: int | None = None
 
 
 class SmartUpdateOutcomeKind(str, Enum):
@@ -1727,10 +1731,111 @@ def smart_update_result_allows_caller_side_effects(result: Any) -> bool:
     )
 
 
+def smart_update_result_requires_review(result: Any) -> bool:
+    """Return true only for identity outcomes requiring durable review."""
+
+    return str(getattr(result, "status", "") or "").strip().lower() in {
+        "review_required",
+        "skipped_identity_gate",
+    }
+
+
+async def persist_smart_update_review(
+    db: Database,
+    *,
+    result: SmartUpdateResult,
+    candidate: EventCandidate,
+    pipeline: str,
+    carrier_ref: str | None = None,
+) -> int | None:
+    """Persist a small, PII-minimal review projection for identity uncertainty.
+
+    Source text and model payloads are deliberately not copied.  The carrier,
+    source identity and immutable decision-log reference are sufficient to
+    safely retry or resolve the packet.
+    """
+
+    if not smart_update_result_requires_review(result):
+        return None
+    carrier = str(carrier_ref or "").strip() or None
+    try:
+        async with db.get_session() as session:
+            row = (
+                await session.execute(
+                    select(SmartUpdateReview).where(
+                        SmartUpdateReview.pipeline == str(pipeline),
+                        SmartUpdateReview.carrier_ref == carrier,
+                    )
+                )
+            ).scalars().first()
+            if row is None:
+                row = SmartUpdateReview(
+                    pipeline=str(pipeline),
+                    carrier_ref=carrier,
+                    source_type=str(getattr(candidate, "source_type", "") or "").strip() or None,
+                    source_url=str(getattr(candidate, "source_url", "") or "").strip() or None,
+                    reason_code=str(result.reason or "").strip() or None,
+                    diagnostic_event_id=result.event_id,
+                    identity_decision_log_id=result.identity_decision_id,
+                    state="pending_review",
+                    attempts=1,
+                )
+                session.add(row)
+            else:
+                row.source_type = str(getattr(candidate, "source_type", "") or "").strip() or row.source_type
+                row.source_url = str(getattr(candidate, "source_url", "") or "").strip() or row.source_url
+                row.reason_code = str(result.reason or "").strip() or row.reason_code
+                row.diagnostic_event_id = result.event_id
+                row.identity_decision_log_id = result.identity_decision_id or row.identity_decision_log_id
+                row.state = "pending_review"
+                row.attempts = int(row.attempts or 0) + 1
+                row.updated_at = datetime.now(timezone.utc)
+            await session.commit()
+            await session.refresh(row)
+            return int(row.id) if row.id is not None else None
+    except Exception:
+        logger.warning("smart_update: durable review projection failed", exc_info=True)
+        return None
+
+
 class SourceBindingConflict(RuntimeError):
     def __init__(self, existing_event_id: int):
         super().__init__("source_binding_conflict")
         self.existing_event_id = int(existing_event_id)
+
+
+class SmartUpdateNotAcceptedError(RuntimeError):
+    """Structured boundary error preserving a rejected typed outcome."""
+
+    def __init__(self, result: SmartUpdateResult, candidate: EventCandidate | None = None):
+        self.result = result
+        self.candidate = candidate
+        super().__init__(
+            "smart_update not accepted: "
+            f"status={result.status} reason={result.reason} "
+            f"matched_event_id={result.event_id}"
+        )
+
+
+async def _source_binding_review_result(
+    db: Database, candidate: EventCandidate, event_id: int | None
+) -> SmartUpdateResult:
+    """Return an auditable fail-closed review outcome for source ownership."""
+
+    decision_id = await _record_identity_gate_decision(
+        db,
+        candidate,
+        decision="review_required",
+        reason="source_binding_conflict",
+        event_id=event_id,
+        payload={"stage": "source_binding"},
+    )
+    return SmartUpdateResult(
+        status="review_required",
+        event_id=event_id,
+        reason="source_binding_conflict",
+        identity_decision_id=decision_id,
+    )
 
 
 def _bounded_organizer_names(*values: Any) -> list[str]:
@@ -10721,11 +10826,10 @@ async def _record_identity_gate_decision(
     event_id: int | None = None,
     candidate_event_id: int | None = None,
     payload: dict[str, Any] | None = None,
-) -> None:
+) -> int | None:
     try:
         async with db.get_session() as session:
-            session.add(
-                EventIdentityDecisionLog(
+            row = EventIdentityDecisionLog(
                     event_id=event_id,
                     candidate_event_id=candidate_event_id,
                     source_type=str(candidate.source_type or "") or None,
@@ -10736,10 +10840,13 @@ async def _record_identity_gate_decision(
                     decided_by="smart_update.identity_gate",
                     decision_payload=payload or {},
                 )
-            )
+            session.add(row)
             await session.commit()
+            await session.refresh(row)
+            return int(row.id) if row.id is not None else None
     except Exception:
         logger.warning("smart_update.identity_gate decision log insert failed", exc_info=True)
+        return None
 
 
 def _far_future_poster_date_mismatch_note(
@@ -15957,11 +16064,7 @@ async def smart_event_update(
                 schedule_kwargs=schedule_kwargs,
             )
         except SourceBindingConflict as exc:
-            result = SmartUpdateResult(
-                status="review_required",
-                event_id=exc.existing_event_id,
-                reason="source_binding_conflict",
-            )
+            result = await _source_binding_review_result(db, candidate, exc.existing_event_id)
         except IntegrityError as exc:
             # The partial unique indexes are the authoritative cross-process
             # source ownership guard. Translate only their race failure; every
@@ -15981,11 +16084,7 @@ async def smart_event_update(
                     row = await cursor.fetchone()
                     await cursor.close()
                     owner_id = int(row[0]) if row and row[0] is not None else None
-            result = SmartUpdateResult(
-                status="review_required",
-                event_id=owner_id,
-                reason="source_binding_conflict",
-            )
+            result = await _source_binding_review_result(db, candidate, owner_id)
     return result
 
 
@@ -16269,7 +16368,7 @@ async def _smart_event_update_impl(
             "smart_update.replay_review reason=source_binding_conflict source_alias=%s",
             hashlib.sha256(str(canonical_source_url or "").encode("utf-8")).hexdigest()[:12],
         )
-        return SmartUpdateResult(status="review_required", reason="source_binding_conflict")
+        return await _source_binding_review_result(db, candidate, None)
     if noop_event_id is not None:
         logger.info(
             "smart_update.noop event_id=%s source_role=%s source_alias=%s fingerprint=%s",
@@ -18020,7 +18119,7 @@ async def _smart_event_update_impl(
                     if identity_verdict.candidate is not None
                     else None,
                 )
-                await _record_identity_gate_decision(
+                identity_decision_id = await _record_identity_gate_decision(
                     db,
                     candidate,
                     decision=identity_verdict.action.value,
@@ -18046,6 +18145,7 @@ async def _smart_event_update_impl(
                     return SmartUpdateResult(
                         status="skipped_identity_gate",
                         reason=identity_verdict.reason_code,
+                        identity_decision_id=identity_decision_id,
                     )
             except Exception as exc:
                 logger.warning("smart_update: identity gate failed", exc_info=True)
@@ -18054,7 +18154,7 @@ async def _smart_event_update_impl(
                     candidate=candidate,
                     reason=str(exc) or "identity gate error",
                 )
-                await _record_identity_gate_decision(
+                identity_decision_id = await _record_identity_gate_decision(
                     db,
                     candidate,
                     decision=identity_verdict.action.value,
@@ -18079,6 +18179,7 @@ async def _smart_event_update_impl(
                     return SmartUpdateResult(
                         status="skipped_identity_gate",
                         reason=identity_verdict.reason_code,
+                        identity_decision_id=identity_decision_id,
                     )
 
         normalized_event_type = _normalize_event_type_value(
@@ -18785,11 +18886,7 @@ async def _smart_event_update_impl(
                     source_role=_candidate_source_role(candidate),
                 )
                 if conflicting_binding is not None:
-                    return SmartUpdateResult(
-                        status="review_required",
-                        event_id=conflicting_binding,
-                        reason="source_binding_conflict",
-                    )
+                    return await _source_binding_review_result(db, candidate, conflicting_binding)
             final_lo, final_hi = _candidate_date_range(candidate)
             if final_lo is not None and final_hi is not None:
                 final_stmt = select(Event).where(
@@ -19079,7 +19176,7 @@ async def _smart_event_update_impl(
             candidate.source_type,
             candidate.source_url,
         )
-        await _record_identity_gate_decision(
+        identity_decision_id = await _record_identity_gate_decision(
             db,
             candidate,
             decision=merge_identity_verdict.action.value,
@@ -19109,6 +19206,7 @@ async def _smart_event_update_impl(
                 merged=False,
                 reason=merge_identity_verdict.reason_code,
                 queue_notes=list(queue_notes or []),
+                identity_decision_id=identity_decision_id,
             )
 
     added_facts: list[str] = []
@@ -19134,11 +19232,7 @@ async def _smart_event_update_impl(
                 source_role=_candidate_source_role(candidate),
             )
             if conflicting_binding is not None:
-                return SmartUpdateResult(
-                    status="review_required",
-                    event_id=conflicting_binding,
-                    reason="source_binding_conflict",
-                )
+                return await _source_binding_review_result(db, candidate, conflicting_binding)
         before_description = event_db.description or ""
         structured_age_decision = _candidate_age_decision(candidate)
         if structured_age_decision is not None:
