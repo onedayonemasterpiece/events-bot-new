@@ -32,7 +32,7 @@ class FakeSqs:
         visible = 0 if self.delivered else len(self.messages)
         return {"Attributes": {
             "ApproximateNumberOfMessages": str(visible),
-            "ApproximateNumberOfMessagesNotVisible": "0",
+            "ApproximateNumberOfMessagesNotVisible": str(len(self.messages) if self.delivered else 0),
         }}
 
     def receive_message(self, **kwargs):
@@ -64,6 +64,7 @@ def test_inventory_is_exact_sanitized_and_restores_visibility(monkeypatch):
         }
         for value in ids
     })
+    monkeypatch.setattr(recover.time, "sleep", lambda _seconds: None)
     result = recover.inventory(sqs, "https://queue.invalid/private", max_messages=10, visibility=300)
 
     assert result["inventory"] == {
@@ -84,6 +85,7 @@ def test_inventory_is_exact_sanitized_and_restores_visibility(monkeypatch):
 def test_inventory_retains_malformed_body_as_stable_error(monkeypatch):
     sqs = FakeSqs([{"unexpected": "recipient@example.test"}])
     monkeypatch.setattr(recover, "_classify", lambda _ids: {})
+    monkeypatch.setattr(recover.time, "sleep", lambda _seconds: None)
     result = recover.inventory(sqs, "queue", max_messages=10, visibility=300)
     assert result["inventory"]["malformed_or_unsupported"] == 1
     assert result["messages"][0]["stable_error_code"] == "ymq_envelope_unsupported"
@@ -101,7 +103,38 @@ def test_replay_deletes_only_success_and_releases_failure_tail(monkeypatch):
         return value
 
     monkeypatch.setattr(recover.consumer, "process_event", process)
-    result = recover.replay(sqs, "queue", batch_size=2)
+    approved = {
+        recover._sha(message["MessageId"]): recover._sha(message["Body"])
+        for message in sqs.messages
+    }
+    result = recover.replay(
+        sqs,
+        "queue",
+        batch_size=2,
+        approved=approved,
+        inventory_sha256="a" * 64,
+    )
     assert sqs.deleted == ["receipt-0"]
     assert sqs.restored == ["receipt-1"]
     assert result["totals"] == {"deleted": 1, "applied": 1, "duplicate": 0, "retained": 1}
+
+
+def test_replay_refuses_message_not_in_reviewed_inventory(monkeypatch):
+    sqs = FakeSqs([record("new", "message-new")])
+    monkeypatch.setattr(
+        recover.consumer,
+        "process_event",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must not run")),
+    )
+    result = recover.replay(
+        sqs,
+        "queue",
+        batch_size=1,
+        approved={"0" * 64: "1" * 64},
+        inventory_sha256="a" * 64,
+    )
+    assert sqs.deleted == []
+    assert sqs.restored == ["receipt-0"]
+    assert result["messages"][0]["stable_error_code"] == (
+        "queue_message_not_in_reviewed_inventory"
+    )

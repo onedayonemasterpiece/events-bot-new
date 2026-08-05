@@ -156,24 +156,21 @@ Required pre-commit results:
 - browser roles cannot execute v3 or legacy-registration RPCs;
 - global/transactional/recommendation outbound switches remain in their reviewed state.
 
-The rollout is deliberately two-phase:
+The current production Supabase Send Email Hook is intentionally disabled and
+the pre-migration ledger must still show no live accepted direct-hook attempts.
+Reverify both facts immediately before apply. Under that required precondition,
+`20260804190000_postbox_auth_feedback_correlation_v1.sql` atomically installs the
+batch admission/completion RPCs **and revokes** the suppression-free v1 admission
+from `service_role`; there is no ordinary migration state that leaves the bypass
+callable. If the Hook is unexpectedly enabled or traffic exists, stop rather
+than applying.
 
-1. apply `20260804190000_postbox_auth_feedback_correlation_v1.sql`; it installs
-   the batch admission/completion RPCs while temporarily retaining the old v1
-   admission grant for the currently deployed Function;
-2. deploy and smoke the reviewed focus Auth Function that calls
-   `focus_auth_begin_delivery_batch_v1` and
-   `focus_auth_complete_delivery_batch_v1`;
-3. apply `20260805071852_enforce_focus_auth_suppression_admission.sql` to revoke
-   the suppression-free v1 admission RPC from `service_role` and browser roles;
-4. rerun the rollback-only SQL contract and privilege checks.
-
-Do not apply the cutover migration before the Function smoke, and do not leave
-the v1 service-role grant in place after a successful smoke. If the Function
-must be rolled back before cutover, deploy the previous version. If it must be
-rolled back after cutover, first execute the rollback statement documented in
-the cutover migration to re-grant v1, deploy the previous version, and record
-both mutations in the incident.
+After migration/SQL-contract verification, deploy and smoke the reviewed focus
+Auth Function that calls `focus_auth_begin_delivery_batch_v1` and
+`focus_auth_complete_delivery_batch_v1`. Do not enable the Supabase Hook as part
+of this incident without its separate product-release authorization. Re-granting
+v1 is emergency rollback only and must be paired with the previous Function
+version while the Hook remains disabled.
 
 The modern `sb_secret_*` Supabase key is sent only as `apikey`; it is opaque and
 must not be placed in a Bearer header. Legacy service-role JWTs retain the
@@ -217,8 +214,10 @@ python3 scripts/ops/postbox_dlq_recover.py inventory \
   --output artifacts/codex/INC-2026-08-04/postbox-dlq-inventory.json
 ```
 
-Inventory requires `inflight=0` at start and fails rather than claiming exactness
-if its bound is exhausted. Inspect the resulting `envelope_schema` classification
+Inventory requires `inflight=0` at start, ten consecutive empty long polls, and
+a reconciled hidden snapshot (`visible=0`, `inflight=unique queue messages`). It
+fails rather than writing evidence when the bound is exhausted or any visibility
+restore entry fails. Inspect the resulting `envelope_schema` classification
 before replay; the tool supports only a raw Postbox event or the exact
 `{"messages":[...]}` consumer envelope. It never writes the raw envelope.
 
@@ -250,12 +249,17 @@ first retained item. It restores that receipt and all unprocessed receipts:
 POSTBOX_DLQ_REPLAY_CONFIRM=INC-2026-08-04 \
 python3 scripts/ops/postbox_dlq_recover.py replay \
   --batch-size 10 \
+  --inventory artifacts/codex/INC-2026-08-04/postbox-dlq-inventory.json \
+  --inventory-sha256 <reviewed-file-sha256> \
   --output artifacts/codex/INC-2026-08-04/replay-batch-001.json
 ```
 
 `consumer.process_event` reconstructs the same validated Function input and v2
 compatibility RPC. A queue receipt is deleted only after all records in that
-queue message return `applied` or exact-field-verified `duplicate`.
+queue message return `applied` or exact-field-verified `duplicate`. The exact
+queue ID hash and body hash must also exist in the independently reviewed
+inventory file whose full-file SHA-256 is supplied on the command line; an
+unreviewed/new message stops the batch and remains visible.
 
 ## Acceptance gates
 
@@ -285,7 +289,7 @@ The migration is additive but must still be backed by a verified logical backup.
 
 A rollback must never convert an ambiguous provider outcome into a retry through another provider.
 
-The exact SQL cutover rollback is:
+The exact emergency admission rollback is:
 
 ```sql
 grant execute on function public.focus_auth_begin_delivery_v1(uuid, uuid, text, boolean)

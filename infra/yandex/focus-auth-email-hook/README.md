@@ -66,9 +66,9 @@ The deterministic ZIP is written under ignored `artifacts/codex/`.
 1. Apply `supabase/migrations/20260801222242_focus_auth_delivery_attempt_v1.sql`
    and `supabase/migrations/20260804190000_postbox_auth_feedback_correlation_v1.sql`
    before deploying a hook version that calls the batch admission/completion
-   RPCs. After that Function version passes its smoke, apply
-   `20260805071852_enforce_focus_auth_suppression_admission.sql` to revoke the
-   suppression-free v1 admission path.
+   RPCs. The same atomic migration revokes the suppression-free v1 admission;
+   apply it only after the production hook-disabled precondition below is
+   reverified.
 2. Create the `kenigevents-focus-auth-mailer` service account with only
    `postbox.sender`; attach it to the Function so `context.token` supplies the
    short-lived IAM token.

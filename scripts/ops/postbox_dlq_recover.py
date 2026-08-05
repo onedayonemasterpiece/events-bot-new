@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 from collections import Counter
@@ -152,7 +153,7 @@ def inventory(client: Any, queue_url: str, *, max_messages: int, visibility: int
     raw_message_ids: list[str] = []
     empty_receives = 0
     try:
-        while len(queue_rows) < max_messages and empty_receives < 3:
+        while len(queue_rows) < max_messages and empty_receives < 10:
             response = client.receive_message(
                 QueueUrl=queue_url,
                 MaxNumberOfMessages=min(10, max_messages - len(queue_rows)),
@@ -213,11 +214,15 @@ def inventory(client: Any, queue_url: str, *, max_messages: int, visibility: int
                 except RecoveryError as exc:
                     row["stable_error_code"] = str(exc)
                 queue_rows[queue_hash] = row
+        time.sleep(2)
+        hidden_snapshot = _attributes(client, queue_url)
         if len(queue_rows) >= max_messages and (
             before["visible"] > max_messages
-            or _attributes(client, queue_url)["visible"] > 0
+            or hidden_snapshot["visible"] > 0
         ):
             raise RecoveryError("inventory_bound_too_small")
+        if hidden_snapshot["visible"] != 0 or hidden_snapshot["inflight"] != len(queue_rows):
+            raise RecoveryError("inventory_snapshot_did_not_reconcile")
         classification = _classify(raw_message_ids)
         for row in queue_rows.values():
             for event in row["events"]:
@@ -237,6 +242,7 @@ def inventory(client: Any, queue_url: str, *, max_messages: int, visibility: int
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "queue_url_sha256": _sha(queue_url),
             "before": before,
+            "hidden_snapshot": hidden_snapshot,
             "inventory": {
                 "queue_messages": len(queue_rows),
                 "unique_event_ids": len({event["event_id_sha256"] for event in event_rows if event["event_id_sha256"]}),
@@ -250,6 +256,7 @@ def inventory(client: Any, queue_url: str, *, max_messages: int, visibility: int
         manifest["manifest_sha256"] = _sha(_canonical(manifest))
         return manifest
     finally:
+        restore_failed = False
         for start in range(0, len(handles), 10):
             entries = [
                 {"Id": str(index), "ReceiptHandle": handle, "VisibilityTimeout": 0}
@@ -259,10 +266,44 @@ def inventory(client: Any, queue_url: str, *, max_messages: int, visibility: int
                 QueueUrl=queue_url, Entries=entries
             )
             if result.get("Failed"):
-                print("ERROR visibility_restore_failed", file=sys.stderr)
+                restore_failed = True
+        if restore_failed:
+            raise RecoveryError("visibility_restore_failed")
 
 
-def replay(client: Any, queue_url: str, *, batch_size: int) -> dict[str, Any]:
+def load_reviewed_inventory(path: Path, expected_sha256: str) -> dict[str, str]:
+    raw = path.read_bytes()
+    if _sha(raw) != expected_sha256.lower().strip():
+        raise RecoveryError("inventory_file_sha256_mismatch")
+    try:
+        value = json.loads(raw)
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        raise RecoveryError("inventory_file_invalid") from exc
+    if not isinstance(value, Mapping) or value.get("schema") != SCHEMA:
+        raise RecoveryError("inventory_file_invalid")
+    messages = value.get("messages")
+    if not isinstance(messages, list) or not messages:
+        raise RecoveryError("inventory_file_invalid")
+    approved: dict[str, str] = {}
+    for row in messages:
+        if not isinstance(row, Mapping):
+            raise RecoveryError("inventory_file_invalid")
+        queue_hash = str(row.get("queue_message_sha256") or "")
+        body_hash = str(row.get("body_sha256") or "")
+        if len(queue_hash) != 64 or len(body_hash) != 64 or queue_hash in approved:
+            raise RecoveryError("inventory_file_invalid")
+        approved[queue_hash] = body_hash
+    return approved
+
+
+def replay(
+    client: Any,
+    queue_url: str,
+    *,
+    batch_size: int,
+    approved: Mapping[str, str],
+    inventory_sha256: str,
+) -> dict[str, Any]:
     if batch_size not in range(1, 11):
         raise RecoveryError("initial_replay_batch_must_be_1_to_10")
     response = client.receive_message(
@@ -278,7 +319,10 @@ def replay(client: Any, queue_url: str, *, batch_size: int) -> dict[str, Any]:
         queue_hash = _sha(str(message.get("MessageId") or ""))
         receipt = str(message.get("ReceiptHandle") or "")
         try:
-            schema, records = _records(str(message.get("Body") or ""))
+            body = str(message.get("Body") or "")
+            if approved.get(queue_hash) != _sha(body):
+                raise RecoveryError("queue_message_not_in_reviewed_inventory")
+            schema, records = _records(body)
             outcome = consumer.process_event({"messages": records}, env=os.environ)
             client.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt)
             status = "deleted_after_verified_consumer_success"
@@ -313,6 +357,7 @@ def replay(client: Any, queue_url: str, *, batch_size: int) -> dict[str, Any]:
         "schema": "kenigevents.postbox_dlq_replay.v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "queue_url_sha256": _sha(queue_url),
+        "inventory_file_sha256": inventory_sha256,
         "totals": dict(results),
         "messages": rows,
         "after": _attributes(client, queue_url),
@@ -326,6 +371,8 @@ def main() -> int:
     parser.add_argument("--max-messages", type=int, default=500)
     parser.add_argument("--visibility-seconds", type=int, default=300)
     parser.add_argument("--batch-size", type=int, default=10)
+    parser.add_argument("--inventory", type=Path)
+    parser.add_argument("--inventory-sha256")
     args = parser.parse_args()
     if args.max_messages not in range(1, 5001):
         raise RecoveryError("max_messages_out_of_range")
@@ -342,7 +389,16 @@ def main() -> int:
     else:
         if os.environ.get("POSTBOX_DLQ_REPLAY_CONFIRM") != "INC-2026-08-04":
             raise RecoveryError("replay_confirmation_missing")
-        result = replay(client, queue_url, batch_size=args.batch_size)
+        if args.inventory is None or not args.inventory_sha256:
+            raise RecoveryError("reviewed_inventory_required")
+        approved = load_reviewed_inventory(args.inventory, args.inventory_sha256)
+        result = replay(
+            client,
+            queue_url,
+            batch_size=args.batch_size,
+            approved=approved,
+            inventory_sha256=args.inventory_sha256.lower().strip(),
+        )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(_canonical(result) + b"\n")
     os.chmod(args.output, 0o600)

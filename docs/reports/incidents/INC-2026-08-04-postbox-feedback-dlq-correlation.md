@@ -73,8 +73,9 @@ production rollout:
   pre-migration/legacy receipts remain authenticated one-time-bindable;
 - receipt/event sizes, event-count range, trigger-install ordering and immutable
   outbox identity now align fail-closed;
-- the old suppression-free v1 Auth admission is revoked by a separate cutover
-  migration only after the new Function version passes its deployment smoke.
+- the old suppression-free v1 Auth admission is revoked atomically by the main
+  migration under the verified production precondition that the Supabase Send
+  Email Hook remains disabled; no normal migration ordering can leave a bypass.
 
 HMAC rotation remains deliberately prohibited while retained feedback,
 correlations or active suppressions use the current key/version. A future
@@ -84,7 +85,7 @@ rotation requires an overlap/keyring migration and is not part of this incident.
 
 - PostgreSQL 17 isolated apply: CI bootstrap plus migrations
   `20260711203940`, `20260712072912`, `20260712083037`, `20260801222242`,
-  `20260804190000` and cutover `20260805071852` applied successfully.
+  `20260804190000` applied successfully, including the v1 privilege revocation.
 - Rollback-only SQL contract: `BEGIN / DO / ROLLBACK`, green after both new
   migrations. It covers Auth/outbox/legacy correlation, cross-source collision,
   exact/conflicting duplicates, 512-character receipt, 300-character event key,
@@ -122,7 +123,7 @@ runbook; absence of a value is a blocker, never an implied success.
 
 ## Rollback ownership
 
-- SQL cutover rollback: re-grant only
+- SQL admission rollback: re-grant only
   `focus_auth_begin_delivery_v1(uuid,uuid,text,boolean)` to `service_role`, reload
   PostgREST, and pair it with a previous Function-version rollback.
 - Registry migration rollback: stop feedback replay/intake and restore the

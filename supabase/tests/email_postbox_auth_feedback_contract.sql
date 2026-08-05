@@ -31,6 +31,18 @@ begin
   insert into auth.users (id, email, email_confirmed_at)
   values (v_user, 'postbox-auth-contract@example.test', now());
 
+  begin
+    insert into personalization.focus_auth_delivery_attempt (
+      attempt_id, user_id, action_type, send_ordinal,
+      recipient_hmac, recipient_hmac_key_version, network_claimed_at
+    ) values (
+      extensions.gen_random_uuid(), v_user, 'signup', 999,
+      v_hmac, null, now()
+    );
+    raise exception 'partial Auth recipient proof passed its CHECK constraint';
+  exception when check_violation then null;
+  end;
+
   v_begin := public.focus_auth_begin_delivery_batch_v1(
     v_user,
     'signup',

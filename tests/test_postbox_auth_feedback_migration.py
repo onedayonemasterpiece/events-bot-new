@@ -5,7 +5,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "supabase" / "migrations" / "20260804190000_postbox_auth_feedback_correlation_v1.sql"
-CUTOVER = ROOT / "supabase" / "migrations" / "20260805071852_enforce_focus_auth_suppression_admission.sql"
 CONTRACT = ROOT / "supabase" / "tests" / "email_postbox_auth_feedback_contract.sql"
 
 
@@ -84,8 +83,8 @@ def test_direct_auth_admission_is_exact_versioned_hmac_and_service_only() -> Non
     assert "normalized_email" not in sql
 
 
-def test_cutover_removes_the_suppression_free_legacy_admission_rpc() -> None:
-    sql = CUTOVER.read_text(encoding="utf-8")
+def test_migration_removes_the_suppression_free_legacy_admission_rpc() -> None:
+    sql = _sql()
     assert "revoke execute on function public.focus_auth_begin_delivery_v1" in sql
     assert "from service_role" in sql
     assert "from public, anon, authenticated" in sql

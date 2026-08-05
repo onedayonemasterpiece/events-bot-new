@@ -78,7 +78,9 @@ alter table personalization.focus_auth_delivery_attempt
       and network_claimed_at is null
     )
     or (
-      length(recipient_hmac) between 43 and 128
+      recipient_hmac is not null
+      and length(recipient_hmac) between 43 and 128
+      and recipient_hmac_key_version is not null
       and recipient_hmac_key_version > 0
       and network_claimed_at is not null
     )
@@ -865,6 +867,12 @@ begin
     raise exception 'Postbox recipient correlation mismatch' using errcode = '23514';
   end if;
 
+  -- Keep the same HMAC-before-source-row lock order as direct Auth admission.
+  -- This also serializes suppressive feedback against the final network claim.
+  perform pg_advisory_xact_lock(
+    hashtextextended(v_correlation.email_hmac, 20260804)
+  );
+
   insert into email_control.provider_event (
     provider, provider_event_key, provider_message_id, event_type, event_at,
     email_hmac, payload_sha256, authenticated, verified
@@ -979,9 +987,6 @@ begin
   end if;
 
   if p_event_type in ('hard_bounce', 'complaint', 'unsubscribe') then
-    perform pg_advisory_xact_lock(
-      hashtextextended(v_correlation.email_hmac, 20260804)
-    );
     v_scope := case when p_event_type = 'unsubscribe' then 'transactional' else 'all' end;
     v_reason := case
       when p_event_type = 'hard_bounce' then 'hard_bounce'
@@ -1319,6 +1324,14 @@ grant execute on function public.email_postbox_health_v1()
   to service_role;
 grant execute on function public.email_classify_postbox_receipts_v1(text[])
   to service_role;
+
+-- The production Send Email Hook is verified disabled before this migration.
+-- Revoke the old suppression-free admission in the same atomic transaction so
+-- no ordinary migration path can leave a bypass callable.
+revoke execute on function public.focus_auth_begin_delivery_v1(uuid, uuid, text, boolean)
+  from service_role;
+revoke execute on function public.focus_auth_begin_delivery_v1(uuid, uuid, text, boolean)
+  from public, anon, authenticated;
 
 notify pgrst, 'reload schema';
 
