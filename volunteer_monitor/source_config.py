@@ -15,7 +15,10 @@ class DobroSourceConfig:
     """
 
     search_url: str = "https://dobro.ru/search?d_c=1&d_s=1&t=e"
-    region_name: str = "Калининградская область"
+    # Dobro.ru's current city chooser renders the region-level option in this
+    # abbreviated form. Downstream source validation still accepts and
+    # canonicalizes the full `Калининградская область` value from detail pages.
+    region_name: str = "Калининградская обл"
     max_more_clicks: int = 40
     max_items: int = 120
     playwright_timeout_ms: int = 30_000
