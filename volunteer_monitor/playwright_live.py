@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from . import playwright_discovery as _base
 from .dobro_adapter import VacancyTarget, extract_event_urls, extract_vacancy_targets
@@ -18,6 +19,101 @@ class LiveDiscoveryResult:
     available_filter_proven: bool
     explicit_zero_supply: bool
     load_more_clicks: int
+
+
+async def _first_visible(locator: Any, *, limit: int = 20) -> Any | None:
+    try:
+        count = min(await locator.count(), limit)
+    except Exception:
+        return None
+    for index in range(count):
+        candidate = locator.nth(index)
+        try:
+            if await candidate.is_visible():
+                return candidate
+        except Exception:
+            continue
+    return None
+
+
+def _current_location_title(page: Any) -> str:
+    try:
+        values = parse_qs(urlsplit(page.url).query).get("location[title]", [])
+        return unquote(str(values[0])).strip() if values else ""
+    except Exception:
+        return ""
+
+
+async def _visible_location_search_input(page: Any) -> Any | None:
+    placeholders = (
+        "Введите название",
+        "Поиск населённого пункта",
+        "Поиск региона",
+        "Город или регион",
+        "В каком месте?",
+    )
+    for placeholder in placeholders:
+        candidate = await _first_visible(
+            page.get_by_placeholder(placeholder, exact=True), limit=10
+        )
+        if candidate is not None:
+            return candidate
+    return None
+
+
+async def _open_current_location_filter(page: Any) -> bool:
+    """Open either observed Dobro.ru location-entry state.
+
+    A cold search page has two valid source states:
+
+    1. a geolocation confirmation popover with `Изменить`;
+    2. an already resolved location, encoded in the URL and rendered as a
+       `button[data-slot=popover-anchor]` such as `Москва`.
+
+    The monitor accepts only those source-backed controls and waits boundedly
+    for the actual location search input after the click.
+    """
+
+    for _ in range(80):
+        if await _visible_location_search_input(page) is not None:
+            return True
+
+        current_title = _current_location_title(page)
+        locators = [
+            page.get_by_role("button", name="Изменить", exact=True),
+            page.get_by_text("Изменить", exact=True),
+        ]
+        if current_title:
+            locators.extend(
+                [
+                    page.get_by_role("button", name=current_title, exact=True),
+                    page.get_by_text(current_title, exact=True),
+                ]
+            )
+        locators.append(page.locator("button[data-slot='popover-anchor']"))
+
+        clicked = False
+        for locator in locators:
+            candidate = await _first_visible(locator, limit=20)
+            if candidate is None:
+                continue
+            try:
+                if current_title and locator == locators[-1]:
+                    text = " ".join((await candidate.inner_text()).split())
+                    if text.casefold() != current_title.casefold():
+                        continue
+                await candidate.click()
+                clicked = True
+                break
+            except Exception:
+                continue
+        if clicked:
+            for _ in range(20):
+                if await _visible_location_search_input(page) is not None:
+                    return True
+                await page.wait_for_timeout(150)
+        await page.wait_for_timeout(250)
+    return False
 
 
 async def _scan_visible_exact_region_candidate(page: Any, region_name: str) -> Any | None:
@@ -49,12 +145,62 @@ async def _scan_visible_exact_region_candidate(page: Any, region_name: str) -> A
 async def _visible_exact_region_candidate(page: Any, region_name: str) -> Any | None:
     """Wait for Dobro.ru's visible exact region option in a duplicated DOM."""
 
-    for _ in range(20):
+    for _ in range(24):
         candidate = await _scan_visible_exact_region_candidate(page, region_name)
         if candidate is not None:
             return candidate
         await page.wait_for_timeout(250)
     return None
+
+
+async def _select_region_live(page: Any, region_name: str) -> bool:
+    """Select the configured region across both observed cold-start flows."""
+
+    target = " ".join(region_name.split()).casefold()
+    if _current_location_title(page).casefold() == target:
+        return True
+
+    await _base._dismiss_cookie_banner(page)
+    if not await _open_current_location_filter(page):
+        raise _base.DiscoveryError("cannot open Dobro.ru location filter")
+
+    candidate = await _visible_exact_region_candidate(page, region_name)
+    if candidate is None:
+        field = await _visible_location_search_input(page)
+        if field is None:
+            raise _base.DiscoveryError("cannot find Dobro.ru location search input")
+        try:
+            await field.fill(region_name)
+        except Exception as exc:
+            raise _base.DiscoveryError("cannot fill Dobro.ru location search input") from exc
+        candidate = await _visible_exact_region_candidate(page, region_name)
+    if candidate is None:
+        raise _base.DiscoveryError(f"cannot select Dobro.ru region: {region_name}")
+    try:
+        await candidate.click()
+    except Exception as exc:
+        raise _base.DiscoveryError(f"cannot click Dobro.ru region: {region_name}") from exc
+
+    for label in ("Выбрать", "Сохранить", "Применить", "Найти", "Показать"):
+        confirm = await _first_visible(
+            page.get_by_role("button", name=label, exact=True), limit=10
+        )
+        if confirm is None:
+            continue
+        try:
+            await confirm.click()
+            break
+        except Exception:
+            continue
+
+    for _ in range(48):
+        if _current_location_title(page).casefold() == target:
+            return True
+        selected = await _base._selected_text(page)
+        if target in selected:
+            return True
+        await page.wait_for_timeout(250)
+    raise _base.DiscoveryError("region selection was not reflected in source state")
 
 
 async def _vacancy_surface_ready(page: Any) -> bool:
@@ -79,14 +225,7 @@ async def _activate_current_vacancy_surface(page: Any) -> bool:
 
     tab = page.get_by_role("tab", name="Вакансии", exact=True)
     try:
-        if not await tab.count():
-            raise _base.DiscoveryError("cannot find Dobro.ru vacancies tab")
-        visible = None
-        for index in range(min(await tab.count(), 10)):
-            candidate = tab.nth(index)
-            if await candidate.is_visible():
-                visible = candidate
-                break
+        visible = await _first_visible(tab, limit=10)
         if visible is None:
             raise _base.DiscoveryError("Dobro.ru vacancies tab is not visible")
         if (
@@ -141,9 +280,11 @@ async def discover_event_urls(config: DobroSourceConfig) -> LiveDiscoveryResult:
         latest_vacancies = extract_vacancy_targets(html, base_url=base_url)
         return extract_event_urls(html, base_url=base_url)
 
+    original_select = _base._select_region
     original_region = _base._region_candidate
     original_available = _base._enable_available_vacancies
     original_extract = _base.extract_event_urls
+    _base._select_region = _select_region_live
     _base._region_candidate = _visible_exact_region_candidate
     _base._enable_available_vacancies = _activate_current_vacancy_surface
     _base.extract_event_urls = capture_urls
@@ -160,6 +301,7 @@ async def discover_event_urls(config: DobroSourceConfig) -> LiveDiscoveryResult:
         _write_enriched_receipt(config, result)
         return result
     finally:
+        _base._select_region = original_select
         _base._region_candidate = original_region
         _base._enable_available_vacancies = original_available
         _base.extract_event_urls = original_extract
