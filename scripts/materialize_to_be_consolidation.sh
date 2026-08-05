@@ -102,6 +102,22 @@ if 'documentation_governance:' not in Path('docs/routes.yml').read_text(encoding
 PY
 ruby -e "require 'yaml'; YAML.load_file('docs/routes.yml')"
 
+python3 - <<'PY'
+from pathlib import Path
+paths = [
+    'docs/features/static-site-pages/focus-group-release/README.md',
+    'docs/features/static-site-pages/focus-group-release/nps-ui.md',
+    'docs/features/static-site-pages/focus-group-release/prize-rules.md',
+    'docs/features/static-site-pages/focus-group-release/status.md',
+    'docs/features/static-site-pages/focus-group.md',
+    'docs/testing/static-site-auth-session-fixture.md',
+]
+for name in paths:
+    path = Path(name)
+    lines = path.read_text(encoding='utf-8').splitlines()
+    path.write_text('\n'.join(line.rstrip() for line in lines) + '\n', encoding='utf-8')
+PY
+
 git diff --check
 rm -f .github/to-be-consolidation-payload-*.b64
 rm -f .github/workflows/to-be-consolidation-materialize-temp.yml
