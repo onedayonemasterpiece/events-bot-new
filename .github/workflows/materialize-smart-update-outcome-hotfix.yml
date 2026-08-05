@@ -57,12 +57,193 @@ jobs:
       - name: Apply exact source patch
         run: python scripts/dev/materialize_smart_update_outcome_hotfix.py
 
+      - name: Refine typed caller boundary
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{label}: expected one anchor, found {count}")
+              return text.replace(old, new, 1)
+
+          smart_path = Path("smart_event_update.py")
+          smart = smart_path.read_text(encoding="utf-8")
+          smart = replace_once(
+              smart,
+              '''    # Evidence-only identity selected before a fail-closed result. Callers must
+              # never use this field to authorize domain or publication side effects.
+              matched_event_id: int | None = None
+
+
+          ''',
+              "",
+              "remove matched_event_id compatibility field",
+          )
+          start = smart.index("def _caller_safe_smart_update_result(")
+          end = smart.index("\n\nclass SourceBindingConflict", start)
+          smart = smart[:start] + smart[end + 2 :]
+          smart = replace_once(
+              smart,
+              "    return _caller_safe_smart_update_result(result)\n",
+              "    return result\n",
+              "preserve diagnostic event_id",
+          )
+          smart_path.write_text(smart, encoding="utf-8")
+
+          handlers_path = Path("source_parsing/handlers.py")
+          handlers = handlers_path.read_text(encoding="utf-8")
+          handlers = replace_once(
+              handlers,
+              "            from smart_event_update import EventCandidate, PosterCandidate, smart_event_update\n",
+              '''            from smart_event_update import (
+                  EventCandidate,
+                  PosterCandidate,
+                  smart_event_update,
+                  smart_update_result_allows_caller_side_effects,
+              )
+          ''',
+              "parser smart update import",
+          )
+          handlers = replace_once(
+              handlers,
+              '''            update_result = await _smart_event_update_with_lock_retry(
+                  db,
+                  candidate,
+                  smart_event_update,
+              )
+              event_id = update_result.event_id
+          ''',
+              '''            update_result = await _smart_event_update_with_lock_retry(
+                  db,
+                  candidate,
+                  smart_event_update,
+              )
+              if not smart_update_result_allows_caller_side_effects(update_result):
+                  status = str(getattr(update_result, "status", "") or "not_accepted")
+                  logger.warning(
+                      "source_parsing: smart_update not accepted title=%s status=%s reason=%s matched_event_id=%s",
+                      theatre_event.title[:80],
+                      status,
+                      getattr(update_result, "reason", None),
+                      getattr(update_result, "event_id", None),
+                  )
+                  return None, False, status
+              event_id = update_result.event_id
+          ''',
+              "parser caller outcome gate",
+          )
+          handlers_path.write_text(handlers, encoding="utf-8")
+
+          vk_path = Path("vk_intake.py")
+          vk = vk_path.read_text(encoding="utf-8")
+          vk = replace_once(
+              vk,
+              "    from smart_event_update import EventCandidate, PosterCandidate, smart_event_update\n",
+              '''    from smart_event_update import (
+              EventCandidate,
+              PosterCandidate,
+              smart_event_update,
+              smart_update_result_allows_caller_side_effects,
+          )
+          ''',
+              "VK smart update import",
+          )
+          vk = replace_once(
+              vk,
+              '''    update_result = await smart_event_update(
+              db,
+              candidate,
+              check_source_url=False,
+          )
+              if str(getattr(update_result, "status", "") or "").startswith("rejected_"):
+          ''',
+              '''    update_result = await smart_event_update(
+              db,
+              candidate,
+              check_source_url=False,
+          )
+              if not smart_update_result_allows_caller_side_effects(update_result):
+                  raise RuntimeError(
+                      "smart_update not accepted: "
+                      f"status={getattr(update_result, 'status', None)} "
+                      f"reason={getattr(update_result, 'reason', None)} "
+                      f"matched_event_id={getattr(update_result, 'event_id', None)}"
+                  )
+              if str(getattr(update_result, "status", "") or "").startswith("rejected_"):
+          ''',
+              "VK caller outcome gate",
+          )
+          vk_path.write_text(vk, encoding="utf-8")
+
+          test_path = Path("tests/test_smart_update_outcome_boundary_hotfix.py")
+          tests = test_path.read_text(encoding="utf-8")
+          tests = replace_once(
+              tests,
+              '''    assert result.status == "review_required"
+              assert result.event_id is None
+              assert result.matched_event_id == 7024
+              assert result.created is False
+          ''',
+              '''    assert result.status == "review_required"
+              assert result.event_id == 7024
+              assert result.created is False
+          ''',
+              "nonaccepted result evidence assertion",
+          )
+          tests = replace_once(
+              tests,
+              '''        time="19:00",
+              ticket_price_min=None,
+          ''',
+              '''        time="19:00",
+              end_date=None,
+              ticket_price_min=None,
+          ''',
+              "parser draft end date fixture",
+          )
+          tests = replace_once(
+              tests,
+              '    with pytest.raises(RuntimeError, match="returned no event_id"):\n',
+              '    with pytest.raises(RuntimeError, match="smart_update not accepted"):\n',
+              "VK rejection message",
+          )
+          test_path.write_text(tests, encoding="utf-8")
+
+          doc_path = Path(
+              "docs/reports/incidents/INC-2026-08-04-smart-update-caller-boundary-followup.md"
+          )
+          doc = doc_path.read_text(encoding="utf-8")
+          doc = replace_once(
+              doc,
+              '''A `not_accepted` result moves the candidate match from `event_id` to the
+          non-authorizing `matched_event_id`. Existing callers therefore stop before
+          their success path. The append-only identity decision log remains the durable
+          source of evidence. Unknown future statuses fail closed until explicitly added
+          to the contract.
+          ''',
+              '''A `not_accepted` result may retain `event_id` as diagnostic evidence, but
+          callers must classify the outcome before using that ID. The official parser and
+          VK persist paths now return/raise before ticket mutation, linked-event recompute,
+          Telegraph rebuild, publication scheduling or successful import state. Unknown
+          future statuses fail closed until explicitly added to the contract.
+          ''',
+              "incident outcome wording",
+          )
+          doc_path.write_text(doc, encoding="utf-8")
+          PY
+
       - name: Install focused test dependencies
         run: python -m pip install -r requirements.txt
 
       - name: Validate focused contracts
         run: |
-          python -m py_compile smart_event_update.py smart_update_identity.py
+          python -m py_compile \
+            smart_event_update.py \
+            smart_update_identity.py \
+            source_parsing/handlers.py \
+            vk_intake.py
           pytest -q \
             tests/test_smart_update_outcome_boundary_hotfix.py \
             tests/test_smart_update_source_identity_contract.py \
