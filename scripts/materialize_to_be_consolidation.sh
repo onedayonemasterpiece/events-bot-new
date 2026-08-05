@@ -36,7 +36,6 @@ P13N_EXT=ad466f9643a25fe9b11c9d135278189f3ba5db61
 copy_from "$P13N_EXT" docs/features/static-site-pages/personalizaion/focus-group-interest-questionnaire-prompt.md
 copy_from "$P13N_EXT" docs/features/static-site-pages/personalizaion/identity-linking-personalization.md
 copy_from "$P13N_EXT" docs/features/static-site-pages/personalizaion/longitudinal-e2e-personalization.md
-copy_from "$P13N_EXT" docs/features/static-site-pages/personalizaion/personal-selection-quality-feedback.md
 copy_from "$P13N_EXT" docs/features/static-site-pages/personalizaion/personalization-test-report-template.md
 copy_from "$P13N_EXT" docs/features/static-site-pages/personalizaion/temporal-profile-simulation.md
 
