@@ -1436,7 +1436,12 @@ async def add_new_event_via_queue(
             import hashlib
             from datetime import datetime, timezone
             from models import Event
-            from smart_event_update import EventCandidate, PosterCandidate, smart_event_update
+            from smart_event_update import (
+                EventCandidate,
+                PosterCandidate,
+                smart_event_update,
+                smart_update_result_allows_caller_side_effects,
+            )
             
             main_mod = sys.modules.get("main") or sys.modules.get("__main__")
             if main_mod is None:
@@ -1538,6 +1543,16 @@ async def add_new_event_via_queue(
                 candidate,
                 smart_event_update,
             )
+            if not smart_update_result_allows_caller_side_effects(update_result):
+                status = str(getattr(update_result, "status", "") or "not_accepted")
+                logger.warning(
+                    "source_parsing: smart_update not accepted title=%s status=%s reason=%s matched_event_id=%s",
+                    theatre_event.title[:80],
+                    status,
+                    getattr(update_result, "reason", None),
+                    getattr(update_result, "event_id", None),
+                )
+                return None, False, status
             event_id = update_result.event_id
             was_added = bool(update_result.created)
 

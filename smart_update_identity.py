@@ -584,6 +584,46 @@ def build_merge_identity_gate_verdict(
             conflicts = tuple(dict.fromkeys((*conflicts, deterministic_code)))
             reasons = tuple(dict.fromkeys((*reasons, "structural identity conflict between matched event and candidate")))
 
+    # Semantic identity remains LLM-first. This rail handles only an explicit
+    # impossibility: two different vendor occurrence identities cannot be one
+    # public Event even if a model incorrectly says SAME_EVENT.
+    candidate_ticket_identity = specific_ticket_occurrence_identity(
+        candidate_subject.ticket_link
+    )
+    existing_ticket_identity = specific_ticket_occurrence_identity(
+        existing_subject.ticket_link
+    )
+    if (
+        candidate_ticket_identity is not None
+        and existing_ticket_identity is not None
+        # Cross-vendor ticket IDs may still describe one event; the LLM remains
+        # authoritative there. Only contradictory occurrence identities issued
+        # by the same vendor are a deterministic impossibility rail.
+        and candidate_ticket_identity[0] == existing_ticket_identity[0]
+        and candidate_ticket_identity != existing_ticket_identity
+    ):
+        conflict = (
+            "specific_ticket_occurrence_conflict:"
+            f"{candidate_ticket_identity[0]}:{candidate_ticket_identity[1]}:"
+            f"{candidate_ticket_identity[2]}:{candidate_ticket_identity[3]}"
+            "!="
+            f"{existing_ticket_identity[0]}:{existing_ticket_identity[1]}:"
+            f"{existing_ticket_identity[2]}:{existing_ticket_identity[3]}"
+        )
+        action = MergeIdentityAction.REVIEW_REQUIRED
+        relation = MergeIdentityRelation.UNSAFE_TO_MERGE
+        reason_code = "specific_ticket_occurrence_conflict"
+        deterministic = True
+        conflicts = tuple(dict.fromkeys((*conflicts, conflict)))
+        reasons = tuple(
+            dict.fromkeys(
+                (
+                    *reasons,
+                    "different explicit ticket occurrence identities require review",
+                )
+            )
+        )
+
     return MergeIdentityGateVerdict(
         mode=resolved_mode,
         action=action,
@@ -789,6 +829,53 @@ def _coarse_event_type(value: str | None) -> str | None:
         if any(needle in text for needle in needles):
             return name
     return None
+
+
+_TICKET_OCCURRENCE_ROUTE_RE = re.compile(
+    r"(?i)(?:^|/)buy/event/(?P<event_id>[^/]+)/"
+    r"(?P<date>\d{4}-\d{2}-\d{2})/"
+    r"(?P<time>\d{1,2}[:.]\d{2}(?::\d{2})?)(?:/|$)"
+)
+
+
+def specific_ticket_occurrence_identity(
+    value: str | None,
+) -> tuple[str, str, str, str] | None:
+    """Extract only an explicit vendor occurrence identity.
+
+    Generic ticket landing pages intentionally remain an LLM-first semantic
+    decision and return ``None`` here.
+    """
+
+    canonical = canonicalize_identity_url(value, preserve_ticket_fragment=True)
+    if not canonical:
+        return None
+    try:
+        parts = urlsplit(canonical)
+    except (TypeError, ValueError):
+        return None
+    routes = [
+        str(parts.fragment or "").strip().lstrip("/"),
+        str(parts.path or "").strip().lstrip("/"),
+    ]
+    match = next(
+        (
+            found
+            for route in routes
+            if (found := _TICKET_OCCURRENCE_ROUTE_RE.search(route))
+        ),
+        None,
+    )
+    if match is None:
+        return None
+    raw_time = match.group("time").replace(".", ":")
+    normalized_time = ":".join(raw_time.split(":")[:2])
+    return (
+        str(parts.hostname or "").casefold(),
+        match.group("event_id").casefold(),
+        match.group("date"),
+        normalized_time,
+    )
 
 
 def _coerce_merge_action(value: Any) -> MergeIdentityAction:
