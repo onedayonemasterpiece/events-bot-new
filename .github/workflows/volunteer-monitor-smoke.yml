@@ -55,7 +55,7 @@ jobs:
       - name: Run fixture and free-search policy tests
         run: |
           set -euo pipefail
-          PYTHONPATH=. pytest -q \
+          PYTHONPATH=. pytest -q --noconftest \
             tests/test_dobro_volunteer_monitor.py \
             tests/test_festival_source_search.py
           PYTHONPATH=. python scripts/run_volunteer_monitor.py \
