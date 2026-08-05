@@ -1,23 +1,24 @@
-# Code-agent task: provision the one unavailable Kaggle credential
+# Code-agent task: replace one rejected Kaggle secret value
 
 Repository: `onedayonemasterpiece/events-bot-new`.
 
-The Volunteer Monitor code, direct live canary, selector debugging, run analysis
-and documentation are handled in PR #335. **Do not modify code, workflows,
-branches, PRs or documentation.**
+Do not modify code, workflows, branches, PRs, variables or documentation.
+Do not create another secret name.
 
-Perform only these GitHub settings operations:
+Perform only this operation:
 
-1. Create GitHub Environment `volunteer-monitor-canary` if it does not exist.
-2. Add environment secret `KAGGLE_API_TOKEN` from the Kaggle token securely
-   available in your execution environment.
-3. Set repository variable:
-   `VOLUNTEER_KAGGLE_KERNEL_SLUG=eventsbot/kenigevents-volunteer-monitor`.
-4. Set repository variable:
-   `VOLUNTEER_KAGGLE_CANARY_ENABLED=true`.
-5. Verify only that the secret name and variables exist. Never print, echo,
-   return or commit the secret value; never create or commit `kaggle.json`.
+1. In GitHub Environment `volunteer-monitor-canary`, replace the **value** of
+   existing secret `KAGGLE_API_TOKEN` with the exact raw current Kaggle access
+   token generated in Kaggle account settings.
 
-If the Kaggle token is not securely available, stop and report only:
-`KAGGLE_API_TOKEN is required`. Do not request it in chat and do not substitute
-another credential.
+The value must contain only the token itself: no secret name, quotes, JSON,
+filename, explanation, GitHub token or legacy `kaggle.json` wrapper.
+
+Never print, echo, return or commit the value. Verify only that the secret update
+succeeded. Do not run or edit anything else.
+
+If a current Kaggle access token is not securely available, report only:
+
+```text
+A current raw KAGGLE_API_TOKEN is required
+```
