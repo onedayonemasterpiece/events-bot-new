@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import os
 import re
@@ -908,6 +909,9 @@ class Database:
                     event_id INTEGER NOT NULL,
                     source_type TEXT NOT NULL,
                     source_url TEXT NOT NULL,
+                    canonical_source_url TEXT,
+                    source_role TEXT,
+                    source_fingerprint TEXT,
                     source_chat_username TEXT,
                     source_chat_id INTEGER,
                     source_message_id INTEGER,
@@ -920,6 +924,12 @@ class Database:
                 """
             )
             await _add_column(conn, "event_source", "source_text TEXT")
+            # These columns are intentionally nullable. Classifying all legacy
+            # rows as identity sources would turn historical context/program
+            # links into unsafe merge anchors.
+            await _add_column(conn, "event_source", "canonical_source_url TEXT")
+            await _add_column(conn, "event_source", "source_role TEXT")
+            await _add_column(conn, "event_source", "source_fingerprint TEXT")
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_event_source_event ON event_source(event_id)"
             )
@@ -932,6 +942,77 @@ class Database:
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_event_source_url ON event_source(source_url)"
             )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_source_canonical_role "
+                "ON event_source(canonical_source_url, source_role)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_source_fingerprint "
+                "ON event_source(source_fingerprint)"
+            )
+            # Classified source rows must be complete and role-valid. Legacy
+            # rows may remain NULL until an evidence-backed intake/repair
+            # classifies them; arbitrary role strings or blank canonical
+            # identities may not bypass the partial unique indexes.
+            await conn.execute(
+                "CREATE TRIGGER IF NOT EXISTS trg_event_source_identity_insert "
+                "BEFORE INSERT ON event_source FOR EACH ROW WHEN "
+                "(NEW.source_role IS NOT NULL AND NEW.source_role NOT IN ('identity_bearing','context_only')) "
+                "OR (NEW.source_role IN ('identity_bearing','context_only') "
+                "AND TRIM(COALESCE(NEW.canonical_source_url,''))='') "
+                "BEGIN SELECT RAISE(ABORT,'event_source_identity_contract'); END"
+            )
+            await conn.execute(
+                "CREATE TRIGGER IF NOT EXISTS trg_event_source_identity_update "
+                "BEFORE UPDATE OF event_id,canonical_source_url,source_role ON event_source "
+                "FOR EACH ROW WHEN "
+                "(NEW.source_role IS NOT NULL AND NEW.source_role NOT IN ('identity_bearing','context_only')) "
+                "OR (NEW.source_role IN ('identity_bearing','context_only') "
+                "AND TRIM(COALESCE(NEW.canonical_source_url,''))='') "
+                "BEGIN SELECT RAISE(ABORT,'event_source_identity_contract'); END"
+            )
+            event_conflict_cursor = await conn.execute(
+                "SELECT event_id, canonical_source_url FROM event_source "
+                "WHERE canonical_source_url IS NOT NULL AND canonical_source_url<>'' "
+                "GROUP BY event_id, canonical_source_url HAVING COUNT(*) > 1 LIMIT 1"
+            )
+            event_identity_conflict = await event_conflict_cursor.fetchone()
+            await event_conflict_cursor.close()
+            if event_identity_conflict is None:
+                await conn.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ux_event_source_event_canonical "
+                    "ON event_source(event_id, canonical_source_url) "
+                    "WHERE canonical_source_url IS NOT NULL AND canonical_source_url<>''"
+                )
+            else:
+                logging.warning(
+                    "event_source per-event canonical uniqueness not activated: event_id=%s source_alias=%s",
+                    event_identity_conflict[0],
+                    hashlib.sha256(str(event_identity_conflict[1]).encode("utf-8")).hexdigest()[:12],
+                )
+            # Activate global identity uniqueness only when current data proves
+            # it is safe. Never guess roles or rewrite conflicting legacy rows at
+            # startup: an explicit repair/audit must resolve those first.
+            conflict_cursor = await conn.execute(
+                "SELECT canonical_source_url FROM event_source "
+                "WHERE source_role='identity_bearing' AND canonical_source_url IS NOT NULL "
+                "AND canonical_source_url<>'' "
+                "GROUP BY canonical_source_url HAVING COUNT(*) > 1 LIMIT 1"
+            )
+            identity_conflict = await conflict_cursor.fetchone()
+            await conflict_cursor.close()
+            if identity_conflict is None:
+                await conn.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ux_event_source_identity_canonical "
+                    "ON event_source(canonical_source_url) "
+                    "WHERE source_role='identity_bearing' "
+                    "AND canonical_source_url IS NOT NULL AND canonical_source_url<>''"
+                )
+            else:
+                logging.warning(
+                    "event_source identity uniqueness not activated: source_alias=%s",
+                    hashlib.sha256(str(identity_conflict[0]).encode("utf-8")).hexdigest()[:12],
+                )
 
             dbg("event_identity")
             await conn.execute(

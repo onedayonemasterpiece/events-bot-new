@@ -4183,7 +4183,7 @@ async def persist_event_and_pages(
     )
 
     nav_update_needed = False
-    if saved.festival:
+    if update_result.status != "noop_exact_source_replay" and saved.festival:
         parts = [p.strip() for p in (saved.date or "").split("..") if p.strip()]
         start_str = parts[0] if parts else None
         end_str = parts[-1] if len(parts) > 1 else None
