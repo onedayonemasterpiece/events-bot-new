@@ -76,6 +76,7 @@ jobs:
 
   direct-live-canary:
     if: >-
+      github.event_name == 'pull_request' ||
       github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && inputs.executor == 'direct')
     needs: fixture
