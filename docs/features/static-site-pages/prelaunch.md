@@ -18,7 +18,16 @@
 
 ## Визуальная концепция
 
-Канонический implementation/review contract находится в [`prelaunch-handoff/README.md`](prelaunch-handoff/README.md). Основной референс хранится в [`prelaunch-handoff/reference/target-desktop.webp`](prelaunch-handoff/reference/target-desktop.webp).
+Канонический implementation/review contract находится в [`prelaunch-handoff/README.md`](prelaunch-handoff/README.md). Текущее состояние и точка продолжения зафиксированы в [`prelaunch-handoff/CONTINUATION-20260805.md`](prelaunch-handoff/CONTINUATION-20260805.md).
+
+Референсы:
+
+- исходная desktop-композиция: [`prelaunch-handoff/reference/target-desktop.webp`](prelaunch-handoff/reference/target-desktop.webp);
+- PWA-образ: [`prelaunch-handoff/reference/PWA-icon.webp`](prelaunch-handoff/reference/PWA-icon.webp);
+- принятая модель света, бликов, пудры и CTA: [`prelaunch-handoff/reference/generated-lighting-desktop-v1.webp`](prelaunch-handoff/reference/generated-lighting-desktop-v1.webp);
+- принятый мобильный масштаб и компоновка: [`prelaunch-handoff/reference/generated-lighting-mobile-v1.webp`](prelaunch-handoff/reference/generated-lighting-mobile-v1.webp).
+
+Generated-reference файлы служат только для visual review и не загружаются пользователю в runtime.
 
 Заглушка использует утверждённый PWA-образ через production asset:
 
@@ -29,34 +38,57 @@
 ### Обязательные визуальные инварианты
 
 - изображение не может быть видно в промежутках между плитками;
-- `.prelaunch__tile` имеет прозрачный base и opacity `1`;
-- затемнение, blur, matte texture, border и bevel реализованы на псевдоэлементах плитки;
-- состояния `sealed`, `dim`, `revealed` отличаются не только opacity, но и blur, saturation, brightness, кромкой и глубиной;
-- плитки в верхнеправой зоне отражают направленный тёплый свет, но не превращаются в резкие вырезанные окна;
+- изображение и glass effects не могут проявляться за скруглёнными углами плитки;
+- square tile-container закрывает угловые вырезы непрозрачным seam-color, а rounded glass surface живёт внутри него;
+- `.prelaunch__tile` всегда имеет opacity `1`;
+- затемнение, blur, matte texture, border и bevel реализованы на внутренней glass surface;
+- состояния `sealed`, `dim`, `revealed` отличаются по transmission, blur, saturation, brightness, кромке и глубине;
+- над всей мозаикой существует один пространственный источник света справа сверху;
+- отдельная плитка не рисует собственный radial spotlight;
+- расстояние до общего источника влияет только на transmission и подсветку верхней/правой кромки;
+- часть плиток на траектории света имеет более заметную подсветку границ, но остаётся частью одного светового поля;
+- золотистая пудра — один статический scene-overlay, а не множество анимированных DOM-частиц;
 - изменяется маленькая случайная группа, а не вся мозаика;
 - при `prefers-reduced-motion: reduce` сцена полностью статична.
 
-Использование opacity всей плитки запрещено: оно одновременно ослабляет кромку и открывает фон в шве, разрушая стеклянную конструкцию.
+Использование opacity всей плитки запрещено: оно ослабляет кромку и открывает фон в шве. Анимация `backdrop-filter` на 72 плитках также запрещена из-за ненужной нагрузки на compositor.
+
+### Адаптивность
+
+Desktop и mobile используют одну визуальную систему стекла, света, пудры и edge accents. Mobile не является отдельным дизайном:
+
+- grid и карта света вычисляются из фактического числа колонок;
+- desktop использует 9 колонок, mobile — 6 более мелких квадратных колонок;
+- на mobile PWA-подложка уменьшается примерно до 88% ширины viewport и сохраняет цельный wordmark;
+- mobile меняет только геометрию и типографический ритм, а не материал и освещение;
+- страница остаётся single-screen без вертикального и горизонтального scroll на принятой матрице viewport.
 
 ## Визуальное доказательство
 
-Browser gate сохраняет PNG, DOM и computed-style JSON для:
+Browser evidence должен сохранять PNG, DOM и computed-style JSON как минимум для:
 
 - `1200×1200` — reference-square;
 - `1440×900` — desktop;
-- `390×844` — mobile.
+- `390×844` — mobile;
+- `320×568` — compact mobile;
+- idle и registered состояния формы на mobile.
 
-В reference-square проверяются положение первых швов, H1 и PWA-проекции. Дополнительно gate доказывает:
+Gates должны доказывать:
 
 - ровно 72 плитки;
-- детерминированное исходное распределение состояний;
-- три разных backdrop-filter treatment;
-- непрозрачную repeating-gradient маску швов;
-- отсутствие whole-tile opacity animation;
+- 8 цельных reveal-windows, адаптивно рассчитанных по grid;
+- 3 усиленных edge accents вдоль верхнеправого светового луча;
+- 4 spatial edge bands: `ambient`, `soft`, `warm`, `hot`;
+- 72 корректные rounded-corner masks;
+- единый root-level radial emitter;
+- отсутствие radial-gradient и viewport-fixed gradients внутри отдельных плиток;
+- наличие golden-powder overlay;
+- отсутствие whole-tile opacity и blur animation;
 - sparse motion `2–5` плиток;
-- отсутствие horizontal overflow.
+- отсутствие horizontal/vertical overflow;
+- корректные idle и registered состояния формы.
 
-Workflow `.github/workflows/prelaunch-visual-review.yml` публикует screenshots, DOM, scene JSON и reference WebP одним artifact для ручного сравнения.
+Control workflow: `.github/workflows/prelaunch-v12-control.yml` в ветке `automation/prelaunch-control-20260804`.
 
 ## Уведомление о запуске
 
@@ -84,6 +116,19 @@ Workflow `.github/workflows/prelaunch-visual-review.yml` публикует scre
 
 Миграция должна быть применена к personalization Supabase до публикации заглушки. Наличие файла в репозитории само по себе не означает, что таблица уже создана в рабочем проекте.
 
+### UX-состояния формы
+
+Обязательны:
+
+1. `idle` — email, CTA, согласие и обещание одного письма;
+2. `submitting` — CTA показывает «Сохраняем…», повторное действие блокируется;
+3. `error` — понятное сообщение, введённый email не теряется;
+4. `success` — input и consent заменяются подтверждением «Готово, вы записаны»;
+5. `registered` — при повторном открытии на том же устройстве показывается «Вы уже записаны»;
+6. `reset` — действие «Другой e-mail» возвращает форму, а backend-idempotency продолжает защищать от дублей.
+
+В idle/success/registered copy должно быть зафиксировано, что для подписавшихся приготовлен отдельный приятный сюрприз. Обещание не раскрывает механику сюрприза и не меняет правовое назначение consent: пользователь по-прежнему соглашается на одно письмо о запуске.
+
 ## Запуск 1 сентября
 
 Публичный запуск — отдельный release transition:
@@ -104,6 +149,12 @@ npm --prefix site run test:static-release
 PUBLIC_PRELAUNCH_MODE=on npm --prefix site run build
 python3 -m http.server 4173 --directory site/dist
 npm --prefix site run check:prelaunch-browser -- \
+  --url http://127.0.0.1:4173/ \
+  --artifact-dir ../artifacts/prelaunch-browser
+npm --prefix site run check:prelaunch-light-model -- \
+  --url http://127.0.0.1:4173/ \
+  --artifact-dir ../artifacts/prelaunch-browser
+npm --prefix site run check:prelaunch-experience -- \
   --url http://127.0.0.1:4173/ \
   --artifact-dir ../artifacts/prelaunch-browser
 npm --prefix site run build:production
