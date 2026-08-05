@@ -18,7 +18,8 @@ This is a feedback/correlation failure, not proof that 162 outbound messages fai
 
 ## Corrected data contract
 
-Migration `20260804190000_postbox_auth_feedback_correlation_v1.sql` introduces one PII-free receipt registry:
+Migration `20260804190000_postbox_auth_feedback_correlation_v1.sql` introduces one
+receipt registry containing pseudonymous identifiers but no plaintext recipient:
 
 ```text
 email_control.postbox_message_correlation
@@ -27,7 +28,9 @@ email_control.postbox_message_correlation
 Each Postbox `provider_message_id` belongs to exactly one source:
 
 - `transactional_outbox` — a row in `email_control.email_outbox`; its HMAC is copied from the verified DB-owned identity;
-- `focus_auth` — a row in `personalization.focus_auth_delivery_attempt`; its HMAC is initially unbound and is bound by the first authenticated Postbox YDS event;
+- `focus_auth` — a row in `personalization.focus_auth_delivery_attempt`; new
+  hook admissions persist the exact HMAC/version and create an already-bound
+  correlation, while only pre-migration attempts remain one-time-bindable;
 - `legacy_auth` — a pre-ledger receipt registered only from an independently reviewed sanitized evidence manifest.
 
 The registry stores no plaintext email, OTP, token, browser identifier, IP address, subject or body.
@@ -71,14 +74,25 @@ Postbox Auth attempts gain a delivery projection separate from provider API acce
 
 ## Suppression boundary
 
-The migration records authenticated `hard_bounce`, `complaint` and transactional `unsubscribe` suppressions by exact versioned recipient HMAC. This proves storage of provider suppression evidence, but it does not by itself prove that the direct focus Auth hook rejects a future send before provider network I/O.
+The migration records authenticated `hard_bounce`, `complaint` and transactional
+`unsubscribe` suppressions by exact versioned recipient HMAC. The reviewed hook
+computes that pseudonymous proof inside the secret boundary and submits the
+complete one- or two-recipient batch only after local rendering. The admission
+RPC and suppression insertion take the same per-HMAC advisory locks; transaction
+commit order therefore defines whether suppression or the network claim wins.
+Admission persists the proof and `network_claimed_at` before returning, and the
+next operation is provider I/O.
 
-Incident closure therefore requires one of two explicit outcomes:
+Secure Supabase `email_change` is one atomic two-recipient admission: current
+address uses `token` with the reversed `token_hash_new`, and new address uses
+`token_new` with `token_hash`. Insecure email change admits one new-address
+delivery. Any exact active suppression blocks the complete batch without a
+provider call. Unrelated historical user-ID suppression is never inferred.
 
-- implement and test a PII-free, versioned recipient-HMAC admission boundary for direct Auth, including first-send, repeat-send and legitimate email-change cases; or
-- retain direct Auth suppression enforcement as a named blocker and keep the incident open.
-
-Never substitute user-ID history for email-identity suppression: account deletion, email change and profile switching make that unsafe.
+HMAC key rotation is forbidden while active suppressions, correlations or
+retained feedback use the current version unless a separately reviewed overlap
+migration provides both keys/versions. A mismatched version fails closed; do not
+change `EMAIL_ADDRESS_HMAC_KEY_VERSION` independently in either Function.
 
 ## Health and notifications
 
@@ -142,6 +156,29 @@ Required pre-commit results:
 - browser roles cannot execute v3 or legacy-registration RPCs;
 - global/transactional/recommendation outbound switches remain in their reviewed state.
 
+The rollout is deliberately two-phase:
+
+1. apply `20260804190000_postbox_auth_feedback_correlation_v1.sql`; it installs
+   the batch admission/completion RPCs while temporarily retaining the old v1
+   admission grant for the currently deployed Function;
+2. deploy and smoke the reviewed focus Auth Function that calls
+   `focus_auth_begin_delivery_batch_v1` and
+   `focus_auth_complete_delivery_batch_v1`;
+3. apply `20260805071852_enforce_focus_auth_suppression_admission.sql` to revoke
+   the suppression-free v1 admission RPC from `service_role` and browser roles;
+4. rerun the rollback-only SQL contract and privilege checks.
+
+Do not apply the cutover migration before the Function smoke, and do not leave
+the v1 service-role grant in place after a successful smoke. If the Function
+must be rolled back before cutover, deploy the previous version. If it must be
+rolled back after cutover, first execute the rollback statement documented in
+the cutover migration to re-grant v1, deploy the previous version, and record
+both mutations in the incident.
+
+The modern `sb_secret_*` Supabase key is sent only as `apikey`; it is opaque and
+must not be placed in a Bearer header. Legacy service-role JWTs retain the
+Bearer header for compatibility.
+
 ### 4. Deploy the Fly monitor change
 
 Deploy the exact reviewed SHA. Verify:
@@ -169,6 +206,22 @@ Build a read-only inventory before replay:
 
 The sum of all classifications must equal the immutable DLQ inventory. Approximate queue attributes alone are not sufficient.
 
+Use the bounded operator tool from a private environment containing the existing
+YMQ and Supabase secret variables. It drains only visibility for the snapshot,
+deduplicates by queue/event/message identity, restores every receipt to visible
+in `finally`, and writes hashes/classifications only:
+
+```bash
+python3 scripts/ops/postbox_dlq_recover.py inventory \
+  --max-messages 500 \
+  --output artifacts/codex/INC-2026-08-04/postbox-dlq-inventory.json
+```
+
+Inventory requires `inflight=0` at start and fails rather than claiming exactness
+if its bound is exhausted. Inspect the resulting `envelope_schema` classification
+before replay; the tool supports only a raw Postbox event or the exact
+`{"messages":[...]}` consumer envelope. It never writes the raw envelope.
+
 ### 6. Register legacy receipts
 
 For each independently proven pre-ledger Hosted Auth receipt, call:
@@ -189,6 +242,20 @@ Replay no more than ten messages per batch initially. For every message:
 - validation/conflict/error — leave the message in DLQ, stop the batch and preserve sanitized evidence.
 
 After each batch, verify queue delta, provider-event delta, suppression delta and correlation counts. Increase batch size only after two clean batches.
+
+The destructive mode has an incident-specific confirmation and stops at the
+first retained item. It restores that receipt and all unprocessed receipts:
+
+```bash
+POSTBOX_DLQ_REPLAY_CONFIRM=INC-2026-08-04 \
+python3 scripts/ops/postbox_dlq_recover.py replay \
+  --batch-size 10 \
+  --output artifacts/codex/INC-2026-08-04/replay-batch-001.json
+```
+
+`consumer.process_event` reconstructs the same validated Function input and v2
+compatibility RPC. A queue receipt is deleted only after all records in that
+queue message return `applied` or exact-field-verified `duplicate`.
 
 ## Acceptance gates
 
@@ -217,3 +284,16 @@ The migration is additive but must still be backed by a verified logical backup.
 6. do not drop the correlation table while any accepted receipt or provider event refers to it.
 
 A rollback must never convert an ambiguous provider outcome into a retry through another provider.
+
+The exact SQL cutover rollback is:
+
+```sql
+grant execute on function public.focus_auth_begin_delivery_v1(uuid, uuid, text, boolean)
+  to service_role;
+notify pgrst, 'reload schema';
+```
+
+Use it only to pair an explicit previous-Function rollback. The additive registry
+migration has no safe destructive rollback after receipts/events exist; restore
+from the verified pre-migration logical backup only under a declared maintenance
+decision, with feedback intake stopped and the DLQ preserved.

@@ -1,0 +1,107 @@
+from __future__ import annotations
+
+import json
+
+from scripts.ops import postbox_dlq_recover as recover
+
+
+def record(event_id="event-1", message_id="message-1", event_type="Send"):
+    return {
+        "eventId": event_id,
+        "eventType": event_type,
+        "mail": {"messageId": message_id, "timestamp": "2026-08-04T10:00:00Z"},
+    }
+
+
+class FakeSqs:
+    def __init__(self, bodies):
+        self.messages = [
+            {
+                "MessageId": f"queue-{index}",
+                "ReceiptHandle": f"receipt-{index}",
+                "Body": json.dumps(body),
+                "Attributes": {"SentTimestamp": "1785837600000"},
+            }
+            for index, body in enumerate(bodies)
+        ]
+        self.delivered = False
+        self.deleted = []
+        self.restored = []
+
+    def get_queue_attributes(self, **_kwargs):
+        visible = 0 if self.delivered else len(self.messages)
+        return {"Attributes": {
+            "ApproximateNumberOfMessages": str(visible),
+            "ApproximateNumberOfMessagesNotVisible": "0",
+        }}
+
+    def receive_message(self, **kwargs):
+        if self.delivered:
+            return {}
+        self.delivered = True
+        return {"Messages": self.messages[:kwargs["MaxNumberOfMessages"]]}
+
+    def change_message_visibility_batch(self, **kwargs):
+        self.restored.extend(item["ReceiptHandle"] for item in kwargs["Entries"])
+        return {"Successful": kwargs["Entries"]}
+
+    def change_message_visibility(self, **kwargs):
+        self.restored.append(kwargs["ReceiptHandle"])
+
+    def delete_message(self, **kwargs):
+        self.deleted.append(kwargs["ReceiptHandle"])
+
+
+def test_inventory_is_exact_sanitized_and_restores_visibility(monkeypatch):
+    sqs = FakeSqs([
+        record(),
+        {"messages": [record("event-2", "message-2", "Delivery")]},
+    ])
+    monkeypatch.setattr(recover, "_classify", lambda ids: {
+        recover._sha(value): {
+            "source_classification": "focus_auth",
+            "correlation_status": "bound",
+        }
+        for value in ids
+    })
+    result = recover.inventory(sqs, "https://queue.invalid/private", max_messages=10, visibility=300)
+
+    assert result["inventory"] == {
+        "queue_messages": 2,
+        "unique_event_ids": 2,
+        "unique_message_ids": 2,
+        "event_types": {"Delivery": 1, "Send": 1},
+        "classifications": {"focus_auth:bound": 2},
+        "malformed_or_unsupported": 0,
+    }
+    serialized = json.dumps(result)
+    assert "message-1" not in serialized
+    assert "event-1" not in serialized
+    assert "queue.invalid" not in serialized
+    assert sorted(sqs.restored) == ["receipt-0", "receipt-1"]
+
+
+def test_inventory_retains_malformed_body_as_stable_error(monkeypatch):
+    sqs = FakeSqs([{"unexpected": "recipient@example.test"}])
+    monkeypatch.setattr(recover, "_classify", lambda _ids: {})
+    result = recover.inventory(sqs, "queue", max_messages=10, visibility=300)
+    assert result["inventory"]["malformed_or_unsupported"] == 1
+    assert result["messages"][0]["stable_error_code"] == "ymq_envelope_unsupported"
+    assert "recipient@example.test" not in json.dumps(result)
+
+
+def test_replay_deletes_only_success_and_releases_failure_tail(monkeypatch):
+    sqs = FakeSqs([record("ok", "message-ok"), record("bad", "message-bad")])
+    outcomes = iter(({"applied": 1, "duplicates": 0}, recover.consumer.BatchError("batch_failed")))
+
+    def process(*_args, **_kwargs):
+        value = next(outcomes)
+        if isinstance(value, Exception):
+            raise value
+        return value
+
+    monkeypatch.setattr(recover.consumer, "process_event", process)
+    result = recover.replay(sqs, "queue", batch_size=2)
+    assert sqs.deleted == ["receipt-0"]
+    assert sqs.restored == ["receipt-1"]
+    assert result["totals"] == {"deleted": 1, "applied": 1, "duplicate": 0, "retained": 1}

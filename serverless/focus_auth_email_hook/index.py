@@ -12,6 +12,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from email.policy import SMTP
@@ -22,7 +23,15 @@ MAX_BODY_BYTES = 65_536
 MAX_RESPONSE_BYTES = 32_768
 WEBHOOK_TOLERANCE_SECONDS = 300
 ATTEMPT_NAMESPACE = uuid.UUID("d14ed2c6-3e91-4ced-8bd0-7d3a81ba2a32")
-ALLOWED_ACTIONS = {"signup", "magiclink", "email", "recovery", "invite", "reauthentication"}
+ALLOWED_ACTIONS = {
+    "signup",
+    "magiclink",
+    "email",
+    "recovery",
+    "invite",
+    "email_change",
+    "reauthentication",
+}
 TOKEN_RE = re.compile(r"^\d{6}$")
 
 Transport = Callable[[str, str, Mapping[str, str], bytes | None, float], tuple[int, bytes]]
@@ -148,6 +157,29 @@ def _attempt_id(redirect_to: str, webhook_id: str) -> uuid.UUID:
     return uuid.uuid5(ATTEMPT_NAMESPACE, webhook_id)
 
 
+def _recipient_hmac(address: str, key: str) -> str:
+    digest = hmac.new(key.encode("utf-8"), address.encode("utf-8"), hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
+def _hmac_key_version(env: Mapping[str, str]) -> int:
+    try:
+        version = int(_required(env, "EMAIL_ADDRESS_HMAC_KEY_VERSION"))
+    except ValueError as exc:
+        raise HookError(
+            "hmac_key_version_invalid",
+            status=500,
+            provider_outcome="configuration_error",
+        ) from exc
+    if version not in range(1, 32_768):
+        raise HookError(
+            "hmac_key_version_invalid",
+            status=500,
+            provider_outcome="configuration_error",
+        )
+    return version
+
+
 def _rpc(
     name: str,
     payload: Mapping[str, Any],
@@ -161,10 +193,19 @@ def _rpc(
     if parsed.scheme != "https" or not parsed.netloc or parsed.path or parsed.query or parsed.fragment:
         raise HookError("supabase_url_invalid", status=500, provider_outcome="configuration_error")
     key = _required(env, "PERSONALIZATION_SUPABASE_SECRET_KEY")
+    request_headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "apikey": key,
+    }
+    # Supabase's modern sb_secret_* keys are opaque API keys, not JWTs. Legacy
+    # service-role JWTs still need the Bearer header for older PostgREST setups.
+    if not key.startswith("sb_secret_"):
+        request_headers["Authorization"] = f"Bearer {key}"
     status, raw = transport(
         "POST",
         f"{base}/rest/v1/rpc/{name}",
-        {"Content-Type": "application/json", "Accept": "application/json", "apikey": key, "Authorization": f"Bearer {key}"},
+        request_headers,
         json.dumps(dict(payload), separators=(",", ":")).encode(),
         timeout,
     )
@@ -176,43 +217,56 @@ def _rpc(
         raise HookError("delivery_ledger_response_invalid", status=503) from exc
 
 
-def _begin_delivery(
-    attempt_id: uuid.UUID,
+def _begin_deliveries(
     user_id: uuid.UUID,
     action: str,
-    prefer_notisend: bool,
+    deliveries: list[Mapping[str, Any]],
     *,
     env: Mapping[str, str],
     transport: Transport,
 ) -> Mapping[str, Any]:
     result = _rpc(
-        "focus_auth_begin_delivery_v1",
+        "focus_auth_begin_delivery_batch_v1",
         {
-            "p_attempt_id": str(attempt_id),
             "p_user_id": str(user_id),
             "p_action_type": action,
-            "p_prefer_notisend": prefer_notisend,
+            "p_deliveries": [
+                {
+                    "attempt_id": str(item["attempt_id"]),
+                    "prefer_notisend": item["prefer_notisend"],
+                    "email_hmac": item["email_hmac"],
+                    "hmac_key_version": item["hmac_key_version"],
+                }
+                for item in deliveries
+            ],
         },
         env=env,
         transport=transport,
     )
-    if not isinstance(result, list) or len(result) != 1 or not isinstance(result[0], Mapping):
+    if not isinstance(result, Mapping):
         raise HookError("delivery_ledger_response_invalid", status=503)
-    return result[0]
+    return result
 
 
-def _complete_delivery(
-    attempt_id: uuid.UUID,
-    provider: str,
-    outcome: str,
-    message_id: str | None,
+def _complete_deliveries(
+    results: list[Mapping[str, Any]],
     *,
     env: Mapping[str, str],
     transport: Transport,
 ) -> None:
     result = _rpc(
-        "focus_auth_complete_delivery_v1",
-        {"p_attempt_id": str(attempt_id), "p_provider": provider, "p_outcome": outcome, "p_provider_message_id": message_id},
+        "focus_auth_complete_delivery_batch_v1",
+        {
+            "p_results": [
+                {
+                    "attempt_id": str(item["attempt_id"]),
+                    "provider": item["provider"],
+                    "outcome": item["outcome"],
+                    "provider_message_id": item.get("provider_message_id"),
+                }
+                for item in results
+            ]
+        },
         env=env,
         transport=transport,
     )
@@ -252,14 +306,101 @@ def choose_provider(
     return "postbox"
 
 
-def _confirmation_url(email_data: Mapping[str, Any], *, env: Mapping[str, str]) -> str:
-    token_hash = str(email_data.get("token_hash") or "").strip()
-    action = str(email_data.get("email_action_type") or "").strip()
-    redirect = str(email_data.get("redirect_to") or "").strip()
+def _confirmation_url(
+    token_hash: str,
+    action: str,
+    redirect: str,
+    *,
+    env: Mapping[str, str],
+) -> str:
+    token_hash = str(token_hash or "").strip()
+    action = str(action or "").strip()
+    redirect = str(redirect or "").strip()
     if not token_hash or action not in ALLOWED_ACTIONS or not redirect:
         raise HookError("email_link_data_invalid", status=400)
     base = _required(env, "PERSONALIZATION_SUPABASE_URL").rstrip("/")
     return f"{base}/auth/v1/verify?token={quote(token_hash)}&type={quote(action)}&redirect_to={quote(redirect, safe='')}"
+
+
+def _email(value: Any, code: str = "hook_user_invalid") -> str:
+    address = str(value or "").strip().lower()
+    if len(address) not in range(3, 321) or "@" not in address or any(
+        char in address for char in "\r\n\x00"
+    ):
+        raise HookError(code, status=400)
+    return address
+
+
+def _email_change_attempt(base: uuid.UUID, recipient_kind: str) -> uuid.UUID:
+    return uuid.uuid5(base, f"email_change:{recipient_kind}")
+
+
+def _delivery_specs(
+    user: Mapping[str, Any],
+    email_data: Mapping[str, Any],
+    base_attempt: uuid.UUID,
+    action: str,
+) -> list[dict[str, Any]]:
+    current_email = _email(user.get("email"))
+    redirect = str(email_data.get("redirect_to") or "").strip()
+    if action != "email_change":
+        return [
+            {
+                "attempt_id": base_attempt,
+                "recipient_kind": "primary",
+                "to_email": current_email,
+                "token": str(email_data.get("token") or "").strip(),
+                "token_hash": str(email_data.get("token_hash") or "").strip(),
+                "redirect_to": redirect,
+            }
+        ]
+
+    new_email = _email(user.get("new_email"), "email_change_payload_invalid")
+    if new_email == current_email:
+        raise HookError("email_change_payload_invalid", status=400)
+    token = str(email_data.get("token") or "").strip()
+    token_new = str(email_data.get("token_new") or "").strip()
+    token_hash = str(email_data.get("token_hash") or "").strip()
+    token_hash_new = str(email_data.get("token_hash_new") or "").strip()
+
+    if token_hash_new:
+        # Secure Email Change: Supabase intentionally reverses the hash suffixes.
+        if not all((token, token_new, token_hash)):
+            raise HookError("email_change_payload_invalid", status=400)
+        return [
+            {
+                "attempt_id": _email_change_attempt(base_attempt, "current"),
+                "recipient_kind": "email_change_current",
+                "to_email": current_email,
+                "token": token,
+                "token_hash": token_hash_new,
+                "redirect_to": redirect,
+            },
+            {
+                "attempt_id": _email_change_attempt(base_attempt, "new"),
+                "recipient_kind": "email_change_new",
+                "to_email": new_email,
+                "token": token_new,
+                "token_hash": token_hash,
+                "redirect_to": redirect,
+            },
+        ]
+
+    # With Secure Email Change disabled Supabase sends one new-address token;
+    # depending on payload version it may be named token or token_new.
+    available_tokens = [candidate for candidate in (token, token_new) if candidate]
+    if len(available_tokens) != 1 or not token_hash:
+        raise HookError("email_change_payload_invalid", status=400)
+    return [
+        {
+            "attempt_id": _email_change_attempt(base_attempt, "new"),
+            "recipient_kind": "email_change_new",
+            "to_email": new_email,
+            "token": available_tokens[0],
+            "token_hash": token_hash,
+            "redirect_to": redirect,
+        }
+    ]
 
 
 def _render_message(token: str, confirmation_url: str) -> tuple[str, str, str]:
@@ -274,6 +415,19 @@ def _render_message(token: str, confirmation_url: str) -> tuple[str, str, str]:
     )
     html_body = f"""<!doctype html><html lang=\"ru\"><body style=\"margin:0;background:#f7f0e6;color:#241a15;font-family:Arial,sans-serif\"><table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\"><tr><td align=\"center\" style=\"padding:24px 12px\"><table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"max-width:520px;background:#fffaf3;border:1px solid #e5d3c1;border-radius:24px\"><tr><td style=\"padding:32px\"><div style=\"font-size:14px;font-weight:700;color:#a54222;letter-spacing:.08em;text-transform:uppercase\">Анонсы</div><h1 style=\"margin:14px 0 8px;font-size:28px;line-height:1.15\">Вход по почте</h1><p style=\"margin:0 0 24px;font-size:16px;line-height:1.5;color:#6d5c52\">Введите этот код на странице входа:</p><div style=\"font-size:36px;line-height:1;font-weight:800;letter-spacing:.18em;text-align:center;background:#f4e7d8;border-radius:18px;padding:22px 12px\">{token}</div><p style=\"margin:24px 0 12px;text-align:center\"><a href=\"{safe_url}\" style=\"display:inline-block;background:#b94d25;color:#fff;text-decoration:none;font-weight:700;border-radius:999px;padding:15px 24px\">Войти по ссылке</a></p><p style=\"margin:20px 0 0;font-size:13px;line-height:1.5;color:#89766b\">Код и ссылка действуют один раз. Если вы не запрашивали вход, просто проигнорируйте письмо.</p></td></tr></table></td></tr></table></body></html>"""
     return subject, text, html_body
+
+
+def _provider_message_id(value: Any) -> str:
+    message_id = str(value or "").strip()
+    if len(message_id) not in range(1, 513) or any(
+        ord(char) < 32 or ord(char) == 127 for char in message_id
+    ):
+        raise HookError(
+            "provider_receipt_invalid",
+            status=503,
+            provider_outcome="ambiguous",
+        )
+    return message_id
 
 
 def _postbox_send(to_email: str, subject: str, text: str, html_body: str, attempt_id: uuid.UUID, *, iam_token: str, env: Mapping[str, str], transport: Transport) -> str:
@@ -305,11 +459,11 @@ def _postbox_send(to_email: str, subject: str, text: str, html_body: str, attemp
     if status != 200:
         raise HookError("provider_rejected", status=503, provider_outcome="definitive_reject")
     try:
-        message_id = str(json.loads(raw)["MessageId"]).strip()
+        message_id = _provider_message_id(json.loads(raw)["MessageId"])
     except (KeyError, TypeError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise HookError("provider_receipt_invalid", status=503, provider_outcome="definitive_reject") from exc
-    if not message_id:
-        raise HookError("provider_receipt_invalid", status=503, provider_outcome="definitive_reject")
+        # A 2xx may already have accepted the message; never retry another
+        # provider when the receipt is missing or malformed.
+        raise HookError("provider_receipt_invalid", status=503, provider_outcome="ambiguous") from exc
     return message_id
 
 
@@ -339,14 +493,12 @@ def _notisend_send(to_email: str, subject: str, text: str, html_body: str, attem
     if status < 200 or status >= 300:
         raise HookError("provider_rejected", status=503, provider_outcome="definitive_reject")
     try:
-        message_id = str(json.loads(raw)["id"]).strip()
+        message_id = _provider_message_id(json.loads(raw)["id"])
     except (KeyError, TypeError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as exc:
         # A 2xx without a usable receipt may already have consumed the provider
         # request and recipient slot. Keep it ambiguous: never retry another
         # provider and never release the capacity reservation automatically.
         raise HookError("provider_receipt_invalid", status=503, provider_outcome="ambiguous") from exc
-    if not message_id:
-        raise HookError("provider_receipt_invalid", status=503, provider_outcome="ambiguous")
     return message_id
 
 
@@ -361,69 +513,188 @@ def process(raw_body: bytes, headers: Mapping[str, Any], *, context: Any, env: M
         user_id = uuid.UUID(str(user.get("id") or ""))
     except ValueError as exc:
         raise HookError("hook_user_invalid", status=400) from exc
-    to_email = str(user.get("email") or "").strip().lower()
-    if len(to_email) not in range(3, 321) or "@" not in to_email or any(char in to_email for char in "\r\n\x00"):
-        raise HookError("hook_user_invalid", status=400)
     action = str(email_data.get("email_action_type") or "").strip()
     if action not in ALLOWED_ACTIONS:
         raise HookError("hook_action_unsupported", status=400)
-    attempt_id = _attempt_id(str(email_data.get("redirect_to") or ""), webhook_id)
-    prefer_notisend = choose_provider(
-        action=action,
-        send_ordinal=1,
-        returning_user=_is_returning_user(str(user.get("created_at") or "")),
-        user_id=user_id,
-        to_email=to_email,
-        env=env,
-    ) == "notisend"
-    row = _begin_delivery(
-        attempt_id,
+    base_attempt_id = _attempt_id(str(email_data.get("redirect_to") or ""), webhook_id)
+    specs = _delivery_specs(user, email_data, base_attempt_id, action)
+    returning_user = _is_returning_user(str(user.get("created_at") or ""))
+    hmac_key = _required(env, "EMAIL_ADDRESS_HMAC_KEY")
+    hmac_key_version = _hmac_key_version(env)
+    for spec in specs:
+        spec["email_hmac"] = _recipient_hmac(spec["to_email"], hmac_key)
+        spec["hmac_key_version"] = hmac_key_version
+        spec["prefer_notisend"] = action != "email_change" and choose_provider(
+            action=action,
+            send_ordinal=1,
+            returning_user=returning_user,
+            user_id=user_id,
+            to_email=spec["to_email"],
+            env=env,
+        ) == "notisend"
+        confirmation_url = _confirmation_url(
+            spec["token_hash"],
+            action,
+            spec["redirect_to"],
+            env=env,
+        )
+        spec["subject"], spec["text"], spec["html_body"] = _render_message(
+            spec["token"], confirmation_url
+        )
+
+    # This is the final external authorization boundary before provider I/O. The
+    # DB atomically checks the complete recipient set, takes HMAC-keyed locks,
+    # persists each proof and marks the network claim.
+    admission = _begin_deliveries(
         user_id,
         action,
-        prefer_notisend,
+        specs,
         env=env,
         transport=transport,
     )
-    is_new = row.get("is_new") is True
-    previous_outcome = str(row.get("previous_outcome") or "")
-    previous_provider = str(row.get("previous_provider") or "") or None
-    previous_message_id = str(row.get("previous_message_id") or "") or None
-    if not is_new:
-        if previous_outcome == "accepted" and previous_provider and previous_message_id:
-            _log("INFO", "delivery_duplicate_acknowledged", attempt_id=str(attempt_id), provider=previous_provider)
-            return {"attempt_id": str(attempt_id), "provider": previous_provider, "duplicate": True}
-        raise HookError("delivery_attempt_already_finalized", status=503)
+    admitted = admission.get("admitted")
+    admission_status = str(admission.get("admission_status") or "")
+    if admitted is not True:
+        if admitted is False and admission_status == "recipient_suppressed":
+            raise HookError("recipient_suppressed", status=403)
+        if admitted is False and admission_status == "attempt_already_finalized":
+            raise HookError("delivery_attempt_already_finalized", status=503)
+        raise HookError("delivery_admission_response_invalid", status=503)
+    rows = admission.get("results")
+    if not isinstance(rows, list) or len(rows) != len(specs):
+        raise HookError("delivery_ledger_response_invalid", status=503)
+    rows_by_attempt = {
+        str(row.get("attempt_id") or ""): row
+        for row in rows
+        if isinstance(row, Mapping)
+    }
+    if len(rows_by_attempt) != len(specs):
+        raise HookError("delivery_ledger_response_invalid", status=503)
 
-    try:
-        send_ordinal = int(row.get("send_ordinal"))
-    except (TypeError, ValueError) as exc:
-        raise HookError("delivery_ledger_response_invalid", status=503) from exc
-    notisend_admitted = row.get("notisend_admitted")
-    if not isinstance(notisend_admitted, bool):
-        raise HookError("notisend_capacity_response_invalid", status=503)
-    # Capacity routing happened atomically with attempt reservation, before any
-    # provider network dispatch. It is not a retry/fallback and cannot duplicate
-    # one Auth email.
-    provider = "notisend" if notisend_admitted else "postbox"
-    subject, text, html_body = _render_message(str(email_data.get("token") or ""), _confirmation_url(email_data, env=env))
-    try:
-        if provider == "notisend":
-            message_id = _notisend_send(to_email, subject, text, html_body, attempt_id, env=env, transport=transport)
-        else:
-            iam_token = str(getattr(context, "token", "") or "").strip()
-            if not iam_token:
-                raise HookError("postbox_iam_token_missing", status=500, provider_outcome="configuration_error")
-            message_id = _postbox_send(to_email, subject, text, html_body, attempt_id, iam_token=iam_token, env=env, transport=transport)
-    except HookError as exc:
-        outcome = exc.provider_outcome or "ambiguous"
+    pending: list[tuple[dict[str, Any], Mapping[str, Any], str, int]] = []
+    accepted_providers: list[str] = []
+    for spec in specs:
+        row = rows_by_attempt.get(str(spec["attempt_id"]))
+        if not isinstance(row, Mapping):
+            raise HookError("delivery_ledger_response_invalid", status=503)
+        is_new = row.get("is_new") is True
+        previous_outcome = str(row.get("previous_outcome") or "")
+        previous_provider = str(row.get("previous_provider") or "") or None
+        previous_message_id = str(row.get("previous_message_id") or "") or None
+        if not is_new:
+            if previous_outcome != "accepted" or not previous_provider or not previous_message_id:
+                raise HookError("delivery_attempt_already_finalized", status=503)
+            _log(
+                "INFO",
+                "delivery_duplicate_acknowledged",
+                attempt_id=str(spec["attempt_id"]),
+                provider=previous_provider,
+            )
+            accepted_providers.append(previous_provider)
+            continue
         try:
-            _complete_delivery(attempt_id, provider, outcome, None, env=env, transport=transport)
+            send_ordinal = int(row.get("send_ordinal"))
+        except (TypeError, ValueError) as exc:
+            raise HookError("delivery_ledger_response_invalid", status=503) from exc
+        notisend_admitted = row.get("notisend_admitted")
+        if not isinstance(notisend_admitted, bool):
+            raise HookError("notisend_capacity_response_invalid", status=503)
+        provider = "notisend" if notisend_admitted else "postbox"
+        pending.append((spec, row, provider, send_ordinal))
+
+    iam_token = str(getattr(context, "token", "") or "").strip()
+
+    def dispatch(item: tuple[dict[str, Any], Mapping[str, Any], str, int]) -> tuple[dict[str, Any], HookError | None, int]:
+        spec, _row, provider, send_ordinal = item
+        try:
+            if provider == "notisend":
+                message_id = _notisend_send(
+                    spec["to_email"],
+                    spec["subject"],
+                    spec["text"],
+                    spec["html_body"],
+                    spec["attempt_id"],
+                    env=env,
+                    transport=transport,
+                )
+            else:
+                if not iam_token:
+                    raise HookError(
+                        "postbox_iam_token_missing",
+                        status=500,
+                        provider_outcome="configuration_error",
+                    )
+                message_id = _postbox_send(
+                    spec["to_email"],
+                    spec["subject"],
+                    spec["text"],
+                    spec["html_body"],
+                    spec["attempt_id"],
+                    iam_token=iam_token,
+                    env=env,
+                    transport=transport,
+                )
+            return {
+                "attempt_id": spec["attempt_id"],
+                "provider": provider,
+                "outcome": "accepted",
+                "provider_message_id": message_id,
+            }, None, send_ordinal
+        except HookError as exc:
+            return {
+                "attempt_id": spec["attempt_id"],
+                "provider": provider,
+                "outcome": exc.provider_outcome or "ambiguous",
+                "provider_message_id": None,
+            }, exc, send_ordinal
+
+    dispatched: list[tuple[dict[str, Any], HookError | None, int]] = []
+    if len(pending) == 1:
+        dispatched = [dispatch(pending[0])]
+    elif pending:
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="auth-mail") as pool:
+            dispatched = list(pool.map(dispatch, pending))
+
+    if dispatched:
+        completion_rows = [item[0] for item in dispatched]
+        try:
+            _complete_deliveries(completion_rows, env=env, transport=transport)
         except HookError:
-            _log("ERROR", "delivery_completion_failed", attempt_id=str(attempt_id), provider=provider, outcome=outcome)
-        raise
-    _complete_delivery(attempt_id, provider, "accepted", message_id, env=env, transport=transport)
-    _log("INFO", "delivery_accepted", attempt_id=str(attempt_id), provider=provider, send_ordinal=send_ordinal)
-    return {"attempt_id": str(attempt_id), "provider": provider, "duplicate": False}
+            for result, _error, _ordinal in dispatched:
+                _log(
+                    "ERROR",
+                    "delivery_completion_failed",
+                    attempt_id=str(result["attempt_id"]),
+                    provider=result["provider"],
+                    outcome=result["outcome"],
+                )
+            raise
+        for result, error, send_ordinal in dispatched:
+            if error is None:
+                accepted_providers.append(str(result["provider"]))
+                _log(
+                    "INFO",
+                    "delivery_accepted",
+                    attempt_id=str(result["attempt_id"]),
+                    provider=result["provider"],
+                    send_ordinal=send_ordinal,
+                )
+        first_error = next((error for _result, error, _ordinal in dispatched if error), None)
+        if first_error is not None:
+            raise first_error
+
+    if len(specs) == 1:
+        return {
+            "attempt_id": str(specs[0]["attempt_id"]),
+            "provider": accepted_providers[0],
+            "duplicate": not pending,
+        }
+    return {
+        "attempt_id": str(base_attempt_id),
+        "providers": accepted_providers,
+        "deliveries": len(specs),
+        "duplicate": not pending,
+    }
 
 
 def handler(event: Mapping[str, Any], context: Any) -> dict[str, Any]:
@@ -432,6 +703,11 @@ def handler(event: Mapping[str, Any], context: Any) -> dict[str, Any]:
         process(body, headers, context=context, env=os.environ)
         return _json_response(200, {})
     except HookError as exc:
+        if exc.code == "recipient_suppressed":
+            # Preserve Auth anti-enumeration: the signed hook suppresses the
+            # provider call but acknowledges the request generically.
+            _log("WARNING", "delivery_suppressed")
+            return _json_response(200, {})
         _log("ERROR", "hook_failed", error_code=exc.code)
         return _json_response(exc.status, {"error": {"http_code": exc.status, "message": exc.code}})
     except Exception:

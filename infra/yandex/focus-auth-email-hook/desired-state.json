@@ -22,11 +22,12 @@
     ],
     "secret_access": {
       "hook_secret": "lockbox.payloadViewer",
+      "email_address_hmac_secret": "lockbox.payloadViewer",
       "notisend_secret": "lockbox.payloadViewer",
       "notisend_secret_kms_key": "kms.keys.encrypterDecrypter"
     },
     "stage_budget_ms": {
-      "attempt_and_capacity_rpc": 1100,
+      "recipient_admission_and_capacity_rpc": 1100,
       "provider_dispatch": 2000,
       "completion_rpc": 1100,
       "total_network_ceiling": 4200
@@ -44,9 +45,15 @@
   },
   "lockbox": {
     "hook_secret_id": "e6qkr3o8dej5674hcah5",
+    "email_address_hmac_secret_id": "e6qeqbto7ticn9fsklgq",
+    "email_address_hmac_secret_version_id": "e6qi77mdnpmetpljf5qa",
+    "email_address_hmac_key": "hmac_key",
+    "email_address_hmac_version_key": "hmac_key_version",
     "notisend_secret_id": "e6qa6hv138tu7ekbpjn2",
     "required_environment_variables": [
       "SEND_EMAIL_HOOK_SECRET",
+      "EMAIL_ADDRESS_HMAC_KEY",
+      "EMAIL_ADDRESS_HMAC_KEY_VERSION",
       "PERSONALIZATION_SUPABASE_SECRET_KEY",
       "NOTISEND_API_TOKEN",
       "FOCUS_AUTH_NOTISEND_EMAILS"
@@ -69,6 +76,9 @@
     "unique_recipient_capacity": 200,
     "unique_recipient_capacity_scope": "provider_billing_period",
     "requires_provider_counter_reconciliation": true,
-    "auth_route_when_unreconciled_expired_or_full": "postbox"
+    "auth_route_when_unreconciled_expired_or_full": "postbox",
+    "email_change": "postbox",
+    "secure_email_change_deliveries": 2,
+    "hmac_rotation_with_active_backlog": "forbidden_without_overlap_migration"
   }
 }

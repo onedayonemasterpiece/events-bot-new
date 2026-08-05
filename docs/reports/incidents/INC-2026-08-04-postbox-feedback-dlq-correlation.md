@@ -45,9 +45,11 @@ The `unknown` and `submitted` counters covered only the transactional outbox and
 
 ## Corrective implementation
 
-Branch `agent/postbox-auth-feedback-correlation-20260804` adds:
+PR #333 on branch `agent/postbox-auth-feedback-correlation-20260804` is the only
+implementation lane; no competing repair branch is authorized. It adds:
 
-- one PII-free receipt registry shared by outbox and Auth;
+- one pseudonymous receipt registry, with no plaintext recipient, shared by
+  outbox and Auth;
 - automatic registration when either ledger persists a Postbox receipt;
 - authenticated one-time HMAC binding for Auth and audited legacy receipts;
 - `email_record_postbox_event_v3` with a v2 compatibility wrapper;
@@ -56,6 +58,81 @@ Branch `agent/postbox-auth-feedback-correlation-20260804` adds:
 - persisted DLQ alert state, delta reporting, six-hour static reminders and recovery notification;
 - rollback-only SQL and Python regression contracts;
 - a production recovery runbook.
+
+Review on 2026-08-05 corrected additional closure-blocking defects before
+production rollout:
+
+- direct Auth originally stored suppression evidence but did not check the exact
+  recipient before network I/O; batch admission now serializes the exact
+  versioned HMAC against suppression insertion, persists the proof/network claim
+  and blocks the complete secure-email-change pair atomically;
+- modern opaque `sb_secret_*` API keys are no longer sent as Bearer JWTs;
+- secure and insecure Supabase `email_change` payloads follow the documented
+  current/new token and reversed token-hash mapping;
+- new Auth correlations are bound at provider-receipt persistence; only
+  pre-migration/legacy receipts remain authenticated one-time-bindable;
+- receipt/event sizes, event-count range, trigger-install ordering and immutable
+  outbox identity now align fail-closed;
+- the old suppression-free v1 Auth admission is revoked by a separate cutover
+  migration only after the new Function version passes its deployment smoke.
+
+HMAC rotation remains deliberately prohibited while retained feedback,
+correlations or active suppressions use the current key/version. A future
+rotation requires an overlap/keyring migration and is not part of this incident.
+
+## Validation evidence (pre-production)
+
+- PostgreSQL 17 isolated apply: CI bootstrap plus migrations
+  `20260711203940`, `20260712072912`, `20260712083037`, `20260801222242`,
+  `20260804190000` and cutover `20260805071852` applied successfully.
+- Rollback-only SQL contract: `BEGIN / DO / ROLLBACK`, green after both new
+  migrations. It covers Auth/outbox/legacy correlation, cross-source collision,
+  exact/conflicting duplicates, 512-character receipt, 300-character event key,
+  event count above 1000, suppression scope/version, atomic email change,
+  immutable outbox identity, health and role privileges.
+- Focus/Postbox Python contract set: hook, consumer, infra and migration tests
+  are included in the ordinary email CI gate. Exact commands and final CI URLs
+  must be recorded here after the PR head is pushed.
+- Read-only Yandex desired-state audit: active feedback consumer Function
+  `d4enjcfg3h6nep4ij4fh`, version `d4ejof08mqck6sp1cn1h`, mounts both HMAC key
+  and version from Lockbox secret `e6qeqbto7ticn9fsklgq`, immutable secret
+  version `e6qi77mdnpmetpljf5qa`, keys `hmac_key` / `hmac_key_version`. The focus
+  hook desired state now pins those exact same references; no secret value was
+  read or recorded.
+
+These are implementation gates, not production closure evidence.
+
+## Production evidence ledger
+
+Pending fields must be replaced with immutable values during the serialized
+runbook; absence of a value is a blocker, never an implied success.
+
+| Gate | Evidence |
+|---|---|
+| PR #333 reviewed head / merge SHA | pending |
+| logical backup path, SHA-256, `pg_restore --list`, restore drill | pending |
+| pre/post migration versions and queries | pending |
+| focus Auth Function version and sanitized config parity | pending |
+| Fly release and in-container SHA | pending |
+| exact DLQ queue/event/message inventory and histogram | pending |
+| sanitized legacy manifest SHA-256 and registrations | pending |
+| replay applied/duplicate/pending/error/remaining | pending |
+| direct Auth, transactional, duplicate, suppressive canaries | pending |
+| monitor delta/static/recovery notification evidence | pending |
+
+## Rollback ownership
+
+- SQL cutover rollback: re-grant only
+  `focus_auth_begin_delivery_v1(uuid,uuid,text,boolean)` to `service_role`, reload
+  PostgREST, and pair it with a previous Function-version rollback.
+- Registry migration rollback: stop feedback replay/intake and restore the
+  verified logical backup only under an explicit maintenance decision; never
+  drop the registry after new events/receipts exist.
+- Fly monitor rollback: redeploy the preceding Fly release from its exact
+  `origin/main` SHA; do not alter queue retention/destination.
+- Queue replay rollback is not deletion recovery: therefore deletion is allowed
+  only after `applied` or field-identical `duplicate` proof, and every batch has
+  before/after counts.
 
 ## Immediate mitigation
 

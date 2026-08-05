@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- Fixed the Postbox feedback/DLQ correlation implementation in PR #333 without
+  creating a competing delivery path: transactional outbox, direct focus Auth
+  and audited legacy receipts share a collision-safe registry; direct Auth now
+  performs exact versioned recipient-HMAC admission immediately before provider
+  I/O, supports atomic secure/insecure email change, persists admission proof,
+  and uses batch completion without cross-provider retries. Aligned receipt and
+  event limits, monitor regression coverage, SQL rollback contracts, CI and the
+  canonical recovery/incident routes. Production migration, replay and canary
+  evidence remain required before closing
+  `INC-2026-08-04-postbox-feedback-dlq-correlation`.
+
 - Fixed the Smart Update identity/source recurrence from 2026-08-04: production
   merge gating is fail-closed before domain side effects, direct and contextual
   source roles use canonical URL ownership, and identical Telegram/VK packets

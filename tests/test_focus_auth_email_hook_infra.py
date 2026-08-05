@@ -16,10 +16,12 @@ def test_function_boundary_is_narrow_and_secret_safe() -> None:
     assert desired["function"]["runtime"] == "python312"
     assert desired["function"]["timeout_seconds"] == 5
     assert desired["function"]["stage_budget_ms"]["total_network_ceiling"] == 4_200
+    assert desired["function"]["stage_budget_ms"]["recipient_admission_and_capacity_rpc"] == 1_100
     assert desired["function"]["stage_budget_ms"]["total_network_ceiling"] < 5_000
     assert desired["function"]["required_roles"] == ["postbox.sender"]
     assert desired["function"]["secret_access"] == {
         "hook_secret": "lockbox.payloadViewer",
+        "email_address_hmac_secret": "lockbox.payloadViewer",
         "notisend_secret": "lockbox.payloadViewer",
         "notisend_secret_kms_key": "kms.keys.encrypterDecrypter",
     }
@@ -29,10 +31,17 @@ def test_function_boundary_is_narrow_and_secret_safe() -> None:
     assert desired["api_gateway"]["max_body_bytes"] == 65_536
     assert set(desired["lockbox"]["required_environment_variables"]) == {
         "SEND_EMAIL_HOOK_SECRET",
+        "EMAIL_ADDRESS_HMAC_KEY",
+        "EMAIL_ADDRESS_HMAC_KEY_VERSION",
         "PERSONALIZATION_SUPABASE_SECRET_KEY",
         "NOTISEND_API_TOKEN",
         "FOCUS_AUTH_NOTISEND_EMAILS",
     }
+    assert "EMAIL_ADDRESS_HMAC_KEY_VERSION" not in desired["lockbox"]["non_secret_environment_variables"]
+    assert desired["lockbox"]["email_address_hmac_secret_id"] == "e6qeqbto7ticn9fsklgq"
+    assert desired["lockbox"]["email_address_hmac_secret_version_id"] == "e6qi77mdnpmetpljf5qa"
+    assert desired["lockbox"]["email_address_hmac_key"] == "hmac_key"
+    assert desired["lockbox"]["email_address_hmac_version_key"] == "hmac_key_version"
     assert spec.count("type: cloud_functions") == 1
     assert spec.count("    post:") == 1
     assert "    get:" not in spec
@@ -80,7 +89,16 @@ def test_provider_policy_has_one_dispatch_and_shared_unique_recipient_cap() -> N
     assert desired["provider_policy"]["unique_recipient_capacity_scope"] == "provider_billing_period"
     assert desired["provider_policy"]["requires_provider_counter_reconciliation"] is True
     assert desired["provider_policy"]["auth_route_when_unreconciled_expired_or_full"] == "postbox"
-    assert '"p_prefer_notisend": prefer_notisend' in source
+    assert desired["provider_policy"]["email_change"] == "postbox"
+    assert desired["provider_policy"]["secure_email_change_deliveries"] == 2
+    assert desired["provider_policy"]["hmac_rotation_with_active_backlog"] == (
+        "forbidden_without_overlap_migration"
+    )
+    assert '"p_deliveries"' in source
+    assert '"email_hmac": item["email_hmac"]' in source
+    assert '"hmac_key_version": item["hmac_key_version"]' in source
+    assert "focus_auth_begin_delivery_batch_v1" in source
+    assert "focus_auth_complete_delivery_batch_v1" in source
     assert "focus_auth_reserve_notisend_recipient_v1" in migration
     assert 'provider = "notisend" if notisend_admitted else "postbox"' in source
     assert source.count("_notisend_send(") == 2  # definition + one dispatch site

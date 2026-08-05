@@ -10,8 +10,11 @@ on:
       - 'supabase/migrations/20260712083037_email_postbox_worker_v1.sql'
       - 'supabase/migrations/20260801222242_focus_auth_delivery_attempt_v1.sql'
       - 'supabase/migrations/20260804190000_postbox_auth_feedback_correlation_v1.sql'
+      - 'supabase/migrations/20260805071852_enforce_focus_auth_suppression_admission.sql'
       - 'supabase/tests/email_postbox_auth_feedback_contract.sql'
       - 'supabase/tests/postbox_auth_feedback_ci_bootstrap.sql'
+      - 'scripts/ops/postbox_dlq_recover.py'
+      - 'tests/test_postbox_dlq_recover.py'
 
 permissions:
   contents: read
@@ -52,4 +55,5 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260712083037_email_postbox_worker_v1.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260801222242_focus_auth_delivery_attempt_v1.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260804190000_postbox_auth_feedback_correlation_v1.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260805071852_enforce_focus_auth_suppression_admission.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/email_postbox_auth_feedback_contract.sql
