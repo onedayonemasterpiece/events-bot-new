@@ -29,6 +29,12 @@ function check(condition, message, localFailures) {
   if (!condition) localFailures.push(message);
 }
 
+function alphaFromColor(value) {
+  if (value === 'transparent') return 0;
+  const match = /rgba\([^)]*[,\s]([\d.]+)\s*\)$/u.exec(value);
+  return match ? Number(match[1]) : 1;
+}
+
 try {
   for (const viewport of viewports) {
     const localFailures = [];
@@ -42,46 +48,59 @@ try {
       const response = await page.goto(url, { waitUntil: 'networkidle' });
       check(response?.ok(), `${viewport.name}: HTTP ${response?.status() || 'unknown'}`, localFailures);
       await page.locator('[data-prelaunch-page]').waitFor({ state: 'visible' });
+      await page.waitForTimeout(250);
 
       const scene = await page.evaluate(() => {
+        const root = document.querySelector('[data-prelaunch-page]');
         const background = document.querySelector('.prelaunch__background');
         const atmosphere = document.querySelector('.prelaunch__atmosphere');
         const mosaic = document.querySelector('[data-prelaunch-mosaic]');
         const tiles = [...document.querySelectorAll('[data-prelaunch-tile]')];
+        const rootBefore = root ? getComputedStyle(root, '::before') : null;
+        const rootAfter = root ? getComputedStyle(root, '::after') : null;
         const backgroundImage = background ? getComputedStyle(background, '::after') : null;
-        const source = atmosphere ? getComputedStyle(atmosphere, '::before') : null;
         const atmosphereStyle = atmosphere ? getComputedStyle(atmosphere) : null;
         const mosaicStyle = mosaic ? getComputedStyle(mosaic) : null;
+        const number = (value) => Number.parseFloat(String(value || '0')) || 0;
+        const gridColumns = String(mosaicStyle?.gridTemplateColumns || '')
+          .split(/\s+/u)
+          .filter(Boolean);
         const tileSurfaces = tiles.map((tile) => {
+          const base = getComputedStyle(tile);
           const surface = getComputedStyle(tile, '::before');
           return {
             index: Number(tile.getAttribute('data-index')),
-            glint: tile.getAttribute('data-glint') === 'true',
+            state: tile.getAttribute('data-state'),
+            edge: tile.getAttribute('data-edge'),
+            accent: tile.getAttribute('data-accent') === 'true',
+            window: tile.getAttribute('data-window') === 'true',
+            baseOverflow: base.overflow,
+            baseRadius: base.borderRadius,
             backgroundImage: surface.backgroundImage,
             backgroundAttachment: surface.backgroundAttachment,
             backgroundSize: surface.backgroundSize,
             backgroundPosition: surface.backgroundPosition,
             backgroundColor: surface.backgroundColor,
             backdropFilter: surface.backdropFilter || surface.webkitBackdropFilter || '',
+            borderRadius: surface.borderRadius,
             boxShadow: surface.boxShadow,
+            transitionProperty: surface.transitionProperty,
+            willChange: surface.willChange,
           };
         });
-        const number = (value) => Number.parseFloat(String(value || '0')) || 0;
-        const gridColumns = String(mosaicStyle?.gridTemplateColumns || '')
-          .split(/\s+/u)
-          .filter(Boolean);
+        const edgeBands = [...new Set(tileSurfaces.map((tile) => tile.edge).filter(Boolean))];
         return {
           viewport: { width: window.innerWidth, height: window.innerHeight },
           layerZ: {
-            atmosphere: number(atmosphereStyle?.zIndex),
+            sharedSource: number(rootBefore?.zIndex),
             mosaic: number(mosaicStyle?.zIndex),
+            atmosphere: number(atmosphereStyle?.zIndex),
           },
+          sharedSourceBackground: rootBefore?.backgroundImage || '',
+          sharedSourceBlend: rootBefore?.mixBlendMode || '',
+          dustBackground: rootAfter?.backgroundImage || '',
+          dustBlend: rootAfter?.mixBlendMode || '',
           atmosphereBackground: atmosphereStyle?.backgroundImage || '',
-          sourceBackground: source?.backgroundImage || '',
-          sourceBorderWidth: number(source?.borderTopWidth),
-          sourceWidth: number(source?.width),
-          sourceRight: number(source?.right),
-          sourceTop: number(source?.top),
           artworkWidth: number(backgroundImage?.width),
           artworkTop: number(backgroundImage?.top),
           artworkLeft: number(backgroundImage?.left),
@@ -90,79 +109,94 @@ try {
           paneRadialCount: tileSurfaces.filter((tile) => tile.backgroundImage.includes('radial-gradient')).length,
           fixedPaneCount: tileSurfaces.filter((tile) => tile.backgroundAttachment.split(',')[0]?.trim() === 'fixed').length,
           paneBackdropCount: tileSurfaces.filter((tile) => tile.backdropFilter && tile.backdropFilter !== 'none').length,
-          uniquePaneMaterialCount: new Set(tileSurfaces.map((tile) => [
-            tile.backgroundImage,
-            tile.backgroundAttachment,
-            tile.backgroundSize,
-            tile.backgroundPosition,
-          ].join('|'))).size,
-          localGlintCount: tileSurfaces.filter((tile) => tile.glint).length,
+          windowCount: tileSurfaces.filter((tile) => tile.window).length,
+          accentCount: tileSurfaces.filter((tile) => tile.accent).length,
+          edgeBands,
+          uniqueEdgeShadowCount: new Set(tileSurfaces.map((tile) => tile.boxShadow)).size,
+          cornerMaskCount: tileSurfaces.filter((tile) => (
+            tile.baseOverflow === 'hidden'
+            && tile.baseRadius === '0px'
+            && tile.borderRadius !== '0px'
+            && tile.boxShadow.includes('rgb(7, 9, 13)')
+          )).length,
+          clearWindowCount: tileSurfaces.filter((tile) => alphaFromColor(tile.backgroundColor) <= .4).length,
+          transitionFilterCount: tileSurfaces.filter((tile) => tile.transitionProperty.includes('backdrop-filter')).length,
+          paneWillChangeCount: tileSurfaces.filter((tile) => tile.willChange && tile.willChange !== 'auto').length,
         };
       });
 
       check(
-        scene.layerZ.atmosphere < scene.layerZ.mosaic,
-        `${viewport.name}: atmospheric source must sit behind glass (${scene.layerZ.atmosphere}/${scene.layerZ.mosaic})`,
+        scene.layerZ.sharedSource < scene.layerZ.mosaic && scene.layerZ.mosaic < scene.layerZ.atmosphere,
+        `${viewport.name}: expected shared source < mosaic < accents (${JSON.stringify(scene.layerZ)})`,
         localFailures,
       );
       check(
-        scene.atmosphereBackground.includes('radial-gradient'),
-        `${viewport.name}: shared atmospheric radial source is missing`,
+        scene.sharedSourceBackground.includes('radial-gradient'),
+        `${viewport.name}: shared upper-right radial emitter is missing`,
         localFailures,
       );
       check(
-        scene.sourceBackground.includes('radial-gradient') && scene.sourceBorderWidth === 0,
-        `${viewport.name}: source must be a broad radial emitter, not a ring`,
+        scene.sharedSourceBlend === 'screen',
+        `${viewport.name}: shared emitter blend=${scene.sharedSourceBlend}`,
         localFailures,
       );
       check(
-        scene.sourceWidth >= viewport.width * .75,
-        `${viewport.name}: shared emitter is too small (${scene.sourceWidth}px)`,
+        (scene.dustBackground.match(/radial-gradient/gu) || []).length >= 12 && scene.dustBlend === 'screen',
+        `${viewport.name}: golden powder overlay is missing or too sparse`,
         localFailures,
       );
       check(
-        scene.sourceRight < 0 && scene.sourceTop < 0,
-        `${viewport.name}: source is not outside the upper-right edge`,
+        !scene.atmosphereBackground || scene.atmosphereBackground === 'none',
+        `${viewport.name}: legacy atmosphere still paints a second full-scene wash`,
         localFailures,
       );
       check(
         scene.paneRadialCount === 0 && scene.fixedPaneCount === 0,
-        `${viewport.name}: a pane still paints its own spotlight (radial=${scene.paneRadialCount}, fixed=${scene.fixedPaneCount})`,
+        `${viewport.name}: a pane paints its own spotlight (radial=${scene.paneRadialCount}, fixed=${scene.fixedPaneCount})`,
         localFailures,
       );
       check(
         scene.paneBackdropCount === 72,
-        `${viewport.name}: all panes must transmit the shared source through backdrop-filter (${scene.paneBackdropCount}/72)`,
+        `${viewport.name}: all panes must transmit the shared source (${scene.paneBackdropCount}/72)`,
+        localFailures,
+      );
+      check(scene.cornerMaskCount === 72, `${viewport.name}: rounded corner masks ${scene.cornerMaskCount}/72`, localFailures);
+      check(scene.windowCount === 8, `${viewport.name}: coherent reveal windows=${scene.windowCount}`, localFailures);
+      check(scene.accentCount === 3, `${viewport.name}: edge accents=${scene.accentCount}`, localFailures);
+      check(
+        ['ambient', 'soft', 'warm', 'hot'].every((edge) => scene.edgeBands.includes(edge)),
+        `${viewport.name}: incomplete edge-response bands ${scene.edgeBands.join(',')}`,
         localFailures,
       );
       check(
-        scene.uniquePaneMaterialCount === 1,
-        `${viewport.name}: panes use ${scene.uniquePaneMaterialCount} local light/material coordinate fields`,
+        scene.uniqueEdgeShadowCount >= 4,
+        `${viewport.name}: edge lighting lacks variation (${scene.uniqueEdgeShadowCount} shadow treatments)`,
         localFailures,
       );
-      check(scene.localGlintCount === 3, `${viewport.name}: deterministic glint markers changed`, localFailures);
-
-      if (viewport.width <= 820) {
-        check(
-          scene.gridColumnCount === 9,
-          `${viewport.name}: semantic 9-column reveal map was reflowed to ${scene.gridColumnCount} columns`,
-          localFailures,
-        );
-      }
+      check(
+        scene.clearWindowCount >= 6 && scene.clearWindowCount <= 10,
+        `${viewport.name}: genuinely clear windows=${scene.clearWindowCount}`,
+        localFailures,
+      );
+      check(scene.transitionFilterCount === 0, `${viewport.name}: blur is animated on ${scene.transitionFilterCount} panes`, localFailures);
+      check(scene.paneWillChangeCount === 0, `${viewport.name}: ${scene.paneWillChangeCount} panes reserve compositor layers`, localFailures);
 
       if (viewport.width <= 599) {
         const widthRatio = scene.artworkWidth / viewport.width;
         const topRatio = scene.artworkTop / viewport.height;
+        check(scene.gridColumnCount === 6, `${viewport.name}: mobile grid columns=${scene.gridColumnCount}`, localFailures);
         check(
-          widthRatio >= 1.42 && widthRatio <= 1.52,
-          `${viewport.name}: phone artwork width ratio ${widthRatio.toFixed(3)} is outside 1.42–1.52`,
+          widthRatio >= .82 && widthRatio <= .96,
+          `${viewport.name}: mobile artwork width ratio ${widthRatio.toFixed(3)} is outside .82–.96`,
           localFailures,
         );
         check(
-          topRatio >= .14 && topRatio <= .24,
-          `${viewport.name}: phone artwork top ratio ${topRatio.toFixed(3)} is outside .14–.24`,
+          topRatio >= .31 && topRatio <= .46,
+          `${viewport.name}: mobile artwork top ratio ${topRatio.toFixed(3)} is outside .31–.46`,
           localFailures,
         );
+      } else {
+        check(scene.gridColumnCount === 9, `${viewport.name}: desktop grid columns=${scene.gridColumnCount}`, localFailures);
       }
 
       const scenePath = resolve(artifactDir, `prelaunch-${viewport.name}-${viewport.width}x${viewport.height}-light-model.json`);
