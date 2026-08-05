@@ -59,6 +59,12 @@ class VolunteerOpportunity:
     checked_at: datetime
     semantic_hash: str
     availability_hash: str
+    # Current Dobro.ru discovery is vacancy-grained. The parent event page is
+    # retained as the semantic/enrichment source, while these exact source CTA
+    # URLs are the only permitted destinations for the future public button.
+    vacancy_ids: tuple[str, ...] = ()
+    application_urls: tuple[str, ...] = ()
+    vacancy_card_texts: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         raw = asdict(self)
@@ -73,6 +79,9 @@ class VolunteerOpportunity:
         raw["availability_status"] = self.availability_status.value
         raw["roles"] = list(self.roles)
         raw["external_links"] = list(self.external_links)
+        raw["vacancy_ids"] = list(self.vacancy_ids)
+        raw["application_urls"] = list(self.application_urls)
+        raw["vacancy_card_texts"] = list(self.vacancy_card_texts)
         return raw
 
 
