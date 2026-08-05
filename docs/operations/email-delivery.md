@@ -81,6 +81,15 @@ focus OTP correlation issue in
 [`INC-2026-07-30-focus-email-otp-false-success`](../reports/incidents/INC-2026-07-30-focus-email-otp-false-success.md).
 Do not purge or bulk-replay that queue as an account-transfer recovery step.
 
+The canonical classification/replay procedure is
+[Postbox feedback correlation and DLQ recovery](postbox-feedback-dlq-recovery.md),
+and its active regression contract is
+[`INC-2026-08-04-postbox-feedback-dlq-correlation`](../reports/incidents/INC-2026-08-04-postbox-feedback-dlq-correlation.md).
+That incident separates provider acceptance from feedback correlation and must
+remain open until exact inventory, bounded replay, suppression and monitor
+canaries are recorded; the approximate queue attribute alone is not closure
+evidence.
+
 Account/billing transfer acceptance is fail-closed:
 
 1. inventory all folders in the target cloud and classify every `STOPPED`,

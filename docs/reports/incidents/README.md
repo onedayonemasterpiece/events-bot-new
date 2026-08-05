@@ -22,6 +22,16 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-04-postbox-feedback-dlq-correlation.md`
+  - Scope: Yandex Postbox feedback correlation for transactional outbox, direct
+    focus Auth and independently proven legacy Auth; YDS/YMQ DLQ replay; Fly
+    Postbox health-monitor deltas; exact email-HMAC suppression admission.
+  - Must not regress: every accepted post-ledger Postbox receipt has exactly one
+    source and correlation; direct Auth checks the exact versioned recipient
+    HMAC atomically before provider I/O (including secure email-change batches);
+    unknown/ambiguous receipts are never guessed, retried cross-provider,
+    purged or deleted before an `applied`/verified-identical `duplicate` result.
+
 - `INC-2026-08-03-static-site-builder-failure-storm.md`
   - Scope: StaticSiteBuilder mutable-catalog preview gates, Kaggle terminal
     evidence, retry/reconciliation and immutable secret-candidate adoption.

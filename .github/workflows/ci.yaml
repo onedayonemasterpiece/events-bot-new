@@ -66,6 +66,9 @@ jobs:
           scripts/region_talk_publication_finalizer.py
           scripts/region_talk_publication_plan.py
           scripts/region_talk_scheduled_runner.py
+          scripts/ops/postbox_dlq_recover.py
+          serverless/email_postbox_events/index.py
+          serverless/focus_auth_email_hook/index.py
           kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py
           site/scripts/export-production-preview-data.py
       - name: Run incident regression tests
@@ -94,7 +97,12 @@ jobs:
           python -m pytest -q
           email_control/tests/test_control_plane.py
           email_control/tests/test_worker.py
+          email_control/tests/test_postbox_monitor_state.py
           tests/test_email_postbox_events.py
+          tests/test_focus_auth_email_hook.py
+          tests/test_focus_auth_email_hook_infra.py
+          tests/test_postbox_auth_feedback_migration.py
+          tests/test_postbox_dlq_recover.py
           tests/test_scheduling.py::test_runtime_health_status_reports_email_worker_and_monitor
       - name: Run Region Talk regression contracts
         run: python -m pytest -q tests/test_region_talk*.py

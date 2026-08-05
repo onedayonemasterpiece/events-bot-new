@@ -31,6 +31,9 @@
 - Event participants/headliners UI and static projection: `docs/features/event-people/README.md`
 - Read-only duplicate-image audit: `docs/operations/event-image-duplicate-audit.md`
 - Email delivery/deliverability: `docs/operations/email-delivery.md`
+- Postbox feedback correlation and bounded DLQ recovery:
+  `docs/operations/postbox-feedback-dlq-recovery.md`; active incident:
+  `docs/reports/incidents/INC-2026-08-04-postbox-feedback-dlq-correlation.md`
 - External focus-group mailbox OTP E2E: `docs/testing/external-focus-email-otp.md`
 - Static-site deterministic direct/relay fault profiles:
   `docs/testing/transport-fault-profiles.v1.yml`
