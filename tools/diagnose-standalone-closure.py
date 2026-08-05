@@ -29,10 +29,7 @@ def main() -> int:
 
     tracked_list = m.git_files(source)
     tracked = set(tracked_list)
-    roots = sorted(
-        path for path in tracked_list
-        if m.RT_RE.search(path) and m.is_safe_copy_path(path)
-    )
+    roots = sorted(path for path in tracked_list if m.RT_RE.search(path) and m.is_safe_copy_path(path))
     selected = set(roots)
     reason: dict[str, str] = {path: "explicit-region-talk-path" for path in roots}
     parent: dict[str, tuple[str, str]] = {}
@@ -66,6 +63,8 @@ def main() -> int:
         changed = False
         for owner in sorted(selected):
             if not m.is_text_path(owner):
+                continue
+            if owner.startswith(("docs/", ".codex/", ".agent/", ".agents/", ".claude/")) or owner in {"README.md", "CHANGELOG.md"}:
                 continue
             for dep in sorted(m.literal_dependencies(source, owner, tracked)):
                 changed = add(dep, owner, "literal-path-reference") or changed
@@ -103,8 +102,8 @@ def main() -> int:
         "direct_importers": direct_importers,
     }
     print(json.dumps(report, ensure_ascii=False, indent=2))
-    if target not in selected or not chain:
-        raise SystemExit("main.py was not selected or parent chain is missing")
+    if target in selected:
+        raise SystemExit("main.py remains in standalone closure")
     return 0
 
 

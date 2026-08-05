@@ -42,8 +42,10 @@ jobs:
           assert digest == os.environ['MIGRATOR_SHA256'], digest
           Path('/tmp/migrate_from_events_bot.py').write_bytes(payload)
           PY
-      - name: Apply the same narrow pytest-support patch
-        run: python control/tools/patch-migrator-pytest-support.py /tmp/migrate_from_events_bot.py
+      - name: Apply standalone dependency-boundary patches
+        run: |
+          python control/tools/patch-migrator-pytest-support.py /tmp/migrate_from_events_bot.py
+          python control/tools/patch-migrator-doc-literals.py /tmp/migrate_from_events_bot.py
       - name: Print exact parent chain to main.py
         run: >-
           python control/tools/diagnose-standalone-closure.py

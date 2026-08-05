@@ -1,4 +1,4 @@
-name: Build standalone Region Talk transfer package v5
+name: Build standalone Region Talk transfer package v6
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: region-talk-standalone-transfer-v5
+  group: region-talk-standalone-transfer-v6
   cancel-in-progress: false
 
 jobs:
@@ -53,14 +53,9 @@ jobs:
         run: |
           cat control/tools/standalone-transfer-tool.part-* > /tmp/migrator.gz.b64
           python - <<'PY'
-          import base64
-          import gzip
-          import hashlib
-          import os
+          import base64, gzip, hashlib, os
           from pathlib import Path
-
-          encoded = Path('/tmp/migrator.gz.b64').read_text()
-          payload = gzip.decompress(base64.b64decode(encoded))
+          payload = gzip.decompress(base64.b64decode(Path('/tmp/migrator.gz.b64').read_text()))
           digest = hashlib.sha256(payload).hexdigest()
           assert digest == os.environ['MIGRATOR_SHA256'], (digest, os.environ['MIGRATOR_SHA256'])
           target = Path('control/tools/migrate_from_events_bot.py')
@@ -69,8 +64,10 @@ jobs:
           print(f'migrator_sha256={digest} bytes={len(payload)}')
           PY
 
-      - name: Narrow pytest support to Region Talk-owned fixtures
-        run: python control/tools/patch-migrator-pytest-support.py control/tools/migrate_from_events_bot.py
+      - name: Apply standalone dependency-boundary patches
+        run: |
+          python control/tools/patch-migrator-pytest-support.py control/tools/migrate_from_events_bot.py
+          python control/tools/patch-migrator-doc-literals.py control/tools/migrate_from_events_bot.py
 
       - name: Build standalone transfer tree
         run: >-
@@ -92,7 +89,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: region-talk-transfer-5bbdb681-v5
+          name: region-talk-transfer-5bbdb681-v6
           path: |
             region-talk-transfer-5bbdb681.tar.gz
             region-talk-transfer-5bbdb681.tar.gz.sha256
@@ -100,8 +97,6 @@ jobs:
           retention-days: 30
 
       - name: Publish exact standalone tree to transfer branch
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           cd control
           git config user.name codex-agent
