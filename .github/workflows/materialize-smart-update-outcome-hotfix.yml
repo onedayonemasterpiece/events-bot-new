@@ -28,6 +28,32 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Correct one-shot materializer bootstrap
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("scripts/dev/materialize_smart_update_outcome_hotfix.py")
+          lines = path.read_text(encoding="utf-8").splitlines()
+          predicates_at = lines.index("    predicates = [")
+          start = lines.index("    if token:", predicates_at)
+          end = start + 1
+          while end < len(lines) and lines[end] != "    legacy_rows = (":
+              end += 1
+          if end >= len(lines):
+              raise RuntimeError("legacy source materializer block end not found")
+          replacement = [
+              "    if token:",
+              "        # SQL only narrows candidates; canonical equality below is authoritative.",
+              "        predicates.append(EventSource.source_url.contains(token))",
+              "",
+          ]
+          path.write_text(
+              "\n".join(lines[:start] + replacement + lines[end:]) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
       - name: Apply exact source patch
         run: python scripts/dev/materialize_smart_update_outcome_hotfix.py
 
