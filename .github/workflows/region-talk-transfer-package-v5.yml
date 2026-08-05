@@ -1,4 +1,4 @@
-name: Build standalone Region Talk transfer package v4
+name: Build standalone Region Talk transfer package v5
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: region-talk-standalone-transfer-v4
+  group: region-talk-standalone-transfer-v5
   cancel-in-progress: false
 
 jobs:
@@ -70,39 +70,7 @@ jobs:
           PY
 
       - name: Narrow pytest support to Region Talk-owned fixtures
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path('control/tools/migrate_from_events_bot.py')
-          text = path.read_text()
-          old = '''    # Pytest support is implicit rather than imported: preserve conftest hooks and
-    # fixture/resource trees used by the transferred product suite.
-    support_prefixes = (
-        "tests/fixtures/", "tests/data/", "tests/resources/",
-        "tests/golden/", "tests/snapshots/", "tests/_helpers/",
-    )
-    for path in tracked_list:
-        # The source-wide conftest imports the monolithic Telegram bot entrypoint
-        # and installs fixtures for unrelated products. A dedicated standalone
-        # Region Talk conftest is generated below instead of copying that shell.
-        if path.startswith(support_prefixes) and is_safe_copy_path(path):
-            if path not in selected:
-                selected.add(path)
-                reasons[path] = "pytest-support"
-'''
-          new = '''    # The source-wide conftest and generic fixture trees belong to events-bot-new
-    # and may import its monolithic Telegram entrypoint. Region Talk tests use a
-    # generated narrow conftest; other resources enter through literal/import
-    # closure. Only the no-network guard is an implicit pytest dependency.
-    for support_path in ("tests/_helpers/no_network.py",):
-        if support_path in tracked and support_path not in selected:
-            selected.add(support_path)
-            reasons[support_path] = "pytest-support"
-'''
-          assert old in text, 'expected pytest-support block not found'
-          path.write_text(text.replace(old, new), encoding='utf-8')
-          PY
+        run: python control/tools/patch-migrator-pytest-support.py control/tools/migrate_from_events_bot.py
 
       - name: Build standalone transfer tree
         run: >-
@@ -124,21 +92,21 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: region-talk-transfer-5bbdb681-v4
+          name: region-talk-transfer-5bbdb681-v5
           path: |
             region-talk-transfer-5bbdb681.tar.gz
             region-talk-transfer-5bbdb681.tar.gz.sha256
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish exact standalone tree to a protected transfer branch
+      - name: Publish exact standalone tree to transfer branch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd control
           git config user.name codex-agent
           git config user.email codex-agent@example.local
-          git checkout --orphan "$GENERATED_BRANCH"
+          git checkout --orphan transfer-generated
           git rm -rf .
           cp -a ../transfer/. .
           git add -A
