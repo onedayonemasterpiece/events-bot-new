@@ -53,7 +53,7 @@ test('artifact policy indexes only the root and hides every other HTML page', ()
     assert.match(readFileSync(join(root, 'index.html'), 'utf8'), /content="index,follow"/u);
     assert.match(
       readFileSync(join(root, 'sobytiya', 'test', 'index.html'), 'utf8'),
-      new RegExp(`content="${PRELAUNCH_ROBOTS_DIRECTIVE}"`, 'u),
+      new RegExp(`content="${PRELAUNCH_ROBOTS_DIRECTIVE}"`, 'u'),
     );
     assert.equal(
       readFileSync(join(root, 'robots.txt'), 'utf8'),
