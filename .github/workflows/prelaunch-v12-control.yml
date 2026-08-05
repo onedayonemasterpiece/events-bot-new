@@ -1,0 +1,172 @@
+name: Prelaunch v12 visual control
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/prelaunch-v12.request'
+      - '.github/workflows/prelaunch-v12-control.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prelaunch-v12-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  visual-evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout control branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Parse exact target request
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+          request_file='.github/prelaunch-v12.request'
+          test -f "$request_file"
+          request_id=$(sed -n 's/^request_id=//p' "$request_file" | tail -n 1)
+          target_branch=$(sed -n 's/^target_branch=//p' "$request_file" | tail -n 1)
+          target_sha=$(sed -n 's/^target_sha=//p' "$request_file" | tail -n 1)
+          [[ "$request_id" =~ ^[A-Za-z0-9._-]{8,120}$ ]]
+          [[ "$target_branch" == 'agent/prelaunch-landing-20260803' ]]
+          [[ "$target_sha" =~ ^[0-9a-f]{40}$ ]]
+          echo "request_id=$request_id" >> "$GITHUB_OUTPUT"
+          echo "target_branch=$target_branch" >> "$GITHUB_OUTPUT"
+          echo "target_sha=$target_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact feature SHA
+        shell: bash
+        env:
+          TARGET_BRANCH: ${{ steps.request.outputs.target_branch }}
+          TARGET_SHA: ${{ steps.request.outputs.target_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/heads/${TARGET_BRANCH}:refs/remotes/origin/${TARGET_BRANCH}"
+          actual_sha=$(git rev-parse "refs/remotes/origin/${TARGET_BRANCH}")
+          test "$actual_sha" = "$TARGET_SHA"
+          git checkout --detach "$TARGET_SHA"
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install site dependencies
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Chromium
+        working-directory: site
+        run: npx playwright install --with-deps chromium
+
+      - name: Run source contracts
+        run: npm --prefix site run test:static-release
+
+      - name: Build prelaunch page
+        env:
+          PUBLIC_PRELAUNCH_MODE: 'on'
+        run: npm --prefix site run build
+
+      - name: Start immutable local server
+        run: |
+          python3 -m http.server 4173 --directory site/dist > /tmp/prelaunch-v12-http.log 2>&1 &
+          echo $! > /tmp/prelaunch-v12-http.pid
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then
+              exit 0
+            fi
+            sleep 0.5
+          done
+          cat /tmp/prelaunch-v12-http.log
+          exit 1
+
+      - name: Capture visual, mask, light, responsive and form-state evidence
+        id: gates
+        shell: bash
+        env:
+          REQUEST_ID: ${{ steps.request.outputs.request_id }}
+          TARGET_SHA: ${{ steps.request.outputs.target_sha }}
+        run: |
+          set -uo pipefail
+          artifact_dir='artifacts/prelaunch-browser'
+          mkdir -p "$artifact_dir/reference"
+
+          npm --prefix site run check:prelaunch-browser -- \
+            --url http://127.0.0.1:4173/ \
+            --artifact-dir ../artifacts/prelaunch-browser
+          browser_status=$?
+
+          node site/scripts/check-prelaunch-viewport-fit.mjs \
+            --url http://127.0.0.1:4173/ \
+            --artifact-dir "$artifact_dir"
+          fit_status=$?
+
+          npm --prefix site run check:prelaunch-light-model -- \
+            --url http://127.0.0.1:4173/ \
+            --artifact-dir ../artifacts/prelaunch-browser
+          light_status=$?
+
+          npm --prefix site run check:prelaunch-experience -- \
+            --url http://127.0.0.1:4173/ \
+            --artifact-dir ../artifacts/prelaunch-browser
+          experience_status=$?
+
+          cp docs/features/static-site-pages/prelaunch-handoff/reference/target-desktop.webp \
+            "$artifact_dir/reference/target-desktop.webp"
+          cp docs/features/static-site-pages/prelaunch-handoff/reference/PWA-icon.webp \
+            "$artifact_dir/reference/PWA-icon.webp"
+          cp docs/features/static-site-pages/prelaunch-handoff/reference/generated-lighting-desktop-v1.webp \
+            "$artifact_dir/reference/generated-lighting-desktop-v1.webp"
+          cp docs/features/static-site-pages/prelaunch-handoff/reference/generated-lighting-mobile-v1.webp \
+            "$artifact_dir/reference/generated-lighting-mobile-v1.webp"
+
+          npm --prefix site run check:prelaunch-product-visual-policy -- \
+            --artifact-dir ../artifacts/prelaunch-browser
+          policy_status=$?
+
+          printf '%s\n' "$TARGET_SHA" > "$artifact_dir/repository-sha.txt"
+          cat > "$artifact_dir/control-receipt.json" <<EOF
+          {
+            "schema_version": "prelaunch_v12_control_receipt_v1",
+            "request_id": "$REQUEST_ID",
+            "target_sha": "$TARGET_SHA",
+            "run_id": "$GITHUB_RUN_ID",
+            "browser_exit_code": $browser_status,
+            "viewport_fit_exit_code": $fit_status,
+            "light_model_exit_code": $light_status,
+            "experience_exit_code": $experience_status,
+            "product_policy_exit_code": $policy_status
+          }
+          EOF
+
+          combined=0
+          for status in "$browser_status" "$fit_status" "$light_status" "$experience_status" "$policy_status"; do
+            if [[ "$status" -ne 0 ]]; then combined=1; fi
+          done
+          exit "$combined"
+
+      - name: Stop local server
+        if: always()
+        run: |
+          if [[ -f /tmp/prelaunch-v12-http.pid ]]; then
+            kill "$(cat /tmp/prelaunch-v12-http.pid)" || true
+          fi
+          cat /tmp/prelaunch-v12-http.log || true
+
+      - name: Upload complete review package
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prelaunch-v12-visual-${{ github.run_id }}
+          path: artifacts/prelaunch-browser
+          if-no-files-found: error
+          retention-days: 14
