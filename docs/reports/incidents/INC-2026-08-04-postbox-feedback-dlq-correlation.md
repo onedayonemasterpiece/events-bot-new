@@ -116,8 +116,9 @@ runbook; absence of a value is a blocker, never an implied success.
 |---|---|
 | PR #333 reviewed head / merge SHA | merged 2026-08-05 07:56 UTC as `183326628b01d7f3d2762df5e0215af7540473f4`; the same implementation lane continued with fail-closed proof constraint `cd3f3d419cf97d7c2fcba6d52e8e37aef1bad385`, reachable from `origin/main` as `eecc93e451f32a66363218d6fe8352d5e5b6dada` |
 | logical backup path, SHA-256, `pg_restore --list`, restore drill | `artifacts/codex/INC-2026-08-04-postbox-feedback-dlq-correlation/personalization-pre-postbox-20260805T074249Z.dump`, 6,188,260 bytes, SHA-256 `487ff4c0c5934e5c9e09e97d2c44403d1ca01e2b58299fd8665ed645641b23b2`; list SHA-256 `8757affc501f64ec8cd218b7b08b15e86082abeb8ef1f1745e4ee42e010ce31b`; vanilla PostgreSQL 17 restore is **blocked** because the provider extension `supabase_vault` is unavailable there, so restorable-backup proof is not yet satisfied |
+| Supabase Send Email Hook precondition | verified through the official Management API at 08:39 UTC: `hook_send_email_enabled=false` and URI absent. Sanitized artifact `auth-config-precondition-20260805T083926Z.json`, SHA-256 `e1348fc5bccc26496d0180a7dd946430b670b9fe316c6e688196a6081b7ebc1d` |
 | pre/post migration versions and queries | precheck SHA-256 `73e84abeaa9170f689096925c8a450397032e2fadb3fca144020cfa0d3d2a8f6`: no accepted outbox/Auth Postbox rows, duplicate receipts or cross-source collisions; `20260804190000` is absent in production. No post-state: migration intentionally not applied |
-| focus Auth Function version and sanitized config parity | current feedback consumer `d4enjcfg3h6nep4ij4fh` / `d4ejof08mqck6sp1cn1h`; desired hook parity pins the same Lockbox version, but no new Function version was deployed because the database precondition is blocked |
+| focus Auth Function version and sanitized config parity | current feedback consumer `d4enjcfg3h6nep4ij4fh` / `d4ejof08mqck6sp1cn1h`; desired hook parity pins the same Lockbox version, but no new Function version was deployed while migration-history and restore gates remain blocked |
 | Fly release and in-container SHA | release `1909`, machine `48e419df93e078`, image digest `sha256:5989aa44b0d9b6bfb265fd5e9e409068d12587878301eac645554a336ab66870`, `/app/.static-site-repo-sha` = `eecc93e451f32a66363218d6fe8352d5e5b6dada`; `/healthz` ready with DB, scheduler, email worker and email monitor all `ok` |
 | exact DLQ queue/event/message inventory and histogram | **blocked** until the classification RPC from the unapplied migration exists; no message was deleted |
 | sanitized legacy manifest SHA-256 and registrations | **blocked** by exact inventory/classification; none registered |
@@ -133,21 +134,29 @@ SHA-256 `44794282847956049ca04eb641fea492040a8c1025bde16dca925d9bbb9f130c`.
 
 The implementation is delivered through PR #333 and its same-lane continuation,
 but the incident remains open. The serialized production sequence stopped before
-any database, Function, queue or switch mutation for these fail-closed reasons:
+any database, Function, queue or switch mutation for the remaining fail-closed
+reasons below.
 
-1. The official Supabase Management Auth-config read returned HTTP `403` for
-   both available redacted credential lanes. The required `auth_config_read`
-   scope is unavailable, so the mandatory proof that the live Send Email Hook is
-   disabled could not be obtained.
-2. Standard Supabase migration dry-run is not isolated to this incident. The
+The Auth-config blocker is resolved. The earlier HTTP `403` was Cloudflare error
+`1010`: its bot filter rejected Python `urllib`'s default User-Agent before token
+authorization. Both the cached CLI token and the replacement environment token
+return `200` with an explicit operator User-Agent. This was not an
+`auth_config_read` scope denial. The live Send Email Hook is verified disabled.
+
+1. Standard Supabase migration dry-run is not isolated to this incident. The
    initial checkout lacked remote-history version `20260803143000`; after a
    temporary exact-history overlay it reported two unrelated Google AI
    migrations plus `20260804190000` as pending. The overlay was removed and no
-   remote mutation was attempted.
-3. The logical backup and restore list exist, but the isolated restore drill
+   remote mutation was attempted. A read-only semantic check confirms the two
+   Google migrations' table, limiter contract and six distinct scopes already
+   exist in production while their versions are absent from migration history.
+   Reapplying or history-repairing unrelated Google changes is outside this
+   incident. Sanitized evidence: `migration-consistency-20260805T0841Z.json`,
+   SHA-256 `a1675b6134669aef13041528f3ccd12cf52620f862a2eb06cd4082fc46cfe9b7`.
+2. The logical backup and restore list exist, but the isolated restore drill
    cannot complete on vanilla PostgreSQL 17 without the production provider's
    `supabase_vault` extension.
-4. Exact DLQ classification depends on the unapplied service-only classifier
+3. Exact DLQ classification depends on the unapplied service-only classifier
    RPC. Replay, deletion, legacy registration and canaries therefore remain
    prohibited.
 
