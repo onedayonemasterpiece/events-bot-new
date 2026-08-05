@@ -115,16 +115,18 @@ runbook; absence of a value is a blocker, never an implied success.
 | Gate | Evidence |
 |---|---|
 | PR #333 reviewed head / merge SHA | merged 2026-08-05 07:56 UTC as `183326628b01d7f3d2762df5e0215af7540473f4`; the same implementation lane continued with fail-closed proof constraint `cd3f3d419cf97d7c2fcba6d52e8e37aef1bad385`, reachable from `origin/main` as `eecc93e451f32a66363218d6fe8352d5e5b6dada` |
-| logical backup path, SHA-256, `pg_restore --list`, restore drill | `artifacts/codex/INC-2026-08-04-postbox-feedback-dlq-correlation/personalization-pre-postbox-20260805T074249Z.dump`, 6,188,260 bytes, SHA-256 `487ff4c0c5934e5c9e09e97d2c44403d1ca01e2b58299fd8665ed645641b23b2`; list SHA-256 `8757affc501f64ec8cd218b7b08b15e86082abeb8ef1f1745e4ee42e010ce31b`; vanilla PostgreSQL 17 restore is **blocked** because the provider extension `supabase_vault` is unavailable there, so restorable-backup proof is not yet satisfied |
+| logical backup path, SHA-256, `pg_restore --list`, restore drill | `artifacts/codex/INC-2026-08-04-postbox-feedback-dlq-correlation/personalization-pre-postbox-20260805T074249Z.dump`, 6,188,260 bytes, SHA-256 `487ff4c0c5934e5c9e09e97d2c44403d1ca01e2b58299fd8665ed645641b23b2`; list SHA-256 `8757affc501f64ec8cd218b7b08b15e86082abeb8ef1f1745e4ee42e010ce31b`; exact Supabase temporary-project restore including `auth.users` passed on PostgreSQL 17 with provider extensions. Validation SHA-256 `d5377bcb297a53738f556385fbf1f2b364e234bb723ed3f99d4a9e876d1ac0ba`, restore log `4c0d03cc4944066d0e7691bf6e6648959cdaadce1767e3c8cbfb3a5d17220056`, rollback contract `d57c25ea033bad7c2b63a3fe5055ddcc212616815d3cee3b6120f14c1bbb5103`; temporary project `znizhmnwabvkzhndaznn` deleted, evidence `ad0c3acf28bab4561f49bcf58709eb0074e17da5138cb8ea9f28aba15c331daf` |
 | Supabase Send Email Hook precondition | verified through the official Management API at 08:39 UTC: `hook_send_email_enabled=false` and URI absent. Sanitized artifact `auth-config-precondition-20260805T083926Z.json`, SHA-256 `e1348fc5bccc26496d0180a7dd946430b670b9fe316c6e688196a6081b7ebc1d` |
-| pre/post migration versions and queries | precheck SHA-256 `73e84abeaa9170f689096925c8a450397032e2fadb3fca144020cfa0d3d2a8f6`: no accepted outbox/Auth Postbox rows, duplicate receipts or cross-source collisions; `20260804190000` is absent in production. No post-state: migration intentionally not applied |
-| focus Auth Function version and sanitized config parity | current feedback consumer `d4enjcfg3h6nep4ij4fh` / `d4ejof08mqck6sp1cn1h`; desired hook parity pins the same Lockbox version, but no new Function version was deployed while migration-history and restore gates remain blocked |
-| Fly release and in-container SHA | release `1909`, machine `48e419df93e078`, image digest `sha256:5989aa44b0d9b6bfb265fd5e9e409068d12587878301eac645554a336ab66870`, `/app/.static-site-repo-sha` = `eecc93e451f32a66363218d6fe8352d5e5b6dada`; `/healthz` ready with DB, scheduler, email worker and email monitor all `ok` |
-| exact DLQ queue/event/message inventory and histogram | **blocked** until the classification RPC from the unapplied migration exists; no message was deleted |
-| sanitized legacy manifest SHA-256 and registrations | **blocked** by exact inventory/classification; none registered |
-| replay applied/duplicate/pending/error/remaining | not started; applied `0`, deleted `0`; migration/inventory gates remain blocked |
-| direct Auth, transactional, duplicate, suppressive canaries | not run; no authorization to change product switches or send production canaries, and the migration/Function cutover is blocked |
-| monitor delta/static/recovery notification evidence | Fly monitor implementation deployed; first scheduled run completed at 08:11:01 UTC in 1,935 ms. State file `/data/email-postbox-monitor-state.json` is mode `0600`, contains only the six documented keys, and records initialized `dlq_total=162` / `postbox_dlq_nonempty`. Delta/static/recovery transition evidence remains pending until a controlled queue transition |
+| pre/post migration versions and queries | selectively applied only `20260804190000`; apply SHA-256 `1fbd89062abc50c150316a006821ad505681ac99f9e4ebd01870ac9ca6df3fec`, post-contract `b680c8b195713dfa322ff08e06e55c6039febb83d37f44842b296577f23f20fe`, assertions `c1d7050f8c3632a3d85c537648436831eaae016a09099b4e627b936ebe26a943`. Repaired only that migration-history version; repair `b5cfced2f535864f000269058f24f39f8d8060c41bf780e4725cf4f0e85dd5a7`, exact postcheck `b3e641f2a2f3e9a1d5a7b8a8ecfb3615eb4b1bc4bb21b4ea4eac769aad645886`. Unrelated Google history was not changed |
+| focus Auth Function version and sanitized config parity | hook Function `d4euk47p8gv7qmgrtib4`, active version `d4ek3skja1m881culgd7`, deterministic zip SHA-256 `2f98728f04aeb09783e084d91dca2c8339e6d25b58cde0d0f85a0f8fad7fbe22`, deploy evidence `5c510314b92cf51310282add79370fbeca38b274cea53202e83f45f5fc79a8ba`; invalid-signature smoke returned `401`, evidence `68aa0b998925da793088f0db35af390b5e66f263f5befc2028b48d8abebf0af0`. It pins HMAC Lockbox version `e6qi77mdnpmetpljf5qa` and extracts only the documented Yandex `context.token.access_token` |
+| Supabase Send Email Hook final state | enabled at exact URI `https://d5d17smc4tutrt316fjo.uvah0e6r.apigw.yandexcloud.net/v1/send-email`; final Management API evidence SHA-256 `a66edd52a5b0695289dd154ce719243ecda61afc250e6bf486bbe6b772504ad9` |
+| Fly release and in-container SHA | release `1914`, machine `48e419df93e078`, image `deployment-01KZ8QQD590542C0CSA64J1FXY`, `/app/.static-site-repo-sha` = exact `origin/main@e7f02bf83f4b94d250be7cc6b792495de3be1984`; `/healthz` ready with DB and all issues empty. Same PR #333 implementation lane contains follow-up commits `f93df1e8f`, `d2d5f443c`, `3d2a8d387`, `e7f02bf83` |
+| exact DLQ queue/event/message inventory and histogram | exact bounded inventory: 162 queue messages, 162 unique event IDs, 81 unique provider message IDs; `Send=81`, `Delivery=78`, `Bounce=3`, oldest `2026-07-29T07:53:33.005397822Z`, newest `2026-08-02T23:58:04.326672281Z`, malformed/unsupported `0`. All 162 classify `unproven:correlation_pending`. File SHA-256 `39b1ee6d93ed59596c7d96cb49d4b17e66109cb52025bdf443107947f5201a97`, internal manifest SHA-256 `7908b414a45b259887ba7951c2f548423f299cbd31be22d2b4ea03b6af945f7d`; visibility restored to 162/0, evidence `a6fe420ea8b2dfc45f9692d0b13f61bb80137fd0824412af48c56e66faa944e4` |
+| sanitized legacy manifest SHA-256 and registrations | no independently verifiable sender-ledger evidence was found for any of the 81 legacy provider receipts, so fail-closed registration count is `0`. All 162 exact queue receipts are retained with owner `onedayonemasterpiece` and blocker `legacy_message_id_has_no_independent_sender_ledger_evidence`; blocker manifest SHA-256 `009ca3d1d7788337f3bb7d62bd5cb6a28054ea0ed74baa162550415ad40a4620` |
+| replay applied/duplicate/pending/error/remaining | batch 001 stopped on its first retained message as required: `consumer_disabled`, applied `0`, duplicate `0`, deleted `0`, remaining `162`; replay evidence `3666f69f522f0806db023336bc7376e0509ea6e26e3fc97e604f92baa593146d`. DB pre/post evidence is byte-identical SHA-256 `355232526918b364d2967316157e13ffc71b2363d3b0e8e8d4bdfd21d288485b` (provider events 6, applied 6, active suppressions 0, correlations 1, legacy correlations 0). Replay now preflights the complete deployed consumer environment before receiving, deployed in release 1914; no second batch was attempted after the mandated first-error stop |
+| direct Auth and duplicate canaries | fixed first-time controlled browser canary passed with exact immutable preview SHA `4a19fbe0b243d8a9a4652ff0c1e4fee9e895cf9c`: one issue, one mail, one verify and one registration. Backend: one `postbox/accepted`, feedback `delivered`, two authenticated/verified/applied events (`Send` and `Delivery`), HMAC version 1, message alias `0537ad09df67cf72`, missing/unbound correlations 0. Evidence: browser manifest `c284a2c04e355ce2c07efbfa6f4e22a2202b7279504734aab9006e487619f8d6`, backend `9ae5479f7a42d4098c5b2ab3e8d7408649c0d69630ff33858a5941b217f50088`, operator/health `916deb74ddf5217b6d5dc055d1be035b835beac2815a5e6e76290422e058b044`. Exact delivered-event replay returned `duplicate`; attempt/event counts stayed 2/2, evidence `ac7866de7885e2a1302d2da975be5240ed217f35345ab5a62387e05373ea5275` |
+| transactional and suppressive canaries | not performed: the user-authorized live canary was explicitly the fixed first-time Auth mailbox, and no arbitrary recipient or synthetic production bounce/complaint was authorized |
+| monitor delta/static/recovery notification evidence | state file remains PII-free mode `0600`. A real inventory in-flight delta notified once at 10:13:31 UTC; three unchanged scheduled runs through 10:30 UTC did not notify again, proving no 15–20 minute storm. Evidence SHA-256 `2672bc3caf5ad7d9928f6cf321963f9143fc036e54ae08c03bf8d377896e7f2a`. Recovery notification is not emitted because 162 evidence-blocked messages correctly remain in DLQ |
 
 Sanitized serialized-run summary:
 `artifacts/codex/INC-2026-08-04-postbox-feedback-dlq-correlation/production-run-20260805T0805Z.json`,
@@ -184,7 +186,31 @@ correctly rejected it. The unit fixture had modeled `context.token` as a plain
 string and therefore missed the production shape. The regression now supplies
 the documented object form and asserts that only `access_token` reaches the
 Postbox header. Hook reactivation, a fresh controlled Postbox canary and the
-remaining DLQ recovery gates stay pending until that exact-main fix is deployed.
+exact DLQ inventory then ran from the same PR #333 implementation lane; their
+immutable results are in the production evidence ledger above.
+
+### Final serialized outcome on 2026-08-05: incident remains open
+
+The new product path is healthy: the Hook is enabled on Function version
+`d4ek3skja1m881culgd7`, the fixed first-time Auth canary reached Postbox
+`accepted` and authenticated `delivered`, its exact duplicate was idempotent,
+and unified health reports no missing or unbound correlation.
+
+The retained historical backlog cannot be deleted safely. All 162 queue
+messages are structurally valid but all 81 unique legacy provider receipts lack
+independent sender-ledger evidence outside the feedback envelope. Registering
+them from the DLQ alone would violate the incident's fail-closed correlation
+contract. The first bounded replay also exposed a missing process-local
+consumer environment and stopped on `consumer_disabled` before deletion; the
+tool now rejects that configuration before receiving a message, but the
+mandatory stop-on-first-error rule prohibits continuing this serialized replay.
+
+Therefore the product result for this run is `FAIL`, not a partial success. No
+message was purged or deleted, all visibility was restored, and every retained
+queue receipt has a hash-only blocker row owned by `onedayonemasterpiece`.
+Incident closure still requires independently reviewed legacy sender evidence
+or an explicit product decision before retention expiry, a new bounded replay
+run, and a real monitor recovery notification after the backlog clears.
 
 ## Rollback ownership
 
