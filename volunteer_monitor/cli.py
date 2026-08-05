@@ -37,7 +37,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--region",
-        default=os.getenv("VOLUNTEER_MONITOR_REGION", "Калининградская область"),
+        # Current Dobro.ru region picker renders this exact abbreviated option.
+        # Detail-page validation independently canonicalizes the full region.
+        default=os.getenv("VOLUNTEER_MONITOR_REGION", "Калининградская обл"),
     )
     parser.add_argument(
         "--max-items",
