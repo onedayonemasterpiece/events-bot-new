@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Made the bounded Postbox DLQ inventory wait for YMQ's approximate visible/in-flight counters to converge before enforcing its exact hidden-snapshot contract.
+
 - Fixed the Postbox feedback/DLQ correlation implementation in PR #333 without
   creating a competing delivery path: transactional outbox, direct focus Auth
   and audited legacy receipts share a collision-safe registry; direct Auth now

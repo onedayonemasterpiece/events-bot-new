@@ -54,6 +54,26 @@ class FakeSqs:
         self.deleted.append(kwargs["ReceiptHandle"])
 
 
+class EventuallyConsistentAttributesSqs(FakeSqs):
+    def __init__(self, bodies):
+        super().__init__(bodies)
+        self.hidden_attribute_reads = 0
+
+    def get_queue_attributes(self, **_kwargs):
+        if self.cursor < len(self.messages):
+            return super().get_queue_attributes()
+        self.hidden_attribute_reads += 1
+        if self.hidden_attribute_reads == 1:
+            return {"Attributes": {
+                "ApproximateNumberOfMessages": str(len(self.messages)),
+                "ApproximateNumberOfMessagesNotVisible": str(len(self.messages)),
+            }}
+        return {"Attributes": {
+            "ApproximateNumberOfMessages": "0",
+            "ApproximateNumberOfMessagesNotVisible": str(len(self.messages)),
+        }}
+
+
 def test_inventory_is_exact_sanitized_and_restores_visibility(monkeypatch):
     sqs = FakeSqs([
         record(),
@@ -82,6 +102,26 @@ def test_inventory_is_exact_sanitized_and_restores_visibility(monkeypatch):
     assert "event-1" not in serialized
     assert "queue.invalid" not in serialized
     assert sorted(sqs.restored) == ["receipt-0", "receipt-1"]
+
+
+def test_inventory_waits_for_approximate_queue_counters_to_converge(monkeypatch):
+    sqs = EventuallyConsistentAttributesSqs([record()])
+    monkeypatch.setattr(recover, "_classify", lambda ids: {
+        recover._sha(value): {
+            "source_classification": "focus_auth",
+            "correlation_status": "bound",
+        }
+        for value in ids
+    })
+    monkeypatch.setattr(recover.time, "sleep", lambda _seconds: None)
+
+    result = recover.inventory(
+        sqs, "https://queue.invalid/private", max_messages=10, visibility=300
+    )
+
+    assert result["hidden_snapshot"] == {"visible": 0, "inflight": 1}
+    assert sqs.hidden_attribute_reads == 2
+    assert sqs.restored == ["receipt-0"]
 
 
 def test_inventory_retains_malformed_body_as_stable_error(monkeypatch):

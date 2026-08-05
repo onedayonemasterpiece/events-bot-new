@@ -98,6 +98,23 @@ def _attributes(client: Any, queue_url: str) -> dict[str, int]:
     }
 
 
+def _wait_for_hidden_snapshot(
+    client: Any,
+    queue_url: str,
+    *,
+    expected_inflight: int,
+    deadline: float,
+) -> dict[str, int]:
+    """Wait for YMQ's approximate counters to converge to the drained view."""
+    snapshot = _attributes(client, queue_url)
+    while snapshot != {"visible": 0, "inflight": expected_inflight}:
+        if time.monotonic() >= deadline:
+            return snapshot
+        time.sleep(2)
+        snapshot = _attributes(client, queue_url)
+    return snapshot
+
+
 def _classify(message_ids: Iterable[str]) -> dict[str, dict[str, str]]:
     ids = list(dict.fromkeys(message_ids))
     if not ids:
@@ -221,8 +238,16 @@ def inventory(client: Any, queue_url: str, *, max_messages: int, visibility: int
                 queue_rows[queue_hash] = row
         if time.monotonic() - started >= visibility - 60:
             raise RecoveryError("inventory_visibility_budget_exhausted")
-        time.sleep(2)
-        hidden_snapshot = _attributes(client, queue_url)
+        # GetQueueAttributes exposes approximate counters. YMQ may briefly
+        # report a received message as both visible and in-flight, so wait for
+        # the counters to converge instead of treating the first stale sample
+        # as an inventory failure. The final contract remains exact.
+        hidden_snapshot = _wait_for_hidden_snapshot(
+            client,
+            queue_url,
+            expected_inflight=len(queue_rows),
+            deadline=min(started + visibility - 60, time.monotonic() + 120),
+        )
         if len(queue_rows) >= max_messages and (
             before["visible"] > max_messages
             or hidden_snapshot["visible"] > 0
