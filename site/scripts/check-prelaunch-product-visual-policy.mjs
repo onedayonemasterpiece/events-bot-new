@@ -57,8 +57,8 @@ for (const name of requiredScreenshots) {
 }
 
 const referenceFiles = [
-  'reference/generated-lighting-desktop-v1.png',
-  'reference/generated-lighting-mobile-v1.png',
+  'reference/generated-lighting-desktop-v1.webp',
+  'reference/generated-lighting-mobile-v1.webp',
   'reference/target-desktop.webp',
   'reference/PWA-icon.webp',
 ];
