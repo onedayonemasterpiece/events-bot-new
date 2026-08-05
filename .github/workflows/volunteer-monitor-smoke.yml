@@ -1,5 +1,6 @@
 name: Volunteer monitor smoke
 
+# Credentialed Kaggle acceptance trigger; no runtime semantic change.
 on:
   pull_request:
     paths:
