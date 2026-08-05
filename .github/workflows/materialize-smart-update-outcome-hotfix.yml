@@ -106,21 +106,11 @@ jobs:
           ''',
               "parser smart update import",
           )
-          handlers = replace_once(
-              handlers,
-              '''            update_result = await _smart_event_update_with_lock_retry(
-                  db,
-                  candidate,
-                  smart_event_update,
-              )
-              event_id = update_result.event_id
-          ''',
-              '''            update_result = await _smart_event_update_with_lock_retry(
-                  db,
-                  candidate,
-                  smart_event_update,
-              )
-              if not smart_update_result_allows_caller_side_effects(update_result):
+          parser_call = "            update_result = await _smart_event_update_with_lock_retry("
+          parser_call_at = handlers.index(parser_call)
+          parser_event_line = "            event_id = update_result.event_id\n"
+          parser_event_at = handlers.index(parser_event_line, parser_call_at)
+          parser_gate = '''            if not smart_update_result_allows_caller_side_effects(update_result):
                   status = str(getattr(update_result, "status", "") or "not_accepted")
                   logger.warning(
                       "source_parsing: smart_update not accepted title=%s status=%s reason=%s matched_event_id=%s",
@@ -130,9 +120,11 @@ jobs:
                       getattr(update_result, "event_id", None),
                   )
                   return None, False, status
-              event_id = update_result.event_id
-          ''',
-              "parser caller outcome gate",
+          '''
+          handlers = (
+              handlers[:parser_event_at]
+              + parser_gate
+              + handlers[parser_event_at:]
           )
           handlers_path.write_text(handlers, encoding="utf-8")
 
@@ -150,31 +142,20 @@ jobs:
           ''',
               "VK smart update import",
           )
-          vk = replace_once(
-              vk,
-              '''    update_result = await smart_event_update(
-              db,
-              candidate,
-              check_source_url=False,
+          vk_call_at = vk.index("    update_result = await smart_event_update(")
+          vk_status_line = (
+              '    if str(getattr(update_result, "status", "") or "").startswith("rejected_"):\n'
           )
-              if str(getattr(update_result, "status", "") or "").startswith("rejected_"):
-          ''',
-              '''    update_result = await smart_event_update(
-              db,
-              candidate,
-              check_source_url=False,
-          )
-              if not smart_update_result_allows_caller_side_effects(update_result):
-                  raise RuntimeError(
-                      "smart_update not accepted: "
-                      f"status={getattr(update_result, 'status', None)} "
-                      f"reason={getattr(update_result, 'reason', None)} "
-                      f"matched_event_id={getattr(update_result, 'event_id', None)}"
-                  )
-              if str(getattr(update_result, "status", "") or "").startswith("rejected_"):
-          ''',
-              "VK caller outcome gate",
-          )
+          vk_status_at = vk.index(vk_status_line, vk_call_at)
+          vk_gate = '''    if not smart_update_result_allows_caller_side_effects(update_result):
+              raise RuntimeError(
+                  "smart_update not accepted: "
+                  f"status={getattr(update_result, 'status', None)} "
+                  f"reason={getattr(update_result, 'reason', None)} "
+                  f"matched_event_id={getattr(update_result, 'event_id', None)}"
+              )
+          '''
+          vk = vk[:vk_status_at] + vk_gate + vk[vk_status_at:]
           vk_path.write_text(vk, encoding="utf-8")
 
           test_path = Path("tests/test_smart_update_outcome_boundary_hotfix.py")
