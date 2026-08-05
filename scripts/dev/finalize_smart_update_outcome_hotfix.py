@@ -117,7 +117,10 @@ def test_cross_vendor_specific_ticket_ids_remain_llm_first() -> None:
 '''
     if "test_cross_vendor_specific_ticket_ids_remain_llm_first" in tests:
         raise RuntimeError("cross-vendor test already exists")
-    tests_path.write_text(tests.rstrip() + addition + "\n", encoding="utf-8")
+    tests_path.write_text(
+        tests.rstrip() + addition.rstrip() + "\n",
+        encoding="utf-8",
+    )
 
     for relative in (
         "scripts/dev/finalize_smart_update_outcome_hotfix.py",
