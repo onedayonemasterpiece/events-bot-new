@@ -104,7 +104,7 @@ def test_inventory_is_exact_sanitized_and_restores_visibility(monkeypatch):
     assert sorted(sqs.restored) == ["receipt-0", "receipt-1"]
 
 
-def test_inventory_waits_for_approximate_queue_counters_to_converge(monkeypatch):
+def test_inventory_uses_empty_polls_when_approximate_visible_is_stale(monkeypatch):
     sqs = EventuallyConsistentAttributesSqs([record()])
     monkeypatch.setattr(recover, "_classify", lambda ids: {
         recover._sha(value): {
@@ -119,8 +119,15 @@ def test_inventory_waits_for_approximate_queue_counters_to_converge(monkeypatch)
         sqs, "https://queue.invalid/private", max_messages=10, visibility=300
     )
 
-    assert result["hidden_snapshot"] == {"visible": 0, "inflight": 1}
-    assert sqs.hidden_attribute_reads == 2
+    assert result["hidden_snapshot"] == {"visible": 1, "inflight": 1}
+    assert result["hidden_reconciliation"] == {
+        "method": "ten_empty_long_polls_plus_matching_inflight",
+        "consecutive_empty_long_polls": 10,
+        "unique_queue_messages": 1,
+        "inflight_matches_unique": True,
+        "approximate_visible_converged": False,
+    }
+    assert sqs.hidden_attribute_reads == 1
     assert sqs.restored == ["receipt-0"]
 
 

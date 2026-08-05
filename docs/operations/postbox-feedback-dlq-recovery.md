@@ -216,13 +216,15 @@ python3 scripts/ops/postbox_dlq_recover.py inventory \
 ```
 
 Inventory requires `inflight=0` at start, ten consecutive empty long polls, and
-a reconciled hidden snapshot (`visible=0`, `inflight=unique queue messages`). It
-fails rather than writing evidence when the bound is exhausted or any visibility
-restore entry fails. Because YMQ documents both queue-depth attributes as
-approximate and may briefly count a received message as visible and in-flight,
-the tool waits up to two minutes for those counters to converge; it still writes
-no inventory unless the final hidden snapshot matches exactly. Inspect the
-resulting `envelope_schema` classification
+a reconciled hidden snapshot whose approximate `inflight` value equals the
+unique queue receipts held by the tool. It fails rather than writing evidence
+when the bound is exhausted or any visibility restore entry fails. YMQ documents
+both queue-depth attributes as approximate; production may continue reporting a
+received message as both visible and in-flight for the complete visibility
+window. The manifest therefore preserves the raw approximate snapshot and an
+explicit `hidden_reconciliation`: exact visible exhaustion is established by
+ten empty long polls while the independent in-flight counter must match the
+unique receipt inventory. Inspect the resulting `envelope_schema` classification
 before replay; the tool supports only a raw Postbox event or the exact
 `{"messages":[...]}` consumer envelope. It never writes the raw envelope.
 

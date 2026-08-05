@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- Made the bounded Postbox DLQ inventory wait for YMQ's approximate visible/in-flight counters to converge before enforcing its exact hidden-snapshot contract.
+- Made the bounded Postbox DLQ inventory reconcile YMQ's documented approximate counters against ten empty long polls and the exact unique in-flight receipt set, including the provider's persistent stale-visible behavior.
 
 - Fixed the Postbox feedback/DLQ correlation implementation in PR #333 without
   creating a competing delivery path: transactional outbox, direct focus Auth

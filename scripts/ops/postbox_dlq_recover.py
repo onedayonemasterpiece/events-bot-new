@@ -105,9 +105,9 @@ def _wait_for_hidden_snapshot(
     expected_inflight: int,
     deadline: float,
 ) -> dict[str, int]:
-    """Wait for YMQ's approximate counters to converge to the drained view."""
+    """Wait until YMQ reports every uniquely received message in flight."""
     snapshot = _attributes(client, queue_url)
-    while snapshot != {"visible": 0, "inflight": expected_inflight}:
+    while snapshot["inflight"] != expected_inflight:
         if time.monotonic() >= deadline:
             return snapshot
         time.sleep(2)
@@ -238,22 +238,23 @@ def inventory(client: Any, queue_url: str, *, max_messages: int, visibility: int
                 queue_rows[queue_hash] = row
         if time.monotonic() - started >= visibility - 60:
             raise RecoveryError("inventory_visibility_budget_exhausted")
-        # GetQueueAttributes exposes approximate counters. YMQ may briefly
-        # report a received message as both visible and in-flight, so wait for
-        # the counters to converge instead of treating the first stale sample
-        # as an inventory failure. The final contract remains exact.
+        # GetQueueAttributes exposes approximate counters. In production YMQ
+        # may keep reporting every received message as both visible and
+        # in-flight for the complete visibility window. Exact exhaustion is
+        # therefore proven by ten empty long polls; the approximate in-flight
+        # counter must still match every unique queue receipt we hold.
         hidden_snapshot = _wait_for_hidden_snapshot(
             client,
             queue_url,
             expected_inflight=len(queue_rows),
-            deadline=min(started + visibility - 60, time.monotonic() + 120),
+            deadline=min(started + visibility - 60, time.monotonic() + 30),
         )
         if len(queue_rows) >= max_messages and (
             before["visible"] > max_messages
             or hidden_snapshot["visible"] > 0
         ):
             raise RecoveryError("inventory_bound_too_small")
-        if hidden_snapshot["visible"] != 0 or hidden_snapshot["inflight"] != len(queue_rows):
+        if hidden_snapshot["inflight"] != len(queue_rows):
             raise RecoveryError("inventory_snapshot_did_not_reconcile")
         if len(queue_rows) != before_confirmed["visible"]:
             raise RecoveryError("inventory_count_did_not_reconcile")
@@ -278,6 +279,13 @@ def inventory(client: Any, queue_url: str, *, max_messages: int, visibility: int
             "before": before,
             "before_confirmed": before_confirmed,
             "hidden_snapshot": hidden_snapshot,
+            "hidden_reconciliation": {
+                "method": "ten_empty_long_polls_plus_matching_inflight",
+                "consecutive_empty_long_polls": empty_receives,
+                "unique_queue_messages": len(queue_rows),
+                "inflight_matches_unique": hidden_snapshot["inflight"] == len(queue_rows),
+                "approximate_visible_converged": hidden_snapshot["visible"] == 0,
+            },
             "inventory": {
                 "queue_messages": len(queue_rows),
                 "unique_event_ids": len({event["event_id_sha256"] for event in event_rows if event["event_id_sha256"]}),
