@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenigevents.ru/schemas/statistics-batch-v1.schema.json",
+  "title": "KenigEvents unified statistics batch v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "batchId", "createdAt", "facts", "observations"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "batchId": { "$ref": "#/$defs/identifier" },
+    "createdAt": { "type": "integer", "minimum": 0 },
+    "facts": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/fact" } },
+    "observations": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/observation" } }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string", "minLength": 8, "maxLength": 160,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]*$"
+    },
+    "token": {
+      "type": "string", "minLength": 1, "maxLength": 96,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]*$"
+    },
+    "eventName": {
+      "type": "string", "minLength": 3, "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_.:-]+$"
+    },
+    "scalar": {
+      "oneOf": [
+        { "type": "string", "maxLength": 96 },
+        { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        { "type": "boolean" },
+        { "type": "null" }
+      ]
+    },
+    "scalarMap": {
+      "type": "object", "maxProperties": 24,
+      "propertyNames": { "pattern": "^[a-z0-9][a-z0-9._:-]{0,63}$" },
+      "additionalProperties": { "$ref": "#/$defs/scalar" }
+    },
+    "numberMap": {
+      "type": "object", "maxProperties": 24,
+      "propertyNames": { "pattern": "^[a-z0-9][a-z0-9._:-]{0,63}$" },
+      "additionalProperties": { "type": "integer", "minimum": -1000000, "maximum": 1000000 }
+    },
+    "entity": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "id"],
+      "properties": { "kind": { "$ref": "#/$defs/token" }, "id": { "$ref": "#/$defs/token" } }
+    },
+    "release": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "releaseSha": { "$ref": "#/$defs/token" },
+        "pageRevision": { "$ref": "#/$defs/token" },
+        "contentRevision": { "$ref": "#/$defs/token" },
+        "featureVersion": { "$ref": "#/$defs/token" }
+      }
+    },
+    "common": {
+      "type": "object",
+      "properties": {
+        "eventName": { "$ref": "#/$defs/eventName" },
+        "sessionId": { "$ref": "#/$defs/identifier" },
+        "actorKey": { "$ref": "#/$defs/identifier" },
+        "surface": { "$ref": "#/$defs/token" },
+        "entity": { "$ref": "#/$defs/entity" },
+        "release": { "$ref": "#/$defs/release" },
+        "dimensions": { "$ref": "#/$defs/scalarMap" },
+        "counters": { "$ref": "#/$defs/numberMap" },
+        "maxima": { "$ref": "#/$defs/numberMap" }
+      }
+    },
+    "fact": {
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["eventName", "lane", "source", "occurredAt", "idempotencyKey"],
+          "properties": {
+            "eventName": { "$ref": "#/$defs/eventName" },
+            "lane": { "const": "product_fact" },
+            "source": { "const": "authoritative_receipt" },
+            "occurredAt": { "type": "integer", "minimum": 0 },
+            "idempotencyKey": { "$ref": "#/$defs/identifier" },
+            "sessionId": { "$ref": "#/$defs/identifier" },
+            "actorKey": { "$ref": "#/$defs/identifier" },
+            "surface": { "$ref": "#/$defs/token" },
+            "entity": { "$ref": "#/$defs/entity" },
+            "release": { "$ref": "#/$defs/release" },
+            "dimensions": { "$ref": "#/$defs/scalarMap" },
+            "counters": { "$ref": "#/$defs/numberMap" },
+            "maxima": { "$ref": "#/$defs/numberMap" }
+          }
+        }
+      ]
+    },
+    "observation": {
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["eventName", "lane", "source", "firstObservedAt", "lastObservedAt", "observationCount"],
+          "properties": {
+            "eventName": { "$ref": "#/$defs/eventName" },
+            "lane": { "enum": ["product_observation", "operational"] },
+            "source": { "enum": ["browser_observation", "service_runtime"] },
+            "firstObservedAt": { "type": "integer", "minimum": 0 },
+            "lastObservedAt": { "type": "integer", "minimum": 0 },
+            "observationCount": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "sessionId": { "$ref": "#/$defs/identifier" },
+            "actorKey": { "$ref": "#/$defs/identifier" },
+            "surface": { "$ref": "#/$defs/token" },
+            "entity": { "$ref": "#/$defs/entity" },
+            "release": { "$ref": "#/$defs/release" },
+            "dimensions": { "$ref": "#/$defs/scalarMap" },
+            "counters": { "$ref": "#/$defs/numberMap" },
+            "maxima": { "$ref": "#/$defs/numberMap" }
+          },
+          "allOf": [
+            {
+              "if": { "properties": { "lane": { "const": "product_observation" } }, "required": ["lane"] },
+              "then": { "properties": { "source": { "const": "browser_observation" } } }
+            },
+            {
+              "if": { "properties": { "lane": { "const": "operational" } }, "required": ["lane"] },
+              "then": {
+                "properties": { "source": { "const": "service_runtime" } },
+                "not": { "required": ["actorKey"] }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

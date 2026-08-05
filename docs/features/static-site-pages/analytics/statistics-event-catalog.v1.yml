@@ -1,0 +1,208 @@
+schema_version: 1
+catalog_id: kenigevents.statistics.v1
+status: accepted_to_be
+unknown_event_policy: reject
+unknown_field_policy: reject
+
+lanes:
+  product_fact:
+    source: authoritative_receipt
+    idempotency_key_required: true
+  product_observation:
+    source: browser_observation
+    consent_required: true
+  operational:
+    source: service_runtime
+    actor_key_allowed: false
+
+common_dimensions:
+  - device_class
+  - app_mode
+  - auth_state_class
+  - surface_family
+  - entry_surface
+  - release_channel
+
+common_release_fields:
+  - release_sha
+  - page_revision
+  - content_revision
+  - feature_version
+
+events:
+  session_summary:
+    lane: product_observation
+    aggregation: session_summary
+    retention_class: session_35d
+    counters:
+      - page_count
+      - unique_event_count
+      - large_cards_exposed
+      - compact_cards_exposed
+      - large_cards_opened
+      - compact_cards_opened
+      - intent_action_count
+    maxima:
+      - max_large_position_bucket
+      - max_compact_position_bucket
+      - max_description_checkpoint
+      - capability_maturity_tier
+
+  card_visible:
+    lane: product_observation
+    aggregation: dedupe_count_max
+    entity_kind: event
+    retention_class: event_actor_day_35d
+    dimensions:
+      - card_density
+      - card_family
+      - ordering_class
+    counters: [exposures]
+    maxima: [position_bucket, dwell_bucket]
+
+  card_opened:
+    lane: product_observation
+    aggregation: dedupe_count
+    entity_kind: event
+    retention_class: event_actor_day_35d
+    dimensions: [card_density, card_family, ordering_class]
+    counters: [opens]
+
+  description_checkpoint:
+    lane: product_observation
+    aggregation: maximum
+    entity_kind: event
+    retention_class: event_actor_day_35d
+    dimensions: [description_length_bucket, media_family, page_family]
+    maxima: [checkpoint, time_to_checkpoint_bucket]
+
+  cta_stage:
+    lane: product_observation
+    aggregation: stage_mask
+    entity_kind: event
+    retention_class: event_actor_day_35d
+    dimensions:
+      - cta_kind
+      - cta_set_version
+      - placement
+      - stage
+    counters: [occurrences]
+
+  action_receipt:
+    lane: product_fact
+    aggregation: exact_once
+    entity_kind: event
+    retention_class: strong_action_90d
+    dimensions:
+      - action_kind
+      - target_kind
+      - stage
+      - result_class
+      - route_class
+
+  hero_talk_state:
+    lane: product_observation
+    aggregation: stage_mask
+    retention_class: feature_actor_day_35d
+    dimensions:
+      - placement
+      - chain_id
+      - step_id
+      - object_role
+      - target_kind
+      - state
+    counters: [occurrences]
+    maxima: [checkpoint]
+
+  keyboard_state:
+    lane: product_observation
+    aggregation: stage_mask
+    retention_class: feature_actor_day_35d
+    dimensions:
+      - state
+      - command_family
+      - page_family
+    counters: [occurrences]
+
+  personalization_state:
+    lane: product_observation
+    aggregation: stage_mask
+    retention_class: personalization_90d
+    dimensions:
+      - state_class
+      - model_version
+      - profile_age_bucket
+      - outcome_class
+    counters: [eligible, opened, value_reached]
+    maxima: [cards_to_first_value_bucket]
+
+  search_outcome:
+    lane: product_observation
+    aggregation: dedupe_count_max
+    retention_class: search_14d
+    dimensions:
+      - result_class
+      - query_length_bucket
+      - latency_bucket
+      - transport_class
+    counters: [requests, value_reached]
+    forbidden_fields: [query, query_text, raw_query]
+
+  pwa_lifecycle:
+    lane: product_observation
+    aggregation: exact_once_per_installation_session
+    retention_class: feature_actor_day_35d
+    dimensions: [lifecycle_kind, display_mode, platform_class]
+    counters: [occurrences]
+    migration_note: current bespoke reliable RPC must be adapted after consent/lane approval
+
+  delivery_receipt:
+    lane: product_fact
+    aggregation: exact_once
+    retention_class: delivery_30_180d
+    dimensions:
+      - purpose
+      - provider_class
+      - stage
+      - result_class
+      - route_class
+      - latency_bucket
+
+  feature_state:
+    lane: product_observation
+    aggregation: stage_mask
+    retention_class: feature_actor_day_35d
+    dimensions:
+      - feature
+      - placement
+      - version
+      - state
+    counters: [eligible, visible, engaged, completed, value_reached]
+    maxima: [checkpoint]
+
+  ingest_health:
+    lane: operational
+    aggregation: minute_bucket
+    retention_class: operational_14d
+    dimensions:
+      - route_class
+      - result_class
+      - failure_class
+      - schema_version
+    counters:
+      - accepted_batches
+      - retry_batches
+      - dropped_batches
+      - quarantined_events
+      - deduped_facts
+    maxima:
+      - outbox_age_bucket
+      - payload_bytes_bucket
+
+  storage_budget:
+    lane: operational
+    aggregation: daily
+    retention_class: operational_90d
+    dimensions: [store, table_class, budget_band]
+    counters: [rows, bytes, read_units, write_units, expired_eligible, archived, deleted]
+    maxima: [oldest_pending_age_bucket]
