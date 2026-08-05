@@ -1,80 +1,237 @@
-# Volunteer monitoring: implementation status and free web-search fallback
+# Volunteer Monitor: implementation and live-acceptance status
 
-> Status: **source adapter skeleton fixture-debugged; live GitHub/Kaggle canary and production apply not yet executed**.
-> Scope: read-only `Добро.рф` discovery/extraction, free candidate-source search policy, and orchestration boundary.
+> **Status, 2026-08-05:** fixture contract and real GitHub-hosted Chromium source boundary are proven; current vacancy-grain CTA preservation and accounted-`PARTIAL` CI are implemented and under branch revalidation. Kaggle canary is blocked only by credential provisioning. Production SQLite apply, BGE/LLM target matching, festival-queue apply and public Astro UI are not implemented.
+> **Branch / PR:** `agent/volunteer-monitor-skeleton-20260804`, PR #335, stacked on the accepted docs contract PR #331.
 
 This document supplements:
 
 - `README.md` — product/runtime contract;
 - `test-plan.md` — fixture, dynamic live canary and browser E2E contract;
-- `implementation-handoff.md` — full W0–W6 implementation plan.
+- `implementation-handoff.md` — full W0–W6 implementation plan;
+- `search-and-kaggle-infrastructure.md` — free search and execution choices.
 
-## 1. What is implemented in the skeleton
+## 1. Implemented read-only source boundary
 
-Paths:
+Current paths:
 
 ```text
 volunteer_monitor/
   source_config.py
   types.py
+  dobro_common.py
+  dobro_page.py
   dobro_adapter.py
   playwright_discovery.py
+  playwright_live.py
   service.py
   festival_source_search.py
   cli.py
 scripts/run_volunteer_monitor.py
-.github/workflows/volunteer-monitor-smoke.yml
+scripts/validate_volunteer_monitor_canary.py
+kaggle/VolunteerMonitor/
+  kernel-metadata.example.json
+  volunteer_monitor.py
+.github/workflows/
+  volunteer-monitor-smoke.yml
+  volunteer-monitor-live-acceptance.yml
 tests/test_dobro_volunteer_monitor.py
 tests/test_festival_source_search.py
 tests/fixtures/volunteer_monitor/*
 ```
 
-The read-only source boundary now has:
+The source boundary now provides:
 
-- canonical `/event/<id>` URL discovery;
-- accessible Playwright interaction with region and available-vacancy filters;
+- Playwright selection of the current region UI;
+- activation of the current vacancy-only search surface;
 - bounded `Показать еще` traversal;
-- explicit `WARN_NO_LIVE_SUPPLY` versus broken discovery;
-- source-local extraction from JSON-LD and visible current-page text;
-- `OPEN / CLOSED / EXPIRED / UNKNOWN` state;
-- Russian date-range fallback;
-- exact external-link scope limited to the event description / explicit source markers;
-- contact PII redaction before bounded evidence is persisted;
-- target-region proof and refusal of a false Moscow/default-region success;
+- extraction of active vacancy identities from source CTA target paths;
+- exact source application URLs retained separately from parent event URLs;
+- one parent-event fetch per selected parent, even when it has several vacancies;
+- JSON-LD and visible-text enrichment from the parent event page;
+- `OPEN / CLOSED / EXPIRED / UNKNOWN` lifecycle parsing for detail pages;
+- active vacancy inventory as source-grounded positive OPEN evidence;
 - separate `semantic_hash` and `availability_hash`;
-- deterministic fixtures and a CLI result receipt.
+- target-region evidence from the vacancy card or parent source;
+- contact PII redaction before bounded excerpts are persisted;
+- explicit zero-supply versus broken-discovery distinction;
+- deterministic fixtures and SHA-bound result receipts;
+- exact source accounting for every sampled parent page.
 
-Local verification on 2026-08-04:
+The future public button must use `application_urls[]`. It must not construct a
+vacancy URL from an event name or use the parent event page as a substitute for
+the source application CTA.
+
+## 2. Fixture evidence
+
+The autonomous source tests do not load the bot-wide `tests/conftest.py`; they
+exercise only the bounded monitor dependencies.
+
+Current fixture coverage includes:
+
+- direct event links;
+- current `/login/?__target_path=/event/<event>/vacancy/<vacancy>` CTA shape;
+- duplicate CTA anchors;
+- OPEN, CLOSED, EXPIRED and UNKNOWN;
+- stale enabled CTA after a deadline;
+- target-region rejection;
+- PII redaction;
+- separate semantic and availability hashes;
+- free-search provider URL-grounding rules.
+
+Latest established fixture baseline before the vacancy CTA addition:
 
 ```text
 19 passed
-fixture CLI: PASS, 2 source pages, 1 OPEN, 1 CLOSED
+fixture CLI: PASS
+source pages: 2
+OPEN: 1
+CLOSED: 1
 ```
 
-Not yet proven:
+The current branch adds the exact vacancy-CTA regression and therefore expects
+at least 20 monitor/search tests in the next green fixture run.
 
-- selectors against a real GitHub-hosted Chromium run;
-- current Kaliningrad live result count;
-- daily recheck against a source transition from `OPEN` to `CLOSED`;
-- Fly SQLite persistence/outbox;
-- BGE/LLM target matching;
-- Kaggle push/poll/result adoption;
-- public Astro projection.
+## 3. Real `Добро.рф` live evidence
 
-The first live run must therefore be described as a **read-only canary**, not production acceptance.
+### 3.1. Accepted source-discovery run
 
-## 2. Official festival URL discovery when Dobro.ru has no outbound link
+```text
+GitHub Actions workflow: Volunteer monitor smoke
+run_id:                    30986388903
+job_id:                    92242069968
+artifact_id:               8922510733
+artifact:                  volunteer-monitor-live-30986388903-1
+result_sha256:              e0afa6324bd67d5c582e3420b8d943cf9806ae3ea57f3db9e8df21725532296c
+```
 
-An official URL can be searched, but search output is always a candidate set. It never directly becomes `festival_calendar_item.source_url`.
+Observed result:
+
+```text
+run_status:          PARTIAL
+parent pages sampled: 101
+opportunities parsed: 88
+OPEN:                 86
+CLOSED:                0
+EXPIRED:               0
+UNKNOWN:               2
+outside-region rows:  12
+transport failures:    1
+```
+
+The accounting is complete:
+
+```text
+88 parsed + 12 outside-region + 1 transport failure = 101 selected pages
+```
+
+Nothing was silently dropped. `PARTIAL` reflected recorded per-source warnings,
+not a failed discovery. CI now treats this as a warning only after the separate
+accounting validator proves the equality above.
+
+The run lasted roughly ten minutes with `max_items=120`, including browser setup,
+five pagination actions and 101 sequential parent-page requests. The dedicated
+PR acceptance workflow uses 24 parent pages and a shorter bounded detail timeout;
+the scheduled/manual diagnostic workflow retains the larger limit.
+
+### 3.2. Current live DOM contract
+
+The following selectors/semantics came from saved HTML and UI diagnostics, not
+from a guessed implementation:
+
+```text
+location opener:       Изменить
+location input:        placeholder="Введите название"
+region option:         Калининградская обл
+vacancy-only surface:  role=tab, name="Вакансии"
+vacancy CTA text:      Отправить заявку
+CTA target shape:      /login/?__target_path=/event/<event_id>/vacancy/<vacancy_id>
+load-more action:      Показать еще
+```
+
+Important changes from the initial design hypothesis:
+
+- the old `С доступными вакансиями` checkbox is not present in the current UI;
+- its current product equivalent is the `Вакансии` tab;
+- region suggestions and vacancy cards are asynchronous;
+- hidden and visible duplicate option trees exist;
+- the region-level source label is abbreviated as `Калининградская обл`;
+- the search surface is vacancy-grained, while the enrichment page is event-grained.
+
+The implementation therefore waits for visible exact region options and for the
+vacancy result panel to expose application targets or a proved empty state.
+Fixed sleeps alone are not accepted as readiness evidence.
+
+### 3.3. Current opportunity identity
+
+The live search card exposes both:
+
+```text
+event_id
+vacancy_id
+exact source application href
+card-local role/date/location text
+```
+
+The monitor retains all exact vacancy IDs and application URLs for each parent
+event. The parent event page remains an enrichment source for title,
+organizer, dates, description and outbound official links. A future public
+projection may group several vacancy CTAs under one matched Event/Festival card,
+but it must not lose the source vacancy identities.
+
+### 3.4. Remaining lifecycle proof
+
+The active `Вакансии` tab naturally contains open vacancy CTAs and therefore does
+not supply a closed example. CLOSED/EXPIRED fixture behavior is green, but a
+separate rotating read-only lifecycle probe of historical source pages is still
+needed before production activation. It must not hardcode one forever-valid
+closed page as the only proof.
+
+## 4. Canary result semantics
+
+A live canary can terminate as:
+
+```text
+PASS
+PARTIAL
+WARN_NO_LIVE_SUPPLY
+functional failure
+```
+
+`PARTIAL` is acceptable only when every selected parent source has exactly one
+terminal disposition:
+
+```text
+parsed opportunity
+outside-target-region
+recorded fetch/parser error
+```
+
+The validator rejects:
+
+- source-count mismatch;
+- duplicated terminal dispositions;
+- unclassified warnings;
+- non-Dobro source URLs in warnings;
+- no OPEN opportunity when live supply exists;
+- PASS with warnings;
+- PARTIAL without warnings;
+- empty success without an explicit zero-result source state.
+
+## 5. Free official-festival URL discovery
+
+An official festival URL can be searched after the monitor cannot match an
+existing Event/Festival and the source application contains no usable outbound
+link. Search output is always a candidate set; it never directly becomes a
+festival destination.
 
 Decision order:
 
 ```text
-1. explicit outbound URL in the Dobro.ru application
+1. explicit outbound URL in the Dobro.ru source
 2. exact URL/alias already stored for the festival series or organizer
 3. free grounded web-search provider
-4. source-role and edition verification
-5. operator review when officiality remains ambiguous
+4. independent source-role / edition verification
+5. operator approval when officiality remains ambiguous
 ```
 
 Forbidden:
@@ -82,173 +239,101 @@ Forbidden:
 ```text
 festival name -> guessed domain
 first result -> official URL
-LLM prose -> URL not present in grounded tool metadata
-search provider confidence -> automatic festival apply
+LLM prose -> URL absent from grounded tool metadata
+search confidence -> automatic festival apply
 ```
 
-### Primary free replacement for Antigravity
+### Primary free lane
 
-Use **Gemini 2.5 Flash-Lite with Google Search grounding** through the already installed `google-genai` client.
-
-Reasons:
-
-- current free-tier allowance includes a bounded number of Google Search grounding prompts per day;
-- the repository already has Google API key pooling, accounting and `google-genai`;
-- grounding metadata exposes actual source URLs;
-- the same strict quota/cooldown boundary can be reused.
-
-Contract:
+Use Gemini 2.5 Flash-Lite with Google Search grounding through the installed
+`google-genai` client.
 
 ```text
-model = gemini-2.5-flash-lite
 consumer = volunteer_festival_source_search
-max grounded requests per opportunity = 1
-max returned URLs = 8
+max grounded requests per unresolved opportunity = 1
+max candidate URLs = 8
 generated prose is discarded
 only grounding_chunks.web.uri is retained
 ```
 
-Only public festival facts are sent. Free-tier data handling must be treated as unsuitable for private/user data; contact details are redacted before the request.
+Only public, redacted festival facts may be sent.
 
 ### Independent free fallback
 
-Use **Tavily Researcher free tier** only after the primary lane is unavailable or exhausted.
-
-Contract:
+Use Tavily Researcher free tier with:
 
 ```text
 search_depth = basic
 max_results = 8
 include_answer = false
 include_raw_content = false
-monthly hard stop below the free allowance
 ```
 
-Tavily returns candidate URLs only. The verifier still has to prove current edition, self-identification/organizer relationship, date compatibility and source role.
+### Optional infrastructure fallback
 
-### Optional self-hosted fallback
+An operator-owned SearXNG instance may provide JSON candidates. Public arbitrary
+instances and browser scraping of search-result HTML are not production sources.
 
-An operator-owned **SearXNG** instance may be used as a third lane. The software is free, but compute, proxy reliability and upstream-engine terms are operational dependencies. It is not a default P0 dependency.
-
-### Rejected as P0 primary options
-
-- Google Programmable Search JSON API: closed to new customers and approaching transition deadline;
-- Yandex Search API: paid outside temporary grants;
-- scraping arbitrary public search-result HTML: brittle and potentially contrary to provider rules;
-- Common Crawl: useful for historical domain hints but too stale for current-edition authority;
-- unauthenticated reader/search proxies: acceptable only for diagnostics, not a production source of truth.
-
-## 3. Search-result verification gate
-
-Every candidate URL is fetched independently and classified:
-
-```text
-official_home
-official_program
-official_organizer
-official_event
-ticket_single_event
-regional_tourism
-media
-aggregator
-unknown
-```
-
-A URL can become the official festival destination only when at least one condition is grounded in the fetched source:
-
-- the page self-identifies as the current festival edition;
-- the known organizer links to it as the festival destination;
-- the current edition page links back to the known organizer/series identity;
-- an operator approves the exact URL with evidence.
-
-Date/year conflict blocks automatic approval even when title similarity is high.
-
-## 4. Recommended execution ownership
-
-### Production
-
-```text
-Fly scheduler/outbox
-  -> immutable input + run identity
-  -> Kaggle CPU kernel (Playwright + changed BGE batch)
-  -> hash-checked result
-  -> Fly transactional apply
-  -> StaticSiteBuilder only on projection diff
-```
-
-Fly remains the state owner. GitHub Actions must not write production SQLite or decide last-good state.
+## 6. Execution ownership
 
 ### GitHub Actions
 
-The included workflow is for:
+Owns:
 
-- PR fixture tests;
-- scheduled read-only live canary;
-- manual diagnostics;
-- bounded evidence artifacts.
+- fixtures;
+- direct read-only live acceptance;
+- optional Kaggle canary;
+- bounded private artifacts and diagnostics.
 
-The direct Playwright canary needs no Kaggle or LLM secret. This is the fastest way to debug the real Dobro.ru selectors before introducing remote-kernel orchestration.
+It does not write production SQLite.
 
 ### Kaggle
 
-Kaggle should be introduced when one of these becomes true:
-
-- BGE target vectors are computed in the same changed-input batch;
-- browser workload no longer fits the bounded Fly job;
-- production needs the existing remote-run adoption/receipt protocol.
-
-Do not create a separate notebook per source or match type.
-
-## 5. Secret and identity plan
-
-Preferred Kaggle authentication for new automation:
+The self-contained private kernel uses the same source package and result schema.
+It becomes automatically eligible on PR pushes only when repository variable
+`VOLUNTEER_KAGGLE_CANARY_ENABLED=true` is present. It still requires GitHub
+Environment `volunteer-monitor-canary` with secret `KAGGLE_API_TOKEN` and
+repository variable:
 
 ```text
-KAGGLE_API_TOKEN
+VOLUNTEER_KAGGLE_KERNEL_SLUG=eventsbot/kenigevents-volunteer-monitor
 ```
 
-Store it in a GitHub Environment named `volunteer-monitor-canary` only for manual/diagnostic Kaggle jobs. Production Fly should use its own least-privileged Kaggle secret and should not depend on a GitHub secret.
+### Production
 
-Optional search secrets:
+The intended owner remains:
 
 ```text
-GOOGLE_API_KEY_VOLUNTEER_SEARCH   # or an approved existing shared Google key pool
-TAVILY_API_KEY                    # fallback only
+Fly durable job / immutable input
+  -> Kaggle CPU batch
+  -> hash-validated result
+  -> Fly transactional SQLite apply
+  -> StaticSiteBuilder only on public projection diff
 ```
 
-Repository variable, not secret:
+GitHub Actions is not the production state owner.
 
-```text
-VOLUNTEER_MONITOR_PERMISSION_REFERENCE
-```
+## 7. Only remaining code-agent task
 
-Secret values cannot be recovered from GitHub after creation. A code agent can add workflow code and run `gh secret set` only when the token is securely mounted into its environment; it cannot invent or read an existing secret value.
+The code agent is no longer needed for source code, selector debugging, workflow
+runs, artifact inspection or documentation. Its task is limited to provisioning
+one unavailable credential and two variables. The exact minimal instruction is
+stored in `code-agent-live-acceptance.md`.
 
-## 6. Why GitHub Actions should not be the production orchestrator
+## 8. Not yet implemented
 
-A workflow can push and poll Kaggle, but waiting for every daily kernel consumes Actions minutes and splits the durable state between GitHub and Fly. The project already has a stronger pattern: Fly owns the outbox and can adopt a matching Kaggle result after restart.
+The branch does **not** yet provide:
 
-Recommended split:
+- Fly SQLite tables and migrations;
+- durable daily outbox scheduling;
+- reuse of the shared BGE-M3 event/festival vector artifact;
+- bounded LLM target adjudication;
+- `festival_queue` write/apply;
+- official-source verifier apply;
+- `volunteer-links-v1.json` production export;
+- card label, detail medallion, content CTA or `/volontery/` page;
+- automatic removal from the generated site after CLOSED/EXPIRED;
+- production deployment.
 
-```text
-GitHub Actions = test / live canary / manual diagnosis
-Fly + Kaggle    = scheduled production monitor and matching
-```
-
-## 7. Current tool-access limitation
-
-The current ChatGPT GitHub connector can inspect branches, PRs, runs, jobs and artifacts, but it does not expose workflow dispatch or repository-secret writes in this session. Adding a Kaggle secret does not by itself make the workflow invokable from this chat.
-
-After a human or code agent starts a run, this session can inspect the run, logs and artifacts and continue debugging from evidence.
-
-## 8. Next implementation sequence
-
-1. Apply this skeleton on top of PR #331.
-2. Run the fixture workflow.
-3. Run one manual direct live canary and repair selectors against artifacts.
-4. Freeze a current real Kaliningrad fixture with contacts redacted.
-5. Add Fly SQLite tables and durable `JobTask.volunteer_monitor`.
-6. Integrate changed-document BGE matching.
-7. Add Gemini-grounded festival-source search with hard quota and Tavily fallback.
-8. Add Kaggle runner/adoption only after the direct live source boundary is stable.
-9. Complete festival queue handoff and public projection E2E.
+Those remain the next implementation phase after source/Kaggle acceptance, not
+work to hide inside the credential-provisioning task.
