@@ -40,6 +40,40 @@ async def _save_evidence(page: Any, config: DobroSourceConfig, name: str) -> Non
         await page.screenshot(path=str(root / f"{name}.png"), full_page=True)
     except Exception:
         pass
+    # A bounded accessibility-adjacent inventory makes selector failures
+    # diagnosable without retaining an unbounded browser trace.
+    try:
+        diagnostic = {
+            "url": page.url,
+            "title": await page.title(),
+            "buttons": [
+                " ".join(value.split())
+                for value in (await page.locator("button:visible").all_inner_texts())[:100]
+                if " ".join(value.split())
+            ],
+            "links": [
+                " ".join(value.split())
+                for value in (await page.locator("a:visible").all_inner_texts())[:100]
+                if " ".join(value.split())
+            ],
+            "inputs": (
+                await page.locator("input:visible").evaluate_all(
+                    "els => els.slice(0, 50).map(el => ({"
+                    "placeholder: el.getAttribute('placeholder') || '',"
+                    "ariaLabel: el.getAttribute('aria-label') || '',"
+                    "role: el.getAttribute('role') || '',"
+                    "type: el.getAttribute('type') || '',"
+                    "value: el.value || ''"
+                    "}))"
+                )
+            ),
+        }
+        (root / f"{name}-ui.json").write_text(
+            json.dumps(diagnostic, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
 
 
 async def _selected_text(page: Any) -> str:
@@ -58,73 +92,136 @@ async def _selected_text(page: Any) -> str:
     return " ".join(values).casefold()
 
 
-async def _select_region(page: Any, region_name: str) -> bool:
-    target = region_name.casefold()
-    if target in await _selected_text(page):
-        return True
-
-    openers = [
-        page.get_by_role("button", name="Местоположение"),
-        page.get_by_text("Местоположение", exact=True),
-        page.get_by_label("Местоположение"),
+async def _dismiss_cookie_banner(page: Any) -> None:
+    candidates = [
+        page.get_by_role("button", name="Принять", exact=True),
+        page.get_by_text("Принять", exact=True),
     ]
-    opened = False
-    for locator in openers:
+    for locator in candidates:
         try:
             if await locator.count() and await locator.first.is_visible():
                 await locator.first.click()
-                opened = True
-                break
+                await page.wait_for_timeout(200)
+                return
         except Exception:
             continue
-    if not opened:
-        raise DiscoveryError("cannot open Dobro.ru location filter")
 
-    # Search inside an opened filter/dialog when the control is present. The
-    # query is never typed into the page-wide 'Поиск добрых дел' input.
-    scopes = [page.get_by_role("dialog"), page.locator("body")]
-    for scope in scopes:
+
+async def _click_first_visible(locators: list[Any]) -> bool:
+    for locator in locators:
         try:
-            if scope is not scopes[-1] and not await scope.count():
+            if await locator.count() and await locator.first.is_visible():
+                await locator.first.click()
+                return True
+        except Exception:
+            continue
+    return False
+
+
+async def _region_candidate(page: Any, region_name: str) -> Any | None:
+    candidates = [
+        page.get_by_role("option", name=region_name, exact=True),
+        page.get_by_role("button", name=region_name, exact=True),
+        page.get_by_role("checkbox", name=region_name, exact=True),
+        page.get_by_role("radio", name=region_name, exact=True),
+        page.get_by_text(region_name, exact=True),
+        page.get_by_label(region_name, exact=True),
+    ]
+    for locator in candidates:
+        try:
+            if await locator.count() and await locator.first.is_visible():
+                return locator.first
+        except Exception:
+            continue
+    return None
+
+
+async def _fill_region_search(page: Any, region_name: str) -> bool:
+    # Prefer a dialog/popover. Body fallback is allowed only for a non-header
+    # input that is not the global "Поиск добрых дел" field.
+    scopes = [page.get_by_role("dialog"), page.locator("body")]
+    placeholder_candidates = (
+        "Поиск населённого пункта",
+        "Поиск региона",
+        "Город или регион",
+        "В каком месте?",
+        "Введите название",
+    )
+    for scope_index, scope in enumerate(scopes):
+        try:
+            if scope_index == 0 and not await scope.count():
                 continue
-            inputs = [
-                scope.get_by_placeholder("Поиск населённого пункта"),
-                scope.get_by_placeholder("Поиск региона"),
+            inputs: list[Any] = [
+                *(scope.get_by_placeholder(value, exact=True) for value in placeholder_candidates),
+                scope.get_by_role("combobox"),
                 scope.get_by_role("textbox"),
             ]
             for field in inputs:
                 if not await field.count() or not await field.first.is_visible():
                     continue
-                placeholder = (await field.first.get_attribute("placeholder") or "").casefold()
-                if "добрых дел" in placeholder:
+                first = field.first
+                placeholder = (await first.get_attribute("placeholder") or "").casefold()
+                aria_label = (await first.get_attribute("aria-label") or "").casefold()
+                if "добрых дел" in placeholder or "добрых дел" in aria_label:
                     continue
-                await field.first.fill(region_name)
-                await page.wait_for_timeout(300)
-                raise StopAsyncIteration
-        except StopAsyncIteration:
-            break
+                if scope_index == 1:
+                    try:
+                        inside_header = await first.evaluate("el => Boolean(el.closest('header'))")
+                    except Exception:
+                        inside_header = True
+                    if inside_header:
+                        continue
+                await first.fill(region_name)
+                await page.wait_for_timeout(500)
+                return True
         except Exception:
             continue
+    return False
 
-    region_candidates = [
-        page.get_by_role("option", name=region_name, exact=True),
-        page.get_by_role("checkbox", name=region_name, exact=True),
-        page.get_by_text(region_name, exact=True),
-        page.get_by_label(region_name, exact=True),
+
+async def _select_region(page: Any, region_name: str) -> bool:
+    target = region_name.casefold()
+    if target in await _selected_text(page):
+        return True
+
+    await _dismiss_cookie_banner(page)
+
+    # The current Dobro.ru header resolves geolocation asynchronously. On a
+    # cold page the SSR DOM contains a skeleton; a city-confirmation popover
+    # appears shortly afterwards with an "Изменить" action.
+    try:
+        await page.get_by_text("Изменить", exact=True).first.wait_for(
+            state="visible", timeout=10_000
+        )
+    except Exception:
+        pass
+
+    openers = [
+        page.get_by_role("button", name="Изменить", exact=True),
+        page.get_by_text("Изменить", exact=True),
+        page.get_by_role("button", name="Местоположение", exact=True),
+        page.get_by_text("Местоположение", exact=True),
+        page.get_by_label("Местоположение"),
+        page.get_by_role("button", name="Город или регион", exact=True),
+        page.get_by_text("Город или регион", exact=True),
     ]
-    clicked = False
-    for locator in region_candidates:
-        try:
-            if await locator.count() and await locator.first.is_visible():
-                await locator.first.click()
-                clicked = True
-                break
-        except Exception:
-            continue
-    if not clicked:
-        raise DiscoveryError(f"cannot select Dobro.ru region: {region_name}")
+    if not await _click_first_visible(openers):
+        raise DiscoveryError("cannot open Dobro.ru location filter")
+    await page.wait_for_timeout(400)
 
-    for label in ("Найти", "Применить", "Показать"):
+    candidate = await _region_candidate(page, region_name)
+    if candidate is None:
+        if not await _fill_region_search(page, region_name):
+            raise DiscoveryError("cannot find Dobro.ru location search input")
+        candidate = await _region_candidate(page, region_name)
+    if candidate is None:
+        raise DiscoveryError(f"cannot select Dobro.ru region: {region_name}")
+    try:
+        await candidate.click()
+    except Exception as exc:
+        raise DiscoveryError(f"cannot click Dobro.ru region: {region_name}") from exc
+
+    for label in ("Выбрать", "Сохранить", "Применить", "Найти", "Показать"):
         locator = page.get_by_role("button", name=label, exact=True)
         try:
             if await locator.count() and await locator.first.is_visible():
@@ -132,7 +229,7 @@ async def _select_region(page: Any, region_name: str) -> bool:
                 break
         except Exception:
             continue
-    await page.wait_for_timeout(800)
+    await page.wait_for_timeout(1_200)
 
     selected = await _selected_text(page)
     body_text = (await page.locator("body").inner_text()).casefold()
