@@ -1,4 +1,4 @@
-name: Build standalone Region Talk transfer package v2
+name: Build standalone Region Talk transfer package v3
 
 on:
   push:
@@ -7,7 +7,11 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: region-talk-standalone-transfer-v3
+  cancel-in-progress: false
 
 jobs:
   package:
@@ -15,12 +19,15 @@ jobs:
     timeout-minutes: 90
     env:
       SOURCE_SHA: 5bbdb681623d5e4e0bff2133e487a6663c1a838a
+      GENERATED_BRANCH: generated/region-talk-standalone-5bbdb681
+      MIGRATOR_SHA256: 25f0b7c7aec495ab07f1457cf81c62d2f4a44c12415d1974affa775fd2cbba6d
     steps:
       - name: Check out transfer control branch
         uses: actions/checkout@v4
         with:
           path: control
-          fetch-depth: 1
+          fetch-depth: 0
+
       - name: Check out exact source revision
         uses: actions/checkout@v4
         with:
@@ -28,46 +35,77 @@ jobs:
           path: source
           fetch-depth: 0
           persist-credentials: false
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: pip
           cache-dependency-path: source/requirements.txt
+
       - name: Install source dependencies
         run: python -m pip install --disable-pip-version-check -r source/requirements.txt
+
       - name: Prove source Region Talk baseline
         working-directory: source
         run: python -m pytest -q tests/test_region_talk*.py
-      - name: Decode standalone migration tool
+
+      - name: Reconstruct and verify standalone migration tool
         run: |
+          cat control/tools/standalone-transfer-tool.part-* > /tmp/migrator.gz.b64
           python - <<'PY'
-          import base64, gzip
+          import base64
+          import gzip
+          import hashlib
+          import os
           from pathlib import Path
-          encoded = Path('control/tools/standalone-transfer-tool.gz.b64').read_text().strip()
+
+          encoded = Path('/tmp/migrator.gz.b64').read_text()
+          payload = gzip.decompress(base64.b64decode(encoded))
+          digest = hashlib.sha256(payload).hexdigest()
+          assert digest == os.environ['MIGRATOR_SHA256'], (digest, os.environ['MIGRATOR_SHA256'])
           target = Path('control/tools/migrate_from_events_bot.py')
-          target.write_bytes(gzip.decompress(base64.b64decode(encoded)))
+          target.write_bytes(payload)
           target.chmod(0o755)
+          print(f'migrator_sha256={digest} bytes={len(payload)}')
           PY
+
       - name: Build standalone transfer tree
         run: >-
           python control/tools/migrate_from_events_bot.py
           --source source
           --target transfer
           --source-sha "$SOURCE_SHA"
+
       - name: Validate transferred runtime and full product suite
         run: |
           python -m compileall -q transfer/scripts transfer/kaggle transfer/tests
           cd transfer
           python scripts/run_region_talk_product_tests.py --full
+
       - name: Produce immutable transfer archive
         run: |
           tar -czf region-talk-transfer-5bbdb681.tar.gz -C transfer .
           sha256sum region-talk-transfer-5bbdb681.tar.gz > region-talk-transfer-5bbdb681.tar.gz.sha256
+
       - uses: actions/upload-artifact@v4
         with:
-          name: region-talk-transfer-5bbdb681-v2
+          name: region-talk-transfer-5bbdb681-v3
           path: |
             region-talk-transfer-5bbdb681.tar.gz
             region-talk-transfer-5bbdb681.tar.gz.sha256
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish exact standalone tree to a protected transfer branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd control
+          git config user.name codex-agent
+          git config user.email codex-agent@example.local
+          git checkout --orphan "$GENERATED_BRANCH"
+          git rm -rf .
+          cp -a ../transfer/. .
+          git add -A
+          git commit -m "feat(migration): materialize standalone Region Talk from ${SOURCE_SHA}"
+          git push --force origin "HEAD:refs/heads/${GENERATED_BRANCH}"
