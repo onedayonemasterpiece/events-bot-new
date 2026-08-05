@@ -29,12 +29,6 @@ function check(condition, message, localFailures) {
   if (!condition) localFailures.push(message);
 }
 
-function alphaFromColor(value) {
-  if (value === 'transparent') return 0;
-  const match = /rgba\([^)]*[,\s]([\d.]+)\s*\)$/u.exec(value);
-  return match ? Number(match[1]) : 1;
-}
-
 try {
   for (const viewport of viewports) {
     const localFailures = [];
@@ -62,6 +56,11 @@ try {
         const atmosphereStyle = atmosphere ? getComputedStyle(atmosphere) : null;
         const mosaicStyle = mosaic ? getComputedStyle(mosaic) : null;
         const number = (value) => Number.parseFloat(String(value || '0')) || 0;
+        const alphaFromColor = (value) => {
+          if (value === 'transparent') return 0;
+          const match = /rgba\([^)]*[,\s]([\d.]+)\s*\)$/u.exec(String(value || ''));
+          return match ? Number(match[1]) : 1;
+        };
         const gridColumns = String(mosaicStyle?.gridTemplateColumns || '')
           .split(/\s+/u)
           .filter(Boolean);
