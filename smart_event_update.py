@@ -13,6 +13,7 @@ import textwrap
 import unicodedata
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+from enum import Enum
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
@@ -1690,6 +1691,38 @@ class SmartUpdateResult:
     skipped_conflicts: list[str] = field(default_factory=list)
     reason: str | None = None
     queue_notes: list[str] = field(default_factory=list)
+class SmartUpdateOutcomeKind(str, Enum):
+    """Caller-facing outcome class; every unknown status fails closed."""
+
+    ACCEPTED_CHANGED = "accepted_changed"
+    ACCEPTED_NO_CHANGE = "accepted_no_change"
+    NOT_ACCEPTED = "not_accepted"
+
+
+_SMART_UPDATE_ACCEPTED_CHANGED = frozenset({"created", "merged"})
+_SMART_UPDATE_ACCEPTED_NO_CHANGE = frozenset(
+    {
+        "skipped_nochange",
+        "skipped_same_source_url",
+        "noop_exact_source_replay",
+    }
+)
+
+
+def classify_smart_update_status(status: str | None) -> SmartUpdateOutcomeKind:
+    value = str(status or "").strip().lower()
+    if value in _SMART_UPDATE_ACCEPTED_CHANGED:
+        return SmartUpdateOutcomeKind.ACCEPTED_CHANGED
+    if value in _SMART_UPDATE_ACCEPTED_NO_CHANGE:
+        return SmartUpdateOutcomeKind.ACCEPTED_NO_CHANGE
+    return SmartUpdateOutcomeKind.NOT_ACCEPTED
+
+
+def smart_update_result_allows_caller_side_effects(result: Any) -> bool:
+    return (
+        classify_smart_update_status(getattr(result, "status", None))
+        is not SmartUpdateOutcomeKind.NOT_ACCEPTED
+    )
 
 
 class SourceBindingConflict(RuntimeError):
@@ -15914,7 +15947,7 @@ async def smart_event_update(
 ) -> SmartUpdateResult:
     async with _SMART_UPDATE_LOCK:
         try:
-            return await _smart_event_update_impl(
+            result = await _smart_event_update_impl(
                 db,
                 candidate,
                 check_source_url=check_source_url,
@@ -15922,7 +15955,7 @@ async def smart_event_update(
                 schedule_kwargs=schedule_kwargs,
             )
         except SourceBindingConflict as exc:
-            return SmartUpdateResult(
+            result = SmartUpdateResult(
                 status="review_required",
                 event_id=exc.existing_event_id,
                 reason="source_binding_conflict",
@@ -15946,11 +15979,12 @@ async def smart_event_update(
                     row = await cursor.fetchone()
                     await cursor.close()
                     owner_id = int(row[0]) if row and row[0] is not None else None
-            return SmartUpdateResult(
+            result = SmartUpdateResult(
                 status="review_required",
                 event_id=owner_id,
                 reason="source_binding_conflict",
             )
+    return result
 
 
 def _candidate_source_role(candidate: EventCandidate) -> str:
@@ -21064,6 +21098,7 @@ async def _source_identity_binding_conflict(
 ) -> int | None:
     if source_role != "identity_bearing":
         return None
+
     row = (
         await session.execute(
             select(EventSource.event_id)
@@ -21075,7 +21110,69 @@ async def _source_identity_binding_conflict(
             .limit(1)
         )
     ).scalar_one_or_none()
-    return int(row) if row is not None else None
+    if row is not None:
+        return int(row)
+
+    # Legacy rows are deliberately not mass-classified. An unknown owner on a
+    # different Event is evidence of ambiguity, so fail closed instead of
+    # silently taking the canonical source for the new candidate.
+    canonical = canonicalize_identity_url(
+        canonical_source_url,
+        preserve_ticket_fragment=True,
+    )
+    if not canonical:
+        return None
+    try:
+        parts = urlsplit(canonical)
+    except (TypeError, ValueError):
+        parts = None
+    token: str | None = None
+    if parts is not None:
+        fragment = str(parts.fragment or "").strip().lstrip("/")
+        path_bits = [item for item in str(parts.path or "").split("/") if item]
+        if fragment and len(fragment) >= 8:
+            token = fragment
+        elif len(path_bits) >= 2:
+            token = "/".join(path_bits[-2:])
+        elif path_bits:
+            token = path_bits[-1]
+
+    predicates = [
+        EventSource.canonical_source_url == canonical,
+        EventSource.source_url == canonical,
+    ]
+    if token:
+        # SQL only narrows candidates; canonical equality below is authoritative.
+        predicates.append(EventSource.source_url.contains(token))
+
+    legacy_rows = (
+        await session.execute(
+            select(
+                EventSource.event_id,
+                EventSource.source_url,
+                EventSource.canonical_source_url,
+            )
+            .where(
+                EventSource.event_id != int(event_id),
+                or_(EventSource.source_role.is_(None), EventSource.source_role == ""),
+                or_(*predicates),
+            )
+            .limit(100)
+        )
+    ).all()
+    for owner_id, raw_url, stored_canonical in legacy_rows:
+        candidate_canonical = canonicalize_identity_url(
+            stored_canonical or raw_url,
+            preserve_ticket_fragment=True,
+        )
+        if candidate_canonical == canonical:
+            logger.warning(
+                "smart_update.legacy_source_owner_review owner_event_id=%s requested_event_id=%s",
+                owner_id,
+                event_id,
+            )
+            return int(owner_id)
+    return None
 
 
 async def _attached_collection_source(

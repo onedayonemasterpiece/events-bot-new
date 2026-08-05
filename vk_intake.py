@@ -4078,7 +4078,12 @@ async def persist_event_and_pages(
     rebuild_fest_nav_if_changed = main_mod.rebuild_fest_nav_if_changed
     normalize_event_type = getattr(main_mod, "normalize_event_type", None)
 
-    from smart_event_update import EventCandidate, PosterCandidate, smart_event_update
+    from smart_event_update import (
+        EventCandidate,
+        PosterCandidate,
+        smart_event_update,
+        smart_update_result_allows_caller_side_effects,
+    )
 
     if (getattr(draft, "reject_reason", None) or "").strip():
         # Keep the error string compatible with vk_auto_queue handler that treats
@@ -4146,6 +4151,13 @@ async def persist_event_and_pages(
         candidate,
         check_source_url=False,
     )
+    if not smart_update_result_allows_caller_side_effects(update_result):
+        raise RuntimeError(
+            "smart_update not accepted: "
+            f"status={getattr(update_result, 'status', None)} "
+            f"reason={getattr(update_result, 'reason', None)} "
+            f"matched_event_id={getattr(update_result, 'event_id', None)}"
+        )
     if str(getattr(update_result, "status", "") or "").startswith("rejected_"):
         raise RuntimeError(
             f"smart_update rejected: {getattr(update_result, 'status', None)} "

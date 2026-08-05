@@ -40,7 +40,7 @@ def test_outcome_contract_is_fail_closed_for_unknown_and_review_statuses() -> No
 
 
 @pytest.mark.asyncio
-async def test_nonaccepted_result_cannot_export_event_id_to_callers(monkeypatch) -> None:
+async def test_nonaccepted_result_is_diagnostic_only_for_callers(monkeypatch) -> None:
     async def _review(*_args, **_kwargs):
         return SmartUpdateResult(
             status="review_required",
@@ -55,8 +55,7 @@ async def test_nonaccepted_result_cannot_export_event_id_to_callers(monkeypatch)
     )
 
     assert result.status == "review_required"
-    assert result.event_id is None
-    assert result.matched_event_id == 7024
+    assert result.event_id == 7024
     assert result.created is False
     assert result.merged is False
     assert not su.smart_update_result_allows_caller_side_effects(result)
@@ -251,6 +250,7 @@ async def test_official_parser_caller_has_zero_side_effects_after_review(
         source_text="Источник",
         date="2026-09-01",
         time="19:00",
+        end_date=None,
         ticket_price_min=None,
         ticket_price_max=None,
         venue="Музей",
@@ -392,7 +392,7 @@ async def test_vk_persist_caller_does_not_convert_review_into_success(
         organizer_names=[],
     )
 
-    with pytest.raises(RuntimeError, match="returned no event_id"):
+    with pytest.raises(RuntimeError, match="smart_update not accepted"):
         await vk_intake.persist_event_and_pages(
             draft,
             [],

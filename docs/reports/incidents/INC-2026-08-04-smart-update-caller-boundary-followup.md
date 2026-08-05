@@ -19,11 +19,12 @@ The public Smart Update boundary classifies every result as:
   `noop_exact_source_replay`;
 - `not_accepted`: every other or unknown status.
 
-A `not_accepted` result moves the candidate match from `event_id` to the
-non-authorizing `matched_event_id`. Existing callers therefore stop before
-their success path. The append-only identity decision log remains the durable
-source of evidence. Unknown future statuses fail closed until explicitly added
-to the contract.
+A `not_accepted` result may retain `event_id` as diagnostic evidence, but
+callers must classify the outcome before using that ID. The official parser and
+VK persist paths now return or raise before ticket mutation, linked-event
+recompute, Telegraph rebuild, publication scheduling or successful import
+state. Unknown future statuses fail closed until explicitly added to the
+contract.
 
 This is a safety boundary, not the final operator UX. A later caller migration
 must consume the typed outcome directly and route `review_required` into durable
