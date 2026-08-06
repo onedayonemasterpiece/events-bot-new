@@ -29,9 +29,7 @@ concurrency:
 jobs:
   smoke:
     if: inputs.allow_write == true
-    runs-on:
-      - self-hosted
-      - lovekgd-penpot
+    runs-on: lovekgd-penpot
     timeout-minutes: 10
     env:
       PENPOT_INTEGRATION_TOKEN: ${{ secrets.PENPOT_INTEGRATION_TOKEN }}
