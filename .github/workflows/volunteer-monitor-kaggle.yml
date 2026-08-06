@@ -1,0 +1,208 @@
+name: Volunteer monitor Kaggle canary
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_items:
+        description: "Maximum Dobro.ru parent event pages"
+        type: string
+        required: true
+        default: "24"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunteer-monitor-kaggle-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  kaggle-live-canary:
+    if: vars.VOLUNTEER_KAGGLE_CANARY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: volunteer-monitor-canary
+    env:
+      PROJECT_KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+      PROVISIONED_KAGGLE_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+      KAGGLE_USERNAME: ${{ vars.KAGGLE_USERNAME || 'zigomaro' }}
+      CONFIGURED_KERNEL_SLUG: ${{ vars.VOLUNTEER_KAGGLE_KERNEL_SLUG || 'kenigevents-volunteer-monitor' }}
+      MAX_ITEMS: ${{ inputs.max_items }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Select existing project Kaggle credential without disclosure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+
+          username = (os.environ.get("KAGGLE_USERNAME") or "zigomaro").strip()
+          configured_slug = (
+              os.environ.get("CONFIGURED_KERNEL_SLUG")
+              or "kenigevents-volunteer-monitor"
+          ).strip()
+          kernel_tail = configured_slug.rsplit("/", 1)[-1]
+          if not username or not kernel_tail:
+              raise SystemExit("Kaggle username or kernel slug is empty")
+
+          raw = (os.environ.get("PROJECT_KAGGLE_KEY") or "").strip()
+          source = "repository KAGGLE_KEY"
+          if not raw:
+              raw = (os.environ.get("PROVISIONED_KAGGLE_TOKEN") or "").strip()
+              source = "environment KAGGLE_API_TOKEN compatibility credential"
+          if not raw:
+              raise SystemExit("No Kaggle credential reached the job")
+
+          key = raw
+          try:
+              parsed = json.loads(raw)
+          except json.JSONDecodeError:
+              parsed = None
+          if isinstance(parsed, dict):
+              username = str(parsed.get("username") or username).strip()
+              key = str(parsed.get("key") or parsed.get("token") or "").strip()
+          elif isinstance(parsed, str):
+              key = parsed.strip()
+          if not username or not key:
+              raise SystemExit("Kaggle credential has no usable username/key")
+
+          print(f"::add-mask::{key}")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as handle:
+              handle.write(f"KAGGLE_USERNAME={username}\n")
+              handle.write("KAGGLE_KEY<<KAGGLE_KEY_EOF\n")
+              handle.write(key + "\n")
+              handle.write("KAGGLE_KEY_EOF\n")
+              handle.write(f"KERNEL_SLUG={username}/{kernel_tail}\n")
+          print(f"Kaggle credential source selected: {source}; owner={username}")
+          PY
+
+      - name: Install proven repository-compatible Kaggle client
+        run: python -m pip install --disable-pip-version-check "kaggle==1.8.4"
+
+      - name: Verify existing project Kaggle authentication
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset KAGGLE_API_TOKEN PROJECT_KAGGLE_KEY PROVISIONED_KAGGLE_TOKEN
+          python - <<'PY'
+          import os
+          from kaggle.api.kaggle_api_extended import KaggleApi
+
+          api = KaggleApi()
+          api.authenticate()
+          api.kernels_list(user=os.environ["KAGGLE_USERNAME"], page_size=1)
+          print("Existing project Kaggle authentication: PASS")
+          PY
+
+      - name: Build self-contained private Volunteer Monitor kernel
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/volunteer-monitor-kernel"
+          rm -rf "$stage"
+          mkdir -p "$stage"
+          cp kaggle/VolunteerMonitor/kernel-metadata.example.json "$stage/kernel-metadata.json"
+          python - "$stage" <<'PY'
+          import base64
+          import io
+          import json
+          import os
+          import sys
+          import zipfile
+          from pathlib import Path
+
+          stage = Path(sys.argv[1])
+          package = Path("volunteer_monitor")
+          buffer = io.BytesIO()
+          with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+              for path in sorted(package.glob("*.py")):
+                  archive.write(path, f"volunteer_monitor/{path.name}")
+          runtime_b64 = base64.b64encode(buffer.getvalue()).decode("ascii")
+          template = Path("kaggle/VolunteerMonitor/volunteer_monitor.py").read_text(encoding="utf-8")
+          max_items = str(max(1, min(int(os.environ["MAX_ITEMS"]), 250)))
+          rendered = template.replace("__RUNTIME_ZIP_B64__", runtime_b64).replace("__MAX_ITEMS__", max_items)
+          (stage / "volunteer_monitor.py").write_text(rendered, encoding="utf-8")
+
+          metadata_path = stage / "kernel-metadata.json"
+          metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+          metadata["id"] = os.environ["KERNEL_SLUG"]
+          metadata["is_private"] = True
+          metadata["enable_gpu"] = False
+          metadata["enable_internet"] = True
+          metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Push and start private Kaggle kernel
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset KAGGLE_API_TOKEN PROJECT_KAGGLE_KEY PROVISIONED_KAGGLE_TOKEN
+          kaggle kernels push -p "$RUNNER_TEMP/volunteer-monitor-kernel" --timeout 900
+
+      - name: Poll terminal status
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset KAGGLE_API_TOKEN PROJECT_KAGGLE_KEY PROVISIONED_KAGGLE_TOKEN
+          for attempt in $(seq 1 60); do
+            status="$(kaggle kernels status "$KERNEL_SLUG" 2>&1 | tr '[:upper:]' '[:lower:]')"
+            echo "$status"
+            if grep -Eq 'complete|completed' <<<"$status"; then exit 0; fi
+            if grep -Eq 'error|failed|cancel' <<<"$status"; then exit 1; fi
+            sleep 30
+          done
+          echo "Kaggle kernel did not reach terminal state" >&2
+          exit 1
+
+      - name: Download and validate Kaggle output
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset KAGGLE_API_TOKEN PROJECT_KAGGLE_KEY PROVISIONED_KAGGLE_TOKEN
+          out="$RUNNER_TEMP/volunteer-monitor-kaggle-output"
+          mkdir -p "$out"
+          kaggle kernels output "$KERNEL_SLUG" -p "$out" --force
+          python - "$out" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          result_path = root / "volunteer-monitor-result.json"
+          receipt_path = root / "volunteer-monitor-receipt.json"
+          result = json.loads(result_path.read_text(encoding="utf-8"))
+          receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+          actual = hashlib.sha256(result_path.read_bytes()).hexdigest()
+          assert receipt["status"] in {"success", "partial"}
+          assert receipt["result_sha256"] == actual
+          assert result["schema_version"] == "volunteer-monitor-result-v1"
+          print(json.dumps({
+              "status": "PASS",
+              "result_sha256": actual,
+              "run_status": result["run_status"],
+              "source_pages_seen": result["source_pages_seen"],
+              "opportunity_count": result["opportunity_count"],
+              "status_counts": result["status_counts"],
+          }, ensure_ascii=False))
+          PY
+          python scripts/validate_volunteer_monitor_canary.py \
+            "$out/volunteer-monitor-result.json"
+
+      - name: Upload Kaggle receipt and output
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: volunteer-monitor-kaggle-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/volunteer-monitor-kaggle-output
+          if-no-files-found: warn
+          retention-days: 14
