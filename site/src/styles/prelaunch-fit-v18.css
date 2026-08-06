@@ -1,0 +1,55 @@
+/*
+ * Prelaunch visual correction v18.
+ *
+ * V18 uses the exact supplied PWA-icon reference rather than the production
+ * app-icon crop. Its wordmark proportions now match the target composition.
+ */
+
+body .prelaunch[data-prelaunch-page] {
+  --prelaunch-artwork-size: min(72vw, 105vh, 1040px);
+  --prelaunch-artwork-left: 56%;
+  --prelaunch-artwork-top: 0px;
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__artwork {
+  z-index: 0 !important;
+  opacity: .98 !important;
+  filter: saturate(.96) contrast(1.05) brightness(.86) !important;
+}
+
+/* The supplied 1200-square mockup maps almost one-to-one to the source icon. */
+@media (min-width: 821px) and (min-height: 1000px) and (max-aspect-ratio: 5 / 4) {
+  body .prelaunch[data-prelaunch-page] {
+    --prelaunch-artwork-size: min(100vw, 1200px);
+    --prelaunch-artwork-left: 50%;
+    --prelaunch-artwork-top: 0px;
+  }
+}
+
+@media (max-width: 599px) {
+  body .prelaunch[data-prelaunch-page] {
+    --prelaunch-artwork-size: min(72vw, 286px);
+    --prelaunch-artwork-left: 54%;
+    --prelaunch-artwork-top: 35.5vh;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__artwork {
+    filter: saturate(.96) contrast(1.05) brightness(.84) !important;
+  }
+}
+
+@media (max-width: 599px) and (max-height: 680px) {
+  body .prelaunch[data-prelaunch-page] {
+    --prelaunch-artwork-size: min(58vw, 190px);
+    --prelaunch-artwork-left: 55%;
+    --prelaunch-artwork-top: 35vh;
+  }
+}
+
+@media (orientation: landscape) and (min-width: 600px) and (max-height: 500px) {
+  body .prelaunch[data-prelaunch-page] {
+    --prelaunch-artwork-size: min(42vw, 320px);
+    --prelaunch-artwork-left: 48%;
+    --prelaunch-artwork-top: 3vh;
+  }
+}
