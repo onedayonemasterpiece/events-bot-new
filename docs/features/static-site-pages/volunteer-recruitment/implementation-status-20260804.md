@@ -1,19 +1,11 @@
-# Volunteer Monitor: implementation and live-acceptance status
+# Volunteer Monitor: implementation and acceptance status
 
-> **Status, 2026-08-05:** read-only `Добро.рф` source boundary, exact vacancy CTA extraction, fixture suite and real GitHub-hosted Chromium acceptance are green. GitHub Environment and variable names for the Kaggle canary exist, but the provisioned `KAGGLE_API_TOKEN` value was rejected by Kaggle before any kernel could be created. Production SQLite apply, BGE/LLM target matching, `festival_queue` apply and public Astro UI are not implemented.
-> **Branch / PR:** `agent/volunteer-monitor-skeleton-20260804`, PR #335, stacked on the accepted docs contract PR #331.
+> **Status, 2026-08-06:** read-only `Добро.рф` source boundary, deterministic fixtures, GitHub-hosted browser canary and private Kaggle execution are proven. Production persistence, daily state apply, BGE/LLM matching, festival-queue handoff and public Astro UI are not implemented.
+> **Branch / PR:** `agent/volunteer-monitor-skeleton-20260804`, draft PR #335, stacked on docs contract PR #331.
 
-Related documents:
+## 1. Implemented source boundary
 
-- `README.md` — product/runtime contract;
-- `test-plan.md` — fixture, dynamic live canary and browser E2E contract;
-- `implementation-handoff.md` — full W0–W6 implementation plan;
-- `search-and-kaggle-infrastructure.md` — free search and execution choices;
-- `code-agent-live-acceptance.md` — the one remaining credential-value task.
-
-## 1. Implemented read-only source boundary
-
-Current runtime paths:
+Runtime paths:
 
 ```text
 volunteer_monitor/
@@ -36,348 +28,190 @@ kaggle/VolunteerMonitor/
 .github/workflows/
   volunteer-monitor-smoke.yml
   volunteer-monitor-live-acceptance.yml
+  volunteer-monitor-kaggle.yml
 ```
 
 Implemented behavior:
 
-- both observed cold-start states of the current Dobro.ru location UI;
+- both observed cold-start states of the current location UI;
 - exact selection of `Калининградская обл`;
-- current vacancy-only `Вакансии` tab;
-- asynchronous region-suggestion and vacancy-card readiness;
+- activation of the current `Вакансии` tab;
+- asynchronous region/vacancy readiness;
 - bounded `Показать еще` traversal;
-- extraction of `event_id`, `vacancy_id` and exact source CTA URL;
-- one parent-event fetch per selected parent, including multiple vacancies;
-- JSON-LD and visible-text enrichment from the parent event page;
-- `OPEN / CLOSED / EXPIRED / UNKNOWN` lifecycle parsing;
-- active vacancy inventory as source-grounded OPEN evidence;
+- extraction of `event_id`, `vacancy_id` and exact application URL;
+- one parent-event fetch per selected event;
+- JSON-LD/visible-text enrichment;
+- `OPEN / CLOSED / EXPIRED / UNKNOWN` parsing;
+- active inventory as authoritative positive OPEN evidence;
 - separate `semantic_hash` and `availability_hash`;
-- target-region evidence from vacancy card or parent source;
-- contact PII redaction before bounded excerpts are persisted;
-- explicit zero-supply versus broken-discovery distinction;
-- exact terminal accounting for every sampled parent source;
-- SHA-bound monitor and lifecycle receipts.
-
-The future public CTA must use `application_urls[]`. It must never derive a
-vacancy URL from a festival/event name or substitute the parent event page for
-the source application destination.
+- PII redaction and bounded evidence;
+- explicit zero-supply versus broken discovery;
+- exact terminal accounting for sampled sources;
+- SHA-bound result and receipt contracts.
 
 ## 2. Fixture evidence
 
-Established fixture workflow:
-
 ```text
-workflow: Volunteer monitor smoke
-run_id:   30989937721
-status:   SUCCESS
-pytest:   20 passed
-fixture:  PASS, 2 pages, 1 OPEN, 1 CLOSED
+workflow run: 31080728482
+job:          92548695664
+status:       SUCCESS
+pytest:       20 passed
+fixture CLI:  PASS
+pages:        2
+OPEN:         1
+CLOSED:       1
+artifact:     8959343631
 ```
 
-The same fixture boundary remained green during every Kaggle-authentication
-attempt. The latest such run was `30992222431`; therefore the remote failure is
-not caused by source-parser, fixture or packaging regressions.
+The fixture suite covers exact current vacancy CTA shape, duplicate links, OPEN/CLOSED/EXPIRED/UNKNOWN, stale CTA after deadline, target-region rejection, PII redaction, separated hashes and grounded search-provider URL rules.
 
-Coverage includes:
-
-- direct event links;
-- current `/login/?__target_path=/event/<event>/vacancy/<vacancy>` CTA shape;
-- duplicate vacancy anchors;
-- OPEN, CLOSED, EXPIRED and UNKNOWN;
-- stale enabled CTA after application deadline;
-- target-region rejection;
-- PII redaction;
-- separate semantic and availability hashes;
-- grounded free-search provider URL rules.
-
-The monitor tests run with `--noconftest`, so this autonomous source boundary
-does not load the entire Telegram bot and unrelated dependencies.
-
-## 3. Accepted real direct live acceptance
-
-### 3.1. Bounded PR acceptance
+## 3. Direct live evidence
 
 ```text
-workflow:                 Volunteer monitor live acceptance
-run_id:                   30989937771
-job_id:                   92253781830
-artifact_id:              8923815849
-artifact:                 volunteer-monitor-live-acceptance-30989937771-1
-result_sha256:             dc46b23238276a9d71a8ee13e1f3fa68d7c5aba2dc7a03cfc051c04bb5da734c
-lifecycle_result_sha256:   fd3e3701d586c33525a231e0f0ee6249ad7456b96081e066e2fe9e94e132a12f
-status:                    SUCCESS
+workflow run:          31080728463
+job:                   92548820167
+status:                SUCCESS
+source pages:          24
+opportunities:         24
+OPEN:                  24
+warnings:               0
+outside-region:         0
+source errors:          0
+accounted:             24 / 24
+artifact ID:           8959425369
+artifact ZIP SHA-256:  48f0c11d958fbb325a63a20adfb01be6693f6678c3610150e8e58aa3982eaa9f
 ```
 
-Observed source result:
+Monitor integrity:
 
 ```text
-parent pages selected:        24
-opportunities parsed:         24
-OPEN:                         24
-outside-region:                0
-transport/parser errors:       0
-accounted sources:            24 / 24
-vacancy records discovered:  162
-parents with application URL: 24 / 24
-vacancy IDs retained:          48
-load-more clicks:               5
+result file SHA-256: f3f8a941b72b7dc66169f629fac333732aeafd6cbc485674584f85ef5b196e0b
+internal result hash: 818937933f8fe28443b9bff30c52072e3ba69b96e9b09350c7a09a129800b1e9
 ```
 
-Historical lifecycle probe:
+Lifecycle probe:
 
 ```text
-sources parsed: 2
-CLOSED:         0
-EXPIRED:        2
-UNKNOWN:        0
-errors:         0
-non-open proof: 2
+requested:             3
+parsed:                3
+CLOSED:                0
+EXPIRED:               3
+UNKNOWN:               0
+errors:                0
+non-public proof:      3
+probe file SHA-256:    722beb70e40dc61c8cc4d81a060cf98aafae403c29701c1839dc00094e193a5c
+internal probe hash:   5e1fabd09817e42aef82ba6f30e5a0214fac3cabed3b6606fcd77f825a760001
 ```
 
-`CLOSED` and `EXPIRED` remain distinct reasons, but both are non-public states
-that remove a volunteer link. The active `Вакансии` tab naturally proves OPEN;
-a separate rotating historical probe proves at least one source-backed
-`CLOSED | EXPIRED` state.
+## 4. Private Kaggle evidence
 
-### 3.2. Full diagnostic run
-
-A broader run remains useful as load/error evidence:
+The first design used the wrong owner/client contract (`eventsbot`, Kaggle CLI 2.x). The repository's working Kaggle infrastructure uses account `zigomaro`, `KAGGLE_USERNAME + KAGGLE_KEY` and Kaggle 1.8.x. Volunteer Monitor now reuses that contract.
 
 ```text
-workflow run:   30986388903
-job:            92242069968
-artifact:       8922510733
-result_sha256:  e0afa6324bd67d5c582e3420b8d943cf9806ae3ea57f3db9e8df21725532296c
-selected:       101 parent pages
-parsed:          88
-OPEN:            86
-UNKNOWN:          2
-outside-region:  12
-transport error:  1
+GitHub Actions run: 31079828744
+job:                92545879373
+status:             SUCCESS
+kernel:             zigomaro/kenigevents-volunteer-monitor
+kernel version:     1
+run_uid:            volunteer-monitor-20260806T070946Z
+started_at:         2026-08-06T07:09:46.700291Z
+completed_at:       2026-08-06T07:14:27.870758Z
 ```
 
-Accounting was exact:
+Result:
 
 ```text
-88 parsed + 12 outside-region + 1 error = 101 selected
+run_status:         PASS
+source pages:       24
+opportunities:      24
+OPEN:               24
+warnings:           0
+outside-region:     0
+source errors:      0
+accounted:          24 / 24
 ```
 
-This result is `PARTIAL`, not a false success. CI accepts `PARTIAL` only after
-the independent accounting validator proves that every selected source has
-exactly one terminal disposition.
-
-## 4. Current live Dobro.ru contract
-
-These selectors and semantics were derived from saved HTML/UI diagnostics:
+Discovery receipt:
 
 ```text
-cold location state A:   geolocation confirmation + `Изменить`
-cold location state B:   selected location button, e.g. `Москва`
-location search input:   placeholder="Введите название"
-region option:           Калининградская обл
-vacancy-only surface:    role=tab, name="Вакансии"
-vacancy CTA text:        Отправить заявку
-CTA target shape:        /login/?__target_path=/event/<event_id>/vacancy/<vacancy_id>
-load-more action:        Показать еще
+region_proven:           true
+available_filter_proven: true
+parent URLs:             101
+vacancies:               159
+load-more clicks:          5
 ```
 
-Important corrections to the original hypothesis:
-
-- the previous `С доступными вакансиями` checkbox is absent;
-- its current product equivalent is the `Вакансии` tab;
-- location and vacancy results are asynchronous;
-- the DOM contains hidden and visible duplicate option trees;
-- region selection may be reflected in URL state or only in the visible header
-  location button;
-- the search surface is vacancy-grained, while event details are parent-grained.
-
-Fixed sleeps are not readiness evidence. The monitor waits for an exact visible
-region option and for vacancy CTAs or an explicit zero-result source state.
-
-## 5. Kaggle canary evidence
-
-### 5.1. GitHub settings boundary
-
-The following names are present and reach the Environment-scoped job:
+Integrity:
 
 ```text
-GitHub Environment: volunteer-monitor-canary
-Environment secret: KAGGLE_API_TOKEN
-Repository variable: VOLUNTEER_KAGGLE_KERNEL_SLUG=eventsbot/kenigevents-volunteer-monitor
-Repository variable: VOLUNTEER_KAGGLE_CANARY_ENABLED=true
+result file SHA-256: 58808e44af5cac4e7577b7dc817b9344fd37771fec6c11083ca5dc28f0ebae44
+internal result hash: 843b5fd966bfab88c467101ca4db88e541449ed894711838791ecbee5fcd592a
+artifact ID:          8959127103
+artifact ZIP SHA-256: 2a41a8a112af6bda3dc14751e2eb4464c70c0ff70ce1d031d671e2ee21d15c17
 ```
 
-The secret value was never printed or returned. GitHub masking confirmed that a
-non-empty value reached the runner. Presence of a secret name, however, is not
-proof that its value is a valid Kaggle credential.
+## 5. Lifecycle and removal contract
 
-### 5.2. Failed authentication attempts
-
-Three bounded runs isolated the failure before kernel execution:
+A live source row is public only while its exact vacancy identity is present in a successfully completed regional vacancy inventory.
 
 ```text
-run_id       job_id       result
-30991688290  92259199357  non-empty KAGGLE_API_TOKEN; `kernels push` rejected authentication
-30991985166  92260102142  repository legacy variables were absent; token path rejected again
-30992222431  92260913717  raw/JSON/quoted legacy normalization attempted; read-only API auth rejected
+present in complete inventory -> OPEN
+previously OPEN but absent     -> no longer OPEN
+explicit close evidence        -> CLOSED
+deadline/event end passed      -> EXPIRED
+transport/DOM uncertainty      -> UNKNOWN
 ```
 
-The third run used a read-only authentication probe before upload:
+`CLOSED` and `EXPIRED` are distinct reasons but both remove the label/link in the next successful apply. `UNKNOWN` never becomes a false close. After 36 hours without a successful check, projection hides fail-closed.
+
+Static HTTP for reviewed historical pages currently proves `EXPIRED`; dynamic UI wording `Набор закрыт` is not consistently present in the source HTML. Therefore the live gate correctly requires source-backed `CLOSED | EXPIRED`, while exact `CLOSED` remains a deterministic fixture contract.
+
+## 6. Canonical workflows
 
 ```text
-kaggle kernels list -m --page-size 1
+volunteer-monitor-smoke.yml
+  PR fixtures
+  scheduled/manual direct monitor
+
+volunteer-monitor-live-acceptance.yml
+  bounded PR direct specimen
+  source-backed non-public lifecycle probe
+
+volunteer-monitor-kaggle.yml
+  manual private Kaggle canary
+  proven zigomaro / kaggle 1.8.4 path
 ```
 
-It failed before kernel packaging, `kernels push`, polling or output download.
-Consequently:
+The temporary acceptance workflow was removed after its successful run.
+
+## 7. Official festival source search
+
+Search runs only after there is no existing Event/Festival match and no explicit/known official URL.
 
 ```text
-Kaggle kernel created: no
-Kaggle execution run ID: none
-Kaggle result JSON: none
-Kaggle receipt JSON: none
-Kaggle output artifact: none
-SHA-256 parity check: not reachable
+explicit source URL
+  -> existing registry
+  -> bounded grounded search candidates
+  -> independent fetch and source-role/edition verification
+  -> operator approval when ambiguous
 ```
 
-This evidence rules out the Dobro.ru selectors, result parser, fixture suite,
-runtime ZIP builder and Kaggle kernel body as the current blocker. The blocker
-is the credential value supplied under `KAGGLE_API_TOKEN`.
+Configured free lanes remain Gemini Google Search grounding, Tavily free tier and optional operator-owned SearXNG. Search output never directly writes an official festival destination.
 
-### 5.3. Workflow state after the failed attempts
+## 8. Remaining implementation
 
-Commit `747e298222720212850f53bcd11e08fab016a02b` leaves the canary ready for both
-supported authentication shapes:
+Not implemented yet:
 
-```text
-1. try KAGGLE_API_TOKEN as a current access token
-2. if rejected, try a safely prepared legacy username/key fallback
-3. fail before upload when both modes are rejected
-```
-
-Automatic Kaggle execution on every PR push is disabled to prevent repeated
-credential failures and wasted Actions minutes. Kaggle now runs only through
-`workflow_dispatch` with:
-
-```text
-executor = kaggle
-VOLUNTEER_KAGGLE_CANARY_ENABLED = true
-```
-
-### 5.4. Exact remaining external action
-
-Replace **only the value** of Environment secret `KAGGLE_API_TOKEN` with the raw,
-current Kaggle access token generated in Kaggle account settings. Do not place
-its name, a GitHub token, a filename, explanatory text, JSON wrapper or quotes in
-the value. Do not paste the token into chat or commit it anywhere.
-
-After replacement, no source-code or selector work is required. The current
-workflow first proves authentication read-only, then pushes the private kernel,
-polls terminal status, downloads output, validates the receipt SHA-256 and runs
-the same source-accounting validator as the direct canary.
-
-## 6. Opportunity identity
-
-The source inventory retains:
-
-```text
-event_id
-vacancy_id
-exact source application URL
-card-local role/date/location text
-parent event source fields
-```
-
-Several vacancy records may map to one parent event. The future Event/Festival
-projection may group them visually, but it must preserve exact vacancy IDs and
-source CTA destinations.
-
-## 7. Canary semantics
-
-Allowed terminal run states:
-
-```text
-PASS
-PARTIAL
-WARN_NO_LIVE_SUPPLY
-functional failure
-```
-
-`PARTIAL` is allowed only when every selected parent source has exactly one of:
-
-```text
-parsed opportunity
-outside-target-region
-recorded fetch/parser error
-```
-
-The validator rejects count mismatch, duplicate dispositions, unclassified
-warnings, non-Dobro warning URLs, no OPEN opportunity under live supply, PASS
-with warnings, PARTIAL without warnings and empty success without explicit
-source zero-state evidence.
-
-## 8. Free official-festival source discovery
-
-Search is triggered only after no existing Event/Festival match and no explicit
-or known official URL.
-
-Order:
-
-```text
-1. explicit outbound source URL
-2. existing exact festival/organizer registry URL
-3. free grounded web-search candidates
-4. source-role / edition verification
-5. operator approval when officiality remains ambiguous
-```
-
-Primary free lane:
-
-```text
-Gemini 2.5 Flash-Lite + Google Search grounding
-one request per unresolved seed
-max 8 grounded candidate URLs
-free-form model URLs/prose discarded
-```
-
-Fallbacks:
-
-```text
-Tavily Researcher free tier, basic, max 8, no generated answer/raw content
-operator-owned SearXNG JSON endpoint
-```
-
-A search result never writes a festival destination directly.
-
-## 9. Execution ownership
-
-GitHub Actions owns fixtures, read-only direct acceptance, optional Kaggle
-canary and private evidence artifacts. It never writes production SQLite.
-
-Production ownership remains:
-
-```text
-Fly durable job / immutable input
-  -> Kaggle CPU batch
-  -> hash-validated result
-  -> Fly transactional SQLite apply
-  -> StaticSiteBuilder only on public projection diff
-```
-
-## 10. Not yet implemented
-
-This branch still does not provide:
-
-- Fly SQLite tables/migrations and durable daily outbox scheduling;
+- SQLite migrations/tables for opportunities, links and monitor runs;
+- Fly-owned durable daily job and last-good adoption;
+- previous-open inventory diff and transactional state apply;
 - shared BGE-M3 Event/Festival shortlist;
-- bounded LLM target adjudication;
-- `festival_queue` write/apply;
+- bounded LLM adjudication and deterministic post-gates;
+- idempotent `festival_queue` insertion;
 - verified official-source candidate apply;
 - production `volunteer-links-v1.json` export;
-- Event/Festival card label;
-- event-detail fact medallion and content CTA;
-- `/volontery/` page;
-- generated-site removal after source closure;
+- card label, detail medallion/content CTA and `/volontery/`;
+- generated-site removal E2E;
 - production deployment.
 
-Those remain the next implementation phase after Kaggle source parity is
-actually proven, not merely after a secret name is created.
+No code-agent credential task remains. The next phase is normal product implementation, not infrastructure recovery.
