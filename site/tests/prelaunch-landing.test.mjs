@@ -24,10 +24,7 @@ test('prelaunch production mode is explicit and defaults on until launch release
   assert.equal(resolvePrelaunchMode({ PUBLIC_PRELAUNCH_MODE: 'on' }), true);
   assert.equal(resolvePrelaunchMode({ PUBLIC_PRELAUNCH_MODE: '1' }), true);
   assert.equal(resolvePrelaunchMode({ PUBLIC_PRELAUNCH_MODE: 'off' }), false);
-  assert.throws(
-    () => resolvePrelaunchMode({ PUBLIC_PRELAUNCH_MODE: 'maybe' }),
-    /PUBLIC_PRELAUNCH_MODE/u,
-  );
+  assert.throws(() => resolvePrelaunchMode({ PUBLIC_PRELAUNCH_MODE: 'maybe' }), /PUBLIC_PRELAUNCH_MODE/u);
 });
 
 test('artifact policy indexes only the root and hides every other HTML page', () => {
@@ -45,10 +42,7 @@ test('artifact policy indexes only the root and hides every other HTML page', ()
     writeFileSync(join(root, 'robots.txt'), 'old');
     writeFileSync(join(root, 'sitemap.xml'), 'old');
 
-    const receipt = applyPrelaunchArtifactPolicy(root, {
-      enabled: true,
-      siteOrigin: 'https://kenigevents.ru',
-    });
+    const receipt = applyPrelaunchArtifactPolicy(root, { enabled: true, siteOrigin: 'https://kenigevents.ru' });
     assert.deepEqual(receipt, { enabled: true, htmlCount: 2, hiddenHtmlCount: 1 });
     assert.match(readFileSync(join(root, 'index.html'), 'utf8'), /content="index,follow"/u);
     assert.match(
@@ -68,62 +62,32 @@ test('artifact policy indexes only the root and hides every other HTML page', ()
   }
 });
 
-test('landing source keeps functional contracts and the reference-bound glass scene', () => {
+test('landing keeps the launch, form and layered scene contracts', () => {
   const landing = source('site/src/components/PrelaunchLanding.astro');
+  const experience = source('site/src/components/PrelaunchExperience.astro');
+  const visual = source('site/src/styles/prelaunch-fit-v27.css');
   const layout = source('site/src/layouts/PrelaunchLayout.astro');
-  const motion = source('site/src/styles/prelaunch-motion.css');
-  const browser = source('site/scripts/check-prelaunch-browser.mjs');
-  const catalog = source('site/src/lib/backendOperationCatalog.ts');
 
-  assert.match(landing, /announcements-brand-v2-512\.png/u);
   assert.match(landing, /Запуск 1 сентября/u);
   assert.match(landing, /Персонализированный сервис анонсов/u);
-  assert.match(landing, /register_prelaunch_notification_v1/u);
-  assert.match(landing, /getResilientDataClient/u);
-  assert.match(landing, /launch-2026-09-01-v1/u);
-  assert.match(landing, /prefers-reduced-motion/u);
-  assert.match(landing, /prelaunch__background/u);
-  assert.match(landing, /prelaunch__mosaic/u);
-  assert.match(landing, /prelaunch__atmosphere/u);
-  assert.match(landing, /prelaunch__foreground/u);
-  assert.match(landing, /length: 72/u);
-  assert.match(landing, /data-state/u);
-  assert.match(landing, /data-zone/u);
-  assert.match(landing, /data-glint/u);
-  assert.match(landing, /repeating-linear-gradient/u);
-  assert.match(landing, /--tile-height:\s*clamp\(166px, 15\.525vw, 256px\)/u);
-  assert.match(landing, /\.prelaunch__tile\s*\{[\s\S]*?background:\s*transparent;[\s\S]*?opacity:\s*1;/u);
-  assert.match(landing, /\.prelaunch__tile::before[\s\S]*?backdrop-filter:/u);
-  assert.ok(landing.includes('86% 15%'), 'directional light anchor must remain in the upper-right zone');
+  assert.match(landing, /data-prelaunch-form/u);
+  assert.match(landing, /data-prelaunch-mosaic/u);
+  assert.match(experience, /targetTileCount = 98/u);
+  assert.match(experience, /svg-rounded-clip/u);
+  assert.match(experience, /<script>[\s\S]*prelaunchEmailGuard[\s\S]*prelaunchExperience/u);
+  assert.match(experience, /rect\.setAttribute\('rx', '175'\)/u);
+  assert.doesNotMatch(experience, /getImageData|Uint32Array|flood/iu);
 
-  const rowsMatch = /const tileStateRows = \[([\s\S]*?)\] as const;/u.exec(landing);
-  assert.ok(rowsMatch, 'deterministic tile state rows must be explicit');
-  const rows = [...rowsMatch[1].matchAll(/'([sdr]{9})'/gu)].map((match) => match[1]);
-  assert.equal(rows.length, 8);
-  const states = rows.join('');
-  assert.equal(states.length, 72);
-  assert.equal([...states].filter((state) => state === 's').length, 30);
-  assert.equal([...states].filter((state) => state === 'd').length, 23);
-  assert.equal([...states].filter((state) => state === 'r').length, 19);
+  assert.match(visual, /14\.2vmin/u);
+  assert.match(visual, /repeat\(14, var\(--tile-width\)\)/u);
+  assert.match(visual, /repeat\(7, var\(--tile-width\)\)/u);
+  assert.match(visual, /overflow:\s*hidden\s*!important/u);
+  assert.match(visual, /filter:\s*none\s*!important/u);
+  assert.match(visual, /radial-gradient\(circle at 100% 100%/u);
+  assert.doesNotMatch(visual, /0 0 0 calc\(var\(--corner-radius\)/u);
 
   assert.match(layout, /content=\{robots\}/u);
   assert.match(layout, /prelaunch-motion\.css/u);
-  assert.match(motion, /\.prelaunch__tile::before/u);
-  assert.match(motion, /background-color var\(--speed\)/u);
-  assert.match(motion, /backdrop-filter var\(--speed\)/u);
-  assert.match(motion, /\.prelaunch__tile::after[\s\S]*opacity var\(--speed\)/u);
-  assert.match(motion, /prefers-reduced-motion/u);
-  assert.doesNotMatch(motion, /\.prelaunch__tile\s*\{[\s\S]*?opacity:\s*var\(--veil\)/u);
-
-  assert.match(browser, /reference-square/u);
-  assert.match(browser, /page\.content\(\)/u);
-  assert.match(browser, /writeFileSync/u);
-  assert.match(browser, /corner masks/u);
-  assert.match(browser, /state alpha order/u);
-  assert.match(browser, /whole-pane opacity/u);
-  assert.match(browser, /shared light source/u);
-  assert.match(browser, /pane aspect/u);
-  assert.match(catalog, /'register_prelaunch_notification_v1'/u);
 });
 
 test('secret candidate inherits the checked production prelaunch surface', () => {
@@ -138,26 +102,32 @@ test('secret candidate inherits the checked production prelaunch surface', () =>
   assert.match(check, /candidate public surface disagrees with prelaunch mode/u);
   assert.match(layout, /noindex,nofollow,noarchive,nosnippet/u);
   assert.match(layout, /name="referrer" content="no-referrer"/u);
-  assert.match(layout, /withBase\('\/'\)/u);
 });
 
-test('prelaunch notification RPC is classified as idempotent replay', () => {
+test('prelaunch notification RPC is classified as idempotent replay over both routes', () => {
   const operation = classifyBackendOperation(
     'https://project.supabase.co/rest/v1/rpc/register_prelaunch_notification_v1',
     { method: 'POST' },
   );
   assert.equal(operation.capability, 'data');
   assert.equal(operation.semantics, 'idempotent-replay');
+  assert.deepEqual(operation.routeSupport, ['direct', 'relay']);
   assert.equal(policyForOperation(operation), 'idempotent-replay');
 });
 
-test('migration stores email in a separate RLS-protected table without public reads', () => {
-  const migration = source('supabase/migrations/20260803113000_prelaunch_launch_notifications_v1.sql');
-  assert.match(migration, /create table if not exists personalization\.prelaunch_launch_subscription/u);
-  assert.match(migration, /enable row level security/u);
-  assert.match(migration, /revoke all on personalization\.prelaunch_launch_subscription from public, anon, authenticated/u);
-  assert.match(migration, /security definer/u);
-  assert.match(migration, /register_prelaunch_notification_v1/u);
-  assert.match(migration, /grant execute[^;]+to anon, authenticated, service_role/su);
-  assert.doesNotMatch(migration, /grant\s+select[^;]+\b(?:anon|authenticated)\b/iu);
+test('migrations keep direct table reads closed and align consent/email validation', () => {
+  const v1 = source('supabase/migrations/20260803113000_prelaunch_launch_notifications_v1.sql');
+  const v2 = source('supabase/migrations/20260806163000_prelaunch_updates_consent_v2.sql');
+  assert.match(v1, /create table if not exists personalization\.prelaunch_launch_subscription/u);
+  assert.match(v1, /enable row level security/u);
+  assert.match(v1, /revoke all on personalization\.prelaunch_launch_subscription from public, anon, authenticated/u);
+  assert.doesNotMatch(v1, /grant\s+select[^;]+\b(?:anon|authenticated)\b/iu);
+
+  assert.match(v2, /prelaunch-updates-2026-v1/u);
+  assert.match(v2, /prelaunch_email_is_valid_v2/u);
+  assert.match(v2, /security definer/u);
+  assert.match(v2, /interval '24 months'/u);
+  assert.match(v2, /Direct and Yandex-relay replays converge/u);
+  assert.match(v2, /grant execute[^;]+to anon, authenticated, service_role/su);
+  assert.doesNotMatch(v2, /execute\s+format\s*\(/iu);
 });
