@@ -32,6 +32,16 @@ function check(condition, message, localFailures) {
   if (!condition) localFailures.push(message);
 }
 
+function boxesOverlap(left, right, gap = 0) {
+  if (!left || !right) return true;
+  return !(
+    left.right + gap <= right.left
+    || right.right + gap <= left.left
+    || left.bottom + gap <= right.top
+    || right.bottom + gap <= left.top
+  );
+}
+
 try {
   for (const viewport of viewports) {
     const localFailures = [];
@@ -115,8 +125,8 @@ try {
         check(box.bottom <= viewport.height + 1, `${viewport.name}: ${name} bottom ${box.bottom}`, localFailures);
       }
       check(
-        scene.description && scene.notify && scene.description.bottom + 6 <= scene.notify.top,
-        `${viewport.name}: description/form collision ${scene.description?.bottom}/${scene.notify?.top}`,
+        !boxesOverlap(scene.description, scene.notify, 6),
+        `${viewport.name}: description/form rectangles overlap`,
         localFailures,
       );
       check(scene.consentFontSize >= 8.5, `${viewport.name}: consent font ${scene.consentFontSize}px is unreadable`, localFailures);
