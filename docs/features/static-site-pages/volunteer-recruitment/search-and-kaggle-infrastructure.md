@@ -1,167 +1,246 @@
-# Volunteer Monitor: free web discovery and Kaggle control plane
+# Volunteer Monitor: web discovery и Kaggle control plane
 
-> Статус: дополнение к `volunteer-recruitment/README.md` и
-> `implementation-handoff.md`. Исполняемый source-monitor skeleton готов;
-> fixture contract проверен, live acceptance ожидает GitHub/Kaggle canary.
+> **Статус, 2026-08-06:** read-only source monitor и private Kaggle canary выполнены на реальной инфраструктуре. Этот документ фиксирует проверенный, а не предполагаемый способ запуска.
 
-## 1. Что делает сам монитор
+## 1. Разделение задач
 
-Ежедневный монитор не использует web search для discovery заявок. Он читает
-согласованную региональную поверхность `Добро.рф`, проходит пагинацию и
-проверяет каждую новую либо ранее открытую заявку.
+Ежедневный монитор `Добро.рф` не использует интернет-поиск для обнаружения заявок. Он читает согласованную региональную поверхность, проходит вкладку `Вакансии`, сохраняет точные vacancy/application identities и определяет source lifecycle.
 
 ```text
-Playwright search surface
-  -> canonical /event/<id> URLs
-  -> HTTP/HTML + JSON-LD extraction
+Playwright regional vacancy inventory
+  -> event_id + vacancy_id + exact application URL
+  -> parent event enrichment
   -> OPEN / CLOSED / EXPIRED / UNKNOWN
-  -> availability_hash
-  -> semantic_hash
+  -> availability_hash + semantic_hash
 ```
 
-BGE/LLM не определяют доступность. Они запускаются позже и только для нового или
-изменившегося `semantic_hash`.
+BGE и LLM не участвуют в определении доступности. Они используются позже только для matching нового или семантически изменившегося документа с существующими `Event` и `festival_calendar_item`.
 
-## 2. Поиск официального источника неизвестного фестиваля
+## 2. Как снимается закрытая заявка
 
-Web discovery разрешён только для `FESTIVAL_DISCOVERY_SEED`, когда нет:
+Production recheck должен сравнивать новый полный inventory с ранее открытыми vacancy identities.
 
-1. точного существующего Event/FestivalEdition match;
+```text
+vacancy присутствует в успешно завершённой вкладке Вакансии
+  -> OPEN
+
+ранее OPEN vacancy отсутствует в полном новом inventory
+  -> больше не OPEN
+  -> detail/deadline evidence уточняет CLOSED либо EXPIRED
+
+DOM/transport failure
+  -> UNKNOWN
+  -> не выдавать за закрытие
+```
+
+`CLOSED` и `EXPIRED` — разные причины, но одинаковый публичный результат: лейбл и кнопка снимаются в следующем успешном apply. Если успешной проверки нет более 36 часов, projection скрывается fail-closed. Exact `CLOSED` покрывается fixture; реальные исторические страницы в статическом HTTP часто дают доказуемый `EXPIRED`, тогда как динамическая надпись `Набор закрыт` не присутствует в исходном HTML.
+
+## 3. Поиск официального источника неизвестного фестиваля
+
+Web discovery запускается только для `FESTIVAL_DISCOVERY_SEED`, когда одновременно нет:
+
+1. точного Event/FestivalEdition match;
 2. явной внешней ссылки в заявке;
-3. уже утверждённого source в festival registry/source graph.
+3. уже утверждённого URL серии или организатора.
 
-Один `source_resolution_hash` получает максимум один primary search request.
-Результаты поиска — только кандидаты. Каждый URL затем повторно загружается
-локальным HTTP/Playwright verifier и требует:
-
-- совпадения series/edition identity;
-- совместимого года/дат, города/площадки или организатора;
-- source-local exact quote и content hash;
-- отсутствия роли агрегатора/СМИ/билетной страницы;
-- operator approval для нового official destination.
-
-### Рекомендуемый бесплатный порядок
-
-#### A. Gemini 2.5 Flash-Lite + Google Search grounding
-
-Это наиболее близкая замена Antigravity как `LLM + web search`. Использовать
-отдельный quota scope и только публичные festival hints. Контакты волонтёров,
-телефоны и email в запрос не передаются.
+Порядок:
 
 ```text
-provider = gemini_google_search
-model = gemini-2.5-flash-lite
-max_requests_per_unresolved_group = 1
+explicit outbound URL из заявки
+  -> existing festival/organizer registry
+  -> один bounded grounded web-search request
+  -> независимая загрузка candidate URLs
+  -> source-role / edition / date verification
+  -> operator approval при неоднозначности
 ```
 
-Host извлекает только grounded URLs; URL из свободного текста ответа без tool
-evidence отклоняется.
+Search output — только candidate set. Он никогда напрямую не становится official destination.
 
-#### B. Tavily Search API
+### Бесплатные провайдеры
 
-Детерминированный search API для получения URL/snippets. Один basic search на
-новый unresolved lead, затем локальная проверка и обычный LLM verifier. Это
-хороший независимый fallback при низком объёме новых фестивалей.
-
-#### C. Brave Search API
-
-Допустимый резерв при согласии завести billing profile. Бесплатный месячный
-кредит покрывает примерно 1 000 Search requests, но регистрация требует карту.
-
-#### D. Operator-owned SearXNG
-
-Не имеет платы за собственный API, но требует хостинга и зависит от доступности
-upstream engines. Используется как challenger/fallback, не как единственный
-production authority.
-
-#### E. Common Crawl
-
-Бесплатен и полезен для поиска старых доменов/архивных festival series, но не
-доказывает текущий официальный сайт или актуальную редакцию.
-
-### Не выбранные варианты
-
-- Antigravity: текущий project/provider permission blocker;
-- Google Programmable Search: не использовать как новую долгосрочную основу;
-- Yandex Search API: технически подходит для русскоязычной выдачи, но это PAYG,
-  а пользовательское ограничение сейчас — только бесплатные варианты;
-- scraping HTML обычных поисковиков напрямую: хрупкий и юридически/операционно
-  нежелательный production dependency.
-
-## 3. Kaggle и GitHub Actions
-
-### Рекомендуемая архитектура
+Primary:
 
 ```text
-Production schedule / durable state: Fly JobOutbox
-Compute/browser/BGE batch:          Kaggle CPU kernel
-Manual/read-only canary:            GitHub Actions workflow_dispatch
-Evidence/log download:              GitHub Actions artifacts
-Production apply:                   только trusted Fly runner
+Gemini 2.5 Flash-Lite + Google Search grounding
+max 1 request на unresolved seed
+max 8 grounded URLs
+free-form prose и неграундированные URL отбрасываются
 ```
 
-GitHub Actions не должен становиться владельцем production SQLite. Он удобен
-как доступный control plane: staging immutable kernel source, `kaggle kernels
-push`, polling, output download, hash validation и artifact retention.
-
-### Секреты
-
-Владельцу репозитория нужно один раз создать GitHub Environment
-`volunteer-monitor-canary` и добавить один environment secret:
+Fallback:
 
 ```text
-KAGGLE_API_TOKEN
+Tavily Researcher free tier
+search_depth=basic
+max_results=8
+include_answer=false
+include_raw_content=false
 ```
 
-Это текущий token-based способ аутентификации Kaggle. Legacy-пара
-`KAGGLE_USERNAME` / `KAGGLE_KEY` для нового контура не требуется.
-
-Дополнительные search secrets добавляются только для выбранных providers:
+Optional infrastructure fallback:
 
 ```text
-GEMINI_API_KEY_VOLUNTEER_SEARCH
-TAVILY_API_KEY
-BRAVE_SEARCH_API_KEY
+operator-owned SearXNG JSON endpoint
 ```
 
-Non-secret variables:
+Не использовать как production authority:
+
+- угаданный домен;
+- первый поисковый результат без verification;
+- парсинг HTML обычной поисковой выдачи;
+- Common Crawl как доказательство текущей редакции;
+- LLM confidence без source evidence.
+
+## 4. Проверенная Kaggle-идентичность проекта
+
+Первоначальная гипотеза `eventsbot + kaggle 2.x + KAGGLE_API_TOKEN` оказалась неверной для этого репозитория.
+
+Рабочие project kernels (`CherryFlash`, `TelegramMonitor` и другие) принадлежат Kaggle account:
 
 ```text
-VOLUNTEER_KAGGLE_KERNEL_SLUG=eventsbot/kenigevents-volunteer-monitor
-VOLUNTEER_MONITOR_PERMISSION_REFERENCE
-VOLUNTEER_SEARCH_PROVIDER
-SEARXNG_ENDPOINT
+zigomaro
 ```
 
-`kaggle.json`, API keys и production DB credentials не коммитятся. Кодовый
-агент может создать workflow и ссылки на secret names, но не может безопасно
-придумать или восстановить значения: их вводит владелец аккаунта.
+Репозиторный runtime использует:
 
-### Как запускать
+```text
+KAGGLE_USERNAME + KAGGLE_KEY
+kaggle 1.8.x API client
+KaggleApi.authenticate()
+```
 
-Workflow должен быть в default branch, после чего доступен:
+Volunteer Monitor приведён к тому же контракту.
 
-- из GitHub Actions UI;
-- через `gh workflow run`;
-- через GitHub REST workflow dispatch.
+### Canonical canary workflow
 
-В поставленном skeleton есть два ручных режима:
+```text
+.github/workflows/volunteer-monitor-kaggle.yml
+```
 
-- `github`: быстрый Playwright canary прямо на GitHub runner;
-- `kaggle`: staging, запуск Kaggle kernel, polling, скачивание и проверка
-  `result_sha256`.
+Он:
 
-Для production после live acceptance предпочтительнее использовать уже
-существующий Fly→Kaggle runner pattern и оставить GitHub Actions read-only
-canary/diagnostic контуром.
+1. запускается вручную через `workflow_dispatch`;
+2. использует Environment `volunteer-monitor-canary`;
+3. берёт существующий `KAGGLE_KEY`, а при его отсутствии безопасно нормализует значение Environment secret `KAGGLE_API_TOKEN` в legacy-compatible key;
+4. получает owner из `KAGGLE_USERNAME`, default `zigomaro`;
+5. использует только tail из `VOLUNTEER_KAGGLE_KERNEL_SLUG`, поэтому ошибочный owner в старом значении variable не переносится в kernel identity;
+6. устанавливает доказанную версию `kaggle==1.8.4`;
+7. делает read-only auth preflight;
+8. собирает self-contained private kernel;
+9. выполняет push, polling, output download;
+10. проверяет result schema, receipt status, SHA-256 и полное source accounting;
+11. сохраняет private GitHub artifact на 14 дней.
 
-## 4. Acceptance перед продолжением
+Direct browser canary и Kaggle canary разделены:
 
-1. Fixture suite green.
-2. GitHub direct live canary доказывает региональный фильтр, available-vacancy
-   filter и terminal pagination.
-3. Kaggle run выдаёт тот же schema contract и hash-valid receipt.
-4. Закрытая заявка определяется не по HTTP 200, а по source state/deadline.
-5. DOM regression не превращается в `0 opportunities / success`.
-6. Только после этого добавляются persistence, BGE shortlist, festival handoff
-   и public projection.
+```text
+volunteer-monitor-smoke.yml             fixture + scheduled/manual direct
+volunteer-monitor-live-acceptance.yml   bounded PR direct + non-open probe
+volunteer-monitor-kaggle.yml            manual private Kaggle acceptance
+```
+
+## 5. Принятое Kaggle evidence
+
+```text
+GitHub Actions run: 31079828744
+job:                92545879373
+kernel:             zigomaro/kenigevents-volunteer-monitor
+kernel version:     1
+run_uid:            volunteer-monitor-20260806T070946Z
+status:             SUCCESS
+```
+
+Execution:
+
+```text
+started_at:         2026-08-06T07:09:46.700291Z
+completed_at:       2026-08-06T07:14:27.870758Z
+source_pages_seen:  24
+opportunities:      24
+OPEN:               24
+warnings:           0
+outside-region:     0
+source errors:      0
+```
+
+Discovery receipt:
+
+```text
+region_proven:           true
+available_filter_proven: true
+parent URLs discovered:  101
+vacancies discovered:    159
+load-more clicks:          5
+```
+
+Integrity:
+
+```text
+result file SHA-256: 58808e44af5cac4e7577b7dc817b9344fd37771fec6c11083ca5dc28f0ebae44
+internal result hash: 843b5fd966bfab88c467101ca4db88e541449ed894711838791ecbee5fcd592a
+GitHub artifact ID:   8959127103
+artifact ZIP SHA-256: 2a41a8a112af6bda3dc14751e2eb4464c70c0ff70ce1d031d671e2ee21d15c17
+```
+
+Downloaded output contains:
+
+```text
+volunteer-monitor-result.json
+volunteer-monitor-receipt.json
+volunteer-monitor-evidence/discovery-receipt.json
+kenigevents-volunteer-monitor.log
+volunteer-monitor-runtime.zip
+```
+
+## 6. Execution ownership
+
+### GitHub Actions
+
+Owns только:
+
+- fixtures;
+- read-only live acceptance;
+- manual Kaggle canary;
+- bounded private evidence.
+
+Не пишет production SQLite.
+
+### Production
+
+```text
+Fly durable JobTask / immutable input
+  -> private Kaggle CPU batch
+  -> hash-validated result adoption
+  -> Fly transactional SQLite apply
+  -> StaticSiteBuilder only when public projection changed
+```
+
+Fly остаётся владельцем last-good state, retries, freshness TTL и production apply. GitHub Actions не является production scheduler.
+
+## 7. Текущие настройки
+
+```text
+GitHub Environment: volunteer-monitor-canary
+Environment secret: KAGGLE_API_TOKEN
+Repository variable: VOLUNTEER_KAGGLE_CANARY_ENABLED=true
+Repository variable: VOLUNTEER_KAGGLE_KERNEL_SLUG=<owner ignored>/kenigevents-volunteer-monitor
+Repository/Environment variable: KAGGLE_USERNAME=zigomaro, либо workflow default
+```
+
+Значения secrets не печатаются и не сохраняются в artifacts. `kaggle.json` не коммитится.
+
+## 8. Acceptance status
+
+Выполнено:
+
+- fixture parser/matcher-provider policy suite;
+- реальный GitHub-hosted Chromium source canary;
+- source accounting;
+- exact application URL preservation;
+- source-backed OPEN;
+- source-backed non-public lifecycle (`EXPIRED`) плюс exact CLOSED fixture;
+- private Kaggle authentication;
+- kernel push/run/complete;
+- output/receipt/SHA validation.
+
+Следующий этап — не инфраструктурный canary, а production implementation: SQLite state, daily inventory diff, BGE shortlist, LLM adjudication, `festival_queue` handoff и Astro projection.
