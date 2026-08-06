@@ -18,12 +18,6 @@ on:
         required: false
         default: Design System
         type: string
-  push:
-    branches:
-      - agent/penpot-api-smoke-20260806
-    paths:
-      - .github/workflows/penpot-design-system-api-smoke.yml
-      - scripts/integrations/penpot_api_smoke_test.mjs
 
 permissions:
   contents: write
@@ -34,8 +28,10 @@ concurrency:
 
 jobs:
   smoke:
-    if: github.event_name == 'push' || inputs.allow_write == true
-    runs-on: macos-latest
+    if: inputs.allow_write == true
+    runs-on:
+      - self-hosted
+      - lovekgd-penpot
     timeout-minutes: 10
     env:
       PENPOT_INTEGRATION_TOKEN: ${{ secrets.PENPOT_INTEGRATION_TOKEN }}
@@ -82,7 +78,6 @@ jobs:
           retention-days: 14
 
       - name: Record branch evidence and changelog
-        if: github.event_name == 'push'
         shell: bash
         run: |
           python3 - <<'PY'
@@ -97,9 +92,9 @@ jobs:
               "# Penpot API smoke — 2026-08-06\n\n"
               "> Status: **PASS**\n\n"
               "The repository-scoped `PENPOT_INTEGRATION_TOKEN` was used only by "
-              "GitHub Actions to create or reuse an isolated Penpot file, add a "
-              "button specimen, create a comment thread and reread the resulting file. "
-              "MCP was not involved.\n\n"
+              "the isolated self-hosted GitHub Actions runner to create or reuse a "
+              "dedicated Penpot file, add a button specimen, create a comment thread "
+              "and reread the resulting file. MCP was not involved.\n\n"
               f"- Team: `{result['team']['name']}` (`{result['team']['id']}`)\n"
               f"- Project: `{result['project']['name']}` (`{result['project']['id']}`)\n"
               f"- File: `{result['file']['name']}` (`{result['file']['id']}`)\n"
