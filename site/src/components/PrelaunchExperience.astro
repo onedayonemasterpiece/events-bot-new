@@ -7,6 +7,7 @@ import '../styles/prelaunch-fit-v15.css';
 import '../styles/prelaunch-fit-v16.css';
 import '../styles/prelaunch-fit-v17.css';
 import '../styles/prelaunch-fit-v18.css';
+import '../styles/prelaunch-fit-v19.css';
 
 const artworkSource = pwaArtwork.src;
 ---
@@ -16,6 +17,17 @@ const artworkSource = pwaArtwork.src;
     const root = document.querySelector('[data-prelaunch-page]');
     const background = root?.querySelector('.prelaunch__background');
     if (!(root instanceof HTMLElement) || !(background instanceof HTMLElement)) return;
+
+    const heading = root.querySelector('#prelaunch-title');
+    if (heading && !heading.querySelector('.prelaunch-title__line')) {
+      const first = document.createElement('span');
+      first.className = 'prelaunch-title__line';
+      first.textContent = 'Запуск';
+      const second = document.createElement('span');
+      second.className = 'prelaunch-title__line';
+      second.textContent = '1 сентября';
+      heading.replaceChildren(first, document.createTextNode(' '), second);
+    }
 
     const source = new Image();
     source.decoding = 'async';
@@ -32,8 +44,6 @@ const artworkSource = pwaArtwork.src;
     const buildTransparentArtwork = () => {
       if (!source.naturalWidth || !source.naturalHeight || root.dataset.artworkReady === 'true') return;
 
-      /* 900px preserves the leather grain while keeping one-time flood fill
-         well below the cost of a frame of continuous backdrop animation. */
       const outputSize = 900;
       const canvas = document.createElement('canvas');
       canvas.className = 'prelaunch__artwork';
