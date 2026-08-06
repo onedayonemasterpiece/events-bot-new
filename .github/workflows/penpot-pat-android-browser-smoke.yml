@@ -74,18 +74,10 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -timezone UTC
           disable-animations: true
           script: |
-            set -eu
-            appium_log="${RUNNER_TEMP}/appium-penpot-android.log"
-            trap 'rm -f "$appium_log"' EXIT
-            npx appium --base-path /wd/hub --port 4723 --allow-insecure uiautomator2:chromedriver_autodownload > "$appium_log" 2>&1 &
-            for n in $(seq 1 60); do
-              if curl -fsS http://127.0.0.1:4723/wd/hub/status >/dev/null; then
-                break
-              fi
-              sleep 1
-            done
+            npx appium --base-path /wd/hub --port 4723 --allow-insecure uiautomator2:chromedriver_autodownload > "${RUNNER_TEMP}/appium-penpot-android.log" 2>&1 &
+            for n in $(seq 1 60); do curl -fsS http://127.0.0.1:4723/wd/hub/status >/dev/null && break; sleep 1; done
             curl -fsS http://127.0.0.1:4723/wd/hub/status >/dev/null
-            node e2e/penpot/pat-browser-probe.mjs
+            node e2e/penpot/pat-browser-probe.mjs; code=$?; rm -f "${RUNNER_TEMP}/appium-penpot-android.log"; exit $code
 
       - name: Upload sanitized evidence
         if: ${{ always() && hashFiles('site/artifacts/penpot-android-browser/result.json') != '' }}
