@@ -1,0 +1,85 @@
+/*
+ * Prelaunch visual correction v20.
+ *
+ * The full PWA object remains present, but its upper material is intentionally
+ * suppressed until the wordmark band, matching the reference's reveal logic.
+ */
+
+body .prelaunch[data-prelaunch-page] .prelaunch__artwork {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 0, 0, .06) 24%,
+    rgba(0, 0, 0, .42) 37%,
+    rgba(0, 0, 0, .88) 47%,
+    #000 52%,
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 0, 0, .06) 24%,
+    rgba(0, 0, 0, .42) 37%,
+    rgba(0, 0, 0, .88) 47%,
+    #000 52%,
+    #000 100%
+  );
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-window="true"] {
+  --cover-state: .14;
+  --edge-open: 0;
+  --blur-base: 1px;
+  --saturation: 1;
+  --brightness: 1.08;
+  --matte: .2;
+  --edge-top: .15;
+  --edge-right: .11;
+  --edge-bloom: .05;
+}
+
+/* Near the common emitter, upper panes become luminous frosted glass. The
+   stronger transmission reveals the shared light field, not leather detail. */
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="0"][data-edge="warm"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="1"][data-edge="warm"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="2"][data-edge="warm"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="0"][data-edge="hot"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="1"][data-edge="hot"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="2"][data-edge="hot"] {
+  --cover-state: .68;
+  --edge-open: .1;
+  --blur-base: 15px;
+  --saturation: .52;
+  --brightness: 1.16;
+  --matte: .31;
+  --edge-top: .3;
+  --edge-right: .24;
+  --edge-bloom: .15;
+}
+
+body .prelaunch[data-prelaunch-page]::before {
+  background:
+    radial-gradient(
+      ellipse 66vw 72vh at 104% -3%,
+      rgba(255, 253, 247, 1) 0%,
+      rgba(255, 230, 205, .86) 15%,
+      rgba(245, 174, 124, .57) 32%,
+      rgba(205, 99, 57, .27) 50%,
+      rgba(140, 53, 28, .07) 68%,
+      transparent 81%
+    ),
+    radial-gradient(
+      ellipse 56vw 56vh at 88% 18%,
+      rgba(255, 233, 214, .35) 0%,
+      rgba(230, 145, 94, .18) 34%,
+      rgba(167, 67, 35, .06) 63%,
+      transparent 80%
+    ),
+    linear-gradient(
+      129deg,
+      transparent 0 56%,
+      rgba(242, 173, 125, .055) 70%,
+      rgba(255, 218, 189, .1) 85%,
+      transparent 100%
+    ) !important;
+}

@@ -1,0 +1,48 @@
+/* Final visual calibration against the supplied desktop references. */
+
+@media (min-width: 821px) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__foreground {
+    padding-inline: clamp(32px, 9.4vw, 135px);
+  }
+}
+
+/* Upper-right cells should reflect the warm source as frosted glass; detailed
+   leather grain belongs to the lower reveal field. */
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-zone="light"][data-state="dim"] {
+  --cover: .73;
+  --blur-base: 14px;
+  --saturation: .46;
+  --brightness: .98;
+  --edge: .17;
+  --edge-highlight: .15;
+  --glow: .17;
+  --matte: .32;
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-zone="light"][data-state="revealed"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-zone="light"][data-state="revealed"][data-index="14"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-zone="light"][data-state="revealed"][data-index="23"] {
+  --cover: .59;
+  --blur-base: 12px;
+  --saturation: .5;
+  --brightness: 1.01;
+  --edge: .19;
+  --edge-highlight: .17;
+  --glow: .2;
+  --matte: .34;
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__atmosphere::before {
+  opacity: .27;
+  border-color: rgba(255, 186, 145, .032);
+}
+
+@media (min-width: 821px) and (min-height: 1000px) and (max-aspect-ratio: 5 / 4) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__foreground {
+    padding-inline: 10.4vw;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__background::after {
+    top: 20px;
+  }
+}

@@ -1,0 +1,152 @@
+/*
+ * Prelaunch visual correction v21.
+ *
+ * Directly calibrated against the supplied square and mobile references after
+ * opening the v20 Playwright screenshots. This is an optical correction layer,
+ * not a metric-driven approximation.
+ */
+
+/* Desktop: the leather object should emerge only around the wordmark band.
+   Hiding its upper field restores the reference hierarchy: copy first, then
+   partially revealed brand object. */
+body .prelaunch[data-prelaunch-page] .prelaunch__artwork {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0 38%,
+    rgba(0, 0, 0, .03) 40%,
+    rgba(0, 0, 0, .22) 44%,
+    rgba(0, 0, 0, .72) 48%,
+    #000 52%,
+    #000 100%
+  ) !important;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0 38%,
+    rgba(0, 0, 0, .03) 40%,
+    rgba(0, 0, 0, .22) 44%,
+    rgba(0, 0, 0, .72) 48%,
+    #000 52%,
+    #000 100%
+  ) !important;
+}
+
+/* Pull the shared emitter inward. The reference is not a tiny hotspot at the
+   edge: its warm volume illuminates several right-hand columns continuously. */
+body .prelaunch[data-prelaunch-page]::before {
+  background:
+    radial-gradient(
+      ellipse 74vw 78vh at 95% 4%,
+      rgba(255, 252, 245, .96) 0%,
+      rgba(255, 228, 203, .81) 13%,
+      rgba(246, 175, 124, .55) 29%,
+      rgba(207, 102, 59, .28) 48%,
+      rgba(142, 55, 29, .075) 67%,
+      transparent 82%
+    ),
+    radial-gradient(
+      ellipse 61vw 62vh at 82% 22%,
+      rgba(255, 231, 210, .31) 0%,
+      rgba(232, 147, 95, .17) 34%,
+      rgba(169, 68, 35, .058) 64%,
+      transparent 81%
+    ),
+    linear-gradient(
+      129deg,
+      transparent 0 53%,
+      rgba(243, 174, 126, .06) 69%,
+      rgba(255, 220, 192, .11) 84%,
+      transparent 100%
+    ) !important;
+}
+
+/* A faint large optical body at the right edge produces the cinematic arc
+   visible in both supplied references. It remains one scene-level layer. */
+body .prelaunch[data-prelaunch-page] .prelaunch__atmosphere::before {
+  display: block !important;
+  content: "" !important;
+  position: absolute;
+  width: min(66vw, 940px) !important;
+  aspect-ratio: 1;
+  right: min(-31vw, -350px) !important;
+  top: 8vh !important;
+  border-radius: 50%;
+  border: clamp(44px, 5.8vw, 84px) solid rgba(255, 219, 193, .052) !important;
+  background: radial-gradient(
+    circle,
+    rgba(255, 242, 226, .13) 0%,
+    rgba(232, 155, 108, .075) 34%,
+    rgba(184, 77, 42, .025) 58%,
+    transparent 74%
+  ) !important;
+  box-shadow:
+    0 0 44px rgba(248, 179, 132, .045),
+    inset 0 0 42px rgba(255, 205, 168, .035) !important;
+  opacity: .82 !important;
+}
+
+/* Canonical square: move the editorial block down to the reference baseline
+   and restore the more generous explanatory typography. */
+@media (min-width: 821px) and (min-height: 1000px) and (max-aspect-ratio: 5 / 4) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__copy {
+    margin-top: clamp(138px, 12vh, 150px) !important;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__copy h1 {
+    font-size: clamp(4.2rem, 6vw, 5.95rem) !important;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__copy p {
+    max-width: 31rem !important;
+    margin-top: 38px !important;
+    font-size: 1.34rem !important;
+    line-height: 1.4 !important;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__notify {
+    transform: translateY(7px) !important;
+  }
+}
+
+/* Mobile keeps more of the object's upper silhouette, as in the accepted
+   portrait composition, but still prevents leather from fighting the copy. */
+@media (max-width: 599px) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__artwork {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0 20%,
+      rgba(0, 0, 0, .14) 25%,
+      rgba(0, 0, 0, .62) 35%,
+      #000 43%,
+      #000 100%
+    ) !important;
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0 20%,
+      rgba(0, 0, 0, .14) 25%,
+      rgba(0, 0, 0, .62) 35%,
+      #000 43%,
+      #000 100%
+    ) !important;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__atmosphere::before {
+    width: 126vw !important;
+    right: -91vw !important;
+    top: 18vh !important;
+    border-width: 42px !important;
+    opacity: .72 !important;
+  }
+}
+
+@media (max-width: 599px) and (min-height: 700px) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__notify {
+    transform: translateY(-74px) !important;
+  }
+}
+
+/* Compact phones keep the established no-scroll layout. */
+@media (max-width: 599px) and (max-height: 680px) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__notify {
+    transform: translateY(-13px) !important;
+  }
+}

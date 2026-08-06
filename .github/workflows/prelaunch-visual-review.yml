@@ -1,0 +1,104 @@
+name: Prelaunch visual review
+
+on:
+  push:
+    branches:
+      - agent/prelaunch-landing-20260803
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '.github/prelaunch-visual-review.trigger'
+      - '.github/workflows/prelaunch-visual-review.yml'
+      - 'docs/features/static-site-pages/prelaunch.md'
+      - 'docs/features/static-site-pages/prelaunch-handoff/**'
+      - 'site/src/components/PrelaunchLanding.astro'
+      - 'site/src/layouts/PrelaunchLayout.astro'
+      - 'site/src/styles/prelaunch-motion.css'
+      - 'site/scripts/check-prelaunch-browser.mjs'
+      - 'site/tests/prelaunch-landing.test.mjs'
+      - 'site/package.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prelaunch-visual-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install site dependencies
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Chromium
+        working-directory: site
+        run: npx playwright install --with-deps chromium
+
+      - name: Run source and release contracts
+        run: npm --prefix site run test:static-release
+
+      - name: Build prelaunch root
+        env:
+          PUBLIC_PRELAUNCH_MODE: 'on'
+        run: npm --prefix site run build
+
+      - name: Start immutable local artifact server
+        run: |
+          python3 -m http.server 4173 --directory site/dist > /tmp/prelaunch-http.log 2>&1 &
+          echo $! > /tmp/prelaunch-http.pid
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then
+              exit 0
+            fi
+            sleep 0.5
+          done
+          cat /tmp/prelaunch-http.log
+          exit 1
+
+      - name: Capture screenshots, DOM and computed glass evidence
+        run: |
+          mkdir -p artifacts/prelaunch-browser/reference
+          set +e
+          npm --prefix site run check:prelaunch-browser -- \
+            --url http://127.0.0.1:4173/ \
+            --artifact-dir ../artifacts/prelaunch-browser
+          gate_status=$?
+          set -e
+          cp docs/features/static-site-pages/prelaunch-handoff/reference/target-desktop.webp \
+            artifacts/prelaunch-browser/reference/target-desktop.webp
+          cp docs/features/static-site-pages/prelaunch-handoff/reference/PWA-icon.webp \
+            artifacts/prelaunch-browser/reference/PWA-icon.webp
+          git rev-parse HEAD > artifacts/prelaunch-browser/repository-sha.txt
+          exit "$gate_status"
+
+      - name: Stop local server
+        if: always()
+        run: |
+          if [[ -f /tmp/prelaunch-http.pid ]]; then
+            kill "$(cat /tmp/prelaunch-http.pid)" || true
+          fi
+          cat /tmp/prelaunch-http.log || true
+
+      - name: Upload visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prelaunch-visual-evidence-${{ github.run_id }}
+          path: artifacts/prelaunch-browser
+          if-no-files-found: error
+          retention-days: 14

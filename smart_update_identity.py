@@ -8,12 +8,9 @@ signal is strong enough that creating a new row would be unsafe.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields, is_dataclass
+from dataclasses import dataclass, field
 from enum import Enum
-import hashlib
-import json
 import re
-import unicodedata
 from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -85,7 +82,6 @@ class IdentitySubject:
     event_type: str | None = None
     ticket_link: str | None = None
     source_url: str | None = None
-    source_role: str = "identity_bearing"
     source_flags: IdentitySourceFlags = field(default_factory=IdentitySourceFlags)
     poster_hashes: tuple[str, ...] = ()
 
@@ -190,22 +186,6 @@ _EVENT_WORDS = {
     "экскурсия",
 }
 
-_TRACKING_QUERY_KEYS = {
-    "_openstat",
-    "fbclid",
-    "from",
-    "gclid",
-    "igshid",
-    "mc_cid",
-    "mc_eid",
-    "ref",
-    "source",
-    "yclid",
-}
-_TG_NON_IDENTITY_QUERY_KEYS = {"single"}
-_VK_PUBLIC_HOSTS = {"vk.com", "m.vk.com", "vk.ru", "m.vk.ru"}
-_VK_WALL_TOKEN_RE = re.compile(r"^wall-?\d+_\d+$", re.IGNORECASE)
-
 
 def parse_identity_gate_mode(raw: str | None, *, default: IdentityGateMode = IdentityGateMode.OFF) -> IdentityGateMode:
     value = (raw or "").strip().lower()
@@ -249,8 +229,6 @@ def _get(obj: Any, name: str, default: Any = None) -> Any:
 
 
 def _source_url_for(obj: Any, role: str) -> str | None:
-    if _normalize_source_role(_get(obj, "source_role")) == "context_only":
-        return None
     if role == "event":
         return (
             _get(obj, "source_url")
@@ -258,11 +236,6 @@ def _source_url_for(obj: Any, role: str) -> str | None:
             or _get(obj, "source_vk_post_url")
         )
     return _get(obj, "source_url") or _get(obj, "source_post_url") or _get(obj, "source_vk_post_url")
-
-
-def _normalize_source_role(value: Any) -> str:
-    role = str(value or "identity_bearing").strip().lower()
-    return "context_only" if role == "context_only" else "identity_bearing"
 
 
 def _poster_hashes_for(obj: Any) -> tuple[str, ...]:
@@ -297,7 +270,6 @@ def identity_subject_from(obj: Any, *, role: str) -> IdentitySubject:
         event_type=_clean_str(_get(obj, "event_type")),
         ticket_link=_clean_str(_get(obj, "ticket_link")),
         source_url=_clean_str(_source_url_for(obj, role)),
-        source_role=_normalize_source_role(_get(obj, "source_role")),
         source_flags=source_flags_for(_get(obj, "source_type")),
         poster_hashes=_poster_hashes_for(obj),
     )
@@ -480,13 +452,6 @@ def build_merge_identity_gate_verdict(
         )
 
     llm = dict(llm_data or {})
-    llm_contract_valid = bool(
-        llm
-        and str(llm.get("action") or "").strip().lower()
-        in {item.value for item in MergeIdentityAction}
-        and str(llm.get("relation") or "").strip().lower()
-        in {item.value for item in MergeIdentityRelation}
-    )
     action = _coerce_merge_action(llm.get("action"))
     relation = _coerce_merge_relation(llm.get("relation"))
     confidence = _coerce_float(llm.get("confidence")) or 0.0
@@ -522,22 +487,7 @@ def build_merge_identity_gate_verdict(
         dict.fromkeys(str(v).strip() for v in allowed_field_items if str(v or "").strip())
     )
 
-    if not llm_contract_valid:
-        action = MergeIdentityAction.REVIEW_REQUIRED
-        relation = MergeIdentityRelation.UNKNOWN
-        reason_code = "merge_identity_llm_unavailable"
-        reasons = reasons or ("merge identity decision is unavailable or invalid",)
-    elif candidate_subject.source_role == "context_only" and relation in {
-        MergeIdentityRelation.SAME_EVENT,
-        MergeIdentityRelation.SOURCE_UPDATE,
-    }:
-        # Context sources may be attached to a caller-selected event for provenance,
-        # but their text/link must never assert event identity or authorize a merge.
-        action = MergeIdentityAction.REVIEW_REQUIRED
-        relation = MergeIdentityRelation.UNKNOWN
-        reason_code = "context_only_cannot_assert_identity"
-        reasons = tuple(dict.fromkeys((*reasons, "context-only source cannot assert SAME_EVENT")))
-    elif relation in {
+    if relation in {
         MergeIdentityRelation.RELATED_BUT_DISTINCT,
         MergeIdentityRelation.FESTIVAL_CONTEXT_SIBLING,
         MergeIdentityRelation.UNSAFE_TO_MERGE,
@@ -548,21 +498,8 @@ def build_merge_identity_gate_verdict(
     elif relation in {MergeIdentityRelation.SAME_EVENT, MergeIdentityRelation.SOURCE_UPDATE}:
         action = MergeIdentityAction.ALLOW_MERGE
     else:
-        action = MergeIdentityAction.REVIEW_REQUIRED
-        reason_code = "merge_identity_uncertain"
-        reasons = tuple(dict.fromkeys((*reasons, "identity relation is not affirmative")))
-
-    if conflicts:
-        # The contract is fail-closed: the LLM cannot authorize mutation while
-        # either deterministic plumbing or its own result reports a blocker.
-        if action not in {
-            MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS,
-            MergeIdentityAction.REVIEW_REQUIRED,
-        }:
-            action = MergeIdentityAction.REVIEW_REQUIRED
-            relation = MergeIdentityRelation.UNSAFE_TO_MERGE
-            reason_code = "merge_identity_blocking_conflict"
-            reasons = tuple(dict.fromkeys((*reasons, "blocking identity conflict requires review")))
+        # LLM unavailable/invalid: allow unless a deterministic rail below proves the merge unsafe.
+        action = MergeIdentityAction.ALLOW_MERGE
 
     deterministic_code = _deterministic_merge_identity_veto_reason(candidate_subject, existing_subject)
     deterministic = False
@@ -583,46 +520,6 @@ def build_merge_identity_gate_verdict(
             deterministic = True
             conflicts = tuple(dict.fromkeys((*conflicts, deterministic_code)))
             reasons = tuple(dict.fromkeys((*reasons, "structural identity conflict between matched event and candidate")))
-
-    # Semantic identity remains LLM-first. This rail handles only an explicit
-    # impossibility: two different vendor occurrence identities cannot be one
-    # public Event even if a model incorrectly says SAME_EVENT.
-    candidate_ticket_identity = specific_ticket_occurrence_identity(
-        candidate_subject.ticket_link
-    )
-    existing_ticket_identity = specific_ticket_occurrence_identity(
-        existing_subject.ticket_link
-    )
-    if (
-        candidate_ticket_identity is not None
-        and existing_ticket_identity is not None
-        # Cross-vendor ticket IDs may still describe one event; the LLM remains
-        # authoritative there. Only contradictory occurrence identities issued
-        # by the same vendor are a deterministic impossibility rail.
-        and candidate_ticket_identity[0] == existing_ticket_identity[0]
-        and candidate_ticket_identity != existing_ticket_identity
-    ):
-        conflict = (
-            "specific_ticket_occurrence_conflict:"
-            f"{candidate_ticket_identity[0]}:{candidate_ticket_identity[1]}:"
-            f"{candidate_ticket_identity[2]}:{candidate_ticket_identity[3]}"
-            "!="
-            f"{existing_ticket_identity[0]}:{existing_ticket_identity[1]}:"
-            f"{existing_ticket_identity[2]}:{existing_ticket_identity[3]}"
-        )
-        action = MergeIdentityAction.REVIEW_REQUIRED
-        relation = MergeIdentityRelation.UNSAFE_TO_MERGE
-        reason_code = "specific_ticket_occurrence_conflict"
-        deterministic = True
-        conflicts = tuple(dict.fromkeys((*conflicts, conflict)))
-        reasons = tuple(
-            dict.fromkeys(
-                (
-                    *reasons,
-                    "different explicit ticket occurrence identities require review",
-                )
-            )
-        )
 
     return MergeIdentityGateVerdict(
         mode=resolved_mode,
@@ -831,53 +728,6 @@ def _coarse_event_type(value: str | None) -> str | None:
     return None
 
 
-_TICKET_OCCURRENCE_ROUTE_RE = re.compile(
-    r"(?i)(?:^|/)buy/event/(?P<event_id>[^/]+)/"
-    r"(?P<date>\d{4}-\d{2}-\d{2})/"
-    r"(?P<time>\d{1,2}[:.]\d{2}(?::\d{2})?)(?:/|$)"
-)
-
-
-def specific_ticket_occurrence_identity(
-    value: str | None,
-) -> tuple[str, str, str, str] | None:
-    """Extract only an explicit vendor occurrence identity.
-
-    Generic ticket landing pages intentionally remain an LLM-first semantic
-    decision and return ``None`` here.
-    """
-
-    canonical = canonicalize_identity_url(value, preserve_ticket_fragment=True)
-    if not canonical:
-        return None
-    try:
-        parts = urlsplit(canonical)
-    except (TypeError, ValueError):
-        return None
-    routes = [
-        str(parts.fragment or "").strip().lstrip("/"),
-        str(parts.path or "").strip().lstrip("/"),
-    ]
-    match = next(
-        (
-            found
-            for route in routes
-            if (found := _TICKET_OCCURRENCE_ROUTE_RE.search(route))
-        ),
-        None,
-    )
-    if match is None:
-        return None
-    raw_time = match.group("time").replace(".", ":")
-    normalized_time = ":".join(raw_time.split(":")[:2])
-    return (
-        str(parts.hostname or "").casefold(),
-        match.group("event_id").casefold(),
-        match.group("date"),
-        normalized_time,
-    )
-
-
 def _coerce_merge_action(value: Any) -> MergeIdentityAction:
     try:
         return MergeIdentityAction(str(value or "").strip().lower())
@@ -993,208 +843,18 @@ def _time_key(value: str | None) -> str | None:
 
 
 def _normalize_url(value: str | None) -> str:
-    return canonicalize_identity_url(value, preserve_ticket_fragment=True) or ""
-
-
-def canonicalize_identity_url(
-    value: str | None,
-    *,
-    preserve_ticket_fragment: bool = False,
-) -> str | None:
-    """Return a stable public URL identity without erasing ticket semantics.
-
-    Telegram preview/host variants and VK mobile/query variants collapse to one
-    public identity. Tracking parameters never participate. Tretyakov's ``#buy``
-    and ``#/buy`` fragments are application routes, not analytics fragments, so
-    ticket canonicalization retains them.
-    """
-
-    raw = str(value or "").strip().strip("<>\"'")
+    raw = (value or "").strip()
     if not raw:
-        return None
+        return ""
     canonical_tg = canonicalize_tg_url(raw)
     if canonical_tg:
-        parts = urlsplit(canonical_tg)
-        path_parts = [part for part in parts.path.split("/") if part]
-        if len(path_parts) == 3 and path_parts[0].casefold() == "s":
-            path_parts = path_parts[1:]
-        if path_parts:
-            path_parts[0] = path_parts[0].casefold()
-        path = "/" + "/".join(path_parts) if path_parts else "/"
-        query = _canonical_query(parts.query, ignored=_TG_NON_IDENTITY_QUERY_KEYS)
-        return urlunsplit(("https", "t.me", path.rstrip("/") or "/", query, ""))
-
-    if "://" not in raw and re.match(r"(?i)^(?:www\.|m\.)?(?:vk\.com|vk\.ru)/", raw):
-        raw = f"https://{raw}"
+        raw = canonical_tg
     try:
         parts = urlsplit(raw)
-        host = (parts.hostname or "").casefold().removeprefix("www.")
-    except (TypeError, ValueError):
-        return raw.rstrip("/") or None
-    if not host:
-        return raw.rstrip("/") or None
-
-    query_pairs = parse_qsl(parts.query, keep_blank_values=True)
-    if host in _VK_PUBLIC_HOSTS:
-        wall_token = (parts.path or "").strip("/")
-        if not _VK_WALL_TOKEN_RE.fullmatch(wall_token):
-            wall_token = next(
-                (
-                    str(v).strip()
-                    for k, v in query_pairs
-                    if str(k).casefold() == "w" and _VK_WALL_TOKEN_RE.fullmatch(str(v).strip())
-                ),
-                "",
-            )
-        if wall_token:
-            return f"https://vk.com/{wall_token.casefold()}"
-        host = "vk.com"
-
-    path = re.sub(r"/{2,}", "/", parts.path or "/")
-    path = path.rstrip("/") or "/"
-    query = _canonical_query(parts.query)
-    fragment = ""
-    if host.endswith("tretyakovgallery.ru"):
-        raw_fragment = str(parts.fragment or "").strip()
-        route = re.sub(r"/{2,}", "/", raw_fragment.lstrip("/"))
-        if route.casefold() == "buy" or re.fullmatch(
-            r"(?i)buy/event/[^/]+/[^/]+/[^/]+", route
-        ):
-            # A Tretyakov SPA fragment is the direct ticket/slot identity, not
-            # an analytics fragment. #buy and #/buy converge to #/buy.
-            fragment = "/" + route
-    return urlunsplit(("https", host, path, query, fragment))
-
-
-def _canonical_query(raw_query: str, *, ignored: set[str] | None = None) -> str:
-    ignored_keys = {str(item).casefold() for item in (ignored or set())}
-    pairs: list[tuple[str, str]] = []
-    for key, value in parse_qsl(raw_query or "", keep_blank_values=True):
-        folded = str(key).casefold()
-        if folded.startswith("utm_") or folded in _TRACKING_QUERY_KEYS or folded in ignored_keys:
-            continue
-        pairs.append((str(key), str(value)))
-    return urlencode(sorted(pairs), doseq=True)
-
-
-def input_packet_fingerprint(value: Any) -> str:
-    """SHA-256 of stable source-packet inputs before Smart Update mutates them.
-
-    Provider metrics, token counts, generated prose/semantic decisions and the
-    fingerprint field itself are intentionally excluded. Poster identity uses
-    stable byte hashes (with a hashed URL fallback), never OCR/provider output.
-    """
-
-    if hasattr(value, "source_type") and hasattr(value, "source_text"):
-        stable_scalar_fields = (
-            "title",
-            "date",
-            "time",
-            "time_is_default",
-            "end_date",
-            "end_date_is_inferred",
-            "festival",
-            "festival_context",
-            "festival_full",
-            "festival_source",
-            "festival_series",
-            "location_name",
-            "location_address",
-            "city",
-            "ticket_price_min",
-            "ticket_price_max",
-            "ticket_status",
-            "age_restriction",
-            "age_restriction_is_structured",
-            "event_type",
-            "is_free",
-            "pushkin_card",
-            "source_chat_username",
-            "source_chat_id",
-            "source_message_id",
-            "creator_id",
-            "trust_level",
-        )
-        posters = []
-        for poster in list(getattr(value, "posters", None) or []):
-            digest = (
-                getattr(poster, "raw_sha256", None)
-                or getattr(poster, "sha256", None)
-                or getattr(poster, "phash", None)
-            )
-            if digest:
-                posters.append(str(digest).strip().lower())
-                continue
-            fallback_url = (
-                getattr(poster, "supabase_url", None)
-                or getattr(poster, "catbox_url", None)
-            )
-            canonical_fallback = canonicalize_identity_url(fallback_url)
-            if canonical_fallback:
-                posters.append("url_sha256:" + hashlib.sha256(canonical_fallback.encode("utf-8")).hexdigest())
-        payload = {
-            "canonical_source_url": canonicalize_identity_url(getattr(value, "source_url", None)),
-            "source_type": str(getattr(value, "source_type", "") or "").strip().lower(),
-            "source_role": _normalize_source_role(getattr(value, "source_role", None)),
-            "source_text": _normalized_packet_text(getattr(value, "source_text", None)),
-            "raw_excerpt": _normalized_packet_text(getattr(value, "raw_excerpt", None)),
-            "ticket_link": canonicalize_identity_url(
-                getattr(value, "ticket_link", None), preserve_ticket_fragment=True
-            ),
-            "festival_dedup_links": sorted(
-                filter(None, (canonicalize_identity_url(item) for item in (getattr(value, "festival_dedup_links", None) or [])))
-            ),
-            "poster_hashes": sorted(set(posters)),
-            "poster_scope_hashes": sorted(
-                str(item).strip().lower()
-                for item in (getattr(value, "poster_scope_hashes", None) or [])
-                if str(item or "").strip()
-            ),
-            "links_payload": _fingerprint_value(getattr(value, "links_payload", None)),
-            "organizer_names": sorted(str(item).strip() for item in (getattr(value, "organizer_names", None) or []) if str(item or "").strip()),
-            "structured": {
-                name: _fingerprint_value(getattr(value, name, None))
-                for name in stable_scalar_fields
-            },
-        }
-    else:
-        payload = _fingerprint_value(value)
-    encoded = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
-
-
-def _normalized_packet_text(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = unicodedata.normalize("NFC", str(value)).replace("\r\n", "\n").replace("\r", "\n")
-    text = "\n".join(re.sub(r"[ \t]+", " ", line).strip() for line in text.split("\n"))
-    text = re.sub(r"\n{3,}", "\n\n", text).strip()
-    return text or None
-
-
-def _fingerprint_value(value: Any) -> Any:
-    if is_dataclass(value) and not isinstance(value, type):
-        return {
-            item.name: _fingerprint_value(getattr(value, item.name))
-            for item in fields(value)
-        }
-    if isinstance(value, Mapping):
-        return {
-            str(key): _fingerprint_value(item)
-            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
-        }
-    if isinstance(value, (list, tuple)):
-        return [_fingerprint_value(item) for item in value]
-    if isinstance(value, (set, frozenset)):
-        normalized = [_fingerprint_value(item) for item in value]
-        return sorted(normalized, key=lambda item: json.dumps(item, ensure_ascii=False, sort_keys=True))
-    if isinstance(value, bytes):
-        return {"__bytes_sha256__": hashlib.sha256(value).hexdigest()}
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-    return str(value)
+    except Exception:
+        return raw.rstrip("/")
+    scheme = (parts.scheme or "https").lower()
+    netloc = parts.netloc.lower().removeprefix("www.")
+    path = (parts.path or "/").rstrip("/") or "/"
+    query = urlencode(sorted(parse_qsl(parts.query, keep_blank_values=True)))
+    return urlunsplit((scheme, netloc, path, query, ""))

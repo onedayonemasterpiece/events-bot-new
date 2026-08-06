@@ -412,22 +412,6 @@ def build_collection_batch_payload(
             failure_codes=failures,
             verified_supply_count=len(result.get("item_ids") or []),
         )
-    # Every policy label is explicit in the batch.  Exact-ID collections such
-    # as gastronomy fail closed until their checked manifest is supplied; an
-    # omitted label must never be mistaken for an approved empty collection.
-    for label, config in sorted((policy.get("labels") or {}).items()):
-        if label in labels:
-            continue
-        labels[label] = batch_module.build_collection_label(
-            strategy=str(config.get("strategy") or "exact"),
-            compute_status="blocked",
-            quality_status="not_evaluated",
-            publication_status="blocked",
-            item_ids=[],
-            hashes=hashes,
-            failure_codes=["checked_exact_id_manifest_missing"],
-            verified_supply_count=0,
-        )
     return batch_module.build_collection_batch(
         catalog_hash=catalog_hash,
         labels=labels,

@@ -23,7 +23,6 @@ sections:
     repository_workflow: docs/operations/repository-workflow.md
     release_governance: docs/operations/release-governance.md
     runtime_logs: docs/operations/runtime-logs.md
-    smart_update_prod_audit: docs/operations/smart-update-prod-audit.md
     kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
     static_site_atomic_root: docs/operations/static-site-atomic-root.md
     static_collection_facts_v3: docs/operations/static-collection-facts-v3.md
@@ -31,7 +30,6 @@ sections:
     event_quality_release_monitoring: docs/operations/event-quality-release-monitoring.md
     event_image_duplicate_audit: docs/operations/event-image-duplicate-audit.md
     email_delivery: docs/operations/email-delivery.md
-    postbox_feedback_dlq_recovery: docs/operations/postbox-feedback-dlq-recovery.md
     telegram_link_inspection: docs/operations/telegram-link-inspection.md
     scheduler_routing:
       docs: docs/operations/cron.md
@@ -127,8 +125,6 @@ sections:
     event_age_rating_gemini_consultation_2026_07_15: docs/reports/event-age-rating-gemini-consultation-2026-07-15.md
     interest_clubs_catalog_audit_2026_07_17: docs/reports/interest-clubs-catalog-audit-2026-07-17.md
     incidents: docs/reports/incidents/README.md
-    incident_postbox_feedback_dlq_correlation_2026_08_04: docs/reports/incidents/INC-2026-08-04-postbox-feedback-dlq-correlation.md
-    incident_smart_update_identity_source_replay_corruption_2026_08_04: docs/reports/incidents/INC-2026-08-04-smart-update-identity-source-replay-corruption.md
     incident_ydb_request_unit_billing_2026_08_03: docs/reports/incidents/INC-2026-08-03-ydb-request-unit-billing.md
     incident_template: docs/reports/incidents/TEMPLATE.md
     incident_unusual_feed_disabled_by_config_2026_08_01: docs/reports/incidents/INC-2026-08-01-unusual-feed-disabled-by-config.md
@@ -375,17 +371,8 @@ features:
   static_site_pages:
     status: secret_candidate_pipeline_root_promotion_blocked
     docs: docs/features/static-site-pages/README.md
-    collections_catalog: docs/features/static-site-pages/podborki.md
-    gastronomy_collection: docs/features/static-site-pages/gastronomy-collection.md
-    personalization_target: docs/features/static-site-pages/personalizaion/personalization-to-be.md
-    personalization_traceability: docs/features/static-site-pages/personalizaion/personalization-research-traceability.md
-    personalization_wave_0: docs/features/static-site-pages/personalizaion/tasks/personalization-wave-0.md
-    weather_calendar: docs/features/static-site-pages/weather-calendar.md
-    focus_group_release: docs/features/static-site-pages/focus-group-release/README.md
-    standard_onboarding: docs/features/static-site-onboarding/README.md
-    auth_session_fixture: docs/testing/static-site-auth-session-fixture.md
-    autotest_strategy: docs/operations/static-site-autotest-strategy.md
-    yandex_dependency_resilience: docs/operations/yandex-dependency-resilience.md
+    prelaunch: docs/features/static-site-pages/prelaunch.md
+    prelaunch_handoff: docs/features/static-site-pages/prelaunch-handoff/README.md
     collections_original_requirements: docs/features/static-site-pages/podborki.md
     collections_extraction_and_product_plan: docs/features/static-site-pages/podborki-to-be.md
     collections_quality_plan: docs/features/static-site-pages/static-collections-quality-plan.md

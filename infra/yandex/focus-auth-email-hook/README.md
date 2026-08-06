@@ -9,10 +9,6 @@ the provider receipt, and returns `200 {}` only after accepted delivery.
 
 Routing is deterministic before network dispatch:
 
-- every Auth recipient is checked by the exact versioned email HMAC against active
-  `all`/`transactional` suppressions inside the same service-only RPC that reserves
-  the attempt; an exact match stops before either provider request, while a real
-  email change produces a different HMAC and is not blocked by the old user ID;
 - a genuinely new user's first send → Yandex Cloud Postbox;
 - an existing user, the second/later send, an allowlisted fixed test user, or an
   allowlisted fixed test mailbox → NotiSend with `payment=subscriber`;
@@ -45,8 +41,6 @@ Private Supabase tables:
   NotiSend recipient and provider billing period, shared with recommendation
   sends. `recommendation_capacity.provider_used_count` is the latest real
   provider counter; admissions after that snapshot are added atomically.
-- `email_control.suppression`: exact pseudonymous versioned email-HMAC evidence used
-  by the direct Auth admission gate. The HMAC key never enters Supabase or logs.
 
 Public receipt lookup returns only `accepted`, `pending_or_ambiguous`, `rejected`
 or no row for a recent opaque UUID. It never returns email, OTP, token/hash, JWT,
@@ -63,29 +57,14 @@ The deterministic ZIP is written under ignored `artifacts/codex/`.
 
 ## Provisioning contract
 
-1. Apply `supabase/migrations/20260801222242_focus_auth_delivery_attempt_v1.sql`
-   and `supabase/migrations/20260804190000_postbox_auth_feedback_correlation_v1.sql`
-   before deploying a hook version that calls the batch admission/completion
-   RPCs. The same atomic migration revokes the suppression-free v1 admission;
-   apply it only after the production hook-disabled precondition below is
-   reverified.
+1. Apply `supabase/migrations/20260801222242_focus_auth_delivery_attempt_v1.sql`.
 2. Create the `kenigevents-focus-auth-mailer` service account with only
    `postbox.sender`; attach it to the Function so `context.token` supplies the
-   short-lived IAM token. In the Python runtime `context.token` is the
-   authentication object (`access_token`, `expires_in`, `token_type`), not the
-   token string itself. The provider request must use only its
-   `access_token` value in `X-YaCloud-SubjectToken`; stringifying the complete
-   object produces an invalid Postbox credential and a definitive provider
-   rejection.
+   short-lived IAM token.
 3. Provide secrets from Lockbox as Function secret environment variables:
-   `SEND_EMAIL_HOOK_SECRET`, `EMAIL_ADDRESS_HMAC_KEY`,
-   `PERSONALIZATION_SUPABASE_SECRET_KEY`,
+   `SEND_EMAIL_HOOK_SECRET`, `PERSONALIZATION_SUPABASE_SECRET_KEY`,
    `NOTISEND_API_TOKEN`, and optional `FOCUS_AUTH_NOTISEND_EMAILS`.
-4. Mount both `EMAIL_ADDRESS_HMAC_KEY` and
-   `EMAIL_ADDRESS_HMAC_KEY_VERSION` from the exact Lockbox secret/version and
-   keys recorded in `desired-state.json`; those references are shared with the
-   feedback consumer. Set the remaining non-secret environment values listed
-   there.
+4. Set non-secret environment values listed in `desired-state.json`.
 5. Build and deploy the Python 3.12 Function with a five-second timeout.
 6. Render the exact Function/invoker IDs into `openapi.yaml` and deploy the
    one-path API Gateway.
@@ -160,11 +139,6 @@ The hook replaces SMTP while enabled. Do not enable it until both provider paths
 ledger RPCs and the external mailbox test pass. Rollback is disabling the hook;
 the prior custom SMTP configuration remains the fallback configuration, not a
 runtime per-message retry.
-
-Do not rotate `EMAIL_ADDRESS_HMAC_KEY` or its positive version while active
-suppression/correlation rows or retained feedback still use the current pair.
-Rotation requires a separately reviewed overlap migration and matching feedback
-consumer keyring; a version mismatch intentionally fails closed.
 
 ## Fixed E2E identities
 

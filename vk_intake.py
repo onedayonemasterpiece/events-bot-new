@@ -4078,12 +4078,7 @@ async def persist_event_and_pages(
     rebuild_fest_nav_if_changed = main_mod.rebuild_fest_nav_if_changed
     normalize_event_type = getattr(main_mod, "normalize_event_type", None)
 
-    from smart_event_update import (
-        EventCandidate,
-        PosterCandidate,
-        smart_event_update,
-        smart_update_result_allows_caller_side_effects,
-    )
+    from smart_event_update import EventCandidate, PosterCandidate, smart_event_update
 
     if (getattr(draft, "reject_reason", None) or "").strip():
         # Keep the error string compatible with vk_auto_queue handler that treats
@@ -4152,19 +4147,9 @@ async def persist_event_and_pages(
         check_source_url=False,
     )
     if str(getattr(update_result, "status", "") or "").startswith("rejected_"):
-        # Preserve the established expected-rejection contract consumed by the
-        # VK queue. Identity review/skip outcomes use the generic fail-closed
-        # branch below and must never be reported as successful imports.
         raise RuntimeError(
             f"smart_update rejected: {getattr(update_result, 'status', None)} "
             f"reason={getattr(update_result, 'reason', None)}"
-        )
-    if not smart_update_result_allows_caller_side_effects(update_result):
-        raise RuntimeError(
-            "smart_update not accepted: "
-            f"status={getattr(update_result, 'status', None)} "
-            f"reason={getattr(update_result, 'reason', None)} "
-            f"matched_event_id={getattr(update_result, 'event_id', None)}"
         )
     if not getattr(update_result, "event_id", None):
         raise RuntimeError(
@@ -4198,7 +4183,7 @@ async def persist_event_and_pages(
     )
 
     nav_update_needed = False
-    if update_result.status != "noop_exact_source_replay" and saved.festival:
+    if saved.festival:
         parts = [p.strip() for p in (saved.date or "").split("..") if p.strip()]
         start_str = parts[0] if parts else None
         end_str = parts[-1] if len(parts) > 1 else None

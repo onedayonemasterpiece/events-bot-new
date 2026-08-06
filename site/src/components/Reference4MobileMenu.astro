@@ -1,8 +1,7 @@
 ---
 import AnnouncementsWordmark from './brand/AnnouncementsWordmark.astro';
-import { BASE_PATH, getEvents, siteHomeHref, withBase } from '../lib/events';
+import { BASE_PATH, siteHomeHref, withBase } from '../lib/events';
 import { mobileDiscoveryHref, type MobileDiscoveryBases } from '../lib/mobileDiscoveryRoutes';
-import { getCollectionNavigationEntries, resolveGastronomyCollection } from '../lib/staticCollections';
 
 interface Props {
   current?: string | null;
@@ -14,9 +13,9 @@ const { current = null, discoveryBases = {}, badge } = Astro.props;
 const route = (path: string) => mobileDiscoveryHref(path, discoveryBases, BASE_PATH);
 const iconRoot = withBase('/assets/icons/reference4-v8');
 const icon = (name: string) => `${iconRoot}/${name}`;
+const searchHref = (query: string) => `${route('/poisk/')}?q=${encodeURIComponent(query)}`;
 const isCurrent = (...keys: string[]) => keys.includes(String(current || ''));
 const serviceShareManifest = withBase('/service-share/current/manifest.json');
-const collectionNavKeys = new Set(getCollectionNavigationEntries(resolveGastronomyCollection(getEvents()).lifecycle).map((entry) => entry.key));
 ---
 
 <details class="mobile-discovery-menu mobile-discovery-menu--reference4" data-mobile-discovery-menu data-reference4-fullscreen>
@@ -74,18 +73,15 @@ const collectionNavKeys = new Set(getCollectionNavigationEntries(resolveGastrono
           <button class="reference4-menu__row reference4-menu__row--back" type="button" data-reference4-collections-back>
             <span class="reference4-menu__back-icon" aria-hidden="true"></span><span>Назад к афише</span>
           </button>
-          <a class="reference4-menu__row" href={route('/podborki/')}>
-            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('squares-four-thin.svg')}')`}></span></span><span>Все подборки</span><i aria-hidden="true"></i>
+          <a class="reference4-menu__row" href={searchHref('события для детей')}>
+            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('baby-thin.svg')}')`}></span></span><span>Детям</span><i aria-hidden="true"></i>
           </a>
-          {collectionNavKeys.has('unusual') && <a class="reference4-menu__row" href={route('/neobychnoe/')} aria-current={isCurrent('unusual') ? 'page' : undefined} data-unusual-nav-link>
+          <a class="reference4-menu__row" href={route('/neobychnoe/')} aria-current={isCurrent('unusual') ? 'page' : undefined} data-unusual-nav-link>
             <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('sparkle-thin.svg')}')`}></span></span><span>Необычное</span><span class="unusual-nav-dot" data-unusual-nav-dot hidden aria-hidden="true"></span>
-          </a>}
-          {collectionNavKeys.has('free') && <a class="reference4-menu__row" href={route('/podborki/besplatnye-sobytiya/')}>
+          </a>
+          <a class="reference4-menu__row" href={route('/podborki/besplatnye-sobytiya/')}>
             <span class="reference4-icon reference4-icon--free" aria-hidden="true">0&#x200A;₽</span><span>Бесплатно</span><i aria-hidden="true"></i>
-          </a>}
-          {collectionNavKeys.has('gastronomy') && <a class="reference4-menu__row" href={route('/podborki/gastronomiya/')}>
-            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('squares-four-thin.svg')}')`}></span></span><span>Гастрономия</span><i aria-hidden="true"></i>
-          </a>}
+          </a>
           <a class="reference4-menu__row" href={route('/kluby-po-interesam/')} aria-current={isCurrent('clubs') ? 'page' : undefined}>
             <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('chats-thin.svg')}')`}></span></span><span>Клубы по интересам</span><i aria-hidden="true"></i>
           </a>

@@ -9,7 +9,6 @@ import {
   assertRecommendationGeometry,
   assertRequiredPreviewBrowserJourney,
   expectedObjectFitForTreatment,
-  festivalCalendarExpectedCount,
   localReleaseAssetPath,
   recordBrowserVisualSuccess,
   releaseRootMetadata,
@@ -17,31 +16,6 @@ import {
   staticSpecimenCandidates,
   startReleaseServer,
 } from './check-browser-release-gate.mjs';
-
-test('festival browser gate binds the rendered active subset to the release manifest', () => {
-  assert.equal(festivalCalendarExpectedCount(null), 21);
-  assert.equal(festivalCalendarExpectedCount({
-    versions: {
-      festival_calendar: {
-        source: 'sqlite-festival-calendar-v1',
-        database_row_count: 21,
-        rendered_count: 18,
-      },
-    },
-  }), 18);
-  assert.throws(() => festivalCalendarExpectedCount({
-    versions: { festival_calendar: { source:'seed', database_row_count:21, rendered_count:18 } },
-  }), /manifest source is invalid/u);
-  assert.throws(() => festivalCalendarExpectedCount({
-    versions: { festival_calendar: { source:'sqlite-festival-calendar-v1', database_row_count:17, rendered_count:18 } },
-  }), /more cards than its source ledger/u);
-  assert.throws(() => festivalCalendarExpectedCount({
-    versions: { festival_calendar: { source:'sqlite-festival-calendar-v1', database_row_count:'21', rendered_count:18 } },
-  }), /database count is invalid/u);
-  const source = readFileSync(new URL('./check-browser-release-gate.mjs', import.meta.url), 'utf8');
-  assert.match(source, /data-festival-count="\$\{expectedCount\}"/u);
-  assert.match(source, /images\.count\(\) === expectedCount/u);
-});
 
 test('R03 mandatory browser gate has bounded action/navigation waits and no network-idle dependency', () => {
   assert.equal(BROWSER_GATE_ACTION_TIMEOUT_MS, 8_000);

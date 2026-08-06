@@ -4,9 +4,8 @@
 
 - **Implementation SHAs:** `efeb7aa5d` (Popular preview gate) and `08dffcfe6`
   (browser fallback/specimen gate).
-- Created and closed regression contract
-  `INC-2026-08-03-static-site-builder-failure-storm` after an exact-main
-  no-root-promotion canary and immutable candidate receipt were verified.
+- Created regression contract
+  `INC-2026-08-03-static-site-builder-failure-storm` with status **open**.
 - Latest reproducible blocker fixed: `check:preview` no longer requires the
   fixture-specific literal `ещё 1 показ` when current Popular rankings contain
   no repeated-date family.
@@ -73,7 +72,7 @@ Results:
 - targeted Popular contract: **2/2 pass** (zero-family and multi-family;
   negative cases cover duplicate linked card, missing/wrong count);
 - occurrence regressions: **16/16 pass**;
-- browser behavior contracts: **12/12 pass**, including real Chromium 404 for
+- browser behavior contracts: **11/11 pass**, including real Chromium 404 for
   the event `6407` card and deterministic `6408 → 6407` discovery;
 - Node syntax and Python compile checks: **pass**;
 - full generated clean-main preview artifact check: **pass**, 288 events.
@@ -97,33 +96,13 @@ missing-image browser test proves the corrected fallback branch.
 - `docs/reports/incidents/README.md`
 - `docs/features/static-site-pages/astro-preview.md`
 
-## Live closure evidence
-
-- PR #317 merged the follow-up manifest-bound festival inventory gate to
-  `origin/main` as `6c7970207c9c5c597d8175b69dcafca115cc0502`; Fly machine
-  version 1904 reported that exact in-container SHA and passed `/healthz`.
-- The single fixed-SHA canary was
-  `static-site:production-secret-20260803T224034-4493aaed:1814d7f84627`.
-  Both production-root and secret-candidate Chromium gates passed; the Kaggle
-  ledger reached `done/report`, 100%, `events=395`, error `null`.
-- Host recovery adopted the same terminal result after the first 5,400-second
-  wrapper timeout; it did not launch another Kaggle run. Full immutable
-  readback verified 3,305 objects / 674,467,502 bytes and atomically advanced
-  the candidate pointer at `2026-08-03T22:51:24Z`.
-- The receipt matches the deployed SHA, run, snapshot, input fingerprint,
-  result SHA and manifest SHA. The public review candidate returns HTTP 200
-  with noindex/noarchive protections.
-- Production root and stable ICS hashes/ETags remained byte-for-byte unchanged,
-  root promotion remained disabled, and final `/healthz` was ready with no
-  issues. Canonical closure details are in the incident record merged by PR
-  #319 (`origin/main@7efa00560725334d16cc06c1e47b858b258e4370`).
-- No OTP flow was invoked.
-
 ## Integration / closure notes
 
 - No files under `site/src`, `CHANGELOG.md`, or `docs/routes.yml` were touched.
 - `CHANGELOG.md` remains for the integrator because this lane was explicitly
   forbidden to edit it.
-- The incident is closed: the fix is reachable from `origin/main`, the exact
-  main SHA reached terminal success, and its immutable candidate receipt plus
-  public non-mutation evidence were independently verified.
+- No canary was started: the parent explicitly requires the integrated exact
+  SHA first. The last automatic run used pre-fix code and failed.
+- Do not mark the incident closed until the fix is reachable from
+  `origin/main`, an exact-main-SHA no-root-promotion canary reaches terminal
+  success, and its immutable candidate receipt is verified.

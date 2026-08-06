@@ -1,0 +1,131 @@
+---
+import pwaArtwork from '../../../docs/features/static-site-pages/prelaunch-handoff/reference/PWA-icon.webp';
+import '../styles/prelaunch-fit-v12.css';
+import '../styles/prelaunch-fit-v13.css';
+import '../styles/prelaunch-fit-v14.css';
+import '../styles/prelaunch-fit-v15.css';
+import '../styles/prelaunch-fit-v16.css';
+import '../styles/prelaunch-fit-v17.css';
+import '../styles/prelaunch-fit-v18.css';
+import '../styles/prelaunch-fit-v19.css';
+
+const artworkSource = pwaArtwork.src;
+---
+
+<script is:inline define:vars={{ artworkSource }}>
+  (() => {
+    const root = document.querySelector('[data-prelaunch-page]');
+    const background = root?.querySelector('.prelaunch__background');
+    const mosaic = root?.querySelector('[data-prelaunch-mosaic]');
+    if (!(root instanceof HTMLElement)
+      || !(background instanceof HTMLElement)
+      || !(mosaic instanceof HTMLElement)) return;
+
+    const heading = root.querySelector('#prelaunch-title');
+    if (heading && !heading.querySelector('.prelaunch-title__line')) {
+      const first = document.createElement('span');
+      first.className = 'prelaunch-title__line';
+      first.textContent = 'Запуск';
+      const second = document.createElement('span');
+      second.className = 'prelaunch-title__line';
+      second.textContent = '1 сентября';
+      heading.replaceChildren(first, document.createTextNode(' '), second);
+    }
+
+    // A bounded 98-pane pool lets a 14-column wide viewport show more panes
+    // instead of enlarging the same seven modules. The original deterministic
+    // material/state plan is repeated; all later mapping uses actual geometry.
+    const templates = Array.from(mosaic.querySelectorAll('[data-prelaunch-tile]'));
+    const targetTileCount = 98;
+    for (let index = templates.length; index < targetTileCount; index += 1) {
+      const template = templates[index % templates.length];
+      const clone = template?.cloneNode(true);
+      if (!(clone instanceof HTMLElement)) continue;
+      clone.dataset.index = String(index);
+      clone.removeAttribute('data-row');
+      clone.removeAttribute('data-column');
+      clone.removeAttribute('data-edge');
+      clone.removeAttribute('data-window');
+      clone.removeAttribute('data-accent');
+      clone.removeAttribute('data-glint');
+      clone.style.setProperty('--delay', `${-((index * 11) % 29) / 10}s`);
+      mosaic.append(clone);
+    }
+    root.dataset.tilePoolCount = String(mosaic.querySelectorAll('[data-prelaunch-tile]').length);
+
+    // The source contains a white studio field and a lower shadow. Its leather
+    // object is a simple rounded rectangle, so clip it geometrically instead of
+    // running a costly and fragile pixel flood-fill in every visitor's browser.
+    const source = new Image();
+    source.decoding = 'async';
+    source.src = artworkSource;
+
+    const mountArtwork = () => {
+      if (!source.naturalWidth || !source.naturalHeight || root.dataset.artworkReady === 'true') return;
+      const namespace = 'http://www.w3.org/2000/svg';
+      const xlink = 'http://www.w3.org/1999/xlink';
+      const clipId = 'prelaunch-pwa-object-clip';
+      const svg = document.createElementNS(namespace, 'svg');
+      svg.classList.add('prelaunch__artwork');
+      svg.setAttribute('viewBox', '110 95 1034 1034');
+      svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+      svg.setAttribute('aria-hidden', 'true');
+      svg.setAttribute('focusable', 'false');
+      svg.setAttribute('role', 'presentation');
+
+      const defs = document.createElementNS(namespace, 'defs');
+      const clip = document.createElementNS(namespace, 'clipPath');
+      clip.setAttribute('id', clipId);
+      clip.setAttribute('clipPathUnits', 'userSpaceOnUse');
+      const rect = document.createElementNS(namespace, 'rect');
+      rect.setAttribute('x', '110');
+      rect.setAttribute('y', '95');
+      rect.setAttribute('width', '1034');
+      rect.setAttribute('height', '1034');
+      rect.setAttribute('rx', '175');
+      rect.setAttribute('ry', '175');
+      clip.append(rect);
+      defs.append(clip);
+
+      const image = document.createElementNS(namespace, 'image');
+      image.setAttribute('x', '0');
+      image.setAttribute('y', '0');
+      image.setAttribute('width', '1254');
+      image.setAttribute('height', '1254');
+      image.setAttribute('preserveAspectRatio', 'none');
+      image.setAttribute('clip-path', `url(#${clipId})`);
+      image.setAttribute('href', artworkSource);
+      image.setAttributeNS(xlink, 'href', artworkSource);
+
+      svg.append(defs, image);
+      background.querySelector('.prelaunch__artwork')?.remove();
+      background.append(svg);
+      root.dataset.transparentArtworkBound = 'svg-rounded-clip';
+      root.dataset.artworkReady = 'true';
+      window.dispatchEvent(new CustomEvent('prelaunch-artwork-ready'));
+    };
+
+    if (source.complete && source.naturalWidth > 0) mountArtwork();
+    else source.addEventListener('load', mountArtwork, { once: true });
+  })();
+</script>
+
+<script>
+  import '../scripts/prelaunchEmailGuard';
+  import '../scripts/prelaunchExperience';
+</script>
+
+<style is:global>
+  @media (prefers-reduced-motion: reduce) {
+    html body .prelaunch[data-prelaunch-page] .prelaunch__tile::before,
+    html body .prelaunch[data-prelaunch-page] .prelaunch__tile::after {
+      transition: none !important;
+    }
+  }
+
+  @media (orientation: landscape) and (min-width: 600px) and (max-height: 500px) {
+    html body .prelaunch[data-prelaunch-page] .prelaunch__notify {
+      transform: translateY(-13px);
+    }
+  }
+</style>

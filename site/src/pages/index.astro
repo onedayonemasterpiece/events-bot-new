@@ -1,8 +1,12 @@
 ---
 import EventLayout from '../layouts/EventLayout.astro';
+import PrelaunchLayout from '../layouts/PrelaunchLayout.astro';
 import HomeColdStartFeed from '../components/HomeColdStartFeed.astro';
 import HomeHeroTalk from '../components/HomeHeroTalk.astro';
 import HomeQuickNav from '../components/HomeQuickNav.astro';
+import PrelaunchExperience from '../components/PrelaunchExperience.astro';
+import PrelaunchLanding from '../components/PrelaunchLanding.astro';
+import PrelaunchVisualReview from '../components/PrelaunchVisualReview.astro';
 import type { PreviewEvent } from '../lib/types';
 import {
   absoluteUrl,
@@ -15,6 +19,7 @@ import {
   SITE_NAME,
 } from '../lib/events';
 
+const prelaunchMode = /^(?:1|true|yes|on)$/iu.test(String(import.meta.env.PUBLIC_PRELAUNCH_MODE || ''));
 const currentDate = getCurrentDate();
 const popular = getPopularEvents(30);
 const fallback = collapseLinkedSessionEvents(
@@ -36,22 +41,30 @@ const title = SITE_NAME;
 const description = 'Афиша Калининграда без шума: полезная статическая подборка событий, быстрые маршруты по датам и локальная персонализация.';
 ---
 
-<EventLayout
-  title={title}
-  description={description}
-  canonicalUrl={absoluteUrl('/')}
-  ogType="website"
-  structuredData={[]}
-  mobileSection="afisha"
->
-  <main id="main" class="home-page" data-home-page data-home-static-fallback-count={feed.length}>
-    <div class="page-shell home-page__shell">
-      <HomeHeroTalk event={heroEvent} />
-      <HomeQuickNav />
-      <HomeColdStartFeed events={feed} />
-    </div>
-  </main>
-</EventLayout>
+{prelaunchMode ? (
+  <PrelaunchLayout>
+    <PrelaunchLanding />
+    <PrelaunchExperience />
+    <PrelaunchVisualReview />
+  </PrelaunchLayout>
+) : (
+  <EventLayout
+    title={title}
+    description={description}
+    canonicalUrl={absoluteUrl('/')}
+    ogType="website"
+    structuredData={[]}
+    mobileSection="afisha"
+  >
+    <main id="main" class="home-page" data-home-page data-home-static-fallback-count={feed.length}>
+      <div class="page-shell home-page__shell">
+        <HomeHeroTalk event={heroEvent} />
+        <HomeQuickNav />
+        <HomeColdStartFeed events={feed} />
+      </div>
+    </main>
+  </EventLayout>
+)}
 
 <style>
   .home-page { padding: clamp(.75rem, 2.4vw, 2rem) 0 5rem; }

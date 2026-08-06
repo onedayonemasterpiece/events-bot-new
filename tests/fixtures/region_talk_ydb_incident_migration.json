@@ -1,8 +1,0 @@
-{
-  "expected_database": "/ru-central1/b1ghfk15fpug7mn5439l/etnkibjidis0o6stn2cq",
-  "source_database": "/ru-central1/b1goifscr17duurhullj/etnrao7p6gh6il6b4qv9",
-  "table_row_counts": [2, 9, 231, 266, 58046],
-  "ordered_export_hash_required": true,
-  "scheduler_enabled": false,
-  "throttling_ru_per_second": 0
-}

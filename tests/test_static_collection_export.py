@@ -286,11 +286,6 @@ def test_semantic_candidates_remain_blocked_in_valid_batch():
     assert batch["labels"]["science"]["compute_status"] == "pass"
     assert batch["labels"]["science"]["quality_status"] == "not_evaluated"
     assert batch["labels"]["science"]["publication_status"] == "blocked"
-    assert batch["labels"]["gastronomy"]["compute_status"] == "blocked"
-    assert batch["labels"]["gastronomy"]["item_ids"] == []
-    assert batch["labels"]["gastronomy"]["failure_codes"] == [
-        "checked_exact_id_manifest_missing"
-    ]
 
 
 def _encoder(texts, **_kwargs):

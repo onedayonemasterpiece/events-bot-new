@@ -4,7 +4,6 @@ import FocusGroupFeedback from '../../components/FocusGroupFeedback.astro';
 import FocusGroupInviteShare from '../../components/FocusGroupInviteShare.astro';
 import FocusGroupThankYou from '../../components/FocusGroupThankYou.astro';
 import StaticSiteAuthRuntime from '../../components/auth/StaticSiteAuthRuntime.astro';
-import PersonalizationRuntime from '../../components/personalization/PersonalizationRuntime.astro';
 import { absoluteUrl, IS_SECRET_CANDIDATE, withBase } from '../../lib/events';
 import '../../styles/design-system.css';
 
@@ -37,7 +36,6 @@ const robots = IS_SECRET_CANDIDATE
     <meta name="theme-color" content="#fff7e7" />
   </head>
   <body>
-    <PersonalizationRuntime />
     <a class="focus-secret__skip" href="#main">К основному содержанию</a>
     <main id="main" class="focus-secret" data-focus-secret data-root-href={withBase('/')}>
       <section class="focus-secret__gate" data-secret-checking aria-live="polite">

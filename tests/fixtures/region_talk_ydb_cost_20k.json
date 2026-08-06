@@ -1,9 +1,0 @@
-{
-  "rows_total": 20000,
-  "due_every": 200,
-  "due_status": "pending_fetch",
-  "terminal_status": "fetched",
-  "page_limit": 25,
-  "max_scan_rows": 5000,
-  "expected_due_rows": 25
-}

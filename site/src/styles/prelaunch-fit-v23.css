@@ -1,0 +1,135 @@
+/*
+ * Prelaunch visual correction v23.
+ *
+ * The emitter remains one scene-level source. These coordinate bands only
+ * determine how much of that source each pane transmits, reproducing the
+ * brighter top/right edge response visible in the reference.
+ */
+
+/* Make the upper wordmark fully available to the coherent windows, while
+   ordinary panes around it remain dark enough to hide leather detail. */
+body .prelaunch[data-prelaunch-page] .prelaunch__artwork {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0 34%,
+    rgba(0, 0, 0, .05) 36%,
+    rgba(0, 0, 0, .46) 41%,
+    #000 46%,
+    #000 100%
+  ) !important;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0 34%,
+    rgba(0, 0, 0, .05) 36%,
+    rgba(0, 0, 0, .46) 41%,
+    #000 46%,
+    #000 100%
+  ) !important;
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="2"]:not([data-window="true"]),
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="3"]:not([data-window="true"]) {
+  --cover-state: .86;
+  --blur-base: 9px;
+  --saturation: .5;
+  --brightness: .83;
+}
+
+/* Soft shoulder of the shared emitter. */
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="0"][data-column="5"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="1"][data-column="4"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="1"][data-column="7"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="2"][data-column="7"] {
+  --cover-state: .72;
+  --edge-open: .06;
+  --blur-base: 13px;
+  --saturation: .55;
+  --brightness: 1.08;
+  --matte: .29;
+  --edge-top: .16;
+  --edge-right: .13;
+  --edge-bloom: .065;
+}
+
+/* Warm body of the shared emitter. */
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="0"][data-column="6"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="1"][data-column="5"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="1"][data-column="6"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="2"][data-column="4"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="2"][data-column="6"] {
+  --cover-state: .58;
+  --edge-open: .1;
+  --blur-base: 15px;
+  --saturation: .58;
+  --brightness: 1.15;
+  --matte: .32;
+  --edge-top: .24;
+  --edge-right: .19;
+  --edge-bloom: .11;
+}
+
+/* Hottest panes nearest the off-canvas source. */
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="0"][data-column="7"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="0"][data-column="8"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="1"][data-column="7"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="1"][data-column="8"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="2"][data-column="5"] {
+  --cover-state: .43;
+  --edge-open: .14;
+  --blur-base: 17px;
+  --saturation: .52;
+  --brightness: 1.22;
+  --matte: .35;
+  --edge-top: .34;
+  --edge-right: .28;
+  --edge-bloom: .17;
+}
+
+@media (max-width: 599px) {
+  /* Six-column mobile grid: translate the same spatial source, not a separate
+     visual design. */
+  body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="0"][data-column="4"],
+  body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="1"][data-column="3"],
+  body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="2"][data-column="3"] {
+    --cover-state: .66;
+    --edge-open: .08;
+    --blur-base: 14px;
+    --brightness: 1.1;
+    --edge-top: .2;
+    --edge-right: .16;
+    --edge-bloom: .09;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="0"][data-column="5"],
+  body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="1"][data-column="4"],
+  body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="1"][data-column="5"],
+  body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="2"][data-column="4"],
+  body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="2"][data-column="5"] {
+    --cover-state: .46;
+    --edge-open: .13;
+    --blur-base: 16px;
+    --brightness: 1.2;
+    --edge-top: .31;
+    --edge-right: .25;
+    --edge-bloom: .15;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__artwork {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0 20%,
+      rgba(0, 0, 0, .14) 25%,
+      rgba(0, 0, 0, .68) 34%,
+      #000 41%,
+      #000 100%
+    ) !important;
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0 20%,
+      rgba(0, 0, 0, .14) 25%,
+      rgba(0, 0, 0, .68) 34%,
+      #000 41%,
+      #000 100%
+    ) !important;
+  }
+}

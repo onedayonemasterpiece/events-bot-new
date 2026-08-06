@@ -11,12 +11,6 @@ from models import Event, EventIdentityDecisionLog
 from smart_event_update import EventCandidate
 
 
-@pytest.fixture(autouse=True)
-def _allow_historical_identity_fixtures(monkeypatch):
-    """Keep fixed provenance fixtures focused on identity persistence."""
-    monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
-
-
 @pytest.mark.asyncio
 async def test_identity_gate_decision_is_persisted(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))

@@ -36,6 +36,7 @@ const READ_ONLY_RPCS = new Set([
 
 const IDEMPOTENT_RPCS = new Set([
   'register_focus_group_participant_v1',
+  'register_prelaunch_notification_v1',
   'submit_focus_group_feedback_v2',
 ]);
 

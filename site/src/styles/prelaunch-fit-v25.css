@@ -1,0 +1,125 @@
+/*
+ * Prelaunch visual correction v25.
+ *
+ * Direct side-by-side review showed that v24 matched geometry but remained too
+ * black and flat. The reference uses charcoal glass and a broad peach light
+ * body across the upper-right and centre-right panes.
+ */
+
+body .prelaunch[data-prelaunch-page] {
+  background:
+    radial-gradient(circle at 81% 32%, rgba(181, 92, 56, .12), transparent 39%),
+    linear-gradient(145deg, #1b1d21 0%, #121419 47%, #090b0e 100%) !important;
+}
+
+/* Dark panes stay opaque enough to preserve hierarchy, but read as charcoal
+   glass rather than black rectangles. */
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-state="sealed"] {
+  --cover-state: .875;
+  --blur-base: 10px;
+  --saturation: .38;
+  --brightness: .8;
+  --matte: .17;
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-state="dim"] {
+  --cover-state: .69;
+  --blur-base: 7px;
+  --saturation: .57;
+  --brightness: .88;
+  --matte: .24;
+}
+
+body .prelaunch[data-prelaunch-page]::before {
+  background:
+    radial-gradient(
+      ellipse 72vw 76vh at 84% 31%,
+      rgba(255, 233, 211, .55) 0%,
+      rgba(247, 180, 132, .49) 21%,
+      rgba(220, 124, 77, .31) 40%,
+      rgba(164, 66, 35, .1) 61%,
+      transparent 78%
+    ),
+    radial-gradient(
+      ellipse 56vw 54vh at 102% -3%,
+      rgba(255, 253, 248, .96) 0%,
+      rgba(255, 229, 205, .72) 18%,
+      rgba(244, 171, 123, .42) 39%,
+      rgba(202, 96, 55, .15) 61%,
+      transparent 80%
+    ),
+    linear-gradient(
+      128deg,
+      transparent 0 50%,
+      rgba(245, 178, 131, .075) 68%,
+      rgba(255, 222, 194, .12) 84%,
+      transparent 100%
+    ) !important;
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__atmosphere {
+  background:
+    radial-gradient(
+      ellipse 54vw 56vh at 84% 35%,
+      rgba(255, 226, 202, .23) 0%,
+      rgba(232, 150, 99, .13) 35%,
+      rgba(178, 72, 38, .04) 61%,
+      transparent 78%
+    ),
+    linear-gradient(90deg, rgba(3, 5, 8, .4), transparent 39%, rgba(3, 5, 8, .02) 70%, rgba(3, 5, 8, .18)) !important;
+}
+
+/* Reference-like warm and hot transmissions. These remain responses to the
+   shared emitter; no local radial highlight is introduced into any tile. */
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="0"][data-column="6"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="1"][data-column="5"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="1"][data-column="6"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="2"][data-column="4"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="2"][data-column="6"] {
+  --cover-state: .42;
+  --brightness: 1.22;
+  --saturation: .65;
+  --edge-top: .27;
+  --edge-right: .22;
+  --edge-bloom: .14;
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="0"][data-column="7"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="0"][data-column="8"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="1"][data-column="7"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="1"][data-column="8"],
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="2"][data-column="5"] {
+  --cover-state: .25;
+  --brightness: 1.34;
+  --saturation: .6;
+  --edge-top: .4;
+  --edge-right: .33;
+  --edge-bloom: .22;
+}
+
+@media (max-width: 599px) {
+  body .prelaunch[data-prelaunch-page] {
+    background:
+      radial-gradient(circle at 104% 37%, rgba(185, 91, 52, .12), transparent 43%),
+      linear-gradient(145deg, #191b1f 0%, #111318 49%, #090b0e 100%) !important;
+  }
+
+  body .prelaunch[data-prelaunch-page]::before {
+    background:
+      radial-gradient(
+        ellipse 126vw 86vh at 108% 39%,
+        rgba(255, 236, 217, .48) 0%,
+        rgba(242, 171, 121, .35) 29%,
+        rgba(201, 92, 51, .14) 55%,
+        transparent 74%
+      ),
+      radial-gradient(
+        ellipse 110vw 58vh at 103% -2%,
+        rgba(255, 252, 245, .88) 0%,
+        rgba(255, 226, 201, .66) 17%,
+        rgba(244, 171, 122, .42) 37%,
+        rgba(205, 99, 57, .16) 60%,
+        transparent 80%
+      ) !important;
+  }
+}
