@@ -37,11 +37,11 @@ The repository secret `PENPOT_INTEGRATION_TOKEN` was present in every run. Offli
 
 Attempts:
 
-1. GitHub-hosted Ubuntu, direct Node request — run `31100428716`;
-2. Ubuntu with browser request headers — run `31100796202`;
-3. Ubuntu with Chromium bootstrap and cookies — run `31100968024`;
-4. Ubuntu with the API request executed inside a Chromium page context — run `31101198304`;
-5. GitHub-hosted macOS — run `31101400696`.
+1. GitHub-hosted Ubuntu, direct Node request — [run 31100428716](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31100428716);
+2. Ubuntu with browser request headers — [run 31100796202](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31100796202);
+3. Ubuntu with Chromium bootstrap and cookies — [run 31100968024](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31100968024);
+4. Ubuntu with the API request executed inside a Chromium page context — [run 31101198304](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31101198304);
+5. GitHub-hosted macOS — [run 31101400696](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31101400696).
 
 The macOS runner was also hosted in Azure `westus`, and the same Cloudflare response was returned. The token has therefore not been proven invalid; the hosted-runner egress path is blocked before PAT validation.
 
@@ -57,9 +57,9 @@ No success claim or synthetic Penpot link is permitted while this status remains
 
 ## Minimal next path
 
-Run the same workflow on a self-hosted GitHub Actions runner located on the existing development server and labelled `lovekgd-penpot`. This keeps the current repository secret and workflow model, but moves the Penpot API call away from GitHub/Azure hosted-runner egress. It does **not** require self-hosting Penpot or introducing MCP.
+Run the same workflow on a short-lived self-hosted GitHub Actions runner located on the existing development server and carrying only the custom label `lovekgd-penpot`. This keeps the current repository secret and workflow model, but moves the Penpot API call away from GitHub/Azure hosted-runner egress. It does **not** require self-hosting Penpot or introducing MCP.
 
-The workflow is manual-only after this record. Once the runner is registered, dispatch it with `allow_write=true`. A successful run must create the isolated file, reread the generated frame, upload a JSON receipt and return the exact Penpot workspace URL.
+The workflow is now manual-only and targets `runs-on: lovekgd-penpot`. Once the runner is registered, dispatch it with `allow_write=true`. A successful run must create the isolated file, reread the generated frame, upload a JSON receipt and return the exact Penpot workspace URL.
 
 ## Acceptance after the write succeeds
 
