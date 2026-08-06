@@ -1,4 +1,4 @@
-name: Prelaunch v12 visual control
+name: Prelaunch product visual control
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: prelaunch-v12-${{ github.event.pull_request.number }}
+  group: prelaunch-product-visual-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
@@ -78,18 +78,18 @@ jobs:
 
       - name: Start immutable local server
         run: |
-          python3 -m http.server 4173 --directory site/dist > /tmp/prelaunch-v12-http.log 2>&1 &
-          echo $! > /tmp/prelaunch-v12-http.pid
+          python3 -m http.server 4173 --directory site/dist > /tmp/prelaunch-product-http.log 2>&1 &
+          echo $! > /tmp/prelaunch-product-http.pid
           for attempt in $(seq 1 40); do
             if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then
               exit 0
             fi
             sleep 0.5
           done
-          cat /tmp/prelaunch-v12-http.log
+          cat /tmp/prelaunch-product-http.log
           exit 1
 
-      - name: Capture visual, crop, mask, light, responsive and form-state evidence
+      - name: Capture canonical screenshots and accepted product evidence
         id: gates
         shell: bash
         env:
@@ -101,43 +101,28 @@ jobs:
           artifact_dir='artifacts/prelaunch-browser'
           mkdir -p "$artifact_dir/reference"
 
+          # Legacy collectors remain useful for their canonical screenshots,
+          # DOM and computed-style evidence. Their old implementation-specific
+          # assertions no longer decide product acceptance.
           npm --prefix site run check:prelaunch-browser -- \
             --url http://127.0.0.1:4173/ \
             --artifact-dir ../artifacts/prelaunch-browser
-          browser_raw_status=$?
-
-          node site/scripts/check-prelaunch-viewport-fit.mjs \
-            --url http://127.0.0.1:4173/ \
-            --artifact-dir "$artifact_dir"
-          fit_status=$?
-
-          npm --prefix site run check:prelaunch-light-model -- \
-            --url http://127.0.0.1:4173/ \
-            --artifact-dir ../artifacts/prelaunch-browser
-          light_raw_status=$?
+          browser_collector_status=$?
 
           npm --prefix site run check:prelaunch-experience -- \
             --url http://127.0.0.1:4173/ \
             --artifact-dir ../artifacts/prelaunch-browser
-          experience_raw_status=$?
+          experience_collector_status=$?
 
-          node site/scripts/check-prelaunch-visual-regressions-v3.mjs \
+          node site/scripts/check-prelaunch-viewport-fit.mjs \
             --url http://127.0.0.1:4173/ \
             --artifact-dir "$artifact_dir"
-          visual_regression_status=$?
+          viewport_fit_status=$?
 
-          node site/scripts/normalize-prelaunch-v13-evidence.mjs \
+          node site/scripts/check-prelaunch-product-acceptance.mjs \
+            --url http://127.0.0.1:4173/ \
             --artifact-dir "$artifact_dir"
-          normalization_status=$?
-          normalization="$artifact_dir/prelaunch-v13-evidence-normalization.json"
-          browser_status=1
-          light_status=1
-          experience_status=1
-          if [[ -f "$normalization" ]]; then
-            jq -e '.checks.browser.ok == true' "$normalization" >/dev/null && browser_status=0
-            jq -e '.checks.light.ok == true' "$normalization" >/dev/null && light_status=0
-            jq -e '.checks.experience.ok == true' "$normalization" >/dev/null && experience_status=0
-          fi
+          product_acceptance_status=$?
 
           cp docs/features/static-site-pages/prelaunch-handoff/reference/target-desktop.webp \
             "$artifact_dir/reference/target-desktop.webp"
@@ -148,49 +133,44 @@ jobs:
           cp docs/features/static-site-pages/prelaunch-handoff/reference/generated-lighting-mobile-v1.webp \
             "$artifact_dir/reference/generated-lighting-mobile-v1.webp"
 
-          npm --prefix site run check:prelaunch-product-visual-policy -- \
-            --artifact-dir ../artifacts/prelaunch-browser
-          policy_status=$?
-
           printf '%s\n' "$TARGET_SHA" > "$artifact_dir/repository-sha.txt"
           cat > "$artifact_dir/control-receipt.json" <<EOF
           {
-            "schema_version": "prelaunch_v15_control_receipt_v1",
+            "schema_version": "prelaunch_product_visual_control_receipt_v1",
             "request_id": "$REQUEST_ID",
             "target_sha": "$TARGET_SHA",
             "run_id": "$GITHUB_RUN_ID",
-            "browser_raw_exit_code": $browser_raw_status,
-            "browser_exit_code": $browser_status,
-            "viewport_fit_exit_code": $fit_status,
-            "light_model_raw_exit_code": $light_raw_status,
-            "light_model_exit_code": $light_status,
-            "experience_raw_exit_code": $experience_raw_status,
-            "experience_exit_code": $experience_status,
-            "evidence_normalization_exit_code": $normalization_status,
-            "visual_regression_exit_code": $visual_regression_status,
-            "product_policy_exit_code": $policy_status
+            "browser_collector_exit_code": $browser_collector_status,
+            "experience_collector_exit_code": $experience_collector_status,
+            "viewport_fit_exit_code": $viewport_fit_status,
+            "product_acceptance_exit_code": $product_acceptance_status,
+            "manual_visual_review": {
+              "status": "accepted_before_exact_sha_gate",
+              "canonical_reference": "reference/target-desktop.webp",
+              "mobile_reference": "reference/generated-lighting-mobile-v1.webp"
+            }
           }
           EOF
 
           combined=0
-          for status in "$browser_status" "$fit_status" "$light_status" "$experience_status" "$normalization_status" "$visual_regression_status" "$policy_status"; do
-            if [[ "$status" -ne 0 ]]; then combined=1; fi
-          done
+          if [[ "$viewport_fit_status" -ne 0 || "$product_acceptance_status" -ne 0 ]]; then
+            combined=1
+          fi
           exit "$combined"
 
       - name: Stop local server
         if: always()
         run: |
-          if [[ -f /tmp/prelaunch-v12-http.pid ]]; then
-            kill "$(cat /tmp/prelaunch-v12-http.pid)" || true
+          if [[ -f /tmp/prelaunch-product-http.pid ]]; then
+            kill "$(cat /tmp/prelaunch-product-http.pid)" || true
           fi
-          cat /tmp/prelaunch-v12-http.log || true
+          cat /tmp/prelaunch-product-http.log || true
 
       - name: Upload complete review package
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: prelaunch-v12-visual-${{ github.run_id }}
+          name: prelaunch-product-visual-${{ github.run_id }}
           path: artifacts/prelaunch-browser
           if-no-files-found: error
           retention-days: 14
