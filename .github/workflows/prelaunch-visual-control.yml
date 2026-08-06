@@ -1,8 +1,5 @@
 name: Prelaunch visual control
 
-# Updating the request file launches a mergeable pull_request run that checks
-# an exact SHA from the long-lived prelaunch branch. `publish_browser=1` adds a
-# create-only visual review prefix after the accepted browser gates.
 on:
   pull_request:
     types: [opened, synchronize, reopened]
@@ -27,31 +24,23 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Parse and validate request
+      - name: Parse and validate exact target
         id: request
         shell: bash
         run: |
           set -euo pipefail
-          request_file='.github/prelaunch-visual-control.request'
-          test -f "$request_file"
-
-          request_id=$(sed -n 's/^request_id=//p' "$request_file" | tail -n 1)
-          target_branch=$(sed -n 's/^target_branch=//p' "$request_file" | tail -n 1)
-          target_sha=$(sed -n 's/^target_sha=//p' "$request_file" | tail -n 1)
-          publish_browser=$(sed -n 's/^publish_browser=//p' "$request_file" | tail -n 1)
-          publish_browser=${publish_browser:-0}
-
+          file='.github/prelaunch-visual-control.request'
+          request_id=$(sed -n 's/^request_id=//p' "$file" | tail -n 1)
+          target_branch=$(sed -n 's/^target_branch=//p' "$file" | tail -n 1)
+          target_sha=$(sed -n 's/^target_sha=//p' "$file" | tail -n 1)
           [[ "$request_id" =~ ^[A-Za-z0-9._-]{8,120}$ ]]
           [[ "$target_branch" == 'agent/prelaunch-landing-20260803' ]]
           [[ "$target_sha" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$publish_browser" =~ ^[01]$ ]]
-
           echo "request_id=$request_id" >> "$GITHUB_OUTPUT"
           echo "target_branch=$target_branch" >> "$GITHUB_OUTPUT"
           echo "target_sha=$target_sha" >> "$GITHUB_OUTPUT"
-          echo "publish_browser=$publish_browser" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout exact prelaunch SHA
+      - name: Checkout exact feature SHA
         shell: bash
         env:
           TARGET_BRANCH: ${{ steps.request.outputs.target_branch }}
@@ -59,11 +48,7 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags origin "+refs/heads/${TARGET_BRANCH}:refs/remotes/origin/${TARGET_BRANCH}"
-          actual_sha=$(git rev-parse "refs/remotes/origin/${TARGET_BRANCH}")
-          if [[ "$actual_sha" != "$TARGET_SHA" ]]; then
-            echo "Target branch moved: requested=$TARGET_SHA actual=$actual_sha" >&2
-            exit 1
-          fi
+          test "$(git rev-parse refs/remotes/origin/${TARGET_BRANCH})" = "$TARGET_SHA"
           git checkout --detach "$TARGET_SHA"
           test "$(git rev-parse HEAD)" = "$TARGET_SHA"
 
@@ -81,79 +66,83 @@ jobs:
         working-directory: site
         run: npx playwright install --with-deps chromium
 
-      - name: Run source and release contracts
+      - name: Run source and email contracts
         run: npm --prefix site run test:static-release
 
-      - name: Build prelaunch root
+      - name: Build deterministic prelaunch surface
         env:
           PUBLIC_PRELAUNCH_MODE: 'on'
+          PUBLIC_PERSONALIZATION_SUPABASE_URL: https://direct.test
+          PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL: https://relay.test
+          PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY: publishable-test-key
         run: npm --prefix site run build
 
-      - name: Start immutable local artifact server
+      - name: Start immutable local server
         run: |
           python3 -m http.server 4173 --directory site/dist > /tmp/prelaunch-http.log 2>&1 &
           echo $! > /tmp/prelaunch-http.pid
-          for attempt in $(seq 1 40); do
+          for attempt in $(seq 1 50); do
             if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then
               exit 0
             fi
-            sleep 0.5
+            sleep 0.4
           done
           cat /tmp/prelaunch-http.log
           exit 1
 
-      - name: Capture visual, no-scroll and light-model evidence
-        id: visual_gate
+      - name: Capture screenshots, mask evidence and transport scenarios
+        id: gates
         shell: bash
         env:
           REQUEST_ID: ${{ steps.request.outputs.request_id }}
           TARGET_SHA: ${{ steps.request.outputs.target_sha }}
         run: |
-          set -euo pipefail
-          mkdir -p artifacts/prelaunch-browser/reference
-
           set +e
-          npm --prefix site run check:prelaunch-browser -- \
+          set -uo pipefail
+          dir='artifacts/prelaunch-browser'
+          mkdir -p "$dir/reference" "$dir/form-security"
+
+          node site/scripts/check-prelaunch-v27-structure.mjs \
             --url http://127.0.0.1:4173/ \
-            --artifact-dir ../artifacts/prelaunch-browser
+            --artifact-dir "$dir"
           visual_status=$?
+
+          node site/scripts/check-prelaunch-form-security.mjs \
+            --url http://127.0.0.1:4173/ \
+            --artifact-dir "$dir/form-security"
+          form_status=$?
 
           node site/scripts/check-prelaunch-viewport-fit.mjs \
             --url http://127.0.0.1:4173/ \
-            --artifact-dir artifacts/prelaunch-browser
-          fit_status=$?
-
-          node site/scripts/check-prelaunch-light-model.mjs \
-            --url http://127.0.0.1:4173/ \
-            --artifact-dir artifacts/prelaunch-browser
-          light_status=$?
-
-          node site/scripts/check-prelaunch-product-visual-policy.mjs \
-            --artifact-dir artifacts/prelaunch-browser
-          policy_status=$?
-          set -e
+            --artifact-dir "$dir"
+          viewport_status=$?
 
           cp docs/features/static-site-pages/prelaunch-handoff/reference/target-desktop.webp \
-            artifacts/prelaunch-browser/reference/target-desktop.webp
+            "$dir/reference/target-desktop.webp"
           cp docs/features/static-site-pages/prelaunch-handoff/reference/PWA-icon.webp \
-            artifacts/prelaunch-browser/reference/PWA-icon.webp
-          printf '%s\n' "$TARGET_SHA" > artifacts/prelaunch-browser/repository-sha.txt
+            "$dir/reference/PWA-icon.webp"
+          cp docs/features/static-site-pages/prelaunch-handoff/reference/generated-lighting-desktop-v1.webp \
+            "$dir/reference/generated-lighting-desktop-v1.webp"
+          cp docs/features/static-site-pages/prelaunch-handoff/reference/generated-lighting-mobile-v1.webp \
+            "$dir/reference/generated-lighting-mobile-v1.webp"
 
-          cat > artifacts/prelaunch-browser/control-receipt.json <<EOF
+          printf '%s\n' "$TARGET_SHA" > "$dir/repository-sha.txt"
+          cat > "$dir/control-receipt.json" <<EOF
           {
-            "schema_version": "prelaunch_visual_control_receipt_v5",
+            "schema_version": "prelaunch_v27_control_receipt_v1",
             "request_id": "$REQUEST_ID",
             "target_sha": "$TARGET_SHA",
-            "control_run_id": "$GITHUB_RUN_ID",
-            "control_run_attempt": "$GITHUB_RUN_ATTEMPT",
-            "legacy_visual_gate_exit_code": $visual_status,
-            "viewport_fit_exit_code": $fit_status,
-            "legacy_light_model_exit_code": $light_status,
-            "product_visual_policy_exit_code": $policy_status,
-            "combined_exit_code": $policy_status
+            "run_id": "$GITHUB_RUN_ID",
+            "visual_exit_code": $visual_status,
+            "form_security_exit_code": $form_status,
+            "viewport_exit_code": $viewport_status,
+            "manual_visual_review": "required_after_artifact_download"
           }
           EOF
-          exit "$policy_status"
+
+          if [[ "$visual_status" -ne 0 || "$form_status" -ne 0 || "$viewport_status" -ne 0 ]]; then
+            exit 1
+          fi
 
       - name: Stop local server
         if: always()
@@ -163,157 +152,11 @@ jobs:
           fi
           cat /tmp/prelaunch-http.log || true
 
-      - name: Build immutable browser-prefix review
-        if: steps.request.outputs.publish_browser == '1'
-        id: review_build
-        shell: bash
-        env:
-          PUBLIC_PRELAUNCH_MODE: 'on'
-          PUBLIC_SITE_MODE: secret_candidate
-          PUBLIC_SITE_ORIGIN: https://kenigevents.ru
-          PUBLIC_ASTRO_ASSET_BASE_URL: ''
-        run: |
-          set -euo pipefail
-          token=$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n')
-          [[ "$token" =~ ^[A-Za-z0-9_-]{43}$ ]]
-          echo "::add-mask::$token"
-          printf '%s' "$token" > "$RUNNER_TEMP/prelaunch-browser-token"
-          chmod 600 "$RUNNER_TEMP/prelaunch-browser-token"
-          export SITE_BASE_PATH="/_review/$token"
-          echo "base_path=$SITE_BASE_PATH" >> "$GITHUB_OUTPUT"
-          npm --prefix site run build
-
-          grep -F 'data-prelaunch-page' site/dist/index.html >/dev/null
-          grep -F 'noindex,nofollow,noarchive,nosnippet' site/dist/index.html >/dev/null
-          grep -F 'name="referrer" content="no-referrer"' site/dist/index.html >/dev/null
-          grep -F "$SITE_BASE_PATH/" site/dist/index.html >/dev/null
-
-          rm -rf review-dist
-          mkdir -p review-dist
-          cp site/dist/index.html review-dist/index.html
-          test ! -d site/dist/_astro || cp -a site/dist/_astro review-dist/_astro
-          if [[ -d site/dist/assets/pwa ]]; then
-            mkdir -p review-dist/assets
-            cp -a site/dist/assets/pwa review-dist/assets/pwa
-          fi
-
-      - name: Publish create-only browser review and verify bytes
-        if: steps.request.outputs.publish_browser == '1'
-        shell: bash
-        env:
-          REQUEST_ID: ${{ steps.request.outputs.request_id }}
-          TARGET_SHA: ${{ steps.request.outputs.target_sha }}
-          BASE_PATH: ${{ steps.review_build.outputs.base_path }}
-          YC_BUCKET: ${{ secrets.KENIGEVENTS_SITE_YC_BUCKET }}
-          YC_ACCESS_KEY: ${{ secrets.KENIGEVENTS_SITE_YC_ACCESS_KEY_ID }}
-          YC_SECRET_KEY: ${{ secrets.KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY }}
-          YC_ENDPOINT: ${{ secrets.KENIGEVENTS_SITE_YC_ENDPOINT || vars.KENIGEVENTS_SITE_YC_ENDPOINT || 'https://storage.yandexcloud.net' }}
-          YC_REGION: ${{ secrets.KENIGEVENTS_SITE_YC_REGION || vars.KENIGEVENTS_SITE_YC_REGION || 'ru-central1' }}
-          PUBLIC_BASE: ${{ secrets.KENIGEVENTS_SITE_PUBLIC_BASE_URL || vars.KENIGEVENTS_SITE_PUBLIC_BASE_URL || 'https://kenigevents.ru' }}
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts/prelaunch-browser/publish
-          if [[ -z "$YC_BUCKET" || -z "$YC_ACCESS_KEY" || -z "$YC_SECRET_KEY" ]]; then
-            cat > artifacts/prelaunch-browser/publish/blocker.json <<EOF
-          {
-            "ok": false,
-            "blocker": "deployment_credentials_unavailable_to_visual_control",
-            "target_sha": "$TARGET_SHA"
-          }
-          EOF
-            exit 78
-          fi
-          python3 -m pip install --quiet --disable-pip-version-check boto3
-
-          python3 - <<'PY'
-          import concurrent.futures, hashlib, json, mimetypes, os, time, urllib.error, urllib.parse, urllib.request
-          from pathlib import Path
-          import boto3
-          from botocore.config import Config
-          from botocore.exceptions import ClientError
-
-          root=Path('review-dist')
-          token=Path(os.environ['RUNNER_TEMP'],'prelaunch-browser-token').read_text()
-          prefix=f'_review/{token}'
-          public_base=os.environ['PUBLIC_BASE'].rstrip('/')
-          endpoint=os.environ['YC_ENDPOINT'].rstrip('/')
-          bucket=os.environ['YC_BUCKET']
-          types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.webp':'image/webp','.svg':'image/svg+xml','.woff2':'font/woff2','.ico':'image/x-icon'}
-          def meta(path):
-            rel=path.relative_to(root).as_posix(); data=path.read_bytes()
-            return {'rel':rel,'data':data,'sha':hashlib.sha256(data).hexdigest(),'type':types.get(path.suffix.lower()) or mimetypes.guess_type(path.name)[0] or 'application/octet-stream','key':f'{prefix}/{rel}'}
-          objects=[meta(p) for p in sorted(root.rglob('*')) if p.is_file()]
-          manifest={'schema_version':'prelaunch_visual_browser_manifest_v1','request_id':os.environ['REQUEST_ID'],'target_sha':os.environ['TARGET_SHA'],'object_prefix':prefix,'root_mutation':False,'stable_ics_mutation':False,'form_transport_configured':False,'files':[{'key':o['rel'],'size':len(o['data']),'sha256':o['sha'],'content_type':o['type']} for o in objects]}
-          (root/'review-manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n')
-          objects.append(meta(root/'review-manifest.json'))
-
-          list_url=f"{endpoint}/{urllib.parse.quote(bucket)}?list-type=2&max-keys=1"
-          try:
-            urllib.request.urlopen(list_url,timeout=20)
-            raise RuntimeError('anonymous ListObjects enabled')
-          except urllib.error.HTTPError as exc:
-            if exc.code not in (401,403): raise
-
-          s3=boto3.client('s3',endpoint_url=endpoint,region_name=os.environ['YC_REGION'],aws_access_key_id=os.environ['YC_ACCESS_KEY'],aws_secret_access_key=os.environ['YC_SECRET_KEY'],config=Config(signature_version='s3v4',retries={'max_attempts':5,'mode':'standard'}))
-          def upload(o):
-            try:
-              s3.put_object(Bucket=bucket,Key=o['key'],Body=o['data'],ContentType=o['type'],CacheControl='private, no-store, max-age=0',IfNoneMatch='*')
-            except ClientError as exc:
-              if exc.response.get('ResponseMetadata',{}).get('HTTPStatusCode') in (409,412): raise RuntimeError(f"refusing overwrite: {o['key']}") from exc
-              raise
-          with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool: list(pool.map(upload,objects))
-
-          def verify(o):
-            url=f"{public_base}/{o['key']}"; last=None
-            for attempt in range(24):
-              try:
-                req=urllib.request.Request(url,headers={'Cache-Control':'no-cache'})
-                with urllib.request.urlopen(req,timeout=30) as response:
-                  data=response.read()
-                  if hashlib.sha256(data).hexdigest()!=o['sha']: raise RuntimeError('hash mismatch')
-                  actual=(response.headers.get('Content-Type') or '').split(';',1)[0].lower().strip(); expected=o['type'].split(';',1)[0].lower().strip()
-                  if actual!=expected: raise RuntimeError(f'MIME {actual} != {expected}')
-                  return
-              except Exception as exc: last=exc; time.sleep(min(2+attempt,7))
-            raise RuntimeError(f"public verify failed {o['rel']}: {last}")
-          with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool: list(pool.map(verify,objects))
-
-          public_url=f'{public_base}/_review/{token}/'
-          receipt={'schema_version':'prelaunch_visual_browser_publish_receipt_v1','ok':True,'request_id':os.environ['REQUEST_ID'],'target_sha':os.environ['TARGET_SHA'],'public_url':public_url,'object_prefix':prefix,'object_count':len(objects),'public_hash_mime_verification':'success','anonymous_list':'disabled','form_transport_configured':False,'root_mutation':False,'stable_ics_mutation':False}
-          out=Path('artifacts/prelaunch-browser/publish'); out.mkdir(parents=True,exist_ok=True)
-          (out/'receipt.json').write_text(json.dumps(receipt,ensure_ascii=False,indent=2)+'\n')
-          (out/'public-url.txt').write_text(public_url+'\n')
-          print(json.dumps({**receipt,'public_url':'masked-in-log'},ensure_ascii=False))
-          PY
-
-      - name: Public browser smoke and review screenshots
-        if: steps.request.outputs.publish_browser == '1'
-        shell: bash
-        run: |
-          set -euo pipefail
-          PUBLIC_URL=$(cat artifacts/prelaunch-browser/publish/public-url.txt)
-          PUBLIC_URL="$PUBLIC_URL" node --input-type=module <<'JS'
-          import { chromium } from './site/node_modules/playwright/index.mjs';
-          import { writeFileSync } from 'node:fs';
-          const browser=await chromium.launch({headless:true}); const results=[];
-          try {
-            for (const viewport of [{name:'desktop',width:1440,height:900},{name:'mobile',width:390,height:844}]) {
-              const context=await browser.newContext({viewport,reducedMotion:'reduce',colorScheme:'dark'}); const page=await context.newPage();
-              const response=await page.goto(process.env.PUBLIC_URL,{waitUntil:'networkidle',timeout:90000}); if(!response?.ok()) throw new Error(`${viewport.name}: HTTP ${response?.status()}`);
-              await page.locator('[data-prelaunch-page]').waitFor({state:'visible'});
-              const scene=await page.evaluate(()=>({robots:document.querySelector('meta[name="robots"]')?.content||'',referrer:document.querySelector('meta[name="referrer"]')?.content||'',tiles:document.querySelectorAll('[data-prelaunch-tile]').length,verticalOverflow:document.documentElement.scrollHeight-innerHeight,horizontalOverflow:document.documentElement.scrollWidth-innerWidth}));
-              if(!scene.robots.includes('noindex')||scene.referrer!=='no-referrer'||scene.tiles!==72||scene.verticalOverflow>1||scene.horizontalOverflow>1) throw new Error(`${viewport.name}: ${JSON.stringify(scene)}`);
-              const screenshot=`artifacts/prelaunch-browser/publish/public-${viewport.name}.png`; await page.screenshot({path:screenshot,fullPage:true,animations:'disabled'}); results.push({viewport,scene,screenshot}); await context.close();
-            }
-          } finally { await browser.close(); }
-          writeFileSync('artifacts/prelaunch-browser/publish/chromium-smoke.json',JSON.stringify({ok:true,url:process.env.PUBLIC_URL,results},null,2)+'\n');
-          JS
-
-      - name: Upload visual and publication evidence
+      - name: Upload complete evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: prelaunch-visual-control-${{ github.run_id }}
+          name: prelaunch-v27-evidence-${{ github.run_id }}
           path: artifacts/prelaunch-browser
           if-no-files-found: error
           retention-days: 14
