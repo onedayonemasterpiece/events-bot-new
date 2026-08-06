@@ -21,16 +21,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from scripts.region_talk_ydb_cost import (  # noqa: E402
-    YdbCostBudget,
-    payload_size_bytes,
-    validate_expected_database,
-)
-
 
 RESEARCH_KINDS = {
     "embeddinggemma_300m_enrichment_item",
@@ -118,7 +108,6 @@ def connect_ydb() -> tuple[Any, Any, str]:
         endpoint, database = endpoint.split("?database=", 1)
     if not endpoint or not database:
         raise RuntimeError("REGION_TALK_YDB_ENDPOINT and REGION_TALK_YDB_DATABASE are required")
-    database = validate_expected_database(database, require_expected=True)
     driver = ydb.Driver(endpoint=endpoint.rstrip("/?"), database=database, credentials=ydb_credentials(ydb))
     driver.wait(timeout=10, fail_fast=True)
     return ydb, driver, database
@@ -133,22 +122,13 @@ def payload_dict(value: Any) -> dict[str, Any]:
     return {}
 
 
-def read_all_rows(
-    ydb: Any,
-    driver: Any,
-    table_path: str,
-    *,
-    page_size: int = 500,
-    budget: YdbCostBudget | None = None,
-) -> list[dict[str, Any]]:
+def read_all_rows(ydb: Any, driver: Any, table_path: str, *, page_size: int = 500) -> list[dict[str, Any]]:
     pool = ydb.SessionPool(driver)
 
     def op(session: Any) -> list[dict[str, Any]]:
         after = ""
         out: list[dict[str, Any]] = []
         while True:
-            if budget is not None:
-                budget.before_query("compactor.read_page")
             query = session.prepare(f"""
 DECLARE $after AS Utf8;
 SELECT pk, kind, payload_json, updated_at FROM `{table_path}`
@@ -159,17 +139,6 @@ LIMIT {max(1, int(page_size))};
 """)
             result_sets = session.transaction(ydb.StaleReadOnly()).execute(query, {"$after": after}, commit_tx=True)
             rows = result_sets[0].rows if result_sets else []
-            if budget is not None:
-                budget.record_read(
-                    "compactor.read_page",
-                    len(rows),
-                    sum(
-                        payload_size_bytes(getattr(row, "payload_json", ""))
-                        + payload_size_bytes(getattr(row, "pk", ""))
-                        + payload_size_bytes(getattr(row, "kind", ""))
-                        for row in rows
-                    ),
-                )
             if not rows:
                 break
             for row in rows:
@@ -193,17 +162,8 @@ LIMIT {max(1, int(page_size))};
         ]
         seen = {row["pk"] for row in out}
         for sql in special_queries:
-            if budget is not None:
-                budget.before_query("compactor.read_special")
             result_sets = session.transaction(ydb.StaleReadOnly()).execute(sql, commit_tx=True)
-            special_rows = result_sets[0].rows if result_sets else []
-            if budget is not None:
-                budget.record_read(
-                    "compactor.read_special",
-                    len(special_rows),
-                    sum(payload_size_bytes(getattr(row, "payload_json", "")) for row in special_rows),
-                )
-            for row in special_rows:
+            for row in (result_sets[0].rows if result_sets else []):
                 pk = str(row.pk)
                 if pk in seen:
                     continue
@@ -219,29 +179,15 @@ LIMIT {max(1, int(page_size))};
     return pool.retry_operation_sync(op)
 
 
-def table_max_updated_at(
-    ydb: Any,
-    driver: Any,
-    table_path: str,
-    *,
-    budget: YdbCostBudget | None = None,
-) -> str:
+def table_max_updated_at(ydb: Any, driver: Any, table_path: str) -> str:
     pool = ydb.SessionPool(driver)
 
     def op(session: Any) -> str:
-        if budget is not None:
-            budget.before_query("compactor.watermark")
         result_sets = session.transaction(ydb.StaleReadOnly()).execute(
             f"SELECT MAX(updated_at) AS max_updated_at FROM `{table_path}`;",
             commit_tx=True,
         )
         rows = result_sets[0].rows if result_sets else []
-        if budget is not None:
-            budget.record_read(
-                "compactor.watermark",
-                len(rows),
-                sum(payload_size_bytes(getattr(row, "max_updated_at", "")) for row in rows),
-            )
         return str(rows[0].max_updated_at or "") if rows else ""
 
     return pool.retry_operation_sync(op)
@@ -446,15 +392,7 @@ def ensure_target_table(ydb: Any, driver: Any, table_path: str, *, replace: bool
     pool.retry_operation_sync(op)
 
 
-def bulk_write(
-    ydb: Any,
-    driver: Any,
-    table_path: str,
-    rows: list[dict[str, Any]],
-    *,
-    chunk_size: int,
-    budget: YdbCostBudget | None = None,
-) -> int:
+def bulk_write(ydb: Any, driver: Any, table_path: str, rows: list[dict[str, Any]], *, chunk_size: int) -> int:
     columns = (
         ydb.BulkUpsertColumns()
         .add_column("pk", ydb.OptionalType(ydb.PrimitiveType.Utf8))
@@ -473,13 +411,6 @@ def bulk_write(
             }
             for row in rows[start:start + chunk_size]
         ]
-        if budget is not None:
-            budget.before_query("compactor.bulk_upsert")
-            budget.record_write(
-                "compactor.bulk_upsert",
-                len(chunk),
-                sum(payload_size_bytes(row) for row in chunk),
-            )
         driver.table_client.bulk_upsert(table_path, chunk, columns)
         written += len(chunk)
         if written % 5000 == 0 or written == len(rows):
@@ -537,12 +468,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bootstrap-acknowledge-target-replacement", action="store_true")
     parser.add_argument("--page-size", type=int, default=500)
     parser.add_argument("--chunk-size", type=int, default=500)
-    parser.add_argument("--max-queries", type=int, default=500)
-    parser.add_argument("--max-rows-read", type=int, default=100000)
-    parser.add_argument("--max-bytes-read", type=int, default=512 * 1024 * 1024)
-    parser.add_argument("--max-rows-written", type=int, default=100000)
-    parser.add_argument("--max-bytes-written", type=int, default=512 * 1024 * 1024)
-    parser.add_argument("--max-estimated-io-ru", type=int, default=250000)
     parser.add_argument("--report", default="artifacts/codex/region-talk-ydb-compact-report.json")
     return parser.parse_args()
 
@@ -550,22 +475,13 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     load_env(Path(args.env_file))
-    budget = YdbCostBudget(
-        max_queries=max(1, int(args.max_queries)),
-        max_rows_read=max(1, int(args.max_rows_read)),
-        max_bytes_read=max(1, int(args.max_bytes_read)),
-        max_rows_written=max(1, int(args.max_rows_written)),
-        max_bytes_written=max(1, int(args.max_bytes_written)),
-        max_estimated_io_ru=max(1, int(args.max_estimated_io_ru)),
-        label="region_talk_compactor",
-    )
     ydb, driver, database = connect_ydb()
     source_table = namespace_table(database, args.source_namespace)
     target_table = namespace_table(database, args.target_namespace)
     try:
-        source_watermark_before = table_max_updated_at(ydb, driver, source_table, budget=budget)
-        source_rows = read_all_rows(ydb, driver, source_table, page_size=args.page_size, budget=budget)
-        source_watermark_after = table_max_updated_at(ydb, driver, source_table, budget=budget)
+        source_watermark_before = table_max_updated_at(ydb, driver, source_table)
+        source_rows = read_all_rows(ydb, driver, source_table, page_size=args.page_size)
+        source_watermark_after = table_max_updated_at(ydb, driver, source_table)
         if source_watermark_before != source_watermark_after:
             raise RuntimeError(
                 "source table changed during migration read; stop writers and retry: "
@@ -582,7 +498,6 @@ def main() -> int:
             "transform": transform_meta,
             "source_watermark_before": source_watermark_before,
             "source_watermark_after": source_watermark_after,
-            "ydb_cost_budget": budget.snapshot(),
         }
         if args.execute:
             ensure_target_table(
@@ -592,17 +507,10 @@ def main() -> int:
                 replace=bool(args.replace_target),
                 bootstrap_ack=bool(args.bootstrap_acknowledge_target_replacement),
             )
-            report["written_rows"] = bulk_write(
-                ydb, driver, target_table, transformed,
-                chunk_size=args.chunk_size, budget=budget,
-            )
-            target_rows = read_all_rows(
-                ydb, driver, target_table,
-                page_size=args.page_size, budget=budget,
-            )
+            report["written_rows"] = bulk_write(ydb, driver, target_table, transformed, chunk_size=args.chunk_size)
+            target_rows = read_all_rows(ydb, driver, target_table, page_size=args.page_size)
             report["actual_target"] = summarize(target_rows)
             report["validation"] = validate(source_rows, target_rows)
-            report["ydb_cost_budget"] = budget.snapshot()
         out = Path(args.report)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")

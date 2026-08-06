@@ -1,5 +1,4 @@
 ---
-import PersonalizationRuntime from '../../../components/personalization/PersonalizationRuntime.astro';
 import FocusGroupInviteIntake from '../../../components/FocusGroupInviteIntake.astro';
 import StaticSiteAuthRuntime from '../../../components/auth/StaticSiteAuthRuntime.astro';
 import { absoluteUrl, IS_SECRET_CANDIDATE, withBase } from '../../../lib/events';
@@ -47,7 +46,6 @@ const pwaServiceWorkerScope = withBase('/');
     </script>
   </head>
   <body>
-    <PersonalizationRuntime />
     <FocusGroupInviteIntake />
     <StaticSiteAuthRuntime />
   </body>

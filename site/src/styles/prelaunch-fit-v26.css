@@ -1,0 +1,25 @@
+/*
+ * Prelaunch visual correction v26.
+ *
+ * Final square-only masking: the first wordmark row must not reveal plain
+ * leather behind the explanatory copy. The pane becomes clear only near the
+ * baseline where the upper wordmark actually begins.
+ */
+
+@media (min-width: 821px) and (min-height: 1000px) and (max-aspect-ratio: 5 / 4) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-row="3"][data-window="true"]::after {
+    opacity: 1 !important;
+    mix-blend-mode: normal !important;
+    background-image:
+      linear-gradient(
+        to bottom,
+        rgba(7, 9, 12, .78) 0%,
+        rgba(7, 9, 12, .62) 25%,
+        rgba(7, 9, 12, .22) 47%,
+        transparent 62%
+      ),
+      radial-gradient(circle at 18% 22%, rgba(255, 255, 255, .075) 0 1px, transparent 1.2px),
+      radial-gradient(circle at 73% 67%, rgba(255, 255, 255, .045) 0 1px, transparent 1.15px) !important;
+    background-size: 100% 100%, 23px 25px, 31px 29px !important;
+  }
+}

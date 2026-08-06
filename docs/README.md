@@ -5,23 +5,12 @@
 ## Быстрый роутинг (для агентов)
 
 - Машиночитаемая карта: `docs/routes.yml`
-- Статический сайт: `docs/features/static-site-pages/README.md`
-  - аналитика и продуктовая статистика: `analytics/README.md`;
-  - подборки и гастрономия: `podborki.md`, `gastronomy-collection.md`;
-  - персонализация: `personalizaion/personalization-to-be.md` и Wave 0;
-  - погода: `weather-calendar.md`;
-  - фокус-группа и обычный онбординг — отдельные контракты.
-- Автотесты статического сайта: `docs/operations/static-site-autotest-strategy.md` и `docs/testing/static-site-auth-session-fixture.md`.
 - Список фич: `docs/features/README.md`
 
 ## Канонические разделы
 
 - Архитектура: `docs/architecture/overview.md`
 - Personalization data ownership (Fly/Supabase/YDB/Object Storage): `docs/architecture/personalization-data-ownership.md`
-- Сквозная аналитика и продуктовая статистика статического сайта:
-  `docs/features/static-site-pages/analytics/README.md`
-- Исследования пользовательских историй, Jobs, outcomes и измеримой связи с продуктовой статистикой:
-  `docs/research/user-stories/README.md`
 - Эксплуатация: `docs/operations/` (как запускать/поддерживать)
 - Workflow репозитория и worktree/branch policy: `docs/operations/repository-workflow.md`
 - Incident management / closure gate: `docs/operations/incident-management.md`
@@ -33,9 +22,6 @@
 - Event participants/headliners UI and static projection: `docs/features/event-people/README.md`
 - Read-only duplicate-image audit: `docs/operations/event-image-duplicate-audit.md`
 - Email delivery/deliverability: `docs/operations/email-delivery.md`
-- Postbox feedback correlation and bounded DLQ recovery:
-  `docs/operations/postbox-feedback-dlq-recovery.md`; active incident:
-  `docs/reports/incidents/INC-2026-08-04-postbox-feedback-dlq-correlation.md`
 - External focus-group mailbox OTP E2E: `docs/testing/external-focus-email-otp.md`
 - Static-site deterministic direct/relay fault profiles:
   `docs/testing/transport-fault-profiles.v1.yml`
@@ -91,5 +77,3 @@
 2. Не создавай новый документ, если можно расширить существующий канонический.
 3. Если нужно сохранить старый путь (ссылки/история) — оставь короткий redirect‑stub без копирования текста.
 4. Новый production incident → добавь канонический record в `docs/reports/incidents/` по `TEMPLATE.md`, внеси его в incident index и убедись, что он пригоден для автоматического regression-check по ID.
-5. Принятое TO-BE-решение должно оперативно доехать до канонического документа в `main`, даже если runtime ещё не реализован. Документы в feature-ветке, PR body, комментарии и preview остаются WIP/evidence и не могут быть единственным источником требования.
-6. Общие определения аналитики, пользователей, сессий, consent, хранения, метрик и resource budgets не дублируются по фичам: feature-документы ссылаются на `docs/features/static-site-pages/analytics/README.md` и добавляют только feature-specific контракт.

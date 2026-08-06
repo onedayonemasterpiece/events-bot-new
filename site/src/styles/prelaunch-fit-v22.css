@@ -1,0 +1,75 @@
+/*
+ * Prelaunch visual correction v22.
+ *
+ * Removes the dark ring introduced by v21 and replaces it with a positive warm
+ * volume. Also tightens the square form and gives the wordmark windows the last
+ * small transmission increase seen in the supplied reference.
+ */
+
+body .prelaunch[data-prelaunch-page] .prelaunch__atmosphere::before {
+  display: block !important;
+  content: "" !important;
+  position: absolute;
+  width: min(68vw, 980px) !important;
+  aspect-ratio: 1;
+  right: min(-40vw, -430px) !important;
+  top: 10vh !important;
+  border: 0 !important;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 244, 230, .31) 0%,
+    rgba(239, 162, 111, .16) 31%,
+    rgba(192, 82, 44, .055) 55%,
+    transparent 72%
+  ) !important;
+  box-shadow: none !important;
+  filter: none !important;
+  opacity: .74 !important;
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-window="true"] {
+  --cover-state: .1;
+  --blur-base: .8px;
+  --brightness: 1.11;
+  --saturation: 1;
+}
+
+@media (min-width: 821px) and (min-height: 1000px) and (max-aspect-ratio: 5 / 4) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__notify {
+    width: 590px !important;
+    transform: translateY(3px) !important;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch-form__row {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+  }
+}
+
+@media (max-width: 599px) {
+  body .prelaunch[data-prelaunch-page]::before {
+    background:
+      radial-gradient(
+        ellipse 120vw 78vh at 113% 40%,
+        rgba(255, 244, 232, .42) 0%,
+        rgba(239, 159, 106, .23) 28%,
+        rgba(194, 82, 44, .08) 53%,
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 115vw 62vh at 102% -2%,
+        rgba(255, 252, 245, .88) 0%,
+        rgba(255, 226, 201, .68) 16%,
+        rgba(244, 171, 122, .43) 34%,
+        rgba(205, 99, 57, .18) 56%,
+        transparent 78%
+      ) !important;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__atmosphere::before {
+    width: 112vw !important;
+    right: -79vw !important;
+    top: 25vh !important;
+    opacity: .62 !important;
+  }
+}

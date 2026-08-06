@@ -1,0 +1,889 @@
+---
+import { withBase } from '../lib/events';
+
+const PRELAUNCH_LAUNCH_DATE = '2026-09-01';
+type TileState = 'sealed' | 'dim' | 'revealed';
+type TileZone = 'quiet' | 'light' | 'leather';
+
+// Deterministic 9 × 8 scene plan. The sparse reveal is intentionally biased
+// towards the leather wordmark while the top-left copy field stays calm.
+const tileStateRows = [
+  'ssssssdds',
+  'ssssdrrds',
+  'ssddrrrdd',
+  'sddrrrdds',
+  'drrrrrdss',
+  'drrrrddss',
+  'sddrrdsss',
+  'sssdddsss',
+] as const;
+const stateByCode: Record<string, TileState> = {
+  s: 'sealed',
+  d: 'dim',
+  r: 'revealed',
+};
+const glintIndices = new Set([24, 31, 50]);
+const tiles = Array.from({ length: 72 }, (_, index) => {
+  const row = Math.floor(index / 9);
+  const column = index % 9;
+  const zone: TileZone = row >= 3 && row <= 6 && column >= 1 && column <= 6
+    ? 'leather'
+    : row <= 3 && column >= 5
+      ? 'light'
+      : 'quiet';
+  return {
+    state: stateByCode[tileStateRows[row][column]],
+    zone,
+    glint: glintIndices.has(index),
+    duration: 4.6 + ((index * 17) % 31) / 10,
+    delay: -((index * 11) % 29) / 10,
+    radius: 12 + ((index * 7) % 6),
+    blurBias: ((index * 13) % 7) / 10,
+    matteBias: ((index * 5) % 5) / 100,
+    specX: 72 + ((index * 11) % 19),
+    specY: 7 + ((index * 7) % 17),
+  };
+});
+---
+
+<main
+  id="main"
+  class="prelaunch"
+  data-home-page
+  data-prelaunch-page
+  data-launch-date={PRELAUNCH_LAUNCH_DATE}
+>
+  <div class="prelaunch__background" aria-hidden="true">
+    <img
+      class="prelaunch__projection"
+      src={withBase('/assets/pwa/announcements-brand-v2-512.png')}
+      width="512"
+      height="512"
+      alt=""
+      decoding="async"
+      fetchpriority="high"
+    />
+  </div>
+
+  <div class="prelaunch__mosaic" aria-hidden="true" data-prelaunch-mosaic>
+    {tiles.map((tile, index) => (
+      <span
+        class="prelaunch__tile"
+        data-prelaunch-tile
+        data-index={index}
+        data-state={tile.state}
+        data-zone={tile.zone}
+        data-glint={tile.glint ? 'true' : undefined}
+        style={`--speed:${tile.duration.toFixed(1)}s;--delay:${tile.delay.toFixed(1)}s;--tile-radius:${tile.radius}px;--blur-bias:${tile.blurBias.toFixed(1)}px;--matte-bias:${tile.matteBias.toFixed(2)};--spec-x:${tile.specX}%;--spec-y:${tile.specY}%;`}
+      ></span>
+    ))}
+  </div>
+
+  <div class="prelaunch__atmosphere" aria-hidden="true">
+    <span class="prelaunch__halo prelaunch__halo--warm"></span>
+    <span class="prelaunch__halo prelaunch__halo--soft"></span>
+    <span class="prelaunch__spark prelaunch__spark--one"></span>
+    <span class="prelaunch__spark prelaunch__spark--two"></span>
+    <span class="prelaunch__spark prelaunch__spark--three"></span>
+  </div>
+
+  <div class="prelaunch__foreground">
+    <header class="prelaunch__brand" aria-label="Полюбить Калининград Анонсы">
+      <span class="prelaunch__brand-icon" aria-hidden="true">
+        <img
+          src={withBase('/assets/pwa/announcements-brand-v2-192.png')}
+          width="192"
+          height="192"
+          alt=""
+          decoding="async"
+        />
+      </span>
+      <p><span>Полюбить</span><span>Калининград</span><span>Анонсы</span></p>
+    </header>
+
+    <section class="prelaunch__copy" aria-labelledby="prelaunch-title">
+      <h1 id="prelaunch-title">Запуск 1 сентября</h1>
+      <p>
+        <span>Персонализированный сервис анонсов</span>
+        <span>и навигатор по культурным</span>
+        <span>и просветительским событиям</span>
+        <span>Калининградской области</span>
+      </p>
+    </section>
+
+    <section class="prelaunch__notify" aria-labelledby="notify-title">
+      <h2 id="notify-title">Напомнить о запуске</h2>
+      <form class="prelaunch-form" data-prelaunch-form novalidate>
+        <div class="prelaunch-form__row">
+          <label class="prelaunch-form__field">
+            <span>Email</span>
+            <input
+              type="email"
+              name="email"
+              inputmode="email"
+              autocomplete="email"
+              maxlength="254"
+              placeholder="E-mail"
+              aria-describedby="prelaunch-consent prelaunch-status"
+              required
+            />
+          </label>
+          <button type="submit" data-prelaunch-submit>
+            <span data-prelaunch-submit-label>Напомнить о запуске</span>
+          </button>
+        </div>
+
+        <label class="prelaunch-form__consent" id="prelaunch-consent">
+          <input type="checkbox" name="consent" required />
+          <span>Согласен получить одно письмо о запуске. Email используется только для этого уведомления.</span>
+        </label>
+
+        <label class="prelaunch-form__trap" aria-hidden="true">
+          <span>Ваш сайт</span>
+          <input type="text" name="website" tabindex="-1" autocomplete="off" />
+        </label>
+
+        <p
+          class="prelaunch-form__status"
+          id="prelaunch-status"
+          data-prelaunch-status
+          role="status"
+          aria-live="polite"
+        ></p>
+        <noscript><p class="prelaunch-form__noscript">Для отправки формы нужен JavaScript.</p></noscript>
+      </form>
+    </section>
+  </div>
+</main>
+
+<script>
+  import { getResilientDataClient } from '../lib/resilientDataClient';
+  import { parseSupabaseTransportError } from '../lib/resilientSupabaseTransport';
+
+  type TileState = 'sealed' | 'dim' | 'revealed';
+  type TileZone = 'quiet' | 'light' | 'leather';
+
+  const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const tiles = Array.from(document.querySelectorAll<HTMLElement>('[data-prelaunch-tile]'));
+  let mosaicTimer = 0;
+  let previousIndices = new Set<number>();
+
+  const randomBetween = (minimum: number, maximum: number) => minimum + Math.random() * (maximum - minimum);
+  const zoneWeight = (zone: string | undefined): number => {
+    if (zone === 'leather') return 1.8;
+    if (zone === 'light') return 1.2;
+    return .52;
+  };
+  const randomState = (current: string | undefined, zone: TileZone): TileState => {
+    const roll = Math.random();
+    if (zone === 'quiet') {
+      if (current === 'sealed') return roll > .84 ? 'revealed' : 'dim';
+      if (current === 'revealed') return roll > .18 ? 'dim' : 'sealed';
+      return roll > .7 ? 'revealed' : 'sealed';
+    }
+    if (zone === 'light') {
+      if (current === 'sealed') return roll > .5 ? 'revealed' : 'dim';
+      if (current === 'revealed') return roll > .3 ? 'dim' : 'sealed';
+      return roll > .48 ? 'revealed' : 'sealed';
+    }
+    if (current === 'sealed') return roll > .42 ? 'revealed' : 'dim';
+    if (current === 'revealed') return roll > .26 ? 'dim' : 'sealed';
+    return roll > .42 ? 'revealed' : 'sealed';
+  };
+
+  function stopMosaic(): void {
+    if (!mosaicTimer) return;
+    window.clearTimeout(mosaicTimer);
+    mosaicTimer = 0;
+  }
+
+  function scheduleMosaic(): void {
+    stopMosaic();
+    if (motionQuery.matches || document.hidden || tiles.length === 0) return;
+    mosaicTimer = window.setTimeout(() => {
+      const available = tiles
+        .map((tile, index) => ({
+          tile,
+          index,
+          key: Math.random() / zoneWeight(tile.dataset.zone),
+        }))
+        .filter(({ index }) => !previousIndices.has(index))
+        .sort((left, right) => left.key - right.key);
+      const changeCount = Math.floor(randomBetween(2, 6));
+      const changed = available.slice(0, changeCount);
+      previousIndices = new Set(changed.map(({ index }) => index));
+      for (const { tile } of changed) {
+        const zone = (tile.dataset.zone || 'quiet') as TileZone;
+        tile.dataset.state = randomState(tile.dataset.state, zone);
+        tile.style.setProperty('--speed', `${randomBetween(4.2, 8.1).toFixed(2)}s`);
+        tile.style.setProperty('--delay', '0s');
+      }
+      scheduleMosaic();
+    }, randomBetween(1800, 3600));
+  }
+
+  document.addEventListener('visibilitychange', scheduleMosaic);
+  motionQuery.addEventListener?.('change', scheduleMosaic);
+  scheduleMosaic();
+
+  const form = document.querySelector<HTMLFormElement>('[data-prelaunch-form]');
+  const status = document.querySelector<HTMLElement>('[data-prelaunch-status]');
+  const submit = document.querySelector<HTMLButtonElement>('[data-prelaunch-submit]');
+  const submitLabel = document.querySelector<HTMLElement>('[data-prelaunch-submit-label]');
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
+
+  function announce(kind: 'idle' | 'success' | 'error', message: string): void {
+    if (!status) return;
+    status.dataset.kind = kind;
+    status.textContent = message;
+  }
+
+  function setSubmitting(active: boolean): void {
+    if (!submit || !submitLabel) return;
+    submit.disabled = active;
+    submit.setAttribute('aria-busy', String(active));
+    submitLabel.textContent = active ? 'Сохраняем…' : 'Напомнить о запуске';
+  }
+
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    announce('idle', '');
+
+    const data = new FormData(form);
+    const email = String(data.get('email') || '').trim().toLocaleLowerCase('ru-RU');
+    const consent = data.get('consent') === 'on';
+    const website = String(data.get('website') || '').trim();
+    const emailInput = form.elements.namedItem('email') as HTMLInputElement | null;
+    const consentInput = form.elements.namedItem('consent') as HTMLInputElement | null;
+
+    if (!email || email.length > 254 || !emailPattern.test(email)) {
+      announce('error', 'Проверьте адрес электронной почты.');
+      emailInput?.focus();
+      return;
+    }
+    if (!consent) {
+      announce('error', 'Подтвердите согласие на одно письмо о запуске.');
+      consentInput?.focus();
+      return;
+    }
+
+    const directUrl = String(import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
+    const relayUrl = String(import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || '').replace(/\/+$/u, '');
+    const publishableKey = String(import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '');
+    if (!directUrl || !publishableKey) {
+      announce('error', 'Форма временно недоступна. Попробуйте ещё раз немного позже.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const client = getResilientDataClient({
+        directUrl,
+        relayUrl,
+        publishableKey,
+        routeCacheNamespace: 'prelaunch-notification-v1',
+      });
+      const response = await client.request(
+        `${directUrl}/rest/v1/rpc/register_prelaunch_notification_v1`,
+        {
+          method: 'POST',
+          cache: 'no-store',
+          credentials: 'omit',
+          headers: {
+            apikey: publishableKey,
+            Authorization: `Bearer ${publishableKey}`,
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            p_email: email,
+            p_source: 'prelaunch_home',
+            p_consent_version: 'launch-2026-09-01-v1',
+            p_website: website,
+          }),
+        },
+      );
+      const payload = await response.json().catch(() => null) as { accepted?: boolean; status?: string } | null;
+      if (!response.ok) throw new Error(`prelaunch_signup_http_${response.status}`);
+      if (!payload || payload.accepted !== true) {
+        throw new Error(payload?.status === 'daily_capacity_reached'
+          ? 'prelaunch_signup_capacity'
+          : 'prelaunch_signup_rejected');
+      }
+      form.reset();
+      try { window.localStorage.setItem('ke_prelaunch_notification_v1', 'registered'); } catch { /* UX hint only. */ }
+      announce('success', 'Готово. 1 сентября отправим одно письмо со ссылкой на сервис.');
+    } catch (error) {
+      const transport = parseSupabaseTransportError(error);
+      if (transport?.code === 'ambiguous') {
+        announce('error', 'Связь прервалась. Повторите отправку — второй записи не появится.');
+      } else if (String((error as Error)?.message || '').includes('capacity')) {
+        announce('error', 'Сейчас слишком много запросов. Попробуйте ещё раз позже.');
+      } else {
+        announce('error', 'Не удалось сохранить email. Проверьте соединение и повторите отправку.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  });
+</script>
+
+<style>
+  .prelaunch {
+    position: relative;
+    isolation: isolate;
+    min-height: 100svh;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 84% 16%, rgba(174,111,78,.13), transparent 38%),
+      linear-gradient(145deg, #17191d 0%, #101216 46%, #090b0e 100%);
+    color: #f2e5d8;
+  }
+
+  .prelaunch__background,
+  .prelaunch__mosaic,
+  .prelaunch__atmosphere {
+    position: absolute;
+    pointer-events: none;
+  }
+
+  .prelaunch__background {
+    z-index: 0;
+    inset: 0;
+    overflow: hidden;
+  }
+  .prelaunch__background::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background:
+      linear-gradient(90deg, rgba(8,10,13,.76) 0%, rgba(8,10,13,.44) 22%, rgba(8,10,13,.16) 56%, rgba(8,10,13,.34) 100%),
+      linear-gradient(180deg, rgba(8,10,13,.42) 0%, rgba(8,10,13,.12) 37%, rgba(8,10,13,.22) 78%, rgba(8,10,13,.55) 100%);
+  }
+
+  .prelaunch__projection {
+    position: absolute;
+    width: clamp(980px, 100vw, 1760px);
+    max-width: none;
+    height: auto;
+    left: 50%;
+    top: 0;
+    transform: translateX(-50%);
+    filter: saturate(.84) contrast(1.08) brightness(.78);
+  }
+
+  .prelaunch__mosaic {
+    --tile-width: clamp(150px, 14.05vw, 232px);
+    --tile-height: clamp(166px, 15.525vw, 256px);
+    --tile-gap: clamp(8px, .72vw, 13px);
+    --tile-pitch-x: calc(var(--tile-width) + var(--tile-gap));
+    --tile-pitch-y: calc(var(--tile-height) + var(--tile-gap));
+    z-index: 1;
+    top: clamp(-102px, -6.6vw, -58px);
+    left: -1px;
+    width: max-content;
+    height: max-content;
+    display: grid;
+    grid-template-columns: repeat(9, var(--tile-width));
+    grid-template-rows: repeat(8, var(--tile-height));
+    gap: var(--tile-gap);
+  }
+  .prelaunch__mosaic::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    z-index: 0;
+    background:
+      repeating-linear-gradient(
+        90deg,
+        transparent 0 var(--tile-width),
+        #07090c var(--tile-width) var(--tile-pitch-x)
+      ),
+      repeating-linear-gradient(
+        180deg,
+        transparent 0 var(--tile-height),
+        #07090c var(--tile-height) var(--tile-pitch-y)
+      );
+    filter: drop-shadow(0 2px 2px rgba(0,0,0,.72));
+  }
+
+  .prelaunch__tile {
+    --cover: .76;
+    --blur-base: 5px;
+    --saturation: .58;
+    --brightness: .8;
+    --edge: .12;
+    --edge-highlight: .10;
+    --glow: .06;
+    --matte: .23;
+    --shadow-alpha: .39;
+    position: relative;
+    z-index: 1;
+    border-radius: var(--tile-radius, 15px);
+    background: transparent;
+    opacity: 1;
+    isolation: isolate;
+  }
+  .prelaunch__tile::before,
+  .prelaunch__tile::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+  .prelaunch__tile::before {
+    z-index: 0;
+    border: 1px solid rgb(235 226 217 / var(--edge));
+    background-color: rgb(11 14 18 / var(--cover));
+    background-image:
+      linear-gradient(145deg, rgba(255,255,255,.075), transparent 21%, transparent 72%, rgba(0,0,0,.2)),
+      radial-gradient(circle at var(--spec-x, 84%) var(--spec-y, 12%), rgb(255 206 171 / var(--glow)), transparent 42%);
+    -webkit-backdrop-filter:
+      blur(calc(var(--blur-base) + var(--blur-bias, 0px)))
+      saturate(var(--saturation))
+      brightness(var(--brightness));
+    backdrop-filter:
+      blur(calc(var(--blur-base) + var(--blur-bias, 0px)))
+      saturate(var(--saturation))
+      brightness(var(--brightness));
+    box-shadow:
+      inset 1px 1px 0 rgb(255 255 255 / var(--edge-highlight)),
+      inset -1px -2px 2px rgba(0,0,0,.56),
+      inset 0 0 24px rgba(0,0,0,.08),
+      0 4px 12px rgb(0 0 0 / var(--shadow-alpha));
+  }
+  .prelaunch__tile::after {
+    z-index: 1;
+    opacity: calc(var(--matte) + var(--matte-bias, 0));
+    background-image:
+      radial-gradient(circle at 16% 22%, rgba(255,255,255,.13) 0 1px, transparent 1.25px),
+      radial-gradient(circle at 70% 64%, rgba(255,255,255,.08) 0 1px, transparent 1.2px),
+      linear-gradient(126deg, rgba(255,255,255,.035), transparent 40%, rgba(0,0,0,.08));
+    background-size: 19px 21px, 27px 25px, 100% 100%;
+    mix-blend-mode: soft-light;
+  }
+  .prelaunch__tile[data-state="sealed"] {
+    --cover: .94;
+    --blur-base: 8px;
+    --saturation: .34;
+    --brightness: .72;
+    --edge: .06;
+    --edge-highlight: .045;
+    --glow: .018;
+    --matte: .13;
+    --shadow-alpha: .34;
+  }
+  .prelaunch__tile[data-state="dim"] {
+    --cover: .76;
+    --blur-base: 5px;
+    --saturation: .58;
+    --brightness: .8;
+    --edge: .12;
+    --edge-highlight: .10;
+    --glow: .06;
+    --matte: .23;
+    --shadow-alpha: .39;
+  }
+  .prelaunch__tile[data-state="revealed"] {
+    --cover: .38;
+    --blur-base: 2.1px;
+    --saturation: .86;
+    --brightness: .92;
+    --edge: .18;
+    --edge-highlight: .15;
+    --glow: .13;
+    --matte: .28;
+    --shadow-alpha: .46;
+  }
+  .prelaunch__tile[data-zone="light"][data-state="dim"] {
+    --cover: .69;
+    --blur-base: 14px;
+    --saturation: .46;
+    --brightness: .96;
+    --edge: .16;
+    --edge-highlight: .13;
+    --glow: .15;
+    --matte: .29;
+  }
+  .prelaunch__tile[data-zone="light"][data-state="revealed"] {
+    --cover: .5;
+    --blur-base: 11px;
+    --saturation: .56;
+    --brightness: 1.03;
+    --edge: .22;
+    --edge-highlight: .18;
+    --glow: .24;
+    --matte: .34;
+  }
+  .prelaunch__tile[data-glint="true"]::before {
+    border-color: rgba(255,206,173,.48);
+    background-color: rgb(11 14 18 / .25);
+    box-shadow:
+      inset 1px 1px 0 rgba(255,247,236,.28),
+      inset -1px -2px 2px rgba(0,0,0,.5),
+      0 0 19px rgba(239,157,113,.13),
+      0 6px 15px rgba(0,0,0,.44);
+  }
+
+  .prelaunch__atmosphere {
+    z-index: 2;
+    inset: 0;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 86% 15%, rgba(255,206,173,.31) 0%, rgba(222,152,113,.18) 12%, transparent 34%),
+      radial-gradient(circle at 62% 54%, rgba(179,80,43,.11), transparent 33%),
+      linear-gradient(90deg, rgba(3,5,8,.45), transparent 40%, rgba(3,5,8,.05) 68%, rgba(3,5,8,.28));
+  }
+  .prelaunch__atmosphere::before {
+    content: "";
+    position: absolute;
+    width: min(62vw, 980px);
+    aspect-ratio: 1;
+    right: -34vw;
+    top: 7vh;
+    border-radius: 50%;
+    border: clamp(52px, 6.8vw, 116px) solid rgba(255,216,191,.052);
+    box-shadow:
+      0 0 46px rgba(255,188,146,.08),
+      inset 0 0 42px rgba(255,200,162,.06);
+    filter: blur(.6px);
+    opacity: .88;
+  }
+  .prelaunch__atmosphere::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    opacity: .18;
+    mix-blend-mode: screen;
+    background-image:
+      radial-gradient(circle at 87% 7%, rgba(255,244,231,.85) 0 1px, transparent 1.5px),
+      radial-gradient(circle at 93% 18%, rgba(255,235,218,.65) 0 1.4px, transparent 2px),
+      radial-gradient(circle at 79% 32%, rgba(255,235,218,.52) 0 1px, transparent 1.6px),
+      radial-gradient(circle at 95% 44%, rgba(255,235,218,.48) 0 1px, transparent 1.6px),
+      radial-gradient(circle at 83% 57%, rgba(255,235,218,.35) 0 1px, transparent 1.5px),
+      linear-gradient(125deg, transparent 0 66%, rgba(255,235,218,.03) 74%, transparent 83%);
+  }
+  .prelaunch__halo {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(78px);
+  }
+  .prelaunch__halo--warm {
+    width: 34vw;
+    aspect-ratio: 1;
+    right: -9vw;
+    top: -5vh;
+    background: rgba(215,126,85,.16);
+  }
+  .prelaunch__halo--soft {
+    width: 31vw;
+    aspect-ratio: 1;
+    left: 39%;
+    bottom: 2vh;
+    background: rgba(144,69,42,.1);
+  }
+  .prelaunch__spark {
+    position: absolute;
+    width: 6px;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: #f7dfce;
+    box-shadow: 0 0 14px 4px rgba(248,211,185,.38);
+    opacity: .5;
+  }
+  .prelaunch__spark--one { top: 11%; right: 8%; }
+  .prelaunch__spark--two { top: 30%; right: 3.5%; width: 4px; }
+  .prelaunch__spark--three {
+    right: 9.5%;
+    bottom: 9.5%;
+    width: clamp(34px, 4.7vw, 62px);
+    border-radius: 0;
+    clip-path: polygon(50% 0, 61% 37%, 100% 50%, 61% 63%, 50% 100%, 39% 63%, 0 50%, 39% 37%);
+    background: rgba(220,222,224,.62);
+    box-shadow: 0 0 20px rgba(255,220,195,.1);
+  }
+
+  .prelaunch__foreground {
+    position: relative;
+    z-index: 3;
+    width: min(1440px, 100%);
+    min-height: 100svh;
+    margin: 0 auto;
+    padding:
+      clamp(52px, 8.8vh, 108px)
+      clamp(28px, 10.4vw, 126px)
+      clamp(36px, 6.1vh, 74px);
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+  }
+
+  .prelaunch__brand {
+    display: flex;
+    align-items: center;
+    gap: clamp(15px, 1.5vw, 23px);
+    width: max-content;
+  }
+  .prelaunch__brand-icon {
+    position: relative;
+    display: block;
+    width: clamp(76px, 8.2vw, 104px);
+    aspect-ratio: 1;
+    overflow: hidden;
+    border-radius: 23%;
+    box-shadow:
+      0 14px 34px rgba(0,0,0,.34),
+      0 0 0 1px rgba(255,212,182,.13),
+      0 0 28px rgba(207,102,61,.1);
+  }
+  .prelaunch__brand-icon img {
+    position: absolute;
+    width: 116%;
+    max-width: none;
+    height: 116%;
+    left: -8%;
+    top: -8%;
+    object-fit: cover;
+  }
+  .prelaunch__brand p {
+    margin: 0;
+    display: grid;
+    color: #ead8c8;
+    font-size: clamp(1.25rem, 2.45vw, 2.35rem);
+    font-weight: 650;
+    line-height: .95;
+    letter-spacing: -.035em;
+    text-shadow: 0 2px 16px rgba(0,0,0,.58);
+  }
+
+  .prelaunch__copy {
+    align-self: start;
+    margin-top: clamp(48px, 8.8vh, 126px);
+    max-width: 1120px;
+  }
+  .prelaunch__copy h1 {
+    margin: 0;
+    color: #f4e8dc;
+    font-size: clamp(4.25rem, 7.05vw, 7.6rem);
+    font-weight: 590;
+    line-height: .91;
+    letter-spacing: -.062em;
+    text-shadow: 0 5px 35px rgba(0,0,0,.5);
+    text-wrap: balance;
+  }
+  .prelaunch__copy p {
+    max-width: 31ch;
+    margin: clamp(22px, 2.6vh, 34px) 0 0;
+    color: rgba(233,218,204,.91);
+    font-size: clamp(1.12rem, 1.7vw, 1.75rem);
+    font-weight: 400;
+    line-height: 1.38;
+    letter-spacing: -.018em;
+    text-shadow: 0 3px 20px rgba(0,0,0,.78);
+    text-wrap: pretty;
+  }
+  .prelaunch__copy p span { display: block; }
+
+  .prelaunch__notify {
+    width: min(560px, 60vw);
+    transform: translateY(-18px);
+  }
+  .prelaunch__notify h2 {
+    margin: 0 0 20px;
+    color: rgba(238,221,205,.95);
+    font-size: clamp(.98rem, 1.18vw, 1.22rem);
+    font-weight: 460;
+  }
+  .prelaunch-form__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+  }
+  .prelaunch-form__field { min-width: 0; }
+  .prelaunch-form__field > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .prelaunch-form input[type="email"] {
+    width: 100%;
+    min-height: clamp(56px, 4.85vh, 62px);
+    padding: 0 clamp(18px, 1.8vw, 25px);
+    border: 1px solid rgba(231,160,122,.7);
+    border-radius: 10px;
+    background: rgba(25,28,34,.78);
+    color: #f6e8db;
+    caret-color: #e9a077;
+    box-shadow:
+      inset 0 1px 8px rgba(0,0,0,.25),
+      0 8px 26px rgba(0,0,0,.16);
+    -webkit-backdrop-filter: blur(18px) saturate(.85);
+    backdrop-filter: blur(18px) saturate(.85);
+  }
+  .prelaunch-form input[type="email"]::placeholder { color: rgba(207,202,198,.48); }
+  .prelaunch-form input[type="email"]:focus { border-color: #efb08d; outline: none; }
+  .prelaunch-form button {
+    min-height: clamp(56px, 4.85vh, 62px);
+    padding: 0 clamp(22px, 2.1vw, 32px);
+    border: 0;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #eca77e, #bd6d4e);
+    color: #24130f;
+    font-weight: 640;
+    white-space: nowrap;
+    cursor: pointer;
+    box-shadow:
+      0 13px 32px rgba(126,55,36,.28),
+      inset 0 1px rgba(255,255,255,.34);
+    transition: transform .2s ease, filter .2s ease, box-shadow .2s ease;
+  }
+  .prelaunch-form button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    filter: brightness(1.06);
+    box-shadow:
+      0 16px 38px rgba(126,55,36,.34),
+      inset 0 1px rgba(255,255,255,.38);
+  }
+  .prelaunch-form button:disabled { cursor: progress; opacity: .72; }
+  .prelaunch-form__consent {
+    display: grid;
+    grid-template-columns: 15px minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
+    max-width: 590px;
+    margin-top: 9px;
+    color: rgba(220,208,197,.62);
+    font-size: .69rem;
+    line-height: 1.38;
+    cursor: pointer;
+  }
+  .prelaunch-form__consent input {
+    width: 14px;
+    height: 14px;
+    margin: 1px 0 0;
+    accent-color: #d78661;
+  }
+  .prelaunch-form__trap {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0,0,0,0) !important;
+    white-space: nowrap !important;
+  }
+  .prelaunch-form__status,
+  .prelaunch-form__noscript {
+    min-height: 1.3rem;
+    margin: 8px 0 0;
+    font-size: .78rem;
+    line-height: 1.4;
+  }
+  .prelaunch-form__status:empty { min-height: 0; margin-top: 0; }
+  .prelaunch-form__status[data-kind="success"] { color: var(--prelaunch-success); }
+  .prelaunch-form__status[data-kind="error"],
+  .prelaunch-form__noscript { color: var(--prelaunch-error); }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .prelaunch__tile[data-state="sealed"]::before { background-color: rgba(11,14,18,.98); }
+    .prelaunch__tile[data-state="dim"]::before { background-color: rgba(11,14,18,.83); }
+    .prelaunch__tile[data-state="revealed"]::before { background-color: rgba(11,14,18,.48); }
+    .prelaunch-form input[type="email"] { background: rgba(25,28,34,.94); }
+  }
+
+  @media (max-width: 820px) {
+    .prelaunch { min-height: max(100svh, 760px); overflow-y: auto; }
+    .prelaunch__projection {
+      width: 180vw;
+      left: 60%;
+      top: 18vh;
+      filter: saturate(.83) contrast(1.06) brightness(.72);
+    }
+    .prelaunch__background::before {
+      background:
+        linear-gradient(180deg, rgba(8,10,13,.22), rgba(8,10,13,.3) 42%, rgba(8,10,13,.78) 78%, #090b0e 100%),
+        linear-gradient(90deg, rgba(8,10,13,.28), transparent 68%, rgba(8,10,13,.2));
+    }
+    .prelaunch__mosaic {
+      --tile-width: clamp(88px, 28vw, 126px);
+      --tile-height: clamp(95px, 30.1vw, 135px);
+      --tile-gap: 7px;
+      --tile-pitch-x: calc(var(--tile-width) + var(--tile-gap));
+      --tile-pitch-y: calc(var(--tile-height) + var(--tile-gap));
+      top: -42px;
+      left: 50%;
+      grid-template-columns: repeat(6, var(--tile-width));
+      grid-template-rows: repeat(12, var(--tile-height));
+      transform: translateX(-50%);
+    }
+    .prelaunch__atmosphere {
+      background:
+        radial-gradient(circle at 88% 16%, rgba(255,202,169,.21), transparent 28%),
+        linear-gradient(180deg, rgba(3,5,8,.04), rgba(3,5,8,.14) 48%, rgba(3,5,8,.63));
+    }
+    .prelaunch__atmosphere::before {
+      width: 96vw;
+      right: -54vw;
+      top: 8vh;
+      border-width: 48px;
+    }
+    .prelaunch__halo--warm { width: 78vw; right: -42vw; }
+    .prelaunch__halo--soft { width: 76vw; left: 18%; bottom: 5vh; }
+    .prelaunch__spark--three { display: none; }
+    .prelaunch__foreground {
+      min-height: max(100svh, 760px);
+      padding: clamp(22px, 5.5vw, 34px) clamp(18px, 6vw, 30px) 26px;
+    }
+    .prelaunch__brand { gap: 11px; }
+    .prelaunch__brand-icon { width: clamp(54px, 16vw, 70px); }
+    .prelaunch__brand p { font-size: clamp(.95rem, 4.6vw, 1.22rem); }
+    .prelaunch__copy {
+      align-self: center;
+      margin-top: clamp(180px, 28vh, 270px);
+    }
+    .prelaunch__copy h1 {
+      max-width: 9ch;
+      font-size: clamp(3.25rem, 15vw, 5.2rem);
+      line-height: .92;
+    }
+    .prelaunch__copy p {
+      margin-top: 20px;
+      max-width: 29ch;
+      font-size: clamp(1rem, 4.4vw, 1.18rem);
+      line-height: 1.38;
+    }
+    .prelaunch__copy p span { display: inline; }
+    .prelaunch__copy p span + span::before { content: " "; }
+    .prelaunch__notify { width: 100%; margin-top: 40px; transform: none; }
+    .prelaunch__notify h2 { margin-bottom: 10px; font-size: .95rem; }
+    .prelaunch-form__row { grid-template-columns: 1fr; gap: 9px; }
+    .prelaunch-form input[type="email"],
+    .prelaunch-form button {
+      width: 100%;
+      min-height: 56px;
+      border-radius: 10px;
+    }
+    .prelaunch-form__consent { font-size: .66rem; }
+  }
+
+  @media (max-height: 760px) and (min-width: 821px) {
+    .prelaunch__foreground { padding-block: 26px; }
+    .prelaunch__brand-icon { width: 68px; }
+    .prelaunch__brand p { font-size: 1.12rem; }
+    .prelaunch__copy { margin-top: 38px; }
+    .prelaunch__copy h1 { font-size: clamp(4rem, 6.5vw, 6.6rem); }
+    .prelaunch__copy p { margin-top: 19px; font-size: 1.06rem; }
+    .prelaunch-form input[type="email"],
+    .prelaunch-form button { min-height: 54px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .prelaunch-form button { transition: none; }
+  }
+</style>

@@ -8319,10 +8319,6 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
              mock.patch.object(mod, "ydb_kv_table_path", return_value="/db/table"), \
              mock.patch.object(mod, "ensure_ydb_kv_table", return_value=None), \
              mock.patch.object(mod, "ydb_select_latest_state", return_value={}), \
-             mock.patch.object(mod, "ydb_select_due_kind_items", return_value=stored["post_link_queue_item"]), \
-             mock.patch.object(mod, "ydb_select_pk_items", side_effect=lambda _s, _y, _t, pks, **_kw: {
-                 pk: row for pk, row in stored["publication_candidate_item"].items() if pk in set(pks)
-             }), \
              mock.patch.object(mod, "ydb_select_kind_items", side_effect=select), \
              mock.patch.object(mod, "ydb_upsert_json_many", side_effect=upsert):
             selected = mod.ydb_candidate_link_rows_from_row_kv(1, kinds=("post_link_queue_item",))
@@ -8756,17 +8752,13 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
              mock.patch.object(mod, "ydb_connect", return_value=(Ydb(), Driver(), {})), \
              mock.patch.object(mod, "ydb_kv_table_path", return_value="/db/table"), \
              mock.patch.object(mod, "ensure_ydb_kv_table", return_value=None), \
-             mock.patch.object(mod, "ydb_select_due_kind_items", return_value={
-                 "post_link_queue_item:999": blocked["post_link_queue_item:999"]
-             }), \
-             mock.patch.object(mod, "ydb_select_pk_items", return_value={}), \
              mock.patch.object(mod, "ydb_select_latest_state", return_value={"telegram_entity_cache": {
                  "telegram:username:ready": {"username": "ready", "channel_id_private": "1", "access_hash_private": "2"},
              }}), \
              mock.patch.object(mod, "ydb_select_kind_items", side_effect=select):
             selected = mod.ydb_candidate_link_rows_from_row_kv(1, kinds=("post_link_queue_item",))
         self.assertEqual([row["post_url"] for row in selected], ["https://t.me/ready/99"])
-        self.assertNotIn(("post_link_queue_item", 5000), calls)
+        self.assertIn(("post_link_queue_item", 5000), calls)
 
     def test_dataset_create_failure_runs_bounded_stale_input_gc_before_final_retry(self) -> None:
         mod = load_runner_module()

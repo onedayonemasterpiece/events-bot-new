@@ -500,7 +500,7 @@ Within the detail hero/fullscreen gallery a positive `visual_only` result is
 the display crop boundary even while asynchronous `media_role` enrichment is
 pending: ordinary photos use bounded `cover`, while OCR/unknown-text documents
 and positively classified non-photo documents use `contain`. There is no crop for OCR, no duplicate underlay, no
-blur/backdrop fill and no repeated image edges. Each event page statically preloads up to 10 continuation candidates in HTML; after JS starts, the page uses only a consented compatible local profile (`ke_personalization_profile`, UUID `anon_id/session_id`, `event-detail-related-v1` + `event-taxonomy-v1`) to filter/rerank. The client removes already hidden / `not_interested` / strong negative-interest matches from the preloaded cards, performs one same-origin JSON hydration from `/data/discovery/<event_id>.json`, where the payload is an `event_detail_related` manifest with `related_static[]`, and top-ups relevant candidates; subsequent expansion is only by `Показать ещё`. Local strong actions currently write a compact browser log with `served_list_id` / `served_list_hash` context for future Supabase telemetry mapping. Important status: the v39 static preview does **not** persist first-party likes/profile snapshots to Supabase yet; the preview contract keeps like/profile writes local-only and forbids treating this as Supabase persistence. Source counters are already synced to Supabase by the production metric pipeline, but browser feedback remains same-browser/local until the dedicated gated write path (same-origin endpoint or append-only Supabase RPC with RLS/grants) is implemented. Cards are full-clickable for users while keeping real HTML links on media/title for SEO/GEO. On the non-interactive body of a standard `EventCard`, navigation and a double-like gesture use one 280 ms arbitration window: one click/tap navigates exactly once, while a mouse double-click or touch double-tap sets the existing like/favorite state to `true` exactly once and does not navigate. Anchors, buttons and other controls, keyboard activation, drag/scroll, and mobile listing rails are excluded; rails retain their separate swipe/overpull contract. `Не интересно` turns the acted-on card into a grey explanatory plate with an explicit `Отменить` action; tapping the plate itself must not navigate to detail. Visible like/share counters are hidden when the total is zero. Visible like counts are honest totals: `likes_count = source_likes_count + service_likes_count`, where source likes come from production TG/VK post metrics and service likes are first-party KenigEvents likes; public HTML/UI shows only this total, not the technical source/service split. The hero no longer duplicates facts as a second info block; it keeps only a compact meta line, while the single `Коротко` block owns icon facts (`Где` combines venue + address, `Вход`, optional `Пушкинская карта`/festival), no longer links to Telegraph, and no longer exposes source count/views in public HTML. The registered-user sources/mentions notice belongs to the parent details section as a bottom strip, not to the `Коротко` fact block. Footer is now a compact navigation block: top links (`Сегодня`, `Завтра`, `Выходные`, `Все анонсы`), crawlable editorial social links with icons + short labels, and contact email `info@kenigevents.ru`.
+blur/backdrop fill and no repeated image edges. Each event page statically preloads up to 10 continuation candidates in HTML; after JS starts, the page uses only a consented compatible local profile (`ke_personalization_profile`, UUID `anon_id/session_id`, `event-detail-related-v1` + `event-taxonomy-v1`) to filter/rerank. The client removes already hidden / `not_interested` / strong negative-interest matches from the preloaded cards, performs one same-origin JSON hydration from `/data/discovery/<event_id>.json`, where the payload is an `event_detail_related` manifest with `related_static[]`, and top-ups relevant candidates; subsequent expansion is only by `Показать ещё`. Local strong actions currently write a compact browser log with `served_list_id` / `served_list_hash` context for future Supabase telemetry mapping. Important status: the v39 static preview does **not** persist first-party likes/profile snapshots to Supabase yet; the preview contract keeps like/profile writes local-only and forbids treating this as Supabase persistence. Source counters are already synced to Supabase by the production metric pipeline, but browser feedback remains same-browser/local until the dedicated gated write path (same-origin endpoint or append-only Supabase RPC with RLS/grants) is implemented. Cards are full-clickable for users while keeping real HTML links on media/title for SEO/GEO; double-tap like is disabled because it conflicted with navigation. `Не интересно` turns the acted-on card into a grey explanatory plate with an explicit `Отменить` action; tapping the plate itself must not navigate to detail. Visible like/share counters are hidden when the total is zero. Visible like counts are honest totals: `likes_count = source_likes_count + service_likes_count`, where source likes come from production TG/VK post metrics and service likes are first-party KenigEvents likes; public HTML/UI shows only this total, not the technical source/service split. The hero no longer duplicates facts as a second info block; it keeps only a compact meta line, while the single `Коротко` block owns icon facts (`Где` combines venue + address, `Вход`, optional `Пушкинская карта`/festival), no longer links to Telegraph, and no longer exposes source count/views in public HTML. The registered-user sources/mentions notice belongs to the parent details section as a bottom strip, not to the `Коротко` fact block. Footer is now a compact navigation block: top links (`Сегодня`, `Завтра`, `Выходные`, `Все анонсы`), crawlable editorial social links with icons + short labels, and contact email `info@kenigevents.ru`.
 
 Desktop deliberately keeps a visible semantic boundary after the explicitly
 similar `Смотрите дальше` set. The following `Ещё события` / mature-profile
@@ -1097,40 +1097,3 @@ donor не перестраиваются. Preview base URLs задаются п
 поэтому в source нет зашитого versioned prefix. Dock и mobile drawer используют
 один resolver; v24 acceptance проверяет, что calendar/personal links ведут в
 принятый v23 prefix, а Search — обратно в текущий v24 prefix.
-
-## Event question CTA through a published VK post
-
-An event detail page may render one accessible “Остались вопросы?” action with
-the core instruction “Задайте их в комментариях ВКонтакте”
-immediately before `Смотрите дальше` in each responsive presentation. The field
-is resolved at build time and browsers never query the production database:
-
-```ts
-question_cta?: {
-  provider: "vk";
-  url: string;
-  source: "partner_post" | "managed_afisha_post";
-}
-```
-
-1. for an event created by a partner, use an exact VK wall post whose owner id
-   belongs to `organization.vk_source_group_ids` only when `event_source`
-   contains authoritative live-at-import provenance: `source_type='vk'`, a
-   non-empty `imported_at`, and `source_chat_id` / `source_message_id` exactly
-   matching the wall owner/post ids;
-2. otherwise use `event_publication.live_url` only when `platform='vk'`,
-   `target='klgdevents'`, `status='published'`, and the owner is the configured
-   Afisha group;
-3. otherwise export `question_cta: null` and render nothing.
-
-An `event.source_post_url` or partner-looking stored/scheduled URL is not
-publication evidence by itself. Missing/incomplete/mismatched import provenance
-falls through to the published managed-Afisha resolver and then to null.
-Arbitrary source URLs, a managed `stored_url`, postponed/scheduled rows, missing
-organization ownership, wrong groups and malformed links therefore fail closed. A
-successful/recovered managed VK publication coalesces `static_site_build:prod`
-with trigger `vk_publication_live`; the short delay lets the owned-publication
-resolver persist its live ledger before export.
-
-The CTA icon assets are exact CC0 SVG Repo library copies with metadata and
-visual-selection notes in `site/public/assets/icons/question-cta/PROVENANCE.md`.

@@ -7,7 +7,7 @@ import math
 import os
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable
@@ -42,7 +42,6 @@ from models import (
 )
 from source_parsing.date_utils import normalize_implicit_iso_date_to_anchor
 from smart_event_update import EventCandidate, PosterCandidate, SmartUpdateResult, smart_event_update
-from smart_update_identity import canonicalize_identity_url, input_packet_fingerprint
 from telegram_sources import canonicalize_tg_url, normalize_tg_username, parse_tg_post_url
 from source_parsing.post_metrics import (
     PopularityBaseline,
@@ -1407,7 +1406,6 @@ async def _attach_linked_sources(
     event_id: int | None,
     linked_urls: list[str] | None,
     trust_level: str | None,
-    source_text: str | None = None,
 ) -> int:
     if not event_id:
         return 0
@@ -1431,42 +1429,15 @@ async def _attach_linked_sources(
             added = 0
             async with db.get_session() as session:
                 for url in normalized:
-                    canonical = canonicalize_identity_url(url)
-                    if not canonical:
-                        continue
-                    existing = (
+                    exists = (
                         await session.execute(
-                            select(EventSource).where(
+                            select(EventSource.id).where(
                                 EventSource.event_id == int(event_id),
-                                (
-                                    (EventSource.canonical_source_url == canonical)
-                                    | (
-                                        EventSource.canonical_source_url.is_(None)
-                                        & (EventSource.source_url == url)
-                                    )
-                                ),
+                                EventSource.source_url == url,
                             )
                         )
                     ).scalar_one_or_none()
-                    fingerprint = input_packet_fingerprint(
-                        {"source_url": url, "source_text": source_text or "", "source_role": "context_only"}
-                    )
-                    if existing:
-                        changed = False
-                        if source_text and source_text != existing.source_text:
-                            existing.source_text = source_text
-                            changed = True
-                        if not existing.canonical_source_url:
-                            existing.canonical_source_url = canonical
-                            changed = True
-                        if not existing.source_role:
-                            existing.source_role = "context_only"
-                            changed = True
-                        if existing.source_role == "context_only" and existing.source_fingerprint != fingerprint:
-                            existing.source_fingerprint = fingerprint
-                            changed = True
-                        if changed:
-                            session.add(existing)
+                    if exists:
                         continue
                     username, message_id = _parse_tg_source_url(url)
                     session.add(
@@ -1474,17 +1445,13 @@ async def _attach_linked_sources(
                             event_id=int(event_id),
                             source_type="telegram",
                             source_url=url,
-                            canonical_source_url=canonical,
-                            source_role="context_only",
-                            source_fingerprint=fingerprint,
                             source_chat_username=username,
                             source_message_id=message_id,
-                            source_text=source_text,
                             trust_level=trust_level,
                         )
                     )
                     added += 1
-                if added or bool(session.dirty):
+                if added:
                     await session.commit()
             return added
         except OperationalError as exc:
@@ -6053,7 +6020,7 @@ async def process_telegram_results(
                     check_source_url=False,
                     schedule_kwargs={"skip_vk_sync": True},
                 )
-                if result.event_id and result.status in {"created", "merged", "skipped_nochange"}:
+                if result.event_id:
                     events_imported = 1
                     merged_event_ids.append(int(result.event_id))
                     report.events_merged += 1
@@ -6641,7 +6608,7 @@ async def process_telegram_results(
                             int(result.event_id)
                         )
                 linked_added = 0
-                if result.event_id and result.status in {"created", "merged", "skipped_nochange"}:
+                if result.event_id:
                     linked_added = await _attach_linked_sources(
                         db,
                         event_id=result.event_id,
@@ -6677,13 +6644,34 @@ async def process_telegram_results(
                             )
                         for linked_url, linked_uname, linked_mid, linked_text in linked_texts:
                             try:
-                                await _attach_linked_sources(
-                                    db,
-                                    event_id=int(result.event_id),
-                                    linked_urls=[linked_url],
-                                    trust_level=source.trust_level,
+                                linked_candidate = replace(
+                                    candidate,
+                                    source_url=linked_url,
                                     source_text=linked_text,
+                                    source_chat_username=linked_uname,
+                                    source_chat_id=None,
+                                    source_message_id=int(linked_mid),
+                                    ticket_link=None,
+                                    posters=[],
+                                    poster_scope_hashes=[],
                                 )
+                                linked_result = await smart_event_update(
+                                    db,
+                                    linked_candidate,
+                                    check_source_url=False,
+                                    schedule_kwargs={"skip_vk_sync": True},
+                                )
+                                if (
+                                    getattr(linked_result, "event_id", None)
+                                    and int(linked_result.event_id) != int(result.event_id)
+                                ):
+                                    logger.warning(
+                                        "tg_monitor.linked_text smart_update produced different event_id=%s expected=%s linked=%s",
+                                        linked_result.event_id,
+                                        result.event_id,
+                                        linked_url,
+                                    )
+                                    break
                             except Exception:
                                 logger.debug(
                                     "tg_monitor.linked_text smart_update failed source=%s message_id=%s linked=%s",
@@ -6738,10 +6726,6 @@ async def process_telegram_results(
                     if info:
                         report.merged_events.append(info)
                         message_merged_events.append(info)
-                elif result.status == "noop_exact_source_replay":
-                    report.events_nochange += 1
-                    report.events_skipped += 1
-                    skip_breakdown["noop_exact_source_replay"] += 1
                 elif result.status == "skipped_nochange":
                     report.events_nochange += 1
                     report.events_skipped += 1

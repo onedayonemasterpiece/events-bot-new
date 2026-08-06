@@ -1,0 +1,42 @@
+/*
+ * Prelaunch visual correction v24.
+ *
+ * Final by-eye tonal calibration: preserve the dark editorial field at left,
+ * but stop the shared darkening layer from muddying the central wordmark.
+ */
+
+body .prelaunch[data-prelaunch-page] .prelaunch__background::before {
+  opacity: 1 !important;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(7, 9, 12, .88) 0%,
+      rgba(7, 9, 12, .68) 24%,
+      rgba(7, 9, 12, .12) 51%,
+      rgba(7, 9, 12, .14) 72%,
+      rgba(7, 9, 12, .3) 100%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(7, 9, 12, .5) 0%,
+      rgba(7, 9, 12, .1) 35%,
+      rgba(7, 9, 12, .075) 76%,
+      rgba(7, 9, 12, .54) 100%
+    ) !important;
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__artwork {
+  filter: saturate(1.02) contrast(1.06) brightness(.94) !important;
+}
+
+@media (min-width: 821px) and (min-height: 1000px) and (max-aspect-ratio: 5 / 4) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__brand-icon {
+    width: 94px !important;
+  }
+}
+
+@media (max-width: 599px) and (min-height: 700px) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__brand-icon {
+    width: 58px !important;
+  }
+}

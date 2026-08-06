@@ -21,6 +21,11 @@ assertTransportFaultBuildDisabled(process.env, 'secret-candidate');
 const siteOrigin = (process.env.PUBLIC_SITE_ORIGIN || 'https://kenigevents.ru').replace(/\/+$/u, '');
 const productionManifestBytes = readFileSync(productionManifestPath);
 const productionManifest = JSON.parse(productionManifestBytes);
+if (typeof productionManifest.prelaunch_mode !== 'boolean') {
+  throw new Error('Checked production manifest is missing boolean prelaunch_mode');
+}
+const prelaunchMode = productionManifest.prelaunch_mode;
+const publicSurface = prelaunchMode ? 'prelaunch' : 'full_catalog';
 const publicSearchConfig = loadPreviewPublicConfig(siteDir, process.env);
 requirePreviewAuthorizedSearch(publicSearchConfig, {
   ...process.env,
@@ -59,6 +64,9 @@ const env = {
   PUBLIC_ASTRO_ASSET_BASE_URL: '',
   PUBLIC_TRANSPORT_TIMETABLE_EXPERIMENT_MODE: transportExperimentMode,
   PUBLIC_STATIC_RELEASE_ID: productionManifest.build_id,
+  // A secret candidate is a review projection of the checked production
+  // artifact. It must not silently replace a prelaunch root with the catalog.
+  PUBLIC_PRELAUNCH_MODE: prelaunchMode ? 'on' : 'off',
   // Mirror the checked production projection instead of degrading a review
   // candidate to the empty-state merely because the shell omitted the flag.
   PUBLIC_INTEREST_CLUBS_ENABLED: process.env.PUBLIC_INTEREST_CLUBS_ENABLED || '1',
@@ -101,6 +109,7 @@ const buildMetadata = {
   schema_version: 'static_secret_candidate_build_v1', site_mode: 'secret_candidate', publication_mode: 'secret_link',
   build_id: productionManifest.build_id, run_id: productionManifest.run_id, repo_sha: productionManifest.repo_sha,
   generated_at: new Date().toISOString(), base_path: basePath, token_sha256: sha256(token),
+  prelaunch_mode: prelaunchMode, public_surface: publicSurface,
   production_manifest_sha256: sha256(productionManifestBytes), production_tree_sha256: productionManifest.tree_sha256,
   snapshot: productionManifest.snapshot,
 };
@@ -111,6 +120,7 @@ const manifest = {
   schema_version: CANDIDATE_MANIFEST_SCHEMA, site_mode: 'secret_candidate', publication_mode: 'secret_link',
   build_id: productionManifest.build_id, run_id: productionManifest.run_id, repo_sha: productionManifest.repo_sha,
   generated_at: buildMetadata.generated_at, base_path: basePath, token_sha256: sha256(token),
+  prelaunch_mode: prelaunchMode, public_surface: publicSurface,
   production_manifest_sha256: buildMetadata.production_manifest_sha256, production_tree_sha256: productionManifest.tree_sha256,
   snapshot: productionManifest.snapshot, catalog: productionManifest.catalog, versions: productionManifest.versions,
   experiments: {

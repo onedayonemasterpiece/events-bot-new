@@ -3,7 +3,6 @@ import { HERO_REVIEW_CASES } from '../lib/heroReview';
 import { MOBILE_EVENT_REVIEW_CASES, mobileEventReviewPath } from '../lib/mobileEventReview';
 import { absoluteUrl, eventPath, getEvents, IS_PRODUCTION_FAMILY } from '../lib/events';
 import { getInterestClubs, interestClubPath, INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
-import { getCollectionSitemapEntries, resolveGastronomyCollection } from '../lib/staticCollections';
 
 function normalizeLastmod(value: string | null | undefined, fallback: string): string {
   if (!value) return fallback;
@@ -14,17 +13,15 @@ function normalizeLastmod(value: string | null | undefined, fallback: string): s
 
 export const GET: APIRoute = () => {
   const now = new Date().toISOString();
-  const gastronomy = resolveGastronomyCollection(getEvents());
-  const collectionSitemapEntries = getCollectionSitemapEntries(gastronomy.lifecycle)
-    .filter((entry) => entry.key !== 'gastronomy' || gastronomy.publicationStatus === 'public');
   const publicEntries = [
     { loc: absoluteUrl('/'), lastmod: now },
     { loc: absoluteUrl('/segodnya/'), lastmod: now },
     { loc: absoluteUrl('/zavtra/'), lastmod: now },
     { loc: absoluteUrl('/vyhodnye/'), lastmod: now },
+    { loc: absoluteUrl('/vystavki/'), lastmod: now },
+    { loc: absoluteUrl('/festivali/'), lastmod: now },
+    { loc: absoluteUrl('/populyarnoe/'), lastmod: now },
     { loc: absoluteUrl('/poisk/'), lastmod: now },
-    { loc: absoluteUrl('/podborki/'), lastmod: now },
-    ...collectionSitemapEntries.map((entry) => ({ loc: absoluteUrl(entry.path!), lastmod: now })),
     { loc: absoluteUrl('/partners/'), lastmod: now },
     { loc: absoluteUrl('/partnerstvo/'), lastmod: now },
     ...(INTEREST_CLUBS_PUBLIC_ENABLED ? [{ loc: absoluteUrl('/kluby-po-interesam/'), lastmod: now }] : []),

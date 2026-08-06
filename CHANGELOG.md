@@ -2,112 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- Добавлен полноэкранный кинематографичный prelaunch с 72-плиточной мозаикой, тремя состояниями стекла, reduced-motion browser gate и репозиторным handoff-пакетом.
+
 ### Fixed
 
-- Made the bounded Postbox DLQ inventory reconcile YMQ's documented approximate counters against ten empty long polls and the exact unique in-flight receipt set, including the provider's persistent stale-visible behavior.
-- Made Postbox DLQ replay fail before receiving a queue message unless the complete deployed consumer validation/HMAC environment is present and enabled.
-
-- Fixed the Postbox feedback/DLQ correlation implementation in PR #333 without
-  creating a competing delivery path: transactional outbox, direct focus Auth
-  and audited legacy receipts share a collision-safe registry; direct Auth now
-  performs exact versioned recipient-HMAC admission immediately before provider
-  I/O, supports atomic secure/insecure email change, persists admission proof,
-  and uses batch completion without cross-provider retries. Aligned receipt and
-  event limits, monitor regression coverage, SQL rollback contracts, CI and the
-  canonical recovery/incident routes. Production migration, replay and canary
-  evidence remain required before closing
-  `INC-2026-08-04-postbox-feedback-dlq-correlation`.
-  The production continuation also fixes direct Auth Postbox authentication by
-  extracting `access_token` from the Yandex Python Function context instead of
-  stringifying the complete token object, with an exact request-header
-  regression test.
-
-- Fixed the Smart Update identity/source recurrence from 2026-08-04: production
-  merge gating is fail-closed before domain side effects, direct and contextual
-  source roles use canonical URL ownership, and identical Telegram/VK packets
-  stop as a pre-provider `noop_exact_source_replay`. Added the narrowly
-  whitelisted, transactional and idempotent production repair for Events 3864,
-  7024, 7244 and 7435 while preserving Event 7151 as a no-change control.
-  The repair now quarantines affected cards until their split Telegraph
-  bindings are confirmed and includes exact hash-sealed compare-and-swap
-  rollback for only the whitelisted graph.
-
-- Added a protected, one-shot read-only Smart Update production health audit
-  workflow contract, sanitized evidence bundle and operator runbook.
-- Fixed the audit product sampler so touched events without an observed source
-  type are retained in the sanitized `unknown` stratum instead of blocking the
-  evidence bundle.
-- Fixed the audit redaction gate to distinguish unquoted capacity byte counts
-  from phone-shaped text while retaining `+7` and formatted domestic-phone
-  detection.
-
-- Fixed StaticSiteBuilder exact-output recovery starvation: when a timed-out
-  host wrapper still owns a verified remote handoff, incoming Smart Update
-  effects merge into that pending row without extending its adoption/readback
-  by another 15-minute debounce window. Ordinary new-build trailing debounce
-  remains unchanged.
-
-- Fixed the initial deterministic defects from the 2026-08-03
-  StaticSiteBuilder failure storm: preview validation now derives Popular
-  repeated-occurrence expectations from generated family data, requires the
-  deterministic multi-image specimen, and distinguishes loaded-image geometry
-  from a bounded missing-image fallback. Together with the follow-up
-  festival-count correction below, the exact-main canary reached terminal
-  success, produced a verified immutable candidate without mutating the public
-  root/ICS, and closed `INC-2026-08-03-static-site-builder-failure-storm`.
-
-- Added the anonymous-first static-site auth and reliability test plane: isolated
-  no-mail Supabase session fixtures, a closed auth-mode registry, and executable
-  normal/direct-down/relay-down/both-down/shared-upstream/ambiguous-body/recovery
-  matrices for Auth, Search, personalization and focus feedback. Ordinary tests
-  now prove selected-once and idempotent behavior with OTP/mail counters fixed at
-  zero; focus release, Yandex degradation and standard-onboarding contracts are
-  synchronized without enabling gated product promises.
-  Session-fixture acceptance now additionally requires exactly one successful
-  same-origin protected REST read with the created Bearer JWT and publishable
-  key, so an omitted, bypassed or failed RLS probe cannot produce a PASS receipt.
-- Added the behavior-preserving P13N-00 boundary and unified page runtime:
-  quarantined legacy scoring, typed fail-closed surface policies, one inert
-  personalization marker on every eligible HTML route, generated auth/transport/
-  personalization inventory, and production-off browser characterization with
-  zero network, storage, reorder or handler changes. Standard cards now arbitrate
-  a 280 ms single navigation against desktop double-click/mobile double-tap to
-  set the existing like state exactly once, including dynamically inserted cards.
-- Added the event question CTA contract and fail-closed VK resolver. Published
-  partner posts take precedence only with exact VK-intake owner/post/timestamp
-  provenance; partner-looking raw, scheduled or stored URLs fall back to a
-  published managed Afisha post and otherwise remain hidden. Event pages render the
-  SVGRepo-sourced “Остались вопросы?” block before recommendations, and a live
-  managed VK publication schedules one coalesced Smart Update refresh.
-- Added the inert typed standard-onboarding route-context and `page_end` slot
-  marker plus generated inventory enforcement. It adds no runtime behavior and
-  keeps artifact, club and raffle programmes explicitly disabled; focus-group
-  routes remain outside the standard-onboarding boundary.
-- Added the checked `/podborki/` catalog and collection registry, including
-  public/repair/blocked/deferred navigation policy and the exact-ID
-  `gastronomy_v1` lifecycle. Blocked collections stay out of navigation and the
-  sitemap, while gastronomy warm builds use no provider calls or prose
-  reclassification.
-- Added the default-off weather-calendar consumer, strict immutable snapshot and
-  atomic-pointer schemas, same-origin SHA verification, date/weekend placements,
-  stale/partial guards and a coherent CC0 SVGRepo outline set. Browser weather
-  requests remain first-party only; rollout stays disabled pending owner/provider
-  approval, remote publication smoke and seven-day canary gates.
-- Changed Region Talk YDB startup and orchestration to use a generation-scoped,
-  bounded typed work queue, point joins and one materialized counter row instead
-  of normal-path population scans. Exact database/cost guards remain mandatory;
-  legacy broad fallback needs two explicit flags, and scheduler/catch-up/RU
-  enablement remain blocked pending the approved server-RU canary.
-  Due work now uses deterministic keyset pages, a generation/queue cursor,
-  serializable owner/token leases and CAS ACK. Partial consumer runs ACK the
-  existing ready generation without replacing its current pointer; only a
-  complete producer input may publish and swap a new generation.
-
-- Fixed the follow-up exact-main StaticSiteBuilder canary failure by binding the
-  Chromium festival-calendar inventory to the hash-bound release manifest's
-  rendered active subset instead of the original 21-row source-ledger size;
-  source identity, source/rendered count ordering, card count and image count
-  remain fail-closed (`INC-2026-08-03-static-site-builder-failure-storm`).
+- Secret candidate теперь наследует `prelaunch_mode` проверенного production manifest и не подменяет prelaunch root обычной главной страницей.
+- Fixed the 2026-08-03 StaticSiteBuilder failure storm: preview validation now derives Popular repeated-occurrence expectations from the generated family data instead of a fixture literal, requires the deterministic multi-image recommendation specimen, and distinguishes loaded-image shell containment from a correctly hidden missing-image fallback. The Chromium release gate now keeps strict geometry for loaded media while accepting only a bounded visible fallback for failed media (`INC-2026-08-03-static-site-builder-failure-storm`).
 
 - Restored the production Supabase/focus API Gateways, isolated email triggers
   and bounded Postbox feedback YDB after `yc.iam.reaper` suspended them during

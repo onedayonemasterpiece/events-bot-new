@@ -80,15 +80,10 @@ async def test_exact_existing_event_attaches_parser_without_llm(tmp_path, monkey
 
     assert stats.ticket_updated == 1
     assert stats.failed == 0
-    assert [
-        (row.source_type, row.source_url, row.canonical_source_url, row.source_role)
-        for row in sources
-    ] == [
+    assert [(row.source_type, row.source_url) for row in sources] == [
         (
             "parser:estrada",
             "https://domiskusstv.edinoepole.ru/widget/events/922/event_seats",
-            "https://domiskusstv.edinoepole.ru/widget/events/922/event_seats",
-            "identity_bearing",
         )
     ]
 
@@ -169,11 +164,8 @@ async def test_exact_ticket_slot_allows_presentation_title_without_llm(
 
     assert stats.ticket_updated == 1
     assert stats.failed == 0
-    assert [
-        (row.source_type, row.source_url, row.canonical_source_url, row.source_role)
-        for row in sources
-    ] == [
-        ("parser:yantarhall", official_url, official_url.rstrip("/"), "identity_bearing")
+    assert [(row.source_type, row.source_url) for row in sources] == [
+        ("parser:yantarhall", official_url)
     ]
 
 

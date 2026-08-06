@@ -14725,19 +14725,6 @@ async def _enqueue_static_site_build_atomic(
         await cursor.close()
         running = next((row for row in rows if row["status"] == "running"), None)
         pending = next((row for row in rows if row["status"] == "pending"), None)
-        state_cursor = await connection.execute(
-            """
-            SELECT active_job_id FROM static_site_build_state
-            WHERE release_channel='secret_preview'
-            """
-        )
-        active_state = await state_cursor.fetchone()
-        await state_cursor.close()
-        active_job_id = (
-            int(active_state["active_job_id"])
-            if active_state and active_state["active_job_id"]
-            else None
-        )
         if running is not None:
             updated_at = _sqlite_parse_datetime(running["updated_at"])
             stale_after = int(JOB_MAX_RUNTIME.get(JobTask.static_site_build, 5400))
@@ -14814,25 +14801,13 @@ async def _enqueue_static_site_build_atomic(
             old_payload = json.loads(pending["payload"] or "null")
             merged = merge_static_site_request_payload(old_payload, payload) if payload is not None else old_payload
             old_next = _sqlite_parse_datetime(pending["next_run_at"])
-            exact_remote_recovery = (
-                active_job_id == int(pending["id"])
-                and isinstance(old_payload, dict)
-                and isinstance(old_payload.get("remote_handoff"), dict)
-            )
-            # A timed-out host wrapper may leave a terminal Kaggle result in an
-            # exact-owner pending row. New Smart Update effects must merge into
-            # that row without repeatedly moving its adoption/readback 15
-            # minutes into the future. Once the recovery is picked, later
-            # effects merge into the running owner normally.
-            target = min(old_next, now) if exact_remote_recovery else (
-                _static_site_coalesced_next_run(
-                    old_next=old_next,
-                    requested=requested,
-                    incoming_payload=payload,
-                    effect_payload=merged,
-                    now=now,
-                    incoming_immediate=immediate,
-                )
+            target = _static_site_coalesced_next_run(
+                old_next=old_next,
+                requested=requested,
+                incoming_payload=payload,
+                effect_payload=merged,
+                now=now,
+                incoming_immediate=immediate,
             )
             await connection.execute(
                 "UPDATE joboutbox SET payload=?, next_run_at=?, updated_at=?, attempts=0, last_error=NULL WHERE id=? AND status='pending'",
@@ -14858,7 +14833,19 @@ async def _enqueue_static_site_build_atomic(
                 await connection.commit()
                 return "daily-already-requested"
             requeued_payload = encoded_payload
-            exact_remote_recovery = False
+            state_cursor = await connection.execute(
+                """
+                SELECT active_job_id FROM static_site_build_state
+                WHERE release_channel='secret_preview'
+                """
+            )
+            active_state = await state_cursor.fetchone()
+            await state_cursor.close()
+            active_job_id = (
+                int(active_state["active_job_id"])
+                if active_state and active_state["active_job_id"]
+                else None
+            )
             if active_job_id == int(prior["id"]):
                 try:
                     prior_payload = json.loads(prior["payload"] or "null")
@@ -14874,7 +14861,6 @@ async def _enqueue_static_site_build_atomic(
                     # needed by the adoption preflight.
                     merged = merge_static_site_request_payload(prior_payload, payload)
                     requeued_payload = json.dumps(merged, ensure_ascii=False)
-                    exact_remote_recovery = True
             await connection.execute(
                 """
                 UPDATE joboutbox SET event_id=?, payload=?, status='pending', attempts=0,
@@ -14883,7 +14869,7 @@ async def _enqueue_static_site_build_atomic(
                 (
                     event_id, requeued_payload, _sqlite_datetime(now),
                     _sqlite_datetime(
-                        now if exact_remote_recovery else _static_site_initial_next_run(
+                        _static_site_initial_next_run(
                             payload=payload,
                             requested=requested,
                             now=now,
@@ -19964,7 +19950,6 @@ async def update_telegraph_event_page(
         if not ev:
             return None
         from models import EventMediaAsset, EventPoster, EventSource, EventSourceFact
-        from smart_update_identity import canonicalize_identity_url
         # Backfill legacy single-source fields into event_source so Telegraph footer
         # shows a meaningful "Источников: N" even for older events.
         try:
@@ -19991,39 +19976,18 @@ async def update_telegraph_event_page(
                         url,
                     )
                     continue
-                canonical_source_url = canonicalize_identity_url(url)
-                if not canonical_source_url:
-                    continue
-                existing_source = (
-                    await session.execute(
-                        select(EventSource).where(
-                            EventSource.event_id == event_id,
-                            or_(
-                                EventSource.canonical_source_url == canonical_source_url,
-                                and_(
-                                    EventSource.canonical_source_url.is_(None),
-                                    EventSource.source_url == url,
-                                ),
-                            ),
-                        )
-                    )
-                ).scalars().first()
-                if existing_source:
-                    if not existing_source.canonical_source_url:
-                        existing_source.canonical_source_url = canonical_source_url
-                    if not existing_source.source_role:
-                        existing_source.source_role = "context_only"
-                    session.add(existing_source)
+                exists = await session.scalar(
+                    select(func.count())
+                    .select_from(EventSource)
+                    .where(EventSource.event_id == event_id, EventSource.source_url == url)
+                )
+                if exists:
                     continue
                 session.add(
                     EventSource(
                         event_id=event_id,
                         source_type=_infer_type(url),
                         source_url=url,
-                        canonical_source_url=canonical_source_url,
-                        # Renderer-side legacy provenance is context, never an
-                        # identity-bearing source for merge decisions.
-                        source_role="context_only",
                         source_text=(getattr(ev, "source_text", None) or "")[:4000],
                         imported_at=now,
                     )
@@ -22439,42 +22403,6 @@ async def _copy_same_day_linked_tg_publication(
         await session.commit()
 
 
-async def _enqueue_static_site_after_vk_publication(
-    db: Database,
-    events: Sequence[Event],
-    *,
-    vk_url: str,
-) -> None:
-    """Coalesce a static refresh after a managed VK URL may become public.
-
-    The exporter independently requires a ``published`` event_publication live
-    URL, so a postponed/stored-only post still fails closed.  The small delay
-    lets the owned-publication resolver persist that live ledger first, while a
-    later recovered live id calls this seam again.
-    """
-
-    if not _env_flag("ENABLE_STATIC_SITE_KAGGLE_BUILDER"):
-        return
-    event_ids = _same_day_publish_group_ids(events)
-    if not event_ids:
-        return
-    revisions = {
-        int(event.id): event_public_revision(event)
-        for event in events
-        if getattr(event, "id", None) in event_ids
-    }
-    url_marker = content_hash(str(vk_url or ""))[:16]
-    await enqueue_static_site_build_request(
-        db,
-        reason="vk_publication_live",
-        event_ids=event_ids,
-        event_revisions=revisions,
-        correlation_id=f"vk-publication-live:{event_ids[0]}:{url_marker}",
-        delay_seconds=max(0, _env_int("STATIC_SITE_VK_PUBLICATION_REFRESH_DELAY_SECONDS", 300)),
-        trigger="vk_publication_live",
-    )
-
-
 async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) -> None:
     if vk_group_blocked.get("wall.post", 0.0) > _time.time() and not _vk_user_token():
         raise VKPermissionError(None, "permission error")
@@ -22514,7 +22442,7 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
     # A postponed VK item may receive a different id at the exact moment it is
     # published.  Recover the unique live projection before hash/idempotency
     # checks so a stale stored id cannot create a duplicate wall post.
-    recovered_live_url = await _recover_managed_vk_live_url(db, ev, bot=bot)
+    await _recover_managed_vk_live_url(db, ev, bot=bot)
     # VK source post should track its own hash; `content_hash` is used by Telegraph (HTML).
     description_for_vk = (getattr(ev, "description", None) or "").strip()
     # Defense-in-depth (INC-2026-05-17): a leaked stringified provider SDK response
@@ -22562,12 +22490,6 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
                 vk_url=existing_vk_post_url,
                 vk_source_hash=new_hash,
             )
-            if recovered_live_url:
-                await _enqueue_static_site_after_vk_publication(
-                    db,
-                    same_day_group,
-                    vk_url=str(ev.source_vk_post_url or existing_vk_post_url),
-                )
             return
         if post_exists:
             logging.warning(
@@ -22612,11 +22534,6 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
             covered_event_ids=_same_day_publish_group_ids(same_day_group),
             vk_url=vk_url,
             vk_source_hash=new_hash,
-        )
-        await _enqueue_static_site_after_vk_publication(
-            db,
-            same_day_group,
-            vk_url=vk_url,
         )
         logline("VK", event_id, "event done", url=vk_url)
         if bot and event_for_notice:

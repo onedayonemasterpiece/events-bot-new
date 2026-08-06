@@ -7,6 +7,10 @@ import {
   safeBuildId, safeRunId, sha256, treeHash, validateCatalogLedger,
 } from './release-contract.mjs';
 import { loadPreviewPublicConfig, requirePreviewAuthorizedSearch } from './preview-public-env.mjs';
+import {
+  applyPrelaunchArtifactPolicy,
+  resolvePrelaunchMode,
+} from './prelaunch-build-contract.mjs';
 import { assertTransportFaultBuildDisabled, removeTransportFaultBuildEnv } from './transport-fault-build-contract.mjs';
 
 const siteDir = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -52,6 +56,8 @@ if (currentGitSha) {
 }
 const siteOrigin = normalizeOrigin(process.env.PUBLIC_SITE_ORIGIN || 'https://kenigevents.ru');
 const icsBaseUrl = (process.env.PUBLIC_ICS_BASE_URL || 'https://static.kenigevents.ru/ics').replace(/\/+$/u, '');
+const prelaunchMode = resolvePrelaunchMode(process.env);
+const publicSurface = prelaunchMode ? 'prelaunch' : 'full_catalog';
 const publicSearchConfig = loadPreviewPublicConfig(siteDir, process.env);
 requirePreviewAuthorizedSearch(publicSearchConfig, {
   ...process.env,
@@ -65,6 +71,7 @@ const env = {
   PUBLIC_SITE_MODE: 'production', PUBLIC_SITE_ORIGIN: siteOrigin, PUBLIC_ICS_BASE_URL: icsBaseUrl, SITE_BASE_PATH: '/',
   PUBLIC_ASSET_BASE_URL: process.env.PUBLIC_ASSET_BASE_URL || 'https://static.kenigevents.ru',
   PUBLIC_TRANSPORT_TIMETABLE_EXPERIMENT_MODE: 'off', PUBLIC_STATIC_RELEASE_ID: buildId,
+  PUBLIC_PRELAUNCH_MODE: prelaunchMode ? 'on' : 'off',
   // Confirmed club identities are part of the release snapshot. An absent
   // runner variable must not silently replace them with an empty catalogue;
   // operators can still use the explicit `0` rollback value.
@@ -78,8 +85,8 @@ if (astro.status !== 0) process.exit(astro.status || 1);
 
 rmSync(join(distDir, '__preview'), { recursive: true, force: true });
 rmSync(join(distDir, 'lab'), { recursive: true, force: true });
-// The root is a first-class product surface (hero talk, quick navigation and a
-// finite cold-start feed). Never alias `/segodnya/` over it during packaging.
+// The root is always a first-class product surface. In prelaunch mode it is
+// the dedicated holder; after launch it returns to Hero Talk and the feed.
 let rootHtml = readFileSync(join(distDir, 'index.html'), 'utf8');
 rootHtml = replaceRequired(rootHtml, '<main id="main"', '<main id="main" data-production-root-home', 'root home marker');
 writeFileSync(join(distDir, 'index.html'), rootHtml);
@@ -89,18 +96,23 @@ const eventArchiveData = JSON.parse(readFileSync(eventArchivePath, 'utf8'));
 const relatedData = JSON.parse(readFileSync(relatedPath, 'utf8'));
 const festivalTimelineData = JSON.parse(readFileSync(festivalTimelinePath, 'utf8'));
 const templateContract = JSON.parse(readFileSync(templateContractPath, 'utf8'));
-const desktopContract = spawnSync(process.execPath, [join(siteDir, 'scripts/check-production-desktop-contract.mjs')], { cwd: siteDir, env, stdio: 'inherit' });
-if (desktopContract.status !== 0) process.exit(desktopContract.status || 1);
+if (!prelaunchMode) {
+  const desktopContract = spawnSync(process.execPath, [join(siteDir, 'scripts/check-production-desktop-contract.mjs')], { cwd: siteDir, env, stdio: 'inherit' });
+  if (desktopContract.status !== 0) process.exit(desktopContract.status || 1);
+} else {
+  console.log('Prelaunch root active: full-catalog desktop root contract is not applicable to this release surface.');
+}
 const buildMetadata = {
   schema_version: 'static_production_build_v2', site_mode: 'production', publication_mode: 'artifact_only',
   build_id: buildId, run_id: runId, repo_sha: repoSha, generated_at: new Date().toISOString(),
   site_origin: siteOrigin, base_path: '/', ics_base_url: icsBaseUrl,
+  prelaunch_mode: prelaunchMode, public_surface: publicSurface, launch_date: '2026-09-01',
   snapshot_id: catalog.snapshot.snapshot_id, snapshot_sha256: catalog.snapshot.sha256,
   validation_contract: CHECK_CONTRACT_VERSION,
 };
 writeFileSync(buildPath, `${JSON.stringify(buildMetadata, null, 2)}\n`);
-const files = fileInventory(distDir, { exclude: ['static-release-manifest.json'] });
-const counts = pageCounts(files, catalog.eligible_count);
+let files = fileInventory(distDir, { exclude: ['static-release-manifest.json'] });
+let counts = pageCounts(files, catalog.eligible_count);
 const idBySlug = new Map(eventsData.events.map((event) => [String(event.slug), Number(event.id)]));
 const archiveSlugs = new Set(eventArchiveData.events.map((event) => String(event.slug)));
 const stableIcs = files.flatMap((file) => {
@@ -115,6 +127,7 @@ const manifest = {
   schema_version: RELEASE_MANIFEST_SCHEMA,
   publication_mode: 'artifact_only', site_mode: 'production', build_id: buildId, run_id: runId, repo_sha: repoSha,
   generated_at: buildMetadata.generated_at, site_origin: siteOrigin, base_path: '/', hash_algorithm: 'sha256',
+  prelaunch_mode: prelaunchMode, public_surface: publicSurface, launch_date: '2026-09-01',
   snapshot: catalog.snapshot,
   catalog: {
     schema_version: catalog.schema_version, eligibility_predicate_version: catalog.eligibility_predicate_version,
@@ -126,6 +139,12 @@ const manifest = {
     template_source_sha: templateContract.accepted_source_sha,
     template_contract_schema: templateContract.schema_version,
     related: relatedData.schema_version || relatedData.algorithm || null,
+    prelaunch: {
+      contract: 'public-prelaunch-holder-v1',
+      enabled: prelaunchMode,
+      launch_date: '2026-09-01',
+      root_indexing: prelaunchMode ? 'root_only' : 'full_catalog',
+    },
     event_detail_archive: {
       source: eventArchiveData.build?.source || null,
       retention_days: 30,
@@ -152,12 +171,41 @@ const manifest = {
   checks: {
     astro_build: 'ok', template_matrix: 'ok', production_contract: 'pending', catalog_parity: 'pending', fixture_isolation: 'pending',
     canonical_and_indexing: 'pending', tree_hashes: 'pending', related_freshness: relatedData.strict_verified_related ? 'verified' : 'optional_degraded',
+    desktop_contract: prelaunchMode ? 'not_applicable_prelaunch' : 'ok',
+    prelaunch_indexing: prelaunchMode ? 'pending' : 'not_applicable',
   },
   intended_immutable_release_prefix: `_static/releases/${buildId}/root`, previous_release: null, rollback_release: null,
 };
+
+// First validate the complete catalogue before the holder masks discovery. This
+// preserves every existing data/template/parity gate instead of treating the
+// temporary public shell as permission to stop checking the actual product.
 writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 const check = spawnSync(process.execPath, [join(siteDir, 'scripts/check-production.mjs')], { cwd: siteDir, env: { ...env, PRODUCTION_BUILD_ID: buildId, STATIC_SITE_RUN_ID: runId, STATIC_SITE_REPO_SHA: repoSha, PRODUCTION_ALLOW_DIRTY: process.env.PRODUCTION_ALLOW_DIRTY || '' }, stdio: 'inherit' });
 if (check.status !== 0) process.exit(check.status || 1);
 for (const key of ['production_contract','catalog_parity','fixture_isolation','canonical_and_indexing','tree_hashes']) manifest.checks[key] = 'ok';
-writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-console.log(`Checked root-form production artifact ready: ${buildId} events=${counts.event_count} files=${counts.file_count}`);
+
+if (prelaunchMode) {
+  const receipt = applyPrelaunchArtifactPolicy(distDir, { enabled: true, siteOrigin });
+  files = fileInventory(distDir, { exclude: ['static-release-manifest.json'] });
+  counts = pageCounts(files, catalog.eligible_count);
+  manifest.files = files;
+  manifest.counts = counts;
+  manifest.tree_sha256 = treeHash(files);
+  manifest.checks.prelaunch_indexing = 'pending';
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const prelaunchCheck = spawnSync(process.execPath, [join(siteDir, 'scripts/check-prelaunch-production.mjs')], {
+    cwd: siteDir,
+    env,
+    stdio: 'inherit',
+  });
+  if (prelaunchCheck.status !== 0) process.exit(prelaunchCheck.status || 1);
+  manifest.checks.prelaunch_indexing = 'ok';
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  console.log(`Applied prelaunch root-only indexing: hidden_html=${receipt.hiddenHtmlCount}`);
+} else {
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+}
+
+console.log(`Checked ${publicSurface} production artifact ready: ${buildId} events=${manifest.counts.event_count} files=${manifest.counts.file_count}`);

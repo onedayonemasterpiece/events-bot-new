@@ -20,6 +20,8 @@ function source(key) { try { return readFileSync(join(root, key), 'utf8'); } cat
 const manifest = JSON.parse(source('secret-candidate-manifest.json'));
 if (manifest.schema_version !== CANDIDATE_MANIFEST_SCHEMA || manifest.site_mode !== 'secret_candidate' || manifest.publication_mode !== 'secret_link') fail('wrong candidate manifest profile');
 if (manifest.base_path !== basePath || manifest.token_sha256 !== sha256(token)) fail('candidate token/base mismatch');
+if (typeof manifest.prelaunch_mode !== 'boolean') fail('candidate prelaunch mode is missing');
+if (manifest.public_surface !== (manifest.prelaunch_mode ? 'prelaunch' : 'full_catalog')) fail('candidate public surface disagrees with prelaunch mode');
 for (const route of [
   'segodnya',
   'zavtra',
@@ -155,6 +157,9 @@ const eventHtml = source(`sobytiya/${eventsData.events[0].slug}/index.html`);
 if (!eventHtml.includes(`${basePath}/_astro/`)) fail('candidate Astro assets are not self-contained under the bearer prefix');
 if (!source('index.html').includes('data-secret-candidate-root-home') || !source('index.html').includes('data-home-page')) {
   fail('candidate root is not the dedicated home surface');
+}
+if (manifest.prelaunch_mode && !source('index.html').includes('data-prelaunch-page')) {
+  fail('prelaunch production artifact lost its prelaunch root in the secret candidate');
 }
 const robots = source('robots.txt');
 if (robots !== 'User-agent: *\nDisallow: /\n') fail('candidate robots artifact must remain disallow');

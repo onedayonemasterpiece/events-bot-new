@@ -1,6 +1,6 @@
 # Гастрономические события как списочная подборка
 
-Статус: **контракт и Astro consumer реализованы fail-closed; owner-reviewed exact-ID состав ещё не принят**.
+Статус: **продуктовое решение принято; data-prep и Astro-страница ещё не реализованы**.
 
 Этот документ — нормативное дополнение к общей документации статических подборок:
 
@@ -269,29 +269,17 @@ concepts, а не по числу сырых строк.
 - Astro не содержит самостоятельной semantic membership логики;
 - редакционные подборки не входят в scope этой реализации.
 
-## 11. Реализованный контракт и следующий этап
+## 11. Следующий этап
 
-Реализация использует три проверяемых файла:
+В следующей data-prep ветке:
 
-- `site/src/data/static-collection-registry.json` — единый реестр каталога,
-  навигации и sitemap со статусами `public`, `repair`, `blocked`, `deferred`;
-- `site/src/data/gastronomy-decisions.v1.json` — checked input с exact event ID,
-  occurrence family и ролью `core`/`co_core`;
-- `site/src/data/gastronomy-collection-v1.json` — hash-bound consumer manifest.
+1. добавить `gastronomy_v1` policy/prototypes/gold в общий collection semantic contract;
+2. получить candidate decisions на свежем production snapshot и провести
+   bounded owner review boundary cases;
+3. записывать exact accepted IDs и lifecycle metadata в collection batch;
+4. добавить fixtures для dedupe и 3+/1–2/0/dormant states;
+5. передать manifest в отдельную Astro/UI integration ветку стандартных
+   списочных подборок.
 
-Локальный генератор `site/scripts/gastronomy_collection_manifest.py` читает
-только эти решения и даты из production catalog/export. Он не анализирует
-`title`, `description` или `topics`, не вызывает провайдеры и требует
-`provider_calls=0`. Он дедуплицирует occurrence families, вычисляет состояния
-`active`, `low_supply`, `recent_empty`, `dormant`, а при неполном input
-блокирует promotion и допускает только совместимый last-good.
-
-Страницы `/podborki/` и `/podborki/gastronomiya/` потребляют реестр и manifest.
-Текущий checked input намеренно имеет `audit_status=incomplete`, поэтому
-гастрономия доступна как `repair`, имеет `noindex` и не входит в sitemap; UI не
-выдаёт технически отсутствующий состав за подтверждённый ноль.
-
-Следующий data-шаг — провести owner review на свежем production snapshot,
-записать полный exact-ID input с `audit_status=complete`, проверить hashes и
-только затем перевести registry entry из `repair` в `public`. Проектирование
-редакционных подборок остаётся отдельной задачей.
+Проектирование редакционных подборок проводится отдельной задачей после
+стабилизации списочных страниц.
