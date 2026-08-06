@@ -1,0 +1,141 @@
+name: Penpot design-system API smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      allow_write:
+        description: Create or reuse the isolated Penpot smoke-test file and specimen
+        required: true
+        default: false
+        type: boolean
+      team_name:
+        description: Penpot team name hint
+        required: false
+        default: Полюбить Калининград
+        type: string
+      project_name:
+        description: Penpot project name hint
+        required: false
+        default: Design System
+        type: string
+  push:
+    branches:
+      - agent/penpot-api-smoke-20260806
+    paths:
+      - .github/workflows/penpot-design-system-api-smoke.yml
+      - scripts/integrations/penpot_api_smoke_test.mjs
+
+permissions:
+  contents: write
+
+concurrency:
+  group: penpot-design-system-api-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    if: github.event_name == 'push' || inputs.allow_write == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PENPOT_INTEGRATION_TOKEN: ${{ secrets.PENPOT_INTEGRATION_TOKEN }}
+      PENPOT_BASE_URL: https://design.penpot.app
+      PENPOT_TEAM_NAME: ${{ inputs.team_name || 'Полюбить Калининград' }}
+      PENPOT_PROJECT_NAME: ${{ inputs.project_name || 'Design System' }}
+      PENPOT_SMOKE_FILE_NAME: 00 — LoveKGD API smoke test
+      PENPOT_RESULT_PATH: artifacts/penpot-smoke/penpot-smoke-result.json
+
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate adapter offline
+        run: |
+          node --check scripts/integrations/penpot_api_smoke_test.mjs
+          node scripts/integrations/penpot_api_smoke_test.mjs --self-test
+
+      - name: Require the integration token
+        shell: bash
+        run: |
+          if [[ -z "${PENPOT_INTEGRATION_TOKEN}" ]]; then
+            echo "PENPOT_INTEGRATION_TOKEN is missing" >&2
+            exit 1
+          fi
+
+      - name: Create and verify Penpot specimen
+        id: penpot
+        run: node scripts/integrations/penpot_api_smoke_test.mjs
+
+      - name: Upload immutable smoke evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: penpot-api-smoke-${{ github.run_id }}
+          path: artifacts/penpot-smoke/penpot-smoke-result.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Record branch evidence and changelog
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          result_path = Path("artifacts/penpot-smoke/penpot-smoke-result.json")
+          result = json.loads(result_path.read_text(encoding="utf-8"))
+          report_path = Path("docs/reports/penpot-api-smoke-2026-08-06.md")
+          report_path.parent.mkdir(parents=True, exist_ok=True)
+          report_path.write_text(
+              "# Penpot API smoke — 2026-08-06\n\n"
+              "> Status: **PASS**\n\n"
+              "The repository-scoped `PENPOT_INTEGRATION_TOKEN` was used only by "
+              "GitHub Actions to create or reuse an isolated Penpot file, add a "
+              "button specimen, create a comment thread and reread the resulting file. "
+              "MCP was not involved.\n\n"
+              f"- Team: `{result['team']['name']}` (`{result['team']['id']}`)\n"
+              f"- Project: `{result['project']['name']}` (`{result['project']['id']}`)\n"
+              f"- File: `{result['file']['name']}` (`{result['file']['id']}`)\n"
+              f"- Page: `{result['page']['id']}`\n"
+              f"- Penpot revision: `{result['file']['revision']}`\n"
+              f"- DS element: `{result['objects']['dsElementId']}`\n"
+              f"- [Open the exact Penpot page]({result['workspaceUrl']})\n\n"
+              "## Acceptance step\n\n"
+              "Open the page and leave a reply or a new comment over the button. "
+              "The next integration slice will pull unresolved comments and generate "
+              "the short ChatGPT prompt for that stable DS element ID.\n",
+              encoding="utf-8",
+          )
+
+          changelog = Path("CHANGELOG.md")
+          text = changelog.read_text(encoding="utf-8")
+          entry = (
+              "- Added a PAT-based Penpot API smoke contour that creates an isolated "
+              "design-system button specimen and comment thread, rereads the exact "
+              "file revision and records a direct workspace link; MCP is not part of "
+              "the contract.\n"
+          )
+          if entry not in text:
+              marker = "## [Unreleased]\n"
+              if marker not in text:
+                  raise SystemExit("CHANGELOG.md has no [Unreleased] marker")
+              text = text.replace(marker, marker + "\n### Added\n\n" + entry, 1)
+              changelog.write_text(text, encoding="utf-8")
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md docs/reports/penpot-api-smoke-2026-08-06.md
+          if git diff --cached --quiet; then
+            echo "Evidence already recorded"
+          else
+            git commit -m "docs: record Penpot API smoke evidence"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
