@@ -26,6 +26,7 @@ on:
       - scripts/integrations/penpot_api_smoke_test.mjs
       - scripts/integrations/penpot_api_browser_fetch.mjs
       - scripts/integrations/penpot_api_playwright_fetch.mjs
+      - scripts/integrations/penpot_api_page_fetch.mjs
 
 permissions:
   contents: write
@@ -71,6 +72,7 @@ jobs:
           node --check scripts/integrations/penpot_api_smoke_test.mjs
           node --check scripts/integrations/penpot_api_browser_fetch.mjs
           node --check scripts/integrations/penpot_api_playwright_fetch.mjs
+          node --check scripts/integrations/penpot_api_page_fetch.mjs
           node scripts/integrations/penpot_api_smoke_test.mjs --self-test
 
       - name: Require the integration token
@@ -83,7 +85,7 @@ jobs:
 
       - name: Create and verify Penpot specimen
         id: penpot
-        run: node scripts/integrations/penpot_api_playwright_fetch.mjs
+        run: node scripts/integrations/penpot_api_page_fetch.mjs
 
       - name: Upload immutable smoke evidence
         uses: actions/upload-artifact@v4
@@ -137,7 +139,7 @@ jobs:
           if entry not in text:
               marker = "## [Unreleased]\n"
               if marker not in text:
-                raise SystemExit("CHANGELOG.md has no [Unreleased] marker")
+                  raise SystemExit("CHANGELOG.md has no [Unreleased] marker")
               text = text.replace(marker, marker + "\n### Added\n\n" + entry, 1)
               changelog.write_text(text, encoding="utf-8")
           PY
