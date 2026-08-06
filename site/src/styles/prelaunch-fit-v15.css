@@ -12,17 +12,29 @@ body .prelaunch[data-prelaunch-page] {
   --prelaunch-artwork-top: clamp(0px, 3.5vh, 32px);
 }
 
+/* The old pseudo-element was useful while decoding the original mockup, but a
+   real decoded image gives us observable dimensions, reliable alpha and zero
+   studio-field leakage. */
 body .prelaunch[data-prelaunch-page] .prelaunch__background::after {
-  width: var(--prelaunch-artwork-size) !important;
-  aspect-ratio: 1 !important;
-  left: var(--prelaunch-artwork-left) !important;
-  top: var(--prelaunch-artwork-top) !important;
-  transform: translateX(-50%) !important;
-  clip-path: none !important;
-  background: var(--prelaunch-artwork-image) center / contain no-repeat !important;
-  mix-blend-mode: normal !important;
-  opacity: .94 !important;
-  filter: saturate(.92) contrast(1.06) brightness(.84) !important;
+  display: none !important;
+  content: none !important;
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__artwork {
+  position: absolute;
+  z-index: 0;
+  width: var(--prelaunch-artwork-size);
+  height: var(--prelaunch-artwork-size);
+  max-width: none;
+  left: var(--prelaunch-artwork-left);
+  top: var(--prelaunch-artwork-top);
+  transform: translateX(-50%);
+  object-fit: contain;
+  object-position: center;
+  opacity: .94;
+  filter: saturate(.92) contrast(1.06) brightness(.84);
+  pointer-events: none;
+  user-select: none;
 }
 
 body .prelaunch[data-prelaunch-page] .prelaunch__projection {
@@ -90,8 +102,8 @@ body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-accent="true"]::befor
     --prelaunch-artwork-top: clamp(212px, 32.5vh, 274px);
   }
 
-  body .prelaunch[data-prelaunch-page] .prelaunch__background::after {
-    filter: saturate(.91) contrast(1.05) brightness(.81) !important;
+  body .prelaunch[data-prelaunch-page] .prelaunch__artwork {
+    filter: saturate(.91) contrast(1.05) brightness(.81);
   }
 }
 
