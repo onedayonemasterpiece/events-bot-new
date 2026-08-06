@@ -6,6 +6,10 @@
 
 This directory is the normative home for reusable visual rules of the KenigEvents static site. Dated research and lab pages remain historical evidence. Production templates must consume the shared tokens and runtime components documented here instead of copying geometry into a page-local stylesheet.
 
+## Research basis
+
+Two independent external design-system studies are preserved verbatim as historical evidence in [`docs/research/design-system/`](../../../research/design-system/README.md). They agree on a layered brand/foundations/product model but conflict on repository architecture and the final token source of truth. Neither report overrides this canonical contract: any adopted recommendation must be recorded through an explicit project decision or ADR and then reflected here, in runtime code, tests and release evidence.
+
 ## What is implemented
 
 - one semantic token layer for color, type, spacing, radii, elevation, motion, touch size and content width, including the global `--ke-content-wide-max` authority for wide desktop surfaces;
