@@ -1,0 +1,81 @@
+name: Volunteer monitor live acceptance
+
+on:
+  pull_request:
+    paths:
+      - "volunteer_monitor/**"
+      - "scripts/run_volunteer_monitor.py"
+      - "scripts/run_volunteer_lifecycle_probe.py"
+      - "scripts/validate_volunteer_monitor_canary.py"
+      - ".github/workflows/volunteer-monitor-live-acceptance.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunteer-monitor-live-acceptance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  direct-live-canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install bounded monitor dependencies
+        run: |
+          python -m pip install --disable-pip-version-check beautifulsoup4 requests playwright
+          python -m playwright install --with-deps --only-shell chromium
+
+      - name: Run and validate read-only live specimen
+        env:
+          VOLUNTEER_MONITOR_PERMISSION_REFERENCE: owner-requested-read-only-canary-20260805
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/volunteer-monitor-evidence"
+          set +e
+          PYTHONPATH=. python scripts/run_volunteer_monitor.py \
+            --mode live_canary \
+            --output "$RUNNER_TEMP/volunteer-monitor-live.json" \
+            --evidence-dir "$RUNNER_TEMP/volunteer-monitor-evidence" \
+            --max-items 24 \
+            --max-more-clicks 12 \
+            --detail-timeout-seconds 12
+          monitor_rc=$?
+          set -e
+          if [ "$monitor_rc" -eq 1 ]; then
+            exit 1
+          fi
+          if [ "$monitor_rc" -eq 2 ]; then
+            echo "::warning::Volunteer Monitor completed PARTIAL; validating exact source accounting"
+          fi
+          python scripts/validate_volunteer_monitor_canary.py \
+            "$RUNNER_TEMP/volunteer-monitor-live.json"
+
+      - name: Prove source-backed non-public lifecycle parsing
+        run: |
+          set -euo pipefail
+          PYTHONPATH=. python scripts/run_volunteer_lifecycle_probe.py \
+            --url https://dobro.ru/event/11018120 \
+            --url https://dobro.ru/event/11392718 \
+            --url https://dobro.ru/event/11198832 \
+            --output "$RUNNER_TEMP/volunteer-lifecycle-probe.json"
+
+      - name: Upload live receipt and failure evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: volunteer-monitor-live-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/volunteer-monitor-live.json
+            ${{ runner.temp }}/volunteer-lifecycle-probe.json
+            ${{ runner.temp }}/volunteer-monitor-evidence
+          if-no-files-found: warn
+          retention-days: 14
