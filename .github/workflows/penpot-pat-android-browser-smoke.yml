@@ -74,10 +74,10 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -timezone UTC
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             appium_log="${RUNNER_TEMP}/appium-penpot-android.log"
-            trap 'rm -f "${appium_log}"' EXIT
-            npx appium --base-path /wd/hub --port 4723 --allow-insecure uiautomator2:chromedriver_autodownload > "${appium_log}" 2>&1 &
+            trap 'rm -f "$appium_log"' EXIT
+            npx appium --base-path /wd/hub --port 4723 --allow-insecure uiautomator2:chromedriver_autodownload > "$appium_log" 2>&1 &
             for n in $(seq 1 60); do
               if curl -fsS http://127.0.0.1:4723/wd/hub/status >/dev/null; then
                 break
