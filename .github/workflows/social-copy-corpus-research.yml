@@ -1,9 +1,9 @@
 name: Social copy corpus research
 
 on:
-  push:
-    branches:
-      - agent/social-copy-corpus-run-2026-08-06
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
     paths:
       - tools/social_copy_corpus_research/**
       - .github/workflows/social-copy-corpus-research.yml
@@ -13,22 +13,15 @@ permissions:
   contents: read
 
 concurrency:
-  group: social-copy-corpus-research
+  group: social-copy-corpus-research-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  collect:
+  telegram-public:
+    name: Collect public Telegram corpus
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.ref == 'agent/social-copy-corpus-run-2026-08-06' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    environment:
-      name: production
-    env:
-      # Prefer the token names already used by the application; the fallbacks
-      # cover older production secret names without exposing any value.
-      VK_USER_TOKEN: ${{ secrets.VK_USER_TOKEN || secrets.VK_ACCESS_TOKEN4 || secrets.VK_ACCESS_TOKEN || secrets.VK_API_TOKEN || secrets.VK_SERVICE_TOKEN || secrets.VK_TOKEN }}
-      TELEGRAM_AUTH_BUNDLE_CHECK_POPULAR: ${{ secrets.TELEGRAM_AUTH_BUNDLE_CHECK_POPULAR }}
-      TELEGRAM_AUTH_BUNDLE_S22: ${{ secrets.TELEGRAM_AUTH_BUNDLE_S22 }}
-      TG_SESSION: ${{ secrets.TG_SESSION }}
     steps:
       - uses: actions/checkout@v4
 
@@ -39,31 +32,158 @@ jobs:
       - name: Install collector dependencies
         run: python -m pip install --disable-pip-version-check requests beautifulsoup4 lxml
 
-      - name: Collect bounded samples
+      - name: Collect bounded public samples
         run: |
           python tools/social_copy_corpus_research/collect.py \
             --sources tools/social_copy_corpus_research/sources.json \
-            --out social-copy-corpus-output \
+            --out social-copy-telegram-output \
             --target 100
 
       - name: Publish sanitized run summary
         if: always()
         run: |
-          if [ -f social-copy-corpus-output/persist/run_summary.json ]; then
+          if [ -f social-copy-telegram-output/persist/run_summary.json ]; then
             {
-              echo '## Social copy corpus collection'
+              echo '## Telegram corpus collection'
               echo '```json'
-              cat social-copy-corpus-output/persist/run_summary.json
+              cat social-copy-telegram-output/persist/run_summary.json
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Upload short-lived research artifact
+      - name: Upload short-lived Telegram research artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: social-copy-corpus-2026-08-06
-          path: social-copy-corpus-output/
+          name: social-copy-telegram-corpus-2026-08-06
+          path: social-copy-telegram-output/
           if-no-files-found: error
           retention-days: 1
           compression-level: 6
+
+  vk-production-readonly:
+    name: Collect VK corpus through production read-only observer
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'agent/social-copy-corpus-run-2026-08-06' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production-readonly
+    env:
+      FLY_APP_NAME: ${{ vars.FLY_APP_NAME }}
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_SMART_UPDATE_AUDIT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up pinned flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+        with:
+          version: 0.4.78
+
+      - name: Fail closed on observer identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${FLY_APP_NAME:-}" == "events-bot-new-wngqia" ]]
+          [[ -n "${FLY_API_TOKEN:-}" ]]
+          echo 'production_readonly_observer=available'
+
+      - name: Execute bounded VK read inside production runtime
+        id: observer
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          transport="${RUNNER_TEMP}/social-copy-vk-transport.json"
+          raw_output="${RUNNER_TEMP}/social-copy-vk-observer.stdout"
+          raw_error="${RUNNER_TEMP}/social-copy-vk-observer.stderr"
+
+          python3 - <<'PY' > "${transport}"
+          import base64
+          import json
+          from pathlib import Path
+
+          config = json.loads(Path("tools/social_copy_corpus_research/sources.json").read_text(encoding="utf-8"))
+          remote_input = json.dumps({"vk": config["vk"], "target": 100}, ensure_ascii=False).encode("utf-8")
+          script = Path("tools/social_copy_corpus_research/collect_vk_remote.py").read_bytes()
+          print(json.dumps({
+              "input_b64": base64.b64encode(remote_input).decode("ascii"),
+              "script_b64": base64.b64encode(script).decode("ascii"),
+          }, sort_keys=True, separators=(",", ":")))
+          PY
+
+          remote_command='python3 -c '\''import base64,io,json,sys;p=json.loads(sys.stdin.read());s=base64.b64decode(p["script_b64"]);i=base64.b64decode(p["input_b64"]).decode("utf-8");sys.stdin=io.StringIO(i);exec(compile(s,"<social_copy_vk_observer>","exec"),{"__name__":"__main__"})'\'''
+
+          set +e
+          flyctl ssh console --app "${FLY_APP_NAME}" --command "${remote_command}" \
+            < "${transport}" > "${raw_output}" 2> "${raw_error}"
+          ssh_rc=$?
+          set -e
+          rm -f "${transport}"
+
+          printf 'ssh_rc=%s\n' "${ssh_rc}" >> "$GITHUB_OUTPUT"
+          printf 'raw_output=%s\n' "${raw_output}" >> "$GITHUB_OUTPUT"
+          printf 'raw_error=%s\n' "${raw_error}" >> "$GITHUB_OUTPUT"
+          echo "VK observer transport status: ${ssh_rc}"
+
+      - name: Validate and materialize observer envelope
+        id: materialize
+        if: always()
+        shell: bash
+        env:
+          RAW_OUTPUT: ${{ steps.observer.outputs.raw_output }}
+          SSH_RC: ${{ steps.observer.outputs.ssh_rc }}
+        run: |
+          set -u
+          out='social-copy-vk-output'
+          mkdir -p "${out}/persist"
+          if [[ -n "${RAW_OUTPUT:-}" && -s "${RAW_OUTPUT}" ]]; then
+            set +e
+            python tools/social_copy_corpus_research/materialize_vk_remote.py \
+              --input "${RAW_OUTPUT}" \
+              --out "${out}" \
+              > "${RUNNER_TEMP}/vk-materialize-summary.json"
+            materialize_rc=$?
+            set -e
+            cat "${RUNNER_TEMP}/vk-materialize-summary.json" >> "$GITHUB_STEP_SUMMARY"
+          else
+            materialize_rc=2
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+          Path("social-copy-vk-output/persist/vk_run_summary.json").write_text(
+              json.dumps({
+                  "schema_version": 1,
+                  "selected_posts": 0,
+                  "successful_sources": 0,
+                  "complete_sources": 0,
+                  "errors": [{"error": "observer_transport_failed_without_payload"}],
+              }, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          fi
+          printf 'materialize_rc=%s\n' "${materialize_rc}" >> "$GITHUB_OUTPUT"
+          printf 'ssh_rc=%s; materialize_rc=%s\n' "${SSH_RC:-unset}" "${materialize_rc}" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
+      - name: Upload short-lived VK research artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: social-copy-vk-corpus-2026-08-06
+          path: social-copy-vk-output/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 6
+
+      - name: Enforce successful VK extraction after artifact capture
+        if: always()
+        shell: bash
+        env:
+          SSH_RC: ${{ steps.observer.outputs.ssh_rc }}
+          MATERIALIZE_RC: ${{ steps.materialize.outputs.materialize_rc }}
+        run: |
+          set -euo pipefail
+          [[ "${SSH_RC:-2}" == "0" ]]
+          [[ "${MATERIALIZE_RC:-2}" == "0" ]]
