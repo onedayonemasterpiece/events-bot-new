@@ -33,7 +33,7 @@
     "deploy:preview": "node scripts/deploy-preview-yc.mjs",
     "plan:secret-candidate": "node scripts/deploy-secret-candidate-yc.mjs plan",
     "publish:secret-candidate": "node scripts/deploy-secret-candidate-yc.mjs publish",
-    "test:static-release": "node --experimental-strip-types --test scripts/static-release.behavior.test.mjs tests/prelaunch-landing.test.mjs tests/prelaunch-experience.test.mjs",
+    "test:static-release": "node --experimental-strip-types --test scripts/static-release.behavior.test.mjs tests/prelaunch-landing.test.mjs tests/prelaunch-experience.test.mjs src/lib/prelaunchEmail.test.ts",
     "test:content-media": "node --experimental-strip-types --test scripts/content-media.behavior.test.mjs",
     "test:festival-timeline-layout": "node --experimental-strip-types --test scripts/festival-timeline-layout.behavior.test.mjs",
     "test:date-listing-order": "node --experimental-strip-types --test tests/date-listing-order.test.mjs",
