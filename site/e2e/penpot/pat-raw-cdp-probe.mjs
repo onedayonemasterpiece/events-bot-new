@@ -23,6 +23,7 @@ const sleep = (ms) => new Promise((resolvePromise) => setTimeout(resolvePromise,
 const safeError = (error) => String(error?.message || error || 'unknown_error')
   .replaceAll(token, '[REDACTED]')
   .slice(0, 500);
+const adb = async (...args) => execFileAsync('adb', args, { maxBuffer: 2 * 1024 * 1024 });
 
 class CdpClient {
   constructor(webSocketUrl) {
@@ -147,18 +148,40 @@ class CdpClient {
   }
 }
 
+async function discoverDevToolsSocket() {
+  const deadline = Date.now() + 45_000;
+  let candidates = [];
+  while (Date.now() < deadline) {
+    const { stdout } = await adb('shell', 'cat', '/proc/net/unix').catch(() => ({ stdout: '' }));
+    candidates = [...String(stdout).matchAll(/@([^\s]*devtools_remote[^\s]*)/gu)]
+      .map((match) => match[1])
+      .filter((value, index, values) => values.indexOf(value) === index);
+    const selected = candidates.find((value) => value === 'chrome_devtools_remote')
+      || candidates.find((value) => value.includes('chrome_devtools_remote'))
+      || candidates[0];
+    if (selected) return { selected, candidates };
+    await sleep(500);
+  }
+  throw new Error(`raw_chrome_devtools_socket_unavailable:candidates=${candidates.length}`);
+}
+
 async function startChrome() {
   const commandLine = 'chrome --no-first-run --disable-fre --disable-default-apps --disable-notifications';
-  await execFileAsync('adb', ['shell', 'sh', '-c', `echo '${commandLine}' '>' /data/local/tmp/chrome-command-line`])
-    .catch(() => undefined);
-  await execFileAsync('adb', ['shell', 'am', 'force-stop', 'com.android.chrome']).catch(() => undefined);
-  await execFileAsync('adb', [
+  await adb('shell', 'am', 'force-stop', 'com.android.chrome').catch(() => undefined);
+  await adb('shell', 'pm', 'clear', 'com.android.chrome').catch(() => undefined);
+  await adb('shell', 'sh', '-c', `printf '%s\\n' '${commandLine}' > /data/local/tmp/chrome-command-line`);
+  await adb('shell', 'chmod', '0666', '/data/local/tmp/chrome-command-line');
+  await adb(
     'shell', 'am', 'start',
     '-a', 'android.intent.action.VIEW',
     '-d', `${baseUrl}/`,
     '-p', 'com.android.chrome',
-  ]);
-  await execFileAsync('adb', ['forward', 'tcp:9222', 'localabstract:chrome_devtools_remote']);
+  );
+
+  const socket = await discoverDevToolsSocket();
+  await adb('forward', '--remove', 'tcp:9222').catch(() => undefined);
+  await adb('forward', 'tcp:9222', `localabstract:${socket.selected}`);
+  return socket;
 }
 
 async function findPageTarget() {
@@ -243,11 +266,12 @@ async function waitForSettledPage(client, timeoutMs) {
 }
 
 const result = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   status: 'FAIL',
   platform: 'android-chrome-raw-cdp',
   targetOrigin,
   startedAt: new Date(startedAt).toISOString(),
+  chrome: null,
   root: null,
   navigationProbes: null,
   cdp: null,
@@ -256,7 +280,11 @@ const result = {
 
 let client;
 try {
-  await startChrome();
+  const socket = await startChrome();
+  result.chrome = {
+    devToolsSocket: socket.selected,
+    devToolsSocketCandidateCount: socket.candidates.length,
+  };
   const target = await findPageTarget();
   client = new CdpClient(target.webSocketDebuggerUrl);
   await client.connect();
@@ -302,8 +330,8 @@ try {
   result.failure = safeError(error);
 } finally {
   if (client) await client.close().catch(() => undefined);
-  await execFileAsync('adb', ['forward', '--remove', 'tcp:9222']).catch(() => undefined);
-  await execFileAsync('adb', ['shell', 'am', 'force-stop', 'com.android.chrome']).catch(() => undefined);
+  await adb('forward', '--remove', 'tcp:9222').catch(() => undefined);
+  await adb('shell', 'am', 'force-stop', 'com.android.chrome').catch(() => undefined);
   result.finishedAt = new Date().toISOString();
   result.durationMs = Date.now() - startedAt;
   await mkdir(dirname(evidencePath), { recursive: true });
@@ -312,6 +340,7 @@ try {
 
 process.stdout.write(`${JSON.stringify({
   status: result.status,
+  devToolsSocketCandidateCount: result.chrome?.devToolsSocketCandidateCount ?? 0,
   rootNavigatorWebdriver: result.root?.final?.navigatorWebdriver ?? null,
   realChallengeCleared: result.navigationProbes?.real?.challengeCleared ?? null,
   realProfileDetected: result.navigationProbes?.real?.final?.profileDetected ?? false,
