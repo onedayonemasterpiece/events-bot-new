@@ -37,7 +37,7 @@
     "test:content-media": "node --experimental-strip-types --test scripts/content-media.behavior.test.mjs",
     "test:festival-timeline-layout": "node --experimental-strip-types --test scripts/festival-timeline-layout.behavior.test.mjs",
     "test:date-listing-order": "node --experimental-strip-types --test tests/date-listing-order.test.mjs",
-    "test:browser-release-gate": "node --test scripts/browser-release-gate.behavior.test.mjs",
+    "test:browser-release-gate": "node --test scripts/browser-release-gate.behavior.test.mjs && node scripts/emit-prelaunch-ci-evidence.mjs",
     "test:static-collections-e2e": "node --test scripts/static-collections-e2e.behavior.test.mjs",
     "test:occurrences": "node --experimental-strip-types --test tests/event-occurrences.test.mjs",
     "test:popular-occurrence-contract": "node --test scripts/popular-occurrence-contract.behavior.test.mjs",
