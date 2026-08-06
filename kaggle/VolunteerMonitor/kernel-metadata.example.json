@@ -1,5 +1,5 @@
 {
-  "id": "eventsbot/kenigevents-volunteer-monitor",
+  "id": "zigomaro/kenigevents-volunteer-monitor",
   "title": "KenigEvents Volunteer Monitor",
   "code_file": "volunteer_monitor.py",
   "language": "python",
