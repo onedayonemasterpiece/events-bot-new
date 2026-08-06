@@ -121,7 +121,7 @@ jobs:
             --artifact-dir ../artifacts/prelaunch-browser
           experience_raw_status=$?
 
-          node site/scripts/check-prelaunch-visual-regressions-v2.mjs \
+          node site/scripts/check-prelaunch-visual-regressions-v3.mjs \
             --url http://127.0.0.1:4173/ \
             --artifact-dir "$artifact_dir"
           visual_regression_status=$?
@@ -155,7 +155,7 @@ jobs:
           printf '%s\n' "$TARGET_SHA" > "$artifact_dir/repository-sha.txt"
           cat > "$artifact_dir/control-receipt.json" <<EOF
           {
-            "schema_version": "prelaunch_v13_control_receipt_v2",
+            "schema_version": "prelaunch_v15_control_receipt_v1",
             "request_id": "$REQUEST_ID",
             "target_sha": "$TARGET_SHA",
             "run_id": "$GITHUB_RUN_ID",
