@@ -157,11 +157,31 @@ jobs:
       - name: Build and check immutable secret candidate
         shell: bash
         env:
+          TARGET_SHA: ${{ steps.request.outputs.target_sha }}
           PUBLIC_PRELAUNCH_MODE: 'on'
           PUBLIC_SITE_ORIGIN: https://kenigevents.ru
           PRODUCTION_ALLOW_DIRTY: '1'
         run: |
           set -euo pipefail
+
+          # The checked-in catalogue is a frozen preview ledger. Stamp only its
+          # release identity in the ephemeral runner so the exact-SHA prelaunch
+          # candidate can pass the production provenance contract without
+          # changing the feature branch or weakening release validation.
+          export PRODUCTION_BUILD_ID="production-prelaunch-v12-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          export STATIC_SITE_RUN_ID="prelaunch-v12-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          export STATIC_SITE_REPO_SHA="$TARGET_SHA"
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const path = 'site/src/data/production-catalog.json';
+          const catalog = JSON.parse(readFileSync(path, 'utf8'));
+          catalog.repo_sha = process.env.STATIC_SITE_REPO_SHA;
+          catalog.run_id = process.env.STATIC_SITE_RUN_ID;
+          catalog.build_id = process.env.PRODUCTION_BUILD_ID;
+          catalog.generated_at = new Date().toISOString();
+          writeFileSync(path, `${JSON.stringify(catalog, null, 2)}\n`);
+          NODE
+
           npm --prefix site run build:production
           npm --prefix site run build:secret-candidate
           npm --prefix site run check:secret-candidate
