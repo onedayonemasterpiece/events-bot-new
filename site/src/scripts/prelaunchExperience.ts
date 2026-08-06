@@ -1,5 +1,8 @@
 const STORAGE_KEY = 'ke_prelaunch_notification_v1';
 const WINDOW_COUNT = 8;
+const CONSENT_POLICY = 'prelaunch-updates-2026-v1';
+const CONSENT_COPY = 'Согласен получать письма о запуске, важных обновлениях и полезных подборках сервиса. Отписаться можно в любой момент.';
+const PROMISE_COPY = 'Оставьте e-mail — и 1 сентября мы пришлём ссылку на сервис. Иногда будем отправлять важные обновления и полезные подборки; для подписавшихся мы приготовили приятный сюрприз.';
 
 type ExperienceState = 'idle' | 'submitting' | 'error' | 'success' | 'registered';
 
@@ -9,6 +12,10 @@ type TileMetric = {
   row: number;
   column: number;
   sourceDistance: number;
+  centerX: number;
+  centerY: number;
+  width: number;
+  height: number;
 };
 
 function splitGridTracks(value: string): string[] {
@@ -36,6 +43,7 @@ function initializePrelaunchExperience(): void {
   root.dataset.experienceReady = 'true';
 
   const mosaic = root.querySelector<HTMLElement>('[data-prelaunch-mosaic]');
+  const projection = root.querySelector<HTMLImageElement>('.prelaunch__projection');
   const tiles = Array.from(root.querySelectorAll<HTMLElement>('[data-prelaunch-tile]'));
   let resizeFrame = 0;
 
@@ -53,6 +61,7 @@ function initializePrelaunchExperience(): void {
       const deltaX = sourceColumn - column;
       const deltaY = (row - sourceRow) * 0.84;
       const sourceDistance = Math.hypot(deltaX, deltaY);
+      const rect = tile.getBoundingClientRect();
 
       let edge = 'ambient';
       if (sourceDistance < 2.45) edge = 'hot';
@@ -64,24 +73,42 @@ function initializePrelaunchExperience(): void {
       tile.dataset.column = String(column);
       tile.dataset.window = 'false';
       tile.dataset.accent = 'false';
-      return { tile, index, row, column, sourceDistance };
+      return {
+        tile,
+        index,
+        row,
+        column,
+        sourceDistance,
+        centerX: rect.left + rect.width / 2,
+        centerY: rect.top + rect.height / 2,
+        width: rect.width,
+        height: rect.height,
+      };
     });
 
-    // Keep one coherent reveal cluster around the branded wordmark. The map is
-    // recomputed from the real column count, so desktop and mobile share the
-    // same rule instead of maintaining separate hand-authored scenes.
-    const targetColumn = (columns - 1) * 0.48;
-    const targetRow = (rows - 1) * 0.61;
+    /* Align the coherent reveal cluster with the actual rendered PWA artwork,
+       not with a hard-coded grid row. This keeps the wordmark readable when the
+       artwork becomes smaller on mobile or the viewport aspect ratio changes. */
+    const artworkRect = projection?.getBoundingClientRect();
+    const fallbackTargetX = window.innerWidth * .53;
+    const fallbackTargetY = window.innerHeight * .67;
+    const targetX = artworkRect && artworkRect.width > 0
+      ? artworkRect.left + artworkRect.width * .5
+      : fallbackTargetX;
+    const targetY = artworkRect && artworkRect.height > 0
+      ? artworkRect.top + artworkRect.height * .63
+      : fallbackTargetY;
+
     metrics
       .filter(({ tile }) => tile.dataset.state === 'revealed')
       .sort((left, right) => {
         const leftDistance = Math.hypot(
-          (left.column - targetColumn) * 1.05,
-          left.row - targetRow,
+          (left.centerX - targetX) / Math.max(1, left.width),
+          (left.centerY - targetY) / Math.max(1, left.height),
         );
         const rightDistance = Math.hypot(
-          (right.column - targetColumn) * 1.05,
-          right.row - targetRow,
+          (right.centerX - targetX) / Math.max(1, right.width),
+          (right.centerY - targetY) / Math.max(1, right.height),
         );
         return leftDistance - rightDistance || left.index - right.index;
       })
@@ -106,6 +133,7 @@ function initializePrelaunchExperience(): void {
 
     root.style.setProperty('--prelaunch-grid-columns', String(columns));
     root.style.setProperty('--prelaunch-grid-rows', String(rows));
+    root.dataset.artworkRevealAligned = artworkRect && artworkRect.width > 0 ? 'true' : 'fallback';
   }
 
   function scheduleCalibration(): void {
@@ -117,9 +145,13 @@ function initializePrelaunchExperience(): void {
   }
 
   calibrateTiles();
+  if (projection && !projection.complete) {
+    projection.addEventListener('load', scheduleCalibration, { once: true });
+  }
   if (mosaic && 'ResizeObserver' in window) {
     const observer = new ResizeObserver(scheduleCalibration);
     observer.observe(mosaic);
+    if (projection) observer.observe(projection);
   } else {
     window.addEventListener('resize', scheduleCalibration, { passive: true });
   }
@@ -138,16 +170,19 @@ function initializePrelaunchExperience(): void {
   const form = root.querySelector<HTMLFormElement>('[data-prelaunch-form]');
   if (!form || form.dataset.experienceBound === 'true') return;
   form.dataset.experienceBound = 'true';
+  form.dataset.consentPolicy = CONSENT_POLICY;
 
   const row = form.querySelector<HTMLElement>('.prelaunch-form__row');
   const consent = form.querySelector<HTMLElement>('.prelaunch-form__consent');
+  const consentCopy = consent?.querySelector<HTMLElement>('span');
   const status = form.querySelector<HTMLElement>('[data-prelaunch-status]');
   const email = form.elements.namedItem('email') as HTMLInputElement | null;
+  if (consentCopy) consentCopy.textContent = CONSENT_COPY;
 
   const promise = document.createElement('p');
   promise.className = 'prelaunch-form__promise';
   promise.id = 'prelaunch-promise';
-  promise.textContent = 'Оставьте e-mail — и 1 сентября мы пришлём письмо о запуске. Для подписавшихся мы приготовили отдельный приятный сюрприз.';
+  promise.textContent = PROMISE_COPY;
   row?.insertAdjacentElement('afterend', promise);
 
   if (email) {
@@ -200,7 +235,7 @@ function initializePrelaunchExperience(): void {
 
     if (completeState) {
       completeTitle.textContent = options.title || 'Вы записаны';
-      completeBody.textContent = options.body || '1 сентября пришлём письмо о запуске. И не забудем про обещанный приятный сюрприз.';
+      completeBody.textContent = options.body || '1 сентября пришлём ссылку на сервис. Позже будем писать только о важных обновлениях и полезных подборках; отписаться можно из любого письма.';
       if (options.focus) complete.focus({ preventScroll: true });
     }
   }
@@ -216,7 +251,7 @@ function initializePrelaunchExperience(): void {
   if (readRegistrationHint()) {
     setState('registered', {
       title: 'Вы уже записаны',
-      body: '1 сентября пришлём письмо о запуске. Для подписавшихся будет отдельный приятный сюрприз.',
+      body: '1 сентября пришлём ссылку на сервис. Для подписавшихся будет приятный сюрприз, а дальше — только важные обновления и полезные подборки.',
     });
   } else {
     setState('idle');
@@ -233,7 +268,7 @@ function initializePrelaunchExperience(): void {
       if (kind === 'success' && message) {
         setState('success', {
           title: 'Готово, вы записаны',
-          body: '1 сентября пришлём письмо со ссылкой на сервис. Для подписавшихся мы приготовили отдельный приятный сюрприз.',
+          body: '1 сентября пришлём ссылку на сервис. Для подписавшихся мы приготовили приятный сюрприз; затем будем писать только о важных обновлениях и полезных подборках.',
           focus: true,
         });
       } else if (kind === 'error' && message) {
