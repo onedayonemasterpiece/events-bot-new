@@ -11,8 +11,20 @@ const artworkUrl = transparentArtwork.src;
 <script is:inline define:vars={{ artworkUrl }}>
   (() => {
     const root = document.querySelector('[data-prelaunch-page]');
-    if (!(root instanceof HTMLElement)) return;
-    root.style.setProperty('--prelaunch-artwork-image', `url("${artworkUrl}")`);
+    const background = root?.querySelector('.prelaunch__background');
+    if (!(root instanceof HTMLElement) || !(background instanceof HTMLElement)) return;
+
+    let artwork = background.querySelector('.prelaunch__artwork');
+    if (!(artwork instanceof HTMLImageElement)) {
+      artwork = document.createElement('img');
+      artwork.className = 'prelaunch__artwork';
+      artwork.alt = '';
+      artwork.setAttribute('aria-hidden', 'true');
+      artwork.decoding = 'async';
+      artwork.draggable = false;
+      background.append(artwork);
+    }
+    artwork.src = artworkUrl;
     root.dataset.transparentArtworkBound = 'true';
   })();
 </script>
