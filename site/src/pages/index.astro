@@ -6,6 +6,7 @@ import HomeHeroTalk from '../components/HomeHeroTalk.astro';
 import HomeQuickNav from '../components/HomeQuickNav.astro';
 import PrelaunchExperience from '../components/PrelaunchExperience.astro';
 import PrelaunchLanding from '../components/PrelaunchLanding.astro';
+import PrelaunchVisualReview from '../components/PrelaunchVisualReview.astro';
 import type { PreviewEvent } from '../lib/types';
 import {
   absoluteUrl,
@@ -44,6 +45,7 @@ const description = 'Афиша Калининграда без шума: пол
   <PrelaunchLayout>
     <PrelaunchLanding />
     <PrelaunchExperience />
+    <PrelaunchVisualReview />
   </PrelaunchLayout>
 ) : (
   <EventLayout
