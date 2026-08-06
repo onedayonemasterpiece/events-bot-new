@@ -1,0 +1,696 @@
+Измеримая связь пользовательских задач, сервиса и продуктовой ценности
+Ни один из рассматриваемых подходов не покрывает всю цепочку от пользовательской потребности до доказанного бизнес-эффекта. HEART хорошо структурирует пользовательские цели и сигналы; GQM превращает вопросы в измерения; GQM+Strategies связывает измерения со стратегиями; Evidence-Based Management отделяет outputs, customer outcomes и impacts; service blueprinting раскрывает сквозной сервис, включая backstage и support processes; task-completion measurement измеряет эффективность выполнения задач; SLI/SLO отвечает, работает ли сервис сейчас; ISO/IEC 25010 оценивает полноту функций относительно заданных задач и целей. Полная модель ниже является синтезом отчёта, а не частью какого-либо одного стандарта. 
+
+Минимальная модель сущностей и связей
+Общепринятая основа. JTBD рассматривает Job как прогресс, которого человек пытается достичь в определённых обстоятельствах; Job может иметь функциональные, социальные и эмоциональные аспекты. Service blueprinting, в свою очередь, помещает действия клиента на одну временную ось с видимыми, невидимыми и поддерживающими процессами сервиса. EBM различает inputs, activities, outputs, customer outcomes и организационные impacts. 
+
+Рекомендуемый синтез сущностей:
+
+Сущность	Рабочее определение	Не следует путать с
+User need	Неудовлетворённость, ограничение или желаемое изменение положения пользователя	Запросом конкретной функции
+Job	Устойчивый прогресс, которого пользователь добивается в контексте; объект продуктового discovery и сквозного измерения	Экраном, сценарием интерфейса или одной транзакцией API
+Job Story	Краткое представление контекста, мотивации и желаемого прогресса	Полной моделью Job
+User Story	Единица планирования изменения продукта с точки зрения роли или пользователя	Доказательством потребности, outcome или ценности
+Journey	Возможная последовательность действий, состояний, каналов и точек контакта, через которую выполняется Job	Job: один Job допускает несколько journeys
+Capability	Устойчивая способность сервиса обеспечить часть пользовательского или операторского поведения	Конкретной реализацией или story
+User outcome	Наблюдаемое улучшение положения пользователя после использования сервиса	Выпуском функции или завершением интерфейсного flow
+Owner outcome / impact	Результат для владельца: доход, стоимость, риск, удержание, производительность, выполнение миссии	Пользовательской активностью как таковой
+Operator job	Задача сотрудника или оператора, необходимая для исполнения, контроля или восстановления пользовательского сервиса	Внутренней технической задачей без операционного сценария
+Enabler	Техническая или организационная способность, создающая возможность реализовывать capabilities: IAM, observability, feature flags	Самостоятельной пользовательской ценностью
+Guardrail	Ограничение, которое не должно быть нарушено при оптимизации: безопасность, ошибки, жалобы, latency, fairness	Основной целевой метрикой
+Event	Атомарная запись о произошедшем факте с устойчивой семантикой	Метрикой или интерпретацией причины
+Metric	Формально определённое агрегирование событий, наблюдений или опросов	Сырым счётчиком
+SLI	Реализованный индикатор качества предоставляемого сервиса	Целевым значением
+SLO	Цель для SLI на заданном окне и для заданной популяции	Обещанием пользователю или SLA
+Incident	Ограниченный во времени эпизод существенного пользовательского или операционного воздействия, требующий координированного реагирования	Любой дефект или единичной ошибкой
+Decision	Зафиксированное решение, принятое на основании evidence, с указанием допущений и уровня причинной уверенности	Дашбордом
+
+Job Stories и User Stories поэтому являются проекциями работы для обсуждения и delivery, а не корневыми идентификаторами продуктовой ценности. Story может быть переписана, разделена или удалена, тогда как Job, capability, outcome и event contract должны оставаться сравнительно стабильными.
+
+Минимальный граф связей:
+
+text
+Копировать
+owner goal ──requires──> owner outcome
+     │                         ▲
+     │ strategy/hypothesis     │ contributes-to
+     ▼                         │
+user outcome <──realizes── Job ──instantiated-as──> journey
+                         │                           │
+                         └──requires──> capability ──┼──implemented-by──> stories
+                                                   │
+                                                   ├──verified-by──> tests
+                                                   ├──operated-by──> operator jobs
+                                                   └──observed-by──> events → metrics → SLI/SLO
+                                                                         │
+release/build/flags ──────────────────────────────────────────────────────┘
+incident ──affects──> journey/capability/SLI
+decision ──uses──> metrics, experiments, research, incidents
+Роли сравниваемых подходов:
+
+Подход	Что он даёт	Чего не даёт сам по себе
+HEART Goals–Signals–Metrics	Категории пользовательских метрик и переход от цели к сигналу и метрике	Стратегическую декомпозицию и runtime reliability
+GQM	Структуру Goal → Questions → Metrics с явной точкой зрения	Модель пользовательского пути
+GQM+Strategies	Связь бизнес-целей, стратегий, software goals и measurement goals	Семантику production events
+EBM	Различение outputs, customer outcomes, impacts и capability to deliver value	Точные границы Job и SLI
+Service blueprinting	Связь customer actions, frontstage, backstage и support processes	Формальный measurement contract
+Task completion / ISO 9241-11	Effectiveness, efficiency и satisfaction в заданном контексте использования	Доказательство бизнес-ценности
+SLI/SLO	Проверку фактического качества сервиса на временном окне	Полноту Job и достижение внешнего outcome
+ISO/IEC 25010	Functional completeness относительно заданных задач и целей	Фактическую доступность, использование и причинность
+
+HEART прямо рекомендует сначала формулировать цели, затем наблюдаемые поведенческие или отношенческие сигналы и только затем нормированные метрики; авторы также предупреждают, что логи следует триангулировать с исследованиями, а не использовать как их замену. GQM требует определять измерения сверху вниз: от цели через вопросы к данным и правилам интерпретации. 
+
+Метрики и точные формулы
+Синтез отчёта: единицей измерения сквозного Job должен быть не page view и не HTTP request, а job attempt — экземпляр попытки пользователя достичь Job, имеющий устойчивый job_attempt_id.
+
+Рекомендуемый автомат состояний:
+
+text
+Копировать
+eligible
+  → started
+  → in_progress
+  → completed_strict
+  → completed_acceptable
+  → rejected_domain
+  → cancelled_by_user
+  → failed_technical
+  → expired_or_unknown
+
+failed_technical → recovery_started → recovered → in_progress
+Начало Job фиксируется в первой точке, где одновременно выполнены три условия:
+
+намерение пользователя достаточно специфично;
+сервис принял ответственность за его исполнение;
+событие не является случайным просмотром.
+Например, для записи к врачу просмотр главной страницы не является стартом; запрос подходящих слотов с выбранной специальностью и местоположением — является. Для перевода денег старт может наступать после подтверждения получателя и суммы, а не при открытии экрана переводов.
+
+Допустимые завершения задаются заранее как контракт:
+
+completed_strict: целевой результат получен полностью;
+completed_acceptable: согласованная альтернатива, например подтверждённая запись в лист ожидания с понятным сроком;
+rejected_domain: сервис корректно ответил, но предметное условие не выполнено, например нет доступных слотов;
+cancelled_by_user: осознанная отмена;
+failed_technical: нарушение исполнения сервисом;
+expired_or_unknown: попытка не получила доказуемого terminal state за установленное время.
+Это предотвращает распространённую ошибку, когда отсутствие товара, отказ риск-модели, отмена пользователя и HTTP 500 объединяются в один «failure rate».
+
+Пусть:
+
+(A) — число валидных started attempts;
+(C_s) — completed_strict;
+(C_a) — все приемлемые завершения, включая strict;
+(F_t) — technical failures;
+(R_d) — domain rejections;
+(U_c) — user cancellations;
+(X) — expired/unknown;
+(F_r) — failed attempts, позднее успешно восстановленные;
+(G) — good events по определению SLI;
+(V) — valid events в знаменателе SLI.
+Тогда:
+
+[ \text{Strict Job Completion Rate}=\frac{C_s}{A} ]
+
+[ \text{Acceptable Job Completion Rate}=\frac{C_a}{A} ]
+
+[ \text{Technical Failure Rate}=\frac{F_t}{A} ]
+
+[ \text{Domain Rejection Rate}=\frac{R_d}{A} ]
+
+[ \text{User Cancellation Rate}=\frac{U_c}{A} ]
+
+[ \text{Unknown/Expiry Rate}=\frac{X}{A} ]
+
+Категории должны удовлетворять проверке:
+
+[ C_a+F_t+R_d+U_c+X=A ]
+
+если каждая attempt имеет ровно один итоговый terminal state.
+
+[ \text{Recovery Success Rate}=\frac{F_r}{F_t} ]
+
+В знаменатель recovery rate включаются лишь ошибки, для которых политика сервиса допускает восстановление. Дополнительно следует измерять:
+
+[ \text{Median/P95 Time to Completion} =Q_{0.50}/Q_{0.95}(t_{\text{terminal}}-t_{\text{start}}) ]
+
+[ \text{Step Conversion}_i =\frac{#\text{attempts, достигших этапа }i+1} {#\text{attempts, достигших этапа }i} ]
+
+[ \text{Repeat Effort Rate} =\frac{#\text{attempts с повтором шага или откатом}} {A} ]
+
+HEART относит к Task Success effectiveness, включая task-completion rate, efficiency, включая time-to-complete, и error rate. ISO 9241-11 рассматривает usability через effectiveness, efficiency и satisfaction в определённом context of use. 
+
+Для reliability:
+
+[ SLI=\frac{G}{V} ]
+
+[ \text{Error Rate}=1-SLI ]
+
+[ \text{Error Budget Fraction}=1-SLO ]
+
+[ \text{Budget Consumed} =\frac{V-G}{V(1-SLO)} ]
+
+Google SRE рекомендует ratio-based SLI — good events к total valid events — поскольку такая форма нормирована от 0 до 100%, естественно образует error budget и удобна для автоматизации. SLI specification следует отделять от SLI implementation: например, «доля подтверждений за 5 секунд» может измеряться серверными логами, real-user monitoring или синтетическими пробами, причём способы имеют различное покрытие. 
+
+Для внешнего пользовательского outcome:
+
+[ \text{User Outcome Rate} =\frac{#\text{completed attempts, после которых подтверждён outcome}} {#\text{eligible completed attempts}} ]
+
+Например, «запись создана» — task completion; «пациент получил консультацию в требуемый срок» — user outcome.
+
+Для владельческого результата:
+
+[ \Delta M=M_{\text{after}}-M_{\text{baseline}} ]
+
+[ \text{Relative Lift} =\frac{M_{\text{after}}-M_{\text{baseline}}} {M_{\text{baseline}}} ]
+
+Но такой lift является только наблюдаемой ассоциацией. Для рандомизированного эксперимента:
+
+[ ATE=E[Y\mid Treatment]-E[Y\mid Control] ]
+
+с доверительным интервалом, заранее определённой primary metric и guardrails. Контролируемые эксперименты являются наиболее надёжным практическим способом установить причинное влияние продуктового изменения на наблюдаемое поведение; корреляционный before/after анализ этого не доказывает. 
+
+Измеримое покрытие service/job
+ISO/IEC 25010:2023 определяет functional completeness как степень, в которой набор функций покрывает все заданные задачи и цели предполагаемых пользователей. Это полезное основание, но для сервиса необходимо расширить понятие полноты контекстом, release state и production evidence. 
+
+Синтез отчёта: Job coverage следует моделировать как каталог проверяемых сценарных ячеек, а не как бинарное поле «функция поддерживается».
+
+Сценарий (s) описывается:
+
+text
+Копировать
+job
+× persona/role
+× journey variant
+× channel
+× device/client
+× authentication state
+× accessibility need
+× network state
+× locale/region
+× account/data state
+× recovery path
+Полный декартов продукт часто непрактичен. Следует завести конечный набор обязательных сценариев: наиболее частые, критические, юридически обязательные, accessibility-сценарии и сценарии с высоким риском. Каждому сценарию присваивается вес (w_s), основанный на доле eligible demand, критичности или нормативном требовании.
+
+Для каждого сценария хранятся независимые индикаторы:
+
+(I_s): реализован;
+(T_s): протестирован;
+(R_s): выпущен требуемой популяции;
+(L_s): подтверждён production evidence;
+(O_s): фактически наблюдался с достаточной выборкой.
+[ C_{\text{implemented}} =\frac{\sum_s w_s I_s}{\sum_s w_s} ]
+
+[ C_{\text{tested}} =\frac{\sum_s w_s T_s}{\sum_s w_s} ]
+
+[ C_{\text{released}} =\frac{\sum_s w_s R_s}{\sum_s w_s} ]
+
+[ C_{\text{live}} =\frac{\sum_s w_s L_s}{\sum_s w_s} ]
+
+[ C_{\text{observed}} =\frac{\sum_s w_s O_s}{\sum_s w_s} ]
+
+Консервативное сквозное покрытие:
+
+[ C_{\text{effective}} =\frac{\sum_s w_s(I_sT_sR_sL_s)} {\sum_s w_s} ]
+
+Произведение здесь означает логическое AND для бинарных индикаторов. Оно не заменяет отдельные показатели: команда должна видеть, теряется ли покрытие на реализации, тестах, rollout или runtime.
+
+Для functional completeness внутри одного сценария, если Job состоит из обязательных task outcomes (k):
+
+[ C_{\text{functional}}(s) =\frac{\sum_k w_k,implemented_{k,s}} {\sum_k w_k} ]
+
+Для production-подтверждения:
+
+[ L_s = \begin{cases} 1,& \text{если }LCB(SLI_s)\ge SLO_s \text{ и }n_s\ge n_{\min}\ 0,& \text{если качество ниже цели}\ unknown,& \text{если данных недостаточно} \end{cases} ]
+
+Где LCB — нижняя граница доверительного интервала. Статус unknown принципиально нельзя считать pass: отсутствие ошибок при отсутствии трафика не доказывает работоспособность.
+
+Минимальный coverage-report должен показывать не только среднее, но и:
+
+[ \text{Worst Critical Cell} =\min_{s\in Critical} SLI_s ]
+
+[ \text{Unsupported Demand} =\frac{\sum_s demand_s\cdot \mathbf{1}[I_s=0]} {\sum_s demand_s} ]
+
+[ \text{Context Completion Gap}d =JCR{\text{reference}}-JCR_d ]
+
+где (d) — конкретный device, channel, auth state или network state.
+
+Для accessibility полезен принцип WCAG о complete process: если страница входит в последовательность, необходимую для выполнения деятельности, соответствовать должен процесс целиком, а не только отдельные страницы. Тот же принцип следует применять к Job coverage: доступная стартовая страница не компенсирует недоступную авторизацию или подтверждение. 
+
+Рекомендуемые статусы gap:
+
+Статус	Значение
+unsupported	Сценарий явно не поддерживается
+implemented_unverified	Реализован, но нет достаточного тестового evidence
+tested_not_released	Прошёл тесты, но недоступен нужной популяции
+released_unhealthy	Доступен, но нарушает Job SLI/SLO
+released_unobserved	Доступен, но недостаточно production observations
+healthy	Подтверждён в целевом контексте
+degraded_recoverable	Основной путь нарушен, но приемлемый recovery работает
+
+Пользовательские и владельческие outcomes
+EBM подчёркивает, что releases и features являются outputs; outcomes — улучшения, которые испытывает пользователь; impacts — результаты организации или других заинтересованных сторон, возникающие при достижении customer outcomes. EBM также предупреждает, что больше работы и больше функций необязательно улучшают пользовательский опыт. 
+
+Рекомендуемая причинная гипотеза должна иметь вид:
+
+text
+Копировать
+изменение capability
+→ улучшение качества journey
+→ рост Job completion / снижение effort
+→ достижение user outcome
+→ изменение owner outcome
+при соблюдении guardrails
+Пример разделения:
+
+Уровень	Пример для сервиса записи
+Output	Выпущено восстановление записи после повторной авторизации
+Task completion	Запись подтверждена
+User outcome	Пользователь получил консультацию в нужный срок
+Owner outcome	Повысилась загрузка доступных слотов
+Guardrail	Не выросли no-show, жалобы и двойные бронирования
+Capability outcome	Снизилось время восстановления и число ручных вмешательств
+
+HEART полезен прежде всего на уровнях пользовательского восприятия и поведения: Happiness, Engagement, Adoption, Retention и Task Success. EBM Current Value и Unrealized Value помогают связать их с текущей и потенциальной ценностью, а Time-to-Market и Ability-to-Innovate отражают способность организации доставлять и проверять ценность. EBM не задаёт универсальных Key Value Measures, а предлагает адаптировать их к контексту. 
+
+Ключевое разделение состояний доказательства:
+
+Утверждение	Минимально достаточное evidence
+Реализовано	Код или конфигурация существуют; capability связана с build/commit
+Протестировано	Заданные тесты прошли в определённых контекстах и версиях
+Выпущено	Build развёрнут и feature exposure подтверждён для заданной популяции
+Сейчас работает	Production SLI удовлетворяет SLO на актуальном окне
+Используется	Есть валидные attempts от целевой популяции, а не только page views
+Задача завершена	Attempt достигла заранее определённого acceptable terminal state
+User outcome достигнут	Измерено внешнее пользовательское постусловие
+Ценность владельцу подтверждена	Owner metric изменилась в ожидаемую сторону без нарушения guardrails
+Причинное влияние доказано	Надёжный эксперимент или обоснованный causal design отделил эффект изменения от альтернативных причин
+
+Развёртывание также не означает полный release: canary — частичное и ограниченное по времени развёртывание, используемое для решения о продолжении rollout. Аналогично «сервис восстановлен» означает, что воздействие смягчено или прежнее состояние сервиса возвращено, но не обязательно устранена первопричина или возвращены все пользовательские outcomes. 
+
+Практическое правило принятия решений:
+
+для заявления «работает» требуется SLI/SLO;
+для заявления «полезно» требуется user outcome;
+для заявления «создаёт ценность» требуется owner outcome;
+для заявления «изменение вызвало ценность» требуется causal evidence.
+Traceability от цели до production facts
+GQM предлагает связывать цель с вопросами, метриками, данными и правилами интерпретации. GQM+Strategies расширяет это до явной связи организационных целей, выбранных стратегий, software goals и measurement goals. HEART добавляет слой Goals → Signals → Metrics. Рекомендуемая traceability-модель объединяет эти подходы, но оставляет raw telemetry независимой от delivery-артефактов. 
+
+text
+Копировать
+strategic goal
+  → owner outcome
+  → user outcome
+  → Job
+  → measurement questions
+  → hypothesis / strategy
+  → capability changes
+  → stories and tests
+  → build + release + feature exposure
+  → stable domain events and traces
+  → metric definitions
+  → SLI/SLO and outcome analyses
+  → evidence assessment
+  → decision record
+Почему story ID не должен попадать в каждое событие. Story — изменчивый planning artifact: несколько stories могут реализовать одну capability, одна story может быть разделена, переоткрыта или заменена. Добавление story IDs связывает долговечную telemetry contract с текущей структурой backlog и создаёт high-cardinality, неоднозначную семантику.
+
+Вместо этого raw event должен содержать устойчивые предметные атрибуты:
+
+text
+Копировать
+event_type
+event_schema_version
+occurred_at
+event_id
+subject_id / pseudonymous_actor_id
+job_type
+job_attempt_id
+journey_stage
+outcome_code
+channel
+client_family
+auth_state
+network_class
+service.name
+service.version
+release_id
+trace_id
+CloudEvents стандартизирует базовые поля id, source, type, subject, time и dataschema; его primer рекомендует обеспечивать обратную совместимость данных внутри event type либо явно версионировать несовместимые изменения. OpenTelemetry semantic conventions дают общие имена и значения для traces, metrics и logs, а стабильные conventions не должны удаляться или возвращаться в нестабильный статус. W3C Trace Context стандартизирует traceparent и tracestate для корреляции распределённых операций. 
+
+Связь со stories выполняется в отдельных реестрах:
+
+text
+Копировать
+story → capability_version
+capability_version → build/release
+release → service.version + feature flag configuration
+event → service.version + release_id
+metric → event types + filters + formula version
+decision → metric snapshots + release/experiment
+Для экспериментов лучше выпускать отдельное событие experiment.exposed или таблицу assignment/exposure и связывать её с attempts по actor, attempt и времени. Это точнее, чем дублировать experiment или story metadata во всех downstream events.
+
+Каждая метрика должна иметь metric contract:
+
+Поле	Содержание
+Semantic question	На какой вопрос отвечает
+Formula	Числитель, знаменатель, unit
+Population	Кто eligible
+Start/terminal rules	Как строятся attempts
+Included/excluded outcomes	Что считается success/error
+Event dependencies	Типы и версии событий
+Context dimensions	Разрезы coverage
+Freshness/window	Окно и задержка
+Owner	Кто интерпретирует и действует
+Decision thresholds	Что произойдёт при значениях
+Known blind spots	Что measurement не видит
+
+SLO без policy слаб: Google SRE рекомендует, чтобы SLO имел владельца, уполномоченного балансировать скорость выпуска и надёжность, а performance относительно SLO влияло на реальные продуктовые решения. 
+
+Сквозной практический пример
+Сервис: запись на медицинскую консультацию.
+
+User need: получить помощь без звонков, лишнего ожидания и риска потерять выбранный слот.
+
+Job: «Когда мне нужна консультация, найти подходящего специалиста и получить подтверждённую запись на приемлемое время».
+
+User outcome: консультация состоялась не позднее заданного пользователем срока.
+
+Owner outcomes: больше полезно заполненных слотов, меньше ручной нагрузки call-центра, сохранённая удовлетворённость пациентов.
+
+Guardrails: no-show rate, двойные бронирования, жалобы, accessibility completion gap и production error budget не ухудшаются.
+
+Journey:
+
+text
+Копировать
+поиск услуги
+→ получение доступных слотов
+→ выбор слота
+→ идентификация/авторизация
+→ подтверждение
+→ напоминание
+→ консультация
+Service blueprint добавляет backstage: чтение расписаний, временное удержание слота, проверку страхового покрытия, запись в систему клиники, доставку уведомления. Operator jobs: устранить конфликт расписаний, освободить зависший hold, повторить передачу записи и связаться с пользователем при неопределённом результате.
+
+Start: appointment.availability_requested, если указаны специальность, регион и временной диапазон.
+
+Strict completion: appointment.confirmed.
+
+Acceptable completion: waitlist.enrolled, только если пользователь явно согласился и получил срок ответа.
+
+Domain rejection: availability.none_found.
+
+Technical failure: timeout, невозможность сохранить запись, ошибка идентификации, потеря ответа после подтверждения.
+
+Recovery: после истечения авторизации выбранный слот сохраняется на ограниченное время; новая attempt ссылается на исходную через predecessor_attempt_id.
+
+Пример недельных данных:
+
+Terminal state	Число
+Confirmed	7 200
+Accepted waitlist	600
+No suitable slots	900
+User cancelled	500
+Technical failure	500
+Expired/unknown	300
+Всего started attempts	10 000
+
+[ Strict\ JCR=7200/10000=72% ]
+
+[ Acceptable\ JCR=(7200+600)/10000=78% ]
+
+[ Technical\ Failure\ Rate=500/10000=5% ]
+
+[ Unknown\ Rate=300/10000=3% ]
+
+Из 500 technical failures 280 пользователей начали recovery, а 210 завершили Job:
+
+[ Recovery\ Success=210/500=42% ]
+
+Для SLI определяется good attempt: strict или acceptable completion не дольше 90 секунд, без двойного бронирования и без ручного вмешательства.
+
+[ Job\ SLI =\frac{\text{good eligible attempts}} {\text{all eligible attempts excluding explicit user cancellations}} ]
+
+При SLO 97% и 50 000 valid attempts месячный error budget равен:
+
+[ 50000(1-0.97)=1500\ bad\ attempts ]
+
+Coverage-реестр содержит, например:
+
+Контекст	Вес	Tested	Released	Job SLI
+iOS, logged-in, normal network	0,30	Да	Да	98,2%
+Android, logged-in, weak network	0,25	Да	Да	95,1%
+Web, guest → authentication	0,20	Да	Да	96,8%
+Web + screen reader	0,15	Частично	Да	недостаточно данных
+Call-center-assisted journey	0,10	Да	Да	99,0%
+
+Среднее не должно скрывать Android weak-network gap и неизвестное accessibility coverage.
+
+Delivery evidence: новая recovery capability реализована stories ST-41 и ST-58, прошла контрактные и end-to-end тесты, включена release 2026.08.1, rollout 100%.
+
+Runtime evidence: после rollout общий Job SLI вырос с 96,1% до 97,0%, но это ещё не causal proof.
+
+Usage evidence: recovery используется в 56% eligible failures.
+
+User outcome: доля пользователей, фактически получивших консультацию в выбранный срок, выросла с 68% до 70%.
+
+Owner value: звонки на одну завершённую запись снизились на 18%, заполнение слотов выросло на 4%, no-show не изменился. Это подтверждает совместимое движение owner metrics, но before/after сравнение остаётся ассоциативным.
+
+Causal evidence: при случайном распределении новой recovery capability strict JCR оказался на 3,2 процентного пункта выше контроля, доверительный интервал не пересёк ноль, а guardrails остались в установленных пределах. Только после этого допустимо утверждение, что capability вызвала улучшение Job completion в исследованной популяции.
+
+Основные антипаттерны
+Антипаттерн	Последствие и замена
+Story = value	«Story done» доказывает output. Связывать story с capability и проверяемой outcome hypothesis
+Feature usage = Job success	Частое использование может означать полезность, обязательность или сложность. Измерять terminal outcomes, effort и errors
+Page view = attempt start	Знаменатель загрязняется случайными визитами. Использовать точку принятого намерения
+Один success event	Теряются domain rejection, user cancellation, technical failure и unknown. Использовать исчерпывающую terminal taxonomy
+HTTP availability как Job SLI	Backend может отвечать, а пользовательский процесс быть сломан. Строить journey/job SLI
+Среднее без контекстов	Массовый успешный канал скрывает неработающий accessibility или weak-network сценарий. Публиковать critical cells и coverage gaps
+Story IDs в telemetry	Схема событий зависит от backlog и создаёт неоднозначные join. Использовать capability, release и semantic event types
+Нет события о начале	Невозможно отличить отсутствие спроса от abandonment и ошибки telemetry
+Нет unknown state	Потерянные события ошибочно становятся failure или success. Сохранять expired_or_unknown
+Тесты = production health	Тест доказывает поведение в тестовой среде, а не текущее качество для пользователей
+Release = adoption	Доступность функции не означает её использование или пригодность
+Revenue lift = user value	Impact может временно расти при ухудшении customer outcome. Поддерживать отдельные user metrics и guardrails
+Before/after = causality	Сезонность, состав пользователей, маркетинг и инциденты остаются альтернативными причинами. Использовать эксперимент или causal design
+SLO без решений	Цель становится декоративной. Связать error-budget state с rollout, инвестициями и приоритетами
+Скалярное coverage	Одно число скрывает, реализовано ли, протестировано ли и работает ли. Хранить coverage vector
+
+HEART прямо предупреждает о неоднозначности raw counts и page views, рекомендуя нормализацию и сигналы, специфичные к цели. EBM отделяет features от customer outcomes и рассматривает каждую функцию как гипотезу о ценности. Google SRE требует измерять сервис через user-relevant SLIs и связывать SLO с последствиями. 
+
+Минимальный machine-readable реестр
+Ниже — минимальный YAML-шаблон. Он хранит стабильные сущности и контракты; backlog IDs присутствуют только как traceability-ссылки, но не как поля raw events.
+
+yaml
+Копировать
+schema_version: "1.0"
+
+goals:
+  - id: goal.owner.access
+    type: owner
+    statement: "Увеличить число своевременно полученных консультаций"
+    outcomes:
+      - outcome.owner.slot_utilization
+      - outcome.owner.support_load
+    guardrails:
+      - metric.no_show_rate
+      - metric.double_booking_rate
+
+outcomes:
+  - id: outcome.user.timely_consultation
+    type: user
+    definition: "Консультация состоялась в пределах desired_deadline"
+    metric: metric.timely_consultation_rate
+
+  - id: outcome.owner.slot_utilization
+    type: owner
+    definition: "Доля доступных слотов, завершившихся консультацией"
+    metric: metric.slot_utilization
+
+  - id: outcome.owner.support_load
+    type: owner
+    definition: "Число звонков на завершённую запись"
+    metric: metric.calls_per_completed_booking
+
+jobs:
+  - id: job.book_consultation
+    statement: "Найти специалиста и получить подтверждённую запись"
+    user_outcome: outcome.user.timely_consultation
+    start_event: appointment.availability_requested.v1
+    terminal_states:
+      strict:
+        - appointment.confirmed
+      acceptable:
+        - waitlist.enrolled
+      domain_rejected:
+        - availability.none_found
+      user_cancelled:
+        - booking.cancelled_by_user
+      technical_failed:
+        - booking.failed_technical
+      unknown:
+        - attempt.expired
+    recovery:
+      start_event: booking.recovery_started.v1
+      success_event: appointment.confirmed.v1
+      link_field: predecessor_attempt_id
+
+journeys:
+  - id: journey.digital_booking
+    job: job.book_consultation
+    stages:
+      - availability
+      - slot_selection
+      - authentication
+      - confirmation
+      - notification
+    capabilities:
+      - capability.availability_search
+      - capability.slot_hold
+      - capability.identity_resume
+      - capability.booking_commit
+      - capability.notification
+
+capabilities:
+  - id: capability.identity_resume
+    owner: booking-team
+    operator_jobs:
+      - operator.reconcile_expired_holds
+    enablers:
+      - enabler.distributed_tracing
+      - enabler.feature_flags
+    story_refs:
+      - ST-41
+      - ST-58
+    test_refs:
+      - test.e2e.reauth_resume
+      - test.contract.slot_hold
+
+scenarios:
+  - id: scenario.android_weak_network
+    job: job.book_consultation
+    weight: 0.25
+    context:
+      channel: android
+      auth_state: logged_in
+      network: weak
+    required: true
+    evidence:
+      implemented: true
+      tested: true
+      released: true
+      live_status: below_slo
+
+events:
+  - type: appointment.availability_requested.v1
+    schema: schemas/availability-requested-v1.json
+    required_fields:
+      - event_id
+      - occurred_at
+      - job_attempt_id
+      - job_type
+      - journey_stage
+      - channel
+      - auth_state
+      - service.version
+      - trace_id
+    semantic_owner: booking-domain
+    stability: stable
+
+  - type: appointment.confirmed.v1
+    schema: schemas/appointment-confirmed-v1.json
+    required_fields:
+      - event_id
+      - occurred_at
+      - job_attempt_id
+      - outcome_code
+      - release_id
+      - service.version
+      - trace_id
+    semantic_owner: booking-domain
+    stability: stable
+
+metrics:
+  - id: metric.acceptable_job_completion_rate
+    question: "Какая доля started attempts имеет приемлемый результат?"
+    numerator:
+      terminal_states:
+        - strict
+        - acceptable
+    denominator:
+      state: started
+      exclusions:
+        - invalid_telemetry
+        - synthetic_traffic
+    dimensions:
+      - channel
+      - client_family
+      - auth_state
+      - network_class
+      - scenario_id
+    window: 28d
+    owner: booking-product
+
+  - id: metric.job_sli
+    formula: "good_attempts / valid_attempts"
+    good:
+      terminal_states:
+        - strict
+        - acceptable
+      max_duration_seconds: 90
+      manual_intervention: false
+      double_booking: false
+    valid:
+      exclude_terminal_states:
+        - user_cancelled
+    source_metrics:
+      - metric.acceptable_job_completion_rate
+
+slos:
+  - id: slo.booking_job
+    sli: metric.job_sli
+    target: 0.97
+    window: 28d
+    minimum_sample: 1000
+    segmentation:
+      critical_scenarios: true
+    error_budget_policy: policies/booking-error-budget.yaml
+    owner: booking-product
+
+releases:
+  - id: release.2026.08.1
+    service_version: "booking-api@8.14.0"
+    capability_versions:
+      - capability.identity_resume@2
+    exposure:
+      population: all_eligible
+      percentage: 100
+    deployed_at: "2026-08-01T12:00:00Z"
+
+hypotheses:
+  - id: hypothesis.reauth_resume
+    change: capability.identity_resume@2
+    expected_user_effect:
+      metric: metric.acceptable_job_completion_rate
+      direction: increase
+      minimum_effect_pp: 2.0
+    expected_owner_effect:
+      metric: metric.calls_per_completed_booking
+      direction: decrease
+    guardrails:
+      - metric.no_show_rate
+      - metric.double_booking_rate
+    causal_method: randomized_controlled_experiment
+
+decisions:
+  - id: decision.reauth_resume_rollout
+    hypothesis: hypothesis.reauth_resume
+    evidence_refs:
+      - experiment.exp-2026-071
+      - release.2026.08.1
+      - slo.booking_job
+    evidence_level: causal
+    decision: retain
+    decided_at: "2026-08-04"
+    owner: booking-product
+Такой реестр делает traceability двунаправленной: от цели можно дойти до событий и production evidence, а от инцидента, метрики или события — до затронутого Job, capability, outcome, release и принятого решения. Формат CloudEvents, OpenTelemetry semantic conventions и versioned metric contracts дают техническую основу, но сама продуктовая цепочка Goal → Job → Outcome → Evidence остаётся явной управленческой моделью организации. 

@@ -20,6 +20,8 @@
 - Personalization data ownership (Fly/Supabase/YDB/Object Storage): `docs/architecture/personalization-data-ownership.md`
 - Сквозная аналитика и продуктовая статистика статического сайта:
   `docs/features/static-site-pages/analytics/README.md`
+- Исследования пользовательских историй, Jobs, outcomes и измеримой связи с продуктовой статистикой:
+  `docs/research/user-stories/README.md`
 - Эксплуатация: `docs/operations/` (как запускать/поддерживать)
 - Workflow репозитория и worktree/branch policy: `docs/operations/repository-workflow.md`
 - Incident management / closure gate: `docs/operations/incident-management.md`
