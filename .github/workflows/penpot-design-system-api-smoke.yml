@@ -25,6 +25,7 @@ on:
       - .github/workflows/penpot-design-system-api-smoke.yml
       - scripts/integrations/penpot_api_smoke_test.mjs
       - scripts/integrations/penpot_api_browser_fetch.mjs
+      - scripts/integrations/penpot_api_playwright_fetch.mjs
 
 permissions:
   contents: write
@@ -37,7 +38,7 @@ jobs:
   smoke:
     if: github.event_name == 'push' || inputs.allow_write == true
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       PENPOT_INTEGRATION_TOKEN: ${{ secrets.PENPOT_INTEGRATION_TOKEN }}
       PENPOT_BASE_URL: https://design.penpot.app
@@ -56,11 +57,20 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install pinned Playwright runtime
+        run: npm --prefix site ci
+
+      - name: Install pinned Chromium
+        run: npx --prefix site playwright install --with-deps chromium
 
       - name: Validate adapter offline
         run: |
           node --check scripts/integrations/penpot_api_smoke_test.mjs
           node --check scripts/integrations/penpot_api_browser_fetch.mjs
+          node --check scripts/integrations/penpot_api_playwright_fetch.mjs
           node scripts/integrations/penpot_api_smoke_test.mjs --self-test
 
       - name: Require the integration token
@@ -73,7 +83,7 @@ jobs:
 
       - name: Create and verify Penpot specimen
         id: penpot
-        run: node scripts/integrations/penpot_api_browser_fetch.mjs
+        run: node scripts/integrations/penpot_api_playwright_fetch.mjs
 
       - name: Upload immutable smoke evidence
         uses: actions/upload-artifact@v4
@@ -127,7 +137,7 @@ jobs:
           if entry not in text:
               marker = "## [Unreleased]\n"
               if marker not in text:
-                  raise SystemExit("CHANGELOG.md has no [Unreleased] marker")
+                raise SystemExit("CHANGELOG.md has no [Unreleased] marker")
               text = text.replace(marker, marker + "\n### Added\n\n" + entry, 1)
               changelog.write_text(text, encoding="utf-8")
           PY
