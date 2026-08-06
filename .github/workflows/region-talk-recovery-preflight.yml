@@ -1,0 +1,121 @@
+name: Region Talk legacy recovery preflight
+
+on:
+  push:
+    branches:
+      - agent/region-talk-recovery-preflight-20260806
+    paths:
+      - '.github/workflows/region-talk-recovery-preflight.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: region-talk-legacy-recovery-preflight
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      REGION_TALK_YDB_ENDPOINT: ${{ vars.REGION_TALK_YDB_ENDPOINT }}
+      REGION_TALK_YDB_DATABASE: ${{ vars.REGION_TALK_YDB_DATABASE }}
+      REGION_TALK_YDB_EXPECTED_DATABASE: ${{ vars.REGION_TALK_YDB_EXPECTED_DATABASE || vars.REGION_TALK_YDB_DATABASE }}
+      REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON: ${{ secrets.REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON || secrets.YC_SA_ML_DEV_KEY }}
+      KAGGLE_USERNAME: ${{ vars.KAGGLE_USERNAME }}
+      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+      TELEGRAM_AUTH_BUNDLE_DISCOVERY1: ${{ secrets.TELEGRAM_AUTH_BUNDLE_DISCOVERY1 }}
+      TELEGRAM_AUTH_BUNDLE_DISCOVERY2: ${{ secrets.TELEGRAM_AUTH_BUNDLE_DISCOVERY2 }}
+      TG_API_ID: ${{ secrets.TG_API_ID || vars.TG_API_ID }}
+      TG_API_HASH: ${{ secrets.TG_API_HASH }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY || secrets.SUPABASE_KEY }}
+      GOOGLE_AI_LIMITER_SUPABASE_URL: ${{ secrets.GOOGLE_AI_LIMITER_SUPABASE_URL || vars.GOOGLE_AI_LIMITER_SUPABASE_URL }}
+      GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY: ${{ secrets.GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY }}
+      GOOGLE_API_KEY3: ${{ secrets.GOOGLE_API_KEY3 || secrets.GOOGLE_API_KEY_3 }}
+
+    steps:
+      - name: Check out workflow branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check out exact proven Region Talk source
+        uses: actions/checkout@v4
+        with:
+          repository: onedayonemasterpiece/events-bot-new
+          ref: 5bbdb681623d5e4e0bff2133e487a6663c1a838a
+          path: legacy-src
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C legacy-src rev-parse HEAD)" = '5bbdb681623d5e4e0bff2133e487a6663c1a838a'
+          test -s legacy-src/scripts/region_talk_scheduled_runner.py
+          test -s legacy-src/scripts/region_talk_orchestrator.py
+          test -s legacy-src/kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py
+          test -s legacy-src/kaggle/RegionTalkBgeM3Enrichment/region_talk_bge_m3_enrichment.py
+          test -s legacy-src/kaggle/RegionTalkImageDiagnostic/region_talk_image_diagnostic.py
+          echo 'Exact proven Region Talk implementation is present.'
+
+      - name: Install preflight-only dependencies
+        shell: bash
+        run: python -m pip install --disable-pip-version-check 'aiosqlite>=0.21.0' 'sqlalchemy>=2.0,<3'
+
+      - name: Run non-mutating production preflight
+        id: probe
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p artifacts/region-talk-recovery-preflight
+          set +e
+          (
+            cd legacy-src
+            python scripts/region_talk_scheduled_runner.py --preflight-only
+          ) > artifacts/region-talk-recovery-preflight/result.json
+          rc=$?
+          set -e
+          echo "exit_code=$rc" >> "$GITHUB_OUTPUT"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('artifacts/region-talk-recovery-preflight/result.json')
+          payload = json.loads(path.read_text(encoding='utf-8'))
+          sanitized = {
+              'ok': bool(payload.get('ok')),
+              'missing': sorted(str(item) for item in (payload.get('missing') or [])),
+              'source_commit': '5bbdb681623d5e4e0bff2133e487a6663c1a838a',
+              'mutated_ydb': False,
+              'started_kaggle': False,
+          }
+          path.write_text(json.dumps(sanitized, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          print(json.dumps(sanitized, ensure_ascii=False))
+          with Path('/tmp/summary.md').open('w', encoding='utf-8') as out:
+              out.write('### Region Talk legacy recovery preflight\n\n')
+              out.write(f"- exact source: `{sanitized['source_commit']}`\n")
+              out.write(f"- ready: `{str(sanitized['ok']).lower()}`\n")
+              out.write(f"- missing groups: `{len(sanitized['missing'])}`\n")
+              for item in sanitized['missing']:
+                  out.write(f"  - `{item}`\n")
+              out.write('- YDB mutations: `false`\n')
+              out.write('- Kaggle kernels started: `false`\n')
+          PY
+          cat /tmp/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload sanitized preflight receipt
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: region-talk-legacy-recovery-preflight-${{ github.sha }}
+          path: artifacts/region-talk-recovery-preflight/result.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce readiness result
+        shell: bash
+        run: test '${{ steps.probe.outputs.exit_code }}' = '0'
