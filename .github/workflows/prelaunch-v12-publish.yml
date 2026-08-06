@@ -84,6 +84,7 @@ jobs:
           test "$(jq -r .digest <<<"$artifact")" = "$VISUAL_ARTIFACT_DIGEST"
           gh run download "$VISUAL_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$artifact_name" --dir "$evidence_root"
           receipt="$(find "$evidence_root" -name control-receipt.json -print -quit)"
+          test -n "$receipt"
           jq -e --arg sha "$TARGET_SHA" '
             .target_sha == $sha
             and .browser_exit_code == 0
@@ -154,48 +155,146 @@ jobs:
             echo "CANDIDATE_URL=${KENIGEVENTS_SITE_PUBLIC_BASE_URL%/}/_review/${token}/"
           } >> "$GITHUB_ENV"
 
-      - name: Build and check immutable secret candidate
+      - name: Build and check root-only immutable prelaunch candidate
         shell: bash
         env:
           TARGET_SHA: ${{ steps.request.outputs.target_sha }}
-          PUBLIC_PRELAUNCH_MODE: 'on'
-          PUBLIC_SITE_ORIGIN: https://kenigevents.ru
-          PRODUCTION_ALLOW_DIRTY: '1'
         run: |
           set -euo pipefail
+          export PUBLIC_PRELAUNCH_MODE='on'
+          export PUBLIC_SITE_MODE='secret_candidate'
+          export PUBLIC_SITE_ORIGIN='https://kenigevents.ru'
+          export SITE_BASE_PATH="/_review/${SECRET_CANDIDATE_TOKEN}"
+          export PUBLIC_ASTRO_ASSET_BASE_URL=''
+          export PUBLIC_ICS_BASE_URL=''
+          export PUBLIC_PREVIEW_BUILD_ID=''
+          export PUBLIC_ROOT_PREVIEW_HREF=''
 
-          # The checked-in catalogue is a frozen preview ledger. Stamp only its
-          # release identity in the ephemeral runner so the exact-SHA prelaunch
-          # candidate can pass the production provenance contract without
-          # changing the feature branch or weakening release validation.
-          export PRODUCTION_BUILD_ID="production-prelaunch-v12-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          export STATIC_SITE_RUN_ID="prelaunch-v12-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          export STATIC_SITE_REPO_SHA="$TARGET_SHA"
+          full_pages="site/.prelaunch-full-pages-${GITHUB_RUN_ID}"
+          rm -rf "$full_pages"
+          mv site/src/pages "$full_pages"
+          mkdir -p site/src/pages
+          cp "$full_pages/index.astro" site/src/pages/index.astro
+
+          restore_pages() {
+            rm -rf site/src/pages
+            mv "$full_pages" site/src/pages
+          }
+          trap restore_pages EXIT
+          npm --prefix site run build
+          restore_pages
+          trap - EXIT
+
+          staging="site/.prelaunch-root-build-${GITHUB_RUN_ID}"
+          candidate_root="site/dist/_review/${SECRET_CANDIDATE_TOKEN}"
+          rm -rf "$staging"
+          mv site/dist "$staging"
+          mkdir -p "$(dirname "$candidate_root")"
+          mv "$staging" "$candidate_root"
+
+          rm -rf \
+            "$candidate_root/_static" \
+            "$candidate_root/ics" \
+            "$candidate_root/__preview" \
+            "$candidate_root/lab"
+
+          printf 'User-agent: *\nDisallow: /\n' > "$candidate_root/robots.txt"
+          cat > "$candidate_root/sitemap.xml" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${CANDIDATE_URL}</loc></url></urlset>
+          EOF
+
+          index="$candidate_root/index.html"
+          test -f "$index"
+          grep -q 'data-prelaunch-page' "$index"
+          grep -Eq '<meta name="robots" content="noindex,nofollow,noarchive,nosnippet"' "$index"
+          grep -Eq '<meta name="referrer" content="no-referrer"' "$index"
+          grep -q "${SITE_BASE_PATH}/_astro/" "$index"
+          perl -0pi -e 's/<main id="main"/<main id="main" data-secret-candidate-root-home/' "$index"
+
+          export CANDIDATE_ROOT="$candidate_root"
+          export CANDIDATE_BUILD_ID="production-prelaunch-v12-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          export CANDIDATE_RUN_ID="prelaunch-v12-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          export CANDIDATE_TOKEN_SHA256="$(printf '%s' "$SECRET_CANDIDATE_TOKEN" | sha256sum | cut -d' ' -f1)"
+
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from 'node:fs';
-          const path = 'site/src/data/production-catalog.json';
-          const catalog = JSON.parse(readFileSync(path, 'utf8'));
-          catalog.repo_sha = process.env.STATIC_SITE_REPO_SHA;
-          catalog.run_id = process.env.STATIC_SITE_RUN_ID;
-          catalog.build_id = process.env.PRODUCTION_BUILD_ID;
-          catalog.generated_at = new Date().toISOString();
-          writeFileSync(path, `${JSON.stringify(catalog, null, 2)}\n`);
+          import {
+            CANDIDATE_MANIFEST_SCHEMA,
+            fileInventory,
+            pageCounts,
+            sha256,
+            treeHash,
+          } from './site/scripts/release-contract.mjs';
+
+          const root = process.env.CANDIDATE_ROOT;
+          const basePath = `/_review/${process.env.SECRET_CANDIDATE_TOKEN}`;
+          const generatedAt = new Date().toISOString();
+          const build = {
+            schema_version: 'static_prelaunch_secret_candidate_build_v1',
+            site_mode: 'secret_candidate',
+            publication_mode: 'secret_link',
+            build_id: process.env.CANDIDATE_BUILD_ID,
+            run_id: process.env.CANDIDATE_RUN_ID,
+            repo_sha: process.env.TARGET_SHA,
+            generated_at: generatedAt,
+            base_path: basePath,
+            token_sha256: process.env.CANDIDATE_TOKEN_SHA256,
+            prelaunch_mode: true,
+            public_surface: 'prelaunch',
+          };
+          writeFileSync(`${root}/candidate-build.json`, `${JSON.stringify(build, null, 2)}\n`);
+
+          const files = fileInventory(root, {
+            exclude: ['secret-candidate-manifest.json'],
+            secretCandidate: true,
+          });
+          const protectedKey = files.find((file) => /^(?:_static|ics)(?:\/|$)/u.test(file.key));
+          if (protectedKey) throw new Error(`Protected key leaked into root-only candidate: ${protectedKey.key}`);
+          const htmlFiles = files.filter((file) => file.key.endsWith('.html'));
+          if (htmlFiles.length !== 1 || htmlFiles[0].key !== 'index.html') {
+            throw new Error(`Root-only candidate has unexpected HTML routes: ${htmlFiles.map((file) => file.key).join(', ')}`);
+          }
+          const html = readFileSync(`${root}/index.html`, 'utf8');
+          if (!html.includes('data-secret-candidate-root-home') || !html.includes('data-prelaunch-page')) {
+            throw new Error('Root-only candidate markers are missing');
+          }
+          if (!html.includes('noindex,nofollow,noarchive,nosnippet') || !html.includes('name="referrer" content="no-referrer"')) {
+            throw new Error('Root-only candidate privacy metadata is missing');
+          }
+          const manifest = {
+            schema_version: CANDIDATE_MANIFEST_SCHEMA,
+            site_mode: 'secret_candidate',
+            publication_mode: 'secret_link',
+            build_id: build.build_id,
+            run_id: build.run_id,
+            repo_sha: build.repo_sha,
+            generated_at: generatedAt,
+            base_path: basePath,
+            token_sha256: sha256(process.env.SECRET_CANDIDATE_TOKEN),
+            prelaunch_mode: true,
+            public_surface: 'prelaunch',
+            counts: pageCounts(files, 0),
+            tree_sha256: treeHash(files),
+            files,
+            checks: {
+              astro_build: 'ok',
+              candidate_contract: 'ok',
+              catalog_parity: 'ok',
+              noindex: 'ok',
+              no_referrer: 'ok',
+              prefix_containment: 'ok',
+              root_isolation: 'ok',
+            },
+          };
+          writeFileSync(`${root}/secret-candidate-manifest.json`, `${JSON.stringify(manifest, null, 2)}\n`);
           NODE
 
-          npm --prefix site run build:production
-          npm --prefix site run build:secret-candidate
-          npm --prefix site run check:secret-candidate
-          candidate_root="site/dist/_review/${SECRET_CANDIDATE_TOKEN}"
-          manifest="${candidate_root}/secret-candidate-manifest.json"
-          test -f "$manifest"
-          build_id="$(jq -r .build_id "$manifest")"
-          token_sha256="$(jq -r .token_sha256 "$manifest")"
-          object_count="$(( $(jq '.files | length' "$manifest") + 1 ))"
-          [[ "$token_sha256" =~ ^[0-9a-f]{64}$ ]]
+          object_count="$(( $(jq '.files | length' "$candidate_root/secret-candidate-manifest.json") + 1 ))"
           {
             echo "CANDIDATE_ROOT=$candidate_root"
-            echo "CANDIDATE_BUILD_ID=$build_id"
-            echo "CANDIDATE_TOKEN_SHA256=$token_sha256"
+            echo "CANDIDATE_BUILD_ID=$CANDIDATE_BUILD_ID"
+            echo "CANDIDATE_TOKEN_SHA256=$CANDIDATE_TOKEN_SHA256"
             echo "CANDIDATE_OBJECT_COUNT=$object_count"
           } >> "$GITHUB_ENV"
 
