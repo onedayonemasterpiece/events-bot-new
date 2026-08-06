@@ -87,7 +87,7 @@ body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-accent="true"]::befor
   body .prelaunch[data-prelaunch-page] {
     --prelaunch-artwork-size: min(92vw, 390px);
     --prelaunch-artwork-left: 54%;
-    --prelaunch-artwork-top: clamp(205px, 32vh, 260px);
+    --prelaunch-artwork-top: clamp(212px, 32.5vh, 274px);
   }
 
   body .prelaunch[data-prelaunch-page] .prelaunch__background::after {
@@ -98,7 +98,7 @@ body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-accent="true"]::befor
 @media (max-width: 599px) and (max-height: 680px) {
   body .prelaunch[data-prelaunch-page] {
     --prelaunch-artwork-size: min(90vw, 330px);
-    --prelaunch-artwork-top: clamp(174px, 31vh, 190px);
+    --prelaunch-artwork-top: clamp(178px, 31.5vh, 194px);
   }
 }
 
