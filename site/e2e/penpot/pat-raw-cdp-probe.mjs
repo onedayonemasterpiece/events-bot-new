@@ -167,9 +167,12 @@ async function discoverDevToolsSocket() {
 
 async function startChrome() {
   const commandLine = 'chrome --no-first-run --disable-fre --disable-default-apps --disable-notifications';
+  const localCommandPath = resolve('artifacts/penpot-android-raw/chrome-command-line');
   await adb('shell', 'am', 'force-stop', 'com.android.chrome').catch(() => undefined);
   await adb('shell', 'pm', 'clear', 'com.android.chrome').catch(() => undefined);
-  await adb('shell', 'sh', '-c', `printf '%s\\n' '${commandLine}' > /data/local/tmp/chrome-command-line`);
+  await mkdir(dirname(localCommandPath), { recursive: true });
+  await writeFile(localCommandPath, `${commandLine}\n`, 'utf8');
+  await adb('push', localCommandPath, '/data/local/tmp/chrome-command-line');
   await adb('shell', 'chmod', '0666', '/data/local/tmp/chrome-command-line');
   await adb(
     'shell', 'am', 'start',
@@ -266,7 +269,7 @@ async function waitForSettledPage(client, timeoutMs) {
 }
 
 const result = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   status: 'FAIL',
   platform: 'android-chrome-raw-cdp',
   targetOrigin,
