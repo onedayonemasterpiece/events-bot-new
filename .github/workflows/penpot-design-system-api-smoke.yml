@@ -24,6 +24,7 @@ on:
     paths:
       - .github/workflows/penpot-design-system-api-smoke.yml
       - scripts/integrations/penpot_api_smoke_test.mjs
+      - scripts/integrations/penpot_api_browser_fetch.mjs
 
 permissions:
   contents: write
@@ -59,6 +60,7 @@ jobs:
       - name: Validate adapter offline
         run: |
           node --check scripts/integrations/penpot_api_smoke_test.mjs
+          node --check scripts/integrations/penpot_api_browser_fetch.mjs
           node scripts/integrations/penpot_api_smoke_test.mjs --self-test
 
       - name: Require the integration token
@@ -71,7 +73,7 @@ jobs:
 
       - name: Create and verify Penpot specimen
         id: penpot
-        run: node scripts/integrations/penpot_api_smoke_test.mjs
+        run: node scripts/integrations/penpot_api_browser_fetch.mjs
 
       - name: Upload immutable smoke evidence
         uses: actions/upload-artifact@v4
