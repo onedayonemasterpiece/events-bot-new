@@ -16,7 +16,10 @@ const artworkSource = pwaArtwork.src;
   (() => {
     const root = document.querySelector('[data-prelaunch-page]');
     const background = root?.querySelector('.prelaunch__background');
-    if (!(root instanceof HTMLElement) || !(background instanceof HTMLElement)) return;
+    const mosaic = root?.querySelector('[data-prelaunch-mosaic]');
+    if (!(root instanceof HTMLElement)
+      || !(background instanceof HTMLElement)
+      || !(mosaic instanceof HTMLElement)) return;
 
     const heading = root.querySelector('#prelaunch-title');
     if (heading && !heading.querySelector('.prelaunch-title__line')) {
@@ -29,112 +32,86 @@ const artworkSource = pwaArtwork.src;
       heading.replaceChildren(first, document.createTextNode(' '), second);
     }
 
+    // A bounded 98-pane pool lets a 14-column wide viewport show more panes
+    // instead of enlarging the same seven modules. The original deterministic
+    // material/state plan is repeated; all later mapping uses actual geometry.
+    const templates = Array.from(mosaic.querySelectorAll('[data-prelaunch-tile]'));
+    const targetTileCount = 98;
+    for (let index = templates.length; index < targetTileCount; index += 1) {
+      const template = templates[index % templates.length];
+      const clone = template?.cloneNode(true);
+      if (!(clone instanceof HTMLElement)) continue;
+      clone.dataset.index = String(index);
+      clone.removeAttribute('data-row');
+      clone.removeAttribute('data-column');
+      clone.removeAttribute('data-edge');
+      clone.removeAttribute('data-window');
+      clone.removeAttribute('data-accent');
+      clone.removeAttribute('data-glint');
+      clone.style.setProperty('--delay', `${-((index * 11) % 29) / 10}s`);
+      mosaic.append(clone);
+    }
+    root.dataset.tilePoolCount = String(mosaic.querySelectorAll('[data-prelaunch-tile]').length);
+
+    // The source contains a white studio field and a lower shadow. Its leather
+    // object is a simple rounded rectangle, so clip it geometrically instead of
+    // running a costly and fragile pixel flood-fill in every visitor's browser.
     const source = new Image();
     source.decoding = 'async';
     source.src = artworkSource;
 
-    const isConnectedStudioPixel = (red, green, blue, alpha) => {
-      if (alpha < 8) return true;
-      const maximum = Math.max(red, green, blue);
-      const minimum = Math.min(red, green, blue);
-      const luminance = red * .2126 + green * .7152 + blue * .0722;
-      return luminance > 205 && maximum - minimum < 48;
-    };
-
-    const buildTransparentArtwork = () => {
+    const mountArtwork = () => {
       if (!source.naturalWidth || !source.naturalHeight || root.dataset.artworkReady === 'true') return;
+      const namespace = 'http://www.w3.org/2000/svg';
+      const xlink = 'http://www.w3.org/1999/xlink';
+      const clipId = 'prelaunch-pwa-object-clip';
+      const svg = document.createElementNS(namespace, 'svg');
+      svg.classList.add('prelaunch__artwork');
+      svg.setAttribute('viewBox', '110 95 1034 1034');
+      svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+      svg.setAttribute('aria-hidden', 'true');
+      svg.setAttribute('focusable', 'false');
+      svg.setAttribute('role', 'presentation');
 
-      const outputSize = 900;
-      const canvas = document.createElement('canvas');
-      canvas.className = 'prelaunch__artwork';
-      canvas.width = outputSize;
-      canvas.height = outputSize;
-      canvas.setAttribute('aria-hidden', 'true');
-      canvas.setAttribute('role', 'presentation');
+      const defs = document.createElementNS(namespace, 'defs');
+      const clip = document.createElementNS(namespace, 'clipPath');
+      clip.setAttribute('id', clipId);
+      clip.setAttribute('clipPathUnits', 'userSpaceOnUse');
+      const rect = document.createElementNS(namespace, 'rect');
+      rect.setAttribute('x', '110');
+      rect.setAttribute('y', '95');
+      rect.setAttribute('width', '1034');
+      rect.setAttribute('height', '1034');
+      rect.setAttribute('rx', '175');
+      rect.setAttribute('ry', '175');
+      clip.append(rect);
+      defs.append(clip);
 
-      const context = canvas.getContext('2d', { willReadFrequently: true });
-      if (!context) return;
-      context.drawImage(source, 0, 0, outputSize, outputSize);
+      const image = document.createElementNS(namespace, 'image');
+      image.setAttribute('x', '0');
+      image.setAttribute('y', '0');
+      image.setAttribute('width', '1254');
+      image.setAttribute('height', '1254');
+      image.setAttribute('preserveAspectRatio', 'none');
+      image.setAttribute('clip-path', `url(#${clipId})`);
+      image.setAttribute('href', artworkSource);
+      image.setAttributeNS(xlink, 'href', artworkSource);
 
-      const image = context.getImageData(0, 0, outputSize, outputSize);
-      const pixels = image.data;
-      const pixelCount = outputSize * outputSize;
-      const visited = new Uint8Array(pixelCount);
-      const queue = new Uint32Array(pixelCount);
-      let head = 0;
-      let tail = 0;
-
-      const enqueue = (index) => {
-        if (visited[index]) return;
-        const offset = index * 4;
-        if (!isConnectedStudioPixel(
-          pixels[offset],
-          pixels[offset + 1],
-          pixels[offset + 2],
-          pixels[offset + 3],
-        )) return;
-        visited[index] = 1;
-        queue[tail] = index;
-        tail += 1;
-      };
-
-      for (let x = 0; x < outputSize; x += 1) {
-        enqueue(x);
-        enqueue((outputSize - 1) * outputSize + x);
-      }
-      for (let y = 1; y < outputSize - 1; y += 1) {
-        enqueue(y * outputSize);
-        enqueue(y * outputSize + outputSize - 1);
-      }
-
-      while (head < tail) {
-        const index = queue[head];
-        head += 1;
-        const x = index % outputSize;
-        const y = Math.floor(index / outputSize);
-        if (x > 0) enqueue(index - 1);
-        if (x + 1 < outputSize) enqueue(index + 1);
-        if (y > 0) enqueue(index - outputSize);
-        if (y + 1 < outputSize) enqueue(index + outputSize);
-      }
-
-      for (let index = 0; index < pixelCount; index += 1) {
-        if (visited[index]) pixels[index * 4 + 3] = 0;
-      }
-
-      for (let y = 1; y < outputSize - 1; y += 1) {
-        for (let x = 1; x < outputSize - 1; x += 1) {
-          const index = y * outputSize + x;
-          if (visited[index]) continue;
-          const touchesRemoved = visited[index - 1]
-            || visited[index + 1]
-            || visited[index - outputSize]
-            || visited[index + outputSize];
-          if (!touchesRemoved) continue;
-          const offset = index * 4;
-          const maximum = Math.max(pixels[offset], pixels[offset + 1], pixels[offset + 2]);
-          const minimum = Math.min(pixels[offset], pixels[offset + 1], pixels[offset + 2]);
-          const luminance = pixels[offset] * .2126 + pixels[offset + 1] * .7152 + pixels[offset + 2] * .0722;
-          if (luminance > 184 && maximum - minimum < 62) {
-            pixels[offset + 3] = Math.min(pixels[offset + 3], 72);
-          }
-        }
-      }
-
-      context.putImageData(image, 0, 0);
+      svg.append(defs, image);
       background.querySelector('.prelaunch__artwork')?.remove();
-      background.append(canvas);
-      root.dataset.transparentArtworkBound = 'canvas-reference';
+      background.append(svg);
+      root.dataset.transparentArtworkBound = 'svg-rounded-clip';
       root.dataset.artworkReady = 'true';
       window.dispatchEvent(new CustomEvent('prelaunch-artwork-ready'));
     };
 
-    if (source.complete) buildTransparentArtwork();
-    else source.addEventListener('load', buildTransparentArtwork, { once: true });
+    if (source.complete && source.naturalWidth > 0) mountArtwork();
+    else source.addEventListener('load', mountArtwork, { once: true });
   })();
 </script>
 
 <script>
+  import '../scripts/prelaunchEmailGuard';
   import '../scripts/prelaunchExperience';
 </script>
 
