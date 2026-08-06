@@ -1,60 +1,29 @@
-name: Penpot design-system API smoke
+name: Penpot PAT canonical read probe
 
 on:
   workflow_dispatch:
-    inputs:
-      allow_write:
-        description: Create or reuse the isolated Penpot smoke-test file and specimen
-        required: true
-        default: false
-        type: boolean
-      team_name:
-        description: Penpot team name hint
-        required: false
-        default: Полюбить Калининград
-        type: string
-      project_name:
-        description: Penpot project name hint
-        required: false
-        default: Design System
-        type: string
+  push:
+    branches:
+      - agent/penpot-api-smoke-20260806
+    paths:
+      - .github/workflows/penpot-design-system-api-smoke.yml
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: penpot-design-system-api-smoke
+  group: penpot-pat-canonical-read-probe
   cancel-in-progress: false
 
 jobs:
-  smoke:
-    if: inputs.allow_write == true
-    runs-on: lovekgd-penpot
-    timeout-minutes: 10
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     env:
       PENPOT_INTEGRATION_TOKEN: ${{ secrets.PENPOT_INTEGRATION_TOKEN }}
-      PENPOT_BASE_URL: https://design.penpot.app
-      PENPOT_TEAM_NAME: ${{ inputs.team_name || 'Полюбить Калининград' }}
-      PENPOT_PROJECT_NAME: ${{ inputs.project_name || 'Design System' }}
-      PENPOT_SMOKE_FILE_NAME: 00 — LoveKGD API smoke test
-      PENPOT_RESULT_PATH: artifacts/penpot-smoke/penpot-smoke-result.json
+      PENPOT_PROFILE_URL: https://design.penpot.app/api/rpc/command/get-profile
 
     steps:
-      - name: Checkout exact branch
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Validate adapter offline
-        run: |
-          node --check scripts/integrations/penpot_api_smoke_test.mjs
-          node scripts/integrations/penpot_api_smoke_test.mjs --self-test
-
       - name: Require the integration token
         shell: bash
         run: |
@@ -63,72 +32,114 @@ jobs:
             exit 1
           fi
 
-      - name: Create and verify Penpot specimen
-        id: penpot
-        run: node scripts/integrations/penpot_api_smoke_test.mjs
+      - name: Run the exact documented GET request
+        id: probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/penpot-read-probe
+          headers="artifacts/penpot-read-probe/headers.txt"
+          body="artifacts/penpot-read-probe/body.bin"
 
-      - name: Upload immutable smoke evidence
+          # Penpot's official integration guide documents GET for get-profile:
+          # curl -H "Authorization: Token <token>" <profile-url>
+          status="$({ curl \
+            --silent \
+            --show-error \
+            --location \
+            --max-time 30 \
+            --dump-header "${headers}" \
+            --output "${body}" \
+            --write-out '%{http_code}' \
+            --header "Authorization: Token ${PENPOT_INTEGRATION_TOKEN}" \
+            --header 'Accept: application/json' \
+            "${PENPOT_PROFILE_URL}"; } || true)"
+
+          content_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/^[^:]+:[[:space:]]*/, ""); gsub(/\r/, ""); value=$0} END{print value}' "${headers}")"
+          server="$(awk 'BEGIN{IGNORECASE=1} /^server:/{sub(/^[^:]+:[[:space:]]*/, ""); gsub(/\r/, ""); value=$0} END{print value}' "${headers}")"
+          cf_ray="$(awk 'BEGIN{IGNORECASE=1} /^cf-ray:/{sub(/^[^:]+:[[:space:]]*/, ""); gsub(/\r/, ""); value=$0} END{print value}' "${headers}")"
+          body_size="$(wc -c < "${body}" | tr -d ' ')"
+          body_sha256="$(shasum -a 256 "${body}" | awk '{print $1}')"
+          cloudflare_challenge=false
+          if grep -aFq 'Just a moment...' "${body}"; then
+            cloudflare_challenge=true
+          fi
+
+          STATUS="${status}" \
+          CONTENT_TYPE="${content_type}" \
+          SERVER_HEADER="${server}" \
+          CF_RAY="${cf_ray}" \
+          BODY_SIZE="${body_size}" \
+          BODY_SHA256="${body_sha256}" \
+          CLOUDFLARE_CHALLENGE="${cloudflare_challenge}" \
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          result = {
+              "request": {
+                  "method": "GET",
+                  "url": os.environ["PENPOT_PROFILE_URL"],
+                  "authorizationScheme": "Token",
+                  "accept": "application/json",
+              },
+              "response": {
+                  "status": int(os.environ["STATUS"] or 0),
+                  "contentType": os.environ["CONTENT_TYPE"],
+                  "server": os.environ["SERVER_HEADER"],
+                  "cfRay": os.environ["CF_RAY"],
+                  "bodySize": int(os.environ["BODY_SIZE"]),
+                  "bodySha256": os.environ["BODY_SHA256"],
+                  "cloudflareChallenge": os.environ["CLOUDFLARE_CHALLENGE"] == "true",
+              },
+          }
+
+          body_path = Path("artifacts/penpot-read-probe/body.bin")
+          if result["response"]["status"] == 200:
+              try:
+                  payload = json.loads(body_path.read_text(encoding="utf-8"))
+              except Exception as exc:
+                  result["validation"] = {"json": False, "errorType": type(exc).__name__}
+              else:
+                  result["validation"] = {
+                      "json": True,
+                      "object": isinstance(payload, dict),
+                      "topLevelKeys": sorted(payload.keys()) if isinstance(payload, dict) else [],
+                  }
+
+          Path("artifacts/penpot-read-probe/result.json").write_text(
+              json.dumps(result, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+          echo "status=${status}" >> "${GITHUB_OUTPUT}"
+          echo "cloudflare_challenge=${cloudflare_challenge}" >> "${GITHUB_OUTPUT}"
+
+          {
+            echo '## Penpot PAT canonical read probe'
+            echo
+            echo "- Method: \`GET\`"
+            echo "- HTTP status: \`${status}\`"
+            echo "- Content-Type: \`${content_type:-missing}\`"
+            echo "- Server: \`${server:-missing}\`"
+            echo "- Cloudflare challenge body: \`${cloudflare_challenge}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload immutable diagnostic receipt
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: penpot-api-smoke-${{ github.run_id }}
-          path: artifacts/penpot-smoke/penpot-smoke-result.json
+          name: penpot-pat-read-probe-${{ github.run_id }}
+          path: artifacts/penpot-read-probe/result.json
           if-no-files-found: error
           retention-days: 14
 
-      - name: Record branch evidence and changelog
+      - name: Require successful profile read
         shell: bash
         run: |
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          result_path = Path("artifacts/penpot-smoke/penpot-smoke-result.json")
-          result = json.loads(result_path.read_text(encoding="utf-8"))
-          report_path = Path("docs/reports/penpot-api-smoke-2026-08-06.md")
-          report_path.parent.mkdir(parents=True, exist_ok=True)
-          report_path.write_text(
-              "# Penpot API smoke — 2026-08-06\n\n"
-              "> Status: **PASS**\n\n"
-              "The repository-scoped `PENPOT_INTEGRATION_TOKEN` was used only by "
-              "the isolated self-hosted GitHub Actions runner to create or reuse a "
-              "dedicated Penpot file, add a button specimen, create a comment thread "
-              "and reread the resulting file. MCP was not involved.\n\n"
-              f"- Team: `{result['team']['name']}` (`{result['team']['id']}`)\n"
-              f"- Project: `{result['project']['name']}` (`{result['project']['id']}`)\n"
-              f"- File: `{result['file']['name']}` (`{result['file']['id']}`)\n"
-              f"- Page: `{result['page']['id']}`\n"
-              f"- Penpot revision: `{result['file']['revision']}`\n"
-              f"- DS element: `{result['objects']['dsElementId']}`\n"
-              f"- [Open the exact Penpot page]({result['workspaceUrl']})\n\n"
-              "## Acceptance step\n\n"
-              "Open the page and leave a reply or a new comment over the button. "
-              "The next integration slice will pull unresolved comments and generate "
-              "the short ChatGPT prompt for that stable DS element ID.\n",
-              encoding="utf-8",
-          )
-
-          changelog = Path("CHANGELOG.md")
-          text = changelog.read_text(encoding="utf-8")
-          entry = (
-              "- Added a PAT-based Penpot API smoke contour that creates an isolated "
-              "design-system button specimen and comment thread, rereads the exact "
-              "file revision and records a direct workspace link; MCP is not part of "
-              "the contract.\n"
-          )
-          if entry not in text:
-              marker = "## [Unreleased]\n"
-              if marker not in text:
-                  raise SystemExit("CHANGELOG.md has no [Unreleased] marker")
-              text = text.replace(marker, marker + "\n### Added\n\n" + entry, 1)
-              changelog.write_text(text, encoding="utf-8")
-          PY
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add CHANGELOG.md docs/reports/penpot-api-smoke-2026-08-06.md
-          if git diff --cached --quiet; then
-            echo "Evidence already recorded"
-          else
-            git commit -m "docs: record Penpot API smoke evidence"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
+          if [[ "${{ steps.probe.outputs.status }}" != "200" ]]; then
+            echo "Canonical Penpot PAT GET did not reach a successful profile read." >&2
+            exit 1
           fi
