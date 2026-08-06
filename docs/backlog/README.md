@@ -6,6 +6,7 @@
 
 ## TODO (проработано, но не реализовано)
 
+- Регистрация на мероприятия партнёров + NFC check-in: demo-ready MVP к 11 августа 2026 года, демонстрация 12 августа 2026 года; продуктовый контракт и границы — `docs/backlog/features/partner-event-registration-and-nfc-check-in/README.md`, план реализации/демо и презентации — `docs/backlog/features/partner-event-registration-and-nfc-check-in/demo-2026-08-12.md`.
 - Movie showtimes (кино/сеансы): `docs/backlog/features/movie-showtimes/README.md`
 - Event scoring & filtering (скоринг/фильтрация): `docs/backlog/features/event-scoring/README.md`
 - Event static pages (собственный домен, SEO/GEO, Yandex S3): `docs/backlog/features/static-event-pages/README.md`
