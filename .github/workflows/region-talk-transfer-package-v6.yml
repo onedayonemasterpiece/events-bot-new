@@ -83,6 +83,17 @@ jobs:
           --target transfer
           --source-sha "$SOURCE_SHA"
 
+      - name: Materialize standalone safety defaults
+        run: |
+          cat > transfer/fly.toml <<'EOF'
+          # Compatibility contract retained from the proven runtime tests.
+          # The standalone Region Talk service is NOT deployed to Fly; GitHub
+          # Actions reads equivalent versioned defaults from its own config.
+          [env]
+          REGION_TALK_REACTION_SYNC_ENABLED = "1"
+          REGION_TALK_REACTION_GATE_ENABLED = "1"
+          EOF
+
       - name: Validate transferred runtime and full product suite
         run: |
           python -m compileall -q transfer/scripts transfer/kaggle transfer/tests
