@@ -317,7 +317,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npm --prefix site run plan:secret-candidate > "${RUNNER_TEMP}/plan.json"
+          node site/scripts/deploy-secret-candidate-yc.mjs plan > "${RUNNER_TEMP}/plan.json"
           jq -e '
             .ok == true
             and .anonymous_list_preflight == "disabled"
@@ -326,7 +326,7 @@ jobs:
             and .overwrite_allowed == false
           ' "${RUNNER_TEMP}/plan.json" >/dev/null
           export SECRET_CANDIDATE_CONFIRM="publish-secret:${CANDIDATE_BUILD_ID}:${CANDIDATE_TOKEN_SHA256}"
-          npm --prefix site run publish:secret-candidate
+          node site/scripts/deploy-secret-candidate-yc.mjs publish
 
       - name: Run public Chromium and product gates
         shell: bash
