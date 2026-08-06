@@ -69,6 +69,13 @@ jobs:
           python control/tools/patch-migrator-pytest-support.py control/tools/migrate_from_events_bot.py
           python control/tools/patch-migrator-doc-literals.py control/tools/migrate_from_events_bot.py
 
+      - name: Diagnose exact source dependency closure
+        continue-on-error: true
+        run: >-
+          python control/tools/diagnose-standalone-closure.py
+          --source source
+          --migrator control/tools/migrate_from_events_bot.py
+
       - name: Build standalone transfer tree
         run: >-
           python control/tools/migrate_from_events_bot.py
