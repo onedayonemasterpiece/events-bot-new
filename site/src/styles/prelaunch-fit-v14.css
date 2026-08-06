@@ -1,0 +1,72 @@
+/*
+ * Prelaunch visual correction v14.
+ *
+ * The source PWA artwork contains a light studio margin. Zoom it inside the
+ * already-sized artwork box, then clip to the leather silhouette. This keeps
+ * the actual leather/wordmark visible without a pale outer crescent.
+ */
+
+body .prelaunch[data-prelaunch-page] .prelaunch__background::after {
+  clip-path: inset(0 round 13%) !important;
+  background: var(--prelaunch-reference-image) center 48% / 122% 122% no-repeat !important;
+  mix-blend-mode: normal !important;
+  opacity: .94 !important;
+  filter: saturate(.98) contrast(1.06) brightness(.79) !important;
+}
+
+/* The coherent windows must actually reveal the artwork. Other panes remain
+   dark/frosted, so this does not turn the page into an orange tiled wall. */
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-window="true"][data-state="revealed"] {
+  --cover-state: .2;
+  --blur-base: 1.8px;
+  --saturation: .96;
+  --brightness: 1.01;
+  --matte: .27;
+  --edge-top: .14;
+  --edge-right: .11;
+  --edge-bloom: .042;
+}
+
+@media (max-width: 599px) {
+  body .prelaunch[data-prelaunch-page] {
+    --prelaunch-artwork-top: clamp(176px, 32vh, 285px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__background::after {
+    background-size: 124% 124% !important;
+    filter: saturate(.98) contrast(1.06) brightness(.78) !important;
+  }
+}
+
+@media (max-width: 599px) and (max-height: 680px) {
+  body .prelaunch[data-prelaunch-page] {
+    --prelaunch-artwork-top: clamp(172px, 31vh, 190px);
+  }
+}
+
+/* A short landscape phone uses the same scene and material, but the form gets
+   a bounded right column so neither CTA nor consent can leave the viewport. */
+@media (orientation: landscape) and (min-width: 600px) and (max-height: 500px) {
+  body .prelaunch[data-prelaunch-page] .prelaunch__foreground {
+    grid-template-columns: minmax(0, 1.08fr) minmax(270px, .92fr) !important;
+    column-gap: clamp(18px, 3vw, 32px) !important;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__notify {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    transform: translateY(-8px) !important;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch-form__row {
+    min-width: 0 !important;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch-form__promise,
+  body .prelaunch[data-prelaunch-page] .prelaunch-form__consent {
+    max-width: 100% !important;
+    font-size: clamp(.5rem, 2.15vh, .58rem) !important;
+    line-height: 1.14 !important;
+  }
+}
