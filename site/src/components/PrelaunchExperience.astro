@@ -5,18 +5,23 @@ import '../styles/prelaunch-fit-v13.css';
 import '../styles/prelaunch-fit-v14.css';
 import '../styles/prelaunch-fit-v15.css';
 
-const artworkImage = `url("${transparentArtwork.src}")`;
+const artworkUrl = transparentArtwork.src;
 ---
+
+<script is:inline define:vars={{ artworkUrl }}>
+  (() => {
+    const root = document.querySelector('[data-prelaunch-page]');
+    if (!(root instanceof HTMLElement)) return;
+    root.style.setProperty('--prelaunch-artwork-image', `url("${artworkUrl}")`);
+    root.dataset.transparentArtworkBound = 'true';
+  })();
+</script>
 
 <script>
   import '../scripts/prelaunchExperience';
 </script>
 
-<style is:global define:vars={{ artworkImage }}>
-  html body .prelaunch[data-prelaunch-page] {
-    --prelaunch-artwork-image: var(--artworkImage);
-  }
-
+<style is:global>
   /* The deterministic reveal map is assigned after hydration. In reduced-
      motion mode the material must settle immediately rather than exposing a
      several-second intermediate aperture to screenshots and assistive users. */
