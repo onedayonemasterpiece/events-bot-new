@@ -1,0 +1,97 @@
+name: Penpot PAT Android browser smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/penpot-api-smoke-20260806
+    paths:
+      - .github/workflows/penpot-pat-android-browser-smoke.yml
+      - site/e2e/penpot/pat-browser-probe.mjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: penpot-pat-android-browser-smoke
+  cancel-in-progress: false
+
+jobs:
+  android-chrome:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      PENPOT_INTEGRATION_TOKEN: ${{ secrets.PENPOT_INTEGRATION_TOKEN }}
+      PENPOT_BASE_URL: https://design.penpot.app
+      PENPOT_ANDROID_DEVICE_NAME: Pixel 7
+      PENPOT_ANDROID_PLATFORM_VERSION: '15'
+      PENPOT_ANDROID_EVIDENCE_PATH: artifacts/penpot-android-browser/result.json
+
+    defaults:
+      run:
+        working-directory: site
+
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.22.0'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install pinned browser-test dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Validate probe and secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check e2e/penpot/pat-browser-probe.mjs
+          if [[ -z "${PENPOT_INTEGRATION_TOKEN}" ]]; then
+            echo 'PENPOT_INTEGRATION_TOKEN is missing' >&2
+            exit 1
+          fi
+
+      - name: Enable KVM for the Android emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm
+          sudo chmod 0666 /dev/kvm
+          test -r /dev/kvm && test -w /dev/kvm
+
+      - name: Run Android 15 Chrome PAT probe
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.34.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          working-directory: site
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -timezone UTC
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            appium_log="${RUNNER_TEMP}/appium-penpot-android.log"
+            trap 'rm -f "${appium_log}"' EXIT
+            npx appium --base-path /wd/hub --port 4723 --allow-insecure uiautomator2:chromedriver_autodownload > "${appium_log}" 2>&1 &
+            for n in $(seq 1 60); do
+              if curl -fsS http://127.0.0.1:4723/wd/hub/status >/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+            curl -fsS http://127.0.0.1:4723/wd/hub/status >/dev/null
+            node e2e/penpot/pat-browser-probe.mjs
+
+      - name: Upload sanitized evidence
+        if: ${{ always() && hashFiles('site/artifacts/penpot-android-browser/result.json') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: penpot-pat-android-browser-${{ github.run_id }}-${{ github.run_attempt }}
+          path: site/artifacts/penpot-android-browser/result.json
+          if-no-files-found: error
+          retention-days: 14
