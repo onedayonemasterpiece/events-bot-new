@@ -89,7 +89,7 @@ jobs:
           cat /tmp/prelaunch-v12-http.log
           exit 1
 
-      - name: Capture visual, mask, light, responsive and form-state evidence
+      - name: Capture visual, crop, mask, light, responsive and form-state evidence
         id: gates
         shell: bash
         env:
@@ -124,6 +124,11 @@ jobs:
             --artifact-dir ../artifacts/prelaunch-browser
           experience_status=$?
 
+          node site/scripts/check-prelaunch-visual-regressions.mjs \
+            --url http://127.0.0.1:4173/ \
+            --artifact-dir "$artifact_dir"
+          visual_regression_status=$?
+
           cp docs/features/static-site-pages/prelaunch-handoff/reference/target-desktop.webp \
             "$artifact_dir/reference/target-desktop.webp"
           cp docs/features/static-site-pages/prelaunch-handoff/reference/PWA-icon.webp \
@@ -140,7 +145,7 @@ jobs:
           printf '%s\n' "$TARGET_SHA" > "$artifact_dir/repository-sha.txt"
           cat > "$artifact_dir/control-receipt.json" <<EOF
           {
-            "schema_version": "prelaunch_v12_control_receipt_v1",
+            "schema_version": "prelaunch_v13_control_receipt_v1",
             "request_id": "$REQUEST_ID",
             "target_sha": "$TARGET_SHA",
             "run_id": "$GITHUB_RUN_ID",
@@ -148,12 +153,13 @@ jobs:
             "viewport_fit_exit_code": $fit_status,
             "light_model_exit_code": $light_status,
             "experience_exit_code": $experience_status,
+            "visual_regression_exit_code": $visual_regression_status,
             "product_policy_exit_code": $policy_status
           }
           EOF
 
           combined=0
-          for status in "$browser_status" "$fit_status" "$light_status" "$experience_status" "$policy_status"; do
+          for status in "$browser_status" "$fit_status" "$light_status" "$experience_status" "$visual_regression_status" "$policy_status"; do
             if [[ "$status" -ne 0 ]]; then combined=1; fi
           done
           exit "$combined"
