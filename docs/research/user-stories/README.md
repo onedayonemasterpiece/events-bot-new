@@ -4,8 +4,8 @@
 
 ## Исследования
 
-1. [Лучшие практики формирования пользовательских историй](user-story-formation-best-practices.md) — переход от пользовательской потребности к вертикальному срезу, Card–Conversation–Confirmation, INVEST, Story Mapping, Example Mapping, acceptance criteria, декомпозиция и практические примеры.
-2. [Измеримая связь пользовательских задач, сервиса и продуктовой ценности](measurable-user-jobs-service-product-value.md) — Jobs, journeys, capabilities, user/owner outcomes, job attempts, coverage, SLI/SLO, production evidence, метрики и traceability до решений.
+1. [Лучшие практики формирования пользовательских историй](user-story-formation-best-practices/README.md) — переход от пользовательской потребности к вертикальному срезу, Card–Conversation–Confirmation, INVEST, Story Mapping, Example Mapping, acceptance criteria, декомпозиция и 16 практических примеров. Исходный отчёт сохранён в пяти последовательных частях; SHA-256 загруженного файла: `5f8a13440bd2c98cbc793d3981b55b7a717861cee1f54cabafbc2fb439eddb47`.
+2. [Измеримая связь пользовательских задач, сервиса и продуктовой ценности](measurable-user-jobs-service-product-value.txt) — Jobs, journeys, capabilities, user/owner outcomes, job attempts, coverage, SLI/SLO, production evidence, метрики и traceability до решений. SHA-256 загруженного файла: `0db507a080d58f6786ee051b1cdf8fdc043a82b2ee5b704953290ae990e1aded`.
 
 ## Правило применения
 
