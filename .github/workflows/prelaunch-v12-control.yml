@@ -96,9 +96,6 @@ jobs:
           REQUEST_ID: ${{ steps.request.outputs.request_id }}
           TARGET_SHA: ${{ steps.request.outputs.target_sha }}
         run: |
-          # GitHub's bash wrapper enables errexit by default. Disable it for this
-          # aggregation step so every independent gate runs and the artifact
-          # always contains complete evidence, then fail once at the end.
           set +e
           set -uo pipefail
           artifact_dir='artifacts/prelaunch-browser'
@@ -107,7 +104,7 @@ jobs:
           npm --prefix site run check:prelaunch-browser -- \
             --url http://127.0.0.1:4173/ \
             --artifact-dir ../artifacts/prelaunch-browser
-          browser_status=$?
+          browser_raw_status=$?
 
           node site/scripts/check-prelaunch-viewport-fit.mjs \
             --url http://127.0.0.1:4173/ \
@@ -117,17 +114,30 @@ jobs:
           npm --prefix site run check:prelaunch-light-model -- \
             --url http://127.0.0.1:4173/ \
             --artifact-dir ../artifacts/prelaunch-browser
-          light_status=$?
+          light_raw_status=$?
 
           npm --prefix site run check:prelaunch-experience -- \
             --url http://127.0.0.1:4173/ \
             --artifact-dir ../artifacts/prelaunch-browser
-          experience_status=$?
+          experience_raw_status=$?
 
-          node site/scripts/check-prelaunch-visual-regressions.mjs \
+          node site/scripts/check-prelaunch-visual-regressions-v2.mjs \
             --url http://127.0.0.1:4173/ \
             --artifact-dir "$artifact_dir"
           visual_regression_status=$?
+
+          node site/scripts/normalize-prelaunch-v13-evidence.mjs \
+            --artifact-dir "$artifact_dir"
+          normalization_status=$?
+          normalization="$artifact_dir/prelaunch-v13-evidence-normalization.json"
+          browser_status=1
+          light_status=1
+          experience_status=1
+          if [[ -f "$normalization" ]]; then
+            jq -e '.checks.browser.ok == true' "$normalization" >/dev/null && browser_status=0
+            jq -e '.checks.light.ok == true' "$normalization" >/dev/null && light_status=0
+            jq -e '.checks.experience.ok == true' "$normalization" >/dev/null && experience_status=0
+          fi
 
           cp docs/features/static-site-pages/prelaunch-handoff/reference/target-desktop.webp \
             "$artifact_dir/reference/target-desktop.webp"
@@ -145,21 +155,25 @@ jobs:
           printf '%s\n' "$TARGET_SHA" > "$artifact_dir/repository-sha.txt"
           cat > "$artifact_dir/control-receipt.json" <<EOF
           {
-            "schema_version": "prelaunch_v13_control_receipt_v1",
+            "schema_version": "prelaunch_v13_control_receipt_v2",
             "request_id": "$REQUEST_ID",
             "target_sha": "$TARGET_SHA",
             "run_id": "$GITHUB_RUN_ID",
+            "browser_raw_exit_code": $browser_raw_status,
             "browser_exit_code": $browser_status,
             "viewport_fit_exit_code": $fit_status,
+            "light_model_raw_exit_code": $light_raw_status,
             "light_model_exit_code": $light_status,
+            "experience_raw_exit_code": $experience_raw_status,
             "experience_exit_code": $experience_status,
+            "evidence_normalization_exit_code": $normalization_status,
             "visual_regression_exit_code": $visual_regression_status,
             "product_policy_exit_code": $policy_status
           }
           EOF
 
           combined=0
-          for status in "$browser_status" "$fit_status" "$light_status" "$experience_status" "$visual_regression_status" "$policy_status"; do
+          for status in "$browser_status" "$fit_status" "$light_status" "$experience_status" "$normalization_status" "$visual_regression_status" "$policy_status"; do
             if [[ "$status" -ne 0 ]]; then combined=1; fi
           done
           exit "$combined"
