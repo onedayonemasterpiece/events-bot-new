@@ -1,0 +1,131 @@
+/*
+ * Prelaunch visual correction v15.
+ *
+ * Uses a deterministic transparent derivative of the supplied PWA artwork.
+ * No generated visual is used at runtime. Removing the studio background in
+ * the asset itself is both cheaper and more reliable than blend-mode tricks.
+ */
+
+body .prelaunch[data-prelaunch-page] {
+  --prelaunch-reference-image: url('../assets/announcements-brand-transparent-384.webp');
+  --prelaunch-artwork-size: min(62vw, 100vh, 940px);
+  --prelaunch-artwork-left: 57%;
+  --prelaunch-artwork-top: clamp(0px, 3.5vh, 32px);
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__background::after {
+  width: var(--prelaunch-artwork-size) !important;
+  aspect-ratio: 1 !important;
+  left: var(--prelaunch-artwork-left) !important;
+  top: var(--prelaunch-artwork-top) !important;
+  transform: translateX(-50%) !important;
+  clip-path: none !important;
+  background: var(--prelaunch-reference-image) center / contain no-repeat !important;
+  mix-blend-mode: normal !important;
+  opacity: .94 !important;
+  filter: saturate(.92) contrast(1.06) brightness(.84) !important;
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__projection {
+  width: var(--prelaunch-artwork-size) !important;
+  max-width: none !important;
+  height: auto !important;
+  left: var(--prelaunch-artwork-left) !important;
+  top: var(--prelaunch-artwork-top) !important;
+  transform: translateX(-50%) !important;
+  opacity: 0 !important;
+}
+
+/* Keep the copy field calm while allowing the coherent centre/lower windows
+   to reveal the actual wordmark. */
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-window="true"][data-state="revealed"] {
+  --cover-state: .24;
+  --blur-base: 1.7px;
+  --saturation: .94;
+  --brightness: .99;
+  --matte: .25;
+  --edge-top: .14;
+  --edge-right: .105;
+  --edge-bloom: .04;
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-zone="quiet"][data-state="revealed"]:not([data-window="true"]) {
+  --cover-state: .79;
+  --blur-base: 6px;
+  --saturation: .58;
+  --brightness: .84;
+  --matte: .2;
+}
+
+/* Avoid a uniform grid of luminous outlines. Only panes near the shared
+   top-right source receive a pronounced edge response. */
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-edge="ambient"]::before {
+  border-color: rgba(225, 218, 211, .045);
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-edge="soft"]::before {
+  border-color: rgba(244, 214, 192, .105);
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-edge="warm"]::before {
+  border-color: rgba(255, 219, 190, .18);
+}
+
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-edge="hot"]::before,
+body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-accent="true"]::before {
+  border-color: rgba(255, 226, 201, .32);
+}
+
+@media (min-width: 821px) and (min-height: 1000px) and (max-aspect-ratio: 5 / 4) {
+  body .prelaunch[data-prelaunch-page] {
+    --prelaunch-artwork-size: min(100vw, 1200px);
+    --prelaunch-artwork-left: 50%;
+    --prelaunch-artwork-top: 0px;
+  }
+}
+
+@media (max-width: 599px) {
+  body .prelaunch[data-prelaunch-page] {
+    --prelaunch-artwork-size: min(92vw, 390px);
+    --prelaunch-artwork-left: 54%;
+    --prelaunch-artwork-top: clamp(188px, 28vh, 238px);
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__background::after {
+    filter: saturate(.91) contrast(1.05) brightness(.81) !important;
+  }
+}
+
+@media (max-width: 599px) and (max-height: 680px) {
+  body .prelaunch[data-prelaunch-page] {
+    --prelaunch-artwork-size: min(90vw, 330px);
+    --prelaunch-artwork-top: clamp(145px, 26vh, 168px);
+  }
+}
+
+@media (orientation: landscape) and (min-width: 600px) and (max-height: 500px) {
+  body .prelaunch[data-prelaunch-page] {
+    --prelaunch-artwork-size: min(55vw, 390px);
+    --prelaunch-artwork-left: 48%;
+    --prelaunch-artwork-top: 0px;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__foreground {
+    grid-template-columns: minmax(0, 1.13fr) minmax(276px, .87fr) !important;
+    column-gap: clamp(16px, 2.6vw, 28px) !important;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch__notify {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    transform: translateY(-13px) !important;
+  }
+
+  body .prelaunch[data-prelaunch-page] .prelaunch-form__promise,
+  body .prelaunch[data-prelaunch-page] .prelaunch-form__consent {
+    max-width: 100% !important;
+    font-size: max(8.6px, 2.18vh) !important;
+    line-height: 1.08 !important;
+  }
+}
