@@ -49,7 +49,7 @@ body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-window="true"][data-s
 }
 
 body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-zone="quiet"][data-state="revealed"]:not([data-window="true"]) {
-  --cover-state: .79;
+  --cover-state: .68;
   --blur-base: 6px;
   --saturation: .58;
   --brightness: .84;
