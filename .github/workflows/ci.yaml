@@ -72,7 +72,7 @@ jobs:
           serverless/email_postbox_events/index.py
           serverless/focus_auth_email_hook/index.py
           kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py
-          site/scripts/export-production-preview_data.py
+          site/scripts/export-production-preview-data.py
       - name: Run incident regression tests
         run: >-
           python -m pytest -vv
