@@ -1,0 +1,34 @@
+name: Approve amber external e2e maintenance run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/approve-amber-external-e2e-20260807.yml
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  approve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_RUN_ID: "31171677572"
+      TARGET_ENVIRONMENT_ID: "19143883846"
+    steps:
+      - name: Approve pending external-e2e deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}/pending_deployments" \
+            --input - <<JSON
+          {
+            "environment_ids": [${TARGET_ENVIRONMENT_ID}],
+            "state": "approved",
+            "comment": "Approved for operator-authorized amber digest production maintenance."
+          }
+          JSON
