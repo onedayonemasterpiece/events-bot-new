@@ -1,0 +1,63 @@
+name: Prelaunch approved secret publication v2
+
+on:
+  push:
+    branches:
+      - automation/prelaunch-control-20260804
+    paths:
+      - '.github/prelaunch-approved-publish-v2.request'
+      - '.github/workflows/prelaunch-approved-publish-v2.yml'
+      - '.github/scripts/publish-approved-prelaunch-v2.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: prelaunch-approved-secret-publication-v2
+  cancel-in-progress: false
+
+jobs:
+  publish-approved-candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    environment: production
+    env:
+      GH_TOKEN: ${{ github.token }}
+      KENIGEVENTS_SITE_YC_BUCKET: ${{ secrets.KENIGEVENTS_SITE_YC_BUCKET || vars.KENIGEVENTS_SITE_YC_BUCKET }}
+      KENIGEVENTS_SITE_YC_ACCESS_KEY_ID: ${{ secrets.KENIGEVENTS_SITE_YC_ACCESS_KEY_ID || vars.KENIGEVENTS_SITE_YC_ACCESS_KEY_ID }}
+      KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY: ${{ secrets.KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY }}
+      KENIGEVENTS_SITE_YC_ENDPOINT: ${{ secrets.KENIGEVENTS_SITE_YC_ENDPOINT || vars.KENIGEVENTS_SITE_YC_ENDPOINT || 'https://storage.yandexcloud.net' }}
+      KENIGEVENTS_SITE_YC_REGION: ${{ secrets.KENIGEVENTS_SITE_YC_REGION || vars.KENIGEVENTS_SITE_YC_REGION || 'ru-central1' }}
+      KENIGEVENTS_SITE_PUBLIC_BASE_URL: ${{ secrets.KENIGEVENTS_SITE_PUBLIC_BASE_URL || vars.KENIGEVENTS_SITE_PUBLIC_BASE_URL || 'https://kenigevents.ru' }}
+      PUBLIC_PERSONALIZATION_SUPABASE_URL: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_URL || vars.PUBLIC_PERSONALIZATION_SUPABASE_URL || secrets.STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_URL || vars.STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_URL }}
+      PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || vars.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || secrets.STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || vars.STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY }}
+      PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || vars.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || secrets.STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || vars.STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL }}
+
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+
+      - name: Publish exact approved candidate
+        shell: bash
+        run: |
+          archive="${RUNNER_TEMP}/control-${GITHUB_SHA}.tar.gz"
+          curl --fail-with-body --silent --show-error --location \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            --output "$archive"
+          tar --extract --gzip --file "$archive" --strip-components=1 --no-same-owner
+          bash .github/scripts/publish-approved-prelaunch-v2.sh
+
+      - name: Upload approved publication evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prelaunch-approved-publication-v2-${{ github.run_id }}
+          path: artifacts/prelaunch-approved-publish-v2
+          if-no-files-found: warn
+          retention-days: 14
