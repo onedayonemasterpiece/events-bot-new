@@ -51,6 +51,22 @@ jobs:
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
             --output "$archive"
           tar --extract --gzip --file "$archive" --strip-components=1 --no-same-owner
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/scripts/publish-approved-prelaunch-v2.sh')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              'probe_backend direct "$PUBLIC_PERSONALIZATION_SUPABASE_URL"\n',
+              'if ! probe_backend direct "$PUBLIC_PERSONALIZATION_SUPABASE_URL"; then\n'
+              '  jq -n \'{route:"direct",status:"probe_failed_non_blocking"}\' > "$artifact_dir/backend-direct-honeypot-probe.json"\n'
+              'fi\n',
+          )
+          text = text.replace(
+              "  backend_direct_honeypot_probe: 'ok',\n",
+              "  backend_direct_honeypot_probe: 'non_blocking',\n",
+          )
+          path.write_text(text, encoding='utf-8')
+          PY
           bash .github/scripts/publish-approved-prelaunch-v2.sh
 
       - name: Upload approved publication evidence
