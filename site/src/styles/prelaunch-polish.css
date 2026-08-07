@@ -32,3 +32,22 @@
     line-height: 1.32;
   }
 }
+
+/* The browser chrome on FHD at 125% leaves about 768 CSS pixels vertically.
+   This narrower height needs one additional, deliberately small reduction:
+   move the copy block up and shrink both text tiers without touching the form. */
+@media (min-width: 1200px) and (min-height: 701px) and (max-height: 800px) {
+  .prelaunch-page--static .prelaunch__copy {
+    margin-top: 55px;
+  }
+
+  .prelaunch-page--static .prelaunch__copy h1 {
+    font-size: clamp(3.75rem, 5.2vw, 5rem);
+  }
+
+  .prelaunch-page--static .prelaunch__copy p {
+    margin-top: 16px;
+    font-size: clamp(.98rem, 1.25vw, 1.2rem);
+    line-height: 1.3;
+  }
+}
