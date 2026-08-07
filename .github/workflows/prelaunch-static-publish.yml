@@ -1,0 +1,493 @@
+name: Prelaunch static secret publication
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/prelaunch-static-publish.request'
+      - '.github/workflows/prelaunch-static-publish.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: prelaunch-static-secret-publication
+  cancel-in-progress: false
+
+jobs:
+  publish-secret-candidate:
+    if: ${{ github.event.pull_request.head.ref == 'automation/prelaunch-control-20260804' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: production
+    env:
+      KENIGEVENTS_SITE_YC_BUCKET: ${{ secrets.KENIGEVENTS_SITE_YC_BUCKET || vars.KENIGEVENTS_SITE_YC_BUCKET }}
+      KENIGEVENTS_SITE_YC_ACCESS_KEY_ID: ${{ secrets.KENIGEVENTS_SITE_YC_ACCESS_KEY_ID || vars.KENIGEVENTS_SITE_YC_ACCESS_KEY_ID }}
+      KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY: ${{ secrets.KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY }}
+      KENIGEVENTS_SITE_YC_ENDPOINT: ${{ secrets.KENIGEVENTS_SITE_YC_ENDPOINT || vars.KENIGEVENTS_SITE_YC_ENDPOINT || 'https://storage.yandexcloud.net' }}
+      KENIGEVENTS_SITE_YC_REGION: ${{ secrets.KENIGEVENTS_SITE_YC_REGION || vars.KENIGEVENTS_SITE_YC_REGION || 'ru-central1' }}
+      KENIGEVENTS_SITE_PUBLIC_BASE_URL: ${{ secrets.KENIGEVENTS_SITE_PUBLIC_BASE_URL || vars.KENIGEVENTS_SITE_PUBLIC_BASE_URL || 'https://kenigevents.ru' }}
+      PUBLIC_PERSONALIZATION_SUPABASE_URL: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_URL || vars.PUBLIC_PERSONALIZATION_SUPABASE_URL }}
+      PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || vars.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY }}
+      PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || vars.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL }}
+    steps:
+      - name: Checkout publication control branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Parse exact static publication request
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+          request_file='.github/prelaunch-static-publish.request'
+          test -f "$request_file"
+          for key in request_id target_branch target_sha visual_run_id visual_artifact_digest; do
+            test "$(grep -c "^${key}=" "$request_file")" -eq 1
+          done
+          request_id="$(sed -n 's/^request_id=//p' "$request_file")"
+          target_branch="$(sed -n 's/^target_branch=//p' "$request_file")"
+          target_sha="$(sed -n 's/^target_sha=//p' "$request_file")"
+          visual_run_id="$(sed -n 's/^visual_run_id=//p' "$request_file")"
+          visual_artifact_digest="$(sed -n 's/^visual_artifact_digest=//p' "$request_file")"
+          [[ "$request_id" =~ ^[A-Za-z0-9._-]{8,120}$ ]]
+          [[ "$target_branch" == 'agent/prelaunch-static-background-20260807' ]]
+          [[ "$target_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$visual_run_id" =~ ^[0-9]{8,20}$ ]]
+          [[ "$visual_artifact_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          {
+            echo "request_id=$request_id"
+            echo "target_branch=$target_branch"
+            echo "target_sha=$target_sha"
+            echo "visual_run_id=$visual_run_id"
+            echo "visual_artifact_digest=$visual_artifact_digest"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "TARGET_BRANCH=$target_branch"
+            echo "TARGET_SHA=$target_sha"
+            echo "VISUAL_RUN_ID=$visual_run_id"
+            echo "VISUAL_ARTIFACT_DIGEST=$visual_artifact_digest"
+          } >> "$GITHUB_ENV"
+
+      - name: Verify green exact-SHA static visual evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          evidence_root="${RUNNER_TEMP}/static-source-evidence"
+          mkdir -p "$evidence_root"
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${VISUAL_RUN_ID}")"
+          test "$(jq -r .status <<<"$run_json")" = completed
+          test "$(jq -r .conclusion <<<"$run_json")" = success
+          test "$(jq -r .name <<<"$run_json")" = 'Prelaunch visual review'
+          test "$(jq -r .event <<<"$run_json")" = push
+          test "$(jq -r .head_branch <<<"$run_json")" = "$TARGET_BRANCH"
+          test "$(jq -r .head_sha <<<"$run_json")" = "$TARGET_SHA"
+
+          artifact_name="prelaunch-evidence-${VISUAL_RUN_ID}"
+          artifacts_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${VISUAL_RUN_ID}/artifacts?per_page=100")"
+          test "$(jq --arg name "$artifact_name" '[.artifacts[] | select(.name == $name)] | length' <<<"$artifacts_json")" -eq 1
+          artifact="$(jq -c --arg name "$artifact_name" '.artifacts[] | select(.name == $name)' <<<"$artifacts_json")"
+          test "$(jq -r .expired <<<"$artifact")" = false
+          test "$(jq -r .digest <<<"$artifact")" = "$VISUAL_ARTIFACT_DIGEST"
+          gh run download "$VISUAL_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$artifact_name" --dir "$evidence_root"
+
+          gates="$(find "$evidence_root" -name github-actions-gates.json -print -quit)"
+          scene="$(find "$evidence_root" -name prelaunch-scene-summary.json -print -quit)"
+          viewport="$(find "$evidence_root" -name prelaunch-viewport-fit-summary.json -print -quit)"
+          form="$(find "$evidence_root" -name prelaunch-form-security-summary.json -print -quit)"
+          test -n "$gates" && test -n "$scene" && test -n "$viewport" && test -n "$form"
+          jq -e --arg sha "$TARGET_SHA" '
+            .repository_sha == $sha
+            and .scene_exit == 0
+            and .viewport_fit_exit == 0
+            and .form_security_exit == 0
+            and .scene_architecture == "generated-responsive-background-live-form"
+          ' "$gates" >/dev/null
+          jq -e '.ok == true and (.failures | length) == 0' "$scene" >/dev/null
+          jq -e '.ok == true and (.failures | length) == 0' "$viewport" >/dev/null
+          jq -e '.ok == true and (.failures | length) == 0' "$form" >/dev/null
+
+      - name: Checkout exact static feature SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/heads/${TARGET_BRANCH}:refs/remotes/origin/${TARGET_BRANCH}"
+          test "$(git rev-parse "refs/remotes/origin/${TARGET_BRANCH}")" = "$TARGET_SHA"
+          git checkout --detach "$TARGET_SHA"
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          mkdir -p artifacts/prelaunch-static-publish/source-evidence
+          cp "${RUNNER_TEMP}/static-source-evidence/github-actions-gates.json" artifacts/prelaunch-static-publish/source-evidence/
+          cp "${RUNNER_TEMP}/static-source-evidence/prelaunch-scene-summary.json" artifacts/prelaunch-static-publish/source-evidence/
+          cp "${RUNNER_TEMP}/static-source-evidence/prelaunch-viewport-fit-summary.json" artifacts/prelaunch-static-publish/source-evidence/
+          cp "${RUNNER_TEMP}/static-source-evidence/prelaunch-form-security-summary.json" artifacts/prelaunch-static-publish/source-evidence/
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.12.0
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install build and browser dependencies
+        working-directory: site
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          aws --version
+
+      - name: Verify production publication configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            KENIGEVENTS_SITE_YC_BUCKET
+            KENIGEVENTS_SITE_YC_ACCESS_KEY_ID
+            KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY
+            PUBLIC_PERSONALIZATION_SUPABASE_URL
+            PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY
+            PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL
+          )
+          missing=()
+          for name in "${required[@]}"; do
+            [[ -n "${!name:-}" ]] || missing+=("$name")
+          done
+          if (( ${#missing[@]} )); then
+            printf 'Missing required production configuration: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+          [[ "$KENIGEVENTS_SITE_PUBLIC_BASE_URL" == 'https://kenigevents.ru' ]]
+
+      - name: Re-run static source contracts
+        run: npm --prefix site run test:static-release
+
+      - name: Generate one-use 256-bit review token
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(openssl rand -base64 32 | tr '/+' '_-' | tr -d '=\n')"
+          [[ "$token" =~ ^[A-Za-z0-9_-]{43}$ ]]
+          echo "::add-mask::$token"
+          {
+            echo "SECRET_CANDIDATE_TOKEN=$token"
+            echo "CANDIDATE_URL=${KENIGEVENTS_SITE_PUBLIC_BASE_URL%/}/_review/${token}/"
+          } >> "$GITHUB_ENV"
+
+      - name: Build checked root-only static candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PUBLIC_PRELAUNCH_MODE='on'
+          export PUBLIC_SITE_MODE='secret_candidate'
+          export PUBLIC_SITE_ORIGIN='https://kenigevents.ru'
+          export SITE_BASE_PATH="/_review/${SECRET_CANDIDATE_TOKEN}"
+          export PUBLIC_ASTRO_ASSET_BASE_URL=''
+          export PUBLIC_ICS_BASE_URL=''
+          export PUBLIC_PREVIEW_BUILD_ID=''
+          export PUBLIC_ROOT_PREVIEW_HREF=''
+
+          full_pages="site/.prelaunch-static-full-pages-${GITHUB_RUN_ID}"
+          rm -rf "$full_pages"
+          mv site/src/pages "$full_pages"
+          mkdir -p site/src/pages
+          cp "$full_pages/index.astro" site/src/pages/index.astro
+          restore_pages() {
+            rm -rf site/src/pages
+            mv "$full_pages" site/src/pages
+          }
+          trap restore_pages EXIT
+          npm --prefix site run build
+          restore_pages
+          trap - EXIT
+
+          staging="site/.prelaunch-static-root-build-${GITHUB_RUN_ID}"
+          candidate_root="site/dist/_review/${SECRET_CANDIDATE_TOKEN}"
+          rm -rf "$staging"
+          mv site/dist "$staging"
+          mkdir -p "$(dirname "$candidate_root")"
+          mv "$staging" "$candidate_root"
+          rm -rf \
+            "$candidate_root/_static" \
+            "$candidate_root/ics" \
+            "$candidate_root/__preview" \
+            "$candidate_root/lab"
+
+          printf 'User-agent: *\nDisallow: /\n' > "$candidate_root/robots.txt"
+          cat > "$candidate_root/sitemap.xml" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${CANDIDATE_URL}</loc></url></urlset>
+          EOF
+
+          index="$candidate_root/index.html"
+          test -f "$index"
+          grep -q 'data-prelaunch-page' "$index"
+          grep -q 'data-static-background="approved-desktop-mobile-v2"' "$index"
+          grep -Eq '<meta name="robots" content="noindex,nofollow,noarchive,nosnippet"' "$index"
+          grep -Eq '<meta name="referrer" content="no-referrer"' "$index"
+          grep -q "${SITE_BASE_PATH}/_astro/" "$index"
+          if grep -q 'data-prelaunch-tile' "$index"; then
+            echo 'Dynamic prelaunch tile leaked into static candidate' >&2
+            exit 1
+          fi
+          perl -0pi -e 's/<main id="main"/<main id="main" data-secret-candidate-root-home/' "$index"
+
+          export CANDIDATE_ROOT="$candidate_root"
+          export CANDIDATE_BUILD_ID="production-prelaunch-static-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          export CANDIDATE_RUN_ID="prelaunch-static-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          export CANDIDATE_TOKEN_SHA256="$(printf '%s' "$SECRET_CANDIDATE_TOKEN" | sha256sum | cut -d' ' -f1)"
+
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import {
+            CANDIDATE_MANIFEST_SCHEMA,
+            fileInventory,
+            pageCounts,
+            sha256,
+            treeHash,
+          } from './site/scripts/release-contract.mjs';
+
+          const root = process.env.CANDIDATE_ROOT;
+          const basePath = `/_review/${process.env.SECRET_CANDIDATE_TOKEN}`;
+          const generatedAt = new Date().toISOString();
+          const build = {
+            schema_version: 'static_prelaunch_secret_candidate_build_v2',
+            site_mode: 'secret_candidate',
+            publication_mode: 'secret_link',
+            build_id: process.env.CANDIDATE_BUILD_ID,
+            run_id: process.env.CANDIDATE_RUN_ID,
+            repo_sha: process.env.TARGET_SHA,
+            generated_at: generatedAt,
+            base_path: basePath,
+            token_sha256: process.env.CANDIDATE_TOKEN_SHA256,
+            prelaunch_mode: true,
+            public_surface: 'prelaunch',
+            scene_architecture: 'generated-responsive-background-live-form',
+          };
+          writeFileSync(`${root}/candidate-build.json`, `${JSON.stringify(build, null, 2)}\n`);
+
+          const files = fileInventory(root, {
+            exclude: ['secret-candidate-manifest.json'],
+            secretCandidate: true,
+          });
+          const protectedKey = files.find((file) => /^(?:_static|ics)(?:\/|$)/u.test(file.key));
+          if (protectedKey) throw new Error(`Protected key leaked into candidate: ${protectedKey.key}`);
+          const htmlFiles = files.filter((file) => file.key.endsWith('.html'));
+          if (htmlFiles.length !== 1 || htmlFiles[0].key !== 'index.html') {
+            throw new Error(`Root-only candidate has unexpected HTML routes: ${htmlFiles.map((file) => file.key).join(', ')}`);
+          }
+          const html = readFileSync(`${root}/index.html`, 'utf8');
+          if (!html.includes('data-secret-candidate-root-home')
+              || !html.includes('data-prelaunch-page')
+              || !html.includes('approved-desktop-mobile-v2')) {
+            throw new Error('Static root-only candidate markers are missing');
+          }
+          if (html.includes('data-prelaunch-tile')) throw new Error('Dynamic tile marker leaked into static candidate');
+          if (!html.includes('noindex,nofollow,noarchive,nosnippet')
+              || !html.includes('name="referrer" content="no-referrer"')) {
+            throw new Error('Root-only candidate privacy metadata is missing');
+          }
+          const manifest = {
+            schema_version: CANDIDATE_MANIFEST_SCHEMA,
+            site_mode: 'secret_candidate',
+            publication_mode: 'secret_link',
+            build_id: build.build_id,
+            run_id: build.run_id,
+            repo_sha: build.repo_sha,
+            generated_at: generatedAt,
+            base_path: basePath,
+            token_sha256: sha256(process.env.SECRET_CANDIDATE_TOKEN),
+            prelaunch_mode: true,
+            public_surface: 'prelaunch',
+            scene_architecture: build.scene_architecture,
+            counts: pageCounts(files, 0),
+            tree_sha256: treeHash(files),
+            files,
+            checks: {
+              astro_build: 'ok',
+              candidate_contract: 'ok',
+              catalog_parity: 'ok',
+              noindex: 'ok',
+              no_referrer: 'ok',
+              prefix_containment: 'ok',
+              root_isolation: 'ok',
+            },
+          };
+          writeFileSync(`${root}/secret-candidate-manifest.json`, `${JSON.stringify(manifest, null, 2)}\n`);
+          NODE
+
+          object_count="$(( $(jq '.files | length' "$candidate_root/secret-candidate-manifest.json") + 1 ))"
+          {
+            echo "CANDIDATE_ROOT=$candidate_root"
+            echo "CANDIDATE_BUILD_ID=$CANDIDATE_BUILD_ID"
+            echo "CANDIDATE_RUN_ID=$CANDIDATE_RUN_ID"
+            echo "CANDIDATE_TOKEN_SHA256=$CANDIDATE_TOKEN_SHA256"
+            echo "CANDIDATE_OBJECT_COUNT=$object_count"
+          } >> "$GITHUB_ENV"
+
+      - name: Verify direct and relay transports without storing a row
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/prelaunch-static-publish
+          call_probe() {
+            local route="$1"
+            local base="$2"
+            local output="artifacts/prelaunch-static-publish/transport-${route}.json"
+            curl --fail-with-body --silent --show-error \
+              --retry 2 --retry-delay 1 --retry-all-errors --max-time 30 \
+              --request POST \
+              --header "apikey: ${PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY}" \
+              --header "Authorization: Bearer ${PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY}" \
+              --header 'Accept: application/json' \
+              --header 'Content-Type: application/json' \
+              --data '{"p_email":"publication-probe.invalid","p_source":"prelaunch_static_publication_probe","p_consent_version":"prelaunch-updates-2026-v1","p_website":"github-actions-honeypot"}' \
+              "${base%/}/rest/v1/rpc/register_prelaunch_notification_v1" > "$output"
+            jq -e '
+              .accepted == true
+              and .status == "registered"
+              and .launch_date == "2026-09-01"
+              and .consent_version == "prelaunch-updates-2026-v1"
+            ' "$output" >/dev/null
+          }
+          call_probe direct "$PUBLIC_PERSONALIZATION_SUPABASE_URL"
+          call_probe relay "$PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL"
+
+      - name: Plan and publish create-only review prefix
+        shell: bash
+        run: |
+          set -euo pipefail
+          plan_file='artifacts/prelaunch-static-publish/publication-plan.json'
+          publish_file='artifacts/prelaunch-static-publish/publication-result.json'
+          node site/scripts/deploy-secret-candidate-yc.mjs plan > "$plan_file"
+          jq -e \
+            --arg url "$CANDIDATE_URL" \
+            --arg prefix "_review/${SECRET_CANDIDATE_TOKEN}" \
+            --argjson count "$CANDIDATE_OBJECT_COUNT" '
+              .ok == true
+              and .command == "plan"
+              and .publication_mode == "secret_link"
+              and .public_url == $url
+              and .object_prefix == $prefix
+              and .object_count == $count
+              and .anonymous_list_preflight == "disabled"
+              and .root_mutation == false
+              and .stable_ics_mutation == false
+              and .overwrite_allowed == false
+            ' "$plan_file" >/dev/null
+          export SECRET_CANDIDATE_CONFIRM="publish-secret:${CANDIDATE_BUILD_ID}:${CANDIDATE_TOKEN_SHA256}"
+          node site/scripts/deploy-secret-candidate-yc.mjs publish > "$publish_file"
+          jq -e \
+            --arg url "$CANDIDATE_URL" '
+              .ok == true
+              and .command == "publish"
+              and .public_url == $url
+              and .public_verification == "ok"
+              and .root_mutation == false
+            ' "$publish_file" >/dev/null
+
+      - name: Run public static browser, viewport and form gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_dir='artifacts/prelaunch-static-publish/public-browser'
+          mkdir -p "$artifact_dir"
+          npm --prefix site run check:prelaunch-scene -- \
+            --url "$CANDIDATE_URL" \
+            --artifact-dir ../artifacts/prelaunch-static-publish/public-browser
+          node site/scripts/check-prelaunch-viewport-fit.mjs \
+            --url "$CANDIDATE_URL" \
+            --artifact-dir "$artifact_dir"
+          node site/scripts/check-prelaunch-form-security.mjs \
+            --url "$CANDIDATE_URL" \
+            --artifact-dir "$artifact_dir"
+
+          curl --fail-with-body --silent --show-error \
+            --header 'cache-control: no-cache' \
+            --dump-header "$artifact_dir/public-index-headers.txt" \
+            --output "$artifact_dir/public-index.html" \
+            "$CANDIDATE_URL"
+          grep -q 'data-static-background="approved-desktop-mobile-v2"' "$artifact_dir/public-index.html"
+          grep -q 'data-secret-candidate-root-home' "$artifact_dir/public-index.html"
+          grep -Eq '<meta name="robots" content="noindex,nofollow,noarchive,nosnippet"' "$artifact_dir/public-index.html"
+          grep -Eq '<meta name="referrer" content="no-referrer"' "$artifact_dir/public-index.html"
+          if grep -q 'data-prelaunch-tile' "$artifact_dir/public-index.html"; then
+            echo 'Published candidate is the obsolete dynamic scene' >&2
+            exit 1
+          fi
+
+      - name: Write final publication receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const read = (path) => JSON.parse(readFileSync(path, 'utf8'));
+          const plan = read('artifacts/prelaunch-static-publish/publication-plan.json');
+          const publication = read('artifacts/prelaunch-static-publish/publication-result.json');
+          const direct = read('artifacts/prelaunch-static-publish/transport-direct.json');
+          const relay = read('artifacts/prelaunch-static-publish/transport-relay.json');
+          const scene = read('artifacts/prelaunch-static-publish/public-browser/prelaunch-scene-summary.json');
+          const viewport = read('artifacts/prelaunch-static-publish/public-browser/prelaunch-viewport-fit-summary.json');
+          const form = read('artifacts/prelaunch-static-publish/public-browser/prelaunch-form-security-summary.json');
+          const receipt = {
+            schema_version: 'prelaunch_static_secret_publication_v1',
+            ok: true,
+            candidate_url: plan.public_url,
+            static_feature_sha: process.env.TARGET_SHA,
+            static_feature_branch: process.env.TARGET_BRANCH,
+            visual_run_id: Number(process.env.VISUAL_RUN_ID),
+            visual_artifact_digest: process.env.VISUAL_ARTIFACT_DIGEST,
+            publication_run_id: Number(process.env.GITHUB_RUN_ID),
+            publication_run_attempt: Number(process.env.GITHUB_RUN_ATTEMPT),
+            publication_run_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            build_id: process.env.CANDIDATE_BUILD_ID,
+            publication_mode: publication.publication_mode,
+            public_verification: publication.public_verification,
+            scene_architecture: 'generated-responsive-background-live-form',
+            public_gates: {
+              static_scene: scene.ok === true,
+              viewport_fit: viewport.ok === true,
+              form_security: form.ok === true,
+              noindex: true,
+              no_referrer: true,
+              no_dynamic_tiles: true,
+            },
+            transport: {
+              direct: {
+                ok: direct.accepted === true && direct.status === 'registered',
+                consent_version: direct.consent_version,
+                stored_row: false,
+              },
+              relay: {
+                ok: relay.accepted === true && relay.status === 'registered',
+                consent_version: relay.consent_version,
+                stored_row: false,
+              },
+            },
+            production_root_changed: false,
+            overwrite_allowed: false,
+            published_at: new Date().toISOString(),
+          };
+          if (!Object.values(receipt.public_gates).every(Boolean)
+              || !receipt.transport.direct.ok
+              || !receipt.transport.relay.ok
+              || receipt.public_verification !== 'ok') {
+            throw new Error('Cannot issue successful static publication receipt');
+          }
+          writeFileSync(
+            'artifacts/prelaunch-static-publish/publication-receipt.json',
+            `${JSON.stringify(receipt, null, 2)}\n`,
+          );
+          NODE
+
+      - name: Upload static publication evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prelaunch-static-publication-${{ github.run_id }}
+          path: artifacts/prelaunch-static-publish
+          if-no-files-found: warn
+          retention-days: 14
