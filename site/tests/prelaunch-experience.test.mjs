@@ -18,6 +18,8 @@ test('prelaunch scene uses responsive generated backgrounds with no live glass g
   assert.match(page, /data-static-background="generated-desktop-mobile-v1"/u);
   assert.match(page, /data-prelaunch-static-picture/u);
   assert.match(page, /data-prelaunch-static-image/u);
+  assert.match(page, /data-prelaunch-static-composite/u);
+  assert.match(page, /data-prelaunch-static-artwork/u);
   assert.match(page, /prelaunch-scene-desktop\.webp/u);
   assert.match(page, /prelaunch-scene-mobile\.webp/u);
   assert.match(page, /<picture/u);
@@ -30,10 +32,13 @@ test('prelaunch scene uses responsive generated backgrounds with no live glass g
   assert.doesNotMatch(page, /prelaunch-fit-v\d+\.css/u);
 
   assert.match(css, /Lightweight prelaunch holder/u);
+  assert.match(css, /responsive fallback picture/u);
+  assert.match(css, /--prelaunch-static-tile-mask/u);
+  assert.match(css, /mask-image:\s*var\(--prelaunch-static-tile-mask\)/u);
+  assert.match(css, /background-repeat:\s*repeat/u);
   assert.match(css, /object-fit:\s*cover/u);
   assert.match(css, /contain:\s*strict/u);
   assert.match(css, /touch-action:\s*manipulation/u);
-  assert.match(css, /pre-rendered responsive picture/u);
   assert.doesNotMatch(css, /backdrop-filter/u);
   assert.doesNotMatch(css, /animation:/u);
 });
