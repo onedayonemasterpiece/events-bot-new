@@ -1,0 +1,71 @@
+name: Encrypted KDG80 focus-group production lookup
+
+on:
+  push:
+    branches:
+      - ops/kdg80-focus-group-lookup-20260807
+    paths:
+      - .github/workflows/ops-kdg80-focus-group-lookup-20260807.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: encrypted-kdg80-focus-group-production-lookup
+  cancel-in-progress: false
+
+env:
+  FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+  FLY_APP: znanie-kgd80-fest
+
+jobs:
+  lookup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Export production registrations read-only and encrypt immediately
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+
+          cleanup() {
+            rm -f \
+              /tmp/kdg80-registrations.b64 \
+              /tmp/kdg80-registrations.xlsx \
+              /tmp/kdg80-registrations.cms
+          }
+          trap cleanup EXIT
+
+          flyctl ssh console \
+            -a "$FLY_APP" \
+            -q \
+            --pty=false \
+            -C 'sh -lc '\''node --input-type=module -e "const r=await fetch('\''\''http://127.0.0.1:8080/api/v1/admin/emergency-export/registrations.xlsx'\''\'',{headers:{authorization:'\''\''Bearer '\''\''+process.env.EMERGENCY_EXPORT_TOKEN}});if(!r.ok)throw new Error('\''\''export failed: '\''\''+r.status);process.stdout.write(Buffer.from(await r.arrayBuffer()).toString('\''\''base64'\''\'));"'\''' \
+            > /tmp/kdg80-registrations.b64
+
+          base64 -d /tmp/kdg80-registrations.b64 > /tmp/kdg80-registrations.xlsx
+          test "$(head -c 2 /tmp/kdg80-registrations.xlsx)" = "PK"
+          echo "Read-only production export received; bytes=$(stat -c %s /tmp/kdg80-registrations.xlsx)"
+
+          openssl cms -encrypt \
+            -binary \
+            -aes-256-cbc \
+            -outform DER \
+            -in /tmp/kdg80-registrations.xlsx \
+            -out /tmp/kdg80-registrations.cms \
+            ops/focus-group-lookup-certificate-20260807.pem
+
+          rm -f /tmp/kdg80-registrations.b64 /tmp/kdg80-registrations.xlsx
+
+      - name: Upload encrypted result
+        uses: actions/upload-artifact@v4
+        with:
+          name: kdg80-focus-group-production-lookup-encrypted
+          path: /tmp/kdg80-registrations.cms
+          if-no-files-found: error
+          retention-days: 1
