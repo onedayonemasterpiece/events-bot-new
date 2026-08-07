@@ -1,4 +1,5 @@
 import { getResilientDataClient } from '../lib/resilientDataClient';
+import { normalizePrelaunchEmail } from '../lib/prelaunchEmail';
 import { parseSupabaseTransportError } from '../lib/resilientSupabaseTransport';
 
 const STORAGE_KEY = 'ke_prelaunch_notification_v1';
@@ -177,7 +178,6 @@ function initializePrelaunchExperience(): void {
   const email = form.elements.namedItem('email') as HTMLInputElement | null;
   const consentInput = form.elements.namedItem('consent') as HTMLInputElement | null;
   const website = form.elements.namedItem('website') as HTMLInputElement | null;
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 
   if (consentCopy) consentCopy.textContent = CONSENT_COPY;
 
@@ -278,13 +278,22 @@ function initializePrelaunchExperience(): void {
     event.stopImmediatePropagation();
     announce('idle', '');
 
-    const normalizedEmail = String(email?.value || '').trim().toLocaleLowerCase('ru-RU');
-    if (!normalizedEmail || normalizedEmail.length > 254 || !emailPattern.test(normalizedEmail)) {
+    const emailResult = normalizePrelaunchEmail(email?.value ?? '');
+    if (!emailResult.ok) {
+      form.dataset.emailValidation = emailResult.reason;
       form.dataset.experienceState = 'error';
+      email?.setCustomValidity('Проверьте адрес электронной почты.');
       announce('error', 'Проверьте адрес электронной почты.');
       email?.focus();
       return;
     }
+    const normalizedEmail = emailResult.email;
+    if (email) {
+      email.value = normalizedEmail;
+      email.setCustomValidity('');
+    }
+    form.dataset.emailValidation = 'accepted';
+
     if (!consentInput?.checked) {
       form.dataset.experienceState = 'error';
       announce('error', 'Подтвердите согласие на письма о запуске и важных обновлениях.');

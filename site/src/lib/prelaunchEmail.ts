@@ -16,6 +16,7 @@ export type PrelaunchEmailValidationResult =
 const LOCAL_ALLOWED = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+$/u;
 const DOMAIN_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
 const ASCII_VISIBLE = /^[\x21-\x7e]+$/u;
+const RAW_CONTROL_OR_SEPARATOR = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u;
 const EXPLICITLY_UNSAFE = /[<>"\\()[\]{},;:\u007f]/u;
 const ORDINARY_TLD = /^[a-z]{2,63}$/u;
 const PUNYCODE_TLD = /^xn--[a-z0-9-]{2,59}$/u;
@@ -29,7 +30,14 @@ const PUNYCODE_TLD = /^xn--[a-z0-9-]{2,59}$/u;
  * is never interpolated into SQL or HTML.
  */
 export function normalizePrelaunchEmail(input: unknown): PrelaunchEmailValidationResult {
-  const value = String(input ?? '').trim().toLowerCase();
+  const raw = String(input ?? '');
+  // Reject control characters before trimming: otherwise a trailing CR/LF could
+  // be silently normalized away and bypass the header-injection contract.
+  if (RAW_CONTROL_OR_SEPARATOR.test(raw)) {
+    return { ok: false, reason: 'unsafe_character' };
+  }
+
+  const value = raw.trim().toLowerCase();
   if (!value) return { ok: false, reason: 'empty' };
   if (value.length < 5 || value.length > 254) return { ok: false, reason: 'length' };
   if (!ASCII_VISIBLE.test(value) || EXPLICITLY_UNSAFE.test(value)) {

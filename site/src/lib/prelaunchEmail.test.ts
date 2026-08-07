@@ -40,6 +40,9 @@ test('rejects markup, header injection and code-like payloads before transport',
     '<script>@example.com',
     'person\r\nbcc@example.com',
     'person@example.com\n',
+    'person\texample@example.com',
+    'person@example.com\u0000',
+    'person@example.com\u2028',
     '"quoted"@example.com',
     "x');drop-table@example.com",
     'person\\payload@example.com',
@@ -52,7 +55,7 @@ test('rejects markup, header injection and code-like payloads before transport',
 test('enforces RFC length ceilings used by the database contract', () => {
   const longLocal = `${'a'.repeat(65)}@example.com`;
   const longDomain = `a@${'b'.repeat(64)}.com`;
-  const totalTooLong = `${'a'.repeat(64)}@${'b'.repeat(60)}.${'c'.repeat(60)}.${'d'.repeat(60)}.com`;
+  const totalTooLong = `${'a'.repeat(64)}@${'b'.repeat(63)}.${'c'.repeat(63)}.${'d'.repeat(63)}.com`;
   assert.equal(normalizePrelaunchEmail(longLocal).ok, false);
   assert.equal(normalizePrelaunchEmail(longDomain).ok, false);
   assert.equal(normalizePrelaunchEmail(totalTooLong).ok, false);

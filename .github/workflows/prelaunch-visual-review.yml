@@ -12,10 +12,20 @@ on:
       - 'docs/features/static-site-pages/prelaunch.md'
       - 'docs/features/static-site-pages/prelaunch-handoff/**'
       - 'site/src/components/PrelaunchLanding.astro'
+      - 'site/src/components/PrelaunchExperience.astro'
+      - 'site/src/components/PrelaunchVisualReview.astro'
       - 'site/src/layouts/PrelaunchLayout.astro'
+      - 'site/src/lib/prelaunchEmail.ts'
+      - 'site/src/lib/prelaunchEmail.test.ts'
+      - 'site/src/scripts/prelaunchEmailGuard.ts'
+      - 'site/src/scripts/prelaunchExperience.ts'
       - 'site/src/styles/prelaunch-motion.css'
-      - 'site/scripts/check-prelaunch-browser.mjs'
+      - 'site/src/styles/prelaunch-fit-v27.css'
+      - 'site/scripts/check-prelaunch-v27-structure.mjs'
+      - 'site/scripts/check-prelaunch-viewport-fit.mjs'
+      - 'site/scripts/check-prelaunch-form-security.mjs'
       - 'site/tests/prelaunch-landing.test.mjs'
+      - 'site/tests/prelaunch-experience.test.mjs'
       - 'site/package.json'
   workflow_dispatch:
 
@@ -52,9 +62,12 @@ jobs:
       - name: Run source and release contracts
         run: npm --prefix site run test:static-release
 
-      - name: Build prelaunch root
+      - name: Build deterministic prelaunch artifact
         env:
           PUBLIC_PRELAUNCH_MODE: 'on'
+          PUBLIC_PERSONALIZATION_SUPABASE_URL: https://direct.test
+          PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL: https://relay.test
+          PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY: prelaunch-actions-public-test-key
         run: npm --prefix site run build
 
       - name: Start immutable local artifact server
@@ -70,21 +83,50 @@ jobs:
           cat /tmp/prelaunch-http.log
           exit 1
 
-      - name: Capture screenshots, DOM and computed glass evidence
+      - name: Capture visual, viewport and resilient-form evidence
         run: |
           mkdir -p artifacts/prelaunch-browser/reference
           set +e
-          npm --prefix site run check:prelaunch-browser -- \
+
+          node site/scripts/check-prelaunch-v27-structure.mjs \
             --url http://127.0.0.1:4173/ \
-            --artifact-dir ../artifacts/prelaunch-browser
-          gate_status=$?
+            --artifact-dir artifacts/prelaunch-browser
+          v27_status=$?
+
+          node site/scripts/check-prelaunch-viewport-fit.mjs \
+            --url http://127.0.0.1:4173/ \
+            --artifact-dir artifacts/prelaunch-browser
+          viewport_status=$?
+
+          node site/scripts/check-prelaunch-form-security.mjs \
+            --url http://127.0.0.1:4173/ \
+            --artifact-dir artifacts/prelaunch-browser
+          form_status=$?
+
           set -e
           cp docs/features/static-site-pages/prelaunch-handoff/reference/target-desktop.webp \
             artifacts/prelaunch-browser/reference/target-desktop.webp
           cp docs/features/static-site-pages/prelaunch-handoff/reference/PWA-icon.webp \
             artifacts/prelaunch-browser/reference/PWA-icon.webp
-          git rev-parse HEAD > artifacts/prelaunch-browser/repository-sha.txt
-          exit "$gate_status"
+          cp docs/features/static-site-pages/prelaunch-handoff/reference/generated-lighting-desktop-v1.webp \
+            artifacts/prelaunch-browser/reference/generated-lighting-desktop-v1.webp
+          cp docs/features/static-site-pages/prelaunch-handoff/reference/generated-lighting-mobile-v1.webp \
+            artifacts/prelaunch-browser/reference/generated-lighting-mobile-v1.webp
+
+          repository_sha="$(git rev-parse HEAD)"
+          printf '%s\n' "$repository_sha" > artifacts/prelaunch-browser/repository-sha.txt
+          cat > artifacts/prelaunch-browser/github-actions-gates.json <<EOF
+          {
+            "repository_sha": "$repository_sha",
+            "v27_structure_exit": $v27_status,
+            "viewport_fit_exit": $viewport_status,
+            "form_security_exit": $form_status
+          }
+          EOF
+
+          if [[ $v27_status -ne 0 || $viewport_status -ne 0 || $form_status -ne 0 ]]; then
+            exit 1
+          fi
 
       - name: Stop local server
         if: always()
@@ -94,11 +136,11 @@ jobs:
           fi
           cat /tmp/prelaunch-http.log || true
 
-      - name: Upload visual evidence
+      - name: Upload visual and form evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: prelaunch-visual-evidence-${{ github.run_id }}
+          name: prelaunch-evidence-${{ github.run_id }}
           path: artifacts/prelaunch-browser
           if-no-files-found: error
           retention-days: 14

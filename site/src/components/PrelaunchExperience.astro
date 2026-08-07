@@ -55,7 +55,7 @@ const artworkSource = pwaArtwork.src;
 
     // The source contains a white studio field and a lower shadow. Its leather
     // object is a simple rounded rectangle, so clip it geometrically instead of
-    // running a costly and fragile pixel flood-fill in every visitor's browser.
+    // running a costly and fragile per-pixel transparency pass in every browser.
     const source = new Image();
     source.decoding = 'async';
     source.src = artworkSource;
