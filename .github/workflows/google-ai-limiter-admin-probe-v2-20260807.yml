@@ -1,0 +1,64 @@
+name: Google AI limiter admin credential probe v2 20260807
+
+on:
+  push:
+    branches:
+      - agent/google-ai-limiter-admin-probe-20260807
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_API_TOKEN_DEPLOY: ${{ secrets.FLY_API_TOKEN_DEPLOY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      SUPABASE_PERSONAL_ACCESS_TOKEN: ${{ secrets.SUPABASE_PERSONAL_ACCESS_TOKEN }}
+      SUPABASE_CLI_ACCESS_TOKEN: ${{ secrets.SUPABASE_CLI_ACCESS_TOKEN }}
+      SUPABASE_PAT: ${{ secrets.SUPABASE_PAT }}
+      SUPABASE_MANAGEMENT_TOKEN: ${{ secrets.SUPABASE_MANAGEMENT_TOKEN }}
+      SUPABASE_API_TOKEN: ${{ secrets.SUPABASE_API_TOKEN }}
+      SUPABASE_PASSWORD: ${{ secrets.SUPABASE_PASSWORD }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      PGPASSWORD: ${{ secrets.PGPASSWORD }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+      PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+      GOOGLE_AI_LIMITER_SUPABASE_ACCESS_TOKEN: ${{ secrets.GOOGLE_AI_LIMITER_SUPABASE_ACCESS_TOKEN }}
+      GOOGLE_AI_LIMITER_SUPABASE_DB_PASSWORD: ${{ secrets.GOOGLE_AI_LIMITER_SUPABASE_DB_PASSWORD }}
+      GOOGLE_AI_LIMITER_SUPABASE_PROJECT_REF: ${{ secrets.GOOGLE_AI_LIMITER_SUPABASE_PROJECT_REF }}
+      GOOGLE_AI_LIMITER_PG_DSN: ${{ secrets.GOOGLE_AI_LIMITER_PG_DSN }}
+      YC_SERVICE_ACCOUNT_KEY: ${{ secrets.YC_SERVICE_ACCOUNT_KEY }}
+      YC_SA_JSON_CREDENTIALS: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
+    steps:
+      - name: Report credential classes only
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in \
+            FLY_API_TOKEN FLY_API_TOKEN_DEPLOY \
+            SUPABASE_URL SUPABASE_SERVICE_KEY SUPABASE_SERVICE_ROLE_KEY SUPABASE_KEY \
+            SUPABASE_PERSONAL_ACCESS_TOKEN SUPABASE_CLI_ACCESS_TOKEN SUPABASE_PAT \
+            SUPABASE_MANAGEMENT_TOKEN SUPABASE_API_TOKEN SUPABASE_PASSWORD \
+            POSTGRES_PASSWORD PGPASSWORD DB_PASSWORD PROD_DATABASE_URL \
+            PRODUCTION_DATABASE_URL DIRECT_URL \
+            GOOGLE_AI_LIMITER_SUPABASE_ACCESS_TOKEN \
+            GOOGLE_AI_LIMITER_SUPABASE_DB_PASSWORD \
+            GOOGLE_AI_LIMITER_SUPABASE_PROJECT_REF \
+            GOOGLE_AI_LIMITER_PG_DSN \
+            YC_SERVICE_ACCOUNT_KEY YC_SA_JSON_CREDENTIALS
+          do
+            if [ -n "${!name:-}" ]; then
+              echo "credential_present:${name}=true"
+            else
+              echo "credential_present:${name}=false"
+            fi
+          done
