@@ -30,7 +30,7 @@ jobs:
       - name: Install pinned Telegram client
         run: python -m pip install --disable-pip-version-check 'Telethon==1.40.0'
 
-      - name: Discover the bot by the repeated export and drop queued updates
+      - name: Obtain the exact bot token through BotFather and drop queued updates
         shell: bash
         run: |
           set -euo pipefail
@@ -42,6 +42,7 @@ jobs:
           import json
           import os
           import re
+          import time
           import urllib.error
           import urllib.parse
           import urllib.request
@@ -49,8 +50,9 @@ jobs:
           from telethon import TelegramClient
           from telethon.sessions import StringSession
 
-          EXPORT_FILENAME = "registrations-all.xlsx"
-          EXPORT_CAPTION = "Сводный XLSX по всем событиям."
+          TARGET_BOT_ID = 8582027786
+          TARGET_BOT_USERNAME = "kgd80regbot"
+          TARGET_BOT_TITLE = "kgd80bot"
           TOKEN_RE = re.compile(r"\b\d{8,12}:[A-Za-z0-9_-]{30,}\b")
 
 
@@ -89,58 +91,126 @@ jobs:
               return payload
 
 
-          async def find_export_bot(client: TelegramClient):
-              matches = []
-              async for dialog in client.iter_dialogs(limit=500):
-                  entity = dialog.entity
-                  if not bool(getattr(entity, "bot", False)):
-                      continue
-                  messages = await client.get_messages(entity, limit=50)
-                  matching_ids = []
-                  for message in messages:
-                      filename = str(getattr(getattr(message, "file", None), "name", "") or "")
-                      caption = str(message.raw_text or "").strip()
-                      if filename == EXPORT_FILENAME and EXPORT_CAPTION in caption:
-                          matching_ids.append(int(message.id))
-                  if matching_ids:
-                      matches.append((entity, matching_ids))
-              if len(matches) != 1:
-                  safe = [
-                      {
-                          "id": int(getattr(entity, "id", 0) or 0),
-                          "username": str(getattr(entity, "username", "") or ""),
-                          "title": str(getattr(entity, "first_name", "") or ""),
-                          "matching_export_messages": len(message_ids),
-                      }
-                      for entity, message_ids in matches
-                  ]
-                  raise RuntimeError(
-                      "Expected exactly one bot dialog with repeated registrations-all.xlsx; "
-                      + json.dumps(safe, ensure_ascii=False)
+          def buttons(message):
+              return [button for row in (message.buttons or []) for button in row]
+
+
+          def button_labels(message) -> list[str]:
+              return [str(button.text or "").strip() for button in buttons(message)]
+
+
+          def choose_button(message, candidates: list[str]):
+              folded_candidates = [candidate.casefold() for candidate in candidates if candidate]
+              for button in buttons(message):
+                  text = str(button.text or "").strip()
+                  folded = text.casefold()
+                  if any(candidate == folded or candidate in folded or folded in candidate for candidate in folded_candidates):
+                      return button
+              return None
+
+
+          async def wait_new_message(client, peer, after_id: int, timeout: int = 30):
+              deadline = time.monotonic() + timeout
+              while time.monotonic() < deadline:
+                  messages = await client.get_messages(peer, limit=30)
+                  candidates = sorted(
+                      [message for message in messages if int(message.id) > int(after_id) and not message.out],
+                      key=lambda message: int(message.id),
                   )
-              return matches[0]
+                  if candidates:
+                      return candidates[-1]
+                  await asyncio.sleep(0.4)
+              raise TimeoutError("BotFather did not send a new message")
 
 
-          async def find_existing_bot_token(client: TelegramClient, target_id: int) -> str:
+          async def wait_changed_or_new(client, peer, original, old_labels: list[str], timeout: int = 30):
+              deadline = time.monotonic() + timeout
+              while time.monotonic() < deadline:
+                  refreshed = await client.get_messages(peer, ids=int(original.id))
+                  if refreshed and button_labels(refreshed) != old_labels:
+                      return refreshed
+                  messages = await client.get_messages(peer, limit=20)
+                  newer = sorted(
+                      [message for message in messages if int(message.id) > int(original.id) and not message.out],
+                      key=lambda message: int(message.id),
+                  )
+                  if newer:
+                      return newer[-1]
+                  await asyncio.sleep(0.4)
+              raise TimeoutError("BotFather menu did not change")
+
+
+          async def wait_token_message(client, peer, original_id: int, timeout: int = 30) -> str:
+              deadline = time.monotonic() + timeout
+              while time.monotonic() < deadline:
+                  candidates = []
+                  same = await client.get_messages(peer, ids=original_id)
+                  if same:
+                      candidates.append(same)
+                  candidates.extend(await client.get_messages(peer, limit=30))
+                  for message in candidates:
+                      match = TOKEN_RE.search(str(message.raw_text or ""))
+                      if match:
+                          return match.group(0)
+                  await asyncio.sleep(0.4)
+              raise TimeoutError("BotFather did not return an API token")
+
+
+          async def token_from_botfather(client: TelegramClient) -> str:
               botfather = await client.get_entity("BotFather")
-              checked: set[str] = set()
-              async for message in client.iter_messages(botfather, limit=10000):
-                  for match in TOKEN_RE.finditer(str(message.raw_text or "")):
-                      token = match.group(0)
-                      if token in checked:
-                          continue
-                      checked.add(token)
-                      try:
-                          identity = bot_api(token, "getMe").get("result") or {}
-                      except RuntimeError:
-                          continue
-                      if int(identity.get("id") or 0) == target_id:
-                          print(f"BOTFATHER_TOKENS_CHECKED={len(checked)}")
-                          return token
-              raise RuntimeError(
-                  f"No still-valid BotFather token found for target bot id {target_id}; "
-                  f"checked={len(checked)}"
+              command = await client.send_message(botfather, "/mybots")
+              menu = await wait_new_message(client, botfather, int(command.id))
+              target_candidates = [
+                  TARGET_BOT_USERNAME,
+                  "@" + TARGET_BOT_USERNAME,
+                  TARGET_BOT_TITLE,
+              ]
+
+              bot_button = choose_button(menu, target_candidates)
+              visited: set[tuple[str, ...]] = set()
+              for _ in range(20):
+                  if bot_button is not None:
+                      break
+                  labels = button_labels(menu)
+                  fingerprint = tuple(labels)
+                  if fingerprint in visited:
+                      break
+                  visited.add(fingerprint)
+                  next_button = choose_button(menu, ["next", "далее", "следующая", "›", ">", "»"])
+                  if next_button is None:
+                      break
+                  old_labels = labels
+                  await menu.click(data=next_button.data)
+                  menu = await wait_changed_or_new(client, botfather, menu, old_labels)
+                  bot_button = choose_button(menu, target_candidates)
+
+              if bot_button is None:
+                  raise RuntimeError(
+                      "Target bot is absent from BotFather /mybots; visible buttons="
+                      + json.dumps(button_labels(menu), ensure_ascii=False)
+                  )
+
+              old_labels = button_labels(menu)
+              await menu.click(data=bot_button.data)
+              controls = await wait_changed_or_new(client, botfather, menu, old_labels)
+              token_button = choose_button(
+                  controls,
+                  ["api token", "token", "токен api", "api-токен", "токен"],
               )
+              if token_button is None:
+                  raise RuntimeError(
+                      "BotFather API token control not found; visible buttons="
+                      + json.dumps(button_labels(controls), ensure_ascii=False)
+                  )
+
+              old_labels = button_labels(controls)
+              await controls.click(data=token_button.data)
+              try:
+                  response = await wait_changed_or_new(client, botfather, controls, old_labels)
+                  response_id = int(response.id)
+              except TimeoutError:
+                  response_id = int(controls.id)
+              return await wait_token_message(client, botfather, response_id)
 
 
           async def main() -> None:
@@ -166,22 +236,16 @@ jobs:
                   if not await client.is_user_authorized():
                       raise RuntimeError("Telegram session is not authorized")
 
-                  target_bot, matching_ids = await find_export_bot(client)
-                  target_id = int(getattr(target_bot, "id", 0) or 0)
-                  target_username = str(getattr(target_bot, "username", "") or "")
-                  target_title = str(getattr(target_bot, "first_name", "") or "")
-                  if target_id <= 0:
-                      raise RuntimeError("Discovered export bot has no valid Telegram id")
+                  target = await client.get_entity(TARGET_BOT_USERNAME)
+                  if int(getattr(target, "id", 0) or 0) != TARGET_BOT_ID:
+                      raise RuntimeError("The discovered KDG80 bot identity changed")
+                  print(f"TARGET_BOT_USERNAME=@{TARGET_BOT_USERNAME}")
+                  print(f"TARGET_BOT_ID={TARGET_BOT_ID}")
 
-                  print(f"TARGET_BOT_ID={target_id}")
-                  print(f"TARGET_BOT_USERNAME=@{target_username}" if target_username else "TARGET_BOT_USERNAME=<none>")
-                  print(f"TARGET_BOT_TITLE={target_title}")
-                  print(f"MATCHING_EXPORT_MESSAGES={len(matching_ids)}")
-
-                  token = await find_existing_bot_token(client, target_id)
+                  token = await token_from_botfather(client)
                   identity = bot_api(token, "getMe").get("result") or {}
-                  if int(identity.get("id") or 0) != target_id:
-                      raise RuntimeError("Resolved token identity changed before containment")
+                  if int(identity.get("id") or 0) != TARGET_BOT_ID:
+                      raise RuntimeError("BotFather returned a token for a different bot")
 
                   before = bot_api(token, "getWebhookInfo").get("result") or {}
                   print(f"WEBHOOK_WAS_PRESENT={bool(before.get('url'))}")
