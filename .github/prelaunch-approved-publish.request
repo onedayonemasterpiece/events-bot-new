@@ -1,0 +1,6 @@
+request_id=prelaunch-approved-20260807-31213981432
+target_branch=agent/prelaunch-static-background-20260807
+target_sha=cb01624787e21bb973fc3f94ce84ef077d88c24c
+visual_run_id=31213981432
+visual_artifact_digest=sha256:6d1c7ad28fa8f65a01d2f71fa9c86d5ade1229443d348c11a5be9e8e1005ecee
+manual_visual_review=approved

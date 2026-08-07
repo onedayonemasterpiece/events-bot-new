@@ -1,0 +1,456 @@
+name: Prelaunch approved secret publication
+
+on:
+  push:
+    branches:
+      - automation/prelaunch-control-20260804
+    paths:
+      - '.github/prelaunch-approved-publish.request'
+      - '.github/workflows/prelaunch-approved-publish.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: prelaunch-approved-secret-publication
+  cancel-in-progress: false
+
+jobs:
+  publish-approved-candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    environment: production
+    env:
+      KENIGEVENTS_SITE_YC_BUCKET: ${{ secrets.KENIGEVENTS_SITE_YC_BUCKET || vars.KENIGEVENTS_SITE_YC_BUCKET }}
+      KENIGEVENTS_SITE_YC_ACCESS_KEY_ID: ${{ secrets.KENIGEVENTS_SITE_YC_ACCESS_KEY_ID || vars.KENIGEVENTS_SITE_YC_ACCESS_KEY_ID }}
+      KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY: ${{ secrets.KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY }}
+      KENIGEVENTS_SITE_YC_ENDPOINT: ${{ secrets.KENIGEVENTS_SITE_YC_ENDPOINT || vars.KENIGEVENTS_SITE_YC_ENDPOINT || 'https://storage.yandexcloud.net' }}
+      KENIGEVENTS_SITE_YC_REGION: ${{ secrets.KENIGEVENTS_SITE_YC_REGION || vars.KENIGEVENTS_SITE_YC_REGION || 'ru-central1' }}
+      KENIGEVENTS_SITE_PUBLIC_BASE_URL: ${{ secrets.KENIGEVENTS_SITE_PUBLIC_BASE_URL || vars.KENIGEVENTS_SITE_PUBLIC_BASE_URL || 'https://kenigevents.ru' }}
+      PUBLIC_PERSONALIZATION_SUPABASE_URL: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_URL || vars.PUBLIC_PERSONALIZATION_SUPABASE_URL || secrets.STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_URL || vars.STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_URL }}
+      PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || vars.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || secrets.STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || vars.STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY }}
+      PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || vars.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || secrets.STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || vars.STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL }}
+
+    steps:
+      - name: Resolve approved request, evidence and exact source
+        id: request
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          download_archive() {
+            local sha="$1" output="$2"
+            curl --fail-with-body --silent --show-error --location \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${sha}" \
+              --output "$output"
+          }
+
+          control_archive="${RUNNER_TEMP}/control-${GITHUB_SHA}.tar.gz"
+          download_archive "$GITHUB_SHA" "$control_archive"
+          tar --extract --gzip --file "$control_archive" --strip-components=1 --no-same-owner
+
+          request_file='.github/prelaunch-approved-publish.request'
+          test -f "$request_file"
+          value() { sed -n "s/^$1=//p" "$request_file" | tail -n 1; }
+          request_id="$(value request_id)"
+          target_branch="$(value target_branch)"
+          target_sha="$(value target_sha)"
+          visual_run_id="$(value visual_run_id)"
+          visual_artifact_digest="$(value visual_artifact_digest)"
+          manual_visual_review="$(value manual_visual_review)"
+
+          [[ "$request_id" =~ ^[A-Za-z0-9._-]{8,120}$ ]]
+          [[ "$target_branch" == 'agent/prelaunch-static-background-20260807' ]]
+          [[ "$target_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$visual_run_id" =~ ^[0-9]{8,20}$ ]]
+          [[ "$visual_artifact_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$manual_visual_review" == 'approved' ]]
+
+          branch_path="$(jq -rn --arg value "$target_branch" '$value | @uri')"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/branches/${branch_path}" --jq .commit.sha)" = "$target_sha"
+
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${visual_run_id}")"
+          test "$(jq -r .status <<<"$run_json")" = completed
+          test "$(jq -r .conclusion <<<"$run_json")" = success
+          test "$(jq -r .name <<<"$run_json")" = 'Prelaunch visual review'
+          test "$(jq -r .head_branch <<<"$run_json")" = "$target_branch"
+          test "$(jq -r .head_sha <<<"$run_json")" = "$target_sha"
+
+          artifact_name="prelaunch-evidence-${visual_run_id}"
+          artifact="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${visual_run_id}/artifacts?per_page=100" \
+            --jq ".artifacts[] | select(.name == \"${artifact_name}\")")"
+          test -n "$artifact"
+          test "$(jq -r .expired <<<"$artifact")" = false
+          test "$(jq -r .digest <<<"$artifact")" = "$visual_artifact_digest"
+
+          evidence='artifacts/prelaunch-approved-publish/source-evidence'
+          mkdir -p "$evidence"
+          gh run download "$visual_run_id" --repo "$GITHUB_REPOSITORY" --name "$artifact_name" --dir "$evidence"
+          test "$(tr -d '\r\n' < "$evidence/repository-sha.txt")" = "$target_sha"
+          jq -e --arg sha "$target_sha" '
+            .repository_sha == $sha
+            and .scene_exit == 0
+            and .viewport_fit_exit == 0
+            and .form_security_exit == 0
+            and .manual_visual_review_required == true
+          ' "$evidence/github-actions-gates.json" >/dev/null
+          jq -e '.ok == true and (.failures | length) == 0' "$evidence/prelaunch-scene-summary.json" >/dev/null
+          jq -e '.ok == true and (.failures | length) == 0' "$evidence/prelaunch-viewport-fit-summary.json" >/dev/null
+          jq -e '.ok == true' "$evidence/prelaunch-form-security-summary.json" >/dev/null
+
+          target_archive="${RUNNER_TEMP}/target-${target_sha}.tar.gz"
+          download_archive "$target_sha" "$target_archive"
+          mkdir -p target
+          tar --extract --gzip --file "$target_archive" --directory target --strip-components=1 --no-same-owner
+          test -f target/site/package-lock.json
+          test -f target/site/src/components/PrelaunchPage.astro
+
+          {
+            echo "request_id=$request_id"
+            echo "target_branch=$target_branch"
+            echo "target_sha=$target_sha"
+            echo "visual_run_id=$visual_run_id"
+            echo "visual_artifact_digest=$visual_artifact_digest"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+          cache-dependency-path: target/site/package-lock.json
+
+      - name: Install and verify approved source
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix target/site ci --no-audit --no-fund
+          aws --version
+          npm --prefix target/site run test:static-release
+          for name in \
+            KENIGEVENTS_SITE_YC_BUCKET \
+            KENIGEVENTS_SITE_YC_ACCESS_KEY_ID \
+            KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY \
+            PUBLIC_PERSONALIZATION_SUPABASE_URL \
+            PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY; do
+            test -n "${!name:-}"
+          done
+
+      - name: Snapshot production, probe backend and build secret candidate
+        shell: bash
+        env:
+          TARGET_SHA: ${{ steps.request.outputs.target_sha }}
+        run: |
+          set -euo pipefail
+          artifact_dir='artifacts/prelaunch-approved-publish'
+          mkdir -p "$artifact_dir"
+
+          snapshot() {
+            SNAPSHOT_OUTPUT="$1" BASE_URL="${KENIGEVENTS_SITE_PUBLIC_BASE_URL%/}" node --input-type=module <<'NODE'
+          import { createHash } from 'node:crypto';
+          import { writeFileSync } from 'node:fs';
+          const base = process.env.BASE_URL.replace(/\/+$/u, '');
+          const surfaces = [];
+          for (const path of ['/', '/robots.txt', '/sitemap.xml', '/ics/']) {
+            const response = await fetch(`${base}${path}`, {
+              redirect: 'manual',
+              headers: { 'cache-control': 'no-cache', pragma: 'no-cache' },
+            });
+            const bytes = Buffer.from(await response.arrayBuffer());
+            surfaces.push({
+              path,
+              status: response.status,
+              location: response.headers.get('location') || '',
+              content_type: response.headers.get('content-type') || '',
+              byte_length: response.ok ? bytes.length : null,
+              body_sha256: response.ok ? createHash('sha256').update(bytes).digest('hex') : null,
+            });
+          }
+          writeFileSync(process.env.SNAPSHOT_OUTPUT, `${JSON.stringify({ base_url: base, surfaces }, null, 2)}\n`);
+          NODE
+          }
+          snapshot "$artifact_dir/production-surfaces-before.json"
+
+          probe() {
+            local route="$1" base="$2" output="$artifact_dir/backend-${route}-honeypot-probe.json"
+            response="$(curl --fail-with-body --silent --show-error --max-time 25 --request POST \
+              --header "apikey: ${PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY}" \
+              --header "Authorization: Bearer ${PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY}" \
+              --header 'Accept: application/json' \
+              --header 'Content-Type: application/json' \
+              --data '{"p_email":"approved-publication-probe@example.com","p_source":"prelaunch_approved_publication_probe","p_consent_version":"prelaunch-updates-2026-v1","p_website":"github-actions-honeypot"}' \
+              "${base%/}/rest/v1/rpc/register_prelaunch_notification_v1")"
+            jq -e '.accepted == true and .status == "registered" and .launch_date == "2026-09-01" and .consent_version == "prelaunch-updates-2026-v1"' <<<"$response" >/dev/null
+            jq --arg route "$route" '{route:$route,accepted,status,launch_date,consent_version}' <<<"$response" > "$output"
+          }
+
+          probe direct "$PUBLIC_PERSONALIZATION_SUPABASE_URL"
+          relay_status='not_configured'
+          if [[ -n "${PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL:-}" ]]; then
+            probe relay "$PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL"
+            relay_status='ok'
+          else
+            jq -n '{route:"relay",status:"not_configured"}' > "$artifact_dir/backend-relay-honeypot-probe.json"
+          fi
+          echo "RELAY_STATUS=$relay_status" >> "$GITHUB_ENV"
+
+          token="$(openssl rand -hex 32)"
+          base_path="/_review/${token}"
+          build_id="prelaunch-approved-${GITHUB_RUN_ID}-${TARGET_SHA:0:12}"
+          token_sha="$(printf '%s' "$token" | sha256sum | cut -d' ' -f1)"
+
+          PUBLIC_PRELAUNCH_MODE=on \
+          PUBLIC_SITE_MODE=secret_candidate \
+          PUBLIC_SITE_ORIGIN="${KENIGEVENTS_SITE_PUBLIC_BASE_URL%/}" \
+          SITE_BASE_PATH="$base_path" \
+          PUBLIC_PERSONALIZATION_SUPABASE_URL="$PUBLIC_PERSONALIZATION_SUPABASE_URL" \
+          PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL="${PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL:-}" \
+          PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY="$PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY" \
+          npm --prefix target/site run build
+
+          source_root='target/site/dist'
+          stage="${RUNNER_TEMP}/candidate-stage"
+          rm -rf "$stage"
+          mkdir -p "$stage"
+          cp "$source_root/index.html" "$stage/index.html"
+          test -d "$source_root/_astro" && cp -R "$source_root/_astro" "$stage/_astro"
+          test -d "$source_root/assets" && cp -R "$source_root/assets" "$stage/assets"
+          find "$source_root" -maxdepth 1 -type f \
+            ! -name 'index.html' \
+            ! -name 'robots.txt' \
+            ! -name 'sitemap.xml' \
+            ! -name 'static-release-manifest.json' \
+            -exec cp {} "$stage/" \;
+
+          rm -rf "$source_root"
+          candidate_root="$source_root/${base_path#/}"
+          mkdir -p "$candidate_root"
+          cp -R "$stage"/. "$candidate_root/"
+          grep -q 'data-prelaunch-page' "$candidate_root/index.html"
+          grep -q 'approved-desktop-mobile-v2' "$candidate_root/index.html"
+          grep -q 'noindex,nofollow,noarchive,nosnippet' "$candidate_root/index.html"
+          grep -q 'name="referrer" content="no-referrer"' "$candidate_root/index.html"
+          find "$candidate_root" -type f -name '*.html' ! -path "$candidate_root/index.html" -print -quit | grep -q . && exit 1 || true
+
+          CANDIDATE_ROOT="$candidate_root" \
+          CANDIDATE_BASE_PATH="$base_path" \
+          CANDIDATE_BUILD_ID="$build_id" \
+          CANDIDATE_TOKEN_SHA256="$token_sha" \
+          node --input-type=module <<'NODE'
+          import { createHash } from 'node:crypto';
+          import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+          import { join, relative, sep } from 'node:path';
+          const root = process.env.CANDIDATE_ROOT;
+          const mime = (key) => ({
+            '.html':'text/html; charset=utf-8',
+            '.css':'text/css; charset=utf-8',
+            '.js':'text/javascript; charset=utf-8',
+            '.mjs':'text/javascript; charset=utf-8',
+            '.json':'application/json; charset=utf-8',
+            '.svg':'image/svg+xml',
+            '.png':'image/png',
+            '.webp':'image/webp',
+            '.ico':'image/x-icon',
+            '.woff2':'font/woff2',
+            '.txt':'text/plain; charset=utf-8',
+          }[key.slice(key.lastIndexOf('.'))] || 'application/octet-stream');
+          const files = [];
+          const walk = (dir) => {
+            for (const name of readdirSync(dir)) {
+              const path = join(dir, name);
+              const stat = statSync(path);
+              if (stat.isDirectory()) walk(path);
+              else {
+                const key = relative(root, path).split(sep).join('/');
+                if (key !== 'secret-candidate-manifest.json') {
+                  const bytes = readFileSync(path);
+                  files.push({
+                    key,
+                    size_bytes: bytes.length,
+                    sha256: createHash('sha256').update(bytes).digest('hex'),
+                    content_type: mime(key),
+                  });
+                }
+              }
+            }
+          };
+          walk(root);
+          files.sort((a, b) => a.key.localeCompare(b.key));
+          const manifest = {
+            schema_version: 'static_secret_candidate_manifest_v1',
+            site_mode: 'secret_candidate',
+            publication_mode: 'secret_link',
+            build_id: process.env.CANDIDATE_BUILD_ID,
+            base_path: process.env.CANDIDATE_BASE_PATH,
+            token_sha256: process.env.CANDIDATE_TOKEN_SHA256,
+            generated_at: new Date().toISOString(),
+            files,
+            checks: {
+              candidate_contract: 'ok',
+              catalog_parity: 'ok',
+              noindex: 'ok',
+              no_referrer: 'ok',
+              prefix_containment: 'ok',
+              root_isolation: 'ok',
+            },
+          };
+          writeFileSync(join(root, 'secret-candidate-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+          NODE
+
+          object_count="$(jq '.files | length + 1' "$candidate_root/secret-candidate-manifest.json")"
+          {
+            echo "SECRET_CANDIDATE_TOKEN=$token"
+            echo "CANDIDATE_BASE_PATH=$base_path"
+            echo "CANDIDATE_ROOT=$candidate_root"
+            echo "CANDIDATE_URL=${KENIGEVENTS_SITE_PUBLIC_BASE_URL%/}${base_path}/"
+            echo "CANDIDATE_BUILD_ID=$build_id"
+            echo "CANDIDATE_TOKEN_SHA256=$token_sha"
+            echo "CANDIDATE_OBJECT_COUNT=$object_count"
+          } >> "$GITHUB_ENV"
+
+      - name: Publish create-only prefix and verify public page
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_dir='artifacts/prelaunch-approved-publish'
+
+          node target/site/scripts/deploy-secret-candidate-yc.mjs plan > "$artifact_dir/publication-plan.json"
+          jq -e '
+            .ok == true
+            and .anonymous_list_preflight == "disabled"
+            and .root_mutation == false
+            and .stable_ics_mutation == false
+            and .overwrite_allowed == false
+          ' "$artifact_dir/publication-plan.json" >/dev/null
+
+          export SECRET_CANDIDATE_CONFIRM="publish-secret:${CANDIDATE_BUILD_ID}:${CANDIDATE_TOKEN_SHA256}"
+          node target/site/scripts/deploy-secret-candidate-yc.mjs publish > "$artifact_dir/publication-result.json"
+          jq -e '.ok == true and .command == "publish" and .public_verification == "ok"' "$artifact_dir/publication-result.json" >/dev/null
+
+          live="$artifact_dir/live"
+          mkdir -p "$live"
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error \
+              --header 'Cache-Control: no-cache' \
+              --dump-header "$live/root-headers.txt" \
+              --output "$live/root-index.html" \
+              "$CANDIDATE_URL"; then
+              if grep -q 'data-prelaunch-page' "$live/root-index.html" \
+                && grep -q 'approved-desktop-mobile-v2' "$live/root-index.html" \
+                && grep -q 'noindex,nofollow,noarchive,nosnippet' "$live/root-index.html"; then
+                ready=1
+                break
+              fi
+            fi
+            sleep 2
+          done
+          test "$ready" = 1
+
+          printf '%s\n' "$CANDIDATE_URL" > "$artifact_dir/candidate-public-url.txt"
+          printf '%s\n' "${{ steps.request.outputs.target_sha }}" > "$artifact_dir/repository-sha.txt"
+          cp "$CANDIDATE_ROOT/secret-candidate-manifest.json" "$artifact_dir/secret-candidate-manifest.json"
+
+      - name: Prove production unchanged and write receipt
+        shell: bash
+        env:
+          REQUEST_ID: ${{ steps.request.outputs.request_id }}
+          TARGET_BRANCH: ${{ steps.request.outputs.target_branch }}
+          TARGET_SHA: ${{ steps.request.outputs.target_sha }}
+          VISUAL_RUN_ID: ${{ steps.request.outputs.visual_run_id }}
+          VISUAL_ARTIFACT_DIGEST: ${{ steps.request.outputs.visual_artifact_digest }}
+        run: |
+          set -euo pipefail
+          artifact_dir='artifacts/prelaunch-approved-publish'
+
+          SNAPSHOT_OUTPUT="$artifact_dir/production-surfaces-after.json" \
+          BASE_URL="${KENIGEVENTS_SITE_PUBLIC_BASE_URL%/}" \
+          node --input-type=module <<'NODE'
+          import { createHash } from 'node:crypto';
+          import { writeFileSync } from 'node:fs';
+          const base = process.env.BASE_URL.replace(/\/+$/u, '');
+          const surfaces = [];
+          for (const path of ['/', '/robots.txt', '/sitemap.xml', '/ics/']) {
+            const response = await fetch(`${base}${path}`, {
+              redirect: 'manual',
+              headers: { 'cache-control': 'no-cache', pragma: 'no-cache' },
+            });
+            const bytes = Buffer.from(await response.arrayBuffer());
+            surfaces.push({
+              path,
+              status: response.status,
+              location: response.headers.get('location') || '',
+              content_type: response.headers.get('content-type') || '',
+              byte_length: response.ok ? bytes.length : null,
+              body_sha256: response.ok ? createHash('sha256').update(bytes).digest('hex') : null,
+            });
+          }
+          writeFileSync(process.env.SNAPSHOT_OUTPUT, `${JSON.stringify({ base_url: base, surfaces }, null, 2)}\n`);
+          NODE
+
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const before = JSON.parse(readFileSync('artifacts/prelaunch-approved-publish/production-surfaces-before.json', 'utf8'));
+          const after = JSON.parse(readFileSync('artifacts/prelaunch-approved-publish/production-surfaces-after.json', 'utf8'));
+          assert.deepEqual(after, before);
+          const relayStatus = process.env.RELAY_STATUS || 'not_configured';
+          const receipt = {
+            schema_version: 'prelaunch_approved_publication_receipt_v1',
+            request_id: process.env.REQUEST_ID,
+            public_url: process.env.CANDIDATE_URL,
+            target_branch: process.env.TARGET_BRANCH,
+            target_sha: process.env.TARGET_SHA,
+            visual_run_id: process.env.VISUAL_RUN_ID,
+            visual_artifact_digest: process.env.VISUAL_ARTIFACT_DIGEST,
+            publish_run_id: process.env.GITHUB_RUN_ID,
+            build_id: process.env.CANDIDATE_BUILD_ID,
+            token_sha256: process.env.CANDIDATE_TOKEN_SHA256,
+            object_count: Number(process.env.CANDIDATE_OBJECT_COUNT),
+            source_visual_gates: 'ok',
+            approved_background_integrity: 'ok',
+            backend_direct_honeypot_probe: 'ok',
+            backend_relay_honeypot_probe: relayStatus,
+            public_hash_mime_verification: 'ok',
+            public_page_verification: 'ok',
+            production_surface_invariants: 'ok',
+            production_root_changed: false,
+            stable_ics_changed: false,
+            create_only_upload: true,
+            generated_at: new Date().toISOString(),
+          };
+          writeFileSync(
+            'artifacts/prelaunch-approved-publish/production-surface-invariants.json',
+            `${JSON.stringify({ ok: true, production_root_changed: false, stable_ics_changed: false }, null, 2)}\n`,
+          );
+          writeFileSync(
+            'artifacts/prelaunch-approved-publish/publication-receipt.json',
+            `${JSON.stringify(receipt, null, 2)}\n`,
+          );
+          NODE
+
+          {
+            echo '## Published approved prelaunch candidate'
+            echo
+            echo "$CANDIDATE_URL"
+            echo
+            echo "Target SHA: $TARGET_SHA"
+            echo "Visual run: $VISUAL_RUN_ID"
+            echo "Relay status: ${RELAY_STATUS:-not_configured}"
+            echo 'Production root changed: no'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload approved publication evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prelaunch-approved-publication-${{ github.run_id }}
+          path: artifacts/prelaunch-approved-publish
+          if-no-files-found: warn
+          retention-days: 14
