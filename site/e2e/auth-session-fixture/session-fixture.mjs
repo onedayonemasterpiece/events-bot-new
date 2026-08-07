@@ -138,6 +138,108 @@ function clientFactoryDefault({ supabaseUrl, key, fetchImpl, role }) {
   });
 }
 
+function exactNonNegativeInteger(value, reason = 'ISSUER_COUNTERS_INVALID') {
+  if (!Number.isSafeInteger(value) || value < 0) throw blocked(reason);
+  return value;
+}
+
+function normalizeIssuerResult(value) {
+  if (!value || typeof value !== 'object') throw blocked('ISSUER_RESPONSE_INVALID');
+  const counters = value.counters || {};
+  const result = {
+    emailOtp: String(value.emailOtp || value.email_otp || ''),
+    actionLink: String(value.actionLink || value.action_link || ''),
+    counters: {
+      adminCredentialCount: exactNonNegativeInteger(
+        counters.adminCredentialCount ?? counters.admin_credential_count,
+      ),
+      productOtpIssueCount: exactNonNegativeInteger(
+        counters.productOtpIssueCount ?? counters.product_otp_issue_count,
+      ),
+      externalMailSendCount: exactNonNegativeInteger(
+        counters.externalMailSendCount ?? counters.external_mail_send_count,
+      ),
+      externalMailReceiptCount: exactNonNegativeInteger(
+        counters.externalMailReceiptCount ?? counters.external_mail_receipt_count,
+      ),
+    },
+  };
+  if (!/^\d{6,10}$/u.test(result.emailOtp)) throw blocked('ISSUER_RESPONSE_INVALID');
+  if (result.actionLink && !result.actionLink.startsWith('https://')) throw blocked('ISSUER_RESPONSE_INVALID');
+  if (result.counters.adminCredentialCount !== 1) throw blocked('ISSUER_COUNTERS_INVALID');
+  if (result.counters.productOtpIssueCount !== 0) throw blocked('UNEXPECTED_PRODUCT_OTP');
+  if (result.counters.externalMailSendCount !== 0) throw blocked('UNEXPECTED_EXTERNAL_MAIL_SEND');
+  if (result.counters.externalMailReceiptCount !== 0) throw blocked('UNEXPECTED_EXTERNAL_MAIL_RECEIPT');
+  return result;
+}
+
+export function createAuthSessionBrokerIssuer(options = {}) {
+  let endpoint;
+  try {
+    endpoint = new URL(String(options.endpoint || ''));
+  } catch (error) {
+    throw blocked('BROKER_ENDPOINT_INVALID', error);
+  }
+  if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password || endpoint.hash) {
+    throw blocked('BROKER_ENDPOINT_INVALID');
+  }
+  const oidcToken = String(options.oidcToken || '').trim();
+  if (!oidcToken) throw blocked('BROKER_OIDC_TOKEN_MISSING');
+  const fetchImpl = options.fetchImpl || globalThis.fetch?.bind(globalThis);
+  if (typeof fetchImpl !== 'function') throw blocked('FETCH_UNAVAILABLE');
+  return Object.freeze({
+    kind: 'github_oidc_broker',
+    async issue({ personaId, redirectTo, runId }) {
+      const response = await fetchImpl(endpoint, {
+        method: 'POST',
+        redirect: 'error',
+        headers: {
+          accept: 'application/json',
+          authorization: `Bearer ${oidcToken}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ persona_id: personaId, redirect_to: redirectTo, run_id: runId }),
+      });
+      if (!response?.ok) throw blocked(`BROKER_REJECTED_${Number(response?.status || 0)}`);
+      let payload;
+      try {
+        payload = await response.json();
+      } catch (error) {
+        throw blocked('BROKER_RESPONSE_INVALID', error);
+      }
+      return normalizeIssuerResult(payload);
+    },
+  });
+}
+
+export function createSupabaseAdminIssuer(options = {}) {
+  const supabaseUrl = String(options.supabaseUrl || '').replace(/\/+$/u, '');
+  const secretKey = String(options.secretKey || '');
+  const fetchImpl = options.fetchImpl || globalThis.fetch?.bind(globalThis);
+  const clientFactory = options.clientFactory || clientFactoryDefault;
+  if (!supabaseUrl || !secretKey || typeof fetchImpl !== 'function' || typeof clientFactory !== 'function') {
+    throw blocked('CONFIG_MISSING');
+  }
+  return Object.freeze({
+    kind: 'admin_generate_link',
+    async issue({ personaEmail, redirectTo }) {
+      const adminClient = clientFactory({ role: 'issuer', supabaseUrl, key: secretKey, fetchImpl });
+      const issued = await adminClient.auth.admin.generateLink({
+        type: 'magiclink', email: personaEmail, options: { redirectTo },
+      });
+      if (issued?.error) throw issued.error;
+      return normalizeIssuerResult({
+        emailOtp: issued?.data?.properties?.email_otp,
+        actionLink: issued?.data?.properties?.action_link,
+        counters: {
+          adminCredentialCount: 1, productOtpIssueCount: 0,
+          externalMailSendCount: 0, externalMailReceiptCount: 0,
+        },
+      });
+    },
+  });
+}
+
 export function allowlistedPersonasFromEnv(env = process.env, mapping = DEFAULT_PERSONA_ENV) {
   const result = {};
   for (const [personaId, variable] of Object.entries(mapping)) {
@@ -165,7 +267,7 @@ export async function createAuthSessionFixture(options = {}) {
   const supabaseUrl = String(options.supabaseUrl || '').replace(/\/+$/u, '');
   const publishableKey = String(options.publishableKey || '');
   const secretKey = String(options.secretKey || '');
-  if (!supabaseUrl || !publishableKey || !secretKey) throw blocked('CONFIG_MISSING');
+  if (!supabaseUrl || !publishableKey || (!options.issuer && !secretKey)) throw blocked('CONFIG_MISSING');
 
   const target = assertTarget(options.targetUrl, options.allowedOrigins);
   const persona = resolvePersona(options.personaId, options.personas || {});
@@ -228,23 +330,25 @@ export async function createAuthSessionFixture(options = {}) {
   };
 
   try {
-    const adminClient = clientFactory({
-      role: 'issuer', supabaseUrl, key: secretKey, fetchImpl,
+    const issuer = options.issuer || createSupabaseAdminIssuer({
+      supabaseUrl, secretKey, fetchImpl, clientFactory,
     });
-    const issued = await adminClient.auth.admin.generateLink({
-      type: 'magiclink',
-      email: persona.email,
-      options: { redirectTo: target.href },
-    });
-    if (issued?.error) throw issued.error;
-    counters.adminCredentials += 1;
-    credential = {
-      emailOtp: String(issued?.data?.properties?.email_otp || ''),
-      actionLink: String(issued?.data?.properties?.action_link || ''),
-    };
-    if (!/^\d{6,10}$/u.test(credential.emailOtp) || !credential.actionLink.startsWith('https://')) {
-      throw blocked('ISSUER_RESPONSE_INVALID');
+    if (typeof issuer?.issue !== 'function' || !/^[a-z][a-z0-9_]{1,63}$/u.test(String(issuer.kind || ''))) {
+      throw blocked('ISSUER_INVALID');
     }
+    const issued = normalizeIssuerResult(await issuer.issue({
+      personaId: persona.id,
+      personaEmail: persona.email,
+      redirectTo: target.href,
+      runId: safeSegment(options.runId || 'local'),
+      scopeKind,
+      scopeId,
+    }));
+    counters.adminCredentials = issued.counters.adminCredentialCount;
+    counters.productOtpIssues += issued.counters.productOtpIssueCount;
+    counters.externalMailSends += issued.counters.externalMailSendCount;
+    counters.externalMailReceipts += issued.counters.externalMailReceiptCount;
+    credential = { emailOtp: issued.emailOtp, actionLink: issued.actionLink };
 
     userClient = clientFactory({
       role: 'session', supabaseUrl, key: publishableKey, fetchImpl,
@@ -315,7 +419,7 @@ export async function createAuthSessionFixture(options = {}) {
       target_path_class: targetPathClass(target.pathname),
       target_path_hash: identityHash(target.pathname, salt),
       project_ref_hash: identityHash(new URL(supabaseUrl).hostname.split('.')[0], salt),
-      bootstrap_method: 'admin_generate_link_then_verify_otp',
+      bootstrap_method: `${issuer.kind}_then_verify_otp`,
       admin_credential_count: counters.adminCredentials,
       auth_verify_count: counters.authVerifies,
       product_otp_issue_count: counters.productOtpIssues,

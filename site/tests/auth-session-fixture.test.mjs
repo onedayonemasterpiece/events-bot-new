@@ -8,6 +8,7 @@ import {
   AuthSessionFixtureBlockedError,
   STATIC_SITE_AUTH_MODES,
   allowlistedPersonasFromEnv,
+  createAuthSessionBrokerIssuer,
   createAuthSessionFixture,
   resetAuthSessionFixtureScopesForTests,
 } from '../e2e/auth-session-fixture/session-fixture.mjs';
@@ -251,4 +252,87 @@ test('persona allowlist is built only from named environment variables', () => {
     STATIC_SITE_AUTH_FIXTURE_EMAIL_SEARCH_CACHED: 'cached@example.invalid',
     ARBITRARY_EMAIL: 'ignored@example.invalid',
   }), { 'search-cached': { email: 'cached@example.invalid' } });
+});
+
+test('broker-compatible issuer can bootstrap without exposing an admin secret to the fixture', async () => {
+  const calls = [];
+  const issuer = {
+    kind: 'github_oidc_broker',
+    async issue(request) {
+      calls.push(request);
+      return {
+        emailOtp: '456789',
+        counters: {
+          adminCredentialCount: 1,
+          productOtpIssueCount: 0,
+          externalMailSendCount: 0,
+          externalMailReceiptCount: 0,
+        },
+      };
+    },
+  };
+  const root = await mkdtemp(join(tmpdir(), 'ke-auth-fixture-broker-'));
+  const fixture = await createAuthSessionFixture({
+    supabaseUrl: 'https://project.supabase.co', publishableKey: 'publishable',
+    targetUrl: 'https://kenigevents.ru/poisk/',
+    personas: { 'search-cached': { email: 'search-cached@example.invalid' } }, personaId: 'search-cached',
+    scopeKind: 'job', scopeId: 'scheduled-1', runId: '12345', tempRoot: root,
+    issuer, fetchImpl, clientFactory: fakeClientFactory, protectedProbe: verifiedRlsProbe,
+  });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0], {
+    personaId: 'search-cached',
+    personaEmail: 'search-cached@example.invalid',
+    redirectTo: 'https://kenigevents.ru/poisk/',
+    runId: '12345',
+    scopeKind: 'job',
+    scopeId: 'scheduled-1',
+  });
+  assert.equal(fixture.receipt.bootstrap_method, 'github_oidc_broker_then_verify_otp');
+  assert.equal(fixture.receipt.admin_credential_count, 1);
+  await fixture.cleanup();
+});
+
+test('issuer counters are exact and fail closed before session verification', async () => {
+  let sessionClientCreated = false;
+  const clientFactory = (options) => {
+    if (options.role === 'session') sessionClientCreated = true;
+    return fakeClientFactory(options);
+  };
+  await assert.rejects(createAuthSessionFixture({
+    supabaseUrl: 'https://project.supabase.co', publishableKey: 'publishable',
+    targetUrl: 'https://kenigevents.ru/poisk/', personas: { p: { email: 'search-cached@example.invalid' } },
+    personaId: 'p', scopeId: 'issuer-counter-negative', fetchImpl, clientFactory,
+    protectedProbe: verifiedRlsProbe,
+    issuer: { kind: 'broker', issue: async () => ({
+      emailOtp: '456789', counters: { adminCredentialCount: 1, productOtpIssueCount: 1,
+        externalMailSendCount: 0, externalMailReceiptCount: 0 },
+    }) },
+  }), /BLOCKED_AUTH_FIXTURE:UNEXPECTED_PRODUCT_OTP/u);
+  assert.equal(sessionClientCreated, false);
+});
+
+test('GitHub OIDC broker issuer sends only role/run/redirect and retains one-time action link', async () => {
+  let observed;
+  const issuer = createAuthSessionBrokerIssuer({
+    endpoint: 'https://broker.example.invalid/issue', oidcToken: 'signed-oidc-secret',
+    fetchImpl: async (input, init) => {
+      observed = { input: String(input), init, body: JSON.parse(init.body) };
+      return Response.json({
+        email_otp: '456789', action_link: 'https://project.supabase.co/auth/v1/verify?token=one-time',
+        counters: { admin_credential_count: 1, product_otp_issue_count: 0,
+          external_mail_send_count: 0, external_mail_receipt_count: 0 },
+      });
+    },
+  });
+  const result = await issuer.issue({
+    personaId: 'search-cached', personaEmail: 'must-not-cross-broker-boundary@example.invalid',
+    redirectTo: 'https://kenigevents.ru/poisk/', runId: '123456789', scopeKind: 'job', scopeId: 'worker-0',
+  });
+  assert.deepEqual(observed.body, {
+    persona_id: 'search-cached', redirect_to: 'https://kenigevents.ru/poisk/', run_id: '123456789',
+  });
+  assert.equal(observed.init.headers.authorization, 'Bearer signed-oidc-secret');
+  assert.equal(result.actionLink, 'https://project.supabase.co/auth/v1/verify?token=one-time');
+  assert.doesNotMatch(JSON.stringify(observed.body), /example\.invalid/u);
 });
