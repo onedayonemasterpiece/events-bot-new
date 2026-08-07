@@ -67,6 +67,17 @@ lanes:
     forbidden_files: [CHANGELOG.md, docs/**, .github/**, supabase/functions/**, supabase/migrations/**]
     verification_scope: targeted
     status: spawned
+  - id: L6-ui-variant
+    role: worker
+    effort: high
+    supporting_requirement_ids: [R06, R09]
+    execution_mode: parallel
+    branch: agent/search-live-automation/ui-variant
+    worktree: /dev/shm/search-live-automation-20260807/ui-variant
+    writable_files: [site/src/components/AuthorizedEventSearch.astro, site/tests/search-*.test.mjs, site/tests/search-*.playwright.mjs, .codex/lanes/L6-ui-variant/RESULTS.md]
+    forbidden_files: [CHANGELOG.md, docs/**, .github/**, supabase/**, site/e2e/**]
+    verification_scope: targeted
+    status: spawned
   - id: L5-ci-registry-ops
     role: integrator
     effort: high_max_available_release_ops
