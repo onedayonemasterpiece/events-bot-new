@@ -46,7 +46,28 @@ async function assertTargetSha(url, expectedValue) {
   const observed = String(body?.repo_sha || '').trim().toLowerCase();
   if (!/^[0-9a-f]{40}$/u.test(observed)) throw new Error('search_target_repo_sha_missing');
   if (observed !== expected) throw new Error('search_target_repo_sha_mismatch');
-  return observed;
+  const revisions = body?.search_revisions;
+  const catalogRevision = String(revisions?.catalog_revision || '');
+  const corpusRevision = String(revisions?.corpus_revision || '');
+  const searchDocumentRevision = String(revisions?.search_document_revision || '');
+  if (![catalogRevision, corpusRevision, searchDocumentRevision].every((value) => /^[0-9a-f]{64}$/u.test(value))
+    || revisions?.coverage_status !== 'complete') throw new Error('search_target_revisions_missing');
+  return { repoSha: observed, catalogRevision, corpusRevision, searchDocumentRevision };
+}
+
+function assertTargetRevisions(journey, identity) {
+  for (const queryCase of journey?.query_cases || []) {
+    const responses = [
+      ...(queryCase.pages || []).map((page) => page.response),
+      queryCase.cache_warm?.response,
+      queryCase.cache_repeat?.response,
+    ].filter(Boolean);
+    for (const response of responses) {
+      if (response.catalog_revision !== identity.catalogRevision || response.corpus_revision !== identity.corpusRevision) {
+        throw new Error('search_target_response_revision_mismatch');
+      }
+    }
+  }
 }
 
 function errorCode(error) {
@@ -86,7 +107,8 @@ let exitCode = 0;
 try {
   if (!closedModes.has(mode)) throw new Error(`search_variant_unknown:${mode}`);
   safeTarget = targetUrl(process.env.E2E_SEARCH_TARGET_URL);
-  targetRepoSha = await assertTargetSha(safeTarget, process.env.E2E_EXPECTED_REPO_SHA);
+  const targetIdentity = await assertTargetSha(safeTarget, process.env.E2E_EXPECTED_REPO_SHA);
+  targetRepoSha = targetIdentity.repoSha;
   const variant = resolveCanaryVariant(mode, platform);
   const actionLink = String(process.env.E2E_AUTH_ACTION_LINK || '');
   if (!authStatePath && !actionLink) throw new Error('search_auth_bootstrap_missing');
@@ -96,6 +118,7 @@ try {
   const journeyTarget = new URL(safeTarget.href);
   if (journeyTarget.pathname.startsWith('/_review/')) journeyTarget.searchParams.set('search_variant', mode);
   const journey = await runSearchJourney({ adapter, targetUrl: journeyTarget.href, variant, queryCases: queryCases(process.env.E2E_SEARCH_QUERIES_JSON) });
+  assertTargetRevisions(journey, targetIdentity);
   const result = { ...journey, platform, execution_mode: mode, target_repo_sha: targetRepoSha };
   await writeSearchEvidence(evidenceDirectory, result);
   process.stdout.write(`search-live PASS platform=${platform} execution_mode=${mode} evidence=${evidenceDirectory}\n`);

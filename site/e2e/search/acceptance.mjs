@@ -45,6 +45,7 @@ export function summarizeSearchPayload(payload, extras = {}) {
     schema_version: boundedString(payload.schema_version ?? payload.search_contract_version, 80),
     search_contract_version: boundedString(payload.search_contract_version ?? payload.schema_version, 80),
     request_id: stableId(payload.request_id),
+    receipt_id: stableId(payload.receipt_id),
     response_ids: visible.map(eventId),
     response_families: visible.map(familyKey),
     item_count: Array.isArray(payload.items) ? payload.items.length : 0,
@@ -147,7 +148,7 @@ export function assertExecutionReceipt(response, requestedMode, label = 'result'
     throw new Error(`search_execution_receipt:${label}:${requested || 'missing'}:${actual || 'missing'}`);
   }
   const allowedActual = {
-    cached_vector: new Set(['cached_vector']),
+    cached_vector: new Set(['cached_vector', 'cold_vector']),
     cold_vector: new Set(['cold_vector']),
     cold_vector_llm: new Set(['cold_vector_llm', 'degraded_vector_fallback']),
     degraded_vector_fallback: new Set(['degraded_vector_fallback']),

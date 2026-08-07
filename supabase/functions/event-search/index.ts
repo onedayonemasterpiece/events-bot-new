@@ -1874,7 +1874,13 @@ async function reserveSearchCanaryLlmAttempt(
 }
 
 function responseEventIds(body: Record<string, unknown>): number[] {
-  const lists = [body.items, body.fallback_items];
+  // Mirror the UI's visible-items contract exactly: while another exact page
+  // exists, fallback discovery cards are not rendered and therefore must not
+  // appear in the owner receipt used for response↔DOM acceptance.
+  const exact = Array.isArray(body.items) ? body.items : [];
+  const lists = body.has_more === true && exact.length > 0
+    ? [exact]
+    : [exact, body.fallback_items];
   const ids: number[] = [];
   const seen = new Set<number>();
   for (const list of lists) {
@@ -2624,7 +2630,8 @@ async function runEventSearch(
     };
     let resultCacheStatus = "skipped";
     const resultCacheWriteAllowed = !isCanary ||
-      requestedExecutionMode === "cached_vector";
+      requestedExecutionMode === "cached_vector" ||
+      requestedExecutionMode === "cold_vector";
     if (resultCacheWriteAllowed && (llmResult.used || !useLlmVerifier)) {
       const cacheStoreStartedAt = performance.now();
       counters.result_cache_write_attempts += 1;

@@ -762,5 +762,15 @@ Affected-route health, content minimum и шардированный catalog evi
 Transport, medallions, people cards, personal pages, connectivity и
 personalization добавляются вместе с реализацией/audit соответствующей surface.
 
+### M9 — Search live plane
+
+Реализованы независимые от Focus/mail `site/e2e/search` и
+`.github/workflows/static-site-search-canary.yml`. Scheduled runner всегда
+разрешает последний durable accepted secret candidate на production host,
+сверяет его SHA, выпускает fresh platform-scoped session через GitHub OIDC
+broker и сохраняет только sanitized receipts. Post-deploy failure является
+blocking; scheduled failures становятся promotion-blocking только после
+зафиксированных 50 browser / 10 Android / 10 iOS consecutive PASS thresholds.
+
 Нельзя откладывать Android/iOS до «когда-нибудь после общей системы», но нельзя и
 заставлять каждый authenticated business test повторять дорогой real-mail OTP.

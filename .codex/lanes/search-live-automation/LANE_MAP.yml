@@ -33,7 +33,7 @@ lanes:
     writable_files: [site/e2e/auth-session-fixture/**, site/tests/auth-session-fixture*.mjs, serverless/static-site-auth-session-broker/**, tests/test_static_site_auth_session_broker.py, .codex/lanes/L1-auth-broker/RESULTS.md]
     forbidden_files: [CHANGELOG.md, docs/**, .github/**, supabase/**]
     verification_scope: targeted
-    status: spawned
+    status: merged
   - id: L2-server-contract
     role: worker
     effort: high_max_available_schema_security
@@ -44,7 +44,7 @@ lanes:
     writable_files: [supabase/functions/event-search/**, supabase/migrations/**event_search_canary_receipts*.sql, supabase/tests/**event_search*.sql, tests/test_supabase_security_hardening.py, .codex/lanes/L2-server-contract/RESULTS.md]
     forbidden_files: [CHANGELOG.md, docs/**, site/**, .github/**]
     verification_scope: targeted
-    status: spawned
+    status: merged
   - id: L3-search-harness
     role: worker
     effort: high
@@ -55,7 +55,7 @@ lanes:
     writable_files: [site/e2e/search/**, site/tests/search-e2e-*.test.mjs, site/package.json, .codex/lanes/L3-search-harness/RESULTS.md]
     forbidden_files: [CHANGELOG.md, docs/**, .github/**, supabase/**, site/e2e/focus-email/journey.mjs, site/e2e/focus-email/run.mjs]
     verification_scope: targeted
-    status: spawned
+    status: merged
   - id: L4-corpus-revision
     role: worker
     effort: high
@@ -66,7 +66,7 @@ lanes:
     writable_files: [scripts/sync_event_search_vectors_to_supabase.py, site/scripts/export-production-preview-data.py, tests/test_static_site_pgvector_export.py, tests/test_event_search_corpus_revision.py, .codex/lanes/L4-corpus-revision/RESULTS.md]
     forbidden_files: [CHANGELOG.md, docs/**, .github/**, supabase/functions/**, supabase/migrations/**]
     verification_scope: targeted
-    status: spawned
+    status: merged
   - id: L6-ui-variant
     role: worker
     effort: high
@@ -77,7 +77,7 @@ lanes:
     writable_files: [site/src/components/AuthorizedEventSearch.astro, site/tests/search-*.test.mjs, site/tests/search-*.playwright.mjs, .codex/lanes/L6-ui-variant/RESULTS.md]
     forbidden_files: [CHANGELOG.md, docs/**, .github/**, supabase/**, site/e2e/**]
     verification_scope: targeted
-    status: spawned
+    status: merged
   - id: L5-ci-registry-ops
     role: integrator
     effort: high_max_available_release_ops
@@ -88,4 +88,4 @@ lanes:
     worktree: /dev/shm/search-live-automation-20260807/integration
     writable_files: [.github/**, docs/**, site/e2e/search/**, site/tests/**, CHANGELOG.md, package_manifests]
     verification_scope: full_local_and_live
-    status: planned
+    status: committed

@@ -4123,6 +4123,9 @@ def sync_event_vectors_to_supabase(
         "--google-key-env", embedding_key_env,
         "--max-provider-calls", str(max(0, int(max_provider_calls))),
         "--sleep-seconds", sleep_seconds,
+        "--prune-missing",
+        "--require-complete",
+        "--report-json", str(preview_events_json.with_name("event-search-corpus-receipt.json")),
     ]
     log_stage(
         "pgvector_sync_start",

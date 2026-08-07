@@ -118,6 +118,12 @@ export async function runSearchJourney({ adapter, targetUrl, variant, queryCases
     await adapter.typeQuery(queryCase.value);
     const cachePolicy = { ...variant.request_policy, execution_mode: 'cached_vector', cache: 'prefer', llm: 'forbid' };
     await adapter.configureRequestPolicy(cachePolicy);
+    const warm = await acceptedSubmit({ adapter, variant, label: `${queryCase.id}:cache_warm` });
+    assertCacheState(warm.response, ['hit', 'miss', 'stored'], `${queryCase.id}:cache_warm`);
+    assertExecutionReceipt(warm.response, 'cached_vector', `${queryCase.id}:cache_warm`);
+    assertProviderAttempts(warm.response, { embedding: 1, vector: 1, llm: 0 });
+    await adapter.clearQuery();
+    await adapter.typeQuery(queryCase.value);
     const repeat = await acceptedSubmit({ adapter, variant, label: `${queryCase.id}:cache_repeat` });
     assertCacheState(repeat.response, ['hit'], `${queryCase.id}:cache_repeat`);
     assertExecutionReceipt(repeat.response, 'cached_vector', `${queryCase.id}:cache_repeat`);
@@ -135,6 +141,13 @@ export async function runSearchJourney({ adapter, targetUrl, variant, queryCases
         route: repeat.route,
         response: repeat.response,
         rendered_ids: repeat.state.rendered_ids,
+      },
+      cache_warm: {
+        request_count: warm.counters.request_count,
+        response_count: warm.counters.response_count,
+        route: warm.route,
+        response: warm.response,
+        rendered_ids: warm.state.rendered_ids,
       },
       scroll,
     });

@@ -103,7 +103,17 @@ const buildMetadata = {
   generated_at: new Date().toISOString(), base_path: basePath, token_sha256: sha256(token),
   production_manifest_sha256: sha256(productionManifestBytes), production_tree_sha256: productionManifest.tree_sha256,
   snapshot: productionManifest.snapshot,
+  search_revisions: productionManifest.search_revisions,
 };
+if (publicSearchConfig.configured) {
+  const revisions = buildMetadata.search_revisions;
+  if (!revisions || revisions.coverage_status !== 'complete'
+    || !/^[0-9a-f]{64}$/u.test(String(revisions.catalog_revision || ''))
+    || !/^[0-9a-f]{64}$/u.test(String(revisions.corpus_revision || ''))
+    || !/^[0-9a-f]{64}$/u.test(String(revisions.search_document_revision || ''))) {
+    throw new Error('Authorized Search candidate requires complete catalog/corpus revisions');
+  }
+}
 writeFileSync(join(candidateRoot, 'candidate-build.json'), `${JSON.stringify(buildMetadata, null, 2)}\n`);
 const files = fileInventory(candidateRoot, { exclude: ['secret-candidate-manifest.json'], secretCandidate: true });
 const events = JSON.parse(readFileSync(eventsPath, 'utf8')).events;

@@ -30,10 +30,14 @@ insert into public.event_search_canary_budget_policy (
   policy_version
 ) values (
   'default',
-  4,
+  12,
   'event-search-canary-llm-budget-v1'
 )
-on conflict (policy_id) do nothing;
+on conflict (policy_id) do update set
+  daily_llm_attempt_limit = excluded.daily_llm_attempt_limit,
+  policy_version = excluded.policy_version,
+  enabled = true,
+  updated_at = now();
 
 -- Product-user limits are deliberately not borrowed by unattended canaries.
 -- LLM provider attempts are governed separately by the stricter atomic ledger
@@ -48,7 +52,7 @@ insert into public.search_quota_plans (
   monthly_llm_rerank_limit,
   enabled
 ) values (
-  'search_canary', 16, 32, 320, 0, 0, 0, true
+  'search_canary', 16, 128, 4096, 0, 0, 0, true
 )
 on conflict (plan_id) do update set
   hourly_search_limit = excluded.hourly_search_limit,

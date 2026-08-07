@@ -64,7 +64,7 @@ test('semantic journey proves three varied queries, pagination, cache and zero-p
   assert.equal(result.query_cases.length, 3);
   assert.equal(result.query_cases[0].pages.length, 2);
   assert.equal(result.query_cases.every((item) => item.cache_repeat.response.served_from_cache), true);
-  assert.equal(result.counters.requests, 7);
+  assert.equal(result.counters.requests, 10);
   assert.equal(result.counters.validation_posts, 0);
   assert.equal(result.target_path, '/preview-<redacted>/poisk/');
   assert.equal(JSON.stringify(result).includes('varied query'), false);
