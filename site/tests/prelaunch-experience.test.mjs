@@ -75,6 +75,23 @@ test('prelaunch form uses guarded idempotent direct and relay transport', () => 
   assert.match(validator, /local\.includes\('\.\.'\)/u);
 });
 
+test('prelaunch consent is a prominent step before the submit action', () => {
+  const page = source('site/src/components/PrelaunchPage.astro');
+  const consentCss = source('site/src/styles/prelaunch-consent.css');
+
+  assert.match(page, /prelaunch-consent\.css/u);
+  assert.match(
+    page,
+    /prelaunch-form__row[\s\S]*prelaunch-form__field[\s\S]*prelaunch-form__consent[\s\S]*data-prelaunch-submit/u,
+  );
+  assert.match(page, /prelaunch-form__consent-copy[\s\S]*Согласие на письма/u);
+  assert.match(consentCss, /grid-template-areas:[\s\S]*"field field"[\s\S]*"consent submit"/u);
+  assert.match(consentCss, /grid-area:\s*consent/u);
+  assert.match(consentCss, /accent-color:\s*#e99b6f/u);
+  assert.match(consentCss, /width:\s*22px[\s\S]*height:\s*22px/u);
+  assert.match(consentCss, /:focus-within/u);
+});
+
 test('prelaunch runtime no longer imports the accumulated visual patch stack', () => {
   const index = source('site/src/pages/index.astro');
   const layout = source('site/src/layouts/PrelaunchLayout.astro');

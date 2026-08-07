@@ -1,6 +1,7 @@
 ---
 import { withBase } from '../lib/events';
 import '../styles/prelaunch-page.css';
+import '../styles/prelaunch-consent.css';
 
 const tiles = Array.from({ length: 112 }, (_, index) => ({
   index,
@@ -101,6 +102,15 @@ const tiles = Array.from({ length: 112 }, (_, index) => ({
               required
             />
           </label>
+
+          <label class="prelaunch-form__consent" id="prelaunch-consent">
+            <input type="checkbox" name="consent" required />
+            <span class="prelaunch-form__consent-copy">
+              <strong>Согласие на письма</strong>
+              <span>Я согласен получать письма о запуске, важных обновлениях и полезных подборках. Отписаться можно в любой момент.</span>
+            </span>
+          </label>
+
           <button type="submit" data-prelaunch-submit>
             <span data-prelaunch-submit-label>Напомнить о запуске</span>
           </button>
@@ -109,11 +119,6 @@ const tiles = Array.from({ length: 112 }, (_, index) => ({
         <p class="prelaunch-form__promise" id="prelaunch-promise">
           Оставьте e-mail — и 1 сентября мы пришлём ссылку на сервис. Иногда будем отправлять важные обновления и полезные подборки; для подписавшихся мы приготовили приятный сюрприз.
         </p>
-
-        <label class="prelaunch-form__consent" id="prelaunch-consent">
-          <input type="checkbox" name="consent" required />
-          <span>Согласен получать письма о запуске, важных обновлениях и полезных подборках сервиса. Отписаться можно в любой момент.</span>
-        </label>
 
         <label class="prelaunch-form__trap" aria-hidden="true">
           <span>Ваш сайт</span>
