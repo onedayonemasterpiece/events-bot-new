@@ -1,0 +1,42 @@
+name: Inspect production bot database maintenance commands
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/ops-dump-restore-inventory-20260807.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 1
+      - name: Print exact handler definitions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          needles = ('dumpdb', 'restore_wrapper', 'def restore', 'async def restore', 'Command("restore")', 'Command("dumpdb")')
+          for path in Path('.').rglob('*.py'):
+              if any(part in {'.git', '.venv', 'node_modules'} for part in path.parts):
+                  continue
+              try:
+                  lines = path.read_text(encoding='utf-8', errors='replace').splitlines()
+              except Exception:
+                  continue
+              hits = [i for i, line in enumerate(lines) if any(n in line for n in needles)]
+              for i in hits:
+                  start = max(0, i - 30)
+                  end = min(len(lines), i + 100)
+                  print(f'FILE={path} LINE={i+1} START={start+1} END={end}')
+                  for n in range(start, end):
+                      print(f'{n+1:06d}: {lines[n]}')
+                  print('---END-SNIPPET---')
+          PY
