@@ -11,36 +11,44 @@ function source(path) {
   return readFileSync(join(repoRoot, path), 'utf8');
 }
 
-test('prelaunch scene uses responsive generated backgrounds with no live glass grid', () => {
+test('prelaunch scene uses the approved responsive WebP backgrounds without reconstruction layers', () => {
   const page = source('site/src/components/PrelaunchPage.astro');
   const css = source('site/src/styles/prelaunch-static.css');
+  const prepare = source('site/scripts/prepare-prelaunch-artwork.mjs');
 
-  assert.match(page, /data-static-background="generated-desktop-mobile-v1"/u);
+  assert.match(page, /data-static-background="approved-desktop-mobile-v2"/u);
   assert.match(page, /data-prelaunch-static-picture/u);
   assert.match(page, /data-prelaunch-static-image/u);
-  assert.match(page, /data-prelaunch-static-composite/u);
-  assert.match(page, /data-prelaunch-static-artwork/u);
   assert.match(page, /prelaunch-scene-desktop\.webp/u);
   assert.match(page, /prelaunch-scene-mobile\.webp/u);
   assert.match(page, /<picture/u);
   assert.match(page, /<source[\s\S]*max-width: 899px/u);
   assert.match(page, /import '\.\.\/styles\/prelaunch-static\.css'/u);
+  assert.doesNotMatch(page, /data-prelaunch-static-composite/u);
+  assert.doesNotMatch(page, /data-prelaunch-static-artwork/u);
   assert.doesNotMatch(page, /data-prelaunch-mosaic/u);
   assert.doesNotMatch(page, /data-prelaunch-seams/u);
   assert.doesNotMatch(page, /data-prelaunch-tile/u);
   assert.doesNotMatch(page, /prelaunchScene/u);
   assert.doesNotMatch(page, /prelaunch-fit-v\d+\.css/u);
 
-  assert.match(css, /Lightweight prelaunch holder/u);
-  assert.match(css, /responsive fallback picture/u);
-  assert.match(css, /--prelaunch-static-tile-mask/u);
-  assert.match(css, /mask-image:\s*var\(--prelaunch-static-tile-mask\)/u);
-  assert.match(css, /background-repeat:\s*repeat/u);
+  assert.match(css, /approved 7 August artwork/u);
+  assert.match(css, /Do not reconstruct the artwork with CSS layers/u);
   assert.match(css, /object-fit:\s*cover/u);
+  assert.match(css, /filter:\s*none/u);
+  assert.match(css, /mix-blend-mode:\s*normal/u);
   assert.match(css, /contain:\s*strict/u);
   assert.match(css, /touch-action:\s*manipulation/u);
+  assert.doesNotMatch(css, /--prelaunch-static-tile-mask/u);
+  assert.doesNotMatch(css, /mask-image:\s*var\(--prelaunch-static-tile-mask\)/u);
+  assert.doesNotMatch(css, /background-repeat:\s*repeat/u);
   assert.doesNotMatch(css, /backdrop-filter/u);
   assert.doesNotMatch(css, /animation:/u);
+
+  assert.match(prepare, /3e975fcd07d025f33c948b32758164905d3abc4b1bc91da5e84819604b712061/u);
+  assert.match(prepare, /c6ae402fd938807b821f0c78d16f1184bb16f25e73efbce94a4e55758aa5c94f/u);
+  assert.match(prepare, /truncated/u);
+  assert.match(prepare, /dimensions mismatch/u);
 });
 
 test('prelaunch form uses guarded idempotent direct and relay transport', () => {
@@ -97,8 +105,11 @@ test('prelaunch runtime no longer imports the accumulated visual patch stack', (
   assert.match(page, /prelaunch-static\.css/u);
 });
 
-test('desktop and mobile reference assets remain stored for manual review', () => {
+test('approved background sources and visual references remain stored', () => {
+  const approvedDir = join(repoRoot, 'site/src/assets/prelaunch-approved');
   const referenceDir = join(repoRoot, 'docs/features/static-site-pages/prelaunch-handoff/reference');
+  assert.equal(existsSync(join(approvedDir, 'desktop', 'part-00.b64part')), true);
+  assert.equal(existsSync(join(approvedDir, 'mobile', 'part-00.b64part')), true);
   assert.equal(existsSync(join(referenceDir, 'PWA-icon.webp')), true);
   assert.equal(existsSync(join(referenceDir, 'generated-lighting-desktop-v1.webp')), true);
   assert.equal(existsSync(join(referenceDir, 'generated-lighting-mobile-v1.webp')), true);

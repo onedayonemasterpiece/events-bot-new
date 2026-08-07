@@ -62,7 +62,7 @@ test('artifact policy indexes only the root and hides every other HTML page', ()
   }
 });
 
-test('landing keeps launch, form, SEO and lightweight static-scene contracts', () => {
+test('landing keeps launch, form, SEO and approved lightweight background contracts', () => {
   const page = source('site/src/components/PrelaunchPage.astro');
   const index = source('site/src/pages/index.astro');
   const layout = source('site/src/layouts/PrelaunchLayout.astro');
@@ -73,12 +73,12 @@ test('landing keeps launch, form, SEO and lightweight static-scene contracts', (
   assert.match(page, /<time datetime="2026-09-01">/u);
   assert.match(page, /Персонализированный сервис анонсов/u);
   assert.match(page, /data-prelaunch-form/u);
-  assert.match(page, /data-static-background="generated-desktop-mobile-v1"/u);
+  assert.match(page, /data-static-background="approved-desktop-mobile-v2"/u);
   assert.match(page, /data-prelaunch-static-picture/u);
-  assert.match(page, /data-prelaunch-static-composite/u);
-  assert.match(page, /data-prelaunch-static-artwork/u);
   assert.match(page, /prelaunch-scene-desktop\.webp/u);
   assert.match(page, /prelaunch-scene-mobile\.webp/u);
+  assert.doesNotMatch(page, /data-prelaunch-static-composite/u);
+  assert.doesNotMatch(page, /data-prelaunch-static-artwork/u);
   assert.doesNotMatch(page, /data-prelaunch-mosaic/u);
   assert.doesNotMatch(page, /data-prelaunch-seams/u);
   assert.doesNotMatch(page, /data-prelaunch-tile/u);
@@ -86,10 +86,11 @@ test('landing keeps launch, form, SEO and lightweight static-scene contracts', (
   assert.match(index, /PUBLIC_PRELAUNCH_MODE/u);
   assert.match(index, /<PrelaunchPage\s*\/>/u);
 
-  assert.match(visual, /responsive fallback picture/u);
-  assert.match(visual, /--prelaunch-static-tile-mask/u);
-  assert.match(visual, /mask-image:\s*var\(--prelaunch-static-tile-mask\)/u);
+  assert.match(visual, /approved 7 August artwork/u);
   assert.match(visual, /object-fit:\s*cover/u);
+  assert.match(visual, /filter:\s*none/u);
+  assert.match(visual, /mix-blend-mode:\s*normal/u);
+  assert.doesNotMatch(visual, /--prelaunch-static-tile-mask/u);
   assert.doesNotMatch(visual, /backdrop-filter/u);
   assert.match(visual, /touch-action:\s*manipulation/u);
 

@@ -1,10 +1,9 @@
 /*
- * Lightweight prelaunch holder.
+ * Lightweight prelaunch holder for the approved 7 August artwork.
  *
- * The accepted glass/PWA composition is reconstructed from a small number of
- * static layers: one responsive fallback picture, one cropped artwork image,
- * repeating rounded masks and a fixed depth map. Semantic content and the
- * resilient email form remain live HTML; there are no per-pane DOM surfaces.
+ * The complete glass, leather PWA object, typography, light and dust are baked
+ * into two responsive WebP backgrounds. Only semantic copy and the resilient
+ * email form remain live HTML. Do not reconstruct the artwork with CSS layers.
  */
 
 .prelaunch-page--static {
@@ -14,27 +13,13 @@
 }
 
 .prelaunch__scene--static {
-  --prelaunch-static-cell: clamp(104px, 7.8vw, 128px);
-  --prelaunch-static-grid-x: -18px;
-  --prelaunch-static-grid-y: -22px;
-  --prelaunch-static-tile-mask: url('data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20100%20100%27%3E%3Crect%20x%3D%274%27%20y%3D%274%27%20width%3D%2792%27%20height%3D%2792%27%20rx%3D%2710%27%20fill%3D%27white%27%2F%3E%3C%2Fsvg%3E');
-  --prelaunch-static-tile-grid: url('data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20100%20100%27%3E%3Crect%20x%3D%274.5%27%20y%3D%274.5%27%20width%3D%2791%27%20height%3D%2791%27%20rx%3D%2710%27%20fill%3D%27none%27%20stroke%3D%27%23f5dfcf%27%20stroke-opacity%3D%27.17%27%20stroke-width%3D%271%27%2F%3E%3Cpath%20d%3D%27M15%205h70%27%20fill%3D%27none%27%20stroke%3D%27%23fff3e6%27%20stroke-opacity%3D%27.14%27%20stroke-width%3D%271%27%2F%3E%3C%2Fsvg%3E');
-  --prelaunch-static-depth-map: url('data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20400%20400%27%3E%3Crect%20x%3D%274%27%20y%3D%274%27%20width%3D%2792%27%20height%3D%2792%27%20rx%3D%2710%27%20fill%3D%27%23080b10%27%20fill-opacity%3D%270.74%27%2F%3E%3Crect%20x%3D%27104%27%20y%3D%274%27%20width%3D%2792%27%20height%3D%2792%27%20rx%3D%2710%27%20fill%3D%27%23080b10%27%20fill-opacity%3D%270.50%27%2F%3E%3Crect%20x%3D%27204%27%20y%3D%274%27%20width%3D%2792%27%20height%3D%2792%27%20rx%3D%2710%27%20fill%3D%27%23080b10%27%20fill-opacity%3D%270.64%27%2F%3E%3Crect%20x%3D%27304%27%20y%3D%274%27%20width%3D%2792%27%20height%3D%2792%27%20rx%3D%2710%27%20fill%3D%27%23080b10%27%20fill-opacity%3D%270.36%27%2F%3E%3Crect%20x%3D%274%27%20y%3D%27104%27%20width%3D%2792%27%20height%3D%2792%27%20rx%3D%2710%27%20fill%3D%27%23080b10%27%20fill-opacity%3D%270.54%27%2F%3E%3Crect%20x%3D%27104%27%20y%3D%27104%27%20width%3D%2792%27%20height%3D%2792%27%20rx%3D%2710%27%20fill%3D%27%23080b10%27%20fill-opacity%3D%270.28%27%2F%3E%3Crect%20x%3D%27204%27%20y%3D%27104%27%20width%3D%2792%27%20height%3D%2792%27%20rx%3D%2710%27%20fill%3D%27%23080b10%27%20fill-opacity%3D%270.71%27%2F%3E%3Crect%20x%3D%27304%27%20y%3D%27104%27%20width%3D%2792%27%20height%3D%2792%27%20rx%3D%2710%27%20fill%3D%27%23080b10%27%20fill-opacity%3D%270.45%27%2F%3E%3Crect%20x%3D%274%27%20y%3D%27204%27%20width%3D%2792%27%20height%3D%2792%27%20rx%3D%2710%27%20fill%3D%27%23080b10%27%20fill-opacity%3D%270.38%27%2F%3E%3Crect%20x%3D%27104%27%20y%3D%27204%27%20width%3D%2792%27%20height%3D%2792%27%20rx%3D%2710%27%20fill%3D%27%23080b10%27%20fill-opacity%3D%270.66%27%2F%3E%3Crect%20x%3D%27204%27%20y%3D%27204%27%20width%3D%2792%27%20height%3D%2792%27%20rx%3D%2710%27%20fill%3D%27%23080b10%27%20fill-opacity%3D%270.24%27%2F%3E%3Crect%20x%3D%27304%27%20y%3D%27204%27%20width%3D%2792%27%20height%3D%2792%27%20rx%3D%2710%27%20fill%3D%27%23080b10%27%20fill-opacity%3D%270.58%27%2F%3E%3Crect%20x%3D%274%27%20y%3D%27304%27%20width%3D%2792%27%20height%3D%2792%27%20rx%3D%2710%27%20fill%3D%27%23080b10%27%20fill-opacity%3D%270.61%27%2F%3E%3Crect%20x%3D%27104%27%20y%3D%27304%27%20width%3D%2792%27%20height%3D%2792%27%20rx%3D%2710%27%20fill%3D%27%23080b10%27%20fill-opacity%3D%270.43%27%2F%3E%3Crect%20x%3D%27204%27%20y%3D%27304%27%20width%3D%2792%27%20height%3D%2792%27%20rx%3D%2710%27%20fill%3D%27%23080b10%27%20fill-opacity%3D%270.77%27%2F%3E%3Crect%20x%3D%27304%27%20y%3D%27304%27%20width%3D%2792%27%20height%3D%2792%27%20rx%3D%2710%27%20fill%3D%27%23080b10%27%20fill-opacity%3D%270.32%27%2F%3E%3C%2Fsvg%3E');
   z-index: 0;
-  background:
-    radial-gradient(ellipse 70% 78% at 72% 72%, rgba(127, 48, 27, .17), transparent 72%),
-    linear-gradient(145deg, #17191d 0%, #101216 48%, #080a0e 100%);
+  background: #080a0e;
   contain: strict;
 }
 
 .prelaunch__static-picture,
 .prelaunch__static-picture img,
-.prelaunch__static-composite,
-.prelaunch__static-depth,
-.prelaunch__static-pane-field,
-.prelaunch__static-grid,
-.prelaunch__static-light,
-.prelaunch__static-dust,
 .prelaunch__static-vignette {
   position: absolute;
   inset: 0;
@@ -58,6 +43,7 @@
   opacity: 1;
   object-fit: cover;
   object-position: center center;
+  filter: none;
   mix-blend-mode: normal;
   user-select: none;
   -webkit-user-drag: none;
@@ -65,133 +51,26 @@
   backface-visibility: hidden;
 }
 
-.prelaunch__static-composite,
-.prelaunch__static-pane-field,
-.prelaunch__static-light {
-  -webkit-mask-image: var(--prelaunch-static-tile-mask);
-  mask-image: var(--prelaunch-static-tile-mask);
-  -webkit-mask-repeat: repeat;
-  mask-repeat: repeat;
-  -webkit-mask-size: var(--prelaunch-static-cell) var(--prelaunch-static-cell);
-  mask-size: var(--prelaunch-static-cell) var(--prelaunch-static-cell);
-  -webkit-mask-position: var(--prelaunch-static-grid-x) var(--prelaunch-static-grid-y);
-  mask-position: var(--prelaunch-static-grid-x) var(--prelaunch-static-grid-y);
-}
-
-.prelaunch__static-composite {
-  z-index: 2;
-  overflow: hidden;
-}
-
-.prelaunch__static-artwork-frame {
-  position: absolute;
-  width: min(112vmin, 1080px);
-  height: min(112vmin, 1080px);
-  left: 69%;
-  top: 83%;
-  overflow: hidden;
-  border-radius: 14.55%;
-  opacity: .98;
-  filter: saturate(.94) contrast(1.045) brightness(.82);
-  transform: translate3d(-50%, -50%, 0);
-  contain: paint;
-}
-
-.prelaunch__static-artwork {
-  position: absolute;
-  width: 121.52%;
-  max-width: none;
-  height: 121.52%;
-  left: -10.76%;
-  top: -9.79%;
-  object-fit: fill;
-  user-select: none;
-  -webkit-user-drag: none;
-}
-
-.prelaunch__static-depth {
-  z-index: 3;
-  background-image: var(--prelaunch-static-depth-map);
-  background-repeat: repeat;
-  background-size:
-    calc(var(--prelaunch-static-cell) * 4)
-    calc(var(--prelaunch-static-cell) * 4);
-  background-position: var(--prelaunch-static-grid-x) var(--prelaunch-static-grid-y);
-}
-
-.prelaunch__static-pane-field {
-  z-index: 4;
-  opacity: .92;
-  background:
-    radial-gradient(ellipse 46% 54% at 101% 1%, rgba(255, 238, 219, .19), transparent 72%),
-    linear-gradient(145deg, rgba(255, 255, 255, .035) 0%, rgba(255, 255, 255, .012) 22%, rgba(7, 10, 15, .12) 62%, rgba(0, 0, 0, .28) 100%);
-}
-
-.prelaunch__static-grid {
-  z-index: 5;
-  background-image: var(--prelaunch-static-tile-grid);
-  background-repeat: repeat;
-  background-size: var(--prelaunch-static-cell) var(--prelaunch-static-cell);
-  background-position: var(--prelaunch-static-grid-x) var(--prelaunch-static-grid-y);
-  opacity: .94;
-}
-
-.prelaunch__static-light {
-  z-index: 6;
-  opacity: .94;
-  mix-blend-mode: screen;
-  background:
-    radial-gradient(
-      ellipse 62vw 70vh at 105% -4%,
-      rgba(255, 252, 242, .97) 0%,
-      rgba(255, 226, 200, .78) 13%,
-      rgba(240, 165, 116, .50) 31%,
-      rgba(191, 84, 43, .20) 52%,
-      transparent 79%
-    ),
-    radial-gradient(
-      ellipse 58vw 55vh at 88% 24%,
-      rgba(255, 226, 205, .38) 0%,
-      rgba(226, 139, 87, .20) 36%,
-      rgba(158, 56, 29, .05) 66%,
-      transparent 83%
-    );
-}
-
-.prelaunch__static-dust {
-  z-index: 7;
-  opacity: .68;
-  mix-blend-mode: screen;
-  background-image:
-    radial-gradient(circle at 98% 2%, rgba(255, 249, 234, .92) 0 1px, transparent 1.8px),
-    radial-gradient(circle at 94% 5%, rgba(255, 215, 170, .62) 0 1.1px, transparent 2px),
-    radial-gradient(circle at 88% 8%, rgba(255, 239, 211, .78) 0 .8px, transparent 1.7px),
-    radial-gradient(circle at 82% 11%, rgba(255, 197, 139, .44) 0 1.3px, transparent 2.6px),
-    radial-gradient(circle at 96% 14%, rgba(255, 241, 216, .84) 0 .9px, transparent 1.8px),
-    radial-gradient(circle at 91% 18%, rgba(255, 207, 154, .56) 0 1.5px, transparent 3px),
-    radial-gradient(circle at 84% 20%, rgba(255, 246, 226, .66) 0 .75px, transparent 1.7px),
-    radial-gradient(circle at 78% 24%, rgba(255, 191, 130, .36) 0 1.2px, transparent 2.5px),
-    radial-gradient(circle at 97% 27%, rgba(255, 234, 203, .70) 0 1.4px, transparent 2.8px),
-    radial-gradient(circle at 89% 31%, rgba(255, 201, 146, .45) 0 .9px, transparent 2px),
-    radial-gradient(circle at 81% 35%, rgba(255, 247, 228, .55) 0 .7px, transparent 1.6px),
-    radial-gradient(circle at 95% 39%, rgba(255, 217, 176, .42) 0 1.1px, transparent 2.4px),
-    radial-gradient(circle at 86% 43%, rgba(255, 236, 207, .38) 0 .8px, transparent 1.8px),
-    radial-gradient(circle at 99% 49%, rgba(255, 203, 150, .28) 0 1.2px, transparent 2.5px),
-    radial-gradient(circle at 91% 72%, rgba(255, 238, 214, .40) 0 .8px, transparent 1.8px),
-    radial-gradient(circle at 96% 88%, rgba(255, 215, 176, .50) 0 1px, transparent 2.4px);
-  -webkit-mask-image: radial-gradient(ellipse 56% 76% at 100% 0, #000 0 54%, rgba(0, 0, 0, .55) 72%, transparent 94%);
-  mask-image: radial-gradient(ellipse 56% 76% at 100% 0, #000 0 54%, rgba(0, 0, 0, .55) 72%, transparent 94%);
-}
-
+/* The artwork already contains its own cinematic light. This overlay only
+   protects foreground contrast and never changes the composition. */
 .prelaunch__static-vignette {
-  z-index: 8;
+  z-index: 2;
   background:
-    linear-gradient(90deg, rgba(5, 7, 10, .64) 0%, rgba(5, 7, 10, .44) 34%, rgba(5, 7, 10, .12) 63%, transparent 82%),
-    linear-gradient(180deg, rgba(5, 7, 10, .14) 0%, transparent 34%, rgba(5, 7, 10, .24) 100%);
+    linear-gradient(90deg, rgba(5, 7, 10, .66) 0%, rgba(5, 7, 10, .42) 30%, rgba(5, 7, 10, .10) 55%, transparent 76%),
+    linear-gradient(180deg, rgba(5, 7, 10, .08) 0%, transparent 38%, rgba(5, 7, 10, .24) 100%);
 }
 
-/* The canonical stylesheet still supplies typography and form tokens. The
-   static holder intentionally suppresses every legacy scene surface. */
+/* Fail-safe removal of the rejected reconstruction stack. */
+.prelaunch-page--static [data-prelaunch-static-composite],
+.prelaunch-page--static [data-prelaunch-static-artwork],
+.prelaunch-page--static .prelaunch__static-composite,
+.prelaunch-page--static .prelaunch__static-artwork-frame,
+.prelaunch-page--static .prelaunch__static-artwork,
+.prelaunch-page--static .prelaunch__static-depth,
+.prelaunch-page--static .prelaunch__static-pane-field,
+.prelaunch-page--static .prelaunch__static-grid,
+.prelaunch-page--static .prelaunch__static-light,
+.prelaunch-page--static .prelaunch__static-dust,
 .prelaunch-page--static [data-prelaunch-mosaic],
 .prelaunch-page--static [data-prelaunch-seams],
 .prelaunch-page--static [data-prelaunch-tile],
@@ -203,7 +82,7 @@
 }
 
 .prelaunch-page--static .prelaunch__foreground {
-  text-shadow: 0 4px 28px rgba(0, 0, 0, .62);
+  text-shadow: 0 4px 28px rgba(0, 0, 0, .66);
 }
 
 .prelaunch-page--static .prelaunch__brand,
@@ -213,47 +92,23 @@
   z-index: 2;
 }
 
+.prelaunch-page--static .prelaunch__notify {
+  width: min(640px, 54vw);
+}
+
 @media (max-width: 899px), (max-aspect-ratio: 5/4) {
-  .prelaunch__scene--static {
-    --prelaunch-static-cell: clamp(90px, 14.5vw, 116px);
-    --prelaunch-static-grid-x: -22px;
-    --prelaunch-static-grid-y: -18px;
-  }
-
-  .prelaunch__static-artwork-frame {
-    width: min(115vw, 900px);
-    height: min(115vw, 900px);
-    left: 82%;
-    top: 69%;
-  }
-
-  .prelaunch__static-light {
-    background:
-      radial-gradient(ellipse 80vw 62vh at 108% -3%, rgba(255, 248, 234, .92), rgba(240, 161, 111, .40) 34%, transparent 78%),
-      radial-gradient(ellipse 72vw 52vh at 88% 22%, rgba(237, 142, 89, .26), transparent 76%);
-  }
-
   .prelaunch__static-vignette {
     background:
-      linear-gradient(180deg, rgba(5, 7, 10, .38) 0%, rgba(5, 7, 10, .12) 31%, transparent 53%, rgba(5, 7, 10, .34) 100%),
-      linear-gradient(90deg, rgba(5, 7, 10, .30), transparent 64%, rgba(5, 7, 10, .06));
+      linear-gradient(180deg, rgba(5, 7, 10, .42) 0%, rgba(5, 7, 10, .16) 29%, transparent 51%, rgba(5, 7, 10, .38) 100%),
+      linear-gradient(90deg, rgba(5, 7, 10, .18), transparent 64%);
+  }
+
+  .prelaunch-page--static .prelaunch__notify {
+    width: 100%;
   }
 }
 
 @media (max-width: 599px) {
-  .prelaunch__scene--static {
-    --prelaunch-static-cell: clamp(78px, 25vw, 104px);
-    --prelaunch-static-grid-x: -18px;
-    --prelaunch-static-grid-y: -14px;
-  }
-
-  .prelaunch__static-artwork-frame {
-    width: min(155vw, 720px);
-    height: min(155vw, 720px);
-    left: 98%;
-    top: 58%;
-  }
-
   .prelaunch-page--static .prelaunch__foreground {
     padding-top: max(22px, env(safe-area-inset-top));
     padding-bottom: max(10px, env(safe-area-inset-bottom));
@@ -261,22 +116,13 @@
 }
 
 @media (orientation: landscape) and (min-width: 600px) and (max-height: 500px) {
-  .prelaunch__scene--static {
-    --prelaunch-static-cell: clamp(78px, 12vw, 102px);
-    --prelaunch-static-grid-x: -14px;
-    --prelaunch-static-grid-y: -20px;
-  }
-
-  .prelaunch__static-artwork-frame {
-    width: min(98vw, 760px);
-    height: min(98vw, 760px);
-    left: 75%;
-    top: 105%;
+  .prelaunch__static-picture img {
+    object-position: center 54%;
   }
 
   .prelaunch__static-vignette {
     background:
-      linear-gradient(90deg, rgba(5, 7, 10, .68) 0%, rgba(5, 7, 10, .34) 44%, transparent 78%),
+      linear-gradient(90deg, rgba(5, 7, 10, .72) 0%, rgba(5, 7, 10, .40) 42%, rgba(5, 7, 10, .08) 72%, transparent 88%),
       linear-gradient(180deg, rgba(5, 7, 10, .12), transparent 52%, rgba(5, 7, 10, .28));
   }
 }

@@ -19,12 +19,12 @@ if (!url || !/^https?:\/\//u.test(url)) {
 mkdirSync(artifactDir, { recursive: true });
 
 const viewports = [
-  { name: 'reference-square', width: 1200, height: 1200 },
-  { name: 'visual-wide', width: 1728, height: 900 },
-  { name: 'visual-desktop', width: 1440, height: 900 },
-  { name: 'mobile', width: 390, height: 844 },
-  { name: 'mobile-small', width: 320, height: 568 },
-  { name: 'mobile-landscape', width: 844, height: 390 },
+  { name: 'reference-square', width: 1200, height: 1200, source: 'mobile', naturalWidth: 853, naturalHeight: 1844 },
+  { name: 'visual-wide', width: 1728, height: 900, source: 'desktop', naturalWidth: 1738, naturalHeight: 905 },
+  { name: 'visual-desktop', width: 1440, height: 900, source: 'desktop', naturalWidth: 1738, naturalHeight: 905 },
+  { name: 'mobile', width: 390, height: 844, source: 'mobile', naturalWidth: 853, naturalHeight: 1844 },
+  { name: 'mobile-small', width: 320, height: 568, source: 'mobile', naturalWidth: 853, naturalHeight: 1844 },
+  { name: 'mobile-landscape', width: 844, height: 390, source: 'mobile', naturalWidth: 853, naturalHeight: 1844 },
 ];
 
 const executablePath = String(process.env.PRELAUNCH_CHROMIUM_EXECUTABLE_PATH || '').trim() || undefined;
@@ -48,10 +48,7 @@ try {
       await page.locator('[data-prelaunch-page]').waitFor({ state: 'visible' });
       await page.waitForFunction(() => {
         const image = document.querySelector('[data-prelaunch-static-image]');
-        return image instanceof HTMLImageElement
-          && image.complete
-          && image.naturalWidth > 0
-          && image.naturalHeight > 0;
+        return image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0 && image.naturalHeight > 0;
       }, undefined, { timeout: 12_000 });
       await page.waitForTimeout(180);
 
@@ -59,14 +56,7 @@ try {
         const rect = (node) => {
           if (!(node instanceof Element)) return null;
           const value = node.getBoundingClientRect();
-          return {
-            top: value.top,
-            right: value.right,
-            bottom: value.bottom,
-            left: value.left,
-            width: value.width,
-            height: value.height,
-          };
+          return { top: value.top, right: value.right, bottom: value.bottom, left: value.left, width: value.width, height: value.height };
         };
         const root = document.querySelector('[data-prelaunch-page]');
         const picture = document.querySelector('[data-prelaunch-static-picture]');
@@ -76,9 +66,7 @@ try {
         const scrolling = document.scrollingElement || document.documentElement;
         const viewportMeta = document.querySelector('meta[name="viewport"]')?.getAttribute('content') || '';
         const jsonLd = [...document.querySelectorAll('script[type="application/ld+json"]')]
-          .map((node) => {
-            try { return JSON.parse(node.textContent || '{}'); } catch { return null; }
-          })
+          .map((node) => { try { return JSON.parse(node.textContent || '{}'); } catch { return null; } })
           .filter(Boolean);
         const jsonTypes = jsonLd.flatMap((entry) => {
           const graph = Array.isArray(entry?.['@graph']) ? entry['@graph'] : [entry];
@@ -103,9 +91,12 @@ try {
             naturalHeight: image instanceof HTMLImageElement ? image.naturalHeight : 0,
             objectFit: imageStyle?.objectFit || '',
             objectPosition: imageStyle?.objectPosition || '',
+            opacity: imageStyle?.opacity || '',
+            filter: imageStyle?.filter || '',
+            mixBlendMode: imageStyle?.mixBlendMode || '',
             animationName: imageStyle?.animationName || '',
-            transitionDuration: imageStyle?.transitionDuration || '',
           },
+          reconstructionLayerCount: document.querySelectorAll('[data-prelaunch-static-composite], [data-prelaunch-static-artwork], .prelaunch__static-depth, .prelaunch__static-pane-field, .prelaunch__static-grid, .prelaunch__static-light, .prelaunch__static-dust').length,
           dynamicTileCount: document.querySelectorAll('[data-prelaunch-tile]').length,
           dynamicSeamCount: document.querySelectorAll('[data-prelaunch-seams]').length,
           backdropFiltered,
@@ -115,7 +106,6 @@ try {
           title: document.title,
           description: document.querySelector('meta[name="description"]')?.getAttribute('content') || '',
           canonical: document.querySelector('link[rel="canonical"]')?.getAttribute('href') || '',
-          robots: document.querySelector('meta[name="robots"]')?.getAttribute('content') || '',
           jsonTypes,
           text: {
             heading: document.querySelector('#prelaunch-title')?.textContent?.trim() || '',
@@ -125,14 +115,18 @@ try {
         };
       });
 
-      check(scene.staticBackground === 'generated-desktop-mobile-v1', `${viewport.name}: static background marker=${scene.staticBackground}`, localFailures);
+      check(scene.staticBackground === 'approved-desktop-mobile-v2', `${viewport.name}: static background marker=${scene.staticBackground}`, localFailures);
       check(scene.rootPosition === 'fixed', `${viewport.name}: root position=${scene.rootPosition}`, localFailures);
       check(scene.rootOverflow === 'hidden', `${viewport.name}: root overflow=${scene.rootOverflow}`, localFailures);
       check(scene.picture && scene.picture.width >= viewport.width - 1 && scene.picture.height >= viewport.height - 1, `${viewport.name}: background picture does not cover viewport`, localFailures);
-      check(scene.image.naturalWidth >= 800 && scene.image.naturalHeight >= 800, `${viewport.name}: background image did not decode`, localFailures);
-      check(scene.image.currentSrc.includes('prelaunch-scene-'), `${viewport.name}: unexpected image source ${scene.image.currentSrc}`, localFailures);
+      check(scene.image.naturalWidth === viewport.naturalWidth && scene.image.naturalHeight === viewport.naturalHeight, `${viewport.name}: selected ${viewport.source} source is ${scene.image.naturalWidth}x${scene.image.naturalHeight}`, localFailures);
+      check(scene.image.currentSrc.includes(`prelaunch-scene-${viewport.source}.webp`), `${viewport.name}: unexpected image source ${scene.image.currentSrc}`, localFailures);
       check(scene.image.objectFit === 'cover', `${viewport.name}: object-fit=${scene.image.objectFit}`, localFailures);
+      check(scene.image.opacity === '1', `${viewport.name}: image opacity=${scene.image.opacity}`, localFailures);
+      check(scene.image.filter === 'none', `${viewport.name}: image filter=${scene.image.filter}`, localFailures);
+      check(scene.image.mixBlendMode === 'normal', `${viewport.name}: image blend=${scene.image.mixBlendMode}`, localFailures);
       check(scene.image.animationName === 'none', `${viewport.name}: image animation=${scene.image.animationName}`, localFailures);
+      check(scene.reconstructionLayerCount === 0, `${viewport.name}: reconstruction layers=${scene.reconstructionLayerCount}`, localFailures);
       check(scene.dynamicTileCount === 0, `${viewport.name}: live tile count=${scene.dynamicTileCount}`, localFailures);
       check(scene.dynamicSeamCount === 0, `${viewport.name}: live seam count=${scene.dynamicSeamCount}`, localFailures);
       check(scene.backdropFiltered.length <= 3, `${viewport.name}: too many backdrop-filter surfaces ${scene.backdropFiltered.join(', ')}`, localFailures);
@@ -172,7 +166,7 @@ try {
 }
 
 const summary = {
-  schema_version: 'prelaunch_static_scene_evidence_v1',
+  schema_version: 'prelaunch_approved_background_evidence_v2',
   ok: failures.length === 0,
   url,
   viewports,
@@ -180,7 +174,8 @@ const summary = {
   failures,
   manual_review_required: true,
   manual_review_axes: [
-    'composition_against_reference',
+    'exact_approved_backgrounds',
+    'composition_against_user_reference',
     'foreground_legibility',
     'desktop_mobile_equivalence',
     'consent_prominence',
