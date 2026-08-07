@@ -36,7 +36,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: prelaunch-visual-review-${{ github.event.pull_request.number || github.ref }}
+  group: prelaunch-static-visual-review-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
