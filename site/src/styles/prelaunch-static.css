@@ -14,6 +14,7 @@
 }
 
 .prelaunch__scene--static {
+  z-index: 0;
   background: #080a0e;
   contain: strict;
 }
@@ -28,17 +29,22 @@
 }
 
 .prelaunch__static-picture {
-  z-index: 0;
+  z-index: 1;
   display: block;
   overflow: hidden;
+  visibility: visible;
+  opacity: 1;
   background: #080a0e;
 }
 
 .prelaunch__static-picture img {
   display: block;
   max-width: none;
+  visibility: visible;
+  opacity: 1;
   object-fit: cover;
   object-position: center center;
+  mix-blend-mode: normal;
   user-select: none;
   -webkit-user-drag: none;
   transform: translateZ(0);
@@ -48,7 +54,7 @@
 /* The source artwork already contains the glass, opaque seams, dust and the
    shared upper-right light. This overlay only protects foreground contrast. */
 .prelaunch__static-vignette {
-  z-index: 1;
+  z-index: 2;
   background:
     linear-gradient(90deg, rgba(5, 7, 10, .55) 0%, rgba(5, 7, 10, .28) 35%, rgba(5, 7, 10, .04) 62%, transparent 82%),
     linear-gradient(180deg, rgba(5, 7, 10, .08) 0%, transparent 35%, rgba(5, 7, 10, .20) 100%);
