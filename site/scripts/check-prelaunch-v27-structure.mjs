@@ -89,10 +89,14 @@ try {
           tileHeight: firstRect?.height || 0,
           tileOverflow: tileStyle?.overflow || '',
           tileBorder: tileStyle?.border || '',
+          tileBorderRadius: tileStyle?.borderRadius || '',
           tileOutline: tileStyle?.outlineStyle || '',
           tileBackgroundImage: tileStyle?.backgroundImage || '',
+          mosaicBackgroundColor: mosaicStyle?.backgroundColor || '',
           glassRadius: glassStyle?.borderRadius || '',
           glassShadow: glassStyle?.boxShadow || '',
+          seamDisplay: seamStyle?.display || '',
+          seamContent: seamStyle?.content || '',
           seamFilter: seamStyle?.filter || '',
           seamShadow: seamStyle?.boxShadow || '',
           verticalOverflow: Math.max(scrolling.scrollHeight, document.documentElement.scrollHeight) - innerHeight,
@@ -110,10 +114,13 @@ try {
         `${viewport.name}: tile/artwork ratio ${(scene.tileWidth / Math.max(1, scene.artworkRect?.width || 1)).toFixed(3)}`, localFailures);
       check(scene.tileOverflow === 'hidden', `${viewport.name}: tile overflow ${scene.tileOverflow}`, localFailures);
       check(scene.tileOutline === 'none', `${viewport.name}: square outline ${scene.tileOutline}`, localFailures);
-      check((scene.tileBackgroundImage.match(/radial-gradient/gu) || []).length === 4,
-        `${viewport.name}: corner masks are not exactly four`, localFailures);
+      check(scene.tileBorderRadius !== '0px', `${viewport.name}: square tile shell ${scene.tileBorderRadius}`, localFailures);
+      check(scene.tileBackgroundImage === 'none', `${viewport.name}: square corner mask ${scene.tileBackgroundImage}`, localFailures);
+      check(scene.mosaicBackgroundColor === 'rgba(0, 0, 0, 0)',
+        `${viewport.name}: opaque mosaic backing ${scene.mosaicBackgroundColor}`, localFailures);
       check(scene.glassRadius !== '0px', `${viewport.name}: glass radius missing`, localFailures);
       check(!scene.glassShadow.includes('rgb(7, 9, 13) 0px 0px 0px'), `${viewport.name}: spread seam shadow remains`, localFailures);
+      check(scene.seamDisplay === 'none', `${viewport.name}: square seam layer display ${scene.seamDisplay}`, localFailures);
       check(scene.seamFilter === 'none', `${viewport.name}: square gap drop-shadow ${scene.seamFilter}`, localFailures);
       check(scene.seamShadow === 'none', `${viewport.name}: square gap box-shadow ${scene.seamShadow}`, localFailures);
       check(scene.verticalOverflow <= 1, `${viewport.name}: vertical overflow ${scene.verticalOverflow}`, localFailures);
@@ -136,7 +143,7 @@ try {
 }
 
 const summary = {
-  schema_version: 'prelaunch_v27_structure_v1',
+  schema_version: 'prelaunch_v27_structure_v2',
   ok: failures.length === 0,
   url,
   evidence,

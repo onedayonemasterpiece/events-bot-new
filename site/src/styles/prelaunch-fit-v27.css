@@ -3,9 +3,10 @@
  *
  * - PWA and pane scale are both based on vmin, so their ratio is stable.
  * - Wide viewports show more panes rather than enlarged panes.
- * - Only the four cut-out corners of each rounded pane receive seam colour.
- * - No square drop-shadow, spread-shadow, border or outline is painted around
- *   a grid cell; mobile glass is clipped by the cell and cannot leak outward.
+ * - Pane shells are genuinely rounded; the continuous artwork remains visible
+ *   in the inter-pane gaps and corner cut-outs, as in the accepted reference.
+ * - No square seam layer, corner mask, drop-shadow, spread-shadow, border or
+ *   outline is painted around a grid cell.
  */
 
 body .prelaunch[data-prelaunch-page] {
@@ -36,54 +37,26 @@ body .prelaunch[data-prelaunch-page] .prelaunch__mosaic {
   box-shadow: none !important;
 }
 
-/* Paint only the real inter-pane gaps. A drop-shadow on this square grid was
-   the source of the visible unrounded rectangles around every pane. */
+/* The old repeating seam grid drew a hard, square frame around every pane.
+   Gaps now expose the one continuous scene; each pane owns its rounded edge. */
 body .prelaunch[data-prelaunch-page] .prelaunch__mosaic::before {
-  display: block !important;
-  content: "" !important;
-  position: absolute;
-  inset: -1px !important;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    repeating-linear-gradient(
-      90deg,
-      transparent 0 var(--tile-width),
-      var(--prelaunch-seam) var(--tile-width) var(--tile-pitch-x)
-    ),
-    repeating-linear-gradient(
-      180deg,
-      transparent 0 var(--tile-height),
-      var(--prelaunch-seam) var(--tile-height) var(--tile-pitch-y)
-    ) !important;
+  display: none !important;
+  content: none !important;
+  background: none !important;
   filter: none !important;
   box-shadow: none !important;
 }
 
-/* The square grid item clips all child paint. Four tiny radial masks cover only
-   the pixels outside the rounded glass surface; they do not form a square
-   stroke along the tile edges. */
 body .prelaunch[data-prelaunch-page] .prelaunch__tile {
   --corner-radius: clamp(9px, 1.15vmin, 14px);
   position: relative;
   z-index: 1;
   overflow: hidden !important;
   border: 0 !important;
-  border-radius: 0 !important;
+  border-radius: var(--corner-radius) !important;
   outline: 0 !important;
-  background-color: transparent !important;
-  background-image:
-    radial-gradient(circle at 100% 100%, transparent calc(100% - 1px), var(--prelaunch-seam) 100%),
-    radial-gradient(circle at 0 100%, transparent calc(100% - 1px), var(--prelaunch-seam) 100%),
-    radial-gradient(circle at 100% 0, transparent calc(100% - 1px), var(--prelaunch-seam) 100%),
-    radial-gradient(circle at 0 0, transparent calc(100% - 1px), var(--prelaunch-seam) 100%) !important;
-  background-position: 0 0, 100% 0, 0 100%, 100% 100% !important;
-  background-size:
-    var(--corner-radius) var(--corner-radius),
-    var(--corner-radius) var(--corner-radius),
-    var(--corner-radius) var(--corner-radius),
-    var(--corner-radius) var(--corner-radius) !important;
-  background-repeat: no-repeat !important;
+  background: transparent !important;
+  background-image: none !important;
   box-shadow: none !important;
   contain: paint style !important;
   isolation: isolate;
@@ -93,7 +66,7 @@ body .prelaunch[data-prelaunch-page] .prelaunch__tile::before,
 body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-glint="true"]::before,
 body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-accent="true"]::before {
   inset: 0 !important;
-  border-radius: var(--corner-radius) !important;
+  border-radius: inherit !important;
   clip-path: inset(0 round var(--corner-radius)) !important;
   outline: 0 !important;
   box-shadow:
@@ -188,7 +161,7 @@ body .prelaunch[data-prelaunch-page] .prelaunch__tile[data-window="true"] {
   }
 
   body .prelaunch[data-prelaunch-page] .prelaunch__mosaic {
-    --tile-width: clamp(54px, 14.2vmin, 62px) !important;
+    --tile-width: clamp(46px, 14.2vmin, 62px) !important;
     --tile-height: var(--tile-width) !important;
     --tile-gap: clamp(4px, .7vmin, 6px) !important;
     grid-template-columns: repeat(7, var(--tile-width)) !important;
