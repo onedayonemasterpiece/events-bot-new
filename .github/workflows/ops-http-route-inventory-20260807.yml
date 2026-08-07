@@ -1,0 +1,32 @@
+name: Inventory runtime HTTP routes for maintenance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/ops-http-route-inventory-20260807.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 1
+      - name: Print route and command declarations
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo HTTP_ROUTES_START
+          git grep -nE 'add_(get|post|put|patch|delete)|web\.(get|post|put|patch|delete)\(|RouteTableDef|register\(app, path=' -- '*.py' || true
+          echo HTTP_ROUTES_END
+          echo INTERNAL_AUTH_START
+          git grep -nEi 'internal|secret.token|authorization|bearer|api.key|webhook.secret|admin.token' -- '*.py' | head -1000 || true
+          echo INTERNAL_AUTH_END
+          echo GUIDE_COMMANDS_START
+          git grep -nEi 'guide.*Command\(|Command\([^)]*guide|guide_digest|guide_occurrence|digest.*guide' -- '*.py' | head -1000 || true
+          echo GUIDE_COMMANDS_END
