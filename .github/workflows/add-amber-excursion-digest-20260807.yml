@@ -1,0 +1,281 @@
+name: Add amber excursion to next guide digest
+
+on:
+  push:
+    branches:
+      - ops/add-amber-excursion-digest-20260807
+    paths:
+      - .github/workflows/add-amber-excursion-digest-20260807.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: add-amber-excursion-digest-20260807
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Insert and verify production digest candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      FLY_APP_NAME: events-bot-new-wngqia
+      FLY_TOKEN_PRIMARY: ${{ secrets.FLY_API_TOKEN }}
+      FLY_TOKEN_EVENTS_BOT: ${{ secrets.FLY_API_TOKEN_EVENTS_BOT }}
+      FLY_TOKEN_DEPLOY: ${{ secrets.FLY_API_TOKEN_DEPLOY }}
+      FLY_TOKEN_PRODUCTION: ${{ secrets.FLY_API_TOKEN_PRODUCTION }}
+
+    steps:
+      - name: Set up pinned flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+        with:
+          version: 0.4.78
+
+      - name: Insert excursion and verify next-digest eligibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+
+          FLY_API_TOKEN=""
+          for candidate in \
+            "${FLY_TOKEN_PRIMARY}" \
+            "${FLY_TOKEN_EVENTS_BOT}" \
+            "${FLY_TOKEN_DEPLOY}" \
+            "${FLY_TOKEN_PRODUCTION}"
+          do
+            if [[ -n "${candidate}" ]]; then
+              FLY_API_TOKEN="${candidate}"
+              break
+            fi
+          done
+          if [[ -z "${FLY_API_TOKEN}" ]]; then
+            echo "::error title=Fly credential missing::No write-capable Fly token is available in the production environment."
+            exit 1
+          fi
+          export FLY_API_TOKEN
+
+          script_file="$(mktemp)"
+          output_file="$(mktemp)"
+          trap 'rm -f "${script_file}" "${output_file}"' EXIT
+
+          cat > "${script_file}" <<'PY'
+          import html
+          import json
+          import sqlite3
+          from pathlib import Path
+
+          DB_PATH = Path("/data/db.sqlite")
+          FINGERPRINT = "manual:kgd80:amber-combine-jewelry-excursion:2026-08-11T11:00"
+          TITLE = "Экскурсия на ювелирное производство Калининградского янтарного комбината"
+          TITLE_NORMALIZED = "экскурсия на ювелирное производство калининградского янтарного комбината"
+          DATE = "2026-08-11"
+          TIME = "11:00"
+          URL = "https://kgd80.ru/special/amber-combine-jewelry-excursion/"
+          ORGANIZERS = [
+              "Фестиваль «80 историй о главном»",
+              "Калининградский янтарный комбинат",
+          ]
+          AUDIENCE = ["активным участникам фестиваля «80 историй о главном»"]
+          BLURB = (
+              "Редкая возможность попасть не в музей при комбинате, а на действующее "
+              "ювелирное производство и увидеть, как янтарь проходит путь до готового изделия."
+          )
+          BOOKING_TEXT = "Подать заявку до 9 августа, 11:00"
+          SEATS_TEXT = (
+              "Участие по результатам розыгрыша; подать заявку могут граждане Российской Федерации"
+          )
+          FACT_PACK = {
+              "source_post_url": URL,
+              "availability_mode": "limited",
+              "post_kind": "announce_single",
+              "group_format": "экскурсия на действующее ювелирное производство",
+              "route_summary": (
+                  "действующее ювелирное производство Калининградского янтарного комбината"
+              ),
+              "organizer_names": ORGANIZERS,
+              "audience_fit": AUDIENCE,
+              "booking_text": BOOKING_TEXT,
+              "booking_url": URL,
+          }
+
+          if not DB_PATH.is_file():
+              raise SystemExit(f"production database not found: {DB_PATH}")
+
+          conn = sqlite3.connect(str(DB_PATH), timeout=30)
+          conn.row_factory = sqlite3.Row
+          conn.execute("PRAGMA busy_timeout=30000")
+          try:
+              table = conn.execute(
+                  "SELECT 1 FROM sqlite_master WHERE type='table' AND name='guide_occurrence'"
+              ).fetchone()
+              if not table:
+                  raise RuntimeError("guide_occurrence table is missing")
+
+              conn.execute("BEGIN IMMEDIATE")
+              matches = conn.execute(
+                  """
+                  SELECT id, source_fingerprint, booking_url, date, time,
+                         published_new_digest_issue_id
+                  FROM guide_occurrence
+                  WHERE source_fingerprint = ? OR booking_url = ?
+                  ORDER BY id
+                  """,
+                  (FINGERPRINT, URL),
+              ).fetchall()
+              unique_ids = {int(row["id"]) for row in matches}
+              if len(unique_ids) > 1:
+                  raise RuntimeError(
+                      "multiple existing excursion rows found: "
+                      + ",".join(str(item) for item in sorted(unique_ids))
+                  )
+
+              payload = (
+                  FINGERPRINT,
+                  TITLE,
+                  TITLE_NORMALIZED,
+                  json.dumps([], ensure_ascii=False),
+                  json.dumps([], ensure_ascii=False),
+                  json.dumps(ORGANIZERS, ensure_ascii=False),
+                  1,
+                  "manual_editorial_add",
+                  0,
+                  0,
+                  DATE,
+                  TIME,
+                  "посёлок Янтарный",
+                  None,
+                  json.dumps(AUDIENCE, ensure_ascii=False),
+                  "Бесплатно",
+                  BOOKING_TEXT,
+                  URL,
+                  URL,
+                  "scheduled",
+                  SEATS_TEXT,
+                  BLURB,
+                  BLURB,
+                  json.dumps(FACT_PACK, ensure_ascii=False, separators=(",", ":")),
+              )
+
+              if matches:
+                  occurrence_id = int(matches[0]["id"])
+                  conn.execute(
+                      """
+                      UPDATE guide_occurrence
+                      SET source_fingerprint=?, canonical_title=?, title_normalized=?,
+                          participant_profiles_json=?, guide_names_json=?, organizer_names_json=?,
+                          digest_eligible=?, digest_eligibility_reason=?, is_last_call=?,
+                          aggregator_only=?, date=?, time=?, city=?, meeting_point=?,
+                          audience_fit_json=?, price_text=?, booking_text=?, booking_url=?,
+                          channel_url=?, status=?, seats_text=?, summary_one_liner=?,
+                          digest_blurb=?, fact_pack_json=?,
+                          published_new_digest_issue_id=NULL,
+                          published_visual_digest_issue_id=NULL,
+                          updated_at=CURRENT_TIMESTAMP
+                      WHERE id=?
+                      """,
+                      (*payload, occurrence_id),
+                  )
+                  action = "updated"
+              else:
+                  cur = conn.execute(
+                      """
+                      INSERT INTO guide_occurrence(
+                          source_fingerprint, canonical_title, title_normalized,
+                          participant_profiles_json, guide_names_json, organizer_names_json,
+                          digest_eligible, digest_eligibility_reason, is_last_call,
+                          aggregator_only, date, time, city, meeting_point,
+                          audience_fit_json, price_text, booking_text, booking_url,
+                          channel_url, status, seats_text, summary_one_liner,
+                          digest_blurb, fact_pack_json,
+                          published_new_digest_issue_id, published_visual_digest_issue_id
+                      )
+                      VALUES(
+                          ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,NULL
+                      )
+                      """,
+                      payload,
+                  )
+                  occurrence_id = int(cur.lastrowid)
+                  action = "inserted"
+              conn.commit()
+
+              row = conn.execute(
+                  """
+                  SELECT *
+                  FROM guide_occurrence
+                  WHERE id=?
+                    AND digest_eligible=1
+                    AND date GLOB '????-??-??'
+                    AND date >= date('now')
+                    AND date <= date('now', '+45 days')
+                    AND published_new_digest_issue_id IS NULL
+                    AND status='scheduled'
+                    AND booking_url=?
+                  """,
+                  (occurrence_id, URL),
+              ).fetchone()
+              if row is None:
+                  raise RuntimeError("saved row is not eligible for the next new-occurrences digest")
+
+              item = dict(row)
+              item.update(
+                  {
+                      "guide_names": [],
+                      "organizer_names": ORGANIZERS,
+                      "audience_fit": AUDIENCE,
+                      "fact_pack": FACT_PACK,
+                      "source_title": "Фестиваль «80 историй о главном»",
+                      "source_kind": "organization_with_tours",
+                      "source_post_url": URL,
+                      "priority_weight": 2.0,
+                      "popularity_mark": "",
+                  }
+              )
+              from guide_excursions.digest import build_digest_messages
+
+              messages = build_digest_messages([item], family="new_occurrences")
+              rendered = "\n\n".join(messages)
+              if TITLE not in rendered or URL not in rendered or "11 августа" not in rendered:
+                  raise RuntimeError("digest renderer did not retain the title, date, and application URL")
+
+              print(f"AMBER_DIGEST_ACTION={action}")
+              print(f"AMBER_DIGEST_OCCURRENCE_ID={occurrence_id}")
+              print("AMBER_DIGEST_ELIGIBLE=true")
+              print(f"AMBER_DIGEST_DATE={DATE} {TIME}")
+              print(f"AMBER_DIGEST_URL={URL}")
+              print("AMBER_DIGEST_PREVIEW_START")
+              print(rendered)
+              print("AMBER_DIGEST_PREVIEW_END")
+          except Exception:
+              conn.rollback()
+              raise
+          finally:
+              conn.close()
+          PY
+
+          flyctl ssh console \
+            --app "${FLY_APP_NAME}" \
+            --command "python3 -c 'import sys; exec(compile(sys.stdin.read(), \"<amber_digest_seed>\", \"exec\"))'" \
+            < "${script_file}" | tee "${output_file}"
+
+          grep -Fxq 'AMBER_DIGEST_ELIGIBLE=true' "${output_file}"
+          grep -Fxq 'AMBER_DIGEST_URL=https://kgd80.ru/special/amber-combine-jewelry-excursion/' "${output_file}"
+          occurrence_id="$(sed -n 's/^AMBER_DIGEST_OCCURRENCE_ID=//p' "${output_file}" | tail -n 1)"
+          action="$(sed -n 's/^AMBER_DIGEST_ACTION=//p' "${output_file}" | tail -n 1)"
+          if [[ ! "${occurrence_id}" =~ ^[0-9]+$ ]]; then
+            echo "::error title=Verification failed::Production did not return a valid occurrence ID."
+            exit 1
+          fi
+
+          {
+            echo '### Amber excursion digest candidate'
+            echo
+            echo "- production action: \`${action}\`"
+            echo "- occurrence ID: \`${occurrence_id}\`"
+            echo '- next new-occurrences digest: **eligible**'
+            echo '- date: **11 August 2026, 11:00**'
+            echo '- application URL: `https://kgd80.ru/special/amber-combine-jewelry-excursion/`'
+          } >> "${GITHUB_STEP_SUMMARY}"
