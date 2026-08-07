@@ -51,6 +51,22 @@ test('prelaunch scene uses the approved responsive WebP backgrounds without reco
   assert.match(prepare, /dimensions mismatch/u);
 });
 
+test('FHD 125% spacing and PWA icon stitching have explicit optical contracts', () => {
+  const page = source('site/src/components/PrelaunchPage.astro');
+  const polish = source('site/src/styles/prelaunch-polish.css');
+
+  assert.match(page, /import '\.\.\/styles\/prelaunch-polish\.css'/u);
+  assert.match(polish, /FHD \/ 125% browser review/u);
+  assert.match(polish, /\.prelaunch-page--static \.prelaunch__brand-icon\s*\{[\s\S]*border-radius:\s*18%/u);
+  assert.match(polish, /\.prelaunch-page--static \.prelaunch__brand-icon img\s*\{[\s\S]*width:\s*108%[\s\S]*height:\s*108%[\s\S]*margin:\s*-4%/u);
+  assert.match(polish, /min-width:\s*1200px/u);
+  assert.match(polish, /min-height:\s*701px/u);
+  assert.match(polish, /max-height:\s*900px/u);
+  assert.match(polish, /font-size:\s*clamp\(3\.9rem,\s*5\.55vw,\s*5\.45rem\)/u);
+  assert.match(polish, /font-size:\s*clamp\(1rem,\s*1\.38vw,\s*1\.34rem\)/u);
+  assert.doesNotMatch(polish, /prelaunch__static-picture|prelaunch__static-vignette/u);
+});
+
 test('prelaunch form uses guarded idempotent direct and relay transport', () => {
   const page = source('site/src/components/PrelaunchPage.astro');
   const form = source('site/src/scripts/prelaunchForm.ts');
@@ -103,6 +119,7 @@ test('prelaunch runtime no longer imports the accumulated visual patch stack', (
   assert.doesNotMatch(layout, /prelaunch-(?:motion|fit-v\d+)\.css/u);
   assert.match(page, /prelaunch-page\.css/u);
   assert.match(page, /prelaunch-static\.css/u);
+  assert.match(page, /prelaunch-polish\.css/u);
 });
 
 test('approved background sources and visual references remain stored', () => {
