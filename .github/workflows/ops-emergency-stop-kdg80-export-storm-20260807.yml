@@ -20,7 +20,6 @@ jobs:
       max-parallel: 1
       matrix:
         scope:
-          - external-e2e
           - production
           - production-readonly
           - volunteer-monitor-canary
@@ -95,7 +94,6 @@ jobs:
           TOKEN_RE = re.compile(r"\b\d{8,12}:[A-Za-z0-9_-]{30,}\b")
           SCOPE = os.environ.get("SCOPE", "unknown")
 
-
           def api(token: str, method: str, params: dict | None = None):
               request = urllib.request.Request(
                   f"https://api.telegram.org/bot{token}/{method}",
@@ -108,7 +106,6 @@ jobs:
               except urllib.error.HTTPError:
                   return None
               return payload.get("result") if payload.get("ok") is True else None
-
 
           def contain(token: str, source: str) -> bool:
               identity = api(token, "getMe") or {}
@@ -130,8 +127,7 @@ jobs:
               print("KDG80_EXPORT_STORM_CONTAINED=true")
               return True
 
-
-          def decode_session(raw: str) -> tuple[str, dict] | None:
+          def decode_session(raw: str):
               value = str(raw or "").strip()
               if not value:
                   return None
@@ -149,16 +145,13 @@ jobs:
                       pass
               return value, {}
 
-
           def all_buttons(message):
               return [button for row in (message.buttons or []) for button in row]
-
 
           def labels(message):
               return [str(button.text or "").strip() for button in all_buttons(message)]
 
-
-          def choose(message, candidates: list[str]):
+          def choose(message, candidates):
               needles = [candidate.casefold() for candidate in candidates if candidate]
               for button in all_buttons(message):
                   text = str(button.text or "").strip()
@@ -167,8 +160,7 @@ jobs:
                       return button
               return None
 
-
-          async def wait_new(client, peer, after_id: int, timeout: int = 20):
+          async def wait_new(client, peer, after_id, timeout=12):
               deadline = time.monotonic() + timeout
               while time.monotonic() < deadline:
                   messages = await client.get_messages(peer, limit=20)
@@ -181,8 +173,7 @@ jobs:
                   await asyncio.sleep(0.4)
               return None
 
-
-          async def wait_change(client, peer, message, old_labels: list[str], timeout: int = 20):
+          async def wait_change(client, peer, message, old_labels, timeout=12):
               deadline = time.monotonic() + timeout
               while time.monotonic() < deadline:
                   refreshed = await client.get_messages(peer, ids=int(message.id))
@@ -194,8 +185,7 @@ jobs:
                   await asyncio.sleep(0.3)
               return None
 
-
-          async def token_from_owner_session(client: TelegramClient) -> str | None:
+          async def token_from_owner_session(client):
               botfather = await client.get_entity("BotFather")
               command = await client.send_message(botfather, "/mybots")
               menu = await wait_new(client, botfather, int(command.id))
@@ -215,7 +205,7 @@ jobs:
               old = labels(controls)
               await controls.click(data=token_button.data)
               response = await wait_change(client, botfather, controls, old)
-              deadline = time.monotonic() + 20
+              deadline = time.monotonic() + 12
               while time.monotonic() < deadline:
                   candidates = await client.get_messages(botfather, limit=30)
                   if response:
@@ -230,8 +220,7 @@ jobs:
                   await asyncio.sleep(0.4)
               return None
 
-
-          async def try_sessions() -> bool:
+          async def try_sessions():
               api_pairs = []
               for index in range(1, 4):
                   raw_id = os.environ.get(f"API_ID_{index:02d}", "").strip()
@@ -243,10 +232,7 @@ jobs:
                           continue
                       if pair not in api_pairs:
                           api_pairs.append(pair)
-              if not api_pairs:
-                  return False
-
-              seen_sessions: set[str] = set()
+              seen_sessions = set()
               for session_index in range(1, 8):
                   decoded = decode_session(os.environ.get(f"SESSION_{session_index:02d}", ""))
                   if not decoded:
@@ -256,14 +242,7 @@ jobs:
                       continue
                   seen_sessions.add(session)
                   for api_id, api_hash in api_pairs:
-                      client = TelegramClient(
-                          StringSession(session),
-                          api_id,
-                          api_hash,
-                          device_model=str(metadata.get("device_model") or "GitHub Actions"),
-                          system_version=str(metadata.get("system_version") or "Linux"),
-                          app_version=str(metadata.get("app_version") or "1.0"),
-                      )
+                      client = TelegramClient(StringSession(session), api_id, api_hash)
                       try:
                           await client.connect()
                           if not await client.is_user_authorized():
@@ -276,7 +255,6 @@ jobs:
                       finally:
                           await client.disconnect()
               return False
-
 
           for index in range(1, 19):
               token = os.environ.get(f"BOT_TOKEN_{index:02d}", "").strip()
