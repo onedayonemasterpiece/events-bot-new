@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import urllib.error
-import urllib.parse
 import urllib.request
 import uuid
 
@@ -33,19 +33,25 @@ https://kgd80.ru/special/amber-combine-jewelry-excursion/
 На origin/main подготовлен идемпотентный скрипт scripts/ops/add_amber_excursion_digest_20260807.py. Использовать локальный release-доступ /home/dev/.config/fly/release.env, выполнить скрипт в production и получить доказательство из build_guide_digest_preview(family="new_occurrences", limit=24): production occurrence ID, позиция в выдаче, точный текст карточки и ссылка. После успеха удалить временные ops-workflow/скрипты, созданные для этой операции, не затрагивая штатные workflow. Никакой Gmail. Не останавливаться на отчёте о блокере: довести до production-результата."""
 
 
-def request(method: str, path: str, *, body: object | None = None, accept: str = "application/json") -> object:
+class SupabaseError(RuntimeError):
+    def __init__(self, status: int, body: str):
+        super().__init__(f"Supabase HTTP {status}: {body}")
+        self.status = status
+        self.body = body
+
+
+def post(payload: dict[str, object]) -> object:
     if not SUPABASE_URL or not SUPABASE_KEY:
         raise RuntimeError("SUPABASE_URL and SUPABASE_KEY are required")
-    data = json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
     req = urllib.request.Request(
-        SUPABASE_URL + path,
-        data=data,
-        method=method,
+        SUPABASE_URL + f"/rest/v1/{TABLE}",
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        method="POST",
         headers={
             "apikey": SUPABASE_KEY,
             "Authorization": f"Bearer {SUPABASE_KEY}",
             "Content-Type": "application/json",
-            "Accept": accept,
+            "Accept": "application/json",
             "Prefer": "return=representation",
         },
     )
@@ -54,52 +60,31 @@ def request(method: str, path: str, *, body: object | None = None, accept: str =
             raw = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         raw = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Supabase HTTP {exc.code}: {raw}") from exc
+        raise SupabaseError(exc.code, raw) from exc
     return json.loads(raw) if raw.strip() else None
 
 
-def schema_for_table() -> tuple[dict[str, object], set[str]]:
-    schema = request("GET", "/rest/v1/", accept="application/openapi+json, application/json")
-    if not isinstance(schema, dict):
-        raise RuntimeError("Supabase OpenAPI schema is not an object")
-    definitions = schema.get("definitions")
-    if not isinstance(definitions, dict):
-        components = schema.get("components")
-        definitions = components.get("schemas") if isinstance(components, dict) else None
-    if not isinstance(definitions, dict):
-        raise RuntimeError("Supabase OpenAPI definitions are missing")
-    table = definitions.get(TABLE) or definitions.get("event_issue_report")
-    if not isinstance(table, dict):
-        candidates = [name for name in definitions if "event" in name.lower() and "issue" in name.lower()]
-        raise RuntimeError(f"{TABLE} schema is missing; candidates={candidates}")
-    properties = table.get("properties")
-    if not isinstance(properties, dict):
-        properties = {}
-    required_raw = table.get("required")
-    required = {str(item) for item in required_raw} if isinstance(required_raw, list) else set()
-    return properties, required
-
-
-def coerce(value: object, spec: object) -> object:
-    kind = spec.get("type") if isinstance(spec, dict) else None
-    if kind == "string" and not isinstance(value, str):
-        return json.dumps(value, ensure_ascii=False)
-    if kind == "integer" and not isinstance(value, int):
+def default_for_required_column(name: str) -> object:
+    lowered = name.lower()
+    if lowered.endswith("_id"):
         return 0
-    if kind == "number" and not isinstance(value, (int, float)):
-        return 0
-    if kind == "array" and not isinstance(value, list):
-        return [value]
-    if kind == "object" and not isinstance(value, dict):
-        return {}
-    if kind == "boolean" and not isinstance(value, bool):
+    if lowered.startswith("is_") or lowered.startswith("has_"):
         return False
-    return value
+    if lowered.endswith("_urls") or lowered.endswith("_json"):
+        return []
+    if "status" in lowered:
+        return "submitted"
+    if "title" in lowered:
+        return TITLE
+    if "url" in lowered:
+        return URL
+    if "text" in lowered or "comment" in lowered or "report" in lowered:
+        return REPORT_TEXT
+    return REQUEST_ID
 
 
 def main() -> int:
-    properties, required = schema_for_table()
-    base: dict[str, object] = {
+    payload: dict[str, object] = {
         "status": "submitted",
         "event_id": 0,
         "event_slug": "amber-combine-jewelry-excursion",
@@ -125,46 +110,37 @@ def main() -> int:
             "url": URL,
         },
     }
-    payload: dict[str, object] = {
-        name: coerce(value, properties[name])
-        for name, value in base.items()
-        if name in properties
-    }
-    defaults: dict[str, object] = {
-        "status": "submitted",
-        "report_text": REPORT_TEXT,
-        "event_title": TITLE,
-        "event_url": URL,
-        "event_slug": "amber-combine-jewelry-excursion",
-        "event_id": 0,
-    }
-    for name in required:
-        if name in payload:
-            continue
-        spec = properties.get(name, {})
-        if name in defaults:
-            payload[name] = coerce(defaults[name], spec)
-            continue
-        kind = spec.get("type") if isinstance(spec, dict) else None
-        payload[name] = {
-            "string": REQUEST_ID,
-            "integer": 0,
-            "number": 0,
-            "boolean": False,
-            "array": [],
-            "object": {},
-        }.get(kind, REQUEST_ID)
 
-    result = request("POST", f"/rest/v1/{TABLE}", body=payload)
-    row = result[0] if isinstance(result, list) and result else result
-    if not isinstance(row, dict):
-        raise RuntimeError(f"Unexpected Supabase response: {result!r}")
-    print("EVENT_ISSUE_COLUMNS=" + ",".join(sorted(properties)))
-    print("EVENT_ISSUE_PAYLOAD_COLUMNS=" + ",".join(sorted(payload)))
-    print("EVENT_ISSUE_REQUEST_ID=" + REQUEST_ID)
-    print("ARTKODEX_REPORT_ID=" + str(row.get("id") or "unknown"))
-    print("ARTKODEX_REPORT_STATUS=" + str(row.get("status") or "unknown"))
-    return 0
+    for attempt in range(1, 25):
+        try:
+            result = post(payload)
+            row = result[0] if isinstance(result, list) and result else result
+            if not isinstance(row, dict):
+                raise RuntimeError(f"Unexpected Supabase response: {result!r}")
+            print("EVENT_ISSUE_REQUEST_ID=" + REQUEST_ID)
+            print("EVENT_ISSUE_PAYLOAD_COLUMNS=" + ",".join(sorted(payload)))
+            print("ARTKODEX_REPORT_ID=" + str(row.get("id") or "unknown"))
+            print("ARTKODEX_REPORT_STATUS=" + str(row.get("status") or "unknown"))
+            return 0
+        except SupabaseError as exc:
+            body = exc.body
+            unknown = re.search(r"Could not find the ['\"]([^'\"]+)['\"] column", body)
+            if unknown and unknown.group(1) in payload:
+                removed = unknown.group(1)
+                payload.pop(removed, None)
+                print(f"RETRY_REMOVED_UNKNOWN_COLUMN={removed}")
+                continue
+            missing = re.search(r"null value in column ['\"]([^'\"]+)['\"] violates not-null constraint", body)
+            if missing:
+                column = missing.group(1)
+                if column not in payload:
+                    payload[column] = default_for_required_column(column)
+                    print(f"RETRY_ADDED_REQUIRED_COLUMN={column}")
+                    continue
+            raise RuntimeError(
+                f"insert failed after {attempt} attempt(s); payload_columns={sorted(payload)}; {exc}"
+            ) from exc
+    raise RuntimeError("Supabase insert retry budget exhausted")
 
 
 if __name__ == "__main__":
