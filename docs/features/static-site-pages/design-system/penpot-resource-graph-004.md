@@ -10,13 +10,13 @@ Penpot must contain one connected design-system graph rather than a collection o
 
 ```text
 accepted production release
-→ production route and source inventory
-→ native Penpot colors and typographies
+→ production route, source and iconography inventory
+→ native Penpot colors, typographies and icon resources
 → native/hybrid component resources and variants
 → product patterns
 → archetypes assembled from component instances
 → automated actual/baseline/diff evidence at multiple viewports
-→ comments routed to a component, pattern, archetype or evidence item
+→ comments routed to a resource, component, pattern, archetype or evidence item
 ```
 
 A screenshot remains first-class evidence. It does not substitute for the component graph.
@@ -36,7 +36,7 @@ static-release-manifest.json
 + snapshot_id and snapshot_sha256
 ```
 
-A page enters the current inventory only when its HTML exists in that production artifact. A component enters the current inventory only when it is transitively reachable from one of those production page sources at the same exact SHA. Merely existing in `site/src/components` is insufficient.
+A page enters the current inventory only when its HTML exists in that production artifact. A component or icon enters the current inventory only when it is transitively reachable from one of those production page sources, or referenced by the accepted production artifact, at the same exact SHA. Merely existing in `site/src/components` or `site/public` is insufficient.
 
 Excluded from current production inventory:
 
@@ -44,13 +44,16 @@ Excluded from current production inventory:
 - `/__preview/**`;
 - detached prototype fixtures;
 - deprecated implementations not reached by production pages;
-- historical screenshots and superseded candidates.
+- historical screenshots and superseded candidates;
+- icon files that exist in the repository but have no production consumer.
 
-Those items may appear only in candidate, archive or technical-test sections.
+Those items may appear only in candidate, archive, legacy, unclassified or technical-test sections.
 
-The machine-readable contract is [`site/src/data/design-system-production-surface-contract.v1.json`](../../../site/src/data/design-system-production-surface-contract.v1.json). It explicitly covers the current product surfaces requested for review: brand/PWA, current header and navigation, bottom navigation, footer, keyboard navigation, event cards and rails, event detail media geometries, medallions, artifacts, focus group, exhibitions, favorites, authorization, search, «Для меня», rail/bus schedules, notices and status surfaces.
+The machine-readable surface contract is [`site/src/data/design-system-production-surface-contract.v1.json`](../../../site/src/data/design-system-production-surface-contract.v1.json). It explicitly covers the current product surfaces requested for review: brand/PWA, current header and navigation, bottom navigation, footer, keyboard navigation, event cards and rails, event detail media geometries, medallions, artifacts, focus group, exhibitions, favorites, authorization, search, «Для меня», rail/bus schedules, notices and status surfaces.
 
-The checker [`site/scripts/check-design-system-production-surface-contract.mjs`](../../../site/scripts/check-design-system-production-surface-contract.mjs):
+The machine-readable iconography contract is [`site/src/data/design-system-iconography-contract.v1.json`](../../../site/src/data/design-system-iconography-contract.v1.json). It inventories the canonical inline UI and social icon components, external SVG collections, attribution/provenance, consumer edges, optical tests, accessibility semantics, legacy/duplicate/unclassified states and the required Penpot resource structure.
+
+The production-surface checker [`site/scripts/check-design-system-production-surface-contract.mjs`](../../../site/scripts/check-design-system-production-surface-contract.mjs):
 
 1. validates the source contract and all referenced source paths;
 2. validates the exact production release identity;
@@ -60,16 +63,30 @@ The checker [`site/scripts/check-design-system-production-surface-contract.mjs`]
 6. reports missing required families and archetypes;
 7. writes one immutable inventory for the Penpot catalog build.
 
-Strict production mode:
+The iconography checker [`site/scripts/check-design-system-iconography-contract.mjs`](../../../site/scripts/check-design-system-iconography-contract.mjs):
+
+1. compares the exact `Icon.astro` and `SocialIcon.astro` name unions with the contract;
+2. verifies expected SVG files and attribution/provenance records;
+3. discovers inline SVG, external SVG, URL/mask references and component consumers;
+4. separates current, candidate, legacy, unused and unclassified iconography;
+5. reports raw inline SVG outside canonical icon components, duplicate/unclassified risks and missing consumers;
+6. emits `artifacts/design-system/iconography-inventory.json` for Resource Graph 004.
+
+Commands:
 
 ```bash
 npm run check:design-system-production-surfaces -- \
   --dist <accepted-production-root> \
   --out artifacts/design-system/production-surface-inventory.json \
   --strict-production
+
+npm run check:design-system-iconography -- \
+  --dist <accepted-production-root> \
+  --out artifacts/design-system/iconography-inventory.json \
+  --strict-production
 ```
 
-Resource Graph 004 publication must stop if this command reports a gap.
+Resource Graph 004 publication must stop if either command reports a production gap.
 
 ## Penpot structure
 
@@ -77,6 +94,7 @@ Resource Graph 004 publication must stop if this command reports a gap.
 00 — System map
 10 — Brand assets
 20 — Foundations
+25 — Iconography
 30 — Core UI resources
 40 — Announcements components
 50 — Product patterns
@@ -97,6 +115,7 @@ Resource Graph 004 publication must stop if this command reports a gap.
 
 - library colors;
 - library typographies;
+- native vector icon component masters and icon specimens;
 - component masters;
 - variant sets;
 - component instances;
@@ -104,6 +123,43 @@ Resource Graph 004 publication must stop if this command reports a gap.
 - source paths, versions, status, known limitations and consumers.
 
 Documentation boards use native flex/grid layouts. Components are not left as unrelated boards at absolute coordinates.
+
+### Iconography page
+
+`25 — Iconography` is a separate first-class resource plane, not a small row embedded in Foundations. It contains:
+
+```text
+System and actions
+Navigation
+Status and feedback
+Social and external services
+Transport
+Festival and editorial categories
+Product-specialized symbols
+Optical alignment and size tests
+Accessibility semantics
+Duplicates, legacy and unclassified
+```
+
+Each **current** icon is a native vector Penpot component master under a hierarchical path such as:
+
+```text
+Icon/UI/Share
+Icon/Navigation/Search
+Icon/Status/Warning
+Icon/Social/VK
+Icon/Transport/Bus
+Icon/Editorial/Festival category/Theatre
+Icon/Product/Artifact
+```
+
+Rasterized screenshots are not accepted as icon masters. A specimen may show the icon at `16`, `20`, `24` and `32` px, inside a `44` px control target, on light, brand, dark and status backgrounds. The page also records source `viewBox`, optical size/alignment, stroke/fill behavior, `currentColor` support, forced-colors behavior, semantic role, accessible semantics, attribution/license and production consumers.
+
+Current icon groups are populated only from production evidence. Repository assets without a current production consumer remain visibly classified as `candidate`, `legacy`, `unused` or `unclassified`; they are not silently promoted into the system.
+
+PWA icons, favicon artwork and channel lockups remain on `10 — Brand assets`. They are cross-linked from Iconography because they share visual language, but they are not generic UI icons.
+
+A comment on an icon master targets the shared icon and all consumers. A comment on an icon instance inside an archetype includes both the master and that exact page/variant context. A comment on a collection section targets system-level consistency, licensing, optical alignment or fragmentation.
 
 ### Archetype page
 
@@ -113,6 +169,7 @@ Each archetype is assembled from component instances. Its metadata records:
 archetype_id
 production routes
 component instance graph
+icon instance graph
 variant properties
 source files
 release repo_sha
@@ -172,12 +229,12 @@ Evidence boards live only on pages `90–93`. Archetypes and component documenta
 
 This preserves both needs:
 
-- component-level inspection and defragmentation;
+- component and icon-level inspection and defragmentation;
 - exact proof of what users see at each tested resolution.
 
 ## One-update interaction contract
 
-A design-system update is one orchestration operation. The user must never repeat synchronization per page, component or file.
+A design-system update is one orchestration operation. The user must never repeat synchronization per page, component, icon or file.
 
 The plugin exposes at most three primary actions:
 
@@ -191,13 +248,14 @@ The plugin exposes at most three primary actions:
 load one signed/hashed catalog
 → validate accepted release identity
 → reconcile colors and typographies
+→ reconcile icon inventory, native masters and specimens
 → reconcile component masters and variants
 → reconcile instances and product patterns
-→ reconcile archetypes
+→ reconcile archetypes and icon-consumer links
 → reconcile actual/baseline/diff evidence pages
-→ write component↔archetype↔evidence links
+→ write resource↔archetype↔evidence links
 → preserve comments and review snapshots
-→ verify counts, hashes, references and currentness
+→ verify counts, hashes, references, provenance and currentness
 → publish one final report
 ```
 
@@ -208,13 +266,14 @@ Expected steady-state report:
 ```text
 PRODUCTION SOURCE        current
 RESOURCE LIBRARY         current
+ICONOGRAPHY              current
 ARCHETYPE COMPOSITION    current
 EVIDENCE                 current
 COVERAGE                  complete or explicit gaps
 REVIEW                    unresolved comment count
 ```
 
-The old single `CURRENT` badge is insufficient because a current screenshot mirror can coexist with an incomplete component library.
+The old single `CURRENT` badge is insufficient because a current screenshot mirror can coexist with an incomplete component or icon library.
 
 ## Comment routing
 
@@ -223,6 +282,9 @@ A native Penpot comment is routed according to the object carrying it:
 | Comment target | Prompt scope |
 |---|---|
 | color or typography resource | token plus all known consumers |
+| icon master or icon variant | icon source, semantic role, provenance and every component/archetype consumer |
+| icon instance in an archetype | icon master plus the exact archetype, route and variant context |
+| iconography collection section | consistency, optical alignment, licensing or fragmentation policy |
 | component master or variant | component API plus every archetype consumer |
 | component instance | component plus the exact archetype context and variant values |
 | product pattern | composition and user task |
@@ -240,10 +302,14 @@ The delivery is accepted only when one real Penpot-file update demonstrates all 
 - inventory generated from one accepted production release;
 - no `/lab` or stale prototype source in current inventory;
 - native colors and typographies present in Resources;
+- a separate `25 — Iconography` plane exists;
+- every current icon is a native vector component master rather than a raster screenshot;
+- current icons have production consumers, source/provenance and archetype links;
+- no production icon remains unclassified;
 - hierarchical component resources and instances present;
 - required archetypes assembled from instances;
 - actual screenshots on separate evidence pages at the declared viewports;
 - archetype-to-evidence navigation works;
-- comments on a component and an archetype produce correctly scoped prompts;
+- comments on an icon, component and archetype produce correctly scoped prompts;
 - second preflight reports no pending managed changes;
-- coverage gaps, if any, are explicit rather than hidden behind `CURRENT`.
+- coverage and iconography gaps, if any, are explicit rather than hidden behind `CURRENT`.
