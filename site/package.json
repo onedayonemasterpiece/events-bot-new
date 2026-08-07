@@ -19,6 +19,7 @@
     "check:production": "node scripts/check-production.mjs",
     "check:production-desktop": "node scripts/check-production-desktop-contract.mjs",
     "check:prelaunch-production": "node scripts/check-prelaunch-production.mjs",
+    "check:prelaunch-scene": "node scripts/check-prelaunch-scene.mjs",
     "check:prelaunch-browser": "node scripts/check-prelaunch-browser.mjs",
     "check:prelaunch-light-model": "node scripts/check-prelaunch-light-model.mjs",
     "check:prelaunch-experience": "node scripts/check-prelaunch-experience.mjs",

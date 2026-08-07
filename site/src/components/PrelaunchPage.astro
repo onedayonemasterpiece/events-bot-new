@@ -1,0 +1,155 @@
+---
+import pwaArtwork from '../assets/announcements-brand-transparent-384.webp';
+import { withBase } from '../lib/events';
+import '../styles/prelaunch-page.css';
+
+const tiles = Array.from({ length: 112 }, (_, index) => ({
+  index,
+  phase: index % 3 === 0 ? 'open' : 'closed',
+  delay: -((index * 11) % 29) / 10,
+}));
+---
+
+<main
+  id="main"
+  class="prelaunch prelaunch-page"
+  data-home-page
+  data-prelaunch-page
+  data-launch-date="2026-09-01"
+>
+  <div class="prelaunch__scene" aria-hidden="true">
+    <div class="prelaunch__background"></div>
+    <img
+      class="prelaunch__artwork"
+      src={pwaArtwork.src}
+      width="384"
+      height="384"
+      alt=""
+      decoding="async"
+      fetchpriority="high"
+    />
+    <div class="prelaunch__light"></div>
+    <svg
+      class="prelaunch__seams"
+      data-prelaunch-seams
+      width="100%"
+      height="100%"
+      preserveAspectRatio="none"
+      focusable="false"
+      aria-hidden="true"
+    >
+      <path data-prelaunch-seam-path fill-rule="evenodd"></path>
+    </svg>
+    <div class="prelaunch__mosaic" data-prelaunch-mosaic>
+      {tiles.map((tile) => (
+        <span
+          class="prelaunch__tile"
+          data-prelaunch-tile
+          data-index={tile.index}
+          data-phase={tile.phase}
+          style={`--delay:${tile.delay.toFixed(1)}s`}
+        ></span>
+      ))}
+    </div>
+    <div class="prelaunch__dust"></div>
+    <span class="prelaunch__spark prelaunch__spark--one"></span>
+    <span class="prelaunch__spark prelaunch__spark--two"></span>
+    <span class="prelaunch__spark prelaunch__spark--star"></span>
+  </div>
+
+  <div class="prelaunch__foreground">
+    <header class="prelaunch__brand" aria-label="Полюбить Калининград Анонсы">
+      <span class="prelaunch__brand-icon" aria-hidden="true">
+        <img
+          src={withBase('/assets/pwa/announcements-brand-v2-192.png')}
+          width="192"
+          height="192"
+          alt=""
+          decoding="async"
+        />
+      </span>
+      <p><span>Полюбить</span><span>Калининград</span><span>Анонсы</span></p>
+    </header>
+
+    <section class="prelaunch__copy" aria-labelledby="prelaunch-title">
+      <h1 id="prelaunch-title"><span>Запуск</span> <span>1 сентября</span></h1>
+      <p>
+        <span>Персонализированный сервис анонсов</span>
+        <span>и навигатор по культурным</span>
+        <span>и просветительским событиям</span>
+        <span>Калининградской области</span>
+      </p>
+    </section>
+
+    <section class="prelaunch__notify" aria-labelledby="notify-title">
+      <h2 id="notify-title">Напомнить о запуске</h2>
+      <form class="prelaunch-form" data-prelaunch-form novalidate>
+        <div class="prelaunch-form__row">
+          <label class="prelaunch-form__field">
+            <span>Email</span>
+            <input
+              type="email"
+              name="email"
+              inputmode="email"
+              autocomplete="email"
+              autocapitalize="none"
+              spellcheck="false"
+              maxlength="254"
+              placeholder="E-mail"
+              aria-describedby="prelaunch-promise prelaunch-consent prelaunch-status"
+              required
+            />
+          </label>
+          <button type="submit" data-prelaunch-submit>
+            <span data-prelaunch-submit-label>Напомнить о запуске</span>
+          </button>
+        </div>
+
+        <p class="prelaunch-form__promise" id="prelaunch-promise">
+          Оставьте e-mail — и 1 сентября мы пришлём ссылку на сервис. Иногда будем отправлять важные обновления и полезные подборки; для подписавшихся мы приготовили приятный сюрприз.
+        </p>
+
+        <label class="prelaunch-form__consent" id="prelaunch-consent">
+          <input type="checkbox" name="consent" required />
+          <span>Согласен получать письма о запуске, важных обновлениях и полезных подборках сервиса. Отписаться можно в любой момент.</span>
+        </label>
+
+        <label class="prelaunch-form__trap" aria-hidden="true">
+          <span>Ваш сайт</span>
+          <input type="text" name="website" tabindex="-1" autocomplete="off" />
+        </label>
+
+        <p
+          class="prelaunch-form__status"
+          id="prelaunch-status"
+          data-prelaunch-status
+          role="status"
+          aria-live="polite"
+        ></p>
+
+        <div
+          class="prelaunch-form__complete"
+          data-prelaunch-complete
+          role="status"
+          aria-live="polite"
+          tabindex="-1"
+          hidden
+        >
+          <span class="prelaunch-form__complete-mark" aria-hidden="true"></span>
+          <p class="prelaunch-form__complete-copy">
+            <strong data-prelaunch-complete-title>Вы записаны</strong>
+            <span data-prelaunch-complete-body>1 сентября пришлём ссылку на сервис.</span>
+          </p>
+          <button class="prelaunch-form__reset" type="button" data-prelaunch-reset>Другой e-mail</button>
+        </div>
+
+        <noscript><p class="prelaunch-form__noscript">Для отправки формы нужен JavaScript.</p></noscript>
+      </form>
+    </section>
+  </div>
+</main>
+
+<script>
+  import '../scripts/prelaunchScene';
+  import '../scripts/prelaunchForm';
+</script>

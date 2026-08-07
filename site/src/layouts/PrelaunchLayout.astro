@@ -1,15 +1,5 @@
 ---
 import { IS_PRODUCTION, IS_SECRET_CANDIDATE, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
-import '../styles/prelaunch-motion.css';
-import '../styles/prelaunch-fit-v3.css';
-import '../styles/prelaunch-fit-v4.css';
-import '../styles/prelaunch-fit-v5.css';
-import '../styles/prelaunch-fit-v6.css';
-import '../styles/prelaunch-fit-v7.css';
-import '../styles/prelaunch-fit-v8.css';
-import '../styles/prelaunch-fit-v9.css';
-import '../styles/prelaunch-fit-v10.css';
-import '../styles/prelaunch-fit-v11.css';
 
 interface Props {
   title?: string;
@@ -83,7 +73,7 @@ const structuredData = {
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={shareImage} />
     <link rel="icon" href={withBase('/assets/pwa/announcements-brand-v2-192.png')} type="image/png" />
-    <meta name="theme-color" content="#0b1110" />
+    <meta name="theme-color" content="#080a0e" />
     <meta name="color-scheme" content="dark" />
     <script type="application/ld+json" set:html={JSON.stringify(structuredData)}></script>
     <style is:global>
@@ -93,15 +83,10 @@ const structuredData = {
         font-synthesis: none;
         text-rendering: optimizeLegibility;
         -webkit-font-smoothing: antialiased;
-        --prelaunch-bg: #0b1110;
-        --prelaunch-surface: rgba(20, 28, 26, 0.74);
+        --prelaunch-bg: #080a0e;
         --prelaunch-text: #f5efe6;
         --prelaunch-muted: #bbb5aa;
-        --prelaunch-line: rgba(239, 223, 201, 0.17);
-        --prelaunch-copper: #d7a06a;
         --prelaunch-copper-soft: #f0c89e;
-        --prelaunch-success: #b8d9c2;
-        --prelaunch-error: #ffc2b8;
       }
 
       * { box-sizing: border-box; }
@@ -110,25 +95,9 @@ const structuredData = {
         min-width: 320px;
         min-height: 100vh;
         margin: 0;
-        overflow-x: hidden;
-        background:
-          radial-gradient(circle at 78% 20%, rgba(174, 116, 70, 0.14), transparent 31rem),
-          radial-gradient(circle at 15% 82%, rgba(72, 101, 88, 0.13), transparent 34rem),
-          linear-gradient(135deg, #0a0f0e 0%, #101716 48%, #090d0d 100%);
+        overflow: hidden;
+        background: var(--prelaunch-bg);
         color: var(--prelaunch-text);
-      }
-      body::before {
-        content: "";
-        position: fixed;
-        inset: 0;
-        z-index: -1;
-        pointer-events: none;
-        opacity: 0.18;
-        background-image:
-          linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,.014) 1px, transparent 1px);
-        background-size: 37px 37px;
-        mask-image: linear-gradient(to bottom, #000, transparent 88%);
       }
       button, input { font: inherit; }
       button { -webkit-tap-highlight-color: transparent; }

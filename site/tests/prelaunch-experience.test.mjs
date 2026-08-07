@@ -11,54 +11,76 @@ function source(path) {
   return readFileSync(join(repoRoot, path), 'utf8');
 }
 
-test('prelaunch uses one shared emitter and no square pane stroke', () => {
-  const light = source('site/src/styles/prelaunch-fit-v12.css');
-  const visual = source('site/src/styles/prelaunch-fit-v27.css');
-  assert.match(light, /\.prelaunch\[data-prelaunch-page\]::before[\s\S]*radial-gradient/u);
-  assert.match(light, /Golden powder[\s\S]*radial-gradient/u);
-  assert.match(light, /--prelaunch-seam:\s*#07090d/u);
-  assert.match(visual, /\.prelaunch__mosaic::before[\s\S]*display:\s*none\s*!important[\s\S]*filter:\s*none\s*!important/u);
-  assert.match(visual, /\.prelaunch__tile\s*\{[\s\S]*overflow:\s*hidden\s*!important[\s\S]*border-radius:\s*var\(--corner-radius\)\s*!important/u);
-  assert.match(visual, /background-image:\s*none\s*!important/u);
-  assert.match(visual, /\.prelaunch__tile::before[\s\S]*clip-path:\s*inset\(0 round var\(--corner-radius\)\)[\s\S]*inset 0 1px 0/u);
-  assert.doesNotMatch(visual, /0 0 0 calc\(var\(--corner-radius\)/u);
-  assert.doesNotMatch(visual, /background-image:[\s\S]*radial-gradient\(circle at 100% 100%/u);
-  assert.doesNotMatch(visual, /\.prelaunch__tile::before[^}]*radial-gradient/su);
+test('prelaunch scene has one continuous artwork, one seam mask and glass panes', () => {
+  const page = source('site/src/components/PrelaunchPage.astro');
+  const scene = source('site/src/scripts/prelaunchScene.ts');
+  const css = source('site/src/styles/prelaunch-page.css');
+
+  assert.match(page, /announcements-brand-transparent-384\.webp/u);
+  assert.match(page, /data-prelaunch-seams/u);
+  assert.match(page, /data-prelaunch-seam-path/u);
+  assert.match(page, /fill-rule="evenodd"/u);
+  assert.match(page, /Array\.from\(\{ length: 112 \}/u);
+  assert.doesNotMatch(page, /prelaunch-fit-v\d+\.css/u);
+
+  assert.match(scene, /inverse-svg-rounded-holes/u);
+  assert.match(scene, /build-time-transparent-asset/u);
+  assert.match(scene, /roundedRectPath/u);
+  assert.match(scene, /seamPath\.setAttribute\('d', path\)/u);
+  assert.match(scene, /const tileSize = artworkSize \/ 5\.95/u);
+  assert.match(scene, /Math\.ceil\(\(width - left/u);
+  assert.doesNotMatch(scene, /getImageData|flood|Uint32Array/iu);
+
+  assert.match(css, /\.prelaunch__seams path[\s\S]*fill:\s*var\(--prelaunch-seam\)/u);
+  assert.match(css, /\.prelaunch__tile[\s\S]*backdrop-filter/u);
+  assert.match(css, /data-depth="sealed"/u);
+  assert.match(css, /data-depth="dim"/u);
+  assert.match(css, /data-depth="clear"/u);
+  assert.match(css, /\.prelaunch__light[\s\S]*radial-gradient/u);
+  assert.match(css, /\.prelaunch__dust[\s\S]*radial-gradient/u);
+  assert.doesNotMatch(css, /transition:[^;}]*backdrop-filter/su);
+  assert.doesNotMatch(css, /0 0 0 calc\(var\(--prelaunch-tile-radius/u);
 });
 
-test('prelaunch enhancement binds SVG artwork, adaptive grid and guarded form states', () => {
-  const script = source('site/src/scripts/prelaunchExperience.ts');
-  const guard = source('site/src/scripts/prelaunchEmailGuard.ts');
+test('prelaunch form uses guarded idempotent direct and relay transport', () => {
+  const page = source('site/src/components/PrelaunchPage.astro');
+  const form = source('site/src/scripts/prelaunchForm.ts');
   const validator = source('site/src/lib/prelaunchEmail.ts');
-  const component = source('site/src/components/PrelaunchExperience.astro');
-  const index = source('site/src/pages/index.astro');
 
-  assert.match(script, /gridTemplateColumns/u);
-  assert.match(script, /dataset\.edge/u);
-  assert.match(script, /dataset\.window/u);
-  assert.match(script, /dataset\.accent/u);
-  assert.match(script, /ke_prelaunch_notification_v1/u);
-  assert.match(script, /Вы уже записаны/u);
-  assert.match(script, /приятный сюрприз/u);
-  assert.match(script, /prelaunch-updates-2026-v1/u);
+  assert.match(page, /data-prelaunch-form/u);
+  assert.match(page, /важных обновлениях и полезных подборках/u);
+  assert.match(page, /приятный сюрприз/u);
+  assert.doesNotMatch(page, /одно письмо/u);
 
-  assert.match(component, /targetTileCount = 98/u);
-  assert.match(component, /createElementNS\(namespace, 'svg'\)/u);
-  assert.match(component, /viewBox', '110 95 1034 1034'/u);
-  assert.match(component, /svg-rounded-clip/u);
-  assert.match(component, /prelaunchEmailGuard/u);
-  assert.match(component, /prelaunchExperience/u);
-  assert.doesNotMatch(component, /getImageData|willReadFrequently|Uint32Array/u);
+  assert.match(form, /normalizePrelaunchEmail/u);
+  assert.match(form, /getResilientDataClient/u);
+  assert.match(form, /PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL/u);
+  assert.match(form, /prelaunch-updates-2026-v1/u);
+  assert.match(form, /register_prelaunch_notification_v1/u);
+  assert.match(form, /prelaunch-notification-v2/u);
+  assert.match(form, /Вы уже записаны/u);
+  assert.match(form, /второй записи не появится/u);
 
-  assert.match(guard, /normalizePrelaunchEmail/u);
-  assert.match(guard, /stopImmediatePropagation/u);
   assert.match(validator, /ASCII_VISIBLE/u);
   assert.match(validator, /EXPLICITLY_UNSAFE/u);
   assert.match(validator, /local\.includes\('\.\.'\)/u);
-  assert.match(index, /PrelaunchExperience/u);
 });
 
-test('generated desktop and mobile lighting references are stored in the handoff', () => {
+test('prelaunch runtime no longer imports the accumulated visual patch stack', () => {
+  const index = source('site/src/pages/index.astro');
+  const layout = source('site/src/layouts/PrelaunchLayout.astro');
+  const page = source('site/src/components/PrelaunchPage.astro');
+  const asset = join(repoRoot, 'site/src/assets/announcements-brand-transparent-384.webp');
+
+  assert.match(index, /import PrelaunchPage/u);
+  assert.match(index, /<PrelaunchPage\s*\/>/u);
+  assert.doesNotMatch(index, /PrelaunchLanding|PrelaunchExperience|PrelaunchVisualReview/u);
+  assert.doesNotMatch(layout, /prelaunch-(?:motion|fit-v\d+)\.css/u);
+  assert.match(page, /prelaunch-page\.css/u);
+  assert.equal(existsSync(asset), true);
+});
+
+test('desktop and mobile reference assets remain stored for manual review', () => {
   const referenceDir = join(repoRoot, 'docs/features/static-site-pages/prelaunch-handoff/reference');
   assert.equal(existsSync(join(referenceDir, 'generated-lighting-desktop-v1.webp')), true);
   assert.equal(existsSync(join(referenceDir, 'generated-lighting-mobile-v1.webp')), true);
