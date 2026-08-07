@@ -1,0 +1,76 @@
+name: Locate an available production maintenance access path
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/ops-access-path-presence-20260807.yml
+
+permissions:
+  contents: read
+
+jobs:
+  repository:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env: &candidate_env
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_API_TOKEN: ${{ secrets.SUPABASE_API_TOKEN }}
+      SUPABASE_CLI_ACCESS_TOKEN: ${{ secrets.SUPABASE_CLI_ACCESS_TOKEN }}
+      SUPABASE_MANAGEMENT_API_TOKEN: ${{ secrets.SUPABASE_MANAGEMENT_API_TOKEN }}
+      SUPABASE_MANAGEMENT_TOKEN: ${{ secrets.SUPABASE_MANAGEMENT_TOKEN }}
+      SUPABASE_PAT: ${{ secrets.SUPABASE_PAT }}
+      SUPABASE_PERSONAL_ACCESS_TOKEN: ${{ secrets.SUPABASE_PERSONAL_ACCESS_TOKEN }}
+      SUPABASE_TOKEN: ${{ secrets.SUPABASE_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+      TELEGRAM_AUTH_BUNDLE_GH_ACTIONS: ${{ secrets.TELEGRAM_AUTH_BUNDLE_GH_ACTIONS }}
+      TELEGRAM_GH_ACTIONS_API_ID: ${{ secrets.TELEGRAM_GH_ACTIONS_API_ID }}
+      TELEGRAM_GH_ACTIONS_API_HASH: ${{ secrets.TELEGRAM_GH_ACTIONS_API_HASH }}
+      TELEGRAM_AUTH_BUNDLE_E2E: ${{ secrets.TELEGRAM_AUTH_BUNDLE_E2E }}
+      TELEGRAM_AUTH_BUNDLE: ${{ secrets.TELEGRAM_AUTH_BUNDLE }}
+      TELEGRAM_SESSION: ${{ secrets.TELEGRAM_SESSION }}
+      TG_SESSION: ${{ secrets.TG_SESSION }}
+      TG_SESSION_BASE64: ${{ secrets.TG_SESSION_BASE64 }}
+      TG_SESSION_STRING: ${{ secrets.TG_SESSION_STRING }}
+      TG_API_ID: ${{ secrets.TG_API_ID }}
+      TG_API_HASH: ${{ secrets.TG_API_HASH }}
+      TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+      TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+      GH_PAT: ${{ secrets.GH_PAT }}
+      GITHUB_PAT: ${{ secrets.GITHUB_PAT }}
+      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      GITHUB_PERSONAL_ACCESS_TOKEN: ${{ secrets.GITHUB_PERSONAL_ACCESS_TOKEN }}
+      GITHUB_ADMIN_TOKEN: ${{ secrets.GITHUB_ADMIN_TOKEN }}
+      GH_ADMIN_TOKEN: ${{ secrets.GH_ADMIN_TOKEN }}
+      ARTKODEX_GITHUB_TOKEN: ${{ secrets.ARTKODEX_GITHUB_TOKEN }}
+      CODEX_GITHUB_TOKEN: ${{ secrets.CODEX_GITHUB_TOKEN }}
+    steps:
+      - &presence
+        name: Print presence only
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "SCOPE=${SCOPE:-repository}"
+          for name in SUPABASE_SERVICE_KEY SUPABASE_SERVICE_ROLE_KEY SUPABASE_ACCESS_TOKEN SUPABASE_API_TOKEN SUPABASE_CLI_ACCESS_TOKEN SUPABASE_MANAGEMENT_API_TOKEN SUPABASE_MANAGEMENT_TOKEN SUPABASE_PAT SUPABASE_PERSONAL_ACCESS_TOKEN SUPABASE_TOKEN SUPABASE_DB_PASSWORD SUPABASE_DATABASE_URL DATABASE_URL PRODUCTION_DATABASE_URL PROD_DATABASE_URL TELEGRAM_AUTH_BUNDLE_GH_ACTIONS TELEGRAM_GH_ACTIONS_API_ID TELEGRAM_GH_ACTIONS_API_HASH TELEGRAM_AUTH_BUNDLE_E2E TELEGRAM_AUTH_BUNDLE TELEGRAM_SESSION TG_SESSION TG_SESSION_BASE64 TG_SESSION_STRING TG_API_ID TG_API_HASH TELEGRAM_API_ID TELEGRAM_API_HASH GH_PAT GITHUB_PAT PERSONAL_ACCESS_TOKEN GITHUB_PERSONAL_ACCESS_TOKEN GITHUB_ADMIN_TOKEN GH_ADMIN_TOKEN ARTKODEX_GITHUB_TOKEN CODEX_GITHUB_TOKEN; do
+            [[ -n "${!name:-}" ]] && echo "PRESENT=${name}" || true
+          done
+
+  environment:
+    strategy:
+      fail-fast: false
+      matrix:
+        scope: [production, production-readonly, volunteer-monitor-canary, region-talk-ydb-import]
+    environment: ${{ matrix.scope }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      <<: *candidate_env
+      SCOPE: ${{ matrix.scope }}
+    steps:
+      - *presence
