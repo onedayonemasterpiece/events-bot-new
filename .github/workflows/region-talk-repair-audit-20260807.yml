@@ -25,7 +25,11 @@ jobs:
     environment: region-talk-ydb-import
     env:
       YANDEX_WIF_OIDC_AUDIENCE: ${{ vars.YANDEX_WIF_OIDC_AUDIENCE }}
-      YANDEX_WIF_SERVICE_ACCOUNT_ID: ${{ vars.YANDEX_WIF_SERVICE_ACCOUNT_ID }}
+      # Non-secret stable service-account identifier recovered from the last
+      # successful protected-environment import receipt.  Keep the variable as
+      # an override, but do not let accidental variable deletion block a
+      # read-only product audit again.
+      YANDEX_WIF_SERVICE_ACCOUNT_ID: ${{ vars.YANDEX_WIF_SERVICE_ACCOUNT_ID || 'aje8eb8nlqvc4g8e0v48' }}
       REGION_TALK_YDB_ENDPOINT: ${{ vars.REGION_TALK_YDB_ENDPOINT }}
       REGION_TALK_YDB_DATABASE: ${{ vars.REGION_TALK_YDB_DATABASE }}
       REGION_TALK_YDB_NAMESPACE: ${{ vars.REGION_TALK_YDB_NAMESPACE }}
