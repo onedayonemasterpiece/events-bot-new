@@ -30,6 +30,20 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-07 recovery audit: public `/poisk/` still returned Object Storage 404,
+  while the durable accepted immutable candidate resolved to build
+  `production-secret-20260807T213802-a8a9b11e`, repo SHA
+  `e7f02bf83f4b94d250be7cc6b792495de3be1984`, and served `/poisk/` with Search enabled.
+- 2026-08-07 no-mail fixture probe on that exact candidate passed real
+  `auth.getUser`, one owner-filtered `user_saved_event` RLS read, session
+  restoration and cleanup with `/auth/v1/otp=0`, mail `0/0`.
+- 2026-08-07 direct authenticated Edge recovery probe ran all three mandatory
+  queries in vector-only mode: every request returned HTTP 200, eight useful
+  IDs and `llm_requested=false`, `llm_used=false`, `llm_attempts=0`; repeating
+  the first query returned the same IDs with a result-cache hit. This proves the
+  live vector baseline, but is not the final browser/card/revision receipt for
+  the new harness SHA.
+
 - 2026-07-02 ~20:14 UTC: `На природу с детьми` backend audit row `ok`, total `2388ms`, LLM `1691ms`.
 - 2026-07-02 ~20:15 UTC: `искусство у моря` backend audit row `ok`, total `3862ms`, LLM `2938ms`.
 - 2026-07-02 ~20:17 UTC: `в пятницу бесплатно` backend audit row `ok`, total `2507ms`, LLM `1164ms`.

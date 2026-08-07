@@ -666,6 +666,47 @@ Search нельзя объявлять восстановленным или г�
 - [ ] approved query pages используют общий static collection pipeline;
 - [ ] BGE остаётся shadow, пока B0–B5 gates не закрыты.
 
+### 13.1 Исполняемый Search harness и варианты
+
+Каноническая реализация находится в `site/e2e/search/`. `journey.mjs` знает
+только семантические действия; Playwright/Appium mechanics принадлежат adapters.
+Обычный Search не получает test mode. Только immutable `secret_candidate` может
+принять закрытый `search_variant`, а Edge повторно авторизует canary persona и
+сам задаёт cache/LLM policy:
+
+| Variant | Cache | Provider contract | Platform |
+|---|---|---|---|
+| `cached_vector` | обязательный hit | embedding/vector/LLM delta `0/0/0` | browser, Android, iOS |
+| `cold_vector` | read bypass | ≤1 embedding, 1 vector RPC, LLM `0` | browser |
+| `cold_vector_llm` | read bypass | vector + server-reserved bounded daily LLM budget | browser |
+| `degraded_vector_fallback` | read bypass | deterministic verifier failure, useful vector cards, provider LLM send `0` | browser |
+
+Каждый request получает `client_request_id`; response и owner-scoped receipt
+содержат requested/actual mode, contract/policy versions, catalog/corpus
+revisions и provider/cache counters. UI acceptance требует один submit → один
+POST, terminal state, equality response/rendered IDs, visible cards, real scroll,
+`Показать ещё`, отсутствие duplicate IDs/families, repeat cache hit, typed empty
+и validation с `0 POST`.
+
+Workflow `.github/workflows/static-site-search-canary.yml` получает только
+последний durable accepted candidate через production resolver, маскирует bearer
+prefix, сверяет exact target SHA и использует `auth.session_fixture`. Browser
+получает server-verified session + RLS probe; Android/iOS получают отдельный
+credential и callback в том же platform browser. Ни один job не читает mailbox.
+
+Расписания: cached каждые 30 минут, cold vector каждые 3 часа, bounded LLM
+четырежды в сутки, mobile nightly. `repository_dispatch` post-deploy запускает
+blocking cold + degraded browser gate. Повторный scheduled failure создаёт или
+обновляет один deduplicated GitHub incident; recovery закрывает его. До включения
+scheduled runs в blocking promotion нужны 50 consecutive browser vector PASS,
+10 Android, 10 iOS и нули по leaks, duplicate POST, budget overflow и
+unexplained revision mismatch.
+
+Default server budget равен 12 LLM provider attempts/UTC day: четыре
+`cold_vector_llm` запуска по трём непагинированным regression queries. Любая
+попытка резервируется атомарно до provider dispatch; исчерпание бюджета
+останавливает запрос, а не увеличивает лимит на клиенте.
+
 ## 14. Нерешённые operational параметры
 
 Они не требуют второго продуктового документа и задаются после W0/load baseline:

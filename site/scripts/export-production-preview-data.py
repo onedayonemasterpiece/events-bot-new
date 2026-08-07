@@ -26,7 +26,7 @@ import urllib.request
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 from zoneinfo import ZoneInfo
 
 SCRIPT_PATH = Path(__file__).resolve()
@@ -2419,6 +2419,43 @@ def fetch_recent_event_detail_archive_rows(
 
 CATALOG_LEDGER_SCHEMA_VERSION = "static_event_catalog_ledger_v1"
 ELIGIBILITY_PREDICATE_VERSION = "static_event_public_projection_v2"
+SEARCH_CATALOG_REVISION_SCHEMA_VERSION = "event_search_catalog_revision_v1"
+
+
+def exported_search_catalog_revision(events: Iterable[dict[str, Any]]) -> str:
+    """Return an order-independent hash of the exact exported event payload."""
+
+    entries: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for raw in events:
+        event = dict(raw)
+        event_id = int(event.get("id") or 0)
+        if event_id <= 0:
+            raise ValueError("exported Search catalog contains a non-positive event id")
+        if event_id in seen:
+            raise ValueError(f"exported Search catalog contains duplicate event id {event_id}")
+        seen.add(event_id)
+        canonical_event = json.dumps(
+            event,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        entries.append({
+            "event_id": event_id,
+            "event_sha256": hashlib.sha256(canonical_event.encode("utf-8")).hexdigest(),
+        })
+    manifest = {
+        "schema_version": SEARCH_CATALOG_REVISION_SCHEMA_VERSION,
+        "events": sorted(entries, key=lambda item: item["event_id"]),
+    }
+    canonical_manifest = json.dumps(
+        manifest,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical_manifest.encode("utf-8")).hexdigest()
 
 
 def _candidate_catalog_rows(
@@ -2464,6 +2501,7 @@ def build_catalog_ledger(
     con: sqlite3.Connection,
     exported_rows: list[sqlite3.Row],
     *,
+    exported_events: list[dict[str, Any]] | None = None,
     current_date: str,
     current_time: str | None,
     generated_at: str,
@@ -2502,7 +2540,7 @@ def build_catalog_ledger(
         for item in eligible
         if str(item.get("source_revision") or "").isdigit()
     ]
-    return {
+    ledger = {
         "schema_version": CATALOG_LEDGER_SCHEMA_VERSION,
         "eligibility_predicate_version": ELIGIBILITY_PREDICATE_VERSION,
         "generated_at": generated_at,
@@ -2523,6 +2561,16 @@ def build_catalog_ledger(
         "eligible": eligible,
         "excluded": excluded,
     }
+    if exported_events is not None:
+        event_ids = {int(event.get("id") or 0) for event in exported_events}
+        eligible_ids = {int(item["event_id"]) for item in eligible}
+        if event_ids != eligible_ids:
+            raise RuntimeError(
+                "catalog revision event payload does not match eligible ledger ids"
+            )
+        ledger["catalog_revision"] = exported_search_catalog_revision(exported_events)
+        ledger["catalog_revision_schema_version"] = SEARCH_CATALOG_REVISION_SCHEMA_VERSION
+    return ledger
 
 
 def _structured_unusual_semantic_record(
@@ -4075,6 +4123,9 @@ def sync_event_vectors_to_supabase(
         "--google-key-env", embedding_key_env,
         "--max-provider-calls", str(max(0, int(max_provider_calls))),
         "--sleep-seconds", sleep_seconds,
+        "--prune-missing",
+        "--require-complete",
+        "--report-json", str(preview_events_json.with_name("event-search-corpus-receipt.json")),
     ]
     log_stage(
         "pgvector_sync_start",
@@ -6377,6 +6428,7 @@ def main() -> int:
         )
         for row in archive_rows
     ]
+    catalog_revision = exported_search_catalog_revision(events)
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     generated_at = datetime.now(timezone.utc).isoformat()
@@ -6391,6 +6443,8 @@ def main() -> int:
             "focus_date_from": args.focus_date_from or None,
             "focus_date_to": args.focus_date_to or None,
             "catalog_mode": args.catalog_mode,
+            "catalog_revision": catalog_revision,
+            "catalog_revision_schema_version": SEARCH_CATALOG_REVISION_SCHEMA_VERSION,
             "notes": [
                 (
                     f"full eligible production catalog: {len(events)} real events"
@@ -6424,6 +6478,8 @@ def main() -> int:
     )
     ledger: dict[str, Any] = {
         "schema_version": CATALOG_LEDGER_SCHEMA_VERSION,
+        "catalog_revision": catalog_revision,
+        "catalog_revision_schema_version": SEARCH_CATALOG_REVISION_SCHEMA_VERSION,
         "generated_at": generated_at,
         "current_date": effective_date,
         "snapshot": {
@@ -6438,6 +6494,7 @@ def main() -> int:
         ledger = build_catalog_ledger(
             con,
             rows,
+            exported_events=events,
             current_date=effective_date,
             current_time=effective_time,
             generated_at=generated_at,

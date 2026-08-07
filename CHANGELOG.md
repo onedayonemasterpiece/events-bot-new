@@ -4,6 +4,15 @@
 
 ### Fixed
 
+- Restored Search as a release-tested feature on the current immutable secret
+  candidate: added server-authoritative cached/cold/degraded variants, exact
+  catalog/corpus revisions, owner-scoped receipts and bounded LLM canary
+  accounting; added a no-mail GitHub OIDC session broker and one platform-neutral
+  browser/Android/iOS Search journey with strict one-POST, card-ID, pagination,
+  real-scroll, cache and redaction assertions. Scheduled cached/cold/mobile
+  canaries and an immediate blocking post-deploy gate are independent from the
+  real-mail Focus OTP workflow.
+
 - Made the bounded Postbox DLQ inventory reconcile YMQ's documented approximate counters against ten empty long polls and the exact unique in-flight receipt set, including the provider's persistent stale-visible behavior.
 - Made Postbox DLQ replay fail before receiving a queue message unless the complete deployed consumer validation/HMAC environment is present and enabled.
 

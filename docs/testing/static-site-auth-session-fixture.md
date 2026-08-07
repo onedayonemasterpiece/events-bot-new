@@ -409,8 +409,11 @@ Infrastructure retry разрешён только до выпуска credentia
   обязательный fail-closed JWT-bound protected RLS read probe, ephemeral
   Playwright storage state, active-scope isolation,
   `product OTP=0`, `external mail=0`, fail-closed cleanup/redaction;
-- **остаётся:** terminal exact-target browser receipt и neutral hosted callback,
-  если конкретный target не принимает generated session state.
+- **реализовано в harness:** terminal exact-target `/poisk/` acceptance сверяет
+  immutable candidate metadata и ожидаемый repository SHA, затем доказывает
+  восстановленную browser session, `auth.getUser`, один owner-filtered RLS read,
+  `product OTP=0`, `mail=0/0`, cleanup и redaction. Live hosted receipt всё ещё
+  обязан быть terminal для каждого принимаемого SHA; наличие кода не равно PASS.
 
 ### A2 — подключение business scenarios
 
@@ -429,9 +432,12 @@ Infrastructure retry разрешён только до выпуска credentia
 
 ### A4 — OIDC broker
 
-- убрать долгоживущий Supabase admin secret из обычного runner;
-- ограничить repository/ref/workflow/persona/redirect;
-- per-run rate limit и audit.
+- **реализовано:** GitHub OIDC broker проверяет подпись, issuer/audience,
+  repository/ref/workflow/environment/event/run claims, exact persona и redirect;
+- atomic service-role RPC допускает ровно один credential на
+  `run_attempt + persona`, audit содержит только keyed hashes;
+- broker возвращает one-time callback/OTP только защищённому caller, но runner
+  никогда не сохраняет их в evidence; real-mail fallback отсутствует.
 
 ## 15. Release gates
 

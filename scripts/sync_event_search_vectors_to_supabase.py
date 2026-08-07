@@ -83,6 +83,14 @@ MONTHS_GENITIVE_RU = (
     "июля", "августа", "сентября", "октября", "ноября", "декабря",
 )
 
+CATALOG_REVISION_SCHEMA_VERSION = "event_search_catalog_revision_v1"
+CORPUS_REVISION_SCHEMA_VERSION = "event_search_corpus_revision_v2"
+COVERAGE_RECEIPT_SCHEMA_VERSION = "event_search_projection_coverage_v1"
+DOCUMENT_KIND_CONTRACT = {
+    "search_v3": ("text_hash", "search_doc_version"),
+    "related_v1": ("related_text_hash", "related_doc_version"),
+}
+
 
 def load_env(path: Path) -> None:
     if not path.exists():
@@ -107,6 +115,45 @@ def clean_text(value: Any) -> str:
 
 def sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _canonical_json(value: Any) -> str:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def exported_search_catalog_revision(events: Iterable[dict[str, Any]]) -> str:
+    """Hash the exact exported eligible event payload, independent of ordering.
+
+    The static exporter and vector projector intentionally share this small
+    JSON contract.  Hashing every complete exported event (rather than only an
+    ID or timestamp) makes a display-only correction advance the catalog even
+    when a legacy SQLite snapshot has no usable source revision column.
+    """
+
+    entries: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for raw in events:
+        event = dict(raw)
+        event_id = int(event.get("id") or 0)
+        if event_id <= 0:
+            raise ValueError("exported Search catalog contains a non-positive event id")
+        if event_id in seen:
+            raise ValueError(f"exported Search catalog contains duplicate event id {event_id}")
+        seen.add(event_id)
+        entries.append({
+            "event_id": event_id,
+            "event_sha256": sha256_text(_canonical_json(event)),
+        })
+    manifest = {
+        "schema_version": CATALOG_REVISION_SCHEMA_VERSION,
+        "events": sorted(entries, key=lambda item: item["event_id"]),
+    }
+    return sha256_text(_canonical_json(manifest))
 
 
 def _occurrence_time(event: dict[str, Any]) -> str | None:
@@ -249,6 +296,7 @@ def vector_corpus_hash(
     document_kind: str,
     embedding_model: str,
     embedding_dim: int,
+    catalog_revision: str = "",
 ) -> str:
     """Return a stable revision for one complete embedding corpus.
 
@@ -258,14 +306,25 @@ def vector_corpus_hash(
     document kind changes and remains identical for no-op reconciliations.
     """
 
-    if document_kind not in {"search_v3", "related_v1"}:
+    if document_kind not in DOCUMENT_KIND_CONTRACT:
         raise ValueError(f"unsupported vector corpus document kind: {document_kind}")
-    hash_key = "text_hash" if document_kind == "search_v3" else "related_text_hash"
+    docs = list(docs)
+    hash_key, version_key = DOCUMENT_KIND_CONTRACT[document_kind]
+    document_versions = {
+        str(doc.document.get(version_key) or "unspecified") for doc in docs
+    }
+    if len(document_versions) > 1:
+        raise ValueError(
+            f"{document_kind} corpus mixes document versions: "
+            f"{', '.join(sorted(document_versions))}"
+        )
     manifest = {
-        "schema_version": "event_vector_corpus_v1",
+        "schema_version": CORPUS_REVISION_SCHEMA_VERSION,
+        "catalog_revision": str(catalog_revision),
         "embedding_model": str(embedding_model),
         "embedding_dim": int(embedding_dim),
         "embedding_doc_kind": document_kind,
+        "document_version": next(iter(document_versions), "unspecified"),
         "documents": sorted(
             (
                 {
@@ -284,6 +343,94 @@ def vector_corpus_hash(
         separators=(",", ":"),
     )
     return sha256_text(canonical)
+
+
+def build_revision_contract(
+    docs: Iterable["SearchDoc"],
+    *,
+    catalog_revision: str,
+    embedding_model: str,
+    embedding_dim: int,
+) -> dict[str, Any]:
+    """Build the revision payload shared by reports and persisted metadata."""
+
+    docs = list(docs)
+    if not re.fullmatch(r"[0-9a-f]{64}", str(catalog_revision or "")):
+        raise ValueError("catalog_revision must be a lowercase SHA-256")
+    corpora: dict[str, dict[str, Any]] = {}
+    for document_kind, (_hash_key, version_key) in DOCUMENT_KIND_CONTRACT.items():
+        versions = {
+            str(doc.document.get(version_key) or "unspecified") for doc in docs
+        }
+        if len(versions) > 1:
+            raise ValueError(
+                f"{document_kind} corpus mixes document versions: "
+                f"{', '.join(sorted(versions))}"
+            )
+        corpora[document_kind] = {
+            "revision": vector_corpus_hash(
+                docs,
+                document_kind=document_kind,
+                embedding_model=embedding_model,
+                embedding_dim=embedding_dim,
+                catalog_revision=catalog_revision,
+            ),
+            "document_version": next(iter(versions), "unspecified"),
+            "embedding_model": str(embedding_model),
+            "embedding_dim": int(embedding_dim),
+            "embedding_doc_kind": document_kind,
+            "document_count": len(docs),
+        }
+    search_revision = corpora["search_v3"]["revision"]
+    return {
+        "schema_version": CORPUS_REVISION_SCHEMA_VERSION,
+        "catalog_revision": catalog_revision,
+        # Search response/cache identity is the searchable document corpus.
+        "corpus_revision": search_revision,
+        "search_document_revision": search_revision,
+        "corpora": corpora,
+    }
+
+
+def annotate_search_documents(
+    docs: Iterable["SearchDoc"], revision_contract: dict[str, Any]
+) -> None:
+    """Persist compact global revision identities on every Search document."""
+
+    corpora = revision_contract["corpora"]
+    for doc in docs:
+        metadata = dict(doc.document.get("metadata") or {})
+        metadata.update({
+            "catalog_revision": revision_contract["catalog_revision"],
+            "corpus_revision": revision_contract["corpus_revision"],
+            "search_document_revision": revision_contract["search_document_revision"],
+            "search_doc_version": doc.document.get("search_doc_version"),
+            "search_corpus_revision": corpora["search_v3"]["revision"],
+            "related_corpus_revision": corpora["related_v1"]["revision"],
+        })
+        doc.document["metadata"] = metadata
+
+
+def embedding_revision_metadata(
+    doc: "SearchDoc",
+    *,
+    document_kind: str,
+    catalog_revision: str,
+    revision_contract: dict[str, Any],
+) -> dict[str, Any]:
+    _hash_key, version_key = DOCUMENT_KIND_CONTRACT[document_kind]
+    return {
+        "doc_kind": document_kind,
+        "doc_version": doc.document.get(version_key),
+        "search_doc_version": doc.document["search_doc_version"],
+        "related_doc_version": doc.document.get("related_doc_version"),
+        "catalog_revision": catalog_revision,
+        # Keep the response/cache Search corpus identity identical across both
+        # stored document-kind rows.
+        "corpus_revision": revision_contract["corpus_revision"],
+        "search_document_revision": revision_contract["search_document_revision"],
+        "embedding_corpus_revision": revision_contract["corpora"][document_kind]["revision"],
+    }
 
 
 def event_weekday(event: dict[str, Any]) -> tuple[int | None, str | None]:
@@ -713,6 +860,153 @@ def build_search_doc(event: dict[str, Any], *, site_origin: str, base_path: str,
     )
 
 
+def build_projection_coverage(
+    docs: Iterable[SearchDoc],
+    *,
+    document_rows: Iterable[dict[str, Any]],
+    embedding_rows: Iterable[dict[str, Any]],
+    document_kinds: Iterable[str],
+    embedding_model: str,
+    embedding_dim: int,
+) -> dict[str, Any]:
+    """Reconcile the stored projection against one exact eligible fixture.
+
+    Counts are derived from a fresh post-write inventory, not from attempted
+    upserts.  This lets release automation distinguish complete storage from a
+    successful HTTP request that left stale, orphaned or incompatible rows.
+    """
+
+    docs = list(docs)
+    kinds = list(dict.fromkeys(str(kind) for kind in document_kinds))
+    expected_docs = {int(doc.event_id): doc for doc in docs}
+    eligible_ids = set(expected_docs)
+    stored_docs = [dict(row) for row in document_rows]
+    stored_embeddings = [dict(row) for row in embedding_rows]
+
+    orphan_document_ids = sorted({
+        int(row.get("event_id") or 0)
+        for row in stored_docs
+        if int(row.get("event_id") or 0) not in eligible_ids
+    })
+    stored_docs_by_id = {
+        int(row.get("event_id") or 0): row
+        for row in stored_docs
+        if int(row.get("event_id") or 0) in eligible_ids
+    }
+    missing_document_ids = sorted(eligible_ids - set(stored_docs_by_id))
+    stale_document_ids: list[int] = []
+    for event_id, doc in expected_docs.items():
+        row = stored_docs_by_id.get(event_id)
+        if row is None:
+            continue
+        if any(
+            str(row.get(field) or "") != str(doc.document.get(field) or "")
+            for field in (
+                "text_hash",
+                "related_text_hash",
+                "search_doc_version",
+                "related_doc_version",
+            )
+        ):
+            stale_document_ids.append(event_id)
+
+    expected_embedding_keys = {
+        (event_id, kind)
+        for event_id in eligible_ids
+        for kind in kinds
+    }
+    present_contract_keys: set[tuple[int, str]] = set()
+    current_embedding_keys: set[tuple[int, str]] = set()
+    stale_embedding_keys: set[tuple[int, str]] = set()
+    wrong_contract_keys: set[tuple[int, str, str, int]] = set()
+    wrong_kind_keys: set[tuple[int, str]] = set()
+    orphan_embedding_ids: set[int] = set()
+
+    for row in stored_embeddings:
+        event_id = int(row.get("event_id") or 0)
+        kind = str(row.get("embedding_doc_kind") or "")
+        model = str(row.get("embedding_model") or "")
+        try:
+            dim = int(row.get("embedding_dim") or 0)
+        except (TypeError, ValueError):
+            dim = 0
+        if event_id not in eligible_ids:
+            orphan_embedding_ids.add(event_id)
+            continue
+        if kind not in DOCUMENT_KIND_CONTRACT:
+            wrong_kind_keys.add((event_id, kind))
+            continue
+        if kind not in kinds:
+            # A search-only audit does not invalidate a separately maintained
+            # related_v1 corpus (and vice versa).
+            continue
+        if model != str(embedding_model) or dim != int(embedding_dim):
+            wrong_contract_keys.add((event_id, kind, model, dim))
+            continue
+        present_contract_keys.add((event_id, kind))
+        doc = expected_docs[event_id]
+        hash_key, version_key = DOCUMENT_KIND_CONTRACT[kind]
+        metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+        if (
+            str(row.get("text_hash") or "")
+            != str(doc.document.get(hash_key) or "")
+            or str(metadata.get("doc_version") or "")
+            != str(doc.document.get(version_key) or "")
+        ):
+            stale_embedding_keys.add((event_id, kind))
+            continue
+        current_embedding_keys.add((event_id, kind))
+
+    missing_embedding_keys = sorted(expected_embedding_keys - present_contract_keys)
+    current_document_count = len(eligible_ids - set(missing_document_ids) - set(stale_document_ids))
+    expected_embedding_count = len(expected_embedding_keys)
+    current_embedding_count = len(current_embedding_keys)
+    blockers = (
+        len(missing_document_ids)
+        + len(stale_document_ids)
+        + len(orphan_document_ids)
+        + len(missing_embedding_keys)
+        + len(stale_embedding_keys)
+        + len(orphan_embedding_ids)
+        + len(wrong_contract_keys)
+        + len(wrong_kind_keys)
+    )
+    return {
+        "schema_version": COVERAGE_RECEIPT_SCHEMA_VERSION,
+        "status": "complete" if blockers == 0 else "incomplete",
+        "eligible_event_count": len(eligible_ids),
+        "current_document_count": current_document_count,
+        "expected_embedding_count": expected_embedding_count,
+        "current_embedding_count": current_embedding_count,
+        "document_coverage_percent": round(
+            100.0 * current_document_count / max(1, len(eligible_ids)), 6
+        ) if eligible_ids else 100.0,
+        "embedding_coverage_percent": round(
+            100.0 * current_embedding_count / max(1, expected_embedding_count), 6
+        ) if expected_embedding_count else 100.0,
+        "missing_document_count": len(missing_document_ids),
+        "stale_document_count": len(stale_document_ids),
+        "orphan_document_count": len(orphan_document_ids),
+        "missing_embedding_count": len(missing_embedding_keys),
+        "stale_embedding_count": len(stale_embedding_keys),
+        "orphan_embedding_count": len(orphan_embedding_ids),
+        "wrong_model_or_dimension_count": len(wrong_contract_keys),
+        "wrong_document_kind_count": len(wrong_kind_keys),
+        # IDs are bounded operational evidence and contain no user/query data.
+        "missing_document_ids": missing_document_ids,
+        "stale_document_ids": sorted(stale_document_ids),
+        "orphan_document_ids": orphan_document_ids,
+        "missing_embedding_keys": [
+            {"event_id": event_id, "document_kind": kind}
+            for event_id, kind in missing_embedding_keys
+        ],
+        "stale_embedding_keys": [
+            {"event_id": event_id, "document_kind": kind}
+            for event_id, kind in sorted(stale_embedding_keys)
+        ],
+    }
+
+
 def env_required(name: str) -> str:
     value = os.getenv(name, "").strip()
     if not value:
@@ -779,6 +1073,36 @@ def upsert_embeddings(rows: list[dict[str, Any]], *, chunk_size: int = 50) -> in
     return sent
 
 
+def patch_embedding_revision_metadata(
+    event_ids: Iterable[int],
+    *,
+    model: str,
+    dim: int,
+    doc_kind: str,
+    metadata: dict[str, Any],
+    chunk_size: int = 80,
+) -> int:
+    """Advance revision metadata on unchanged vectors without provider calls."""
+
+    ids = sorted({int(event_id) for event_id in event_ids})
+    model_q = urllib.parse.quote(model, safe="")
+    kind_q = urllib.parse.quote(doc_kind, safe="")
+    sent = 0
+    for start in range(0, len(ids), max(1, int(chunk_size))):
+        chunk = ids[start : start + max(1, int(chunk_size))]
+        in_list = ",".join(str(event_id) for event_id in chunk)
+        supabase_request(
+            "PATCH",
+            "event_embeddings?"
+            f"event_id=in.({in_list})&embedding_model=eq.{model_q}"
+            f"&embedding_dim=eq.{int(dim)}&embedding_doc_kind=eq.{kind_q}",
+            body={"metadata": metadata},
+            timeout=45.0,
+        )
+        sent += len(chunk)
+    return sent
+
+
 def fetch_indexed_event_ids() -> set[int]:
     out: set[int] = set()
     page_size = 1000
@@ -792,6 +1116,100 @@ def fetch_indexed_event_ids() -> set[int]:
         if len(rows) < page_size:
             return out
         offset += page_size
+
+
+def fetch_projection_inventory(*, page_size: int = 1000) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Read a complete narrow inventory for the post-sync coverage receipt."""
+
+    def fetch_all(table: str, projection: str, *, order: str) -> list[dict[str, Any]]:
+        rows_out: list[dict[str, Any]] = []
+        offset = 0
+        while True:
+            rows = supabase_request(
+                "GET",
+                f"{table}?select={projection}&order={order}&limit={page_size}&offset={offset}",
+            ) or []
+            rows_out.extend(dict(row) for row in rows)
+            if len(rows) < page_size:
+                return rows_out
+            offset += page_size
+
+    documents = fetch_all(
+        "event_search_documents",
+        "event_id,text_hash,related_text_hash,search_doc_version,related_doc_version,metadata",
+        order="event_id.asc",
+    )
+    embeddings = fetch_all(
+        "event_embeddings",
+        "event_id,embedding_model,embedding_dim,embedding_doc_kind,text_hash,metadata",
+        order="event_id.asc,embedding_model.asc,embedding_dim.asc,embedding_doc_kind.asc",
+    )
+    return documents, embeddings
+
+
+def noncanonical_embedding_rows(
+    docs: Iterable[SearchDoc],
+    embedding_rows: Iterable[dict[str, Any]],
+    *,
+    document_kinds: Iterable[str],
+    embedding_model: str,
+    embedding_dim: int,
+) -> list[dict[str, Any]]:
+    """Select rows that cannot belong to the requested authoritative corpus."""
+
+    expected = {int(doc.event_id): doc for doc in docs}
+    requested = set(document_kinds)
+    rejected: list[dict[str, Any]] = []
+    for raw in embedding_rows:
+        row = dict(raw)
+        event_id = int(row.get("event_id") or 0)
+        kind = str(row.get("embedding_doc_kind") or "")
+        if event_id not in expected or kind not in DOCUMENT_KIND_CONTRACT:
+            rejected.append(row)
+            continue
+        if kind not in requested:
+            continue
+        try:
+            dim = int(row.get("embedding_dim") or 0)
+        except (TypeError, ValueError):
+            dim = 0
+        doc = expected[event_id]
+        hash_key, version_key = DOCUMENT_KIND_CONTRACT[kind]
+        metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+        if (
+            str(row.get("embedding_model") or "") != str(embedding_model)
+            or dim != int(embedding_dim)
+            or str(row.get("text_hash") or "") != str(doc.document.get(hash_key) or "")
+            or str(metadata.get("doc_version") or "")
+            != str(doc.document.get(version_key) or "")
+        ):
+            rejected.append(row)
+    return rejected
+
+
+def delete_embedding_rows(rows: Iterable[dict[str, Any]]) -> int:
+    """Delete exact incompatible embedding identities without broad filters."""
+
+    identities = sorted({
+        (
+            int(row.get("event_id") or 0),
+            str(row.get("embedding_model") or ""),
+            int(row.get("embedding_dim") or 0),
+            str(row.get("embedding_doc_kind") or ""),
+        )
+        for row in rows
+    })
+    for event_id, model, dim, kind in identities:
+        model_q = urllib.parse.quote(model, safe="")
+        kind_q = urllib.parse.quote(kind, safe="")
+        supabase_request(
+            "DELETE",
+            "event_embeddings?"
+            f"event_id=eq.{event_id}&embedding_model=eq.{model_q}"
+            f"&embedding_dim=eq.{dim}&embedding_doc_kind=eq.{kind_q}",
+            timeout=45.0,
+        )
+    return len(identities)
 
 
 def delete_stale_events(event_ids: Iterable[int], *, chunk_size: int = 80) -> int:
@@ -943,6 +1361,18 @@ def main() -> int:
     load_env(ROOT / args.env_file)
     fixture = json.loads(Path(args.preview_events_json).read_text(encoding="utf-8"))
     events = [dict(event) for event in (fixture.get("events") or [])]
+    computed_catalog_revision = exported_search_catalog_revision(events)
+    fixture_catalog_revision = str(
+        ((fixture.get("build") or {}).get("catalog_revision") or "")
+    ).strip()
+    if fixture_catalog_revision:
+        if not re.fullmatch(r"[0-9a-f]{64}", fixture_catalog_revision):
+            raise SystemExit("preview fixture catalog_revision is not a lowercase SHA-256")
+        if fixture_catalog_revision != computed_catalog_revision:
+            raise SystemExit(
+                "preview fixture catalog_revision does not match its exact event payload"
+            )
+    catalog_revision = fixture_catalog_revision or computed_catalog_revision
     occurrence_projections = build_occurrence_projections(events)
     for event in events:
         event.update(occurrence_projections.get(int(event.get("id") or 0), {}))
@@ -960,14 +1390,16 @@ def main() -> int:
     invalid_kinds = sorted(set(document_kinds) - {"search_v3", "related_v1"})
     if invalid_kinds:
         raise SystemExit(f"Unsupported document kinds: {', '.join(invalid_kinds)}")
+    revision_contract = build_revision_contract(
+        docs,
+        catalog_revision=catalog_revision,
+        embedding_model=args.embedding_model,
+        embedding_dim=args.embedding_dim,
+    )
+    annotate_search_documents(docs, revision_contract)
     corpus_hashes = {
-        kind: vector_corpus_hash(
-            docs,
-            document_kind=kind,
-            embedding_model=args.embedding_model,
-            embedding_dim=args.embedding_dim,
-        )
-        for kind in ("search_v3", "related_v1")
+        kind: revision_contract["corpora"][kind]["revision"]
+        for kind in DOCUMENT_KIND_CONTRACT
     }
 
     report: dict[str, Any] = {
@@ -979,6 +1411,11 @@ def main() -> int:
         "apply": bool(args.apply),
         "site_origin": args.site_origin,
         "base_path": args.base_path,
+        "catalog_revision": catalog_revision,
+        "catalog_revision_source": "fixture" if fixture_catalog_revision else "computed_legacy_fixture",
+        "corpus_revision": revision_contract["corpus_revision"],
+        "search_document_revision": revision_contract["search_document_revision"],
+        "revision_contract": revision_contract,
         "search_v3_hash": corpus_hashes["search_v3"],
         "related_v1_hash": corpus_hashes["related_v1"],
     }
@@ -1012,6 +1449,7 @@ def main() -> int:
     provider_calls = 0
     embedding_client: GoogleAIClient | None = None
     skipped_by_kind = {kind: 0 for kind in document_kinds}
+    skipped_ids_by_kind: dict[str, list[int]] = {kind: [] for kind in document_kinds}
     upserted_embeddings = 0
     started_at = time.monotonic()
     for doc in docs:
@@ -1019,13 +1457,12 @@ def main() -> int:
             if doc_kind == "search_v3":
                 embedding_input = doc.search_embedding_input
                 text_hash = str(doc.document["text_hash"])
-                doc_version_key = "search_doc_version"
             else:
                 embedding_input = doc.related_embedding_input
                 text_hash = str(doc.document["related_text_hash"])
-                doc_version_key = "related_doc_version"
             if not args.force and existing_by_kind.get(doc_kind, {}).get(doc.event_id) == text_hash:
                 skipped_by_kind[doc_kind] += 1
+                skipped_ids_by_kind[doc_kind].append(doc.event_id)
                 continue
             if provider_calls >= max(0, int(args.max_provider_calls)):
                 # The call cap limits provider work, not verification. Keep
@@ -1051,12 +1488,12 @@ def main() -> int:
                 "embedding": vector,
                 "text_hash": text_hash,
                 "embedded_at": datetime.now(timezone.utc).isoformat(),
-                "metadata": {
-                    "doc_kind": doc_kind,
-                    "doc_version": doc.document.get(doc_version_key),
-                    "search_doc_version": doc.document["search_doc_version"],
-                    "related_doc_version": doc.document.get("related_doc_version"),
-                },
+                "metadata": embedding_revision_metadata(
+                    doc,
+                    document_kind=doc_kind,
+                    catalog_revision=catalog_revision,
+                    revision_contract=revision_contract,
+                ),
             })
             if len(rows) >= max(1, int(args.upsert_chunk_size)):
                 upserted_embeddings += upsert_embeddings(rows)
@@ -1075,6 +1512,25 @@ def main() -> int:
                 time.sleep(float(args.sleep_seconds))
     if rows:
         upserted_embeddings += upsert_embeddings(rows)
+    embedding_metadata_patched = 0
+    if args.prune_missing:
+        docs_by_id = {doc.event_id: doc for doc in docs}
+        for doc_kind, skipped_ids in skipped_ids_by_kind.items():
+            if not skipped_ids:
+                continue
+            sample = docs_by_id[skipped_ids[0]]
+            embedding_metadata_patched += patch_embedding_revision_metadata(
+                skipped_ids,
+                model=args.embedding_model,
+                dim=args.embedding_dim,
+                doc_kind=doc_kind,
+                metadata=embedding_revision_metadata(
+                    sample,
+                    document_kind=doc_kind,
+                    catalog_revision=catalog_revision,
+                    revision_contract=revision_contract,
+                ),
+            )
     skipped_total = sum(skipped_by_kind.values())
     expected_embeddings = len(docs) * len(document_kinds)
     not_embedded_due_call_cap = max(0, expected_embeddings - skipped_total - provider_calls)
@@ -1084,23 +1540,76 @@ def main() -> int:
         fixture_ids = {doc.event_id for doc in docs}
         stale_event_ids = sorted(indexed_ids - fixture_ids)
         delete_stale_events(stale_event_ids)
+    coverage: dict[str, Any] | None = None
+    noncanonical_embeddings_deleted = 0
+    if args.prune_missing:
+        document_rows, embedding_rows = fetch_projection_inventory()
+        rejected_embeddings = noncanonical_embedding_rows(
+            docs,
+            embedding_rows,
+            document_kinds=document_kinds,
+            embedding_model=args.embedding_model,
+            embedding_dim=args.embedding_dim,
+        )
+        if rejected_embeddings:
+            noncanonical_embeddings_deleted = delete_embedding_rows(
+                rejected_embeddings
+            )
+            document_rows, embedding_rows = fetch_projection_inventory()
+        coverage = build_projection_coverage(
+            docs,
+            document_rows=document_rows,
+            embedding_rows=embedding_rows,
+            document_kinds=document_kinds,
+            embedding_model=args.embedding_model,
+            embedding_dim=args.embedding_dim,
+        )
+    projection_complete = bool(
+        not_embedded_due_call_cap == 0
+        and (coverage is None or coverage["status"] == "complete")
+    )
     report.update({
         "documents_upserted": upserted_docs,
         "embeddings_upserted": upserted_embeddings,
         "embeddings_skipped_unchanged": skipped_total,
         "embeddings_skipped_by_kind": skipped_by_kind,
+        "embedding_revision_metadata_patched": embedding_metadata_patched,
         "provider_calls": provider_calls,
         "not_embedded_due_call_cap": not_embedded_due_call_cap,
         "stale_events_deleted": len(stale_event_ids),
         "stale_event_ids": stale_event_ids,
-        "complete": not_embedded_due_call_cap == 0,
+        "noncanonical_embeddings_deleted": noncanonical_embeddings_deleted,
+        "coverage": coverage,
+        "complete": projection_complete,
         "elapsed_seconds": round(time.monotonic() - started_at, 3),
     })
+    if coverage is not None:
+        report.update({
+            key: coverage[key]
+            for key in (
+                "eligible_event_count",
+                "current_document_count",
+                "expected_embedding_count",
+                "current_embedding_count",
+                "document_coverage_percent",
+                "embedding_coverage_percent",
+                "missing_document_count",
+                "stale_document_count",
+                "orphan_document_count",
+                "missing_embedding_count",
+                "stale_embedding_count",
+                "orphan_embedding_count",
+                "wrong_model_or_dimension_count",
+                "wrong_document_kind_count",
+            )
+        })
     write_report(report, args.report_json)
     print(json.dumps(report, ensure_ascii=False, indent=2))
-    if args.require_complete and not_embedded_due_call_cap:
+    if args.require_complete and not projection_complete:
         print(
-            f"vector sync incomplete: {not_embedded_due_call_cap} embeddings left by provider-call cap",
+            "vector sync incomplete: "
+            f"{not_embedded_due_call_cap} embeddings left by provider-call cap; "
+            f"coverage={coverage['status'] if coverage else 'not_requested'}",
             file=sys.stderr,
         )
         return 2

@@ -1,0 +1,91 @@
+mode: worktree_worker
+repo: onedayonemasterpiece/events-bot-new
+base_ref: origin/main
+base_sha: ec09c011674eecddf9e9b8e154e3d102f9384b12
+base_branch: main
+integration_branch: integration/search-live-automation-20260807
+global_constraints:
+  - Do not merge PR 284; extract only Search journey/adapter/assertion/evidence ideas.
+  - Search uses session_fixture; real-mail OTP remains an independent gate.
+  - Restricted candidate URL, session, OTP, email, JWT and tokens must never enter git or artifacts.
+  - Supabase RLS/auth/schema and target SHA checks fail closed.
+  - Production deploy only from clean exact origin/main after merge.
+verification_owner: /root
+stop_conditions: [secret_or_session_leak, target_sha_mismatch, uncontrolled_provider_cost, migration_or_rls_regression]
+requirements:
+  R01: Selectively extract Search journey/adapters/counters/route assertions/sanitized evidence from PR 284; exclude mail/focus coupling.
+  R02: Terminal exact-target auth.session_fixture plus broker-compatible issuer and GitHub OIDC broker.
+  R03: Common platform-neutral site/e2e/search harness.
+  R04: Registry execution variants and per-variant policies/evidence.
+  R05: Server receipt/revision/mode/provider counters/owner RPC/daily canary budget.
+  R06: UI assertions for single POST, terminal state, rendered IDs, visibility, scroll/pagination/dedup/cache/validation.
+  R07: Android/iOS L2 with fresh per-device session, native keyboard/touch and sanitized evidence.
+  R08: Cached/cold/mobile/post-deploy schedules, alert dedupe, stability thresholds and release blocking.
+  R09: Live vector-only Search on latest accepted secret/Kaggle target with several queries and exact SHA/revision evidence.
+lanes:
+  - id: L1-auth-broker
+    role: worker
+    effort: high_max_available_security_auth
+    requirement_ids: [R02]
+    execution_mode: parallel
+    branch: agent/search-live-automation/auth-broker
+    worktree: /dev/shm/search-live-automation-20260807/auth-broker
+    writable_files: [site/e2e/auth-session-fixture/**, site/tests/auth-session-fixture*.mjs, serverless/static-site-auth-session-broker/**, tests/test_static_site_auth_session_broker.py, .codex/lanes/L1-auth-broker/RESULTS.md]
+    forbidden_files: [CHANGELOG.md, docs/**, .github/**, supabase/**]
+    verification_scope: targeted
+    status: merged
+  - id: L2-server-contract
+    role: worker
+    effort: high_max_available_schema_security
+    requirement_ids: [R05]
+    execution_mode: parallel
+    branch: agent/search-live-automation/server-contract
+    worktree: /dev/shm/search-live-automation-20260807/server-contract
+    writable_files: [supabase/functions/event-search/**, supabase/migrations/**event_search_canary_receipts*.sql, supabase/tests/**event_search*.sql, tests/test_supabase_security_hardening.py, .codex/lanes/L2-server-contract/RESULTS.md]
+    forbidden_files: [CHANGELOG.md, docs/**, site/**, .github/**]
+    verification_scope: targeted
+    status: merged
+  - id: L3-search-harness
+    role: worker
+    effort: high
+    requirement_ids: [R01, R03, R06]
+    execution_mode: parallel
+    branch: agent/search-live-automation/harness
+    worktree: /dev/shm/search-live-automation-20260807/harness
+    writable_files: [site/e2e/search/**, site/tests/search-e2e-*.test.mjs, site/package.json, .codex/lanes/L3-search-harness/RESULTS.md]
+    forbidden_files: [CHANGELOG.md, docs/**, .github/**, supabase/**, site/e2e/focus-email/journey.mjs, site/e2e/focus-email/run.mjs]
+    verification_scope: targeted
+    status: merged
+  - id: L4-corpus-revision
+    role: worker
+    effort: high
+    requirement_ids: [R09]
+    execution_mode: parallel
+    branch: agent/search-live-automation/corpus-revision
+    worktree: /dev/shm/search-live-automation-20260807/corpus-revision
+    writable_files: [scripts/sync_event_search_vectors_to_supabase.py, site/scripts/export-production-preview-data.py, tests/test_static_site_pgvector_export.py, tests/test_event_search_corpus_revision.py, .codex/lanes/L4-corpus-revision/RESULTS.md]
+    forbidden_files: [CHANGELOG.md, docs/**, .github/**, supabase/functions/**, supabase/migrations/**]
+    verification_scope: targeted
+    status: merged
+  - id: L6-ui-variant
+    role: worker
+    effort: high
+    supporting_requirement_ids: [R06, R09]
+    execution_mode: parallel
+    branch: agent/search-live-automation/ui-variant
+    worktree: /dev/shm/search-live-automation-20260807/ui-variant
+    writable_files: [site/src/components/AuthorizedEventSearch.astro, site/tests/search-*.test.mjs, site/tests/search-*.playwright.mjs, .codex/lanes/L6-ui-variant/RESULTS.md]
+    forbidden_files: [CHANGELOG.md, docs/**, .github/**, supabase/**, site/e2e/**]
+    verification_scope: targeted
+    status: merged
+  - id: L5-ci-registry-ops
+    role: integrator
+    effort: high_max_available_release_ops
+    requirement_ids: [R04, R07, R08]
+    depends_on: [L1-auth-broker, L2-server-contract, L3-search-harness, L4-corpus-revision]
+    execution_mode: serial_after_dependency
+    branch: integration/search-live-automation-20260807
+    worktree: /dev/shm/search-live-automation-20260807/integration
+    writable_files: [.github/**, docs/**, site/e2e/search/**, site/tests/**, CHANGELOG.md, package_manifests]
+    verification_scope: full_local_and_live
+    status: committed

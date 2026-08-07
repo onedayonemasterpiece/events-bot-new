@@ -29,7 +29,7 @@ test('R8 keeps the accepted v28 in-button progress geometry and semantics', () =
 test('R8 guards duplicate submits and owns success/error/abort/reset transitions', () => {
   assert.match(search, /async function runSearch\([^)]*\) \{\s*if \(!supabase \|\| loading \|\| searchStartPending\) return;/u);
   assert.match(search, /searchStartPending = true;[\s\S]*?await authController\?\.getSession\(\)/u);
-  assert.match(search, /activeSearchController = controller;\s*searchStartPending = false;\s*setSearchLoading\(true/u);
+  assert.match(search, /activeSearchController = controller;\s*searchStartPending = false;\s*setSearchLifecycle\('loading'\);\s*setSearchLoading\(true/u);
   assert.match(search, /submit\.disabled = isLoading/u);
   assert.match(search, /progressValue = Math\.max\(progressValue,/u);
   assert.match(search, /if \(nextStageRank < progressStageRank\) return/u);
