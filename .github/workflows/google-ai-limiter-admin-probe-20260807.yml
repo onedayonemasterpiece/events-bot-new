@@ -1,0 +1,55 @@
+name: Google AI limiter admin credential probe 20260807
+
+on:
+  push:
+    branches:
+      - agent/google-ai-limiter-admin-probe-20260807
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GOOGLE_AI_LIMITER_SUPABASE_URL: ${{ secrets.GOOGLE_AI_LIMITER_SUPABASE_URL }}
+      GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY: ${{ secrets.GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_MANAGEMENT_API_TOKEN: ${{ secrets.SUPABASE_MANAGEMENT_API_TOKEN }}
+      SUPABASE_TOKEN: ${{ secrets.SUPABASE_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+      GOOGLE_AI_LIMITER_DATABASE_URL: ${{ secrets.GOOGLE_AI_LIMITER_DATABASE_URL }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
+      POSTGRES_PRISMA_URL: ${{ secrets.POSTGRES_PRISMA_URL }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+    steps:
+      - name: Report credential classes only
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in \
+            GOOGLE_AI_LIMITER_SUPABASE_URL \
+            GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY \
+            SUPABASE_ACCESS_TOKEN \
+            SUPABASE_MANAGEMENT_API_TOKEN \
+            SUPABASE_TOKEN \
+            SUPABASE_DB_PASSWORD \
+            SUPABASE_DATABASE_URL \
+            GOOGLE_AI_LIMITER_DATABASE_URL \
+            DATABASE_URL \
+            POSTGRES_URL \
+            POSTGRES_PRISMA_URL \
+            SUPABASE_PROJECT_REF \
+            SUPABASE_PROJECT_ID
+          do
+            if [ -n "${!name:-}" ]; then
+              echo "credential_present:${name}=true"
+            else
+              echo "credential_present:${name}=false"
+            fi
+          done
