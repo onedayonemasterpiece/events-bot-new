@@ -1,0 +1,70 @@
+name: Locate Region Talk direct Supabase credential 20260807
+
+on:
+  push:
+    branches:
+      - agent/google-ai-limiter-admin-probe-20260807
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      SECRET_DSN: ${{ secrets.REGION_TALK_SUPABASE_DIRECT_CONNECTION_STRING }}
+      VARIABLE_DSN: ${{ vars.REGION_TALK_SUPABASE_DIRECT_CONNECTION_STRING }}
+    steps:
+      - run: |
+          [ -n "${SECRET_DSN:-}" ] && echo 'repo_secret=true' || echo 'repo_secret=false'
+          [ -n "${VARIABLE_DSN:-}" ] && echo 'repo_variable=true' || echo 'repo_variable=false'
+
+  production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    environment: production
+    env:
+      SECRET_DSN: ${{ secrets.REGION_TALK_SUPABASE_DIRECT_CONNECTION_STRING }}
+      VARIABLE_DSN: ${{ vars.REGION_TALK_SUPABASE_DIRECT_CONNECTION_STRING }}
+    steps:
+      - run: |
+          [ -n "${SECRET_DSN:-}" ] && echo 'production_secret=true' || echo 'production_secret=false'
+          [ -n "${VARIABLE_DSN:-}" ] && echo 'production_variable=true' || echo 'production_variable=false'
+
+  production-readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    environment: production-readonly
+    env:
+      SECRET_DSN: ${{ secrets.REGION_TALK_SUPABASE_DIRECT_CONNECTION_STRING }}
+      VARIABLE_DSN: ${{ vars.REGION_TALK_SUPABASE_DIRECT_CONNECTION_STRING }}
+    steps:
+      - run: |
+          [ -n "${SECRET_DSN:-}" ] && echo 'production_readonly_secret=true' || echo 'production_readonly_secret=false'
+          [ -n "${VARIABLE_DSN:-}" ] && echo 'production_readonly_variable=true' || echo 'production_readonly_variable=false'
+
+  region-talk-ydb-import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    environment: region-talk-ydb-import
+    env:
+      SECRET_DSN: ${{ secrets.REGION_TALK_SUPABASE_DIRECT_CONNECTION_STRING }}
+      VARIABLE_DSN: ${{ vars.REGION_TALK_SUPABASE_DIRECT_CONNECTION_STRING }}
+    steps:
+      - run: |
+          [ -n "${SECRET_DSN:-}" ] && echo 'region_talk_ydb_import_secret=true' || echo 'region_talk_ydb_import_secret=false'
+          [ -n "${VARIABLE_DSN:-}" ] && echo 'region_talk_ydb_import_variable=true' || echo 'region_talk_ydb_import_variable=false'
+
+  volunteer-monitor-canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    environment: volunteer-monitor-canary
+    env:
+      SECRET_DSN: ${{ secrets.REGION_TALK_SUPABASE_DIRECT_CONNECTION_STRING }}
+      VARIABLE_DSN: ${{ vars.REGION_TALK_SUPABASE_DIRECT_CONNECTION_STRING }}
+    steps:
+      - run: |
+          [ -n "${SECRET_DSN:-}" ] && echo 'volunteer_monitor_secret=true' || echo 'volunteer_monitor_secret=false'
+          [ -n "${VARIABLE_DSN:-}" ] && echo 'volunteer_monitor_variable=true' || echo 'volunteer_monitor_variable=false'
