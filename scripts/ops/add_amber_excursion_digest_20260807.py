@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-DB_PATH = Path("/data/db.sqlite")
+DB_PATH = Path(os.getenv("AMBER_DB_PATH") or "/data/db.sqlite")
 PROFILE_SLUG = "festival-80-stories"
 SOURCE_PLATFORM = "web"
 SOURCE_USERNAME = "kgd80-amber-combine-jewelry-excursion"
