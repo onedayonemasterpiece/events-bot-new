@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: emergency-stop-kdg80-export-storm-20260807
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   contain:
