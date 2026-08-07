@@ -20,6 +20,9 @@
 - Personalization data ownership (Fly/Supabase/YDB/Object Storage): `docs/architecture/personalization-data-ownership.md`
 - Сквозная аналитика и продуктовая статистика статического сайта:
   `docs/features/static-site-pages/analytics/README.md`
+- Методология продуктовой модели — needs, Jobs, outcomes, journeys, capabilities,
+  stories, evidence, coverage и связь со статистикой:
+  `docs/product-model/README.md`
 - Исследования пользовательских историй, Jobs, outcomes и измеримой связи с продуктовой статистикой:
   `docs/research/user-stories/README.md`
 - Эксплуатация: `docs/operations/` (как запускать/поддерживать)
