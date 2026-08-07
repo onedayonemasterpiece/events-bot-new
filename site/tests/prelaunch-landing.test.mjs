@@ -62,31 +62,41 @@ test('artifact policy indexes only the root and hides every other HTML page', ()
   }
 });
 
-test('landing keeps the launch, form, SEO and canonical scene contracts', () => {
+test('landing keeps launch, form, SEO and lightweight static-scene contracts', () => {
   const page = source('site/src/components/PrelaunchPage.astro');
   const index = source('site/src/pages/index.astro');
   const layout = source('site/src/layouts/PrelaunchLayout.astro');
-  const visual = source('site/src/styles/prelaunch-page.css');
+  const visual = source('site/src/styles/prelaunch-static.css');
 
   assert.match(page, /Запуск/u);
   assert.match(page, /1 сентября/u);
+  assert.match(page, /<time datetime="2026-09-01">/u);
   assert.match(page, /Персонализированный сервис анонсов/u);
   assert.match(page, /data-prelaunch-form/u);
-  assert.match(page, /data-prelaunch-mosaic/u);
-  assert.match(page, /data-prelaunch-seams/u);
+  assert.match(page, /data-static-background="generated-desktop-mobile-v1"/u);
+  assert.match(page, /data-prelaunch-static-picture/u);
+  assert.match(page, /prelaunch-scene-desktop\.webp/u);
+  assert.match(page, /prelaunch-scene-mobile\.webp/u);
+  assert.doesNotMatch(page, /data-prelaunch-mosaic/u);
+  assert.doesNotMatch(page, /data-prelaunch-seams/u);
+  assert.doesNotMatch(page, /prelaunchScene/u);
   assert.match(index, /PUBLIC_PRELAUNCH_MODE/u);
   assert.match(index, /<PrelaunchPage\s*\/>/u);
 
-  assert.match(visual, /--prelaunch-artwork-size/u);
-  assert.match(visual, /--prelaunch-tile-size/u);
-  assert.match(visual, /\.prelaunch__seams/u);
-  assert.match(visual, /backdrop-filter/u);
-  assert.match(visual, /prefers-reduced-motion/u);
+  assert.match(visual, /object-fit:\s*cover/u);
+  assert.match(visual, /generated responsive picture|pre-rendered responsive picture/u);
+  assert.doesNotMatch(visual, /backdrop-filter/u);
+  assert.match(visual, /touch-action:\s*manipulation/u);
 
   assert.match(layout, /content=\{robots\}/u);
   assert.match(layout, /noindex,nofollow,noarchive,nosnippet/u);
   assert.match(layout, /name="referrer" content="no-referrer"/u);
   assert.match(layout, /application\/ld\+json/u);
+  assert.match(layout, /'@type': 'Organization'/u);
+  assert.match(layout, /'@type': 'Service'/u);
+  assert.match(layout, /maximum-scale=1/u);
+  assert.match(layout, /user-scalable=no/u);
+  assert.match(layout, /viewport-fit=cover/u);
 });
 
 test('secret candidate inherits the checked production prelaunch surface', () => {

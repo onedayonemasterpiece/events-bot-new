@@ -12,53 +12,110 @@ const {
   description = 'Персонализированный сервис анонсов и навигатор по культурным и просветительским событиям Калининградской области. Запуск 1 сентября 2026 года.',
 } = Astro.props;
 const canonicalUrl = `${SITE_ORIGIN}${withBase('/')}`;
-const robots = IS_PRODUCTION ? 'index,follow' : 'noindex,nofollow,noarchive,nosnippet';
+const robots = IS_PRODUCTION
+  ? 'index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1'
+  : 'noindex,nofollow,noarchive,nosnippet';
 const shareImage = `${SITE_ORIGIN}${withBase('/assets/pwa/announcements-brand-v2-512.png')}`;
+const logoImage = `${SITE_ORIGIN}${withBase('/assets/pwa/announcements-brand-v2-512.png')}`;
+const organizationId = `${SITE_ORIGIN}/#organization`;
+const websiteId = `${canonicalUrl}#website`;
+const pageId = `${canonicalUrl}#prelaunch`;
+const serviceId = `${canonicalUrl}#service`;
+const imageId = `${canonicalUrl}#primaryimage`;
 const structuredData = {
   '@context': 'https://schema.org',
   '@graph': [
     {
+      '@type': 'Organization',
+      '@id': organizationId,
+      name: 'Полюбить Калининград',
+      alternateName: ['Полюбить Калининград Анонсы', 'Калининград Анонсы'],
+      url: SITE_ORIGIN,
+      logo: { '@id': imageId },
+    },
+    {
+      '@type': 'ImageObject',
+      '@id': imageId,
+      url: logoImage,
+      contentUrl: logoImage,
+      width: 512,
+      height: 512,
+      caption: 'Полюбить Калининград Анонсы',
+    },
+    {
       '@type': 'WebSite',
-      '@id': `${canonicalUrl}#website`,
+      '@id': websiteId,
       url: canonicalUrl,
       name: SITE_NAME,
+      alternateName: 'Калининград Анонсы',
       description,
-      inLanguage: 'ru',
+      inLanguage: 'ru-RU',
+      publisher: { '@id': organizationId },
     },
     {
       '@type': 'WebPage',
-      '@id': `${canonicalUrl}#prelaunch`,
+      '@id': pageId,
       url: canonicalUrl,
       name: title,
       description,
-      inLanguage: 'ru',
-      isPartOf: { '@id': `${canonicalUrl}#website` },
-      about: { '@id': `${canonicalUrl}#service` },
+      inLanguage: 'ru-RU',
+      isPartOf: { '@id': websiteId },
+      about: { '@id': serviceId },
+      primaryImageOfPage: { '@id': imageId },
+      dateModified: '2026-08-07',
     },
     {
       '@type': 'Service',
-      '@id': `${canonicalUrl}#service`,
+      '@id': serviceId,
       name: SITE_NAME,
       description,
+      provider: { '@id': organizationId },
       areaServed: [
         { '@type': 'City', name: 'Калининград' },
         { '@type': 'AdministrativeArea', name: 'Калининградская область' },
       ],
       serviceType: 'Персонализированный сервис анонсов культурных и просветительских событий',
+      availableChannel: {
+        '@type': 'ServiceChannel',
+        serviceUrl: canonicalUrl,
+      },
     },
   ],
 };
 ---
 <!doctype html>
-<html lang="ru">
+<html lang="ru-RU">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
     <meta name="robots" content={robots} />
+    <meta name="googlebot" content={robots} />
     {IS_SECRET_CANDIDATE && <meta name="referrer" content="no-referrer" />}
     <title>{title}</title>
     <meta name="description" content={description} />
+    <meta name="application-name" content={SITE_NAME} />
     <link rel="canonical" href={canonicalUrl} />
+    <link rel="alternate" hreflang="ru-RU" href={canonicalUrl} />
+    <link rel="alternate" hreflang="x-default" href={canonicalUrl} />
+    <link
+      rel="preload"
+      as="image"
+      href={withBase('/assets/prelaunch/prelaunch-scene-desktop.webp')}
+      type="image/webp"
+      media="(min-width: 900px) and (min-aspect-ratio: 5/4)"
+      fetchpriority="high"
+    />
+    <link
+      rel="preload"
+      as="image"
+      href={withBase('/assets/prelaunch/prelaunch-scene-mobile.webp')}
+      type="image/webp"
+      media="(max-width: 899px), (max-aspect-ratio: 5/4)"
+      fetchpriority="high"
+    />
     <meta property="og:site_name" content={SITE_NAME} />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="ru_RU" />
@@ -66,6 +123,7 @@ const structuredData = {
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalUrl} />
     <meta property="og:image" content={shareImage} />
+    <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="512" />
     <meta property="og:image:height" content="512" />
     <meta property="og:image:alt" content="Логотип «Полюбить Калининград Анонсы»" />
@@ -91,12 +149,20 @@ const structuredData = {
       }
 
       * { box-sizing: border-box; }
-      html { min-width: 320px; min-height: 100%; background: var(--prelaunch-bg); }
+      html {
+        min-width: 320px;
+        min-height: 100%;
+        background: var(--prelaunch-bg);
+        overscroll-behavior: none;
+        touch-action: manipulation;
+      }
       body {
         min-width: 320px;
         min-height: 100vh;
         margin: 0;
         overflow: hidden;
+        overscroll-behavior: none;
+        touch-action: manipulation;
         background: var(--prelaunch-bg);
         color: var(--prelaunch-text);
       }

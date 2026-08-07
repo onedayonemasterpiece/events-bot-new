@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - agent/prelaunch-landing-20260803
+      - agent/prelaunch-static-background-20260807
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
@@ -11,6 +12,7 @@ on:
       - '.github/workflows/prelaunch-visual-review.yml'
       - 'docs/features/static-site-pages/prelaunch.md'
       - 'docs/features/static-site-pages/prelaunch-handoff/**'
+      - 'site/public/assets/prelaunch/**'
       - 'site/scripts/prepare-prelaunch-artwork.mjs'
       - 'site/src/components/PrelaunchPage.astro'
       - 'site/src/layouts/PrelaunchLayout.astro'
@@ -20,6 +22,8 @@ on:
       - 'site/src/scripts/prelaunchScene.ts'
       - 'site/src/scripts/prelaunchForm.ts'
       - 'site/src/styles/prelaunch-page.css'
+      - 'site/src/styles/prelaunch-static.css'
+      - 'site/src/styles/prelaunch-consent.css'
       - 'site/scripts/check-prelaunch-scene.mjs'
       - 'site/scripts/check-prelaunch-viewport-fit.mjs'
       - 'site/scripts/check-prelaunch-form-security.mjs'
@@ -122,7 +126,8 @@ jobs:
             "scene_exit": $scene_status,
             "viewport_fit_exit": $viewport_status,
             "form_security_exit": $form_status,
-            "manual_visual_review_required": true
+            "manual_visual_review_required": true,
+            "scene_architecture": "generated-responsive-background-live-form"
           }
           JSON
 

@@ -1,0 +1,121 @@
+/*
+ * Lightweight prelaunch holder.
+ *
+ * The cinematic glass/PWA composition is a pre-rendered responsive picture.
+ * Only semantic content and the resilient email form remain live HTML. This
+ * keeps the accepted visual direction while removing the expensive grid of
+ * per-pane backdrop-filter surfaces from desktop rendering.
+ */
+
+.prelaunch-page--static {
+  touch-action: manipulation;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+.prelaunch__scene--static {
+  background: #080a0e;
+  contain: strict;
+}
+
+.prelaunch__static-picture,
+.prelaunch__static-picture img,
+.prelaunch__static-vignette {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.prelaunch__static-picture {
+  z-index: 0;
+  display: block;
+  overflow: hidden;
+  background: #080a0e;
+}
+
+.prelaunch__static-picture img {
+  display: block;
+  max-width: none;
+  object-fit: cover;
+  object-position: center center;
+  user-select: none;
+  -webkit-user-drag: none;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* The source artwork already contains the glass, opaque seams, dust and the
+   shared upper-right light. This overlay only protects foreground contrast. */
+.prelaunch__static-vignette {
+  z-index: 1;
+  background:
+    linear-gradient(90deg, rgba(5, 7, 10, .55) 0%, rgba(5, 7, 10, .28) 35%, rgba(5, 7, 10, .04) 62%, transparent 82%),
+    linear-gradient(180deg, rgba(5, 7, 10, .08) 0%, transparent 35%, rgba(5, 7, 10, .20) 100%);
+}
+
+/* The old canonical scene stylesheet still supplies typography and form
+   tokens, but the static holder intentionally has no live glass panes. */
+.prelaunch-page--static [data-prelaunch-mosaic],
+.prelaunch-page--static [data-prelaunch-seams],
+.prelaunch-page--static [data-prelaunch-tile],
+.prelaunch-page--static .prelaunch__artwork,
+.prelaunch-page--static .prelaunch__light,
+.prelaunch-page--static .prelaunch__dust,
+.prelaunch-page--static .prelaunch__spark {
+  display: none !important;
+}
+
+.prelaunch-page--static .prelaunch__foreground {
+  text-shadow: 0 4px 28px rgba(0, 0, 0, .58);
+}
+
+.prelaunch-page--static .prelaunch__brand,
+.prelaunch-page--static .prelaunch__copy,
+.prelaunch-page--static .prelaunch__notify {
+  position: relative;
+  z-index: 2;
+}
+
+@media (min-width: 1200px) and (min-aspect-ratio: 4/3) {
+  .prelaunch__static-picture img {
+    object-position: 50% center;
+  }
+}
+
+@media (max-width: 899px), (max-aspect-ratio: 5/4) {
+  .prelaunch__static-vignette {
+    background:
+      linear-gradient(180deg, rgba(5, 7, 10, .30) 0%, rgba(5, 7, 10, .06) 32%, transparent 54%, rgba(5, 7, 10, .26) 100%),
+      linear-gradient(90deg, rgba(5, 7, 10, .20), transparent 55%, rgba(5, 7, 10, .04));
+  }
+}
+
+@media (max-width: 599px) {
+  .prelaunch__static-picture img {
+    object-position: center center;
+  }
+
+  .prelaunch-page--static .prelaunch__foreground {
+    padding-top: max(22px, env(safe-area-inset-top));
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (orientation: landscape) and (min-width: 600px) and (max-height: 500px) {
+  .prelaunch__static-picture img {
+    object-position: center 54%;
+  }
+
+  .prelaunch__static-vignette {
+    background:
+      linear-gradient(90deg, rgba(5, 7, 10, .60) 0%, rgba(5, 7, 10, .25) 42%, transparent 76%),
+      linear-gradient(180deg, rgba(5, 7, 10, .08), transparent 55%, rgba(5, 7, 10, .22));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prelaunch__static-picture img {
+    transform: none;
+  }
+}
