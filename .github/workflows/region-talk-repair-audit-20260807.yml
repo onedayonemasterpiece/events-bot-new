@@ -1,0 +1,126 @@
+name: Region Talk repair product audit 20260807
+
+on:
+  push:
+    branches:
+      - agent/region-talk-repair-audit-20260807
+    paths:
+      - '.github/workflows/region-talk-repair-audit-20260807.yml'
+      - 'scripts/region_talk_repair_audit.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: region-talk-repair-product-audit-20260807
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: region-talk-ydb-import
+    env:
+      YANDEX_WIF_OIDC_AUDIENCE: ${{ vars.YANDEX_WIF_OIDC_AUDIENCE }}
+      YANDEX_WIF_SERVICE_ACCOUNT_ID: ${{ vars.YANDEX_WIF_SERVICE_ACCOUNT_ID }}
+      REGION_TALK_YDB_ENDPOINT: ${{ vars.REGION_TALK_YDB_ENDPOINT }}
+      REGION_TALK_YDB_DATABASE: ${{ vars.REGION_TALK_YDB_DATABASE }}
+      REGION_TALK_YDB_NAMESPACE: ${{ vars.REGION_TALK_YDB_NAMESPACE }}
+      REGION_TALK_YDB_SELECT_PAGE_SIZE: '200'
+      REGION_TALK_NOTIFY_PUBLICATION_SCAN_LIMIT: '5000'
+      REGION_TALK_NOTIFY_SOURCE_SCAN_LIMIT: '5000'
+      AUDIT_DIR: artifacts/region-talk-repair-audit
+
+    steps:
+      - name: Check out audit branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install existing Region Talk runtime
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+
+      - name: Exchange GitHub OIDC for short-lived Yandex IAM token
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${ACTIONS_ID_TOKEN_REQUEST_URL:?GitHub OIDC request URL is required}"
+          : "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:?GitHub OIDC request token is required}"
+          : "${YANDEX_WIF_OIDC_AUDIENCE:?missing YANDEX_WIF_OIDC_AUDIENCE}"
+          : "${YANDEX_WIF_SERVICE_ACCOUNT_ID:?missing YANDEX_WIF_SERVICE_ACCOUNT_ID}"
+          : "${REGION_TALK_YDB_ENDPOINT:?missing REGION_TALK_YDB_ENDPOINT}"
+          : "${REGION_TALK_YDB_DATABASE:?missing REGION_TALK_YDB_DATABASE}"
+
+          github_oidc="$({
+            curl --fail --silent --show-error \
+              --header "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+              --get --data-urlencode "audience=${YANDEX_WIF_OIDC_AUDIENCE}" \
+              "$ACTIONS_ID_TOKEN_REQUEST_URL"
+          } | jq --exit-status --raw-output '.value | strings | select(length > 100)')"
+          iam_response="$(curl --fail --silent --show-error \
+            --request POST 'https://auth.yandex.cloud/oauth/token' \
+            --header 'Content-Type: application/x-www-form-urlencoded' \
+            --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+            --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+            --data-urlencode "audience=${YANDEX_WIF_SERVICE_ACCOUNT_ID}" \
+            --data-urlencode "subject_token=${github_oidc}" \
+            --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')"
+          iam_token="$(printf '%s' "$iam_response" | jq --exit-status --raw-output '.access_token | strings | select(length > 20)')"
+          echo "::add-mask::$iam_token"
+          echo "REGION_TALK_YDB_IAM_TOKEN=$iam_token" >> "$GITHUB_ENV"
+
+      - name: Read live repair inventory without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$AUDIT_DIR"
+          python scripts/region_talk_repair_audit.py \
+            --scan-limit 5000 \
+            --output "$AUDIT_DIR/audit.json"
+
+      - name: Publish product summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('artifacts/region-talk-repair-audit/audit.json').read_text(encoding='utf-8'))
+          counts = payload['counts']
+          print('### Region Talk repair product audit')
+          print()
+          for key in (
+              'accepted_unpublished_candidates',
+              'article_candidates',
+              'social_candidates',
+              'profile_ready',
+              'current_source_profile_writer_drafts',
+              'current_revisions_delivered_to_operator',
+              'operator_current',
+              'needs_source_profile',
+              'needs_writer_repair',
+              'needs_operator_delivery',
+              'blocked_correction',
+          ):
+              print(f'- {key}: `{counts.get(key, 0)}`')
+          print(f"- missing article sources: `{len(payload.get('missing_article_source_keys') or [])}`")
+          print(f"- missing social sources: `{len(payload.get('missing_social_source_keys') or [])}`")
+          print('- mutations: `none`')
+          PY
+
+      - name: Upload sanitized audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: region-talk-repair-audit-${{ github.run_id }}
+          path: artifacts/region-talk-repair-audit/audit.json
+          if-no-files-found: error
+          retention-days: 14
