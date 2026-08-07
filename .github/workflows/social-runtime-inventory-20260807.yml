@@ -1,0 +1,77 @@
+name: Production social runtime inventory 2026-08-07
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/social-runtime-inventory-20260807-trigger.txt
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-social-runtime-inventory-20260807
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production-readonly
+    env:
+      FLY_APP_NAME: events-bot-new-wngqia
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_SMART_UPDATE_AUDIT }}
+    steps:
+      - name: Set up pinned flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+        with:
+          version: 0.4.78
+
+      - name: Inspect social credential and runtime capability presence
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          [[ -n "${FLY_API_TOKEN:-}" ]] || { echo '::error::FLY_API_TOKEN_SMART_UPDATE_AUDIT is unavailable'; exit 1; }
+          script_file="$(mktemp)"
+          trap 'rm -f "$script_file"' EXIT
+          cat > "$script_file" <<'PY'
+          import importlib.util
+          import json
+          import os
+          from pathlib import Path
+
+          names = [
+              "TELEGRAM_BOT_TOKEN",
+              "TG_API_ID", "TG_API_HASH", "TG_SESSION_STRING", "TG_SESSION_BASE64",
+              "TELEGRAM_SESSION", "TELEGRAM_AUTH_BUNDLE", "TELEGRAM_AUTH_BUNDLE_E2E",
+              "TELEGRAM_AUTH_BUNDLE_S22", "TELEGRAM_AUTH_BUNDLE_STORY",
+              "VK_TOKEN", "VK_ACCESS_TOKEN", "VK_USER_TOKEN", "VK_GROUP_TOKEN",
+              "VK_GROUP_ID", "VK_OWNER_ID", "VK_API_VERSION",
+              *[f"VK_ACCESS_TOKEN{i}" for i in range(1, 11)],
+              "KAGGLE_USERNAME", "KAGGLE_KEY",
+          ]
+          for name in names:
+              print(f"RUNTIME_ENV_{'PRESENT' if os.getenv(name) else 'ABSENT'}={name}")
+
+          for module in ("telethon", "requests", "PIL", "aiohttp", "remote_telegram_session"):
+              print(f"RUNTIME_MODULE_{'PRESENT' if importlib.util.find_spec(module) else 'ABSENT'}={module}")
+
+          data = Path('/data')
+          if data.is_dir():
+              candidates = []
+              for item in data.iterdir():
+                  low = item.name.lower()
+                  if any(token in low for token in ('telegram', 'telethon', 'session', 'secret', 'auth', 'vk')):
+                      candidates.append({
+                          'name': item.name,
+                          'kind': 'dir' if item.is_dir() else 'file',
+                          'size': item.stat().st_size if item.is_file() else None,
+                      })
+              print('RUNTIME_SOCIAL_DATA_ENTRIES=' + json.dumps(candidates, ensure_ascii=False, separators=(',', ':')))
+          else:
+              print('RUNTIME_SOCIAL_DATA_ENTRIES=[]')
+          PY
+          flyctl ssh console --app "$FLY_APP_NAME" \
+            --command "python3 -c 'import sys; exec(compile(sys.stdin.read(), \"<social_runtime_inventory>\", \"exec\"))'" \
+            < "$script_file"
