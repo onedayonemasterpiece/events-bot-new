@@ -1,0 +1,27 @@
+name: Inspect Supabase relay contract for local agent intake
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/ops-relay-contract-inventory-20260807.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 1
+      - name: Print relay and issue-report call sites
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo RELAY_REFERENCES_START
+          grep -RInE 'PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL|SUPABASE_RELAY_URL|event_issue_reports|issue report|issue-report' . \
+            --exclude-dir=.git --exclude-dir=node_modules --exclude='*.lock' | head -3000 || true
+          echo RELAY_REFERENCES_END
