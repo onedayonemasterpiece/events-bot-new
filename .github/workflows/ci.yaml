@@ -19,6 +19,8 @@ jobs:
           cache-dependency-path: site/package-lock.json
       - name: Install pinned site dependencies
         run: npm ci --no-audit --no-fund
+      - name: Validate design-system production surface contract
+        run: npm run check:design-system-production-surfaces
       - name: Install pinned Chromium and system dependencies
         run: npx playwright install --with-deps chromium
       - name: Run browser gate receipt contracts

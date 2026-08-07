@@ -1,0 +1,261 @@
+{
+  "schema_version": "lovekgd-design-system-production-surface-contract-v1",
+  "contract_id": "announcements-production-surfaces-2026-08-07",
+  "selection_policy": {
+    "authority": "accepted-production-release",
+    "required_release_files": [
+      "static-release-manifest.json",
+      "production-build.json"
+    ],
+    "require_matching_repo_sha": true,
+    "require_matching_build_id": true,
+    "require_matching_snapshot": true,
+    "exclude_route_prefixes": [
+      "/lab/",
+      "/__preview/"
+    ],
+    "exclude_source_prefixes": [
+      "site/src/pages/lab/"
+    ],
+    "rule": "A page or component enters the current design-system inventory only when it is reachable from an HTML route in the accepted production artifact at the exact release SHA. Source presence alone is not production use."
+  },
+  "interaction_budget": {
+    "plugin_open_per_update": 1,
+    "maximum_user_actions": 3,
+    "primary_action": "update-everything",
+    "allowed_actions": [
+      "check-currentness",
+      "update-everything",
+      "build-review-prompt"
+    ],
+    "forbidden_workflow": "No per-page, per-component or per-file update actions."
+  },
+  "evidence_viewports": [
+    { "id": "mobile-390x844", "width": 390, "height": 844, "class": "mobile" },
+    { "id": "mobile-430x932", "width": 430, "height": 932, "class": "mobile" },
+    { "id": "tablet-768x1024", "width": 768, "height": 1024, "class": "tablet" },
+    { "id": "desktop-1280x800", "width": 1280, "height": 800, "class": "desktop" },
+    { "id": "desktop-1728x900", "width": 1728, "height": 900, "class": "desktop" }
+  ],
+  "evidence_contract": {
+    "origin": "automated-tests",
+    "artifact_kinds": [
+      "actual",
+      "approved-baseline",
+      "diff"
+    ],
+    "required_metadata": [
+      "test_id",
+      "route",
+      "viewport_id",
+      "repo_sha",
+      "build_id",
+      "snapshot_id",
+      "run_id",
+      "captured_at",
+      "sha256"
+    ],
+    "penpot_pages": [
+      "90 — Evidence / desktop",
+      "91 — Evidence / tablet",
+      "92 — Evidence / mobile",
+      "93 — Evidence / interaction and accessibility"
+    ],
+    "archetype_link_rule": "Every current archetype stores references to its actual evidence boards and the originating automated test artifacts."
+  },
+  "component_families": [
+    {
+      "id": "brand.identity-and-pwa",
+      "label": "Brand identity, lockups, favicon and PWA assets",
+      "layer": "brand",
+      "required": true,
+      "source_files": [
+        "site/src/components/brand/AnnouncementsLockup.astro",
+        "site/src/components/brand/AnnouncementsWordmark.astro",
+        "site/public/brand-mark.svg",
+        "site/public/favicon.svg",
+        "site/public/brand/announcements-wordmark-ui.svg",
+        "site/public/brand/favicon-tag-wide-o.svg"
+      ]
+    },
+    {
+      "id": "shell.header-navigation-footer",
+      "label": "Desktop/mobile header, menus, primary navigation, bottom navigation and footer",
+      "layer": "product-component",
+      "required": true,
+      "source_files": [
+        "site/src/layouts/EventLayout.astro",
+        "site/src/components/HomeQuickNav.astro",
+        "site/src/components/MobileBottomNav.astro",
+        "site/src/components/MobileSearchBottomNav.astro",
+        "site/src/components/Reference4MobileMenu.astro",
+        "site/src/components/SiteFooter.astro"
+      ]
+    },
+    {
+      "id": "navigation.keyboard",
+      "label": "Keyboard navigation and shortcut discovery",
+      "layer": "product-component",
+      "required": true,
+      "source_files": [
+        "site/src/components/KeyboardEventNavigation.astro"
+      ]
+    },
+    {
+      "id": "event.cards-and-rails",
+      "label": "Small and large event cards, listing rows, discovery rail and exact-time rail",
+      "layer": "product-component",
+      "required": true,
+      "source_files": [
+        "site/src/components/EventCard.astro",
+        "site/src/components/EventListItem.astro",
+        "site/src/components/listings/ListingEventCard.astro",
+        "site/src/components/listings/ListingDiscoveryRail.astro",
+        "site/src/components/listings/MobileListingRailRow.astro",
+        "site/src/components/listings/ExactTimeTimeline.astro",
+        "site/src/components/listings/ListingTimeNav.astro",
+        "site/src/components/listings/ListingTimeMarker.astro"
+      ]
+    },
+    {
+      "id": "event.detail-and-media",
+      "label": "Event detail, wide/narrow image geometry, hero, CTA, facts and media rail",
+      "layer": "product-pattern",
+      "required": true,
+      "source_files": [
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/components/EventHero.astro",
+        "site/src/components/EventCtaPanel.astro",
+        "site/src/components/DesktopEventActionPanel.astro",
+        "site/src/components/EventFacts.astro",
+        "site/src/components/EventMediaRail.astro",
+        "site/src/components/MobileEventProductionStyles.astro"
+      ]
+    },
+    {
+      "id": "event.medallions",
+      "label": "Medallion system and full current medallion library",
+      "layer": "product-component",
+      "required": true,
+      "source_files": [
+        "site/src/components/EventTokenMedallions.astro"
+      ]
+    },
+    {
+      "id": "artifacts.collection",
+      "label": "Easter-egg artifacts, current collection and reserved collection slots",
+      "layer": "product-pattern",
+      "required": true,
+      "source_files": [
+        "site/src/components/FocusEggArtifact.astro",
+        "site/src/components/FocusEggCollectionCard.astro",
+        "site/src/components/FocusEggSavedListDemo.astro",
+        "site/src/components/listings/AmberRailArtifact.astro"
+      ]
+    },
+    {
+      "id": "focus-group.flow",
+      "label": "Focus-group invitation, NPS, feedback, diagnostics and thank-you flow",
+      "layer": "product-pattern",
+      "required": true,
+      "source_files": [
+        "site/src/components/FocusGroupInviteIntake.astro",
+        "site/src/components/FocusGroupInviteShare.astro",
+        "site/src/components/FocusGroupFeedback.astro",
+        "site/src/components/FocusGroupLabPanel.astro",
+        "site/src/components/FocusGroupThankYou.astro",
+        "site/src/components/FocusConnectivityDiagnostic.astro"
+      ]
+    },
+    {
+      "id": "exhibitions",
+      "label": "Exhibitions listing, personal surface and exhibition rows",
+      "layer": "product-pattern",
+      "required": true,
+      "source_files": [
+        "site/src/components/ExhibitionsPersonalSurface.astro",
+        "site/src/components/ExhibitionPrototypeRow.astro"
+      ]
+    },
+    {
+      "id": "favorites",
+      "label": "Favorites page and saved-event states",
+      "layer": "product-pattern",
+      "required": true,
+      "source_files": [
+        "site/src/components/FavoritesSurface.astro"
+      ]
+    },
+    {
+      "id": "authorization",
+      "label": "Anonymous, email OTP, Yandex and authenticated states",
+      "layer": "product-pattern",
+      "required": true,
+      "source_files": [
+        "site/src/components/auth/StaticSiteAuthRuntime.astro"
+      ]
+    },
+    {
+      "id": "search",
+      "label": "Authorized search, loading, results, empty and recovery states",
+      "layer": "product-pattern",
+      "required": true,
+      "source_files": [
+        "site/src/components/AuthorizedEventSearch.astro",
+        "site/src/components/SearchCollectionLinks.astro",
+        "site/src/components/MobileSearchBottomNav.astro"
+      ]
+    },
+    {
+      "id": "personalization.for-me",
+      "label": "For-me feed, interest profile and personal filtering",
+      "layer": "product-pattern",
+      "required": true,
+      "source_files": [
+        "site/src/components/PersonalFeedSlot.astro",
+        "site/src/components/InterestProfile.astro",
+        "site/src/components/ListingPersonalFilter.astro"
+      ]
+    },
+    {
+      "id": "transport.rail-and-bus",
+      "label": "Rail and bus schedules and event transport context",
+      "layer": "product-pattern",
+      "required": true,
+      "source_files": [
+        "site/src/components/EventTransportSchedule.astro",
+        "site/src/components/EventBusTransportSchedule.astro",
+        "site/src/components/KaupTransportSchedule.astro"
+      ]
+    },
+    {
+      "id": "system.notifications-and-status",
+      "label": "Notices, toast regions, errors and persistent/timed status surfaces",
+      "layer": "core-component",
+      "required": true,
+      "source_files": [
+        "site/src/components/MobileToastRegion.astro",
+        "site/src/components/design-system/StatePanel.astro"
+      ]
+    }
+  ],
+  "archetypes": [
+    { "id": "home", "routes": ["/"], "required": true, "evidence_viewports": ["mobile-390x844", "desktop-1728x900"] },
+    { "id": "today-listing", "routes": ["/segodnya/"], "required": true, "evidence_viewports": ["mobile-390x844", "tablet-768x1024", "desktop-1728x900"] },
+    { "id": "tomorrow-listing", "routes": ["/zavtra/"], "required": true, "evidence_viewports": ["mobile-390x844", "desktop-1728x900"] },
+    { "id": "weekend-listing", "routes": ["/vyhodnye/"], "required": true, "evidence_viewports": ["mobile-390x844", "desktop-1728x900"] },
+    { "id": "popular-listing", "routes": ["/populyarnoe/"], "required": true, "evidence_viewports": ["mobile-390x844", "desktop-1280x800"] },
+    { "id": "collections", "routes": ["/podborki/"], "required": true, "evidence_viewports": ["mobile-430x932", "desktop-1280x800"] },
+    { "id": "festivals", "routes": ["/festivali/"], "required": true, "evidence_viewports": ["mobile-430x932", "desktop-1728x900"] },
+    { "id": "exhibitions", "routes": ["/vystavki/"], "required": true, "evidence_viewports": ["mobile-430x932", "desktop-1280x800"] },
+    { "id": "favorites", "routes": ["/izbrannoe/"], "required": true, "evidence_viewports": ["mobile-390x844", "desktop-1280x800"] },
+    { "id": "search", "routes": ["/poisk/"], "required": true, "evidence_viewports": ["mobile-390x844", "desktop-1280x800"] },
+    { "id": "for-me", "routes": ["/dlya-menya/"], "required": true, "evidence_viewports": ["mobile-390x844", "desktop-1280x800"] },
+    { "id": "focus-group", "routes": ["/fokus-gruppa/"], "required": true, "evidence_viewports": ["mobile-390x844", "desktop-1280x800"] },
+    { "id": "artifacts", "routes": ["/artefakty/"], "required": true, "evidence_viewports": ["mobile-430x932", "desktop-1280x800"] },
+    { "id": "event-detail", "routes": ["/sobytiya/*/"], "required": true, "evidence_viewports": ["mobile-390x844", "tablet-768x1024", "desktop-1728x900"], "required_scenarios": ["wide-image", "narrow-image", "no-image"] },
+    { "id": "interest-clubs", "routes": ["/kluby-po-interesam/"], "required": true, "evidence_viewports": ["mobile-430x932", "desktop-1280x800"] },
+    { "id": "unusual-events", "routes": ["/neobychnoe/"], "required": true, "evidence_viewports": ["mobile-430x932", "desktop-1280x800"] },
+    { "id": "information-pages", "routes": ["/partners/", "/partnerstvo/"], "required": true, "evidence_viewports": ["mobile-390x844", "desktop-1280x800"] }
+  ]
+}
