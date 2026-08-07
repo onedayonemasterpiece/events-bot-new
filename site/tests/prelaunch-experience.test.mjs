@@ -17,11 +17,12 @@ test('prelaunch uses one shared emitter and no square pane stroke', () => {
   assert.match(light, /\.prelaunch\[data-prelaunch-page\]::before[\s\S]*radial-gradient/u);
   assert.match(light, /Golden powder[\s\S]*radial-gradient/u);
   assert.match(light, /--prelaunch-seam:\s*#07090d/u);
-  assert.match(visual, /\.prelaunch__mosaic::before[\s\S]*filter:\s*none\s*!important/u);
-  assert.match(visual, /\.prelaunch__tile\s*\{[\s\S]*overflow:\s*hidden\s*!important/u);
-  assert.match(visual, /background-image:[\s\S]*radial-gradient\(circle at 100% 100%[\s\S]*radial-gradient\(circle at 0 0/u);
-  assert.match(visual, /\.prelaunch__tile::before[\s\S]*inset 0 1px 0/u);
+  assert.match(visual, /\.prelaunch__mosaic::before[\s\S]*display:\s*none\s*!important[\s\S]*filter:\s*none\s*!important/u);
+  assert.match(visual, /\.prelaunch__tile\s*\{[\s\S]*overflow:\s*hidden\s*!important[\s\S]*border-radius:\s*var\(--corner-radius\)\s*!important/u);
+  assert.match(visual, /background-image:\s*none\s*!important/u);
+  assert.match(visual, /\.prelaunch__tile::before[\s\S]*clip-path:\s*inset\(0 round var\(--corner-radius\)\)[\s\S]*inset 0 1px 0/u);
   assert.doesNotMatch(visual, /0 0 0 calc\(var\(--corner-radius\)/u);
+  assert.doesNotMatch(visual, /background-image:[\s\S]*radial-gradient\(circle at 100% 100%/u);
   assert.doesNotMatch(visual, /\.prelaunch__tile::before[^}]*radial-gradient/su);
 });
 

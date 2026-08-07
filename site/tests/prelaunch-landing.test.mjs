@@ -82,8 +82,10 @@ test('landing keeps the launch, form and layered scene contracts', () => {
   assert.match(visual, /repeat\(14, var\(--tile-width\)\)/u);
   assert.match(visual, /repeat\(7, var\(--tile-width\)\)/u);
   assert.match(visual, /overflow:\s*hidden\s*!important/u);
-  assert.match(visual, /filter:\s*none\s*!important/u);
-  assert.match(visual, /radial-gradient\(circle at 100% 100%/u);
+  assert.match(visual, /\.prelaunch__mosaic::before[\s\S]*display:\s*none\s*!important/u);
+  assert.match(visual, /background-image:\s*none\s*!important/u);
+  assert.match(visual, /border-radius:\s*var\(--corner-radius\)\s*!important/u);
+  assert.doesNotMatch(visual, /radial-gradient\(circle at 100% 100%/u);
   assert.doesNotMatch(visual, /0 0 0 calc\(var\(--corner-radius\)/u);
 
   assert.match(layout, /content=\{robots\}/u);
