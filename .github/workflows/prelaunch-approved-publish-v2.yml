@@ -96,6 +96,16 @@ jobs:
               1,
           )
 
+          token_generation = 'token="$(openssl rand -hex 32)"\n'
+          if token_generation not in text:
+              raise SystemExit('candidate token patch target is missing')
+          text = text.replace(
+              token_generation,
+              'token="$(node -e "process.stdout.write(require(\\\'node:crypto\\\').randomBytes(32).toString(\\\'base64url\\\'))")"\n'
+              '[[ "$token" =~ ^[A-Za-z0-9_-]{43}$ ]]\n',
+              1,
+          )
+
           path.write_text(text, encoding='utf-8')
           PY
           bash .github/scripts/publish-approved-prelaunch-v2.sh
