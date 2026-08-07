@@ -1,0 +1,46 @@
+/*
+ * Visual calibration layer for the canonical prelaunch scene.
+ * This file contains only values established by manual reference comparison;
+ * it does not reintroduce the retired versioned CSS patch stack.
+ */
+
+.prelaunch__artwork {
+  filter: saturate(1.01) contrast(1.045) brightness(.84);
+}
+
+.prelaunch__tile[data-depth="sealed"] {
+  --cover: .80;
+  --blur: 11.5px;
+  --saturation: .48;
+  --brightness: .84;
+  --matte: .22;
+}
+
+.prelaunch__tile[data-depth="dim"] {
+  --cover: .52;
+  --blur: 6.5px;
+  --saturation: .76;
+  --brightness: .95;
+  --matte: .22;
+}
+
+.prelaunch__tile[data-depth="clear"] {
+  --cover: .28;
+  --blur: 2.3px;
+  --saturation: .98;
+  --brightness: 1.03;
+  --matte: .17;
+  --border-alpha: .10;
+}
+
+@media (max-width: 599px) and (min-height: 681px) {
+  .prelaunch__notify {
+    transform: translateY(74px);
+  }
+}
+
+@media (max-width: 599px) and (max-height: 680px) {
+  .prelaunch__notify {
+    transform: translateY(42px);
+  }
+}

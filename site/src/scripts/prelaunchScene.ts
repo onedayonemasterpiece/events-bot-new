@@ -61,12 +61,12 @@ function initializePrelaunchScene(): void {
 
     let artworkSize = Math.min(vmin * .84, 1008);
     let artworkCenterX = width * .51;
-    let artworkCenterY = height * .47;
+    let artworkCenterY = height * .56;
 
     if (isWide) {
       artworkSize = Math.min(vmin * .84, 780);
       artworkCenterX = width * .58;
-      artworkCenterY = height * .58;
+      artworkCenterY = height * .77;
     }
     if (isMobile) {
       artworkSize = Math.min(vmin * .84, 330);
@@ -80,7 +80,7 @@ function initializePrelaunchScene(): void {
     if (isLandscapePhone) {
       artworkSize = Math.min(vmin * .92, 330);
       artworkCenterX = width * .48;
-      artworkCenterY = height * .49;
+      artworkCenterY = height * .63;
     }
 
     const tileSize = artworkSize / 5.95;
@@ -131,12 +131,12 @@ function initializePrelaunchScene(): void {
       const artworkY = (centerY - artworkBox.top) / artworkBox.height;
       const insideArtwork = artworkX > -.04 && artworkX < 1.04 && artworkY > -.04 && artworkY < 1.04;
       const wordmarkBand = artworkX > .04 && artworkX < .96 && artworkY > .40 && artworkY < .88;
-      const leatherBody = artworkX > .01 && artworkX < .99 && artworkY > .06 && artworkY < .96;
+      const lowerLeather = artworkX > .01 && artworkX < .99 && artworkY > .30 && artworkY < .97;
 
       let depth: PaneDepth = 'sealed';
-      if (wordmarkBand) depth = (row + column) % 6 === 0 ? 'dim' : 'clear';
-      else if (leatherBody) depth = (row * 3 + column) % 5 < 3 ? 'dim' : 'sealed';
-      else if (!insideArtwork && (row * 5 + column) % 7 === 0) depth = 'dim';
+      if (wordmarkBand) depth = (row + column) % 4 === 0 ? 'dim' : 'clear';
+      else if (lowerLeather) depth = (row * 3 + column) % 5 < 2 ? 'dim' : 'sealed';
+      else if (!insideArtwork && (row * 5 + column) % 8 === 0) depth = 'dim';
 
       const sourceDistance = Math.hypot(
         (sourceX - centerX) / tileSize,
