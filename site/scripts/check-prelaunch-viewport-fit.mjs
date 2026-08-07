@@ -62,6 +62,20 @@ try {
             height: value.height,
           };
         };
+        const overlap = (aStart, aEnd, bStart, bEnd) => Math.max(
+          0,
+          Math.min(aEnd, bEnd) - Math.max(aStart, bStart),
+        );
+        const radiusRatio = (value, box) => {
+          if (!box) return 0;
+          const raw = String(value || '').trim();
+          const numeric = Number.parseFloat(raw);
+          if (!Number.isFinite(numeric)) return 0;
+          if (raw.endsWith('%')) return numeric / 100;
+          const side = Math.min(box.width, box.height);
+          return side > 0 ? numeric / side : 0;
+        };
+
         const scrolling = document.scrollingElement || document.documentElement;
         const documentHeight = Math.max(
           scrolling.scrollHeight,
@@ -84,6 +98,20 @@ try {
         const notify = rect('.prelaunch__notify');
         const brandIconRect = rect('.prelaunch__brand-icon');
         const brandIconImageRect = rect('.prelaunch__brand-icon img');
+        const horizontalOverlap = description && notify
+          ? overlap(description.left, description.right, notify.left, notify.right)
+          : 0;
+        const descriptionNotifyLayout = horizontalOverlap > 1 ? 'stacked' : 'side-by-side';
+        const descriptionNotifyGap = description && notify
+          ? notify.top - description.bottom
+          : -1;
+        const descriptionNotifyHorizontalGap = description && notify
+          ? Math.max(notify.left - description.right, description.left - notify.right, 0)
+          : -1;
+        const brandIconImageScale = brandIconRect && brandIconImageRect && brandIconRect.width > 0
+          ? brandIconImageRect.width / brandIconRect.width
+          : 0;
+
         return {
           viewport: { width: window.innerWidth, height: window.innerHeight },
           documentHeight,
@@ -99,12 +127,16 @@ try {
           brandIcon: brandIconRect,
           brandIconImage: brandIconImageRect,
           brandIconOverflow: brandIconStyle?.overflow || '',
-          brandIconRadius: Number.parseFloat(brandIconStyle?.borderTopLeftRadius || '0'),
+          brandIconRadiusValue: brandIconStyle?.borderTopLeftRadius || '',
+          brandIconRadiusRatio: radiusRatio(brandIconStyle?.borderTopLeftRadius, brandIconRect),
           brandIconImageWidth: Number.parseFloat(brandIconImageStyle?.width || '0'),
+          brandIconImageScale,
           heading: rect('#prelaunch-title'),
           description,
           notify,
-          descriptionNotifyGap: description && notify ? notify.top - description.bottom : -1,
+          descriptionNotifyLayout,
+          descriptionNotifyGap,
+          descriptionNotifyHorizontalGap,
           consent: rect('.prelaunch-form__consent'),
           consentFontSize: consent ? Number.parseFloat(getComputedStyle(consent).fontSize) : 0,
         };
@@ -132,20 +164,35 @@ try {
         check(box.bottom <= viewport.height + 1, `${viewport.name}: ${name} bottom ${box.bottom}`, localFailures);
       }
 
-      const minimumGap = viewport.minDescriptionNotifyGap || 6;
-      check(
-        scene.descriptionNotifyGap >= minimumGap,
-        `${viewport.name}: description/form gap ${scene.descriptionNotifyGap}px is below ${minimumGap}px`,
-        localFailures,
-      );
+      if (scene.descriptionNotifyLayout === 'stacked') {
+        const minimumGap = viewport.minDescriptionNotifyGap || 6;
+        check(
+          scene.descriptionNotifyGap >= minimumGap,
+          `${viewport.name}: description/form gap ${scene.descriptionNotifyGap}px is below ${minimumGap}px`,
+          localFailures,
+        );
+      } else {
+        const minimumHorizontalGap = viewport.minDescriptionNotifyHorizontalGap || 20;
+        check(
+          scene.descriptionNotifyHorizontalGap >= minimumHorizontalGap,
+          `${viewport.name}: side-by-side copy/form gap ${scene.descriptionNotifyHorizontalGap}px is below ${minimumHorizontalGap}px`,
+          localFailures,
+        );
+      }
       check(scene.consentFontSize >= 8.5, `${viewport.name}: consent font ${scene.consentFontSize}px is unreadable`, localFailures);
 
       if (scene.brandIcon && scene.brandIconImage) {
-        const radiusRatio = scene.brandIconRadius / Math.min(scene.brandIcon.width, scene.brandIcon.height);
-        const imageScale = scene.brandIconImage.width / scene.brandIcon.width;
         check(scene.brandIconOverflow === 'hidden', `${viewport.name}: PWA icon wrapper overflow=${scene.brandIconOverflow}`, localFailures);
-        check(radiusRatio <= 0.20, `${viewport.name}: PWA icon radius ratio ${radiusRatio.toFixed(3)} crops stitching`, localFailures);
-        check(imageScale >= 1 && imageScale <= 1.10, `${viewport.name}: PWA icon image scale ${imageScale.toFixed(3)} crops stitching`, localFailures);
+        check(
+          scene.brandIconRadiusRatio <= 0.20,
+          `${viewport.name}: PWA icon radius ${scene.brandIconRadiusValue} (${scene.brandIconRadiusRatio.toFixed(3)}) crops stitching`,
+          localFailures,
+        );
+        check(
+          scene.brandIconImageScale >= 1 && scene.brandIconImageScale <= 1.10,
+          `${viewport.name}: PWA icon image scale ${scene.brandIconImageScale.toFixed(3)} crops stitching`,
+          localFailures,
+        );
         check(scene.brandIconImageWidth > 0, `${viewport.name}: PWA icon image has no computed width`, localFailures);
       }
 
