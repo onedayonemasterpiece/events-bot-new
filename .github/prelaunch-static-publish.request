@@ -1,5 +1,5 @@
 request_id=static-prelaunch-20260807-9d8fc920
- target_branch=agent/prelaunch-static-background-20260807
- target_sha=9d8fc9203a69f385407a57e23310bb47f2db4e2d
- visual_run_id=31224605480
- visual_artifact_digest=sha256:5f9bc73f66ff568b43a5e08a9e98cae6f8997fecbe73f7cce6d634c65eb0768e
+target_branch=agent/prelaunch-static-background-20260807
+target_sha=9d8fc9203a69f385407a57e23310bb47f2db4e2d
+visual_run_id=31224605480
+visual_artifact_digest=sha256:5f9bc73f66ff568b43a5e08a9e98cae6f8997fecbe73f7cce6d634c65eb0768e
