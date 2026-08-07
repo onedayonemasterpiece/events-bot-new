@@ -11,44 +11,31 @@ function source(path) {
   return readFileSync(join(repoRoot, path), 'utf8');
 }
 
-test('prelaunch scene has one source artwork, one seam mask and glass panes', () => {
+test('prelaunch scene uses responsive generated backgrounds with no live glass grid', () => {
   const page = source('site/src/components/PrelaunchPage.astro');
-  const scene = source('site/src/scripts/prelaunchScene.ts');
-  const css = source('site/src/styles/prelaunch-page.css');
-  const prepare = source('site/scripts/prepare-prelaunch-artwork.mjs');
+  const css = source('site/src/styles/prelaunch-static.css');
 
-  assert.match(page, /\/assets\/prelaunch\/PWA-icon\.webp/u);
-  assert.match(page, /data-prelaunch-artwork/u);
-  assert.match(page, /data-prelaunch-artwork-image/u);
-  assert.match(page, /data-prelaunch-seams/u);
-  assert.match(page, /data-prelaunch-seam-path/u);
-  assert.match(page, /fill-rule="evenodd"/u);
-  assert.match(page, /Array\.from\(\{ length: 112 \}/u);
+  assert.match(page, /data-static-background="generated-desktop-mobile-v1"/u);
+  assert.match(page, /data-prelaunch-static-picture/u);
+  assert.match(page, /data-prelaunch-static-image/u);
+  assert.match(page, /prelaunch-scene-desktop\.webp/u);
+  assert.match(page, /prelaunch-scene-mobile\.webp/u);
+  assert.match(page, /<picture/u);
+  assert.match(page, /<source[\s\S]*max-width: 899px/u);
+  assert.match(page, /import '\.\.\/styles\/prelaunch-static\.css'/u);
+  assert.doesNotMatch(page, /data-prelaunch-mosaic/u);
+  assert.doesNotMatch(page, /data-prelaunch-seams/u);
+  assert.doesNotMatch(page, /data-prelaunch-tile/u);
+  assert.doesNotMatch(page, /prelaunchScene/u);
   assert.doesNotMatch(page, /prelaunch-fit-v\d+\.css/u);
 
-  assert.match(prepare, /prelaunch-handoff[\s\S]*PWA-icon\.webp/u);
-  assert.match(prepare, /copyFileSync/u);
-
-  assert.match(scene, /inverse-svg-rounded-holes/u);
-  assert.match(scene, /source-asset-rounded-crop/u);
-  assert.match(scene, /roundedRectPath/u);
-  assert.match(scene, /seamPath\.setAttribute\('d', path\)/u);
-  assert.match(scene, /artworkSize \/ 5\.95/u);
-  assert.match(scene, /Math\.min\(width \* \.155, 62\)/u);
-  assert.match(scene, /Math\.ceil\(\(width - left/u);
-  assert.doesNotMatch(scene, /getImageData|flood|Uint32Array/iu);
-
-  assert.match(css, /\.prelaunch__artwork[\s\S]*overflow:\s*hidden/u);
-  assert.match(css, /\.prelaunch__artwork img[\s\S]*121\.52%/u);
-  assert.match(css, /\.prelaunch__seams path[\s\S]*fill:\s*var\(--prelaunch-seam\)/u);
-  assert.match(css, /\.prelaunch__tile[\s\S]*backdrop-filter/u);
-  assert.match(css, /data-depth="sealed"/u);
-  assert.match(css, /data-depth="dim"/u);
-  assert.match(css, /data-depth="clear"/u);
-  assert.match(css, /\.prelaunch__light[\s\S]*radial-gradient/u);
-  assert.match(css, /\.prelaunch__dust[\s\S]*radial-gradient/u);
-  assert.doesNotMatch(css, /transition:[^;}]*backdrop-filter/su);
-  assert.doesNotMatch(css, /0 0 0 calc\(var\(--prelaunch-tile-radius/u);
+  assert.match(css, /Lightweight prelaunch holder/u);
+  assert.match(css, /object-fit:\s*cover/u);
+  assert.match(css, /contain:\s*strict/u);
+  assert.match(css, /touch-action:\s*manipulation/u);
+  assert.match(css, /pre-rendered responsive picture/u);
+  assert.doesNotMatch(css, /backdrop-filter/u);
+  assert.doesNotMatch(css, /animation:/u);
 });
 
 test('prelaunch form uses guarded idempotent direct and relay transport', () => {
@@ -102,6 +89,7 @@ test('prelaunch runtime no longer imports the accumulated visual patch stack', (
   assert.doesNotMatch(index, /PrelaunchLanding|PrelaunchExperience|PrelaunchVisualReview/u);
   assert.doesNotMatch(layout, /prelaunch-(?:motion|fit-v\d+)\.css/u);
   assert.match(page, /prelaunch-page\.css/u);
+  assert.match(page, /prelaunch-static\.css/u);
 });
 
 test('desktop and mobile reference assets remain stored for manual review', () => {
