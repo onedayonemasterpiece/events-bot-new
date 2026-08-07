@@ -44,9 +44,23 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Download exact source archive
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          archive="${RUNNER_TEMP}/events-bot-new-${GITHUB_SHA}.tar.gz"
+          curl --fail-with-body --silent --show-error --location \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            --output "$archive"
+          tar --extract --gzip --file "$archive" --strip-components=1 --no-same-owner
+          test -f site/package-lock.json
+          test -f site/src/components/PrelaunchPage.astro
+          printf '%s\n' "$GITHUB_SHA" > .exact-source-sha
 
       - uses: actions/setup-node@v4
         with:
@@ -118,7 +132,8 @@ jobs:
           cp docs/features/static-site-pages/prelaunch-handoff/reference/generated-lighting-mobile-v1.webp \
             "$artifact_dir/reference/generated-lighting-mobile-v1.webp"
 
-          repository_sha="$(git rev-parse HEAD)"
+          repository_sha="${GITHUB_SHA}"
+          test "$(cat .exact-source-sha)" = "$repository_sha"
           printf '%s\n' "$repository_sha" > "$artifact_dir/repository-sha.txt"
           cat > "$artifact_dir/github-actions-gates.json" <<JSON
           {
