@@ -1,0 +1,55 @@
+name: Social runtime access credential probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/social-runtime-access-presence-trigger.txt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repository-scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_ACCESS_TOKEN: ${{ secrets.FLY_ACCESS_TOKEN }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TG_API_ID: ${{ secrets.TG_API_ID }}
+      TG_API_HASH: ${{ secrets.TG_API_HASH }}
+      TELEGRAM_AUTH_BUNDLE_E2E: ${{ secrets.TELEGRAM_AUTH_BUNDLE_E2E }}
+      TELEGRAM_AUTH_BUNDLE_STORY: ${{ secrets.TELEGRAM_AUTH_BUNDLE_STORY }}
+      VK_TOKEN: ${{ secrets.VK_TOKEN }}
+    steps:
+      - name: Print repository-scope presence only
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in FLY_API_TOKEN FLY_ACCESS_TOKEN TELEGRAM_BOT_TOKEN TG_API_ID TG_API_HASH TELEGRAM_AUTH_BUNDLE_E2E TELEGRAM_AUTH_BUNDLE_STORY VK_TOKEN; do
+            [[ -n "${!name:-}" ]] && echo "REPOSITORY_SECRET_PRESENT=$name" || echo "REPOSITORY_SECRET_ABSENT=$name"
+          done
+
+  production-scope:
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_ACCESS_TOKEN: ${{ secrets.FLY_ACCESS_TOKEN }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TG_API_ID: ${{ secrets.TG_API_ID }}
+      TG_API_HASH: ${{ secrets.TG_API_HASH }}
+      TELEGRAM_AUTH_BUNDLE_E2E: ${{ secrets.TELEGRAM_AUTH_BUNDLE_E2E }}
+      TELEGRAM_AUTH_BUNDLE_STORY: ${{ secrets.TELEGRAM_AUTH_BUNDLE_STORY }}
+      VK_TOKEN: ${{ secrets.VK_TOKEN }}
+    steps:
+      - name: Print production-scope presence only
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in FLY_API_TOKEN FLY_ACCESS_TOKEN TELEGRAM_BOT_TOKEN TG_API_ID TG_API_HASH TELEGRAM_AUTH_BUNDLE_E2E TELEGRAM_AUTH_BUNDLE_STORY VK_TOKEN; do
+            [[ -n "${!name:-}" ]] && echo "PRODUCTION_SECRET_PRESENT=$name" || echo "PRODUCTION_SECRET_ABSENT=$name"
+          done
