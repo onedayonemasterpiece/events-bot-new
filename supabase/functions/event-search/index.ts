@@ -7,8 +7,8 @@ import {
   paginateOccurrenceFamilies,
 } from "./occurrence-families.ts";
 import {
-  GoogleProviderAttemptError,
   googleModelActionUrl,
+  GoogleProviderAttemptError,
   GoogleQuotaBackend,
   GoogleQuotaKey,
   GoogleQuotaKeyCandidate,
@@ -28,6 +28,58 @@ const CORS_HEADERS = {
 const DEFAULT_LIMIT = 12;
 const MAX_LIMIT = 24;
 const EMBEDDING_DIM = 768;
+const SEARCH_CONTRACT_VERSION = "event-search-contract-v2";
+const EMBEDDING_POLICY_VERSION = "gemini-embedding-2-query-template-v2";
+const LLM_POLICY_VERSION = "lite-first-gemma-overflow-v2";
+const CACHE_POLICY_VERSION = "revision-bound-result-cache-v2";
+
+const EXECUTION_MODES = [
+  "cached_vector",
+  "cold_vector",
+  "cold_vector_llm",
+  "degraded_vector_fallback",
+] as const;
+
+type ExecutionMode = (typeof EXECUTION_MODES)[number];
+
+type SearchAttemptCounters = {
+  embedding_provider_attempts: number;
+  llm_provider_attempts: number;
+  vector_rpc_attempts: number;
+  result_cache_read_attempts: number;
+  result_cache_hit_count: number;
+  result_cache_write_attempts: number;
+  query_embedding_cache_read_attempts: number;
+  query_embedding_cache_hit_count: number;
+};
+
+type SearchRevisionSnapshot = {
+  catalog_revision: string;
+  corpus_revision: string;
+  search_document_revision: string;
+  document_count: number;
+  embedding_count: number;
+};
+
+function emptyAttemptCounters(): SearchAttemptCounters {
+  return {
+    embedding_provider_attempts: 0,
+    llm_provider_attempts: 0,
+    vector_rpc_attempts: 0,
+    result_cache_read_attempts: 0,
+    result_cache_hit_count: 0,
+    result_cache_write_attempts: 0,
+    query_embedding_cache_read_attempts: 0,
+    query_embedding_cache_hit_count: 0,
+  };
+}
+
+function isExecutionMode(value: unknown): value is ExecutionMode {
+  return (
+    typeof value === "string" &&
+    (EXECUTION_MODES as readonly string[]).includes(value)
+  );
+}
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -67,7 +119,8 @@ const MAX_QUERY_LENGTH = 180;
 const MAX_REQUEST_BODY_BYTES = 16 * 1024;
 
 type QueryValidation =
-  { ok: true; query: string } | { ok: false; error: string; detail: string };
+  | { ok: true; query: string }
+  | { ok: false; error: string; detail: string };
 
 function validateSearchQuery(value: unknown): QueryValidation {
   const query = normalizeQuery(value);
@@ -158,36 +211,42 @@ function parseQueryFacets(query: string): QueryFacets {
   const weekday = WEEKDAY_ALIASES.find(([pattern]) => pattern.test(normalized));
   const timeOfDay =
     /(^|[^а-яa-z0-9])(утро|утром|утренн[а-яa-z0-9_-]*)(?=$|[^а-яa-z0-9])/u.test(
-      normalized,
-    )
+        normalized,
+      )
       ? "morning"
-      : /(^|[^а-яa-z0-9])(день|днем|дневн[а-яa-z0-9_-]*)(?=$|[^а-яa-z0-9])/u.test(
+      : /(^|[^а-яa-z0-9])(день|днем|дневн[а-яa-z0-9_-]*)(?=$|[^а-яa-z0-9])/u
+          .test(
             normalized,
           )
-        ? "day"
-        : /(^|[^а-яa-z0-9])(вечер|вечером|вечерн[а-яa-z0-9_-]*)(?=$|[^а-яa-z0-9])/u.test(
-              normalized,
-            )
-          ? "evening"
-          : /(^|[^а-яa-z0-9])(ночь|ночью|ночн[а-яa-z0-9_-]*)(?=$|[^а-яa-z0-9])/u.test(
-                normalized,
-              )
-            ? "night"
-            : null;
+      ? "day"
+      : /(^|[^а-яa-z0-9])(вечер|вечером|вечерн[а-яa-z0-9_-]*)(?=$|[^а-яa-z0-9])/u
+          .test(
+            normalized,
+          )
+      ? "evening"
+      : /(^|[^а-яa-z0-9])(ночь|ночью|ночн[а-яa-z0-9_-]*)(?=$|[^а-яa-z0-9])/u
+          .test(
+            normalized,
+          )
+      ? "night"
+      : null;
   const admission =
-    /(^|[^а-яa-z0-9])(бесплатн[а-яa-z0-9_-]*|свободн[а-яa-z0-9_-]+\s+вход|без\s+оплаты)(?=$|[^а-яa-z0-9])/u.test(
-      normalized,
-    )
+    /(^|[^а-яa-z0-9])(бесплатн[а-яa-z0-9_-]*|свободн[а-яa-z0-9_-]+\s+вход|без\s+оплаты)(?=$|[^а-яa-z0-9])/u
+        .test(
+          normalized,
+        )
       ? "free"
-      : /(^|[^а-яa-z0-9])(регистрац[а-яa-z0-9_-]*|запис[ьи][а-яa-z0-9_-]*|по\s+записи)(?=$|[^а-яa-z0-9])/u.test(
+      : /(^|[^а-яa-z0-9])(регистрац[а-яa-z0-9_-]*|запис[ьи][а-яa-z0-9_-]*|по\s+записи)(?=$|[^а-яa-z0-9])/u
+          .test(
             normalized,
           )
-        ? "registration_required"
-        : /(^|[^а-яa-z0-9])(билет[а-яa-z0-9_-]*|платн[а-яa-z0-9_-]*|купить)(?=$|[^а-яa-z0-9])/u.test(
-              normalized,
-            )
-          ? "paid"
-          : null;
+      ? "registration_required"
+      : /(^|[^а-яa-z0-9])(билет[а-яa-z0-9_-]*|платн[а-яa-z0-9_-]*|купить)(?=$|[^а-яa-z0-9])/u
+          .test(
+            normalized,
+          )
+      ? "paid"
+      : null;
   return {
     weekday_iso: weekday ? weekday[1] : null,
     weekday_ru: weekday ? weekday[2] : null,
@@ -299,14 +358,9 @@ function googleProviderKeyGroups(
   return { active, reserve };
 }
 
-function providerKeyPool(
-  kind: "EMBEDDING" | "LLM",
-): GoogleApiKeyCandidate[] {
+function providerKeyPool(kind: "EMBEDDING" | "LLM"): GoogleApiKeyCandidate[] {
   const groups = googleProviderKeyGroups(kind);
-  return [
-    ...groups.active,
-    ...groups.reserve,
-  ];
+  return [...groups.active, ...groups.reserve];
 }
 
 function shouldTryNextGoogleKey(status: number): boolean {
@@ -314,11 +368,13 @@ function shouldTryNextGoogleKey(status: number): boolean {
 }
 
 function shouldTryNextSharedQuotaKey(error: unknown): boolean {
-  return error instanceof SharedGoogleQuotaError &&
+  return (
+    error instanceof SharedGoogleQuotaError &&
     error.stage === "reserve" &&
     ["rpm", "tpm", "rpd", "provider_429", "no_keys"].includes(
       error.blocked_reason || "",
-    );
+    )
+  );
 }
 
 async function fetchWithTimeout(
@@ -394,6 +450,7 @@ type EmbeddingResult = {
 type QueryEmbeddingCacheOptions = {
   supabaseUrl: string;
   queryHash: string;
+  bypassRead?: boolean;
 };
 
 type SearchResultCacheOptions = {
@@ -407,8 +464,7 @@ type SearchResultCacheOptions = {
 };
 
 function personalizationServiceClient(supabaseUrl: string) {
-  const serviceKey =
-    env("SUPABASE_SERVICE_ROLE_KEY") ||
+  const serviceKey = env("SUPABASE_SERVICE_ROLE_KEY") ||
     env("PERSONALIZATION_SUPABASE_SECRET_KEY") ||
     env("PERSONALIZATION_SUPABASE_SERVICE_KEY") ||
     env("SUPABASE_SERVICE_KEY");
@@ -448,9 +504,7 @@ function sharedGoogleQuotaBackend(
     async rpc(name: string, payload: Record<string, unknown>) {
       const { data, error } = await service.rpc(name, payload);
       if (error) {
-        throw new Error(
-          `${name}:${error.code || error.message || "unknown"}`,
-        );
+        throw new Error(`${name}:${error.code || error.message || "unknown"}`);
       }
       return data;
     },
@@ -540,19 +594,26 @@ async function storeCachedQueryEmbedding(
   values: number[],
   keyEnv: string,
 ): Promise<boolean> {
-  if (!cache?.supabaseUrl || !cache.queryHash || values.length !== EMBEDDING_DIM) {
+  if (
+    !cache?.supabaseUrl ||
+    !cache.queryHash ||
+    values.length !== EMBEDDING_DIM
+  ) {
     return false;
   }
   const service = personalizationServiceClient(cache.supabaseUrl);
   if (!service) return false;
   try {
-    const { error } = await service.rpc("upsert_event_search_query_embedding_v1", {
-      p_query_hash: cache.queryHash,
-      p_embedding_model: model,
-      p_embedding_dim: EMBEDDING_DIM,
-      p_embedding: values,
-      p_metadata: { key_env: keyEnv, source: "event-search-edge" },
-    });
+    const { error } = await service.rpc(
+      "upsert_event_search_query_embedding_v1",
+      {
+        p_query_hash: cache.queryHash,
+        p_embedding_model: model,
+        p_embedding_dim: EMBEDDING_DIM,
+        p_embedding: values,
+        p_metadata: { key_env: keyEnv, source: "event-search-edge" },
+      },
+    );
     return !error;
   } catch (_) {
     return false;
@@ -623,19 +684,24 @@ async function embedQuery(
   query: string,
   quotaBackend: GoogleQuotaBackend | null,
   cache?: QueryEmbeddingCacheOptions,
+  counters: SearchAttemptCounters = emptyAttemptCounters(),
 ): Promise<EmbeddingResult> {
   const model = googleModelId(
     env("EVENT_SEARCH_EMBEDDING_MODEL"),
     "gemini-embedding-2",
   );
-  const cachedValues = await readCachedQueryEmbedding(cache, model);
-  if (cachedValues) {
-    return {
-      values: cachedValues,
-      key_env: "cache",
-      model,
-      cache_status: "hit",
-    };
+  if (!cache?.bypassRead) {
+    counters.query_embedding_cache_read_attempts += 1;
+    const cachedValues = await readCachedQueryEmbedding(cache, model);
+    if (cachedValues) {
+      counters.query_embedding_cache_hit_count += 1;
+      return {
+        values: cachedValues,
+        key_env: "cache",
+        model,
+        cache_status: "hit",
+      };
+    }
   }
 
   const keys = await resolveStrictGoogleQuotaPool(
@@ -670,6 +736,7 @@ async function embedQuery(
         accountName: sharedGoogleAccountName(),
         readEnv: (name) => env(name),
         execute: async (apiKey, lease) => {
+          counters.embedding_provider_attempts += 1;
           logEvent("event_search_google_provider_sent", {
             provider_kind: "embedding",
             model,
@@ -712,12 +779,18 @@ async function embedQuery(
           }
           const values = (payload as Record<string, unknown>)?.embedding &&
               typeof (payload as Record<string, unknown>).embedding === "object"
-            ? ((payload as Record<string, unknown>).embedding as Record<string, unknown>)
-              .values
+            ? (
+              (payload as Record<string, unknown>).embedding as Record<
+                string,
+                unknown
+              >
+            ).values
             : null;
           if (!Array.isArray(values) || values.length !== EMBEDDING_DIM) {
             throw new GoogleProviderAttemptError(
-              `embedding_bad_dimension:${Array.isArray(values) ? values.length : "missing"}`,
+              `embedding_bad_dimension:${
+                Array.isArray(values) ? values.length : "missing"
+              }`,
               {
                 provider_status: "succeeded_invalid_payload",
                 error_type: "provider_payload",
@@ -743,7 +816,7 @@ async function embedQuery(
         values: numericValues,
         key_env: key.limiter_env_name,
         model,
-        cache_status: cache ? (stored ? "miss" : "store_failed") : "unavailable",
+        cache_status: cache ? stored ? "miss" : "store_failed" : "unavailable",
       };
     } catch (error) {
       const message = errorMessage(error).slice(0, 120);
@@ -779,11 +852,11 @@ async function embedQuery(
 }
 
 function extractGeminiText(payload: Record<string, unknown>): string {
-  const parts =
-    ((
-      (payload?.candidates as Candidate[] | undefined)?.[0]?.content as
-        Candidate | undefined
-    )?.parts as Candidate[] | undefined) || [];
+  const parts = ((
+    (payload?.candidates as Candidate[] | undefined)?.[0]?.content as
+      | Candidate
+      | undefined
+  )?.parts as Candidate[] | undefined) || [];
   return parts
     .map((part) => (typeof part?.text === "string" ? part.text : ""))
     .filter(Boolean)
@@ -800,8 +873,9 @@ function extractJsonObjectText(text: string): string {
     .trim();
   if (unfenced.startsWith("{") && unfenced.endsWith("}")) return unfenced;
   const start = unfenced.indexOf("{");
-  if (start < 0)
+  if (start < 0) {
     throw new Error(`llm_json_object_missing:${unfenced.slice(0, 60)}`);
+  }
   let depth = 0;
   let inString = false;
   let escaped = false;
@@ -866,8 +940,7 @@ const LLM_VERIFIER_RESPONSE_SCHEMA = {
 type Candidate = Record<string, unknown>;
 
 function candidateId(candidate: Candidate): number | null {
-  const raw =
-    candidate?.event_id ??
+  const raw = candidate?.event_id ??
     candidate?.id ??
     (candidate?.display as Candidate | undefined)?.event_id ??
     (candidate?.display as Candidate | undefined)?.id;
@@ -909,8 +982,7 @@ async function fetchCandidateDigests(
   supabaseUrl: string,
   eventIds: number[],
 ): Promise<Map<number, string>> {
-  const serviceKey =
-    env("SUPABASE_SERVICE_ROLE_KEY") ||
+  const serviceKey = env("SUPABASE_SERVICE_ROLE_KEY") ||
     env("PERSONALIZATION_SUPABASE_SECRET_KEY") ||
     env("PERSONALIZATION_SUPABASE_SERVICE_KEY") ||
     env("SUPABASE_SERVICE_KEY");
@@ -924,7 +996,9 @@ async function fetchCandidateDigests(
   const filter = `event_id=in.(${ids.join(",")})`;
   try {
     const response = await fetchWithTimeout(
-      `${supabaseUrl.replace(/\/$/u, "")}/rest/v1/event_search_documents?${select}&${filter}`,
+      `${
+        supabaseUrl.replace(/\/$/u, "")
+      }/rest/v1/event_search_documents?${select}&${filter}`,
       {
         method: "GET",
         headers: {
@@ -957,15 +1031,13 @@ function normalizeCandidate(
   row: Record<string, unknown>,
   index: number,
 ): Candidate {
-  const snapshot =
-    row.card_snapshot && typeof row.card_snapshot === "object"
-      ? (row.card_snapshot as Candidate)
-      : {};
+  const snapshot = row.card_snapshot && typeof row.card_snapshot === "object"
+    ? (row.card_snapshot as Candidate)
+    : {};
   const eventId = Number(row.event_id ?? snapshot.event_id ?? snapshot.id);
-  const display =
-    snapshot.display && typeof snapshot.display === "object"
-      ? (snapshot.display as Candidate)
-      : {};
+  const display = snapshot.display && typeof snapshot.display === "object"
+    ? (snapshot.display as Candidate)
+    : {};
   const similarity = Number(row.similarity ?? 0);
   return {
     ...snapshot,
@@ -976,8 +1048,8 @@ function normalizeCandidate(
     tags: Array.isArray(snapshot.tags)
       ? snapshot.tags
       : Array.isArray(row.tags)
-        ? row.tags
-        : [],
+      ? row.tags
+      : [],
     base_similarity: similarity,
     static_score: similarity,
     semantic_score: similarity,
@@ -1016,6 +1088,8 @@ type LlmVerifyResult = {
 type LlmVerifyOptions = {
   gemma_overflow_allowed: boolean;
   quota_backend: GoogleQuotaBackend | null;
+  counters?: SearchAttemptCounters;
+  reserve_canary_attempt?: () => Promise<boolean>;
 };
 
 type LlmAttempt = {
@@ -1055,6 +1129,10 @@ function uniqueCandidatesByIds(
     seen.add(id);
   }
   return out;
+}
+
+function sanitizedLlmAttempts(attempts: LlmAttempt[] | undefined) {
+  return (attempts || []).map(({ key_env: _keyEnv, ...attempt }) => attempt);
 }
 
 function sleepMs(ms: number): Promise<void> {
@@ -1112,7 +1190,7 @@ function parseTimeoutProfile(
     .filter((item) => Number.isFinite(item) && item > 0);
   const base = raw.length > 0 ? raw : fallback;
   const out = base.map((item) =>
-    Math.max(minMs, Math.min(maxMs, Math.trunc(item))),
+    Math.max(minMs, Math.min(maxMs, Math.trunc(item)))
   );
   return out.length > 0 ? out : fallback;
 }
@@ -1235,7 +1313,7 @@ async function llmVerify(
   const enabled = ["1", "true", "yes", "on"].includes(
     env("EVENT_SEARCH_LLM_ENABLED", "").toLowerCase(),
   );
-  if (candidates.length === 0)
+  if (candidates.length === 0) {
     return {
       exact: [],
       possible: [],
@@ -1243,7 +1321,8 @@ async function llmVerify(
       status: "skipped_no_candidates",
       used: false,
     };
-  if (!enabled)
+  }
+  if (!enabled) {
     return {
       exact: [],
       possible: candidates,
@@ -1251,6 +1330,7 @@ async function llmVerify(
       status: "disabled",
       used: false,
     };
+  }
   const factCoverage = candidateDigests.size / Math.max(1, candidates.length);
   if (factCoverage < 0.5) {
     return {
@@ -1323,8 +1403,7 @@ async function llmVerify(
     0,
     5000,
   );
-  const shouldTryFallback =
-    options.gemma_overflow_allowed &&
+  const shouldTryFallback = options.gemma_overflow_allowed &&
     fallbackEnabled &&
     fallbackModels.length > 0;
   const factMaxChars = envInt("EVENT_SEARCH_LLM_FACT_MAX_CHARS", 180, 120, 800);
@@ -1407,7 +1486,12 @@ async function llmVerify(
     attemptNumber: number,
     timeoutMs: number,
     profile: LlmPromptProfile,
-  ): Promise<{ result: ParsedLlmClassification; profile: LlmPromptProfile } | null> => {
+  ): Promise<
+    {
+      result: ParsedLlmClassification;
+      profile: LlmPromptProfile;
+    } | null
+  > => {
     const reservedTpm = envInt(
       "EVENT_SEARCH_LLM_RESERVED_TPM",
       Math.ceil(profile.prompt_chars / 2) + maxOutputTokens,
@@ -1421,6 +1505,28 @@ async function llmVerify(
       const key = llmKeys[(providerKeyCursor + keyIndex) % llmKeys.length];
       if (providerBlockedScopes.has(key.quota_scope)) continue;
       const startedAt = performance.now();
+      if (options.reserve_canary_attempt) {
+        let reserved = false;
+        try {
+          reserved = await options.reserve_canary_attempt();
+        } catch (_) {
+          reserved = false;
+        }
+        if (!reserved) {
+          attempts.push({
+            model,
+            role,
+            attempt: attemptNumber,
+            status: "degraded:canary_daily_budget_exhausted",
+            elapsed_ms: nowMs() - Math.round(startedAt),
+            timeout_ms: timeoutMs,
+            prompt_chars: profile.prompt_chars,
+            prompt_fact_chars: profile.prompt_fact_chars,
+            compact_candidate_count: profile.compact_candidate_count,
+          });
+          return null;
+        }
+      }
       try {
         const result = await withSharedGoogleQuotaAttempt({
           backend: options.quota_backend,
@@ -1431,6 +1537,7 @@ async function llmVerify(
           accountName: sharedGoogleAccountName(),
           readEnv: (name) => env(name),
           execute: async (apiKey, lease) => {
+            if (options.counters) options.counters.llm_provider_attempts += 1;
             logEvent("event_search_google_provider_sent", {
               provider_kind: "llm",
               provider_role: role,
@@ -1471,7 +1578,7 @@ async function llmVerify(
               timeoutMs,
               "llm_provider",
             );
-            const payload = await response.json().catch(() => ({})) as Record<
+            const payload = (await response.json().catch(() => ({}))) as Record<
               string,
               unknown
             >;
@@ -1535,11 +1642,12 @@ async function llmVerify(
         const message = errorMessage(error).slice(0, 80);
         const status = error instanceof GoogleProviderAttemptError
           ? `degraded:provider_${error.error_code || "error"}`
-          : error instanceof SharedGoogleQuotaError && error.stage === "reserve"
-            ? `degraded:quota_${error.blocked_reason || "unavailable"}`
-            : error instanceof SharedGoogleQuotaError
-              ? `degraded:shared_limiter_${error.stage}`
-              : `degraded:${message}`;
+          : error instanceof SharedGoogleQuotaError &&
+              error.stage === "reserve"
+          ? `degraded:quota_${error.blocked_reason || "unavailable"}`
+          : error instanceof SharedGoogleQuotaError
+          ? `degraded:shared_limiter_${error.stage}`
+          : `degraded:${message}`;
         attempts.push({
           model,
           role,
@@ -1591,13 +1699,19 @@ async function llmVerify(
       attemptNumber += 1
     ) {
       const primaryBudgetStartedAt = performance.now();
-      for (const [profileIndex, candidateCount] of primaryCandidateCounts.entries()) {
+      for (
+        const [
+          profileIndex,
+          candidateCount,
+        ] of primaryCandidateCounts.entries()
+      ) {
         const elapsedBudgetMs = nowMs() - Math.round(primaryBudgetStartedAt);
         const remainingBudgetMs = primaryTotalBudgetMs - elapsedBudgetMs;
         if (remainingBudgetMs < 300) break;
         const profileTimeoutMs = Math.min(
-          primaryTimeoutProfileMs[Math.min(profileIndex, primaryTimeoutProfileMs.length - 1)] ||
-            primaryTimeoutMs,
+          primaryTimeoutProfileMs[
+            Math.min(profileIndex, primaryTimeoutProfileMs.length - 1)
+          ] || primaryTimeoutMs,
           remainingBudgetMs,
         );
         const profile = buildPromptProfile(candidateCount);
@@ -1658,10 +1772,9 @@ async function llmVerify(
     }
   }
 
-  const lastStatus =
-    attempts.length > 0
-      ? attempts[attempts.length - 1].status
-      : "degraded:no_model_attempts";
+  const lastStatus = attempts.length > 0
+    ? attempts[attempts.length - 1].status
+    : "degraded:no_model_attempts";
   return {
     exact: [],
     possible: candidates,
@@ -1673,8 +1786,8 @@ async function llmVerify(
     attempts,
     prompt_chars: attempts[attempts.length - 1]?.prompt_chars,
     prompt_fact_chars: attempts[attempts.length - 1]?.prompt_fact_chars,
-    compact_candidate_count:
-      attempts[attempts.length - 1]?.compact_candidate_count,
+    compact_candidate_count: attempts[attempts.length - 1]
+      ?.compact_candidate_count,
   };
 }
 
@@ -1691,6 +1804,173 @@ async function recordSearchRequest(
   } catch (_) {
     // Search telemetry must never break the user-facing search request.
   }
+}
+
+type RpcClient = {
+  rpc: (
+    fn: string,
+    args?: Record<string, unknown>,
+  ) => PromiseLike<{
+    data: unknown;
+    error: { code?: string; message?: string } | null;
+  }>;
+};
+
+async function getSearchRevisionSnapshot(
+  service: RpcClient,
+  embeddingModel: string,
+  embeddingDocKind: string,
+): Promise<SearchRevisionSnapshot> {
+  const { data, error } = await service.rpc(
+    "get_event_search_revision_snapshot_internal_v1",
+    {
+      p_embedding_model: embeddingModel,
+      p_embedding_dim: EMBEDDING_DIM,
+      p_embedding_doc_kind: embeddingDocKind,
+    },
+  );
+  if (error) {
+    throw new Error(`revision_snapshot:${error.code || error.message}`);
+  }
+  const row = Array.isArray(data)
+    ? (data[0] as Candidate | undefined)
+    : (data as Candidate | null);
+  if (!row) throw new Error("revision_snapshot:missing");
+  return {
+    catalog_revision: String(row.catalog_revision || "missing"),
+    corpus_revision: String(row.corpus_revision || "missing"),
+    search_document_revision: String(row.search_document_revision || "missing"),
+    document_count: Math.max(0, Number(row.document_count || 0)),
+    embedding_count: Math.max(0, Number(row.embedding_count || 0)),
+  };
+}
+
+async function isSearchCanaryPrincipal(
+  service: RpcClient,
+  userId: string,
+): Promise<boolean> {
+  const { data, error } = await service.rpc(
+    "is_event_search_canary_principal_internal_v1",
+    { p_user_id: userId },
+  );
+  return !error && data === true;
+}
+
+async function reserveSearchCanaryLlmAttempt(
+  service: RpcClient,
+  userId: string,
+  clientRequestId: string,
+): Promise<boolean> {
+  const { error } = await service.rpc(
+    "reserve_event_search_canary_llm_budget_internal_v1",
+    {
+      p_user_id: userId,
+      p_operation_id: crypto.randomUUID(),
+      p_client_request_id: clientRequestId,
+      p_attempts: 1,
+    },
+  );
+  return !error;
+}
+
+function responseEventIds(body: Record<string, unknown>): number[] {
+  const lists = [body.items, body.fallback_items];
+  const ids: number[] = [];
+  const seen = new Set<number>();
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const raw of list) {
+      const id = raw && typeof raw === "object"
+        ? candidateId(raw as Candidate)
+        : null;
+      if (id === null || seen.has(id)) continue;
+      seen.add(id);
+      ids.push(id);
+      if (ids.length >= 100) return ids;
+    }
+  }
+  return ids;
+}
+
+async function recordSearchCanaryReceipt(
+  service: RpcClient,
+  options: {
+    userId: string;
+    requestId: string;
+    clientRequestId: string;
+    requestedMode: ExecutionMode;
+    actualMode: ExecutionMode;
+    terminalStatus: string;
+    revisions: SearchRevisionSnapshot;
+    counters: SearchAttemptCounters;
+    responseBody?: Record<string, unknown>;
+    errorCode?: string | null;
+  },
+): Promise<string | null> {
+  const body = options.responseBody || {};
+  const ids = responseEventIds(body);
+  const servedListId = String(body.served_list_id || "").trim();
+  const { data, error } = await service.rpc(
+    "record_event_search_canary_receipt_internal_v1",
+    {
+      p_user_id: options.userId,
+      p_request_id: options.requestId,
+      p_client_request_id: options.clientRequestId,
+      p_search_contract_version: SEARCH_CONTRACT_VERSION,
+      p_requested_execution_mode: options.requestedMode,
+      p_actual_execution_mode: options.actualMode,
+      p_terminal_status: options.terminalStatus,
+      p_catalog_revision: options.revisions.catalog_revision,
+      p_corpus_revision: options.revisions.corpus_revision,
+      p_search_document_revision: options.revisions.search_document_revision,
+      p_embedding_policy_version: EMBEDDING_POLICY_VERSION,
+      p_llm_policy_version: LLM_POLICY_VERSION,
+      p_cache_policy_version: CACHE_POLICY_VERSION,
+      p_embedding_provider_attempts:
+        options.counters.embedding_provider_attempts,
+      p_llm_provider_attempts: options.counters.llm_provider_attempts,
+      p_vector_rpc_attempts: options.counters.vector_rpc_attempts,
+      p_result_cache_read_attempts: options.counters.result_cache_read_attempts,
+      p_result_cache_hit_count: options.counters.result_cache_hit_count,
+      p_result_cache_write_attempts:
+        options.counters.result_cache_write_attempts,
+      p_query_embedding_cache_read_attempts:
+        options.counters.query_embedding_cache_read_attempts,
+      p_query_embedding_cache_hit_count:
+        options.counters.query_embedding_cache_hit_count,
+      p_result_count: ids.length,
+      p_response_event_ids: ids,
+      p_served_list_id: servedListId || null,
+      p_error_code: options.errorCode || null,
+    },
+  );
+  return error || typeof data !== "string" ? null : data;
+}
+
+function receiptContractFields(
+  requestedMode: ExecutionMode,
+  actualMode: ExecutionMode,
+  revisions: SearchRevisionSnapshot,
+  counters: SearchAttemptCounters,
+): Record<string, unknown> {
+  return {
+    search_contract_version: SEARCH_CONTRACT_VERSION,
+    requested_execution_mode: requestedMode,
+    actual_execution_mode: actualMode,
+    catalog_revision: revisions.catalog_revision,
+    corpus_revision: revisions.corpus_revision,
+    search_document_revision: revisions.search_document_revision,
+    embedding_policy_version: EMBEDDING_POLICY_VERSION,
+    llm_policy_version: LLM_POLICY_VERSION,
+    cache_policy_version: CACHE_POLICY_VERSION,
+    policy_versions: {
+      embedding: EMBEDDING_POLICY_VERSION,
+      llm: LLM_POLICY_VERSION,
+      cache: CACHE_POLICY_VERSION,
+    },
+    ...counters,
+    request_counters: { ...counters },
+  };
 }
 
 type ProgressStage = {
@@ -1715,10 +1995,10 @@ async function runEventSearch(
   progress?: ProgressCallback,
 ): Promise<SearchHandlerResult> {
   await progress?.({ stage: "auth", progress: 5, label: "Проверяю вход" });
-  const supabaseUrl =
-    env("SUPABASE_URL") || env("PERSONALIZATION_SUPABASE_URL");
-  const supabaseAnonKey =
-    env("SUPABASE_ANON_KEY") || env("PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY");
+  const supabaseUrl = env("SUPABASE_URL") ||
+    env("PERSONALIZATION_SUPABASE_URL");
+  const supabaseAnonKey = env("SUPABASE_ANON_KEY") ||
+    env("PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY");
   if (!supabaseUrl || !supabaseAnonKey) {
     return {
       status: 500,
@@ -1740,8 +2020,9 @@ async function runEventSearch(
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const { data: userResult, error: userError } =
-    await supabase.auth.getUser(accessToken);
+  const { data: userResult, error: userError } = await supabase.auth.getUser(
+    accessToken,
+  );
   if (userError || !userResult?.user) {
     return {
       status: 401,
@@ -1768,7 +2049,10 @@ async function runEventSearch(
   let body: Record<string, unknown> = {};
   try {
     const contentLength = Number(request.headers.get("Content-Length") || "0");
-    if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BODY_BYTES) {
+    if (
+      Number.isFinite(contentLength) &&
+      contentLength > MAX_REQUEST_BODY_BYTES
+    ) {
       return {
         status: 413,
         body: { error: "request_too_large", request_id: requestId },
@@ -1807,9 +2091,10 @@ async function runEventSearch(
   ).trim();
   if (
     requestedOperationId &&
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
-      requestedOperationId,
-    )
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
+      .test(
+        requestedOperationId,
+      )
   ) {
     return {
       status: 400,
@@ -1827,11 +2112,38 @@ async function runEventSearch(
     60,
   );
   const includeFallback = body.include_fallback !== false;
-  const useLlmVerifier =
-    body.use_llm_verifier !== false &&
-    ["1", "true", "yes", "on"].includes(
-      env("EVENT_SEARCH_LLM_ENABLED", "").toLowerCase(),
-    );
+  const explicitExecutionMode = body.execution_mode !== undefined;
+  if (explicitExecutionMode && !isExecutionMode(body.execution_mode)) {
+    return {
+      status: 400,
+      body: { error: "invalid_execution_mode", request_id: requestId },
+    };
+  }
+  const isCanary = explicitExecutionMode;
+  if (isCanary && !(await isSearchCanaryPrincipal(service, userId))) {
+    return {
+      status: 403,
+      body: { error: "search_canary_persona_required", request_id: requestId },
+    };
+  }
+  const llmEnvironmentEnabled = ["1", "true", "yes", "on"].includes(
+    env("EVENT_SEARCH_LLM_ENABLED", "").toLowerCase(),
+  );
+  const requestedExecutionMode: ExecutionMode = explicitExecutionMode
+    ? (body.execution_mode as ExecutionMode)
+    : body.use_llm_verifier !== false && llmEnvironmentEnabled
+    ? "cold_vector_llm"
+    : "cold_vector";
+  const requestedLlm = requestedExecutionMode === "cold_vector_llm" ||
+    requestedExecutionMode === "degraded_vector_fallback";
+  const useLlmVerifier = requestedLlm && llmEnvironmentEnabled;
+  const bypassResultCache = isCanary &&
+    requestedExecutionMode !== "cached_vector";
+  const bypassQueryEmbeddingCache = isCanary &&
+    requestedExecutionMode !== "cached_vector";
+  const deterministicLlmFailure = isCanary &&
+    requestedExecutionMode === "degraded_vector_fallback";
+  const quotaPlanId = isCanary ? "search_canary" : "registered";
   const queryHash = await sha256Hex(query.toLowerCase());
   const queryEmbeddingHash = await queryEmbeddingCacheHash(query);
   const embeddingModel = googleModelId(
@@ -1839,20 +2151,50 @@ async function runEventSearch(
     "gemini-embedding-2",
   );
   const embeddingDocKind = env("EVENT_SEARCH_EMBEDDING_DOC_KIND", "search_v3");
+  const counters = emptyAttemptCounters();
+  let revisions: SearchRevisionSnapshot;
+  try {
+    revisions = await getSearchRevisionSnapshot(
+      service,
+      embeddingModel,
+      embeddingDocKind,
+    );
+  } catch (error) {
+    return {
+      status: 503,
+      body: {
+        error: "search_revision_unavailable",
+        detail: errorMessage(error).slice(0, 160),
+        request_id: requestId,
+      },
+    };
+  }
   const timings: Record<string, number> = {};
   const dateFrom = new Date().toISOString().slice(0, 10);
   const allowLlmFallback = body.allow_llm_fallback !== false;
   const llmPolicySignature = JSON.stringify({
     enabled: useLlmVerifier,
     allow_fallback: allowLlmFallback,
-    lite_model: googleModelId(env("EVENT_SEARCH_LLM_MODEL"), "gemini-3.1-flash-lite"),
-    overflow_model: googleModelId(env("EVENT_SEARCH_LLM_FALLBACK_MODEL"), "gemma-4-26b-a4b-it"),
+    lite_model: googleModelId(
+      env("EVENT_SEARCH_LLM_MODEL"),
+      "gemini-3.1-flash-lite",
+    ),
+    overflow_model: googleModelId(
+      env("EVENT_SEARCH_LLM_FALLBACK_MODEL"),
+      "gemma-4-26b-a4b-it",
+    ),
   });
   const resultCacheKey = await searchResultCacheKey({
-    v: 1,
+    v: 2,
     query_hash: queryEmbeddingHash,
+    catalog_revision: revisions.catalog_revision,
+    corpus_revision: revisions.corpus_revision,
+    search_document_revision: revisions.search_document_revision,
     embedding_model: embeddingModel,
     embedding_doc_kind: embeddingDocKind,
+    embedding_policy_version: EMBEDDING_POLICY_VERSION,
+    llm_policy_version: LLM_POLICY_VERSION,
+    cache_policy_version: CACHE_POLICY_VERSION,
     date_from: dateFrom,
     limit,
     offset,
@@ -1877,29 +2219,54 @@ async function runEventSearch(
     label: "Проверяю быстрый кэш",
   });
   const resultCacheStartedAt = performance.now();
-  const cachedResult = await readCachedSearchResult(resultCache);
+  let cachedResult: Record<string, unknown> | null = null;
+  if (!bypassResultCache) {
+    counters.result_cache_read_attempts += 1;
+    cachedResult = await readCachedSearchResult(resultCache);
+    if (cachedResult) counters.result_cache_hit_count += 1;
+  }
   timings.result_cache_ms = nowMs() - Math.round(resultCacheStartedAt);
   if (cachedResult) {
     const quotaStartedAt = performance.now();
     const { data: quotaRows } = await service.rpc(
       "get_event_search_quota_internal_v1",
-      { p_user_id: userId, p_plan_id: "registered" },
+      { p_user_id: userId, p_plan_id: quotaPlanId },
     );
     timings.quota_ms = nowMs() - Math.round(quotaStartedAt);
     timings.total_ms = nowMs() - Math.round(requestStartedAt);
     const quotaState = Array.isArray(quotaRows) ? quotaRows[0] : quotaRows;
-    const bodyFromCache = {
+    const bodyFromCache: Record<string, unknown> = {
       ...cachedResult,
       request_id: requestId,
       client_request_id: quotaOperationId,
       quota: quotaState || cachedResult.quota || null,
       result_cache_status: "hit",
       served_from_cache: true,
+      ...receiptContractFields(
+        requestedExecutionMode,
+        "cached_vector",
+        revisions,
+        counters,
+      ),
       timings_ms: {
-        ...((cachedResult.timings_ms as Record<string, unknown> | undefined) || {}),
+        ...((cachedResult.timings_ms as Record<string, unknown> | undefined) ||
+          {}),
         ...timings,
       },
     };
+    if (isCanary) {
+      bodyFromCache.receipt_id = await recordSearchCanaryReceipt(service, {
+        userId,
+        requestId,
+        clientRequestId: quotaOperationId,
+        requestedMode: requestedExecutionMode,
+        actualMode: "cached_vector",
+        terminalStatus: "ok",
+        revisions,
+        counters,
+        responseBody: bodyFromCache,
+      });
+    }
     logEvent("event_search_result_cache_hit", {
       request_id: requestId,
       user_hash: userHash,
@@ -1925,8 +2292,8 @@ async function runEventSearch(
     {
       p_user_id: userId,
       p_client_request_id: quotaOperationId,
-      p_plan_id: "registered",
-      p_use_llm: useLlmVerifier,
+      p_plan_id: quotaPlanId,
+      p_use_llm: !isCanary && useLlmVerifier && !deterministicLlmFailure,
     },
   );
   timings.quota_ms = nowMs() - Math.round(quotaStartedAt);
@@ -1951,16 +2318,40 @@ async function runEventSearch(
       error_code: quotaError.code || "quota_error",
       timings_ms: timings,
     });
+    const quotaFailureMode: ExecutionMode = requestedLlm
+      ? "degraded_vector_fallback"
+      : "cold_vector";
+    const quotaFailureBody: Record<string, unknown> = {
+      error: "quota_exceeded",
+      detail: quotaError.message?.includes("hourly")
+        ? "Часовой лимит поисков закончился. Окно обновится в начале следующего часа; повтор уже найденного из кэша лимит не тратит."
+        : "Лимит поисков на сегодня закончился. Повтор уже найденного из кэша лимит не тратит.",
+      request_id: requestId,
+      client_request_id: quotaOperationId,
+      ...receiptContractFields(
+        requestedExecutionMode,
+        quotaFailureMode,
+        revisions,
+        counters,
+      ),
+    };
+    if (isCanary) {
+      quotaFailureBody.receipt_id = await recordSearchCanaryReceipt(service, {
+        userId,
+        requestId,
+        clientRequestId: quotaOperationId,
+        requestedMode: requestedExecutionMode,
+        actualMode: quotaFailureMode,
+        terminalStatus: "quota_exceeded",
+        revisions,
+        counters,
+        responseBody: quotaFailureBody,
+        errorCode: quotaError.code || "quota_error",
+      });
+    }
     return {
       status: 429,
-      body: {
-        error: "quota_exceeded",
-        detail: quotaError.message?.includes("hourly")
-          ? "Часовой лимит поисков закончился. Окно обновится в начале следующего часа; повтор уже найденного из кэша лимит не тратит."
-          : "Лимит поисков на сегодня закончился. Повтор уже найденного из кэша лимит не тратит.",
-        request_id: requestId,
-        client_request_id: quotaOperationId,
-      },
+      body: quotaFailureBody,
     };
   }
 
@@ -1968,8 +2359,9 @@ async function runEventSearch(
   const llmQuotaReserved = Boolean(
     (quotaState as Record<string, unknown> | null)?.llm_reserved,
   );
-  const llmGemmaOverflowAllowed =
-    useLlmVerifier && llmQuotaReserved && allowLlmFallback;
+  const llmExecutionAllowed = useLlmVerifier && (isCanary || llmQuotaReserved);
+  const llmGemmaOverflowAllowed = llmExecutionAllowed &&
+    !deterministicLlmFailure && allowLlmFallback;
   const googleQuotaBackend = sharedGoogleQuotaBackend(supabaseUrl);
 
   try {
@@ -1979,10 +2371,16 @@ async function runEventSearch(
       label: "Понимаю смысл запроса",
     });
     const embeddingStartedAt = performance.now();
-    const embeddingResult = await embedQuery(query, googleQuotaBackend, {
-      supabaseUrl,
-      queryHash: queryEmbeddingHash,
-    });
+    const embeddingResult = await embedQuery(
+      query,
+      googleQuotaBackend,
+      {
+        supabaseUrl,
+        queryHash: queryEmbeddingHash,
+        bypassRead: bypassQueryEmbeddingCache,
+      },
+      counters,
+    );
     const embedding = embeddingResult.values;
     timings.embedding_ms = nowMs() - Math.round(embeddingStartedAt);
 
@@ -1992,6 +2390,7 @@ async function runEventSearch(
       label: "Ищу похожие события",
     });
     const searchStartedAt = performance.now();
+    counters.vector_rpc_attempts += 1;
     const { data: rows, error: searchError } = await service.rpc(
       "search_events_by_embedding_internal_v1",
       {
@@ -2051,7 +2450,7 @@ async function runEventSearch(
         llm_verifier: {
           requested: useLlmVerifier,
           used: false,
-          status: useLlmVerifier && llmQuotaReserved ? "pending" : "disabled",
+          status: llmExecutionAllowed ? "pending" : "disabled",
           model: null,
           policy: null,
           attempts: [],
@@ -2063,7 +2462,10 @@ async function runEventSearch(
           rejected_count: 0,
           query_interpretation: null,
         },
-        timings_ms: { ...timings, total_ms: nowMs() - Math.round(requestStartedAt) },
+        timings_ms: {
+          ...timings,
+          total_ms: nowMs() - Math.round(requestStartedAt),
+        },
       },
     });
 
@@ -2071,11 +2473,24 @@ async function runEventSearch(
       exact: [],
       possible: items,
       rejected_ids: [],
-      status: useLlmVerifier ? "llm_quota_exhausted" : "disabled",
+      status: requestedLlm ? "llm_quota_exhausted" : "disabled",
       used: false,
     };
     let llmCandidateFactCount = 0;
-    if (useLlmVerifier && llmQuotaReserved) {
+    if (deterministicLlmFailure) {
+      llmResult = {
+        exact: [],
+        possible: items,
+        rejected_ids: [],
+        status: "degraded:deterministic_canary_failure",
+        used: false,
+        model: null,
+        policy: LLM_POLICY_VERSION,
+        attempts: [],
+      };
+      timings.digest_ms = 0;
+      timings.llm_ms = 0;
+    } else if (llmExecutionAllowed) {
       await progress?.({
         stage: "llm_verify",
         progress: 72,
@@ -2092,6 +2507,11 @@ async function runEventSearch(
       llmResult = await llmVerify(query, items, candidateDigests, {
         gemma_overflow_allowed: llmGemmaOverflowAllowed,
         quota_backend: googleQuotaBackend,
+        counters,
+        reserve_canary_attempt: isCanary
+          ? () =>
+            reserveSearchCanaryLlmAttempt(service, userId, quotaOperationId)
+          : undefined,
       });
       timings.llm_ms = nowMs() - Math.round(llmStartedAt);
     } else {
@@ -2104,9 +2524,9 @@ async function runEventSearch(
 
     let fallbackItems: Candidate[] = llmResult.used && includeFallback
       ? collapseOccurrenceFamilies(
-          llmResult.possible,
-          new Set(items.map(occurrenceFamilyKey)),
-        )
+        llmResult.possible,
+        new Set(items.map(occurrenceFamilyKey)),
+      )
       : [];
     if (
       includeFallback &&
@@ -2140,8 +2560,7 @@ async function runEventSearch(
           )
           .filter((candidate) => !seenIds.has(candidateId(candidate))),
         seenFamilies,
-      )
-        .slice(0, limit);
+      ).slice(0, limit);
       timings.fallback_rpc_ms = nowMs() - Math.round(fallbackStartedAt);
     }
 
@@ -2153,6 +2572,11 @@ async function runEventSearch(
     const servedListId = crypto.randomUUID();
     const servedHash = await servedListHash(queryHash, items, fallbackItems);
     timings.total_ms = nowMs() - Math.round(requestStartedAt);
+    const actualExecutionMode: ExecutionMode = llmResult.used
+      ? "cold_vector_llm"
+      : requestedLlm
+      ? "degraded_vector_fallback"
+      : "cold_vector";
     const responseBody: Record<string, unknown> = {
       schema_version: "event-search-results-v1",
       surface: "authorized_event_search",
@@ -2161,6 +2585,12 @@ async function runEventSearch(
         : "pgvector_gemini_embedding_2_possible_only_v1",
       request_id: requestId,
       client_request_id: quotaOperationId,
+      ...receiptContractFields(
+        requestedExecutionMode,
+        actualExecutionMode,
+        revisions,
+        counters,
+      ),
       served_list_id: servedListId,
       served_list_hash: servedHash,
       query_hash: queryHash,
@@ -2181,7 +2611,7 @@ async function runEventSearch(
         status: llmResult.status,
         model: llmResult.model || null,
         policy: llmResult.policy || null,
-        attempts: llmResult.attempts || [],
+        attempts: sanitizedLlmAttempts(llmResult.attempts),
         gemma_overflow_allowed: llmGemmaOverflowAllowed,
         prompt_chars: llmResult.prompt_chars ?? null,
         prompt_fact_chars: llmResult.prompt_fact_chars ?? null,
@@ -2193,8 +2623,11 @@ async function runEventSearch(
       timings_ms: timings,
     };
     let resultCacheStatus = "skipped";
-    if (llmResult.used || !useLlmVerifier) {
+    const resultCacheWriteAllowed = !isCanary ||
+      requestedExecutionMode === "cached_vector";
+    if (resultCacheWriteAllowed && (llmResult.used || !useLlmVerifier)) {
       const cacheStoreStartedAt = performance.now();
+      counters.result_cache_write_attempts += 1;
       const stored = await storeCachedSearchResult(resultCache, responseBody, {
         source: "event-search-edge",
         request_id: requestId,
@@ -2209,6 +2642,23 @@ async function runEventSearch(
     timings.total_ms = nowMs() - Math.round(requestStartedAt);
     responseBody.result_cache_status = resultCacheStatus;
     responseBody.timings_ms = timings;
+    Object.assign(responseBody, counters, {
+      request_counters: { ...counters },
+    });
+
+    if (isCanary) {
+      responseBody.receipt_id = await recordSearchCanaryReceipt(service, {
+        userId,
+        requestId,
+        clientRequestId: quotaOperationId,
+        requestedMode: requestedExecutionMode,
+        actualMode: actualExecutionMode,
+        terminalStatus: "ok",
+        revisions,
+        counters,
+        responseBody,
+      });
+    }
 
     await recordSearchRequest(service, userId, {
       p_request_kind: llmResult.used ? "llm_rerank" : "vector_search",
@@ -2305,14 +2755,39 @@ async function runEventSearch(
       error_code: errorMessage(error).slice(0, 120),
       timings_ms: timings,
     });
+    const failureMode: ExecutionMode = requestedLlm
+      ? "degraded_vector_fallback"
+      : "cold_vector";
+    const failureBody: Record<string, unknown> = {
+      error: "search_failed",
+      detail: errorMessage(error).slice(0, 500),
+      request_id: requestId,
+      client_request_id: quotaOperationId,
+      ...receiptContractFields(
+        requestedExecutionMode,
+        failureMode,
+        revisions,
+        counters,
+      ),
+      timings_ms: timings,
+    };
+    if (isCanary) {
+      failureBody.receipt_id = await recordSearchCanaryReceipt(service, {
+        userId,
+        requestId,
+        clientRequestId: quotaOperationId,
+        requestedMode: requestedExecutionMode,
+        actualMode: failureMode,
+        terminalStatus: "provider_error",
+        revisions,
+        counters,
+        responseBody: failureBody,
+        errorCode: errorMessage(error).slice(0, 120),
+      });
+    }
     return {
       status: 502,
-      body: {
-        error: "search_failed",
-        detail: errorMessage(error).slice(0, 500),
-        request_id: requestId,
-        timings_ms: timings,
-      },
+      body: failureBody,
     };
   }
 }
@@ -2401,8 +2876,8 @@ Deno.serve(async (request) => {
     );
   }
 
-  const accept =
-    request.headers.get("Accept") || request.headers.get("accept") || "";
+  const accept = request.headers.get("Accept") ||
+    request.headers.get("accept") || "";
   if (accept.includes("application/x-ndjson")) {
     return progressStreamResponse(request, requestId, requestStartedAt);
   }
