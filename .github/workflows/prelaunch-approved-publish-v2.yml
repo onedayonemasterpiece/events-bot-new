@@ -101,8 +101,8 @@ jobs:
               raise SystemExit('candidate token patch target is missing')
           text = text.replace(
               token_generation,
-              'token="$(node -e "process.stdout.write(require(\\\'node:crypto\\\').randomBytes(32).toString(\\\'base64url\\\'))")"\n'
-              '[[ "$token" =~ ^[A-Za-z0-9_-]{43}$ ]]\n',
+              "token=\"$(openssl rand 32 | base64 -w 0 | tr '+/' '-_' | tr -d '=')\"\n"
+              "[[ \"$token\" =~ ^[A-Za-z0-9_-]{43}$ ]]\n",
               1,
           )
 
