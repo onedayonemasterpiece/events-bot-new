@@ -1,4 +1,5 @@
 name: KDG80 latest production registration export
+# recipient-cert-revision: 03728e47234329c9
 
 on:
   push:
