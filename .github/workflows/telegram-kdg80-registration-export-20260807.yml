@@ -1,4 +1,4 @@
-name: KDG80 fresh production registration export
+name: KDG80 latest production registration export
 
 on:
   push:
@@ -36,7 +36,7 @@ jobs:
       - name: Install Telethon
         run: python -m pip install --disable-pip-version-check 'telethon>=1.34,<2'
 
-      - name: Request and download fresh production XLSX
+      - name: Download latest automated production XLSX
         shell: bash
         run: |
           set -euo pipefail
@@ -80,42 +80,25 @@ jobs:
                   if not await client.is_user_authorized():
                       raise RuntimeError('Telegram session is not authorized')
                   bot = await client.get_entity(BOT_USERNAME)
-                  sent = await client.send_message(bot, '/export_all')
-                  received = None
-                  observed = []
-                  for _ in range(40):
-                      await asyncio.sleep(3)
-                      async for message in client.iter_messages(bot, limit=25, min_id=sent.id):
-                          file_name = getattr(getattr(message, 'file', None), 'name', None)
-                          observed.append({
-                              'id': message.id,
-                              'date': iso(message.date),
-                              'text': (message.raw_text or '')[:500],
-                              'file_name': file_name,
-                          })
-                          if file_name == EXPECTED_FILE:
-                              received = message
-                              break
-                      if received is not None:
+                  export_message = None
+                  async for message in client.iter_messages(bot, limit=300):
+                      file_name = getattr(getattr(message, 'file', None), 'name', None)
+                      if file_name == EXPECTED_FILE:
+                          export_message = message
                           break
-                  if received is None:
-                      raise RuntimeError(
-                          'KDG80 bot did not return the expected XLSX; responses=' +
-                          json.dumps(observed[-10:], ensure_ascii=False)
-                      )
-                  downloaded = await client.download_media(received, file=str(OUTPUT))
+                  if export_message is None:
+                      raise RuntimeError('Latest automated production XLSX was not found')
+                  downloaded = await client.download_media(export_message, file=str(OUTPUT))
                   if not downloaded or not OUTPUT.exists():
                       raise RuntimeError('Telegram XLSX download failed')
-                  header = OUTPUT.read_bytes()[:2]
-                  if header != b'PK':
+                  if OUTPUT.read_bytes()[:2] != b'PK':
                       raise RuntimeError('Downloaded document is not an XLSX/ZIP payload')
                   meta = {
                       'schema_version': 1,
-                      'source': 'KDG80 production Telegram admin export',
+                      'source': 'KDG80 latest automated daily production export',
                       'bot_username': BOT_USERNAME,
-                      'command_message_id': sent.id,
-                      'export_message_id': received.id,
-                      'export_message_date': iso(received.date),
+                      'export_message_id': export_message.id,
+                      'export_message_date': iso(export_message.date),
                       'file_name': EXPECTED_FILE,
                       'size_bytes': OUTPUT.stat().st_size,
                       'downloaded_at': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
@@ -125,8 +108,8 @@ jobs:
                       encoding='utf-8',
                   )
                   print(
-                      f"Fresh production export received: message_id={received.id}; "
-                      f"bytes={OUTPUT.stat().st_size}"
+                      f"Production export downloaded: message_id={export_message.id}; "
+                      f"exported_at={meta['export_message_date']}; bytes={OUTPUT.stat().st_size}"
                   )
               finally:
                   await client.disconnect()
