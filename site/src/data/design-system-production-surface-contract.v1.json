@@ -17,7 +17,7 @@
     "exclude_source_prefixes": [
       "site/src/pages/lab/"
     ],
-    "rule": "A page or component enters the current design-system inventory only when it is reachable from an HTML route in the accepted production artifact at the exact release SHA. Source presence alone is not production use."
+    "rule": "A page, component or icon enters the current design-system inventory only when it is reachable from an HTML route in the accepted production artifact at the exact release SHA. Source presence alone is not production use."
   },
   "interaction_budget": {
     "plugin_open_per_update": 1,
@@ -28,7 +28,7 @@
       "update-everything",
       "build-review-prompt"
     ],
-    "forbidden_workflow": "No per-page, per-component or per-file update actions."
+    "forbidden_workflow": "No per-page, per-component, per-icon or per-file update actions."
   },
   "evidence_viewports": [
     { "id": "mobile-390x844", "width": 390, "height": 844, "class": "mobile" },
@@ -76,6 +76,39 @@
         "site/public/favicon.svg",
         "site/public/brand/announcements-wordmark-ui.svg",
         "site/public/brand/favicon-tag-wide-o.svg"
+      ]
+    },
+    {
+      "id": "foundations.iconography",
+      "label": "Current UI, social, navigation, status, transport and product-specialized iconography",
+      "layer": "foundation",
+      "required": true,
+      "source_files": [
+        "site/src/components/Icon.astro",
+        "site/src/components/SocialIcon.astro",
+        "site/src/data/design-system-iconography-contract.v1.json",
+        "site/public/assets/icons/festival-categories/103262-theatre-masks.svg",
+        "site/public/assets/icons/festival-categories/389003-anchor.svg",
+        "site/public/assets/icons/festival-categories/389049-book-open.svg",
+        "site/public/assets/icons/festival-categories/389059-camera.svg",
+        "site/public/assets/icons/festival-categories/389063-carrot.svg",
+        "site/public/assets/icons/festival-categories/389241-history.svg",
+        "site/public/assets/icons/festival-categories/389291-map-pin.svg",
+        "site/public/assets/icons/festival-categories/389302-mic.svg",
+        "site/public/assets/icons/festival-categories/389324-music.svg",
+        "site/public/assets/icons/festival-categories/389330-palette.svg",
+        "site/public/assets/icons/festival-categories/389439-star.svg",
+        "site/public/assets/icons/festival-categories/389461-ticket.svg",
+        "site/public/assets/icons/festival-categories/389494-users.svg",
+        "site/public/assets/icons/festival-categories/480248-saxophone-2.svg",
+        "site/public/assets/icons/reference4-v8/search-thin.svg",
+        "site/public/assets/icons/reference4-v8/share-network-thin.svg",
+        "site/public/assets/icons/reference4-v8/heart-thin.svg",
+        "site/public/assets/icons/question-cta/question-bubble-390478.svg",
+        "site/public/assets/icons/question-cta/vk-repost-348786.svg",
+        "site/public/assets/icons/train-front-cc0.svg",
+        "site/public/assets/transport/bus-svgrepo-337651.svg",
+        "site/public/assets/social/max-colored-official.svg"
       ]
     },
     {
