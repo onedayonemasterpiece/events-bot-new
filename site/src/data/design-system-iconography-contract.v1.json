@@ -1,1 +1,297 @@
-{}
+{
+  "schema_version": "lovekgd-design-system-iconography-contract-v1",
+  "contract_id": "announcements-iconography-2026-08-07",
+  "scope": "Brand and product iconography used by the accepted production release and represented as native Penpot resources.",
+  "selection_policy": {
+    "authority": "accepted-production-release",
+    "require_exact_release_identity": true,
+    "source_presence_is_not_usage": true,
+    "current_rule": "An icon enters the current resource library only when it is referenced by a production-reachable component or by the accepted production artifact at the exact release SHA.",
+    "non_current_statuses": [
+      "candidate",
+      "legacy",
+      "unclassified",
+      "unused"
+    ]
+  },
+  "penpot": {
+    "page_id": "25-iconography",
+    "page_name": "25 — Iconography",
+    "resource_path_prefix": "Icon",
+    "sections": [
+      "System and actions",
+      "Navigation",
+      "Status and feedback",
+      "Social and external services",
+      "Transport",
+      "Festival and editorial categories",
+      "Product-specialized symbols",
+      "Optical alignment and size tests",
+      "Accessibility semantics",
+      "Duplicates, legacy and unclassified"
+    ],
+    "comment_targets": [
+      "icon-component-master",
+      "icon-variant",
+      "icon-specimen",
+      "icon-consumer-instance",
+      "icon-collection-section"
+    ]
+  },
+  "canonical_components": [
+    {
+      "id": "icon.ui",
+      "source": "site/src/components/Icon.astro",
+      "kind": "inline-svg-component",
+      "status": "current-when-production-reachable",
+      "names": [
+        "heart",
+        "comment",
+        "calendar",
+        "dislike",
+        "share",
+        "pin",
+        "ticket",
+        "info",
+        "spark",
+        "lock",
+        "image",
+        "phone",
+        "copy",
+        "check",
+        "bus",
+        "car",
+        "walk",
+        "install"
+      ],
+      "penpot_path": "Icon/UI",
+      "required_properties": [
+        "name",
+        "semantic-role",
+        "decorative-or-informative",
+        "source-viewBox",
+        "optical-size",
+        "production-consumers"
+      ]
+    },
+    {
+      "id": "icon.social",
+      "source": "site/src/components/SocialIcon.astro",
+      "kind": "mixed-inline-and-asset-component",
+      "status": "current-when-production-reachable",
+      "names": [
+        "telegram",
+        "vk",
+        "max"
+      ],
+      "penpot_path": "Icon/Social",
+      "required_properties": [
+        "service",
+        "official-brand-colors",
+        "decorative-or-informative",
+        "source-viewBox",
+        "production-consumers"
+      ]
+    }
+  ],
+  "asset_collections": [
+    {
+      "id": "festival-categories",
+      "root": "site/public/assets/icons/festival-categories",
+      "penpot_path": "Icon/Editorial/Festival category",
+      "classification": "production-specialized-or-candidate",
+      "expected_svg_files": [
+        "103262-theatre-masks.svg",
+        "389003-anchor.svg",
+        "389049-book-open.svg",
+        "389059-camera.svg",
+        "389063-carrot.svg",
+        "389241-history.svg",
+        "389291-map-pin.svg",
+        "389302-mic.svg",
+        "389324-music.svg",
+        "389330-palette.svg",
+        "389439-star.svg",
+        "389461-ticket.svg",
+        "389494-users.svg",
+        "480248-saxophone-2.svg"
+      ],
+      "attribution": "site/public/assets/icons/festival-categories/ATTRIBUTION.md"
+    },
+    {
+      "id": "reference4-v8",
+      "root": "site/public/assets/icons/reference4-v8",
+      "penpot_path": "Icon/Product/Reference 4 v8",
+      "classification": "production-specialized-or-candidate",
+      "expected_svg_files": [
+        "baby-thin.svg",
+        "buildings-thin.svg",
+        "chats-thin.svg",
+        "flag-banner-thin.svg",
+        "handshake-thin.svg",
+        "heart-thin.svg",
+        "palette-thin.svg",
+        "popular-star-four-thin.svg",
+        "popular-trend-up-thin.svg",
+        "search-thin.svg",
+        "share-network-thin.svg",
+        "share-thin.svg",
+        "sparkle-thin.svg",
+        "squares-four-thin.svg",
+        "user-focus-thin.svg"
+      ],
+      "attribution": "site/public/assets/icons/reference4-v8/ATTRIBUTION.md"
+    },
+    {
+      "id": "reference4-legacy",
+      "root": "site/public/assets/icons/reference4",
+      "penpot_path": "Icon/Legacy/Reference 4",
+      "classification": "legacy-until-production-proof",
+      "expected_svg_files": [
+        "dazzling-star.svg",
+        "euro-circle.svg",
+        "handshake.svg",
+        "heart.svg",
+        "message-circle-heart.svg",
+        "palette.svg",
+        "party-horn.svg",
+        "search.svg",
+        "share-nodes.svg",
+        "slash.svg",
+        "teddy-bear.svg"
+      ],
+      "attribution": "site/public/assets/icons/reference4/ATTRIBUTION.md"
+    },
+    {
+      "id": "question-cta",
+      "root": "site/public/assets/icons/question-cta",
+      "penpot_path": "Icon/Product/Question CTA",
+      "classification": "production-specialized-or-candidate",
+      "expected_svg_files": [
+        "question-bubble-390478.svg",
+        "vk-repost-348786.svg"
+      ],
+      "attribution": "site/public/assets/icons/question-cta/PROVENANCE.md"
+    },
+    {
+      "id": "standalone-product-icons",
+      "root": "site/public/assets/icons",
+      "penpot_path": "Icon/Product/Standalone",
+      "classification": "production-specialized-or-candidate",
+      "expected_svg_files": [
+        "lab-flask-287837.svg",
+        "link-minimalistic-svgrepo.svg",
+        "svgrepo-450220-long-arrow-right.svg",
+        "train-front-cc0.svg"
+      ]
+    },
+    {
+      "id": "transport-icons",
+      "root": "site/public/assets/transport",
+      "penpot_path": "Icon/Transport",
+      "classification": "production-specialized-or-candidate",
+      "expected_svg_files": [
+        "bus-svgrepo-337651.svg"
+      ]
+    },
+    {
+      "id": "social-brand-assets",
+      "root": "site/public/assets/social",
+      "penpot_path": "Icon/Social/Official assets",
+      "classification": "official-brand-asset",
+      "expected_svg_files": [
+        "max-colored-official.svg"
+      ]
+    }
+  ],
+  "linked_brand_assets": {
+    "page": "10 — Brand assets",
+    "pwa_root": "site/public/assets/pwa",
+    "rule": "PWA and favicon artwork is linked from iconography but remains a brand/channel asset rather than a generic UI icon."
+  },
+  "discovery": {
+    "scan_roots": [
+      "site/src",
+      "site/public"
+    ],
+    "detect": [
+      "inline-svg-in-astro",
+      "svg-file",
+      "svg-url-reference",
+      "css-mask-reference",
+      "data-uri-svg",
+      "icon-component-name",
+      "social-icon-name"
+    ],
+    "report": "artifacts/design-system/iconography-inventory.json",
+    "unclassified_is_publication_blocker": true,
+    "duplicate_geometry_requires_review": true
+  },
+  "specimen_matrix": {
+    "display_sizes_px": [
+      16,
+      20,
+      24,
+      32
+    ],
+    "control_target_px": 44,
+    "backgrounds": [
+      "light",
+      "brand",
+      "dark",
+      "status"
+    ],
+    "states": [
+      "default",
+      "hover",
+      "focus",
+      "pressed",
+      "disabled",
+      "selected-when-applicable"
+    ],
+    "checks": [
+      "viewBox-normalization",
+      "optical-centering",
+      "stroke-and-fill-consistency",
+      "currentColor-behavior",
+      "small-size-legibility",
+      "forced-colors",
+      "high-contrast",
+      "touch-target-separation"
+    ]
+  },
+  "accessibility": {
+    "decorative": "aria-hidden=true and no duplicate accessible name",
+    "informative": "role=img with a contextual accessible label",
+    "action": "The enclosing control owns the accessible name; the icon remains decorative unless it conveys additional state.",
+    "state_change": "A changed icon never communicates success, failure, selection or status by shape or color alone."
+  },
+  "consumer_graph": {
+    "required_links": [
+      "icon-to-source",
+      "icon-to-production-consumer",
+      "icon-to-component-master",
+      "icon-to-archetype-instance",
+      "icon-to-evidence"
+    ],
+    "fragmentation_flags": [
+      "duplicate-semantic-name",
+      "duplicate-geometry",
+      "mixed-viewBox-without-optical-rule",
+      "raw-inline-svg-outside-canonical-component",
+      "asset-without-attribution-or-provenance",
+      "production-reference-to-legacy-icon",
+      "unclassified-icon"
+    ]
+  },
+  "publication_gate": {
+    "resource_graph_004_requires": [
+      "zero-unclassified-production-icons",
+      "all-current-icons-have-consumers",
+      "all-current-icons-have-native-penpot-component-masters",
+      "all-current-icons-have-source-and-license-provenance",
+      "all-archetype-icon-instances-link-to-current-masters",
+      "iconography-page-and-resources-match-the-single-catalog"
+    ]
+  }
+}
