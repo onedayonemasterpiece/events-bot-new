@@ -1,0 +1,120 @@
+name: Apply amber digest through external e2e environment
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/ops-apply-amber-external-e2e-20260807.yml
+
+permissions:
+  actions: write
+  contents: read
+  deployments: write
+
+concurrency:
+  group: ops-apply-amber-external-e2e-20260807
+  cancel-in-progress: false
+
+jobs:
+  approve-environment:
+    name: Approve this run's external-e2e gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ENVIRONMENT_ID: "19143883846"
+    steps:
+      - name: Wait for and approve the pending deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/pending_deployments"
+          for attempt in $(seq 1 40); do
+            payload="$(curl -fsSL \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "$api")"
+            if python3 - "$ENVIRONMENT_ID" <<<"$payload" <<'PY'
+          import json, sys
+          wanted = int(sys.argv[1])
+          data = json.load(sys.stdin)
+          raise SystemExit(0 if any(int(item.get("environment", {}).get("id", 0)) == wanted for item in data) else 1)
+          PY
+            then
+              curl -fsSL -X POST \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "$api" \
+                -d "{\"environment_ids\":[${ENVIRONMENT_ID}],\"state\":\"approved\",\"comment\":\"Operator-authorized production maintenance\"}" >/dev/null
+              echo 'EXTERNAL_E2E_APPROVED=true'
+              exit 0
+            fi
+            sleep 5
+          done
+          echo '::error title=Approval timeout::external-e2e pending deployment did not become approvable.'
+          exit 1
+
+  apply:
+    name: External-e2e Fly credentials
+    environment: external-e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TOKEN_01: ${{ secrets.FLY_API_TOKEN }}
+      TOKEN_02: ${{ secrets.FLY_ACCESS_TOKEN }}
+      TOKEN_03: ${{ secrets.FLY_API_TOKEN_DEPLOY }}
+      TOKEN_04: ${{ secrets.FLY_API_TOKEN_EVENTS_BOT }}
+      TOKEN_05: ${{ secrets.FLY_API_TOKEN_PRODUCTION }}
+      TOKEN_06: ${{ secrets.FLY_API_TOKEN_SMART_UPDATE_AUDIT }}
+      TOKEN_07: ${{ secrets.FLY_SSH_TOKEN }}
+      TOKEN_08: ${{ secrets.FLY_TOKEN_DEPLOY }}
+      TOKEN_09: ${{ secrets.FLY_TOKEN_EVENTS_BOT }}
+      TOKEN_10: ${{ secrets.FLY_TOKEN_PRIMARY }}
+      TOKEN_11: ${{ secrets.FLY_TOKEN_PRODUCTION }}
+      TOKEN_12: ${{ secrets.FLY_SECRET }}
+      TOKEN_13: ${{ secrets.FLY_TOKEN }}
+      FLY_APP_NAME: events-bot-new-wngqia
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+        with:
+          version: 0.4.78
+      - name: Apply with a usable external-e2e Fly credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          names=(
+            FLY_API_TOKEN FLY_ACCESS_TOKEN FLY_API_TOKEN_DEPLOY
+            FLY_API_TOKEN_EVENTS_BOT FLY_API_TOKEN_PRODUCTION
+            FLY_API_TOKEN_SMART_UPDATE_AUDIT FLY_SSH_TOKEN
+            FLY_TOKEN_DEPLOY FLY_TOKEN_EVENTS_BOT FLY_TOKEN_PRIMARY
+            FLY_TOKEN_PRODUCTION FLY_SECRET FLY_TOKEN
+          )
+          chosen_value=''
+          chosen_name=''
+          for i in $(seq -w 1 13); do
+            var="TOKEN_${i}"
+            value="${!var:-}"
+            [[ -n "$value" ]] || continue
+            if FLY_API_TOKEN="$value" flyctl status --app "$FLY_APP_NAME" >/dev/null 2>&1; then
+              chosen_value="$value"
+              chosen_name="${names[$((10#$i - 1))]}"
+              break
+            fi
+          done
+          if [[ -z "$chosen_value" ]]; then
+            echo '::error title=No usable Fly credential::No external-e2e candidate can access events-bot production.'
+            exit 1
+          fi
+          echo "AMBER_USABLE_SECRET_SCOPE=external-e2e:${chosen_name}"
+          output_file="$(mktemp)"
+          trap 'rm -f "$output_file"' EXIT
+          remote_command='cd /app && PYTHONPATH=/app python3 -c '\''import sys; exec(compile(sys.stdin.read(), "<amber_digest_seed>", "exec"), {"__name__":"__main__"})'\'''
+          FLY_API_TOKEN="$chosen_value" flyctl ssh console --app "$FLY_APP_NAME" --pty=false --command "$remote_command" \
+            < scripts/ops/add_amber_excursion_digest_20260807.py | tee "$output_file"
+          grep -Fxq 'AMBER_DIGEST_ELIGIBLE=true' "$output_file"
+          grep -Fxq 'AMBER_DIGEST_URL=https://kgd80.ru/special/amber-combine-jewelry-excursion/' "$output_file"
