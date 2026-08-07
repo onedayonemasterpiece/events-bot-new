@@ -1,0 +1,29 @@
+name: Inventory release and deploy routes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/ops-deploy-route-inventory-20260807.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+      - name: Print release commands and hooks
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo DEPLOY_CURRENT_START
+          git grep -nEi 'flyctl[[:space:]]+(deploy|ssh|status)|fly[[:space:]]+deploy|release\.env|deploy-to|auto.?deploy|github.?deploy' -- . ':!*.lock' ':!node_modules' | head -2000 || true
+          echo DEPLOY_CURRENT_END
+          echo DEPLOY_HISTORY_FILES_START
+          git log --all --name-only --pretty=format: -- .github docs scripts | sort -u | grep -Ei 'deploy|release|fly' | head -1000 || true
+          echo DEPLOY_HISTORY_FILES_END
