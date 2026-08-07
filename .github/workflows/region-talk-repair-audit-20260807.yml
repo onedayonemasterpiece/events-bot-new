@@ -3,6 +3,7 @@ name: Region Talk repair product audit 20260807
 on:
   push:
     branches:
+      - main
       - agent/region-talk-repair-audit-20260807
     paths:
       - '.github/workflows/region-talk-repair-audit-20260807.yml'
@@ -34,7 +35,7 @@ jobs:
       AUDIT_DIR: artifacts/region-talk-repair-audit
 
     steps:
-      - name: Check out audit branch
+      - name: Check out exact triggering commit
         uses: actions/checkout@v4
         with:
           persist-credentials: false
