@@ -149,7 +149,6 @@ jobs:
             KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY
             PUBLIC_PERSONALIZATION_SUPABASE_URL
             PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY
-            PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL
           )
           missing=()
           for name in "${required[@]}"; do
@@ -327,7 +326,7 @@ jobs:
             echo "CANDIDATE_OBJECT_COUNT=$object_count"
           } >> "$GITHUB_ENV"
 
-      - name: Verify direct and relay transports without storing a row
+      - name: Verify direct transport and optional relay without storing a row
         shell: bash
         run: |
           set -euo pipefail
@@ -353,7 +352,21 @@ jobs:
             ' "$output" >/dev/null
           }
           call_probe direct "$PUBLIC_PERSONALIZATION_SUPABASE_URL"
-          call_probe relay "$PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL"
+          if [[ -n "${PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL:-}" ]]; then
+            call_probe relay "$PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL"
+          else
+            cat > artifacts/prelaunch-static-publish/transport-relay.json <<'JSON'
+          {
+            "configured": false,
+            "accepted": null,
+            "ok": true,
+            "status": "not_configured",
+            "launch_date": "2026-09-01",
+            "consent_version": "prelaunch-updates-2026-v1",
+            "stored_row": false
+          }
+          JSON
+          fi
 
       - name: Plan and publish create-only review prefix
         shell: bash
@@ -462,7 +475,11 @@ jobs:
                 stored_row: false,
               },
               relay: {
-                ok: relay.accepted === true && relay.status === 'registered',
+                configured: relay.configured !== false,
+                ok: relay.configured === false
+                  ? true
+                  : relay.accepted === true && relay.status === 'registered',
+                status: relay.status,
                 consent_version: relay.consent_version,
                 stored_row: false,
               },
