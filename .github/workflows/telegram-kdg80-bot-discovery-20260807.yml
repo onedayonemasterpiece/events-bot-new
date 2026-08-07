@@ -1,0 +1,141 @@
+name: KDG80 Telegram admin bot discovery
+
+on:
+  push:
+    branches:
+      - agent/telegram-read-kdg80-admin-export-20260807
+    paths:
+      - .github/workflows/telegram-kdg80-bot-discovery-20260807.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: telegram-auth-bundle-gh-actions
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    if: github.actor == 'onedayonemasterpiece' && github.triggering_actor == 'onedayonemasterpiece'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TELEGRAM_AUTH_BUNDLE_GH_ACTIONS: ${{ secrets.TELEGRAM_AUTH_BUNDLE_GH_ACTIONS }}
+      TELEGRAM_API_ID: ${{ secrets.TELEGRAM_GH_ACTIONS_API_ID || secrets.SOCIAL_METRICS_TG_API_ID || secrets.TG_API_ID || secrets.TELEGRAM_API_ID }}
+      TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_GH_ACTIONS_API_HASH || secrets.SOCIAL_METRICS_TG_API_HASH || secrets.TG_API_HASH || secrets.TELEGRAM_API_HASH }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Telethon
+        run: python -m pip install --disable-pip-version-check 'telethon>=1.34,<2'
+
+      - name: Discover bot dialogs without marking messages read
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p out
+          python - <<'PY'
+          import asyncio
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          from telethon import TelegramClient
+          from telethon.sessions import StringSession
+          from scripts.telegram_read import load_auth_config
+
+          def iso(value):
+              if value is None:
+                  return None
+              if value.tzinfo is None:
+                  value = value.replace(tzinfo=timezone.utc)
+              return value.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+
+          async def main():
+              auth = load_auth_config('TELEGRAM_AUTH_BUNDLE_GH_ACTIONS')
+              kwargs = {
+                  'device_model': auth.device_model or 'GitHub Actions',
+                  'system_version': auth.system_version or 'Linux',
+                  'app_version': auth.app_version or 'KDG80 admin discovery',
+                  'lang_code': auth.lang_code or 'ru',
+                  'system_lang_code': auth.system_lang_code or 'ru',
+              }
+              client = TelegramClient(StringSession(auth.session), auth.api_id, auth.api_hash, **kwargs)
+              await client.connect()
+              try:
+                  if not await client.is_user_authorized():
+                      raise RuntimeError('Telegram session is not authorized')
+                  bots = []
+                  async for dialog in client.iter_dialogs(limit=500):
+                      entity = dialog.entity
+                      if not bool(getattr(entity, 'bot', False)):
+                          continue
+                      messages = []
+                      async for message in client.iter_messages(entity, limit=12):
+                          file_name = None
+                          mime_type = None
+                          if getattr(message, 'file', None):
+                              file_name = getattr(message.file, 'name', None)
+                              mime_type = getattr(message.file, 'mime_type', None)
+                          messages.append({
+                              'id': message.id,
+                              'date': iso(message.date),
+                              'outgoing': bool(message.out),
+                              'text': (message.raw_text or '')[:2000],
+                              'file_name': file_name,
+                              'mime_type': mime_type,
+                          })
+                      bots.append({
+                          'dialog_id': dialog.id,
+                          'name': dialog.name,
+                          'username': getattr(entity, 'username', None),
+                          'verified': bool(getattr(entity, 'verified', False)),
+                          'last_message_date': iso(getattr(dialog.message, 'date', None)),
+                          'messages': messages,
+                      })
+                  payload = {
+                      'schema_version': 1,
+                      'mode': 'read_only_bot_dialog_discovery',
+                      'generated_at': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+                      'bot_count': len(bots),
+                      'bots': bots,
+                  }
+                  Path('out/kdg80-bot-discovery.json').write_text(
+                      json.dumps(payload, ensure_ascii=False, indent=2) + '\n',
+                      encoding='utf-8',
+                  )
+                  print(f'Bot discovery completed: bot_count={len(bots)}')
+              finally:
+                  await client.disconnect()
+
+          asyncio.run(main())
+          PY
+
+      - name: Encrypt discovery result
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl cms -encrypt \
+            -binary \
+            -aes-256-cbc \
+            -outform DER \
+            -in out/kdg80-bot-discovery.json \
+            -out out/kdg80-bot-discovery.cms \
+            ops/focus-group-lookup-certificate-20260807.pem
+          rm -f out/kdg80-bot-discovery.json
+
+      - name: Upload encrypted discovery result
+        uses: actions/upload-artifact@v4
+        with:
+          name: kdg80-bot-discovery-encrypted
+          path: out/kdg80-bot-discovery.cms
+          if-no-files-found: error
+          retention-days: 1
