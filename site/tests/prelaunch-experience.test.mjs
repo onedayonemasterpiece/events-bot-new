@@ -33,7 +33,8 @@ test('prelaunch scene has one source artwork, one seam mask and glass panes', ()
   assert.match(scene, /source-asset-rounded-crop/u);
   assert.match(scene, /roundedRectPath/u);
   assert.match(scene, /seamPath\.setAttribute\('d', path\)/u);
-  assert.match(scene, /const tileSize = artworkSize \/ 5\.95/u);
+  assert.match(scene, /artworkSize \/ 5\.95/u);
+  assert.match(scene, /Math\.min\(width \* \.155, 62\)/u);
   assert.match(scene, /Math\.ceil\(\(width - left/u);
   assert.doesNotMatch(scene, /getImageData|flood|Uint32Array/iu);
 
