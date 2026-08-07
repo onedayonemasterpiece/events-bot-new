@@ -1,0 +1,31 @@
+name: Kaggle social access presence probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/kaggle-social-access-trigger.txt
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      KAGGLE_USERNAME_SECRET: ${{ secrets.KAGGLE_USERNAME }}
+      KAGGLE_USERNAME_VAR: ${{ vars.KAGGLE_USERNAME }}
+      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+      KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+      KAGGLE_JSON: ${{ secrets.KAGGLE_JSON }}
+      KAGGLE_CONFIG_JSON: ${{ secrets.KAGGLE_CONFIG_JSON }}
+      REGION_TALK_MANIFEST_HMAC_KEY: ${{ secrets.REGION_TALK_MANIFEST_HMAC_KEY }}
+    steps:
+      - name: Print presence only
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in KAGGLE_USERNAME_SECRET KAGGLE_USERNAME_VAR KAGGLE_KEY KAGGLE_API_TOKEN KAGGLE_JSON KAGGLE_CONFIG_JSON REGION_TALK_MANIFEST_HMAC_KEY; do
+            [[ -n "${!name:-}" ]] && echo "ACCESS_PRESENT=$name" || echo "ACCESS_ABSENT=$name"
+          done
