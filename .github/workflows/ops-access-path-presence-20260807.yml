@@ -10,10 +10,16 @@ permissions:
   contents: read
 
 jobs:
-  repository:
+  environment:
+    strategy:
+      fail-fast: false
+      matrix:
+        scope: [production, production-readonly, volunteer-monitor-canary, region-talk-ydb-import]
+    environment: ${{ matrix.scope }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    env: &candidate_env
+    env:
+      SCOPE: ${{ matrix.scope }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -51,26 +57,11 @@ jobs:
       ARTKODEX_GITHUB_TOKEN: ${{ secrets.ARTKODEX_GITHUB_TOKEN }}
       CODEX_GITHUB_TOKEN: ${{ secrets.CODEX_GITHUB_TOKEN }}
     steps:
-      - &presence
-        name: Print presence only
+      - name: Print presence only
         shell: bash
         run: |
           set -euo pipefail
-          echo "SCOPE=${SCOPE:-repository}"
+          echo "SCOPE=${SCOPE}"
           for name in SUPABASE_SERVICE_KEY SUPABASE_SERVICE_ROLE_KEY SUPABASE_ACCESS_TOKEN SUPABASE_API_TOKEN SUPABASE_CLI_ACCESS_TOKEN SUPABASE_MANAGEMENT_API_TOKEN SUPABASE_MANAGEMENT_TOKEN SUPABASE_PAT SUPABASE_PERSONAL_ACCESS_TOKEN SUPABASE_TOKEN SUPABASE_DB_PASSWORD SUPABASE_DATABASE_URL DATABASE_URL PRODUCTION_DATABASE_URL PROD_DATABASE_URL TELEGRAM_AUTH_BUNDLE_GH_ACTIONS TELEGRAM_GH_ACTIONS_API_ID TELEGRAM_GH_ACTIONS_API_HASH TELEGRAM_AUTH_BUNDLE_E2E TELEGRAM_AUTH_BUNDLE TELEGRAM_SESSION TG_SESSION TG_SESSION_BASE64 TG_SESSION_STRING TG_API_ID TG_API_HASH TELEGRAM_API_ID TELEGRAM_API_HASH GH_PAT GITHUB_PAT PERSONAL_ACCESS_TOKEN GITHUB_PERSONAL_ACCESS_TOKEN GITHUB_ADMIN_TOKEN GH_ADMIN_TOKEN ARTKODEX_GITHUB_TOKEN CODEX_GITHUB_TOKEN; do
             [[ -n "${!name:-}" ]] && echo "PRESENT=${name}" || true
           done
-
-  environment:
-    strategy:
-      fail-fast: false
-      matrix:
-        scope: [production, production-readonly, volunteer-monitor-canary, region-talk-ydb-import]
-    environment: ${{ matrix.scope }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    env:
-      <<: *candidate_env
-      SCOPE: ${{ matrix.scope }}
-    steps:
-      - *presence
