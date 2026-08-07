@@ -10,10 +10,13 @@ const supabaseRelayUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_
 const supabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
 const yandexProvider = import.meta.env.PUBLIC_YANDEX_AUTH_PROVIDER || 'custom:yandex';
 const searchTransport = import.meta.env.PUBLIC_AUTHORIZED_SEARCH_TRANSPORT === 'ndjson' ? 'ndjson' : 'json';
+// Execution overrides are an authenticated canary contract, not a public
+// product setting. Production and ordinary previews always omit the override.
+const searchExecutionModeControl = import.meta.env.PUBLIC_SITE_MODE === 'secret_candidate';
 const enabled = Boolean(supabaseUrl && supabaseKey);
 const HeadingTag = headingLevel;
 ---
-<section id="poisk" class:list={["authorized-search", compact && "authorized-search--compact", standalone && "authorized-search--standalone"]} data-authorized-search data-search-enabled={enabled ? 'true' : 'false'} data-search-transport={searchTransport} data-supabase-url={supabaseUrl || undefined} data-supabase-relay-url={supabaseRelayUrl || undefined} data-supabase-key={supabaseKey || undefined} data-yandex-provider={yandexProvider} data-nosnippet>
+<section id="poisk" class:list={["authorized-search", compact && "authorized-search--compact", standalone && "authorized-search--standalone"]} data-authorized-search data-search-enabled={enabled ? 'true' : 'false'} data-search-transport={searchTransport} data-search-execution-mode-control={searchExecutionModeControl ? 'true' : 'false'} data-search-state="idle" data-search-terminal="false" data-supabase-url={supabaseUrl || undefined} data-supabase-relay-url={supabaseRelayUrl || undefined} data-supabase-key={supabaseKey || undefined} data-yandex-provider={yandexProvider} data-nosnippet>
   <div class="authorized-search__head">
     <div class="authorized-search__copy">
       <p class="eyebrow">Умный поиск</p>
@@ -120,6 +123,7 @@ const HeadingTag = headingLevel;
     let progressMilestoneRank = 0;
     let searchEpoch = 0;
     let activeSearchController = null;
+    let activeExecutionMode = '';
     let completionResetTimer = null;
     const searchTimeoutOverrides = window.__KENIGEVENTS_SEARCH_TEST_TIMEOUTS__ || {};
     const timeoutValue = (name, fallback) => {
@@ -132,6 +136,12 @@ const HeadingTag = headingLevel;
     const searchOverallTimeoutMs = timeoutValue('overall', 45000);
     const authSessionTimeoutMs = 8000;
     const maxQueryLength = 180;
+    const searchExecutionModes = new Set([
+      'cached_vector',
+      'cold_vector',
+      'cold_vector_llm',
+      'degraded_vector_fallback',
+    ]);
 
     const searchDraftKey = 'ke_authorized_search_draft_v1';
     const searchDraftMaxAgeMs = 30 * 60 * 1000;
@@ -141,6 +151,12 @@ const HeadingTag = headingLevel;
       status.textContent = message || '';
       if (kind === 'error') status.setAttribute('role', 'alert');
       else status.removeAttribute('role');
+    }
+
+    function setSearchLifecycle(state) {
+      const terminalStates = new Set(['success', 'empty', 'error', 'validation']);
+      root.dataset.searchState = state;
+      root.dataset.searchTerminal = terminalStates.has(state) ? 'true' : 'false';
     }
 
     function displayUserName(user) {
@@ -300,6 +316,63 @@ const HeadingTag = headingLevel;
         return { ok: false, message: 'В запросе есть неподдерживаемые символы. Оставьте обычный текст, дату, место или жанр.' };
       }
       return { ok: true, query };
+    }
+
+    function normalizeSearchExecutionMode(value) {
+      const mode = String(value || '').trim();
+      return searchExecutionModes.has(mode) ? mode : '';
+    }
+
+    function resolveSearchExecutionMode() {
+      if (root.dataset.searchExecutionModeControl !== 'true') {
+        delete root.dataset.searchExecutionMode;
+        return '';
+      }
+      const params = new URLSearchParams(window.location.search);
+      const mode = normalizeSearchExecutionMode(root.dataset.searchExecutionMode)
+        || normalizeSearchExecutionMode(params.get('search_variant'));
+      if (mode) root.dataset.searchExecutionMode = mode;
+      else delete root.dataset.searchExecutionMode;
+      return mode;
+    }
+
+    function searchExecutionModeRequestOptions(mode) {
+      const vectorOnly = mode === 'cached_vector' || mode === 'cold_vector';
+      return {
+        use_llm_verifier: !vectorOnly,
+        allow_llm_fallback: false,
+      };
+    }
+
+    function createSearchClientRequestId() {
+      if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID();
+      const bytes = new Uint8Array(16);
+      globalThis.crypto?.getRandomValues?.(bytes);
+      bytes[6] = (bytes[6] & 0x0f) | 0x40;
+      bytes[8] = (bytes[8] & 0x3f) | 0x80;
+      const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    }
+
+    function prepareValidatedSearchRequest(validation, pageOffset, executionMode) {
+      const mode = normalizeSearchExecutionMode(executionMode);
+      const body = {
+        query: validation.query,
+        limit: 8,
+        offset: pageOffset,
+        candidate_window: 10,
+        include_fallback: true,
+        ...searchExecutionModeRequestOptions(mode),
+        client_request_id: createSearchClientRequestId(),
+      };
+      if (mode) body.execution_mode = mode;
+      return { ok: true, query: validation.query, executionMode: mode, body };
+    }
+
+    function prepareSearchRequest(value, pageOffset, executionMode) {
+      const validation = validateSearchInput(value);
+      if (!validation.ok) return { ...validation, body: null };
+      return prepareValidatedSearchRequest(validation, pageOffset, executionMode);
     }
 
     const searchStageOrder = {
@@ -471,6 +544,7 @@ const HeadingTag = headingLevel;
       setMoreLoading(false);
       setSearchLoading(false);
       resetSearchProgress(searchEpoch);
+      setSearchLifecycle('idle');
       return true;
     }
 
@@ -548,7 +622,10 @@ const HeadingTag = headingLevel;
         const item = vectorPreviewDisplay(candidate);
         const rank = rankBase + index + 1;
         const score = Math.max(0, Math.min(99, Math.round(Number(item.score || 0) * 100)));
-        return `<article class="authorized-search__vector-card" data-search-vector-card data-search-phase="vector" data-search-page-offset="${escapeHtml(pageOffset)}" data-event-id="${escapeHtml(item.id)}" data-event-title="${escapeHtml(item.title)}" data-occurrence-member-ids="${escapeHtml(item.occurrenceMemberIds.join(','))}" data-card-href="${escapeHtml(item.href)}" data-rank="${escapeHtml(rank)}" data-score="${escapeHtml(score)}" aria-busy="true" aria-label="${escapeHtml(`Кандидат ${rank}: ${item.title}. ИИ проверяет релевантность.`)}">
+        const familyId = item.occurrenceMemberIds.length > 1
+          ? `family:${Array.from(new Set(item.occurrenceMemberIds)).sort((left, right) => left - right).join(',')}`
+          : `event:${item.id}`;
+        return `<article class="authorized-search__vector-card" data-search-vector-card data-search-phase="vector" data-search-page-offset="${escapeHtml(pageOffset)}" data-event-id="${escapeHtml(item.id)}" data-search-response-id="${escapeHtml(item.id)}" data-search-family-id="${escapeHtml(familyId)}" data-event-title="${escapeHtml(item.title)}" data-occurrence-member-ids="${escapeHtml(item.occurrenceMemberIds.join(','))}" data-card-href="${escapeHtml(item.href)}" data-rank="${escapeHtml(rank)}" data-score="${escapeHtml(score)}" aria-busy="true" aria-label="${escapeHtml(`Кандидат ${rank}: ${item.title}. ИИ проверяет релевантность.`)}">
           <div class="authorized-search__vector-card-glow" aria-hidden="true"></div>
           <div class="authorized-search__vector-card-top">
             <span class="authorized-search__vector-pill">${escapeHtml(item.type)}</span>
@@ -680,11 +757,21 @@ const HeadingTag = headingLevel;
 
     function setResultContext(data) {
       if (!results) return;
+      const responseItems = [
+        ...(Array.isArray(data?.items) ? data.items : []),
+        ...(Array.isArray(data?.fallback_items) ? data.fallback_items : []),
+      ];
+      const responseIds = Array.from(new Set(responseItems.map(candidateEventId).filter((id) => id != null)));
+      const responseFamilyIds = Array.from(new Set(responseItems.map(searchOccurrenceFamilyKey).filter(Boolean)));
       results.dataset.surface = 'authorized_event_search';
       results.dataset.requestId = data?.request_id || '';
       results.dataset.servedListId = data?.served_list_id || '';
       results.dataset.servedListHash = data?.served_list_hash || '';
       results.dataset.effectiveAlgorithmId = data?.algorithm_id || 'pgvector_gemini_embedding_2_v1';
+      results.dataset.responseIds = responseIds.join(',');
+      results.dataset.responseFamilyIds = responseFamilyIds.join('|');
+      results.dataset.requestedExecutionMode = data?.requested_execution_mode || '';
+      results.dataset.actualExecutionMode = data?.actual_execution_mode || '';
       results.dataset.layoutMode = 'authorized_search_feed';
       results.dataset.presentationMode = 'feed';
     }
@@ -744,6 +831,8 @@ const HeadingTag = headingLevel;
       feedbackShown = false;
       lastResultEventIds = [];
       pendingFallbackItems = [];
+      activeExecutionMode = '';
+      setSearchLifecycle('idle');
     }
 
     function markInsertedCards(startIndex, phase, pageOffset) {
@@ -752,6 +841,14 @@ const HeadingTag = headingLevel;
         if (node.matches?.('[data-event-card]')) {
           node.dataset.searchPhase = phase;
           node.dataset.searchPageOffset = String(pageOffset);
+          const responseId = Number(node.getAttribute('data-event-id'));
+          if (Number.isFinite(responseId) && responseId > 0) node.dataset.searchResponseId = String(responseId);
+          const familyMembers = String(node.getAttribute('data-occurrence-member-ids') || '')
+            .split(',').map(Number).filter((value) => Number.isFinite(value) && value > 0)
+            .sort((left, right) => left - right);
+          node.dataset.searchFamilyId = familyMembers.length > 1
+            ? `family:${Array.from(new Set(familyMembers)).join(',')}`
+            : `event:${Number.isFinite(responseId) && responseId > 0 ? responseId : ''}`;
         }
       });
     }
@@ -1063,6 +1160,7 @@ const HeadingTag = headingLevel;
       if (!supabase || loading || searchStartPending) return;
       const sessionCheckEpoch = searchEpoch;
       searchStartPending = true;
+      setSearchLifecycle('checking_auth');
       let sessionData;
       try {
         const session = await authController?.getSession();
@@ -1071,6 +1169,7 @@ const HeadingTag = headingLevel;
         if (sessionCheckEpoch !== searchEpoch) return;
         searchStartPending = false;
         setStatus('Не удалось проверить вход. Попробуйте ещё раз.', 'error');
+        setSearchLifecycle('error');
         return;
       }
       if (sessionCheckEpoch !== searchEpoch || !searchStartPending) return;
@@ -1081,6 +1180,7 @@ const HeadingTag = headingLevel;
         if (!validation.ok) {
           searchStartPending = false;
           setStatus(validation.message, 'error');
+          setSearchLifecycle('validation');
           return;
         }
         if (input) input.value = validation.query;
@@ -1089,13 +1189,15 @@ const HeadingTag = headingLevel;
         await beginYandexLogin();
         return;
       }
-      const validation = validateSearchInput(input?.value || '');
-      if (!validation.ok) {
+      const prepared = prepareSearchRequest(input?.value || '', append ? offset : 0, append ? activeExecutionMode : resolveSearchExecutionMode());
+      if (!prepared.ok) {
         searchStartPending = false;
-        setStatus(validation.message, 'error');
+        setStatus(prepared.message, 'error');
+        setSearchLifecycle('validation');
         return;
       }
-      const query = validation.query;
+      const query = prepared.query;
+      activeExecutionMode = prepared.executionMode;
       if (input) input.value = query;
       const epoch = searchEpoch + 1;
       searchEpoch = epoch;
@@ -1103,10 +1205,12 @@ const HeadingTag = headingLevel;
       const controller = new AbortController();
       activeSearchController = controller;
       searchStartPending = false;
+      setSearchLifecycle('loading');
       setSearchLoading(true, { showSkeleton: !append });
       if (append) setMoreLoading(true);
       let vectorRendered = false;
       let completed = false;
+      let terminalState = 'error';
       let overallWatchdogTimer;
       let overallWatchdogTimedOut = false;
       beginSearchProgress(epoch, append ? 'Открываю следующую страницу…' : 'Открываю поиск…');
@@ -1132,9 +1236,9 @@ const HeadingTag = headingLevel;
             setResultContext({});
           }
         }
-        const pageOffset = offset;
+        const pageOffset = prepared.body.offset;
         const searchRequest = invokeEventSearch(
-          { query, limit: 8, offset: pageOffset, candidate_window: 10, include_fallback: true, use_llm_verifier: true, allow_llm_fallback: false },
+          prepared.body,
           session,
           {
             epoch,
@@ -1167,6 +1271,7 @@ const HeadingTag = headingLevel;
             await updateAuth();
           }
           setStatus(errorMessageFromSearchPayload(error), 'error');
+          terminalState = 'error';
           return;
         }
         if (!data) {
@@ -1175,12 +1280,14 @@ const HeadingTag = headingLevel;
           } else {
             setStatus('Поиск не вернул ответ. Попробуйте ещё раз.', 'error');
           }
+          terminalState = 'error';
           return;
         }
         const items = Array.isArray(data?.items) ? data.items : [];
         const fallbackItems = Array.isArray(data?.fallback_items) ? data.fallback_items : [];
         renderSearchPayload(data, { append, phase: 'final', pageOffset });
         completed = true;
+        terminalState = items.length === 0 && fallbackItems.length === 0 ? 'empty' : 'success';
         const nextOffset = Number(data?.next_offset);
         offset = Number.isFinite(nextOffset) && nextOffset >= pageOffset ? nextOffset : pageOffset + items.length;
         if (more) more.hidden = !data?.has_more;
@@ -1201,14 +1308,19 @@ const HeadingTag = headingLevel;
         if (!isCurrentSearchEpoch(epoch)) return;
         if (overallWatchdogTimedOut || error?.message === 'search_overall_timeout') {
           setStatus('Поиск занял слишком много времени. Поле уже снова доступно — попробуйте ещё раз.', 'error');
+          terminalState = 'error';
         } else if (controller.signal.aborted || error?.name === 'AbortError') {
+          terminalState = 'idle';
           return;
         } else if (error?.name === 'TypeError' || /failed to fetch|networkerror|load failed|supabase_transport/iu.test(String(error?.message || ''))) {
           setStatus('Не удалось связаться с сервером поиска. Поле уже снова доступно — попробуйте ещё раз.', 'error');
+          terminalState = 'error';
         } else if (vectorRendered && results?.children.length) {
           setStatus('Показал быстрые результаты по смыслу. Финальный ответ не пришёл, но найденные карточки остаются на экране.', 'info');
+          terminalState = 'success';
         } else {
           setStatus('Поиск сейчас не ответил. Попробуйте ещё раз.', 'error');
+          terminalState = 'error';
         }
       } finally {
         window.clearTimeout(slowNoticeTimer);
@@ -1218,6 +1330,7 @@ const HeadingTag = headingLevel;
         setSkeletonLoading(false);
         setMoreLoading(false);
         setSearchLoading(false);
+        setSearchLifecycle(terminalState);
         if (completed) scheduleSearchProgressReset(epoch);
         else resetSearchProgress(epoch);
       }
@@ -1236,6 +1349,7 @@ const HeadingTag = headingLevel;
       return true;
     }
 
+    resolveSearchExecutionMode();
     if (enabled) {
       authController = getStaticSiteAuth({
         supabaseUrl: root.dataset.supabaseUrl,
