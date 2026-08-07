@@ -65,25 +65,29 @@ function initializePrelaunchScene(): void {
 
     if (isWide) {
       artworkSize = Math.min(vmin * .84, 780);
-      artworkCenterX = width * .58;
-      artworkCenterY = height * .64;
+      artworkCenterX = width * .64;
+      artworkCenterY = height * .62;
     }
     if (isMobile) {
-      artworkSize = Math.min(vmin * .84, 330);
+      artworkSize = Math.min(vmin * .72, 286);
       artworkCenterX = width * .54;
-      artworkCenterY = height * .50;
+      artworkCenterY = height * .57;
     }
     if (isCompactMobile) {
-      artworkSize = Math.min(vmin * .82, 280);
-      artworkCenterY = height * .49;
+      artworkSize = Math.min(vmin * .68, 226);
+      artworkCenterY = height * .54;
     }
     if (isLandscapePhone) {
-      artworkSize = Math.min(vmin * .92, 330);
-      artworkCenterX = width * .48;
-      artworkCenterY = height * .59;
+      artworkSize = Math.min(vmin * .68, 260);
+      artworkCenterX = width * .50;
+      artworkCenterY = height * .60;
     }
 
-    const tileSize = artworkSize / 5.95;
+    const tileSize = isMobile
+      ? Math.min(width * .155, 62)
+      : isLandscapePhone
+        ? Math.min(height * .145, 58)
+        : artworkSize / 5.95;
     const tileGap = Math.max(isMobile ? 4 : 5, Math.min(vmin * .0068, isMobile ? 6 : 9));
     const tileRadius = Math.max(9, Math.min(vmin * .0112, 15));
     const pitch = tileSize + tileGap;
@@ -130,22 +134,30 @@ function initializePrelaunchScene(): void {
       const artworkX = (centerX - artworkBox.left) / artworkBox.width;
       const artworkY = (centerY - artworkBox.top) / artworkBox.height;
       const insideArtwork = artworkX > -.04 && artworkX < 1.04 && artworkY > -.04 && artworkY < 1.04;
-      const wordmarkBand = artworkX > .04 && artworkX < .96 && artworkY > .40 && artworkY < .88;
+      const wordmarkBand = artworkX > .04 && artworkX < .96 && artworkY > .40 && artworkY < .90;
+      const coherentCore = artworkX > .20 && artworkX < .82 && artworkY > .43 && artworkY < .90;
       const lowerLeather = artworkX > .01 && artworkX < .99 && artworkY > .30 && artworkY < .97;
 
       let depth: PaneDepth = 'sealed';
-      if (wordmarkBand) depth = (row + column) % 4 === 0 ? 'dim' : 'clear';
-      else if (lowerLeather) depth = (row * 3 + column) % 5 < 2 ? 'dim' : 'sealed';
-      else if (!insideArtwork && (row * 5 + column) % 8 === 0) depth = 'dim';
+      if (coherentCore) {
+        const pattern = (row * 2 + column * 3) % 6;
+        depth = pattern < 3 ? 'clear' : pattern < 5 ? 'dim' : 'sealed';
+      } else if (wordmarkBand) {
+        depth = (row + column) % 3 === 0 ? 'dim' : 'sealed';
+      } else if (lowerLeather) {
+        depth = (row * 3 + column) % 5 < 2 ? 'dim' : 'sealed';
+      } else if (!insideArtwork && (row * 5 + column) % 8 === 0) {
+        depth = 'dim';
+      }
 
       const sourceDistance = Math.hypot(
         (sourceX - centerX) / tileSize,
         (sourceY - centerY) / tileSize,
       );
       let light: PaneLight = 'ambient';
-      if (sourceDistance < 2.6) light = 'hot';
-      else if (sourceDistance < 4.4) light = 'warm';
-      else if (sourceDistance < 6.3) light = 'soft';
+      if (sourceDistance < 2.7) light = 'hot';
+      else if (sourceDistance < 4.7) light = 'warm';
+      else if (sourceDistance < 6.8) light = 'soft';
 
       pane.dataset.depth = depth;
       pane.dataset.light = light;
