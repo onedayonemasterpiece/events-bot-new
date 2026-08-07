@@ -117,6 +117,7 @@ function initializePrelaunchScene(): void {
     const sourceX = width * 1.04;
     const sourceY = -height * .06;
     const visibleBoxes: PaneBox[] = [];
+    const clearCandidates: HTMLElement[] = [];
     let visibleCount = 0;
     let clearCount = 0;
 
@@ -142,6 +143,7 @@ function initializePrelaunchScene(): void {
       if (coherentCore) {
         const pattern = (row * 2 + column * 3) % 6;
         depth = pattern < 3 ? 'clear' : pattern < 5 ? 'dim' : 'sealed';
+        if (depth !== 'clear') clearCandidates.push(pane);
       } else if (wordmarkBand) {
         depth = (row + column) % 3 === 0 ? 'dim' : 'sealed';
       } else if (lowerLeather) {
@@ -170,6 +172,16 @@ function initializePrelaunchScene(): void {
       visibleBoxes.push({ x, y, width: tileSize, height: tileSize });
       visibleCount += 1;
       if (depth === 'clear') clearCount += 1;
+    }
+
+    if (isLandscapePhone && clearCount < 3) {
+      for (const pane of clearCandidates) {
+        if (clearCount >= 3) break;
+        if (pane.dataset.depth === 'clear') continue;
+        pane.dataset.depth = 'clear';
+        pane.dataset.locked = 'true';
+        clearCount += 1;
+      }
     }
 
     seamSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
