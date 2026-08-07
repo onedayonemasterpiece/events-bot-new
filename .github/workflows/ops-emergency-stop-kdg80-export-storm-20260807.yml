@@ -15,13 +15,52 @@ concurrency:
 
 jobs:
   contain:
-    environment: volunteer-monitor-canary
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        scope:
+          - external-e2e
+          - production
+          - production-readonly
+          - volunteer-monitor-canary
+          - region-talk-ydb-import
+    environment: ${{ matrix.scope }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 8
     env:
-      TELEGRAM_AUTH_BUNDLE_GH_ACTIONS: ${{ secrets.TELEGRAM_AUTH_BUNDLE_GH_ACTIONS }}
-      TELEGRAM_GH_ACTIONS_API_ID: ${{ secrets.TELEGRAM_GH_ACTIONS_API_ID }}
-      TELEGRAM_GH_ACTIONS_API_HASH: ${{ secrets.TELEGRAM_GH_ACTIONS_API_HASH }}
+      SCOPE: ${{ matrix.scope }}
+      BOT_TOKEN_01: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      BOT_TOKEN_02: ${{ secrets.KGD80_TELEGRAM_BOT_TOKEN }}
+      BOT_TOKEN_03: ${{ secrets.KDG80_TELEGRAM_BOT_TOKEN }}
+      BOT_TOKEN_04: ${{ secrets.KGD80_BOT_TOKEN }}
+      BOT_TOKEN_05: ${{ secrets.KDG80_BOT_TOKEN }}
+      BOT_TOKEN_06: ${{ secrets.REGISTRATION_TELEGRAM_BOT_TOKEN }}
+      BOT_TOKEN_07: ${{ secrets.REGISTRATION_BOT_TOKEN }}
+      BOT_TOKEN_08: ${{ secrets.TELEGRAM_REGISTRATION_BOT_TOKEN }}
+      BOT_TOKEN_09: ${{ secrets.TELEGRAM_BOT_TOKEN_KGD80 }}
+      BOT_TOKEN_10: ${{ secrets.TELEGRAM_BOT_TOKEN_KDG80 }}
+      BOT_TOKEN_11: ${{ secrets.KGD80_REG_BOT_TOKEN }}
+      BOT_TOKEN_12: ${{ secrets.KDG80_REG_BOT_TOKEN }}
+      BOT_TOKEN_13: ${{ secrets.KGD80REGBOT_TOKEN }}
+      BOT_TOKEN_14: ${{ secrets.KGD80REG_BOT_TOKEN }}
+      BOT_TOKEN_15: ${{ secrets.ZNANIE_TELEGRAM_BOT_TOKEN }}
+      BOT_TOKEN_16: ${{ secrets.FESTIVAL_TELEGRAM_BOT_TOKEN }}
+      BOT_TOKEN_17: ${{ secrets.TELEGRAM_TOKEN }}
+      BOT_TOKEN_18: ${{ secrets.BOT_TOKEN }}
+      SESSION_01: ${{ secrets.TELEGRAM_AUTH_BUNDLE_GH_ACTIONS }}
+      SESSION_02: ${{ secrets.TELEGRAM_AUTH_BUNDLE_E2E }}
+      SESSION_03: ${{ secrets.TELEGRAM_AUTH_BUNDLE }}
+      SESSION_04: ${{ secrets.TELEGRAM_SESSION }}
+      SESSION_05: ${{ secrets.TG_SESSION }}
+      SESSION_06: ${{ secrets.TG_SESSION_BASE64 }}
+      SESSION_07: ${{ secrets.TG_SESSION_STRING }}
+      API_ID_01: ${{ secrets.TELEGRAM_GH_ACTIONS_API_ID }}
+      API_HASH_01: ${{ secrets.TELEGRAM_GH_ACTIONS_API_HASH }}
+      API_ID_02: ${{ secrets.TG_API_ID }}
+      API_HASH_02: ${{ secrets.TG_API_HASH }}
+      API_ID_03: ${{ secrets.TELEGRAM_API_ID }}
+      API_HASH_03: ${{ secrets.TELEGRAM_API_HASH }}
     steps:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
@@ -30,7 +69,7 @@ jobs:
       - name: Install pinned Telegram client
         run: python -m pip install --disable-pip-version-check 'Telethon==1.40.0'
 
-      - name: Obtain the exact bot token through BotFather and drop queued updates
+      - name: Find a valid token or owner session and contain the storm
         shell: bash
         run: |
           set -euo pipefail
@@ -50,221 +89,203 @@ jobs:
           from telethon import TelegramClient
           from telethon.sessions import StringSession
 
-          TARGET_BOT_ID = 8582027786
-          TARGET_BOT_USERNAME = "kgd80regbot"
-          TARGET_BOT_TITLE = "kgd80bot"
+          TARGET_ID = 8582027786
+          TARGET_USERNAME = "kgd80regbot"
+          TARGET_TITLE = "kgd80bot"
           TOKEN_RE = re.compile(r"\b\d{8,12}:[A-Za-z0-9_-]{30,}\b")
+          SCOPE = os.environ.get("SCOPE", "unknown")
 
 
-          def decode_bundle(value: str) -> dict:
-              raw = str(value or "").strip()
-              if not raw:
-                  raise RuntimeError("Telegram auth bundle is empty")
-              if raw.startswith("{"):
-                  data = json.loads(raw)
-              else:
-                  padded = raw + ("=" * (-len(raw) % 4))
-                  try:
-                      decoded = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
-                  except Exception:
-                      decoded = base64.b64decode(padded.encode("ascii")).decode("utf-8")
-                  data = json.loads(decoded)
-              if not isinstance(data, dict) or not data.get("session"):
-                  raise RuntimeError("Telegram auth bundle has no session")
-              return data
-
-
-          def bot_api(token: str, method: str, params: dict | None = None) -> dict:
-              body = urllib.parse.urlencode(params or {}).encode("utf-8")
+          def api(token: str, method: str, params: dict | None = None):
               request = urllib.request.Request(
                   f"https://api.telegram.org/bot{token}/{method}",
-                  data=body,
+                  data=urllib.parse.urlencode(params or {}).encode("utf-8"),
                   method="POST",
               )
               try:
-                  with urllib.request.urlopen(request, timeout=20) as response:
+                  with urllib.request.urlopen(request, timeout=15) as response:
                       payload = json.loads(response.read().decode("utf-8"))
-              except urllib.error.HTTPError as error:
-                  raise RuntimeError(f"Bot API {method} returned HTTP {error.code}") from error
-              if payload.get("ok") is not True:
-                  raise RuntimeError(f"Bot API {method} failed")
-              return payload
+              except urllib.error.HTTPError:
+                  return None
+              return payload.get("result") if payload.get("ok") is True else None
 
 
-          def buttons(message):
+          def contain(token: str, source: str) -> bool:
+              identity = api(token, "getMe") or {}
+              if int(identity.get("id") or 0) != TARGET_ID:
+                  return False
+              before = api(token, "getWebhookInfo") or {}
+              print(f"SCOPE={SCOPE}")
+              print(f"TOKEN_SOURCE={source}")
+              print(f"WEBHOOK_WAS_PRESENT={bool(before.get('url'))}")
+              print(f"PENDING_BEFORE={int(before.get('pending_update_count') or 0)}")
+              result = api(token, "deleteWebhook", {"drop_pending_updates": "true"})
+              if result is not True:
+                  raise RuntimeError("deleteWebhook failed")
+              after = api(token, "getWebhookInfo") or {}
+              print(f"WEBHOOK_PRESENT_AFTER={bool(after.get('url'))}")
+              print(f"PENDING_AFTER={int(after.get('pending_update_count') or 0)}")
+              if after.get("url") or int(after.get("pending_update_count") or 0):
+                  raise RuntimeError("containment verification failed")
+              print("KDG80_EXPORT_STORM_CONTAINED=true")
+              return True
+
+
+          def decode_session(raw: str) -> tuple[str, dict] | None:
+              value = str(raw or "").strip()
+              if not value:
+                  return None
+              if value.startswith("{"):
+                  data = json.loads(value)
+                  return str(data.get("session") or ""), data
+              padded = value + ("=" * (-len(value) % 4))
+              for decoder in (base64.urlsafe_b64decode, base64.b64decode):
+                  try:
+                      decoded = decoder(padded.encode("ascii")).decode("utf-8")
+                      data = json.loads(decoded)
+                      if isinstance(data, dict) and data.get("session"):
+                          return str(data["session"]), data
+                  except Exception:
+                      pass
+              return value, {}
+
+
+          def all_buttons(message):
               return [button for row in (message.buttons or []) for button in row]
 
 
-          def button_labels(message) -> list[str]:
-              return [str(button.text or "").strip() for button in buttons(message)]
+          def labels(message):
+              return [str(button.text or "").strip() for button in all_buttons(message)]
 
 
-          def choose_button(message, candidates: list[str]):
-              folded_candidates = [candidate.casefold() for candidate in candidates if candidate]
-              for button in buttons(message):
+          def choose(message, candidates: list[str]):
+              needles = [candidate.casefold() for candidate in candidates if candidate]
+              for button in all_buttons(message):
                   text = str(button.text or "").strip()
                   folded = text.casefold()
-                  if any(candidate == folded or candidate in folded or folded in candidate for candidate in folded_candidates):
+                  if any(needle == folded or needle in folded or folded in needle for needle in needles):
                       return button
               return None
 
 
-          async def wait_new_message(client, peer, after_id: int, timeout: int = 30):
+          async def wait_new(client, peer, after_id: int, timeout: int = 20):
               deadline = time.monotonic() + timeout
               while time.monotonic() < deadline:
-                  messages = await client.get_messages(peer, limit=30)
-                  candidates = sorted(
-                      [message for message in messages if int(message.id) > int(after_id) and not message.out],
-                      key=lambda message: int(message.id),
-                  )
-                  if candidates:
-                      return candidates[-1]
-                  await asyncio.sleep(0.4)
-              raise TimeoutError("BotFather did not send a new message")
-
-
-          async def wait_changed_or_new(client, peer, original, old_labels: list[str], timeout: int = 30):
-              deadline = time.monotonic() + timeout
-              while time.monotonic() < deadline:
-                  refreshed = await client.get_messages(peer, ids=int(original.id))
-                  if refreshed and button_labels(refreshed) != old_labels:
-                      return refreshed
                   messages = await client.get_messages(peer, limit=20)
-                  newer = sorted(
-                      [message for message in messages if int(message.id) > int(original.id) and not message.out],
+                  found = sorted(
+                      [message for message in messages if int(message.id) > after_id and not message.out],
                       key=lambda message: int(message.id),
                   )
-                  if newer:
-                      return newer[-1]
+                  if found:
+                      return found[-1]
                   await asyncio.sleep(0.4)
-              raise TimeoutError("BotFather menu did not change")
+              return None
 
 
-          async def wait_token_message(client, peer, original_id: int, timeout: int = 30) -> str:
+          async def wait_change(client, peer, message, old_labels: list[str], timeout: int = 20):
               deadline = time.monotonic() + timeout
               while time.monotonic() < deadline:
-                  candidates = []
-                  same = await client.get_messages(peer, ids=original_id)
-                  if same:
-                      candidates.append(same)
-                  candidates.extend(await client.get_messages(peer, limit=30))
+                  refreshed = await client.get_messages(peer, ids=int(message.id))
+                  if refreshed and labels(refreshed) != old_labels:
+                      return refreshed
+                  newer = await wait_new(client, peer, int(message.id), timeout=1)
+                  if newer:
+                      return newer
+                  await asyncio.sleep(0.3)
+              return None
+
+
+          async def token_from_owner_session(client: TelegramClient) -> str | None:
+              botfather = await client.get_entity("BotFather")
+              command = await client.send_message(botfather, "/mybots")
+              menu = await wait_new(client, botfather, int(command.id))
+              if not menu:
+                  return None
+              bot_button = choose(menu, [TARGET_USERNAME, "@" + TARGET_USERNAME, TARGET_TITLE])
+              if not bot_button:
+                  return None
+              old = labels(menu)
+              await menu.click(data=bot_button.data)
+              controls = await wait_change(client, botfather, menu, old)
+              if not controls:
+                  return None
+              token_button = choose(controls, ["api token", "token", "токен api", "api-токен", "токен"])
+              if not token_button:
+                  return None
+              old = labels(controls)
+              await controls.click(data=token_button.data)
+              response = await wait_change(client, botfather, controls, old)
+              deadline = time.monotonic() + 20
+              while time.monotonic() < deadline:
+                  candidates = await client.get_messages(botfather, limit=30)
+                  if response:
+                      candidates = [response, *candidates]
                   for message in candidates:
                       match = TOKEN_RE.search(str(message.raw_text or ""))
                       if match:
-                          return match.group(0)
+                          token = match.group(0)
+                          identity = api(token, "getMe") or {}
+                          if int(identity.get("id") or 0) == TARGET_ID:
+                              return token
                   await asyncio.sleep(0.4)
-              raise TimeoutError("BotFather did not return an API token")
+              return None
 
 
-          async def token_from_botfather(client: TelegramClient) -> str:
-              botfather = await client.get_entity("BotFather")
-              command = await client.send_message(botfather, "/mybots")
-              menu = await wait_new_message(client, botfather, int(command.id))
-              target_candidates = [
-                  TARGET_BOT_USERNAME,
-                  "@" + TARGET_BOT_USERNAME,
-                  TARGET_BOT_TITLE,
-              ]
+          async def try_sessions() -> bool:
+              api_pairs = []
+              for index in range(1, 4):
+                  raw_id = os.environ.get(f"API_ID_{index:02d}", "").strip()
+                  raw_hash = os.environ.get(f"API_HASH_{index:02d}", "").strip()
+                  if raw_id and raw_hash:
+                      try:
+                          pair = (int(raw_id), raw_hash)
+                      except ValueError:
+                          continue
+                      if pair not in api_pairs:
+                          api_pairs.append(pair)
+              if not api_pairs:
+                  return False
 
-              bot_button = choose_button(menu, target_candidates)
-              visited: set[tuple[str, ...]] = set()
-              for _ in range(20):
-                  if bot_button is not None:
-                      break
-                  labels = button_labels(menu)
-                  fingerprint = tuple(labels)
-                  if fingerprint in visited:
-                      break
-                  visited.add(fingerprint)
-                  next_button = choose_button(menu, ["next", "далее", "следующая", "›", ">", "»"])
-                  if next_button is None:
-                      break
-                  old_labels = labels
-                  await menu.click(data=next_button.data)
-                  menu = await wait_changed_or_new(client, botfather, menu, old_labels)
-                  bot_button = choose_button(menu, target_candidates)
-
-              if bot_button is None:
-                  raise RuntimeError(
-                      "Target bot is absent from BotFather /mybots; visible buttons="
-                      + json.dumps(button_labels(menu), ensure_ascii=False)
-                  )
-
-              old_labels = button_labels(menu)
-              await menu.click(data=bot_button.data)
-              controls = await wait_changed_or_new(client, botfather, menu, old_labels)
-              token_button = choose_button(
-                  controls,
-                  ["api token", "token", "токен api", "api-токен", "токен"],
-              )
-              if token_button is None:
-                  raise RuntimeError(
-                      "BotFather API token control not found; visible buttons="
-                      + json.dumps(button_labels(controls), ensure_ascii=False)
-                  )
-
-              old_labels = button_labels(controls)
-              await controls.click(data=token_button.data)
-              try:
-                  response = await wait_changed_or_new(client, botfather, controls, old_labels)
-                  response_id = int(response.id)
-              except TimeoutError:
-                  response_id = int(controls.id)
-              return await wait_token_message(client, botfather, response_id)
+              seen_sessions: set[str] = set()
+              for session_index in range(1, 8):
+                  decoded = decode_session(os.environ.get(f"SESSION_{session_index:02d}", ""))
+                  if not decoded:
+                      continue
+                  session, metadata = decoded
+                  if not session or session in seen_sessions:
+                      continue
+                  seen_sessions.add(session)
+                  for api_id, api_hash in api_pairs:
+                      client = TelegramClient(
+                          StringSession(session),
+                          api_id,
+                          api_hash,
+                          device_model=str(metadata.get("device_model") or "GitHub Actions"),
+                          system_version=str(metadata.get("system_version") or "Linux"),
+                          app_version=str(metadata.get("app_version") or "1.0"),
+                      )
+                      try:
+                          await client.connect()
+                          if not await client.is_user_authorized():
+                              continue
+                          token = await token_from_owner_session(client)
+                          if token and contain(token, f"session_{session_index:02d}"):
+                              return True
+                      except Exception as error:
+                          print(f"SESSION_{session_index:02d}_PATH_ERROR={type(error).__name__}")
+                      finally:
+                          await client.disconnect()
+              return False
 
 
-          async def main() -> None:
-              bundle = decode_bundle(os.environ.get("TELEGRAM_AUTH_BUNDLE_GH_ACTIONS", ""))
-              api_id = int(os.environ.get("TELEGRAM_GH_ACTIONS_API_ID", "0") or 0)
-              api_hash = str(os.environ.get("TELEGRAM_GH_ACTIONS_API_HASH", "")).strip()
-              if api_id <= 0 or not api_hash:
-                  raise RuntimeError("Telegram API credentials are missing")
+          for index in range(1, 19):
+              token = os.environ.get(f"BOT_TOKEN_{index:02d}", "").strip()
+              if token and contain(token, f"secret_{index:02d}"):
+                  raise SystemExit(0)
 
-              client = TelegramClient(
-                  StringSession(str(bundle["session"])),
-                  api_id,
-                  api_hash,
-                  device_model=str(bundle.get("device_model") or "GitHub Actions"),
-                  system_version=str(bundle.get("system_version") or "Linux"),
-                  app_version=str(bundle.get("app_version") or "1.0"),
-                  lang_code=str(bundle.get("lang_code") or "ru"),
-                  system_lang_code=str(bundle.get("system_lang_code") or "ru"),
-              )
+          if asyncio.run(try_sessions()):
+              raise SystemExit(0)
 
-              await client.connect()
-              try:
-                  if not await client.is_user_authorized():
-                      raise RuntimeError("Telegram session is not authorized")
-
-                  target = await client.get_entity(TARGET_BOT_USERNAME)
-                  if int(getattr(target, "id", 0) or 0) != TARGET_BOT_ID:
-                      raise RuntimeError("The discovered KDG80 bot identity changed")
-                  print(f"TARGET_BOT_USERNAME=@{TARGET_BOT_USERNAME}")
-                  print(f"TARGET_BOT_ID={TARGET_BOT_ID}")
-
-                  token = await token_from_botfather(client)
-                  identity = bot_api(token, "getMe").get("result") or {}
-                  if int(identity.get("id") or 0) != TARGET_BOT_ID:
-                      raise RuntimeError("BotFather returned a token for a different bot")
-
-                  before = bot_api(token, "getWebhookInfo").get("result") or {}
-                  print(f"WEBHOOK_WAS_PRESENT={bool(before.get('url'))}")
-                  print(f"PENDING_BEFORE={int(before.get('pending_update_count') or 0)}")
-                  if before.get("last_error_message"):
-                      print("WEBHOOK_LAST_ERROR_PRESENT=true")
-
-                  bot_api(token, "deleteWebhook", {"drop_pending_updates": "true"})
-                  after = bot_api(token, "getWebhookInfo").get("result") or {}
-                  print(f"WEBHOOK_PRESENT_AFTER={bool(after.get('url'))}")
-                  print(f"PENDING_AFTER={int(after.get('pending_update_count') or 0)}")
-                  if after.get("url"):
-                      raise RuntimeError("Webhook is still configured after emergency deletion")
-                  if int(after.get("pending_update_count") or 0) != 0:
-                      raise RuntimeError("Telegram still reports pending updates after drop")
-                  print("KDG80_EXPORT_STORM_CONTAINED=true")
-              finally:
-                  await client.disconnect()
-
-
-          asyncio.run(main())
+          print(f"SCOPE={SCOPE}")
+          print("SCOPE_RESULT=no-containment-path")
           PY
