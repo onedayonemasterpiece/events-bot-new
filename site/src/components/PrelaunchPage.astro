@@ -1,5 +1,4 @@
 ---
-import pwaArtwork from '../assets/announcements-brand-transparent-384.webp';
 import { withBase } from '../lib/events';
 import '../styles/prelaunch-page.css';
 
@@ -19,15 +18,17 @@ const tiles = Array.from({ length: 112 }, (_, index) => ({
 >
   <div class="prelaunch__scene" aria-hidden="true">
     <div class="prelaunch__background"></div>
-    <img
-      class="prelaunch__artwork"
-      src={pwaArtwork.src}
-      width="384"
-      height="384"
-      alt=""
-      decoding="async"
-      fetchpriority="high"
-    />
+    <div class="prelaunch__artwork" data-prelaunch-artwork>
+      <img
+        data-prelaunch-artwork-image
+        src={withBase('/assets/prelaunch/PWA-icon.webp')}
+        width="1254"
+        height="1254"
+        alt=""
+        decoding="async"
+        fetchpriority="high"
+      />
+    </div>
     <div class="prelaunch__light"></div>
     <svg
       class="prelaunch__seams"

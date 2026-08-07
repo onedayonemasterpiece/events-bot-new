@@ -57,11 +57,11 @@ try {
       await page.locator('[data-prelaunch-page]').waitFor({ state: 'visible' });
       await page.waitForFunction(() => {
         const root = document.querySelector('[data-prelaunch-page]');
-        const artwork = document.querySelector('.prelaunch__artwork');
+        const image = document.querySelector('[data-prelaunch-artwork-image]');
         return root?.getAttribute('data-scene-ready') === 'true'
-          && artwork instanceof HTMLImageElement
-          && artwork.complete
-          && artwork.naturalWidth > 0;
+          && image instanceof HTMLImageElement
+          && image.complete
+          && image.naturalWidth > 0;
       }, undefined, { timeout: 12_000 });
       await page.waitForTimeout(250);
 
@@ -81,7 +81,8 @@ try {
           };
         };
         const root = document.querySelector('[data-prelaunch-page]');
-        const artwork = document.querySelector('.prelaunch__artwork');
+        const artwork = document.querySelector('[data-prelaunch-artwork]');
+        const artworkImage = document.querySelector('[data-prelaunch-artwork-image]');
         const seams = document.querySelector('[data-prelaunch-seams]');
         const seamPath = document.querySelector('[data-prelaunch-seam-path]');
         const mosaic = document.querySelector('[data-prelaunch-mosaic]');
@@ -92,19 +93,12 @@ try {
           return box.left >= 0 && box.top >= 0 && box.right <= innerWidth && box.bottom <= innerHeight;
         }) || tiles[0];
         const sampleStyle = sample ? getComputedStyle(sample) : null;
+        const artworkStyle = artwork ? getComputedStyle(artwork) : null;
+        const imageStyle = artworkImage ? getComputedStyle(artworkImage) : null;
         const rootStyle = root ? getComputedStyle(root) : null;
         const seamStyle = seams ? getComputedStyle(seams) : null;
         const mosaicStyle = mosaic ? getComputedStyle(mosaic) : null;
         const scrolling = document.scrollingElement || document.documentElement;
-        const first = tiles[0];
-        const second = tiles[1];
-        const firstRect = first?.getBoundingClientRect();
-        const secondRect = second?.getBoundingClientRect();
-        const seamSample = firstRect && secondRect ? {
-          x: (firstRect.right + secondRect.left) / 2,
-          y: firstRect.top + firstRect.height / 2,
-        } : null;
-        const clearRect = sample ? rect(sample) : null;
         return {
           viewport: { width: innerWidth, height: innerHeight },
           rootPosition: rootStyle?.position || '',
@@ -117,9 +111,14 @@ try {
           clearTileCount: Number(root?.getAttribute('data-clear-tile-count') || 0),
           artwork: {
             rect: rect(artwork),
-            src: artwork instanceof HTMLImageElement ? artwork.currentSrc || artwork.src : '',
-            naturalWidth: artwork instanceof HTMLImageElement ? artwork.naturalWidth : 0,
-            naturalHeight: artwork instanceof HTMLImageElement ? artwork.naturalHeight : 0,
+            overflow: artworkStyle?.overflow || '',
+            borderRadius: artworkStyle?.borderRadius || '',
+            src: artworkImage instanceof HTMLImageElement ? artworkImage.currentSrc || artworkImage.src : '',
+            naturalWidth: artworkImage instanceof HTMLImageElement ? artworkImage.naturalWidth : 0,
+            naturalHeight: artworkImage instanceof HTMLImageElement ? artworkImage.naturalHeight : 0,
+            imageWidth: imageStyle?.width || '',
+            imageLeft: imageStyle?.left || '',
+            imageTop: imageStyle?.top || '',
           },
           seams: {
             rect: rect(seams),
@@ -133,13 +132,12 @@ try {
             gap: mosaicStyle?.gap || '',
           },
           sampleTile: {
-            rect: clearRect,
+            rect: rect(sample),
             borderRadius: sampleStyle?.borderRadius || '',
             backgroundColor: sampleStyle?.backgroundColor || '',
             backdropFilter: sampleStyle?.backdropFilter || sampleStyle?.webkitBackdropFilter || '',
             boxShadow: sampleStyle?.boxShadow || '',
           },
-          seamSample,
           verticalOverflow: Math.max(scrolling.scrollHeight, document.documentElement.scrollHeight, document.body?.scrollHeight || 0) - innerHeight,
           horizontalOverflow: Math.max(scrolling.scrollWidth, document.documentElement.scrollWidth, document.body?.scrollWidth || 0) - innerWidth,
           domTileCount: document.querySelectorAll('[data-prelaunch-tile]').length,
@@ -154,14 +152,16 @@ try {
       check(scene.rootPosition === 'fixed', `${viewport.name}: root position=${scene.rootPosition}`, localFailures);
       check(scene.rootOverflow === 'hidden', `${viewport.name}: root overflow=${scene.rootOverflow}`, localFailures);
       check(scene.seamModel === 'inverse-svg-rounded-holes', `${viewport.name}: seam model=${scene.seamModel}`, localFailures);
-      check(scene.artworkModel === 'build-time-transparent-asset', `${viewport.name}: artwork model=${scene.artworkModel}`, localFailures);
+      check(scene.artworkModel === 'source-asset-rounded-crop', `${viewport.name}: artwork model=${scene.artworkModel}`, localFailures);
       check(scene.seams.pathLength > 500, `${viewport.name}: seam path length=${scene.seams.pathLength}`, localFailures);
       check(scene.seams.fillRule === 'evenodd', `${viewport.name}: seam fill-rule=${scene.seams.fillRule}`, localFailures);
       check(scene.domTileCount === 112, `${viewport.name}: DOM tile count=${scene.domTileCount}`, localFailures);
       check(scene.visibleTileCount > 0 && scene.visibleTileCount <= 112, `${viewport.name}: visible tile count=${scene.visibleTileCount}`, localFailures);
       check(scene.clearTileCount >= 3, `${viewport.name}: clear tile count=${scene.clearTileCount}`, localFailures);
-      check(scene.artwork.naturalWidth > 0 && scene.artwork.naturalHeight > 0, `${viewport.name}: artwork did not decode`, localFailures);
-      check(scene.artwork.src.includes('_astro') || scene.artwork.src.includes('announcements-brand-transparent'), `${viewport.name}: unexpected artwork source`, localFailures);
+      check(scene.artwork.naturalWidth >= 1200 && scene.artwork.naturalHeight >= 1200, `${viewport.name}: source artwork did not decode`, localFailures);
+      check(scene.artwork.src.includes('/assets/prelaunch/PWA-icon.webp'), `${viewport.name}: unexpected artwork source`, localFailures);
+      check(scene.artwork.overflow === 'hidden', `${viewport.name}: artwork crop is not clipped`, localFailures);
+      check(scene.artwork.borderRadius !== '0px', `${viewport.name}: artwork crop lost radius`, localFailures);
       check(scene.sampleTile.borderRadius !== '0px', `${viewport.name}: sample tile is square`, localFailures);
       check(scene.sampleTile.backdropFilter.includes('blur'), `${viewport.name}: sample tile has no glass blur`, localFailures);
       check(scene.verticalOverflow <= 1, `${viewport.name}: vertical overflow=${scene.verticalOverflow}`, localFailures);
@@ -234,7 +234,7 @@ try {
 }
 
 const summary = {
-  schema_version: 'prelaunch_scene_evidence_v1',
+  schema_version: 'prelaunch_scene_evidence_v2',
   ok: failures.length === 0,
   url,
   viewports,

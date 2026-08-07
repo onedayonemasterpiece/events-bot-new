@@ -40,9 +40,10 @@ function initializePrelaunchScene(): void {
   const mosaic = root.querySelector<HTMLElement>('[data-prelaunch-mosaic]');
   const seamSvg = root.querySelector<SVGSVGElement>('[data-prelaunch-seams]');
   const seamPath = root.querySelector<SVGPathElement>('[data-prelaunch-seam-path]');
-  const artwork = root.querySelector<HTMLImageElement>('.prelaunch__artwork');
+  const artwork = root.querySelector<HTMLElement>('[data-prelaunch-artwork]');
+  const artworkImage = root.querySelector<HTMLImageElement>('[data-prelaunch-artwork-image]');
   const panes = Array.from(root.querySelectorAll<HTMLElement>('[data-prelaunch-tile]')).slice(0, MAX_TILES);
-  if (!mosaic || !seamSvg || !seamPath || !artwork || panes.length === 0) return;
+  if (!mosaic || !seamSvg || !seamPath || !artwork || !artworkImage || panes.length === 0) return;
 
   const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
   let resizeFrame = 0;
@@ -79,7 +80,7 @@ function initializePrelaunchScene(): void {
     if (isLandscapePhone) {
       artworkSize = Math.min(vmin * .92, 330);
       artworkCenterX = width * .48;
-      artworkCenterY = height * .48;
+      artworkCenterY = height * .49;
     }
 
     const tileSize = artworkSize / 5.95;
@@ -129,11 +130,11 @@ function initializePrelaunchScene(): void {
       const artworkX = (centerX - artworkBox.left) / artworkBox.width;
       const artworkY = (centerY - artworkBox.top) / artworkBox.height;
       const insideArtwork = artworkX > -.04 && artworkX < 1.04 && artworkY > -.04 && artworkY < 1.04;
-      const wordmarkBand = artworkX > .05 && artworkX < .95 && artworkY > .42 && artworkY < .89;
-      const leatherBody = artworkX > .02 && artworkX < .98 && artworkY > .08 && artworkY < .95;
+      const wordmarkBand = artworkX > .04 && artworkX < .96 && artworkY > .40 && artworkY < .88;
+      const leatherBody = artworkX > .01 && artworkX < .99 && artworkY > .06 && artworkY < .96;
 
       let depth: PaneDepth = 'sealed';
-      if (wordmarkBand) depth = (row + column) % 5 === 0 ? 'dim' : 'clear';
+      if (wordmarkBand) depth = (row + column) % 6 === 0 ? 'dim' : 'clear';
       else if (leatherBody) depth = (row * 3 + column) % 5 < 3 ? 'dim' : 'sealed';
       else if (!insideArtwork && (row * 5 + column) % 7 === 0) depth = 'dim';
 
@@ -170,7 +171,7 @@ function initializePrelaunchScene(): void {
     root.dataset.visibleTileCount = String(visibleCount);
     root.dataset.clearTileCount = String(clearCount);
     root.dataset.seamModel = 'inverse-svg-rounded-holes';
-    root.dataset.artworkModel = 'build-time-transparent-asset';
+    root.dataset.artworkModel = 'source-asset-rounded-crop';
   }
 
   function scheduleLayout(): void {
@@ -204,7 +205,7 @@ function initializePrelaunchScene(): void {
     }, randomBetween(MIN_PHASE_INTERVAL_MS, MAX_PHASE_INTERVAL_MS));
   }
 
-  artwork.addEventListener('load', scheduleLayout, { once: true });
+  artworkImage.addEventListener('load', scheduleLayout, { once: true });
   window.addEventListener('resize', scheduleLayout, { passive: true });
   document.addEventListener('visibilitychange', schedulePhaseAnimation);
   motionQuery.addEventListener?.('change', schedulePhaseAnimation);

@@ -3,15 +3,15 @@
  *
  * Optical order:
  * 1. dark cinematic base;
- * 2. one continuous transparent leather artwork;
+ * 2. one continuous PWA artwork, cropped by one rounded wrapper;
  * 3. one shared upper-right light source;
  * 4. one inverse SVG seam mask with rounded holes;
- * 5. rounded glass panes with different transmission/blur states;
+ * 5. rounded glass panes with varied transmission and blur;
  * 6. scene-level dust and sparse specular accents;
  * 7. semantic foreground content and resilient notification form.
  *
  * The artwork is never visible in seams or rounded-corner cut-outs. No pane
- * paints its own radial spotlight and backdrop-filter is not animated.
+ * paints its own radial spotlight and backdrop-filter is never animated.
  */
 
 .prelaunch-page {
@@ -43,22 +43,38 @@
   z-index: 0;
   inset: 0;
   background:
-    radial-gradient(ellipse 70% 72% at 72% 58%, rgba(112, 42, 23, .16), transparent 70%),
+    radial-gradient(ellipse 72% 76% at 67% 63%, rgba(118, 45, 25, .18), transparent 72%),
     linear-gradient(145deg, #17191d 0%, #101216 48%, #080a0e 100%);
 }
 
+/*
+ * The source reference contains a white studio field. The wrapper displays a
+ * known 1032×1032 crop of the 1254×1254 source and clips it to the simple
+ * rounded leather silhouette. White field and bottom shadow stay outside.
+ */
 .prelaunch__artwork {
   position: absolute;
   z-index: 1;
   width: var(--prelaunch-artwork-size);
   height: var(--prelaunch-artwork-size);
-  max-width: none;
   left: var(--prelaunch-artwork-left);
   top: var(--prelaunch-artwork-top);
   transform: translate(-50%, -50%);
-  object-fit: contain;
-  filter: saturate(.93) contrast(1.04) brightness(.78);
+  overflow: hidden;
+  border-radius: 14.55%;
   opacity: .98;
+  filter: saturate(1.02) contrast(1.045) brightness(.88);
+  contain: paint;
+}
+
+.prelaunch__artwork img {
+  position: absolute;
+  width: 121.52%;
+  max-width: none;
+  height: 121.52%;
+  left: -10.76%;
+  top: -9.79%;
+  object-fit: fill;
   user-select: none;
 }
 
@@ -69,30 +85,32 @@
   contain: paint;
   background:
     radial-gradient(
-      ellipse 60vw 66vh at 105% -4%,
+      ellipse 62vw 70vh at 105% -4%,
       rgba(255, 252, 242, .98) 0%,
-      rgba(255, 226, 200, .80) 13%,
-      rgba(240, 165, 116, .52) 31%,
-      rgba(191, 84, 43, .22) 51%,
-      transparent 78%
+      rgba(255, 226, 200, .82) 13%,
+      rgba(240, 165, 116, .54) 31%,
+      rgba(191, 84, 43, .23) 52%,
+      transparent 79%
     ),
     radial-gradient(
-      ellipse 57vw 52vh at 88% 24%,
-      rgba(255, 226, 205, .42) 0%,
-      rgba(226, 139, 87, .22) 36%,
-      rgba(158, 56, 29, .055) 66%,
+      ellipse 58vw 55vh at 88% 24%,
+      rgba(255, 226, 205, .44) 0%,
+      rgba(226, 139, 87, .23) 36%,
+      rgba(158, 56, 29, .06) 66%,
       transparent 83%
     ),
     linear-gradient(
       128deg,
-      transparent 0 58%,
-      rgba(247, 178, 130, .04) 70%,
-      rgba(255, 221, 193, .09) 84%,
+      transparent 0 57%,
+      rgba(247, 178, 130, .045) 70%,
+      rgba(255, 221, 193, .095) 84%,
       transparent 100%
     );
   mix-blend-mode: screen;
 }
 
+/* One opaque frame with rounded holes. It hides the artwork and the global
+   light in every gap and in every rounded-corner cut-out. */
 .prelaunch__seams {
   position: absolute;
   z-index: 3;
@@ -116,19 +134,21 @@
   contain: layout paint style;
 }
 
+/* Every pane is the same glass material. Depth and light zones only change
+   transmission, blur and edge response; the continuous artwork remains below. */
 .prelaunch__tile {
-  --cover: .72;
-  --blur: 7px;
-  --saturation: .65;
-  --brightness: .88;
-  --matte: .17;
-  --edge-top: .05;
-  --edge-right: .03;
-  --edge-bloom: .01;
+  --cover: .58;
+  --blur: 6.4px;
+  --saturation: .72;
+  --brightness: .93;
+  --matte: .20;
+  --edge-top: .055;
+  --edge-right: .035;
+  --edge-bloom: .012;
   --phase: 0;
   --light-open: 0;
   --light-bright: 0;
-  --border-alpha: .045;
+  --border-alpha: .055;
   position: relative;
   width: var(--prelaunch-tile-size);
   height: var(--prelaunch-tile-size);
@@ -136,7 +156,14 @@
   border: 1px solid rgb(244 226 212 / var(--border-alpha));
   border-radius: var(--prelaunch-tile-radius);
   outline: 0;
-  background-color: rgb(9 12 16 / calc(var(--cover) - var(--light-open) + var(--phase)));
+  background-color: rgb(9 12 16 / clamp(.08, calc(var(--cover) - var(--light-open) + var(--phase)), .88));
+  background-image: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, .028) 0%,
+    rgba(255, 255, 255, .008) 18%,
+    transparent 46%,
+    rgba(0, 0, 0, .07) 100%
+  );
   -webkit-backdrop-filter:
     blur(var(--blur))
     saturate(var(--saturation))
@@ -148,9 +175,9 @@
   box-shadow:
     inset 0 1px 0 rgb(255 236 221 / var(--edge-top)),
     inset -1px 0 0 rgb(255 222 198 / var(--edge-right)),
-    inset -4px 0 13px rgb(244 171 124 / var(--edge-bloom)),
-    inset 0 -1px 0 rgba(0, 0, 0, .40),
-    inset 0 0 18px rgba(0, 0, 0, .05);
+    inset -5px 0 15px rgb(244 171 124 / var(--edge-bloom)),
+    inset 0 -1px 0 rgba(0, 0, 0, .42),
+    inset 0 0 18px rgba(0, 0, 0, .045);
   contain: paint style;
   isolation: isolate;
   transition:
@@ -172,81 +199,81 @@
   background-image:
     radial-gradient(circle at 18% 22%, rgba(255, 255, 255, .09) 0 .7px, transparent 1.3px),
     radial-gradient(circle at 74% 68%, rgba(255, 255, 255, .05) 0 .65px, transparent 1.2px),
-    linear-gradient(128deg, rgba(255, 255, 255, .022), transparent 48%, rgba(0, 0, 0, .055));
+    linear-gradient(128deg, rgba(255, 255, 255, .024), transparent 48%, rgba(0, 0, 0, .055));
   background-size: 25px 27px, 33px 31px, 100% 100%;
   mix-blend-mode: soft-light;
 }
 
 .prelaunch__tile[data-depth="sealed"] {
-  --cover: .82;
-  --blur: 10px;
-  --saturation: .47;
-  --brightness: .82;
-  --matte: .20;
+  --cover: .74;
+  --blur: 11px;
+  --saturation: .52;
+  --brightness: .86;
+  --matte: .22;
 }
 
 .prelaunch__tile[data-depth="dim"] {
-  --cover: .59;
-  --blur: 5.6px;
-  --saturation: .70;
-  --brightness: .91;
+  --cover: .49;
+  --blur: 6.2px;
+  --saturation: .78;
+  --brightness: .96;
   --matte: .22;
 }
 
 .prelaunch__tile[data-depth="clear"] {
-  --cover: .38;
-  --blur: 2.6px;
-  --saturation: .93;
-  --brightness: 1;
-  --matte: .18;
-  --border-alpha: .08;
+  --cover: .20;
+  --blur: 1.55px;
+  --saturation: 1;
+  --brightness: 1.06;
+  --matte: .15;
+  --border-alpha: .10;
 }
 
 .prelaunch__tile[data-light="soft"] {
-  --light-open: .025;
+  --light-open: .02;
   --light-bright: .035;
-  --edge-top: .09;
-  --edge-right: .065;
-  --edge-bloom: .025;
-  --border-alpha: .065;
+  --edge-top: .10;
+  --edge-right: .075;
+  --edge-bloom: .03;
+  --border-alpha: .08;
 }
 
 .prelaunch__tile[data-light="warm"] {
-  --light-open: .10;
-  --light-bright: .11;
-  --edge-top: .20;
-  --edge-right: .15;
-  --edge-bloom: .08;
-  --border-alpha: .15;
+  --light-open: .09;
+  --light-bright: .12;
+  --edge-top: .24;
+  --edge-right: .18;
+  --edge-bloom: .10;
+  --border-alpha: .18;
 }
 
 .prelaunch__tile[data-light="hot"] {
-  --light-open: .20;
-  --light-bright: .22;
-  --edge-top: .38;
-  --edge-right: .30;
-  --edge-bloom: .17;
-  --border-alpha: .29;
+  --light-open: .18;
+  --light-bright: .24;
+  --edge-top: .44;
+  --edge-right: .35;
+  --edge-bloom: .21;
+  --border-alpha: .34;
 }
 
 .prelaunch__tile[data-accent="true"] {
-  --light-open: .24;
-  --light-bright: .25;
-  --edge-top: .52;
-  --edge-right: .42;
-  --edge-bloom: .24;
-  --border-alpha: .44;
+  --light-open: .23;
+  --light-bright: .28;
+  --edge-top: .58;
+  --edge-right: .48;
+  --edge-bloom: .30;
+  --border-alpha: .50;
 }
 
-.prelaunch__tile[data-phase="open"] { --phase: -.10; }
-.prelaunch__tile[data-phase="closed"] { --phase: .06; }
+.prelaunch__tile[data-phase="open"] { --phase: -.08; }
+.prelaunch__tile[data-phase="closed"] { --phase: .045; }
 
 .prelaunch__dust {
   position: absolute;
   z-index: 5;
   inset: 0;
   contain: paint;
-  opacity: .72;
+  opacity: .74;
   mix-blend-mode: screen;
   background-image:
     radial-gradient(circle at 98% 2%, rgba(255, 249, 234, .92) 0 1px, transparent 1.8px),
@@ -597,15 +624,71 @@
   font-size: .75rem;
 }
 
-@media (min-width: 1200px) and (max-height: 1000px) and (min-aspect-ratio: 4 / 3) {
+/* Short desktop moves the form to a right-hand column instead of letting it
+   collide with the description or escape below the viewport. */
+@media (min-width: 900px) and (max-height: 700px) {
+  .prelaunch__foreground {
+    padding: 28px 42px 16px;
+    grid-template-columns: minmax(0, 1.12fr) minmax(330px, .88fr);
+    grid-template-rows: auto 1fr;
+    column-gap: 34px;
+  }
+
+  .prelaunch__brand {
+    grid-column: 1;
+  }
+
+  .prelaunch__brand-icon {
+    width: 66px;
+  }
+
+  .prelaunch__brand p {
+    font-size: 1.38rem;
+  }
+
   .prelaunch__copy {
-    margin-top: clamp(45px, 7vh, 75px);
+    grid-column: 1;
+    margin-top: 34px;
+  }
+
+  .prelaunch__copy h1 {
+    font-size: clamp(3.25rem, 6vw, 4.2rem);
+  }
+
+  .prelaunch__copy p {
+    margin-top: 15px;
+    font-size: clamp(.92rem, 1.55vw, 1.08rem);
+  }
+
+  .prelaunch__notify {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    align-self: end;
+    width: 100%;
+  }
+
+  .prelaunch-form__row {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .prelaunch-form input[type="email"],
+  .prelaunch-form button {
+    min-height: 50px;
+  }
+
+  .prelaunch-form__promise {
+    font-size: .63rem;
+  }
+
+  .prelaunch-form__consent {
+    font-size: .56rem;
   }
 }
 
 @media (max-width: 599px) {
   .prelaunch__foreground {
-    padding: 24px 24px 18px;
+    padding: 24px 24px 14px;
     grid-template-rows: auto 1fr auto;
   }
 
@@ -690,7 +773,7 @@
 @media (max-width: 599px) and (max-height: 680px) {
   .prelaunch__foreground {
     padding-top: 16px;
-    padding-bottom: 10px;
+    padding-bottom: 8px;
   }
 
   .prelaunch__brand-icon {
@@ -742,32 +825,78 @@
 
 @media (orientation: landscape) and (min-width: 600px) and (max-height: 500px) {
   .prelaunch__foreground {
-    padding: 16px 24px 10px;
-    grid-template-columns: minmax(0, 1.08fr) minmax(280px, .92fr);
+    padding: 14px 22px 8px;
+    grid-template-columns: minmax(0, 1.08fr) minmax(270px, .92fr);
     grid-template-rows: auto 1fr;
-    column-gap: 28px;
+    column-gap: 24px;
   }
 
   .prelaunch__brand {
     grid-column: 1;
+    gap: 10px;
+  }
+
+  .prelaunch__brand-icon {
+    width: 48px;
+  }
+
+  .prelaunch__brand p {
+    font-size: 1rem;
   }
 
   .prelaunch__copy {
     grid-column: 1;
-    margin-top: 18px;
+    margin-top: 12px;
+  }
+
+  .prelaunch__copy h1 {
+    font-size: clamp(2.15rem, 10vh, 2.8rem);
+    line-height: .92;
+  }
+
+  .prelaunch__copy h1 span {
+    display: block;
+  }
+
+  .prelaunch__copy p {
+    margin-top: 10px;
+    font-size: max(10px, 2.7vh);
+    line-height: 1.2;
   }
 
   .prelaunch__notify {
     grid-column: 2;
     grid-row: 1 / 3;
-    align-self: end;
+    align-self: center;
     width: 100%;
+  }
+
+  .prelaunch__notify h2 {
+    margin-bottom: 7px;
+    font-size: max(12px, 3vh);
+  }
+
+  .prelaunch-form__row {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  .prelaunch-form input[type="email"],
+  .prelaunch-form button {
+    min-height: 42px;
   }
 
   .prelaunch-form__promise,
   .prelaunch-form__consent {
+    margin-top: 5px;
     font-size: max(8.6px, 2.15vh);
-    line-height: 1.14;
+    line-height: 1.12;
+  }
+
+  .prelaunch-form__status {
+    min-height: 0;
+    margin-top: 3px;
+    font-size: 8.6px;
   }
 }
 

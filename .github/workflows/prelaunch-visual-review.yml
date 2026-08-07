@@ -11,7 +11,7 @@ on:
       - '.github/workflows/prelaunch-visual-review.yml'
       - 'docs/features/static-site-pages/prelaunch.md'
       - 'docs/features/static-site-pages/prelaunch-handoff/**'
-      - 'site/src/assets/announcements-brand-transparent-384.webp'
+      - 'site/scripts/prepare-prelaunch-artwork.mjs'
       - 'site/src/components/PrelaunchPage.astro'
       - 'site/src/layouts/PrelaunchLayout.astro'
       - 'site/src/pages/index.astro'

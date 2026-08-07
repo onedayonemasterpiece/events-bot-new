@@ -11,26 +11,34 @@ function source(path) {
   return readFileSync(join(repoRoot, path), 'utf8');
 }
 
-test('prelaunch scene has one continuous artwork, one seam mask and glass panes', () => {
+test('prelaunch scene has one source artwork, one seam mask and glass panes', () => {
   const page = source('site/src/components/PrelaunchPage.astro');
   const scene = source('site/src/scripts/prelaunchScene.ts');
   const css = source('site/src/styles/prelaunch-page.css');
+  const prepare = source('site/scripts/prepare-prelaunch-artwork.mjs');
 
-  assert.match(page, /announcements-brand-transparent-384\.webp/u);
+  assert.match(page, /\/assets\/prelaunch\/PWA-icon\.webp/u);
+  assert.match(page, /data-prelaunch-artwork/u);
+  assert.match(page, /data-prelaunch-artwork-image/u);
   assert.match(page, /data-prelaunch-seams/u);
   assert.match(page, /data-prelaunch-seam-path/u);
   assert.match(page, /fill-rule="evenodd"/u);
   assert.match(page, /Array\.from\(\{ length: 112 \}/u);
   assert.doesNotMatch(page, /prelaunch-fit-v\d+\.css/u);
 
+  assert.match(prepare, /prelaunch-handoff[\s\S]*PWA-icon\.webp/u);
+  assert.match(prepare, /copyFileSync/u);
+
   assert.match(scene, /inverse-svg-rounded-holes/u);
-  assert.match(scene, /build-time-transparent-asset/u);
+  assert.match(scene, /source-asset-rounded-crop/u);
   assert.match(scene, /roundedRectPath/u);
   assert.match(scene, /seamPath\.setAttribute\('d', path\)/u);
   assert.match(scene, /const tileSize = artworkSize \/ 5\.95/u);
   assert.match(scene, /Math\.ceil\(\(width - left/u);
   assert.doesNotMatch(scene, /getImageData|flood|Uint32Array/iu);
 
+  assert.match(css, /\.prelaunch__artwork[\s\S]*overflow:\s*hidden/u);
+  assert.match(css, /\.prelaunch__artwork img[\s\S]*121\.52%/u);
   assert.match(css, /\.prelaunch__seams path[\s\S]*fill:\s*var\(--prelaunch-seam\)/u);
   assert.match(css, /\.prelaunch__tile[\s\S]*backdrop-filter/u);
   assert.match(css, /data-depth="sealed"/u);
@@ -70,18 +78,17 @@ test('prelaunch runtime no longer imports the accumulated visual patch stack', (
   const index = source('site/src/pages/index.astro');
   const layout = source('site/src/layouts/PrelaunchLayout.astro');
   const page = source('site/src/components/PrelaunchPage.astro');
-  const asset = join(repoRoot, 'site/src/assets/announcements-brand-transparent-384.webp');
 
   assert.match(index, /import PrelaunchPage/u);
   assert.match(index, /<PrelaunchPage\s*\/>/u);
   assert.doesNotMatch(index, /PrelaunchLanding|PrelaunchExperience|PrelaunchVisualReview/u);
   assert.doesNotMatch(layout, /prelaunch-(?:motion|fit-v\d+)\.css/u);
   assert.match(page, /prelaunch-page\.css/u);
-  assert.equal(existsSync(asset), true);
 });
 
 test('desktop and mobile reference assets remain stored for manual review', () => {
   const referenceDir = join(repoRoot, 'docs/features/static-site-pages/prelaunch-handoff/reference');
+  assert.equal(existsSync(join(referenceDir, 'PWA-icon.webp')), true);
   assert.equal(existsSync(join(referenceDir, 'generated-lighting-desktop-v1.webp')), true);
   assert.equal(existsSync(join(referenceDir, 'generated-lighting-mobile-v1.webp')), true);
 });
