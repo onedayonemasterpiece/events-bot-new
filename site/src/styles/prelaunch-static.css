@@ -92,19 +92,11 @@
   z-index: 2;
 }
 
-.prelaunch-page--static .prelaunch__notify {
-  width: min(640px, 54vw);
-}
-
 @media (max-width: 899px), (max-aspect-ratio: 5/4) {
   .prelaunch__static-vignette {
     background:
       linear-gradient(180deg, rgba(5, 7, 10, .42) 0%, rgba(5, 7, 10, .16) 29%, transparent 51%, rgba(5, 7, 10, .38) 100%),
       linear-gradient(90deg, rgba(5, 7, 10, .18), transparent 64%);
-  }
-
-  .prelaunch-page--static .prelaunch__notify {
-    width: 100%;
   }
 }
 
