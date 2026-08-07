@@ -1,0 +1,60 @@
+name: Prelaunch live canary
+
+on:
+  push:
+    branches: [agent/prelaunch-landing-20260803]
+    paths:
+      - '.github/workflows/prelaunch-live-canary.yml'
+      - 'site/scripts/prelaunch-live-canary.mjs'
+      - 'supabase/migrations/20260806163000_prelaunch_updates_consent_v2.sql'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prelaunch-live-canary
+  cancel-in-progress: false
+
+jobs:
+  configuration-preflight:
+    runs-on: ubuntu-24.04
+    environment: { name: external-e2e }
+    env:
+      E2E_SUPABASE_HOST: ${{ vars.E2E_SUPABASE_HOST }}
+      E2E_RELAY_HOST: ${{ vars.E2E_RELAY_HOST }}
+      E2E_RECIPIENT_TEMPLATE: ${{ secrets.E2E_RECIPIENT_TEMPLATE }}
+      PUBLIC_KEY_VAR: ${{ vars.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY }}
+      PUBLIC_KEY_SECRET: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY }}
+      ANON_KEY_SECRET: ${{ secrets.SUPABASE_ANON_KEY }}
+      SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_REF_VAR: ${{ vars.SUPABASE_PROJECT_REF }}
+      PROJECT_REF_SECRET: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Report configuration presence without values
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/prelaunch-live-canary
+          {
+            printf '{\n'
+            first=1
+            for name in E2E_SUPABASE_HOST E2E_RELAY_HOST E2E_RECIPIENT_TEMPLATE PUBLIC_KEY_VAR PUBLIC_KEY_SECRET ANON_KEY_SECRET SERVICE_ROLE_KEY ACCESS_TOKEN DB_PASSWORD PROJECT_REF_VAR PROJECT_REF_SECRET; do
+              value="${!name:-}"
+              present=false
+              [[ -n "$value" ]] && present=true
+              [[ $first -eq 0 ]] && printf ',\n'
+              first=0
+              printf '  "%s": %s' "$name" "$present"
+            done
+            printf '\n}\n'
+          } | tee artifacts/prelaunch-live-canary/configuration-presence.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prelaunch-live-canary-preflight-${{ github.run_id }}
+          path: artifacts/prelaunch-live-canary
+          if-no-files-found: error
+          retention-days: 3
