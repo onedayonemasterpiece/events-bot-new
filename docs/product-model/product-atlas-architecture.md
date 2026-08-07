@@ -1,124 +1,169 @@
-# Product Atlas: сквозная визуализация продукта, готовности и фактической ценности
+# Product Atlas: сквозная продуктовая доска в Penpot
 
-> **Статус:** рекомендуемая архитектура для owner review.  
+> **Статус:** скорректированное архитектурное решение для практического пилота.  
 > **Дата:** 7 августа 2026 года.  
-> **Канонический владелец смысла:** `events-bot-new`.  
-> **Связанные документы:** [методология продуктовой модели](README.md), [исследования визуализации](../research/product-visualization/README.md), [аналитика](../features/static-site-pages/analytics/README.md), [дизайн-система](../features/static-site-pages/design-system/README.md).
+> **Канонический владелец продуктового смысла:** `events-bot-new`.  
+> **Не является:** автоматической системой продуктовой аналитики, новым backlog-сервисом или live-dashboard.
 
 ## 1. Решение
 
-Для «Полюбить Калининград Анонсы» рекомендуется гибридный **Product Atlas**:
+Для «Полюбить Калининград Анонсы» создаётся отдельная **Product Atlas board** в Penpot и отдельный Product Atlas plugin.
 
-```text
-одна машиночитаемая продуктовая модель
-  → живая web-проекция Product Console
-  → пространственная Penpot-проекция Product Atlas
-```
-
-Модель хранит устойчивый продуктовый backbone:
+Доска показывает одну связанную модель:
 
 ```text
 user need
-→ Job
+→ Job / Job Story
 → user outcome
 → journey
 → capability
-```
-
-и связывает его с изменяемыми слоями:
-
-```text
-capability
-→ User Story / operator job / technical enabler
-→ acceptance scenario
+→ User Stories / operator jobs / technical enablers
+→ acceptance scenarios
 → implementation / release evidence
-→ runtime observation / incident
-→ metric / SLI / SLO
+→ production health / incidents
+→ наблюдения и результаты отдельных анализов
 → owner outcome
 → decision
 ```
 
-Penpot и web не являются конкурирующими источниками. Они показывают разные проекции одной модели и одного evidence snapshot.
+Она не заменяет release-checklist, статистические БД, дизайн-систему или feature-документы. Она связывает их через стабильные IDs и ссылки.
 
-## 2. Почему выбран гибрид
+## 2. Где находятся источники истины
 
-### Penpot-only не подходит
+### 2.1 Product model и решения — `events-bot-new`
 
-Penpot хорошо поддерживает пространственный обзор, дизайн-контекст, нативные комментарии и совместный review. Но большой борд не должен вручную имитировать live-dashboard, хранить частые metric updates или становиться вторым backlog.
+Здесь хранятся:
 
-### Web-only недостаточен
-
-Web-проекция лучше подходит для фильтров, актуальных метрик, таблиц, accessibility, mobile review и PDF. Но она хуже передаёт целостную пространственную картину, связи с визуальными компонентами и коллективный review на большом борде.
-
-### Гибрид использует сильные стороны обоих
-
-- **Product Console:** актуальные данные, фильтры, coverage matrices, trends, decision queue;
-- **Penpot Product Atlas:** стабильная пространственная карта, дизайн-контекст, owner review, комментарии и candidate alternatives;
-- **Git:** канонические определения, IDs, связи, decisions и evidence references.
-
-## 3. Владение по репозиториям
-
-### `events-bot-new`
-
-Владеет:
-
-- user needs, Jobs и Job Stories;
-- user outcomes;
+- user needs, Jobs, Job Stories и user outcomes;
 - owner goals, owner outcomes и operator jobs;
-- будущими partner needs, Jobs и outcomes после их исследования;
-- journeys, capabilities, stories и enablers;
-- acceptance scenarios, release checklist и incidents;
-- decisions и traceability.
+- будущие partner needs, Jobs и outcomes после отдельного исследования;
+- journeys, capabilities, User Stories и enablers;
+- acceptance scenarios, release/checklist links и incidents;
+- принятые decisions;
+- результаты отдельных продуктовых анализов, выполненных человеком или ChatGPT.
 
-Raw telemetry не получает изменчивые `story_id` как основную семантику.
+Penpot является визуальной проекцией и review-средой. Комментарий или вручную нарисованная карточка в Penpot не становится продуктовым требованием автоматически.
 
-### `common-analytics`
+### 2.2 Статистика — проектируемый DB/runtime-контур
 
-Владеет вычисляемой evidence-проекцией:
+Статистика не хранится в `common-analytics` и не должна переноситься в GitHub как основной data store.
 
-- job attempts и terminal states;
-- metric snapshots;
-- SLI/SLO и error-budget state;
-- context coverage и data-quality state;
-- freshness, sample size и confidence;
-- агрегированными problem signals для Product Radar.
+Канонический общий контракт в `main`:
 
-Он не переопределяет Jobs, outcomes или product intent.
+```text
+docs/features/static-site-pages/analytics/README.md
+```
 
-### `lovekgd-design-system`
+На дату этого решения детальные runtime/migration contracts находятся в открытом PR `#337`:
 
-Владеет:
+```text
+docs/features/static-site-pages/analytics/unified-statistics-runtime-architecture.md
+docs/features/static-site-pages/analytics/statistics-migration-inventory.v1.yml
+docs/features/static-site-pages/analytics/statistics-event-catalog.v1.yml
+```
 
-- foundations и semantic design tokens;
-- visual status grammar;
-- внутренними Product Atlas components;
-- Penpot catalog/renderer/plugin contracts;
-- visual evidence и comment-to-prompt transport.
+Целевой путь статистики:
 
-Он не становится вторым реестром продукта.
+```text
+browser / authoritative receipt
+→ unified client and catalog
+→ first-party ingest
+→ compact YDB facts and aggregates
+→ verified Parquet archive
+→ TTL / verified deletion
+```
 
-## 4. Интересанты
+Product Atlas не читает production БД автоматически на первом этапе.
 
-Product Atlas сразу поддерживает три отдельные lane:
+### 2.3 Продуктовая аналитика — отдельные запросы и analysis records
 
-1. **Пользователь:** needs, Jobs, journeys и user outcomes.
-2. **Владелец / оператор:** owner outcomes, operator jobs, guardrails и decisions.
-3. **Партнёр:** future-ready lane для partner Jobs и outcomes.
+Пока не вводится автоматическая сквозная продуктовая аналитика.
 
-Партнёрская lane не заполняется предположениями. До исследования она явно имеет состояние `not_modeled` или `unknown`.
+Рабочий процесс:
 
-Общие capabilities связывают несколько lane и показывают:
+```text
+вопрос владельца
+→ запрос к данным / документам / production evidence
+→ анализ в ChatGPT
+→ проверяемый Markdown analysis record
+→ связанные findings и decisions
+→ обновление Product Atlas
+```
 
-- взаимное усиление интересов;
-- конфликты целей;
-- guardrails;
-- незакрытые stakeholder gaps.
+Analysis record хранит не сырые данные, а:
 
-## 5. Основные представления
+- вопрос и границы анализа;
+- дату и data cutoff;
+- использованные источники, query/export IDs и release identity;
+- метод;
+- выводы;
+- неопределённость и ограничения;
+- связанные Jobs, outcomes, capabilities и scenarios;
+- варианты решений и принятое решение.
 
-Product Atlas использует пять согласованных views.
+Каноническое место: [`analysis/README.md`](analysis/README.md).
 
-### 5.1 Product Outcome Spine
+### 2.4 `common-analytics`
+
+`common-analytics` не является источником статистики, Job health или Product Atlas evidence.
+
+Он может хранить исследовательские копии и свои существующие on-demand catalog artifacts, но Product Atlas не зависит от него.
+
+### 2.5 Дизайн-система
+
+Канонический runtime UI остаётся в `events-bot-new`. `lovekgd-design-system` владеет Penpot delivery/review tooling и визуальными contracts.
+
+Product Atlas связывается с:
+
+- design-system component / pattern / archetype IDs;
+- actual/baseline/diff evidence;
+- coverage и fragmentation;
+- candidate visual decisions.
+
+Неполный component inventory не блокирует доску. Он становится видимым gap:
+
+```text
+not_modeled
+missing_component
+partial_component_coverage
+fragmented_implementation
+missing_visual_evidence
+```
+
+## 3. Интересанты
+
+Product Atlas поддерживает три разные lane.
+
+### Пользователь
+
+```text
+need → Job → journey → user outcome
+```
+
+### Владелец / оператор
+
+```text
+owner goal → owner outcome → operator job → decision
+```
+
+### Партнёр
+
+```text
+partner need → partner Job → partner outcome
+```
+
+Partner lane заранее не заполняется выдуманными Jobs. До исследования используются `not_modeled` и `unknown`.
+
+Общие capabilities показывают, где интересы:
+
+- совпадают;
+- усиливают друг друга;
+- конфликтуют;
+- ограничены guardrails.
+
+## 4. Пять согласованных views
+
+### 4.1 Product Outcome Spine
 
 Показывает:
 
@@ -126,165 +171,185 @@ Product Atlas использует пять согласованных views.
 need → Job → user outcome → owner outcome
 ```
 
-Рядом видны capabilities, guardrails, metric contracts и confidence.
+Рядом располагаются capabilities, guardrails, analysis findings и decisions.
 
-### 5.2 Job & Journey Map
+### 4.2 Job & Journey Map
 
-Показывает альтернативные journeys, шаги, recovery paths и текущую работоспособность в выбранном контексте.
+Показывает альтернативные journeys, шаги, recovery paths и затронутые scenarios.
 
-### 5.3 Capability Delivery Map
+### 4.3 Capability Delivery Map
 
-Показывает capabilities, User Stories, operator jobs, enablers, acceptance, implementation и release milestones.
-
-### 5.4 Coverage & Operational Health Matrix
-
-Показывает независимое состояние по контекстам:
+Показывает связь:
 
 ```text
-device / app mode
-× authentication
-× network
-× accessibility
-× account/data state
-× recovery path
+capability
+→ stories / operator jobs / enablers
+→ acceptance
+→ implementation
+→ release
 ```
 
-`unknown` не считается PASS.
+### 4.4 Coverage & Readiness Matrix
 
-### 5.5 Evidence, Metrics & Decisions
+Показывает независимые признаки по контекстам:
 
-Показывает metric definitions, current values, target, sample, freshness, SLI/SLO, incidents и owner decisions.
+```text
+implemented
+tested
+released
+live_verified
+observed_with_sufficient_data
+```
 
-## 6. Главный экран и Product Problem Radar
+Контексты могут включать device/app mode, auth, network, accessibility, account/data state и recovery.
 
-Верхняя полоса каждого overview содержит **Problem Radar**. Это не вручную расставленные стикеры, а вычисляемые product-problem records.
+### 4.5 Evidence, Findings & Decisions
 
-Источники проблем:
+Показывает:
 
-1. critical runtime `broken` или `degraded`;
-2. P0/P1 release blocker;
-3. critical `unknown`, `insufficient_data` или `stale_evidence`;
-4. user outcome ниже принятого порога;
-5. owner/partner `decision_required`;
-6. design-system fragmentation или drift.
+- release/test/incident evidence;
+- вручную добавленные analysis findings;
+- metric snapshots только когда они получены конкретным проверяемым анализом;
+- owner decisions;
+- открытые вопросы.
 
-Минимальные поля проблемы:
+На первом этапе это не auto-refresh dashboard.
+
+## 5. Многоосевая готовность
+
+Один `done` запрещён.
+
+Capability может одновременно иметь:
+
+```yaml
+definition: decided
+delivery: implemented
+verification: candidate_pass
+deployment: production
+runtime_health: broken
+runtime_context: mobile + weak_network
+analysis_state: insufficient_data
+user_outcome: not_confirmed
+owner_outcome: unknown
+```
+
+Прошлое implementation/release evidence не стирается текущим incident.
+
+`unknown` не означает success.
+
+## 6. Product Problem Radar
+
+На странице `00 — Executive / Problem Radar` выводятся до семи главных проблем.
+
+На первом этапе problems формируются из известных источников:
+
+1. release/checklist blocker;
+2. acceptance gap;
+3. production incident;
+4. conflict или stale requirement;
+5. missing component / UI coverage / design drift;
+6. accepted analysis finding;
+7. owner decision required.
+
+DB-метрика может стать источником проблемы только после отдельного анализа и сохранения analysis record.
+
+Problem record:
 
 ```yaml
 id:
 problem_type:
 severity: S | M | L
+statement:
 affected_job_ids: []
 affected_capability_ids: []
 context:
-first_seen_at:
-last_seen_at:
-evidence_refs: []
+source_refs: []
+analysis_record_ids: []
 incident_id:
 owner:
 decision_due_at:
 ```
 
-Размер пузыря дискретный `S/M/L`, а не псевдоточная площадь. На первом экране показываются не более семи главных проблем; остальные сворачиваются в счётчик.
+Размер bubble дискретный `S/M/L`. Это не непрозрачный автоматический score.
 
-Типы визуально различаются текстом, формой, pattern и цветом:
-
-- product gap;
-- coverage gap;
-- runtime incident;
-- evidence gap;
-- decision gap;
-- design drift.
-
-Клик ведёт по цепочке:
+Клик ведёт:
 
 ```text
 problem
 → affected Job
-→ context scenario
+→ context / journey step
 → capability
-→ evidence / incident
-→ варианты решения
+→ source evidence / analysis / incident
+→ options and decision
 ```
 
-## 7. Многоосевая готовность
+## 7. Отдельный Penpot-файл и отдельный plugin
 
-Единый `done` запрещён. Capability может одновременно иметь:
+Product Atlas размещается в отдельном Penpot-файле.
 
-```yaml
-delivery:
-  implemented: true
-  verified: true
-  released: true
-runtime:
-  status: broken
-  context: mobile + weak_network
-  incident_id: INC-...
-adoption:
-  status: observed
-user_outcome:
-  status: not_confirmed
-owner_outcome:
-  status: insufficient_data
-```
-
-Минимальные независимые фасеты:
-
-- definition / decision / design;
-- implementation;
-- verification;
-- release / exposure;
-- runtime health;
-- adoption;
-- task completion;
-- user outcome;
-- owner outcome;
-- evidence freshness/confidence;
-- causal confidence.
-
-## 8. Penpot boundary
-
-Product Atlas создаётся в **отдельном Penpot-файле**, а не внутри Resource Graph дизайн-системы.
-
-Причины:
-
-- другая частота обновления;
-- другой набор сущностей и владельцев;
-- более высокий объём dynamic evidence;
-- отдельный review lifecycle;
-- необходимость сохранять design-system library чистой.
-
-Product Atlas использует общие Penpot libraries и foundations LoveKGD, но имеет собственные named pages:
+Страницы:
 
 ```text
 00 — Executive / Problem Radar
 10 — Stakeholders, Jobs and outcomes
 20 — Journeys and capabilities
 30 — Delivery, coverage and readiness
-40 — Metrics, incidents and decisions
+40 — Findings, incidents and decisions
 50 — UI and design evidence
 80 — Candidate decisions
 89 — Decision archive
 99 — Technical diagnostics
 ```
 
-## 9. Интеграция с дизайн-системой
+Для него создаётся отдельный plugin и отдельный manifest.
 
-Создаётся внутреннее расширение с отдельным namespace, например:
+### Почему plugin отдельный
+
+Design-system Resource Graph и Product Atlas имеют:
+
+- разные catalogs;
+- разные managed namespaces;
+- разные pages;
+- разные update cadence;
+- разные сущности и feedback semantics.
+
+Единый пользовательский plugin создавал бы риск запустить неправильный import в неправильном файле.
+
+Допускается переиспользовать внутренний renderer core, но не manifest, catalog kind или managed namespace.
+
+### Обязательная защита от неправильного файла
+
+Product Atlas plugin:
+
+- принимает только `catalog_kind=product-atlas`;
+- пишет namespace `lovekgd.productatlas.*`;
+- требует file marker `file_kind=product-atlas`;
+- отказывается работать при обнаружении Resource Graph namespace или design-system marker;
+- создаёт и изменяет только allowlisted Product Atlas pages;
+- никогда не импортирует design-system resource catalog.
+
+Design-system plugin симметрично должен отказываться работать при Product Atlas marker. Это отдельный acceptance gate перед реальным использованием двух plugins.
+
+## 8. Визуальная связь с дизайн-системой
+
+Product Atlas использует те же semantic foundations:
+
+- typography;
+- spacing;
+- semantic colors;
+- shape/elevation;
+- focus и keyboard rules;
+- reduced motion;
+- accessible status grammar.
+
+Но internal visualization components имеют отдельный namespace:
 
 ```text
 Visualization/ProductModel/*
 Internal/ProductAtlas/*
 ```
 
-Переиспользуются:
-
-- `--ke-*` color, typography, spacing, shape, elevation и interaction tokens;
-- accessibility rules;
-- status semantics;
-- focus, keyboard и reduced-motion behavior.
-
-Добавляются семантические компоненты:
+Минимальный набор:
 
 - `ProductEntityCard`;
 - `StakeholderLane`;
@@ -294,95 +359,91 @@ Internal/ProductAtlas/*
 - `StatusFacetStrip`;
 - `ProblemBubble`;
 - `CoverageCell`;
-- `MetricEvidenceCard`;
+- `AnalysisFindingCard`;
 - `IncidentMarker`;
 - `DecisionCallout`;
 - `EvidenceLink`;
-- `Legend` и `FilterContext`.
+- `Legend`.
 
-Внутренние atlas-компоненты не становятся публичными UI primitives сайта.
+Если какого-либо компонента ещё нет, board показывает gap и temporary primitive, а не скрывает неполноту системы.
 
-## 10. Расширение Penpot plugin
+## 9. Комплексная обратная связь
 
-Новый режим не переписывает существующий Resource Graph renderer с нуля. Он переиспользует доказанные механизмы:
+На Product Atlas комментарии ставятся к разным управляемым сущностям: Jobs, outcomes, journeys, capabilities, coverage cells, problems, findings и UI evidence.
 
-- one catalog / exact identity;
-- schema and hash validation;
-- managed plugin metadata;
-- idempotent whole-system reconciliation;
-- checkpoints, resume и fail-closed semantics;
-- preservation of foreign objects and comments;
-- native comments → deterministic prompt.
+Plugin собирает **один системный prompt** из всех выбранных или всех незакрытых комментариев.
 
-Добавляются:
+Для каждого комментария сохраняются:
 
-- Product Atlas catalog schema;
-- stable placement rules for five views;
-- in-place updates of metric/status child shapes;
-- Product Radar derivation;
-- cross-links to Product Console, incidents, release evidence и design-system archetypes.
+- Penpot thread ID;
+- page и managed element ID;
+- entity type и stable product ID;
+- stakeholder lane;
+- связанные Job, journey, capability и scenario;
+- current statuses;
+- source/evidence refs;
+- Product Atlas catalog revision;
+- точный текст комментария.
 
-Частые metric updates изменяют managed child values **in place**, чтобы не терять spatial position и Penpot comment attachment. Structural schema changes создают versioned/archive snapshot.
+Prompt требует от ChatGPT:
 
-Каждый snapshot и managed object содержит:
+1. рассмотреть комментарии как связанную систему, а не отдельные UI-правки;
+2. объединить дубли и выявить сквозные темы;
+3. отделить product problem от предложенного решения;
+4. указать затронутые user/owner/partner outcomes;
+5. проверить противоречия между комментариями;
+6. предложить варианты решения;
+7. разложить последствия по слоям:
+   - product intent;
+   - UX/journey;
+   - UI/design system;
+   - implementation/enablers;
+   - acceptance/testing;
+   - statistics/measurement;
+   - documentation;
+8. отдельно сформулировать owner decisions;
+9. не менять production и не закрывать комментарии автоматически.
+
+Результат review после проверки сохраняется как analysis/decision record в `events-bot-new` и только затем меняет каноническую модель.
+
+## 10. Update cycle
 
 ```text
-product_model_sha
-analytics_snapshot_sha
-checklist_sha
-incident_revision
-release_identity
-design_token_version
-renderer_version
+product model / evidence / analysis record changes
+→ Product Atlas catalog generation
+→ plugin preflight and guarded update
+→ comments across the board
+→ one systemic ChatGPT prompt
+→ reviewed analysis and decision record
+→ candidate product/design/implementation changes
+→ acceptance and release evidence
+→ next Product Atlas snapshot
 ```
 
-Penpot MCP может использоваться как вспомогательный read/inspect и prototyping-инструмент. Детерминированный sync выполняет самописный plugin, потому что он проверяет catalog, hashes, object identity и idempotency.
+## 11. Пилот
 
-## 11. Operating cycle
+Первая итерация ограничена:
 
-```text
-product model change
-→ validation
-→ Product Console generation
-→ Penpot Product Atlas snapshot
-→ owner/design review and comments
-→ deterministic implementation prompt
-→ candidate implementation
-→ acceptance and release
-→ production evidence
-→ Product Radar and outcome update
-→ decision: retain / iterate / narrow / rollback / stop
-```
-
-Penpot comment не меняет production автоматически. Он создаёт трассируемое предложение или candidate task. Только accepted code, tests и release evidence меняют actual state.
-
-## 12. Пилот
-
-Первая итерация ограничивается:
-
-- одним Job: «найти подходящее событие и получить достаточно информации для решения»;
-- двумя journeys: обычный каталог и Search;
+- одним Job: найти подходящее событие и получить достаточно информации для решения;
+- двумя journeys: каталог и Search;
 - 5–8 capabilities;
-- четырьмя контекстами: desktop normal, mobile weak network, anonymous→auth, keyboard/screen reader;
-- 3–5 метриками;
-- одним реальным или учебным incident;
-- одним Product Radar.
+- четырьмя context scenarios;
+- одним реальным incident или confirmed gap;
+- одним вручную подготовленным analysis record;
+- одним Product Problem Radar;
+- одним комплексным comment-to-prompt cycle.
 
-Пилот генерирует:
+Пилот не требует автоматического доступа к production DB.
 
-1. статический Markdown snapshot;
-2. одну web coverage/readiness page;
-3. один Penpot Product Atlas snapshot.
+Критерий успеха: владелец за 10–15 минут без устных пояснений находит главный Job, top problem, affected context, evidence, связанные комментарии и требуемое решение.
 
-Критерий успеха: за 10–15 минут владелец без устных пояснений находит главный Job, top problem, affected context, evidence и необходимое решение.
+## 12. Отложенные, но не забытые работы
 
-## 13. Отложенные, но не забытые шаги
+После пилота:
 
-После owner review этой архитектуры и согласования с общей дизайн-системой:
-
-1. создать пилотный machine-readable registry;
-2. восстановить первый набор Jobs и stories;
-3. связать их с release-checklist, acceptance и incidents;
-4. определить metric contracts и недостающие events;
-5. сгенерировать `JOB-HEALTH`, `USER-STORIES`, `OWNER-OUTCOMES` и `FOCUS-GROUP-STORIES` views;
-6. затем расширить модель на весь статический сайт и партнёрский контур.
+1. восстановить полный реестр Jobs и stories;
+2. связать его с release-checklist, acceptance и incidents;
+3. дополнить unified statistics contracts недостающими measurement questions;
+4. по запросу выполнять продуктовые анализы над DB/exports и сохранять analysis records;
+5. расширить board на фокус-группу и партнёрский контур;
+6. только после накопления практики решать, нужна ли автоматическая product-analytics projection.
