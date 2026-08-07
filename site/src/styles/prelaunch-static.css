@@ -4,7 +4,7 @@
  * The cinematic glass/PWA composition is a pre-rendered responsive picture.
  * Only semantic content and the resilient email form remain live HTML. This
  * keeps the accepted visual direction while removing the expensive grid of
- * per-pane backdrop-filter surfaces from desktop rendering.
+ * per-pane compositing surfaces from desktop rendering.
  */
 
 .prelaunch-page--static {
