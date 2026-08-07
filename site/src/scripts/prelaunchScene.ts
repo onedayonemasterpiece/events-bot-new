@@ -61,26 +61,26 @@ function initializePrelaunchScene(): void {
 
     let artworkSize = Math.min(vmin * .84, 1008);
     let artworkCenterX = width * .51;
-    let artworkCenterY = height * .56;
+    let artworkCenterY = height * .51;
 
     if (isWide) {
       artworkSize = Math.min(vmin * .84, 780);
       artworkCenterX = width * .58;
-      artworkCenterY = height * .77;
+      artworkCenterY = height * .64;
     }
     if (isMobile) {
       artworkSize = Math.min(vmin * .84, 330);
       artworkCenterX = width * .54;
-      artworkCenterY = height * .54;
+      artworkCenterY = height * .50;
     }
     if (isCompactMobile) {
       artworkSize = Math.min(vmin * .82, 280);
-      artworkCenterY = height * .52;
+      artworkCenterY = height * .49;
     }
     if (isLandscapePhone) {
       artworkSize = Math.min(vmin * .92, 330);
       artworkCenterX = width * .48;
-      artworkCenterY = height * .63;
+      artworkCenterY = height * .59;
     }
 
     const tileSize = artworkSize / 5.95;
