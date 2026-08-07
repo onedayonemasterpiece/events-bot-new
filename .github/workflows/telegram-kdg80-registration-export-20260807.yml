@@ -1,0 +1,161 @@
+name: KDG80 fresh production registration export
+
+on:
+  push:
+    branches:
+      - agent/telegram-read-kdg80-admin-export-20260807
+    paths:
+      - .github/workflows/telegram-kdg80-registration-export-20260807.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: telegram-auth-bundle-gh-actions
+  cancel-in-progress: false
+
+jobs:
+  export:
+    if: github.actor == 'onedayonemasterpiece' && github.triggering_actor == 'onedayonemasterpiece'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TELEGRAM_AUTH_BUNDLE_GH_ACTIONS: ${{ secrets.TELEGRAM_AUTH_BUNDLE_GH_ACTIONS }}
+      TELEGRAM_API_ID: ${{ secrets.TELEGRAM_GH_ACTIONS_API_ID || secrets.SOCIAL_METRICS_TG_API_ID || secrets.TG_API_ID || secrets.TELEGRAM_API_ID }}
+      TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_GH_ACTIONS_API_HASH || secrets.SOCIAL_METRICS_TG_API_HASH || secrets.TG_API_HASH || secrets.TELEGRAM_API_HASH }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Telethon
+        run: python -m pip install --disable-pip-version-check 'telethon>=1.34,<2'
+
+      - name: Request and download fresh production XLSX
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p out
+          python - <<'PY'
+          import asyncio
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          from telethon import TelegramClient
+          from telethon.sessions import StringSession
+          from scripts.telegram_read import load_auth_config
+
+          BOT_USERNAME = 'kgd80regbot'
+          EXPECTED_FILE = 'registrations-all.xlsx'
+          OUTPUT = Path('out/registrations-all.xlsx')
+
+          def iso(value):
+              if value is None:
+                  return None
+              if value.tzinfo is None:
+                  value = value.replace(tzinfo=timezone.utc)
+              return value.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+
+          async def main():
+              auth = load_auth_config('TELEGRAM_AUTH_BUNDLE_GH_ACTIONS')
+              client = TelegramClient(
+                  StringSession(auth.session),
+                  auth.api_id,
+                  auth.api_hash,
+                  device_model=auth.device_model or 'GitHub Actions',
+                  system_version=auth.system_version or 'Linux',
+                  app_version=auth.app_version or 'KDG80 production export',
+                  lang_code=auth.lang_code or 'ru',
+                  system_lang_code=auth.system_lang_code or 'ru',
+              )
+              await client.connect()
+              try:
+                  if not await client.is_user_authorized():
+                      raise RuntimeError('Telegram session is not authorized')
+                  bot = await client.get_entity(BOT_USERNAME)
+                  sent = await client.send_message(bot, '/export_all')
+                  received = None
+                  observed = []
+                  for _ in range(40):
+                      await asyncio.sleep(3)
+                      async for message in client.iter_messages(bot, limit=25, min_id=sent.id):
+                          file_name = getattr(getattr(message, 'file', None), 'name', None)
+                          observed.append({
+                              'id': message.id,
+                              'date': iso(message.date),
+                              'text': (message.raw_text or '')[:500],
+                              'file_name': file_name,
+                          })
+                          if file_name == EXPECTED_FILE:
+                              received = message
+                              break
+                      if received is not None:
+                          break
+                  if received is None:
+                      raise RuntimeError(
+                          'KDG80 bot did not return the expected XLSX; responses=' +
+                          json.dumps(observed[-10:], ensure_ascii=False)
+                      )
+                  downloaded = await client.download_media(received, file=str(OUTPUT))
+                  if not downloaded or not OUTPUT.exists():
+                      raise RuntimeError('Telegram XLSX download failed')
+                  header = OUTPUT.read_bytes()[:2]
+                  if header != b'PK':
+                      raise RuntimeError('Downloaded document is not an XLSX/ZIP payload')
+                  meta = {
+                      'schema_version': 1,
+                      'source': 'KDG80 production Telegram admin export',
+                      'bot_username': BOT_USERNAME,
+                      'command_message_id': sent.id,
+                      'export_message_id': received.id,
+                      'export_message_date': iso(received.date),
+                      'file_name': EXPECTED_FILE,
+                      'size_bytes': OUTPUT.stat().st_size,
+                      'downloaded_at': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+                  }
+                  Path('out/export-metadata.json').write_text(
+                      json.dumps(meta, ensure_ascii=False, indent=2) + '\n',
+                      encoding='utf-8',
+                  )
+                  print(
+                      f"Fresh production export received: message_id={received.id}; "
+                      f"bytes={OUTPUT.stat().st_size}"
+                  )
+              finally:
+                  await client.disconnect()
+
+          asyncio.run(main())
+          PY
+
+      - name: Encrypt production export and metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C out -czf out/kdg80-production-registration-export.tar.gz \
+            registrations-all.xlsx export-metadata.json
+          openssl cms -encrypt \
+            -binary \
+            -aes-256-cbc \
+            -outform DER \
+            -in out/kdg80-production-registration-export.tar.gz \
+            -out out/kdg80-production-registration-export.cms \
+            ops/focus-group-lookup-certificate-20260807.pem
+          rm -f \
+            out/registrations-all.xlsx \
+            out/export-metadata.json \
+            out/kdg80-production-registration-export.tar.gz
+
+      - name: Upload encrypted production export
+        uses: actions/upload-artifact@v4
+        with:
+          name: kdg80-production-registration-export-encrypted
+          path: out/kdg80-production-registration-export.cms
+          if-no-files-found: error
+          retention-days: 1
