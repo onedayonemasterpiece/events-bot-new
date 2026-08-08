@@ -14740,7 +14740,7 @@ async def _enqueue_static_site_build_atomic(
         )
         if running is not None:
             updated_at = _sqlite_parse_datetime(running["updated_at"])
-            stale_after = int(JOB_MAX_RUNTIME.get(JobTask.static_site_build, 5400))
+            stale_after = int(JOB_MAX_RUNTIME.get(JobTask.static_site_build, 14400))
             if (now - updated_at).total_seconds() > stale_after:
                 remote_run_id = await asyncio.to_thread(
                     active_static_site_remote_run,
@@ -18340,7 +18340,12 @@ JOB_MAX_RUNTIME: dict[JobTask, int] = {
     JobTask.week_pages: 180,
     JobTask.weekend_pages: 180,
     JobTask.event_vector_sync: 7200,
-    JobTask.static_site_build: 5400,
+    # The budget covers both the bounded remote Kaggle build and Fly-side
+    # create-only publication plus byte/MIME verification of every candidate
+    # object. A production candidate currently has >3,300 objects; using the
+    # 90-minute remote wait as the whole job budget cancels the host receipt
+    # after all objects have already been uploaded.
+    JobTask.static_site_build: 14400,
     JobTask.event_age_bge_assessment: 4200,
     JobTask.interest_club_relation: 600,
 }

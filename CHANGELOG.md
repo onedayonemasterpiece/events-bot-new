@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Fixed full secret-candidate jobs being cancelled during host-side publication
+  after Kaggle had passed and all 3,300+ objects were uploaded. The static job
+  now has a four-hour end-to-end budget while retaining the independent
+  90-minute remote-kernel timeout and ten-minute pre-handoff stale recovery.
+
 - Fixed exact secret Search candidate generation to carry the dedicated vector
   owner's complete v2 catalog/corpus revision receipt through the immutable
   private Kaggle input. The candidate remains read-only for pgvector writes and
