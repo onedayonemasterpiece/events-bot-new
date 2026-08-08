@@ -41,6 +41,16 @@ function files(root) {
   visit(root); return output;
 }
 
+function heavyDirectoryEntry(output, directory) {
+  const root = join(output, directory);
+  if (!existsSync(root)) return { logical_path: `${directory}/`, storage: 'actions-heavy-artifact', status: 'not-captured', file_count: 0, bytes: 0 };
+  const entries = files(root).map((path) => {
+    const bytes = readFileSync(path); return { path: relative(root, path), bytes: bytes.length, sha256: sha(bytes) };
+  });
+  const aggregate = entries.map((item) => `${item.path}\0${item.bytes}\0${item.sha256}\n`).join('');
+  return { logical_path: `${directory}/`, storage: 'actions-heavy-artifact', status: 'present', file_count: entries.length, bytes: entries.reduce((sum, item) => sum + item.bytes, 0), aggregate_sha256: sha(aggregate), entries };
+}
+
 export function v1SnapshotRoot(output, snapshotId) {
   return join(resolve(output), 'catalog', 'component-decoder', safeSnapshotId(snapshotId));
 }
@@ -162,18 +172,23 @@ function mismatchRows(components) {
   }));
 }
 
-function evaluateGates({ components, componentEvidence, specimenObservations, candidateContracts, capsules, canonical }) {
+export function evaluateGates({ components, componentEvidence, specimenObservations, candidateContracts, capsules, unresolved = [], canonical }) {
   const counts = classificationCounts(components);
+  const observedCapsules = new Set(specimenObservations.flatMap((item) => item.capsule_ids || []));
+  const requiredCapsules = new Set(capsules.map((item) => item.id));
+  const boundEvidence = componentEvidence.filter((item) => item.component_binding && item.screenshot_sha256);
   const gates = {
     logical_component_classification: canonical ? components.length === 107 : components.length > 0,
     closed_classification_enums: components.every((item) => DISPOSITIONS.includes(item.disposition) && REACHABILITY.includes(item.reachability)),
     state_aware_source_records: components.every((item) => Object.values(item.source_state_by_plane).some((state) => state && ['parsed', 'empty'].includes(state.parser_status))),
-    component_scoped_browser_evidence: componentEvidence.some((item) => item.component_binding),
-    controlled_specimen_evidence: specimenObservations.length > 0,
+    component_scoped_browser_evidence: new Set(boundEvidence.map((item) => item.component_binding)).size >= 6,
+    controlled_specimen_evidence: specimenObservations.length > 0 && specimenObservations.every((item) => item.screenshot_sha256 && item.proof_label && item.observation_status === 'captured'),
+    six_capsule_evidence_coverage: [...requiredCapsules].every((id) => observedCapsules.has(id)),
     candidate_as_is_contracts: candidateContracts.length > 0,
     reconciliation_capsules: capsules.length >= 6,
     capsule_human_visual_review: capsules.length >= 6 && capsules.every((item) => item.files?.['capsule.json']?.review_status === 'reviewed'),
-    source_to_specimen_to_real_page_trace: specimenObservations.some((item) => item.source_binding_id && item.page_verification_id),
+    source_to_specimen_to_real_page_trace: specimenObservations.length > 0 && specimenObservations.every((item) => item.source_binding_id && item.page_verification_id && ['state-equivalent', 'consumer-exists-only', 'lab-source-only'].includes(item.trace_kind) && typeof item.production_state_claimed === 'boolean'),
+    blocking_unresolved_clear: !unresolved.some((item) => item.blocks_handoff === true),
     normalization_stop_preserved: true,
     plane_identity_preserved: components.every((item) => item.plane_bindings.every((binding) => binding.plane)),
   };
@@ -245,7 +260,7 @@ export function writeV1Snapshot({
   }
   if (!capsules.length) claimWrite(join(root, 'conformance-capsules', 'README.md'), '# Reconciliation capsules\n\nPending source/specimen/consumer reconciliation.\n', budget);
   claimWrite(join(root, 'penpot-materialization-candidates.json'), json({ schema_version: V1_SCHEMA, status: 'not-materialized', candidates: [], stop_reason: 'normalization-and-Penpot-materialization-are-out-of-scope' }, true), budget);
-  const gate = evaluateGates({ components, componentEvidence, specimenObservations, candidateContracts, capsules, canonical });
+  const gate = evaluateGates({ components, componentEvidence, specimenObservations, candidateContracts, capsules, unresolved, canonical });
   const summary = `# Current UI Decoder v1 — evidence completion\n\n` +
     `- Snapshot: \`${snapshotId}\`\n- Logical components: ${components.length}${canonical ? '/107' : ''}\n` +
     `- Dispositions: ${JSON.stringify(gate.counts.dispositions)}\n- Reachability: ${JSON.stringify(gate.counts.reachability)}\n` +
@@ -259,16 +274,28 @@ export function writeV1Snapshot({
   indexed.push({ path: 'manifest.json', storage: 'compact-git-snapshot', status: 'written-after-artifact-index', digest_source: 'receipt.json' });
   indexed.push({ path: 'receipt.json', storage: 'compact-git-snapshot', status: 'written-after-manifest', digest_source: 'not-self-indexed' });
   indexed.push({ path: 'artifact-index.json', storage: 'compact-git-snapshot', status: 'self-index-not-hashed', digest_source: 'manifest.json' });
-  indexed.push({ path: '../../../screenshots/', storage: 'actions-heavy-artifact', status: existsSync(join(output, 'screenshots')) ? 'present' : 'not-captured' });
-  indexed.push({ path: '../../../component-screenshots/', storage: 'actions-heavy-artifact', status: existsSync(join(output, 'component-screenshots')) ? 'present' : 'not-captured' });
-  indexed.push({ path: '../../../component-evidence.jsonl', storage: 'actions-heavy-artifact', status: existsSync(join(output, 'component-evidence.jsonl')) ? 'present' : 'not-captured' });
-  claimWrite(join(root, 'artifact-index.json'), json({ schema_version: V1_SCHEMA, snapshot_id: snapshotId, entries: indexed }, true), budget);
+  indexed.push(heavyDirectoryEntry(output, 'screenshots'));
+  indexed.push(heavyDirectoryEntry(output, 'component-screenshots'));
+  const componentEvidencePath = join(output, 'component-evidence.jsonl');
+  indexed.push(existsSync(componentEvidencePath)
+    ? { logical_path: 'component-evidence.jsonl', storage: 'actions-heavy-artifact', status: 'present', bytes: statSync(componentEvidencePath).size, sha256: sha(readFileSync(componentEvidencePath)) }
+    : { logical_path: 'component-evidence.jsonl', storage: 'actions-heavy-artifact', status: 'not-captured' });
+  const actions = {
+    backend: 'github-actions', repository: process.env.GITHUB_REPOSITORY || null,
+    run_id: process.env.GITHUB_RUN_ID || null, run_attempt: process.env.GITHUB_RUN_ATTEMPT || null,
+    workflow_path: '.github/workflows/current-ui-resource-graph.yml',
+    artifact_name: 'current-ui-resource-graph-snapshot-20260808T124842-4786ac53bc',
+    artifact_id: null, artifact_digest: null, retention_days: 90,
+    post_upload_metadata_status: 'must-be-attached-by-reviewed-handoff-materializer',
+  };
+  claimWrite(join(root, 'artifact-index.json'), json({ schema_version: V1_SCHEMA, snapshot_id: snapshotId, actions, entries: indexed }, true), budget);
   const manifestOutputs = files(root).filter((path) => !['manifest.json', 'receipt.json'].includes(relative(root, path))).map((path) => {
     const bytes = readFileSync(path); return [relative(root, path), { bytes: bytes.length, sha256: sha(bytes) }];
   });
   const manifest = {
     schema_version: V1_SCHEMA, snapshot_id: snapshotId, snapshot_time: snapshotTime,
     identity_planes: identity, classification: gate.counts, go_no_go: gate,
+    decoder: { repository: process.env.GITHUB_REPOSITORY || 'onedayonemasterpiece/events-bot-new', sha: process.env.GITHUB_SHA || null, workflow_path: '.github/workflows/current-ui-resource-graph.yml', run_id: process.env.GITHUB_RUN_ID || null, run_attempt: process.env.GITHUB_RUN_ATTEMPT || null },
     evidence: { component_observation_count: componentEvidence.length, specimen_observation_count: specimenObservations.length, viewport_observation_count: viewportEvidence.length, source_style_observation_count: styles.length, style_provenance: ['postcss-source-ast-plane-scoped', 'browser-computed-element-plane-scoped'], requested_component_breakpoints: COMPONENT_BREAKPOINT_CONTEXTS },
     known_exceptions: knownExceptions(), outputs: Object.fromEntries(manifestOutputs),
     constraints: { as_is_only: true, candidate_contracts_are_not_normative: true, merge: false, split: false, normalization: false, tokenization: false, penpot_mutation: false, astro_css_mutation: false, full_html_retained: false, bearer_url_retained: false },

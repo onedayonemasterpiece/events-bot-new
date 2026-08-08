@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 
 import pytest
@@ -322,6 +323,23 @@ def test_v1_compact_snapshot_is_complete_as_a_tree_and_fail_closed(decoded):
         assert row["recommendation"] == "unresolved"
         assert row["disposition_basis"]
         assert row["reachability_basis"]
+
+
+def test_v1_deep_validator_recomputes_hashes_and_rejects_tampering(decoded, tmp_path):
+    output, _, _ = decoded
+    root = output / "catalog/component-decoder/decoder-v1-snapshot-test"
+    validator = REPO / "scripts/current_ui_resource_graph/v1/validate-snapshot.mjs"
+    valid = subprocess.run(["node", str(validator), str(root)], cwd=REPO, text=True, capture_output=True)
+    assert valid.returncode == 0, valid.stderr
+    assert json.loads(valid.stdout)["status"] == "valid"
+
+    corrupted = tmp_path / "corrupted-snapshot"
+    shutil.copytree(root, corrupted)
+    component = next((corrupted / "components").glob("*.json"))
+    component.write_text(component.read_text() + " ", encoding="utf-8")
+    invalid = subprocess.run(["node", str(validator), str(corrupted)], cwd=REPO, text=True, capture_output=True)
+    assert invalid.returncode != 0
+    assert "mismatch" in invalid.stderr.lower()
 
 
 def test_state_aware_ast_facts_and_inline_script_import_edges(decoded):
@@ -970,6 +988,10 @@ def test_workflow_uses_validated_env_inputs_and_honest_validation_receipt():
     assert all("${{ inputs." not in block for block in run_blocks)
     assert "Materialize exact candidate and public-root source trees" in workflow
     assert "--root-source-root" in workflow
+    assert "--root-runtime-file" in workflow
+    assert "actions/artifacts/$CURRENT_UI_GRAPH_ROOT_ARTIFACT_ID/zip" in workflow
+    assert "d9d6ec1e5c5e291a598dfdcef6ca90ce049196f3f3484d0d89351d04bc2bb855" in workflow
+    assert "actions: read" in workflow
     assert "CURRENT_UI_GRAPH_ROOT_HTML_SHA256" in workflow
     assert "workflow_validation_failed" in workflow
     assert '"$receipt_status" == "complete"' in workflow
@@ -980,6 +1002,8 @@ def test_workflow_uses_validated_env_inputs_and_honest_validation_receipt():
     assert 'index("capsule_human_visual_review")' in workflow
     assert ".constraints.normalization == false" in workflow
     assert "does not authorize merge, split, normalization" in workflow
+    assert "validate-snapshot.mjs" in workflow
+    assert "retention-days: 90" in workflow
 
 
 def test_browser_capture_uses_and_checks_exact_playwright_viewports():

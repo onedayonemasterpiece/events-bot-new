@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-export const COMPONENT_EVIDENCE_SCREENSHOT_RESERVATION = 128 * 1024;
-export const COMPONENT_EVIDENCE_LIMIT_PER_PAGE = 6;
+export const COMPONENT_EVIDENCE_SCREENSHOT_RESERVATION = 1024 * 1024;
+export const COMPONENT_EVIDENCE_LIMIT_PER_PAGE = 3;
 export const COMPONENT_BREAKPOINT_CONTEXTS = Object.freeze([390, 420, 540, 700, 720, 1728]);
 
 function sha(value) { return createHash('sha256').update(value).digest('hex'); }
@@ -98,8 +98,10 @@ export async function captureComponentScopedEvidence({
     const filename = `component-${routeHash.slice(0, 12)}-${viewport.width}x${viewport.height}-${order}.jpg`;
     const path = join(dir, filename);
     const buffer = await locator.screenshot({ type: 'jpeg', quality: 60, animations: 'disabled', caret: 'hide', scale: 'css' });
+    const confirm = await locator.screenshot({ type: 'jpeg', quality: 60, animations: 'disabled', caret: 'hide', scale: 'css' });
+    if (!buffer.equals(confirm)) throw new Error(`Component screenshot failed two-frame stability contract: ${filename}`);
     if (buffer.length > COMPONENT_EVIDENCE_SCREENSHOT_RESERVATION) throw new Error(`Component screenshot exceeds deterministic byte reservation: ${filename}`);
-    writeFileSync(path, buffer); budget.claim(COMPONENT_EVIDENCE_SCREENSHOT_RESERVATION, `component-screenshots/${filename}`);
+    writeFileSync(path, buffer); budget.claim(buffer.length, `component-screenshots/${filename}`);
     const clean = JSON.parse(JSON.stringify(candidate, (_key, value) => typeof value === 'string' ? sanitizeEvidenceString(value) : value));
     const record = {
       id: `component-evidence.${sha(`${routeHash}\0${viewport.width}\0${order}`).slice(0, 16)}`,

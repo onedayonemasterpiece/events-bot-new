@@ -101,6 +101,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   decode:
@@ -130,6 +131,7 @@ jobs:
       CURRENT_UI_GRAPH_ROOT_RUNTIME_URL: ${{ inputs.root_runtime_url }}
       CURRENT_UI_GRAPH_ROOT_HTML_SHA256: ${{ inputs.root_html_sha256 }}
       CURRENT_UI_GRAPH_CANDIDATE_BASE_URL: ${{ secrets.CURRENT_UI_GRAPH_CANDIDATE_BASE_URL }}
+      GH_TOKEN: ${{ github.token }}
       GRAPH_OUTPUT: artifacts/current-ui-resource-graph/dispatch-rejected
       CANDIDATE_WORKTREE: ${{ github.workspace }}/../current-ui-graph-candidate-source
       ROOT_WORKTREE: ${{ github.workspace }}/../current-ui-graph-public-root-source
@@ -203,6 +205,18 @@ jobs:
           npm ci --ignore-scripts
           npx playwright install --with-deps chromium
 
+      - name: Materialize immutable public-root observation from pinned artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          root_zip="$RUNNER_TEMP/prelaunch-root-$CURRENT_UI_GRAPH_ROOT_ARTIFACT_ID.zip"
+          root_html="$RUNNER_TEMP/prelaunch-root-$CURRENT_UI_GRAPH_ROOT_ARTIFACT_ID.html"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$CURRENT_UI_GRAPH_ROOT_ARTIFACT_ID/zip" > "$root_zip"
+          printf '%s  %s\n' d9d6ec1e5c5e291a598dfdcef6ca90ce049196f3f3484d0d89351d04bc2bb855 "$root_zip" | sha256sum --check --strict
+          unzip -p "$root_zip" live-root.html > "$root_html"
+          printf '%s  %s\n' "$CURRENT_UI_GRAPH_ROOT_HTML_SHA256" "$root_html" | sha256sum --check --strict
+          printf 'CURRENT_UI_GRAPH_ROOT_RUNTIME_FILE=%s\n' "$root_html" >> "$GITHUB_ENV"
+
       - name: Decode exact current resource graph
         id: decode
         shell: bash
@@ -233,6 +247,7 @@ jobs:
             --root-artifact-id "$CURRENT_UI_GRAPH_ROOT_ARTIFACT_ID" \
             --root-published-at "$CURRENT_UI_GRAPH_ROOT_PUBLISHED_AT" \
             --root-runtime-url "$CURRENT_UI_GRAPH_ROOT_RUNTIME_URL" \
+            --root-runtime-file "$CURRENT_UI_GRAPH_ROOT_RUNTIME_FILE" \
             --root-html-sha256 "$CURRENT_UI_GRAPH_ROOT_HTML_SHA256" \
             --candidate-base-url-env CURRENT_UI_GRAPH_CANDIDATE_BASE_URL \
             --browser-observations true \
@@ -303,6 +318,7 @@ jobs:
               test -e "$capsule/$file"
             done
           done
+          node scripts/current_ui_resource_graph/v1/validate-snapshot.mjs "$v1_root"
           grep -F 'does not authorize merge, split, normalization, tokenization, Penpot mutation, or Astro/CSS changes' "$v1_root/summary.md" >/dev/null
           ! grep -R -F 'Proceed to normalization workshop' "$v1_root"
           ! grep -R -F "$CURRENT_UI_GRAPH_CANDIDATE_BASE_URL" "$GRAPH_OUTPUT"
@@ -341,4 +357,4 @@ jobs:
           name: current-ui-resource-graph-snapshot-20260808T124842-4786ac53bc
           path: artifacts/current-ui-resource-graph/
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90
