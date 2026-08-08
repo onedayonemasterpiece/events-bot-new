@@ -7,8 +7,9 @@ Rebased base: `origin/main` at `93a94b6aba181c40491f03fc3ebcdcc2dc320ced`
 Release-gate remediation candidate: `829abf86bb9c333c0400e528ad265cacfbe6ff40`
 
 Implementation, fake-provider validation and canonical documentation are
-complete. The first exact-head reviews requested changes; commits `e433fa95f0`, `06a6dc55a`, and `829abf86b`
-close those findings. Repeat exact-head independent review, PR CI, merge,
+complete. The first exact-head reviews requested changes; commits `e433fa95f0`,
+`06a6dc55a`, and `829abf86b` close those findings. Repeat exact-head
+independent review, PR CI, merge,
 credentials, deploy and live provider canaries remain pending. Production was
 not changed.
 No GitHub issue was created. Superseded PR #365 code is absent.
@@ -25,7 +26,7 @@ No GitHub issue was created. Superseded PR #365 code is absent.
 | R06 | VK stories/media/statistics | Partial | Statistics contracts exist; story/media activation is rejected until authenticated upload and exact actor grants pass a later gate |
 | R07 | ChatGPT catalog, granular scopes, approval, audit and budgets | Done in code | Capability-filtered catalog, exact human target/item browser preview, durable hashes/CAS/UTC-day budgets |
 | R08 | Codex remains evidence-only | Done | Exact separate resource, max scopes and seven-tool regression |
-| R09 | Fake-provider tests and CI gate | Done locally; repeat GitHub CI pending | Full private MCP suite 202 passed after remediation; explicit workflow gate already present |
+| R09 | Fake-provider tests and CI gate | Done locally; repeat GitHub CI pending | Full private MCP suite 205 passed after remediation; explicit workflow gate already present |
 | R10 | Docs/env/generator/rollout | Done | Canonical runbook, E2E index, env template, fresh generator and CHANGELOG |
 | R11 | One-target editorial sample up to 100 posts | Done in code | Runtime + real VK adapter 4×25 integration test, cumulative 100, exact target/purpose/access/authorization-basis cursor binding |
 | R12 | Deeper incident/stability investigation surface | Deferred as requested | Begins only after social workspace release |
@@ -77,7 +78,7 @@ Security/hygiene checks:
 - social mutations available to Codex: 0;
 - invalid approval requests receive no-store/self-only CSP error pages and do
   not disclose the prepared content;
-- auth/social SQLite state is separate from the event DB and mode `0600`.
+- auth/social SQLite state is separate from the event DB and mode `0600`;
 - provider bindings, cursors, exact previews and receipts are encrypted and
   restart-safe; a provider-attempted crash state reconciles without re-send;
 - publication attempts use durable UTC-day budgets (not hourly reset);
