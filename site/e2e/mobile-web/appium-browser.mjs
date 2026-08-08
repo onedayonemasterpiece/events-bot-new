@@ -134,6 +134,34 @@ export async function performNativeTouchSwipe(driver, {
   return receipt;
 }
 
+/** Dispatch one real browser-document swipe through the platform's accepted native route. */
+export async function performNativeDocumentSwipe(driver, {
+  platform, startXRatio, startYRatio, endXRatio, endYRatio, duration = 450,
+} = {}) {
+  if (platform === 'android') {
+    return performNativeTouchSwipe(driver, {
+      startXRatio, startYRatio, endXRatio, endYRatio, duration,
+    });
+  }
+  if (platform !== 'ios') throw new TypeError('mobile_document_swipe_platform_invalid');
+  let receipt = null;
+  await withNativeAppContext(driver, async () => {
+    const viewport = await driver.getWindowSize();
+    const width = Number(viewport?.width);
+    const height = Number(viewport?.height);
+    if (!Number.isFinite(width) || width < 1 || !Number.isFinite(height) || height < 1) {
+      throw new TypeError('mobile_native_viewport_invalid');
+    }
+    // XCUITest's application-level swipe dispatches a native finger gesture to
+    // Safari. Its table-oriented `mobile: scroll` and W3C pointer source can
+    // both acknowledge without moving the WebKit document.
+    await driver.executeScript('mobile: swipe', [{ direction: 'up' }]);
+    receipt = { route: 'xcuitest_native_swipe', native_viewport_width: Math.round(width),
+      native_viewport_height: Math.round(height), direction: 'up' };
+  });
+  return receipt;
+}
+
 export function buildAppiumCapabilities(platform, config, env = process.env) {
   return platform === 'android' ? {
     platformName: 'Android', browserName: 'Chrome',

@@ -831,11 +831,13 @@ WebKit. Общий профиль задаёт `appium:webviewConnectTimeout=600
 передаются в capabilities и не входят в публикуемые evidence/Appium logs.
 Критический iOS web input фокусируется общей функцией через один exact native
 accessibility match и native tap; WebKit `click()` с `isKeyboardShown()` в web
-context не считается доказательством software keyboard. Документы Android
-Chrome и iOS Safari прокручиваются одной общей W3C touch sequence в
-`NATIVE_APP`; размеры viewport тоже читаются только после этого switch, потому
-что WebView/CSS геометрия не является native touch geometry. Затем возвращается
-исходный WebView и измеряется реальный `scrollY`. Нативные shortcuts
+context не считается доказательством software keyboard. Общий
+`performNativeDocumentSwipe` прокручивает Android Chrome абсолютной W3C touch
+sequence, а iOS Safari — application-level XCUITest `mobile: swipe`; обе ветки
+работают в `NATIVE_APP`, читают native viewport и возвращают исходный WebView
+для измерения реального `scrollY`. Safari W3C pointer source не используется:
+live run `31277971410` подтвердил 24 успешных acknowledgement без доставки
+жеста в WebKit. Нативные shortcuts
 UiAutomator2 `mobile: scrollGesture` и XCUITest `mobile: scroll` не применяются
 к browser page content: они предназначены для нативных scrollable controls или
 таблиц/коллекций и могут успешно ответить без движения DOM.
@@ -845,9 +847,10 @@ UiAutomator2 `mobile: scrollGesture` и XCUITest `mobile: scroll` не прим�
 только iOS допускает этот конкретный unsupported response как best-effort,
 тогда как положительный DOM `scrollY` и видимость финальной карточки остаются
 обязательным доказательством. Остальные driver errors не подавляются.
-При отказе публикуется только allowlisted numeric/boolean receipt: native
-viewport, start/end/duration, число жестов, `scrollY` delta и видимость финальной
-карточки; hierarchy, screenshot, URL и текст страницы в него не входят.
+При отказе публикуется только закрытый route enum и numeric/boolean receipt:
+native viewport, доступные start/end/duration, число жестов, `scrollY` delta и
+видимость финальной карточки; hierarchy, screenshot, URL и текст страницы в
+него не входят.
 
 Для любой новой или ремонтируемой Android/iOS web-проверки обязателен проектный
 skill `.codex/skills/mobile-web-e2e/SKILL.md`: сначала найти terminal receipts и

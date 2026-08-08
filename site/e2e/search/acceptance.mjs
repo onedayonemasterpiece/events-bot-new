@@ -195,7 +195,8 @@ export function assertRealScroll(receipt) {
       delta_y: numeric(receipt?.delta_y),
       card_visible_after: receipt?.card_visible_after === true,
       gesture_count: asCount(receipt?.gesture_count),
-      route: gesture.route === 'w3c_native_touch' ? gesture.route : 'unreported',
+      route: ['w3c_native_touch', 'xcuitest_native_swipe'].includes(gesture.route)
+        ? gesture.route : 'unreported',
       native_viewport_width: numeric(gesture.native_viewport_width),
       native_viewport_height: numeric(gesture.native_viewport_height),
       start_x: numeric(gesture.start_x), start_y: numeric(gesture.start_y),

@@ -6,7 +6,7 @@ import { parse } from 'yaml';
 import { extractDriverNetworkEvents } from '../../e2e/focus-email/adapters/appium-ui.mjs';
 import { buildAppiumCapabilities, classifyActiveIosApp, inspectSafariNativeUiProtocol,
   dismissNativeKeyboard, focusIosSafariWebInput, isUnsupportedIosKeyboardDismissError,
-  observeNativeKeyboard, performNativeTouchSwipe,
+  observeNativeKeyboard, performNativeDocumentSwipe, performNativeTouchSwipe,
   prepareIosSafariWebContext, summarizeKnownSafariNativeSource } from '../../e2e/mobile-web/appium-browser.mjs';
 
 test('Appium capability builder pins real mobile browsers and iOS keyboard ownership', () => {
@@ -136,6 +136,26 @@ test('shared native touch swipe runs on device coordinates and restores the web 
   assert.deepEqual(pointer.actions.map((item) => item.type),
     ['pointerMove', 'pointerDown', 'pause', 'pointerMove', 'pointerUp']);
   assert.deepEqual(calls.at(-1), ['context', 'WEBVIEW_chrome']);
+});
+
+test('shared document swipe routes iOS Safari through the XCUITest native swipe command', async () => {
+  const calls = [];
+  let context = 'WEBVIEW_safari';
+  const driver = {
+    getContext: async () => context,
+    getContexts: async () => ['NATIVE_APP', 'WEBVIEW_safari'],
+    switchContext: async (next) => { context = next; calls.push(['context', next]); },
+    getWindowSize: async () => { calls.push(['size']); return { width: 393, height: 852 }; },
+    executeScript: async (...args) => calls.push(['executeScript', ...args]),
+  };
+  const receipt = await performNativeDocumentSwipe(driver, { platform: 'ios' });
+  assert.deepEqual(receipt, { route: 'xcuitest_native_swipe', native_viewport_width: 393,
+    native_viewport_height: 852, direction: 'up' });
+  assert.deepEqual(calls, [
+    ['context', 'NATIVE_APP'], ['size'],
+    ['executeScript', 'mobile: swipe', [{ direction: 'up' }]],
+    ['context', 'WEBVIEW_safari'],
+  ]);
 });
 
 test('shared keyboard dismissal checks and hides the IME only in native context', async () => {
