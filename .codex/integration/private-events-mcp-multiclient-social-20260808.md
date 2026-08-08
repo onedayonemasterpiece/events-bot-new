@@ -4,11 +4,11 @@
 
 Integration branch: `integration/private-events-mcp-universal-social`
 Rebased base: `origin/main` at `93a94b6aba181c40491f03fc3ebcdcc2dc320ced`
-Release-gate remediation candidate: `e433fa95f0ce2c8fbbd28a29f3cc71e6c98b288b`
+Release-gate remediation candidate: `829abf86bb9c333c0400e528ad265cacfbe6ff40`
 
 Implementation, fake-provider validation and canonical documentation are
-complete. The first exact-head reviews requested changes; commit `e433fa95f0ce2c8fbbd28a29f3cc71e6c98b288b`
-closes those findings. Repeat exact-head independent review, PR CI, merge,
+complete. The first exact-head reviews requested changes; commits `e433fa95f0`, `06a6dc55a`, and `829abf86b`
+close those findings. Repeat exact-head independent review, PR CI, merge,
 credentials, deploy and live provider canaries remain pending. Production was
 not changed.
 No GitHub issue was created. Superseded PR #365 code is absent.
@@ -46,7 +46,7 @@ supersedes the earlier alias-only 65-test report.
 
 ## Validation receipt
 
-On remediation candidate `e433fa95f0ce2c8fbbd28a29f3cc71e6c98b288b` rebased directly onto the recorded
+On remediation candidate `829abf86bb9c333c0400e528ad265cacfbe6ff40` rebased directly onto the recorded
 `origin/main`:
 
 ```bash
@@ -61,7 +61,7 @@ PYTHONPATH=. python -m pytest -q tests/test_private_events_mcp_*.py
 git diff --check origin/main...HEAD
 ```
 
-Result: compile PASS; **202 passed**, three unchanged aiohttp
+Result: compile PASS; **205 passed**, three unchanged aiohttp
 `NotAppKeyWarning` warnings; diff check PASS. Targeted integration run was
 **92 passed** before the full gate. Changed/new MCP modules also pass focused
 Ruff checks; the monolithic `main_part2.py` retains repository-pre-existing full
@@ -81,8 +81,10 @@ Security/hygiene checks:
 - provider bindings, cursors, exact previews and receipts are encrypted and
   restart-safe; a provider-attempted crash state reconciles without re-send;
 - publication attempts use durable UTC-day budgets (not hourly reset);
-- disabled action/media/story classes are absent from the ChatGPT catalog and
-  media/story activation itself fails configuration until real upload storage.
+- disabled action/media/story classes are absent from the ChatGPT catalog, and
+  a stale preparation cannot bypass a newly disabled action kill switch;
+- forward and item-only attempt budgets use the actual destination/source target;
+- media/story activation itself fails configuration until real upload storage.
 
 ## Remaining release gates
 
