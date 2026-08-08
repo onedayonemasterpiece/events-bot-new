@@ -11,6 +11,8 @@
 - Initial implementation SHA: `4afab6aa6334b358ba2933a31c4c7a31405af33b`
 - Primary review-remediation SHA: `f58862d88b73bd20906df69774223270ecacc60c`
 - Final review-probe SHA: `71fb4adcb6ba0a8a5455c1f7b053da2b5ad6c3de`
+- Operation-claim/permissions remediation head SHA (before this results-only
+  commit): `98e9374c102fb31f0224f98ccdb5d7c741874844`
 - Branch: `agent/mcp-universal-social/telegram`
 - Production calls/deploy: not performed.
 
@@ -19,8 +21,10 @@
 - Added `TelegramWorkspaceAdapter` with exactly five public async operations:
   `capabilities(target_ref)`, `resolve(request)`, `read(request)`, and
   `execute(intent, operation_ref=...)`, plus `reconcile(operation_ref)`. The
-  caller-issued operation ref is the exact ledger/receipt/reconciliation key,
-  including timeout/unknown outcomes. There is no public provider request,
+  mandatory caller-issued operation ref is the exact ledger/receipt/
+  reconciliation key, including timeout/unknown outcomes. It is validated
+  against the exact core `op_` grammar and is never minted or defaulted by the
+  adapter. There is no public provider request,
   method, constructor, kwargs, or raw TL escape hatch.
 - Added exact Saved Messages/self resolution and exact username, canonical
   `t.me` profile, and provider-ID resolution to user/channel/group bindings.
@@ -46,9 +50,22 @@
   Stories require one staged asset and explicit stored privacy.
 - A no-rights broadcast advertises no mutations. Item actions recheck the live
   source rights, forwarding rechecks both source and destination, and execution
-  carries the same immutable source/destination binding snapshot (including
-  its binding version) from preflight through the provider call, preventing a
-  mutable ref-store TOCTOU swap.
+  carries detached source/destination provider-peer snapshots from preflight
+  through the provider call. Permission probes receive a separate detached
+  copy, so both ref-store swaps and in-place permission-probe mutation cannot
+  change the peer used for edit/delete/comment/reaction/forward.
+- Capability derivation uses the real Telethon 1.44
+  `ParticipantPermissions` surface (`is_creator`, `is_admin`,
+  `has_default_permissions`, membership state, and post/edit/delete rights)
+  plus actual participant `admin_rights.post_stories`; it does not rely on the
+  nonexistent `send_messages` or `post_stories` permission properties. Group
+  publishing follows membership/default-ban state and fails closed.
+- Added a mandatory atomic operation-ledger claim contract bound to the full
+  `compute_action_digest(intent)`. Exact completed replays return the canonical
+  stored result without a provider call, a changed intent conflicts before the
+  provider, an in-progress concurrent claim is denied, and completion cannot
+  replace a different digest. Retry-safe pre-provider failures release only
+  the matching claim; uncertain post-mutation outcomes are durably reconciled.
 - Added structured rich entity compilation with deterministic codepoint to
   UTF-16 offsets, fixed link/mention/custom-emoji translation, and media only
   from opaque staged asset refs. No path, arbitrary URL fetch, base64, session,
@@ -78,8 +95,13 @@ The fake-only focused suite covers:
 - every closed mutation family;
 - exact capability denial before provider mutation, including a no-rights
   broadcast and every item mutation family;
-- mutable-ref TOCTOU swaps for edit/delete/comment/reaction and forwarding;
-- caller-issued operation refs and same-key success/timeout reconciliation;
+- mutable-ref TOCTOU swaps for edit/delete/comment/reaction and forwarding,
+  plus in-place mutation of both the permission-probe and store-owned entity;
+- required/invalid caller-issued operation refs, exact replay, changed-intent
+  conflict, two-adapter concurrent same-key exclusion, and success/timeout
+  reconciliation;
+- realistic and installed Telethon permission surfaces, ordinary group member
+  send rights, default-ban denial, and no-rights broadcast denial;
 - provider/native-ID/secret redaction and closed public surface;
 - non-idempotent timeout, FloodWait persistence, and no blind retry;
 - actual `asyncio.wait_for` expiry and post-mutation lost-fence uncertainty;
@@ -89,14 +111,14 @@ The fake-only focused suite covers:
 ## Validation commands
 
 ```text
-PYTHONPATH=. /home/dev/.codex/venvs/events-bot-new/bin/python -m pytest -q \
+/home/dev/.codex/venvs/events-bot-new/bin/python -m pytest -q \
   tests/test_private_events_mcp_telegram_workspace.py
-# 37 passed
+# 44 passed
 
-PYTHONPATH=. /home/dev/.codex/venvs/events-bot-new/bin/python -m pytest -q \
+/home/dev/.codex/venvs/events-bot-new/bin/python -m pytest -q \
   tests/test_private_events_mcp_social_workspace_contract.py \
   tests/test_private_events_mcp_telegram_workspace.py
-# 67 passed (final combined rerun)
+# 74 passed (final combined rerun)
 
 /home/dev/.codex/venvs/events-bot-new/bin/python -m compileall -q \
   private_events_mcp_telegram_adapter.py \
@@ -104,9 +126,12 @@ PYTHONPATH=. /home/dev/.codex/venvs/events-bot-new/bin/python -m pytest -q \
 # passed
 
 git diff --check
-git diff --cached --check
 # passed
 ```
+
+One initial combined-test command used the nonexistent path
+`tests/test_private_events_mcp_social_workspace.py` and exited 4 without
+running tests. The corrected canonical contract path above passed 74 tests.
 
 ## Risks and integration notes
 
@@ -115,7 +140,9 @@ git diff --cached --check
   `TELEGRAM_AUTH_BUNDLE_EVENTS_BOT_MCP`; it must never borrow E2E/S22 sessions.
 - The injected opaque-ref store and governor are security-critical integration
   dependencies: refs/cursors/operations must be durable and resource-bound;
-  lease fencing and cooldowns must be cross-process and persistent.
+  operation claim/release/complete must be atomic compare-and-set operations
+  bound to the full action digest; lease fencing and cooldowns must be
+  cross-process and persistent.
 - **Open integration blocker:** the current provider-neutral
   `validate_read_request()` requires username/profile-link/provider-ID exact
   resolution to expect only `user`, so it rejects exact channel/group resolver
