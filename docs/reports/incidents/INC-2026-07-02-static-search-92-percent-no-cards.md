@@ -91,6 +91,15 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
   boundary is therefore IME dismissal, not another scroll API: the helper now
   performs one official user-equivalent downward native swipe and must observe
   the keyboard absent before Search can start its upward document swipes.
+- 2026-08-08 iOS run `31279646307` validated the new fail-closed classification:
+  it stopped at `search_scroll_keyboard_dismiss` with
+  `mobile_keyboard_dismiss_unconfirmed`; auth callback, Safari, WebView and
+  Search surface were all confirmed, and no document swipe was attempted. A
+  generic application swipe down therefore does not dismiss this Safari search
+  keyboard. Search now uses the other official user-equivalent route: resolve
+  exactly one allowlisted non-actionable `Найти событие` heading in native
+  accessibility, tap its rect, then require IME absence. It cannot hit submit,
+  resend, result text or a guessed coordinate.
 
 - 2026-08-08 exact-main degraded browser journey полностью прошёл UI/Search
   контракт для трёх запросов, но GitHub job завершился красным после journey:
@@ -295,8 +304,9 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
   OTP infrastructure-retry boundary without copying OTP feature mechanics.
 - 2026-08-08 iOS keyboard-dismiss correction: Search and OTP now share a
   fail-closed transition for the exact unsupported WDA hide-keyboard response.
-  It triggers one native downward dismissal swipe and must then prove the IME
-  absent; the response itself is never success. Lifecycle evidence identifies
+  It triggers one exact caller-bounded non-actionable native tap (or a downward
+  swipe only when no safe target exists) and must then prove the IME absent; the
+  response itself is never success. Lifecycle evidence identifies
   input, terminal, keyboard-dismiss and scroll phases separately, and the
   following document swipe must still move DOM and reveal the final card.
 - 2026-08-08 cross-platform browser-scroll correction: Android Chrome and iOS

@@ -192,6 +192,7 @@ test('journey is mechanics-neutral and mobile adapters own native keyboard/touch
   assert.match(mobile, /performNativeDocumentSwipe/u);
   assert.match(mobile, /allowUnsupported: platform === 'ios'/u);
   assert.match(mobile, /search_scroll_keyboard_dismiss/u);
+  assert.match(mobile, /fallbackTapLabels: IOS_SEARCH_KEYBOARD_DISMISS_LABELS/u);
   assert.doesNotMatch(mobile, /mobile: scroll(?:Gesture)?/u);
   assert.doesNotMatch(mobile, /const size = await driver\.getWindowSize\(\)/u);
   assert.match(mobile, /gesture: \(\) => performNativeDocumentSwipe\(driver, \{ platform/u);

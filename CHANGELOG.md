@@ -75,6 +75,13 @@
 
 ### Fixed
 
+- Fixed the remaining Mobile Safari Search IME dismissal after live fail-closed
+  evidence proved a generic downward application swipe left the keyboard open.
+  Search now declares only its exact non-actionable native heading as the
+  outside-field tap target; the shared helper requires one match, taps its
+  resolved rect, and still requires the IME absent before scrolling. Generic
+  coordinates and submit/result controls are never eligible.
+
 - Fixed the shared iOS Search/OTP keyboard-dismiss boundary after live Search
   proved that tolerating XCUITest's exact unsupported `hideKeyboard` response
   could leave every subsequent Safari swipe inside the IME. The helper now

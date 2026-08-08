@@ -208,6 +208,54 @@ test('shared iOS keyboard dismissal recovers exact unsupported hide with a verif
   )), true);
 });
 
+test('shared iOS keyboard dismissal taps one exact safe native label when declared', async () => {
+  const calls = [];
+  let context = 'WEBVIEW_safari';
+  let keyboardShown = true;
+  const driver = {
+    getContext: async () => context,
+    getContexts: async () => ['NATIVE_APP', 'WEBVIEW_safari'],
+    switchContext: async (next) => { context = next; calls.push(['context', next]); },
+    isKeyboardShown: async () => keyboardShown,
+    hideKeyboard: async () => { throw new Error('Did not know how to dismiss the keyboard'); },
+    findElements: async (...args) => { calls.push(['findElements', ...args]);
+      return [{ 'element-6066-11e4-a52e-4f735466cecf': 'safe-heading' }]; },
+    getElementRect: async (id) => { calls.push(['rect', id]);
+      return { x: 20, y: 100, width: 200, height: 40 }; },
+    executeScript: async (...args) => { calls.push(['executeScript', ...args]); keyboardShown = false; },
+    waitUntil: async (probe) => probe(),
+  };
+  assert.equal(await dismissNativeKeyboard(driver, {
+    allowUnsupported: true, fallbackTapLabels: ['Найти событие'],
+  }), true);
+  assert.match(calls.find((item) => item[0] === 'findElements')[2],
+    /type == 'XCUIElementTypeStaticText'.*name == 'Найти событие'/u);
+  assert.deepEqual(calls.find((item) => item[0] === 'executeScript'),
+    ['executeScript', 'mobile: tap', [{ x: 120, y: 120 }]]);
+  assert.equal(context, 'WEBVIEW_safari');
+});
+
+test('shared iOS keyboard dismissal rejects missing or ambiguous safe tap targets', async () => {
+  for (const matches of [[], [{ ELEMENT: 'one' }, { ELEMENT: 'two' }]]) {
+    let context = 'WEBVIEW_safari';
+    let tapCalls = 0;
+    const driver = {
+      getContext: async () => context,
+      getContexts: async () => ['NATIVE_APP', 'WEBVIEW_safari'],
+      switchContext: async (next) => { context = next; },
+      isKeyboardShown: async () => true,
+      hideKeyboard: async () => { throw new Error('Did not know how to dismiss the keyboard'); },
+      findElements: async () => matches,
+      executeScript: async () => { tapCalls += 1; },
+    };
+    await assert.rejects(() => dismissNativeKeyboard(driver, {
+      allowUnsupported: true, fallbackTapLabels: ['Найти событие'],
+    }), new RegExp(`mobile_keyboard_dismiss_target_count:${matches.length}`, 'u'));
+    assert.equal(tapCalls, 0);
+    assert.equal(context, 'WEBVIEW_safari');
+  }
+});
+
 test('shared iOS keyboard dismissal fails closed when fallback swipe leaves the IME visible', async () => {
   let context = 'WEBVIEW_safari';
   const driver = {

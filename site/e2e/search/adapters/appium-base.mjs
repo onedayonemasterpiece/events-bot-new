@@ -9,6 +9,10 @@ const IOS_SEARCH_INPUT_LABELS = Object.freeze([
   'Например: послушать хор или сходить с детьми бесплатно',
   'Например: джаз на выходных',
 ]);
+const IOS_SEARCH_KEYBOARD_DISMISS_LABELS = Object.freeze([
+  'Найти событие',
+  'Найти событие по описанию',
+]);
 
 function pageResultSnapshot() {
   const results = document.querySelector('[data-search-results]');
@@ -184,7 +188,8 @@ export async function createAppiumSearchAdapter(options = {}) {
     async snapshotResults() { return driver.execute(pageResultSnapshot); },
     async realScrollResults() {
       lifecycle.failure_stage = 'search_scroll_keyboard_dismiss';
-      await dismissNativeKeyboard(driver, { allowUnsupported: platform === 'ios' });
+      await dismissNativeKeyboard(driver, { allowUnsupported: platform === 'ios',
+        fallbackTapLabels: IOS_SEARCH_KEYBOARD_DISMISS_LABELS });
       lifecycle.failure_stage = 'search_scroll';
       return runRealTouchScroll({
         readScrollY: () => driver.execute(() => scrollY),
