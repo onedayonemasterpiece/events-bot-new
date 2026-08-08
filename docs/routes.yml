@@ -378,6 +378,7 @@ features:
   static_site_pages:
     status: secret_candidate_pipeline_root_promotion_blocked
     docs: docs/features/static-site-pages/README.md
+    current_ui_resource_graph: docs/features/static-site-pages/current-ui-resource-graph.md
     collections_catalog: docs/features/static-site-pages/podborki.md
     gastronomy_collection: docs/features/static-site-pages/gastronomy-collection.md
     personalization_target: docs/features/static-site-pages/personalizaion/personalization-to-be.md

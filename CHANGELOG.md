@@ -18,6 +18,37 @@
   budget. ChatGPT and Codex now have distinct MCP resources; Codex remains
   limited to the seven existing read tools and can never discover social tools.
 
+- Added a deterministic, read-only Current UI Resource Graph v0 decoder for the
+  exact immutable Astro candidate: parser-backed source inventory, streaming
+  all-route structural observations, conservative observed-family and
+  fragmentation hypotheses, independent desktop/mobile evidence, explicit
+  surface coverage, redacted/budgeted JSONL snapshots, failure receipts and an
+  always-uploading GitHub Actions artifact. The decoder keeps candidate and
+  public-root identities separate and never merges or normalizes UI resources.
+  Acceptance hardening now pins the complete candidate manifest contract and
+  public-root HTML hash, inventories both exact source trees/runtime planes,
+  maps safe relative routes through deterministic transitive imports, preserves
+  distinct page families and marker-only Hero-talk evidence, includes
+  standalone/computed style cohorts and multi-channel fragmentation evidence,
+  selects family representatives fairly before outliers, bounds retries, and
+  rejects shell-interpolated dispatch data or falsely complete validation
+  receipts. Browser capture now applies and asserts the exact independent
+  mobile/desktop viewport instead of silently accepting Playwright's default.
+  Plane-aware family aggregation no longer treats the same source path in two
+  releases as fragmentation; non-Astro endpoints no longer become UI page
+  families, and desktop/mobile evidence is emitted for every observed UI family
+  with an explicit mapped-host-page boundary. Browser evidence now freezes the
+  snapshot clock/pseudorandom fixture and waits for network, media and a stable
+  layout fingerprint before measuring, then requires two consecutive identical
+  screenshot buffers before accepting pixels. Canonical graph receipts now use
+  a size-checked fixed raster reservation and stable perceptual dHash, while raw
+  Chromium pixels remain explicitly noncanonical visual evidence checked by an
+  equal cross-run perceptual fingerprint. The manual-dispatch schema now gives
+  every required input an explicit `type: string`, preventing GitHub from
+  rejecting the workflow before job creation; job-level worktree/marker paths
+  use the context-valid workspace root instead of step-only `runner.temp`, and
+  focused tests pin both contracts.
+
 - Added the disabled-by-default private Events MCP: path-scoped OAuth with
   PKCE, bounded read-only event and incident evidence tools, production smoke
   tooling, and an explicit no-provider-call acceptance gate. Its HTTP transport

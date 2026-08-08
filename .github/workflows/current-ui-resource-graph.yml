@@ -1,0 +1,301 @@
+name: Current UI Resource Graph v0
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_source_sha:
+        description: Exact immutable candidate source SHA
+        required: true
+        type: string
+        default: ef7aa62e45c60f7a12da6160f490719c0721ec03
+      candidate_build_id:
+        description: Exact checked candidate build
+        required: true
+        type: string
+        default: production-secret-20260808T144842-5472a382
+      candidate_run_id:
+        description: Exact static-site pipeline run
+        required: true
+        type: string
+        default: static-site:production-secret-20260808T144842-5472a382:acbd40ef5203
+      snapshot_id:
+        description: Exact source/runtime snapshot
+        required: true
+        type: string
+        default: snapshot-20260808T124842-4786ac53bc
+      snapshot_time:
+        description: Deterministic graph snapshot timestamp
+        required: true
+        type: string
+        default: 2026-08-08T12:48:42Z
+      candidate_manifest_sha256:
+        description: Exact checked candidate manifest SHA-256
+        required: true
+        type: string
+        default: d615f6e447dc8c6ae3b876bf4a99123d1c85afee55276c26645f020b26074322
+      candidate_generated_at:
+        description: Exact candidate manifest generated_at
+        required: true
+        type: string
+        default: 2026-08-08T13:32:56.163Z
+      candidate_tree_sha256:
+        description: Exact candidate inventory tree SHA-256
+        required: true
+        type: string
+        default: 0aad3919fccd996a5d32bcc760af8ee9b72249742c9db53196b009759bd0e7f4
+      production_manifest_sha256:
+        description: Exact production manifest embedded by the candidate
+        required: true
+        type: string
+        default: baa0f29da3205ac81ddd4804bf6ff8e22b4585abb58d7d378e8dd87b9d395e45
+      production_tree_sha256:
+        description: Exact production tree embedded by the candidate
+        required: true
+        type: string
+        default: 47df3798686dfbdde43589ba6a6498effd82f6fd091de6883a4899b7b4e57769
+      astro_version:
+        description: Exact Astro version
+        required: true
+        type: string
+        default: 6.4.8
+      node_version:
+        description: Exact Node version
+        required: true
+        type: string
+        default: 22.12.0
+      root_source_sha:
+        description: Independent current-root source SHA
+        required: true
+        type: string
+        default: 5a9d804438377f65fe4b26bd7019e73626529864
+      root_release_id:
+        description: Independent current-root release
+        required: true
+        type: string
+        default: prelaunch-main-31263560430-1
+      root_actions_run_id:
+        description: Independent current-root Actions run
+        required: true
+        type: string
+        default: "31263560430"
+      root_artifact_id:
+        description: Independent current-root artifact
+        required: true
+        type: string
+        default: "9023507736"
+      root_published_at:
+        description: Independent current-root publication time
+        required: true
+        type: string
+        default: 2026-08-08T15:09:02Z
+      root_runtime_url:
+        description: Public prelaunch root (never the candidate)
+        required: true
+        type: string
+        default: https://kenigevents.ru/
+      root_html_sha256:
+        description: Exact observed public-root HTML SHA-256
+        required: true
+        type: string
+        default: 1c31504d10d9ec66c7fa84ad52c94e6019a741f0ee01826f219578963e0ea21e
+
+permissions:
+  contents: read
+
+jobs:
+  decode:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      # Dispatch values enter shell only as quoted environment data. The first
+      # step checks every value against this snapshot's immutable allowlist.
+      CURRENT_UI_GRAPH_CANDIDATE_SOURCE_SHA: ${{ inputs.candidate_source_sha }}
+      CURRENT_UI_GRAPH_CANDIDATE_BUILD_ID: ${{ inputs.candidate_build_id }}
+      CURRENT_UI_GRAPH_CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+      CURRENT_UI_GRAPH_SNAPSHOT_ID: ${{ inputs.snapshot_id }}
+      CURRENT_UI_GRAPH_SNAPSHOT_TIME: ${{ inputs.snapshot_time }}
+      CURRENT_UI_GRAPH_CANDIDATE_MANIFEST_SHA256: ${{ inputs.candidate_manifest_sha256 }}
+      CURRENT_UI_GRAPH_CANDIDATE_GENERATED_AT: ${{ inputs.candidate_generated_at }}
+      CURRENT_UI_GRAPH_CANDIDATE_TREE_SHA256: ${{ inputs.candidate_tree_sha256 }}
+      CURRENT_UI_GRAPH_PRODUCTION_MANIFEST_SHA256: ${{ inputs.production_manifest_sha256 }}
+      CURRENT_UI_GRAPH_PRODUCTION_TREE_SHA256: ${{ inputs.production_tree_sha256 }}
+      CURRENT_UI_GRAPH_ASTRO_VERSION: ${{ inputs.astro_version }}
+      CURRENT_UI_GRAPH_NODE_VERSION: ${{ inputs.node_version }}
+      CURRENT_UI_GRAPH_ROOT_SOURCE_SHA: ${{ inputs.root_source_sha }}
+      CURRENT_UI_GRAPH_ROOT_RELEASE_ID: ${{ inputs.root_release_id }}
+      CURRENT_UI_GRAPH_ROOT_ACTIONS_RUN_ID: ${{ inputs.root_actions_run_id }}
+      CURRENT_UI_GRAPH_ROOT_ARTIFACT_ID: ${{ inputs.root_artifact_id }}
+      CURRENT_UI_GRAPH_ROOT_PUBLISHED_AT: ${{ inputs.root_published_at }}
+      CURRENT_UI_GRAPH_ROOT_RUNTIME_URL: ${{ inputs.root_runtime_url }}
+      CURRENT_UI_GRAPH_ROOT_HTML_SHA256: ${{ inputs.root_html_sha256 }}
+      CURRENT_UI_GRAPH_CANDIDATE_BASE_URL: ${{ secrets.CURRENT_UI_GRAPH_CANDIDATE_BASE_URL }}
+      GRAPH_OUTPUT: artifacts/current-ui-resource-graph/dispatch-rejected
+      CANDIDATE_WORKTREE: ${{ github.workspace }}/../current-ui-graph-candidate-source
+      ROOT_WORKTREE: ${{ github.workspace }}/../current-ui-graph-public-root-source
+      DISPATCH_VALIDATION_MARKER: ${{ github.workspace }}/../current-ui-graph-dispatch-ok
+      GRAPH_VALIDATION_MARKER: ${{ github.workspace }}/../current-ui-graph-validation-ok
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate dispatch identity and initialize failure-safe receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$GRAPH_OUTPUT"
+          jq -n --arg snapshot_time "$CURRENT_UI_GRAPH_SNAPSHOT_TIME" \
+            '{schema_version:"current_ui_resource_graph_v0",snapshot_time:$snapshot_time,status:"workflow_started"}' \
+            > "$GRAPH_OUTPUT/receipt.json"
+          validate_exact() {
+            local label="$1" actual="$2" expected="$3"
+            if [[ "$actual" != "$expected" ]]; then
+              printf 'Rejected non-canonical Current UI graph dispatch field: %s\n' "$label" >&2
+              return 1
+            fi
+          }
+          validate_exact candidate_source_sha "$CURRENT_UI_GRAPH_CANDIDATE_SOURCE_SHA" ef7aa62e45c60f7a12da6160f490719c0721ec03
+          validate_exact candidate_build_id "$CURRENT_UI_GRAPH_CANDIDATE_BUILD_ID" production-secret-20260808T144842-5472a382
+          validate_exact candidate_run_id "$CURRENT_UI_GRAPH_CANDIDATE_RUN_ID" static-site:production-secret-20260808T144842-5472a382:acbd40ef5203
+          validate_exact snapshot_id "$CURRENT_UI_GRAPH_SNAPSHOT_ID" snapshot-20260808T124842-4786ac53bc
+          validate_exact snapshot_time "$CURRENT_UI_GRAPH_SNAPSHOT_TIME" 2026-08-08T12:48:42Z
+          validate_exact candidate_manifest_sha256 "$CURRENT_UI_GRAPH_CANDIDATE_MANIFEST_SHA256" d615f6e447dc8c6ae3b876bf4a99123d1c85afee55276c26645f020b26074322
+          validate_exact candidate_generated_at "$CURRENT_UI_GRAPH_CANDIDATE_GENERATED_AT" 2026-08-08T13:32:56.163Z
+          validate_exact candidate_tree_sha256 "$CURRENT_UI_GRAPH_CANDIDATE_TREE_SHA256" 0aad3919fccd996a5d32bcc760af8ee9b72249742c9db53196b009759bd0e7f4
+          validate_exact production_manifest_sha256 "$CURRENT_UI_GRAPH_PRODUCTION_MANIFEST_SHA256" baa0f29da3205ac81ddd4804bf6ff8e22b4585abb58d7d378e8dd87b9d395e45
+          validate_exact production_tree_sha256 "$CURRENT_UI_GRAPH_PRODUCTION_TREE_SHA256" 47df3798686dfbdde43589ba6a6498effd82f6fd091de6883a4899b7b4e57769
+          validate_exact astro_version "$CURRENT_UI_GRAPH_ASTRO_VERSION" 6.4.8
+          validate_exact node_version "$CURRENT_UI_GRAPH_NODE_VERSION" 22.12.0
+          validate_exact root_source_sha "$CURRENT_UI_GRAPH_ROOT_SOURCE_SHA" 5a9d804438377f65fe4b26bd7019e73626529864
+          validate_exact root_release_id "$CURRENT_UI_GRAPH_ROOT_RELEASE_ID" prelaunch-main-31263560430-1
+          validate_exact root_actions_run_id "$CURRENT_UI_GRAPH_ROOT_ACTIONS_RUN_ID" 31263560430
+          validate_exact root_artifact_id "$CURRENT_UI_GRAPH_ROOT_ARTIFACT_ID" 9023507736
+          validate_exact root_published_at "$CURRENT_UI_GRAPH_ROOT_PUBLISHED_AT" 2026-08-08T15:09:02Z
+          validate_exact root_runtime_url "$CURRENT_UI_GRAPH_ROOT_RUNTIME_URL" https://kenigevents.ru/
+          validate_exact root_html_sha256 "$CURRENT_UI_GRAPH_ROOT_HTML_SHA256" 1c31504d10d9ec66c7fa84ad52c94e6019a741f0ee01826f219578963e0ea21e
+          next_output="artifacts/current-ui-resource-graph/$CURRENT_UI_GRAPH_SNAPSHOT_ID"
+          mkdir -p "$next_output"
+          mv "$GRAPH_OUTPUT/receipt.json" "$next_output/receipt.json"
+          printf 'GRAPH_OUTPUT=%s\n' "$next_output" >> "$GITHUB_ENV"
+          touch "$DISPATCH_VALIDATION_MARKER"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Materialize exact candidate and public-root source trees
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "$CURRENT_UI_GRAPH_CANDIDATE_SOURCE_SHA^{commit}"
+          git cat-file -e "$CURRENT_UI_GRAPH_ROOT_SOURCE_SHA^{commit}"
+          git worktree add --detach "$CANDIDATE_WORKTREE" "$CURRENT_UI_GRAPH_CANDIDATE_SOURCE_SHA"
+          git worktree add --detach "$ROOT_WORKTREE" "$CURRENT_UI_GRAPH_ROOT_SOURCE_SHA"
+
+      - name: Install pinned site parsers and Chromium
+        working-directory: ${{ runner.temp }}/current-ui-graph-candidate-source/site
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts
+          npx playwright install --with-deps chromium
+
+      - name: Decode exact current resource graph
+        id: decode
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CURRENT_UI_GRAPH_CANDIDATE_BASE_URL"
+          node scripts/current_ui_resource_graph/decode.mjs \
+            --source-root "$CANDIDATE_WORKTREE/site/src" \
+            --root-source-root "$ROOT_WORKTREE/site/src" \
+            --site-root "$CANDIDATE_WORKTREE/site" \
+            --source-sha "$CURRENT_UI_GRAPH_CANDIDATE_SOURCE_SHA" \
+            --candidate-build-id "$CURRENT_UI_GRAPH_CANDIDATE_BUILD_ID" \
+            --candidate-run-id "$CURRENT_UI_GRAPH_CANDIDATE_RUN_ID" \
+            --candidate-snapshot-id "$CURRENT_UI_GRAPH_SNAPSHOT_ID" \
+            --snapshot-id "$CURRENT_UI_GRAPH_SNAPSHOT_ID" \
+            --snapshot-time "$CURRENT_UI_GRAPH_SNAPSHOT_TIME" \
+            --candidate-manifest-sha256 "$CURRENT_UI_GRAPH_CANDIDATE_MANIFEST_SHA256" \
+            --candidate-generated-at "$CURRENT_UI_GRAPH_CANDIDATE_GENERATED_AT" \
+            --candidate-tree-sha256 "$CURRENT_UI_GRAPH_CANDIDATE_TREE_SHA256" \
+            --production-manifest-sha256 "$CURRENT_UI_GRAPH_PRODUCTION_MANIFEST_SHA256" \
+            --production-tree-sha256 "$CURRENT_UI_GRAPH_PRODUCTION_TREE_SHA256" \
+            --astro-version "$CURRENT_UI_GRAPH_ASTRO_VERSION" \
+            --node-version "$CURRENT_UI_GRAPH_NODE_VERSION" \
+            --root-source-sha "$CURRENT_UI_GRAPH_ROOT_SOURCE_SHA" \
+            --root-release-id "$CURRENT_UI_GRAPH_ROOT_RELEASE_ID" \
+            --root-actions-run-id "$CURRENT_UI_GRAPH_ROOT_ACTIONS_RUN_ID" \
+            --root-artifact-id "$CURRENT_UI_GRAPH_ROOT_ARTIFACT_ID" \
+            --root-published-at "$CURRENT_UI_GRAPH_ROOT_PUBLISHED_AT" \
+            --root-runtime-url "$CURRENT_UI_GRAPH_ROOT_RUNTIME_URL" \
+            --root-html-sha256 "$CURRENT_UI_GRAPH_ROOT_HTML_SHA256" \
+            --candidate-base-url-env CURRENT_UI_GRAPH_CANDIDATE_BASE_URL \
+            --browser-observations true \
+            --browser-max-pages 20 \
+            --verify-production-identity true \
+            --output "$GRAPH_OUTPUT"
+
+      - name: Validate complete graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(manifest.json summary.md source-components.jsonl observed-ui-families.jsonl runtime-observations.jsonl page-families.jsonl desktop-mobile-analysis.jsonl style-observations.jsonl fragmentation-report.jsonl candidate-component-graph.jsonl unresolved-questions.md coverage-report.md screenshots-index.jsonl receipt.json)
+          for file in "${required[@]}"; do test -s "$GRAPH_OUTPUT/$file"; done
+          for file in "$GRAPH_OUTPUT"/*.jsonl; do test -s "$file"; jq -c . "$file" >/dev/null; done
+          jq -e '.status == "complete"' "$GRAPH_OUTPUT/receipt.json" >/dev/null
+          jq -e '
+            .identity_invariant == "candidate_is_not_production_root"
+            and (.constraints.automatic_merge == false)
+            and (.source_pins.latest_checked_kaggle_candidate.requested_sha == "ef7aa62e45c60f7a12da6160f490719c0721ec03")
+            and (.source_pins.current_root_prelaunch.requested_sha == "5a9d804438377f65fe4b26bd7019e73626529864")
+            and (.runtime_manifest.schema_version == "static_secret_candidate_manifest_v1")
+            and (.runtime_manifest.generated_at == "2026-08-08T13:32:56.163Z")
+            and (.runtime_manifest.tree_sha256 == "0aad3919fccd996a5d32bcc760af8ee9b72249742c9db53196b009759bd0e7f4")
+            and (.runtime_manifest.production_manifest_sha256 == "baa0f29da3205ac81ddd4804bf6ff8e22b4585abb58d7d378e8dd87b9d395e45")
+            and (.runtime_manifest.production_tree_sha256 == "47df3798686dfbdde43589ba6a6498effd82f6fd091de6883a4899b7b4e57769")
+            and (.runtime_planes.current_root_prelaunch.verification == "exact_sha256_match")
+            and (.runtime_planes.current_root_prelaunch.html_sha256 == "1c31504d10d9ec66c7fa84ad52c94e6019a741f0ee01826f219578963e0ea21e")
+          ' "$GRAPH_OUTPUT/manifest.json" >/dev/null
+          if jq -e 'select(.decision != "NOT_MERGED" or .recommendation != "unresolved")' "$GRAPH_OUTPUT/fragmentation-report.jsonl" >/dev/null; then exit 1; fi
+          if jq -e 'select(.decision != "NOT_MERGED" or .recommendation != "unresolved")' "$GRAPH_OUTPUT/candidate-component-graph.jsonl" >/dev/null; then exit 1; fi
+          grep -Fx 'Proceed to normalization workshop' "$GRAPH_OUTPUT/summary.md" >/dev/null
+          ! grep -R -F "$CURRENT_UI_GRAPH_CANDIDATE_BASE_URL" "$GRAPH_OUTPUT"
+          touch "$GRAPH_VALIDATION_MARKER"
+
+      - name: Finalize complete, failed, or failed-validation workflow receipt
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$GRAPH_OUTPUT"
+          receipt="$GRAPH_OUTPUT/receipt.json"
+          if ! test -s "$receipt" || ! jq -e . "$receipt" >/dev/null 2>&1; then
+            reason=workflow_failed_before_decoder_receipt
+            test -f "$DISPATCH_VALIDATION_MARKER" || reason=dispatch_validation_failed
+            jq -n --arg snapshot_time "$CURRENT_UI_GRAPH_SNAPSHOT_TIME" --arg reason "$reason" \
+              '{schema_version:"current_ui_resource_graph_v0",snapshot_time:$snapshot_time,status:"failed",reason:$reason}' > "$receipt"
+          else
+            receipt_status="$(jq -r '.status // "unknown"' "$receipt")"
+            if [[ "$receipt_status" == "complete" && ! -f "$GRAPH_VALIDATION_MARKER" ]]; then
+              tmp="$receipt.tmp"
+              jq '.decoder_status=.status | .status="failed" | .reason="workflow_validation_failed"' "$receipt" > "$tmp"
+              mv "$tmp" "$receipt"
+            elif [[ "$receipt_status" == "workflow_started" || "$receipt_status" == "started" ]]; then
+              reason=workflow_failed_before_decoder_completion
+              test -f "$DISPATCH_VALIDATION_MARKER" || reason=dispatch_validation_failed
+              jq --arg reason "$reason" '.status="failed" | .reason=$reason' "$receipt" > "$receipt.tmp"
+              mv "$receipt.tmp" "$receipt"
+            fi
+          fi
+
+      - name: Upload complete or failed graph
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: current-ui-resource-graph-snapshot-20260808T124842-4786ac53bc
+          path: artifacts/current-ui-resource-graph/
+          if-no-files-found: error
+          retention-days: 30
