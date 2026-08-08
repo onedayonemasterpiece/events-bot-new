@@ -12,6 +12,7 @@ from scripts.generate_private_events_mcp_credentials import (
     create_private_output_dir,
     write_private_text,
 )
+from scripts.apply_private_events_mcp_overlay import patch_main
 from scripts.smoke_private_events_mcp import sanitized_endpoint_receipt
 
 
@@ -118,3 +119,18 @@ def test_private_output_directory_is_fresh_and_mode_0700(tmp_path: Path) -> None
     assert output.stat().st_mode & 0o777 == 0o700
     with pytest.raises(FileExistsError):
         create_private_output_dir(output)
+
+
+def test_overlay_inserts_enabled_only_provider_adapters_idempotently(tmp_path: Path) -> None:
+    app_module = tmp_path / "main_part2.py"
+    app_module.write_text(
+        "from aiohttp import web\n\ndef create_app():\n    app = web.Application()\n    return app\n",
+        encoding="utf-8",
+    )
+    assert patch_main(app_module) is True
+    content = app_module.read_text(encoding="utf-8")
+    assert "PrivateEventsMCPConfig.from_env()" in content
+    assert "if private_mcp_config.enabled:" in content
+    assert "build_private_events_mcp_social_adapters(vk_api)" in content
+    assert content.count("attach_private_events_mcp(") == 1
+    assert patch_main(app_module) is False

@@ -324,7 +324,7 @@ merges its fixtures without overwriting an existing `tests/conftest.py`.
 Before deployment:
 
 ```bash
-PYTHONPATH=. python -m compileall -q private_events_mcp tests
+PYTHONPATH=. python -m compileall -q private_events_mcp private_events_mcp_provider_adapters.py tests scripts main_part2.py
 PYTHONPATH=. pytest -q tests/test_private_events_mcp_*.py
 ```
 

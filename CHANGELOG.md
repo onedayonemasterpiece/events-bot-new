@@ -70,6 +70,10 @@
   Generated ChatGPT profiles now remain read-only unless social scopes are
   explicitly enabled by the operator.
 
+- Kept the private MCP overlay installer and CI gate aligned with the enabled-
+  only Telegram/VK adapter injection, including compilation of the provider
+  boundary and the canonical application module.
+
 - Hardened private Events MCP OAuth credential handling: generator and smoke
   receipts no longer print the private endpoint path, generated bundles start
   in a fresh `0700` directory with atomic `0600` files, Codex callback dot
