@@ -16,6 +16,11 @@
 
 ### Fixed
 
+- Increased the one-shot Appium session-start request budget from WebdriverIO's
+  120-second default to five minutes, with ambiguous automatic session retries
+  disabled, so a cold iOS simulator/WDA launch can complete without creating a
+  second device session.
+
 - Fixed iOS Search L2 target resolution on the macOS runner by replacing the
   Bash-4-only `mapfile` builtin with Bash-3.2-compatible bounded line reads;
   secret target masking and exact SHA validation remain unchanged.

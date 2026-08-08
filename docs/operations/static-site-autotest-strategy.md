@@ -795,3 +795,7 @@ Appium browser capabilities на обеих платформах фиксиру�
 `wdio:enforceWebDriverClassic=true`: WebdriverIO не должен автоматически
 переключать Chrome/Safari session на частичный BiDi transport, поскольку
 Appium drivers не гарантируют `script.addPreloadScript`.
+Cold simulator/WDA startup получает один WebDriver session POST с бюджетом до
+300 секунд и `connectionRetryCount=0`. После неоднозначного timeout новая
+session автоматически не создаётся; следующий запуск получает новую
+platform-scoped broker session после защитного lease.

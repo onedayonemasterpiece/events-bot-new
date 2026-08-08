@@ -143,6 +143,8 @@ test('journey is mechanics-neutral and mobile adapters own native keyboard/touch
   assert.match(mobile, /driver\.keys\('\\uE007'\)/u);
   assert.match(mobile, /mobile: scrollGesture/u);
   assert.match(mobile, /mobile: scroll/u);
+  assert.match(mobile, /connectionRetryTimeout: Number\(options\.connectionRetryTimeout \|\| 300_000\)/u);
+  assert.match(mobile, /connectionRetryCount: 0/u);
   assert.doesNotMatch(mobile, /screenshot|pageSource|getPageSource|\bhar\b|trace|video/iu);
   assert.match(android, /'wdio:enforceWebDriverClassic': true/u);
   assert.match(ios, /'wdio:enforceWebDriverClassic': true/u);

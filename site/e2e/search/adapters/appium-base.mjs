@@ -30,6 +30,8 @@ export async function createAppiumSearchAdapter(options = {}) {
     driver = await remote({
       hostname: options.hostname || '127.0.0.1', port: Number(options.port || 4723), path: options.path || '/',
       logLevel: options.logLevel || 'error',
+      connectionRetryTimeout: Number(options.connectionRetryTimeout || 300_000),
+      connectionRetryCount: 0,
       capabilities: options.capabilities,
     });
     ownsDriver = true;
