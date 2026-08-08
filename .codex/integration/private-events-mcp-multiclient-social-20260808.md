@@ -3,7 +3,7 @@
 ## Scope and status
 
 Integration branch: `feature/private-events-mcp-multiclient-social`
-Rebased base: `origin/main` at `37f53ecdc393dc8433b80538e434faf1e1749a61`
+Rebased base: `origin/main` at `ef4695986170d668b9092c74518baf38941e6996`
 Pre-report implementation head: `5d8f876531be5279a2ae37f07a35ddf5a8469266`
 
 No code or transport from superseded PR #365 is present. No GitHub issue was
