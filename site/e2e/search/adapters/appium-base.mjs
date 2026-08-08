@@ -57,6 +57,9 @@ export async function createAppiumSearchAdapter(options = {}) {
       await driver.url(actionLink);
       await driver.waitUntil(async () => new URL(await driver.getUrl()).origin === new URL(returnTarget).origin,
         { timeout: timeoutMs, interval: 250, timeoutMsg: 'search_auth_callback_timeout' });
+      await driver.waitUntil(async () => driver.execute(() => document.querySelector('[data-authorized-search]')
+        ?.classList.contains('is-authorized') === true),
+      { timeout: timeoutMs, interval: 250, timeoutMsg: 'search_auth_callback_session_not_restored' });
     },
     async open(targetUrl) {
       await driver.url(targetUrl);

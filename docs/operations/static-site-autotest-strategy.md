@@ -802,3 +802,7 @@ platform-scoped broker session после защитного lease.
 Android/iOS scroll receipt строится только из реальных Appium touch gestures:
 адаптер повторяет их с bounded limit до попадания последней rendered card во
 viewport и проверяет положительный `scrollY` delta; DOM-scroll не допускается.
+Device callback считается завершённым не при первом возврате на site origin, а
+только после `is-authorized` на возвращённой `/poisk/`. Лишь после этого journey
+делает обычный reload exact target и тем самым доказывает same-storage session
+persistence, не прерывая одноразовый callback.
