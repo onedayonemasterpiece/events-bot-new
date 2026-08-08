@@ -73,6 +73,8 @@ async def test_oauth_pkce_and_authenticated_mcp_round_trip(config) -> None:
         }
         page = await client.get(config.oauth_authorize_path + "?" + urlencode(authorize_query))
         assert page.status == 200
+        csp = page.headers["Content-Security-Policy"]
+        assert "form-action 'self' https://chatgpt.com" in csp
         html = await page.text()
         sealed = re.search(r'name="authorization_request" value="([^"]+)"', html)
         assert sealed
@@ -169,6 +171,42 @@ async def test_oauth_pkce_and_authenticated_mcp_round_trip(config) -> None:
 
 
 @pytest.mark.asyncio
+async def test_chatgpt_redirect_authority_is_canonical_and_not_reflected_in_csp(config) -> None:
+    app = web.Application()
+    attach_private_events_mcp(app, config)
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    base_query = {
+        "response_type": "code",
+        "client_id": config.oauth_client_id,
+        "state": "state-test-123",
+        "resource": config.resource,
+        "scope": "events:read",
+        "code_challenge": pkce_s256("z" * 64),
+        "code_challenge_method": "S256",
+    }
+    malicious_marker = "img-src evil.example"
+    try:
+        for redirect_uri in (
+            "https://x;img-src evil.example@chatgpt.com/connector/oauth/callback-id",
+            "https://chatgpt.com:444/connector/oauth/callback-id",
+            "https://chatgpt.com/connector/oauth/callback-id?next=evil",
+        ):
+            response = await client.get(
+                config.oauth_authorize_path
+                + "?"
+                + urlencode({**base_query, "redirect_uri": redirect_uri})
+            )
+            assert response.status == 400
+            csp = response.headers["Content-Security-Policy"]
+            assert malicious_marker not in csp
+            assert csp.count("form-action") == 1
+            assert "form-action 'self';" in csp
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
 async def test_codex_public_client_real_oauth_and_mcp_contract(config) -> None:
     app = web.Application()
     attach_private_events_mcp(app, config)
@@ -189,6 +227,8 @@ async def test_codex_public_client_real_oauth_and_mcp_contract(config) -> None:
         }
         page = await client.get(config.oauth_authorize_path + "?" + urlencode(query))
         assert page.status == 200
+        csp = page.headers["Content-Security-Policy"]
+        assert "form-action 'self' http://127.0.0.1:1455" in csp
         sealed = re.search(
             r'name="authorization_request" value="([^"]+)",?', await page.text()
         )

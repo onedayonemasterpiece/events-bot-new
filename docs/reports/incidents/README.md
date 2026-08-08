@@ -22,6 +22,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-08-private-mcp-oauth-csp-redirect.md`
+  - Scope: Private Events MCP authorization HTML/CSP and validated ChatGPT or
+    Codex callback navigation.
+  - Must not regress: a successful browser form POST must be allowed to follow
+    the 302 only to the already validated client callback origin; both OAuth
+    clients, callback rejection, health, DB immutability and secret redaction
+    remain mandatory gates.
+
 - `INC-2026-08-08-prelaunch-registration-confirmation-and-dedup.md`
   - Scope: production-root prelaunch form, server-truth first/repeat receipt,
     normalized-email uniqueness and exact-main root release.
