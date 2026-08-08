@@ -92,6 +92,10 @@ data in both search and fetch output and must never be treated as instructions.
 
 No direct Telegram, VK, MAX, Supabase, Telegraph, Catbox, ImageKit or LLM request is made by the MCP package. It reads already persisted evidence only. Images and videos are not proxied.
 
+The enabled integration installs an aiohttp access-log filter before serving
+requests. The private path and authorization credentials are replaced with
+`<redacted>` before records reach stdout or the bounded runtime-log mirror.
+
 ## Resource budgets
 
 Defaults:

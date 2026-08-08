@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 from dataclasses import replace
+import logging
 import re
 from urllib.parse import parse_qs, urlencode, urlsplit
 
@@ -150,7 +151,9 @@ async def test_oauth_pkce_and_authenticated_mcp_round_trip(config) -> None:
 
 
 @pytest.mark.asyncio
-async def test_invalid_bearer_is_http_401_with_resource_metadata(config, monkeypatch) -> None:
+async def test_invalid_bearer_is_http_401_with_resource_metadata(
+    config, monkeypatch, caplog
+) -> None:
     app = web.Application()
     attach_private_events_mcp(app, config)
     client = TestClient(TestServer(app))
@@ -165,6 +168,17 @@ async def test_invalid_bearer_is_http_401_with_resource_metadata(config, monkeyp
         assert "resource_metadata" in response.headers["WWW-Authenticate"]
     finally:
         await client.close()
+
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger="aiohttp.access"):
+        logging.getLogger("aiohttp.access").info(
+            'request="POST %s" operator=%s',
+            config.mcp_path,
+            config.operator_token,
+        )
+    assert config.path_secret not in caplog.text
+    assert config.operator_token not in caplog.text
+    assert caplog.text.count("<redacted>") == 2
 
     monkeypatch.setenv("PRIVATE_EVENTS_MCP_ENABLED", "0")
     monkeypatch.setenv("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL", "not-an-absolute-url")

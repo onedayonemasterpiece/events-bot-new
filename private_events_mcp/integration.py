@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
+from typing import Any
 
 from aiohttp import web
 
@@ -13,6 +15,58 @@ from .server import (
 
 
 logger = logging.getLogger(__name__)
+
+
+def _redact_log_value(value: Any, secrets: tuple[str, ...]) -> Any:
+    if isinstance(value, str):
+        for secret in secrets:
+            value = value.replace(secret, "<redacted>")
+        return value
+    if isinstance(value, tuple):
+        return tuple(_redact_log_value(item, secrets) for item in value)
+    if isinstance(value, list):
+        return [_redact_log_value(item, secrets) for item in value]
+    if isinstance(value, Mapping):
+        return {
+            key: _redact_log_value(item, secrets)
+            for key, item in value.items()
+        }
+    return value
+
+
+class _PrivateEventsMCPAccessLogFilter(logging.Filter):
+    """Remove private MCP credentials before aiohttp handlers emit a record."""
+
+    def __init__(self, secrets: tuple[str, ...]) -> None:
+        super().__init__()
+        self._secrets = secrets
+
+    def extend(self, secrets: tuple[str, ...]) -> None:
+        self._secrets = tuple(dict.fromkeys((*self._secrets, *secrets)))
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.msg = _redact_log_value(record.msg, self._secrets)
+        record.args = _redact_log_value(record.args, self._secrets)
+        return True
+
+
+def _install_access_log_redaction(config: PrivateEventsMCPConfig) -> None:
+    secrets = tuple(
+        item
+        for item in (
+            config.path_secret,
+            config.oauth_client_secret,
+            config.operator_token,
+            config.signing_key,
+        )
+        if item
+    )
+    access_logger = logging.getLogger("aiohttp.access")
+    for existing in access_logger.filters:
+        if isinstance(existing, _PrivateEventsMCPAccessLogFilter):
+            existing.extend(secrets)
+            return
+    access_logger.addFilter(_PrivateEventsMCPAccessLogFilter(secrets))
 
 
 def attach_private_events_mcp(
@@ -32,6 +86,7 @@ def attach_private_events_mcp(
         return None
     if SERVER_APP_KEY in app:
         return app[SERVER_APP_KEY]
+    _install_access_log_redaction(resolved)
     server = PrivateEventsMCPServer(resolved)
     server.register(app)
     logger.info(
