@@ -362,6 +362,10 @@ Activation is accepted only when all of the following are recorded:
 1. exact deployed repository SHA and Fly release;
 2. `/healthz` stays healthy;
 3. OAuth metadata and PKCE flow pass;
+   the authorization page CSP must allow the already validated callback origin
+   (`https://chatgpt.com` for ChatGPT or the exact Codex loopback origin) in
+   `form-action`, so a real browser can follow the successful 302 without
+   weakening redirect URI validation;
 4. Codex `tools/list` exposes exactly the seven read tools; ChatGPT anonymous or
    read-only grants expose the same seven, while explicitly granted social
    scopes expose only their matching Telegram/VK tools;
