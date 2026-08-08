@@ -47,7 +47,8 @@
   every required input an explicit `type: string`, preventing GitHub from
   rejecting the workflow before job creation; job-level worktree/marker paths
   use the context-valid workspace root instead of step-only `runner.temp`, and
-  focused tests pin both contracts.
+  all string defaults are quoted so YAML cannot normalize exact timestamp
+  identities before validation. Focused tests pin all three contracts.
 
 - Added the disabled-by-default private Events MCP: path-scoped OAuth with
   PKCE, bounded read-only event and incident evidence tools, production smoke
