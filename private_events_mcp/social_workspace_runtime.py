@@ -1,0 +1,928 @@
+"""Durable, provider-neutral runtime for the private Social Workspace tools.
+
+The runtime owns every security boundary around a deliberately tiny adapter
+protocol.  Adapters never receive OAuth identity data and their native ids are
+encrypted in the OAuth SQLite database before an opaque reference is returned.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import base64
+import hashlib
+import hmac
+import json
+import re
+import secrets
+import sqlite3
+import time
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass, replace
+from datetime import datetime, timezone
+from typing import Any, Protocol
+
+from .auth_store import OAuthStateStore
+from .social_workspace import (
+    SocialActionIntent,
+    SocialActionStatus,
+    SocialPlatform,
+    SocialReadOperation,
+    SocialReadRequest,
+    SocialWorkspaceValidationError,
+    compute_action_digest,
+    validate_action_status_response,
+    validate_capabilities,
+    validate_editorial_sample_response,
+    validate_resolved_target_preview,
+)
+from .tool_catalog import ToolCallContext
+
+
+class SocialWorkspaceRuntimeError(SocialWorkspaceValidationError):
+    """A fail-closed runtime policy or durable-state check failed."""
+
+
+class SocialWorkspaceAdapter(Protocol):
+    """Stable provider adapter surface; native provider methods stay private."""
+
+    async def capabilities(self, target_ref: str | None) -> Mapping[str, Any]: ...
+    async def resolve(self, request: SocialReadRequest) -> Mapping[str, Any]: ...
+    async def read(self, request: SocialReadRequest) -> Mapping[str, Any]: ...
+    async def execute(self, intent: SocialActionIntent) -> Mapping[str, Any]: ...
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimePrincipal:
+    client_id: str
+    subject: str
+    resource: str
+    scopes: frozenset[str]
+
+    @classmethod
+    def from_context(cls, context: ToolCallContext) -> RuntimePrincipal:
+        if not isinstance(context, ToolCallContext):
+            raise SocialWorkspaceRuntimeError("authenticated tool context is required")
+        identity = context.identity
+        if not identity.client_id or not identity.subject or not context.resource:
+            raise SocialWorkspaceRuntimeError("authenticated principal is incomplete")
+        return cls(identity.client_id, identity.subject, context.resource, identity.scopes)
+
+
+@dataclass(frozen=True, slots=True)
+class SocialBudgetLimits:
+    attempts: int = 1000
+    rate: int = 1000
+    egress: int = 16 * 1024 * 1024
+    media: int = 1000
+
+
+_REF_RE = re.compile(r"^(tgt|itm|ast)_[A-Za-z0-9_-]{16,160}$")
+_SECRET_KEY = re.compile(
+    r"(?:^id$|(?:provider|peer|owner|chat|user)_id$|token|secret|password|authorization|cookie|session|raw|method|path|url)",
+    re.IGNORECASE,
+)
+_SECRET_VALUE = re.compile(r"(?i)(?:bearer\s+[a-z0-9._~-]{8,}|(?:token|secret|password)=\S+)")
+
+
+def _now_rfc3339(now: int) -> str:
+    return datetime.fromtimestamp(now, timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+class SocialWorkspaceRuntime:
+    """ChatGPT social orchestration backed only by the OAuth/auth SQLite file."""
+
+    def __init__(
+        self,
+        *,
+        store: OAuthStateStore,
+        adapters: Mapping[str, SocialWorkspaceAdapter],
+        encryption_key: str,
+        policy_version: str = "social-workspace-v1",
+        provider_timeout_seconds: float = 15.0,
+        reference_ttl_seconds: int = 30 * 86400,
+        preparation_ttl_seconds: int = 600,
+        approval_ttl_seconds: int = 300,
+        sample_ttl_seconds: int = 3600,
+        response_cap_bytes: int = 128 * 1024,
+        budget_limits: SocialBudgetLimits | Mapping[str, int] | None = None,
+        circuit_failure_threshold: int = 3,
+        circuit_cooldown_seconds: int = 60,
+        clock: Any = time.time,
+    ) -> None:
+        if not isinstance(store, OAuthStateStore):
+            raise TypeError("store must be OAuthStateStore")
+        if not isinstance(encryption_key, str) or len(encryption_key) < 16:
+            raise ValueError("encryption_key must contain at least 16 characters")
+        self.store = store
+        self.adapters = dict(adapters)
+        if set(self.adapters) - {"telegram", "vk"}:
+            raise ValueError("unsupported social adapter")
+        self._key = hashlib.sha256(encryption_key.encode("utf-8")).digest()
+        self.policy_version = policy_version
+        self.provider_timeout_seconds = float(provider_timeout_seconds)
+        self.reference_ttl_seconds = int(reference_ttl_seconds)
+        self.preparation_ttl_seconds = int(preparation_ttl_seconds)
+        self.approval_ttl_seconds = int(approval_ttl_seconds)
+        self.sample_ttl_seconds = int(sample_ttl_seconds)
+        self.response_cap_bytes = int(response_cap_bytes)
+        if budget_limits is None:
+            self.budgets = SocialBudgetLimits()
+        elif isinstance(budget_limits, SocialBudgetLimits):
+            self.budgets = budget_limits
+        else:
+            self.budgets = SocialBudgetLimits(**dict(budget_limits))
+        if any(getattr(self.budgets, field) < 1 for field in ("attempts", "rate", "egress", "media")):
+            raise ValueError("budget limits must be positive")
+        self.circuit_failure_threshold = max(1, int(circuit_failure_threshold))
+        self.circuit_cooldown_seconds = max(1, int(circuit_cooldown_seconds))
+        self._clock = clock
+
+    def _now(self) -> int:
+        return int(self._clock())
+
+    @staticmethod
+    def _hash(value: str) -> str:
+        return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+    def _binding(self, principal: RuntimePrincipal) -> tuple[str, str, str]:
+        return tuple(self._hash(value) for value in (
+            principal.client_id, principal.subject, principal.resource
+        ))  # type: ignore[return-value]
+
+    def _principal_hash(self, principal: RuntimePrincipal) -> str:
+        return self._hash(
+            f"{principal.client_id}\0{principal.subject}\0{principal.resource}"
+        )
+
+    def _encrypt(self, plaintext: str) -> str:
+        nonce = secrets.token_bytes(16)
+        raw = plaintext.encode("utf-8")
+        stream = bytearray()
+        counter = 0
+        while len(stream) < len(raw):
+            stream.extend(hmac.new(self._key, nonce + counter.to_bytes(4, "big"), hashlib.sha256).digest())
+            counter += 1
+        encrypted = bytes(a ^ b for a, b in zip(raw, stream))
+        tag = hmac.new(self._key, nonce + encrypted, hashlib.sha256).digest()
+        return base64.urlsafe_b64encode(nonce + encrypted + tag).decode("ascii")
+
+    def _decrypt(self, envelope: str) -> str:
+        try:
+            packed = base64.urlsafe_b64decode(envelope.encode("ascii"))
+            nonce, encrypted, tag = packed[:16], packed[16:-32], packed[-32:]
+        except Exception as exc:
+            raise SocialWorkspaceRuntimeError("encrypted reference is invalid") from exc
+        expected = hmac.new(self._key, nonce + encrypted, hashlib.sha256).digest()
+        if len(nonce) != 16 or not hmac.compare_digest(tag, expected):
+            raise SocialWorkspaceRuntimeError("encrypted reference integrity failed")
+        stream = bytearray()
+        counter = 0
+        while len(stream) < len(encrypted):
+            stream.extend(hmac.new(self._key, nonce + counter.to_bytes(4, "big"), hashlib.sha256).digest())
+            counter += 1
+        return bytes(a ^ b for a, b in zip(encrypted, stream)).decode("utf-8")
+
+    def _adapter(self, platform: SocialPlatform | str) -> SocialWorkspaceAdapter:
+        name = platform.value if isinstance(platform, SocialPlatform) else platform
+        adapter = self.adapters.get(name)
+        if adapter is None:
+            raise SocialWorkspaceRuntimeError("social provider is disabled")
+        return adapter
+
+    def _mint_ref(
+        self, kind: str, provider_ref: Any, platform: str, principal: RuntimePrincipal
+    ) -> str:
+        if not isinstance(provider_ref, (str, int)) or not str(provider_ref):
+            raise SocialWorkspaceRuntimeError("provider returned an invalid reference")
+        prefix = {"target": "tgt", "item": "itm", "asset": "ast"}[kind]
+        public_ref = f"{prefix}_{secrets.token_urlsafe(24)}"
+        now = self._now()
+        client, subject, resource = self._binding(principal)
+        with self.store._lock, self.store._connect() as conn:
+            conn.execute(
+                """INSERT INTO social_workspace_ref(
+                    ref_hash,ref_kind,client_hash,subject_hash,resource_hash,platform,
+                    policy_version,provider_ref_ciphertext,expires_at,created_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                (self._hash(public_ref), kind, client, subject, resource, platform,
+                 self.policy_version, self._encrypt(str(provider_ref)),
+                 now + self.reference_ttl_seconds, now),
+            )
+        return public_ref
+
+    def _resolve_ref(
+        self, public_ref: str, kind: str, platform: str, principal: RuntimePrincipal
+    ) -> str:
+        client, subject, resource = self._binding(principal)
+        with self.store._lock, self.store._connect() as conn:
+            row = conn.execute(
+                """SELECT * FROM social_workspace_ref WHERE ref_hash=? AND ref_kind=?
+                   AND client_hash=? AND subject_hash=? AND resource_hash=? AND platform=?
+                   AND policy_version=? AND expires_at>?""",
+                (self._hash(public_ref), kind, client, subject, resource, platform,
+                 self.policy_version, self._now()),
+            ).fetchone()
+        if row is None:
+            raise SocialWorkspaceRuntimeError("opaque reference is expired or not bound")
+        return self._decrypt(row["provider_ref_ciphertext"])
+
+    def _ref_platform(self, public_ref: str, kind: str, principal: RuntimePrincipal) -> str:
+        client, subject, resource = self._binding(principal)
+        with self.store._lock, self.store._connect() as conn:
+            row = conn.execute(
+                """SELECT platform FROM social_workspace_ref WHERE ref_hash=? AND ref_kind=?
+                   AND client_hash=? AND subject_hash=? AND resource_hash=?
+                   AND policy_version=? AND expires_at>?""",
+                (self._hash(public_ref), kind, client, subject, resource,
+                 self.policy_version, self._now()),
+            ).fetchone()
+        if row is None:
+            raise SocialWorkspaceRuntimeError("opaque reference is expired or not bound")
+        return str(row["platform"])
+
+    def _audit(
+        self, principal: RuntimePrincipal, *, platform: str | None, operation: str,
+        outcome: str, reason: str, target_ref: str | None = None,
+        action_digest: str | None = None, response_bytes: int = 0, media_items: int = 0,
+    ) -> None:
+        principal_hash = self._principal_hash(principal)
+        with self.store._lock, self.store._connect() as conn:
+            conn.execute(
+                """INSERT INTO social_workspace_audit(
+                   principal_hash,platform,operation,target_ref_hash,action_digest,
+                   outcome,reason_code,response_bytes,media_items,created_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                (principal_hash, platform, operation,
+                 self._hash(target_ref) if target_ref else None, action_digest,
+                 outcome[:32], re.sub(r"[^a-z0-9_]", "_", reason.lower())[:64] or "unknown",
+                 max(0, response_bytes), max(0, media_items), self._now()),
+            )
+
+    def audit_denial(
+        self, context: ToolCallContext, *, platform: str | None, operation: str,
+        reason: str, target_ref: str | None = None,
+    ) -> None:
+        self._audit(RuntimePrincipal.from_context(context), platform=platform,
+                    operation=operation, outcome="denied", reason=reason,
+                    target_ref=target_ref)
+
+    def _budget_keys(
+        self, principal: RuntimePrincipal, platform: str, target_ref: str | None, action: str
+    ) -> tuple[tuple[str, str], ...]:
+        principal_key = f"{principal.client_id}\0{principal.subject}\0{principal.resource}"
+        return (
+            ("global", "global"),
+            ("principal", principal_key),
+            ("target", f"{platform}\0{target_ref or '-'}"),
+            ("action", f"{platform}\0{action}"),
+        )
+
+    def _consume_budget(
+        self, principal: RuntimePrincipal, platform: str, target_ref: str | None,
+        action: str, metric: str, amount: int,
+    ) -> None:
+        if amount <= 0:
+            return
+        limit = getattr(self.budgets, metric)
+        now = self._now()
+        period = datetime.fromtimestamp(now, timezone.utc).strftime("%Y-%m-%dT%H")
+        with self.store._lock, self.store._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                for dimension, raw_key in self._budget_keys(principal, platform, target_ref, action):
+                    key = self._hash(raw_key)
+                    row = conn.execute(
+                        "SELECT amount FROM social_workspace_budget WHERE period=? AND dimension=? AND bucket_hash=? AND metric=?",
+                        (period, dimension, key, metric),
+                    ).fetchone()
+                    used = int(row["amount"]) if row else 0
+                    if used + amount > limit:
+                        raise SocialWorkspaceRuntimeError(f"{metric} budget exceeded")
+                    conn.execute(
+                        """INSERT INTO social_workspace_budget(period,dimension,bucket_hash,metric,amount,updated_at)
+                           VALUES(?,?,?,?,?,?) ON CONFLICT(period,dimension,bucket_hash,metric)
+                           DO UPDATE SET amount=amount+excluded.amount,updated_at=excluded.updated_at""",
+                        (period, dimension, key, metric, amount, now),
+                    )
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+
+    def _check_circuit(self, principal: RuntimePrincipal, platform: str, target_ref: str | None) -> None:
+        if not target_ref:
+            return
+        client, subject, resource = self._binding(principal)
+        with self.store._lock, self.store._connect() as conn:
+            row = conn.execute(
+                """SELECT flood_until,circuit_open_until FROM social_workspace_circuit
+                   WHERE client_hash=? AND subject_hash=? AND resource_hash=? AND platform=? AND target_ref_hash=?""",
+                (client, subject, resource, platform, self._hash(target_ref)),
+            ).fetchone()
+        now = self._now()
+        if row and ((row["flood_until"] or 0) > now or (row["circuit_open_until"] or 0) > now):
+            raise SocialWorkspaceRuntimeError("provider flood/circuit gate is open")
+
+    def _record_provider_result(
+        self, principal: RuntimePrincipal, platform: str, target_ref: str | None,
+        *, success: bool, flood_seconds: int = 0,
+    ) -> None:
+        if not target_ref:
+            return
+        client, subject, resource = self._binding(principal)
+        now = self._now()
+        target_hash = self._hash(target_ref)
+        with self.store._lock, self.store._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                """SELECT consecutive_failures FROM social_workspace_circuit
+                   WHERE client_hash=? AND subject_hash=? AND resource_hash=? AND platform=? AND target_ref_hash=?""",
+                (client, subject, resource, platform, target_hash),
+            ).fetchone()
+            failures = 0 if success else (int(row["consecutive_failures"]) if row else 0) + 1
+            circuit_until = now + self.circuit_cooldown_seconds if failures >= self.circuit_failure_threshold else None
+            conn.execute(
+                """INSERT INTO social_workspace_circuit(client_hash,subject_hash,resource_hash,platform,
+                   target_ref_hash,consecutive_failures,flood_until,circuit_open_until,updated_at)
+                   VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(client_hash,subject_hash,resource_hash,platform,target_ref_hash)
+                   DO UPDATE SET consecutive_failures=excluded.consecutive_failures,
+                   flood_until=excluded.flood_until,circuit_open_until=excluded.circuit_open_until,
+                   updated_at=excluded.updated_at""",
+                (client, subject, resource, platform, target_hash, failures,
+                 now + flood_seconds if flood_seconds else None, circuit_until, now),
+            )
+            conn.execute("COMMIT")
+
+    def _native_read(self, request: SocialReadRequest, principal: RuntimePrincipal) -> SocialReadRequest:
+        platform = request.platform.value
+        target = self._resolve_ref(request.target_ref, "target", platform, principal) if request.target_ref else None
+        item = self._resolve_ref(request.item_ref, "item", platform, principal) if request.item_ref else None
+        return replace(request, target_ref=target, item_ref=item)
+
+    def _native_intent(self, intent: SocialActionIntent, principal: RuntimePrincipal) -> SocialActionIntent:
+        platform = intent.platform.value
+        target = self._resolve_ref(intent.target_ref, "target", platform, principal) if intent.target_ref else None
+        item = self._resolve_ref(intent.item_ref, "item", platform, principal) if intent.item_ref else None
+        destination = self._resolve_ref(intent.destination_target_ref, "target", platform, principal) if intent.destination_target_ref else None
+        media = intent.content
+        if media is not None:
+            media = replace(media, media=tuple(
+                replace(attachment, asset_ref=self._resolve_ref(attachment.asset_ref, "asset", platform, principal))
+                for attachment in media.media
+            ))
+        return replace(intent, target_ref=target, item_ref=item,
+                       destination_target_ref=destination, content=media)
+
+    def _sanitize_provider_output(
+        self, value: Any, platform: str, principal: RuntimePrincipal,
+        *, known_refs: Mapping[tuple[str, str], str] | None = None,
+    ) -> Any:
+        known = dict(known_refs or {})
+
+        def walk(node: Any, key: str | None = None) -> Any:
+            if isinstance(node, Mapping):
+                clean: dict[str, Any] = {}
+                for raw_key, child in node.items():
+                    name = str(raw_key)
+                    if _SECRET_KEY.search(name):
+                        continue
+                    clean[name] = walk(child, name)
+                return clean
+            if isinstance(node, (list, tuple)):
+                return [walk(child, key) for child in node]
+            if key in {"target_ref", "actor_target_ref", "destination_target_ref"} and node is not None:
+                raw = str(node)
+                if ("target", raw) not in known:
+                    known[("target", raw)] = self._mint_ref("target", raw, platform, principal)
+                return known[("target", raw)]
+            if key in {"item_ref", "observed_item_ref", "root_item_ref"} and node is not None:
+                raw = str(node)
+                if ("item", raw) not in known:
+                    known[("item", raw)] = self._mint_ref("item", raw, platform, principal)
+                return known[("item", raw)]
+            if key in {"asset_ref"} and node is not None:
+                raw = str(node)
+                if ("asset", raw) not in known:
+                    known[("asset", raw)] = self._mint_ref("asset", raw, platform, principal)
+                return known[("asset", raw)]
+            if isinstance(node, str):
+                return _SECRET_VALUE.sub("[REDACTED]", node)[:8192]
+            if node is None or isinstance(node, (bool, int, float)):
+                return node
+            return str(node)[:1024]
+
+        redacted = walk(value)
+        encoded = _json(redacted).encode("utf-8")
+        if len(encoded) > self.response_cap_bytes:
+            raise SocialWorkspaceRuntimeError("response cap exceeded")
+        return redacted
+
+    async def capabilities(
+        self, target_ref: str | None, context: ToolCallContext, *, platform: str
+    ) -> dict[str, Any]:
+        principal = RuntimePrincipal.from_context(context)
+        native = self._resolve_ref(target_ref, "target", platform, principal) if target_ref else None
+        try:
+            self._consume_budget(principal, platform, target_ref, "capabilities", "rate", 1)
+            raw = await asyncio.wait_for(self._adapter(platform).capabilities(native), self.provider_timeout_seconds)
+            safe = self._sanitize_provider_output(raw, platform, principal,
+                known_refs={("target", native): target_ref} if native and target_ref else None)
+            safe["platform"] = platform
+            if target_ref:
+                safe["target_ref"] = target_ref
+            validated = validate_capabilities(safe)
+            result = asdict(validated)
+            result = {key: (sorted(str(v) for v in value) if isinstance(value, (set, frozenset)) else str(value) if hasattr(value, "value") else value) for key, value in result.items()}
+            result = {key: value for key, value in result.items() if value is not None}
+            size = len(_json(result).encode())
+            self._consume_budget(principal, platform, target_ref, "capabilities", "egress", size)
+            self._audit(principal, platform=platform, operation="capabilities", outcome="succeeded", reason="ok", target_ref=target_ref, response_bytes=size)
+            return result
+        except Exception as exc:
+            self._audit(principal, platform=platform, operation="capabilities", outcome="denied", reason=type(exc).__name__, target_ref=target_ref)
+            raise
+
+    async def resolve(self, request: SocialReadRequest, context: ToolCallContext) -> dict[str, Any]:
+        if request.operation is not SocialReadOperation.RESOLVE_TARGET:
+            raise SocialWorkspaceRuntimeError("resolve requires resolve_target")
+        principal = RuntimePrincipal.from_context(context)
+        platform = request.platform.value
+        try:
+            self._consume_budget(principal, platform, None, request.operation.value, "rate", 1)
+            raw = await asyncio.wait_for(self._adapter(platform).resolve(request), self.provider_timeout_seconds)
+            safe = self._sanitize_provider_output(raw, platform, principal)
+            safe["platform"] = platform
+            safe["trust"] = "untrusted_external_data"
+            safe["is_exact_match"] = True
+            validate_resolved_target_preview(request, safe)
+            size = len(_json(safe).encode())
+            self._consume_budget(principal, platform, safe.get("target_ref"), request.operation.value, "egress", size)
+            self._audit(principal, platform=platform, operation=request.operation.value, outcome="succeeded", reason="ok", target_ref=safe.get("target_ref"), response_bytes=size)
+            return safe
+        except Exception as exc:
+            self._audit(principal, platform=platform, operation=request.operation.value, outcome="denied", reason=type(exc).__name__)
+            raise
+
+    def _sample_state(self, request: SocialReadRequest, principal: RuntimePrincipal) -> tuple[str, int, str | None]:
+        now = self._now()
+        client, subject, resource = self._binding(principal)
+        binding = _json({
+            "target_ref": request.target_ref,
+            "expected_target_kinds": sorted(str(v) for v in request.expected_target_kinds),
+            "purpose": str(request.purpose), "date_from": request.date_from,
+            "date_to": request.date_to, "total_limit": request.total_limit,
+        })
+        with self.store._lock, self.store._connect() as conn:
+            if request.sample_ref is None:
+                sample_ref = "smp_" + secrets.token_urlsafe(24)
+                conn.execute(
+                    """INSERT INTO social_workspace_sample(sample_hash,client_hash,subject_hash,
+                       resource_hash,platform,target_ref_hash,binding_json,cumulative_count,total_limit,
+                       expires_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (self._hash(sample_ref), client, subject, resource, request.platform.value,
+                     self._hash(request.target_ref or ""), binding, 0, request.total_limit,
+                     now + self.sample_ttl_seconds, now, now),
+                )
+                return sample_ref, 0, None
+            row = conn.execute(
+                """SELECT * FROM social_workspace_sample WHERE sample_hash=? AND client_hash=?
+                   AND subject_hash=? AND resource_hash=? AND platform=? AND expires_at>?""",
+                (self._hash(request.sample_ref), client, subject, resource,
+                 request.platform.value, now),
+            ).fetchone()
+            if row is None or row["binding_json"] != binding:
+                raise SocialWorkspaceRuntimeError("sample continuation binding mismatch")
+            if not row["continuation_cursor_hash"] or not hmac.compare_digest(row["continuation_cursor_hash"], self._hash(request.cursor or "")):
+                raise SocialWorkspaceRuntimeError("sample cursor is not server-minted")
+            if not row["continuation_cursor_ciphertext"]:
+                raise SocialWorkspaceRuntimeError("sample provider cursor is unavailable")
+            return (request.sample_ref, int(row["cumulative_count"]),
+                    self._decrypt(row["continuation_cursor_ciphertext"]))
+
+    async def read(self, request: SocialReadRequest, context: ToolCallContext) -> dict[str, Any]:
+        if request.operation is SocialReadOperation.RESOLVE_TARGET:
+            return await self.resolve(request, context)
+        principal = RuntimePrincipal.from_context(context)
+        platform = request.platform.value
+        target_ref = request.target_ref
+        try:
+            self._check_circuit(principal, platform, target_ref)
+            self._consume_budget(principal, platform, target_ref, request.operation.value, "rate", 1)
+            sample: tuple[str, int, str | None] | None = None
+            if request.operation is SocialReadOperation.EDITORIAL_SAMPLE:
+                sample = self._sample_state(request, principal)
+                if sample[1] + request.page_size > request.total_limit:
+                    raise SocialWorkspaceRuntimeError("editorial sample cumulative limit exceeded")
+            native = self._native_read(request, principal)
+            if sample is not None and sample[2] is not None:
+                native = replace(native, cursor=sample[2])
+            known: dict[tuple[str, str], str] = {}
+            if target_ref and native.target_ref:
+                known[("target", native.target_ref)] = target_ref
+            if request.item_ref and native.item_ref:
+                known[("item", native.item_ref)] = request.item_ref
+            raw = await asyncio.wait_for(self._adapter(platform).read(native), self.provider_timeout_seconds)
+            safe = self._sanitize_provider_output(raw, platform, principal, known_refs=known)
+            if not isinstance(safe, dict):
+                raise SocialWorkspaceRuntimeError("provider response must be an object")
+            safe["trust"] = "untrusted_external_data"
+            if sample:
+                sample_ref, cumulative, _ = sample
+                items = safe.get("items", [])
+                if not isinstance(items, list) or len(items) > request.page_size:
+                    raise SocialWorkspaceRuntimeError("editorial page exceeds requested size")
+                count = len(items)
+                new_total = cumulative + count
+                provider_next_cursor = safe.get("next_cursor")
+                next_cursor = provider_next_cursor
+                if new_total >= request.total_limit:
+                    next_cursor = None
+                    safe.pop("next_cursor", None)
+                elif next_cursor is not None:
+                    next_cursor = secrets.token_urlsafe(24)
+                    safe["next_cursor"] = next_cursor
+                safe.update({"sample_ref": sample_ref, "sampled_count": count,
+                             "cumulative_count": new_total, "total_limit": request.total_limit,
+                             "storage_disposition": "ephemeral_no_index"})
+                # Contract validation provides an additional exact shape/binding gate.
+                from .social_workspace import EditorialSampleState, SocialReadPurpose
+                state = EditorialSampleState(sample_ref, target_ref or "",
+                    frozenset(request.expected_target_kinds), request.purpose or SocialReadPurpose.EDITORIAL_ANALYSIS,
+                    request.date_from, request.date_to, request.total_limit, cumulative,
+                    True, request.cursor, request.cursor is not None, True, False)
+                validate_editorial_sample_response(request, state, safe)
+                with self.store._lock, self.store._connect() as conn:
+                    changed = conn.execute(
+                        """UPDATE social_workspace_sample SET cumulative_count=?,
+                           continuation_cursor_hash=?,continuation_cursor_ciphertext=?,
+                           updated_at=? WHERE sample_hash=? AND cumulative_count=?""",
+                        (new_total, self._hash(next_cursor) if next_cursor else None,
+                         self._encrypt(str(provider_next_cursor)) if next_cursor else None,
+                         self._now(), self._hash(sample_ref), cumulative),
+                    ).rowcount
+                if changed != 1:
+                    raise SocialWorkspaceRuntimeError("sample continuation was concurrently consumed")
+            size = len(_json(safe).encode("utf-8"))
+            media_count = self._count_media(safe)
+            self._consume_budget(principal, platform, target_ref, request.operation.value, "egress", size)
+            self._consume_budget(principal, platform, target_ref, request.operation.value, "media", media_count)
+            self._record_provider_result(principal, platform, target_ref, success=True)
+            self._audit(principal, platform=platform, operation=request.operation.value,
+                        outcome="succeeded", reason="ok", target_ref=target_ref,
+                        response_bytes=size, media_items=media_count)
+            return safe
+        except Exception as exc:
+            flood = int(getattr(exc, "retry_after", 0) or 0)
+            self._record_provider_result(principal, platform, target_ref, success=False, flood_seconds=flood)
+            self._audit(principal, platform=platform, operation=request.operation.value,
+                        outcome="denied", reason=type(exc).__name__, target_ref=target_ref)
+            raise
+
+    @staticmethod
+    def _count_media(value: Any) -> int:
+        if isinstance(value, Mapping):
+            return sum((len(child) if key == "media" and isinstance(child, list) else SocialWorkspaceRuntime._count_media(child)) for key, child in value.items())
+        if isinstance(value, list):
+            return sum(SocialWorkspaceRuntime._count_media(child) for child in value)
+        return 0
+
+    async def prepare(self, intent: SocialActionIntent, context: ToolCallContext) -> dict[str, Any]:
+        principal = RuntimePrincipal.from_context(context)
+        if not intent.required_scopes.issubset(principal.scopes):
+            self._audit(principal, platform=intent.platform.value, operation="prepare",
+                        outcome="denied", reason="missing_scope", target_ref=intent.target_ref)
+            raise SocialWorkspaceRuntimeError("required social action scope is missing")
+        platform = intent.platform.value
+        digest = compute_action_digest(intent)
+        # Resolve every reference now, so cross-principal/resource/target mutation
+        # fails before an approval can ever be issued.
+        try:
+            self._native_intent(intent, principal)
+        except Exception as exc:
+            self._audit(principal, platform=platform, operation="prepare",
+                        outcome="denied", reason=type(exc).__name__,
+                        target_ref=intent.target_ref, action_digest=digest)
+            raise
+        now = self._now()
+        client, subject, resource = self._binding(principal)
+        idem = self._hash(intent.idempotency_key)
+        with self.store._lock, self.store._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                existing = conn.execute(
+                    """SELECT * FROM social_workspace_preparation WHERE client_hash=? AND
+                       subject_hash=? AND resource_hash=? AND platform=? AND action=? AND idempotency_hash=?""",
+                    (client, subject, resource, platform, intent.action.value, idem),
+                ).fetchone()
+                if existing:
+                    if existing["action_digest"] != digest:
+                        raise SocialWorkspaceRuntimeError("idempotency key payload mutation denied")
+                    conn.execute("COMMIT")
+                    return self._preparation_result(existing["preparation_ref"], intent,
+                        digest, int(existing["expires_at"]))
+                prep = "prep_" + secrets.token_urlsafe(24)
+                expires = now + self.preparation_ttl_seconds
+                conn.execute(
+                    """INSERT INTO social_workspace_preparation(preparation_hash,preparation_ref,
+                       client_hash,subject_hash,resource_hash,platform,action,target_ref_hash,
+                       action_digest,idempotency_hash,intent_ciphertext,status,expires_at,created_at)
+                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (self._hash(prep), prep, client, subject, resource, platform,
+                     intent.action.value, self._hash(intent.target_ref) if intent.target_ref else None,
+                     digest, idem, self._encrypt(_json(asdict(intent))),
+                     SocialActionStatus.AWAITING_HUMAN_APPROVAL.value, expires, now),
+                )
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                conn.execute(
+                    """INSERT INTO social_workspace_audit(principal_hash,platform,operation,
+                       target_ref_hash,action_digest,outcome,reason_code,response_bytes,
+                       media_items,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                    (self._principal_hash(principal), platform, "prepare",
+                     self._hash(intent.target_ref) if intent.target_ref else None,
+                     digest, "denied", "durable_preparation_denied", 0,
+                     len(intent.content.media) if intent.content else 0, self._now()),
+                )
+                raise
+        self._audit(principal, platform=platform, operation="prepare", outcome="succeeded",
+                    reason="awaiting_approval", target_ref=intent.target_ref, action_digest=digest)
+        return self._preparation_result(prep, intent, digest, expires)
+
+    @staticmethod
+    def _preparation_result(prep: str, intent: SocialActionIntent, digest: str, expires: int) -> dict[str, Any]:
+        result = {"preparation_ref": prep, "action": intent.action.value,
+                  "status": SocialActionStatus.AWAITING_HUMAN_APPROVAL.value,
+                  "action_digest": digest,
+                  "summary": f"{intent.action.value} on approved opaque reference",
+                  "expires_at": _now_rfc3339(expires),
+                  "required_scopes": sorted(intent.required_scopes)}
+        if intent.target_ref is not None:
+            result["target_ref"] = intent.target_ref
+        if intent.item_ref is not None:
+            result["item_ref"] = intent.item_ref
+        return result
+
+    def approve_preparation(
+        self, *, preparation_ref: str, operator_principal: str, operator_nonce: str,
+        ttl_seconds: int | None = None,
+    ) -> dict[str, str]:
+        """Server approval-page helper; deliberately never registered as an MCP tool.
+
+        The production caller must authenticate the operator and supply a fresh,
+        single-use CSRF/approval nonce.  Model-authored tool arguments can never
+        create this state.
+        """
+        if not operator_principal.strip() or len(operator_nonce) < 16:
+            raise SocialWorkspaceRuntimeError("authenticated operator and nonce are required")
+        now = self._now()
+        with self.store._lock, self.store._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                prep = conn.execute(
+                    "SELECT * FROM social_workspace_preparation WHERE preparation_hash=?",
+                    (self._hash(preparation_ref),),
+                ).fetchone()
+                if prep is None or int(prep["expires_at"]) <= now:
+                    raise SocialWorkspaceRuntimeError("preparation is expired or unknown")
+                nonce_hash = self._hash(operator_nonce)
+                if conn.execute("SELECT 1 FROM social_workspace_approval WHERE operator_nonce_hash=?", (nonce_hash,)).fetchone():
+                    raise SocialWorkspaceRuntimeError("operator approval nonce was already used")
+                approval = "apr_" + secrets.token_urlsafe(24)
+                receipt = "arc_" + secrets.token_urlsafe(24)
+                expires = min(int(prep["expires_at"]), now + int(ttl_seconds or self.approval_ttl_seconds))
+                conn.execute(
+                    """INSERT INTO social_workspace_approval(approval_hash,approval_ref,receipt_ref,
+                       receipt_hash,preparation_hash,client_hash,subject_hash,resource_hash,target_ref_hash,
+                       action_digest,operator_hash,operator_nonce_hash,expires_at,created_at)
+                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (self._hash(approval), approval, receipt, self._hash(receipt),
+                     self._hash(preparation_ref), prep["client_hash"], prep["subject_hash"],
+                     prep["resource_hash"], prep["target_ref_hash"], prep["action_digest"],
+                     self._hash(operator_principal), nonce_hash, expires, now),
+                )
+                conn.execute("COMMIT")
+                return {"approval_ref": approval, "approval_receipt": receipt}
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+
+    def _intent_from_row(self, row: sqlite3.Row) -> SocialActionIntent:
+        from .social_workspace import validate_prepare_request
+        return validate_prepare_request(json.loads(self._decrypt(row["intent_ciphertext"])))
+
+    async def commit(
+        self, payload: Mapping[str, Any], context: ToolCallContext
+    ) -> dict[str, Any]:
+        principal = RuntimePrincipal.from_context(context)
+        required = {"preparation_ref", "approval_ref", "approval_receipt", "action_digest"}
+        if set(payload) != required:
+            self._audit(principal, platform=None, operation="commit", outcome="denied", reason="invalid_commit_shape")
+            raise SocialWorkspaceRuntimeError("commit requires exact approval fields")
+        prep_ref = str(payload["preparation_ref"])
+        approval_ref = str(payload["approval_ref"])
+        receipt = str(payload["approval_receipt"])
+        digest = str(payload["action_digest"])
+        now = self._now()
+        client, subject, resource = self._binding(principal)
+        with self.store._lock, self.store._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                prep = conn.execute("SELECT * FROM social_workspace_preparation WHERE preparation_hash=?", (self._hash(prep_ref),)).fetchone()
+                approval = conn.execute("SELECT * FROM social_workspace_approval WHERE approval_hash=? AND receipt_hash=?", (self._hash(approval_ref), self._hash(receipt))).fetchone()
+                if prep is None or approval is None:
+                    raise SocialWorkspaceRuntimeError("approval or preparation is invalid")
+                expected_binding = (client, subject, resource, digest, self._hash(prep_ref), prep["target_ref_hash"])
+                actual_binding = (approval["client_hash"], approval["subject_hash"], approval["resource_hash"], approval["action_digest"], approval["preparation_hash"], approval["target_ref_hash"])
+                if expected_binding != actual_binding or prep["action_digest"] != digest:
+                    raise SocialWorkspaceRuntimeError("approval binding mismatch")
+                if int(prep["expires_at"]) <= now or int(approval["expires_at"]) <= now:
+                    raise SocialWorkspaceRuntimeError("approval or preparation expired")
+                if approval["consumed_at"] is not None:
+                    raise SocialWorkspaceRuntimeError("approval receipt was already consumed")
+                intent = self._intent_from_row(prep)
+                if not intent.required_scopes.issubset(principal.scopes):
+                    raise SocialWorkspaceRuntimeError("required social action scope is missing")
+                self._consume_budget_on_conn(conn, principal, intent.platform.value,
+                                             intent.target_ref, intent.action.value, "attempts", 1, now)
+                changed = conn.execute("UPDATE social_workspace_approval SET consumed_at=? WHERE approval_hash=? AND consumed_at IS NULL", (now, self._hash(approval_ref))).rowcount
+                if changed != 1:
+                    raise SocialWorkspaceRuntimeError("approval receipt was already consumed")
+                operation = "op_" + secrets.token_urlsafe(24)
+                conn.execute(
+                    """INSERT INTO social_workspace_operation(operation_hash,operation_ref,
+                       preparation_hash,client_hash,subject_hash,resource_hash,platform,action,
+                       target_ref_hash,status,retry_safe,provider_attempted_at,created_at,updated_at)
+                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (self._hash(operation), operation, self._hash(prep_ref), client, subject,
+                     resource, intent.platform.value, intent.action.value, prep["target_ref_hash"],
+                     SocialActionStatus.PROVIDER_ATTEMPTED.value, 0, now, now, now),
+                )
+                conn.execute("UPDATE social_workspace_preparation SET status=? WHERE preparation_hash=?",
+                             (SocialActionStatus.COMMITTED.value, self._hash(prep_ref)))
+                conn.execute("COMMIT")
+            except Exception as exc:
+                conn.execute("ROLLBACK")
+                conn.execute(
+                    """INSERT INTO social_workspace_audit(principal_hash,platform,operation,
+                       target_ref_hash,action_digest,outcome,reason_code,response_bytes,
+                       media_items,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                    (self._principal_hash(principal), None, "commit", None,
+                     None, "denied", type(exc).__name__.lower()[:64], 0, 0, self._now()),
+                )
+                raise
+        platform = intent.platform.value
+        target_ref = intent.target_ref or intent.destination_target_ref
+        try:
+            native = self._native_intent(intent, principal)
+            known: dict[tuple[str, str], str] = {}
+            if native.target_ref and intent.target_ref:
+                known[("target", native.target_ref)] = intent.target_ref
+            if native.item_ref and intent.item_ref:
+                known[("item", native.item_ref)] = intent.item_ref
+            raw = await asyncio.wait_for(self._adapter(platform).execute(native), self.provider_timeout_seconds)
+            safe = self._sanitize_provider_output(raw, platform, principal, known_refs=known)
+            if not isinstance(safe, dict):
+                raise SocialWorkspaceRuntimeError("provider action result must be an object")
+            safe.update({"platform": platform, "operation_ref": operation,
+                         "action": intent.action.value})
+            safe.setdefault("status", SocialActionStatus.SUCCEEDED.value)
+            safe.setdefault("retry_safe", False)
+            validate_action_status_response(safe)
+            self._finish_operation(operation, safe, None)
+            self._record_provider_result(principal, platform, target_ref, success=True)
+            size = len(_json(safe).encode())
+            media_count = len(intent.content.media) if intent.content else 0
+            self._consume_budget(principal, platform, target_ref, intent.action.value, "egress", size)
+            self._consume_budget(principal, platform, target_ref, intent.action.value, "media", media_count)
+            self._audit(principal, platform=platform, operation="commit", outcome="succeeded",
+                        reason="provider_succeeded", target_ref=target_ref,
+                        action_digest=digest, response_bytes=size, media_items=media_count)
+            return safe
+        except asyncio.TimeoutError:
+            unknown = {"platform": platform, "operation_ref": operation,
+                       "action": intent.action.value, "status": "outcome_unknown",
+                       "retry_safe": False, "error_code": "provider_timeout"}
+            self._finish_operation(operation, unknown, "provider_timeout")
+            self._record_provider_result(principal, platform, target_ref, success=False)
+            self._audit(principal, platform=platform, operation="commit", outcome="outcome_unknown",
+                        reason="provider_timeout", target_ref=target_ref, action_digest=digest)
+            return unknown
+        except Exception as exc:
+            failed = {"platform": platform, "operation_ref": operation,
+                      "action": intent.action.value, "status": "failed",
+                      "retry_safe": False, "error_code": "provider_failure"}
+            self._finish_operation(operation, failed, "provider_failure")
+            self._record_provider_result(principal, platform, target_ref, success=False,
+                                         flood_seconds=int(getattr(exc, "retry_after", 0) or 0))
+            self._audit(principal, platform=platform, operation="commit", outcome="failed",
+                        reason=type(exc).__name__, target_ref=target_ref, action_digest=digest)
+            raise
+
+    def _consume_budget_on_conn(self, conn: sqlite3.Connection, principal: RuntimePrincipal,
+        platform: str, target_ref: str | None, action: str, metric: str, amount: int, now: int) -> None:
+        limit = getattr(self.budgets, metric)
+        period = datetime.fromtimestamp(now, timezone.utc).strftime("%Y-%m-%dT%H")
+        for dimension, raw_key in self._budget_keys(principal, platform, target_ref, action):
+            key = self._hash(raw_key)
+            row = conn.execute("SELECT amount FROM social_workspace_budget WHERE period=? AND dimension=? AND bucket_hash=? AND metric=?", (period, dimension, key, metric)).fetchone()
+            if (int(row["amount"]) if row else 0) + amount > limit:
+                raise SocialWorkspaceRuntimeError(f"{metric} budget exceeded")
+            conn.execute("""INSERT INTO social_workspace_budget(period,dimension,bucket_hash,metric,amount,updated_at)
+                VALUES(?,?,?,?,?,?) ON CONFLICT(period,dimension,bucket_hash,metric)
+                DO UPDATE SET amount=amount+excluded.amount,updated_at=excluded.updated_at""",
+                (period, dimension, key, metric, amount, now))
+
+    def _finish_operation(self, operation: str, result: Mapping[str, Any], error: str | None) -> None:
+        with self.store._lock, self.store._connect() as conn:
+            conn.execute("""UPDATE social_workspace_operation SET status=?,retry_safe=?,
+                result_json=?,error_code=?,updated_at=? WHERE operation_hash=?""",
+                (result["status"], int(bool(result.get("retry_safe"))), _json(result), error,
+                 self._now(), self._hash(operation)))
+
+    async def status(self, reference_kind: str, reference: str, context: ToolCallContext) -> dict[str, Any]:
+        principal = RuntimePrincipal.from_context(context)
+        client, subject, resource = self._binding(principal)
+        with self.store._lock, self.store._connect() as conn:
+            if reference_kind == "operation":
+                row = conn.execute("SELECT * FROM social_workspace_operation WHERE operation_hash=? AND client_hash=? AND subject_hash=? AND resource_hash=?", (self._hash(reference), client, subject, resource)).fetchone()
+                if row is None:
+                    raise SocialWorkspaceRuntimeError("operation is unknown or not bound")
+                if row["result_json"]:
+                    return json.loads(row["result_json"])
+                return {"platform": row["platform"], "operation_ref": reference,
+                        "action": row["action"], "status": row["status"],
+                        "retry_safe": bool(row["retry_safe"])}
+            prep = conn.execute("SELECT * FROM social_workspace_preparation WHERE preparation_hash=? AND client_hash=? AND subject_hash=? AND resource_hash=?", (self._hash(reference), client, subject, resource)).fetchone()
+            if prep is None:
+                raise SocialWorkspaceRuntimeError("preparation is unknown or not bound")
+            return {"platform": prep["platform"], "operation_ref": "op_" + "0" * 24,
+                    "action": prep["action"], "status": prep["status"], "retry_safe": False}
+
+    async def reconcile(self, operation_ref: str, context: ToolCallContext) -> dict[str, Any]:
+        principal = RuntimePrincipal.from_context(context)
+        current = await self.status("operation", operation_ref, context)
+        if current["status"] != SocialActionStatus.OUTCOME_UNKNOWN.value:
+            return current
+        adapter = self._adapter(current["platform"])
+        reconcile = getattr(adapter, "reconcile", None)
+        if not callable(reconcile):
+            return current
+        try:
+            raw = await asyncio.wait_for(reconcile(operation_ref), self.provider_timeout_seconds)
+            safe = self._sanitize_provider_output(raw, current["platform"], principal)
+            if not isinstance(safe, dict):
+                return current
+            safe.update({"platform": current["platform"], "operation_ref": operation_ref,
+                         "action": current["action"]})
+            safe.setdefault("retry_safe", False)
+            validate_action_status_response(safe)
+            self._finish_operation(operation_ref, safe, safe.get("error_code"))
+            self._audit(principal, platform=current["platform"], operation="reconcile",
+                        outcome="succeeded", reason="status_reconciled")
+            return safe
+        except asyncio.TimeoutError:
+            return current
+
+    async def stage_asset(self, request: Any, context: ToolCallContext) -> dict[str, Any]:
+        """Bind an already accepted server upload handle to an opaque asset ref.
+
+        The upload transport owns bytes and malware scanning; the MCP model can
+        only present its server-minted ``upl_`` handle and declared digest.
+        """
+        principal = RuntimePrincipal.from_context(context)
+        platform = request.platform.value
+        try:
+            self._consume_budget(principal, platform, None, "asset_stage", "rate", 1)
+            self._consume_budget(principal, platform, None, "asset_stage", "media", 1)
+            asset_ref = self._mint_ref("asset", request.upload_ref, platform, principal)
+            result = {"asset_ref": asset_ref, "status": "ready"}
+            self._audit(principal, platform=platform, operation="asset_stage",
+                        outcome="succeeded", reason="upload_bound", media_items=1)
+            return result
+        except Exception as exc:
+            self._audit(principal, platform=platform, operation="asset_stage",
+                        outcome="denied", reason=type(exc).__name__)
+            raise
+
+    async def asset_status(
+        self, asset_ref: str, context: ToolCallContext, *, platform: str | None = None
+    ) -> dict[str, Any]:
+        principal = RuntimePrincipal.from_context(context)
+        platform = platform or self._ref_platform(asset_ref, "asset", principal)
+        self._resolve_ref(asset_ref, "asset", platform, principal)
+        result = {"asset_ref": asset_ref, "status": "ready",
+                  "trust": "untrusted_external_data"}
+        self._audit(principal, platform=platform, operation="asset_status",
+                    outcome="succeeded", reason="ready")
+        return result
+
+
+__all__ = [
+    "RuntimePrincipal", "SocialBudgetLimits", "SocialWorkspaceAdapter",
+    "SocialWorkspaceRuntime", "SocialWorkspaceRuntimeError",
+]
