@@ -879,7 +879,11 @@ export async function captureBrowserEvidence({ candidateBase, manifest, runtimeO
   try {
     for (const selectedPage of selected) {
       for (const viewport of [{ width: 390, height: 844 }, { width: 1728, height: 900 }]) {
-        const page = await browser.newPage({ viewportSize: viewport, deviceScaleFactor: 1, reducedMotion: 'reduce' });
+        const page = await browser.newPage({ viewport, deviceScaleFactor: 1, reducedMotion: 'reduce' });
+        const actualViewport = page.viewportSize();
+        if (actualViewport?.width !== viewport.width || actualViewport?.height !== viewport.height) {
+          throw new Error(`Browser viewport contract mismatch: expected ${viewport.width}x${viewport.height}`);
+        }
         const target = relativeKeyUrl(candidateBase, selectedPage.file.key);
         await withRetry(`Browser route ${selectedPage.observation.route_hash.slice(0, 12)}`, () => page.goto(target.href, { waitUntil: 'domcontentloaded', timeout: 20_000 }), { attempts: 3, redact: redactFactory([candidateBase]) });
         await page.evaluate(async () => { if (document.fonts?.ready) await document.fonts.ready; });

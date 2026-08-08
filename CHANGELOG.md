@@ -32,7 +32,8 @@
   standalone/computed style cohorts and multi-channel fragmentation evidence,
   selects family representatives fairly before outliers, bounds retries, and
   rejects shell-interpolated dispatch data or falsely complete validation
-  receipts.
+  receipts. Browser capture now applies and asserts the exact independent
+  mobile/desktop viewport instead of silently accepting Playwright's default.
 
 - Added the disabled-by-default private Events MCP: path-scoped OAuth with
   PKCE, bounded read-only event and incident evidence tools, production smoke

@@ -84,8 +84,11 @@ described as a responsive variant.
 The browser budget chooses the modal structural representative of every page
 family before considering any outlier. Remaining outlier slots are allocated
 round-robin across families, and a budget smaller than the family count emits
-explicit uncaptured rows. Manifest, HTML and browser navigation retries are
-bounded to three attempts; retry configuration itself is capped.
+explicit uncaptured rows. Each browser context is created with the declared
+Playwright viewport and is rejected if the runtime viewport differs, so mobile
+and desktop screenshots cannot silently fall back to the default dimensions.
+Manifest, HTML and browser navigation retries are bounded to three attempts;
+retry configuration itself is capped.
 
 Required snapshot files are:
 

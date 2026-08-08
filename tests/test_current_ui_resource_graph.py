@@ -550,3 +550,12 @@ def test_workflow_uses_validated_env_inputs_and_honest_validation_receipt():
     assert "CURRENT_UI_GRAPH_ROOT_HTML_SHA256" in workflow
     assert "workflow_validation_failed" in workflow
     assert '"$receipt_status" == "complete"' in workflow
+
+
+def test_browser_capture_uses_and_checks_exact_playwright_viewports():
+    source = (REPO / "scripts/current_ui_resource_graph/graph-lib.mjs").read_text(encoding="utf-8")
+
+    assert "browser.newPage({ viewport," in source
+    assert "viewportSize: viewport" not in source
+    assert "const actualViewport = page.viewportSize();" in source
+    assert "Browser viewport contract mismatch" in source

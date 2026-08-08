@@ -20,6 +20,8 @@ Penpot data, design-system contracts, or normalization behavior.
 - Allocated screenshot budget to one modal representative per family before
   round-robin outliers, with explicit uncaptured records when the budget is too
   small.
+- Corrected the Playwright browser-context option and added a runtime assertion
+  so screenshot files use the declared `390x844` and `1728x900` dimensions.
 - Removed raw workflow-dispatch interpolation from shell, allowlisted every
   immutable identity input, pinned GitHub Actions by commit SHA and made the
   always-uploaded receipt fail closed after validation errors.
