@@ -1078,6 +1078,71 @@ async def test_realistic_telethon_group_permissions_are_fail_closed(harness):
 
 
 @pytest.mark.asyncio
+async def test_actual_chat_banned_rights_deny_plain_and_granular_media_before_provider(
+    harness,
+):
+    types = pytest.importorskip("telethon.tl.types")
+    adapter, client, refs, _ = harness
+    group = refs.targets[GROUP_REF]
+    group.entity.creator = False
+    group.entity.admin_rights = SimpleNamespace(
+        post_messages=False,
+        edit_messages=False,
+        delete_messages=False,
+        post_stories=False,
+    )
+    group.entity.default_banned_rights = types.ChatBannedRights(
+        until_date=None,
+        send_plain=True,
+        send_photos=True,
+        send_videos=True,
+        send_docs=True,
+        send_audios=True,
+        send_gifs=True,
+    )
+    refs.items[ITEM_REF] = replace(refs.items[ITEM_REF], target_ref=GROUP_REF)
+
+    capabilities = await adapter.capabilities(GROUP_REF)
+    validate_capabilities(capabilities)
+    assert set(capabilities["actions"]).isdisjoint(
+        {"publish", "comment", "forward", "schedule"}
+    )
+    assert set(capabilities["content_features"]).isdisjoint(
+        {"image", "video", "document", "audio", "animation"}
+    )
+    assert capabilities["max_media_items"] == 0
+
+    denied = (
+        intent(SocialAction.PUBLISH, target_ref=GROUP_REF, content=content("plain")),
+        intent(SocialAction.COMMENT, item_ref=ITEM_REF, content=content("plain")),
+        intent(
+            SocialAction.FORWARD,
+            item_ref=ITEM_REF,
+            destination_target_ref=GROUP_REF,
+        ),
+        intent(
+            SocialAction.SCHEDULE,
+            target_ref=GROUP_REF,
+            content=content("plain"),
+            schedule_at="2026-08-09T12:00:00Z",
+        ),
+        intent(
+            SocialAction.PUBLISH,
+            target_ref=GROUP_REF,
+            content=content(
+                media=(MediaAttachment(ASSET_REF, MediaRole.IMAGE),)
+            ),
+        ),
+    )
+    for index, denied_intent in enumerate(denied):
+        with pytest.raises(Exception, match="capability denied"):
+            await adapter.execute(
+                denied_intent, operation_ref=op_ref(500 + index)
+            )
+    assert client.calls == []
+
+
+@pytest.mark.asyncio
 async def test_exact_capability_preflight_denies_without_provider_mutation(harness):
     adapter, client, refs, _ = harness
     original = refs.targets[CHANNEL_REF]

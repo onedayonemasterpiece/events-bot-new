@@ -321,6 +321,7 @@ class _DefaultTelethonTypes:
                 (types, "ReactionEmoji"),
                 (types, "InputMessagesFilterEmpty"),
                 (types, "InputPeerEmpty"),
+                (types, "ChatBannedRights"),
             )
             if any(not hasattr(owner, name) for owner, name in required):
                 raise RuntimeError("required Telethon feature missing")
@@ -338,6 +339,20 @@ class _DefaultTelethonTypes:
                 for method, parameters in signatures.items()
             ):
                 raise RuntimeError("required Telethon client feature missing")
+            banned_right_fields = {
+                "send_plain",
+                "send_media",
+                "send_photos",
+                "send_videos",
+                "send_docs",
+                "send_audios",
+                "send_gifs",
+                "send_reactions",
+            }
+            if not banned_right_fields.issubset(
+                inspect.signature(types.ChatBannedRights).parameters
+            ):
+                raise RuntimeError("required Telethon rights feature missing")
         except Exception:
             raise TelegramWorkspaceError("provider_dependency_unavailable") from None
         self._functions, self._types, self._utils = functions, types, utils
@@ -443,6 +458,12 @@ class _PreflightSnapshot:
     target: TelegramTargetBinding
     source: TelegramTargetBinding | None
     item: TelegramItemBinding | None
+
+
+@dataclass(frozen=True, slots=True)
+class _LivePolicy:
+    actions: frozenset[SocialAction]
+    content_features: frozenset[ContentFeature]
 
 
 class TelegramWorkspaceAdapter:
@@ -779,10 +800,17 @@ class TelegramWorkspaceAdapter:
 
         return await self._session("resolve_target", run)
 
-    async def _live_actions(self, client: Any, binding: TelegramTargetBinding) -> set[SocialAction]:
+    async def _live_policy(
+        self,
+        client: Any,
+        binding: TelegramTargetBinding,
+        *,
+        content: RichContent | None = None,
+    ) -> _LivePolicy:
         configured = (
             set(binding.allowed_actions) if binding.allowed_actions is not None else None
         )
+        features = set(ContentFeature)
         if binding.kind is SocialTargetKind.SELF:
             actions = {
                 SocialAction.SEND_MESSAGE,
@@ -794,7 +822,10 @@ class TelegramWorkspaceAdapter:
             }
             if binding.story_privacy is not None:
                 actions.add(SocialAction.STORY)
-            return actions if configured is None else actions & configured
+            return _LivePolicy(
+                frozenset(actions if configured is None else actions & configured),
+                frozenset(features),
+            )
         if binding.kind is SocialTargetKind.USER:
             actions = {
                 SocialAction.SEND_MESSAGE,
@@ -804,7 +835,10 @@ class TelegramWorkspaceAdapter:
                 SocialAction.REACTION,
                 SocialAction.SCHEDULE,
             }
-            return actions if configured is None else actions & configured
+            return _LivePolicy(
+                frozenset(actions if configured is None else actions & configured),
+                frozenset(features),
+            )
         permissions = None
         if callable(getattr(client, "get_permissions", None)):
             try:
@@ -826,6 +860,7 @@ class TelegramWorkspaceAdapter:
         entity_rights = getattr(binding.entity, "admin_rights", None)
         participant = getattr(permissions, "participant", None)
         participant_rights = getattr(participant, "admin_rights", None)
+        participant_banned_rights = getattr(participant, "banned_rights", None)
 
         def live_right(name: str) -> bool:
             if permissions is not None:
@@ -833,22 +868,93 @@ class TelegramWorkspaceAdapter:
             return bool(getattr(entity_rights, name, False))
 
         is_admin = creator or live_right("is_admin")
-        is_present_member = creator or is_admin or bool(
-            getattr(permissions, "has_default_permissions", False)
-        )
-        is_restricted = bool(getattr(permissions, "is_banned", False)) or bool(
-            getattr(permissions, "has_left", False)
-        )
         default_banned_rights = getattr(binding.entity, "default_banned_rights", None)
-        default_send_forbidden = bool(
-            getattr(default_banned_rights, "send_messages", False)
+        banned_rights = (
+            ()
+            if is_admin
+            else tuple(
+                value
+                for value in (default_banned_rights, participant_banned_rights)
+                if value is not None
+            )
         )
-        can_send = (
+
+        def restricted(name: str) -> bool:
+            return any(
+                bool(getattr(rights, name, False)) for rights in banned_rights
+            )
+        has_left = bool(getattr(permissions, "has_left", False)) or bool(
+            getattr(participant, "left", False)
+        )
+        cannot_view = restricted("view_messages")
+        is_restricted_member = bool(getattr(permissions, "is_banned", False))
+        is_present_member = (
+            creator
+            or is_admin
+            or bool(getattr(permissions, "has_default_permissions", False))
+            or (
+                is_restricted_member
+                and participant_banned_rights is not None
+                and not has_left
+                and not cannot_view
+            )
+        )
+        can_send_base = (
             binding.kind is SocialTargetKind.GROUP
             and is_present_member
-            and not is_restricted
-            and (is_admin or not default_send_forbidden)
+            and not has_left
+            and not cannot_view
+            and not restricted("send_messages")
         )
+        media_bans = {
+            ContentFeature.IMAGE: "send_photos",
+            ContentFeature.VIDEO: "send_videos",
+            ContentFeature.DOCUMENT: "send_docs",
+            ContentFeature.AUDIO: "send_audios",
+            ContentFeature.ANIMATION: "send_gifs",
+        }
+
+        def media_allowed(feature: ContentFeature) -> bool:
+            return not restricted("send_media") and not restricted(media_bans[feature])
+
+        content_allowed = True
+        if binding.kind is SocialTargetKind.GROUP:
+            allowed_media = (
+                {feature for feature in media_bans if media_allowed(feature)}
+                if can_send_base
+                else set()
+            )
+            plain_allowed = can_send_base and not restricted("send_plain")
+            if not (plain_allowed or allowed_media):
+                features.clear()
+            else:
+                features -= set(media_bans) - allowed_media
+                if restricted("embed_links"):
+                    features.discard(ContentFeature.LINKS)
+                if restricted("send_stickers"):
+                    features.discard(ContentFeature.CUSTOM_EMOJI)
+
+            content_allowed = plain_allowed or bool(allowed_media)
+            if content is not None:
+                content_allowed = (
+                    can_send_base
+                    and (
+                        plain_allowed
+                        if not content.media
+                        else all(
+                            ContentFeature(attachment.role.value) in allowed_media
+                            for attachment in content.media
+                        )
+                    )
+                    and not (
+                        ContentFeature.LINKS in content.features
+                        and restricted("embed_links")
+                    )
+                    and not (
+                        ContentFeature.CUSTOM_EMOJI in content.features
+                        and restricted("send_stickers")
+                    )
+                )
         can_post = creator or live_right("post_messages")
         can_edit = creator or live_right("edit_messages")
         can_delete = creator or live_right("delete_messages")
@@ -864,23 +970,54 @@ class TelegramWorkspaceAdapter:
             actions.update(
                 {SocialAction.FORWARD, SocialAction.REACTION, SocialAction.COMMENT}
             )
-        if binding.kind is SocialTargetKind.GROUP and can_send:
+        if binding.kind is SocialTargetKind.GROUP and content_allowed:
             actions.update(
                 {
                     SocialAction.PUBLISH,
                     SocialAction.COMMENT,
                     SocialAction.SCHEDULE,
-                    SocialAction.FORWARD,
-                    SocialAction.REACTION,
                 }
             )
+        if binding.kind is SocialTargetKind.GROUP and can_send_base:
+            unknown_forward_restrictions = (
+                "send_plain",
+                "send_media",
+                "send_photos",
+                "send_videos",
+                "send_roundvideos",
+                "send_docs",
+                "send_audios",
+                "send_voices",
+                "send_gifs",
+                "send_stickers",
+                "send_games",
+                "send_inline",
+                "send_polls",
+                "embed_links",
+            )
+            if not any(restricted(name) for name in unknown_forward_restrictions):
+                actions.add(SocialAction.FORWARD)
+            if not restricted("send_reactions"):
+                actions.add(SocialAction.REACTION)
         if can_edit:
             actions.add(SocialAction.EDIT)
         if can_delete:
             actions.add(SocialAction.DELETE)
         if binding.story_privacy and can_story:
             actions.add(SocialAction.STORY)
-        return actions if configured is None else actions & configured
+        return _LivePolicy(
+            frozenset(actions if configured is None else actions & configured),
+            frozenset(features),
+        )
+
+    async def _live_actions(
+        self,
+        client: Any,
+        binding: TelegramTargetBinding,
+        *,
+        content: RichContent | None = None,
+    ) -> set[SocialAction]:
+        return set((await self._live_policy(client, binding, content=content)).actions)
 
     async def _capabilities_with_client(
         self, client: Any, binding: TelegramTargetBinding | None
@@ -892,7 +1029,11 @@ class TelegramWorkspaceAdapter:
         if binding and binding.kind in {SocialTargetKind.SELF, SocialTargetKind.USER}:
             reads.discard(SocialReadOperation.EDITORIAL_SAMPLE)
             reads.discard(SocialReadOperation.GET_AUDIENCE)
-        actions = await self._live_actions(client, binding) if binding else set()
+        policy = await self._live_policy(client, binding) if binding else None
+        actions = set(policy.actions) if policy else set()
+        content_features = (
+            set(policy.content_features) if policy else set(ContentFeature)
+        )
         return {
             "platform": "telegram",
             **({"target_ref": binding.target_ref} if binding else {}),
@@ -908,9 +1049,20 @@ class TelegramWorkspaceAdapter:
             ),
             "read_operations": sorted(value.value for value in reads),
             "actions": sorted(value.value for value in actions),
-            "content_features": sorted(value.value for value in ContentFeature),
+            "content_features": sorted(value.value for value in content_features),
             "max_text_length": 4096,
-            "max_media_items": 10,
+            "max_media_items": (
+                10
+                if content_features
+                & {
+                    ContentFeature.IMAGE,
+                    ContentFeature.VIDEO,
+                    ContentFeature.DOCUMENT,
+                    ContentFeature.AUDIO,
+                    ContentFeature.ANIMATION,
+                }
+                else 0
+            ),
         }
 
     async def capabilities(self, target_ref: str | None) -> Mapping[str, Any]:
@@ -1471,7 +1623,9 @@ class TelegramWorkspaceAdapter:
         else:
             target = self._target(intent.target_ref or "")
         checked_target = source if source is not None else target
-        actions = await self._live_actions(client, checked_target)
+        actions = await self._live_actions(
+            client, checked_target, content=intent.content
+        )
         if intent.action not in actions:
             raise SocialWorkspaceValidationError("capability denied: unsupported_action")
         if intent.action is SocialAction.FORWARD:
