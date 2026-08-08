@@ -37,13 +37,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validate one-use production publisher
+      - name: Materialize and validate one-use production publisher
         shell: bash
         run: |
           set -euo pipefail
-          test "$(sha256sum .github/scripts/publish-prelaunch-root-20260808.sh | cut -d' ' -f1)" = 'df673401c03713ce400541ba27b0593894dd7b546598b6f538f9e4b699fb1375'
-          bash -n .github/scripts/publish-prelaunch-root-20260808.sh
-          chmod 700 .github/scripts/publish-prelaunch-root-20260808.sh
+          source_script='.github/scripts/publish-prelaunch-root-20260808.sh'
+          publish_script="${RUNNER_TEMP}/publish-prelaunch-root-20260808.sh"
+          test "$(sha256sum "$source_script" | cut -d' ' -f1)" = 'df673401c03713ce400541ba27b0593894dd7b546598b6f538f9e4b699fb1375'
+          cp "$source_script" "$publish_script"
+          test "$(sha256sum "$publish_script" | cut -d' ' -f1)" = 'df673401c03713ce400541ba27b0593894dd7b546598b6f538f9e4b699fb1375'
+          bash -n "$publish_script"
+          chmod 700 "$publish_script"
+          echo "PUBLISH_SCRIPT=$publish_script" >> "$GITHUB_ENV"
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -56,7 +61,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: .github/scripts/publish-prelaunch-root-20260808.sh
+        run: "$PUBLISH_SCRIPT"
 
       - name: Upload production-root release evidence
         if: always()
