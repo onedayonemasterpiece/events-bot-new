@@ -79,16 +79,34 @@ manifest shard hash/byte verification                            PASS
 screenshot physical dimension/perceptual fingerprint             PASS (40)
 canonical full-rerun byte comparison                              PASS
 secret redaction byte scan                                       PASS
-manual screenshot review: all 40 captured specimens             PASS WITH OBSERVATION
+manual screenshot review: local + Actions, all 40 specimens     PASS WITH OBSERVATION
   production representatives/outliers: no blank/error/404 or wrong viewport
   labs-preview-special mobile: shell-only versus full desktop event; recorded
   as viewport conflict, not normalized or treated as a responsive variant
 ```
 
-## Delivery gate
+## Delivery evidence
 
-The remaining delivery step is to land the decoder workflow on the repository
-default branch and run it there, because the acceptance contract requires an
-actual GitHub Actions artifact. Record the Actions run and uploaded artifact in
-the task handoff; the committed graph generator, not the ignored local corpus,
-is the durable source.
+The decoder landed on the default branch and completed in GitHub Actions:
+
+- successful run: [`31274711696`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31274711696),
+  source `68774e001818adf1e56284396293626872ee2fef`;
+- artifact ID `9026814725`, name
+  `current-ui-resource-graph-snapshot-20260808T124842-4786ac53bc`;
+- artifact digest
+  `sha256:7072a4ceb746ebd20733103bcac312bbb090fd5c40a545f3d8c17c94e01306bd`,
+  compressed size 8,272,118 bytes, retained through 2026-09-07;
+- downloaded receipt `complete`, manifest SHA-256
+  `9e369a1c0e98bf20a8b954b239d56a1c7a69850f4ec9de08b2e65be9d3fd9458`;
+- all 14 canonical files are byte-identical to final local v13, every declared
+  output hash/byte count verifies, and the bearer/redaction scan passes;
+- all 40 downloaded screenshots have their indexed physical size (20 at
+  `390x844`, 20 at `1728x900`). All four Actions contact sheets were reviewed
+  manually, followed by original-size review of the independently changed raw
+  event-detail, Exhibitions, Home and lab specimens. No new blank/error/404 or
+  viewport problem was found; the known lab mobile shell-only conflict remains
+  unresolved evidence.
+
+Earlier failed runs uploaded honest failed receipts while exposing workflow
+schema/path defects; they are not accepted graph artifacts. The successful run
+above supersedes them and closes the durable-artifact delivery gate.
