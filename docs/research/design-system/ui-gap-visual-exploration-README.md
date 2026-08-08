@@ -2,10 +2,11 @@
 
 This note indexes the two deep-research inputs used for the LoveKGD synthesis and records their provenance. The raw uploads are preserved in the originating ChatGPT research session; the repository stores the reviewed project synthesis rather than treating either raw report as a normative contract.
 
-## Canonical synthesis, clarification and worked example
+## Canonical synthesis, clarifications and worked example
 
 - [`ui-gap-visual-exploration-synthesis-2026-08-08.md`](ui-gap-visual-exploration-synthesis-2026-08-08.md) — evidence-led synthesis, corrected for the accepted two-plugin boundary and optimized for a single operator.
 - [`ui-gap-composition-archetype-boundary-2026-08-08.md`](ui-gap-composition-archetype-boundary-2026-08-08.md) — explicit boundary between exploratory page composition and an accepted reusable page archetype; defines five possible composition outcomes and the promotion path into Resource Graph.
+- [`ui-gap-plugin-mcp-dual-integration-2026-08-08.md`](ui-gap-plugin-mcp-dual-integration-2026-08-08.md) — dual integration architecture: deterministic LoveKGD plugin path and fast Penpot MCP/code-agent path, shared manifests, protected zones, plugin adoption and acceptance-test matrix.
 - [`ui-gap-synthetic-penpot-example-2026-08-08.md`](ui-gap-synthetic-penpot-example-2026-08-08.md) — synthetic gap-page matrix, automatic `05 — Recent changes` component/archetype timeline, sample change manifest and operator flow.
 
 ## Source inputs
@@ -30,7 +31,7 @@ Design System plugin + Resource Graph / UI Exploration files
 
 `UI Exploration` is a separate Penpot file **inside the Design System solution**, not a third independent system or plugin. Product Atlas supplies `ui_gap_id`, product context and decision linkage; the Design System contour owns visual alternatives, local candidates, design references and runtime closure.
 
-The terminology is now explicit:
+The terminology is explicit:
 
 ```text
 page composition
@@ -42,6 +43,18 @@ page archetype
 
 A selected composition may revise an existing archetype, add an archetype variant, create a new archetype candidate, remain route-local or leave the archetype unchanged.
 
+The two UI Exploration integration channels are also explicit:
+
+```text
+LoveKGD plugin
+= deterministic sync, validation, adoption, history, freeze and promotion
+
+Penpot MCP + code agent
+= live creation and debugging inside one protected working zone
+```
+
+MCP output remains a draft until the LoveKGD plugin validates and adopts it.
+
 ## Preservation rule
 
 The repository preserves reviewed synthesis, worked examples, decisions and provenance. It does not copy every intermediate chat message as normative documentation. New accepted conclusions must move from research into an explicit ADR or operational contract under `docs/features/static-site-pages/design-system/`.
@@ -51,11 +64,12 @@ The repository preserves reviewed synthesis, worked examples, decisions and prov
 ```text
 external research
 → reviewed synthesis
-→ terminology clarification and synthetic example
-→ small UI Exploration pilot
+→ terminology and integration clarifications
+→ synthetic example
+→ dual-path capability probe and UI Exploration pilot
 → owner decision / ADR
-→ plugin and repository implementation
+→ plugin, MCP skill and repository implementation
 → runtime evidence
 ```
 
-The synthesis, clarification and synthetic example are proposed pilot contracts. Accepted implementation decisions belong in `docs/features/static-site-pages/design-system/`.
+The synthesis, clarifications and synthetic example are proposed pilot contracts. Accepted implementation decisions belong in `docs/features/static-site-pages/design-system/`.
