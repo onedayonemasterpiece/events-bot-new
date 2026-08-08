@@ -206,6 +206,15 @@ def build_social_workspace_tools(
         if request.content is not None and request.content.media and not enabled("media_story"):
             raise InvalidArgumentsError("social media actions are disabled")
 
+    def require_stored_action_feature(action_value: Any) -> SocialAction:
+        try:
+            action = SocialAction(str(action_value))
+        except ValueError:
+            raise InvalidArgumentsError("stored social action is invalid") from None
+        if not enabled(action_features[action]):
+            raise InvalidArgumentsError("social action class is disabled")
+        return action
+
     def action_scope(arguments: Mapping[str, Any]) -> frozenset[str]:
         try:
             request = validate_prepare_request(arguments)
@@ -250,6 +259,7 @@ def build_social_workspace_tools(
         if row is None:
             raise InvalidArgumentsError("preparation reference is unknown")
         require_platform(row["platform"])
+        require_stored_action_feature(row["action"])
         return required_scope_for_action(row["platform"], row["action"])
 
     def asset_status_scope(arguments: Mapping[str, Any]) -> frozenset[str]:

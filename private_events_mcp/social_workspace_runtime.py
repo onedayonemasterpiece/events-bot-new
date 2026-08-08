@@ -469,6 +469,42 @@ class SocialWorkspaceRuntime:
             ("action", f"{platform}\0{action}"),
         )
 
+    def _action_budget_target_ref(
+        self,
+        intent: SocialActionIntent,
+        conn: sqlite3.Connection,
+    ) -> str | None:
+        """Return the actual mutation destination for per-target budgets.
+
+        Forwarding is charged to its destination.  Item-only mutations are
+        charged to the source target captured in the encrypted human preview.
+        Collapsing these families into a shared ``platform/-`` bucket would
+        make unrelated destinations deny each other and would not represent a
+        real per-target policy.
+        """
+
+        direct = intent.destination_target_ref or intent.target_ref
+        if direct is not None:
+            return direct
+        if intent.item_ref is None:
+            return None
+        row = conn.execute(
+            "SELECT preview_json FROM social_workspace_ref_preview WHERE ref_hash=?",
+            (self._hash(intent.item_ref),),
+        ).fetchone()
+        if row is None:
+            raise SocialWorkspaceRuntimeError("item target budget binding is unavailable")
+        try:
+            preview = json.loads(self._decrypt(row["preview_json"]))
+            target_ref = preview.get("target_ref")
+        except Exception:  # noqa: BLE001 - encrypted preview is untrusted state
+            raise SocialWorkspaceRuntimeError(
+                "item target budget binding is invalid"
+            ) from None
+        if not isinstance(target_ref, str) or not _REF_RE.fullmatch(target_ref):
+            raise SocialWorkspaceRuntimeError("item target budget binding is invalid")
+        return target_ref
+
     def _consume_budget(
         self, principal: RuntimePrincipal, platform: str, target_ref: str | None,
         action: str, metric: str, amount: int,
@@ -1268,10 +1304,11 @@ class SocialWorkspaceRuntime:
                 intent = self._intent_from_row(prep)
                 if not intent.required_scopes.issubset(principal.scopes):
                     raise SocialWorkspaceRuntimeError("required social action scope is missing")
+                target_ref = self._action_budget_target_ref(intent, conn)
                 self._consume_budget_on_conn(conn, principal, intent.platform.value,
-                                             intent.target_ref, intent.action.value, "attempts", 1, now)
+                                             target_ref, intent.action.value, "attempts", 1, now)
                 self._consume_budget_on_conn(
-                    conn, principal, intent.platform.value, intent.target_ref,
+                    conn, principal, intent.platform.value, target_ref,
                     intent.action.value, "media",
                     len(intent.content.media) if intent.content else 0, now,
                 )
@@ -1289,7 +1326,8 @@ class SocialWorkspaceRuntime:
                        target_ref_hash,status,retry_safe,provider_attempted_at,created_at,updated_at)
                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (self._hash(operation), operation, self._hash(prep_ref), client, subject,
-                     resource, intent.platform.value, intent.action.value, prep["target_ref_hash"],
+                     resource, intent.platform.value, intent.action.value,
+                     self._hash(target_ref) if target_ref else None,
                      SocialActionStatus.PROVIDER_ATTEMPTED.value, 0, now, now, now),
                 )
                 conn.execute("UPDATE social_workspace_preparation SET status=? WHERE preparation_hash=?",
@@ -1306,7 +1344,6 @@ class SocialWorkspaceRuntime:
                 )
                 raise
         platform = intent.platform.value
-        target_ref = intent.target_ref or intent.destination_target_ref
         media_count = len(intent.content.media) if intent.content else 0
         provider_returned = False
         try:

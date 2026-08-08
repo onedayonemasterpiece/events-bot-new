@@ -152,7 +152,8 @@ Every external mutation follows:
    exact human-readable target, destination, source item, action and text, then
    confirms in the browser; an opaque-only target/item preview fails closed;
 4. `social_action_commit` accepts only the preparation ref and digest. It
-   atomically consumes the server-side approval before one provider attempt;
+   rechecks the current action-class kill switch, then atomically consumes the
+   server-side approval before one provider attempt;
 5. `social_action_status` or read-after-write evidence reconciles the receipt.
 
 The approval token is never pasted into ChatGPT. It is not an OAuth token and
@@ -247,7 +248,9 @@ bodies; the exact approval preview is encrypted at rest. The isolated
 OAuth/social state DB is created mode `0600` and remains
 separate from `/data/db.sqlite`; provider bindings are encrypted before storage.
 Publication attempts are charged before transport against durable UTC-day
-global/principal/target/action limits (the configured per-principal default is
+global/principal/target/action limits. Forward is charged to its destination;
+item-only actions are charged to the item's bound source target rather than a
+shared provider bucket (the configured per-principal default is
 `PRIVATE_EVENTS_MCP_SOCIAL_PUBLISH_ATTEMPTS_PER_DAY=10`).
 
 ## Environment and credentials

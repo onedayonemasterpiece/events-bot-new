@@ -18,10 +18,11 @@
   hardening now persists encrypted provider refs/cursors/receipts across
   restarts, requires human-readable target/destination/item approval previews,
   binds a closed editorial authorization basis to every server sample, charges
-  publication attempts against durable UTC-day limits, and makes the tool
-  catalog omit disabled action classes. Media/story activation is rejected
-  until a real authenticated byte-bound upload/storage path exists; generated
-  client profiles do not request story scopes.
+  publication attempts against durable UTC-day limits for the actual
+  destination/source target, rechecks the current action kill switch at commit,
+  and makes the tool catalog omit disabled action classes. Media/story
+  activation is rejected until a real authenticated byte-bound upload/storage
+  path exists; generated client profiles do not request story scopes.
 
 - Added lazy legacy generic-text Telegram and VK transports for the private
   Events MCP compatibility mode:

@@ -6,6 +6,7 @@ import sqlite3
 import time
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -105,7 +106,7 @@ class FakeAdapter:
         if self.timeout:
             await asyncio.sleep(0.1)
         return {
-            "target_ref": intent.target_ref,
+            "target_ref": intent.target_ref or intent.destination_target_ref,
             "item_ref": "native-sent-99",
             "status": "succeeded",
             "retry_safe": False,
@@ -477,6 +478,58 @@ async def test_runtime_feature_policy_is_enforced_inside_handlers(runtime) -> No
     assert adapter.executions == 0
 
 
+@pytest.mark.asyncio
+async def test_disabled_action_kill_switch_revokes_stale_preparation_commit(
+    runtime,
+) -> None:
+    service, adapter, _store = runtime
+    principal = RuntimePrincipal.from_context(context())
+    target = service._mint_ref("target", "native-channel", "telegram", principal)
+    prepared = await service.prepare(
+        validate_prepare_request(
+            {
+                "platform": "telegram",
+                "action": "publish",
+                "idempotency_key": "stale-publish-kill-switch-123",
+                "target_ref": target,
+                "content": {
+                    "text": "Must not publish",
+                    "entities": [],
+                    "media": [],
+                },
+            }
+        ),
+        context(),
+    )
+    service.approve_preparation(
+        preparation_ref=prepared["preparation_ref"],
+        operator_principal="operator",
+        operator_nonce="stale-publish-kill-switch-nonce",
+    )
+    tools = {
+        tool.name: tool
+        for tool in build_social_workspace_tools(
+            service,
+            feature_policy={
+                "private_read": False,
+                "dm": True,
+                "post": False,
+                "edit_delete": False,
+                "media_story": False,
+            },
+        )
+    }
+    with pytest.raises(InvalidArgumentsError, match="action class is disabled"):
+        await tools["social_action_commit"].handler(
+            {
+                "preparation_ref": prepared["preparation_ref"],
+                "action_digest": prepared["action_digest"],
+            },
+            context(),
+        )
+    assert adapter.executions == 0
+
+
 def test_thread_tool_exposes_comments_and_reactions_contract(runtime) -> None:
     service, _adapter, _store = runtime
     tool = next(
@@ -796,6 +849,77 @@ async def test_reminted_same_native_target_shares_durable_target_budget(
     with pytest.raises(SocialWorkspaceRuntimeError, match="rate budget exceeded"):
         await service.capabilities(second, context(), platform="telegram")
     assert adapter.capability_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_forward_attempt_budget_is_independent_per_destination(
+    tmp_path: Path,
+) -> None:
+    adapter = FakeAdapter()
+    service = SocialWorkspaceRuntime(
+        store=OAuthStateStore(str(tmp_path / "auth.sqlite")),
+        adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+        budget_dimension_limits={
+            "attempts": {
+                "global": 10,
+                "principal": 10,
+                "target": 1,
+                "action": 10,
+            }
+        },
+    )
+    principal = RuntimePrincipal.from_context(context())
+
+    async def forward(index: int, destination: str) -> dict[str, Any]:
+        item = service._mint_ref(
+            "item", f"native-item-{index}", "telegram", principal
+        )
+        service._store_item_preview(
+            item,
+            {
+                "item_ref": item,
+                "target_ref": destination,
+                "kind": "message",
+                "text": f"Source {index}",
+            },
+        )
+        prepared = await service.prepare(
+            validate_prepare_request(
+                {
+                    "platform": "telegram",
+                    "action": "forward",
+                    "idempotency_key": f"forward-target-budget-{index}",
+                    "item_ref": item,
+                    "destination_target_ref": destination,
+                }
+            ),
+            context(),
+        )
+        service.approve_preparation(
+            preparation_ref=prepared["preparation_ref"],
+            operator_principal="operator",
+            operator_nonce=f"forward-target-budget-nonce-{index}",
+        )
+        return await service.commit(
+            {
+                "preparation_ref": prepared["preparation_ref"],
+                "action_digest": prepared["action_digest"],
+            },
+            context(),
+        )
+
+    first_target = service._mint_ref(
+        "target", "native-destination-1", "telegram", principal
+    )
+    second_target = service._mint_ref(
+        "target", "native-destination-2", "telegram", principal
+    )
+    assert (await forward(1, first_target))["status"] == "succeeded"
+    assert (await forward(2, second_target))["status"] == "succeeded"
+    with pytest.raises(SocialWorkspaceRuntimeError, match="attempts budget exceeded"):
+        await forward(3, first_target)
+    assert adapter.executions == 2
 
 
 
