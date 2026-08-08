@@ -51,13 +51,28 @@ async function acceptedSubmit({ adapter, variant, label, prefixIds = [] }) {
   return { before, after, delta, counters, response, state, route };
 }
 
+function cacheHit(response) {
+  return String(response?.result_cache_status || '').toLowerCase() === 'hit' || response?.served_from_cache === true;
+}
+
+function assertCachedDebugResponse(response, label) {
+  assertCacheState(response, ['hit', 'miss', 'stored'], label);
+  assertProviderAttempts(response, cacheHit(response)
+    ? { embedding: 0, vector: 0, llm: 0 }
+    : { embedding: 1, vector: 1, llm: 0 });
+  return !cacheHit(response);
+}
+
 /**
  * Semantic Search journey. The adapter owns every input, browser/device,
  * network-observation and scrolling mechanic; this module only sequences user
  * intentions and validates observable product contracts.
  */
-export async function runSearchJourney({ adapter, targetUrl, variant, queryCases }) {
+export async function runSearchJourney({ adapter, targetUrl, variant, queryCases, cacheBootstrap = false }) {
   requiredAdapter(adapter);
+  if (cacheBootstrap && variant?.request_policy?.execution_mode !== 'cached_vector') {
+    throw new Error('search_cache_bootstrap_variant_invalid');
+  }
   const cases = validCases(queryCases);
   await adapter.configureRequestPolicy(variant.request_policy);
   await adapter.open(targetUrl);
@@ -78,9 +93,14 @@ export async function runSearchJourney({ adapter, targetUrl, variant, queryCases
     await adapter.clearQuery();
     await adapter.typeQuery(queryCase.value);
     const initial = await acceptedSubmit({ adapter, variant, label: `${queryCase.id}:initial` });
-    assertCacheState(initial.response, variant.expected_cache_state, `${queryCase.id}:initial`);
     assertExecutionReceipt(initial.response, variant.request_policy.execution_mode, `${queryCase.id}:initial`);
-    assertProviderAttempts(initial.response, variant.allowed_provider_attempts);
+    let initialCacheBootstrap = false;
+    if (cacheBootstrap) {
+      initialCacheBootstrap = assertCachedDebugResponse(initial.response, `${queryCase.id}:initial`);
+    } else {
+      assertCacheState(initial.response, variant.expected_cache_state, `${queryCase.id}:initial`);
+      assertProviderAttempts(initial.response, variant.allowed_provider_attempts);
+    }
 
     const scroll = await adapter.realScrollResults();
     assertRealScroll(scroll);
@@ -104,7 +124,12 @@ export async function runSearchJourney({ adapter, targetUrl, variant, queryCases
       const counters = assertOneSubmitOnePost(delta, `${queryCase.id}:show_more`);
       const response = delta.responses[0];
       assertExecutionReceipt(response, variant.request_policy.execution_mode, `${queryCase.id}:show_more`);
-      assertProviderAttempts(response, variant.allowed_provider_attempts);
+      let paginationCacheBootstrap = false;
+      if (cacheBootstrap) {
+        paginationCacheBootstrap = assertCachedDebugResponse(response, `${queryCase.id}:show_more`);
+      } else {
+        assertProviderAttempts(response, variant.allowed_provider_attempts);
+      }
       const state = await adapter.snapshotResults();
       assertTerminalState(state, `${queryCase.id}:show_more`);
       assertUniqueCards(state, `${queryCase.id}:show_more`);
@@ -112,6 +137,7 @@ export async function runSearchJourney({ adapter, targetUrl, variant, queryCases
       const route = assertRoute(delta, variant, `${queryCase.id}:show_more`);
       pageReceipts.push({ request_count: counters.request_count, response_count: counters.response_count, route,
         response, rendered_ids: state.rendered_ids });
+      if (paginationCacheBootstrap) pageReceipts.at(-1).cache_bootstrap = true;
     }
 
     await adapter.clearQuery();
@@ -134,6 +160,11 @@ export async function runSearchJourney({ adapter, targetUrl, variant, queryCases
     results.push({
       query_id: queryCase.id,
       pagination_required: queryCase.paginate,
+      cache_bootstrap: {
+        enabled: cacheBootstrap,
+        initial: initialCacheBootstrap,
+        pagination: pageReceipts.slice(1).filter((page) => page.cache_bootstrap === true).length,
+      },
       pages: pageReceipts,
       cache_repeat: {
         request_count: repeat.counters.request_count,

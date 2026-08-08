@@ -6,7 +6,7 @@ import { SEARCH_CANARY_VARIANTS } from '../e2e/search/canary-manifest.mjs';
 import { runSearchJourney } from '../e2e/search/journey.mjs';
 import { runRealWheelScroll } from '../e2e/search/adapters/playwright.mjs';
 
-function fakeAdapter() {
+function fakeAdapter({ coldCachedKeys = false } = {}) {
   const activity = { requests: [], responses: [], routes: [] };
   let policy = null;
   let value = '';
@@ -15,22 +15,29 @@ function fakeAdapter() {
   let showMore = false;
   const indexes = new Map();
   const cases = new Map([['first varied query', 1], ['second varied query', 2], ['third varied query', 3]]);
+  const cachedKeys = new Set();
   const dispatch = (append = false) => {
     const caseNo = cases.get(value);
     const mode = policy.execution_mode;
     const id = append ? `${caseNo}02` : `${caseNo}01`;
+    const cacheKey = `${value}:${append ? 'next' : 'first'}`;
+    const cacheHit = mode === 'cached_vector' && (!coldCachedKeys || cachedKeys.has(cacheKey));
+    if (mode === 'cached_vector') cachedKeys.add(cacheKey);
     activity.requests.push({ method: 'POST', path: '/functions/v1/event-search' });
     activity.responses.push({
       response_ids: [id], response_families: [`event:${id}`], item_count: 1, fallback_count: 0,
-      has_more: caseNo === 1 && !append && mode !== 'cached_vector',
-      result_cache_status: mode === 'cached_vector' ? 'hit' : 'stored', served_from_cache: mode === 'cached_vector',
-      requested_execution_mode: mode, actual_execution_mode: mode,
-      provider_attempts: mode === 'cached_vector' ? { embedding: 0, vector: 0, llm: 0 } : { embedding: 1, vector: 1, llm: 0 },
+      has_more: caseNo === 1 && !append,
+      result_cache_status: mode === 'cached_vector' ? (cacheHit ? 'hit' : 'stored') : 'stored',
+      served_from_cache: cacheHit,
+      requested_execution_mode: mode, actual_execution_mode: mode === 'cached_vector' && !cacheHit ? 'cold_vector' : mode,
+      provider_attempts: mode === 'cached_vector' && cacheHit
+        ? { embedding: 0, vector: 0, llm: 0 }
+        : { embedding: 1, vector: 1, llm: 0 },
       provider_attempts_present: true,
     });
     activity.routes.push({ policy: 'selected-once', route: 'direct', status: 200 });
     if (append) rendered.push(id); else rendered = [id];
-    showMore = caseNo === 1 && !append && mode !== 'cached_vector';
+    showMore = caseNo === 1 && !append;
     indexes.set(value, (indexes.get(value) || 0) + 1);
   };
   return {
@@ -89,6 +96,41 @@ test('semantic journey proves three varied queries, pagination, cache and zero-p
   assert.equal(JSON.stringify(result).includes('varied query'), false);
 });
 
+test('live cached debug may bootstrap an invalidated cache and must then prove a zero-provider hit', async () => {
+  const result = await runSearchJourney({
+    adapter: fakeAdapter({ coldCachedKeys: true }), targetUrl: 'https://kenigevents.ru/preview-secret-token-123/poisk/',
+    variant: SEARCH_CANARY_VARIANTS.cached_vector,
+    cacheBootstrap: true,
+    queryCases: [
+      { id: 'case_one', value: 'first varied query', paginate: true },
+      { id: 'case_two', value: 'second varied query' },
+      { id: 'case_three', value: 'third varied query' },
+    ],
+  });
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.query_cases.every((item) => item.cache_bootstrap.initial), true);
+  assert.equal(result.query_cases[0].cache_bootstrap.pagination, 1);
+  assert.equal(result.query_cases.every((item) => item.cache_repeat.response.served_from_cache), true);
+  assert.deepEqual(result.query_cases.map((item) => item.cache_repeat.response.provider_attempts), [
+    { embedding: 0, vector: 0, llm: 0 },
+    { embedding: 0, vector: 0, llm: 0 },
+    { embedding: 0, vector: 0, llm: 0 },
+  ]);
+  assert.equal(result.counters.requests, 10);
+});
+
+test('strict cached release rejects the same initial cache miss instead of bootstrapping it', async () => {
+  await assert.rejects(() => runSearchJourney({
+    adapter: fakeAdapter({ coldCachedKeys: true }), targetUrl: 'https://kenigevents.ru/preview-secret-token-123/poisk/',
+    variant: SEARCH_CANARY_VARIANTS.cached_vector,
+    queryCases: [
+      { id: 'case_one', value: 'first varied query', paginate: true },
+      { id: 'case_two', value: 'second varied query' },
+      { id: 'case_three', value: 'third varied query' },
+    ],
+  }), /search_cache_state:case_one:initial:stored/u);
+});
+
 test('journey is mechanics-neutral and mobile adapters own native keyboard/touch mechanics', async () => {
   const journey = await readFile(new URL('../e2e/search/journey.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(journey, /playwright|appium|webdriver|mouse|touch|keyboard\.press/iu);
@@ -109,5 +151,6 @@ test('runner is fail-closed on exact secret target SHA and carries three inciden
   assert.match(runner, /На природу с детьми/u);
   assert.match(runner, /искусство у моря/u);
   assert.match(runner, /в пятницу бесплатно/u);
+  assert.match(runner, /revisionPolicy === 'live_consistent' && mode === 'cached_vector'/u);
   assert.doesNotMatch(runner, /focus-email|mailbox|real-mail|otp/iu);
 });

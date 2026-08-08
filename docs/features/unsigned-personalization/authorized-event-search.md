@@ -178,6 +178,11 @@ revision evidence.
 с receipt многочасовой статической сборки. Это только быстрый debug gate.
 Расписания, post-deploy promotion и финальная release-приёмка всегда используют
 `release_exact`; debug PASS не подменяет совпадение revisions готового release.
+Если result-cache был физически очищен обновлением документов/embeddings,
+ручной `live_consistent + cached_vector` может принять один ограниченный
+`miss/stored` как прогрев, но тот же journey обязан закончить повтором с
+`hit`, `served_from_cache=true` и нулевыми embedding/vector/LLM attempts.
+`release_exact` такого прогрева не разрешает: первый запрос обязан быть hit.
 
 Search progress has a single owner: backend NDJSON stages. The old client-side
 28/55/74/92% timers are removed. Until the first frame the adjacent semantic
