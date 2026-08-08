@@ -161,32 +161,39 @@ test('shared document swipe routes iOS Safari through the XCUITest native swipe 
 test('shared keyboard dismissal checks and hides the IME only in native context', async () => {
   const calls = [];
   let context = 'WEBVIEW_chrome';
+  let keyboardShown = true;
   const driver = {
     getContext: async () => context,
     getContexts: async () => ['NATIVE_APP', 'WEBVIEW_chrome'],
     switchContext: async (next) => { context = next; calls.push(['context', next]); },
-    isKeyboardShown: async () => { calls.push(['shown']); return true; },
-    hideKeyboard: async () => calls.push(['hide']),
+    isKeyboardShown: async () => { calls.push(['shown']); return keyboardShown; },
+    hideKeyboard: async () => { calls.push(['hide']); keyboardShown = false; },
+    waitUntil: async (probe) => probe(),
   };
   assert.equal(await dismissNativeKeyboard(driver), true);
-  assert.deepEqual(calls.map((item) => item[0]), ['context', 'shown', 'hide', 'context']);
+  assert.deepEqual(calls.map((item) => item[0]), ['context', 'shown', 'hide', 'shown', 'context']);
 });
 
-test('shared keyboard dismissal may tolerate XCUITest Safari unsupported command only when explicit', async () => {
+test('shared iOS keyboard dismissal recovers exact unsupported hide with a verified native swipe', async () => {
   const calls = [];
   let context = 'WEBVIEW_safari';
+  let keyboardShown = true;
   const driver = {
     getContext: async () => context,
     getContexts: async () => ['NATIVE_APP', 'WEBVIEW_safari'],
     switchContext: async (next) => { context = next; calls.push(['context', next]); },
-    isKeyboardShown: async () => true,
+    isKeyboardShown: async () => keyboardShown,
     hideKeyboard: async () => { calls.push(['hide']); throw new Error('Did not know how to dismiss the keyboard'); },
+    executeScript: async (...args) => { calls.push(['executeScript', ...args]); keyboardShown = false; },
+    waitUntil: async (probe) => probe(),
   };
   await assert.rejects(() => dismissNativeKeyboard(driver), /Did not know how/u);
   assert.equal(context, 'WEBVIEW_safari');
   assert.equal(await dismissNativeKeyboard(driver, { allowUnsupported: true }), true);
   assert.equal(context, 'WEBVIEW_safari');
   assert.equal(calls.filter((item) => item[0] === 'hide').length, 2);
+  assert.deepEqual(calls.find((item) => item[0] === 'executeScript'),
+    ['executeScript', 'mobile: swipe', [{ direction: 'down' }]]);
   for (const message of [
     'session corrupted: Did not know how to dismiss the keyboard',
     'Did not know how to dismiss the keyboard; transport closed',
@@ -199,6 +206,37 @@ test('shared keyboard dismissal may tolerate XCUITest Safari unsupported command
   assert.equal(isUnsupportedIosKeyboardDismissError(new Error(
     `WebDriverError: Error Domain=com.facebook.WebDriverAgent Code=1 "${description}" UserInfo={NSLocalizedDescription=${description}} when running "appium/device/hide_keyboard" with method "POST"`,
   )), true);
+});
+
+test('shared iOS keyboard dismissal fails closed when fallback swipe leaves the IME visible', async () => {
+  let context = 'WEBVIEW_safari';
+  const driver = {
+    getContext: async () => context,
+    getContexts: async () => ['NATIVE_APP', 'WEBVIEW_safari'],
+    switchContext: async (next) => { context = next; },
+    isKeyboardShown: async () => true,
+    hideKeyboard: async () => { throw new Error('Did not know how to dismiss the keyboard'); },
+    executeScript: async () => undefined,
+    waitUntil: async (probe) => { await probe(); throw new Error('timeout'); },
+  };
+  await assert.rejects(() => dismissNativeKeyboard(driver, { allowUnsupported: true }),
+    /mobile_keyboard_dismiss_unconfirmed/u);
+  assert.equal(context, 'WEBVIEW_safari');
+});
+
+test('shared keyboard dismissal fails closed when initial IME state is unobservable', async () => {
+  let context = 'WEBVIEW_safari';
+  let hideCalls = 0;
+  const driver = {
+    getContext: async () => context,
+    getContexts: async () => ['NATIVE_APP', 'WEBVIEW_safari'],
+    switchContext: async (next) => { context = next; },
+    isKeyboardShown: async () => { throw new Error('transport details are not evidence'); },
+    hideKeyboard: async () => { hideCalls += 1; },
+  };
+  await assert.rejects(() => dismissNativeKeyboard(driver), /mobile_keyboard_state_unavailable/u);
+  assert.equal(hideCalls, 0);
+  assert.equal(context, 'WEBVIEW_safari');
 });
 
 test('adapter confines diagnostic native source capture before candidate navigation and sensitive input', async () => {

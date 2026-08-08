@@ -843,10 +843,12 @@ UiAutomator2 `mobile: scrollGesture` и XCUITest `mobile: scroll` не прим�
 таблиц/коллекций и могут успешно ответить без движения DOM.
 Перед scroll baseline общий helper закрывает открытую IME, чтобы finger path не
 попал в клавиатуру вместо browser viewport. Mobile Safari/XCUITest иногда
-возвращает exact `Did not know how to dismiss the keyboard` уже после Return;
-только iOS допускает этот конкретный unsupported response как best-effort,
-тогда как положительный DOM `scrollY` и видимость финальной карточки остаются
-обязательным доказательством. Остальные driver errors не подавляются.
+возвращает exact `Did not know how to dismiss the keyboard`; только этот iOS
+ответ разрешает один документированный user-equivalent `mobile: swipe` вниз.
+После штатного hide или fallback helper обязан повторно увидеть
+`isKeyboardShown() == false`; иначе он завершает сценарий как
+`mobile_keyboard_dismiss_unconfirmed` до document scroll. Остальные driver
+errors не подавляются.
 При отказе публикуется только закрытый route enum и numeric/boolean receipt:
 native viewport, доступные start/end/duration, число жестов, `scrollY` delta и
 видимость финальной карточки; hierarchy, screenshot, URL и текст страницы в

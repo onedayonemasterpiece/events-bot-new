@@ -45,14 +45,31 @@ export function isUnsupportedIosKeyboardDismissError(error) {
 
 export async function dismissNativeKeyboard(driver, { allowUnsupported = false } = {}) {
   return withNativeAppContext(driver, async () => {
-    const shown = await driver.isKeyboardShown().catch(() => false);
+    let shown = false;
+    try {
+      shown = await driver.isKeyboardShown();
+    } catch {
+      throw new Error('mobile_keyboard_state_unavailable');
+    }
     if (!shown) return false;
     try {
       await driver.hideKeyboard();
     } catch (error) {
       const unsupported = isUnsupportedIosKeyboardDismissError(error);
       if (!allowUnsupported || !unsupported) throw error;
+      // XCUITest documents that iPhone keyboards without a dismiss button must
+      // be closed with the same gesture a user would make. Swipe down on the
+      // active Safari application, then prove the IME is actually gone before
+      // a subsequent document swipe is allowed.
+      await driver.executeScript('mobile: swipe', [{ direction: 'down' }]);
     }
+    let hidden = false;
+    await driver.waitUntil(async () => {
+      hidden = !(await driver.isKeyboardShown().catch(() => true));
+      return hidden;
+    }, { timeout: 3_000, interval: 200,
+      timeoutMsg: 'mobile_keyboard_dismiss_unconfirmed' }).catch(() => undefined);
+    if (!hidden) throw new Error('mobile_keyboard_dismiss_unconfirmed');
     return true;
   });
 }

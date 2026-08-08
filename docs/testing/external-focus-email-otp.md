@@ -354,6 +354,14 @@ an active, visible email field but a not-yet-observed IME with exact
 `issue=0`, `verify=0`, `registration=0`, mail `0`; that receipt permits one
 controlled rerun after the observation fix, not an OTP resend fallback.
 
+Keyboard dismissal is also a shared observed transition, not a successful
+driver acknowledgement. On iOS, only XCUITest's exact unsupported
+`hideKeyboard` response may invoke one application-level native swipe down, as
+recommended for keyboards without a dismiss button; the helper must then
+observe the IME absent within three seconds. A still-visible or unobservable
+keyboard is fatal, so OTP evidence capture and Search scrolling cannot continue
+over an open keyboard.
+
 Sanitized runtime diagnostics treat only an aborted losing request with a
 successful same-method/path peer as expected cancellation. Transport/CORS/HTTP
 failures of the exact disposable `focus_auth_record_verification_v1` and
