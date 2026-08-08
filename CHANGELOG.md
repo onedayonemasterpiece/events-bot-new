@@ -75,6 +75,12 @@
 
 ### Fixed
 
+- Fixed iOS Search real-scroll acceptance after XCUITest `mobile: scroll`
+  acknowledged repeated native-control gestures without moving Safari's DOM.
+  Android Chrome and iOS Safari now share the same native-viewport W3C touch
+  primitive, restore WebView, and still require positive `scrollY` plus final
+  card visibility; the reusable mobile E2E skill records this boundary.
+
 - Fixed iOS Search failing after successful auth and vector results when Mobile
   Safari/XCUITest rejected `hideKeyboard` with its exact unsupported-command
   response. The shared mobile helper now matches OTP's best-effort iOS boundary

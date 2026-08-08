@@ -831,13 +831,14 @@ WebKit. Общий профиль задаёт `appium:webviewConnectTimeout=600
 передаются в capabilities и не входят в публикуемые evidence/Appium logs.
 Критический iOS web input фокусируется общей функцией через один exact native
 accessibility match и native tap; WebKit `click()` с `isKeyboardShown()` в web
-context не считается доказательством software keyboard. Android Chrome
-документ прокручивается общей W3C touch sequence в `NATIVE_APP`; размеры
-viewport тоже читаются только после этого switch, потому что WebView/CSS
-геометрия не является native touch geometry. Затем возвращается исходный
-WebView и измеряется реальный `scrollY`. Нативный shortcut
-`mobile: scrollGesture` не применяется к Chrome page content: он предназначен
-для нативных scrollable controls и может успешно ответить без движения DOM.
+context не считается доказательством software keyboard. Документы Android
+Chrome и iOS Safari прокручиваются одной общей W3C touch sequence в
+`NATIVE_APP`; размеры viewport тоже читаются только после этого switch, потому
+что WebView/CSS геометрия не является native touch geometry. Затем возвращается
+исходный WebView и измеряется реальный `scrollY`. Нативные shortcuts
+UiAutomator2 `mobile: scrollGesture` и XCUITest `mobile: scroll` не применяются
+к browser page content: они предназначены для нативных scrollable controls или
+таблиц/коллекций и могут успешно ответить без движения DOM.
 Перед scroll baseline общий helper закрывает открытую IME, чтобы finger path не
 попал в клавиатуру вместо browser viewport. Mobile Safari/XCUITest иногда
 возвращает exact `Did not know how to dismiss the keyboard` уже после Return;

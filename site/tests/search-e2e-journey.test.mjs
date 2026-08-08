@@ -182,9 +182,9 @@ test('journey is mechanics-neutral and mobile adapters own native keyboard/touch
   assert.match(mobile, /performNativeTouchSwipe/u);
   assert.match(mobile, /allowUnsupported: platform === 'ios'/u);
   assert.match(mobile, /search_scroll_keyboard_dismiss/u);
-  assert.doesNotMatch(mobile, /mobile: scrollGesture/u);
+  assert.doesNotMatch(mobile, /mobile: scroll(?:Gesture)?/u);
   assert.doesNotMatch(mobile, /const size = await driver\.getWindowSize\(\)/u);
-  assert.match(mobile, /mobile: scroll/u);
+  assert.match(mobile, /gesture: \(\) => performNativeTouchSwipe/u);
   assert.match(mobile, /connectionRetryTimeout: Number\(options\.connectionRetryTimeout \|\| 300_000\)/u);
   assert.match(mobile, /connectionRetryCount: 0/u);
   assert.doesNotMatch(mobile, /screenshot|pageSource|getPageSource|\bhar\b|trace|video/iu);
