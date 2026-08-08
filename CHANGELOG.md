@@ -73,7 +73,8 @@
   attempt only when sanitized evidence proves the auth callback and Search
   traffic never started. The shared mobile layer now reduces the local Appium
   log to closed simulator/WDA phase booleans, elapsed time and attempt number;
-  raw logs, capabilities, URLs and device identifiers are never uploaded.
+  a truncated log fails the retry gate, and raw logs, capabilities, URLs and
+  device identifiers are never uploaded.
 
 - Unified the remaining Search/OTP mobile input primitives: iOS Search now
   focuses its web field through one exact native Safari accessibility match and

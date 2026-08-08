@@ -23,6 +23,7 @@ test('Appium startup receipt reduces raw XCUITest log to closed phase booleans',
   const receipt = summarizeAppiumSessionStartup(raw);
   assert.deepEqual(receipt, {
     log_inspected: true,
+    log_truncated: false,
     simulator_started: true,
     wda_install_attempted: true,
     wda_start_attempted: true,
@@ -34,6 +35,12 @@ test('Appium startup receipt reduces raw XCUITest log to closed phase booleans',
   });
   assert.equal(JSON.stringify(receipt).includes('must-not-survive'), false);
   assert.equal(JSON.stringify(receipt).includes('/private/path'), false);
+  const truncated = summarizeAppiumSessionStartup(
+    "Event 'wdaSessionStarted'\nEvent 'wdaStarted'\n" + 'x'.repeat(2_000_001),
+  );
+  assert.equal(truncated.log_truncated, true);
+  assert.equal(truncated.wda_session_started, false);
+  assert.equal(truncated.wda_started, false);
 });
 
 test('session-create failure receipt exposes only retry-safe bounded metadata', async () => {
@@ -59,7 +66,7 @@ test('only an iOS session-creation failure before callback and Search traffic is
       failure_stage: 'webdriver_session_create', auth_callback_started: false,
       webdriver_client_session_created: false, appium_server_ready: true,
       error_class: 'webdriver_client_request_timeout', startup_attempt: 1,
-      elapsed_ms: 300_000, log_inspected: true, simulator_started: true,
+      elapsed_ms: 300_000, log_inspected: true, log_truncated: false, simulator_started: true,
       wda_install_attempted: true, wda_start_attempted: true,
       wda_start_failed: false, wda_session_attempted: false,
       wda_session_started: false, wda_session_failed: false, wda_started: false,
@@ -77,6 +84,8 @@ test('only an iOS session-creation failure before callback and Search traffic is
     failure_receipt: { ...base.failure_receipt, startup_attempt: 2 } }), false);
   assert.equal(isRetryableMobileStartupResult({ ...base,
     failure_receipt: { ...base.failure_receipt, error_class: 'webdriver_session_error' } }), false);
+  assert.equal(isRetryableMobileStartupResult({ ...base,
+    failure_receipt: { ...base.failure_receipt, log_truncated: true } }), false);
   const retained = closedMobileStartupRetryReceipt(base);
   assert.equal(retained.schema_version, 'appium-startup-retry-v1');
   assert.equal(retained.startup_attempt, 1);
@@ -90,7 +99,7 @@ test('closed first-attempt receipt survives evidence cleanup for terminal attemp
     schema_version: 'appium-startup-retry-v1', failure_stage: 'webdriver_session_create',
     auth_callback_started: false, webdriver_client_session_created: false,
     appium_server_ready: true, elapsed_ms: 300_000, startup_attempt: 1,
-    error_class: 'webdriver_client_request_timeout', log_inspected: true,
+    error_class: 'webdriver_client_request_timeout', log_inspected: true, log_truncated: false,
     simulator_started: true, wda_install_attempted: true, wda_start_attempted: true,
     wda_start_failed: false, wda_session_attempted: false,
     wda_session_started: false, wda_session_failed: false, wda_started: false,

@@ -19,6 +19,7 @@ export function isRetryableMobileStartupResult(result) {
     && receipt?.error_class === 'webdriver_client_request_timeout'
     && receipt?.startup_attempt === 1
     && receipt?.log_inspected === true
+    && receipt?.log_truncated === false
     && receipt?.wda_session_started === false
     && receipt?.wda_started === false
     && Number(receipt?.elapsed_ms) >= 295_000
@@ -28,7 +29,7 @@ export function isRetryableMobileStartupResult(result) {
 const closedReceiptKeys = Object.freeze([
   'failure_stage', 'auth_callback_started', 'webdriver_client_session_created',
   'appium_server_ready', 'elapsed_ms', 'startup_attempt', 'error_class',
-  'log_inspected', 'simulator_started', 'wda_install_attempted',
+  'log_inspected', 'log_truncated', 'simulator_started', 'wda_install_attempted',
   'wda_start_attempted', 'wda_start_failed', 'wda_session_attempted',
   'wda_session_started', 'wda_session_failed', 'wda_started',
 ]);

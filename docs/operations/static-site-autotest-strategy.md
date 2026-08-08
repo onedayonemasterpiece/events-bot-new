@@ -803,7 +803,9 @@ Cold simulator/WDA startup получает один WebDriver session POST с �
 device job. Неиспользованный callback не перевыпускается и не открывался; любой
 callback/Search side effect или неоднозначная стадия запрещают retry. Raw Appium
 log читается только локально и сворачивается в allowlisted phase booleans,
-elapsed time и attempt number, после чего удаляется.
+elapsed time, attempt number и truncation flag, после чего удаляется. Обрезанный
+log может объяснять отказ, но никогда не разрешает retry по отсутствующим
+событиям.
 Android/iOS scroll receipt строится только из реальных Appium touch gestures:
 адаптер повторяет их с bounded limit до попадания последней rendered card во
 viewport и проверяет положительный `scrollY` delta; DOM-scroll не допускается.

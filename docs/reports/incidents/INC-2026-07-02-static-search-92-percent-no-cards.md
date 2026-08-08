@@ -258,7 +258,8 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
 - 2026-08-08 iOS startup observability/retry correction: the shared mobile
   layer converts a failed Appium session creation into an allowlisted receipt
   containing only stage, elapsed time, attempt number and simulator/WDA
-  booleans. The Search workflow may restart Appium exactly once only before the
+  booleans; a truncated log is explicitly non-retryable. The Search workflow
+  may restart Appium exactly once only before the
   device callback is opened and before any Search traffic, matching the accepted
   OTP infrastructure-retry boundary without copying OTP feature mechanics.
 

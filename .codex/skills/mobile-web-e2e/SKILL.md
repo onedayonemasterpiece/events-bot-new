@@ -53,7 +53,7 @@ Artifacts must be sanitized and allowlisted. A failed gesture may retain only ro
 
 ## Debug workflow
 
-1. Read the exact failed step and sanitized artifact; classify runner/session/browser/product failure. For a session-create timeout, retain only the shared closed Appium phase receipt (server ready, simulator/WDA phase booleans, elapsed time and attempt number); never upload the raw log.
+1. Read the exact failed step and sanitized artifact; classify runner/session/browser/product failure. For a session-create timeout, retain only the shared closed Appium phase receipt (server ready, simulator/WDA phase booleans, elapsed time, attempt number and truncation flag); never upload the raw log. A truncated log can diagnose but can never authorize retry.
 2. Compare the failed configuration with the shared profile and the latest terminal Android/iOS receipts.
 3. Add the smallest failing regression test before changing code.
 4. Change one transport variable at a time. After two similar external-tool failures, consult official Appium driver documentation before another attempt.
