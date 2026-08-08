@@ -16,6 +16,8 @@
 
 ### Fixed
 
+- Fixed the production-root prelaunch registration contract without changing its visual, background or SEO/GEO surface: first and repeat RPC receipts are now distinct, the final normalized-email insert is race-safe, and the browser keeps permanent success/reload state while retaining input on errors and locking duplicate submits. Added exact-main release and incident regression gates.
+
 - Fixed the serialized browser Search runtime probe to retain the server
   `receipt_id` needed by the owner-scoped receipt RPC gate. A successful live
   UI journey no longer fails afterward because the sanitized probe dropped its

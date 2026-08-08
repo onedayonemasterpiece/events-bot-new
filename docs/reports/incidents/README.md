@@ -22,6 +22,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-08-prelaunch-registration-confirmation-and-dedup.md`
+  - Scope: production-root prelaunch form, server-truth first/repeat receipt,
+    normalized-email uniqueness and exact-main root release.
+  - Must not regress: confirmed success is permanent; reload shows registered;
+    only explicit reset restores the form; errors retain input; duplicate submit
+    is locked; two real calls yield one row; synthetic evidence is deleted and
+    no full email enters public logs or artifacts.
+
 - `INC-2026-08-04-postbox-feedback-dlq-correlation.md`
   - Scope: Yandex Postbox feedback correlation for transactional outbox, direct
     focus Auth and independently proven legacy Auth; YDS/YMQ DLQ replay; Fly

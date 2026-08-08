@@ -7,6 +7,8 @@
     "node": ">=22.12.0"
   },
   "scripts": {
+    "predev": "node scripts/prepare-prelaunch-artwork.mjs",
+    "prebuild": "node scripts/prepare-prelaunch-artwork.mjs",
     "dev": "astro dev --host 127.0.0.1",
     "build": "astro build",
     "build:preview": "node scripts/build-preview.mjs",
@@ -46,7 +48,9 @@
     "test:search-e2e-harness": "node --test tests/search-e2e-*.test.mjs",
     "astro": "astro",
     "test:resilient-client": "node --experimental-strip-types --test src/lib/resilientSupabaseTransport.test.ts tests/resilient-data-storage.test.mjs tests/supabase-runtime-gate.test.mjs && node --experimental-strip-types --test tests/search-recovery.test.mjs tests/static-site-auth.test.mjs tests/pwa-install.test.mjs",
-    "test:transport-faults": "node --experimental-strip-types --test src/lib/transportFaultInjector.test.ts && node --test scripts/transport-fault-build-contract.test.mjs"
+    "test:transport-faults": "node --experimental-strip-types --test src/lib/transportFaultInjector.test.ts && node --test scripts/transport-fault-build-contract.test.mjs",
+    "test:prelaunch-form": "node --experimental-strip-types --test src/lib/prelaunchEmail.test.ts tests/prelaunch-form-contract.test.mjs",
+    "check:prelaunch-form": "node scripts/check-prelaunch-form-security.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.108.2",
