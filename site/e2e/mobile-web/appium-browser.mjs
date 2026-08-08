@@ -77,15 +77,27 @@ export async function focusIosSafariWebInput(driver, { labels, types = IOS_WEB_I
   });
 }
 
-/** Execute an absolute-coordinate finger swipe in NATIVE_APP, never through Chromedriver. */
-export async function performNativeTouchSwipe(driver, { startX, startY, endX, endY, duration = 450 } = {}) {
-  const coordinates = [startX, startY, endX, endY].map(Number);
+/** Resolve viewport ratios and execute the finger swipe wholly in NATIVE_APP. */
+export async function performNativeTouchSwipe(driver, {
+  startXRatio, startYRatio, endXRatio, endYRatio, duration = 450,
+} = {}) {
+  const ratios = [startXRatio, startYRatio, endXRatio, endYRatio].map(Number);
   const durationMs = Number(duration);
-  if (coordinates.some((value) => !Number.isFinite(value)) || !Number.isFinite(durationMs) || durationMs < 1) {
+  if (ratios.some((value) => !Number.isFinite(value) || value <= 0 || value >= 1)
+    || !Number.isFinite(durationMs) || durationMs < 1) {
     throw new TypeError('mobile_touch_swipe_geometry_invalid');
   }
-  const [fromX, fromY, toX, toY] = coordinates.map(Math.round);
+  let receipt = null;
   await withNativeAppContext(driver, async () => {
+    const viewport = await driver.getWindowSize();
+    const width = Number(viewport?.width);
+    const height = Number(viewport?.height);
+    if (!Number.isFinite(width) || width < 1 || !Number.isFinite(height) || height < 1) {
+      throw new TypeError('mobile_native_viewport_invalid');
+    }
+    const [fromX, fromY, toX, toY] = [
+      width * ratios[0], height * ratios[1], width * ratios[2], height * ratios[3],
+    ].map(Math.round);
     try {
       await driver.performActions([{
         type: 'pointer', id: 'mobile-web-finger', parameters: { pointerType: 'touch' }, actions: [
@@ -99,9 +111,12 @@ export async function performNativeTouchSwipe(driver, { startX, startY, endX, en
     } finally {
       await driver.releaseActions().catch(() => undefined);
     }
+    receipt = { route: 'w3c_native_touch', native_viewport_width: Math.round(width),
+      native_viewport_height: Math.round(height), start_x: fromX, start_y: fromY,
+      end_x: toX, end_y: toY, delta_x: toX - fromX, delta_y: toY - fromY,
+      duration_ms: Math.round(durationMs) };
   });
-  return { route: 'w3c_native_touch', delta_x: toX - fromX, delta_y: toY - fromY,
-    duration_ms: Math.round(durationMs) };
+  return receipt;
 }
 
 export function buildAppiumCapabilities(platform, config, env = process.env) {

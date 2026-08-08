@@ -38,6 +38,16 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
   WebKit click followed by web-context `isKeyboardShown()` produced false
   keyboard evidence. Both failures exposed feature-local mechanics that were
   still weaker than the accepted OTP mobile input path.
+- 2026-08-08 follow-up Android run `31274053708` proved that switching the W3C
+  swipe itself to `NATIVE_APP` was insufficient: its coordinates had already
+  been calculated from WebView `getWindowSize()`, so CSS/web viewport geometry
+  was applied as native device pixels and again produced zero DOM `scrollY`.
+  Official UiAutomator2 guidance requires native actions to consume native
+  coordinates; viewport measurement is now inside the same native context.
+- 2026-08-08 iOS run `31274142041` failed before product navigation: its single
+  Appium new-session POST exhausted the full 300-second cold-start budget. This
+  is an unambiguous simulator/WDA infrastructure failure, not Search or keyboard
+  evidence; no automatic second session was created with the issued credential.
 
 - 2026-08-08 exact-main degraded browser journey полностью прошёл UI/Search
   контракт для трёх запросов, но GitHub job завершился красным после journey:
@@ -224,6 +234,11 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
   longer treats a native-scrollable UiAutomator2 shortcut as Chrome document
   input, and iOS no longer treats WebKit focus acknowledgement as native
   software-keyboard proof.
+- 2026-08-08 native viewport correction: the Android swipe helper now resolves
+  its ratio-based start/end points from `getWindowSize()` only while already in
+  `NATIVE_APP`. A sanitized failure receipt retains numeric viewport/gesture
+  geometry, gesture count and DOM `scrollY` delta so another no-op cannot remain
+  an undifferentiated `search_real_scroll_missing` artifact.
 
 ## Follow-up Actions
 
