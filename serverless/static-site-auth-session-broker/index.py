@@ -17,8 +17,9 @@ import os
 import re
 import urllib.error
 import urllib.request
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping
+from typing import Any
 from urllib.parse import urlsplit
 
 GITHUB_ISSUER = "https://token.actions.githubusercontent.com"
@@ -57,7 +58,7 @@ class Policy:
     per_run_persona_limit: int
     audit_key: str
     supabase_url: str
-    supabase_secret_key: str
+    supabase_service_role_key: str
 
 
 def _required(env: Mapping[str, str], name: str) -> str:
@@ -81,6 +82,31 @@ def _base_url(value: str) -> str:
             or parsed.path or parsed.query or parsed.fragment:
         raise BrokerError("supabase_url_invalid", status=500)
     return value.rstrip("/")
+
+
+def _service_role_key(env: Mapping[str, str]) -> str:
+    """Return a broker-only legacy service-role JWT, failing closed on key type.
+
+    Supabase's modern ``sb_secret_*`` keys are deliberately not accepted here:
+    the Auth Admin endpoint used by this broker requires the legacy
+    service-role JWT in both ``apikey`` and ``Authorization`` headers for this
+    project.  Payload inspection is only a local configuration guard; upstream
+    still authenticates the signed JWT.
+    """
+    key = _required(env, "AUTH_SESSION_BROKER_SUPABASE_SERVICE_ROLE_KEY")
+    if key.startswith("sb_secret_"):
+        raise BrokerError("supabase_service_role_key_invalid", status=500)
+    try:
+        parts = key.split(".")
+        if len(parts) != 3:
+            raise ValueError("jwt_parts")
+        payload_raw = parts[1] + "=" * (-len(parts[1]) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(payload_raw.encode()))
+    except (ValueError, binascii.Error, json.JSONDecodeError, UnicodeError) as exc:
+        raise BrokerError("supabase_service_role_key_invalid", status=500) from exc
+    if not isinstance(payload, Mapping) or payload.get("role") != "service_role":
+        raise BrokerError("supabase_service_role_key_invalid", status=500)
+    return key
 
 
 def _redirect_shape(value: str, *, template: bool) -> tuple[str, str, int | None]:
@@ -154,7 +180,7 @@ def policy_from_env(env: Mapping[str, str]) -> Policy:
         per_run_persona_limit=limit,
         audit_key=audit_key,
         supabase_url=_base_url(_required(env, "PERSONALIZATION_SUPABASE_URL")),
-        supabase_secret_key=_required(env, "PERSONALIZATION_SUPABASE_SECRET_KEY"),
+        supabase_service_role_key=_service_role_key(env),
     )
 
 
@@ -261,10 +287,12 @@ def urllib_transport(method: str, url: str, headers: Mapping[str, str], body: by
 
 
 def _headers(policy: Policy) -> dict[str, str]:
-    headers = {"accept": "application/json", "content-type": "application/json", "apikey": policy.supabase_secret_key}
-    if not policy.supabase_secret_key.startswith("sb_secret_"):
-        headers["authorization"] = f"Bearer {policy.supabase_secret_key}"
-    return headers
+    return {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "apikey": policy.supabase_service_role_key,
+        "authorization": f"Bearer {policy.supabase_service_role_key}",
+    }
 
 
 def _json_call(path: str, payload: Mapping[str, Any], *, policy: Policy, transport: Transport) -> Any:

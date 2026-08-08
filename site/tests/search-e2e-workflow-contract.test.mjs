@@ -27,6 +27,8 @@ test('Search workflow has independent no-mail schedules, L2 jobs and blocking po
   assert.match(source, /reactivecircus\/android-emulator-runner@[0-9a-f]{40}/u);
   assert.match(source, /runs-on: macos-15/u);
   assert.match(source, /static-site-search-post-deploy/u);
+  assert.match(source, /AUTH_SESSION_BROKER_OIDC_AUDIENCE: kenigevents-static-search-broker/u);
+  assert.match(source, /environment: \{ name: search-e2e \}/u);
   assert.match(source, /exit 1/u);
   assert.doesNotMatch(source, /focus-email|E2E_MAIL|IMAP|POSTBOX|real.?mail/iu);
 });
@@ -61,6 +63,9 @@ test('immutable candidate binds the authoritative complete Search projection rev
 
 test('browser fixture sends its issued session through the owner RLS probe', async () => {
   const source = await readFile(browserRunnerUrl, 'utf8');
+  for (const persona of ['search-cached-browser', 'search-cold-browser', 'search-degraded-browser']) {
+    assert.ok(source.includes(persona), persona);
+  }
   assert.match(source, /protectedOwnerProbe\(\{ fetchImpl, userId, supabaseUrl, accessToken, publishableKey \}\)/u);
   assert.match(source, /apikey: publishableKey/u);
   assert.match(source, /authorization: `Bearer \$\{accessToken\}`/u);

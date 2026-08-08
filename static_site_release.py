@@ -1583,6 +1583,7 @@ def delete_immutable_snapshot(
     for path in (
         snapshot,
         manifest,
+        snapshot.with_suffix(".search-receipt.json"),
         Path(f"{snapshot}-wal"),
         Path(f"{snapshot}-shm"),
     ):

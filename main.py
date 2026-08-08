@@ -295,6 +295,7 @@ from static_site_release import (
     validate_snapshot,
     validate_vector_barrier,
 )
+from static_site_search_snapshot import bind_snapshot_search_receipt
 from shortlinks import (
     ensure_vk_short_ics_link,
     ensure_vk_short_ticket_link,
@@ -24127,7 +24128,6 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         request_payload,
         (os.getenv("STATIC_SITE_VECTOR_RECEIPT_PATH") or "").strip() or None,
     )
-    related_corpus_revision = str(vector_evidence.get("related_v1_hash") or "").strip()
     search_corpus_receipt_path = (
         (os.getenv("STATIC_SITE_VECTOR_RECEIPT_PATH") or "").strip() or None
     )
@@ -24170,6 +24170,24 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         snapshot_id=snapshot_id,
     )
     await asyncio.to_thread(validate_snapshot, snapshot_path, manifest_path)
+    if _env_flag("STATIC_SITE_SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH"):
+        try:
+            if not search_corpus_receipt_path:
+                raise StaticSiteRetryableError("vector_barrier_receipt_pending")
+            search_corpus_receipt_path, vector_evidence = await asyncio.to_thread(
+                bind_snapshot_search_receipt,
+                request_payload=request_payload,
+                source_receipt_path=search_corpus_receipt_path,
+                snapshot_path=snapshot_path,
+                current_date=clock.effective_date,
+                current_datetime=clock.current_datetime,
+            )
+        except Exception:
+            await asyncio.to_thread(
+                delete_immutable_snapshot, snapshot_path, manifest_path
+            )
+            raise
+    related_corpus_revision = str(vector_evidence.get("related_v1_hash") or "").strip()
     related_cache_path = (
         os.getenv("STATIC_SITE_RELATED_CACHE") or "/data/static_site_event_related_chain_cache.json"
     ).strip()

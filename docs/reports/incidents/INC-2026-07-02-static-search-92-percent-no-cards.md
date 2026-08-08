@@ -30,6 +30,14 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-08 два exact-current-SHA candidate run полностью собирали 1,339 Astro
+  pages, но после 17–19 минут падали на `Search corpus/catalog revision
+  mismatch`: mutable vector receipt проверялся до online snapshot и мог уже не
+  соответствовать полному каталогу snapshot. Третий run с успевшим обновиться
+  receipt прошёл production/candidate gates. Prevention теперь замораживает
+  одно чтение receipt после snapshot, вычисляет exact full-catalog revision до
+  Kaggle и локально откладывает stale pair как retryable.
+
 - 2026-08-08 the new cross-platform harness completed a real browser vector
   journey on the working immutable candidate for all three regression queries:
   one POST per submit, eight response IDs mapped to eight rendered cards, real
@@ -76,6 +84,9 @@ Open. Current evidence supports multiple contributing roots:
 2. The frontend has CSS for `.authorized-search__skeletons`, but no skeleton DOM/toggle is wired in `AuthorizedEventSearch.astro`; therefore there is no card-shaped shimmer/halo placeholder while results are being verified.
 3. Production entrypoint promotion is incomplete: root `/poisk/` is not published and root CTA points to an older preview build without the search page.
 4. Client-side observability is insufficient to prove whether reported stuck sessions failed on network delivery, stale JS, render exception, or user impatience during a slow LLM lane.
+5. Static release barrier проверял только event subset из request payload до
+   создания immutable snapshot. Unrelated full-catalog drift поэтому проходил
+   precheck и обнаруживался лишь после дорогого remote Astro build.
 
 ## Contributing Factors
 
@@ -135,6 +146,9 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
   monotonic progress fill into the submit button. The semantic progressbar
   remains available to assistive technology. Public preview evidence is still
   required before this incident can close.
+- 2026-08-08 release hardening: Search receipt теперь snapshot-scoped,
+  hash-receipted и сверяется с exact full exported catalog до remote launch;
+  replacement mutable receipt после precheck не влияет на handoff.
 
 ## Follow-up Actions
 

@@ -199,7 +199,7 @@ begin
 end;
 $$;
 
--- Broker claims are idempotent and active-cap bounded without credential data.
+-- Broker claims are one-shot and active-cap bounded without credential data.
 do $$
 begin
   if not public.claim_static_site_auth_session_issue_v1(
@@ -207,10 +207,10 @@ begin
   ) then
     raise exception 'first broker claim was denied';
   end if;
-  if not public.claim_static_site_auth_session_issue_v1(
+  if public.claim_static_site_auth_session_issue_v1(
     'run-1', 1, 'search-browser', 'owner/repo', 'workflow@sha', 1
   ) then
-    raise exception 'idempotent broker claim was denied';
+    raise exception 'replayed broker claim was admitted';
   end if;
   if public.claim_static_site_auth_session_issue_v1(
     'run-2', 1, 'search-browser', 'owner/repo', 'workflow@sha', 1

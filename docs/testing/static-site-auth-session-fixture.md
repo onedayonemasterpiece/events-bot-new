@@ -330,7 +330,7 @@ direct-down, relay-down и both-down с нулём product OTP/mail/provider eff
 
 ```text
 GitHub OIDC
-  -> constrained Yandex/server-side session broker
+  -> constrained Fly/server-side session broker
   -> repository/ref/workflow/environment/run validation
   -> allowlisted persona + redirect
   -> Supabase admin.generateLink
@@ -339,6 +339,14 @@ GitHub OIDC
 
 Broker не предоставляет общий Admin API. Он только выпускает ограниченный
 credential, имеет per-run/per-persona rate limits и PII-free audit.
+Production endpoint включается отдельным fail-closed флагом на существующем
+Fly HTTPS service; port 80 всегда перенаправляется на HTTPS, GitHub runner
+обращается server-to-server без CORS. Broker выбирает project-wide legacy
+`service_role` JWT только через отдельное broker env name, не через generic
+personalization key; это изоляция экспозиции, но не независимая ротация ключа.
+Повтор того же `run_id + run_attempt + persona`
+отклоняется до `generate_link`; при неоднозначном сбое нужен новый
+`run_attempt`, а не повторная выдача в том же attempt.
 
 ## 12. Storage и evidence
 
@@ -436,6 +444,8 @@ Infrastructure retry разрешён только до выпуска credentia
   repository/ref/workflow/environment/event/run claims, exact persona и redirect;
 - atomic service-role RPC допускает ровно один credential на
   `run_attempt + persona`, audit содержит только keyed hashes;
+- production Fly transport ограничивает тело, не блокирует webhook event loop,
+  не логирует request/response, форсирует HTTPS и валидирует policy при startup;
 - broker возвращает one-time callback/OTP только защищённому caller, но runner
   никогда не сохраняет их в evidence; real-mail fallback отсутствует.
 
