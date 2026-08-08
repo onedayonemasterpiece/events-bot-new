@@ -57,12 +57,15 @@ class FakeCooldown:
     def __init__(self) -> None:
         self.captchas: list[VKActor] = []
         self.successes: list[VKActor] = []
+        self.blocked: set[VKActor] = set()
 
     async def ensure_available(self, actor: VKActor) -> None:
-        return None
+        if actor in self.blocked:
+            raise RuntimeError("captcha cooldown active with provider_secret")
 
     async def record_captcha(self, actor: VKActor) -> None:
         self.captchas.append(actor)
+        self.blocked.add(actor)
 
     async def record_success(self, actor: VKActor) -> None:
         self.successes.append(actor)
@@ -293,7 +296,7 @@ async def test_closed_action_families_media_schedule_repost_and_story(workspace)
     adapter, transport, refs, _, _ = workspace
     community = mint_target(refs)
     user = mint_target(refs, "user")
-    post = refs.mint("item", {"kind": "post", "owner_id": -101, "post_id": 501})
+    post = refs.mint("item", {"kind": "post", "group_id": 101, "owner_id": -101, "post_id": 501})
     refs.mint("item", {"kind": "message", "peer_id": 101, "message_id": 901})
     image = refs.mint("asset", {"role": "image", "attachment": "photo-101_55"})
     album = refs.mint("asset", {"role": "image", "attachment": "album-101_57"})
@@ -344,3 +347,87 @@ async def test_actor_denial_timeout_captcha_and_no_provider_error_leakage(worksp
     assert result["error_code"] == "outcome_unknown"
     assert len([call for call in transport.calls if call["method"] == "wall.post"]) == 1
     assert any(event == ("after", "community_editor", "outcome_unknown") for event in governor.events)
+
+
+@pytest.mark.asyncio
+async def test_idempotency_binds_full_intent_and_rejects_conflict_before_provider(workspace) -> None:
+    adapter, transport, refs, _, _ = workspace
+    community = mint_target(refs)
+    original = validate_prepare_request({"platform": "vk", "action": "publish", "idempotency_key": "full-intent-key", "target_ref": community, "content": {"text": "Original"}})
+    replay = await adapter.execute(original)
+    assert await adapter.execute(original) == replay
+    changed = validate_prepare_request({"platform": "vk", "action": "publish", "idempotency_key": "full-intent-key", "target_ref": community, "content": {"text": "Changed"}})
+    call_count = len(transport.calls)
+    with pytest.raises(VKWorkspaceError, match="idempotency_conflict"):
+        await adapter.execute(changed)
+    assert len(transport.calls) == call_count
+
+
+@pytest.mark.asyncio
+async def test_action_matrix_requires_bound_community_and_exact_target_capabilities(workspace) -> None:
+    adapter, transport, refs, _, _ = workspace
+    malformed_community = refs.mint("target", {"kind": "community", "owner_id": -101})
+    publish = validate_prepare_request({"platform": "vk", "action": "publish", "idempotency_key": "missing-group-id", "target_ref": malformed_community, "content": {"text": "Unsafe"}})
+    result = await adapter.execute(publish)
+    assert result["status"] == "failed" and result["error_code"] == "community_binding_invalid"
+    assert not transport.calls
+
+    user = mint_target(refs, "user")
+    story_asset = refs.mint("asset", {"role": "video", "attachment": "video-101_56", "story_upload_result": "safe-upload-result-123"})
+    story = validate_prepare_request({"platform": "vk", "action": "story", "idempotency_key": "user-story-denied", "target_ref": user, "content": {"media": [{"asset_ref": story_asset, "role": "video"}]}})
+    result = await adapter.execute(story)
+    assert result["status"] == "failed" and result["error_code"] == "community_required"
+    assert not transport.calls
+
+    transport.denied.add((VKActor.COMMUNITY_EDITOR, "forward"))
+    community = mint_target(refs)
+    community_caps = await adapter.capabilities(community)
+    user_caps = await adapter.capabilities(user)
+    assert "forward" not in community_caps["actions"]
+    assert "forward" in user_caps["actions"]  # explicit USER_MESSENGER/forward capability
+    assert "story" not in user_caps["actions"]
+
+
+@pytest.mark.asyncio
+async def test_cursor_is_bound_to_operation_target_and_query(workspace) -> None:
+    adapter, _, refs, _, _ = workspace
+    first = mint_target(refs)
+    second = refs.mint("target", {"kind": "community", "group_id": 202, "owner_id": -202})
+    page = await adapter.read(read_request("list_items", target_ref=first, read_access="public", limit=2))
+    cursor = page["next_cursor"]
+    with pytest.raises(VKWorkspaceError, match="cursor_context_mismatch"):
+        await adapter.read(read_request("list_items", target_ref=second, read_access="public", limit=2, cursor=cursor))
+    with pytest.raises(VKWorkspaceError, match="cursor_context_mismatch"):
+        await adapter.read(read_request("search_items", target_ref=first, query="concert", read_access="public", limit=2, cursor=cursor))
+
+
+@pytest.mark.asyncio
+async def test_captcha_cooldown_is_atomic_with_serialized_provider_call(workspace) -> None:
+    adapter, transport, refs, _, cooldown = workspace
+    community = mint_target(refs)
+    transport.captcha_method = "wall.get"
+    request = read_request("list_items", target_ref=community, read_access="public", limit=1)
+    outcomes = await asyncio.gather(adapter.read(request), adapter.read(request), return_exceptions=True)
+    assert all(isinstance(outcome, VKWorkspaceError) for outcome in outcomes)
+    assert {outcome.code for outcome in outcomes} == {"captcha_cooldown", "cooldown_active"}
+    assert len([call for call in transport.calls if call["method"] == "wall.get"]) == 1
+    assert cooldown.captchas == [VKActor.PUBLIC_READER]
+
+
+@pytest.mark.asyncio
+async def test_concurrent_exact_story_replay_makes_one_provider_call_and_one_receipt(workspace) -> None:
+    adapter, transport, refs, _, _ = workspace
+    community = mint_target(refs)
+    story_asset = refs.mint("asset", {"role": "video", "attachment": "video-101_56", "story_upload_result": "safe-upload-result-123"})
+    intent = validate_prepare_request({"platform": "vk", "action": "story", "idempotency_key": "same-story-concurrent", "target_ref": community, "content": {"media": [{"asset_ref": story_asset, "role": "video"}]}})
+    caller_ref = "op_callerissuedstoryref00000001"
+    first, second = await asyncio.gather(
+        adapter.execute(intent, operation_ref=caller_ref),
+        adapter.execute(intent, operation_ref=caller_ref),
+    )
+    assert first == second
+    assert first["operation_ref"] == caller_ref
+    assert await adapter.reconcile(caller_ref) == first
+    assert len([call for call in transport.calls if call["method"] == "stories.save"]) == 1
+    with pytest.raises(VKWorkspaceError, match="operation_ref_conflict"):
+        await adapter.execute(intent, operation_ref="op_differentcallerref0000000002")

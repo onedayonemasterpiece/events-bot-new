@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import hmac
 import inspect
 import json
 import re
+import secrets
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -32,6 +34,7 @@ from private_events_mcp.social_workspace import (
     SocialTargetKind,
     SocialWorkspaceValidationError,
     TargetLocatorKind,
+    compute_action_digest,
     validate_opaque_ref,
 )
 
@@ -112,6 +115,16 @@ class _CallPolicy:
     optional: frozenset[str] = frozenset()
 
 
+@dataclass(frozen=True, slots=True)
+class _CursorBinding:
+    operation: str
+    resource_fingerprint: str
+    query_fingerprint: str
+    sample_ref: str
+    offset: int
+    nonce: str
+
+
 def _policy(
     actor: VKActor,
     capability: str,
@@ -154,7 +167,7 @@ _CALLS: Mapping[str, _CallPolicy] = {
     "message_forward": _policy(VKActor.USER_MESSENGER, "forward", "messages.send", ["peer_id", "message", "random_id", "forward"]),
     "message_edit": _policy(VKActor.USER_MESSENGER, "edit", "messages.edit", ["peer_id", "message", "message_id"], ["attachment"]),
     "message_delete": _policy(VKActor.USER_MESSENGER, "delete", "messages.delete", ["message_ids", "delete_for_all"]),
-    "story_save": _policy(VKActor.STORY_EDITOR, "story_write", "stories.save", ["upload_results"], ["extended"]),
+    "story_save": _policy(VKActor.STORY_EDITOR, "story_write", "stories.save", ["upload_results", "group_id"], ["extended"]),
 }
 
 VK_FIXED_METHOD_ALLOWLIST = frozenset(policy.method for policy in _CALLS.values())
@@ -220,9 +233,13 @@ class VKWorkspaceAdapter:
         self._sanitize_text = sanitize_text
         self._timeout = float(timeout_seconds)
         self._lock = asyncio.Lock()
-        self._cursors: dict[str, int] = {}
+        self._action_lock = asyncio.Lock()
+        self._cursor_secret = secrets.token_bytes(32)
+        self._cursors: dict[str, _CursorBinding] = {}
         self._samples: dict[str, int] = {}
         self._operations: dict[str, dict[str, Any]] = {}
+        self._idempotency: dict[str, tuple[str, str]] = {}
+        self._operation_claims: dict[str, tuple[str, str]] = {}
 
     def __repr__(self) -> str:
         return "<VKWorkspaceAdapter platform='vk' transport='role_scoped'>"
@@ -243,17 +260,17 @@ class VKWorkspaceAdapter:
             raise VKWorkspaceError("adapter_contract_error")
         if not self._permitted(policy.actor, policy.capability):
             raise VKWorkspaceError("actor_capability_denied")
-        try:
-            await self._await(self._cooldown.ensure_available(policy.actor))
-        except Exception:
-            raise VKWorkspaceError("cooldown_active") from None
-        try:
-            await self._await(self._governor.before_call(policy.actor, policy.capability))
-        except Exception:
-            raise VKWorkspaceError("rate_limited") from None
-        outcome = "failed"
-        try:
-            async with self._lock:
+        async with self._lock:
+            try:
+                await self._await(self._cooldown.ensure_available(policy.actor))
+            except Exception:
+                raise VKWorkspaceError("cooldown_active") from None
+            try:
+                await self._await(self._governor.before_call(policy.actor, policy.capability))
+            except Exception:
+                raise VKWorkspaceError("rate_limited") from None
+            outcome = "failed"
+            try:
                 result = await asyncio.wait_for(
                     self._transport.invoke(
                         actor=policy.actor,
@@ -264,34 +281,34 @@ class VKWorkspaceAdapter:
                     ),
                     timeout=self._timeout,
                 )
-            if isinstance(result, Mapping) and "error" in result:
-                error = result.get("error")
-                code = error.get("error_code") if isinstance(error, Mapping) else None
-                if code == 14:
+                if isinstance(result, Mapping) and "error" in result:
+                    error = result.get("error")
+                    code = error.get("error_code") if isinstance(error, Mapping) else None
+                    if code == 14:
+                        await self._await(self._cooldown.record_captcha(policy.actor))
+                        raise VKWorkspaceError("captcha_cooldown")
+                    raise VKWorkspaceError("provider_unavailable")
+                outcome = "succeeded"
+                await self._await(self._cooldown.record_success(policy.actor))
+                return result
+            except asyncio.CancelledError:
+                outcome = "cancelled"
+                raise
+            except asyncio.TimeoutError:
+                outcome = "outcome_unknown"
+                raise VKWorkspaceError("outcome_unknown") from None
+            except VKWorkspaceError:
+                raise
+            except Exception as exc:
+                if getattr(exc, "code", None) == 14 or getattr(exc, "error_code", None) == 14:
                     await self._await(self._cooldown.record_captcha(policy.actor))
-                    raise VKWorkspaceError("captcha_cooldown")
-                raise VKWorkspaceError("provider_unavailable")
-            outcome = "succeeded"
-            await self._await(self._cooldown.record_success(policy.actor))
-            return result
-        except asyncio.CancelledError:
-            outcome = "cancelled"
-            raise
-        except asyncio.TimeoutError:
-            outcome = "outcome_unknown"
-            raise VKWorkspaceError("outcome_unknown") from None
-        except VKWorkspaceError:
-            raise
-        except Exception as exc:
-            if getattr(exc, "code", None) == 14 or getattr(exc, "error_code", None) == 14:
-                await self._await(self._cooldown.record_captcha(policy.actor))
-                raise VKWorkspaceError("captcha_cooldown") from None
-            raise VKWorkspaceError("provider_unavailable") from None
-        finally:
-            try:
-                await self._await(self._governor.after_call(policy.actor, policy.capability, outcome))
-            except Exception:
-                pass
+                    raise VKWorkspaceError("captcha_cooldown") from None
+                raise VKWorkspaceError("provider_unavailable") from None
+            finally:
+                try:
+                    await self._await(self._governor.after_call(policy.actor, policy.capability, outcome))
+                except Exception:
+                    pass
 
     def _sanitize(self, value: Any) -> Any:
         """Recursively copy provider data and sanitize every string leaf."""
@@ -325,23 +342,80 @@ class VKWorkspaceAdapter:
             raise VKWorkspaceError("opaque_reference_failed")
         return value
 
-    def _cursor(self, offset: int) -> str:
-        token = "cur_" + hashlib.sha256(f"vk:{offset}:{len(self._cursors)}".encode()).hexdigest()[:28]
-        self._cursors[token] = offset
+    @staticmethod
+    def _cursor_context(request: SocialReadRequest, sample_ref: str | None = None) -> tuple[str, str, str, str]:
+        resource = request.target_ref or request.item_ref or "none"
+        resource_fingerprint = hashlib.sha256(resource.encode()).hexdigest()
+        query_fingerprint = hashlib.sha256((request.query or "").encode()).hexdigest()
+        return request.operation.value, resource_fingerprint, query_fingerprint, sample_ref or request.sample_ref or "none"
+
+    def _cursor(self, request: SocialReadRequest, offset: int, *, sample_ref: str | None = None) -> str:
+        operation, resource, query, sample = self._cursor_context(request, sample_ref)
+        nonce = secrets.token_hex(8)
+        binding = _CursorBinding(operation, resource, query, sample, offset, nonce)
+        payload = self._cursor_payload(binding)
+        signature = hmac.new(self._cursor_secret, payload.encode(), hashlib.sha256).hexdigest()[:32]
+        token = f"cur_{nonce}_{signature}"
+        self._cursors[token] = binding
         return token
 
-    def _offset(self, cursor: str | None) -> int:
-        if cursor is None:
+    def _offset(self, request: SocialReadRequest) -> int:
+        if request.cursor is None:
             return 0
-        if cursor not in self._cursors:
+        binding = self._cursors.get(request.cursor)
+        if binding is None:
             raise VKWorkspaceError("cursor_invalid")
-        return self._cursors[cursor]
+        expected = self._cursor_context(request)
+        if (binding.operation, binding.resource_fingerprint, binding.query_fingerprint, binding.sample_ref) != expected:
+            raise VKWorkspaceError("cursor_context_mismatch")
+        payload = self._cursor_payload(binding)
+        expected_token = f"cur_{binding.nonce}_{hmac.new(self._cursor_secret, payload.encode(), hashlib.sha256).hexdigest()[:32]}"
+        if not hmac.compare_digest(request.cursor, expected_token):
+            raise VKWorkspaceError("cursor_invalid")
+        return binding.offset
+
+    @staticmethod
+    def _cursor_payload(binding: _CursorBinding) -> str:
+        return json.dumps({
+            "operation": binding.operation, "resource_fingerprint": binding.resource_fingerprint,
+            "query_fingerprint": binding.query_fingerprint, "sample_ref": binding.sample_ref,
+            "offset": binding.offset, "nonce": binding.nonce,
+        }, sort_keys=True, separators=(",", ":"))
 
     def _target_kind(self, native: Mapping[str, Any]) -> SocialTargetKind:
         try:
             return SocialTargetKind(str(native["kind"]))
         except Exception:
             raise VKWorkspaceError("opaque_reference_failed") from None
+
+    @staticmethod
+    def _valid_user_binding(native: Mapping[str, Any]) -> bool:
+        user_id, peer_id = _int(native.get("user_id")), _int(native.get("peer_id"))
+        return user_id is not None and user_id > 0 and peer_id == user_id
+
+    @staticmethod
+    def _valid_community_binding(native: Mapping[str, Any]) -> bool:
+        group_id, owner_id = _int(native.get("group_id")), _int(native.get("owner_id"))
+        return native.get("kind") == "community" and group_id is not None and group_id > 0 and owner_id == -group_id
+
+    @staticmethod
+    def _valid_community_post(native: Mapping[str, Any]) -> bool:
+        group_id, owner_id, post_id = (
+            _int(native.get("group_id")), _int(native.get("owner_id")), _int(native.get("post_id"))
+        )
+        return native.get("kind") == "post" and group_id is not None and group_id > 0 and owner_id == -group_id and post_id is not None and post_id > 0
+
+    @staticmethod
+    def _valid_message_binding(native: Mapping[str, Any]) -> bool:
+        peer_id, message_id = _int(native.get("peer_id")), _int(native.get("message_id"))
+        return peer_id is not None and peer_id > 0 and message_id is not None and message_id > 0
+
+    @staticmethod
+    def _wall_native(owner_id: int, post_id: int) -> dict[str, Any]:
+        native: dict[str, Any] = {"kind": "post", "owner_id": owner_id, "post_id": post_id}
+        if owner_id < 0:
+            native["group_id"] = -owner_id
+        return native
 
     def _target_preview(self, native: Mapping[str, Any], raw: Mapping[str, Any], *, exact: bool = True) -> dict[str, Any]:
         kind = self._target_kind(native)
@@ -402,12 +476,26 @@ class VKWorkspaceAdapter:
         for action, alternatives in checks.items():
             if any(self._permitted(actor, capability) for actor, capability in alternatives):
                 actions.add(action)
-        if kind is SocialTargetKind.USER:
-            actions &= {SocialAction.SEND_MESSAGE, SocialAction.FORWARD}
-        elif kind in {SocialTargetKind.COMMUNITY, SocialTargetKind.GROUP, SocialTargetKind.CHANNEL}:
-            actions.discard(SocialAction.SEND_MESSAGE)
-        elif kind is SocialTargetKind.SELF:
+        if target_ref is not None:
+            native = self._resolve_ref("target", target_ref)
             actions.clear()
+            if kind is SocialTargetKind.USER and self._valid_user_binding(native):
+                if self._permitted(VKActor.USER_MESSENGER, "dm_send"):
+                    actions.add(SocialAction.SEND_MESSAGE)
+                if self._permitted(VKActor.USER_MESSENGER, "forward"):
+                    actions.add(SocialAction.FORWARD)
+            elif kind is SocialTargetKind.COMMUNITY and self._valid_community_binding(native):
+                community_checks = {
+                    SocialAction.PUBLISH: "post_publish", SocialAction.SCHEDULE: "post_publish",
+                    SocialAction.EDIT: "edit", SocialAction.DELETE: "delete",
+                    SocialAction.FORWARD: "forward", SocialAction.REACTION: "reaction",
+                    SocialAction.COMMENT: "comment",
+                }
+                for action, capability in community_checks.items():
+                    if self._permitted(VKActor.COMMUNITY_EDITOR, capability):
+                        actions.add(action)
+                if self._permitted(VKActor.STORY_EDITOR, "story_write"):
+                    actions.add(SocialAction.STORY)
         return {
             "platform": "vk",
             **({"target_ref": target_ref} if target_ref is not None else {}),
@@ -547,7 +635,7 @@ class VKWorkspaceAdapter:
         if group_id is None or owner_id is None:
             raise VKWorkspaceError("opaque_reference_failed")
         page_size = min(request.page_size, _MAX_RESULT_PAGE)
-        offset = self._offset(request.cursor)
+        offset = self._offset(request)
         sample_ref = request.sample_ref
         if sample_ref is None:
             sample_ref = "smp_" + hashlib.sha256(f"vk:{request.target_ref}:{len(self._samples)}".encode()).hexdigest()[:32]
@@ -581,7 +669,7 @@ class VKWorkspaceAdapter:
             post_id = _int(raw.get("id"))
             if post_id is None:
                 continue
-            item = self._public_item(raw, native={"kind": "post", "owner_id": owner_id, "post_id": post_id})
+            item = self._public_item(raw, native=self._wall_native(owner_id, post_id))
             item["text"] = item["text"][:768]
             item["caption"] = item["caption"][:256]
             selected.append(item)
@@ -606,7 +694,7 @@ class VKWorkspaceAdapter:
             "trust": _TRUST,
         }
         if len(_items(wall_response)) == count and cumulative < request.total_limit:
-            output["next_cursor"] = self._cursor(offset + count)
+            output["next_cursor"] = self._cursor(request, offset + count, sample_ref=sample_ref)
         return output
 
     async def read(self, request: SocialReadRequest) -> Mapping[str, Any]:
@@ -619,7 +707,7 @@ class VKWorkspaceAdapter:
         if request.operation is SocialReadOperation.EDITORIAL_SAMPLE:
             return await self._editorial(request)
         limit = min(request.limit, _MAX_RESULT_PAGE)
-        offset = self._offset(request.cursor)
+        offset = self._offset(request)
 
         if request.operation in {SocialReadOperation.LIST_ITEMS, SocialReadOperation.SEARCH_ITEMS}:
             if request.target_ref:
@@ -640,7 +728,7 @@ class VKWorkspaceAdapter:
                                 results.append(self._public_item(raw, native={"kind": "message", "peer_id": peer_id, "message_id": message_id}, kind=SocialItemKind.MESSAGE))
                         output = {"results": results[:limit], "trust": _TRUST}
                         if len(_items(response)) == limit:
-                            output["next_cursor"] = self._cursor(offset + limit)
+                            output["next_cursor"] = self._cursor(request, offset + limit)
                         return output
                     peer_id = _int(native.get("peer_id"))
                     if peer_id is None:
@@ -657,7 +745,7 @@ class VKWorkspaceAdapter:
                     else:
                         response = await self._call("wall_feed", {"owner_id": owner_id, "count": limit, "offset": offset, "filter": "owner"})
                     raws = _items(response)
-                    results = [self._public_item(raw, native={"kind": "post", "owner_id": owner_id, "post_id": _int(raw.get("id"))}, target_ref=request.target_ref) for raw in raws if _int(raw.get("id")) is not None]
+                    results = [self._public_item(raw, native=self._wall_native(owner_id, _int(raw.get("id"))), target_ref=request.target_ref) for raw in raws if _int(raw.get("id")) is not None]
             else:
                 response = await self._call("newsfeed_search", {"q": request.query or "", "count": limit, **({"start_from": request.cursor} if request.cursor else {})})
                 raws = _items(response)
@@ -665,10 +753,10 @@ class VKWorkspaceAdapter:
                 for raw in raws:
                     owner_id, post_id = _int(raw.get("owner_id")), _int(raw.get("id"))
                     if owner_id is not None and post_id is not None:
-                        results.append(self._public_item(raw, native={"kind": "post", "owner_id": owner_id, "post_id": post_id}))
+                        results.append(self._public_item(raw, native=self._wall_native(owner_id, post_id)))
             output: dict[str, Any] = {"results": results[:limit], "trust": _TRUST}
             if len(raws) == limit and request.target_ref:
-                output["next_cursor"] = self._cursor(offset + limit)
+                output["next_cursor"] = self._cursor(request, offset + limit)
             return output
 
         if request.operation is SocialReadOperation.GET_ITEM:
@@ -766,16 +854,47 @@ class VKWorkspaceAdapter:
             attachments.append(attachment)
         return content.text, ",".join(attachments) if attachments else None
 
-    def _operation_ref(self, intent: SocialActionIntent) -> str:
-        digest = hashlib.sha256((intent.idempotency_key + "\0" + intent.action.value).encode()).hexdigest()
+    @staticmethod
+    def _operation_ref(intent: SocialActionIntent, action_digest: str) -> str:
+        digest = hashlib.sha256((intent.idempotency_key + "\0" + action_digest).encode()).hexdigest()
         return "op_" + digest[:32]
 
-    async def execute(self, intent: SocialActionIntent) -> Mapping[str, Any]:
+    async def execute(
+        self, intent: SocialActionIntent, *, operation_ref: str | None = None
+    ) -> Mapping[str, Any]:
         if intent.platform is not SocialPlatform.VK:
             raise SocialWorkspaceValidationError("VK action is required")
-        operation_ref = self._operation_ref(intent)
-        if operation_ref in self._operations:
-            return dict(self._operations[operation_ref])
+        if operation_ref is not None and not re.fullmatch(r"op_[A-Za-z0-9_-]{24,160}", operation_ref):
+            raise SocialWorkspaceValidationError("operation_ref is invalid")
+        action_digest = compute_action_digest(intent)
+        async with self._action_lock:
+            existing = self._idempotency.get(intent.idempotency_key)
+            if existing is not None:
+                existing_digest, existing_ref = existing
+                if not hmac.compare_digest(existing_digest, action_digest):
+                    raise VKWorkspaceError("idempotency_conflict")
+                if operation_ref is not None and operation_ref != existing_ref:
+                    raise VKWorkspaceError("operation_ref_conflict")
+                receipt = self._operations.get(existing_ref)
+                if receipt is None:
+                    raise VKWorkspaceError("operation_in_progress")
+                return dict(receipt)
+            claimed_ref = operation_ref or self._operation_ref(intent, action_digest)
+            prior_claim = self._operation_claims.get(claimed_ref)
+            claim = (intent.idempotency_key, action_digest)
+            if prior_claim is not None and prior_claim != claim:
+                raise VKWorkspaceError("operation_ref_conflict")
+            self._idempotency[intent.idempotency_key] = (action_digest, claimed_ref)
+            self._operation_claims[claimed_ref] = claim
+            try:
+                return await self._execute_once(intent, claimed_ref)
+            except VKWorkspaceError as exc:
+                status = SocialActionStatus.OUTCOME_UNKNOWN if exc.code == "outcome_unknown" else SocialActionStatus.FAILED
+                receipt = {"platform": "vk", "operation_ref": claimed_ref, "action": intent.action.value, "status": status.value, "retry_safe": False, "error_code": exc.code}
+                self._operations[claimed_ref] = receipt
+                return dict(receipt)
+
+    async def _execute_once(self, intent: SocialActionIntent, operation_ref: str) -> Mapping[str, Any]:
         if intent.expected_revision is not None:
             result = {"platform": "vk", "operation_ref": operation_ref, "action": intent.action.value, "status": "failed", "retry_safe": False, "error_code": "expected_revision_unsupported"}
             self._operations[operation_ref] = result
@@ -789,7 +908,7 @@ class VKWorkspaceAdapter:
         new_item_native: Mapping[str, Any] | None = None
         try:
             if intent.action is SocialAction.SEND_MESSAGE:
-                if target is None or self._target_kind(target) is not SocialTargetKind.USER:
+                if target is None or self._target_kind(target) is not SocialTargetKind.USER or not self._valid_user_binding(target):
                     raise VKWorkspaceError("exact_user_required")
                 peer_id = target.get("peer_id")
                 params = {"peer_id": peer_id, "message": text, "random_id": random_id, **({"attachment": attachments} if attachments else {})}
@@ -803,8 +922,10 @@ class VKWorkspaceAdapter:
                     raise VKWorkspaceError("read_after_write_failed")
                 new_item_native = {"kind": "message", "peer_id": peer_id, "message_id": message_id}
             elif intent.action in {SocialAction.PUBLISH, SocialAction.SCHEDULE}:
-                if target is None or self._target_kind(target) not in {SocialTargetKind.COMMUNITY, SocialTargetKind.GROUP, SocialTargetKind.CHANNEL}:
+                if target is None or self._target_kind(target) is not SocialTargetKind.COMMUNITY:
                     raise VKWorkspaceError("community_required")
+                if not self._valid_community_binding(target):
+                    raise VKWorkspaceError("community_binding_invalid")
                 params = {"owner_id": target.get("owner_id"), "from_group": 1, "message": text, "guid": guid, "signed": 0, **({"attachments": attachments} if attachments else {})}
                 if intent.action is SocialAction.SCHEDULE:
                     assert intent.schedule_at is not None
@@ -812,49 +933,65 @@ class VKWorkspaceAdapter:
                 response = await self._call("wall_post", params)
                 post_id = response.get("post_id") if isinstance(response, Mapping) else None
                 if type(post_id) is not int: raise VKWorkspaceError("provider_unavailable")
-                new_item_native = {"kind": "post", "owner_id": target.get("owner_id"), "post_id": post_id}
+                new_item_native = self._wall_native(target["owner_id"], post_id)
             elif intent.action is SocialAction.COMMENT:
-                if item is None: raise VKWorkspaceError("item_required")
+                if item is None or not self._valid_community_post(item): raise VKWorkspaceError("community_post_required")
                 params = {"owner_id": item.get("owner_id"), "post_id": item.get("post_id"), "message": text, "guid": guid, "from_group": 1, **({"attachments": attachments} if attachments else {})}
                 response = await self._call("wall_comment", params)
                 comment_id = response.get("comment_id") if isinstance(response, Mapping) else None
                 if type(comment_id) is not int: raise VKWorkspaceError("provider_unavailable")
                 new_item_native = {"kind": "comment", "owner_id": item.get("owner_id"), "post_id": item.get("post_id"), "comment_id": comment_id}
             elif intent.action is SocialAction.REACTION:
-                if item is None or intent.reaction not in {"like", "unlike"}: raise VKWorkspaceError("reaction_unsupported")
+                if item is None or not self._valid_community_post(item): raise VKWorkspaceError("community_post_required")
+                if intent.reaction not in {"like", "unlike"}: raise VKWorkspaceError("reaction_unsupported")
                 await self._call("like_add" if intent.reaction == "like" else "like_delete", {"type": "post", "owner_id": item.get("owner_id"), "item_id": item.get("post_id")})
             elif intent.action is SocialAction.EDIT:
                 if item is None: raise VKWorkspaceError("item_required")
                 if item.get("kind") == "message":
+                    if not self._valid_message_binding(item): raise VKWorkspaceError("message_binding_invalid")
                     await self._call("message_edit", {"peer_id": item.get("peer_id"), "message": text, "message_id": item.get("message_id"), **({"attachment": attachments} if attachments else {})})
                 else:
+                    if not self._valid_community_post(item): raise VKWorkspaceError("community_post_required")
                     await self._call("wall_edit", {"owner_id": item.get("owner_id"), "post_id": item.get("post_id"), "message": text, **({"attachments": attachments} if attachments else {})})
             elif intent.action is SocialAction.DELETE:
                 if item is None: raise VKWorkspaceError("item_required")
                 if item.get("kind") == "message":
+                    if not self._valid_message_binding(item): raise VKWorkspaceError("message_binding_invalid")
                     await self._call("message_delete", {"message_ids": str(item.get("message_id")), "delete_for_all": 1})
                 else:
+                    if not self._valid_community_post(item): raise VKWorkspaceError("community_post_required")
                     await self._call("wall_delete", {"owner_id": item.get("owner_id"), "post_id": item.get("post_id")})
             elif intent.action is SocialAction.FORWARD:
                 if item is None or destination is None: raise VKWorkspaceError("destination_required")
                 if item.get("kind") == "message":
+                    if not self._valid_message_binding(item) or self._target_kind(destination) is not SocialTargetKind.USER or not self._valid_user_binding(destination):
+                        raise VKWorkspaceError("exact_user_required")
                     forward = json.dumps({"peer_id": item.get("peer_id"), "message_ids": [item.get("message_id")]}, separators=(",", ":"))
                     await self._call("message_forward", {"peer_id": destination.get("peer_id"), "message": "", "random_id": random_id, "forward": forward})
                 else:
-                    params = {"object": f"wall{item.get('owner_id')}_{item.get('post_id')}"}
-                    if destination.get("group_id") is not None: params["group_id"] = destination.get("group_id")
+                    if _int(item.get("owner_id")) is None or _int(item.get("post_id")) is None:
+                        raise VKWorkspaceError("wall_post_required")
+                    if self._target_kind(destination) is not SocialTargetKind.COMMUNITY:
+                        raise VKWorkspaceError("community_required")
+                    if not self._valid_community_binding(destination):
+                        raise VKWorkspaceError("community_binding_invalid")
+                    params = {"object": f"wall{item.get('owner_id')}_{item.get('post_id')}", "group_id": destination["group_id"]}
                     await self._call("wall_repost", params)
             elif intent.action is SocialAction.STORY:
+                if target is None or self._target_kind(target) is not SocialTargetKind.COMMUNITY:
+                    raise VKWorkspaceError("community_required")
+                if not self._valid_community_binding(target):
+                    raise VKWorkspaceError("community_binding_invalid")
                 if not intent.content or len(intent.content.media) != 1:
                     raise VKWorkspaceError("story_requires_one_asset")
                 binding = self._resolve_ref("asset", intent.content.media[0].asset_ref)
                 upload_result = binding.get("story_upload_result")
                 if not isinstance(upload_result, str) or not re.fullmatch(r"[A-Za-z0-9._~-]{8,2048}", upload_result):
                     raise VKWorkspaceError("asset_not_ready")
-                response = await self._call("story_save", {"upload_results": upload_result, "extended": 0})
+                response = await self._call("story_save", {"upload_results": upload_result, "group_id": target["group_id"], "extended": 0})
                 stories = _items(response)
                 if stories and _int(stories[0].get("id")) is not None:
-                    new_item_native = {"kind": "story", "owner_id": target.get("owner_id") if target else None, "story_id": stories[0]["id"]}
+                    new_item_native = {"kind": "story", "group_id": target["group_id"], "owner_id": target["owner_id"], "story_id": stories[0]["id"]}
             else:
                 raise SocialWorkspaceValidationError("unsupported VK action")
         except VKWorkspaceError as exc:
