@@ -705,6 +705,12 @@ caller, не относительно shell working directory.
 маркера не является допустимым sanitized evidence, даже если upload-step был
 разрешён локальной проверкой `hashFiles`.
 
+Browser runtime probe сохраняет в allowlist оба неприватных server identity:
+`request_id` и `receipt_id`. После UI journey root-wrapper читает каждый receipt
+через owner-scoped `get_event_search_receipt_v1` и сверяет режим, revisions и
+rendered response IDs; отсутствие `receipt_id` является terminal failure, а не
+причиной пропустить server-side gate.
+
 Перед remote launch static builder делает online SQLite snapshot, одним чтением
 копирует v2 Search receipt в snapshot-scoped immutable файл и тем же canonical
 export contract вычисляет полный `catalog_revision` snapshot. Несовпадение

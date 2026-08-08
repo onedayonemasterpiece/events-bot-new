@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Fixed the serialized browser Search runtime probe to retain the server
+  `receipt_id` needed by the owner-scoped receipt RPC gate. A successful live
+  UI journey no longer fails afterward because the sanitized probe dropped its
+  non-secret receipt identity.
+
 - Fixed sanitized Search evidence uploads to include the hidden
   `.redaction-ok` marker. Browser, Android and iOS artifacts can now prove the
   same redaction gate that authorized their upload instead of silently dropping
