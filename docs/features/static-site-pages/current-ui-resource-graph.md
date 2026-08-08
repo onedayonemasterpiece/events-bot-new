@@ -116,6 +116,9 @@ large-poster-plus-small-photo-preview specimen after all page-family
 representatives, before generic outliers. The
 canonical workflow therefore uses a bounded budget of 23 pages / 46 core
 viewport screenshots rather than relying on an accidental structural outlier.
+Its total serialized evidence budget is explicitly capped at 90 MiB; the
+workflow validates both the declared cap and that the final pre-manifest byte
+count remains below it.
 
 Media inside `DesktopEventPage` is also recorded without inventing Astro
 component boundaries: the primary large frame, split small-photo rail,
