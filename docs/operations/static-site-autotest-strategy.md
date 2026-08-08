@@ -772,5 +772,13 @@ broker и сохраняет только sanitized receipts. Post-deploy failur
 blocking; scheduled failures становятся promotion-blocking только после
 зафиксированных 50 browser / 10 Android / 10 iOS consecutive PASS thresholds.
 
+Ручной запуск имеет отдельную быструю политику `live_consistent` для отладки
+только Search journey на уже опубликованной `/poisk/`. Она разрешает ожидаемый
+drift между старым candidate receipt и живым каталогом, но требует валидные и
+одинаковые catalog/corpus revisions во всех ответах journey и полное совпадение
+каждого ответа с owner-scoped server receipt. Scheduled и post-deploy jobs
+fail-closed используют только `release_exact`; быстрый режим не продвигает
+release и не требует полной генерации 1300+ статических страниц.
+
 Нельзя откладывать Android/iOS до «когда-нибудь после общей системы», но нельзя и
 заставлять каждый authenticated business test повторять дорогой real-mail OTP.

@@ -16,6 +16,7 @@ test('Search workflow has independent no-mail schedules, L2 jobs and blocking po
   const source = await readFile(workflowUrl, 'utf8');
   const parsed = YAML.parse(source);
   assert.ok(parsed?.on?.workflow_dispatch);
+  assert.deepEqual(parsed?.on?.workflow_dispatch?.inputs?.revision_policy?.options, ['release_exact', 'live_consistent']);
   assert.deepEqual(parsed?.on?.repository_dispatch?.types, ['static-site-search-post-deploy']);
   assert.deepEqual(parsed?.on?.schedule?.map((item) => item.cron), [
     '17,47 * * * *', '23 */3 * * *', '41 1,7,13,19 * * *', '19 2 * * *',
@@ -29,6 +30,9 @@ test('Search workflow has independent no-mail schedules, L2 jobs and blocking po
   assert.match(source, /runs-on: macos-15/u);
   assert.match(source, /static-site-search-post-deploy/u);
   assert.match(source, /AUTH_SESSION_BROKER_OIDC_AUDIENCE: kenigevents-static-search-broker/u);
+  assert.match(source, /E2E_SEARCH_REVISION_POLICY/u);
+  assert.match(source, /workflow_dispatch:\*\) variants=.*revision_policy="\$INPUT_REVISION_POLICY"/u);
+  assert.match(source, /schedule:.*revision_policy=release_exact/u);
   assert.match(source, /environment: \{ name: search-e2e \}/u);
   assert.match(source, /exit 1/u);
   assert.doesNotMatch(source, /focus-email|E2E_MAIL|IMAP|POSTBOX|real.?mail/iu);

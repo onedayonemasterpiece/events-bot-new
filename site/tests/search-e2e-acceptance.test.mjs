@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import {
   assertExecutionReceipt,
   assertResponseRenderedIds,
+  assertSearchRevisionPolicy,
   assertUniqueCards,
   summarizeSearchPayload,
 } from '../e2e/search/acceptance.mjs';
@@ -69,6 +70,40 @@ test('rendered IDs and duplicate family assertions are strict', () => {
   assert.doesNotThrow(() => assertResponseRenderedIds({ response_ids: ['2', '3'] }, { rendered_ids: ['1', '2', '3'] }, { prefixIds: ['1'] }));
   assert.throws(() => assertResponseRenderedIds({ response_ids: ['2'] }, { rendered_ids: ['1', '3'] }, { prefixIds: ['1'] }), /ids_mismatch/u);
   assert.throws(() => assertUniqueCards({ rendered_ids: ['1', '2'], rendered_families: ['family:1,2', 'family:1,2'] }), /duplicate_families/u);
+});
+
+test('Search debug accepts one internally consistent live revision while release remains exact', () => {
+  const identity = {
+    catalogRevision: 'a'.repeat(64),
+    corpusRevision: 'b'.repeat(64),
+  };
+  const response = {
+    catalog_revision: 'c'.repeat(64),
+    corpus_revision: 'd'.repeat(64),
+  };
+  const journey = {
+    query_cases: [{
+      pages: [{ response }],
+      cache_warm: { response: { ...response } },
+      cache_repeat: { response: { ...response } },
+    }],
+  };
+  assert.throws(
+    () => assertSearchRevisionPolicy(journey, identity, 'release_exact'),
+    /search_target_response_revision_mismatch/u,
+  );
+  assert.deepEqual(assertSearchRevisionPolicy(journey, identity, 'live_consistent'), {
+    policy: 'live_consistent',
+    catalog_revision: 'c'.repeat(64),
+    corpus_revision: 'd'.repeat(64),
+    response_count: 3,
+  });
+  const drifted = structuredClone(journey);
+  drifted.query_cases[0].cache_repeat.response.catalog_revision = 'e'.repeat(64);
+  assert.throws(
+    () => assertSearchRevisionPolicy(drifted, identity, 'live_consistent'),
+    /search_response_revision_changed_during_journey/u,
+  );
 });
 
 test('manifest has only the four closed execution modes and exact policies', () => {

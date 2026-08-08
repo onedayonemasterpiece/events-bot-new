@@ -16,6 +16,13 @@
 
 ### Fixed
 
+- Split iterative Search debugging from the multi-hour full-site release gate.
+  Manual canaries may use a live-consistent revision policy that still proves
+  exact page SHA, one stable catalog/corpus pair and owner-scoped receipts,
+  while schedules and post-deploy promotion remain strict `release_exact`.
+  Failed revision checks now retain sanitized journey counters and cases for
+  diagnosis instead of discarding otherwise successful Search evidence.
+
 - Fixed the production-root prelaunch registration contract without changing its visual, background or SEO/GEO surface: first and repeat RPC receipts are now distinct, the final normalized-email insert is race-safe, and the browser keeps permanent success/reload state while retaining input on errors and locking duplicate submits. Added exact-main release, metadata-preserving rollback and incident regression gates.
 
 - Redacted private Events MCP path and authorization credentials from aiohttp
