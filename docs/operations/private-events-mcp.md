@@ -68,11 +68,23 @@ The operator enters the bootstrap token on the authorization page. Rotate `PRIVA
 
 Every tool is annotated read-only, non-destructive and idempotent.
 
+Each streamable-HTTP `POST` accepts exactly one JSON-RPC object. JSON-RPC
+batches are rejected with HTTP `400`, so a caller cannot multiply SQLite work
+inside one admission/rate slot. When `MCP-Protocol-Version` is present it must
+name a supported protocol version; invalid or unsupported versions also fail
+closed with HTTP `400`.
+
 ## Data and privacy boundary
 
 The implementation has no raw SQL tool. User input is accepted only as bounded typed arguments and is applied to internal parameterized statements.
 
 Included event evidence is limited to explicit allowlisted columns. Column names containing `password`, `secret`, `token` or `api_key` are removed defensively. The MCP package never reads process environment values back to a tool response.
+
+Decoded runtime JSON is recursively redacted for credential-bearing keys,
+authorization material and personal operator identifiers, including nested
+objects and arrays. Credential-shaped values embedded in text are redacted as
+well. Telegram, VK and other source text is explicitly labeled as untrusted
+external data and must never be treated as instructions.
 
 No direct Telegram, VK, MAX, Supabase, Telegraph, Catbox, ImageKit or LLM request is made by the MCP package. It reads already persisted evidence only. Images and videos are not proxied.
 
@@ -161,5 +173,8 @@ Activation is accepted only when all of the following are recorded:
 8. event database SHA-256 or SQLite `data_version` evidence is unchanged across smoke queries;
 9. Telegram webhook latency/error counters show no material regression;
 10. credentials never appear in logs, commits, PR text or CI artifacts.
+11. unsupported `MCP-Protocol-Version` and JSON-RPC batch requests both return
+    HTTP `400`;
+12. nested synthetic credentials do not appear in any tool output.
 
 Rollback is setting `PRIVATE_EVENTS_MCP_ENABLED=0` and redeploying the exact approved SHA. The OAuth state database can remain on the volume; it is isolated from event data.

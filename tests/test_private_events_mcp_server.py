@@ -164,3 +164,41 @@ async def test_invalid_bearer_is_http_401_with_resource_metadata(config) -> None
         assert "resource_metadata" in response.headers["WWW-Authenticate"]
     finally:
         await client.close()
+
+
+@pytest.mark.asyncio
+async def test_jsonrpc_batch_is_rejected_to_preserve_request_budget(config) -> None:
+    app = web.Application()
+    attach_private_events_mcp(app, config)
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        response = await client.post(
+            config.mcp_path,
+            json=[
+                {"jsonrpc": "2.0", "id": 1, "method": "ping", "params": {}},
+                {"jsonrpc": "2.0", "id": 2, "method": "ping", "params": {}},
+            ],
+        )
+        assert response.status == 400
+        assert (await response.json())["error"] == "jsonrpc_batch_not_supported"
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_unsupported_protocol_header_is_rejected(config) -> None:
+    app = web.Application()
+    attach_private_events_mcp(app, config)
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        response = await client.post(
+            config.mcp_path,
+            json={"jsonrpc": "2.0", "id": 1, "method": "ping", "params": {}},
+            headers={"MCP-Protocol-Version": "2099-01-01"},
+        )
+        assert response.status == 400
+        assert (await response.json())["error"] == "unsupported_mcp_protocol_version"
+    finally:
+        await client.close()

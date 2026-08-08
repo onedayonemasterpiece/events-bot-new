@@ -14,7 +14,11 @@ from .config import PrivateEventsMCPConfig
 from .crypto import AccessIdentity, TokenValidationError
 from .limits import AdmissionController, RateLimitExceeded
 from .oauth import PrivateOAuthServer
-from .protocol import LATEST_LEGACY_PROTOCOL, MCPProtocol
+from .protocol import (
+    LATEST_LEGACY_PROTOCOL,
+    SUPPORTED_LEGACY_PROTOCOLS,
+    MCPProtocol,
+)
 from .repository import EventsEvidenceRepository
 from .tool_catalog import build_tools
 
@@ -119,6 +123,13 @@ class PrivateEventsMCPServer:
         method = ""
         try:
             self._validate_transport_request(request)
+            protocol_header = (request.headers.get("MCP-Protocol-Version") or "").strip()
+            if protocol_header and protocol_header not in SUPPORTED_LEGACY_PROTOCOLS:
+                return self._plain_error(
+                    400,
+                    "unsupported_mcp_protocol_version",
+                    correlation_id=correlation,
+                )
             if request.content_length is not None and request.content_length > self.config.max_request_bytes:
                 return self._plain_error(413, "request_too_large", correlation_id=correlation)
             content_type = (request.content_type or "").casefold()
@@ -157,29 +168,25 @@ class PrivateEventsMCPServer:
                     payload = json.loads(body)
                 except (UnicodeDecodeError, json.JSONDecodeError):
                     return self._plain_error(400, "invalid_json", correlation_id=correlation)
-                requests: list[Mapping[str, Any]]
-                batch = isinstance(payload, list)
-                if batch:
-                    if not payload or len(payload) > 16 or not all(isinstance(item, Mapping) for item in payload):
-                        return self._plain_error(400, "invalid_jsonrpc_batch", correlation_id=correlation)
-                    requests = list(payload)
-                elif isinstance(payload, Mapping):
-                    requests = [payload]
-                else:
+                # MCP 2025-06-18 and later require one JSON-RPC message per
+                # HTTP POST. Rejecting batches also prevents one request from
+                # multiplying database work while consuming a single rate slot.
+                if isinstance(payload, list):
+                    return self._plain_error(
+                        400,
+                        "jsonrpc_batch_not_supported",
+                        correlation_id=correlation,
+                    )
+                if not isinstance(payload, Mapping):
                     return self._plain_error(400, "jsonrpc_object_required", correlation_id=correlation)
-                responses: list[dict[str, Any]] = []
-                for item in requests:
-                    if not method:
-                        method = str(item.get("method") or "")[:100]
-                    response = await self.protocol.dispatch(item, identity)
-                    if response is not None:
-                        responses.append(response)
-                if not responses:
+                request_message = payload
+                method = str(request_message.get("method") or "")[:100]
+                response_payload = await self.protocol.dispatch(request_message, identity)
+                if response_payload is None:
                     return web.Response(
                         status=202,
                         headers=self._security_headers(correlation),
                     )
-                response_payload: Any = responses if batch else responses[0]
                 encoded = json.dumps(
                     response_payload,
                     ensure_ascii=False,
@@ -187,7 +194,7 @@ class PrivateEventsMCPServer:
                     separators=(",", ":"),
                 ).encode("utf-8")
                 if len(encoded) > self.config.max_response_bytes:
-                    request_id = requests[0].get("id") if len(requests) == 1 else None
+                    request_id = request_message.get("id")
                     response_payload = {
                         "jsonrpc": "2.0",
                         "id": request_id,

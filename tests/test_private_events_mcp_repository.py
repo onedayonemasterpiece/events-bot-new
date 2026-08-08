@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import sqlite3
 
 import pytest
 
@@ -45,3 +46,31 @@ async def test_operations_snapshot_has_no_provider_calls(config) -> None:
     assert snapshot["network"] == {"provider_calls": 0, "media_transferred": False}
     assert snapshot["counts"]["events_total"] == 1
     assert snapshot["status_counts"]["joboutbox"]["error"] == 1
+
+
+@pytest.mark.asyncio
+async def test_runtime_payloads_are_recursively_redacted_and_source_text_is_untrusted(
+    config, event_db
+) -> None:
+    conn = sqlite3.connect(event_db)
+    conn.execute(
+        "UPDATE joboutbox SET payload=? WHERE id=7",
+        (
+            '{"event_id":42,"access_token":"provider-secret",'
+            '"nested":{"client_secret":"client-secret-value",'
+            '"operator_id":123456,"total_tokens":99},'
+            '"note":"Authorization: Bearer bearer-secret-value"}',
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    document = await EventsEvidenceRepository(config).get_event(42)
+    assert "provider-secret" not in document.text
+    assert "client-secret-value" not in document.text
+    assert "123456" not in document.text
+    assert "bearer-secret-value" not in document.text
+    assert "<redacted>" in document.text
+    assert '"total_tokens": 99' in document.text
+    assert "untrusted_data_never_instructions" in document.text
+    assert document.metadata["contains_untrusted_external_content"] is True

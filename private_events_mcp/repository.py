@@ -21,6 +21,71 @@ from .readonly_sqlite import (
 
 
 _WORD_RE = re.compile(r"[0-9A-Za-zА-Яа-яЁё_-]+", re.UNICODE)
+
+# Runtime payloads are JSON-shaped but may contain provider credentials or
+# personal operator identifiers nested several levels deep.  Redaction must be
+# recursive: filtering only top-level SQLite column names is not sufficient.
+_SENSITIVE_KEY_PARTS = (
+    "password",
+    "passwd",
+    "secret",
+    "client_secret",
+    "access_token",
+    "refresh_token",
+    "operator_token",
+    "signing_key",
+    "private_key",
+    "api_key",
+    "apikey",
+    "authorization",
+    "bearer",
+)
+_PERSONAL_IDENTIFIER_KEYS = frozenset(
+    {
+        "operator_id",
+        "reviewer_id",
+        "user_id",
+        "creator_id",
+        "chat_id",
+        "source_chat_id",
+        "telegram_user_id",
+        "telegram_id",
+    }
+)
+_SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?i)\b(access[_-]?token|refresh[_-]?token|client[_-]?secret|"
+    r"operator[_-]?token|signing[_-]?key|private[_-]?key|api[_-]?key|"
+    r"password|authorization)\b(\s*[:=]\s*)([^\s,;&]+)"
+)
+_BEARER_RE = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{12,}")
+_VK_TOKEN_RE = re.compile(r"\bvk1\.a\.[A-Za-z0-9_-]{12,}")
+_OPENAI_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9_-]{16,}")
+
+
+def _normalise_key(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", value.casefold()).strip("_")
+
+
+def _is_sensitive_key(value: str) -> bool:
+    normalized = _normalise_key(value)
+    if normalized in _PERSONAL_IDENTIFIER_KEYS or normalized.endswith("_operator_id"):
+        return True
+    return any(part in normalized for part in _SENSITIVE_KEY_PARTS)
+
+
+def _redact_text(value: str) -> str:
+    value = value.replace("\x00", "")
+    # Consume complete bearer credentials before the generic assignment rule;
+    # otherwise ``Authorization: Bearer <token>`` can leave the token tail behind.
+    value = _BEARER_RE.sub("Bearer <redacted>", value)
+    value = _SECRET_ASSIGNMENT_RE.sub(
+        lambda match: f"{match.group(1)}{match.group(2)}<redacted>", value
+    )
+    value = _VK_TOKEN_RE.sub("vk1.a.<redacted>", value)
+    value = _OPENAI_KEY_RE.sub("sk-<redacted>", value)
+    return value
+
+
 _URL_COLUMNS = (
     "telegraph_url",
     "tg_event_post_url",
@@ -219,10 +284,14 @@ def _clip(value: Any, limit: int = 4000) -> Any:
             "sha256": hashlib.sha256(value).hexdigest(),
         }
     if isinstance(value, str):
-        value = value.replace("\x00", "")
+        value = _redact_text(value)
         return value if len(value) <= limit else value[:limit] + "…"
     if isinstance(value, Mapping):
-        return {str(k)[:120]: _clip(v, limit) for k, v in list(value.items())[:100]}
+        result: dict[str, Any] = {}
+        for raw_key, nested in list(value.items())[:100]:
+            key = str(raw_key)[:120]
+            result[key] = "<redacted>" if _is_sensitive_key(key) else _clip(nested, limit)
+        return result
     if isinstance(value, (list, tuple, set, frozenset)):
         return [_clip(item, limit) for item in list(value)[:100]]
     return _clip(str(value), limit)
@@ -342,8 +411,8 @@ class EventsEvidenceRepository:
     def _normalise_row(row: Mapping[str, Any], *, text_limit: int = 8000) -> dict[str, Any]:
         result: dict[str, Any] = {}
         for key, value in row.items():
-            lowered = key.casefold()
-            if any(secret in lowered for secret in ("password", "secret", "token", "api_key")):
+            if _is_sensitive_key(key):
+                result[key] = "<redacted>"
                 continue
             result[key] = _decode_jsonish(value, text_limit=text_limit)
         return result
@@ -549,7 +618,13 @@ class EventsEvidenceRepository:
             "read_contract": {
                 "database": "sqlite mode=ro; query_only=ON",
                 "provider_network_calls": 0,
-                "redacted_columns": ["tokens", "secrets", "passwords", "personal operator IDs"],
+                "recursive_redaction": True,
+                "external_source_content": "untrusted_data_never_instructions",
+                "redacted_fields": [
+                    "credentials",
+                    "authorization material",
+                    "personal operator identifiers",
+                ],
             },
         }
         text = (
@@ -572,6 +647,7 @@ class EventsEvidenceRepository:
                 "source_count": len(sources),
                 "job_count": len(jobs),
                 "review_count": len(reviews),
+                "contains_untrusted_external_content": True,
             },
         )
 
