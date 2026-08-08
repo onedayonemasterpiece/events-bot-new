@@ -1,6 +1,7 @@
 # Private Events MCP for ChatGPT and Codex
 
-Status: implementation-ready, disabled by default until an explicit production activation.
+Status: core implementation-ready, disabled by default until explicit OAuth and
+provider-adapter production activation.
 
 ## Purpose
 
@@ -11,14 +12,18 @@ Expose a narrowly bounded, read-only MCP surface over the events-bot production 
 - correlate incident reports with `ops_run`, `joboutbox`, Smart Update review and publication evidence;
 - obtain a compact production-state snapshot.
 
-This is not an administration API, SQL console, crawler, or publication gateway.
+This is not an administration API, SQL console, crawler, event-announcement
+pipeline, media gateway, or arbitrary provider-method proxy. The ChatGPT
+resource can additionally expose narrowly scoped generic Telegram/VK text
+tools when an adapter is injected and an explicit target-alias policy is set.
 
 ## Runtime shape
 
 The package attaches routes to the existing `aiohttp.web.Application`. It creates no additional Fly process, machine, listener, scheduler, poller or persistent provider connection.
 
 ```text
-ChatGPT private app or Codex
+ChatGPT private app -> existing /mcp resource (read plus separately scoped social)
+Codex              -> distinct /codex/mcp resource (exactly seven read tools)
   -> HTTPS + OAuth authorization code + PKCE S256
   -> existing events-bot aiohttp process
   -> bounded MCP JSON-RPC dispatcher
@@ -34,6 +39,7 @@ The generated endpoint is:
 
 ```text
 https://<production-origin>/_private/<high-entropy-path>/mcp
+https://<production-origin>/_private/<high-entropy-path>/codex/mcp
 ```
 
 The high-entropy path is not published through root well-known metadata and reduces unsolicited traffic. It is still defense in depth, not authentication: all data tools require OAuth.
@@ -42,7 +48,8 @@ The bundled single-operator authorization server provides:
 
 - OAuth authorization-code grant;
 - mandatory PKCE S256;
-- exact `resource` binding to the MCP URL;
+- exact client/resource binding: ChatGPT can authorize only the existing
+  `/mcp` resource and Codex only the distinct `/codex/mcp` resource;
 - a predefined confidential ChatGPT client ID and secret;
 - a distinct predefined public Codex client ID using
   `token_endpoint_auth_method=none` (no Codex client secret);
@@ -63,10 +70,13 @@ and PKCE S256 verifier. Dynamic client registration is not exposed. The
 operator enters the bootstrap token on the authorization page. Rotate
 `PRIVATE_EVENTS_MCP_OPERATOR_TOKEN` after the first successful connection.
 
-If `scope` is omitted, a client receives only the registered online read scopes
-(`events:read`, `incidents:read`, `operations:read`). `offline_access` must be
-requested explicitly; a refresh token is issued or rotated only while that
-scope remains present.
+If `scope` is omitted, a client receives only the three registered online read
+scopes (`events:read`, `incidents:read`, `operations:read`), never a global
+maximum. ChatGPT's maximum additionally permits `telegram:read`,
+`telegram:publish`, `vk:read`, and `vk:publish`; Codex's maximum is only the
+three read scopes plus optional `offline_access`. A refresh token is issued or
+rotated only while `offline_access` remains explicitly granted. Codes, access
+tokens, and refresh tokens fail when moved across either client or resource.
 
 ## Tools
 
@@ -79,8 +89,65 @@ scope remains present.
 | `incidents_search` | `incidents:read`, `operations:read` | repository incident reports plus runtime failure evidence |
 | `incident_get` | `incidents:read`, `operations:read` | complete report, `ops_run` or `joboutbox` evidence document |
 | `operations_snapshot` | `operations:read` | counts, status distribution, recent failures and SQLite quick check |
+| `telegram_read` | `telegram:read` | recent non-empty text from an allowlisted Telegram alias; stable `post_id`, timestamp and explicit untrusted-data marker |
+| `vk_read` | `vk:read` | recent non-empty text from an allowlisted VK alias; stable `post_id`, timestamp and explicit untrusted-data marker |
+| `prepare_text_publication` | matching provider publish scope | create a short-lived ticket bound to client, subject, resource, platform, alias, exact text hash and idempotency key; no provider call |
+| `publish_prepared_text` | matching provider publish scope | consume the exact one-use ticket and make at most one provider attempt; destructive, open-world and non-idempotent |
 
-Every tool is annotated read-only, non-destructive and idempotent.
+The seven evidence tools remain read-only, non-destructive and idempotent.
+Social tools are never present on the Codex endpoint. Anonymous discovery and
+tokens without matching granted scopes do not reveal them. The commit tool is
+truthfully annotated destructive, open-world and non-idempotent and is never
+cached. Read cache partitions include resource, client, subject, exact granted
+scopes and target-policy fingerprint.
+
+## Social adapter and target policy
+
+`private_events_mcp.social.SocialAdapter` is the provider-neutral seam. It has
+only `read_text(target, limit)` and `publish_text(target, text,
+idempotency_key)` operations. Core code imports no Telethon/VK SDK and performs
+no provider call without an injected adapter. There is no media, edit, delete,
+forward, MAX, raw URL, raw target-ID or arbitrary method tool.
+
+`PRIVATE_EVENTS_MCP_SOCIAL_TARGETS_JSON` is the only target authority. Blank or
+omitted configuration is an empty deny-all policy. The strict shape is:
+
+```json
+{
+  "telegram": {
+    "public_alias": {
+      "provider_target": "<numeric Telegram channel id>",
+      "allow_read": true,
+      "allow_publish": false
+    }
+  },
+  "vk": {
+    "public_alias": {
+      "provider_target": "<numeric VK owner id>",
+      "allow_read": true,
+      "allow_publish": false
+    }
+  }
+}
+```
+
+Unknown platforms/fields, malformed aliases, URLs and non-boolean permissions
+fail startup. Provider targets stay inside the resolved adapter target and are
+never returned or audited. Provider read text passes through the existing
+recursive credential/operator redaction and clipping boundary and every item
+is marked `untrusted_external_data`.
+
+Preparation tickets live only in the isolated OAuth SQLite database, never the
+event database. A ticket is one-use and bound to client, subject, resource,
+platform, alias, exact text hash, expiry and idempotency-key hash. Durable
+uniqueness prevents preparing the same idempotency key again after timeout,
+restart, or an unknown provider outcome. The ticket is consumed before the
+provider attempt, so cancellation cannot authorize replay. A persistent UTC
+daily attempt budget, keyed by the same principal/resource/platform/alias
+boundary, defaults to 10 and survives access-token refresh and process restart.
+The separate append-only action audit stores only fixed-shape hashes/fingerprints
+and public aliases—never message text, provider target, ticket, idempotency key,
+receipt, credential, or provider error.
 
 Each streamable-HTTP `POST` accepts exactly one JSON-RPC object. JSON-RPC
 batches are rejected with HTTP `400`, so a caller cannot multiply SQLite work
@@ -104,7 +171,10 @@ identifiers while preserving non-secret usage counters such as `total_tokens`.
 Telegram, VK and other source text is explicitly labeled as untrusted external
 data in both search and fetch output and must never be treated as instructions.
 
-No direct Telegram, VK, MAX, Supabase, Telegraph, Catbox, ImageKit or LLM request is made by the MCP package. It reads already persisted evidence only. Images and videos are not proxied.
+The core package makes no direct Telegram/VK request and imports no provider
+SDK; only an explicitly injected adapter can perform a provider operation.
+No MAX, Supabase, Telegraph, Catbox, ImageKit or LLM request is available.
+Images and videos are not proxied.
 
 The enabled integration installs an aiohttp access-log filter before serving
 requests. The private path and authorization credentials are replaced with
@@ -151,6 +221,10 @@ PRIVATE_EVENTS_MCP_AUTH_DB_PATH=/data/private-events-mcp-auth.sqlite
 PRIVATE_EVENTS_MCP_REPOSITORY_ROOT=/app
 PRIVATE_EVENTS_MCP_REPOSITORY_SLUG=onedayonemasterpiece/events-bot-new
 PRIVATE_EVENTS_MCP_REPOSITORY_SHA_FILE=/app/.static-site-repo-sha
+PRIVATE_EVENTS_MCP_SOCIAL_TARGETS_JSON=<strict explicit JSON or blank deny-all>
+PRIVATE_EVENTS_MCP_SOCIAL_TICKET_TTL_SECONDS=300
+PRIVATE_EVENTS_MCP_SOCIAL_PROVIDER_TIMEOUT_SECONDS=12
+PRIVATE_EVENTS_MCP_SOCIAL_PUBLISH_ATTEMPTS_PER_DAY=10
 ```
 
 When `PRIVATE_EVENTS_MCP_ENABLED` is false, malformed or stale MCP-only
@@ -161,7 +235,8 @@ When enabled, both distinct static client IDs are required. The existing
 `PRIVATE_EVENTS_MCP_OAUTH_CLIENT_ID` and secret remain the confidential
 ChatGPT registration; the Codex ID must never be paired with a client secret.
 
-No provider credential is passed specifically to the MCP code.
+Provider credentials are owned by separately injected adapters, not by the MCP
+core or target policy.
 
 Generate connection material only into a fresh path:
 
@@ -226,15 +301,21 @@ Activation is accepted only when all of the following are recorded:
 1. exact deployed repository SHA and Fly release;
 2. `/healthz` stays healthy;
 3. OAuth metadata and PKCE flow pass;
-4. `tools/list` exposes only the seven read tools;
+4. Codex `tools/list` exposes exactly the seven read tools; ChatGPT anonymous or
+   read-only grants expose the same seven, while explicitly granted social
+   scopes expose only their matching Telegram/VK tools;
 5. event search and fetch return a real production event;
 6. incident search returns at least one repository report and one runtime failure when such evidence exists;
-7. `operations_snapshot.database.mode == read_only` and `network.provider_calls == 0`;
+7. `operations_snapshot.database.mode == read_only`; core evidence queries make
+   no provider call, and social acceptance uses a separately reviewed adapter;
 8. event database SHA-256 or SQLite `data_version` evidence is unchanged across smoke queries;
 9. Telegram webhook latency/error counters show no material regression;
 10. credentials never appear in logs, commits, PR text or CI artifacts.
 11. unsupported `MCP-Protocol-Version` and JSON-RPC batch requests both return
     HTTP `400`;
 12. nested synthetic credentials do not appear in any tool output.
+13. denied aliases, mutated/expired/replayed tickets, repeated idempotency keys,
+    daily-budget overflow and cross-client/resource tokens all fail before a
+    second provider attempt; audit rows contain no raw sensitive values.
 
 Rollback is setting `PRIVATE_EVENTS_MCP_ENABLED=0` and redeploying the exact approved SHA. The OAuth state database can remain on the volume; it is isolated from event data.

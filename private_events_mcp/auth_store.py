@@ -5,6 +5,7 @@ import sqlite3
 import threading
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,14 @@ from .crypto import secret_hash, verify_pkce
 
 
 class OAuthStoreError(ValueError):
+    pass
+
+
+class SocialTicketError(ValueError):
+    pass
+
+
+class SocialPublishBudgetError(ValueError):
     pass
 
 
@@ -30,6 +39,17 @@ class RefreshGrant:
     client_id: str
     resource: str
     scopes: frozenset[str]
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedPublication:
+    client_id: str
+    subject: str
+    resource: str
+    platform: str
+    target_alias: str
+    text_hash: str
+    idempotency_hash: str
 
 
 class OAuthStateStore:
@@ -94,6 +114,70 @@ class OAuthStateStore:
                 );
                 CREATE INDEX IF NOT EXISTS ix_oauth_audit_created_at
                     ON oauth_audit(created_at);
+
+                CREATE TABLE IF NOT EXISTS social_preparation_ticket (
+                    ticket_hash TEXT PRIMARY KEY,
+                    client_id TEXT NOT NULL,
+                    subject TEXT NOT NULL,
+                    resource TEXT NOT NULL,
+                    platform TEXT NOT NULL,
+                    target_alias TEXT NOT NULL,
+                    text_hash TEXT NOT NULL,
+                    idempotency_hash TEXT NOT NULL,
+                    expires_at INTEGER NOT NULL,
+                    consumed_at INTEGER,
+                    created_at INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS ix_social_ticket_expiry
+                    ON social_preparation_ticket(expires_at);
+                CREATE UNIQUE INDEX IF NOT EXISTS ux_social_ticket_idempotency
+                    ON social_preparation_ticket(
+                        client_id, subject, resource, platform, target_alias,
+                        idempotency_hash
+                    );
+
+                CREATE TABLE IF NOT EXISTS social_publish_daily_budget (
+                    budget_day TEXT NOT NULL,
+                    client_id TEXT NOT NULL,
+                    subject TEXT NOT NULL,
+                    resource TEXT NOT NULL,
+                    platform TEXT NOT NULL,
+                    target_alias TEXT NOT NULL,
+                    attempts INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    PRIMARY KEY(
+                        budget_day, client_id, subject, resource, platform,
+                        target_alias
+                    )
+                );
+
+                CREATE TABLE IF NOT EXISTS social_action_audit (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    action TEXT NOT NULL,
+                    outcome TEXT NOT NULL,
+                    client_fingerprint TEXT NOT NULL,
+                    subject_fingerprint TEXT NOT NULL,
+                    resource_fingerprint TEXT NOT NULL,
+                    platform TEXT,
+                    target_alias TEXT,
+                    text_hash TEXT,
+                    ticket_fingerprint TEXT,
+                    idempotency_fingerprint TEXT,
+                    receipt_fingerprint TEXT,
+                    created_at INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS ix_social_action_audit_created_at
+                    ON social_action_audit(created_at);
+                CREATE TRIGGER IF NOT EXISTS social_action_audit_no_update
+                BEFORE UPDATE ON social_action_audit
+                BEGIN
+                    SELECT RAISE(ABORT, 'social_action_audit is append-only');
+                END;
+                CREATE TRIGGER IF NOT EXISTS social_action_audit_no_delete
+                BEFORE DELETE ON social_action_audit
+                BEGIN
+                    SELECT RAISE(ABORT, 'social_action_audit is append-only');
+                END;
                 """
             )
 
@@ -115,6 +199,14 @@ class OAuthStateStore:
             (now - 86400, now - 30 * 86400),
         )
         conn.execute("DELETE FROM oauth_audit WHERE created_at < ?", (now - 90 * 86400,))
+        # Preparation rows double as the durable idempotency ledger. They are
+        # intentionally retained so a process restart or later cleanup cannot
+        # make a previously attempted key reusable.
+        old_day = datetime.fromtimestamp(now - 90 * 86400, tz=timezone.utc).date().isoformat()
+        conn.execute(
+            "DELETE FROM social_publish_daily_budget WHERE budget_day < ?",
+            (old_day,),
+        )
 
     def create_authorization_code(
         self,
@@ -340,3 +432,223 @@ class OAuthStateStore:
                 """,
                 (action, outcome, client_fingerprint, subject, payload, current),
             )
+
+    def create_preparation_ticket(
+        self,
+        *,
+        ticket: str,
+        client_id: str,
+        subject: str,
+        resource: str,
+        platform: str,
+        target_alias: str,
+        text_hash: str,
+        idempotency_key: str,
+        expires_at: int,
+        now: int | None = None,
+    ) -> None:
+        current = int(time.time()) if now is None else int(now)
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                self._cleanup(conn, current)
+                conn.execute(
+                    """
+                    INSERT INTO social_preparation_ticket(
+                        ticket_hash, client_id, subject, resource, platform,
+                        target_alias, text_hash, idempotency_hash, expires_at,
+                        created_at
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?)
+                    """,
+                    (
+                        secret_hash(ticket),
+                        client_id,
+                        subject,
+                        resource,
+                        platform,
+                        target_alias,
+                        text_hash,
+                        secret_hash(idempotency_key),
+                        int(expires_at),
+                        current,
+                    ),
+                )
+                conn.execute("COMMIT")
+            except sqlite3.IntegrityError as exc:
+                conn.execute("ROLLBACK")
+                raise SocialTicketError("idempotency_key_already_used") from exc
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+
+    def consume_preparation_ticket(
+        self,
+        *,
+        ticket: str,
+        client_id: str,
+        subject: str,
+        resource: str,
+        platform: str,
+        target_alias: str,
+        text_hash: str,
+        idempotency_key: str,
+        now: int | None = None,
+    ) -> PreparedPublication:
+        current = int(time.time()) if now is None else int(now)
+        digest = secret_hash(ticket)
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                row = conn.execute(
+                    "SELECT * FROM social_preparation_ticket WHERE ticket_hash=?",
+                    (digest,),
+                ).fetchone()
+                if row is None or row["consumed_at"] is not None:
+                    raise SocialTicketError("invalid_preparation_ticket")
+                if int(row["expires_at"]) <= current:
+                    raise SocialTicketError("expired_preparation_ticket")
+                expected = (
+                    client_id,
+                    subject,
+                    resource,
+                    platform,
+                    target_alias,
+                    text_hash,
+                    secret_hash(idempotency_key),
+                )
+                actual = (
+                    row["client_id"],
+                    row["subject"],
+                    row["resource"],
+                    row["platform"],
+                    row["target_alias"],
+                    row["text_hash"],
+                    row["idempotency_hash"],
+                )
+                if actual != expected:
+                    raise SocialTicketError("preparation_ticket_binding_mismatch")
+                changed = conn.execute(
+                    """
+                    UPDATE social_preparation_ticket SET consumed_at=?
+                    WHERE ticket_hash=? AND consumed_at IS NULL
+                    """,
+                    (current, digest),
+                ).rowcount
+                if changed != 1:
+                    raise SocialTicketError("invalid_preparation_ticket")
+                conn.execute("COMMIT")
+                return PreparedPublication(
+                    client_id=row["client_id"],
+                    subject=row["subject"],
+                    resource=row["resource"],
+                    platform=row["platform"],
+                    target_alias=row["target_alias"],
+                    text_hash=row["text_hash"],
+                    idempotency_hash=row["idempotency_hash"],
+                )
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+
+    def audit_social_action(
+        self,
+        *,
+        action: str,
+        outcome: str,
+        client_id: str,
+        subject: str,
+        resource: str,
+        platform: str | None = None,
+        target_alias: str | None = None,
+        text_hash: str | None = None,
+        ticket: str | None = None,
+        idempotency_key: str | None = None,
+        receipt_reference: str | None = None,
+        now: int | None = None,
+    ) -> None:
+        """Append a deliberately fixed-shape, fingerprint-only social audit row."""
+
+        current = int(time.time()) if now is None else int(now)
+        fingerprint = lambda value: secret_hash(value)[:16] if value else None
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO social_action_audit(
+                    action, outcome, client_fingerprint, subject_fingerprint,
+                    resource_fingerprint, platform, target_alias, text_hash,
+                    ticket_fingerprint, idempotency_fingerprint,
+                    receipt_fingerprint, created_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    action[:80],
+                    outcome[:40],
+                    fingerprint(client_id),
+                    fingerprint(subject),
+                    fingerprint(resource),
+                    platform,
+                    target_alias,
+                    text_hash,
+                    fingerprint(ticket),
+                    fingerprint(idempotency_key),
+                    fingerprint(receipt_reference),
+                    current,
+                ),
+            )
+
+    def reserve_publish_attempt(
+        self,
+        *,
+        client_id: str,
+        subject: str,
+        resource: str,
+        platform: str,
+        target_alias: str,
+        daily_limit: int,
+        now: int | None = None,
+    ) -> int:
+        current = int(time.time()) if now is None else int(now)
+        budget_day = datetime.fromtimestamp(current, tz=timezone.utc).date().isoformat()
+        limit = max(1, int(daily_limit))
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                row = conn.execute(
+                    """
+                    SELECT attempts FROM social_publish_daily_budget
+                    WHERE budget_day=? AND client_id=? AND subject=? AND resource=?
+                      AND platform=? AND target_alias=?
+                    """,
+                    (budget_day, client_id, subject, resource, platform, target_alias),
+                ).fetchone()
+                attempts = int(row["attempts"]) if row is not None else 0
+                if attempts >= limit:
+                    raise SocialPublishBudgetError("daily_publish_attempt_limit_reached")
+                next_attempts = attempts + 1
+                conn.execute(
+                    """
+                    INSERT INTO social_publish_daily_budget(
+                        budget_day, client_id, subject, resource, platform,
+                        target_alias, attempts, updated_at
+                    ) VALUES(?,?,?,?,?,?,?,?)
+                    ON CONFLICT(
+                        budget_day, client_id, subject, resource, platform,
+                        target_alias
+                    ) DO UPDATE SET attempts=excluded.attempts, updated_at=excluded.updated_at
+                    """,
+                    (
+                        budget_day,
+                        client_id,
+                        subject,
+                        resource,
+                        platform,
+                        target_alias,
+                        next_attempts,
+                        current,
+                    ),
+                )
+                conn.execute("COMMIT")
+                return next_attempts
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise

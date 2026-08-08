@@ -323,6 +323,12 @@ def _clip(value: Any, limit: int = 4000) -> Any:
     return _clip(str(value), limit)
 
 
+def redact_and_clip_untrusted(value: Any, *, limit: int = 4000) -> Any:
+    """Apply the MCP output-boundary redaction to provider-derived data."""
+
+    return _clip(value, limit)
+
+
 def _decode_jsonish(value: Any, *, text_limit: int = 4000) -> Any:
     if not isinstance(value, str):
         return _clip(value, text_limit)

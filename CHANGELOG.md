@@ -4,6 +4,13 @@
 
 ### Added
 
+- Added a provider-neutral private MCP social core for explicitly allowlisted
+  Telegram/VK aliases: scope- and resource-filtered discovery, redacted
+  untrusted text reads, one-use text-publication tickets, durable idempotency,
+  append-only redacted action audit, and a persistent per-target daily attempt
+  budget. ChatGPT and Codex now have distinct MCP resources; Codex remains
+  limited to the seven existing read tools and can never discover social tools.
+
 - Added the disabled-by-default private Events MCP: path-scoped OAuth with
   PKCE, bounded read-only event and incident evidence tools, production smoke
   tooling, and an explicit no-provider-call acceptance gate. Its HTTP transport

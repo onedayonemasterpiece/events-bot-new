@@ -182,7 +182,7 @@ async def test_codex_public_client_real_oauth_and_mcp_contract(config) -> None:
             "client_id": config.codex_oauth_client_id,
             "redirect_uri": callback,
             "state": "codex-state",
-            "resource": config.resource,
+            "resource": config.codex_resource,
             "scope": "events:read incidents:read operations:read offline_access",
             "code_challenge": pkce_s256(verifier),
             "code_challenge_method": "S256",
@@ -213,7 +213,7 @@ async def test_codex_public_client_real_oauth_and_mcp_contract(config) -> None:
                 "client_id": config.codex_oauth_client_id,
                 "code": code,
                 "redirect_uri": callback,
-                "resource": config.resource,
+                "resource": config.codex_resource,
                 "code_verifier": verifier,
             },
         )
@@ -221,7 +221,7 @@ async def test_codex_public_client_real_oauth_and_mcp_contract(config) -> None:
         tokens = await token_response.json()
 
         listed = await client.post(
-            config.mcp_path,
+            config.codex_mcp_path,
             json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
             headers={"Authorization": f"Bearer {tokens['access_token']}"},
         )
@@ -238,7 +238,7 @@ async def test_codex_public_client_real_oauth_and_mcp_contract(config) -> None:
                 "grant_type": "refresh_token",
                 "client_id": config.codex_oauth_client_id,
                 "refresh_token": tokens["refresh_token"],
-                "resource": config.resource,
+                "resource": config.codex_resource,
             },
         )
         assert refreshed.status == 200
@@ -309,7 +309,7 @@ async def test_public_client_rejects_secret_downgrade_and_cross_client_code(conf
         subject="events-bot-owner",
         client_id=config.codex_oauth_client_id,
         redirect_uri=callback,
-        resource=config.resource,
+        resource=config.codex_resource,
         scopes={"events:read"},
         code_challenge=pkce_s256(verifier),
         expires_at=2**31,
@@ -354,7 +354,7 @@ async def test_public_client_rejects_secret_downgrade_and_cross_client_code(conf
                 "client_id": config.codex_oauth_client_id,
                 "code": code,
                 "redirect_uri": callback,
-                "resource": config.resource,
+                "resource": config.codex_resource,
                 "code_verifier": verifier,
             },
         )
