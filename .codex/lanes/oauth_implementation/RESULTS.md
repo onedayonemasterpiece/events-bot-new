@@ -3,7 +3,9 @@
 - Lane: `oauth_implementation` (R1/R5)
 - Branch: `agent/mcp-multiclient/oauth`
 - Base SHA: `ef2e1eb28cf1d1d0899a167f7ba9c0ce6b84826e`
-- Implementation head SHA: `ef375be01b8fcddac71ed8d7fbfee37d926f72f6`
+- Initial implementation SHA: `ef375be01b8fcddac71ed8d7fbfee37d926f72f6`
+- Review hardening SHA: `8ee16f60f70b0f030166d8340de08b1fe431b85d`
+- Private-directory follow-up SHA: `b570959c36225b0f47e80de6b07ebdf9c4a1e822`
 - Status: complete
 
 ## Delivered
@@ -24,11 +26,18 @@
 - Updated generator, dual-mode production smoke, canonical runbook, env example,
   changelog, config tests, redirect negatives, downgrade/cross-client negatives,
   and a full public Codex OAuth-to-MCP contract test.
+- Closed independent review blockers: command receipts redact the private path,
+  credential bundles use a fresh `0700` directory and exclusive `0600` files,
+  dot-segment callbacks fail closed, omitted scopes use online read defaults,
+  and refresh tokens require retained `offline_access`.
+- Exposed resource-parameterized metadata, bearer verification and challenge
+  hooks; the Codex registry uses `config.codex_resource` when that property is
+  supplied by the downstream multi-endpoint integration.
 
 ## Evidence and commands
 
 - `PYTHONPATH=. /home/dev/.codex/venvs/events-bot-new/bin/python -m compileall -q private_events_mcp tests scripts/generate_private_events_mcp_credentials.py scripts/smoke_private_events_mcp.py` — PASS.
-- `PYTHONPATH=. /home/dev/.codex/venvs/events-bot-new/bin/pytest -q tests/test_private_events_mcp_*.py` — PASS, `29 passed in 1.31s`.
+- `PYTHONPATH=. /home/dev/.codex/venvs/events-bot-new/bin/pytest -q tests/test_private_events_mcp_*.py` — PASS, latest run `38 passed in 1.91s`.
 - Generated credentials into an isolated `/tmp` directory and asserted Codex
   `none` auth/no secret, ChatGPT secret preservation, deploy env mapping, and
   mode `0600` on all generated files — PASS (`generator_contract=PASS`).
@@ -60,3 +69,5 @@
 - `tests/test_private_events_mcp_oauth_store.py`
 - `tests/test_private_events_mcp_server.py`
 - `.codex/lanes/oauth_implementation/RESULTS.md`
+- `private_events_mcp/auth_store.py`
+- `tests/test_private_events_mcp_scripts.py`

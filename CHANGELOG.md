@@ -49,6 +49,11 @@
   bootstrap after corpus invalidation only when the same journey subsequently
   proves a served cache hit with zero embedding/vector/LLM attempts; strict
   scheduled and post-deploy release canaries still reject the initial miss.
+- Hardened private Events MCP OAuth credential handling: generator and smoke
+  receipts no longer print the private endpoint path, generated bundles start
+  in a fresh `0700` directory with atomic `0600` files, Codex callback dot
+  segments are rejected, omitted scopes no longer imply `offline_access`, and
+  refresh tokens are issued only while that scope remains granted.
 
 - Fixed the production-root prelaunch registration contract without changing its visual, background or SEO/GEO surface: first and repeat RPC receipts are now distinct, the final normalized-email insert is race-safe, and the browser keeps permanent success/reload state while retaining input on errors and locking duplicate submits. Added exact-main release, metadata-preserving rollback and incident regression gates.
 

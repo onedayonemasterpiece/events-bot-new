@@ -63,6 +63,11 @@ and PKCE S256 verifier. Dynamic client registration is not exposed. The
 operator enters the bootstrap token on the authorization page. Rotate
 `PRIVATE_EVENTS_MCP_OPERATOR_TOKEN` after the first successful connection.
 
+If `scope` is omitted, a client receives only the registered online read scopes
+(`events:read`, `incidents:read`, `operations:read`). `offline_access` must be
+requested explicitly; a refresh token is issued or rotated only while that
+scope remains present.
+
 ## Tools
 
 | Tool | Scope | Contract |
@@ -157,6 +162,20 @@ When enabled, both distinct static client IDs are required. The existing
 ChatGPT registration; the Codex ID must never be paired with a client secret.
 
 No provider credential is passed specifically to the MCP code.
+
+Generate connection material only into a fresh path:
+
+```bash
+python scripts/generate_private_events_mcp_credentials.py \
+  --base-url https://events-bot-new-wngqia.fly.dev \
+  --output-dir /secure/new-private-events-mcp-credentials
+```
+
+The generator refuses an existing output directory, creates the new directory
+as `0700`, and creates every credential/config file atomically as `0600` with
+exclusive creation. Its stdout receipt contains only the public origin, a
+redacted MCP path and an endpoint fingerprint; the private path is present only
+inside the owner-only files.
 
 ## Integration
 
