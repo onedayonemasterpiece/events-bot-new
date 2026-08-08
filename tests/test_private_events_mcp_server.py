@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import base64
-from dataclasses import replace
 import logging
 import re
+from dataclasses import replace
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 import pytest
@@ -12,6 +12,49 @@ from aiohttp.test_utils import TestClient, TestServer
 
 from private_events_mcp.crypto import AccessIdentity, pkce_s256
 from private_events_mcp.integration import attach_private_events_mcp
+
+
+class _WorkspaceAdapter:
+    async def capabilities(self, target_ref):
+        return {}
+
+    async def resolve(self, request):
+        return {}
+
+    async def read(self, request):
+        return {}
+
+    async def execute(self, intent, *, operation_ref):
+        return {}
+
+    async def reconcile(self, operation_ref):
+        return {}
+
+
+def test_universal_social_catalog_is_chatgpt_only_and_adapter_set_is_exact(config) -> None:
+    universal = replace(
+        config,
+        universal_social_enabled=True,
+        universal_social_telegram_enabled=True,
+        universal_social_dm_enabled=True,
+    )
+    app = web.Application()
+    server = attach_private_events_mcp(
+        app,
+        universal,
+        social_workspace_adapters={"telegram": _WorkspaceAdapter()},
+    )
+    assert server is not None
+    chatgpt_names = {tool.name for tool in server.protocol.tools}
+    codex_names = {tool.name for tool in server.codex_protocol.tools}
+    assert "social_target_resolve" in chatgpt_names
+    assert "social_action_prepare" in chatgpt_names
+    assert "social_action_commit" in chatgpt_names
+    assert len(codex_names) == 7
+    assert not any(name.startswith("social_") for name in codex_names)
+
+    with pytest.raises(ValueError, match="adapter set"):
+        attach_private_events_mcp(web.Application(), universal)
 
 
 @pytest.mark.asyncio

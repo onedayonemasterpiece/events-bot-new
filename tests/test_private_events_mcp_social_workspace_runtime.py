@@ -298,6 +298,60 @@ def test_tools_are_private_noncacheable_granular_and_feature_hidden(runtime) -> 
                    for scope in option) for tool in tools for option in tool.scope_options)
 
 
+@pytest.mark.asyncio
+async def test_runtime_feature_policy_is_enforced_inside_handlers(runtime) -> None:
+    service, adapter, _store = runtime
+    tools = {
+        tool.name: tool
+        for tool in build_social_workspace_tools(
+            service,
+            feature_policy={
+                "private_read": False,
+                "dm": False,
+                "post": True,
+                "edit_delete": False,
+                "media_story": False,
+            },
+        )
+    }
+    with pytest.raises(InvalidArgumentsError, match="private social reads are disabled"):
+        await tools["social_content_feed"].handler(
+            {
+                "platform": "telegram",
+                "operation": "list_items",
+                "target_ref": "tgt_savedmessages0001",
+                "read_access": "dialogs",
+            },
+            context(),
+        )
+    with pytest.raises(InvalidArgumentsError, match="action class is disabled"):
+        await tools["social_action_prepare"].handler(
+            {
+                "platform": "telegram",
+                "action": "send_message",
+                "idempotency_key": "disabled-dm-123",
+                "target_ref": "tgt_savedmessages0001",
+                "content": {"text": "Hello", "entities": [], "media": []},
+            },
+            context(),
+        )
+    assert adapter.executions == 0
+
+
+def test_thread_tool_exposes_comments_and_reactions_contract(runtime) -> None:
+    service, _adapter, _store = runtime
+    tool = next(
+        item
+        for item in build_social_workspace_tools(service)
+        if item.name == "social_content_thread"
+    )
+    assert tool.input_schema["properties"]["operation"]["enum"] == [
+        "list_comments",
+        "list_reactions",
+    ]
+    assert len(tool.output_schema["oneOf"]) == 2
+
+
 def test_auth_database_is_separate_and_event_database_is_untouched(tmp_path: Path) -> None:
     event_db = tmp_path / "events.sqlite"
     event_db.write_bytes(b"immutable-event-db-sentinel")

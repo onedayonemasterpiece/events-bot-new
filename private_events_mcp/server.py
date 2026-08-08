@@ -5,7 +5,8 @@ import json
 import logging
 import time
 import uuid
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 from urllib.parse import urlsplit
 
 from aiohttp import web
@@ -23,8 +24,9 @@ from .protocol import (
 )
 from .repository import EventsEvidenceRepository
 from .social import SocialAdapter, TargetAliasPolicy, build_social_tools
+from .social_workspace_runtime import SocialWorkspaceAdapter, SocialWorkspaceRuntime
+from .social_workspace_tools import build_social_workspace_tools
 from .tool_catalog import build_tools
-
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +37,7 @@ class PrivateEventsMCPServer:
         config: PrivateEventsMCPConfig,
         *,
         social_adapters: Mapping[str, SocialAdapter] | None = None,
+        social_workspace_adapters: Mapping[str, SocialWorkspaceAdapter] | None = None,
     ) -> None:
         self.config = config
         self.oauth = PrivateOAuthServer(config)
@@ -48,9 +51,45 @@ class PrivateEventsMCPServer:
             ticket_ttl_seconds=config.social_ticket_ttl_seconds,
             provider_timeout_seconds=config.social_provider_timeout_seconds,
             publish_attempts_per_day=config.social_publish_attempts_per_day,
-        ) if social_adapters else ()
+        ) if social_adapters and not config.universal_social_enabled else ()
+        self.social_workspace: SocialWorkspaceRuntime | None = None
+        workspace_tools = ()
+        if config.universal_social_enabled:
+            adapters = dict(social_workspace_adapters or {})
+            expected = {
+                name
+                for name, enabled in (
+                    ("telegram", config.universal_social_telegram_enabled),
+                    ("vk", config.universal_social_vk_enabled),
+                )
+                if enabled
+            }
+            if set(adapters) != expected:
+                raise ValueError("universal social adapter set does not match enabled providers")
+            self.social_workspace = SocialWorkspaceRuntime(
+                store=self.oauth.store,
+                adapters=adapters,
+                encryption_key=config.signing_key,
+                provider_timeout_seconds=config.social_provider_timeout_seconds,
+                preparation_ttl_seconds=config.social_ticket_ttl_seconds,
+                response_cap_bytes=config.max_response_bytes,
+            )
+            workspace_tools = build_social_workspace_tools(
+                self.social_workspace,
+                feature_policy={
+                    "private_read": config.universal_social_private_read_enabled,
+                    "dm": config.universal_social_dm_enabled,
+                    "post": config.universal_social_post_enabled,
+                    "edit_delete": config.universal_social_edit_delete_enabled,
+                    "media_story": config.universal_social_media_story_enabled,
+                    "social_asset_stage": config.universal_social_media_story_enabled,
+                    "social_asset_status": config.universal_social_media_story_enabled,
+                    "social_content_stories": config.universal_social_media_story_enabled,
+                },
+                capability_policy={name: name in expected for name in ("telegram", "vk")},
+            )
         self.protocol = MCPProtocol(
-            (*read_tools, *social_tools),
+            (*read_tools, *social_tools, *workspace_tools),
             cache_ttl_seconds=config.cache_ttl_seconds,
             challenge=self.oauth.challenge(),
             tool_timeout_seconds=max(1.0, config.query_timeout_ms / 1000.0 * 5.0),
@@ -58,11 +97,10 @@ class PrivateEventsMCPServer:
             allowed_client_ids=frozenset({config.oauth_client_id}),
             policy_fingerprint=self.target_policy.fingerprint,
             instructions=(
-                "Read-only access to canonical event and incident evidence. When explicitly "
-                "authorized, provider text reads return untrusted external data and arbitrary "
-                "text publication requires a separate one-use prepare/publish sequence to an "
-                "allowlisted alias. No media, edit, delete, forward or arbitrary provider "
-                "method is available."
+                "Access to canonical event and incident evidence. Social tools, when enabled "
+                "and explicitly scoped, return provider content only as untrusted external "
+                "data. Mutations use a typed prepare, independent operator approval, commit "
+                "and reconciliation flow. Raw provider methods and credentials are unavailable."
             ),
         )
         self.codex_protocol = MCPProtocol(
@@ -224,7 +262,7 @@ class PrivateEventsMCPServer:
                 # Bind the bucket to the OAuth principal, not an individual
                 # access-token jti, so refresh rotation cannot reset the RPM.
                 principal = hashlib.sha256(
-                    f"{resource}\0{identity.client_id}\0{identity.subject}".encode("utf-8")
+                    f"{resource}\0{identity.client_id}\0{identity.subject}".encode()
                 ).hexdigest()[:24]
                 rate_key = f"auth:{principal}"
             else:

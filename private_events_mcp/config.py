@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
-
 _TRUE = {"1", "true", "yes", "on"}
 _FALSE = {"0", "false", "no", "off"}
 _SECRET_RE = re.compile(r"^[A-Za-z0-9_-]{24,160}$")
@@ -115,7 +114,7 @@ class PrivateEventsMCPConfig:
     incident_scan_bytes: int = 3 * 1024 * 1024
 
     @classmethod
-    def from_env(cls) -> "PrivateEventsMCPConfig":
+    def from_env(cls) -> PrivateEventsMCPConfig:
         enabled = _bool("PRIVATE_EVENTS_MCP_ENABLED", False)
         base = (os.getenv("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL") or "").strip()
         config = cls(
@@ -301,6 +300,23 @@ class PrivateEventsMCPConfig:
         from .social import TargetAliasPolicy
 
         TargetAliasPolicy.from_json(self.social_targets_json)
+        provider_flags = (
+            self.universal_social_telegram_enabled,
+            self.universal_social_vk_enabled,
+        )
+        capability_flags = (
+            self.universal_social_private_read_enabled,
+            self.universal_social_dm_enabled,
+            self.universal_social_post_enabled,
+            self.universal_social_edit_delete_enabled,
+            self.universal_social_media_story_enabled,
+        )
+        if not self.universal_social_enabled and any((*provider_flags, *capability_flags)):
+            raise ValueError(
+                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_ENABLED is required for social workspace flags"
+            )
+        if self.universal_social_enabled and not any(provider_flags):
+            raise ValueError("universal social workspace requires at least one provider")
 
     @property
     def private_prefix(self) -> str:

@@ -20,6 +20,7 @@ from .social_workspace import (
     SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_PREPARE_SCHEMA,
+    SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_READ_SCHEMA,
     SOCIAL_WORKSPACE_STATISTICS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA,
@@ -29,6 +30,8 @@ from .social_workspace import (
     SOCIAL_WORKSPACE_TARGET_PREVIEW_SCHEMA,
     SOCIAL_WORKSPACE_TARGET_SEARCH_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA,
+    SocialAction,
+    SocialReadAccess,
     SocialReadOperation,
     required_scope_for_action,
     validate_asset_stage_request,
@@ -55,7 +58,10 @@ def _read_schema(operation: SocialReadOperation) -> dict[str, Any]:
 
 def _thread_schema() -> dict[str, Any]:
     schema = copy.deepcopy(dict(SOCIAL_WORKSPACE_READ_SCHEMA))
-    schema["properties"]["operation"] = {"const": "list_comments"}
+    schema["properties"]["operation"] = {
+        "type": "string",
+        "enum": ["list_comments", "list_reactions"],
+    }
     required = list(schema.get("required", []))
     if "operation" not in required:
         required.append("operation")
@@ -145,6 +151,32 @@ def build_social_workspace_tools(
         except Exception as exc:  # noqa: BLE001 - normalize untrusted request errors
             raise rejected(exc) from None
 
+    def require_read_feature(request: Any) -> None:
+        if request.read_access in {
+            SocialReadAccess.PRIVATE,
+            SocialReadAccess.DIALOGS,
+        } and not enabled("private_read"):
+            raise InvalidArgumentsError("private social reads are disabled")
+        if request.operation is SocialReadOperation.LIST_STORIES and not enabled("media_story"):
+            raise InvalidArgumentsError("social stories are disabled")
+
+    def require_action_feature(request: Any) -> None:
+        feature = {
+            SocialAction.SEND_MESSAGE: "dm",
+            SocialAction.PUBLISH: "post",
+            SocialAction.COMMENT: "post",
+            SocialAction.REACTION: "post",
+            SocialAction.FORWARD: "post",
+            SocialAction.SCHEDULE: "post",
+            SocialAction.EDIT: "edit_delete",
+            SocialAction.DELETE: "edit_delete",
+            SocialAction.STORY: "media_story",
+        }[request.action]
+        if not enabled(feature):
+            raise InvalidArgumentsError("social action class is disabled")
+        if request.content is not None and request.content.media and not enabled("media_story"):
+            raise InvalidArgumentsError("social media actions are disabled")
+
     def action_scope(arguments: Mapping[str, Any]) -> frozenset[str]:
         try:
             request = validate_prepare_request(arguments)
@@ -224,6 +256,7 @@ def build_social_workspace_tools(
         try:
             request = validate_read_request(arguments)
             require_platform(request.platform.value)
+            require_read_feature(request)
             return await (runtime.resolve(request, context)
                           if request.operation is SocialReadOperation.RESOLVE_TARGET
                           else runtime.read(request, context))
@@ -242,6 +275,7 @@ def build_social_workspace_tools(
         try:
             request = validate_prepare_request(arguments)
             require_platform(request.platform.value)
+            require_action_feature(request)
             return await runtime.prepare(request, context)
         except Exception as exc:  # noqa: BLE001 - normalize adapter/runtime errors
             raise rejected(exc) from None
@@ -265,6 +299,8 @@ def build_social_workspace_tools(
 
     async def asset_stage(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
         try:
+            if not enabled("media_story"):
+                raise InvalidArgumentsError("social media actions are disabled")
             request = validate_asset_stage_request(arguments)
             require_platform(request.platform.value)
             return await runtime.stage_asset(request, context)
@@ -333,7 +369,10 @@ def build_social_workspace_tools(
                  scope_selector=read_scope, **common),
         ToolSpec("social_content_thread", "Read social thread",
                  "Read comments or reaction summaries without native identifiers.",
-                 _thread_schema(), SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA,
+                 _thread_schema(), _combined_output(
+                     SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA,
+                     SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA,
+                 ),
                  handler=read, scope_selector=read_scope, **common),
         ToolSpec("social_content_stories", "Read social stories",
                  "Read a bounded stories page through provider-neutral contracts.",
