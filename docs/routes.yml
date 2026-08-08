@@ -23,6 +23,7 @@ sections:
     repository_workflow: docs/operations/repository-workflow.md
     release_governance: docs/operations/release-governance.md
     runtime_logs: docs/operations/runtime-logs.md
+    private_events_mcp: docs/operations/private-events-mcp.md
     smart_update_prod_audit: docs/operations/smart-update-prod-audit.md
     kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
     static_site_atomic_root: docs/operations/static-site-atomic-root.md

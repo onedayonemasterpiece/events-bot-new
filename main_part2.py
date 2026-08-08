@@ -22329,6 +22329,9 @@ def create_app() -> web.Application:
     )
 
     app = web.Application()
+    # Private ChatGPT MCP: strict no-op unless PRIVATE_EVENTS_MCP_ENABLED=1.
+    from private_events_mcp import attach_private_events_mcp
+    attach_private_events_mcp(app)
     SimpleRequestHandler(dp, bot).register(app, path="/webhook")
     setup_application(app, dp, bot=bot)
     

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added the disabled-by-default private Events MCP: path-scoped OAuth with
+  PKCE, bounded read-only event and incident evidence tools, production smoke
+  tooling, and an explicit no-provider-call acceptance gate.
+
 ### Fixed
 
 - Fixed the serialized browser Search runtime probe to retain the server
