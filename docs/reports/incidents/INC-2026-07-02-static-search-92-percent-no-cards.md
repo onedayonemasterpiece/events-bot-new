@@ -192,6 +192,14 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
 - 2026-08-08 mobile callback correction: the device adapter waits for the
   returned `/poisk/` surface to become authorized before performing the
   same-storage reload, so it cannot interrupt one-shot session persistence.
+- 2026-08-08 mobile transport correction: Search no longer owns a weaker copy
+  of Android/iOS Appium capabilities. It consumes the neutral profile extracted
+  from terminal OTP acceptance. iOS therefore launches Safari native-first,
+  handles only the exact allowlisted first-run dialog, and attaches WebKit with
+  the proven 60-second/120-probe bounds instead of XCUITest's five-second
+  default; the live Search CI failure occurred at 5.749 seconds. The project
+  `mobile-web-e2e` skill makes shared-transport discovery mandatory for future
+  mobile scenarios.
 
 ## Follow-up Actions
 

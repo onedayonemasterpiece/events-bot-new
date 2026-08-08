@@ -1,4 +1,5 @@
 import { installSearchRuntimeProbe, snapshotSearchRuntimeProbe } from './runtime-probe.mjs';
+import { prepareIosSafariWebContext } from '../../mobile-web/appium-browser.mjs';
 
 function pageResultSnapshot() {
   const results = document.querySelector('[data-search-results]');
@@ -50,6 +51,7 @@ export async function createAppiumSearchAdapter(options = {}) {
     });
     ownsDriver = true;
   }
+  if (platform === 'ios') await prepareIosSafariWebContext(driver);
   let configuredPolicy = {};
 
   const adapter = {

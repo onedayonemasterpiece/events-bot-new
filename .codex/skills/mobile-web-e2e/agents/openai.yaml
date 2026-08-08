@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mobile Web E2E"
+  short_description: "Reuse the proven Android/iOS Appium browser harness"
+  default_prompt: "Implement or debug Android/iOS web E2E by reusing the shared KenigEvents Appium transport and its accepted receipts."

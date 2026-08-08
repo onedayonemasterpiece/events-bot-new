@@ -3,9 +3,9 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { parse } from 'yaml';
 
-import { buildAppiumCapabilities, classifyActiveIosApp, extractDriverNetworkEvents,
-  inspectSafariNativeUiProtocol, observeNativeKeyboard,
-  summarizeKnownSafariNativeSource } from '../../e2e/focus-email/adapters/appium-ui.mjs';
+import { extractDriverNetworkEvents, observeNativeKeyboard } from '../../e2e/focus-email/adapters/appium-ui.mjs';
+import { buildAppiumCapabilities, classifyActiveIosApp, inspectSafariNativeUiProtocol,
+  prepareIosSafariWebContext, summarizeKnownSafariNativeSource } from '../../e2e/mobile-web/appium-browser.mjs';
 
 test('Appium capability builder pins real mobile browsers and iOS keyboard ownership', () => {
   const ios = buildAppiumCapabilities('ios', { deviceName: 'iPhone 16', platformVersion: '18.5', udid: 'opaque' },
@@ -23,6 +23,45 @@ test('Appium capability builder pins real mobile browsers and iOS keyboard owner
   const android = buildAppiumCapabilities('android', { deviceName: 'Pixel 7', platformVersion: '15' }, {});
   assert.equal(android.browserName, 'Chrome');
   assert.equal(android['appium:automationName'], 'UiAutomator2');
+});
+
+test('Search and OTP consume one neutral Appium browser profile', async () => {
+  const [searchAndroid, searchIos, focus] = await Promise.all([
+    readFile(new URL('../../e2e/search/adapters/appium-android.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../../e2e/search/adapters/appium-ios.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../../e2e/focus-email/adapters/appium-ui.mjs', import.meta.url), 'utf8'),
+  ]);
+  for (const source of [searchAndroid, searchIos, focus]) assert.match(source, /mobile-web\/appium-browser\.mjs/u);
+  assert.match(searchIos, /buildAppiumCapabilities\('ios'/u);
+  assert.match(searchAndroid, /buildAppiumCapabilities\('android'/u);
+  assert.match(focus, /buildAppiumCapabilities\(platform/u);
+});
+
+test('shared iOS startup clears the exact dialog before attaching Safari WebKit', async () => {
+  const calls = [];
+  let dismissed = false;
+  const driver = {
+    updateSettings: async (settings) => calls.push(['settings', settings]),
+    getContext: async () => 'NATIVE_APP',
+    getContexts: async () => ['NATIVE_APP', 'WEBVIEW_1'],
+    switchContext: async (context) => calls.push(['context', context]),
+    executeScript: async (command, args) => {
+      calls.push(['execute', command, args]);
+      if (command === 'mobile: alert' && args?.[0]?.action === 'accept') dismissed = true;
+    },
+    waitUntil: async (predicate) => {
+      if (!await predicate()) throw new Error('unexpected_webview_timeout');
+    },
+  };
+  const receipt = await prepareIosSafariWebContext(driver, {
+    inspect: async () => dismissed
+      ? { blocking_dialog_count: 0, known_dialog_count: 0, continue_button_count: 0 }
+      : { blocking_dialog_count: 1, known_dialog_count: 1, continue_button_count: 1, action_token: 'opaque' },
+  });
+  assert.equal(receipt.dismissed, true);
+  assert.deepEqual(calls[0], ['settings', { respectSystemAlerts: true }]);
+  assert.ok(calls.some((item) => item[0] === 'execute' && item[2]?.[0]?.action === 'accept'));
+  assert.deepEqual(calls.at(-1), ['context', 'WEBVIEW_1']);
 });
 
 test('native keyboard observation waits through a delayed Android IME report', async () => {
@@ -46,8 +85,9 @@ test('adapter confines diagnostic native source capture before candidate navigat
   assert.match(source, /ios-startup\.raw\.xml/u);
   assert.match(source, /00-safari-launch\.png/u);
   const openInvite = source.slice(source.indexOf('async openInvite()'), source.indexOf('async verifyReleaseIdentity()'));
-  assert.ok(openInvite.indexOf('ensureSafariSystemUiStable()') < openInvite.indexOf('switchToSafariWebContext()'));
-  assert.ok(openInvite.indexOf('switchToSafariWebContext()') < openInvite.indexOf('driver.url(target.href)'));
+  assert.ok(openInvite.indexOf('ensureSafariSystemUiStable()') < openInvite.indexOf('driver.url(target.href)'));
+  const shared = await readFile(new URL('../../e2e/mobile-web/appium-browser.mjs', import.meta.url), 'utf8');
+  assert.ok(shared.indexOf('stabilizeSafariSystemUi') < shared.indexOf('driver.switchContext(selected)'));
 });
 
 test('transient native source reduces to known element/container counters and owner enum', () => {

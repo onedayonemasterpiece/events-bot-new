@@ -806,3 +806,16 @@ Device callback считается завершённым не при перво
 только после `is-authorized` на возвращённой `/poisk/`. Лишь после этого journey
 делает обычный reload exact target и тем самым доказывает same-storage session
 persistence, не прерывая одноразовый callback.
+Android/iOS Search и real-mail OTP используют один нейтральный transport из
+`site/e2e/mobile-web/`; feature adapters не имеют права копировать Appium
+startup/capabilities. iOS сначала запускает `com.apple.mobilesafari` как native
+application, очищает только exact allowlisted first-run dialog, затем подключает
+WebKit. Общий профиль задаёт `appium:webviewConnectTimeout=60000` и bounded
+`appium:webviewConnectRetries=120`: официальный XCUITest default 5000 мс уже
+привёл Search CI к отказу через 5.749 секунды. Action link и secret target не
+передаются в capabilities и не входят в публикуемые evidence/Appium logs.
+
+Для любой новой или ремонтируемой Android/iOS web-проверки обязателен проектный
+skill `.codex/skills/mobile-web-e2e/SKILL.md`: сначала найти terminal receipts и
+общий transport, и только затем добавлять feature journey. Это regression guard
+против повторного изобретения отдельного Appium-контура.
