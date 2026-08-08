@@ -309,6 +309,13 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
   response itself is never success. Lifecycle evidence identifies
   input, terminal, keyboard-dismiss and scroll phases separately, and the
   following document swipe must still move DOM and reveal the final card.
+- 2026-08-08 iOS keyboard-target diagnosis: live run `31280455371` reached an
+  authorized Search surface but found zero eligible visible exact
+  `StaticText` headings and stopped before the fallback tap or document scroll.
+  The
+  shared helper now records only total/visible counts across four closed
+  XCTest types on this fail-closed path; no hierarchy, label or page text is
+  retained, and the diagnostic cannot authorize a tap.
 - 2026-08-08 cross-platform browser-scroll correction: Android Chrome and iOS
   Safari now share the routing primitive `performNativeDocumentSwipe`; Android
   dispatches absolute-coordinate W3C touch, while iOS uses the XCUITest

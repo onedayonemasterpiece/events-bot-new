@@ -75,6 +75,12 @@
 
 ### Fixed
 
+- Added fail-closed iOS Search keyboard-target diagnostics after live Safari
+  exposed no eligible exact heading. A rejected fallback now records only
+  total/visible counts for four closed XCTest element types; it never captures
+  the native hierarchy, labels, page text or credentials, and it still cannot
+  tap anything unless exactly one visible `StaticText` matches.
+
 - Fixed the remaining Mobile Safari Search IME dismissal after live fail-closed
   evidence proved a generic downward application swipe left the keyboard open.
   Search now declares only its exact non-actionable native heading as the

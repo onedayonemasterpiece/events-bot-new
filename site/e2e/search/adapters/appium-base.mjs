@@ -189,7 +189,8 @@ export async function createAppiumSearchAdapter(options = {}) {
     async realScrollResults() {
       lifecycle.failure_stage = 'search_scroll_keyboard_dismiss';
       await dismissNativeKeyboard(driver, { allowUnsupported: platform === 'ios',
-        fallbackTapLabels: IOS_SEARCH_KEYBOARD_DISMISS_LABELS });
+        fallbackTapLabels: IOS_SEARCH_KEYBOARD_DISMISS_LABELS,
+        onFallbackTapProbe: (probe) => { lifecycle.keyboard_dismiss_target_probe = probe; } });
       lifecycle.failure_stage = 'search_scroll';
       return runRealTouchScroll({
         readScrollY: () => driver.execute(() => scrollY),

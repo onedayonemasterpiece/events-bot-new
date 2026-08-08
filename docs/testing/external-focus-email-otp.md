@@ -363,6 +363,10 @@ the documented application-level swipe down. The helper must then observe the
 IME absent within three seconds. A missing/ambiguous target, still-visible or
 unobservable keyboard is fatal, so OTP evidence capture and Search scrolling
 cannot continue over an open keyboard.
+When a caller-declared exact target is absent or ambiguous, the shared helper
+may retain only total/visible counts for the closed XCTest type set
+`StaticText`/`Other`/`Button`/`Link`. This diagnostic does not retain labels or
+hierarchy and does not make any newly observed type actionable by itself.
 
 Sanitized runtime diagnostics treat only an aborted losing request with a
 successful same-method/path peer as expected cancellation. Transport/CORS/HTTP
