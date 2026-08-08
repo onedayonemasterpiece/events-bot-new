@@ -52,6 +52,13 @@
   that same resolved candidate-worktree environment value instead of a stale
   temp-root literal. Focused tests pin all of these contracts.
 
+- Added explicit Current UI event-presentation resource records for the
+  editorial landscape, split portrait/poster and no-image desktop formats;
+  their distinct side/stacked versus inline CTA placements; and the large
+  primary/poster media versus small remaining-photo rails/previews. The bounded
+  browser set now guarantees both desktop families, no-image, and poster-plus-
+  preview specimens while every record remains `NOT_MERGED / unresolved`.
+
 - Added the disabled-by-default private Events MCP: path-scoped OAuth with
   PKCE, bounded read-only event and incident evidence tools, production smoke
   tooling, and an explicit no-provider-call acceptance gate. Its HTTP transport

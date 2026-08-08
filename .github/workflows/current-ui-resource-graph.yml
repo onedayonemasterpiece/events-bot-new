@@ -234,7 +234,7 @@ jobs:
             --root-html-sha256 "$CURRENT_UI_GRAPH_ROOT_HTML_SHA256" \
             --candidate-base-url-env CURRENT_UI_GRAPH_CANDIDATE_BASE_URL \
             --browser-observations true \
-            --browser-max-pages 20 \
+            --browser-max-pages 23 \
             --verify-production-identity true \
             --output "$GRAPH_OUTPUT"
 
@@ -242,7 +242,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          required=(manifest.json summary.md source-components.jsonl observed-ui-families.jsonl runtime-observations.jsonl page-families.jsonl desktop-mobile-analysis.jsonl style-observations.jsonl fragmentation-report.jsonl candidate-component-graph.jsonl unresolved-questions.md coverage-report.md screenshots-index.jsonl receipt.json)
+          required=(manifest.json summary.md source-components.jsonl observed-ui-families.jsonl runtime-observations.jsonl page-families.jsonl event-presentation-formats.jsonl desktop-mobile-analysis.jsonl style-observations.jsonl fragmentation-report.jsonl candidate-component-graph.jsonl unresolved-questions.md coverage-report.md screenshots-index.jsonl receipt.json)
           for file in "${required[@]}"; do test -s "$GRAPH_OUTPUT/$file"; done
           for file in "$GRAPH_OUTPUT"/*.jsonl; do test -s "$file"; jq -c . "$file" >/dev/null; done
           jq -e '.status == "complete"' "$GRAPH_OUTPUT/receipt.json" >/dev/null
@@ -261,6 +261,18 @@ jobs:
           ' "$GRAPH_OUTPUT/manifest.json" >/dev/null
           if jq -e 'select(.decision != "NOT_MERGED" or .recommendation != "unresolved")' "$GRAPH_OUTPUT/fragmentation-report.jsonl" >/dev/null; then exit 1; fi
           if jq -e 'select(.decision != "NOT_MERGED" or .recommendation != "unresolved")' "$GRAPH_OUTPUT/candidate-component-graph.jsonl" >/dev/null; then exit 1; fi
+          if jq -e 'select(.decision != "NOT_MERGED" or .recommendation != "unresolved")' "$GRAPH_OUTPUT/event-presentation-formats.jsonl" >/dev/null; then exit 1; fi
+          jq -se '
+            (map(select(.id == "event-format.desktop.editorial-landscape" and .status == "observed" and .runtime_route_count > 0 and (.screenshot_evidence | length) >= 2)) | length) == 1
+            and (map(select(.id == "event-format.desktop.split-portrait-poster" and .status == "observed" and .runtime_route_count > 0 and (.screenshot_evidence | length) >= 2)) | length) == 1
+            and (map(select(.id == "event-format.desktop.split-portrait-visual" and .status == "observed" and .runtime_route_count > 0 and (.screenshot_evidence | length) >= 2)) | length) == 1
+            and (map(select(.id == "event-format.desktop.no-image-fallback" and .status == "observed" and .runtime_route_count > 0 and (.screenshot_evidence | length) >= 2)) | length) == 1
+            and (map(select(.id == "event-format.cta.editorial-side-stacked" and .status == "observed")) | length) == 1
+            and (map(select(.id == "event-format.cta.split-inline" and .status == "observed")) | length) == 1
+            and (map(select(.id == "event-format.media.primary-large-frame" and .status == "observed")) | length) == 1
+            and (map(select(.id == "event-format.media.editorial-large-poster-companion" and .status == "observed" and (.screenshot_evidence | length) >= 2)) | length) == 1
+            and (map(select(.id == "event-format.media.editorial-small-companion-previews" and .status == "observed" and (.screenshot_evidence | length) >= 2)) | length) == 1
+          ' "$GRAPH_OUTPUT/event-presentation-formats.jsonl" >/dev/null
           grep -Fx 'Proceed to normalization workshop' "$GRAPH_OUTPUT/summary.md" >/dev/null
           ! grep -R -F "$CURRENT_UI_GRAPH_CANDIDATE_BASE_URL" "$GRAPH_OUTPUT"
           touch "$GRAPH_VALIDATION_MARKER"
