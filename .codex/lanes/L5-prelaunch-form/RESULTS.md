@@ -62,7 +62,7 @@ supabase/migrations/20260808143744_prelaunch_registration_result_and_race_safe_d
 - `npm --prefix site run test:prelaunch-form` — PASS, 7/7.
 - Disk-backed `PUBLIC_PRELAUNCH_MODE=on npm --prefix site run build` — prelaunch root emitted; approved background reconstruction hashes matched.
 - `check-prelaunch-form-security.mjs` against rebuilt artifact — PASS; covered first success, exact repeat state, reload, explicit reset, retained input on error, runtime duplicate-submit lock, capacity/rejection/down routes and idempotent relay replay.
-- `git diff --exit-code 9d8fc9203a69f385407a57e23310bb47f2db4e2d -- <visual/page/layout/index/artwork paths>` — PASS; visual/background/assets/SEO-GEO sources unchanged.
+- `git diff --exit-code 9d8fc9203a69f385407a57e23310bb47f2db4e2d -- <visual/page/layout/artwork paths>` — PASS; visual/background/assets/SEO-GEO sources unchanged. The shared main index was merged additively; its prelaunch projection is checked through the exact built HTML SEO contract.
 - `bash -n .github/scripts/publish-prelaunch-root-main.sh` — PASS.
 - `git diff --check` — PASS.
 
@@ -79,4 +79,4 @@ Production reproduction returned HTTP 400 / PostgreSQL `22023` / `invalid_prelau
 
 ## Merge notes
 
-Merge in order `4c12b5c8f`, then `c81af38b8`. Shared files were reconciled additively from current main. The deployed prelaunch visual/page/layout/index/artwork bytes match production SHA; only form runtime behavior and release/test/docs contracts changed.
+Merge in order `4c12b5c8f`, then `c81af38b8`. Shared files were reconciled additively from current main. The deployed prelaunch visual/page/layout/artwork bytes match production SHA; the exact built root keeps the production SEO contract, and only form runtime behavior plus release/test/docs contracts changed.

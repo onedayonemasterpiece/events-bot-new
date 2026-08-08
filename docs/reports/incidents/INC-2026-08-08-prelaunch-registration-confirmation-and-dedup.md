@@ -108,7 +108,7 @@ visual assets, background, SEO/GEO or unrelated site behavior.
 ## Corrective Actions
 
 - v3 returns `registered` vs `already_registered`;
-- unique-index + `ON CONFLICT(email) DO NOTHING` closes concurrent insert;
+- verified `UNIQUE(email)` + `ON CONFLICT(email) DO NOTHING` closes concurrent insert;
 - client maps server receipt to permanent distinct state;
 - runtime in-flight lock complements disabled CTA;
 - artifact-bound browser checker covers the complete form state machine;

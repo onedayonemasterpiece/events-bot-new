@@ -29,7 +29,6 @@ git diff --exit-code "$PROD_VISUAL_SHA" -- \
   site/src/assets/prelaunch-approved \
   site/src/components/PrelaunchPage.astro \
   site/src/layouts/PrelaunchLayout.astro \
-  site/src/pages/index.astro \
   site/src/styles/prelaunch-calibration.css \
   site/src/styles/prelaunch-consent.css \
   site/src/styles/prelaunch-page.css \
@@ -53,7 +52,14 @@ trap - EXIT
 
 grep -q 'data-prelaunch-page' site/dist/index.html
 grep -q '<title>Полюбить Калининград Анонсы — запуск 1 сентября</title>' site/dist/index.html
+grep -q '<link rel="canonical" href="https://kenigevents.ru/">' site/dist/index.html
+grep -q 'content="Персонализированный сервис анонсов и навигатор по культурным и просветительским событиям Калининградской области. Запуск 1 сентября 2026 года."' site/dist/index.html
+grep -q 'content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1"' site/dist/index.html
 if grep -q 'noindex' site/dist/index.html; then echo 'Production root contains noindex' >&2; exit 1; fi
+test "$(sha256sum site/dist/assets/prelaunch/prelaunch-scene-desktop.webp | cut -d' ' -f1)" = '3e975fcd07d025f33c948b32758164905d3abc4b1bc91da5e84819604b712061'
+test "$(sha256sum site/dist/assets/prelaunch/prelaunch-scene-mobile.webp | cut -d' ' -f1)" = 'c6ae402fd938807b821f0c78d16f1184bb16f25e73efbce94a4e55758aa5c94f'
+test "$(sha256sum site/dist/assets/pwa/announcements-brand-v2-192.png | cut -d' ' -f1)" = 'e99b28e73f966732155f4cba802b470f1d85e2c5c5294cfd864403d61bdf0512'
+test "$(sha256sum site/dist/assets/pwa/announcements-brand-v2-512.png | cut -d' ' -f1)" = 'cb1a469e7584a62bab005babcb63805e8d921c73a8c12ec221094c5d8719827d'
 
 python3 -m http.server 4173 --directory site/dist >"$EVIDENCE/local-http.log" 2>&1 &
 server_pid=$!
@@ -125,6 +131,10 @@ grep -q 'data-prelaunch-page' "$EVIDENCE/live-root.html"
 npm --prefix site run check:prelaunch-form -- --url "$ROOT_ORIGIN/" --artifact-dir "../$EVIDENCE/live-browser"
 
 jq -n --arg repo_sha "$EXPECTED_SHA" --arg release_id "$release" --arg published_at "$(date -u +%FT%TZ)" '{schema_version:"prelaunch_root_release_receipt_v2",result:"published",repo_sha:$repo_sha,release_id:$release_id,published_at:$published_at,source_branch:"main",local_form_gate:"ok",live_form_gate:"ok"}' > "$EVIDENCE/release-receipt.json"
+aws_cmd s3 cp "$EVIDENCE/release-receipt.json" "s3://$BUCKET/_static/prelaunch-root/current.json" \
+  --content-type 'application/json; charset=utf-8' \
+  --cache-control 'public, max-age=0, must-revalidate' \
+  --no-progress
 rollback=0
 trap - ERR INT TERM
 echo "PUBLISHED_REPO_SHA=$EXPECTED_SHA"
