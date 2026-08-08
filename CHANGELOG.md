@@ -4,6 +4,18 @@
 
 ### Fixed
 
+- Bound the Search corpus receipt to the exact immutable SQLite snapshot before
+  a static Kaggle launch. Full-catalog revision drift now defers locally with a
+  retryable vector-barrier result instead of wasting an 18-minute remote build
+  that can only fail at the final Astro production gate.
+
+- Closed the Search session-fixture broker replay path: a repeated GitHub
+  run-attempt/persona claim is now denied before credential generation. Added a
+  fail-closed, body-bounded Fly aiohttp transport with strict GitHub OIDC policy
+  and broker-only selection of the legacy Supabase service-role compatibility key, keeping
+  OTP/action links and identity material out of logs and artifacts; Fly port 80
+  now redirects to HTTPS before any broker credential exchange.
+
 - Fixed full secret-candidate jobs being cancelled during host-side publication
   after Kaggle had passed and all 3,300+ objects were uploaded. The static job
   now has a four-hour end-to-end budget while retaining the independent

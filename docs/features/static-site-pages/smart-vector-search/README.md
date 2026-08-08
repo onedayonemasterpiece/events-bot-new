@@ -694,6 +694,14 @@ prefix, сверяет exact target SHA и использует `auth.session_fi
 получает server-verified session + RLS probe; Android/iOS получают отдельный
 credential и callback в том же platform browser. Ни один job не читает mailbox.
 
+Перед remote launch static builder делает online SQLite snapshot, одним чтением
+копирует v2 Search receipt в snapshot-scoped immutable файл и тем же canonical
+export contract вычисляет полный `catalog_revision` snapshot. Несовпадение
+завершается локально как retryable `vector_barrier_catalog_revision_pending`;
+Kaggle не тратит полный Astro build на заведомо устаревший corpus. Именно
+замороженный receipt передаётся runner, поэтому последующая замена mutable
+owner receipt не может изменить revisions уже запущенного candidate.
+
 Расписания: cached каждые 30 минут, cold vector каждые 3 часа, bounded LLM
 четырежды в сутки, mobile nightly. `repository_dispatch` post-deploy запускает
 blocking cold + degraded browser gate. Повторный scheduled failure создаёт или

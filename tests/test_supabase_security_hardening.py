@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SAVED = ROOT / "supabase/migrations/20260731174310_harden_saved_event_mutations.sql"
 SEARCH = ROOT / "supabase/migrations/20260731174313_harden_event_search_internal_rpc.sql"
@@ -139,3 +138,18 @@ def test_broker_issue_claim_is_service_only_and_pii_free() -> None:
             # The canonical table name contains session; columns must not.
             continue
         assert forbidden not in claim_table
+
+    replay_fix = (
+        ROOT
+        / "supabase"
+        / "migrations"
+        / "20260808094500_static_site_auth_session_claim_replay.sql"
+    ).read_text(encoding="utf-8")
+    duplicate_guard = replay_fix[
+        replay_fix.index("if exists (") : replay_fix.index("delete from", replay_fix.index("if exists ("))
+    ]
+    assert "run_id = p_run_id" in duplicate_guard
+    assert "run_attempt = p_run_attempt" in duplicate_guard
+    assert "persona_id = p_persona_id" in duplicate_guard
+    assert "return false;" in duplicate_guard
+    assert "return true;" not in duplicate_guard
