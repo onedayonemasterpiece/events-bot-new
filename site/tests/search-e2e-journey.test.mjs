@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import { SEARCH_CANARY_VARIANTS } from '../e2e/search/canary-manifest.mjs';
 import { runSearchJourney } from '../e2e/search/journey.mjs';
 import { runRealWheelScroll } from '../e2e/search/adapters/playwright.mjs';
+import { runRealTouchScroll } from '../e2e/search/adapters/appium-base.mjs';
 
 function fakeAdapter({ coldCachedKeys = false } = {}) {
   const activity = { requests: [], responses: [], routes: [] };
@@ -74,6 +75,20 @@ test('Playwright wheel scrolling reaches a production-length final card beyond f
   assert.equal(receipt.card_visible_after, true);
   assert.equal(receipt.delta_y >= 6900, true);
   assert.equal(positiveWheels > 5, true);
+});
+
+test('mobile touch scrolling reaches a production-length final card beyond one gesture', async () => {
+  let scrollY = 0;
+  let gestures = 0;
+  const receipt = await runRealTouchScroll({
+    readScrollY: async () => scrollY,
+    lastCardVisible: async () => scrollY >= 3600,
+    gesture: async () => { gestures += 1; scrollY += 480; },
+    wait: async () => {},
+  });
+  assert.equal(receipt.card_visible_after, true);
+  assert.equal(receipt.delta_y >= 3600, true);
+  assert.equal(gestures > 5, true);
 });
 
 test('semantic journey proves three varied queries, pagination, cache and zero-post validation', async () => {

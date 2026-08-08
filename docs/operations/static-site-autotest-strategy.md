@@ -799,3 +799,6 @@ Cold simulator/WDA startup получает один WebDriver session POST с �
 300 секунд и `connectionRetryCount=0`. После неоднозначного timeout новая
 session автоматически не создаётся; следующий запуск получает новую
 platform-scoped broker session после защитного lease.
+Android/iOS scroll receipt строится только из реальных Appium touch gestures:
+адаптер повторяет их с bounded limit до попадания последней rendered card во
+viewport и проверяет положительный `scrollY` delta; DOM-scroll не допускается.
