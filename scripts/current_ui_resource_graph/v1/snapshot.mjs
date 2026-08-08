@@ -153,8 +153,11 @@ function unresolvedRows(components, coverage) {
 function mismatchRows(components) {
   return components.filter((item) => item.disposition === 'needs-verification').map((item) => ({
     id: `mismatch.${item.id.slice('component.'.length)}`, component_id: item.id, logical_path: item.logical_path,
-    channels: ['source-consumer-graph', 'exact-runtime-mapping'], conclusion: 'requires-additional-verification',
-    decision: 'NOT_MERGED', normalization_allowed: false,
+    channels: ['source-consumer-graph', 'exact-runtime-mapping'], conclusion: 'unresolved mapping',
+    observed_fact: 'required-by-surface-contract-but-no-consumer-or-runtime-binding',
+    inferred_interpretation: 'component may be dead, superseded, or missing a consumer edge',
+    open_question: 'Which AS-IS disposition is correct under the pinned production configuration?',
+    decision: 'NOT_MERGED', recommendation: 'unresolved', normalization_allowed: false,
   }));
 }
 
@@ -168,7 +171,8 @@ function evaluateGates({ components, componentEvidence, specimenObservations, ca
     controlled_specimen_evidence: specimenObservations.length > 0,
     candidate_as_is_contracts: candidateContracts.length > 0,
     reconciliation_capsules: capsules.length >= 6,
-    source_to_specimen_to_real_page_trace: false,
+    capsule_human_visual_review: capsules.length >= 6 && capsules.every((item) => item.files?.['capsule.json']?.review_status === 'reviewed'),
+    source_to_specimen_to_real_page_trace: specimenObservations.some((item) => item.source_binding_id && item.page_verification_id),
     normalization_stop_preserved: true,
     plane_identity_preserved: components.every((item) => item.plane_bindings.every((binding) => binding.plane)),
   };
@@ -180,6 +184,7 @@ export function writeV1Snapshot({
   screenshots, viewportEvidence, componentEvidence = [], coverage = [], budget,
   styles = [],
   specimenPlanRows = null, specimenObservations = [], candidateContracts = [], capsules = [],
+  mismatchRowsExtra = [], unresolvedRowsExtra = [],
 }) {
   const root = initializeV1Receipt(output, snapshotId, snapshotTime);
   const canonical = identity.latest_checked_kaggle_candidate.source_sha === 'ef7aa62e45c60f7a12da6160f490719c0721ec03';
@@ -198,12 +203,45 @@ export function writeV1Snapshot({
   writeJsonl(join(root, 'specimen-plan.jsonl'), plans, budget);
   writeJsonl(join(root, 'specimen-observations.jsonl'), specimenObservations, budget);
   writeJsonl(join(root, 'page-verification.jsonl'), pageVerification(screenshots, componentEvidence), budget);
-  const mismatches = mismatchRows(components); const unresolved = unresolvedRows(components, coverage);
+  const mergeUnique = (left, right) => [...new Map([...left, ...right].map((item) => [item.id, item])).values()].sort((a, b) => a.id.localeCompare(b.id));
+  const mismatches = mergeUnique(mismatchRows(components), mismatchRowsExtra);
+  const unresolved = mergeUnique(unresolvedRows(components, coverage), unresolvedRowsExtra);
   writeJsonl(join(root, 'mismatches.jsonl'), mismatches, budget);
   writeJsonl(join(root, 'unresolved.jsonl'), unresolved, budget);
-  for (const contract of candidateContracts) claimWrite(join(root, 'candidate-contracts', `${contract.id}.contract.json`), json(contract, true), budget);
+  const contractIndex = new Map();
+  for (const contract of candidateContracts) {
+    const contractPath = join(root, 'candidate-contracts', `${contract.id}.contract.json`);
+    const content = json(contract, true);
+    claimWrite(contractPath, content, budget);
+    contractIndex.set(contract.id, { path: relative(root, contractPath), sha256: sha(content) });
+  }
   if (!candidateContracts.length) claimWrite(join(root, 'candidate-contracts', 'README.md'), '# Candidate AS-IS contracts\n\nPending reconciliation; no normative TO-BE contract is asserted.\n', budget);
-  for (const capsule of capsules) claimWrite(join(root, 'conformance-capsules', `${capsule.id}.json`), json(capsule, true), budget);
+  for (const capsule of capsules) {
+    const capsuleRoot = join(root, 'conformance-capsules', capsule.directory);
+    mkdirSync(capsuleRoot, { recursive: true });
+    const written = [];
+    for (const name of capsule.canonical_files.filter((item) => item !== 'evidence-index.json')) {
+      let value = capsule.files[name];
+      if (name === 'candidate-contract-ref.json') value = {
+        ...value,
+        contracts: value.contract_ids.map((id) => ({ id, ...(contractIndex.get(id) || { missing: true }) })),
+      };
+      if (name === 'mismatch-refs.jsonl') value = mismatches.filter((item) => JSON.stringify(item).includes(capsule.directory.split('-').slice(1).join('-').replace('button-cta', 'button')));
+      if (name === 'unresolved-refs.jsonl') value = [...value, ...unresolved.filter((item) => JSON.stringify(item).includes(capsule.directory.split('-').slice(1).join('-').replace('button-cta', 'button')))];
+      const content = name.endsWith('.jsonl')
+        ? (Array.isArray(value) ? value : [value]).map((item) => json(item)).join('')
+        : name.endsWith('.md') ? String(value) : json(value, true);
+      const target = join(capsuleRoot, name);
+      claimWrite(target, content, budget);
+      written.push({ path: name, bytes: Buffer.byteLength(content), sha256: sha(content) });
+    }
+    const evidenceIndex = {
+      schema_version: V1_SCHEMA, capsule_id: capsule.id, status: 'compact-capsule-index',
+      entries: written.sort((a, b) => a.path.localeCompare(b.path)),
+      heavy_evidence_status: capsule.files['capsule.json'].review_status === 'reviewed' ? 'reviewed' : 'capture-or-review-pending',
+    };
+    claimWrite(join(capsuleRoot, 'evidence-index.json'), json(evidenceIndex, true), budget);
+  }
   if (!capsules.length) claimWrite(join(root, 'conformance-capsules', 'README.md'), '# Reconciliation capsules\n\nPending source/specimen/consumer reconciliation.\n', budget);
   claimWrite(join(root, 'penpot-materialization-candidates.json'), json({ schema_version: V1_SCHEMA, status: 'not-materialized', candidates: [], stop_reason: 'normalization-and-Penpot-materialization-are-out-of-scope' }, true), budget);
   const gate = evaluateGates({ components, componentEvidence, specimenObservations, candidateContracts, capsules, canonical });

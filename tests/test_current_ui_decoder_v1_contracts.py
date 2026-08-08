@@ -194,29 +194,21 @@ console.log(JSON.stringify({directories:CAPSULE_DIRECTORIES,canonicalFiles:CAPSU
     for capsule in value["rows"]:
         assert set(capsule["files"]) == set(value["canonicalFiles"])
         overview = capsule["files"]["capsule.json"]
-        screenshots = capsule["files"]["screenshot-refs.json"]
-        reviewer = capsule["files"]["reviewer-conclusion.json"]
-        specimen = capsule["files"]["specimen-ref.json"]
-        page = capsule["files"]["real-page-ref.json"]
+        review = capsule["files"]["REVIEW.md"]
+        specimen = capsule["files"]["specimen-observation-refs.jsonl"]
+        page = capsule["files"]["real-page-verification-refs.jsonl"]
         assert overview["review_status"] == "pending"
         assert overview["evidence_status"] == "planned-not-captured"
-        assert screenshots == {
-            "human_visual_review": "pending",
-            "references": [],
-            "status": "no-capture-attached",
-        }
-        assert reviewer["status"] == "pending"
-        assert reviewer["conclusion"] is None
-        assert reviewer["reviewer"] is None
-        assert specimen["observations"] == []
-        assert page["production_observed_by_capsule"] is False
+        assert "PENDING HUMAN VISUAL" in review
+        assert specimen
+        assert all(item["observation_attached"] is False for item in specimen)
+        assert all(item["production_observed_by_capsule"] is False for item in page)
         assert capsule["decision"] == "NOT_MERGED"
         assert capsule["normalization_allowed"] is False
-        source_record = capsule["files"]["source-facts.json"]
-        assert source_record["facts"]
-        assert isinstance(source_record["inference"], list)
-        assert isinstance(source_record["open_questions"], list)
-        assert source_record["decision"]
+        source_records = capsule["files"]["source-facts.jsonl"]
+        assert any(item["record_kind"] == "observed-source-fact" for item in source_records)
+        assert any(item["record_kind"] == "inferred-interpretation" for item in source_records)
+        assert any(item["record_kind"] == "decoder-boundary-decision" for item in source_records)
 
 
 def test_capsule_contract_refs_are_integral_and_hash_review_claims_fail_closed():
@@ -225,8 +217,8 @@ def test_capsule_contract_refs_are_integral_and_hash_review_claims_fail_closed()
         + """
 const original=buildReconciliationCapsules();
 const dangling=structuredClone(original); dangling[0].files['candidate-contract-ref.json'].contract_ids=['candidate.missing'];
-const reviewed=structuredClone(original); reviewed[0].files['reviewer-conclusion.json'].status='complete';
-const capture=structuredClone(original); capture[0].files['screenshot-refs.json'].references=['fake.png'];
+const reviewed=structuredClone(original); reviewed[0].files['capsule.json'].review_status='reviewed';
+const capture=structuredClone(original); capture[0].files['specimen-observation-refs.jsonl'][0].observation_attached=true;
 const tampered=structuredClone(original); tampered[0].title='changed';
 const cases={good:original,dangling,reviewed,capture,tampered};
 console.log(JSON.stringify(Object.fromEntries(Object.entries(cases).map(([name,rows])=>{

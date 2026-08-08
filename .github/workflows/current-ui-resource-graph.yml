@@ -113,6 +113,7 @@ jobs:
       CURRENT_UI_GRAPH_CANDIDATE_BUILD_ID: ${{ inputs.candidate_build_id }}
       CURRENT_UI_GRAPH_CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
       CURRENT_UI_GRAPH_SNAPSHOT_ID: ${{ inputs.snapshot_id }}
+      CURRENT_UI_GRAPH_V1_SNAPSHOT_ID: decoder-v1-snapshot-20260808T124842-4786ac53bc
       CURRENT_UI_GRAPH_SNAPSHOT_TIME: ${{ inputs.snapshot_time }}
       CURRENT_UI_GRAPH_CANDIDATE_MANIFEST_SHA256: ${{ inputs.candidate_manifest_sha256 }}
       CURRENT_UI_GRAPH_CANDIDATE_GENERATED_AT: ${{ inputs.candidate_generated_at }}
@@ -217,6 +218,7 @@ jobs:
             --candidate-run-id "$CURRENT_UI_GRAPH_CANDIDATE_RUN_ID" \
             --candidate-snapshot-id "$CURRENT_UI_GRAPH_SNAPSHOT_ID" \
             --snapshot-id "$CURRENT_UI_GRAPH_SNAPSHOT_ID" \
+            --v1-snapshot-id "$CURRENT_UI_GRAPH_V1_SNAPSHOT_ID" \
             --snapshot-time "$CURRENT_UI_GRAPH_SNAPSHOT_TIME" \
             --candidate-manifest-sha256 "$CURRENT_UI_GRAPH_CANDIDATE_MANIFEST_SHA256" \
             --candidate-generated-at "$CURRENT_UI_GRAPH_CANDIDATE_GENERATED_AT" \
@@ -235,7 +237,7 @@ jobs:
             --candidate-base-url-env CURRENT_UI_GRAPH_CANDIDATE_BASE_URL \
             --browser-observations true \
             --browser-max-pages 23 \
-            --output-byte-budget 94371840 \
+            --output-byte-budget 134217728 \
             --verify-production-identity true \
             --output "$GRAPH_OUTPUT"
 
@@ -247,16 +249,16 @@ jobs:
           for file in "${required[@]}"; do test -s "$GRAPH_OUTPUT/$file"; done
           for file in "$GRAPH_OUTPUT"/*.jsonl; do test -s "$file"; jq -c . "$file" >/dev/null; done
           jq -e '.status == "complete"' "$GRAPH_OUTPUT/receipt.json" >/dev/null
-          v1_root="$GRAPH_OUTPUT/catalog/component-decoder/$CURRENT_UI_GRAPH_SNAPSHOT_ID"
+          v1_root="$GRAPH_OUTPUT/catalog/component-decoder/$CURRENT_UI_GRAPH_V1_SNAPSHOT_ID"
           v1_required=(manifest.json receipt.json summary.md artifact-index.json source-files.jsonl source-bindings.jsonl component-families.jsonl composition-edges.jsonl consumers.jsonl route-families.jsonl page-state-signatures.jsonl specimen-plan.jsonl specimen-observations.jsonl page-verification.jsonl mismatches.jsonl unresolved.jsonl penpot-materialization-candidates.json)
           for file in "${v1_required[@]}"; do test -e "$v1_root/$file"; done
           test "$(find "$v1_root/components" -maxdepth 1 -type f -name 'component.*.json' | wc -l)" -eq 107
-          jq -e '.status == "complete" and .evidence_completion == "complete" and .handoff_status == "GO"' "$v1_root/receipt.json" >/dev/null
+          jq -e '.status == "complete" and .evidence_completion == "partial" and .handoff_status == "NO_GO" and (.blockers | index("capsule_human_visual_review")) != null' "$v1_root/receipt.json" >/dev/null
           jq -e '
             .schema_version == "current_ui_component_decoder_v1"
             and .classification.total == 107
-            and .go_no_go.status == "GO"
-            and (.go_no_go.blockers | length) == 0
+            and .go_no_go.status == "NO_GO"
+            and (.go_no_go.blockers | index("capsule_human_visual_review")) != null
             and (.constraints.as_is_only == true)
             and (.constraints.candidate_contracts_are_not_normative == true)
             and (.constraints.merge == false)
@@ -278,7 +280,7 @@ jobs:
             and (.runtime_manifest.production_tree_sha256 == "47df3798686dfbdde43589ba6a6498effd82f6fd091de6883a4899b7b4e57769")
             and (.runtime_planes.current_root_prelaunch.verification == "exact_sha256_match")
             and (.runtime_planes.current_root_prelaunch.html_sha256 == "1c31504d10d9ec66c7fa84ad52c94e6019a741f0ee01826f219578963e0ea21e")
-            and (.output_byte_budget == 94371840)
+            and (.output_byte_budget == 134217728)
             and (.output_bytes_before_manifest < .output_byte_budget)
           ' "$GRAPH_OUTPUT/manifest.json" >/dev/null
           if jq -e 'select(.decision != "NOT_MERGED" or .recommendation != "unresolved")' "$GRAPH_OUTPUT/fragmentation-report.jsonl" >/dev/null; then exit 1; fi
@@ -295,6 +297,12 @@ jobs:
             and (map(select(.id == "event-format.media.editorial-large-poster-companion" and .status == "observed" and (.screenshot_evidence | length) >= 2)) | length) == 1
             and (map(select(.id == "event-format.media.editorial-small-companion-previews" and .status == "observed" and (.screenshot_evidence | length) >= 2)) | length) == 1
           ' "$GRAPH_OUTPUT/event-presentation-formats.jsonl" >/dev/null
+          test "$(find "$v1_root/conformance-capsules" -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 6
+          for capsule in "$v1_root"/conformance-capsules/*; do
+            for file in capsule.json source-facts.jsonl candidate-contract-ref.json specimen-observation-refs.jsonl real-page-verification-refs.jsonl state-token-dependency-map.json override-findings.jsonl mismatch-refs.jsonl unresolved-refs.jsonl evidence-index.json REVIEW.md; do
+              test -e "$capsule/$file"
+            done
+          done
           grep -F 'does not authorize merge, split, normalization, tokenization, Penpot mutation, or Astro/CSS changes' "$v1_root/summary.md" >/dev/null
           ! grep -R -F 'Proceed to normalization workshop' "$v1_root"
           ! grep -R -F "$CURRENT_UI_GRAPH_CANDIDATE_BASE_URL" "$GRAPH_OUTPUT"

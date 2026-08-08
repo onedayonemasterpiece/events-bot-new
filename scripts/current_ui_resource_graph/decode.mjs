@@ -12,6 +12,7 @@ import {
 } from './graph-lib.mjs';
 import { classifyLogicalComponents, classificationCounts } from './v1/classification.mjs';
 import { initializeV1Receipt, writeV1Snapshot } from './v1/snapshot.mjs';
+import { buildDecoderReconciliationBundle } from './v1/capsules.mjs';
 
 function bool(value, fallback = false) {
   if (value === undefined) return fallback;
@@ -158,6 +159,7 @@ async function run(argv) {
     if (args.source_sha) identity.latest_checked_kaggle_candidate.source_sha = args.source_sha;
     if (args.snapshot_id) identity.snapshot_id = args.snapshot_id;
     if (args.snapshot_time) identity.snapshot_time = args.snapshot_time;
+    const v1SnapshotId = args.v1_snapshot_id || `decoder-v1-${identity.snapshot_id}`;
     const candidateOverrides = {
       build_id: args.candidate_build_id, run_id: args.candidate_run_id,
       snapshot_id: args.candidate_snapshot_id, manifest_sha256: args.candidate_manifest_sha256,
@@ -177,7 +179,7 @@ async function run(argv) {
     const candidateBase = baseFromFile || baseFromEnv;
     redact = redactFactory([candidateBase]);
     const budget = new Budget(Number(args.output_byte_budget || 75 * 1024 * 1024));
-    v1ReceiptPath = join(initializeV1Receipt(output, identity.snapshot_id, identity.snapshot_time), 'receipt.json');
+    v1ReceiptPath = join(initializeV1Receipt(output, v1SnapshotId, identity.snapshot_time), 'receipt.json');
     const maxHtmlBytes = Number(args.max_html_bytes || 4 * 1024 * 1024);
     const rootSourceRoot = resolve(args.root_source_root || sourceRoot);
     const sourcePin = validateSourcePin(sourceRoot, identity.latest_checked_kaggle_candidate.source_sha, args.source_tree_hash || '');
@@ -239,6 +241,7 @@ async function run(argv) {
     const coverage = coverageRows(sourceRecords, runtime, pageFamilies);
     const eventFormats = eventPresentationFormats(sourceRecords, runtime, screenshots);
     const logicalComponents = classifyLogicalComponents(sourceRecords, runtime);
+    const reconciliation = buildDecoderReconciliationBundle({ eventPresentationRecords: eventFormats });
 
     await writeJsonl(join(output, 'source-components.jsonl'), sourceRecords, budget);
     await writeJsonl(join(output, 'observed-ui-families.jsonl'), families, budget);
@@ -314,10 +317,16 @@ async function run(argv) {
     });
     if (serialized.length) throw new Error(`Secret redaction invariant failed: ${serialized.join(', ')}`);
     writeV1Snapshot({
-      output, snapshotId: identity.snapshot_id, snapshotTime: identity.snapshot_time,
+      output, snapshotId: v1SnapshotId, snapshotTime: identity.snapshot_time,
       identity: { current_root_prelaunch: identity.current_root_prelaunch, latest_checked_kaggle_candidate: identity.latest_checked_kaggle_candidate },
       sourceRecords, components: logicalComponents, families, pageFamilies, runtime, screenshots,
       viewportEvidence, componentEvidence, coverage, styles, budget,
+      specimenPlanRows: reconciliation.specimen_plan,
+      specimenObservations: reconciliation.specimen_observations,
+      candidateContracts: reconciliation.candidate_contracts,
+      capsules: reconciliation.capsules,
+      mismatchRowsExtra: reconciliation.mismatches,
+      unresolvedRowsExtra: reconciliation.unresolved,
     });
     if (candidateBase) {
       const candidateToken = new URL(candidateBase).pathname.split('/').filter(Boolean).find((part) => part.length >= 20) || '';

@@ -263,8 +263,8 @@ def test_deterministic_byte_identical_rerun(decoded):
     assert {name: (first / name).read_bytes() for name in names} == {
         name: (second / name).read_bytes() for name in names
     }
-    first_v1 = first / "catalog/component-decoder/snapshot-test"
-    second_v1 = second / "catalog/component-decoder/snapshot-test"
+    first_v1 = first / "catalog/component-decoder/decoder-v1-snapshot-test"
+    second_v1 = second / "catalog/component-decoder/decoder-v1-snapshot-test"
     assert {
         path.relative_to(first_v1): path.read_bytes()
         for path in first_v1.rglob("*")
@@ -287,7 +287,7 @@ def test_required_output_set_and_nonempty_jsonl(decoded):
 
 def test_v1_compact_snapshot_is_complete_as_a_tree_and_fail_closed(decoded):
     output, _, _ = decoded
-    root = output / "catalog/component-decoder/snapshot-test"
+    root = output / "catalog/component-decoder/decoder-v1-snapshot-test"
     assert V1_REQUIRED.issubset({path.name for path in root.iterdir()})
     manifest = json.loads((root / "manifest.json").read_text())
     receipt = json.loads((root / "receipt.json").read_text())
@@ -299,6 +299,16 @@ def test_v1_compact_snapshot_is_complete_as_a_tree_and_fail_closed(decoded):
     assert receipt["handoff_status"] == "NO_GO"
     assert manifest["constraints"]["normalization"] is False
     assert manifest["constraints"]["astro_css_mutation"] is False
+    assert len(list((root / "candidate-contracts").glob("*.contract.json"))) == 9
+    capsule_dirs = sorted(path for path in (root / "conformance-capsules").iterdir() if path.is_dir())
+    assert len(capsule_dirs) == 6
+    capsule_required = {
+        "capsule.json", "source-facts.jsonl", "candidate-contract-ref.json",
+        "specimen-observation-refs.jsonl", "real-page-verification-refs.jsonl",
+        "state-token-dependency-map.json", "override-findings.jsonl",
+        "mismatch-refs.jsonl", "unresolved-refs.jsonl", "evidence-index.json", "REVIEW.md",
+    }
+    assert all(capsule_required == {path.name for path in capsule.iterdir()} for capsule in capsule_dirs)
     components = list((root / "components").glob("*.json"))
     source_components = {
         row["path"]
@@ -363,7 +373,7 @@ def test_state_aware_ast_facts_and_inline_script_import_edges(decoded):
 def test_v1_known_exceptions_are_not_synthesized(decoded):
     output, _, _ = decoded
     manifest = json.loads(
-        (output / "catalog/component-decoder/snapshot-test/manifest.json").read_text()
+        (output / "catalog/component-decoder/decoder-v1-snapshot-test/manifest.json").read_text()
     )
     exceptions = {item["id"]: item for item in manifest["known_exceptions"]}
     assert exceptions["exception.labs-preview-special"]["classification"] == "lab-only"
@@ -877,8 +887,8 @@ def test_exact_candidate_constants_and_retry_bound():
 def test_workflow_has_an_explicit_bounded_budget_for_expanded_event_specimens():
     workflow = (REPO / ".github/workflows/current-ui-resource-graph.yml").read_text()
     assert "--browser-max-pages 23" in workflow
-    assert "--output-byte-budget 94371840" in workflow
-    assert ".output_byte_budget == 94371840" in workflow
+    assert "--output-byte-budget 134217728" in workflow
+    assert ".output_byte_budget == 134217728" in workflow
 
 
 def test_partial_receipt_survives_failure(tmp_path):
@@ -903,7 +913,7 @@ def test_partial_receipt_survives_failure(tmp_path):
     assert secret not in result.stderr
     assert secret not in json.dumps(receipt)
     v1_receipt = json.loads(
-        (output / "catalog/component-decoder/snapshot-test/receipt.json").read_text()
+        (output / "catalog/component-decoder/decoder-v1-snapshot-test/receipt.json").read_text()
     )
     assert v1_receipt["status"] == "failed"
     assert v1_receipt["handoff_status"] == "NO_GO"
@@ -948,7 +958,8 @@ def test_workflow_uses_validated_env_inputs_and_honest_validation_receipt():
     assert "Current UI Decoder v1 evidence completion" in workflow
     assert 'test "$(find "$v1_root/components"' in workflow
     assert ".classification.total == 107" in workflow
-    assert '.handoff_status == "GO"' in workflow
+    assert '.handoff_status == "NO_GO"' in workflow
+    assert 'index("capsule_human_visual_review")' in workflow
     assert ".constraints.normalization == false" in workflow
     assert "does not authorize merge, split, normalization" in workflow
 

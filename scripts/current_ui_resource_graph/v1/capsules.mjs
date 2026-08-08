@@ -18,9 +18,10 @@ export const CAPSULE_DIRECTORIES = Object.freeze([
   '04-transport', '05-medallions', '06-artifacts',
 ]);
 export const CAPSULE_FILES = Object.freeze([
-  'capsule.json', 'source-facts.json', 'candidate-contract-ref.json', 'specimen-ref.json',
-  'real-page-ref.json', 'state-token-dependency-map.json', 'screenshot-refs.json',
-  'override-findings.json', 'reviewer-conclusion.json',
+  'capsule.json', 'source-facts.jsonl', 'candidate-contract-ref.json',
+  'specimen-observation-refs.jsonl', 'real-page-verification-refs.jsonl',
+  'state-token-dependency-map.json', 'override-findings.jsonl', 'mismatch-refs.jsonl',
+  'unresolved-refs.jsonl', 'evidence-index.json', 'REVIEW.md',
 ]);
 
 function stable(value) {
@@ -55,14 +56,20 @@ function makeCapsule({ number, slug, title, contractIds, facts, inference, openQ
       contract_ids: contractIds, evidence_status: 'planned-not-captured', review_status: 'pending',
       decision: 'NOT_MERGED', recommendation: 'unresolved', normalization_allowed: false,
     },
-    'source-facts.json': { facts, inference, open_questions: openQuestions, decision },
+    'source-facts.jsonl': [
+      ...facts.map((item) => ({ ...item, record_kind: 'observed-source-fact' })),
+      ...inference.map((statement, index) => ({ id: `${id}.inference.${index + 1}`, record_kind: 'inferred-interpretation', statement, confidence: 'inferred' })),
+      { id: `${id}.as-is-decision`, record_kind: 'decoder-boundary-decision', statement: decision, decision: 'NOT_MERGED' },
+    ],
     'candidate-contract-ref.json': { contract_ids: contractIds, contract_hashes_attached_at_materialization: false },
-    'specimen-ref.json': { references: specimens, observations: [], status: 'planned-not-captured' },
-    'real-page-ref.json': realPage,
+    'specimen-observation-refs.jsonl': specimens.map((item) => ({ ...item, evidence_kind: 'planned-specimen-reference', observation_attached: false })),
+    'real-page-verification-refs.jsonl': [{ ...realPage, evidence_kind: 'real-page-verification-reference' }],
     'state-token-dependency-map.json': { ...mapping, token_mapping_status: 'raw-source-references-only-no-tokenization' },
-    'screenshot-refs.json': { references: [], status: 'no-capture-attached', human_visual_review: 'pending' },
-    'override-findings.json': { findings: overrides, style_divergence_policy: 'source and computed-style divergences are evidence only; they are not mismatches without reviewed reconciliation' },
-    'reviewer-conclusion.json': { status: 'pending', reviewer: null, reviewed_at: null, conclusion: null, alternatives: [], confidence: 'unresolved', evidence_refs: [] },
+    'override-findings.jsonl': overrides.map((item, index) => ({ id: `${id}.override.${index + 1}`, ...item, style_divergence_policy: 'source and computed-style divergences are evidence only; they are not mismatches without reviewed reconciliation' })),
+    'mismatch-refs.jsonl': [],
+    'unresolved-refs.jsonl': openQuestions.map((statement, index) => ({ id: `${id}.unresolved.${index + 1}`, statement, blocks_handoff: true, status: 'open' })),
+    'evidence-index.json': { status: 'materialized-by-snapshot-writer', entries: [] },
+    'REVIEW.md': `# ${title}\n\nStatus: **PENDING HUMAN VISUAL AND SEMANTIC REVIEW**\n\nNo acceptance, normalization, merge, split, or Penpot materialization is authorized.\n`,
   };
   const unsigned = {
     schema_version: CAPSULE_SCHEMA, id, directory, title, canonical_files: [...CAPSULE_FILES], files,
@@ -250,9 +257,9 @@ export function assertReconciliationCapsules(capsules, contracts = buildCandidat
   for (const capsule of capsules) {
     if (capsule.schema_version !== CAPSULE_SCHEMA || capsule.decision !== 'NOT_MERGED' || capsule.normalization_allowed !== false) throw new Error(`Capsule STOP violated: ${capsule.id}`);
     if (CAPSULE_FILES.some((file) => !(file in capsule.files))) throw new Error(`Capsule canonical file missing: ${capsule.id}`);
-    if (capsule.files['capsule.json'].review_status !== 'pending' || capsule.files['reviewer-conclusion.json'].status !== 'pending' || capsule.files['reviewer-conclusion.json'].conclusion !== null) throw new Error(`Capsule falsely claims human review: ${capsule.id}`);
-    if (capsule.files['screenshot-refs.json'].references.length || capsule.files['screenshot-refs.json'].status !== 'no-capture-attached') throw new Error(`Capsule falsely claims screenshots: ${capsule.id}`);
-    if (capsule.files['specimen-ref.json'].observations.length || capsule.files['real-page-ref.json'].production_observed_by_capsule !== false) throw new Error(`Capsule falsely claims observation: ${capsule.id}`);
+    if (capsule.files['capsule.json'].review_status !== 'pending' || !capsule.files['REVIEW.md'].includes('PENDING HUMAN VISUAL')) throw new Error(`Capsule falsely claims human review: ${capsule.id}`);
+    if (capsule.files['specimen-observation-refs.jsonl'].some((item) => item.observation_attached !== false)) throw new Error(`Capsule falsely claims specimen observation: ${capsule.id}`);
+    if (capsule.files['real-page-verification-refs.jsonl'].some((item) => item.production_observed_by_capsule !== false)) throw new Error(`Capsule falsely claims page observation: ${capsule.id}`);
     for (const id of capsule.files['candidate-contract-ref.json'].contract_ids) if (!contractIds.has(id)) throw new Error(`Dangling capsule contract ref: ${id}`);
     const { detached_capsule_sha256, ...unsigned } = capsule;
     if (detached_capsule_sha256 !== sha(unsigned)) throw new Error(`Detached capsule hash mismatch: ${capsule.id}`);
