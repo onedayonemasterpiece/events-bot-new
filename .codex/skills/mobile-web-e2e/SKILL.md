@@ -35,6 +35,7 @@ Run `rg -n "appium|UiAutomator2|XCUITest|Mobile Safari|webviewConnect" site/e2e 
 - iOS WebView discovery uses the shared bounded 60-second connection window and retry profile; do not fall back to XCUITest's five-second default.
 - Use one bounded WebDriver session creation attempt. Workflow-level retry is allowed only before product side effects and must create a fresh, unambiguous run attempt/session.
 - For authenticated scenarios, use a fresh persona-scoped credential/session per device, complete callback in the device browser, wait for the authorized UI, then reload the exact target to prove same-storage persistence.
+- For broker-issued magic links, never open the default admin `action_link` directly: use the shared fail-closed converter to an allowlisted `token_hash/type` target callback so verification and persistence occur inside the device browser. Never extract or inject access/refresh tokens.
 
 ## Acceptance and evidence
 

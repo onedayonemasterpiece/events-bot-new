@@ -34,6 +34,12 @@
 
 ### Fixed
 
+- Mobile Search now converts the broker's Supabase admin confirmation URL into
+  the static site's supported `token_hash/type` callback before opening it in
+  Chrome/Safari. Verification therefore runs inside the device browser and
+  persists in that browser's storage instead of losing the default implicit
+  session fragment while `detectSessionInUrl` is intentionally disabled.
+
 - Replaced Search-local Android/iOS Appium capabilities with the accepted
   neutral mobile-web profile already used by OTP acceptance. Search now starts
   iOS Safari natively, clears only the exact allowlisted first-run dialog, and

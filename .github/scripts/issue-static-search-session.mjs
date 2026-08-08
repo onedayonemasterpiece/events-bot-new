@@ -1,6 +1,7 @@
 import { appendFile } from 'node:fs/promises';
 
-import { createAuthSessionBrokerIssuer } from '../../site/e2e/auth-session-fixture/session-fixture.mjs';
+import { createAuthSessionBrokerIssuer,
+  createBrowserVerificationCallback } from '../../site/e2e/auth-session-fixture/session-fixture.mjs';
 
 function required(name) {
   const value = String(process.env[name] || '').trim();
@@ -44,16 +45,20 @@ async function main() {
     redirectTo: targetUrl,
     runId: required('GITHUB_RUN_ID'),
   });
-  const actionLink = String(credential.actionLink || '');
+  let actionLink = String(credential.actionLink || '');
   if (!actionLink.startsWith('https://') || /[\r\n]/u.test(actionLink)) {
     throw new Error('broker_action_link_invalid');
   }
+  let browserCallback = createBrowserVerificationCallback({ actionLink, redirectTo: targetUrl });
   // Mask before writing to the step environment. The OTP is deliberately not
   // exported: browser/device bootstrap follows only the one-time callback.
   process.stdout.write(`::add-mask::${actionLink}\n`);
-  await appendFile(required('GITHUB_ENV'), `E2E_AUTH_ACTION_LINK=${actionLink}\n`, { mode: 0o600 });
+  process.stdout.write(`::add-mask::${browserCallback}\n`);
+  await appendFile(required('GITHUB_ENV'), `E2E_AUTH_ACTION_LINK=${browserCallback}\n`, { mode: 0o600 });
   credential.emailOtp = '';
   credential.actionLink = '';
+  actionLink = '';
+  browserCallback = '';
   process.stdout.write('Search one-shot session issued (OTP/mail 0/0).\n');
 }
 
