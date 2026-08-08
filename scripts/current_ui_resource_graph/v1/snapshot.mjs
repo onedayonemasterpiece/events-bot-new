@@ -94,6 +94,7 @@ function stateSignatures(runtime) {
     route_hash: item.route_hash, structure_hash: item.structure_hash,
     source_mapping: item.source_mapping, source_page_ids: item.source_page_ids,
     surface_markers: item.surface_markers || [], event_resources: item.event_resources || {},
+    component_states: item.component_states || {},
     proof_label: item.plane === 'current_root_prelaunch' ? 'public-root-runtime-observed' : 'exact-candidate-runtime-observed',
   })).sort((a, b) => a.plane.localeCompare(b.plane) || a.page_family.localeCompare(b.page_family) || a.route_hash.localeCompare(b.route_hash));
 }

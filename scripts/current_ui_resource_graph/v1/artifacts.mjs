@@ -299,20 +299,23 @@ export function buildArtifactMismatchRecords() {
     {
       id: 'mismatch.artifacts.focus-saved-transition-glyph', system_id: FOCUS_SYSTEM_ID,
       component_id: componentId(FOCUS_COMPONENTS[2]), logical_path: FOCUS_COMPONENTS[2],
-      channels: ['source-static-render', 'source-client-transition'], conclusion: 'source/specimen mismatch',
+      channels: ['source-static-render', 'source-client-transition'], conclusion: 'unresolved mapping',
+      evidence_status: 'source-derived-potential-mismatch-awaiting-controlled-capture',
       observed_fact: 'eligible-to-found changes dataset, labels and visibility but not the glyph text rendered for eligible',
     },
     {
       id: 'mismatch.artifacts.focus-catalog-mark', system_id: FOCUS_SYSTEM_ID,
       component_id: componentId(FOCUS_COMPONENTS[1]), logical_path: FOCUS_COMPONENTS[1],
-      channels: ['source-static-render', 'source-client-storage-override'], conclusion: 'source/specimen mismatch',
+      channels: ['source-static-render', 'source-client-storage-override'], conclusion: 'unresolved mapping',
+      evidence_status: 'source-derived-potential-mismatch-awaiting-controlled-capture',
       observed_fact: 'storage override changes data-egg-state and state label but not the pre-rendered mark glyph',
     },
     {
       id: 'mismatch.artifacts.focus-unavailable-found-count', system_id: FOCUS_SYSTEM_ID,
       component_id: componentId(FOCUS_COMPONENTS[1]), logical_path: FOCUS_COMPONENTS[1],
       source_paths: [FOCUS_COMPONENTS[1], 'src/pages/fokus-gruppa/kollektsiya/index.astro'],
-      channels: ['source-prototype-state', 'source-client-storage-override', 'source-progress-calculation'], conclusion: 'source/specimen mismatch',
+      channels: ['source-prototype-state', 'source-client-storage-override', 'source-progress-calculation'], conclusion: 'unresolved mapping',
+      evidence_status: 'source-derived-potential-mismatch-awaiting-controlled-capture',
       observed_fact: 'FG-E06 can be visually changed from unavailable to found by storage while the denominator and found count still exclude it',
     },
     {

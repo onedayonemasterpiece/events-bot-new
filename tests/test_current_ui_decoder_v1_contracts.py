@@ -41,7 +41,7 @@ console.log(JSON.stringify({
 }));
 """
     )
-    assert value["count"] == 9
+    assert value["count"] == 12
     assert value["deterministic"] is True
     assert value["serializedEqual"] is True
     assert set(value["ids"]) == {
@@ -49,6 +49,8 @@ console.log(JSON.stringify({
         "candidate.event-media", "candidate.transport-rail", "candidate.transport-bus",
         "candidate.transport-kaup", "candidate.event-token-medallions",
         "candidate.artifacts-focus-egg", "candidate.artifacts-amber",
+        "candidate.event-card-listing-representations", "candidate.search-results",
+        "candidate.favorites-saved-events",
     }
     required = {
         "version", "semantic_role", "anatomy", "props", "slots", "variant_axes",
@@ -250,7 +252,7 @@ console.log(JSON.stringify({
 }));
 """
     )
-    assert value["contractCount"] == 9
+    assert value["contractCount"] == 12
     assert value["capsuleCount"] == 6
     assert value["observationCount"] == 0
     assert set(value["conclusions"]) <= set(value["allowed"])

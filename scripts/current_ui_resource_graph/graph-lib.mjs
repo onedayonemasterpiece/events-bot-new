@@ -219,6 +219,7 @@ export function hashSourceTree(root) {
 
 function nodeName(path) { return basename(path, extname(path)); }
 function componentType(rel) {
+  if (extname(rel) === '.css') return 'stylesheet';
   if (rel.includes('/pages/') && extname(rel) === '.astro') return 'page';
   if (rel.includes('/layouts/')) return 'layout';
   if (rel.includes('/components/')) return 'component';
@@ -256,7 +257,7 @@ function extractFrontmatterFacts(frontmatter, esm) {
 }
 
 export async function inventorySource(sourceRoot, parsers, { plane = 'latest_checked_kaggle_candidate' } = {}) {
-  const files = walk(sourceRoot, (path) => ['.astro', '.ts', '.js', '.mjs'].includes(extname(path)) && !/\.(?:test|spec)\.[^.]+$/u.test(path));
+  const files = walk(sourceRoot, (path) => ['.astro', '.ts', '.js', '.mjs', '.css'].includes(extname(path)) && !/\.(?:test|spec)\.[^.]+$/u.test(path));
   const records = [];
   for (const path of files) {
     const rel = relative(dirname(sourceRoot), path).split(sep).join('/');
@@ -289,6 +290,19 @@ export async function inventorySource(sourceRoot, parsers, { plane = 'latest_che
         parserStatus = 'parse_failed';
         conditions = [{ kind: 'unknown', reason_hash: sha256(error.message) }];
       }
+    } else if (extname(path) === '.css') {
+      try {
+        const root = parsers.postcss.parse(source, { from: rel });
+        const declarations = []; const atRules = []; const selectors = [];
+        root.walkDecls((decl) => declarations.push({ property: decl.prop, value_hash: sha256(decl.value), line: decl.source?.start?.line ?? null, custom_property: decl.prop.startsWith('--') }));
+        root.walkAtRules((rule) => atRules.push({ name: rule.name, params_hash: sha256(rule.params || ''), line: rule.source?.start?.line ?? null }));
+        root.walkRules((rule) => selectors.push({ selector_hash: sha256(rule.selector || ''), line: rule.source?.start?.line ?? null, pseudo_state: /:(?:hover|focus|focus-visible|active|disabled|checked|open|has)\b/u.test(rule.selector || '') }));
+        imports = root.nodes.filter((node) => node.type === 'atrule' && node.name === 'import').map((node) => node.params.replace(/^['"]|['"].*$/gu, '')).filter(Boolean).sort();
+        sourceState = { parser: 'postcss', parser_status: declarations.length || atRules.length || selectors.length ? 'parsed' : 'empty', declarations, at_rules: atRules, selectors };
+        parser = 'postcss';
+      } catch (error) {
+        parserStatus = 'parse_failed'; sourceState = { parser: 'postcss', parser_status: 'parse_failed', reason_hash: sha256(error.message) };
+      }
     } else {
       try {
         const parsedModule = parsers.esm.parse(source);
@@ -313,7 +327,7 @@ export async function inventorySource(sourceRoot, parsers, { plane = 'latest_che
       conditions, data_dependencies: [...new Set(data)].sort(), css_dependencies: [...new Set(css)].sort(),
       client_dependencies: [...new Set([...imports.filter((item) => /(?:client|browser|supabase)/iu.test(item)), ...clientDirectives])].sort(),
       content_sha256: hash, status: parserStatus === 'parsed' ? 'observed' : 'unknown',
-      confidence: parserStatus === 'parsed' ? (extname(path) === '.astro' ? 'high' : 'medium') : 'low',
+      confidence: parserStatus === 'parsed' ? (['.astro', '.css'].includes(extname(path)) ? 'high' : 'medium') : 'low',
       evidence: { parser, parser_status: parserStatus, source_line_count: source.split('\n').length },
       source_state: sourceState,
     });
@@ -324,7 +338,7 @@ export async function inventorySource(sourceRoot, parsers, { plane = 'latest_che
       const base = resolve(dirname(join(dirname(sourceRoot), consumer.path)), imported);
       const target = records.find((candidate) => {
         const absolute = join(dirname(sourceRoot), candidate.path);
-        return absolute === base || absolute === `${base}.astro` || absolute === `${base}.ts` || absolute === `${base}.js` || absolute === join(base, 'index.astro');
+        return absolute === base || absolute === `${base}.astro` || absolute === `${base}.ts` || absolute === `${base}.js` || absolute === `${base}.css` || absolute === join(base, 'index.astro');
       });
       if (target) target.consumers.push(consumer.id);
     }
@@ -534,6 +548,7 @@ export function structuralScan(html, htmlparser2) {
   const tags = new Map(); const regions = new Map(); const features = runtimeFeatures(); const tokens = [];
   const surfaceMarkers = new Set();
   const eventResourceMarkers = new Map();
+  const componentStateAttributes = new Map();
   const desktopFamilies = new Map(); const actionFamilies = new Map(); const actionLayouts = new Map(); const presentationReasons = new Map(); const presentationFallbacks = new Map();
   const countValue = (target, value, { maxValues = 32, maxLength = 96 } = {}) => {
     if (typeof value !== 'string' || !value || value.length > maxLength) return;
@@ -548,6 +563,16 @@ export function structuralScan(html, htmlparser2) {
     'data-companion-preview-item': 'editorial_companion_photo_preview_small',
     'data-desktop-action-panel': 'desktop_action_panel',
   });
+  const exactStateAttributes = Object.freeze([
+    'data-event-transport-schedule', 'data-event-city', 'data-outbound-count', 'data-return-count', 'data-event-end-basis',
+    'data-return-schedule-cutoff', 'data-last-same-day-return',
+    'data-event-bus-schedule', 'data-bus-route', 'data-bus-outbound', 'data-bus-return',
+    'data-kaup-transport', 'data-kaup-compact', 'data-kaup-official-transfer', 'data-kaup-public-bus', 'data-transport-treatment',
+    'data-medallion-layout', 'data-main-medallion-slug', 'data-top-slot-enabled', 'data-medallion-slot',
+    'data-medallion-role', 'data-medallion-category', 'data-identity-resolution', 'data-identity-conflict',
+    'data-focus-egg-artifact', 'data-egg-state', 'data-artifact-collection', 'data-artifact-slot',
+    'data-artifact-state', 'data-artifact-collection-unavailable', 'data-amber-artifact', 'aria-pressed',
+  ]);
   let elementCount = 0, maxDepth = 0, depth = 0;
   const parser = new htmlparser2.Parser({
     onopentag(name, attributes) {
@@ -565,12 +590,18 @@ export function structuralScan(html, htmlparser2) {
       for (const [attribute, resource] of Object.entries(resourceAttributes)) {
         if (Object.hasOwn(attributes, attribute)) countValue(eventResourceMarkers, resource);
       }
+      for (const attribute of exactStateAttributes) if (Object.hasOwn(attributes, attribute)) {
+        if (!componentStateAttributes.has(attribute)) componentStateAttributes.set(attribute, new Map());
+        const raw = attributes[attribute];
+        const value = raw === '' ? 'present' : raw;
+        if (/^(?:present|true|false|explicit|forecast|schedule_cutoff|inline|desktop-slots|top|main|secondary|organizer|source|program|pushkin|badge|pill|resolved|conflicting_source_identity|ambiguous_venue_identity|locked|eligible|found|unavailable|empty|tail|departure_board_v1|route_strips_v1|next_departure_queue_v1|[0-9]{1,3}|[a-z0-9_-]{1,48})$/u.test(value)) countValue(componentStateAttributes.get(attribute), value, { maxValues: 24, maxLength: 64 });
+      }
       if (/^(header|main|nav|aside|footer|section)$/u.test(name)) regions.set(name, (regions.get(name) || 0) + 1);
       if (/^(a|button|input|select|textarea)$/u.test(name) || /button|cta|action/u.test(marker)) features.actionLike += 1;
       if (/event|sobyt/u.test(marker)) features.eventLike += 1;
       if (/^(ul|ol)$/u.test(name) || /list|listing|feed/u.test(marker)) features.listLike += 1;
       if (/^(img|picture|video|figure)$/u.test(name) || /media|gallery|poster|hero/u.test(marker)) features.mediaLike += 1;
-      if (/medallion/u.test(marker)) features.medallionLike += 1;
+      if (/medallion|event-token-layout|data-medallion-layout/u.test(marker)) features.medallionLike += 1;
       if (name === 'time' || /date|calendar|occurrence/u.test(marker)) features.timeLike += 1;
       if (/transport|bus|rail/u.test(marker)) features.transportLike += 1;
       if (name === 'nav' || /navigation|header|footer/u.test(marker)) features.navLike += 1;
@@ -596,6 +627,7 @@ export function structuralScan(html, htmlparser2) {
       presentation_fallbacks: Object.fromEntries([...presentationFallbacks].sort(([a], [b]) => a.localeCompare(b))),
       markers: Object.fromEntries([...eventResourceMarkers].sort(([a], [b]) => a.localeCompare(b))),
     },
+    component_states: Object.fromEntries([...componentStateAttributes].sort(([a], [b]) => a.localeCompare(b)).map(([attribute, values]) => [attribute, Object.fromEntries([...values].sort(([a], [b]) => a.localeCompare(b)))])),
   };
 }
 
@@ -734,6 +766,7 @@ function runtimeRecord(route, scan, bytes, contentHash, { plane, relativePath })
     structure_hash: scan.structure_hash, element_count: scan.element_count, max_depth: scan.max_depth,
     major_regions: scan.major_regions, tag_counts: scan.tag_counts, feature_counts: scan.features,
     surface_hypotheses: hypotheses, surface_markers: scan.surface_markers, event_resources: scan.event_resources,
+    component_states: scan.component_states,
     evidence: ['exact_manifest_file', 'streaming_structural_parse'],
   };
 }
@@ -815,7 +848,8 @@ export async function styleObservations(sourceRoots, sourceRecords, parsers) {
       const rel = relative(dirname(sourceRoot), path).split(sep).join('/');
       let root;
       try { root = parsers.postcss.parse(readFileSync(path, 'utf8'), { from: rel }); } catch { continue; }
-      appendCssDeclarations(result, root, { sourceId: null, sourcePath: rel, plane, blockIndex: 0, blockStartLine: 1 });
+      const stylesheet = sourceRecords.find((record) => record.plane === plane && record.path === rel && record.type === 'stylesheet');
+      appendCssDeclarations(result, root, { sourceId: stylesheet?.id || null, sourcePath: rel, plane, blockIndex: 0, blockStartLine: 1 });
     }
   }
   const cohorts = new Map();

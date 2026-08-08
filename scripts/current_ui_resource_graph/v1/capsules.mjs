@@ -220,6 +220,9 @@ export function buildConsolidatedSpecimenPlan() {
     planned('specimen-plan.contracts.event-editorial-and-split', 'candidate.event-detail-presentation', ['1023', '1024', '1728'], 'event-presentation-pair'),
     planned('specimen-plan.contracts.button-cta', 'candidate.button-cta-fragmented', ['390', '1024', '1728'], 'button-cta-representative-matrix'),
     planned('specimen-plan.contracts.media-heavy', 'candidate.event-media', ['1024', '1728'], 'large-poster-and-small-photo-previews'),
+    planned('specimen-plan.contracts.event-card-listing', 'candidate.event-card-listing-representations', ['390', '720', '1024', '1728'], 'card-and-row-contexts'),
+    planned('specimen-plan.contracts.search-results', 'candidate.search-results', ['390', '768', '1728'], 'empty-loading-results-error'),
+    planned('specimen-plan.contracts.favorites', 'candidate.favorites-saved-events', ['390', '768', '1728'], 'empty-populated-storage-unavailable'),
   ];
   return clone([...generic, ...transport.specimen_plan, ...medallions.specimen_plan, ...artifacts.specimen_plan].map((item) => ({ ...item, evidence_original_status: item.observation_status || item.status || item.plan_status || 'planned', observation_status: item.observation_status || item.status || 'planned-not-captured' })).sort((a, b) => a.id.localeCompare(b.id)));
 }

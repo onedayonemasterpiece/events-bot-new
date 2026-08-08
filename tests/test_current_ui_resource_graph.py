@@ -156,7 +156,7 @@ def _fixture(tmp_path: Path):
         "index.html": b"<!doctype html><main data-home-hero-talk><section class='home-hero-talk'>Hi</section></main>",
         "segodnya/index.html": b"<!doctype html><main><article class='event-card'>Today</article></main>",
         "populyarnoe/index.html": b"<!doctype html><main><article class='event-card'>Popular</article></main>",
-        "sobytiya/example/index.html": b"<!doctype html><main class='event-detail' data-desktop-clean-event data-desktop-family='split' data-presentation-reason='split-portrait-or-square-visual'><figure data-media-frame><img src='poster.jpg'><nav data-split-media-rail><button><img src='photo-thumb.jpg'></button></nav></figure><section data-desktop-action-panel data-action-family='split' data-action-layout='inline'><button>Tickets</button></section></main>",
+        "sobytiya/example/index.html": b"<!doctype html><main class='event-detail' data-desktop-clean-event data-desktop-family='split' data-presentation-reason='split-portrait-or-square-visual'><figure data-media-frame><img src='poster.jpg'><nav data-split-media-rail><button><img src='photo-thumb.jpg'></button></nav></figure><section data-desktop-action-panel data-action-family='split' data-action-layout='inline'><button>Tickets</button></section><aside data-event-transport-schedule data-event-city='svetlogorsk' data-outbound-count='2' data-return-count='2' data-event-end-basis='explicit'></aside><div class='event-token-layout' data-medallion-layout='desktop-slots' data-top-slot-enabled='true'><section data-medallion-slot='top' data-identity-resolution='resolved'><span data-medallion-role='main' data-medallion-category='venue_brand'></span></section></div></main>",
         "sobytiya/editorial/index.html": b"<!doctype html><main class='event-detail' data-desktop-clean-event data-desktop-family='editorial' data-presentation-reason='editorial-primary-qualified-landscape'><figure data-media-frame><img src='hero.jpg'></figure><nav data-hero-rail><button><img src='photo-thumb.jpg'></button></nav><section data-desktop-action-panel data-action-family='editorial' data-action-layout='stacked'><button>Tickets</button></section><button data-editorial-ocr-companion><img src='poster.jpg'></button><div><button data-companion-preview-item><img src='photo-small.jpg'></button></div></main>",
         "sobytiya/no-image/index.html": b"<!doctype html><main class='event-detail' data-desktop-clean-event data-desktop-family='split' data-presentation-reason='split-no-image-fallback' data-presentation-fallback='venue-identity'><figure data-media-frame><div class='event-fallback-art'>Fallback</div></figure><section data-desktop-action-panel data-action-family='split' data-action-layout='inline'><button>Calendar</button></section></main>",
         "vyhodnye/date-2026-08-08/index.html": b"<!doctype html><main><ul><li><button>Open event</button></li></ul></main>",
@@ -299,7 +299,7 @@ def test_v1_compact_snapshot_is_complete_as_a_tree_and_fail_closed(decoded):
     assert receipt["handoff_status"] == "NO_GO"
     assert manifest["constraints"]["normalization"] is False
     assert manifest["constraints"]["astro_css_mutation"] is False
-    assert len(list((root / "candidate-contracts").glob("*.contract.json"))) == 9
+    assert len(list((root / "candidate-contracts").glob("*.contract.json"))) == 12
     capsule_dirs = sorted(path for path in (root / "conformance-capsules").iterdir() if path.is_dir())
     assert len(capsule_dirs) == 6
     capsule_required = {
@@ -368,6 +368,24 @@ def test_state_aware_ast_facts_and_inline_script_import_edges(decoded):
         and item["kind"] == "IfStatement"
         for item in keyboard["source_state"]["branches"]
     )
+
+
+def test_css_sources_and_exact_component_state_signatures_are_provenanced(decoded):
+    output, _, _ = decoded
+    sources = [json.loads(line) for line in (output / "source-components.jsonl").read_text().splitlines()]
+    stylesheet = next(row for row in sources if row["path"].endswith("styles/global.css"))
+    assert stylesheet["type"] == "stylesheet"
+    assert stylesheet["evidence"]["parser"] == "postcss"
+    assert stylesheet["source_state"]["parser_status"] == "parsed"
+    style_rows = [json.loads(line) for line in (output / "style-observations.jsonl").read_text().splitlines()]
+    assert any(row.get("source_id") == stylesheet["id"] for row in style_rows)
+
+    signatures = [json.loads(line) for line in (output / "catalog/component-decoder/decoder-v1-snapshot-test/page-state-signatures.jsonl").read_text().splitlines()]
+    event = next(row for row in signatures if row["page_family"] == "page-family.event-detail" and row["component_states"].get("data-event-end-basis"))
+    assert event["component_states"]["data-event-end-basis"] == {"explicit": 1}
+    assert event["component_states"]["data-outbound-count"] == {"2": 1}
+    assert event["component_states"]["data-medallion-layout"] == {"desktop-slots": 1}
+    assert event["component_states"]["data-medallion-role"] == {"main": 1}
 
 
 def test_v1_known_exceptions_are_not_synthesized(decoded):
@@ -538,7 +556,7 @@ def test_not_merged_and_unresolved_are_invariants(decoded):
         assert {row["decision"] for row in rows} == {"NOT_MERGED"}
         assert {row["recommendation"] for row in rows} == {"unresolved"}
     assert (output / "summary.md").read_text().rstrip().endswith(
-        "Proceed to normalization workshop"
+        "Complete component specimens, source-to-page reconciliation, capsule review, and immutable handoff. STOP before normalization."
     )
 
 

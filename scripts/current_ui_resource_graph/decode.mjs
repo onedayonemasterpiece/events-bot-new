@@ -86,7 +86,9 @@ function validateRuntimeIdentity(manifest, bytes, identities, verifyProduction) 
 
 function sourceCounts(records) {
   const count = (type) => records.filter((record) => record.type === type).length;
-  return { total: records.length, components: count('component'), layouts: count('layout'), pages: count('page'), controllers_or_modules: count('controller_or_module') };
+  const result = { total: records.length, components: count('component'), layouts: count('layout'), pages: count('page'), controllers_or_modules: count('controller_or_module'), stylesheets: count('stylesheet') };
+  if (result.components + result.layouts + result.pages + result.controllers_or_modules + result.stylesheets !== result.total) throw new Error('Source inventory category count mismatch');
+  return result;
 }
 
 function sourceCountsByPlane(records) {
@@ -114,7 +116,7 @@ function summaryMarkdown(identity, counts, families, coverage) {
     `## Mobile/Desktop\n\n- Shared structures: ${counts.shared}\n- Divergent structures: ${counts.divergent}\n- Unknown independent comparison: ${counts.desktop_mobile_unknown}\n\n` +
     `## Top 20 high-impact families\n\n${highImpact.map((item, index) => `${index + 1}. ${item.label} — ${item.status}`).join('\n')}\n\n` +
     `## Coverage hypotheses\n\n- FOUND: ${coverage.filter((item) => item.status === 'FOUND').length}\n- MISSING: ${coverage.filter((item) => item.status === 'MISSING').length}\n- DISCOVERED: ${coverage.filter((item) => item.status === 'DISCOVERED').length}\n- AMBIGUOUS: ${coverage.filter((item) => item.status === 'AMBIGUOUS').length}\n\n` +
-    `## Recommended next step\n\nProceed to normalization workshop\n`;
+    `## Required evidence-completion step\n\nComplete component specimens, source-to-page reconciliation, capsule review, and immutable handoff. STOP before normalization.\n`;
 }
 
 function coverageMarkdown(rows, sourcePin, runtimeFacts) {
@@ -308,7 +310,7 @@ async function run(argv) {
       visual_evidence_contract: { raw_raster_role: 'noncanonical_visual_evidence', canonical_fingerprint: 'dhash-64', in_session_stability: 'two_consecutive_exact_buffers', cross_run_acceptance: 'equal_perceptual_dhash_64' },
       output_byte_budget: budget.limit, output_bytes_before_manifest: budget.used,
       outputs: outputHashes(output, hashedNames),
-      constraints: { automatic_defragmentation: false, automatic_merge: false, component_contract_generation: false, full_html_retained: false, bearer_url_retained: false },
+      constraints: { automatic_defragmentation: false, automatic_merge: false, candidate_as_is_contract_generation: true, normative_component_contract_generation: false, full_html_retained: false, bearer_url_retained: false },
     };
     writeDeterministic(join(output, 'manifest.json'), stableJson(manifest, true), budget);
     assertGraphInvariants(output);

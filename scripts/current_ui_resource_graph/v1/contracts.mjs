@@ -147,6 +147,53 @@ function buttonContract() {
   });
 }
 
+function followupSurfaceContracts() {
+  return [
+    contract({
+      id: 'candidate.event-card-listing-representations', role: 'Event preview representations across feed, listing and compact mobile rail contexts',
+      bindings: [source('src/components/EventCard.astro'), source('src/components/listings/ListingEventCard.astro'), source('src/components/listings/MobileListingRailRow.astro'), source('src/components/EventListItem.astro')],
+      relationship: 'unresolved', confidence: 'deterministic', anatomy: ['media-or-fallback', 'date-time', 'title', 'venue-or-location', 'badges-or-medallions', 'optional-action'],
+      props: { event: { required: true }, context: { status: 'implementation-specific-source-prop' } },
+      variants: { implementation: ['event-card', 'listing-event-card', 'mobile-listing-rail-row', 'event-list-item-lab'], media_presence: ['image', 'fallback'] },
+      states: { temporal: ['upcoming', 'today', 'archive'], favorite: ['unknown', 'saved', 'not-saved'] },
+      valid: ['each implementation remains bound to its current consumer context'], invalid: ['claiming card implementations interchangeable before reconciliation'],
+      responsive: [{ kind: 'consumer-scoped', status: 'component-boundary-capture-required' }], media: [{ kind: 'preview-media', states: ['image', 'fallback', 'crop-override'] }],
+      a11y: ['link name, image alt and nested action order require component capture'], fixtures: ['image-card', 'fallback-card', 'dense-listing-row', 'mobile-rail-row'],
+      evidence: [fact('fact.event-card-fragmentation', 'Four source implementations render event preview information in distinct contexts', ['src/components/EventCard.astro', 'src/components/listings/ListingEventCard.astro', 'src/components/listings/MobileListingRailRow.astro', 'src/components/EventListItem.astro'])],
+      consumers: [], reachability: 'mixed-production-and-lab-reachability-needs-consumer-reconciliation',
+      overrides: [], gaps: ['source-to-consumer and crop override reconciliation pending'], blockers: ['controlled and real-page component captures pending'], alternatives: ['one card family', 'context-specific card candidates'],
+    }),
+    contract({
+      id: 'candidate.search-results', role: 'Authorized event search form, result collection and recovery states',
+      bindings: [source('src/components/AuthorizedEventSearch.astro'), source('src/components/SearchCollectionLinks.astro'), source('src/pages/poisk/index.astro', 'production-consumer')],
+      relationship: 'one-to-many', confidence: 'deterministic', anatomy: ['query-field', 'submit-or-clear-actions', 'async-status', 'result-list', 'collection-links'],
+      props: { source_props: { status: 'state-aware-extraction-bound-by-logical-source-record' } },
+      variants: { authorization: ['signed-out', 'signed-in'], result_density: ['empty', 'one', 'many'] },
+      states: { request: ['idle', 'loading', 'success', 'empty', 'error'], keyboard_focus: ['field', 'result', 'dismissed'] },
+      valid: ['loading and error remain distinct async states'], invalid: ['treating page shell and result card as one accepted component'],
+      responsive: [{ kind: 'viewport-and-keyboard', status: 'real-page-capture-required' }], media: [],
+      a11y: ['field label, status live region, result link order and keyboard dismissal require capture'], fixtures: ['empty-query', 'loading', 'results', 'error-recovery'],
+      evidence: [fact('fact.search-source', 'Search is implemented as a composed page/controller surface rather than a normalized result component', ['src/components/AuthorizedEventSearch.astro', 'src/pages/poisk/index.astro'])],
+      consumers: [{ logical_path: 'src/pages/poisk/index.astro', route_family: 'page-family.search' }], reachability: 'production-reachable',
+      overrides: [], gaps: ['result item boundary and async visual states pending'], blockers: ['controlled network-state specimen and real-page verification pending'], alternatives: ['composed search surface', 'separate field/status/result candidates'],
+    }),
+    contract({
+      id: 'candidate.favorites-saved-events', role: 'Saved-event collection surface and its empty/populated/runtime states',
+      bindings: [source('src/components/FavoritesSurface.astro'), source('src/pages/izbrannoe/index.astro', 'production-consumer')],
+      relationship: 'one-to-many', confidence: 'deterministic', anatomy: ['surface-heading', 'empty-or-unavailable-state', 'saved-event-list', 'runtime-update-region'],
+      props: { source_props: { status: 'state-aware-extraction-bound-by-logical-source-record' } },
+      variants: { storage_availability: ['available', 'unavailable'], count: ['zero', 'one', 'many'] },
+      states: { hydration: ['server-shell', 'runtime-ready'], collection: ['empty', 'populated', 'stale-entry'] },
+      valid: ['empty and storage-unavailable remain distinct'], invalid: ['promoting storage/runtime behavior to a visual variant without capture'],
+      responsive: [{ kind: 'consumer-scoped', status: 'component-boundary-capture-required' }], media: [{ kind: 'nested-event-preview', status: 'implementation-specific' }],
+      a11y: ['empty/status announcement and saved item action order require capture'], fixtures: ['empty', 'one-saved', 'many-saved', 'storage-unavailable'],
+      evidence: [fact('fact.favorites-source', 'FavoritesSurface composes saved-event states on the favorites route', ['src/components/FavoritesSurface.astro', 'src/pages/izbrannoe/index.astro'])],
+      consumers: [{ logical_path: 'src/pages/izbrannoe/index.astro', route_family: 'page-family.favorites' }], reachability: 'production-reachable',
+      overrides: [], gaps: ['runtime storage states and nested card boundaries pending'], blockers: ['controlled localStorage specimens and real-page verification pending'], alternatives: ['collection composition', 'standalone saved-event component family'],
+    }),
+  ];
+}
+
 function transportContracts(lane) {
   const definitions = {
     rail: { id: 'candidate.transport-rail', path: TRANSPORT_SOURCE_PATHS.rail, role: 'Event rail outbound and return schedule', anatomy: ['route-heading', 'outbound-group', 'return-group', 'cutoff-or-warning-state'], a11y: ['source landmark/heading semantics pending capture'] },
@@ -215,7 +262,7 @@ export function buildCandidateContracts({ eventPresentationRecords = [] } = {}) 
   const artifacts = buildArtifactDecoderLane();
   const records = [
     ...presentationContracts(eventPresentationRecords), buttonContract(), ...transportContracts(transport),
-    medallionContract(medallions), ...artifactContracts(artifacts),
+    medallionContract(medallions), ...artifactContracts(artifacts), ...followupSurfaceContracts(),
   ].sort((a, b) => a.id.localeCompare(b.id));
   assertCandidateContracts(records);
   return clone(records);
@@ -238,7 +285,7 @@ export function assertCandidateContract(record) {
 }
 
 export function assertCandidateContracts(records) {
-  if (!Array.isArray(records) || records.length < 9) throw new Error('Candidate contract suite must include nine AS-IS candidates');
+  if (!Array.isArray(records) || records.length < 12) throw new Error('Candidate contract suite must include the twelve priority AS-IS candidates');
   if (new Set(records.map((item) => item.id)).size !== records.length) throw new Error('Duplicate candidate contract ID');
   for (const record of records) assertCandidateContract(record);
   return true;
