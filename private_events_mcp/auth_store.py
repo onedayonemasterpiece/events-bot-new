@@ -268,6 +268,7 @@ class OAuthStateStore:
         redirect_uri: str,
         resource: str,
         code_verifier: str,
+        allowed_scopes: frozenset[str] | None = None,
         now: int | None = None,
     ) -> AuthorizationGrant:
         current = int(time.time()) if now is None else int(now)
@@ -289,6 +290,10 @@ class OAuthStateStore:
                     or row["resource"] != resource
                 ):
                     raise OAuthStoreError("invalid_grant")
+                stored_scopes = self._text_to_scopes(row["scopes"])
+                if allowed_scopes is not None and not stored_scopes.issubset(allowed_scopes):
+                    # Reject before consuming the one-use code.
+                    raise OAuthStoreError("invalid_scope")
                 if not verify_pkce(code_verifier, row["code_challenge"]):
                     raise OAuthStoreError("invalid_grant")
                 changed = conn.execute(
@@ -307,7 +312,7 @@ class OAuthStateStore:
                     client_id=row["client_id"],
                     redirect_uri=row["redirect_uri"],
                     resource=row["resource"],
-                    scopes=self._text_to_scopes(row["scopes"]),
+                    scopes=stored_scopes,
                 )
             except Exception:
                 conn.execute("ROLLBACK")
@@ -353,6 +358,7 @@ class OAuthStateStore:
         resource: str,
         new_expires_at: int,
         requested_scopes: set[str] | frozenset[str] | None = None,
+        allowed_scopes: frozenset[str] | None = None,
         now: int | None = None,
     ) -> RefreshGrant:
         current = int(time.time()) if now is None else int(now)
@@ -371,6 +377,9 @@ class OAuthStateStore:
                 if row["client_id"] != client_id or row["resource"] != resource:
                     raise OAuthStoreError("invalid_grant")
                 original_scopes = self._text_to_scopes(row["scopes"])
+                if allowed_scopes is not None and not original_scopes.issubset(allowed_scopes):
+                    # Reject before revoking/rotating the refresh token.
+                    raise OAuthStoreError("invalid_scope")
                 scopes = original_scopes
                 if requested_scopes is not None:
                     requested = frozenset(requested_scopes)
