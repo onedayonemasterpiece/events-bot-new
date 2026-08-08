@@ -66,7 +66,7 @@ lanes:
     expected_output: committed provider-neutral contract and focused core tests
     verification_scope: targeted
     effort: high
-    status: independent_review
+    status: completed
   - id: L1-telegram-workspace
     role: worker
     requirement_ids: [R01, R02, R03]
