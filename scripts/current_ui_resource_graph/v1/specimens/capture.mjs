@@ -87,6 +87,25 @@ async function elementFacts(locator, partSelectors) {
     const cssVariables = Object.fromEntries([...style].filter((name) => name.startsWith('--')).sort().slice(0, 80).map((name) => [name, style.getPropertyValue(name).trim()]));
     const computedNames = ['display','visibility','opacity','position','color','backgroundColor','fontFamily','fontSize','fontWeight','lineHeight','padding','margin','gap','borderRadius','objectFit','overflow'];
     const computed = Object.fromEntries(computedNames.map((name) => [name, style[name]]));
+    const matchedRules = [];
+    const visitRules = (rules, sheetIndex, context = []) => {
+      for (let ruleIndex = 0; ruleIndex < rules.length && matchedRules.length < 80; ruleIndex += 1) {
+        const rule = rules[ruleIndex];
+        if (rule.selectorText) {
+          let matches = false; try { matches = node.matches(rule.selectorText); } catch { matches = false; }
+          if (matches) matchedRules.push({ stylesheet_index: sheetIndex, rule_index: ruleIndex,
+            selector: rule.selectorText.slice(0, 512), context,
+            declarations: [...rule.style].slice(0, 80).map((property) => ({ property, value: rule.style.getPropertyValue(property).trim(), priority: rule.style.getPropertyPriority(property) })) });
+        } else if (rule.cssRules) {
+          const label = rule.conditionText || rule.media?.mediaText || rule.name || rule.constructor?.name || 'group-rule';
+          visitRules(rule.cssRules, sheetIndex, [...context, String(label).slice(0, 256)]);
+        }
+      }
+    };
+    [...document.styleSheets].forEach((sheet, sheetIndex) => { try { visitRules(sheet.cssRules, sheetIndex); } catch {} });
+    const loadedFonts = document.fonts ? [...document.fonts].slice(0, 80).map((face) => ({
+      family: face.family, style: face.style, weight: face.weight, stretch: face.stretch, status: face.status,
+    })) : [];
     const media = [...node.querySelectorAll('img,picture,video,svg')].slice(0, 12).map((item) => ({ tag: item.tagName.toLowerCase(), width: item.getBoundingClientRect().width, height: item.getBoundingClientRect().height, natural_width: item.naturalWidth ?? null, natural_height: item.naturalHeight ?? null, source_sha_input: item.currentSrc || item.getAttribute('src') || '', object_fit: getComputedStyle(item).objectFit }));
     return {
       tag: node.tagName.toLowerCase(), classes: [...node.classList].slice(0, 30), attributes, redacted_attribute_names: sensitiveAttributeNames,
@@ -95,6 +114,7 @@ async function elementFacts(locator, partSelectors) {
       pseudo: { before: { content: before.content, display: before.display }, after: { content: after.content, display: after.display } },
       state: { focused: document.activeElement === node || node.contains(document.activeElement), hidden: node.hidden, open: 'open' in node ? Boolean(node.open) : null, disabled: 'disabled' in node ? Boolean(node.disabled) : null },
       media, parts: parts.map((selector) => ({ selector, count: node.querySelectorAll(selector).length })),
+      cascade: { matched_rules: matchedRules, provenance: 'browser-cssom-matched-rules-compiled-source-line-unavailable' }, loaded_fonts: loadedFonts,
       media_queries: { reduced_motion: matchMedia('(prefers-reduced-motion: reduce)').matches, narrow_420: matchMedia('(max-width:420px)').matches, narrow_720: matchMedia('(max-width:720px)').matches },
     };
   }, partSelectors);
@@ -123,6 +143,7 @@ async function captureStep({ page, row, outputDir, step, telemetry }) {
   const facts = await elementFacts(locator, row.part_selectors);
   const packet = {
     schema_version: row.schema_version, id: `specimen-observation.${row.id}.${step}`, specimen_id: row.id, plan_id: row.id,
+    capsule_ids: [...row.capsule_ids],
     trace_kind: row.trace_kind, state_equivalence: row.state_equivalence, production_state_claimed: false,
     source_paths: [...row.source_paths], consumer_paths: [...row.consumer_paths], fixture_ref: row.fixture_ref, fixture_delta_fields: Object.keys(row.fixture_delta).sort(),
     component_presence: row.component_presence || 'expected-present', expected_absent_markers: [...(row.expected_absent_markers || [])],
@@ -130,6 +151,7 @@ async function captureStep({ page, row, outputDir, step, telemetry }) {
     proof_label: 'controlled-specimen-browser-element', dom: { tag: facts.tag, classes: facts.classes, attributes: facts.attributes, redacted_attribute_names: facts.redacted_attribute_names, child_count: facts.child_count, text_length: facts.text_length, text_sha256: facts.text_sha256, full_html_retained: false },
     accessibility: { aria_snapshot: aria, ...facts.state }, computed: facts.computed, geometry: facts.geometry, css_variables: facts.css_variables,
     pseudo: facts.pseudo, parts: facts.parts, media: facts.media, media_queries: facts.media_queries,
+    cascade: facts.cascade, loaded_fonts: facts.loaded_fonts,
     screenshot: { path: `component-screenshots/${name}`, bytes: second.length, sha256: sha(second), dhash: pngDifferenceHash(second), first_sha256: sha(first), first_dhash: pngDifferenceHash(first), exact_stable: first.equals(second), perceptually_stable: pngDifferenceHash(first) === pngDifferenceHash(second) },
     console: { counts: telemetry.consoleCounts, message_text_retained: false, message_hashes: telemetry.consoleHashes.slice(0, 20) },
     network: { counts_by_resource_type: telemetry.resourceCounts, response_status_counts: telemetry.statusCounts, failed_count: telemetry.failed, raw_urls_retained: false },

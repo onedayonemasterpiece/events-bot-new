@@ -74,7 +74,15 @@ export function validateCompactSnapshot(snapshotRoot, { canonical = null } = {})
   if (manifest.go_no_go?.status === 'GO' && blocking.length) throw new Error('GO snapshot contains blocking unresolved records');
   if (manifest.go_no_go?.status === 'GO') {
     const observations = readJsonl(join(root, 'specimen-observations.jsonl'));
-    if (!observations.length || !observations.every((item) => item.source_binding_id && item.screenshot_sha256 && item.trace_kind)) throw new Error('GO snapshot lacks bound specimen evidence');
+    const pageVerifications = readJsonl(join(root, 'page-verification.jsonl'));
+    const pageIds = new Set(pageVerifications.map((item) => item.id));
+    if (!observations.length || !observations.every((item) => item.source_binding_id && item.screenshot_sha256 &&
+      item.review_status === 'reviewed' && ['state-equivalent', 'consumer-exists-only', 'lab-source-only'].includes(item.trace_kind) &&
+      (item.trace_kind === 'lab-source-only' || pageIds.has(item.page_verification_id)))) throw new Error('GO snapshot lacks reviewed bound specimen evidence');
+    if (capsuleRoots.some((capsuleRoot) => readJson(join(capsuleRoot, 'capsule.json')).review_status !== 'reviewed')) throw new Error('GO snapshot contains unreviewed capsule');
+    if (!artifactIndex.actions?.artifact_id || !artifactIndex.actions?.run_id || !/^sha256:[a-f0-9]{64}$/u.test(artifactIndex.actions?.artifact_digest || '')) throw new Error('GO snapshot lacks durable Actions provenance');
+    if (!artifactIndex.permanent_storage?.uri || !artifactIndex.permanent_storage?.object_version || !/^sha256:[a-f0-9]{64}$/u.test(artifactIndex.permanent_storage?.sha256 || '')) throw new Error('GO snapshot lacks permanent evidence provenance');
+    if (!manifest.review?.ledger_sha256 || !manifest.review?.reviewed_at || !(manifest.review?.raster_review_count > 0)) throw new Error('GO snapshot lacks human review provenance');
   }
 
   const unsafe = walk(root).filter((path) => /(?:_review\/|authorization\s*[:=]\s*["']?(?:bearer|basic|[a-z0-9_-]{16})|bearer\s+[a-z0-9._~-]{12}|sb_publishable_[a-z0-9_-]+|"data-supabase-key"\s*:\s*"[^"{])/iu.test(readFileSync(path, 'utf8')));

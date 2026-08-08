@@ -13,6 +13,13 @@ import {
 import { classifyLogicalComponents, classificationCounts } from './v1/classification.mjs';
 import { initializeV1Receipt, writeV1Snapshot } from './v1/snapshot.mjs';
 import { buildDecoderReconciliationBundle } from './v1/capsules.mjs';
+import {
+  buildSpecimenRegistry,
+  materializeSpecimenHarness,
+  buildSpecimenHarness,
+  captureWithExactPlaywright,
+  validateTraceIntegrity,
+} from './v1/specimens/index.mjs';
 
 function bool(value, fallback = false) {
   if (value === undefined) return fallback;
@@ -244,6 +251,38 @@ async function run(argv) {
     const eventFormats = eventPresentationFormats(sourceRecords, runtime, screenshots);
     const logicalComponents = classifyLogicalComponents(sourceRecords, runtime);
     const reconciliation = buildDecoderReconciliationBundle({ eventPresentationRecords: eventFormats });
+    const specimenRegistry = buildSpecimenRegistry();
+    let specimenObservations = reconciliation.specimen_observations;
+    let realPageVerifications = [];
+    if (bool(args.specimen_observations, false)) {
+      if (!bool(args.browser_observations, false)) throw new Error('Controlled specimen observations require browser observations');
+      const harnessRoot = resolve(args.specimen_harness_root || join(output, '.specimen-harness'));
+      const nodeModules = resolve(args.specimen_node_modules || join(siteRoot, 'node_modules'));
+      materializeSpecimenHarness({ candidateSite: siteRoot, harnessRoot, nodeModules, registry: specimenRegistry });
+      const harnessBuild = buildSpecimenHarness({ harnessRoot });
+      if (!harnessBuild.ok) throw new Error(`Controlled specimen harness build failed: ${harnessBuild.stderr_tail}`);
+      specimenObservations = await captureWithExactPlaywright({
+        nodeModules,
+        dist: harnessBuild.dist,
+        outputDir: join(output, 'component-screenshots'),
+        registry: specimenRegistry,
+      });
+      validateTraceIntegrity(specimenRegistry, specimenObservations, realPageVerifications);
+    }
+    const registryPlanRows = [
+      ...specimenRegistry.controlled_specimens.map((row) => ({
+        ...row, id: `specimen-plan.controlled.${row.id}`, registry_id: row.id,
+        observation_status: 'planned-controlled-capture', decision: 'NOT_MERGED', normalization_allowed: false,
+      })),
+      ...specimenRegistry.real_route_verifications.map((row) => ({
+        ...row, id: `specimen-plan.real-route.${row.id}`, registry_id: row.id,
+        observation_status: 'planned-real-page-verification', decision: 'NOT_MERGED', normalization_allowed: false,
+      })),
+      ...specimenRegistry.source_model_only_cases.map((row) => ({
+        ...row, id: `specimen-plan.source-model.${row.id}`, registry_id: row.id,
+        observation_status: 'source-model-only-unreachable-in-pinned-data', decision: 'NOT_MERGED', normalization_allowed: false,
+      })),
+    ];
 
     await writeJsonl(join(output, 'source-components.jsonl'), sourceRecords, budget);
     await writeJsonl(join(output, 'observed-ui-families.jsonl'), families, budget);
@@ -323,8 +362,9 @@ async function run(argv) {
       identity: { current_root_prelaunch: identity.current_root_prelaunch, latest_checked_kaggle_candidate: identity.latest_checked_kaggle_candidate },
       sourceRecords, components: logicalComponents, families, pageFamilies, runtime, screenshots,
       viewportEvidence, componentEvidence, coverage, styles, budget,
-      specimenPlanRows: reconciliation.specimen_plan,
-      specimenObservations: reconciliation.specimen_observations,
+      specimenPlanRows: [...reconciliation.specimen_plan, ...registryPlanRows],
+      specimenObservations,
+      pageVerificationRowsExtra: realPageVerifications,
       candidateContracts: reconciliation.candidate_contracts,
       capsules: reconciliation.capsules,
       mismatchRowsExtra: reconciliation.mismatches,

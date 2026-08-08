@@ -10,7 +10,7 @@ export const REACHABILITY = Object.freeze([
 ]);
 export const CANONICAL_DISPOSITION_COUNTS = Object.freeze({
   'production-ui': 51, 'composition-layout': 20, 'lab-only': 20, 'experiment-only': 4,
-  'support-data': 1, nonvisual: 8, 'dead-unreachable': 2, 'needs-verification': 1,
+  'support-data': 1, nonvisual: 8, 'dead-unreachable': 3, 'needs-verification': 0,
 });
 
 const GROUPS = Object.freeze({
@@ -72,9 +72,10 @@ src/components/UnusualUnreadRuntime.astro
 src/components/auth/StaticSiteAuthRuntime.astro
 src/components/personalization/PersonalizationRuntime.astro`,
   'dead-unreachable': `
+src/components/MobileSearchBottomNav.astro
 src/components/listings/PopularCategoryFilter.astro
 src/components/listings/WeekendTimeMatrix.astro`,
-  'needs-verification': `src/components/MobileSearchBottomNav.astro`,
+  'needs-verification': ``,
 });
 
 const DISPOSITION_BY_PATH = new Map();
@@ -190,5 +191,6 @@ export function knownExceptions() {
     { id: 'exception.legal', classification: 'absent-as-is-future-requirement', current_status: 'not-observed', synthesis_allowed: false },
     { id: 'exception.hero-talk-page-end', classification: 'absent-as-is-future-requirement', current_status: 'not-observed', synthesis_allowed: false },
     { id: 'exception.transport-timetable-experiment', classification: 'experiment-off-source-only', current_status: 'not-a-production-variant', synthesis_allowed: false },
+    { id: 'exception.mobile-search-bottom-nav', classification: 'dead-unreachable-contract-mismatch', current_status: 'zero-consumer-zero-runtime-marker-in-exhaustive-pinned-scan', synthesis_allowed: false },
   ];
 }

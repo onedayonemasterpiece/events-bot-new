@@ -614,8 +614,8 @@ def test_v1_closed_enums_canonical_counts_and_evidence_sanitizer():
         "experiment-only": 4,
         "support-data": 1,
         "nonvisual": 8,
-        "dead-unreachable": 2,
-        "needs-verification": 1,
+        "dead-unreachable": 3,
+        "needs-verification": 0,
     }
     assert len(payload["dispositions"]) == 8
     assert len(payload["reachability"]) == 7

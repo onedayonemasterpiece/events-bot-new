@@ -821,7 +821,9 @@ function appendCssDeclarations(result, root, { sourceId, sourcePath, plane, bloc
     result.push({
       id: `style.${plane}.${sha256(`${sourcePath}\0${blockIndex}\0${declarationIndex}\0${decl.source?.start?.line}\0${decl.source?.start?.column}\0${decl.prop}`).slice(0, 16)}`,
       plane, source_id: sourceId, source_path: sourcePath, kind: 'source_literal_usage', property: decl.prop,
-      value: decl.value, selector_sha256: selector ? sha256(selector) : null,
+      value: decl.value, selector: selector.slice(0, 512), selector_sha256: selector ? sha256(selector) : null,
+      pseudo_states: [...selector.matchAll(/:(hover|focus|focus-visible|active|disabled|checked|open|has)\b/gu)].map((match) => match[1]),
+      custom_property_dependencies: [...new Set([...decl.value.matchAll(/var\(\s*(--[A-Za-z0-9_-]+)/gu)].map((match) => match[1]))].sort(),
       semantic_cohorts: semanticCohorts(selector, decl.prop), at_rule_context: contexts.reverse(), style_block_index: blockIndex,
       style_block_start_line: blockStartLine, line_in_style_block: decl.source?.start?.line ?? null,
       source_divergence: 'literal_usage_only', computed_inconsistency: 'unknown', confidence: 'high', evidence: ['postcss_ast'], recommendation: 'unresolved',

@@ -25,6 +25,15 @@
   activation is rejected until a real authenticated byte-bound upload/storage
   path exists; generated client profiles do not request story scopes.
 
+- Added the real-component Current UI Decoder specimen and review pipeline:
+  19 bounded disposable Astro wrappers (20 interaction captures), exact
+  `PreviewEvent` transport/medallion fixtures, 25 real-route bindings,
+  element PNG/DOM/ARIA/computed/cascade/font evidence, and a fail-closed human
+  review materializer that requires every raster, all six capsules, Actions
+  provenance and permanent-storage hashes before the narrow
+  `GO_FOR_FAMILY_SCOPED_DEFRAGMENTATION` verdict. No runtime Astro/CSS,
+  normalization, token or Penpot output is changed.
+
 - Added the fail-closed Current UI Decoder v1 evidence layer while preserving
   every v0 graph output: the pinned 107 logical component paths now receive
   closed AS-IS disposition/reachability classifications with per-plane source
