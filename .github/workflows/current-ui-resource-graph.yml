@@ -195,7 +195,7 @@ jobs:
           git worktree add --detach "$ROOT_WORKTREE" "$CURRENT_UI_GRAPH_ROOT_SOURCE_SHA"
 
       - name: Install pinned site parsers and Chromium
-        working-directory: ${{ runner.temp }}/current-ui-graph-candidate-source/site
+        working-directory: ${{ env.CANDIDATE_WORKTREE }}/site
         shell: bash
         run: |
           set -euo pipefail

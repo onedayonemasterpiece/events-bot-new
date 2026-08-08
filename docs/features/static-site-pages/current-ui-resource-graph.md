@@ -162,7 +162,10 @@ validate and schedule the workflow rather than rejecting it before job
 creation. Every default is also an explicitly quoted YAML string; this prevents
 timestamp-like identity values from being normalized into a different display
 form before the exact allowlist gate sees them. Job-level environment paths use the allowed `github.workspace`
-context rather than the step-only `runner` context. The workflow materializes the
+context rather than the step-only `runner` context. The dependency-install step
+resolves its working directory from that same `CANDIDATE_WORKTREE` environment
+value, so worktree creation and consumption cannot silently use different temp
+roots. The workflow materializes the
 exact candidate and public-root SHAs in separate detached worktrees, installs
 the candidate-pinned site dependencies and Playwright Chromium, and reads the
 bearer candidate base only from repository secret
