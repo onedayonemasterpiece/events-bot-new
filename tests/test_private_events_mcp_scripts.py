@@ -8,7 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from scripts.generate_private_events_mcp_credentials import write_private_text
+from scripts.generate_private_events_mcp_credentials import (
+    create_private_output_dir,
+    write_private_text,
+)
 from scripts.smoke_private_events_mcp import sanitized_endpoint_receipt
 
 
@@ -39,6 +42,7 @@ def test_generator_stdout_redacts_private_endpoint(tmp_path: Path) -> None:
     assert receipt["public_origin"] == "https://events.example"
     assert receipt["mcp_path"] == "/_private/<redacted>/mcp"
     assert len(receipt["endpoint_fingerprint"]) == 12
+    assert output.stat().st_mode & 0o777 == 0o700
 
 
 def test_smoke_receipt_redacts_private_endpoint() -> None:
@@ -72,3 +76,11 @@ def test_private_artifact_is_created_exclusively_with_mode_0600(
     assert mode == 0o600
     with pytest.raises(FileExistsError):
         write_private_text(target, "replacement forbidden")
+
+
+def test_private_output_directory_is_fresh_and_mode_0700(tmp_path: Path) -> None:
+    output = tmp_path / "private-output"
+    create_private_output_dir(output)
+    assert output.stat().st_mode & 0o777 == 0o700
+    with pytest.raises(FileExistsError):
+        create_private_output_dir(output)

@@ -38,6 +38,15 @@ def write_private_text(path: Path, content: str) -> None:
             os.close(fd)
 
 
+def create_private_output_dir(path: Path) -> None:
+    """Create a fresh owner-only directory; never mix with prior artifacts."""
+
+    path.mkdir(parents=True, mode=0o700, exist_ok=False)
+    # umask may only have made the new directory stricter. The inode is newly
+    # owned by this process, so normalizing it to owner rwx is safe.
+    os.chmod(path, 0o700)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Generate deploy, ChatGPT and Codex credentials for the private events MCP."
@@ -47,7 +56,10 @@ def main() -> int:
     args = parser.parse_args()
 
     output = args.output_dir.resolve()
-    output.mkdir(parents=True, exist_ok=True)
+    try:
+        create_private_output_dir(output)
+    except FileExistsError:
+        parser.error("--output-dir must be a fresh path that does not already exist")
     path_secret = token("mcp_", 32)
     client_id = token("chatgpt-events-", 18)
     client_secret = token("client_", 48)
