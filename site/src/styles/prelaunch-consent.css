@@ -1,0 +1,258 @@
+/*
+ * Consent is an explicit form step, not fine print. The checkbox sits in the
+ * action flow and keeps a large, high-contrast click target on every viewport.
+ */
+
+.prelaunch-form__row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "field field"
+    "consent submit";
+  gap: 10px 12px;
+  align-items: stretch;
+}
+
+.prelaunch-form__field {
+  grid-area: field;
+}
+
+.prelaunch-form__row > [data-prelaunch-submit] {
+  grid-area: submit;
+  min-width: 218px;
+}
+
+.prelaunch-form__consent {
+  grid-area: consent;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  max-width: none;
+  min-height: 60px;
+  margin: 0;
+  padding: 8px 13px;
+  border: 1px solid rgba(239, 177, 137, .48);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(63, 40, 31, .72), rgba(28, 29, 34, .86)),
+    rgba(25, 28, 34, .84);
+  color: rgba(245, 230, 217, .91);
+  font-size: .68rem;
+  line-height: 1.3;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 241, 226, .07),
+    0 8px 24px rgba(0, 0, 0, .16);
+  -webkit-backdrop-filter: blur(16px) saturate(.9);
+  backdrop-filter: blur(16px) saturate(.9);
+  transition:
+    border-color .2s ease,
+    background-color .2s ease,
+    box-shadow .2s ease;
+}
+
+.prelaunch-form__consent:hover {
+  border-color: rgba(246, 190, 153, .68);
+  background:
+    linear-gradient(135deg, rgba(77, 46, 34, .78), rgba(31, 31, 36, .9)),
+    rgba(27, 29, 35, .88);
+}
+
+.prelaunch-form__consent:focus-within {
+  border-color: #f1b58f;
+  box-shadow:
+    0 0 0 2px rgba(239, 166, 120, .22),
+    inset 0 1px 0 rgba(255, 241, 226, .1),
+    0 9px 26px rgba(0, 0, 0, .2);
+}
+
+.prelaunch-form__consent:has(input:checked) {
+  border-color: rgba(242, 178, 135, .7);
+  background:
+    linear-gradient(135deg, rgba(83, 47, 34, .78), rgba(31, 31, 36, .9)),
+    rgba(27, 29, 35, .88);
+}
+
+.prelaunch-form__consent input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: #e99b6f;
+  cursor: pointer;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .32));
+}
+
+.prelaunch-form__consent-copy {
+  min-width: 0;
+}
+
+.prelaunch-form__consent-copy strong,
+.prelaunch-form__consent-copy > span {
+  display: block;
+}
+
+.prelaunch-form__consent-copy strong {
+  margin-bottom: 2px;
+  color: #f7e8da;
+  font-size: .75rem;
+  font-weight: 650;
+  line-height: 1.16;
+}
+
+.prelaunch-form__consent-copy > span {
+  color: rgba(235, 220, 207, .82);
+  text-wrap: pretty;
+}
+
+.prelaunch-form__promise {
+  margin-top: 8px;
+}
+
+@media (max-width: 899px) {
+  .prelaunch-form__row {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "field"
+      "consent"
+      "submit";
+    gap: 9px;
+  }
+
+  .prelaunch-form__row > [data-prelaunch-submit] {
+    min-width: 0;
+  }
+
+  .prelaunch-form__consent {
+    min-height: 54px;
+    padding: 8px 11px;
+  }
+}
+
+@media (min-width: 900px) and (max-height: 700px) {
+  .prelaunch-form__row {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "field"
+      "consent"
+      "submit";
+    gap: 8px;
+  }
+
+  .prelaunch-form__row > [data-prelaunch-submit] {
+    min-width: 0;
+  }
+
+  .prelaunch-form__consent {
+    grid-template-columns: 20px minmax(0, 1fr);
+    min-height: 50px;
+    padding: 7px 10px;
+  }
+
+  .prelaunch-form__consent input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+  }
+
+  .prelaunch-form__consent-copy strong {
+    font-size: .66rem;
+  }
+
+  .prelaunch-form__consent-copy > span {
+    font-size: .58rem;
+    line-height: 1.22;
+  }
+}
+
+@media (max-width: 599px) {
+  .prelaunch-form__consent {
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 9px;
+    min-height: 54px;
+    padding: 7px 10px;
+  }
+
+  .prelaunch-form__consent input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+  }
+
+  .prelaunch-form__consent-copy strong {
+    font-size: .67rem;
+  }
+
+  .prelaunch-form__consent-copy > span {
+    font-size: .61rem;
+    line-height: 1.22;
+  }
+}
+
+@media (max-width: 599px) and (max-height: 680px) {
+  .prelaunch-form__row {
+    gap: 6px;
+  }
+
+  .prelaunch-form__consent {
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 7px;
+    min-height: 44px;
+    padding: 5px 8px;
+  }
+
+  .prelaunch-form__consent input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+  }
+
+  .prelaunch-form__consent-copy strong {
+    margin-bottom: 1px;
+    font-size: .59rem;
+  }
+
+  .prelaunch-form__consent-copy > span {
+    font-size: .53rem;
+    line-height: 1.16;
+  }
+}
+
+@media (orientation: landscape) and (min-width: 600px) and (max-height: 500px) {
+  .prelaunch-form__row {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "field"
+      "consent"
+      "submit";
+    gap: 6px;
+  }
+
+  .prelaunch-form__row > [data-prelaunch-submit] {
+    min-width: 0;
+  }
+
+  .prelaunch-form__consent {
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 7px;
+    min-height: 42px;
+    padding: 5px 8px;
+  }
+
+  .prelaunch-form__consent input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+  }
+
+  .prelaunch-form__consent-copy strong {
+    margin-bottom: 1px;
+    font-size: max(9px, 2.25vh);
+  }
+
+  .prelaunch-form__consent-copy > span {
+    font-size: max(8.4px, 2.05vh);
+    line-height: 1.12;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prelaunch-form__consent {
+    transition: none;
+  }
+}

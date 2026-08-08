@@ -1,0 +1,125 @@
+mode: serial_integrator
+repo: onedayonemasterpiece/events-bot-new
+base_ref: origin/main
+base_sha: 60eda72a497042c68ab86a1d56dcca2703833398
+base_branch: main
+integration_branch: integration/prelaunch-form-hotfix-20260808
+global_constraints:
+  - form-only behavior; no visual/background/SEO/GEO changes
+  - no full emails in GitHub logs or artifacts
+  - existing personalization table and RPC only
+  - production release source must be origin/main
+verification_owner: /root
+stop_conditions:
+  - unmasked customer email would be emitted
+  - production tree is dirty or deploy SHA is not exact origin/main
+  - visual/background/SEO diff is detected
+lanes:
+  - id: L1-production-reproduction
+    role: planner
+    requirement_ids: [R1]
+    target: production browser Network/console and root-cause evidence
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: redacted reproduction and actual failing boundary
+    verification_scope: inspection_only
+    effort: medium
+    status: completed
+  - id: L2-protected-db-audit
+    role: planner
+    requirement_ids: [R4]
+    target: production Supabase catalog and masked record read
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: masked operator evidence and safe SQL
+    verification_scope: inspection_only
+    effort: high
+    status: completed
+  - id: L3-release-map
+    role: planner
+    requirement_ids: []
+    target: release ancestry and GitHub Actions mapping
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: main-based release path
+    verification_scope: inspection_only
+    effort: high
+    status: completed
+  - id: L4-incident-map
+    role: reviewer
+    requirement_ids: []
+    target: incident contract and regression checklist
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: incident record requirements
+    verification_scope: inspection_only
+    effort: high
+    status: completed
+  - id: L5-implementation
+    role: worker
+    requirement_ids: [R2, R3]
+    target: main-based prelaunch runtime reconciliation, RPC/client fix, tests, docs, incident, release control
+    depends_on: [L1-production-reproduction, L2-protected-db-audit, L3-release-map, L4-incident-map]
+    execution_mode: serial_after_dependency
+    branch: agent/prelaunch-form-hotfix/l5-implementation
+    worktree: /dev/shm/prelaunch-form-l5
+    writable_files:
+      - site/src/components/PrelaunchPage.astro
+      - site/src/layouts/PrelaunchLayout.astro
+      - site/src/scripts/prelaunchForm.ts
+      - site/src/lib/prelaunchEmail.ts
+      - site/src/styles/prelaunch-*.css
+      - site/public/assets/prelaunch/**
+      - site/scripts/*prelaunch*
+      - site/tests/*prelaunch*
+      - site/src/pages/index.astro
+      - site/package.json
+      - site/package-lock.json
+      - site/src/lib/backendOperationCatalog.ts
+      - supabase/migrations/*prelaunch*
+      - .github/scripts/*prelaunch*
+      - .github/workflows/*prelaunch*
+      - docs/features/static-site-pages/prelaunch.md
+      - docs/reports/incidents/INC-2026-08-08-prelaunch-registration-confirmation-and-dedup.md
+      - docs/reports/incidents/README.md
+      - docs/routes.yml
+      - CHANGELOG.md
+      - .codex/lanes/L5-prelaunch-form/RESULTS.md
+    forbidden_files:
+      - unrelated runtime and visual assets
+    expected_output: clean committed implementation with targeted tests
+    verification_scope: full_local
+    effort: high
+    status: spawned
+  - id: L6-integration-release-live-acceptance
+    role: merge_reviewer
+    requirement_ids: [R5, R6]
+    target: integration, green CI, main merge, deploy, live double-submit/read/reload/cleanup
+    depends_on: [L5-implementation]
+    execution_mode: serial_after_dependency
+    branch: integration/prelaunch-form-hotfix-20260808
+    worktree: /dev/shm/prelaunch-form-integration
+    writable_files:
+      - integration resolutions and reports
+    forbidden_files:
+      - unrelated feature code
+    expected_output: origin/main production SHA, Actions run, redacted live proof and closure audit
+    verification_scope: full_local
+    effort: high
+    status: in_progress
