@@ -229,7 +229,11 @@ def build_social_tools(
         reason: str,
     ) -> None:
         raw_platform = arguments.get("platform")
-        platform = raw_platform if raw_platform in SOCIAL_PLATFORMS else "invalid"
+        platform = (
+            raw_platform
+            if isinstance(raw_platform, str) and raw_platform in SOCIAL_PLATFORMS
+            else "invalid"
+        )
         raw_alias = arguments.get("target_alias")
         alias = (
             raw_alias

@@ -756,6 +756,22 @@ async def test_empty_target_policy_denies_every_alias(config) -> None:
             },
         )
         assert malformed["result"]["isError"] is True
+        for malformed_platform in (["telegram"], {}):
+            _response, malformed = await _rpc(
+                client,
+                empty.mcp_path,
+                token,
+                "tools/call",
+                {
+                    "name": "prepare_text_publication",
+                    "arguments": {
+                        **publication,
+                        "platform": malformed_platform,
+                        "idempotency_key": "denied-key-bad-platform",
+                    },
+                },
+            )
+            assert malformed["result"]["isError"] is True
         read_only_token = _token(empty, scopes={"events:read"})
         _response, insufficient = await _rpc(
             client,
@@ -777,5 +793,7 @@ async def test_empty_target_policy_denies_every_alias(config) -> None:
             ("prepare_text_publication", "denied_invalid_arguments", "kenigevents"),
             ("publish_prepared_text", "denied_invalid_arguments", "kenigevents"),
             ("prepare_text_publication", "denied_invalid_arguments", "invalid"),
+            ("prepare_text_publication", "denied_invalid_arguments", "kenigevents"),
+            ("prepare_text_publication", "denied_invalid_arguments", "kenigevents"),
             ("prepare_text_publication", "denied_insufficient_scope", "kenigevents"),
         ]
