@@ -82,7 +82,7 @@ lanes:
     expected_output: committed fake-tested Telegram capability adapter; no live calls
     verification_scope: targeted
     effort: high
-    status: planned
+    status: completed
   - id: L0b-social-oauth-policy
     role: worker
     requirement_ids: [R07, R08]
@@ -118,7 +118,7 @@ lanes:
     expected_output: committed durable runtime and fake-adapter ToolSpec layer; no server wiring or live provider calls
     verification_scope: targeted
     effort: high
-    status: planned
+    status: completed
   - id: L2-vk-workspace
     role: worker
     requirement_ids: [R04, R05, R06]
@@ -134,7 +134,7 @@ lanes:
     expected_output: committed fake-tested VK capability adapter; no live calls
     verification_scope: targeted
     effort: high
-    status: planned
+    status: completed
   - id: L3-tests-ci
     role: worker
     requirement_ids: [R09]
@@ -150,7 +150,7 @@ lanes:
     expected_output: committed acceptance tests and explicit CI invocation
     verification_scope: full_local
     effort: high
-    status: planned
+    status: completed
   - id: L4-docs-rollout
     role: worker
     requirement_ids: [R10]
@@ -172,7 +172,7 @@ lanes:
     expected_output: committed canonical operational contract and sanitized scripts
     verification_scope: targeted
     effort: high
-    status: planned
+    status: completed
   - id: L5-independent-review
     role: reviewer
     requirement_ids: []

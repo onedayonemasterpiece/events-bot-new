@@ -155,13 +155,9 @@ running tests. The corrected canonical contract path above passed 74 tests.
   operation claim/release/complete must be atomic compare-and-set operations
   bound to the full action digest; lease fencing and cooldowns must be
   cross-process and persistent.
-- **Open integration blocker:** the current provider-neutral
-  `validate_read_request()` requires username/profile-link/provider-ID exact
-  resolution to expect only `user`, so it rejects exact channel/group resolver
-  requests before this adapter runs. The focused suite records that rejection
-  and does not present direct adapter channel/group classification as integrated
-  acceptance. The integration/core owner must reconcile that contract before
-  claiming channel/group exact resolution end to end.
+- **Resolved during integration:** provider-neutral validation now accepts one
+  exact non-self expected kind, including `channel` and `group`; integration
+  regression coverage binds the requested kind to the resolved preview.
 - Provider/legal consent, durable approvals, safety/audit hooks, catalogs,
   OAuth scopes, production smoke tests, and deployment are outside this lane.
 - No canonical docs or `CHANGELOG.md` were edited because the lane map forbade
