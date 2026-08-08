@@ -617,6 +617,32 @@ async def test_normal_read_projects_closed_contract_and_drops_native_identifiers
             action_digest=forward["action_digest"],
         )
 
+    global_item = service._mint_ref(
+        "item", "native-global-result", "vk", RuntimePrincipal.from_context(context())
+    )
+    service._store_item_preview(
+        global_item,
+        {
+            "item_ref": global_item,
+            "kind": "post",
+            "published_at": "2026-08-08T12:00:00Z",
+            "text": "Exact global result without source identity",
+        },
+    )
+    destructive = await service.prepare(validate_prepare_request({
+        "platform": "vk", "action": "delete",
+        "idempotency_key": "global-result-delete-123",
+        "item_ref": global_item,
+    }), context())
+    with pytest.raises(
+        SocialWorkspaceRuntimeError,
+        match="human source target preview is unavailable",
+    ):
+        service.approval_preview(
+            preparation_ref=destructive["preparation_ref"],
+            action_digest=destructive["action_digest"],
+        )
+
     native_target = service._resolve_ref(
         discovered_target,
         "target",

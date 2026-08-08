@@ -16,7 +16,8 @@
   tokens with no fallback. All new provider/action classes are disabled by
   strict runtime kill switches until exact-main canary acceptance. Release-gate
   hardening now persists encrypted provider refs/cursors/receipts across
-  restarts, requires human-readable target/destination/item approval previews,
+  restarts, requires human-readable target/destination/source/item approval
+  previews,
   binds a closed editorial authorization basis to every server sample, charges
   publication attempts against durable UTC-day limits for the actual
   destination/source target, rechecks the current action kill switch at commit,

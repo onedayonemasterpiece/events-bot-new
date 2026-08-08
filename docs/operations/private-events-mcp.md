@@ -149,8 +149,9 @@ Every external mutation follows:
 2. it persists only the exact canonical digest and returns an operator approval
    URL; it does not call the provider;
 3. the operator opens that URL, enters the separate approval token, inspects the
-   exact human-readable target, destination, source item, action and text, then
-   confirms in the browser; an opaque-only target/item preview fails closed;
+   exact human-readable target, destination, source target, source item, action
+   and text, then confirms in the browser; an opaque-only target/item preview
+   or an item without a human-readable source target fails closed;
 4. `social_action_commit` accepts only the preparation ref and digest. It
    rechecks the current action-class kill switch, then atomically consumes the
    server-side approval before one provider attempt;

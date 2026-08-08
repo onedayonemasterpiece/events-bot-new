@@ -1171,6 +1171,10 @@ class SocialWorkspaceRuntime:
             )
         if intent.item_ref is not None and item is None:
             raise SocialWorkspaceRuntimeError("human item preview is unavailable")
+        if intent.item_ref is not None and source_target is None:
+            raise SocialWorkspaceRuntimeError(
+                "human source target preview is unavailable"
+            )
         content = None
         if intent.content is not None:
             content = {
