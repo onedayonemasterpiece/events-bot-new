@@ -26,6 +26,25 @@ REQUIRED = {
     "coverage-report.md",
     "screenshots-index.jsonl",
 }
+V1_REQUIRED = {
+    "manifest.json",
+    "receipt.json",
+    "summary.md",
+    "artifact-index.json",
+    "source-files.jsonl",
+    "source-bindings.jsonl",
+    "component-families.jsonl",
+    "composition-edges.jsonl",
+    "consumers.jsonl",
+    "route-families.jsonl",
+    "page-state-signatures.jsonl",
+    "specimen-plan.jsonl",
+    "specimen-observations.jsonl",
+    "page-verification.jsonl",
+    "mismatches.jsonl",
+    "unresolved.jsonl",
+    "penpot-materialization-candidates.json",
+}
 
 
 def _sha(value: bytes) -> str:
@@ -85,8 +104,18 @@ def _fixture(tmp_path: Path):
         '<article class="event-card"><slot /></article>\n', encoding="utf-8"
     )
     (components / "DesktopEventActionPanel.astro").write_text(
-        "---\nconst { family } = Astro.props;\n---\n"
+        "---\nenum ActionMode { Inline = 'inline', Stacked = 'stacked' }\n"
+        "interface Props { family?: 'split' | 'editorial'; allow?: boolean; mode?: ActionMode; }\n"
+        "const { family = 'split', allow = true } = Astro.props;\n"
+        "const layout = family === 'split' ? 'inline' : 'stacked';\n---\n"
         '<section data-desktop-action-panel data-action-family={family} data-action-layout={family === "split" ? "inline" : "stacked"}><button>Tickets</button></section>\n',
+        encoding="utf-8",
+    )
+    (components / "ClubCatalogNavigation.mjs").write_text(
+        "export const keys = ['ArrowLeft', 'ArrowRight'];\n", encoding="utf-8"
+    )
+    (components / "ClubCatalogKeyboard.astro").write_text(
+        '<script>import { keys } from "./ClubCatalogNavigation.mjs"; if (keys.length) window.__keys = keys;</script>\n',
         encoding="utf-8",
     )
     (components / "DesktopEventPage.astro").write_text(
@@ -234,6 +263,17 @@ def test_deterministic_byte_identical_rerun(decoded):
     assert {name: (first / name).read_bytes() for name in names} == {
         name: (second / name).read_bytes() for name in names
     }
+    first_v1 = first / "catalog/component-decoder/snapshot-test"
+    second_v1 = second / "catalog/component-decoder/snapshot-test"
+    assert {
+        path.relative_to(first_v1): path.read_bytes()
+        for path in first_v1.rglob("*")
+        if path.is_file()
+    } == {
+        path.relative_to(second_v1): path.read_bytes()
+        for path in second_v1.rglob("*")
+        if path.is_file()
+    }
 
 
 def test_required_output_set_and_nonempty_jsonl(decoded):
@@ -243,6 +283,98 @@ def test_required_output_set_and_nonempty_jsonl(decoded):
         assert (output / name).stat().st_size > 0
         if name.endswith(".jsonl"):
             assert all(json.loads(line) for line in (output / name).read_text().splitlines())
+
+
+def test_v1_compact_snapshot_is_complete_as_a_tree_and_fail_closed(decoded):
+    output, _, _ = decoded
+    root = output / "catalog/component-decoder/snapshot-test"
+    assert V1_REQUIRED.issubset({path.name for path in root.iterdir()})
+    manifest = json.loads((root / "manifest.json").read_text())
+    receipt = json.loads((root / "receipt.json").read_text())
+    assert manifest["schema_version"] == "current_ui_component_decoder_v1"
+    assert manifest["go_no_go"]["status"] == "NO_GO"
+    assert "controlled_specimen_evidence" in manifest["go_no_go"]["blockers"]
+    assert receipt["status"] == "complete"
+    assert receipt["evidence_completion"] == "partial"
+    assert receipt["handoff_status"] == "NO_GO"
+    assert manifest["constraints"]["normalization"] is False
+    assert manifest["constraints"]["astro_css_mutation"] is False
+    components = list((root / "components").glob("*.json"))
+    source_components = {
+        row["path"]
+        for row in map(json.loads, (output / "source-components.jsonl").read_text().splitlines())
+        if row["type"] == "component"
+    }
+    assert len(components) == len(source_components)
+    for path in components:
+        row = json.loads(path.read_text())
+        assert row["decision"] == "NOT_MERGED"
+        assert row["recommendation"] == "unresolved"
+        assert row["disposition_basis"]
+        assert row["reachability_basis"]
+
+
+def test_state_aware_ast_facts_and_inline_script_import_edges(decoded):
+    output, _, _ = decoded
+    rows = list(map(json.loads, (output / "source-components.jsonl").read_text().splitlines()))
+    action = next(
+        row
+        for row in rows
+        if row["plane"] == "latest_checked_kaggle_candidate"
+        and row["name"] == "DesktopEventActionPanel"
+    )
+    facts = action["source_state"]
+    assert facts["parser_status"] == "parsed"
+    props = {item["name"]: item for item in facts["props"]}
+    assert props["family"]["allowed_literals"] == ["split", "editorial"]
+    assert props["family"]["default"] == {"observed": True, "value": "split"}
+    assert props["allow"]["default"] == {"observed": True, "value": True}
+    assert props["mode"]["allowed_literals"] == ["inline", "stacked"]
+    assert facts["enums"][0]["name"] == "ActionMode"
+    assert any(item["name"] == "layout" for item in facts["derived_state"])
+    assert {item["name"] for item in facts["state_attributes"]} >= {
+        "data-desktop-action-panel",
+        "data-action-family",
+        "data-action-layout",
+    }
+
+    keyboard = next(
+        row
+        for row in rows
+        if row["plane"] == "latest_checked_kaggle_candidate"
+        and row["name"] == "ClubCatalogKeyboard"
+    )
+    support = next(
+        row
+        for row in rows
+        if row["plane"] == "latest_checked_kaggle_candidate"
+        and row["name"] == "ClubCatalogNavigation"
+    )
+    assert "./ClubCatalogNavigation.mjs" in keyboard["imports"]
+    assert support["id"] in keyboard["direct_dependencies"]
+    assert keyboard["id"] in support["consumers"]
+    assert any(
+        item.get("source_scope") == "inline_script"
+        and item["kind"] == "IfStatement"
+        for item in keyboard["source_state"]["branches"]
+    )
+
+
+def test_v1_known_exceptions_are_not_synthesized(decoded):
+    output, _, _ = decoded
+    manifest = json.loads(
+        (output / "catalog/component-decoder/snapshot-test/manifest.json").read_text()
+    )
+    exceptions = {item["id"]: item for item in manifest["known_exceptions"]}
+    assert exceptions["exception.labs-preview-special"]["classification"] == "lab-only"
+    for key in (
+        "exception.editorial-collections",
+        "exception.legal",
+        "exception.hero-talk-page-end",
+    ):
+        assert exceptions[key]["classification"] == "absent-as-is-future-requirement"
+        assert exceptions[key]["synthesis_allowed"] is False
+    assert exceptions["exception.transport-timetable-experiment"]["current_status"] == "not-a-production-variant"
 
 
 def test_mixed_dynamic_route_is_not_lost(decoded):
@@ -403,9 +535,46 @@ def test_not_merged_and_unresolved_are_invariants(decoded):
 def test_secret_is_redacted_and_source_is_not_mutated(decoded):
     output, _, secret = decoded
     token = secret.split("/")[-2]
-    corpus = b"\n".join(path.read_bytes() for path in output.iterdir() if path.is_file())
+    corpus = b"\n".join(path.read_bytes() for path in output.rglob("*") if path.is_file())
     assert secret.encode() not in corpus
     assert token.encode() not in corpus
+    assert b"outerHTML" not in corpus
+    assert b"innerHTML" not in corpus
+
+
+def test_v1_closed_enums_canonical_counts_and_evidence_sanitizer():
+    script = """
+      import { CANONICAL_DISPOSITION_COUNTS, DISPOSITIONS, REACHABILITY } from './scripts/current_ui_resource_graph/v1/classification.mjs';
+      import { assertSafeComponentEvidence, sanitizeEvidenceString } from './scripts/current_ui_resource_graph/v1/evidence.mjs';
+      const secret = sanitizeEvidenceString('https://candidate.invalid/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/');
+      let rejected = false;
+      try { assertSafeComponentEvidence({ proof_label: 'exact-candidate-browser-element', url: 'https://unsafe.invalid/' }); }
+      catch { rejected = true; }
+      process.stdout.write(JSON.stringify({ counts: CANONICAL_DISPOSITION_COUNTS, dispositions: DISPOSITIONS, reachability: REACHABILITY, secret, rejected }));
+    """
+    result = subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        cwd=REPO,
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert sum(payload["counts"].values()) == 107
+    assert payload["counts"] == {
+        "production-ui": 51,
+        "composition-layout": 20,
+        "lab-only": 20,
+        "experiment-only": 4,
+        "support-data": 1,
+        "nonvisual": 8,
+        "dead-unreachable": 2,
+        "needs-verification": 1,
+    }
+    assert len(payload["dispositions"]) == 8
+    assert len(payload["reachability"]) == 7
+    assert payload["secret"]["redacted"] is True
+    assert payload["rejected"] is True
 
 
 def test_named_coverage_surfaces_cannot_silently_disappear(decoded):
@@ -733,6 +902,12 @@ def test_partial_receipt_survives_failure(tmp_path):
     assert receipt["status"] == "failed"
     assert secret not in result.stderr
     assert secret not in json.dumps(receipt)
+    v1_receipt = json.loads(
+        (output / "catalog/component-decoder/snapshot-test/receipt.json").read_text()
+    )
+    assert v1_receipt["status"] == "failed"
+    assert v1_receipt["handoff_status"] == "NO_GO"
+    assert secret not in json.dumps(v1_receipt)
 
 
 def test_workflow_uses_validated_env_inputs_and_honest_validation_receipt():
@@ -770,6 +945,12 @@ def test_workflow_uses_validated_env_inputs_and_honest_validation_receipt():
     assert "CURRENT_UI_GRAPH_ROOT_HTML_SHA256" in workflow
     assert "workflow_validation_failed" in workflow
     assert '"$receipt_status" == "complete"' in workflow
+    assert "Current UI Decoder v1 evidence completion" in workflow
+    assert 'test "$(find "$v1_root/components"' in workflow
+    assert ".classification.total == 107" in workflow
+    assert '.handoff_status == "GO"' in workflow
+    assert ".constraints.normalization == false" in workflow
+    assert "does not authorize merge, split, normalization" in workflow
 
 
 def test_browser_capture_uses_and_checks_exact_playwright_viewports():

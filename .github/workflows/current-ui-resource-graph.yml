@@ -1,4 +1,4 @@
-name: Current UI Resource Graph v0
+name: Current UI Decoder v1 evidence completion
 
 on:
   workflow_dispatch:
@@ -247,6 +247,25 @@ jobs:
           for file in "${required[@]}"; do test -s "$GRAPH_OUTPUT/$file"; done
           for file in "$GRAPH_OUTPUT"/*.jsonl; do test -s "$file"; jq -c . "$file" >/dev/null; done
           jq -e '.status == "complete"' "$GRAPH_OUTPUT/receipt.json" >/dev/null
+          v1_root="$GRAPH_OUTPUT/catalog/component-decoder/$CURRENT_UI_GRAPH_SNAPSHOT_ID"
+          v1_required=(manifest.json receipt.json summary.md artifact-index.json source-files.jsonl source-bindings.jsonl component-families.jsonl composition-edges.jsonl consumers.jsonl route-families.jsonl page-state-signatures.jsonl specimen-plan.jsonl specimen-observations.jsonl page-verification.jsonl mismatches.jsonl unresolved.jsonl penpot-materialization-candidates.json)
+          for file in "${v1_required[@]}"; do test -e "$v1_root/$file"; done
+          test "$(find "$v1_root/components" -maxdepth 1 -type f -name 'component.*.json' | wc -l)" -eq 107
+          jq -e '.status == "complete" and .evidence_completion == "complete" and .handoff_status == "GO"' "$v1_root/receipt.json" >/dev/null
+          jq -e '
+            .schema_version == "current_ui_component_decoder_v1"
+            and .classification.total == 107
+            and .go_no_go.status == "GO"
+            and (.go_no_go.blockers | length) == 0
+            and (.constraints.as_is_only == true)
+            and (.constraints.candidate_contracts_are_not_normative == true)
+            and (.constraints.merge == false)
+            and (.constraints.split == false)
+            and (.constraints.normalization == false)
+            and (.constraints.tokenization == false)
+            and (.constraints.penpot_mutation == false)
+            and (.constraints.astro_css_mutation == false)
+          ' "$v1_root/manifest.json" >/dev/null
           jq -e '
             .identity_invariant == "candidate_is_not_production_root"
             and (.constraints.automatic_merge == false)
@@ -276,7 +295,8 @@ jobs:
             and (map(select(.id == "event-format.media.editorial-large-poster-companion" and .status == "observed" and (.screenshot_evidence | length) >= 2)) | length) == 1
             and (map(select(.id == "event-format.media.editorial-small-companion-previews" and .status == "observed" and (.screenshot_evidence | length) >= 2)) | length) == 1
           ' "$GRAPH_OUTPUT/event-presentation-formats.jsonl" >/dev/null
-          grep -Fx 'Proceed to normalization workshop' "$GRAPH_OUTPUT/summary.md" >/dev/null
+          grep -F 'does not authorize merge, split, normalization, tokenization, Penpot mutation, or Astro/CSS changes' "$v1_root/summary.md" >/dev/null
+          ! grep -R -F 'Proceed to normalization workshop' "$v1_root"
           ! grep -R -F "$CURRENT_UI_GRAPH_CANDIDATE_BASE_URL" "$GRAPH_OUTPUT"
           touch "$GRAPH_VALIDATION_MARKER"
 

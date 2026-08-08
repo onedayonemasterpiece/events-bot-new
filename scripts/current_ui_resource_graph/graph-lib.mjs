@@ -8,6 +8,8 @@ import { once } from 'node:events';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
+import { extractAstroStateFacts, extractStateAwareFacts, inlineScriptImports } from './v1/source-state.mjs';
+import { captureComponentScopedEvidence } from './v1/evidence.mjs';
 
 export const SCHEMA = 'current_ui_resource_graph_v0';
 const MAX_SCREENSHOT_BYTES = 192 * 1024;
@@ -231,8 +233,9 @@ export async function loadParsers(siteRoot) {
   const postcss = requireFromSite('postcss');
   const htmlparser2 = requireFromSite('htmlparser2');
   const esm = requireFromSite('es-module-lexer');
+  const babel = requireFromSite('@babel/parser');
   await esm.init;
-  return { astro, postcss, htmlparser2, esm };
+  return { astro, postcss, htmlparser2, esm, babel };
 }
 
 function astWalk(node, visit) {
@@ -261,12 +264,15 @@ export async function inventorySource(sourceRoot, parsers, { plane = 'latest_che
     const hash = sha256(source);
     const type = componentType(`/${rel}`);
     let imports = [], exports = [], children = [], props = [], slots = [], conditions = [], data = [], css = [], clientDirectives = [], parser = 'es_module_lexer', parserStatus = 'parsed';
+    let sourceState = { parser: '@babel/parser', parser_status: 'not_attempted' };
     if (extname(path) === '.astro') {
       try {
         const parsed = await parsers.astro.parse(source, { position: true });
         const frontmatter = parsed.ast.children.find((child) => child.type === 'frontmatter')?.value || '';
         const facts = extractFrontmatterFacts(frontmatter, parsers.esm);
         ({ imports, props, data, css } = facts);
+        imports = [...new Set([...imports, ...inlineScriptImports(source, parsers.esm)])].sort();
+        sourceState = extractStateAwareFacts(frontmatter, parsers.babel);
         astWalk(parsed.ast, (node) => {
           if (node.type === 'component') children.push({ name: node.name, line: node.position?.start?.line ?? null });
           for (const attribute of node.attributes || []) if (attribute.name?.startsWith('client:')) clientDirectives.push(`${node.name || node.type}:${attribute.name}`);
@@ -277,6 +283,7 @@ export async function inventorySource(sourceRoot, parsers, { plane = 'latest_che
           if (node.type === 'expression') conditions.push({ kind: 'template_expression', line: node.position?.start?.line ?? null });
           if (node.type === 'element' && node.name === 'style') css.push('inline:style');
         });
+        sourceState = extractAstroStateFacts(source, sourceState, parsed.ast, parsers.babel);
         parser = '@astrojs/compiler';
       } catch (error) {
         parserStatus = 'parse_failed';
@@ -287,6 +294,7 @@ export async function inventorySource(sourceRoot, parsers, { plane = 'latest_che
         const parsedModule = parsers.esm.parse(source);
         imports = parsedModule[0].map((entry) => source.slice(entry.s, entry.e)).filter(Boolean).sort();
         exports = parsedModule[1].map((entry) => entry.n).filter(Boolean).sort();
+        sourceState = extractStateAwareFacts(source, parsers.babel);
       }
       catch { parserStatus = 'parse_failed'; }
       data = imports.filter((item) => /(?:data|api|client|server|supabase|json)/iu.test(item));
@@ -307,6 +315,7 @@ export async function inventorySource(sourceRoot, parsers, { plane = 'latest_che
       content_sha256: hash, status: parserStatus === 'parsed' ? 'observed' : 'unknown',
       confidence: parserStatus === 'parsed' ? (extname(path) === '.astro' ? 'high' : 'medium') : 'low',
       evidence: { parser, parser_status: parserStatus, source_line_count: source.split('\n').length },
+      source_state: sourceState,
     });
   }
   for (const consumer of records) {
@@ -1123,7 +1132,7 @@ export async function captureBrowserEvidence({ candidateBase, manifest, runtimeO
   const { selected, uncaptured } = selectScreenshotPages(byFamily, maxPages);
   const screenshotDir = join(outputDir, 'screenshots'); mkdirSync(screenshotDir, { recursive: true });
   const browser = await chromium.launch({ headless: true });
-  const viewportEvidence = []; const screenshots = [];
+  const viewportEvidence = []; const screenshots = []; const componentEvidence = [];
   try {
     for (const selectedPage of selected) {
       for (const viewport of [{ width: 390, height: 844 }, { width: 1728, height: 900 }]) {
@@ -1231,7 +1240,6 @@ export async function captureBrowserEvidence({ candidateBase, manifest, runtimeO
         }
         if (!stableScreenshot) throw new Error(`Browser pixels did not stabilize: ${selectedPage.observation.route_hash.slice(0, 12)}`);
         writeFileSync(path, stableScreenshot);
-        await page.close();
         const size = statSync(path).size;
         if (size > MAX_SCREENSHOT_BYTES) throw new Error(`Screenshot exceeds deterministic byte reservation: ${filename}`);
         budget.claim(MAX_SCREENSHOT_BYTES, `screenshots/${filename}`);
@@ -1241,12 +1249,17 @@ export async function captureBrowserEvidence({ candidateBase, manifest, runtimeO
         const perceptualDhash = BigInt(`0b${dhashBits}`).toString(16).padStart(16, '0');
         const relativePath = `screenshots/${filename}`;
         screenshots.push({ id: `screenshot.${sha256(`${selectedPage.observation.route_hash}\0${viewport.width}`).slice(0, 16)}`, page_family: selectedPage.pageFamily, selection: selectedPage.selection, route_hash: selectedPage.observation.route_hash, screenshot_path: relativePath, viewport, perceptual_dhash_64: perceptualDhash, pixel_stability: 'two_consecutive_exact_buffers', raw_raster_role: 'noncanonical_visual_evidence', source: 'exact_candidate_browser' });
+        componentEvidence.push(...await captureComponentScopedEvidence({
+          page, pageFamily: selectedPage.pageFamily, routeHash: selectedPage.observation.route_hash,
+          viewport, outputDir, budget, plane: 'latest_checked_kaggle_candidate',
+        }));
         const uiFamilies = families.filter((item) => item.runtime_observations.includes(selectedPage.observation.id)).map((item) => item.id).sort();
         viewportEvidence.push({ page_family: selectedPage.pageFamily, ui_families: uiFamilies, route_hash: selectedPage.observation.route_hash, viewport, structure: computed.structure_hash, computed, screenshot_path: relativePath, selection: selectedPage.selection });
+        await page.close();
       }
     }
   } finally { await browser.close(); }
-  return { screenshots: [...screenshots, ...uncaptured], viewportEvidence };
+  return { screenshots: [...screenshots, ...uncaptured], viewportEvidence, componentEvidence };
 }
 
 export function coverageRows(sourceRecords, runtimeObservations, pageFamilies) {

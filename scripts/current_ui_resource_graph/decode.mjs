@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import {
@@ -10,6 +10,8 @@ import {
   REQUIRED_CANDIDATE_CHECKS, scanLocalRuntime, scanPublicRoot, scanRemoteRuntime, screenshotIndex, sha256, stableJson,
   styleObservations, validateManifestInventory, validateSourcePin, withRetry, writeDeterministic,
 } from './graph-lib.mjs';
+import { classifyLogicalComponents, classificationCounts } from './v1/classification.mjs';
+import { initializeV1Receipt, writeV1Snapshot } from './v1/snapshot.mjs';
 
 function bool(value, fallback = false) {
   if (value === undefined) return fallback;
@@ -24,6 +26,17 @@ function firstOutputArg(argv) {
     if (argv[i].startsWith('--output=')) return argv[i].slice('--output='.length);
   }
   return 'artifacts/current-ui-resource-graph/partial';
+}
+
+function outputFiles(root) {
+  const found = [];
+  function visit(dir) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) visit(path); else if (entry.isFile()) found.push(path);
+    }
+  }
+  visit(root); return found;
 }
 
 async function fetchManifest(base, redact, maxBytes) {
@@ -132,6 +145,7 @@ async function run(argv) {
   const output = ensureOutput(firstOutputArg(argv));
   let redact = redactFactory();
   const receiptPath = join(output, 'receipt.json');
+  let v1ReceiptPath = null;
   let receiptTime = DEFAULT_IDENTITIES.snapshot_time;
   writeFileSync(receiptPath, stableJson({ schema_version: SCHEMA, status: 'started', snapshot_time: receiptTime }, true));
   try {
@@ -163,6 +177,7 @@ async function run(argv) {
     const candidateBase = baseFromFile || baseFromEnv;
     redact = redactFactory([candidateBase]);
     const budget = new Budget(Number(args.output_byte_budget || 75 * 1024 * 1024));
+    v1ReceiptPath = join(initializeV1Receipt(output, identity.snapshot_id, identity.snapshot_time), 'receipt.json');
     const maxHtmlBytes = Number(args.max_html_bytes || 4 * 1024 * 1024);
     const rootSourceRoot = resolve(args.root_source_root || sourceRoot);
     const sourcePin = validateSourcePin(sourceRoot, identity.latest_checked_kaggle_candidate.source_sha, args.source_tree_hash || '');
@@ -203,6 +218,7 @@ async function run(argv) {
     const families = observedFamilies(sourceRecords, runtime);
     const pageFamilies = pageFamiliesFromSource(sourceRecords, runtime);
     let viewportEvidence = [];
+    let componentEvidence = [];
     let screenshots = screenshotIndex(pageFamilies);
     if (bool(args.browser_observations, false)) {
       const browserResult = await captureBrowserEvidence({
@@ -211,6 +227,7 @@ async function run(argv) {
         snapshotTime: identity.snapshot_time,
       });
       viewportEvidence = browserResult.viewportEvidence;
+      componentEvidence = browserResult.componentEvidence || [];
       const capturedFamilies = new Set(browserResult.screenshots.map((item) => item.page_family));
       screenshots = [...browserResult.screenshots, ...screenshots.filter((item) => !capturedFamilies.has(item.page_family))]
         .sort((a, b) => a.page_family.localeCompare(b.page_family) || String(a.route_hash).localeCompare(String(b.route_hash)) || (a.viewport?.width || 0) - (b.viewport?.width || 0));
@@ -221,6 +238,7 @@ async function run(argv) {
     const desktop = desktopMobile(pageFamilies, families, viewportEvidence);
     const coverage = coverageRows(sourceRecords, runtime, pageFamilies);
     const eventFormats = eventPresentationFormats(sourceRecords, runtime, screenshots);
+    const logicalComponents = classifyLogicalComponents(sourceRecords, runtime);
 
     await writeJsonl(join(output, 'source-components.jsonl'), sourceRecords, budget);
     await writeJsonl(join(output, 'observed-ui-families.jsonl'), families, budget);
@@ -232,6 +250,7 @@ async function run(argv) {
     await writeJsonl(join(output, 'fragmentation-report.jsonl'), fragmentation, budget);
     await writeJsonl(join(output, 'candidate-component-graph.jsonl'), candidates, budget);
     await writeJsonl(join(output, 'screenshots-index.jsonl'), screenshots, budget);
+    await writeJsonl(join(output, 'component-evidence.jsonl'), componentEvidence, budget);
 
     const counts = {
       routes: runtime.length, candidate_routes: candidateRuntime.length, public_root_observations: 1,
@@ -248,6 +267,9 @@ async function run(argv) {
       shared: desktop.filter((item) => item.scope === 'ui_family' && item.relation === 'shared_structure_observed').length,
       divergent: desktop.filter((item) => item.scope === 'ui_family' && item.relation === 'divergent_structure_observed').length,
       desktop_mobile_unknown: desktop.filter((item) => item.scope === 'ui_family' && item.relation === 'unknown').length,
+      logical_components: logicalComponents.length,
+      logical_component_classification: classificationCounts(logicalComponents),
+      component_evidence: componentEvidence.length,
     };
     writeDeterministic(join(output, 'summary.md'), summaryMarkdown(identity, counts, families, coverage), budget);
     writeDeterministic(join(output, 'coverage-report.md'), coverageMarkdown(coverage, sourcePin, runtimeFacts), budget);
@@ -291,11 +313,25 @@ async function run(argv) {
       try { return readFileSync(join(output, name), 'utf8').includes(candidateBase) && Boolean(candidateBase); } catch { return false; }
     });
     if (serialized.length) throw new Error(`Secret redaction invariant failed: ${serialized.join(', ')}`);
+    writeV1Snapshot({
+      output, snapshotId: identity.snapshot_id, snapshotTime: identity.snapshot_time,
+      identity: { current_root_prelaunch: identity.current_root_prelaunch, latest_checked_kaggle_candidate: identity.latest_checked_kaggle_candidate },
+      sourceRecords, components: logicalComponents, families, pageFamilies, runtime, screenshots,
+      viewportEvidence, componentEvidence, coverage, styles, budget,
+    });
+    if (candidateBase) {
+      const candidateToken = new URL(candidateBase).pathname.split('/').filter(Boolean).find((part) => part.length >= 20) || '';
+      const leaked = outputFiles(output).filter((path) => {
+        const bytes = readFileSync(path); return bytes.includes(candidateBase) || (candidateToken && bytes.includes(candidateToken));
+      });
+      if (leaked.length) throw new Error(`Recursive secret redaction invariant failed: ${leaked.map((path) => basename(path)).sort().join(', ')}`);
+    }
     writeFileSync(receiptPath, stableJson({ schema_version: SCHEMA, status: 'complete', snapshot_id: identity.snapshot_id, snapshot_time: identity.snapshot_time, manifest_sha256: sha256(readFileSync(join(output, 'manifest.json'))), output_bytes: budget.used }, true));
     return 0;
   } catch (error) {
     const message = redact(error?.message || error);
     writeFileSync(receiptPath, stableJson({ schema_version: SCHEMA, status: 'failed', snapshot_time: receiptTime, error: message }, true));
+    if (v1ReceiptPath) writeFileSync(v1ReceiptPath, stableJson({ schema_version: 'current_ui_component_decoder_v1', status: 'failed', handoff_status: 'NO_GO', snapshot_time: receiptTime, error: message }, true));
     process.stderr.write(`Current UI Resource Graph failed: ${message}\n`);
     return 1;
   }
