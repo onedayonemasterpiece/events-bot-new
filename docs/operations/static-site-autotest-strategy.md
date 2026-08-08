@@ -806,6 +806,14 @@ Device callback считается завершённым не при перво
 только после `is-authorized` на возвращённой `/poisk/`. Лишь после этого journey
 делает обычный reload exact target и тем самым доказывает same-storage session
 persistence, не прерывая одноразовый callback.
+Broker admin `action_link` не открывается напрямую: его default hosted GET
+возвращает implicit session fragment, который production static auth намеренно
+не парсит (`detectSessionInUrl=false`). Runner fail-closed проверяет exact
+`token/type/redirect_to`, строит allowlisted target callback с
+`token_hash/type`, маскирует обе одноразовые ссылки, а `StaticSiteAuth.verifyOtp`
+выполняется уже внутри device browser. Так session сохраняется в том же
+Chrome/Safari storage без передачи access/refresh token runner-у; raw Appium
+logs удаляются до завершения job и никогда не публикуются.
 Android/iOS Search и real-mail OTP используют один нейтральный transport из
 `site/e2e/mobile-web/`; feature adapters не имеют права копировать Appium
 startup/capabilities. iOS сначала запускает `com.apple.mobilesafari` как native

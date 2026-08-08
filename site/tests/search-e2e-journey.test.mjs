@@ -171,6 +171,7 @@ test('journey is mechanics-neutral and mobile adapters own native keyboard/touch
 
 test('runner is fail-closed on exact secret target SHA and carries three incident queries', async () => {
   const runner = await readFile(new URL('../e2e/search/run.mjs', import.meta.url), 'utf8');
+  const mobileIssuer = await readFile(new URL('../../.github/scripts/issue-static-search-session.mjs', import.meta.url), 'utf8');
   assert.match(runner, /E2E_EXPECTED_REPO_SHA/u);
   assert.match(runner, /candidate-build\.json/u);
   assert.match(runner, /static_secret_candidate_build_v1/u);
@@ -180,4 +181,6 @@ test('runner is fail-closed on exact secret target SHA and carries three inciden
   assert.match(runner, /в пятницу бесплатно/u);
   assert.match(runner, /revisionPolicy === 'live_consistent' && mode === 'cached_vector'/u);
   assert.doesNotMatch(runner, /focus-email|mailbox|real-mail|otp/iu);
+  assert.match(mobileIssuer, /createBrowserVerificationCallback/u);
+  assert.doesNotMatch(mobileIssuer, /E2E_AUTH_ACTION_LINK=\$\{actionLink\}/u);
 });

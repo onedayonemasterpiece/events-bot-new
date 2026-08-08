@@ -9,6 +9,7 @@ import {
   STATIC_SITE_AUTH_MODES,
   allowlistedPersonasFromEnv,
   createAuthSessionBrokerIssuer,
+  createBrowserVerificationCallback,
   createAuthSessionFixture,
   resetAuthSessionFixtureScopesForTests,
 } from '../e2e/auth-session-fixture/session-fixture.mjs';
@@ -335,4 +336,28 @@ test('GitHub OIDC broker issuer sends only role/run/redirect and retains one-tim
   assert.equal(observed.init.headers.authorization, 'Bearer signed-oidc-secret');
   assert.equal(result.actionLink, 'https://project.supabase.co/auth/v1/verify?token=one-time');
   assert.doesNotMatch(JSON.stringify(observed.body), /example\.invalid/u);
+});
+
+test('mobile callback converts the admin confirmation URL into the static token-hash contract', () => {
+  const target = 'https://kenigevents.ru/_review/opaque-review-path/poisk/';
+  const callback = createBrowserVerificationCallback({
+    actionLink: `https://project.supabase.co/auth/v1/verify?token=hashed-secret&type=magiclink&redirect_to=${encodeURIComponent(target)}`,
+    redirectTo: target,
+  });
+  const url = new URL(callback);
+  assert.equal(url.origin, 'https://kenigevents.ru');
+  assert.equal(url.pathname, '/_review/opaque-review-path/poisk/');
+  assert.equal(url.searchParams.get('token_hash'), 'hashed-secret');
+  assert.equal(url.searchParams.get('type'), 'magiclink');
+  assert.equal(url.searchParams.has('redirect_to'), false);
+  assert.equal(url.hash, '');
+
+  assert.throws(() => createBrowserVerificationCallback({
+    actionLink: 'https://project.supabase.co/auth/v1/verify?token=hashed-secret&type=magiclink&redirect_to=https%3A%2F%2Fattacker.invalid%2F',
+    redirectTo: target,
+  }), /BROKER_ACTION_REDIRECT_MISMATCH/u);
+  assert.throws(() => createBrowserVerificationCallback({
+    actionLink: `https://project.supabase.co/auth/v1/verify?token=hashed-secret&type=recovery&redirect_to=${encodeURIComponent(target)}`,
+    redirectTo: target,
+  }), /BROKER_ACTION_TYPE_INVALID/u);
 });

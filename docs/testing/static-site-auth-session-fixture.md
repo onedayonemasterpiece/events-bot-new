@@ -117,8 +117,11 @@ Setup получает:
 
 1. server-side `auth.admin.generateLink({ type: 'magiclink', ... })`;
 2. redirect только на allowlisted KenigEvents origin/path;
-3. browser открывает одноразовую `action_link`;
-4. общий `StaticSiteAuth` завершает `token_hash/type` либо code callback;
+3. browser fixture проверяет `email_otp` server-side и создаёт ephemeral state;
+4. device fixture не открывает default `action_link` напрямую: runner проверяет
+   его `token/type/redirect_to`, переносит одноразовый hash в allowlisted target
+   как `token_hash/type`, а общий `StaticSiteAuth` выполняет штатный `verifyOtp`
+   уже внутри реального Chrome/Safari и того же storage;
 5. callback parameters удаляются из видимого URL;
 6. `getSession()` и защищённый read probe подтверждают identity;
 7. browser context сохраняет ephemeral `storageState`.
@@ -163,6 +166,12 @@ Setup получает:
 формата storage и не считается platform acceptance. Предпочтительно пройти
 штатный callback/verify в реальном Chrome Android или Mobile Safari, а затем
 продолжить сценарий в той же сессии.
+
+Почему нельзя открывать admin `action_link` напрямую: стандартный hosted GET
+возвращает implicit session в URL fragment, а production static auth намеренно
+использует `detectSessionInUrl=false` и PKCE для обычного OAuth. Поддерживаемая
+device-граница поэтому — `token_hash/type` callback с browser-side `verifyOtp`;
+ни access token, ни refresh token runner не извлекает и не записывает.
 
 Если предмет теста — native email/OTP keyboard или Auth UI, выбирается
 `admin_otp_ui` либо `real_mail_otp`, а не `session_fixture`.

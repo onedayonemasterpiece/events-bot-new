@@ -173,6 +173,48 @@ function normalizeIssuerResult(value) {
   return result;
 }
 
+/**
+ * Admin generate_link returns a confirmation URL whose default GET redirect
+ * carries an implicit-flow session fragment. The static site deliberately
+ * disables automatic fragment parsing and accepts a token_hash callback
+ * instead, so mobile browsers must perform that supported verification in the
+ * target origin rather than consuming the default redirect first.
+ */
+export function createBrowserVerificationCallback({ actionLink, redirectTo }) {
+  let action;
+  let target;
+  try {
+    action = new URL(String(actionLink || ''));
+    target = new URL(String(redirectTo || ''));
+  } catch (error) {
+    throw blocked('BROKER_ACTION_URL_INVALID', error);
+  }
+  if (action.protocol !== 'https:' || action.username || action.password || action.hash
+    || action.pathname !== '/auth/v1/verify') throw blocked('BROKER_ACTION_URL_INVALID');
+  if (target.protocol !== 'https:' || target.username || target.password || target.hash) {
+    throw blocked('BROKER_ACTION_TARGET_INVALID');
+  }
+  const tokenValues = action.searchParams.getAll('token');
+  const typeValues = action.searchParams.getAll('type');
+  const redirectValues = action.searchParams.getAll('redirect_to');
+  if (redirectValues.length !== 1 || redirectValues[0] !== target.href) {
+    throw blocked('BROKER_ACTION_REDIRECT_MISMATCH');
+  }
+  if (typeValues.length !== 1 || typeValues[0] !== 'magiclink') {
+    throw blocked('BROKER_ACTION_TYPE_INVALID');
+  }
+  const tokenHash = String(tokenValues.length === 1 ? tokenValues[0] : '');
+  if (tokenHash.length < 8 || tokenHash.length > 2048 || /[\u0000-\u0020\u007f]/u.test(tokenHash)) {
+    throw blocked('BROKER_ACTION_TOKEN_INVALID');
+  }
+  for (const key of ['code', 'token_hash', 'type', 'access_token', 'refresh_token']) {
+    target.searchParams.delete(key);
+  }
+  target.searchParams.set('token_hash', tokenHash);
+  target.searchParams.set('type', 'magiclink');
+  return target.href;
+}
+
 export function createAuthSessionBrokerIssuer(options = {}) {
   let endpoint;
   try {

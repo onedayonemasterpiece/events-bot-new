@@ -200,6 +200,14 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
   default; the live Search CI failure occurred at 5.749 seconds. The project
   `mobile-web-e2e` skill makes shared-transport discovery mandatory for future
   mobile scenarios.
+- 2026-08-08 mobile auth callback correction: two Android runs reached the
+  exact target but could not restore a session because the broker's default
+  hosted confirmation GET returned an implicit URL fragment while static auth
+  deliberately sets `detectSessionInUrl=false`. The runner now validates the
+  broker confirmation URL, converts only its one-time hash/type into the
+  allowlisted target callback, and lets `StaticSiteAuth.verifyOtp` persist the
+  session inside the real device browser. No access/refresh token crosses the
+  runner and raw Appium logs are deleted rather than uploaded.
 
 ## Follow-up Actions
 
