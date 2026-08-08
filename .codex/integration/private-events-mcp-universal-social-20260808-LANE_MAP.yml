@@ -13,7 +13,7 @@ global_constraints:
   - TELEGRAM_AUTH_BUNDLE_EVENTS_BOT_MCP remains the only Telegram role for this MCP
   - secrets, sessions, access tokens, raw provider errors, and private target internals never enter Git or tool output
   - code changes require canonical docs and CHANGELOG Unreleased sync
-  - targeted editorial sampling is bounded to one resolved target and at most 80 items; no background harvesting or durable content index
+  - targeted editorial sampling is bounded to one resolved target and at most 100 items; no background harvesting or durable content index
   - Telegram/VK AI read features require an explicit per-target consent/purpose policy before production enablement
 verification_owner: root integrator
 stop_conditions:
@@ -32,7 +32,7 @@ requirements:
   R08: Preserve Codex event/incident MCP behavior and seven-tool read-only catalog; Codex uses local Telegram/VK tools instead of social MCP
   R09: Fake-provider contract tests, OAuth/catalog isolation, full MCP suite, CI gate, non-destructive live E2E and webhook/health regression checks
   R10: Canonical docs, env/credential generator, connection instructions, rollout/rollback and production acceptance receipts
-  R11: Bounded editorial sample of 50-80 posts from one explicitly resolved channel/community for tone, topics and description drafting; no mass collection
+  R11: Bounded editorial sample of up to 100 posts from one explicitly resolved channel/community for tone, topics and description drafting; no mass collection
 lanes:
   - id: L0-core-contract
     role: worker
