@@ -220,8 +220,12 @@ after the last public change. A change arriving during a running build records a
 deferred marker; completion schedules exactly one follow-up. The worker creates
 an online SQLite backup, runs `quick_check`, records SHA-256/size/max event
 revision and submits that immutable file as a unique Kaggle input. Retries,
-missed-build reconciliation and the feature-specific 5400-second runtime are
-bounded in `static_site_release.py`/`main.py`.
+missed-build reconciliation and the feature-specific 14400-second end-to-end
+runtime are bounded in `static_site_release.py`/`main.py`. The four-hour budget
+is intentionally larger than the 90-minute remote Kaggle wait: it also covers
+Fly-side create-only upload and byte/MIME verification of every object in a
+full candidate (currently more than 3,300 objects). The remote wait remains
+bounded independently.
 
 Immediately before the vector barrier, the worker refreshes revisions for the
 event ids already present in the coalesced request from current canonical
@@ -634,11 +638,11 @@ the unavailable fallback.
 
 The outbox distinguishes a durable remote build from a process orphan. A row
 with an exact `static_site_build_state.active_job_id` or a persisted
-`remote_handoff` keeps the full 5400-second build budget. A `running` row with
+`remote_handoff` keeps the full 14400-second end-to-end budget. A `running` row with
 neither marker is a pre-handoff owner and is recovered after the bounded
 `STATIC_SITE_PRE_HANDOFF_STALE_SECONDS` window (600 seconds by default), so a
 restart between outbox claim and Kaggle handoff cannot block Smart Update for
-90 minutes. When a follow-up loses its CAS to a real owner, it is deferred for
+the full four-hour budget. When a follow-up loses its CAS to a real owner, it is deferred for
 `STATIC_SITE_CLAIM_RETRY_SECONDS` (30 seconds by default) without consuming an
 attempt; a two-second log/SQLite hot-spin is forbidden.
 

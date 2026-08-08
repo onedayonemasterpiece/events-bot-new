@@ -645,7 +645,8 @@ def test_add_build_08_command_separates_snapshot_from_live_status_db(
     assert _arg_after(cmd, "--db") == "/data/static_site_snapshots/request.sqlite"
     assert _arg_after(cmd, "--status-db") == "/data/db.sqlite"
     assert _arg_after(cmd, "--timeout-minutes") == "90"
-    assert main.JOB_MAX_RUNTIME[main.JobTask.static_site_build] == 5400
+    assert main.JOB_MAX_RUNTIME[main.JobTask.static_site_build] == 14400
+    assert main.JOB_MAX_RUNTIME[main.JobTask.static_site_build] >= (90 + 60) * 60
 
 
 def test_add_build_08_production_candidate_binds_snapshot_repo_run_and_secret() -> None:

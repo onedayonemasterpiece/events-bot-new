@@ -42,6 +42,11 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
   receipt discarded them and the Kaggle handoff never packaged the receipt.
   The repair upgrades that owner receipt to v2 and hands it to Kaggle without
   re-enabling duplicate vector writes in the static builder.
+- 2026-08-08 the repaired exact-SHA candidate passed Kaggle, but the 5400-second
+  outbox deadline expired during create-only publication/verification after all
+  3,314 private objects were uploaded. Durable recovery completed that exact
+  candidate successfully. The runtime contract is now four hours end to end,
+  while the remote Kaggle wait remains independently bounded at 90 minutes.
 
 - 2026-08-07 recovery audit: public `/poisk/` still returned Object Storage 404,
   while the durable accepted immutable candidate resolved to build
