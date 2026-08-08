@@ -1,0 +1,26 @@
+{
+  "identity_candidates": [
+    { "key": "festival-brand", "category": "festival_brand" },
+    { "key": "organizer", "category": "organizer" },
+    { "key": "venue-a", "category": "venue_brand" },
+    { "key": "venue-b", "category": "venue_brand" }
+  ],
+  "overflow_tokens": [
+    { "key": "organizer:a", "kind": "organizer", "role": "main", "identity_category": "organizer", "image_url": "/fixtures/a.svg" },
+    { "key": "source:a", "kind": "source", "role": "secondary", "image_url": "/fixtures/source.webp", "fallback_image_url": "/fixtures/source.png" },
+    { "key": "program:a", "kind": "program", "role": "secondary", "image_url": "/fixtures/program.svg" },
+    { "key": "pushkin-card", "kind": "pushkin", "role": "secondary", "image_url": "/fixtures/pushkin.webp", "fallback_image_url": "/fixtures/pushkin.png" },
+    { "key": "price", "kind": "pill", "role": "secondary" },
+    { "key": "kids-family", "kind": "pill", "role": "secondary" },
+    { "key": "free-admission", "kind": "badge", "role": "secondary", "image_url": "/fixtures/free.svg" }
+  ],
+  "boundary_viewports": [
+    [320, 844],
+    [390, 844],
+    [1023, 900],
+    [1024, 900],
+    [1280, 720],
+    [1280, 721],
+    [1440, 900]
+  ]
+}
