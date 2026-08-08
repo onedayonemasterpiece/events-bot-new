@@ -17,7 +17,7 @@ import copy
 import inspect
 import re
 import secrets
-from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Protocol
@@ -41,7 +41,6 @@ from private_events_mcp.social_workspace import (
     validate_action_status_response,
     validate_opaque_ref,
 )
-
 
 _TRUST = "untrusted_external_data"
 _MAX_PAGE = 25
@@ -68,9 +67,9 @@ class TelegramWorkspaceError(RuntimeError):
 
     def __repr__(self) -> str:
         return (
-            "TelegramWorkspaceError(code={!r}, retry_safe={!r}, "
-            "retry_after_seconds={!r})"
-        ).format(self.code, self.retry_safe, self.retry_after_seconds)
+            f"TelegramWorkspaceError(code={self.code!r}, retry_safe={self.retry_safe!r}, "
+            f"retry_after_seconds={self.retry_after_seconds!r})"
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -353,7 +352,7 @@ class _DefaultTelethonTypes:
                 inspect.signature(types.ChatBannedRights).parameters
             ):
                 raise RuntimeError("required Telethon rights feature missing")
-        except Exception:
+        except Exception:  # noqa: BLE001 - normalize optional dependency drift
             raise TelegramWorkspaceError("provider_dependency_unavailable") from None
         self._functions, self._types, self._utils = functions, types, utils
         return functions, types
@@ -529,7 +528,7 @@ class TelegramWorkspaceAdapter:
                 await _await(client.disconnect())
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 - best-effort secret-free disconnect
             pass
 
     async def _session(
@@ -557,9 +556,11 @@ class TelegramWorkspaceAdapter:
                     raise TelegramWorkspaceError("provider_unavailable")
                 if callable(getattr(client, "connect", None)):
                     await _await(client.connect())
-                if callable(getattr(client, "is_user_authorized", None)):
-                    if not await _await(client.is_user_authorized()):
-                        raise TelegramWorkspaceError("provider_unauthorized", retry_safe=False)
+                if (
+                    callable(getattr(client, "is_user_authorized", None))
+                    and not await _await(client.is_user_authorized())
+                ):
+                    raise TelegramWorkspaceError("provider_unauthorized", retry_safe=False)
                 await self._fenced(lease)
                 return await asyncio.wait_for(body(client, lease, attempt), self._timeout)
             except asyncio.CancelledError:
@@ -577,7 +578,7 @@ class TelegramWorkspaceAdapter:
                     "outcome_unknown" if attempt.provider_mutation_attempted else "provider_timeout",
                     retry_safe=not attempt.provider_mutation_attempted,
                 ) from None
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - provider error secrecy boundary
                 wait = _extract_flood_wait(exc)
                 if wait is not None:
                     await _await(self._governor.note_flood_wait(wait))
@@ -594,7 +595,7 @@ class TelegramWorkspaceAdapter:
                     await self._disconnect(client)
                 try:
                     await _await(self._governor.release(lease))
-                except Exception:
+                except Exception:  # noqa: BLE001, S110 - best-effort lease cleanup
                     pass
 
     async def _call(self, client: Any, lease: TelegramLease, value: Any) -> Any:
@@ -611,7 +612,7 @@ class TelegramWorkspaceAdapter:
         try:
             detached_entity = copy.deepcopy(binding.entity)
             detached_privacy = copy.deepcopy(binding.story_privacy)
-        except Exception:
+        except Exception:  # noqa: BLE001 - opaque provider entities vary by Telethon layer
             raise SocialWorkspaceValidationError("target binding cannot be snapshotted") from None
         if detached_entity is binding.entity:
             raise SocialWorkspaceValidationError("target binding is not detachable")
@@ -843,7 +844,7 @@ class TelegramWorkspaceAdapter:
         if callable(getattr(client, "get_permissions", None)):
             try:
                 permissions_peer = copy.deepcopy(binding.entity)
-            except Exception:
+            except Exception:  # noqa: BLE001 - provider entity snapshot boundary
                 raise SocialWorkspaceValidationError(
                     "capability peer cannot be snapshotted"
                 ) from None
@@ -1646,9 +1647,10 @@ class TelegramWorkspaceAdapter:
             SocialTargetKind.GROUP,
         }:
             raise SocialWorkspaceValidationError("publish requires channel or group")
-        if intent.content:
-            if len(intent.content.text) > 4096 or len(intent.content.media) > 10:
-                raise SocialWorkspaceValidationError("capability denied: content limit")
+        if intent.content and (
+            len(intent.content.text) > 4096 or len(intent.content.media) > 10
+        ):
+            raise SocialWorkspaceValidationError("capability denied: content limit")
         return _PreflightSnapshot(target=target, source=source, item=item)
 
     async def _send_content(
@@ -1710,7 +1712,7 @@ class TelegramWorkspaceAdapter:
                     operation_ref=operation_ref, action_digest=action_digest
                 )
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 - opaque durable ledger boundary
             raise TelegramWorkspaceError(
                 "operation_ledger_failed", retry_safe=False
             ) from None
@@ -1736,7 +1738,7 @@ class TelegramWorkspaceAdapter:
                     operation_ref=operation_ref, action_digest=action_digest
                 )
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 - opaque durable ledger boundary
             raise TelegramWorkspaceError(
                 "operation_ledger_failed", retry_safe=False
             ) from None
@@ -1758,7 +1760,7 @@ class TelegramWorkspaceAdapter:
                     result=dict(result),
                 )
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 - opaque durable ledger boundary
             raise TelegramWorkspaceError(
                 "operation_ledger_failed", retry_safe=False
             ) from None
@@ -1778,7 +1780,7 @@ class TelegramWorkspaceAdapter:
             raise SocialWorkspaceValidationError("operation_ref is invalid")
         try:
             claim = await _await(self._refs.resolve_operation(operation_ref))
-        except Exception:
+        except Exception:  # noqa: BLE001 - normalize opaque ledger failures
             raise TelegramWorkspaceError("operation_not_found", retry_safe=False) from None
         if (
             not isinstance(claim, TelegramOperationClaim)
@@ -2012,11 +2014,11 @@ class TelegramWorkspaceAdapter:
 __all__ = [
     "TelegramAssetBinding",
     "TelegramGovernor",
+    "TelegramItemBinding",
     "TelegramLease",
     "TelegramOpaqueRefStore",
     "TelegramOperationClaim",
     "TelegramTargetBinding",
-    "TelegramItemBinding",
     "TelegramWorkspaceAdapter",
     "TelegramWorkspaceError",
 ]

@@ -8,25 +8,29 @@ It exposes fixed high-level adapters, never raw Telethon or VK methods.
 from __future__ import annotations
 
 import asyncio
+import base64
 import copy
 import hashlib
 import hmac
 import json
 import os
+import pickle
 import secrets
 import sqlite3
 import threading
 import time
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from private_events_mcp.config import PrivateEventsMCPConfig
 from private_events_mcp.repository import redact_and_clip_untrusted
 from private_events_mcp.social_workspace import (
     MediaRole,
     SocialAction,
+    SocialActionStatus,
     SocialTargetKind,
+    compute_action_digest,
 )
 from private_events_mcp_provider_adapters import build_role_scoped_telegram_client
 from private_events_mcp_vk_adapter import (
@@ -64,16 +68,123 @@ class _BoundedMap:
             return self.values[key]
 
 
+def _seal_binding(signing_key: str, value: Any) -> str:
+    key = hashlib.sha256(("private-events-mcp-provider-binding\0" + signing_key).encode()).digest()
+    nonce = secrets.token_bytes(16)
+    raw = pickle.dumps(copy.deepcopy(value), protocol=5)
+    stream = bytearray()
+    counter = 0
+    while len(stream) < len(raw):
+        stream.extend(hmac.new(key, nonce + counter.to_bytes(4, "big"), hashlib.sha256).digest())
+        counter += 1
+    encrypted = bytes(left ^ right for left, right in zip(raw, stream))
+    tag = hmac.new(key, nonce + encrypted, hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(nonce + encrypted + tag).decode("ascii")
+
+
+def _open_binding(signing_key: str, envelope: str) -> Any:
+    key = hashlib.sha256(("private-events-mcp-provider-binding\0" + signing_key).encode()).digest()
+    try:
+        packed = base64.urlsafe_b64decode(envelope.encode("ascii"))
+        nonce, encrypted, tag = packed[:16], packed[16:-32], packed[-32:]
+    except Exception:  # noqa: BLE001 - normalize encrypted envelope corruption
+        raise ProviderBindingError("provider binding is invalid") from None
+    expected = hmac.new(key, nonce + encrypted, hashlib.sha256).digest()
+    if len(nonce) != 16 or not hmac.compare_digest(expected, tag):
+        raise ProviderBindingError("provider binding integrity failed")
+    stream = bytearray()
+    counter = 0
+    while len(stream) < len(encrypted):
+        stream.extend(hmac.new(key, nonce + counter.to_bytes(4, "big"), hashlib.sha256).digest())
+        counter += 1
+    raw = bytes(left ^ right for left, right in zip(encrypted, stream))
+    try:
+        return pickle.loads(raw)
+    except Exception:  # noqa: BLE001 - authenticated local serialization boundary
+        raise ProviderBindingError("provider binding is invalid") from None
+
+
+class _DurableEncryptedMap:
+    def __init__(
+        self,
+        state: SQLiteProviderCoordinator,
+        *,
+        kind: str,
+        signing_key: str,
+        maximum: int = 20_000,
+    ) -> None:
+        self.state = state
+        self.kind = kind
+        self.signing_key = signing_key
+        self.maximum = maximum
+
+    def put(self, key: str, value: Any) -> None:
+        encoded = _seal_binding(self.signing_key, value)
+        now = self.state.now_ms()
+        with self.state._lock, self.state._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                "DELETE FROM social_provider_binding WHERE created_at_ms<?",
+                # Keep inner bindings at least as long as the outer runtime's
+                # default 30-day opaque-reference TTL.
+                (now - 35 * 86400 * 1000,),
+            )
+            exists = conn.execute(
+                "SELECT 1 FROM social_provider_binding WHERE binding_ref=? AND binding_kind=?",
+                (key, self.kind),
+            ).fetchone()
+            if exists is None:
+                count = conn.execute(
+                    "SELECT COUNT(*) FROM social_provider_binding WHERE binding_kind=?",
+                    (self.kind,),
+                ).fetchone()[0]
+                if int(count) >= self.maximum:
+                    conn.execute("ROLLBACK")
+                    raise ProviderBindingError("provider reference capacity exhausted")
+            conn.execute(
+                """INSERT INTO social_provider_binding(
+                   binding_ref,binding_kind,payload_ciphertext,created_at_ms)
+                   VALUES(?,?,?,?) ON CONFLICT(binding_ref) DO UPDATE SET
+                   binding_kind=excluded.binding_kind,
+                   payload_ciphertext=excluded.payload_ciphertext,
+                   created_at_ms=excluded.created_at_ms""",
+                (key, self.kind, encoded, now),
+            )
+            conn.execute("COMMIT")
+
+    def get(self, key: str) -> Any:
+        with self.state._lock, self.state._connect() as conn:
+            row = conn.execute(
+                """SELECT payload_ciphertext FROM social_provider_binding
+                   WHERE binding_ref=? AND binding_kind=?""",
+                (key, self.kind),
+            ).fetchone()
+        if row is None:
+            raise ProviderBindingError("provider reference is unknown")
+        return _open_binding(self.signing_key, str(row["payload_ciphertext"]))
+
+
 class InMemoryVKOpaqueRefStore:
     """Process-local inner refs; outer OAuth refs remain durable and encrypted."""
 
     def __init__(self) -> None:
-        self._maps = {kind: _BoundedMap() for kind in ("target", "item", "asset")}
+        self._maps = {
+            kind: _BoundedMap()
+            for kind in ("target", "item", "asset", "cursor", "sample")
+        }
 
     def mint(self, kind: str, native_value: Mapping[str, Any]) -> str:
         if kind not in self._maps or not isinstance(native_value, Mapping):
             raise ProviderBindingError("invalid VK provider reference")
-        ref = _bounded_ref({"target": "tgt", "item": "itm", "asset": "ast"}[kind])
+        ref = _bounded_ref(
+            {
+                "target": "tgt",
+                "item": "itm",
+                "asset": "ast",
+                "cursor": "cur",
+                "sample": "smp",
+            }[kind]
+        )
         self._maps[kind].put(ref, copy.deepcopy(dict(native_value)))
         return ref
 
@@ -81,6 +192,53 @@ class InMemoryVKOpaqueRefStore:
         if kind not in self._maps:
             raise ProviderBindingError("invalid VK provider reference")
         return copy.deepcopy(self._maps[kind].get(opaque_ref))
+
+    def put_named(self, kind: str, ref: str, value: Mapping[str, Any]) -> None:
+        if kind not in self._maps or not isinstance(value, Mapping):
+            raise ProviderBindingError("invalid VK provider state")
+        self._maps[kind].put(ref, copy.deepcopy(dict(value)))
+
+
+class DurableVKOpaqueRefStore:
+    """Encrypted restart-safe VK target/item/asset/cursor/sample bindings."""
+
+    _PREFIX: ClassVar[dict[str, str]] = {
+        "target": "tgt",
+        "item": "itm",
+        "asset": "ast",
+        "cursor": "cur",
+        "sample": "smp",
+    }
+
+    def __init__(self, state: SQLiteProviderCoordinator, signing_key: str) -> None:
+        self._maps = {
+            kind: _DurableEncryptedMap(
+                state,
+                kind=f"vk_{kind}",
+                signing_key=signing_key,
+            )
+            for kind in self._PREFIX
+        }
+
+    def mint(self, kind: str, native_value: Mapping[str, Any]) -> str:
+        if kind not in self._maps or not isinstance(native_value, Mapping):
+            raise ProviderBindingError("invalid VK provider reference")
+        ref = _bounded_ref(self._PREFIX[kind])
+        self._maps[kind].put(ref, copy.deepcopy(dict(native_value)))
+        return ref
+
+    def resolve(self, kind: str, opaque_ref: str) -> Mapping[str, Any]:
+        if kind not in self._maps:
+            raise ProviderBindingError("invalid VK provider reference")
+        value = self._maps[kind].get(opaque_ref)
+        if not isinstance(value, Mapping):
+            raise ProviderBindingError("invalid VK provider reference")
+        return copy.deepcopy(dict(value))
+
+    def put_named(self, kind: str, ref: str, value: Mapping[str, Any]) -> None:
+        if kind not in self._maps or not isinstance(value, Mapping):
+            raise ProviderBindingError("invalid VK provider state")
+        self._maps[kind].put(ref, copy.deepcopy(dict(value)))
 
 
 class SQLiteProviderCoordinator:
@@ -90,6 +248,21 @@ class SQLiteProviderCoordinator:
         self.path = path
         self._lock = threading.RLock()
         Path(path).parent.mkdir(parents=True, exist_ok=True)
+        # sqlite3.connect() creates a missing file with a mode derived from the
+        # process umask.  Create it ourselves at 0600 first so there is no
+        # group/world-readable window if startup fails before the schema is
+        # initialized.  Refuse symlink destinations for the same reason.
+        flags = os.O_CREAT | os.O_EXCL | os.O_RDWR
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        try:
+            descriptor = os.open(path, flags, 0o600)
+        except FileExistsError:
+            if Path(path).is_symlink():
+                raise ProviderBindingError("provider state path is unsafe") from None
+            os.chmod(path, 0o600)
+        else:
+            os.close(descriptor)
         with self._connect() as conn:
             conn.executescript(
                 """
@@ -114,9 +287,25 @@ class SQLiteProviderCoordinator:
                     claimed_at_ms INTEGER NOT NULL,
                     updated_at_ms INTEGER NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS social_provider_binding (
+                    binding_ref TEXT PRIMARY KEY,
+                    binding_kind TEXT NOT NULL,
+                    payload_ciphertext TEXT NOT NULL,
+                    created_at_ms INTEGER NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS social_provider_vk_operation (
+                    operation_ref TEXT PRIMARY KEY,
+                    idempotency_hash TEXT NOT NULL UNIQUE,
+                    action_digest TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    result_json TEXT,
+                    claimed_at_ms INTEGER NOT NULL,
+                    updated_at_ms INTEGER NOT NULL
+                );
                 INSERT OR IGNORE INTO social_provider_tg_state(singleton) VALUES(1);
                 """
             )
+        os.chmod(path, 0o600)
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, timeout=3.0, isolation_level=None)
@@ -288,7 +477,7 @@ def _vk_allowed(config: PrivateEventsMCPConfig) -> dict[VKActor, frozenset[str]]
         VKActor.STORY_EDITOR: set(),
     }
     if config.universal_social_private_read_enabled:
-        allowed[VKActor.DIALOG_READER].update({"dialogs", "search_newsfeed"})
+        allowed[VKActor.DIALOG_READER].add("dialogs")
     if config.universal_social_dm_enabled:
         allowed[VKActor.USER_MESSENGER].add("dm_send")
     if config.universal_social_post_enabled:
@@ -310,16 +499,127 @@ def _sanitize_provider_text(value: str) -> str:
     return sanitized if isinstance(sanitized, str) else "[redacted]"
 
 
-def build_vk_workspace_adapter(config: PrivateEventsMCPConfig) -> VKWorkspaceAdapter:
+class DurableVKWorkspaceAdapter:
+    """Restart-safe claim/result envelope around the fixed VK adapter."""
+
+    platform = "vk"
+
+    def __init__(self, delegate: VKWorkspaceAdapter, state: SQLiteProviderCoordinator) -> None:
+        self.delegate = delegate
+        self.state = state
+
+    async def capabilities(self, target_ref: str | None) -> Mapping[str, Any]:
+        return await self.delegate.capabilities(target_ref)
+
+    async def resolve(self, request: Any) -> Mapping[str, Any]:
+        return await self.delegate.resolve(request)
+
+    async def read(self, request: Any) -> Mapping[str, Any]:
+        return await self.delegate.read(request)
+
+    @staticmethod
+    def _unknown(operation_ref: str, action: str) -> dict[str, Any]:
+        return {
+            "platform": "vk",
+            "operation_ref": operation_ref,
+            "action": action,
+            "status": SocialActionStatus.OUTCOME_UNKNOWN.value,
+            "retry_safe": False,
+            "error_code": "restart_reconciliation_required",
+        }
+
+    async def execute(
+        self, intent: Any, *, operation_ref: str
+    ) -> Mapping[str, Any]:
+        digest = compute_action_digest(intent)
+        idem = hashlib.sha256(intent.idempotency_key.encode()).hexdigest()
+        now = self.state.now_ms()
+        with self.state._lock, self.state._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                """SELECT * FROM social_provider_vk_operation
+                   WHERE operation_ref=? OR idempotency_hash=?""",
+                (operation_ref, idem),
+            ).fetchone()
+            if row is not None:
+                if (
+                    row["operation_ref"] != operation_ref
+                    or row["action_digest"] != digest
+                    or row["idempotency_hash"] != idem
+                ):
+                    conn.execute("ROLLBACK")
+                    raise ProviderBindingError("VK operation reference conflict")
+                conn.execute("COMMIT")
+                if row["result_json"]:
+                    return json.loads(row["result_json"])
+                return self._unknown(operation_ref, str(row["action"]))
+            conn.execute(
+                """INSERT INTO social_provider_vk_operation(
+                   operation_ref,idempotency_hash,action_digest,action,
+                   claimed_at_ms,updated_at_ms) VALUES(?,?,?,?,?,?)""",
+                (operation_ref, idem, digest, intent.action.value, now, now),
+            )
+            conn.execute("COMMIT")
+        try:
+            result = dict(
+                await self.delegate.execute(intent, operation_ref=operation_ref)
+            )
+        except Exception:  # noqa: BLE001 - provider details stay behind the boundary
+            result = {
+                "platform": "vk",
+                "operation_ref": operation_ref,
+                "action": intent.action.value,
+                # The boundary cannot prove whether a provider-side mutation
+                # happened before an exception escaped.  Persist uncertainty
+                # and never invite a blind retry with a new idempotency key.
+                "status": SocialActionStatus.OUTCOME_UNKNOWN.value,
+                "retry_safe": False,
+                "error_code": "provider_boundary_exception",
+            }
+        encoded = json.dumps(result, ensure_ascii=False, sort_keys=True)
+        with self.state._lock, self.state._connect() as conn:
+            changed = conn.execute(
+                """UPDATE social_provider_vk_operation
+                   SET result_json=?,updated_at_ms=?
+                   WHERE operation_ref=? AND action_digest=? AND result_json IS NULL""",
+                (encoded, self.state.now_ms(), operation_ref, digest),
+            ).rowcount
+            if changed != 1:
+                row = conn.execute(
+                    "SELECT result_json FROM social_provider_vk_operation WHERE operation_ref=?",
+                    (operation_ref,),
+                ).fetchone()
+                if row is None or not row["result_json"]:
+                    raise ProviderBindingError("VK operation completion conflict")
+                if row["result_json"] != encoded:
+                    raise ProviderBindingError("VK operation result conflict")
+        return result
+
+    async def reconcile(self, operation_ref: str) -> Mapping[str, Any]:
+        with self.state._lock, self.state._connect() as conn:
+            row = conn.execute(
+                """SELECT action,result_json FROM social_provider_vk_operation
+                   WHERE operation_ref=?""",
+                (operation_ref,),
+            ).fetchone()
+        if row is None:
+            raise ProviderBindingError("VK operation is unknown")
+        if row["result_json"]:
+            return json.loads(row["result_json"])
+        return self._unknown(operation_ref, str(row["action"]))
+
+
+def build_vk_workspace_adapter(config: PrivateEventsMCPConfig) -> DurableVKWorkspaceAdapter:
     state = SQLiteProviderCoordinator(config.auth_database_path)
-    return VKWorkspaceAdapter(
+    delegate = VKWorkspaceAdapter(
         transport=DedicatedVKActorTransport(allowed=_vk_allowed(config)),
-        refs=InMemoryVKOpaqueRefStore(),
+        refs=DurableVKOpaqueRefStore(state, config.signing_key),
         governor=DurableVKGovernor(state),
         cooldown=DurableVKCooldown(state),
         sanitize_text=_sanitize_provider_text,
         timeout_seconds=config.social_provider_timeout_seconds,
     )
+    return DurableVKWorkspaceAdapter(delegate, state)
 
 
 def build_private_events_mcp_workspace_adapters(
@@ -353,7 +653,7 @@ def build_telegram_workspace_adapter(config: PrivateEventsMCPConfig) -> Any:
 
 
 class InMemoryTelegramOpaqueRefStore:
-    """Bounded, process-local Telethon entity store behind durable outer refs."""
+    """Encrypted restart-safe Telethon entity store behind durable outer refs."""
 
     def __init__(self, config: PrivateEventsMCPConfig) -> None:
         from private_events_mcp_telegram_adapter import (
@@ -367,12 +667,20 @@ class InMemoryTelegramOpaqueRefStore:
         self._Item = TelegramItemBinding
         self._Asset = TelegramAssetBinding
         self._Claim = TelegramOperationClaim
-        self._targets = _BoundedMap()
-        self._items = _BoundedMap()
-        self._assets = _BoundedMap()
-        self._cursors = _BoundedMap()
-        self._operation_lock = threading.RLock()
         self._state = SQLiteProviderCoordinator(config.auth_database_path)
+        self._targets = _DurableEncryptedMap(
+            self._state, kind="tg_target", signing_key=config.signing_key
+        )
+        self._items = _DurableEncryptedMap(
+            self._state, kind="tg_item", signing_key=config.signing_key
+        )
+        self._assets = _DurableEncryptedMap(
+            self._state, kind="tg_asset", signing_key=config.signing_key
+        )
+        self._cursors = _DurableEncryptedMap(
+            self._state, kind="tg_cursor", signing_key=config.signing_key
+        )
+        self._operation_lock = threading.RLock()
         actions: set[SocialAction] = set()
         if config.universal_social_dm_enabled:
             actions.add(SocialAction.SEND_MESSAGE)

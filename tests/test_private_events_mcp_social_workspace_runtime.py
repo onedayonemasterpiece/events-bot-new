@@ -221,6 +221,7 @@ async def test_editorial_sample_four_pages_is_cumulative_and_cursor_bound(runtim
             "platform": "vk", "operation": "editorial_sample",
             "target_ref": target, "expected_target_kinds": ["community"],
             "read_access": "public", "purpose": "editorial_analysis",
+            "authorization_basis": "operator_authorized",
             "page_size": 25, "total_limit": 100,
         }
         if sample_ref:
@@ -259,6 +260,37 @@ async def test_budgets_and_denials_are_durably_audited(tmp_path: Path) -> None:
     assert ("denied", "cross_target") in rows
 
 
+def test_publish_attempt_budget_uses_utc_day_not_hour(tmp_path: Path) -> None:
+    current = [1_787_616_000]  # 2026-08-25T00:00:00Z
+    service = SocialWorkspaceRuntime(
+        store=OAuthStateStore(str(tmp_path / "auth.sqlite")),
+        adapters={"telegram": FakeAdapter()},
+        encryption_key="unit-test-key-that-is-long-enough",
+        budget_dimension_limits={
+            "attempts": {
+                "global": 1,
+                "principal": 1,
+                "target": 1,
+                "action": 1,
+            }
+        },
+        clock=lambda: current[0],
+    )
+    principal = RuntimePrincipal.from_context(context())
+    service._consume_budget(
+        principal, "telegram", None, "send_message", "attempts", 1
+    )
+    current[0] += 23 * 3600
+    with pytest.raises(SocialWorkspaceRuntimeError, match="attempts budget exceeded"):
+        service._consume_budget(
+            principal, "telegram", None, "send_message", "attempts", 1
+        )
+    current[0] += 3600
+    service._consume_budget(
+        principal, "telegram", None, "send_message", "attempts", 1
+    )
+
+
 @pytest.mark.asyncio
 async def test_timeout_is_unknown_not_retry_safe_and_status_reconciles(runtime) -> None:
     service, adapter, _store = runtime
@@ -285,6 +317,51 @@ async def test_timeout_is_unknown_not_retry_safe_and_status_reconciles(runtime) 
     assert adapter.reconcile_refs == [result["operation_ref"]]
 
 
+@pytest.mark.asyncio
+async def test_restart_left_provider_attempted_operation_reconciles_without_retry(
+    runtime,
+) -> None:
+    service, adapter, store = runtime
+    principal = RuntimePrincipal.from_context(context())
+    target = service._mint_ref("target", "native-user", "telegram", principal)
+    intent = validate_prepare_request(
+        {
+            "platform": "telegram",
+            "action": "send_message",
+            "idempotency_key": "restart-inflight-123",
+            "target_ref": target,
+            "content": {"text": "Hello", "entities": [], "media": []},
+        }
+    )
+    prep = await service.prepare(intent, context())
+    approval = service.approve_preparation(
+        preparation_ref=prep["preparation_ref"],
+        operator_principal="operator",
+        operator_nonce="restart-inflight-nonce-12345",
+    )
+    completed = await service.commit(
+        {
+            "preparation_ref": prep["preparation_ref"],
+            **approval,
+            "action_digest": prep["action_digest"],
+        },
+        context(),
+    )
+    with sqlite3.connect(store.path) as conn:
+        conn.execute(
+            """UPDATE social_workspace_operation
+               SET status='provider_attempted',result_json=NULL,error_code=NULL
+               WHERE operation_hash=?""",
+            (service._hash(completed["operation_ref"]),),
+        )
+    executions = adapter.executions
+    reconciled = await service.reconcile(completed["operation_ref"], context())
+    assert reconciled["status"] == "failed"
+    assert reconciled["retry_safe"] is False
+    assert adapter.executions == executions
+    assert adapter.reconcile_refs == [completed["operation_ref"]]
+
+
 def test_tools_are_private_noncacheable_granular_and_feature_hidden(runtime) -> None:
     service, _adapter, _store = runtime
     tools = build_social_workspace_tools(service,
@@ -296,6 +373,68 @@ def test_tools_are_private_noncacheable_granular_and_feature_hidden(runtime) -> 
     assert all(tool.scope_selector is not None for tool in tools)
     assert all(all(any(scope.startswith(p + ":") for p in ("telegram", "vk"))
                    for scope in option) for tool in tools for option in tool.scope_options)
+
+
+def test_catalog_omits_disabled_action_and_media_surfaces(runtime) -> None:
+    service, _adapter, _store = runtime
+    disabled = build_social_workspace_tools(
+        service,
+        feature_policy={
+            "private_read": False,
+            "dm": False,
+            "post": False,
+            "edit_delete": False,
+            "media_story": False,
+        },
+    )
+    names = {tool.name for tool in disabled}
+    assert not {
+        "social_action_prepare",
+        "social_action_commit",
+        "social_action_status",
+        "social_content_stories",
+        "social_asset_stage",
+        "social_asset_status",
+    } & names
+    assert all(
+        not any(
+            scope.endswith(
+                (
+                    ":dm:send",
+                    ":post:publish",
+                    ":edit",
+                    ":delete",
+                    ":forward",
+                    ":reaction",
+                    ":comment",
+                    ":schedule",
+                    ":story:read",
+                    ":story:write",
+                )
+            )
+            for option in tool.scope_options
+            for scope in option
+        )
+        for tool in disabled
+    )
+
+    dm_only = build_social_workspace_tools(
+        service,
+        feature_policy={
+            "private_read": False,
+            "dm": True,
+            "post": False,
+            "edit_delete": False,
+            "media_story": False,
+        },
+    )
+    prepare = next(tool for tool in dm_only if tool.name == "social_action_prepare")
+    assert prepare.input_schema["properties"]["action"]["enum"] == ["send_message"]
+    advertised = {
+        scope for option in prepare.scope_options for scope in option
+    }
+    assert "telegram:dm:send" in advertised and "vk:dm:send" in advertised
+    assert not any(scope.endswith(":post:publish") for scope in advertised)
 
 
 @pytest.mark.asyncio
@@ -366,7 +505,7 @@ def test_auth_database_is_separate_and_event_database_is_untouched(tmp_path: Pat
 async def test_normal_read_projects_closed_contract_and_drops_native_identifiers(
     runtime,
 ) -> None:
-    service, adapter, _store = runtime
+    service, adapter, store = runtime
 
     async def hostile_read(request):
         return {
@@ -394,6 +533,92 @@ async def test_normal_read_projects_closed_contract_and_drops_native_identifiers
     assert "innocent_new_provider_field" not in encoded
     assert "provider_debug" not in encoded
     assert result["results"][0]["target_ref"].startswith("tgt_")
+
+    discovered_target = result["results"][0]["target_ref"]
+    prepared = await service.prepare(validate_prepare_request({
+        "platform": "vk", "action": "publish",
+        "idempotency_key": "searched-target-publication-123",
+        "target_ref": discovered_target,
+        "content": {"text": "Exact publication", "entities": [], "media": []},
+    }), context())
+    preview = service.approval_preview(
+        preparation_ref=prepared["preparation_ref"],
+        action_digest=prepared["action_digest"],
+    )
+    assert preview["target"]["display_name"] == "Named community"
+
+    source_item = service._mint_ref(
+        "item", "native-source-item", "vk", RuntimePrincipal.from_context(context())
+    )
+    forward = await service.prepare(validate_prepare_request({
+        "platform": "vk", "action": "forward",
+        "idempotency_key": "searched-target-forward-123",
+        "item_ref": source_item,
+        "destination_target_ref": discovered_target,
+    }), context())
+    with pytest.raises(
+        SocialWorkspaceRuntimeError, match="human item preview is unavailable"
+    ):
+        service.approval_preview(
+            preparation_ref=forward["preparation_ref"],
+            action_digest=forward["action_digest"],
+        )
+
+    native_target = service._resolve_ref(
+        discovered_target,
+        "target",
+        "vk",
+        RuntimePrincipal.from_context(context()),
+    )
+
+    async def item_read(request):
+        return {
+            "results": [{
+                "item_ref": "native-item-123",
+                "target_ref": native_target,
+                "kind": "post",
+                "published_at": "2026-08-08T12:00:00Z",
+                "text": "Original exact item",
+                "caption": "",
+                "basic_metrics": {"views": 1},
+                "trust": "untrusted_external_data",
+            }],
+            "trust": "untrusted_external_data",
+        }
+
+    adapter.read = item_read
+    feed = await service.read(validate_read_request({
+        "platform": "vk", "operation": "list_items",
+        "target_ref": discovered_target, "read_access": "public",
+    }), context())
+    item_ref = feed["results"][0]["item_ref"]
+    visible_forward = await service.prepare(validate_prepare_request({
+        "platform": "vk", "action": "forward",
+        "idempotency_key": "visible-item-forward-123",
+        "item_ref": item_ref,
+        "destination_target_ref": discovered_target,
+    }), context())
+    forward_preview = service.approval_preview(
+        preparation_ref=visible_forward["preparation_ref"],
+        action_digest=visible_forward["action_digest"],
+    )
+    assert forward_preview["destination_target"]["display_name"] == "Named community"
+    assert forward_preview["item"]["text"] == "Original exact item"
+    edit = await service.prepare(validate_prepare_request({
+        "platform": "vk", "action": "edit",
+        "idempotency_key": "exact-item-edit-123",
+        "item_ref": item_ref,
+        "content": {"text": "Edited exact item", "entities": [], "media": []},
+    }), context())
+    edit_preview = service.approval_preview(
+        preparation_ref=edit["preparation_ref"],
+        action_digest=edit["action_digest"],
+    )
+    assert edit_preview["item"]["text"] == "Original exact item"
+    assert edit_preview["source_target"]["display_name"] == "Named community"
+    raw_state = Path(store.path).read_bytes()
+    assert b"Named community" not in raw_state
+    assert b"Original exact item" not in raw_state
 
 
 @pytest.mark.asyncio

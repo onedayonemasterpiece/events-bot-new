@@ -6,12 +6,18 @@ from dataclasses import replace
 import pytest
 
 import private_events_mcp_provider_adapters as legacy_adapters
+from private_events_mcp.social_workspace import (
+    SocialTargetKind,
+    validate_prepare_request,
+)
 from private_events_mcp_vk_adapter import VKActor
 from private_events_mcp_workspace_providers import (
     DedicatedVKActorTransport,
     DurableTelegramGovernor,
     DurableVKCooldown,
     DurableVKGovernor,
+    DurableVKOpaqueRefStore,
+    DurableVKWorkspaceAdapter,
     InMemoryTelegramOpaqueRefStore,
     InMemoryVKOpaqueRefStore,
     ProviderBindingError,
@@ -86,6 +92,7 @@ def test_vk_inner_refs_are_opaque_and_detached() -> None:
 @pytest.mark.asyncio
 async def test_durable_provider_cooldowns_and_telegram_lease(tmp_path) -> None:
     state = SQLiteProviderCoordinator(str(tmp_path / "auth.sqlite"))
+    assert (tmp_path / "auth.sqlite").stat().st_mode & 0o777 == 0o600
     cooldown = DurableVKCooldown(state, captcha_seconds=60)
     await cooldown.record_captcha(VKActor.PUBLIC_READER)
     with pytest.raises(ProviderBindingError, match="cooldown"):
@@ -107,6 +114,84 @@ async def test_durable_provider_cooldowns_and_telegram_lease(tmp_path) -> None:
     telegram_b.note_flood_wait(30)
     telegram_b.release(replacement)
     assert telegram_b.cooldown_remaining() > 0
+
+
+def test_vk_bindings_are_encrypted_and_survive_restart(tmp_path) -> None:
+    path = tmp_path / "auth.sqlite"
+    state = SQLiteProviderCoordinator(str(path))
+    first = DurableVKOpaqueRefStore(state, "signing-key-for-tests-123456789")
+    ref = first.mint(
+        "target", {"kind": "community", "group_id": 123, "owner_id": -123}
+    )
+    second = DurableVKOpaqueRefStore(
+        SQLiteProviderCoordinator(str(path)), "signing-key-for-tests-123456789"
+    )
+    assert second.resolve("target", ref)["group_id"] == 123
+    assert b'"group_id"' not in path.read_bytes()
+
+
+@pytest.mark.asyncio
+async def test_vk_operation_receipt_survives_adapter_restart(tmp_path) -> None:
+    class Delegate:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def execute(self, intent, *, operation_ref):
+            self.calls += 1
+            return {
+                "platform": "vk",
+                "operation_ref": operation_ref,
+                "action": intent.action.value,
+                "status": "succeeded",
+                "retry_safe": False,
+            }
+
+    path = tmp_path / "auth.sqlite"
+    first_delegate = Delegate()
+    first = DurableVKWorkspaceAdapter(
+        first_delegate, SQLiteProviderCoordinator(str(path))
+    )
+    intent = validate_prepare_request(
+        {
+            "platform": "vk",
+            "action": "send_message",
+            "idempotency_key": "restart-safe-vk-operation",
+            "target_ref": "tgt_" + "a" * 24,
+            "content": {"text": "Exact reminder", "entities": [], "media": []},
+        }
+    )
+    operation_ref = "op_" + "b" * 24
+    receipt = await first.execute(intent, operation_ref=operation_ref)
+    assert first_delegate.calls == 1
+
+    second_delegate = Delegate()
+    second = DurableVKWorkspaceAdapter(
+        second_delegate, SQLiteProviderCoordinator(str(path))
+    )
+    assert await second.execute(intent, operation_ref=operation_ref) == receipt
+    assert await second.reconcile(operation_ref) == receipt
+    assert second_delegate.calls == 0
+
+
+def test_telegram_bindings_survive_store_restart(config, tmp_path) -> None:
+    isolated = replace(
+        config,
+        auth_database_path=str(tmp_path / "telegram-auth.sqlite"),
+        universal_social_enabled=True,
+        universal_social_telegram_enabled=True,
+        universal_social_dm_enabled=True,
+    )
+    first = InMemoryTelegramOpaqueRefStore(isolated)
+    binding = first.mint_target(
+        entity={"id": 42},
+        kind=SocialTargetKind.USER,
+        title="Exact person",
+        canonical_handle="exact_person",
+        profile_link="https://t.me/exact_person",
+        is_self=False,
+    )
+    second = InMemoryTelegramOpaqueRefStore(isolated)
+    assert second.resolve_target(binding.target_ref).title == "Exact person"
 
 
 def test_workspace_builder_is_lazy_and_matches_enabled_providers(config) -> None:

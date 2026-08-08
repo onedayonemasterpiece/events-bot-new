@@ -147,7 +147,7 @@ _CALLS: Mapping[str, _CallPolicy] = {
     "wall_feed": _policy(VKActor.PUBLIC_READER, "read_public", "wall.get", ["owner_id", "count", "filter"], ["offset"]),
     "wall_item": _policy(VKActor.PUBLIC_READER, "read_public", "wall.getById", ["posts"], ["extended"]),
     "wall_search": _policy(VKActor.PUBLIC_READER, "search_public", "wall.search", ["owner_id", "query", "count"], ["offset", "owners_only"]),
-    "newsfeed_search": _policy(VKActor.DIALOG_READER, "search_newsfeed", "newsfeed.search", ["q", "count"], ["start_from"]),
+    "newsfeed_search": _policy(VKActor.PUBLIC_READER, "search_public", "newsfeed.search", ["q", "count"], ["start_from"]),
     "wall_comments": _policy(VKActor.PUBLIC_READER, "read_public", "wall.getComments", ["owner_id", "post_id", "count"], ["offset", "extended", "sort"]),
     "wall_likes": _policy(VKActor.PUBLIC_READER, "read_public", "likes.getList", ["type", "owner_id", "item_id", "count"], ["extended"]),
     "dialog_history": _policy(VKActor.DIALOG_READER, "dialogs", "messages.getHistory", ["peer_id", "count"], ["offset", "start_message_id", "rev"]),
@@ -235,9 +235,6 @@ class VKWorkspaceAdapter:
         self._timeout = float(timeout_seconds)
         self._lock = asyncio.Lock()
         self._action_lock = asyncio.Lock()
-        self._cursor_secret = secrets.token_bytes(32)
-        self._cursors: dict[str, _CursorBinding] = {}
-        self._samples: dict[str, int] = {}
         self._operations: dict[str, dict[str, Any]] = {}
         self._idempotency: dict[str, tuple[str, str]] = {}
         self._operation_claims: dict[str, tuple[str, str]] = {}
@@ -355,34 +352,42 @@ class VKWorkspaceAdapter:
         operation, resource, query, sample, read_access = self._cursor_context(request, sample_ref)
         nonce = secrets.token_hex(8)
         binding = _CursorBinding(operation, resource, query, sample, read_access, offset, nonce)
-        payload = self._cursor_payload(binding)
-        signature = hmac.new(self._cursor_secret, payload.encode(), hashlib.sha256).hexdigest()[:32]
-        token = f"cur_{nonce}_{signature}"
-        self._cursors[token] = binding
-        return token
+        try:
+            return self._refs.mint(
+                "cursor",
+                {
+                    "operation": binding.operation,
+                    "resource_fingerprint": binding.resource_fingerprint,
+                    "query_fingerprint": binding.query_fingerprint,
+                    "sample_ref": binding.sample_ref,
+                    "read_access": binding.read_access,
+                    "offset": binding.offset,
+                    "nonce": binding.nonce,
+                },
+            )
+        except Exception:  # noqa: BLE001 - opaque cursor failures are normalized
+            raise VKWorkspaceError("cursor_invalid") from None
 
     def _offset(self, request: SocialReadRequest) -> int:
         if request.cursor is None:
             return 0
-        binding = self._cursors.get(request.cursor)
-        if binding is None:
+        try:
+            stored = self._refs.resolve("cursor", request.cursor)
+            binding = _CursorBinding(
+                str(stored["operation"]),
+                str(stored["resource_fingerprint"]),
+                str(stored["query_fingerprint"]),
+                str(stored["sample_ref"]),
+                str(stored["read_access"]),
+                int(stored["offset"]),
+                str(stored["nonce"]),
+            )
+        except Exception:  # noqa: BLE001 - normalize opaque cursor failures
             raise VKWorkspaceError("cursor_invalid")
         expected = self._cursor_context(request)
         if (binding.operation, binding.resource_fingerprint, binding.query_fingerprint, binding.sample_ref, binding.read_access) != expected:
             raise VKWorkspaceError("cursor_context_mismatch")
-        payload = self._cursor_payload(binding)
-        expected_token = f"cur_{binding.nonce}_{hmac.new(self._cursor_secret, payload.encode(), hashlib.sha256).hexdigest()[:32]}"
-        if not hmac.compare_digest(request.cursor, expected_token):
-            raise VKWorkspaceError("cursor_invalid")
         return binding.offset
-
-    @staticmethod
-    def _cursor_payload(binding: _CursorBinding) -> str:
-        return json.dumps({
-            "operation": binding.operation, "resource_fingerprint": binding.resource_fingerprint,
-            "query_fingerprint": binding.query_fingerprint, "sample_ref": binding.sample_ref,
-            "read_access": binding.read_access, "offset": binding.offset, "nonce": binding.nonce,
-        }, sort_keys=True, separators=(",", ":"))
 
     def _target_kind(self, native: Mapping[str, Any]) -> SocialTargetKind:
         try:
@@ -642,11 +647,24 @@ class VKWorkspaceAdapter:
         offset = self._offset(request)
         sample_ref = request.sample_ref
         if sample_ref is None:
-            sample_ref = "smp_" + hashlib.sha256(f"vk:{request.target_ref}:{len(self._samples)}".encode()).hexdigest()[:32]
-            self._samples[sample_ref] = 0
-        if sample_ref not in self._samples:
+            sample_ref = self._refs.mint(
+                "sample", {"target_ref": request.target_ref, "cumulative": 0}
+            )
+        try:
+            sample_state = self._refs.resolve("sample", sample_ref)
+        except Exception:  # noqa: BLE001 - initialize only the runtime-bound sample ref
+            put_named = getattr(self._refs, "put_named", None)
+            if request.sample_ref is None or not callable(put_named):
+                raise VKWorkspaceError("sample_state_invalid") from None
+            put_named(
+                "sample",
+                sample_ref,
+                {"target_ref": request.target_ref, "cumulative": 0},
+            )
+            sample_state = self._refs.resolve("sample", sample_ref)
+        if sample_state.get("target_ref") != request.target_ref:
             raise VKWorkspaceError("sample_state_invalid")
-        cumulative = self._samples[sample_ref]
+        cumulative = _int(sample_state.get("cumulative")) or 0
         remaining = min(request.total_limit, _MAX_EDITORIAL_TOTAL) - cumulative
         count = min(page_size, max(0, remaining))
         group_response, wall_response = await asyncio.gather(
@@ -678,7 +696,14 @@ class VKWorkspaceAdapter:
             item["caption"] = item["caption"][:256]
             selected.append(item)
         cumulative += len(selected)
-        self._samples[sample_ref] = cumulative
+        put_named = getattr(self._refs, "put_named", None)
+        if not callable(put_named):
+            raise VKWorkspaceError("sample_state_invalid")
+        put_named(
+            "sample",
+            sample_ref,
+            {"target_ref": request.target_ref, "cumulative": cumulative},
+        )
         output: dict[str, Any] = {
             "sample_ref": sample_ref,
             "target": {

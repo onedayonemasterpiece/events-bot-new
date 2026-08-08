@@ -9,6 +9,8 @@ from typing import Any
 
 import pytest
 
+from private_events_mcp.auth_store import OAuthStateStore
+from private_events_mcp.crypto import AccessIdentity
 from private_events_mcp.social_workspace import (
     EditorialSampleState,
     SocialReadPurpose,
@@ -18,6 +20,11 @@ from private_events_mcp.social_workspace import (
     validate_prepare_request,
     validate_read_request,
 )
+from private_events_mcp.social_workspace_runtime import (
+    RuntimePrincipal,
+    SocialWorkspaceRuntime,
+)
+from private_events_mcp.tool_catalog import ToolCallContext
 from private_events_mcp_vk_adapter import (
     VK_API_VERSION,
     VK_FIXED_METHOD_ALLOWLIST,
@@ -34,13 +41,19 @@ class FakeRefs:
 
     def mint(self, kind: str, native_value: Mapping[str, Any]) -> str:
         raw = json.dumps(dict(native_value), sort_keys=True, separators=(",", ":"))
-        prefix = {"target": "tgt", "item": "itm", "asset": "ast"}[kind]
+        prefix = {
+            "target": "tgt", "item": "itm", "asset": "ast",
+            "cursor": "cur", "sample": "smp",
+        }[kind]
         ref = f"{prefix}_{hashlib.sha256((kind + raw).encode()).hexdigest()[:24]}"
         self.values[(kind, ref)] = dict(native_value)
         return ref
 
     def resolve(self, kind: str, opaque_ref: str) -> Mapping[str, Any]:
         return dict(self.values[(kind, opaque_ref)])
+
+    def put_named(self, kind: str, opaque_ref: str, value: Mapping[str, Any]) -> None:
+        self.values[(kind, opaque_ref)] = dict(value)
 
 
 class FakeGovernor:
@@ -206,7 +219,7 @@ async def test_fixed_allowlist_version_and_exact_resolution_without_native_id_le
 async def test_named_community_editorial_sample_pages_to_100_with_metadata_and_schema(workspace) -> None:
     adapter, transport, refs, _, _ = workspace
     target_ref = mint_target(refs)
-    request = read_request("editorial_sample", target_ref=target_ref, expected_target_kinds=["community"], read_access="public", purpose="editorial_analysis", page_size=25, total_limit=100)
+    request = read_request("editorial_sample", target_ref=target_ref, expected_target_kinds=["community"], read_access="public", purpose="editorial_analysis", authorization_basis="operator_authorized", page_size=25, total_limit=100)
     pages = []
     cumulative = 0
     for _ in range(4):
@@ -234,11 +247,64 @@ async def test_named_community_editorial_sample_pages_to_100_with_metadata_and_s
 
 
 @pytest.mark.asyncio
+async def test_runtime_and_real_vk_adapter_share_server_sample_across_four_pages(
+    workspace, tmp_path,
+) -> None:
+    adapter, transport, refs, _, _ = workspace
+    runtime = SocialWorkspaceRuntime(
+        store=OAuthStateStore(str(tmp_path / "auth.sqlite")),
+        adapters={"vk": adapter},
+        encryption_key="runtime-vk-integration-key-123456",
+    )
+    identity = AccessIdentity(
+        "operator",
+        "chatgpt",
+        frozenset({"vk:read:public"}),
+        "https://mcp.example",
+        "jti",
+        2_000_000_000,
+    )
+    context = ToolCallContext(identity, identity.audience)
+    native_target = mint_target(refs)
+    public_target = runtime._mint_ref(
+        "target",
+        native_target,
+        "vk",
+        RuntimePrincipal.from_context(context),
+    )
+    payload: dict[str, Any] = {
+        "platform": "vk",
+        "operation": "editorial_sample",
+        "target_ref": public_target,
+        "expected_target_kinds": ["community"],
+        "read_access": "public",
+        "purpose": "editorial_analysis",
+        "authorization_basis": "operator_authorized",
+        "page_size": 25,
+        "total_limit": 100,
+    }
+    pages = []
+    for _ in range(4):
+        page = await runtime.read(validate_read_request(payload), context)
+        pages.append(page)
+        if page.get("next_cursor"):
+            payload.update(
+                sample_ref=page["sample_ref"],
+                cursor=page["next_cursor"],
+            )
+    assert [page["cumulative_count"] for page in pages] == [25, 50, 75, 100]
+    assert pages[-1].get("next_cursor") is None
+    assert len({page["sample_ref"] for page in pages}) == 1
+    wall_calls = [call for call in transport.calls if call["method"] == "wall.get"]
+    assert [call["params"]["offset"] for call in wall_calls] == [0, 25, 50, 75]
+
+
+@pytest.mark.asyncio
 async def test_editorial_sample_keeps_ads_reposts_and_pinned_out_of_owner_post_items(workspace) -> None:
     adapter, transport, refs, _, _ = workspace
     transport.flagged_wall = True
     target_ref = mint_target(refs)
-    page = await adapter.read(read_request("editorial_sample", target_ref=target_ref, expected_target_kinds=["community"], read_access="public", purpose="editorial_analysis", page_size=5, total_limit=100))
+    page = await adapter.read(read_request("editorial_sample", target_ref=target_ref, expected_target_kinds=["community"], read_access="public", purpose="editorial_analysis", authorization_basis="operator_authorized", page_size=5, total_limit=100))
     assert page["sampled_count"] == 2
     assert [item["text"].split()[1] for item in page["items"]] == ["4", "5"]
     assert all(set(item).isdisjoint({"marked_as_ads", "copy_history", "is_pinned"}) for item in page["items"])

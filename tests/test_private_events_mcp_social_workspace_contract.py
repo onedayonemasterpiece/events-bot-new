@@ -172,6 +172,7 @@ def _editorial(**updates: Any) -> dict[str, Any]:
         "expected_target_kinds": ["community"],
         "read_access": "public",
         "purpose": "editorial_analysis",
+        "authorization_basis": "operator_authorized",
         "date_from": "2026-07-01",
         "date_to": "2026-08-08",
         "page_size": 25,

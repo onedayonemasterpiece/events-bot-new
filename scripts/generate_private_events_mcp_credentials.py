@@ -96,8 +96,6 @@ def main() -> int:
                     "reaction",
                     "comment",
                     "schedule",
-                    "story:read",
-                    "story:write",
                     "analytics",
                     "audience",
                 )
@@ -134,8 +132,6 @@ def main() -> int:
                     "reaction",
                     "comment",
                     "schedule",
-                    "story:read",
-                    "story:write",
                     "analytics",
                     "audience",
                 )

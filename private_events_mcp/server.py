@@ -30,6 +30,7 @@ from .protocol import (
 from .repository import EventsEvidenceRepository
 from .social import SocialAdapter, TargetAliasPolicy, build_social_tools
 from .social_workspace_runtime import (
+    SocialBudgetLimits,
     SocialWorkspaceAdapter,
     SocialWorkspaceRuntime,
     SocialWorkspaceRuntimeError,
@@ -85,6 +86,17 @@ class PrivateEventsMCPServer:
                 preparation_ttl_seconds=config.social_ticket_ttl_seconds,
                 response_cap_bytes=config.max_response_bytes,
                 approval_url_base=config.social_approval_url,
+                budget_limits=SocialBudgetLimits(
+                    attempts=config.social_publish_attempts_per_day
+                ),
+                budget_dimension_limits={
+                    "attempts": {
+                        "global": config.social_publish_attempts_per_day * 10,
+                        "principal": config.social_publish_attempts_per_day,
+                        "target": config.social_publish_attempts_per_day,
+                        "action": config.social_publish_attempts_per_day,
+                    }
+                },
             )
             workspace_tools = build_social_workspace_tools(
                 self.social_workspace,

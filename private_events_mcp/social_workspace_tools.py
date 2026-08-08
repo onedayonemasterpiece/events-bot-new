@@ -46,13 +46,22 @@ from .tool_catalog import ToolCallContext, ToolSpec
 _PLATFORMS = ("telegram", "vk")
 
 
-def _read_schema(operation: SocialReadOperation) -> dict[str, Any]:
+def _read_schema(
+    operation: SocialReadOperation,
+    *,
+    read_access_values: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
     schema = copy.deepcopy(dict(SOCIAL_WORKSPACE_READ_SCHEMA))
     schema["properties"]["operation"] = {"const": operation.value}
     required = list(schema.get("required", []))
     if "operation" not in required:
         required.append("operation")
     schema["required"] = required
+    if read_access_values is not None:
+        schema["properties"]["read_access"] = {
+            "type": "string",
+            "enum": list(read_access_values),
+        }
     return schema
 
 
@@ -123,6 +132,26 @@ def build_social_workspace_tools(
     def enabled(name: str) -> bool:
         return policy_allows(feature_policy, name) and policy_allows(capability_policy, name)
 
+    action_features = {
+        SocialAction.SEND_MESSAGE: "dm",
+        SocialAction.PUBLISH: "post",
+        SocialAction.COMMENT: "post",
+        SocialAction.REACTION: "post",
+        SocialAction.FORWARD: "post",
+        SocialAction.SCHEDULE: "post",
+        SocialAction.EDIT: "edit_delete",
+        SocialAction.DELETE: "edit_delete",
+        SocialAction.STORY: "media_story",
+    }
+    enabled_actions = tuple(
+        action for action, feature in action_features.items() if enabled(feature)
+    )
+    read_access_values = (
+        ("public", "private", "dialogs")
+        if enabled("private_read")
+        else ("public",)
+    )
+
     def require_platform(platform: Any) -> str:
         if not isinstance(platform, str) or platform not in enabled_platforms:
             raise InvalidArgumentsError("platform is unavailable")
@@ -133,14 +162,24 @@ def build_social_workspace_tools(
             return exc
         return InvalidArgumentsError("social workspace request rejected")
 
-    all_scope_options = tuple(
-        frozenset({f"{platform}:{suffix}"})
+    read_suffixes = ["discover", "read:public", "analytics", "audience"]
+    if enabled("private_read"):
+        read_suffixes.extend(("read:private", "read:dialogs"))
+    if enabled("media_story"):
+        read_suffixes.append("story:read")
+    allowed_scopes = {
+        f"{platform}:{suffix}"
         for platform in enabled_platforms
-        for suffix in (
-            "discover", "read:public", "read:private", "read:dialogs", "dm:send",
-            "post:publish", "edit", "delete", "forward", "reaction", "comment",
-            "schedule", "story:read", "story:write", "analytics", "audience",
-        )
+        for suffix in read_suffixes
+    }
+    allowed_scopes.update(
+        scope
+        for platform in enabled_platforms
+        for action in enabled_actions
+        for scope in required_scope_for_action(platform, action)
+    )
+    all_scope_options = tuple(
+        frozenset({scope}) for scope in sorted(allowed_scopes)
     )
 
     def read_scope(arguments: Mapping[str, Any]) -> frozenset[str]:
@@ -161,17 +200,7 @@ def build_social_workspace_tools(
             raise InvalidArgumentsError("social stories are disabled")
 
     def require_action_feature(request: Any) -> None:
-        feature = {
-            SocialAction.SEND_MESSAGE: "dm",
-            SocialAction.PUBLISH: "post",
-            SocialAction.COMMENT: "post",
-            SocialAction.REACTION: "post",
-            SocialAction.FORWARD: "post",
-            SocialAction.SCHEDULE: "post",
-            SocialAction.EDIT: "edit_delete",
-            SocialAction.DELETE: "edit_delete",
-            SocialAction.STORY: "media_story",
-        }[request.action]
+        feature = action_features[request.action]
         if not enabled(feature):
             raise InvalidArgumentsError("social action class is disabled")
         if request.content is not None and request.content.media and not enabled("media_story"):
@@ -315,6 +344,39 @@ def build_social_workspace_tools(
         except Exception as exc:  # noqa: BLE001 - normalize adapter/runtime errors
             raise rejected(exc) from None
 
+    def read_schema(operation: SocialReadOperation) -> dict[str, Any]:
+        return _read_schema(
+            operation,
+            read_access_values=read_access_values,
+        )
+
+    thread_schema = _thread_schema()
+    thread_schema["properties"]["read_access"] = {
+        "type": "string",
+        "enum": list(read_access_values),
+    }
+    analytics_schema = _analytics_schema()
+    analytics_schema["properties"]["read_access"] = {
+        "type": "string",
+        "enum": list(read_access_values),
+    }
+    prepare_schema = copy.deepcopy(dict(SOCIAL_WORKSPACE_PREPARE_SCHEMA))
+    prepare_schema["properties"]["platform"] = {
+        "type": "string",
+        "enum": list(enabled_platforms),
+    }
+    prepare_schema["properties"]["action"] = {
+        "type": "string",
+        "enum": [action.value for action in enabled_actions],
+    }
+    prepare_output_schema = copy.deepcopy(
+        dict(SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA)
+    )
+    prepare_output_schema["properties"]["action"] = {
+        "type": "string",
+        "enum": [action.value for action in enabled_actions],
+    }
+
     capability_schema = {
         "type": "object", "additionalProperties": False,
         "required": ["platform"],
@@ -339,54 +401,54 @@ def build_social_workspace_tools(
                  handler=capabilities, scope_selector=capabilities_scope, **common),
         ToolSpec("social_target_resolve", "Resolve exact social target",
                  "Resolve self or one exact person to a bound opaque target reference.",
-                 _read_schema(SocialReadOperation.RESOLVE_TARGET),
+                 read_schema(SocialReadOperation.RESOLVE_TARGET),
                  SOCIAL_WORKSPACE_TARGET_PREVIEW_SCHEMA, handler=read,
                  scope_selector=read_scope, **common),
         ToolSpec("social_targets_search", "Search social targets",
                  "Search provider targets without exposing provider-native identifiers.",
-                 _read_schema(SocialReadOperation.SEARCH_TARGETS),
+                 read_schema(SocialReadOperation.SEARCH_TARGETS),
                  SOCIAL_WORKSPACE_TARGET_SEARCH_OUTPUT_SCHEMA, handler=read,
                  scope_selector=read_scope, **common),
         ToolSpec("social_targets_list", "List social targets",
                  "List bounded accessible targets as opaque references.",
-                 _read_schema(SocialReadOperation.SEARCH_TARGETS),
+                 read_schema(SocialReadOperation.SEARCH_TARGETS),
                  SOCIAL_WORKSPACE_TARGET_LIST_OUTPUT_SCHEMA, handler=targets_list,
                  scope_selector=read_scope, **common),
         ToolSpec("social_content_search", "Search social content",
                  "Search bounded content with mandatory untrusted-data marking.",
-                 _read_schema(SocialReadOperation.SEARCH_ITEMS),
+                 read_schema(SocialReadOperation.SEARCH_ITEMS),
                  SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA, handler=read,
                  scope_selector=read_scope, **common),
         ToolSpec("social_content_feed", "Read social feed",
                  "Read a bounded feed through an opaque target reference.",
-                 _read_schema(SocialReadOperation.LIST_ITEMS),
+                 read_schema(SocialReadOperation.LIST_ITEMS),
                  SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA, handler=read,
                  scope_selector=read_scope, **common),
         ToolSpec("social_content_item", "Read social item",
                  "Read one item through a bound opaque item reference.",
-                 _read_schema(SocialReadOperation.GET_ITEM),
+                 read_schema(SocialReadOperation.GET_ITEM),
                  SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA, handler=read,
                  scope_selector=read_scope, **common),
         ToolSpec("social_content_thread", "Read social thread",
                  "Read comments or reaction summaries without native identifiers.",
-                 _thread_schema(), _combined_output(
+                 thread_schema, _combined_output(
                      SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA,
                      SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA,
                  ),
                  handler=read, scope_selector=read_scope, **common),
         ToolSpec("social_content_stories", "Read social stories",
                  "Read a bounded stories page through provider-neutral contracts.",
-                 _read_schema(SocialReadOperation.LIST_STORIES),
+                 read_schema(SocialReadOperation.LIST_STORIES),
                  SOCIAL_WORKSPACE_STORIES_OUTPUT_SCHEMA, handler=read,
                  scope_selector=read_scope, **common),
         ToolSpec("social_content_editorial_sample", "Sample editorial content",
                  "Read an ephemeral server-cursored editorial sample, cumulatively capped at 100.",
-                 _read_schema(SocialReadOperation.EDITORIAL_SAMPLE),
+                 read_schema(SocialReadOperation.EDITORIAL_SAMPLE),
                  SOCIAL_WORKSPACE_EDITORIAL_SAMPLE_SCHEMA, handler=read,
                  scope_selector=read_scope, **common),
         ToolSpec("social_content_analytics", "Read social analytics",
                  "Read bounded provider-neutral statistics or audience counts.",
-                 _analytics_schema(), _combined_output(
+                 analytics_schema, _combined_output(
                      SOCIAL_WORKSPACE_STATISTICS_OUTPUT_SCHEMA,
                      SOCIAL_WORKSPACE_AUDIENCE_OUTPUT_SCHEMA,
                  ),
@@ -406,7 +468,7 @@ def build_social_workspace_tools(
                  scope_selector=asset_status_scope, **common),
         ToolSpec("social_action_prepare", "Prepare social action",
                  "Persist an exact action digest for external human approval; this never executes it.",
-                 SOCIAL_WORKSPACE_PREPARE_SCHEMA, SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA,
+                 prepare_schema, prepare_output_schema,
                  handler=prepare, scope_selector=action_scope,
                  read_only=False, idempotent=True, **common),
         ToolSpec("social_action_commit", "Commit approved social action",
@@ -422,7 +484,23 @@ def build_social_workspace_tools(
                  SOCIAL_WORKSPACE_STATUS_SCHEMA, SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA,
                  handler=status, scope_selector=status_scope, **common),
     ]
-    return tuple(spec for spec in specs if enabled(spec.name))
+    action_tool_names = {
+        "social_action_prepare",
+        "social_action_commit",
+        "social_action_status",
+    }
+    feature_tools = {
+        "social_content_stories": "media_story",
+        "social_asset_stage": "media_story",
+        "social_asset_status": "media_story",
+    }
+    return tuple(
+        spec
+        for spec in specs
+        if enabled(spec.name)
+        and (enabled_actions or spec.name not in action_tool_names)
+        and enabled(feature_tools.get(spec.name, spec.name))
+    )
 
 
 __all__ = ["build_social_workspace_tools"]

@@ -483,12 +483,28 @@ def test_social_kill_switches_default_off_and_parse_strictly(monkeypatch) -> Non
     assert all(not getattr(config, field) for field in _SOCIAL_SWITCH_ENV.values())
 
     for name in _SOCIAL_SWITCH_ENV:
+        if name == "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED":
+            continue
         monkeypatch.setenv(name, "true")
     monkeypatch.setenv(
         "PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN", "approval_" + "a" * 48
     )
     configured = PrivateEventsMCPConfig.from_env()
-    assert all(getattr(configured, field) for field in _SOCIAL_SWITCH_ENV.values())
+    assert all(
+        getattr(configured, field)
+        for name, field in _SOCIAL_SWITCH_ENV.items()
+        if name != "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED"
+    )
+    assert configured.universal_social_media_story_enabled is False
+
+    monkeypatch.setenv(
+        "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED", "true"
+    )
+    with pytest.raises(ValueError, match="authenticated upload storage"):
+        PrivateEventsMCPConfig.from_env()
+    monkeypatch.setenv(
+        "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED", "false"
+    )
 
     monkeypatch.setenv("PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_DM_ENABLED", "enabled")
     with pytest.raises(

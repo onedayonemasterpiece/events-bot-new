@@ -66,6 +66,9 @@ ChatGPT social scopes are granular by provider and action class:
 
 `<provider>` is `telegram` or `vk`. Granting a scope does not bypass a runtime
 kill switch, current provider rights, request budgets, or human approval.
+The two `story:*` names are reserved in the policy vocabulary, but are not
+requested by the credential generator and have no activatable production tool
+until the authenticated upload/storage gate is implemented.
 Legacy `telegram:read|publish` and `vk:read|publish` remain only for the narrow
 compatibility implementation when the universal workspace master switch is off;
 they do not alias to the granular workspace scopes.
@@ -106,11 +109,8 @@ matching its granted scopes and the enabled provider/capability flags:
 | `social_content_feed` | bounded target feed/history |
 | `social_content_item` | fetch one bound item |
 | `social_content_thread` | comments or reaction summaries |
-| `social_content_stories` | bounded story reads when enabled and supported |
 | `social_content_editorial_sample` | purpose-bound editorial sample, at most 25 items/page and 100 cumulatively |
 | `social_content_analytics` | bounded aggregate statistics/audience counts where the credential is entitled |
-| `social_asset_stage` | bind an already accepted upload/provider-media handle to an opaque asset ref |
-| `social_asset_status` | inspect staged asset state |
 | `social_action_prepare` | freeze exact typed action/content/target/media digest; no provider call |
 | `social_action_commit` | consume server-recorded human approval, then make the sole provider attempt |
 | `social_action_status` | reconcile durable success/failure/outcome-unknown state |
@@ -124,7 +124,9 @@ bulk indexer:
 
 - page size is at most 25 and the server cursor enforces a cumulative maximum of
   100 for the exact target, purpose and access class;
-- the caller must state the editorial purpose and authorization/consent basis;
+- the caller must state the editorial purpose and one closed authorization
+  basis: `self_owned`, `operator_authorized`, or `provider_approved`; that basis
+  is bound into the server sample state and its sanitized audit receipt;
 - the cursor and sample ref cannot be replayed for another target or access
   class;
 - provider text is clipped, recursively redacted, marked
@@ -134,8 +136,8 @@ bulk indexer:
 
 ### Communication and mutation
 
-The workspace uses typed actions such as `send_message`, `publish`, `comment`,
-`reaction`, `forward`, `schedule`, `edit`, `delete` and `story`. The target and
+The active workspace uses typed actions such as `send_message`, `publish`,
+`comment`, `reaction`, `forward`, `schedule`, `edit` and `delete`. The target and
 source item are provider-resolved opaque refs. Saved Messages is a first-class
 Telegram self target; an exact user/DM is resolved and previewed as that person,
 not as an alias guessed by the model.
@@ -147,7 +149,8 @@ Every external mutation follows:
 2. it persists only the exact canonical digest and returns an operator approval
    URL; it does not call the provider;
 3. the operator opens that URL, enters the separate approval token, inspects the
-   exact target/action/text/media fingerprints and confirms in the browser;
+   exact human-readable target, destination, source item, action and text, then
+   confirms in the browser; an opaque-only target/item preview fails closed;
 4. `social_action_commit` accepts only the preparation ref and digest. It
    atomically consumes the server-side approval before one provider attempt;
 5. `social_action_status` or read-after-write evidence reconciles the receipt.
@@ -170,10 +173,12 @@ PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_EDIT_DELETE_ENABLED
 PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED
 ```
 
-Child switches cannot enable a disabled master/provider. Keep media/story off
-until the production account capability and accepted upload-handle path have
-passed their separate live canary. Text in a social message is never treated as
-a media URL to fetch.
+Child switches cannot enable a disabled master/provider. Media/story activation
+is currently rejected by configuration: there is no authenticated byte-bound
+upload route yet, so `PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED=1`
+fails startup validation instead of exposing placeholder asset/story tools.
+The generator does not request story scopes. Text in a social message is never
+treated as a media URL to fetch.
 
 ## Provider boundary
 
@@ -189,14 +194,16 @@ for the API pair). It never falls back to `TELEGRAM_AUTH_BUNDLE_E2E`,
 `TELEGRAM_SESSION`, `TELEGRAM_AUTH_BUNDLE_S22`, or the bot token.
 
 The dedicated Telethon workspace provides typed resolve/read/search/editorial
-sample/basic statistics/story and action operations. It supports Saved via the
+sample/basic statistics and text action operations. It supports Saved via the
 authorized account itself and exact-person/dialog resolution. Opaque refs hide
 provider access hashes. Cross-process SQLite fencing serializes the dedicated
 session, persists FloodWait/cooldown state, and rejects a lost lease. Live
 rights and granular `ChatBannedRights` are rechecked before mutation. The
 adapter carries immutable peer snapshots through preflight, atomically claims
 caller-issued operation refs, and preserves timeout/lost-fence outcomes for
-reconciliation.
+reconciliation. Encrypted target/item/cursor bindings and operation receipts are
+kept in the isolated auth database, so an approval or reconciliation does not
+lose its provider binding on process restart.
 
 ### VK
 
@@ -219,6 +226,9 @@ only sanitized provider error codes. Public-wall and private-dialog access are
 separate; a public scope cannot route to conversation history. Cursor context
 binds target, operation and access class. Writes bind the full intent digest and
 operation ref so concurrent or mutated replays cannot duplicate provider work.
+Encrypted provider refs, sample/cursor state and action receipts survive process
+restart; an interrupted unreceipted operation becomes non-retryable
+`outcome_unknown` rather than being executed again.
 
 ## Privacy, untrusted data and logs
 
@@ -233,8 +243,12 @@ Access logs redact the private route, bearer/basic authorization and configured
 secrets before stdout/runtime-log mirror. Provider logs contain no message body,
 raw target, token, idempotency value or provider payload. Approval/audit ledgers
 store hashes and bounded public summaries, not credentials or private message
-bodies. The isolated OAuth/social state DB is created mode `0600` and remains
-separate from `/data/db.sqlite`.
+bodies; the exact approval preview is encrypted at rest. The isolated
+OAuth/social state DB is created mode `0600` and remains
+separate from `/data/db.sqlite`; provider bindings are encrypted before storage.
+Publication attempts are charged before transport against durable UTC-day
+global/principal/target/action limits (the configured per-principal default is
+`PRIVATE_EVENTS_MCP_SOCIAL_PUBLISH_ATTEMPTS_PER_DAY=10`).
 
 ## Environment and credentials
 
@@ -330,8 +344,9 @@ Record all of the following without secrets:
 6. unsupported MCP protocol version and JSON-RPC batch return HTTP 400;
 7. nested synthetic credentials and provider native identifiers never appear in
    responses, logs or artifacts;
-8. targeted editorial canary reads the named target in pages and cannot exceed
-   100 or replay a cursor against another target/access class;
+8. targeted editorial canary records its closed authorization basis, reads the
+   named target in pages and cannot exceed 100 or replay a cursor against
+   another target/access class;
 9. Telegram Saved canary prepares, browser-approves, commits exact text, then
    reads back the exact provider receipt/message; do not auto-delete it;
 10. one explicitly authorized exact-person reminder canary resolves and previews
@@ -341,11 +356,13 @@ Record all of the following without secrets:
 12. mutations fail before provider transport when scope, feature flag, current
     rights, target/item binding, approval, budget or idempotency is invalid;
 13. provider timeout/fence loss remains outcome-unknown and reconciliation does
-    not blind-retry;
+    not blind-retry; encrypted provider refs/cursors/receipts remain usable
+    after a controlled restart, while an interrupted action remains unknown;
 14. provider call evidence is zero for Codex/evidence queries and accurately
     attributed for the separately approved social canary;
 15. webhook latency/errors, scheduler/jobs, runtime-log mirror, disk free space
-    and auth DB permissions show no regression.
+    and auth DB permissions show no regression; the auth/provider state file is
+    `0600` from creation and daily attempt budget rows use the current UTC date.
 
 Rollback: turn `PRIVATE_EVENTS_MCP_ENABLED=0` (or the universal social master
 switch off for a social-only rollback) and redeploy the exact approved main SHA.

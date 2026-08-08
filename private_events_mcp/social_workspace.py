@@ -80,6 +80,12 @@ class SocialReadPurpose(_StringEnum):
     EDITORIAL_ANALYSIS = "editorial_analysis"
 
 
+class EditorialAuthorizationBasis(_StringEnum):
+    SELF_OWNED = "self_owned"
+    OPERATOR_AUTHORIZED = "operator_authorized"
+    PROVIDER_APPROVED = "provider_approved"
+
+
 class SocialItemKind(_StringEnum):
     MESSAGE = "message"
     POST = "post"
@@ -351,6 +357,7 @@ class SocialReadRequest:
     total_limit: int
     read_access: SocialReadAccess | None
     expected_target_kinds: tuple[SocialTargetKind, ...]
+    authorization_basis: EditorialAuthorizationBasis | None = None
 
     @property
     def required_scopes(self) -> frozenset[str]:
@@ -785,6 +792,7 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
             "platform", "operation", "target_ref", "item_ref", "query", "cursor", "limit",
             "item_kinds", "target_locator", "purpose", "sample_ref", "date_from", "date_to",
             "page_size", "total_limit", "read_access", "expected_target_kinds",
+            "authorization_basis",
         },
         "request",
     )
@@ -832,6 +840,15 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
     purpose = (
         _enum(data.get("purpose"), SocialReadPurpose, "purpose")
         if "purpose" in data
+        else None
+    )
+    authorization_basis = (
+        _enum(
+            data.get("authorization_basis"),
+            EditorialAuthorizationBasis,
+            "authorization_basis",
+        )
+        if "authorization_basis" in data
         else None
     )
     sample_ref = data.get("sample_ref")
@@ -885,6 +902,10 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
             raise SocialWorkspaceValidationError("target_ref is required for editorial sample")
         if purpose is not SocialReadPurpose.EDITORIAL_ANALYSIS:
             raise SocialWorkspaceValidationError("editorial_analysis purpose is required")
+        if authorization_basis is None:
+            raise SocialWorkspaceValidationError(
+                "editorial sample authorization_basis is required"
+            )
         if read_access not in {SocialReadAccess.PUBLIC, SocialReadAccess.PRIVATE}:
             raise SocialWorkspaceValidationError("editorial sample requires public or private access")
         allowed_editorial_targets = {
@@ -934,6 +955,7 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
         total_limit=total_limit,
         read_access=read_access,
         expected_target_kinds=expected_target_kinds,
+        authorization_basis=authorization_basis,
     )
 
 
@@ -1713,6 +1735,10 @@ SOCIAL_WORKSPACE_READ_SCHEMA: Mapping[str, Any] = {
         },
         "target_locator": {"$ref": "#/$defs/target_locator"},
         "purpose": {"type": "string", "enum": _enum_values(SocialReadPurpose)},
+        "authorization_basis": {
+            "type": "string",
+            "enum": _enum_values(EditorialAuthorizationBasis),
+        },
         "sample_ref": {"type": "string", "pattern": r"^smp_[A-Za-z0-9_-]{24,160}$"},
         "date_from": {"type": "string", "format": "date"},
         "date_to": {"type": "string", "format": "date"},
@@ -2319,6 +2345,7 @@ __all__ = [
     "CapabilityHook",
     "ContentFeature",
     "DurableIdempotencyReservation",
+    "EditorialAuthorizationBasis",
     "EditorialSampleState",
     "EditorialSampleStateHook",
     "ExecutionSafetyHooks",

@@ -325,6 +325,11 @@ class PrivateEventsMCPConfig:
             raise ValueError(
                 "PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN must contain at least 32 characters"
             )
+        if self.universal_social_media_story_enabled:
+            raise ValueError(
+                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED is unavailable "
+                "until authenticated upload storage passes its production gate"
+            )
 
     @property
     def private_prefix(self) -> str:

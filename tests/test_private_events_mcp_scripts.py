@@ -75,7 +75,7 @@ def test_generator_stdout_redacts_private_endpoint(tmp_path: Path) -> None:
     )
     assert "telegram:post:publish" in social["chatgpt"]["oauth_scopes"]
     assert "telegram:dm:send" in social["chatgpt"]["oauth_scopes"]
-    assert "vk:story:write" in social["chatgpt"]["oauth_scopes"]
+    assert "vk:story:write" not in social["chatgpt"]["oauth_scopes"]
     assert "telegram:publish" not in social["chatgpt"]["oauth_scopes"]
 
 
