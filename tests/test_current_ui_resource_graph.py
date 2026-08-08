@@ -705,6 +705,13 @@ def test_exact_candidate_constants_and_retry_bound():
     assert "failed after 3 attempts" in payload["error"]
 
 
+def test_workflow_has_an_explicit_bounded_budget_for_expanded_event_specimens():
+    workflow = (REPO / ".github/workflows/current-ui-resource-graph.yml").read_text()
+    assert "--browser-max-pages 23" in workflow
+    assert "--output-byte-budget 94371840" in workflow
+    assert ".output_byte_budget == 94371840" in workflow
+
+
 def test_partial_receipt_survives_failure(tmp_path):
     source, root_source, runtime, manifest, root_runtime = _fixture(tmp_path)
     payload = json.loads(manifest.read_text())

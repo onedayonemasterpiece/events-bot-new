@@ -81,6 +81,12 @@
   primitive, restore WebView, and still require positive `scrollY` plus final
   card visibility; the reusable mobile E2E skill records this boundary.
 
+- Raised the explicit Current UI graph evidence budget from the old 75 MiB
+  default to a workflow-gated 90 MiB after the new portrait, no-image and
+  poster-companion specimens correctly made the fail-closed decoder exceed the
+  previous cap. The workflow now verifies both the declared budget and actual
+  pre-manifest usage.
+
 - Fixed iOS Search failing after successful auth and vector results when Mobile
   Safari/XCUITest rejected `hideKeyboard` with its exact unsupported-command
   response. The shared mobile helper now matches OTP's best-effort iOS boundary

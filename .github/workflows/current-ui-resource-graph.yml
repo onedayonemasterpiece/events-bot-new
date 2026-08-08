@@ -235,6 +235,7 @@ jobs:
             --candidate-base-url-env CURRENT_UI_GRAPH_CANDIDATE_BASE_URL \
             --browser-observations true \
             --browser-max-pages 23 \
+            --output-byte-budget 94371840 \
             --verify-production-identity true \
             --output "$GRAPH_OUTPUT"
 
@@ -258,6 +259,8 @@ jobs:
             and (.runtime_manifest.production_tree_sha256 == "47df3798686dfbdde43589ba6a6498effd82f6fd091de6883a4899b7b4e57769")
             and (.runtime_planes.current_root_prelaunch.verification == "exact_sha256_match")
             and (.runtime_planes.current_root_prelaunch.html_sha256 == "1c31504d10d9ec66c7fa84ad52c94e6019a741f0ee01826f219578963e0ea21e")
+            and (.output_byte_budget == 94371840)
+            and (.output_bytes_before_manifest < .output_byte_budget)
           ' "$GRAPH_OUTPUT/manifest.json" >/dev/null
           if jq -e 'select(.decision != "NOT_MERGED" or .recommendation != "unresolved")' "$GRAPH_OUTPUT/fragmentation-report.jsonl" >/dev/null; then exit 1; fi
           if jq -e 'select(.decision != "NOT_MERGED" or .recommendation != "unresolved")' "$GRAPH_OUTPUT/candidate-component-graph.jsonl" >/dev/null; then exit 1; fi
