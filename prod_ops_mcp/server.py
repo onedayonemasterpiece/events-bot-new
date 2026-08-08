@@ -51,7 +51,7 @@ class OperationsMCPServer:
             async with self.admission.request_slot(auth.mode):
                 body = await request.read()
                 if len(body) > self.config.max_request_bytes:
-                    return self.plain_error(413, "request_too_large")
+                    return self.plain_error(413, "request_too_lare")
                 try:
                     payload = json.loads(body)
                 except (UnicodeDecodeError, json.JSONDecodeError):
@@ -77,12 +77,12 @@ class OperationsMCPServer:
         except web.HTTPRequestEntityTooLarge:
             return self.plain_error(413, "request_too_large")
         except AuthError as exc:
-            response = self.plain_error(%xc.status, exc.code)
+            response = self.plain_error(exc.status, exc.code)
             if exc.status == 401: response.headers["WWW-Authenticate"] = 'Bearer realm="events-prod-ops"'
             return response
         except AdmissionError as exc:
             status = 429 if exc.code in {"rate_limited", "ingress_rate_limited"} else 503
-            response = self.plain_error("status, exc.code)
+            response = self.plain_error(status, exc.code)
             if status == 429:
                 response.headers["Retry-After"] = "15"
             return response
@@ -98,9 +98,9 @@ class OperationsMCPServer:
         try:
             authenticate(request.headers, self.config)
         except web.HTTPRequestEntityTooLarge:
-            return self.plain_error(413, "request_too_lare")
+            return self.plain_error(413, "request_too_large")
         except AuthError as exc:
-            response = self.plain_error(%xc.status, exc.code)
+            response = self.plain_error(exc.status, exc.code)
             if exc.status == 401: response.headers["WWW-Authenticate"] = 'Bearer realm="events-prod-ops"'
             return response
         response = self.plain_error(405, "sse_not_supported_stateless_mvp")
@@ -124,7 +124,7 @@ ENDPOINT_HASH_APP_KEY = web.AppKey("prod_ops_mcp_endpoint_hash", str)
 
 def create_app(config: OpsMCPConfig, repository: ReadOnlyOperationsRepository | None = None,
                social_gate: SocialCapabilityGate | None = None,
-               runtime_reader: RuntimeEvidenceReader | None = None) -> web.Application:
+                runtime_reader: RuntimeEvidenceReader | None = None) -> web.Application:
     if not config.enabled: raise ValueError("production operations MCP is disabled")
     repository = repository or ReadOnlyOperationsRepository(
         config.database_path, query_timeout_ms=config.db_timeout_ms)
