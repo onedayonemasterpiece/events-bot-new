@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 
 
 _TRUE = {"1", "true", "yes", "on"}
+_FALSE = {"0", "false", "no", "off"}
 _SECRET_RE = re.compile(r"^[A-Za-z0-9_-]{24,160}$")
 _CLIENT_ID_RE = re.compile(r"^[A-Za-z0-9._~-]{8,160}$")
 
@@ -17,6 +18,27 @@ def _bool(name: str, default: bool = False) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in _TRUE
+
+
+def _strict_feature_bool(name: str, *, mcp_enabled: bool) -> bool:
+    """Parse an opt-in capability flag without weakening disabled startup.
+
+    An enabled MCP rejects misspelled boolean values instead of unexpectedly
+    enabling or disabling a sensitive capability.  A disabled MCP remains an
+    inert no-op and deliberately ignores stale malformed MCP-only variables.
+    """
+
+    if not mcp_enabled:
+        return False
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return False
+    normalized = raw.strip().lower()
+    if normalized in _TRUE:
+        return True
+    if normalized in _FALSE:
+        return False
+    raise ValueError(f"{name} must be an explicit boolean")
 
 
 def _int(name: str, default: int, *, low: int, high: int) -> int:
@@ -63,6 +85,14 @@ class PrivateEventsMCPConfig:
     repository_root: str
     repository_slug: str
     repository_sha_file: str
+    universal_social_enabled: bool = False
+    universal_social_telegram_enabled: bool = False
+    universal_social_vk_enabled: bool = False
+    universal_social_private_read_enabled: bool = False
+    universal_social_dm_enabled: bool = False
+    universal_social_post_enabled: bool = False
+    universal_social_edit_delete_enabled: bool = False
+    universal_social_media_story_enabled: bool = False
     social_targets_json: str = ""
     social_ticket_ttl_seconds: int = 300
     social_provider_timeout_seconds: int = 12
@@ -119,6 +149,38 @@ class PrivateEventsMCPConfig:
                 os.getenv("PRIVATE_EVENTS_MCP_REPOSITORY_SHA_FILE")
                 or "/app/.static-site-repo-sha"
             ).strip(),
+            universal_social_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_ENABLED",
+                mcp_enabled=enabled,
+            ),
+            universal_social_telegram_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_TELEGRAM_ENABLED",
+                mcp_enabled=enabled,
+            ),
+            universal_social_vk_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_VK_ENABLED",
+                mcp_enabled=enabled,
+            ),
+            universal_social_private_read_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_PRIVATE_READ_ENABLED",
+                mcp_enabled=enabled,
+            ),
+            universal_social_dm_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_DM_ENABLED",
+                mcp_enabled=enabled,
+            ),
+            universal_social_post_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_POST_ENABLED",
+                mcp_enabled=enabled,
+            ),
+            universal_social_edit_delete_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_EDIT_DELETE_ENABLED",
+                mcp_enabled=enabled,
+            ),
+            universal_social_media_story_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED",
+                mcp_enabled=enabled,
+            ),
             social_targets_json=(
                 os.getenv("PRIVATE_EVENTS_MCP_SOCIAL_TARGETS_JSON") or ""
             ).strip(),

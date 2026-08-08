@@ -15,6 +15,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from aiohttp import web
 
 from .access_policy import (
+    APPROVAL_REQUIRED_SOCIAL_SCOPES,
     CHATGPT_DEFAULT_SCOPES,
     CHATGPT_MAX_SCOPES,
     CODEX_DEFAULT_SCOPES,
@@ -359,13 +360,15 @@ class PrivateOAuthServer:
         social_warning = ""
         if social:
             capability_text += (
-                " Дополнительно запрошены generic-инструменты чтения/публикации "
-                "текста в явно разрешённых Telegram/VK-каналах."
+                " Дополнительно запрошены перечисленные ниже granular social "
+                "capabilities для явно разрешённых Telegram/VK targets."
             )
-            if social & {"telegram:publish", "vk:publish"}:
+            if social & APPROVAL_REQUIRED_SOCIAL_SCOPES:
                 social_warning = (
-                    '<p><strong>Внимание:</strong> publish-scopes разрешают создавать новые '
-                    "сообщения после отдельного prepare/commit шага.</p>"
+                    '<p><strong>Внимание:</strong> mutation-scopes разрешают изменяющие '
+                    "операции только после отдельного external action approval и "
+                    "prepare/commit "
+                    "шага.</p>"
                 )
         body = f"""<!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -647,6 +650,8 @@ class PrivateOAuthServer:
             raise TokenValidationError("wrong_client") from exc
         if resource not in client.allowed_resources:
             raise TokenValidationError("wrong_client")
+        if not identity.scopes.issubset(client.allowed_scopes):
+            raise TokenValidationError("wrong_scope")
         return identity
 
     def challenge(
