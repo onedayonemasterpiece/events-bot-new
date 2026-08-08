@@ -1,0 +1,169 @@
+name: Current UI Resource Graph v0
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_source_sha:
+        description: Exact immutable candidate source SHA
+        required: true
+        default: ef7aa62e45c60f7a12da6160f490719c0721ec03
+      candidate_build_id:
+        description: Exact checked candidate build
+        required: true
+        default: production-secret-20260808T144842-5472a382
+      candidate_run_id:
+        description: Exact static-site pipeline run
+        required: true
+        default: static-site:production-secret-20260808T144842-5472a382:acbd40ef5203
+      snapshot_id:
+        description: Exact source/runtime snapshot
+        required: true
+        default: snapshot-20260808T124842-4786ac53bc
+      snapshot_time:
+        description: Deterministic snapshot timestamp
+        required: true
+        default: 2026-08-08T12:48:42Z
+      candidate_manifest_sha256:
+        description: Exact candidate manifest SHA-256
+        required: true
+        default: d615f6e447dc8c6ae3b876bf4a99123d1c85afee55276c26645f020b26074322
+      astro_version:
+        description: Exact Astro version
+        required: true
+        default: 6.4.8
+      node_version:
+        description: Exact Node version
+        required: true
+        default: 22.12.0
+      root_source_sha:
+        description: Independent current-root source SHA
+        required: true
+        default: 5a9d804438377f65fe4b26bd7019e73626529864
+      root_release_id:
+        description: Independent current-root release
+        required: true
+        default: prelaunch-main-31263560430-1
+      root_actions_run_id:
+        description: Independent current-root Actions run
+        required: true
+        default: "31263560430"
+      root_artifact_id:
+        description: Independent current-root artifact
+        required: true
+        default: "9023507736"
+      root_published_at:
+        description: Independent current-root publication time
+        required: true
+        default: 2026-08-08T15:09:02Z
+      root_runtime_url:
+        description: Public prelaunch root (never the candidate)
+        required: true
+        default: https://kenigevents.ru/
+
+permissions:
+  contents: read
+
+jobs:
+  decode:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      GRAPH_OUTPUT: artifacts/current-ui-resource-graph/${{ inputs.snapshot_id }}
+      PINNED_WORKTREE: ${{ runner.temp }}/current-ui-graph-source
+      CURRENT_UI_GRAPH_CANDIDATE_BASE_URL: ${{ secrets.CURRENT_UI_GRAPH_CANDIDATE_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Initialize failure-safe artifact receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$GRAPH_OUTPUT"
+          printf '%s\n' '{"schema_version":"current_ui_resource_graph_v0","snapshot_time":"${{ inputs.snapshot_time }}","status":"workflow_started"}' > "$GRAPH_OUTPUT/receipt.json"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Materialize exact pinned source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e '${{ inputs.candidate_source_sha }}^{commit}'
+          git worktree add --detach "$PINNED_WORKTREE" '${{ inputs.candidate_source_sha }}'
+
+      - name: Install pinned site parsers and Chromium
+        working-directory: ${{ runner.temp }}/current-ui-graph-source/site
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts
+          npx playwright install --with-deps chromium
+
+      - name: Decode exact current resource graph
+        id: decode
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CURRENT_UI_GRAPH_CANDIDATE_BASE_URL"
+          node scripts/current_ui_resource_graph/decode.mjs \
+            --source-root "$PINNED_WORKTREE/site/src" \
+            --site-root "$PINNED_WORKTREE/site" \
+            --source-sha '${{ inputs.candidate_source_sha }}' \
+            --candidate-build-id '${{ inputs.candidate_build_id }}' \
+            --candidate-run-id '${{ inputs.candidate_run_id }}' \
+            --candidate-snapshot-id '${{ inputs.snapshot_id }}' \
+            --snapshot-id '${{ inputs.snapshot_id }}' \
+            --snapshot-time '${{ inputs.snapshot_time }}' \
+            --candidate-manifest-sha256 '${{ inputs.candidate_manifest_sha256 }}' \
+            --astro-version '${{ inputs.astro_version }}' \
+            --node-version '${{ inputs.node_version }}' \
+            --root-source-sha '${{ inputs.root_source_sha }}' \
+            --root-release-id '${{ inputs.root_release_id }}' \
+            --root-actions-run-id '${{ inputs.root_actions_run_id }}' \
+            --root-artifact-id '${{ inputs.root_artifact_id }}' \
+            --root-published-at '${{ inputs.root_published_at }}' \
+            --root-runtime-url '${{ inputs.root_runtime_url }}' \
+            --candidate-base-url-env CURRENT_UI_GRAPH_CANDIDATE_BASE_URL \
+            --browser-observations true \
+            --browser-max-pages 20 \
+            --verify-production-identity true \
+            --output "$GRAPH_OUTPUT"
+
+      - name: Validate complete graph
+        if: ${{ success() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(manifest.json summary.md source-components.jsonl observed-ui-families.jsonl runtime-observations.jsonl page-families.jsonl desktop-mobile-analysis.jsonl style-observations.jsonl fragmentation-report.jsonl candidate-component-graph.jsonl unresolved-questions.md coverage-report.md screenshots-index.jsonl receipt.json)
+          for file in "${required[@]}"; do test -s "$GRAPH_OUTPUT/$file"; done
+          for file in "$GRAPH_OUTPUT"/*.jsonl; do test -s "$file"; jq -c . "$file" >/dev/null; done
+          jq -e '.status == "complete"' "$GRAPH_OUTPUT/receipt.json" >/dev/null
+          jq -e '.identity_invariant == "candidate_is_not_production_root" and (.constraints.automatic_merge == false)' "$GRAPH_OUTPUT/manifest.json" >/dev/null
+          if jq -e 'select(.decision != "NOT_MERGED" or .recommendation != "unresolved")' "$GRAPH_OUTPUT/fragmentation-report.jsonl" >/dev/null; then exit 1; fi
+          ! grep -R -F "$CURRENT_UI_GRAPH_CANDIDATE_BASE_URL" "$GRAPH_OUTPUT"
+
+      - name: Finalize partial workflow receipt
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$GRAPH_OUTPUT"
+          if ! test -s "$GRAPH_OUTPUT/receipt.json"; then
+            printf '%s\n' '{"schema_version":"current_ui_resource_graph_v0","snapshot_time":"${{ inputs.snapshot_time }}","status":"partial","reason":"workflow_failed_before_decoder_receipt"}' > "$GRAPH_OUTPUT/receipt.json"
+          elif jq -e '.status == "workflow_started"' "$GRAPH_OUTPUT/receipt.json" >/dev/null 2>&1; then
+            printf '%s\n' '{"schema_version":"current_ui_resource_graph_v0","snapshot_time":"${{ inputs.snapshot_time }}","status":"partial","reason":"workflow_failed_before_decoder_completion"}' > "$GRAPH_OUTPUT/receipt.json"
+          fi
+
+      - name: Upload complete or partial graph
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-ui-resource-graph-${{ inputs.snapshot_id }}
+          path: ${{ env.GRAPH_OUTPUT }}
+          if-no-files-found: error
+          retention-days: 30

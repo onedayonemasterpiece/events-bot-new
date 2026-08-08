@@ -18,6 +18,14 @@
   budget. ChatGPT and Codex now have distinct MCP resources; Codex remains
   limited to the seven existing read tools and can never discover social tools.
 
+- Added a deterministic, read-only Current UI Resource Graph v0 decoder for the
+  exact immutable Astro candidate: parser-backed source inventory, streaming
+  all-route structural observations, conservative observed-family and
+  fragmentation hypotheses, independent desktop/mobile evidence, explicit
+  surface coverage, redacted/budgeted JSONL snapshots, failure receipts and an
+  always-uploading GitHub Actions artifact. The decoder keeps candidate and
+  public-root identities separate and never merges or normalizes UI resources.
+
 - Added the disabled-by-default private Events MCP: path-scoped OAuth with
   PKCE, bounded read-only event and incident evidence tools, production smoke
   tooling, and an explicit no-provider-call acceptance gate. Its HTTP transport
