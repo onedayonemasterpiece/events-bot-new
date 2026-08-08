@@ -140,11 +140,15 @@ is marked `untrusted_external_data`.
 Preparation tickets live only in the isolated OAuth SQLite database, never the
 event database. A ticket is one-use and bound to client, subject, resource,
 platform, alias, exact text hash, expiry and idempotency-key hash. Durable
-uniqueness prevents preparing the same idempotency key again after timeout,
-restart, or an unknown provider outcome. The ticket is consumed before the
-provider attempt, so cancellation cannot authorize replay. A persistent UTC
-daily attempt budget, keyed by the same principal/resource/platform/alias
-boundary, defaults to 10 and survives access-token refresh and process restart.
+uniqueness prevents preparing the same idempotency key again for 90 days after
+timeout, restart, or an unknown provider outcome; cleanup keeps the isolated
+auth database bounded. The ticket is consumed before the provider attempt, so
+cancellation cannot authorize replay. A persistent UTC daily attempt budget,
+keyed by the same principal/resource/platform/alias boundary, defaults to 10,
+is reserved atomically when a unique preparation ticket is created, and
+survives access-token refresh and process restart. A provider timeout is
+reported as `outcome=unknown`, `retry_safe=false`; the caller must not retry
+with a new idempotency key because the original publication may have succeeded.
 The separate append-only action audit stores only fixed-shape hashes/fingerprints
 and public aliases—never message text, provider target, ticket, idempotency key,
 receipt, credential, or provider error.
@@ -170,6 +174,10 @@ generic and provider bot tokens, and operator/reviewer email or username
 identifiers while preserving non-secret usage counters such as `total_tokens`.
 Telegram, VK and other source text is explicitly labeled as untrusted external
 data in both search and fetch output and must never be treated as instructions.
+Telegram bot-token shaped values embedded in nested text are redacted. Tool
+calls reject undeclared top-level arguments rather than silently accepting raw
+target IDs, URLs, provider methods, media, edit/delete requests, or future
+platforms.
 
 The core package makes no direct Telegram/VK request and imports no provider
 SDK; only an explicitly injected adapter can perform a provider operation.
@@ -243,8 +251,14 @@ Generate connection material only into a fresh path:
 ```bash
 python scripts/generate_private_events_mcp_credentials.py \
   --base-url https://events-bot-new-wngqia.fly.dev \
-  --output-dir /secure/new-private-events-mcp-credentials
+  --output-dir /secure/new-private-events-mcp-credentials \
+  --enable-chatgpt-social
 ```
+
+Omit `--enable-chatgpt-social` for the least-privilege three-scope read-only
+ChatGPT profile. Supplying the flag is an explicit operator choice that adds
+Telegram/VK read and publish scopes plus `offline_access`; Codex remains fixed
+to the read-only scope maximum in both cases.
 
 The generator refuses an existing output directory, creates the new directory
 as `0700`, and creates every credential/config file atomically as `0600` with
@@ -316,6 +330,10 @@ Activation is accepted only when all of the following are recorded:
 12. nested synthetic credentials do not appear in any tool output.
 13. denied aliases, mutated/expired/replayed tickets, repeated idempotency keys,
     daily-budget overflow and cross-client/resource tokens all fail before a
-    second provider attempt; audit rows contain no raw sensitive values.
+    second provider attempt; denied prepare/publish calls are audited and audit
+    rows contain no raw sensitive values;
+14. provider timeout is surfaced as outcome unknown and unsafe to retry, while
+    Telegram bot-token shaped strings and undeclared tool arguments are removed
+    or rejected before reaching the caller/provider.
 
 Rollback is setting `PRIVATE_EVENTS_MCP_ENABLED=0` and redeploying the exact approved SHA. The OAuth state database can remain on the volume; it is isolated from event data.

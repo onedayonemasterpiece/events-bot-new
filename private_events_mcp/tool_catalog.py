@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Mapping, Sequence
@@ -46,14 +47,39 @@ class ToolSpec:
             return self.scope_selector(arguments)
         return self.scopes
 
-    def descriptor(self) -> dict[str, Any]:
+    def validate_arguments(self, arguments: Mapping[str, Any]) -> None:
+        properties = self.input_schema.get("properties", {})
+        if self.input_schema.get("additionalProperties") is False and isinstance(
+            properties, Mapping
+        ):
+            unknown = sorted(str(key) for key in arguments if key not in properties)
+            if unknown:
+                raise InvalidArgumentsError(
+                    "Unsupported argument field(s): " + ", ".join(unknown)
+                )
+
+    def descriptor(self, granted_scopes: frozenset[str] | None = None) -> dict[str, Any]:
         options = self.scope_options or (self.scopes,)
+        if granted_scopes is not None:
+            options = tuple(option for option in options if option.issubset(granted_scopes))
         schemes = [{"type": "oauth2", "scopes": sorted(option)} for option in options]
+        input_schema = copy.deepcopy(dict(self.input_schema))
+        platform_schema = input_schema.get("properties", {}).get("platform")
+        if self.scope_options and isinstance(platform_schema, dict):
+            allowed_platforms = sorted(
+                {
+                    scope.split(":", 1)[0]
+                    for option in options
+                    for scope in option
+                    if ":" in scope
+                }
+            )
+            platform_schema["enum"] = allowed_platforms
         return {
             "name": self.name,
             "title": self.title,
             "description": self.description,
-            "inputSchema": dict(self.input_schema),
+            "inputSchema": input_schema,
             "outputSchema": dict(self.output_schema),
             "securitySchemes": schemes,
             "annotations": {

@@ -46,9 +46,32 @@ def test_generator_stdout_redacts_private_endpoint(tmp_path: Path) -> None:
     assert len(receipt["endpoint_fingerprint"]) == 12
     assert len(receipt["codex_endpoint_fingerprint"]) == 12
     assert codex_url.endswith("/codex/mcp")
-    assert "telegram:publish" in generated["chatgpt"]["oauth_scopes"]
+    assert "telegram:publish" not in generated["chatgpt"]["oauth_scopes"]
     assert "telegram:publish" not in generated["codex"]["oauth_scopes"]
     assert output.stat().st_mode & 0o777 == 0o700
+
+    social_output = tmp_path / "generated-social"
+    subprocess.run(
+        [
+            sys.executable,
+            str(repo / "scripts/generate_private_events_mcp_credentials.py"),
+            "--base-url",
+            "https://events.example",
+            "--output-dir",
+            str(social_output),
+            "--enable-chatgpt-social",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    social = json.loads(
+        (social_output / "chatgpt-private-app-credentials.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert "telegram:publish" in social["chatgpt"]["oauth_scopes"]
+    assert "vk:publish" in social["chatgpt"]["oauth_scopes"]
 
 
 def test_smoke_receipt_redacts_private_endpoint() -> None:

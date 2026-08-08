@@ -192,7 +192,12 @@ class MCPProtocol:
                 visible = [tool for tool in self.tools if tool.is_visible(identity.scopes)]
             return self._response(
                 request_id,
-                result={"tools": [tool.descriptor() for tool in visible]},
+                result={
+                    "tools": [
+                        tool.descriptor(identity.scopes if identity is not None else None)
+                        for tool in visible
+                    ]
+                },
             )
         if method != "tools/call":
             return self._error(request_id, -32601, "Method not found")
@@ -209,6 +214,7 @@ class MCPProtocol:
         if not self._identity_allowed(identity):
             return self._response(request_id, result=self._auth_result("token target is invalid"))
         try:
+            tool.validate_arguments(arguments)
             required_scopes = tool.required_scopes(arguments)
         except (InvalidArgumentsError, ValueError) as exc:
             return self._response(
@@ -277,7 +283,7 @@ class MCPProtocol:
                     "isError": True,
                 },
             )
-        except (QueryBudgetExceeded, asyncio.TimeoutError):
+        except QueryBudgetExceeded:
             return self._response(
                 request_id,
                 result={
@@ -286,6 +292,41 @@ class MCPProtocol:
                             "type": "text",
                             "text": "Read budget exceeded. Narrow the query or lower the limit.",
                         }
+                    ],
+                    "isError": True,
+                },
+            )
+        except asyncio.TimeoutError:
+            if tool.destructive:
+                structured = {
+                    "outcome": "unknown",
+                    "retry_safe": False,
+                    "instruction": (
+                        "The provider may already have accepted the publication. "
+                        "Do not retry with a new idempotency key."
+                    ),
+                }
+                return self._response(
+                    request_id,
+                    result={
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": (
+                                    "Publication outcome is unknown; do not retry with a new "
+                                    "idempotency key."
+                                ),
+                            }
+                        ],
+                        "structuredContent": structured,
+                        "isError": True,
+                    },
+                )
+            return self._response(
+                request_id,
+                result={
+                    "content": [
+                        {"type": "text", "text": "Tool time budget exceeded."}
                     ],
                     "isError": True,
                 },

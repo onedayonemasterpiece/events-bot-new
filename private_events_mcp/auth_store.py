@@ -199,9 +199,13 @@ class OAuthStateStore:
             (now - 86400, now - 30 * 86400),
         )
         conn.execute("DELETE FROM oauth_audit WHERE created_at < ?", (now - 90 * 86400,))
-        # Preparation rows double as the durable idempotency ledger. They are
-        # intentionally retained so a process restart or later cleanup cannot
-        # make a previously attempted key reusable.
+        # Preparation rows double as a bounded idempotency ledger. The daily
+        # reservation cap bounds growth; a 90-day replay window is far longer
+        # than the five-minute ticket lifetime while keeping the auth DB finite.
+        conn.execute(
+            "DELETE FROM social_preparation_ticket WHERE created_at < ?",
+            (now - 90 * 86400,),
+        )
         old_day = datetime.fromtimestamp(now - 90 * 86400, tz=timezone.utc).date().isoformat()
         conn.execute(
             "DELETE FROM social_publish_daily_budget WHERE budget_day < ?",
@@ -445,6 +449,7 @@ class OAuthStateStore:
         text_hash: str,
         idempotency_key: str,
         expires_at: int,
+        daily_limit: int = 10,
         now: int | None = None,
     ) -> None:
         current = int(time.time()) if now is None else int(now)
@@ -452,6 +457,16 @@ class OAuthStateStore:
             conn.execute("BEGIN IMMEDIATE")
             try:
                 self._cleanup(conn, current)
+                self._reserve_publish_attempt_on_conn(
+                    conn,
+                    client_id=client_id,
+                    subject=subject,
+                    resource=resource,
+                    platform=platform,
+                    target_alias=target_alias,
+                    daily_limit=daily_limit,
+                    now=current,
+                )
                 conn.execute(
                     """
                     INSERT INTO social_preparation_ticket(
@@ -596,8 +611,9 @@ class OAuthStateStore:
                 ),
             )
 
-    def reserve_publish_attempt(
-        self,
+    @staticmethod
+    def _reserve_publish_attempt_on_conn(
+        conn: sqlite3.Connection,
         *,
         client_id: str,
         subject: str,
@@ -605,50 +621,43 @@ class OAuthStateStore:
         platform: str,
         target_alias: str,
         daily_limit: int,
-        now: int | None = None,
+        now: int,
     ) -> int:
-        current = int(time.time()) if now is None else int(now)
+        current = int(now)
         budget_day = datetime.fromtimestamp(current, tz=timezone.utc).date().isoformat()
         limit = max(1, int(daily_limit))
-        with self._lock, self._connect() as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            try:
-                row = conn.execute(
-                    """
-                    SELECT attempts FROM social_publish_daily_budget
-                    WHERE budget_day=? AND client_id=? AND subject=? AND resource=?
-                      AND platform=? AND target_alias=?
-                    """,
-                    (budget_day, client_id, subject, resource, platform, target_alias),
-                ).fetchone()
-                attempts = int(row["attempts"]) if row is not None else 0
-                if attempts >= limit:
-                    raise SocialPublishBudgetError("daily_publish_attempt_limit_reached")
-                next_attempts = attempts + 1
-                conn.execute(
-                    """
-                    INSERT INTO social_publish_daily_budget(
-                        budget_day, client_id, subject, resource, platform,
-                        target_alias, attempts, updated_at
-                    ) VALUES(?,?,?,?,?,?,?,?)
-                    ON CONFLICT(
-                        budget_day, client_id, subject, resource, platform,
-                        target_alias
-                    ) DO UPDATE SET attempts=excluded.attempts, updated_at=excluded.updated_at
-                    """,
-                    (
-                        budget_day,
-                        client_id,
-                        subject,
-                        resource,
-                        platform,
-                        target_alias,
-                        next_attempts,
-                        current,
-                    ),
-                )
-                conn.execute("COMMIT")
-                return next_attempts
-            except Exception:
-                conn.execute("ROLLBACK")
-                raise
+        row = conn.execute(
+            """
+            SELECT attempts FROM social_publish_daily_budget
+            WHERE budget_day=? AND client_id=? AND subject=? AND resource=?
+              AND platform=? AND target_alias=?
+            """,
+            (budget_day, client_id, subject, resource, platform, target_alias),
+        ).fetchone()
+        attempts = int(row["attempts"]) if row is not None else 0
+        if attempts >= limit:
+            raise SocialPublishBudgetError("daily_publish_attempt_limit_reached")
+        next_attempts = attempts + 1
+        conn.execute(
+            """
+            INSERT INTO social_publish_daily_budget(
+                budget_day, client_id, subject, resource, platform,
+                target_alias, attempts, updated_at
+            ) VALUES(?,?,?,?,?,?,?,?)
+            ON CONFLICT(
+                budget_day, client_id, subject, resource, platform,
+                target_alias
+            ) DO UPDATE SET attempts=excluded.attempts, updated_at=excluded.updated_at
+            """,
+            (
+                budget_day,
+                client_id,
+                subject,
+                resource,
+                platform,
+                target_alias,
+                next_attempts,
+                current,
+            ),
+        )
+        return next_attempts

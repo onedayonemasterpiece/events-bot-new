@@ -80,6 +80,7 @@ _SECRET_ASSIGNMENT_RE = re.compile(
 _BEARER_RE = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{12,}")
 _VK_TOKEN_RE = re.compile(r"\bvk1\.a\.[A-Za-z0-9_-]{12,}")
 _OPENAI_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9_-]{16,}")
+_TELEGRAM_BOT_TOKEN_RE = re.compile(r"(?<!\d)\d{5,16}:[A-Za-z0-9_-]{20,100}\b")
 
 
 def _normalise_key(value: str) -> str:
@@ -109,6 +110,7 @@ def _redact_text(value: str) -> str:
     )
     value = _VK_TOKEN_RE.sub("vk1.a.<redacted>", value)
     value = _OPENAI_KEY_RE.sub("sk-<redacted>", value)
+    value = _TELEGRAM_BOT_TOKEN_RE.sub("<telegram-bot-token-redacted>", value)
     return value
 
 

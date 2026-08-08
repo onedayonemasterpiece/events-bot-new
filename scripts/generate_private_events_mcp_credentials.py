@@ -53,6 +53,14 @@ def main() -> int:
     )
     parser.add_argument("--base-url", required=True, type=validate_base_url)
     parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument(
+        "--enable-chatgpt-social",
+        action="store_true",
+        help=(
+            "Explicitly request Telegram/VK read+publish and offline_access scopes for "
+            "the generated ChatGPT connector profile."
+        ),
+    )
     args = parser.parse_args()
 
     output = args.output_dir.resolve()
@@ -69,6 +77,17 @@ def main() -> int:
     endpoint = f"{args.base_url}/_private/{path_secret}/mcp"
     codex_endpoint = f"{args.base_url}/_private/{path_secret}/codex/mcp"
 
+    chatgpt_scopes = ["events:read", "incidents:read", "operations:read"]
+    if args.enable_chatgpt_social:
+        chatgpt_scopes.extend(
+            [
+                "telegram:read",
+                "telegram:publish",
+                "vk:read",
+                "vk:publish",
+                "offline_access",
+            ]
+        )
     chatgpt = {
         "name": "Events Bot — private production evidence",
         "description": (
@@ -80,15 +99,13 @@ def main() -> int:
         "oauth_client_id": client_id,
         "oauth_client_secret": client_secret,
         "bootstrap_operator_token": operator_token,
-        "oauth_scopes": [
-            "events:read",
-            "incidents:read",
-            "operations:read",
+        "oauth_scopes": chatgpt_scopes,
+        "available_optional_scopes": [
+            "offline_access",
             "telegram:read",
             "telegram:publish",
             "vk:read",
             "vk:publish",
-            "offline_access",
         ],
         "notes": [
             "The bootstrap operator token is entered once in the authorization browser page.",

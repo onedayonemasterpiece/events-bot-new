@@ -60,8 +60,11 @@ class FakeAdapter:
         return SocialReadResult(
             posts=(
                 SocialPost(
-                    post_id="post-101",
-                    text="Authorization: Bearer provider-secret-abcdefghijklmnop",
+                    post_id="post-101-123456789:abcdefghijklmnopqrstuvwxyzABCDE",
+                    text=(
+                        "Authorization: Bearer provider-secret-abcdefghijklmnop "
+                        "123456789:abcdefghijklmnopqrstuvwxyzABCDE"
+                    ),
                     published_at="2026-08-08T12:00:00Z",
                 ),
             )
@@ -173,6 +176,21 @@ async def test_endpoint_client_scope_and_catalog_isolation(config) -> None:
             "idempotentHint": False,
             "openWorldHint": True,
         }
+        telegram_publish_token = _token(configured, scopes={"telegram:publish"})
+        _response, telegram_only = await _rpc(
+            client, configured.mcp_path, telegram_publish_token, "tools/list", {}
+        )
+        telegram_prepare = next(
+            item
+            for item in telegram_only["result"]["tools"]
+            if item["name"] == "prepare_text_publication"
+        )
+        assert telegram_prepare["inputSchema"]["properties"]["platform"]["enum"] == [
+            "telegram"
+        ]
+        assert telegram_prepare["securitySchemes"] == [
+            {"type": "oauth2", "scopes": ["telegram:publish"]}
+        ]
 
         minimal_token = _token(
             configured,
@@ -264,6 +282,7 @@ async def test_alias_denial_and_read_redaction_and_audit(config) -> None:
         assert result["trust"] == "untrusted_external_data"
         assert result["posts"][0]["trust"] == "untrusted_external_data"
         assert "provider-secret" not in result["posts"][0]["text"]
+        assert "123456789:" not in str(result["posts"][0])
         assert "<redacted>" in result["posts"][0]["text"]
         assert telegram.read_calls == 1
     finally:
@@ -294,6 +313,19 @@ async def test_prepare_publish_binding_replay_and_redacted_append_only_audit(con
         "idempotency_key": idempotency,
     }
     try:
+        _response, extra = await _rpc(
+            client,
+            configured.mcp_path,
+            token,
+            "tools/call",
+            {
+                "name": "prepare_text_publication",
+                "arguments": {**base_arguments, "raw_target_id": "-100999"},
+            },
+        )
+        assert extra["result"]["isError"] is True
+        assert "Unsupported argument field" in str(extra)
+
         _response, prepared = await _rpc(
             client,
             configured.mcp_path,
@@ -402,6 +434,15 @@ def test_ticket_expiry_and_every_binding_dimension(tmp_path) -> None:
     with pytest.raises(SocialTicketError, match="expired"):
         store.consume_preparation_ticket(**values, now=200)
 
+    # The replay ledger is durable but bounded: the key becomes eligible only
+    # once a later write runs cleanup beyond the 90-day retention horizon.
+    later = 100 + 91 * 86400
+    store.create_preparation_ticket(
+        **{**values, "ticket": "replacement-ticket-abcdefghijklmnopqrstuvwxyz"},
+        expires_at=later + 60,
+        now=later,
+    )
+
 
 @pytest.mark.asyncio
 async def test_publish_timeout_consumes_ticket_and_records_unknown_outcome(config) -> None:
@@ -440,6 +481,14 @@ async def test_publish_timeout_consumes_ticket_and_records_unknown_outcome(confi
             client, configured.mcp_path, token, "tools/call", call
         )
         assert timed_out["result"]["isError"] is True
+        assert timed_out["result"]["structuredContent"] == {
+            "outcome": "unknown",
+            "retry_safe": False,
+            "instruction": (
+                "The provider may already have accepted the publication. "
+                "Do not retry with a new idempotency key."
+            ),
+        }
         _response, replay = await _rpc(
             client, configured.mcp_path, token, "tools/call", call
         )
@@ -494,6 +543,8 @@ async def test_daily_publish_budget_survives_access_token_refresh(config) -> Non
             "tools/call",
             {"name": "prepare_text_publication", "arguments": arguments},
         )
+        if prepared["result"].get("isError"):
+            return _response, prepared
         ticket = prepared["result"]["structuredContent"]["preparation_ticket"]
         return await _rpc(
             client,
@@ -629,5 +680,43 @@ async def test_empty_target_policy_denies_every_alias(config) -> None:
         )
         assert denied["result"]["isError"] is True
         assert empty_adapter.read_calls == 0
+        publication = {
+            "platform": "telegram",
+            "target_alias": "kenigevents",
+            "text": "denied body",
+            "idempotency_key": "denied-key-001",
+        }
+        _response, denied_prepare = await _rpc(
+            client,
+            empty.mcp_path,
+            token,
+            "tools/call",
+            {"name": "prepare_text_publication", "arguments": publication},
+        )
+        assert denied_prepare["result"]["isError"] is True
+        _response, denied_publish = await _rpc(
+            client,
+            empty.mcp_path,
+            token,
+            "tools/call",
+            {
+                "name": "publish_prepared_text",
+                "arguments": {
+                    **publication,
+                    "preparation_ticket": "x" * 48,
+                },
+            },
+        )
+        assert denied_publish["result"]["isError"] is True
     finally:
         await client.close()
+
+    with sqlite3.connect(empty.auth_database_path) as conn:
+        assert conn.execute(
+            "SELECT action, outcome FROM social_action_audit "
+            "WHERE action LIKE '%publication%' OR action='publish_prepared_text' "
+            "ORDER BY id"
+        ).fetchall() == [
+            ("prepare_text_publication", "denied"),
+            ("publish_prepared_text", "denied"),
+        ]

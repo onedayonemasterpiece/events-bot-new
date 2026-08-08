@@ -339,9 +339,24 @@ def build_social_tools(
         alias = _alias(arguments)
         text = _text(arguments)
         idempotency_key = _idempotency_key(arguments)
-        policy.resolve(platform, alias, action="publish")
-        adapter_for(platform)
         text_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        try:
+            policy.resolve(platform, alias, action="publish")
+            adapter_for(platform)
+        except (InvalidArgumentsError, ValueError):
+            await asyncio.to_thread(
+                store.audit_social_action,
+                action="prepare_text_publication",
+                outcome="denied",
+                client_id=context.identity.client_id,
+                subject=context.identity.subject,
+                resource=context.resource,
+                platform=platform,
+                target_alias=alias,
+                text_hash=text_hash,
+                idempotency_key=idempotency_key,
+            )
+            raise
         ticket = random_token(48)
         now = int(time.time())
         expires_at = now + max(60, min(int(ticket_ttl_seconds), 900))
@@ -357,9 +372,10 @@ def build_social_tools(
                 text_hash=text_hash,
                 idempotency_key=idempotency_key,
                 expires_at=expires_at,
+                daily_limit=publish_attempts_per_day,
                 now=now,
             )
-        except SocialTicketError as exc:
+        except (SocialTicketError, SocialPublishBudgetError) as exc:
             await asyncio.to_thread(
                 store.audit_social_action,
                 action="prepare_text_publication",
@@ -404,9 +420,25 @@ def build_social_tools(
         text = _text(arguments)
         idempotency_key = _idempotency_key(arguments)
         ticket = _ticket(arguments)
-        target = policy.resolve(platform, alias, action="publish")
-        adapter = adapter_for(platform)
         text_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        try:
+            target = policy.resolve(platform, alias, action="publish")
+            adapter = adapter_for(platform)
+        except (InvalidArgumentsError, ValueError):
+            await asyncio.to_thread(
+                store.audit_social_action,
+                action="publish_prepared_text",
+                outcome="denied",
+                client_id=context.identity.client_id,
+                subject=context.identity.subject,
+                resource=context.resource,
+                platform=platform,
+                target_alias=alias,
+                text_hash=text_hash,
+                ticket=ticket,
+                idempotency_key=idempotency_key,
+            )
+            raise
         try:
             await asyncio.to_thread(
                 store.consume_preparation_ticket,
@@ -424,31 +456,6 @@ def build_social_tools(
                 store.audit_social_action,
                 action="publish_prepared_text",
                 outcome="denied",
-                client_id=context.identity.client_id,
-                subject=context.identity.subject,
-                resource=context.resource,
-                platform=platform,
-                target_alias=alias,
-                text_hash=text_hash,
-                ticket=ticket,
-                idempotency_key=idempotency_key,
-            )
-            raise InvalidArgumentsError(str(exc)) from exc
-        try:
-            await asyncio.to_thread(
-                store.reserve_publish_attempt,
-                client_id=context.identity.client_id,
-                subject=context.identity.subject,
-                resource=context.resource,
-                platform=platform,
-                target_alias=alias,
-                daily_limit=publish_attempts_per_day,
-            )
-        except SocialPublishBudgetError as exc:
-            await asyncio.to_thread(
-                store.audit_social_action,
-                action="publish_prepared_text",
-                outcome="daily_budget_denied",
                 client_id=context.identity.client_id,
                 subject=context.identity.subject,
                 resource=context.resource,

@@ -374,6 +374,25 @@ async def test_omitted_scope_uses_read_only_registered_default(config) -> None:
     client = TestClient(TestServer(app))
     await client.start_server()
     try:
+        social_scope = await client.get(
+            config.oauth_authorize_path
+            + "?"
+            + urlencode(
+                {
+                    "response_type": "code",
+                    "client_id": config.codex_oauth_client_id,
+                    "redirect_uri": "http://127.0.0.1:9000/callback/social-denied",
+                    "state": "state",
+                    "resource": config.codex_resource,
+                    "scope": "events:read telegram:read",
+                    "code_challenge": pkce_s256("s" * 64),
+                    "code_challenge_method": "S256",
+                }
+            )
+        )
+        assert social_scope.status == 400
+        assert "Requested scope is not available" in await social_scope.text()
+
         response = await client.get(
             config.oauth_authorize_path
             + "?"

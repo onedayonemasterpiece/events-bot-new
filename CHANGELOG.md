@@ -56,6 +56,13 @@
   bootstrap after corpus invalidation only when the same journey subsequently
   proves a served cache hit with zero embedding/vector/LLM attempts; strict
   scheduled and post-deploy release canaries still reject the initial miss.
+- Hardened private MCP social actions: strict runtime argument schemas, scoped
+  provider discovery, denied-action audit, atomic prepare-time daily quotas,
+  bounded 90-day idempotency retention, Telegram bot-token redaction, and an
+  explicit non-retryable `outcome_unknown` result for publication timeouts.
+  Generated ChatGPT profiles now remain read-only unless social scopes are
+  explicitly enabled by the operator.
+
 - Hardened private Events MCP OAuth credential handling: generator and smoke
   receipts no longer print the private endpoint path, generated bundles start
   in a fresh `0700` directory with atomic `0600` files, Codex callback dot
