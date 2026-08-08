@@ -23,6 +23,12 @@ jobs:
       PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || vars.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY }}
       PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || vars.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL }}
     steps:
+      - name: Checkout full history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
       - name: Confirm required names are available without exposing values
         shell: bash
         run: |
@@ -45,12 +51,16 @@ jobs:
           fi
           echo 'required_configuration=present'
 
-      - name: Print production secret and variable names only
+      - name: Print Supabase credential names referenced anywhere in history
         shell: bash
-        env:
-          SECRET_NAMES_JSON: ${{ toJSON(secrets) }}
-          VARIABLE_NAMES_JSON: ${{ toJSON(vars) }}
         run: |
           set -euo pipefail
-          printf '%s' "$SECRET_NAMES_JSON" | jq -r 'keys[] | "SECRET_NAME=" + .'
-          printf '%s' "$VARIABLE_NAMES_JSON" | jq -r 'keys[] | "VARIABLE_NAME=" + .'
+          echo 'CURRENT_SUPABASE_NAMES_START'
+          git grep -IhoE '(secrets\.|vars\.)?[A-Z0-9_]*(SUPABASE|POSTGRES|DATABASE)[A-Z0-9_]*' -- . ':!*.sqlite' ':!*.db' 2>/dev/null \
+            | sed -E 's/^(secrets\.|vars\.)//' | sort -u
+          echo 'CURRENT_SUPABASE_NAMES_END'
+          echo 'HISTORY_SUPABASE_NAMES_START'
+          git rev-list --all | while read -r commit; do
+            git grep -IhoE '(secrets\.|vars\.)?[A-Z0-9_]*(SUPABASE|POSTGRES|DATABASE)[A-Z0-9_]*' "$commit" -- .github docs scripts site supabase 2>/dev/null || true
+          done | sed -E 's/^(secrets\.|vars\.)//' | sort -u
+          echo 'HISTORY_SUPABASE_NAMES_END'
