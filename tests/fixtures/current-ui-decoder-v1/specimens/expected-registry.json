@@ -1,0 +1,22 @@
+{
+  "controlled_count": 19,
+  "real_route_count": 25,
+  "source_model_only_count": 1,
+  "capsules": [
+    "01-event-presentation-states",
+    "02-button-cta",
+    "03-media-heavy",
+    "04-transport",
+    "05-medallions",
+    "06-artifacts"
+  ],
+  "renderers": [
+    "amber",
+    "artifact-collection",
+    "button",
+    "focus-egg",
+    "kaup",
+    "medallions",
+    "rail"
+  ]
+}
