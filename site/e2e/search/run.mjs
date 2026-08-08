@@ -106,7 +106,13 @@ try {
   if (actionLink) await adapter.bootstrapSession(actionLink, safeTarget.href);
   const journeyTarget = new URL(safeTarget.href);
   if (journeyTarget.pathname.startsWith('/_review/')) journeyTarget.searchParams.set('search_variant', mode);
-  const journey = await runSearchJourney({ adapter, targetUrl: journeyTarget.href, variant, queryCases: queryCases(process.env.E2E_SEARCH_QUERIES_JSON) });
+  const journey = await runSearchJourney({
+    adapter,
+    targetUrl: journeyTarget.href,
+    variant,
+    queryCases: queryCases(process.env.E2E_SEARCH_QUERIES_JSON),
+    cacheBootstrap: revisionPolicy === 'live_consistent' && mode === 'cached_vector',
+  });
   lastJourney = journey;
   const revisionReceipt = assertSearchRevisionPolicy(journey, targetIdentity, revisionPolicy);
   const result = { ...journey, platform, execution_mode: mode, target_repo_sha: targetRepoSha, revision_receipt: revisionReceipt };

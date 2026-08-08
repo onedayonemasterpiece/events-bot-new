@@ -173,6 +173,10 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
   `live_consistent` policy that keeps exact page SHA, stable live revisions and
   owner-scoped receipts mandatory without rebuilding 1300+ unrelated pages.
   Scheduled/post-deploy acceptance remains `release_exact` and blocking.
+- 2026-08-08 cache-debug correction: an explicitly manual
+  `live_consistent + cached_vector` journey may bootstrap a cache entry cleared
+  by corpus updates, but must prove a same-journey repeat hit with zero provider
+  attempts. Strict scheduled/release acceptance still rejects the initial miss.
 
 ## Follow-up Actions
 

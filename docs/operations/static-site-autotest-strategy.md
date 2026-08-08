@@ -779,6 +779,11 @@ drift между старым candidate receipt и живым каталогом
 каждого ответа с owner-scoped server receipt. Scheduled и post-deploy jobs
 fail-closed используют только `release_exact`; быстрый режим не продвигает
 release и не требует полной генерации 1300+ статических страниц.
+Только в `live_consistent + cached_vector` допускается один bootstrap после
+физической инвалидации кеша: первый `miss/stored` ограничен одной vector/
+embedding попыткой и нулём LLM, после чего повтор того же запроса обязан дать
+cache hit с нулевыми provider deltas. В `release_exact` первый miss остаётся
+ошибкой frequent cached canary.
 
 Нельзя откладывать Android/iOS до «когда-нибудь после общей системы», но нельзя и
 заставлять каждый authenticated business test повторять дорогой real-mail OTP.
