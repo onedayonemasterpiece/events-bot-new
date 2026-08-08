@@ -852,6 +852,10 @@ application swipe вниз. После штатного hide или fallback hel
 `isKeyboardShown() == false`; иначе он завершает сценарий как
 `mobile_keyboard_dismiss_unconfirmed` до document scroll. Остальные driver
 errors не подавляются.
+Если exact heading отсутствует или неоднозначен, failure receipt сохраняет
+только `total_count`/`visible_count` для закрытого списка XCTest-типов
+`StaticText`/`Other`/`Button`/`Link`. Raw hierarchy, labels и соседний текст не
+собираются; диагностический тип не становится разрешением на tap автоматически.
 При отказе публикуется только закрытый route enum и numeric/boolean receipt:
 native viewport, доступные start/end/duration, число жестов, `scrollY` delta и
 видимость финальной карточки; hierarchy, screenshot, URL и текст страницы в

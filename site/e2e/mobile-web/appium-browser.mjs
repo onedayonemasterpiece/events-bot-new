@@ -44,7 +44,7 @@ export function isUnsupportedIosKeyboardDismissError(error) {
 }
 
 export async function dismissNativeKeyboard(driver, {
-  allowUnsupported = false, fallbackTapLabels = [],
+  allowUnsupported = false, fallbackTapLabels = [], onFallbackTapProbe = null,
 } = {}) {
   const safeTapLabels = [...new Set((fallbackTapLabels || [])
     .map((value) => String(value).trim()).filter(Boolean))];
@@ -73,6 +73,25 @@ export async function dismissNativeKeyboard(driver, {
         const matches = await driver.findElements('-ios predicate string',
           `visible == 1 AND type == 'XCUIElementTypeStaticText' AND (${labelPredicate})`);
         if (!Array.isArray(matches) || matches.length !== 1) {
+          if (typeof onFallbackTapProbe === 'function') {
+            const typeEntries = [
+              ['static_text', 'XCUIElementTypeStaticText'],
+              ['other', 'XCUIElementTypeOther'],
+              ['button', 'XCUIElementTypeButton'],
+              ['link', 'XCUIElementTypeLink'],
+            ];
+            const probe = { schema_version: 'ios-keyboard-dismiss-target-v1' };
+            for (const [key, type] of typeEntries) {
+              const typed = `type == '${type}' AND (${labelPredicate})`;
+              const all = await driver.findElements('-ios predicate string', typed);
+              const visible = await driver.findElements('-ios predicate string', `visible == 1 AND ${typed}`);
+              probe[key] = {
+                total_count: Array.isArray(all) ? all.length : -1,
+                visible_count: Array.isArray(visible) ? visible.length : -1,
+              };
+            }
+            onFallbackTapProbe(probe);
+          }
           throw new Error(`mobile_keyboard_dismiss_target_count:${Array.isArray(matches) ? matches.length : 'invalid'}`);
         }
         const elementId = matches[0]['element-6066-11e4-a52e-4f735466cecf'] || matches[0].ELEMENT;

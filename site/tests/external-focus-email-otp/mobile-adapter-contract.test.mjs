@@ -256,6 +256,39 @@ test('shared iOS keyboard dismissal rejects missing or ambiguous safe tap target
   }
 });
 
+test('shared iOS keyboard dismissal reports only closed exact-label type counts before rejecting a target', async () => {
+  let context = 'WEBVIEW_safari';
+  let probe = null;
+  const driver = {
+    getContext: async () => context,
+    getContexts: async () => ['NATIVE_APP', 'WEBVIEW_safari'],
+    switchContext: async (next) => { context = next; },
+    isKeyboardShown: async () => true,
+    hideKeyboard: async () => { throw new Error('Did not know how to dismiss the keyboard'); },
+    findElements: async (_using, predicate) => {
+      if (predicate.includes("type == 'XCUIElementTypeOther'")) {
+        return predicate.includes('visible == 1') ? [] : [{ ELEMENT: 'offscreen-other' }];
+      }
+      if (predicate.includes("type == 'XCUIElementTypeButton'")) return [{ ELEMENT: 'visible-button' }];
+      return [];
+    },
+    executeScript: async () => { throw new Error('tap must not run for a non-StaticText target'); },
+  };
+  await assert.rejects(() => dismissNativeKeyboard(driver, {
+    allowUnsupported: true,
+    fallbackTapLabels: ['Найти событие'],
+    onFallbackTapProbe: (value) => { probe = value; },
+  }), /mobile_keyboard_dismiss_target_count:0/u);
+  assert.deepEqual(probe, {
+    schema_version: 'ios-keyboard-dismiss-target-v1',
+    static_text: { total_count: 0, visible_count: 0 },
+    other: { total_count: 1, visible_count: 0 },
+    button: { total_count: 1, visible_count: 1 },
+    link: { total_count: 0, visible_count: 0 },
+  });
+  assert.equal(context, 'WEBVIEW_safari');
+});
+
 test('shared iOS keyboard dismissal fails closed when fallback swipe leaves the IME visible', async () => {
   let context = 'WEBVIEW_safari';
   const driver = {
