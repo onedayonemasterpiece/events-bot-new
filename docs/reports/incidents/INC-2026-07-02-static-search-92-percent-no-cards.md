@@ -83,6 +83,14 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
   the next implementation was bound to the official XCUITest contract:
   application-level `mobile: swipe` for a simple native swipe, while
   table/collection `mobile: scroll` remains forbidden.
+- 2026-08-08 iOS run `31278836719` used that exact
+  `xcuitest_native_swipe` route but again left DOM delta zero after 24 commands.
+  The safe job log placed XCUITest's exact unsupported `hideKeyboard` response
+  immediately before the no-op scroll, while the shared helper treated that
+  response as success without re-reading keyboard visibility. The remaining
+  boundary is therefore IME dismissal, not another scroll API: the helper now
+  performs one official user-equivalent downward native swipe and must observe
+  the keyboard absent before Search can start its upward document swipes.
 
 - 2026-08-08 exact-main degraded browser journey полностью прошёл UI/Search
   контракт для трёх запросов, но GitHub job завершился красным после journey:
@@ -285,12 +293,12 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
   may restart Appium exactly once only before the
   device callback is opened and before any Search traffic, matching the accepted
   OTP infrastructure-retry boundary without copying OTP feature mechanics.
-- 2026-08-08 iOS keyboard-dismiss correction: Search and OTP now share the same
-  Safari best-effort boundary for the exact unsupported WDA hide-keyboard
-  response. Lifecycle evidence identifies input, terminal, keyboard-dismiss and
-  scroll phases separately; an unsupported hide command cannot itself pass the
-  scenario because the following native scroll must still move the DOM and
-  reveal the final card.
+- 2026-08-08 iOS keyboard-dismiss correction: Search and OTP now share a
+  fail-closed transition for the exact unsupported WDA hide-keyboard response.
+  It triggers one native downward dismissal swipe and must then prove the IME
+  absent; the response itself is never success. Lifecycle evidence identifies
+  input, terminal, keyboard-dismiss and scroll phases separately, and the
+  following document swipe must still move DOM and reveal the final card.
 - 2026-08-08 cross-platform browser-scroll correction: Android Chrome and iOS
   Safari now share the routing primitive `performNativeDocumentSwipe`; Android
   dispatches absolute-coordinate W3C touch, while iOS uses the XCUITest

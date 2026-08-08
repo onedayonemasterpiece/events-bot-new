@@ -75,6 +75,13 @@
 
 ### Fixed
 
+- Fixed the shared iOS Search/OTP keyboard-dismiss boundary after live Search
+  proved that tolerating XCUITest's exact unsupported `hideKeyboard` response
+  could leave every subsequent Safari swipe inside the IME. The helper now
+  performs one documented user-equivalent native swipe down and must observe
+  the keyboard absent within three seconds; otherwise it fails closed before
+  Search scrolling or OTP evidence capture.
+
 - Fixed iOS Search real-scroll acceptance after both table-oriented XCUITest
   `mobile: scroll` and Safari W3C pointer actions acknowledged repeated gestures
   without moving WebKit DOM. Shared `performNativeDocumentSwipe` now preserves
