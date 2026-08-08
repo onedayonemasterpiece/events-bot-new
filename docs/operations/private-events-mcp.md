@@ -279,6 +279,10 @@ No method name, raw owner ID, URL, attachment, schedule, edit, delete, or raw VK
 response is exposed through MCP. Provider failures cross the seam only as a
 generic `SocialAdapterError` without credentials, target IDs, or provider
 payloads.
+The adapter marks these two fixed calls for a full runtime-log boundary:
+provider errors redact the entire parameter map, provider message, token,
+captcha fields, owner ID, publication text and idempotency GUID before either
+the normal logger or the generic adapter exception can observe them.
 
 Generate connection material only into a fresh path:
 

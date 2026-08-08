@@ -281,6 +281,7 @@ class VKSocialAdapter:
                 owner_id=owner_id,
                 count=_provider_scan_limit(bounded_limit),
                 filter="owner",
+                _private_events_mcp_log_boundary=True,
             )
             if not isinstance(response, Mapping) or not isinstance(
                 response.get("items"), list
@@ -331,6 +332,7 @@ class VKSocialAdapter:
                 signed=0,
                 message=text,
                 guid=guid,
+                _private_events_mcp_log_boundary=True,
             )
             if not isinstance(response, Mapping):
                 raise _generic_error("vk")

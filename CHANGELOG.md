@@ -74,6 +74,10 @@
   only Telegram/VK adapter injection, including compilation of the provider
   boundary and the canonical application module.
 
+- Fully redacted private MCP VK failure logs, including draft message, owner,
+  GUID, provider error/captcha values and all credential fragments, while
+  preserving existing non-MCP VK diagnostics.
+
 - Hardened private Events MCP OAuth credential handling: generator and smoke
   receipts no longer print the private endpoint path, generated bundles start
   in a fresh `0700` directory with atomic `0600` files, Codex callback dot

@@ -282,7 +282,12 @@ async def test_vk_uses_only_fixed_wall_methods_and_parameters() -> None:
     assert calls == [
         (
             "wall.get",
-            {"owner_id": -231920894, "count": 100, "filter": "owner"},
+            {
+                "owner_id": -231920894,
+                "count": 100,
+                "filter": "owner",
+                "_private_events_mcp_log_boundary": True,
+            },
         ),
         (
             "wall.post",
@@ -292,6 +297,7 @@ async def test_vk_uses_only_fixed_wall_methods_and_parameters() -> None:
                 "signed": 0,
                 "message": "Generic VK publication",
                 "guid": expected_guid,
+                "_private_events_mcp_log_boundary": True,
             },
         ),
     ]
@@ -337,7 +343,12 @@ async def test_reads_scan_past_blanks_but_return_at_most_requested_texts() -> No
     assert vk_calls == [
         (
             "wall.get",
-            {"owner_id": -231920894, "count": 5, "filter": "owner"},
+            {
+                "owner_id": -231920894,
+                "count": 5,
+                "filter": "owner",
+                "_private_events_mcp_log_boundary": True,
+            },
         )
     ]
 
@@ -424,3 +435,62 @@ def test_disabled_create_app_does_not_build_or_validate_provider_adapters(
     )
     app = main.create_app()
     assert app is not None
+
+
+@pytest.mark.asyncio
+async def test_real_vk_runtime_error_log_redacts_mcp_payload_and_credentials(
+    monkeypatch, caplog
+) -> None:
+    import main
+
+    secret_token = "vk1.a.synthetic-secret-token-material-abcdef"
+    secret_text = "private draft 123456789:abcdefghijklmnopqrstuvwxyzABCDE"
+    provider_error = "provider echoed private draft and owner -231920894"
+
+    class ErrorResponse:
+        @staticmethod
+        def json():
+            return {
+                "error": {
+                    "error_code": 15,
+                    "error_msg": provider_error,
+                    "captcha_sid": "private-captcha-id",
+                    "captcha_img": "https://captcha.example/private",
+                }
+            }
+
+    async def fake_http_call(*_args, **_kwargs):
+        return ErrorResponse()
+
+    async def no_throttle() -> None:
+        return None
+
+    monkeypatch.setattr(main, "VK_READ_VIA_SERVICE", False)
+    monkeypatch.setattr(main, "VK_USER_TOKEN", secret_token)
+    monkeypatch.setattr(main, "VK_TOKEN", None)
+    monkeypatch.setattr(main, "VK_TOKEN_AFISHA", None)
+    monkeypatch.setattr(main, "http_call", fake_http_call)
+    monkeypatch.setattr(main, "_vk_throttle", no_throttle)
+
+    with caplog.at_level("ERROR"):
+        with pytest.raises(SocialAdapterError):
+            await VKSocialAdapter(main.vk_api).publish_text(
+                target=VK_TARGET,
+                text=secret_text,
+                idempotency_key="private-log-boundary-001",
+            )
+
+    rendered = caplog.text
+    for forbidden in (
+        secret_token,
+        secret_token[:6],
+        secret_token[-4:],
+        secret_text,
+        "-231920894",
+        provider_error,
+        "private-captcha-id",
+        "captcha.example/private",
+    ):
+        assert forbidden not in rendered
+    assert "msg=<redacted-provider-error>" in rendered
+    assert "token=<redacted>" in rendered

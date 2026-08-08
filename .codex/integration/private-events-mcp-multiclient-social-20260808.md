@@ -2,8 +2,8 @@
 
 ## Scope and status
 
-Integration branch: `feature/private-events-mcp-multiclient-social`  
-Rebased base: `origin/main` at `37f53ecdc393dc8433b80538e434faf1e1749a61`  
+Integration branch: `feature/private-events-mcp-multiclient-social`
+Rebased base: `origin/main` at `37f53ecdc393dc8433b80538e434faf1e1749a61`
 Pre-report implementation head: `5d8f876531be5279a2ae37f07a35ddf5a8469266`
 
 No code or transport from superseded PR #365 is present. No GitHub issue was
@@ -44,7 +44,7 @@ PYTHONPATH=. pytest -q tests/test_private_events_mcp_*.py
 git diff --check origin/main...HEAD
 ```
 
-Result: compile PASS; **64 passed**; diff check PASS. The only warnings are three
+Result after VK runtime-log hardening: compile PASS; **65 passed**; diff check PASS. The only warnings are three
 existing aiohttp `NotAppKeyWarning` notices exercised by the disabled-create-app
 regression test.
 
@@ -52,6 +52,8 @@ A local read-only provider probe used the dedicated MCP Telegram role and the
 fixed VK adapter. Both returned two recent records; no text or credential was
 logged and no publication was attempted. The sanitized untracked receipt is at
 `artifacts/codex/private-mcp-live-read-probe/receipt.json`.
+
+An independent review found and reproduced a VK provider-error log leak in the pre-final head; the runtime boundary was then hardened to suppress publication text, owner, GUID, provider message/captcha data and every token fragment, with a real `main.vk_api` regression test. Final exact-head re-review is required.
 
 Tracked activation/credential files: 0. Legacy `prod_ops_mcp`, `PROD_OPS_MCP_*`
 and static-bearer paths in this diff: 0.
