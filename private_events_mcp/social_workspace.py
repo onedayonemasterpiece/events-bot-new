@@ -851,9 +851,9 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
         if target_locator.kind is TargetLocatorKind.SELF:
             if expected != {SocialTargetKind.SELF}:
                 raise SocialWorkspaceValidationError("self resolution must expect only self")
-        elif expected != {SocialTargetKind.USER}:
+        elif len(expected) != 1 or SocialTargetKind.SELF in expected:
             raise SocialWorkspaceValidationError(
-                "username, profile link, and provider id resolution must expect only user"
+                "exact target resolution must expect one non-self target kind"
             )
     elif operation is SocialReadOperation.SEARCH_TARGETS:
         if not query:
@@ -954,8 +954,8 @@ def validate_resolved_target_preview(
     if request.target_locator.kind is TargetLocatorKind.SELF:
         if kind is not SocialTargetKind.SELF:
             raise SocialWorkspaceValidationError("self locator did not resolve self")
-    elif kind is not SocialTargetKind.USER:
-        raise SocialWorkspaceValidationError("exact-person locator did not resolve a user")
+    elif kind is SocialTargetKind.SELF:
+        raise SocialWorkspaceValidationError("non-self locator resolved self")
     _optional_text(data.get("display_name"), "display_name", maximum=512, required=True)
     if data.get("is_exact_match") is not True:
         raise SocialWorkspaceValidationError("target resolution is not an exact match")

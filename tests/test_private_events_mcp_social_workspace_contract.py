@@ -307,7 +307,7 @@ def test_saved_messages_self_locator_has_no_value_and_resolves_only_self() -> No
         ("vk", {"kind": "provider_id", "value": "123456"}),
     ],
 )
-def test_exact_person_locators_require_user_kind_and_canonical_preview(
+def test_exact_person_locators_bind_requested_user_kind_and_canonical_preview(
     platform: str, locator: dict[str, str]
 ) -> None:
     request_payload = {
@@ -329,17 +329,43 @@ def test_exact_person_locators_require_user_kind_and_canonical_preview(
     }
     validate(preview, SOCIAL_WORKSPACE_TARGET_PREVIEW_SCHEMA)
     assert validate_resolved_target_preview(request, preview) == TARGET_REF
-    with pytest.raises(SocialWorkspaceValidationError, match="only user"):
-        validate_read_request(
-            {
-                "platform": platform,
-                "operation": "resolve_target",
-                "target_locator": locator,
-                "expected_target_kinds": ["channel"],
-            }
-        )
     with pytest.raises(SocialWorkspaceValidationError, match="kind mismatch"):
         validate_resolved_target_preview(request, {**preview, "kind": "channel"})
+
+
+@pytest.mark.parametrize(
+    ("platform", "kind", "locator"),
+    [
+        ("telegram", "channel", {"kind": "username", "value": "public_channel"}),
+        ("telegram", "group", {"kind": "provider_id", "value": "-123456"}),
+        ("vk", "community", {"kind": "profile_link", "value": "https://vk.com/community"}),
+    ],
+)
+def test_exact_nonself_resolution_supports_one_declared_target_kind(
+    platform: str, kind: str, locator: dict[str, str]
+) -> None:
+    request = validate_read_request({
+        "platform": platform,
+        "operation": "resolve_target",
+        "target_locator": locator,
+        "expected_target_kinds": [kind],
+    })
+    preview = {
+        "platform": platform,
+        "target_ref": TARGET_REF,
+        "kind": kind,
+        "display_name": "Exact target",
+        "is_exact_match": True,
+        "trust": "untrusted_external_data",
+    }
+    assert validate_resolved_target_preview(request, preview) == TARGET_REF
+    with pytest.raises(SocialWorkspaceValidationError, match="one non-self"):
+        validate_read_request({
+            "platform": platform,
+            "operation": "resolve_target",
+            "target_locator": locator,
+            "expected_target_kinds": [kind, "user"],
+        })
 
 
 def test_profile_locator_rejects_arbitrary_or_credentialed_links() -> None:
