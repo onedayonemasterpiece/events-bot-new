@@ -1,7 +1,7 @@
 mode: worktree_worker_then_serial_integrator
 repo: onedayonemasterpiece/events-bot-new
 base_ref: origin/main
-base_sha: 384f58166cb3f9cd6095564da6a8fc02003e8167
+base_sha: 63e411b390489d2a4bbe509622335d00f303416b
 base_branch: main
 integration_branch: integration/private-events-mcp-universal-social
 global_constraints:
