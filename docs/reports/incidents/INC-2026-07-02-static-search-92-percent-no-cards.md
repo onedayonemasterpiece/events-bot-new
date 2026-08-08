@@ -183,6 +183,9 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
 - 2026-08-08 mobile transport correction: Android/iOS capabilities force
   WebDriver Classic, preventing WebdriverIO from selecting Appium's incomplete
   BiDi surface and failing on `script.addPreloadScript` before UI acceptance.
+- 2026-08-08 iOS cold-start correction: the single Appium new-session request
+  has a five-minute client budget and no ambiguous automatic retry, instead of
+  WebdriverIO aborting a valid cold simulator/WDA launch at 120 seconds.
 
 ## Follow-up Actions
 
