@@ -144,6 +144,8 @@ def test_authorized_github_run_claims_once_and_returns_no_mail_issuer_contract()
     assert "opaque-signed-jwt" not in serialized
     assert "456789" not in serialized
     assert "123456789" not in serialized
+    assert "token=secret" not in serialized
+    assert expected_key not in serialized
 
 
 def test_broker_accepts_sdk_wrapped_generate_link_shape_for_issuer_compatibility():
@@ -152,13 +154,15 @@ def test_broker_accepts_sdk_wrapped_generate_link_shape_for_issuer_compatibility
             if url.endswith("/auth/v1/admin/generate_link"):
                 self.calls.append((method, url, dict(headers), body, timeout))
                 return 200, json.dumps({
-                    "properties": {
-                        "email_otp": "456789",
-                        "action_link": (
-                            "https://project.supabase.co/auth/v1/verify?token=secret&"
-                            "redirect_to=https%3A%2F%2Fkenigevents.ru%2Fpoisk%2F"
-                        ),
-                        "redirect_to": "https://kenigevents.ru/poisk/",
+                    "data": {
+                        "properties": {
+                            "email_otp": "456789",
+                            "action_link": (
+                                "https://project.supabase.co/auth/v1/verify?token=secret&"
+                                "redirect_to=https%3A%2F%2Fkenigevents.ru%2Fpoisk%2F"
+                            ),
+                            "redirect_to": "https://kenigevents.ru/poisk/",
+                        }
                     }
                 }).encode()
             return super().__call__(method, url, headers, body, timeout)
