@@ -263,3 +263,144 @@ StaticSiteBuilder до Astro build. До owner-accepted baseline и terminal liv
 Публичный `collections.product_page_smoke` остаётся `planned` до появления
 Astro routes. В этом shadow-релизе routes, navigation, sitemap и publication
 запрещены. Android/iOS для data-only изменения подборок не запускаются.
+
+## 11. Ежедневный gate движения критических данных
+
+### 11.1. Решение
+
+До production-релиза должен быть реализован и включён по расписанию blocking
+сценарий `data.critical_pipelines_daily`. Он отвечает не на слабый вопрос
+«файл/таблица существует», а на сквозной вопрос:
+
+```text
+scheduled producer действительно отработал
+  -> authoritative upstream был проверен
+  -> свежий watermark/result был сохранён либо доказан NO_CHANGE_EXPECTED
+  -> downstream projection/export получил именно этот result
+  -> текущий static candidate не использует устаревший или частичный input
+```
+
+Наличие последнего успешного файла, запущенного Kaggle kernel, живого scheduler
+job или last-good projection само по себе не является PASS. Last-good защищает
+публичный сайт от плохой публикации, но не скрывает остановившийся producer.
+
+Единый verifier запускается минимум раз в сутки после последних обязательных
+source slots и перед release/candidate decision. Сами producer jobs сохраняют
+собственную более частую cadence. Для producer без отдельного утверждённого SLA
+обязателен хотя бы один terminal checked poll за последние 36 часов; более
+строгий feature-specific SLA всегда имеет приоритет.
+
+### 11.2. Машиночитаемый реестр producer'ов
+
+Implementation должна добавить versioned registry, а не держать перечень только
+в Markdown. Для каждого producer фиксируются:
+
+- стабильный `producer_id`, owner и authoritative SOR;
+- реальное расписание/cadence и timezone;
+- `required_when` — `core` либо точный manifest/feature flag;
+- upstream cursor, fingerprint или timestamp, который доказывает факт опроса;
+- output artifact/table/projection и его watermark/hash/version;
+- downstream consumer и receipt, доказывающий consumption;
+- `max_success_age`, `max_output_age`, coverage floor и допустимая очередь;
+- typed empty/no-change policy;
+- last-good policy, alert route и recovery/runbook.
+
+Проверка обязана падать при неизвестном активном producer, отсутствующем в
+registry, и при producer, объявленном `core`, но выключенном в production.
+
+### 11.3. Обязательный охват
+
+| Producer group | Обязательность | Что именно должен доказать autotest |
+|---|---|---|
+| Официальные расписания и source parsing | Core | Для каждого active source: due slot, попытка чтения, terminal outcome, source fingerprint/cursor, counts `created/updated/nochange/failed`, свежесть current/future event horizon; HTTP/DOM/Kaggle failure не может стать ложным zero-result PASS. |
+| Telegram Monitoring и VK crawl/auto-import | Core | Все due slots материализованы в `ops_run` или эквивалентном ledger; есть bounded scan cursor, scanned/imported/skipped/failed counts и catch-up outcome. Пропущенный slot, `heavy_busy` без terminal catch-up или постоянно растущий inbox backlog блокирует gate. |
+| Статистика source/owned posts по событиям | Core | `social_metrics` batch действительно прочитал due publication targets; проверяются target coverage, `measured_at`, точки `1h/6h/24h/72h`, resolver errors и overdue targets. Telegram может быть feature-gated, но включённый channel не допускает silent session fallback или stale counters. |
+| Клубы по интересам | Core для опубликованной поверхности | Проверяются relation outbox age, terminal evaluation/retry states, approved identity coverage, accepted relation watermark и hash `interest-clubs-static-v2.json`; provider deferral видим и не стирает last-good, но бесконечный/stale хвост не считается PASS. |
+| Facts, подборки, площадки и организации | Core для текущего production candidate | Проверяются source-bound admission/audience/people facts, collection/BGE receipt, exact catalog coverage и hashes `collection-batch-v1.json`/`venue-pages-v1.json`; semantic head без owner gold остаётся blocked, а не превращается в пустой success. |
+| Event media | Core для event/listing pages | Для активного каталога проверяются media-ingest watermark, automatic gate outcomes, broken/missing object references, manifest parity и резкое падение coverage. Последний корректный asset допустим как fallback, но остановившийся ingest остаётся красным сигналом. |
+| Search vectors и static search snapshot | Core | Vector barrier terminal для exact catalog revision, embeddings/index coverage соответствует экспортируемому catalog, receipt/hash свежие, а `static_site_search_snapshot` привязан к тому же immutable DB snapshot. Partial vector corpus или stale receipt блокирует candidate. |
+| StaticSiteBuilder/export/publisher | Core | Build receipt содержит exact repo/snapshot SHA и map версий всех required producer inputs. Если upstream изменился, coalesced build обязан потребить новый watermark в пределах release freshness SLA; если upstream не менялся, verifier принимает только доказанный checked poll, а не возраст старого artifact. |
+| Rail/bus transport snapshot | Manifest-conditional; blocking при наличии transport blocks | Проверяются snapshot/manifest age, coverage ожидаемых направлений, source errors и failed-refresh drill. Отдельный transport last-good не превращает устаревший snapshot в зелёный status. |
+| Ticket/admission rescan | Manifest-conditional; blocking при публикации ticket/admission state | Проверяются все due URLs, terminal status, last checked timestamp, изменения availability/price/link и bounded backlog. Массовый provider error или «успех» с нулём фактически проверенных due targets блокирует gate. |
+| Weather, unusual-events, festival/calendar и иные дополнительные projections | Manifest-conditional | Producer становится blocking автоматически, как только его output объявлен required в production manifest или feature flag включён. Выключенная/default-off поверхность получает typed `NOT_REQUIRED`, а не фиктивный PASS. |
+
+Новые production data-pipelines добавляются в этот registry одновременно с
+producer implementation и consumer contract. Отдельный Kaggle notebook без SOR,
+watermark, terminal ledger и consumer receipt не допускается как скрытая
+production-зависимость.
+
+### 11.4. Что означает «данные движутся»
+
+Autotest не требует искусственных изменений строк каждый день. Неизменившийся
+output допустим только как `NO_CHANGE_EXPECTED`, если одновременно доказано:
+
+1. scheduled slot был due и реально завершился;
+2. upstream был прочитан, а не заменён cache/last-good;
+3. проверен непустой ожидаемый target set либо сформирован typed legitimate-empty
+   receipt;
+4. source cursor/fingerprint не изменился;
+5. нет overdue retry/backlog и partial source failures;
+6. downstream продолжает ссылаться на совместимый last-good output.
+
+Если upstream watermark изменился, а output/consumer watermark не сдвинулся в
+SLA, результат — `FAIL_STALLED`. Если producer не смог доказать факт опроса,
+результат — `BLOCKED_NO_OBSERVATION`, даже когда старый output визуально пригоден.
+
+### 11.5. Evidence contract
+
+Каждый суточный run публикует как минимум:
+
+- `critical-data-freshness-v1.json`;
+- `junit.xml`;
+- краткий GitHub Actions/ops summary без секретов и bearer URL.
+
+Для каждого producer запись содержит exact repo SHA/environment, due slot,
+`started_at`/`terminal_at`, status/reason, upstream watermark, число ожидаемых и
+проверенных targets, output watermark/hash/version, downstream consumption
+receipt, backlog/coverage counters, `NO_CHANGE_EXPECTED` evidence и ссылки на
+bounded run/artifact. Итоговый static release manifest связывает hash принятого
+суточного summary либо более свежего эквивалентного run.
+
+Разрешённые итоговые состояния:
+
+- `PASS_UPDATED` — upstream и output/consumer продвинулись;
+- `PASS_NO_CHANGE_EXPECTED` — успешный checked poll доказал отсутствие изменений;
+- `NOT_REQUIRED` — только для manifest-disabled producer;
+- `WATCH` — только для явно неблокирующего shadow producer;
+- `FAIL`/`BLOCKED` — stale, missing, partial, unconsumed или unverifiable data.
+
+Core producer не может завершиться `WATCH` или `NOT_REQUIRED`.
+
+### 11.6. Acceptance до D0
+
+Gate считается внедрённым, а не просто описанным, только когда:
+
+1. runner, registry и tests достигли `origin/main`;
+2. production schedule включён и виден в scheduler health/ops ledger;
+3. получены минимум три последовательных terminal scheduled `PASS` на реальном
+   production data plane;
+4. выполнен failed-refresh drill, который даёт blocking failure и alert;
+5. выполнен downstream-not-consumed drill, который обнаруживает новый upstream
+   watermark при старом export/candidate;
+6. проверен отдельный `NO_CHANGE_EXPECTED` case без искусственной записи;
+7. alert имеет owner, cooldown и recovery receipt;
+8. implementation одновременно обновила
+   `docs/testing/static-site-autotest-scenarios.v1.yml`, `docs/operations/cron.md`
+   и release evidence index.
+
+До выполнения этих пунктов `Critical data progression` остаётся `Missing` и
+canonical-root promotion запрещён.
+
+### 11.7. Дополнительные NO-GO
+
+Release blocked, если хотя бы один required producer:
+
+- не имеет terminal checked run в своём SLA;
+- не был запущен по расписанию или его пропуск не закрыт catch-up;
+- вернул zero targets без typed legitimate-empty proof;
+- использует stale cache/last-good вместо доказанного upstream observation;
+- изменил upstream watermark, но не обновил downstream projection/export;
+- имеет unexplained coverage collapse, orphan IDs или schema/hash mismatch;
+- отсутствует в input map текущего StaticSiteBuilder candidate;
+- объявлен green только по факту запуска Kaggle kernel без validated result/import;
+- не публикует безопасный machine-readable receipt и alertable terminal status.
