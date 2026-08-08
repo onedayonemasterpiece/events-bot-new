@@ -37,6 +37,7 @@ from private_events_mcp.social_workspace import (
     SocialTargetKind,
     SocialWorkspaceValidationError,
     TargetLocatorKind,
+    validate_action_status_response,
     validate_opaque_ref,
 )
 
@@ -84,6 +85,7 @@ class TelegramTargetBinding:
     is_self: bool = False
     allowed_actions: frozenset[SocialAction] | None = None
     story_privacy: tuple[Any, ...] | None = field(default=None, repr=False)
+    binding_version: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,6 +105,12 @@ class TelegramAssetBinding:
     asset_ref: str
     role: MediaRole
     provider_media: Any = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class TelegramOperationBinding:
+    operation_ref: str
+    result: Mapping[str, Any]
 
 
 class TelegramOpaqueRefStore(Protocol):
@@ -140,6 +148,14 @@ class TelegramOpaqueRefStore(Protocol):
     def resolve_cursor(self, *, family: str, cursor: str) -> Mapping[str, Any]: ...
 
     def mint_operation(self, *, action: SocialAction, idempotency_key: str) -> str: ...
+
+    def record_operation(
+        self, *, operation_ref: str, result: Mapping[str, Any]
+    ) -> None | Awaitable[None]: ...
+
+    def resolve_operation(
+        self, operation_ref: str
+    ) -> TelegramOperationBinding | Awaitable[TelegramOperationBinding]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -407,6 +423,13 @@ class _Attempt:
     provider_mutation_attempted: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class _PreflightSnapshot:
+    target: TelegramTargetBinding
+    source: TelegramTargetBinding | None
+    item: TelegramItemBinding | None
+
+
 class TelegramWorkspaceAdapter:
     """Fixed high-level Telegram implementation for Social Workspace."""
 
@@ -433,6 +456,8 @@ class TelegramWorkspaceAdapter:
             "mint_cursor",
             "resolve_cursor",
             "mint_operation",
+            "record_operation",
+            "resolve_operation",
         ):
             if not callable(getattr(refs, method, None)):
                 raise TypeError("refs must implement the opaque reference contract")
@@ -560,16 +585,59 @@ class TelegramWorkspaceAdapter:
             raise SocialWorkspaceValidationError("asset is not staged provider media")
         return binding
 
-    def _cursor(self, family: str, value: str | None) -> Mapping[str, Any]:
+    @staticmethod
+    def _cursor_binding(
+        request: SocialReadRequest, *, target_ref: str | None = None
+    ) -> dict[str, Any]:
+        return {
+            "platform": request.platform.value,
+            "operation": request.operation.value,
+            "target_ref": target_ref if target_ref is not None else request.target_ref,
+            "item_ref": request.item_ref,
+            "sample_ref": request.sample_ref,
+            "query": request.query,
+            "limit": request.limit,
+            "date_from": request.date_from,
+            "date_to": request.date_to,
+            "read_access": (
+                request.read_access.value if request.read_access is not None else None
+            ),
+            "purpose": request.purpose.value if request.purpose is not None else None,
+            "page_size": request.page_size,
+            "total_limit": request.total_limit,
+            "item_kinds": [value.value for value in request.item_kinds],
+            "expected_target_kinds": [
+                value.value for value in request.expected_target_kinds
+            ],
+        }
+
+    def _cursor(
+        self,
+        family: str,
+        value: str | None,
+        *,
+        binding: Mapping[str, Any],
+    ) -> Mapping[str, Any]:
         if value is None:
             return {}
         state = self._refs.resolve_cursor(family=family, cursor=value)
         if not isinstance(state, Mapping):
             raise SocialWorkspaceValidationError("cursor binding is invalid")
+        if state.get("_binding") != dict(binding):
+            raise SocialWorkspaceValidationError("cursor request binding mismatch")
         return state
 
-    def _new_cursor(self, family: str, state: Mapping[str, Any]) -> str:
-        cursor = self._refs.mint_cursor(family=family, state=state)
+    def _new_cursor(
+        self,
+        family: str,
+        state: Mapping[str, Any],
+        *,
+        binding: Mapping[str, Any],
+    ) -> str:
+        if "_binding" in state:
+            raise SocialWorkspaceValidationError("cursor state contains reserved binding")
+        bound_state = {**dict(state), "_binding": dict(binding)}
+        cursor = self._refs.mint_cursor(family=family, state=bound_state)
         if not isinstance(cursor, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,512}", cursor):
             raise SocialWorkspaceValidationError("cursor minter returned invalid cursor")
         return cursor
@@ -695,22 +763,46 @@ class TelegramWorkspaceAdapter:
         permissions = None
         if callable(getattr(client, "get_permissions", None)):
             permissions = await _await(client.get_permissions(binding.entity, "me"))
-        creator = bool(getattr(binding.entity, "creator", False))
+        creator = (
+            bool(getattr(permissions, "is_creator", False))
+            if permissions is not None
+            else bool(getattr(binding.entity, "creator", False))
+        )
         rights = getattr(binding.entity, "admin_rights", None)
-        can_send = creator or bool(getattr(permissions, "send_messages", False))
-        can_post = creator or bool(getattr(rights, "post_messages", False))
-        actions: set[SocialAction] = {SocialAction.FORWARD, SocialAction.REACTION}
+        def live_right(name: str) -> bool:
+            if permissions is not None:
+                return bool(getattr(permissions, name, False))
+            return bool(getattr(rights, name, False))
+
+        is_admin = creator or live_right("is_admin")
+        can_send = creator or live_right("send_messages")
+        can_post = creator or live_right("post_messages")
+        can_edit = creator or live_right("edit_messages")
+        can_delete = creator or live_right("delete_messages")
+        can_story = creator or live_right("post_stories")
+        managed = is_admin or can_post or can_edit or can_delete or can_story
+        actions: set[SocialAction] = set()
         if binding.kind is SocialTargetKind.CHANNEL and can_post:
             actions.update({SocialAction.PUBLISH, SocialAction.SCHEDULE})
+        if binding.kind is SocialTargetKind.CHANNEL and managed:
+            actions.update(
+                {SocialAction.FORWARD, SocialAction.REACTION, SocialAction.COMMENT}
+            )
         if binding.kind is SocialTargetKind.GROUP and can_send:
-            actions.update({SocialAction.PUBLISH, SocialAction.COMMENT, SocialAction.SCHEDULE})
-        if creator or bool(getattr(rights, "edit_messages", False)):
+            actions.update(
+                {
+                    SocialAction.PUBLISH,
+                    SocialAction.COMMENT,
+                    SocialAction.SCHEDULE,
+                    SocialAction.FORWARD,
+                    SocialAction.REACTION,
+                }
+            )
+        if can_edit:
             actions.add(SocialAction.EDIT)
-        if creator or bool(getattr(rights, "delete_messages", False)):
+        if can_delete:
             actions.add(SocialAction.DELETE)
-        if binding.story_privacy and (
-            creator or bool(getattr(rights, "post_stories", False))
-        ):
+        if binding.story_privacy and can_story:
             actions.add(SocialAction.STORY)
         return actions if configured is None else actions & configured
 
@@ -833,10 +925,13 @@ class TelegramWorkspaceAdapter:
         family: str,
         more: bool,
         state: Mapping[str, Any] | None,
+        binding: Mapping[str, Any],
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {"results": results, "trust": _TRUST}
         if more and state:
-            payload["next_cursor"] = self._new_cursor(family, state)
+            payload["next_cursor"] = self._new_cursor(
+                family, state, binding=binding
+            )
         return payload
 
     async def _target_from_message(self, client: Any, message: Any) -> TelegramTargetBinding:
@@ -866,10 +961,11 @@ class TelegramWorkspaceAdapter:
             # The integration maps the fixed dialog-list tool to the closed "*"
             # sentinel because the provider-neutral enum has no LIST_TARGETS member.
             query = "" if request.query == "*" else (request.query or "").casefold()
-            cursor = self._cursor("target_search", request.cursor)
+            cursor_binding = self._cursor_binding(request)
+            cursor = self._cursor(
+                "target_search", request.cursor, binding=cursor_binding
+            )
             offset = cursor.get("offset", 0)
-            if cursor and cursor.get("query") != (request.query or ""):
-                raise SocialWorkspaceValidationError("cursor request binding mismatch")
             if type(offset) is not int or offset < 0 or offset > _MAX_GLOBAL_SCAN:
                 raise SocialWorkspaceValidationError("target cursor state is invalid")
             await self._fenced(lease)
@@ -913,6 +1009,7 @@ class TelegramWorkspaceAdapter:
             family="target_search",
             more=not request.target_ref and len(entities) > _MAX_PAGE,
             state={"offset": offset + _MAX_PAGE, "query": request.query or ""},
+            binding=self._cursor_binding(request),
         )
 
     async def _read_messages(
@@ -923,13 +1020,11 @@ class TelegramWorkspaceAdapter:
         target: TelegramTargetBinding,
     ) -> Mapping[str, Any]:
         family = "target_items"
-        cursor = self._cursor(family, request.cursor)
+        cursor_binding = self._cursor_binding(request, target_ref=target.target_ref)
+        cursor = self._cursor(
+            family, request.cursor, binding=cursor_binding
+        )
         offset_id = cursor.get("offset_id", 0)
-        if cursor and (
-            cursor.get("target_ref") != target.target_ref
-            or cursor.get("query") != (request.query or "")
-        ):
-            raise SocialWorkspaceValidationError("cursor request binding mismatch")
         if type(offset_id) is not int or offset_id < 0:
             raise SocialWorkspaceValidationError("cursor state is invalid")
         limit = min(request.limit, _MAX_PAGE)
@@ -956,6 +1051,7 @@ class TelegramWorkspaceAdapter:
             family=family,
             more=len(messages) > limit,
             state=state,
+            binding=cursor_binding,
         )
 
     async def _global_search(
@@ -964,10 +1060,11 @@ class TelegramWorkspaceAdapter:
         lease: TelegramLease,
         request: SocialReadRequest,
     ) -> Mapping[str, Any]:
-        cursor = self._cursor("global_search", request.cursor)
+        cursor_binding = self._cursor_binding(request)
+        cursor = self._cursor(
+            "global_search", request.cursor, binding=cursor_binding
+        )
         offset_id = cursor.get("offset_id", 0)
-        if cursor and cursor.get("query") != (request.query or ""):
-            raise SocialWorkspaceValidationError("cursor request binding mismatch")
         if type(offset_id) is not int or offset_id < 0:
             raise SocialWorkspaceValidationError("cursor state is invalid")
         limit = min(request.limit, _MAX_PAGE)
@@ -1005,6 +1102,7 @@ class TelegramWorkspaceAdapter:
             family="global_search",
             more=len(messages) > limit,
             state=state,
+            binding=cursor_binding,
         )
 
     async def _editorial(
@@ -1016,7 +1114,25 @@ class TelegramWorkspaceAdapter:
         target = self._target(request.target_ref or "")
         if target.kind not in {SocialTargetKind.CHANNEL, SocialTargetKind.GROUP}:
             raise SocialWorkspaceValidationError("editorial target must be channel or group")
-        cursor = self._cursor("editorial_sample", request.cursor)
+        if (
+            type(request.page_size) is not int
+            or not 1 <= request.page_size <= _MAX_PAGE
+            or type(request.total_limit) is not int
+            or not 1 <= request.total_limit <= _MAX_SAMPLE
+        ):
+            raise SocialWorkspaceValidationError("editorial bounds are invalid")
+        if not isinstance(request.sample_ref, str) or not re.fullmatch(
+            r"smp_[A-Za-z0-9_-]{24,160}", request.sample_ref
+        ):
+            raise SocialWorkspaceValidationError("editorial sample_ref is required")
+        if request.date_from is not None and request.date_to is not None and (
+            request.date_from > request.date_to
+        ):
+            raise SocialWorkspaceValidationError("editorial date range is reversed")
+        cursor_binding = self._cursor_binding(request, target_ref=target.target_ref)
+        cursor = self._cursor(
+            "editorial_sample", request.cursor, binding=cursor_binding
+        )
         offset_id = cursor.get("offset_id", 0)
         cumulative = cursor.get("cumulative_count", 0)
         if type(offset_id) is not int or type(cumulative) is not int or cumulative < 0:
@@ -1086,6 +1202,7 @@ class TelegramWorkspaceAdapter:
                     "offset_id": _provider_message_id(page[-1] if page else scanned[-1]),
                     "cumulative_count": next_count,
                 },
+                binding=cursor_binding,
             )
         return payload
 
@@ -1094,10 +1211,9 @@ class TelegramWorkspaceAdapter:
     ) -> Mapping[str, Any]:
         item = self._item(request.item_ref or "")
         target = self._target(item.target_ref)
-        cursor = self._cursor("comments", request.cursor)
+        cursor_binding = self._cursor_binding(request, target_ref=target.target_ref)
+        cursor = self._cursor("comments", request.cursor, binding=cursor_binding)
         offset_id = cursor.get("offset_id", 0)
-        if cursor and cursor.get("item_ref") != item.item_ref:
-            raise SocialWorkspaceValidationError("cursor request binding mismatch")
         response = await self._call(
             client,
             lease,
@@ -1126,6 +1242,7 @@ class TelegramWorkspaceAdapter:
                     "offset_id": _provider_message_id(messages[limit - 1]),
                     "item_ref": item.item_ref,
                 },
+                binding=cursor_binding,
             )
         return payload
 
@@ -1150,10 +1267,9 @@ class TelegramWorkspaceAdapter:
         stories = list(
             getattr(getattr(response, "stories", None), "stories", None) or []
         )
-        cursor = self._cursor("stories", request.cursor)
+        cursor_binding = self._cursor_binding(request, target_ref=target.target_ref)
+        cursor = self._cursor("stories", request.cursor, binding=cursor_binding)
         offset = cursor.get("offset", 0)
-        if cursor and cursor.get("target_ref") != target.target_ref:
-            raise SocialWorkspaceValidationError("cursor request binding mismatch")
         if type(offset) is not int or offset < 0:
             raise SocialWorkspaceValidationError("story cursor state is invalid")
         limit = min(request.limit, _MAX_PAGE)
@@ -1181,6 +1297,7 @@ class TelegramWorkspaceAdapter:
             family="stories",
             more=offset + limit < len(stories),
             state={"offset": offset + limit, "target_ref": target.target_ref},
+            binding=cursor_binding,
         )
 
     async def _statistics(self, client: Any, request: SocialReadRequest) -> Mapping[str, Any]:
@@ -1268,20 +1385,25 @@ class TelegramWorkspaceAdapter:
 
     async def _preflight(
         self, client: Any, intent: SocialActionIntent
-    ) -> tuple[TelegramTargetBinding, TelegramItemBinding | None]:
+    ) -> _PreflightSnapshot:
         item = self._item(intent.item_ref) if intent.item_ref else None
-        target_ref = intent.target_ref or (item.target_ref if item else None)
+        source = self._target(item.target_ref) if item is not None else None
         if intent.action is SocialAction.FORWARD:
-            target_ref = intent.destination_target_ref
-        target = self._target(target_ref or "")
-        actions = await self._live_actions(client, target)
-        if intent.action not in actions and not (
-            intent.action is SocialAction.COMMENT
-            and item is not None
-            and item.allowed_actions is not None
-            and SocialAction.COMMENT in item.allowed_actions
-        ):
+            target = self._target(intent.destination_target_ref or "")
+        elif source is not None:
+            target = source
+        else:
+            target = self._target(intent.target_ref or "")
+        checked_target = source if source is not None else target
+        actions = await self._live_actions(client, checked_target)
+        if intent.action not in actions:
             raise SocialWorkspaceValidationError("capability denied: unsupported_action")
+        if intent.action is SocialAction.FORWARD:
+            destination_actions = await self._live_actions(client, target)
+            if SocialAction.FORWARD not in destination_actions:
+                raise SocialWorkspaceValidationError(
+                    "capability denied: forward_destination"
+                )
         if item and item.allowed_actions is not None and intent.action not in item.allowed_actions:
             raise SocialWorkspaceValidationError("capability denied: item_action")
         if intent.action is SocialAction.SEND_MESSAGE and target.kind not in {
@@ -1297,7 +1419,7 @@ class TelegramWorkspaceAdapter:
         if intent.content:
             if len(intent.content.text) > 4096 or len(intent.content.media) > 10:
                 raise SocialWorkspaceValidationError("capability denied: content limit")
-        return target, item
+        return _PreflightSnapshot(target=target, source=source, item=item)
 
     async def _send_content(
         self,
@@ -1349,10 +1471,66 @@ class TelegramWorkspaceAdapter:
             )
         )
 
-    async def execute(self, intent: SocialActionIntent) -> Mapping[str, Any]:
+    async def _record_operation(
+        self, operation_ref: str, result: Mapping[str, Any]
+    ) -> Mapping[str, Any]:
+        self._recordless_operation_validation(operation_ref, result)
+        try:
+            await _await(
+                self._refs.record_operation(
+                    operation_ref=operation_ref, result=dict(result)
+                )
+            )
+        except Exception:
+            raise TelegramWorkspaceError(
+                "operation_ledger_failed", retry_safe=False
+            ) from None
+        return result
+
+    async def reconcile(self, operation_ref: str) -> Mapping[str, Any]:
+        if not isinstance(operation_ref, str) or not re.fullmatch(
+            r"op_[A-Za-z0-9_-]{24,160}", operation_ref
+        ):
+            raise SocialWorkspaceValidationError("operation_ref is invalid")
+        try:
+            binding = await _await(self._refs.resolve_operation(operation_ref))
+        except Exception:
+            raise TelegramWorkspaceError("operation_not_found", retry_safe=False) from None
+        if (
+            not isinstance(binding, TelegramOperationBinding)
+            or binding.operation_ref != operation_ref
+            or binding.result.get("operation_ref") != operation_ref
+        ):
+            raise SocialWorkspaceValidationError("operation ledger binding mismatch")
+        return dict(self._recordless_operation_validation(operation_ref, binding.result))
+
+    def _recordless_operation_validation(
+        self, operation_ref: str, result: Mapping[str, Any]
+    ) -> Mapping[str, Any]:
+        if result.get("operation_ref") != operation_ref or result.get("platform") != "telegram":
+            raise SocialWorkspaceValidationError("operation ledger binding mismatch")
+        if result.get("target_ref") is not None:
+            validate_opaque_ref(result.get("target_ref"), "target")
+        if result.get("item_ref") is not None:
+            validate_opaque_ref(result.get("item_ref"), "item")
+        error_code = result.get("error_code")
+        if error_code is not None and (
+            not isinstance(error_code, str)
+            or not re.fullmatch(r"[a-z][a-z0-9_]{1,63}", error_code)
+        ):
+            raise SocialWorkspaceValidationError("operation error_code is invalid")
+        validate_action_status_response(result)
+        return result
+
+    async def execute(
+        self,
+        intent: SocialActionIntent,
+        *,
+        operation_ref: str | None = None,
+    ) -> Mapping[str, Any]:
         if intent.platform is not SocialPlatform.TELEGRAM:
             raise SocialWorkspaceValidationError("Telegram adapter requires telegram platform")
-        operation_ref = self._refs.mint_operation(
+        operation_ref = operation_ref or self._refs.mint_operation(
             action=intent.action, idempotency_key=intent.idempotency_key
         )
         if not isinstance(operation_ref, str) or not re.fullmatch(
@@ -1361,7 +1539,8 @@ class TelegramWorkspaceAdapter:
             raise SocialWorkspaceValidationError("operation minter returned invalid ref")
 
         async def run(client: Any, lease: TelegramLease, attempt: _Attempt) -> Mapping[str, Any]:
-            target, item = await self._preflight(client, intent)
+            snapshot = await self._preflight(client, intent)
+            target, source, item = snapshot.target, snapshot.source, snapshot.item
             await self._fenced(lease)
             result: Any = None
             if intent.action in {SocialAction.SEND_MESSAGE, SocialAction.PUBLISH}:
@@ -1376,8 +1555,7 @@ class TelegramWorkspaceAdapter:
                     client, target, intent.content, attempt=attempt, schedule=schedule
                 )
             elif intent.action is SocialAction.COMMENT:
-                assert intent.content is not None and item is not None
-                source = self._target(item.target_ref)
+                assert intent.content is not None and item is not None and source is not None
                 result = await self._send_content(
                     client,
                     source,
@@ -1396,8 +1574,7 @@ class TelegramWorkspaceAdapter:
                 )
                 target = source
             elif intent.action is SocialAction.EDIT:
-                assert intent.content is not None and item is not None
-                source = self._target(item.target_ref)
+                assert intent.content is not None and item is not None and source is not None
                 if intent.content.media:
                     raise SocialWorkspaceValidationError("media replacement is unsupported")
                 compiled_entities = self._compile_entities(intent.content)
@@ -1413,14 +1590,12 @@ class TelegramWorkspaceAdapter:
                 )
                 target = source
             elif intent.action is SocialAction.DELETE:
-                assert item is not None
-                source = self._target(item.target_ref)
+                assert item is not None and source is not None
                 attempt.provider_mutation_attempted = True
                 await _await(client.delete_messages(source.entity, [item.message_id], revoke=True))
                 target = source
             elif intent.action is SocialAction.FORWARD:
-                assert item is not None
-                source = self._target(item.target_ref)
+                assert item is not None and source is not None
                 attempt.provider_mutation_attempted = True
                 result = await _await(
                     client.forward_messages(
@@ -1428,8 +1603,7 @@ class TelegramWorkspaceAdapter:
                     )
                 )
             elif intent.action is SocialAction.REACTION:
-                assert item is not None and intent.reaction is not None
-                source = self._target(item.target_ref)
+                assert item is not None and source is not None and intent.reaction is not None
                 reaction_request = self._types.request(
                     "reaction",
                     peer=source.entity,
@@ -1515,12 +1689,13 @@ class TelegramWorkspaceAdapter:
             return receipt
 
         try:
-            return await self._session(intent.action.value, run)
+            result = await self._session(intent.action.value, run)
+            return await self._record_operation(operation_ref, result)
         except TelegramWorkspaceError as exc:
             if exc.code in {
                 "outcome_unknown", "provider_cooldown", "provider_error", "lease_lost"
             } and not exc.retry_safe:
-                return {
+                result = {
                     "platform": "telegram",
                     "operation_ref": operation_ref,
                     "action": intent.action.value,
@@ -1528,6 +1703,7 @@ class TelegramWorkspaceAdapter:
                     "retry_safe": False,
                     "error_code": exc.code,
                 }
+                return await self._record_operation(operation_ref, result)
             raise
 
 
@@ -1536,6 +1712,7 @@ __all__ = [
     "TelegramGovernor",
     "TelegramLease",
     "TelegramOpaqueRefStore",
+    "TelegramOperationBinding",
     "TelegramTargetBinding",
     "TelegramItemBinding",
     "TelegramWorkspaceAdapter",

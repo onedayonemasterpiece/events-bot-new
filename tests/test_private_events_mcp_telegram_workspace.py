@@ -32,11 +32,13 @@ from private_events_mcp.social_workspace import (
     validate_capabilities,
     validate_action_status_response,
     validate_editorial_sample_response,
+    validate_read_request,
 )
 from private_events_mcp_telegram_adapter import (
     TelegramAssetBinding,
     TelegramItemBinding,
     TelegramLease,
+    TelegramOperationBinding,
     TelegramTargetBinding,
     TelegramWorkspaceAdapter,
     TelegramWorkspaceError,
@@ -49,7 +51,9 @@ USER_REF = "tgt_exactperson000001"
 CHANNEL_REF = "tgt_editorchannel0001"
 GROUP_REF = "tgt_commentgroup000001"
 DEST_REF = "tgt_forwardtarget0001"
+NO_RIGHT_REF = "tgt_norightschannel001"
 ITEM_REF = "itm_channelmessage001"
+NO_RIGHT_ITEM_REF = "itm_norightsmessage0001"
 ASSET_REF = "ast_stagedimage000001"
 EMOJI_REF = "ast_customemoji000001"
 
@@ -142,6 +146,7 @@ class FakeRefs:
                         SocialAction.DELETE,
                         SocialAction.FORWARD,
                         SocialAction.REACTION,
+                        SocialAction.COMMENT,
                         SocialAction.SCHEDULE,
                         SocialAction.STORY,
                     }
@@ -166,6 +171,15 @@ class FakeRefs:
                 "https://t.me/dest",
                 allowed_actions=frozenset(SocialAction),
             ),
+            NO_RIGHT_REF: TelegramTargetBinding(
+                NO_RIGHT_REF,
+                SocialTargetKind.CHANNEL,
+                Entity(103, username="readonly", title="Read only", broadcast=True),
+                "Read only",
+                "readonly",
+                "https://t.me/readonly",
+                allowed_actions=frozenset(SocialAction),
+            ),
         }
         self.items = {
             ITEM_REF: TelegramItemBinding(
@@ -181,7 +195,13 @@ class FakeRefs:
                         SocialAction.COMMENT,
                     }
                 ),
-            )
+            ),
+            NO_RIGHT_ITEM_REF: TelegramItemBinding(
+                NO_RIGHT_ITEM_REF,
+                NO_RIGHT_REF,
+                501,
+                frozenset(SocialAction),
+            ),
         }
         self.assets = {
             ASSET_REF: TelegramAssetBinding(
@@ -196,6 +216,7 @@ class FakeRefs:
         self.next_item = 1
         self.next_cursor = 1
         self.next_operation = 1
+        self.operations = {}
 
     def resolve_target(self, target_ref):
         return self.targets[target_ref]
@@ -249,6 +270,14 @@ class FakeRefs:
         self.next_operation += 1
         return ref
 
+    def record_operation(self, *, operation_ref, result):
+        self.operations[operation_ref] = TelegramOperationBinding(
+            operation_ref, dict(result)
+        )
+
+    def resolve_operation(self, operation_ref):
+        return self.operations[operation_ref]
+
 
 class FakeGovernor:
     def __init__(self) -> None:
@@ -291,6 +320,10 @@ class FakeClient:
             target_ref: [Message(value, f"text-{value}") for value in range(100, 0, -1)]
             for target_ref in (SELF_REF, USER_REF, CHANNEL_REF, GROUP_REF, DEST_REF)
         }
+        self.entity_refs = {
+            id(binding.entity): target_ref
+            for target_ref, binding in refs.targets.items()
+        }
         self.messages[CHANNEL_REF].append(Message(500, "root"))
         self.raise_on: str | None = None
         self.delay = 0.0
@@ -315,15 +348,33 @@ class FakeClient:
         raise LookupError("native secret 998877")
 
     async def get_permissions(self, entity, who):
-        del entity, who
-        return SimpleNamespace(send_messages=True)
+        del who
+        creator = bool(getattr(entity, "creator", False))
+        rights = getattr(entity, "admin_rights", None)
+        return SimpleNamespace(
+            is_creator=creator,
+            is_admin=creator,
+            send_messages=creator or bool(getattr(entity, "megagroup", False)),
+            post_messages=creator or bool(getattr(rights, "post_messages", False)),
+            edit_messages=creator or bool(getattr(rights, "edit_messages", False)),
+            delete_messages=creator or bool(getattr(rights, "delete_messages", False)),
+            post_stories=creator or bool(getattr(rights, "post_stories", False)),
+        )
 
     async def iter_dialogs(self, *, limit):
         for binding in list(self.refs.targets.values())[:limit]:
             yield SimpleNamespace(entity=binding.entity)
 
     def _target_ref(self, entity):
-        return next(ref for ref, binding in self.refs.targets.items() if binding.entity is entity)
+        current = next(
+            (
+                ref
+                for ref, binding in self.refs.targets.items()
+                if binding.entity is entity
+            ),
+            None,
+        )
+        return current or self.entity_refs[id(entity)]
 
     async def iter_messages(self, entity, *, limit, offset_id=0, search=None):
         values = self.messages[self._target_ref(entity)]
@@ -460,7 +511,7 @@ def intent(action, **changes):
 
 
 @pytest.mark.asyncio
-async def test_saved_self_and_exact_user_channel_group_resolution(harness):
+async def test_saved_self_and_core_compatible_exact_user_resolution(harness):
     adapter, _, _, _ = harness
     saved = await adapter.resolve(
         read_request(
@@ -478,8 +529,23 @@ async def test_saved_self_and_exact_user_channel_group_resolution(harness):
         "trust": "untrusted_external_data",
     }
 
+    resolved = await adapter.resolve(
+        read_request(
+            SocialReadOperation.RESOLVE_TARGET,
+            target_locator=TargetLocator(TargetLocatorKind.USERNAME, "exact_user"),
+            expected_target_kinds=(SocialTargetKind.USER,),
+        )
+    )
+    assert resolved["kind"] == "user"
+    assert "id" not in resolved and "entity" not in resolved
+
+
+@pytest.mark.asyncio
+async def test_transport_classifies_channel_and_group_but_is_not_core_acceptance(harness):
+    """Core currently blocks these requests; this covers only adapter classification."""
+
+    adapter, _, _, _ = harness
     for value, kind in (
-        ("exact_user", SocialTargetKind.USER),
         ("https://t.me/editorial", SocialTargetKind.CHANNEL),
         ("101", SocialTargetKind.GROUP),
     ):
@@ -499,6 +565,21 @@ async def test_saved_self_and_exact_user_channel_group_resolution(harness):
         )
         assert resolved["kind"] == kind.value
         assert "id" not in resolved and "entity" not in resolved
+
+
+def test_core_exact_resolver_blocks_channel_group_before_adapter_integration():
+    with pytest.raises(Exception, match="must expect only user"):
+        validate_read_request(
+            {
+                "platform": "telegram",
+                "operation": "resolve_target",
+                "target_locator": {
+                    "kind": "profile_link",
+                    "value": "https://t.me/editorial",
+                },
+                "expected_target_kinds": ["channel"],
+            }
+        )
 
 
 @pytest.mark.asyncio
@@ -605,6 +686,94 @@ async def test_dialog_search_target_history_and_global_keyword_search_are_bounde
 
 
 @pytest.mark.asyncio
+async def test_cursor_is_bound_to_operation_target_query_sample_and_dates(harness):
+    adapter, _, refs, _ = harness
+    history_request = read_request(
+        SocialReadOperation.LIST_ITEMS, target_ref=CHANNEL_REF, limit=7
+    )
+    history = await adapter.read(history_request)
+    cursor = history["next_cursor"]
+    for changed in (
+        replace(history_request, target_ref=GROUP_REF, cursor=cursor),
+        replace(
+            history_request,
+            operation=SocialReadOperation.SEARCH_ITEMS,
+            query="text",
+            cursor=cursor,
+        ),
+    ):
+        with pytest.raises(Exception, match="cursor request binding mismatch"):
+            await adapter.read(changed)
+
+    search_request = read_request(
+        SocialReadOperation.SEARCH_ITEMS,
+        target_ref=CHANNEL_REF,
+        query="text",
+        limit=7,
+    )
+    search = await adapter.read(search_request)
+    with pytest.raises(Exception, match="cursor request binding mismatch"):
+        await adapter.read(
+            replace(search_request, query="other", cursor=search["next_cursor"])
+        )
+
+    sample_request = read_request(
+        SocialReadOperation.EDITORIAL_SAMPLE,
+        target_ref=CHANNEL_REF,
+        sample_ref="smp_editorialsample000000000001",
+        page_size=25,
+        total_limit=100,
+        purpose=SocialReadPurpose.EDITORIAL_ANALYSIS,
+        expected_target_kinds=(SocialTargetKind.CHANNEL,),
+        date_from="2026-08-01",
+        date_to="2026-08-31",
+    )
+    sample = await adapter.read(sample_request)
+    sample_cursor = sample["next_cursor"]
+    for changed in (
+        replace(
+            sample_request,
+            sample_ref="smp_anothersample0000000000001",
+            cursor=sample_cursor,
+        ),
+        replace(sample_request, target_ref=GROUP_REF, cursor=sample_cursor),
+        replace(sample_request, date_from="2026-08-02", cursor=sample_cursor),
+    ):
+        with pytest.raises(Exception, match="cursor request binding mismatch"):
+            await adapter.read(changed)
+
+    family, stored = refs.cursors[sample_cursor]
+    assert family == "editorial_sample"
+    stored["_binding"]["platform"] = "vk"
+    with pytest.raises(Exception, match="cursor request binding mismatch"):
+        await adapter.read(replace(sample_request, cursor=sample_cursor))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("page_size", "total_limit"),
+    [(26, 100), (25, 101), (0, 100), (25, 0)],
+)
+async def test_adapter_enforces_editorial_bounds_without_core_validator(
+    harness, page_size, total_limit
+):
+    adapter, client, _, _ = harness
+    with pytest.raises(Exception, match="editorial bounds are invalid"):
+        await adapter.read(
+            read_request(
+                SocialReadOperation.EDITORIAL_SAMPLE,
+                target_ref=CHANNEL_REF,
+                sample_ref="smp_editorialsample000000000001",
+                page_size=page_size,
+                total_limit=total_limit,
+                purpose=SocialReadPurpose.EDITORIAL_ANALYSIS,
+                expected_target_kinds=(SocialTargetKind.CHANNEL,),
+            )
+        )
+    assert client.calls == []
+
+
+@pytest.mark.asyncio
 async def test_similar_stories_reactions_comments_and_bounded_stats(harness):
     adapter, _, _, _ = harness
     similar = await adapter.read(
@@ -692,6 +861,71 @@ async def test_every_closed_mutation_family(harness, action, changes, provider_c
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("action", "changes", "provider_call"),
+    [
+        (SocialAction.EDIT, {"item_ref": ITEM_REF, "content": content("edit")}, "edit_message"),
+        (SocialAction.DELETE, {"item_ref": ITEM_REF}, "delete_messages"),
+        (SocialAction.COMMENT, {"item_ref": ITEM_REF, "content": content("reply")}, "send_message"),
+        (SocialAction.REACTION, {"item_ref": ITEM_REF, "reaction": "🔥"}, "reaction"),
+        (
+            SocialAction.FORWARD,
+            {"item_ref": ITEM_REF, "destination_target_ref": DEST_REF},
+            "forward_messages",
+        ),
+    ],
+)
+async def test_mutations_use_one_immutable_preflight_binding_snapshot(
+    harness, action, changes, provider_call
+):
+    adapter, client, refs, _ = harness
+    old_source = refs.targets[CHANNEL_REF]
+    old_destination = refs.targets[DEST_REF]
+    swapped = False
+
+    async def permissions_then_swap(entity, who):
+        nonlocal swapped
+        result = await FakeClient.get_permissions(client, entity, who)
+        if not swapped:
+            swapped = True
+            refs.targets[CHANNEL_REF] = replace(
+                old_source,
+                entity=Entity(
+                    999,
+                    username="swapped_source",
+                    title="Swapped source",
+                    broadcast=True,
+                    creator=True,
+                ),
+                binding_version="v2",
+            )
+            refs.targets[DEST_REF] = replace(
+                old_destination,
+                entity=Entity(
+                    998,
+                    username="swapped_destination",
+                    title="Swapped destination",
+                    megagroup=True,
+                    creator=True,
+                ),
+                binding_version="v2",
+            )
+        return result
+
+    client.get_permissions = permissions_then_swap
+    receipt = await adapter.execute(intent(action, **changes))
+    assert receipt["status"] == "succeeded"
+    provider_values = next(value for name, value in client.calls if name == provider_call)
+    if action is SocialAction.FORWARD:
+        assert provider_values["entity"] is old_destination.entity
+        assert provider_values["from_peer"] is old_source.entity
+    elif action is SocialAction.REACTION:
+        assert provider_values["peer"] is old_source.entity
+    else:
+        assert provider_values["entity"] is old_source.entity
+
+
+@pytest.mark.asyncio
 async def test_exact_capability_preflight_denies_without_provider_mutation(harness):
     adapter, client, refs, _ = harness
     original = refs.targets[CHANNEL_REF]
@@ -702,6 +936,38 @@ async def test_exact_capability_preflight_denies_without_provider_mutation(harne
         await adapter.execute(
             intent(SocialAction.PUBLISH, target_ref=CHANNEL_REF, content=content())
         )
+    assert client.calls == []
+
+
+@pytest.mark.asyncio
+async def test_no_rights_broadcast_advertises_and_executes_no_mutations(harness):
+    adapter, client, _, _ = harness
+    capabilities = await adapter.capabilities(NO_RIGHT_REF)
+    assert capabilities["target_kinds"] == ["channel"]
+    assert capabilities["actions"] == []
+    denied = (
+        intent(
+            SocialAction.PUBLISH,
+            target_ref=NO_RIGHT_REF,
+            content=content("not allowed"),
+        ),
+        intent(SocialAction.EDIT, item_ref=NO_RIGHT_ITEM_REF, content=content("x")),
+        intent(SocialAction.DELETE, item_ref=NO_RIGHT_ITEM_REF),
+        intent(
+            SocialAction.FORWARD,
+            item_ref=NO_RIGHT_ITEM_REF,
+            destination_target_ref=DEST_REF,
+        ),
+        intent(SocialAction.REACTION, item_ref=NO_RIGHT_ITEM_REF, reaction="👍"),
+        intent(
+            SocialAction.COMMENT,
+            item_ref=NO_RIGHT_ITEM_REF,
+            content=content("no"),
+        ),
+    )
+    for denied_intent in denied:
+        with pytest.raises(Exception, match="capability denied"):
+            await adapter.execute(denied_intent)
     assert client.calls == []
 
 
@@ -726,12 +992,16 @@ async def test_provider_errors_and_outputs_never_leak_native_ids_or_secrets(harn
 async def test_timeout_is_unknown_without_retry_and_floodwait_is_persisted(harness):
     adapter, client, _, governor = harness
     client.raise_on = "send_message"
+    runtime_operation_ref = "op_runtimeledger0000000000000001"
     unknown = await adapter.execute(
-        intent(SocialAction.SEND_MESSAGE, target_ref=USER_REF, content=content())
+        intent(SocialAction.SEND_MESSAGE, target_ref=USER_REF, content=content()),
+        operation_ref=runtime_operation_ref,
     )
+    assert unknown["operation_ref"] == runtime_operation_ref
     assert unknown["status"] == "outcome_unknown"
     assert unknown["retry_safe"] is False
     assert len([name for name, _ in client.calls if name == "send_message"]) == 1
+    assert await adapter.reconcile(runtime_operation_ref) == unknown
 
     client.raise_on = "similar_channels"
     with pytest.raises(TelegramWorkspaceError) as flood:
@@ -748,13 +1018,29 @@ async def test_timeout_is_unknown_without_retry_and_floodwait_is_persisted(harne
     assert "AUTH_KEY" not in repr(flood.value)
 
 
+@pytest.mark.asyncio
+async def test_caller_operation_ref_is_the_only_receipt_and_reconciliation_key(harness):
+    adapter, _, refs, _ = harness
+    operation_ref = "op_callerissued000000000000001"
+    receipt = await adapter.execute(
+        intent(SocialAction.PUBLISH, target_ref=CHANNEL_REF, content=content()),
+        operation_ref=operation_ref,
+    )
+    assert receipt["operation_ref"] == operation_ref
+    assert list(refs.operations) == [operation_ref]
+    assert await adapter.reconcile(operation_ref) == receipt
+    with pytest.raises(TelegramWorkspaceError) as missing:
+        await adapter.reconcile("op_missingoperation000000000001")
+    assert missing.value.code == "operation_not_found"
+
+
 def test_surface_is_closed_lazy_and_contains_no_credential_or_raw_escape_hatch():
     public = {
         name
         for name, value in inspect.getmembers(TelegramWorkspaceAdapter, inspect.isfunction)
         if not name.startswith("_")
     }
-    assert public == {"capabilities", "resolve", "read", "execute"}
+    assert public == {"capabilities", "resolve", "read", "execute", "reconcile"}
     source = Path("private_events_mcp_telegram_adapter.py").read_text()
     assert "import telethon" in source  # lazy inside the fixed type factory
     assert "TELEGRAM_AUTH_BUNDLE_E2E" not in source
@@ -763,7 +1049,8 @@ def test_surface_is_closed_lazy_and_contains_no_credential_or_raw_escape_hatch()
     for forbidden in ("raw_method", "raw_kwargs", "file_path", "fetch_url", "base64"):
         assert forbidden not in source
     signature = inspect.signature(TelegramWorkspaceAdapter.execute)
-    assert list(signature.parameters) == ["self", "intent"]
+    assert list(signature.parameters) == ["self", "intent", "operation_ref"]
+    assert signature.parameters["operation_ref"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
 def test_installed_telethon_satisfies_the_guarded_fixed_feature_set():
