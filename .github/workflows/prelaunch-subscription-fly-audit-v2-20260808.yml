@@ -1,0 +1,302 @@
+name: Prelaunch subscription Fly private audit v2 20260808
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/prelaunch-subscription-fly-audit-v2-20260808.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prelaunch-subscription-fly-private-audit-v2
+  cancel-in-progress: false
+
+jobs:
+  read-through-production-runtime:
+    if: ${{ github.event.pull_request.head.ref == 'automation/prelaunch-control-20260804' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: production
+    env:
+      TOKEN_01: ${{ secrets.FLY_API_TOKEN }}
+      TOKEN_02: ${{ secrets.FLY_ACCESS_TOKEN }}
+      TOKEN_03: ${{ secrets.FLY_API_TOKEN_DEPLOY }}
+      TOKEN_04: ${{ secrets.FLY_API_TOKEN_EVENTS_BOT }}
+      TOKEN_05: ${{ secrets.FLY_API_TOKEN_PRODUCTION }}
+      TOKEN_06: ${{ secrets.FLY_API_TOKEN_SMART_UPDATE_AUDIT }}
+      TOKEN_07: ${{ secrets.FLY_SSH_TOKEN }}
+      TOKEN_08: ${{ secrets.FLY_TOKEN_DEPLOY }}
+      TOKEN_09: ${{ secrets.FLY_TOKEN_EVENTS_BOT }}
+      TOKEN_10: ${{ secrets.FLY_TOKEN_PRIMARY }}
+      TOKEN_11: ${{ secrets.FLY_TOKEN_PRODUCTION }}
+      TOKEN_12: ${{ secrets.FLY_SECRET }}
+      TOKEN_13: ${{ secrets.FLY_TOKEN }}
+    steps:
+      - name: Set up flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+        with:
+          version: 0.4.78
+
+      - name: Query protected subscriptions and encrypt before persistence
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+
+          app='events-bot-new-wngqia'
+          artifact_dir='artifacts/prelaunch-subscription-fly-audit-v2'
+          work_dir="${RUNNER_TEMP}/prelaunch-subscription-fly-audit-v2"
+          raw="$work_dir/raw.json"
+          payload="$work_dir/payload.json"
+          public_key="$work_dir/public.pem"
+          encrypted="$artifact_dir/audit.enc.json"
+          mkdir -p "$artifact_dir" "$work_dir"
+
+          names=(
+            FLY_API_TOKEN FLY_ACCESS_TOKEN FLY_API_TOKEN_DEPLOY
+            FLY_API_TOKEN_EVENTS_BOT FLY_API_TOKEN_PRODUCTION
+            FLY_API_TOKEN_SMART_UPDATE_AUDIT FLY_SSH_TOKEN
+            FLY_TOKEN_DEPLOY FLY_TOKEN_EVENTS_BOT FLY_TOKEN_PRIMARY
+            FLY_TOKEN_PRODUCTION FLY_SECRET FLY_TOKEN
+          )
+          chosen_value=''
+          chosen_name=''
+          for i in $(seq -w 1 13); do
+            var="TOKEN_${i}"
+            value="${!var:-}"
+            [[ -n "$value" ]] || continue
+            if FLY_API_TOKEN="$value" flyctl status --app "$app" >/dev/null 2>&1; then
+              chosen_value="$value"
+              chosen_name="${names[$((10#$i - 1))]}"
+              break
+            fi
+          done
+          [[ -n "$chosen_value" ]] || {
+            echo 'fly_usable_token=none'
+            exit 1
+          }
+          echo "fly_usable_token=${chosen_name}"
+
+          cat > "$public_key" <<'PEM'
+          -----BEGIN PUBLIC KEY-----
+          MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAnSCzxb3KdzCPDhXCPcZF
+          P3udCUUU5u3wL7oTKBp6xdJRE3SCowM8qYPdSAolsBO/c9Q5MzocHh7+q1Uk9ff4
+          M6jzMpmnr9KdCZ8il8Ris5eg0Z5z5CoGzXSjYT4VuHSBLlyJbsqJ6Y0fjZsjO8/e
+          EpOdiIVdcFvxoQ83+1my/nWxP3B1TQ5qrwcLdFf3uJXorFJFL2yOYPHa2yYvxOjj
+          Oh7yQ3Ya+YnMs9aOG6Im4ffYeH65ZwivfuMnzRlwUYU+s/ZxvAn/rF7FWxQ4ENVl
+          QVGuJCHKvWftzu6G1p4oVsavmr9KjCxGnI4/49VoI6eXi1jyIZoPOXIKL5X7msap
+          syPUmMP8tHx2h6SEQlQK0TRpRB8X17bzZbI+3OfXDW9Skhw8mcBkj7wPLEZRPd76
+          2H+iLUHFsx7ETqHTLJ6Xsql7sZIz4oZK1NpxMOW4xXkAUEmwKBa3d6UxP6/aiukU
+          Vt5ymGRWYdjg1OxK6kT6qbyv2P5M+0rkkTavr301ODSmwRd3PakEACk8HAhUnWIa
+          reMzHWFkxBOANePXuOVX3ytIu58/4/lt1eJc7i6ewnSSqB3gjbcI4OczHdLD9vGK
+          sH2lLRujyUjyXuyXI9dt0I/nwl/MF/DLWrZsIP4xa5cdPwwPpTTffWj/+H2LgUDu
+          qX++cTcYiS3Aamnwuhv80osCAwEAAQ==
+          -----END PUBLIC KEY-----
+          PEM
+          sed -i 's/^          //' "$public_key"
+
+          cat > "$work_dir/query.py" <<'REMOTE_PY'
+          import json
+          import os
+          import sys
+          import urllib.parse
+          import urllib.request
+
+          SINCE = "2026-08-08T05:29:00Z"
+          FIELDS = (
+              "email,source,consent_version,first_requested_at,last_requested_at,"
+              "request_count,delivery_status,delivery_attempt_count,notification_sent_at,created_at,updated_at"
+          )
+          diagnostics = []
+
+          def emit(rows, method, **extra):
+              print(json.dumps({
+                  "query_success": True,
+                  "method": method,
+                  "since": SINCE,
+                  "rows": rows,
+                  "diagnostics": diagnostics,
+                  **extra,
+              }, separators=(",", ":")))
+              raise SystemExit(0)
+
+          urls = []
+          keys = []
+          dsns = []
+          for name, raw_value in os.environ.items():
+              value = raw_value.strip()
+              upper = name.upper()
+              if "SUPABASE" in upper and value.startswith("https://"):
+                  urls.append((name, value.rstrip("/")))
+              if (
+                  "SUPABASE" in upper
+                  and value
+                  and not value.startswith(("https://", "postgres://", "postgresql://"))
+                  and any(word in upper for word in ("SERVICE", "SECRET", "KEY", "TOKEN"))
+                  and "PUBLISHABLE" not in upper
+                  and "ANON" not in upper
+              ):
+                  keys.append((name, value))
+              if value.startswith(("postgres://", "postgresql://")) and any(
+                  word in upper for word in ("DATABASE", "POSTGRES", "SUPABASE", "PG")
+              ):
+                  dsns.append((name, value))
+
+          query = urllib.parse.urlencode({
+              "select": FIELDS,
+              "source": "eq.prelaunch_home",
+              "last_requested_at": f"gte.{SINCE}",
+              "order": "last_requested_at.desc",
+              "limit": "50",
+          }, safe=".,")
+          for url_name, base in urls:
+              for key_name, key in keys:
+                  request = urllib.request.Request(
+                      f"{base}/rest/v1/prelaunch_launch_subscription?{query}",
+                      headers={
+                          "apikey": key,
+                          "Authorization": f"Bearer {key}",
+                          "Accept": "application/json",
+                          "Accept-Profile": "personalization",
+                      },
+                  )
+                  try:
+                      with urllib.request.urlopen(request, timeout=20) as response:
+                          rows = json.loads(response.read().decode("utf-8"))
+                      if isinstance(rows, list):
+                          emit(rows, "postgrest", url_env=url_name, key_env=key_name)
+                  except Exception as exc:
+                      diagnostics.append({
+                          "method": "postgrest",
+                          "url_env": url_name,
+                          "key_env": key_name,
+                          "result": type(exc).__name__,
+                      })
+
+          sql = """
+          select email, source, consent_version, first_requested_at, last_requested_at,
+                 request_count, delivery_status, delivery_attempt_count,
+                 notification_sent_at, created_at, updated_at
+            from personalization.prelaunch_launch_subscription
+           where source = 'prelaunch_home'
+             and last_requested_at >= timestamptz '2026-08-08 05:29:00+00'
+           order by last_requested_at desc
+           limit 50
+          """
+          for dsn_name, dsn in dsns:
+              for driver in ("psycopg", "psycopg2"):
+                  try:
+                      module = __import__(driver)
+                      connection = module.connect(dsn)
+                      try:
+                          cursor = connection.cursor()
+                          cursor.execute(sql)
+                          columns = [item[0] for item in cursor.description]
+                          rows = [
+                              {key: (value.isoformat() if hasattr(value, "isoformat") else value)
+                               for key, value in zip(columns, row)}
+                              for row in cursor.fetchall()
+                          ]
+                      finally:
+                          connection.close()
+                      emit(rows, f"postgres:{driver}", dsn_env=dsn_name)
+                  except Exception as exc:
+                      diagnostics.append({
+                          "method": f"postgres:{driver}",
+                          "dsn_env": dsn_name,
+                          "result": type(exc).__name__,
+                      })
+
+          print(json.dumps({
+              "query_success": False,
+              "method": "none",
+              "since": SINCE,
+              "rows": [],
+              "available_url_envs": [name for name, _ in urls],
+              "available_key_envs": [name for name, _ in keys],
+              "available_dsn_envs": [name for name, _ in dsns],
+              "diagnostics": diagnostics,
+          }, separators=(",", ":")))
+          REMOTE_PY
+          sed -i 's/^          //' "$work_dir/query.py"
+
+          remote_command='cd /app && python3 -c '\''import sys; exec(compile(sys.stdin.read(), "<prelaunch_subscription_audit>", "exec"), {"__name__":"__main__"})'\'''
+          FLY_API_TOKEN="$chosen_value" flyctl ssh console \
+            --app "$app" --pty=false --command "$remote_command" \
+            < "$work_dir/query.py" > "$raw"
+          jq -e '.rows | type == "array"' "$raw" >/dev/null
+
+          RAW_PATH="$raw" OUTPUT_PATH="$payload" node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const raw = JSON.parse(readFileSync(process.env.RAW_PATH, 'utf8'));
+          const allowed = new Set([
+            'email', 'source', 'consent_version', 'first_requested_at', 'last_requested_at',
+            'request_count', 'delivery_status', 'delivery_attempt_count',
+            'notification_sent_at', 'created_at', 'updated_at',
+          ]);
+          const rows = (Array.isArray(raw.rows) ? raw.rows : []).map((row) => Object.fromEntries(
+            Object.entries(row || {}).filter(([key]) => allowed.has(key)),
+          ));
+          writeFileSync(process.env.OUTPUT_PATH, `${JSON.stringify({
+            schema_version: 'prelaunch_subscription_private_audit_v4',
+            queried_at: new Date().toISOString(),
+            since: raw.since,
+            query_success: raw.query_success === true,
+            method: raw.method || 'none',
+            row_count: rows.length,
+            rows,
+            diagnostics: {
+              url_env: raw.url_env || null,
+              key_env: raw.key_env || null,
+              dsn_env: raw.dsn_env || null,
+              available_url_envs: raw.available_url_envs || [],
+              available_key_envs: raw.available_key_envs || [],
+              available_dsn_envs: raw.available_dsn_envs || [],
+              attempts: raw.diagnostics || [],
+            },
+          })}\n`, { mode: 0o600 });
+          NODE
+
+          PUBLIC_KEY_PATH="$public_key" PLAINTEXT_PATH="$payload" ENCRYPTED_PATH="$encrypted" node --input-type=module <<'NODE'
+          import { constants, createCipheriv, publicEncrypt, randomBytes } from 'node:crypto';
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const key = randomBytes(32);
+          const iv = randomBytes(12);
+          const plaintext = readFileSync(process.env.PLAINTEXT_PATH);
+          const cipher = createCipheriv('aes-256-gcm', key, iv);
+          const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+          const tag = cipher.getAuthTag();
+          const encryptedKey = publicEncrypt({
+            key: readFileSync(process.env.PUBLIC_KEY_PATH),
+            padding: constants.RSA_PKCS1_OAEP_PADDING,
+            oaepHash: 'sha256',
+          }, key);
+          writeFileSync(process.env.ENCRYPTED_PATH, `${JSON.stringify({
+            schema_version: 'private_audit_envelope_v1',
+            algorithm: 'RSA-OAEP-256+A256GCM',
+            encrypted_key: encryptedKey.toString('base64'),
+            iv: iv.toString('base64'),
+            tag: tag.toString('base64'),
+            ciphertext: ciphertext.toString('base64'),
+          })}\n`, { mode: 0o600 });
+          NODE
+
+          query_success="$(jq -r '.query_success' "$payload")"
+          method="$(jq -r '.method' "$payload")"
+          row_count="$(jq -r '.row_count' "$payload")"
+          rm -f "$raw" "$payload" "$public_key" "$work_dir/query.py"
+          echo "query_success=${query_success}"
+          echo "query_method=${method}"
+          echo "recent_rows=${row_count}"
+          test "$query_success" = true
+
+      - name: Upload encrypted private audit result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prelaunch-subscription-fly-audit-v2-${{ github.run_id }}
+          path: artifacts/prelaunch-subscription-fly-audit-v2/audit.enc.json
+          if-no-files-found: error
+          retention-days: 1
