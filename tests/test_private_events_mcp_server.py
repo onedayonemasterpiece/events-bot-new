@@ -283,7 +283,7 @@ async def test_codex_redirect_contract_rejects_non_literal_variants(
                     "client_id": config.codex_oauth_client_id,
                     "redirect_uri": redirect_uri,
                     "state": "state",
-                    "resource": config.resource,
+                    "resource": config.codex_resource,
                     "code_challenge": pkce_s256("v" * 64),
                     "code_challenge_method": "S256",
                 }
@@ -383,7 +383,7 @@ async def test_omitted_scope_uses_read_only_registered_default(config) -> None:
                     "client_id": config.codex_oauth_client_id,
                     "redirect_uri": "http://127.0.0.1:9000/callback/default-scope",
                     "state": "state",
-                    "resource": config.resource,
+                    "resource": config.codex_resource,
                     "code_challenge": pkce_s256("d" * 64),
                     "code_challenge_method": "S256",
                 }

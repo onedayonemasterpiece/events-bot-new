@@ -25,9 +25,10 @@ def fingerprint(value: str) -> str:
 
 def sanitized_endpoint_receipt(endpoint: str) -> dict[str, str]:
     parsed = urlsplit(endpoint)
+    suffix = "/codex/mcp" if parsed.path.endswith("/codex/mcp") else "/mcp"
     return {
         "public_origin": f"{parsed.scheme}://{parsed.netloc}",
-        "mcp_path": "/_private/<redacted>/mcp",
+        "mcp_path": f"/_private/<redacted>{suffix}",
         "endpoint_fingerprint": fingerprint(endpoint),
     }
 
@@ -40,7 +41,8 @@ async def run(credentials_path: Path, *, client_kind: str = "chatgpt") -> dict:
     client_secret = app.get("oauth_client_secret")
     operator_token = app["bootstrap_operator_token"]
     resource = endpoint
-    base_prefix = endpoint.rsplit("/mcp", 1)[0]
+    endpoint_suffix = "/codex/mcp" if endpoint.endswith("/codex/mcp") else "/mcp"
+    base_prefix = endpoint[: -len(endpoint_suffix)]
     authorize = base_prefix + "/oauth/authorize"
     token_endpoint = base_prefix + "/oauth/token"
     endpoint_parts = urlsplit(endpoint)

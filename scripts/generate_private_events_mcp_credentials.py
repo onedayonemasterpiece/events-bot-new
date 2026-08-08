@@ -67,10 +67,14 @@ def main() -> int:
     operator_token = token("operator_", 48)
     signing_key = token("signing_", 64)
     endpoint = f"{args.base_url}/_private/{path_secret}/mcp"
+    codex_endpoint = f"{args.base_url}/_private/{path_secret}/codex/mcp"
 
     chatgpt = {
         "name": "Events Bot — private production evidence",
-        "description": "Read-only event, incident and operations analysis",
+        "description": (
+            "Event/incident analysis plus generic text read/publication for explicitly "
+            "allowlisted Telegram and VK channels"
+        ),
         "mcp_url": endpoint,
         "authentication": "OAuth",
         "oauth_client_id": client_id,
@@ -80,6 +84,10 @@ def main() -> int:
             "events:read",
             "incidents:read",
             "operations:read",
+            "telegram:read",
+            "telegram:publish",
+            "vk:read",
+            "vk:publish",
             "offline_access",
         ],
         "notes": [
@@ -90,7 +98,7 @@ def main() -> int:
     }
     codex = {
         "name": "Events Bot — private production evidence",
-        "mcp_url": endpoint,
+        "mcp_url": codex_endpoint,
         "oauth_client_id": codex_client_id,
         "token_endpoint_auth_method": "none",
         "redirect_uri_contract": "http://127.0.0.1:<explicit-port>/callback/<opaque>",
@@ -157,6 +165,9 @@ def main() -> int:
         "public_origin": args.base_url,
         "mcp_path": "/_private/<redacted>/mcp",
         "endpoint_fingerprint": hashlib.sha256(endpoint.encode()).hexdigest()[:12],
+        "codex_endpoint_fingerprint": hashlib.sha256(
+            codex_endpoint.encode()
+        ).hexdigest()[:12],
     }, ensure_ascii=False))
     return 0
 

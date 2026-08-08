@@ -14,6 +14,13 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from aiohttp import web
 
+from .access_policy import (
+    CHATGPT_DEFAULT_SCOPES,
+    CHATGPT_MAX_SCOPES,
+    CODEX_DEFAULT_SCOPES,
+    CODEX_MAX_SCOPES,
+    SOCIAL_SCOPES,
+)
 from .auth_store import OAuthStateStore, OAuthStoreError
 from .config import PrivateEventsMCPConfig
 from .crypto import (
@@ -31,8 +38,7 @@ from .limits import SlidingWindowLimiter
 
 logger = logging.getLogger(__name__)
 
-ALL_SCOPES = frozenset({"events:read", "incidents:read", "operations:read", "offline_access"})
-DEFAULT_SCOPES = ALL_SCOPES - {"offline_access"}
+ALL_SCOPES = CHATGPT_MAX_SCOPES | CODEX_MAX_SCOPES
 SUBJECT = "events-bot-owner"
 _PKCE_CHALLENGE_RE = re.compile(r"^[A-Za-z0-9_-]{43}$")
 _PKCE_VERIFIER_RE = re.compile(r"^[A-Za-z0-9._~-]{43,128}$")
@@ -158,16 +164,16 @@ class PrivateOAuthServer:
                 client_id,
                 "client_secret_basic",
                 frozenset({self.config.resource}),
-                ALL_SCOPES,
-                DEFAULT_SCOPES,
+                CHATGPT_MAX_SCOPES,
+                CHATGPT_DEFAULT_SCOPES,
             )
         if constant_time_equal(client_id, self.config.codex_oauth_client_id):
             return OAuthClient(
                 client_id,
                 "none",
-                frozenset({getattr(self.config, "codex_resource", self.config.resource)}),
-                ALL_SCOPES,
-                DEFAULT_SCOPES,
+                frozenset({self.config.codex_resource}),
+                CODEX_MAX_SCOPES,
+                CODEX_DEFAULT_SCOPES,
             )
         raise OAuthHTTPError("unauthorized_client", "Unknown OAuth client")
 
@@ -326,12 +332,34 @@ class PrivateOAuthServer:
             return self._error_page(exc)
         sealed = self._seal_authorization_request(auth_request)
         scopes = ", ".join(sorted(auth_request.scopes))
+        client_name = (
+            "ChatGPT"
+            if auth_request.client_id == self.config.oauth_client_id
+            else "Codex"
+        )
+        social = auth_request.scopes & SOCIAL_SCOPES
+        capability_text = (
+            "Будет предоставлен доступ к событиям, incident reports и операционным "
+            "квитанциям."
+        )
+        social_warning = ""
+        if social:
+            capability_text += (
+                " Дополнительно запрошены generic-инструменты чтения/публикации "
+                "текста в явно разрешённых Telegram/VK-каналах."
+            )
+            if social & {"telegram:publish", "vk:publish"}:
+                social_warning = (
+                    '<p><strong>Внимание:</strong> publish-scopes разрешают создавать новые '
+                    "сообщения после отдельного prepare/commit шага.</p>"
+                )
         body = f"""<!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Подключить Events Bot</title>
 <style>body{{font:16px system-ui;max-width:680px;margin:48px auto;padding:0 20px;color:#151515}}input{{width:100%;box-sizing:border-box;padding:12px;font-size:16px}}button{{margin-top:16px;padding:12px 18px;font-size:16px}}code{{word-break:break-word}}.muted{{color:#666}}</style></head>
-<body><main><h1>Подключить Events Bot к ChatGPT</h1>
-<p>Будет предоставлен только read-only доступ к событиям, incident reports и операционным квитанциям.</p>
+<body><main><h1>Подключить Events Bot к {html.escape(client_name)}</h1>
+<p>{html.escape(capability_text)}</p>
+{social_warning}
 <p class="muted">Scopes: <code>{html.escape(scopes)}</code></p>
 <form method="post" autocomplete="off">
 <input type="hidden" name="authorization_request" value="{html.escape(sealed, quote=True)}">
@@ -621,10 +649,11 @@ class PrivateOAuthServer:
         return self._json_response(
             {
                 "name": "Events Bot private MCP",
-                "mode": "read_only",
-                "resource": self.config.resource,
+                "mode": "client_policy",
+                "resources": [self.config.resource, self.config.codex_resource],
                 "scopes": sorted(ALL_SCOPES),
-                "provider_network_calls": False,
+                "core_provider_network_calls": False,
+                "social_provider_operations": "injected_adapters_only",
                 "database_mode": "sqlite_read_only",
             }
         )

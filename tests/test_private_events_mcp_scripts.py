@@ -36,12 +36,18 @@ def test_generator_stdout_redacts_private_endpoint(tmp_path: Path) -> None:
         (output / "chatgpt-private-app-credentials.json").read_text(encoding="utf-8")
     )
     private_url = generated["chatgpt"]["mcp_url"]
+    codex_url = generated["codex"]["mcp_url"]
     path_secret = generated["deploy"]["PRIVATE_EVENTS_MCP_PATH_SECRET"]
     assert private_url not in completed.stdout
+    assert codex_url not in completed.stdout
     assert path_secret not in completed.stdout
     assert receipt["public_origin"] == "https://events.example"
     assert receipt["mcp_path"] == "/_private/<redacted>/mcp"
     assert len(receipt["endpoint_fingerprint"]) == 12
+    assert len(receipt["codex_endpoint_fingerprint"]) == 12
+    assert codex_url.endswith("/codex/mcp")
+    assert "telegram:publish" in generated["chatgpt"]["oauth_scopes"]
+    assert "telegram:publish" not in generated["codex"]["oauth_scopes"]
     assert output.stat().st_mode & 0o777 == 0o700
 
 
@@ -53,6 +59,11 @@ def test_smoke_receipt_redacts_private_endpoint() -> None:
     assert "mcp_super_secret_value" not in encoded
     assert receipt["public_origin"] == "https://events.example"
     assert receipt["mcp_path"] == "/_private/<redacted>/mcp"
+
+    codex_endpoint = "https://events.example/_private/mcp_super_secret_value/codex/mcp"
+    codex_receipt = sanitized_endpoint_receipt(codex_endpoint)
+    assert codex_endpoint not in json.dumps(codex_receipt)
+    assert codex_receipt["mcp_path"] == "/_private/<redacted>/codex/mcp"
 
 
 def test_private_artifact_is_created_exclusively_with_mode_0600(

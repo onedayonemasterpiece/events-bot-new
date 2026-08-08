@@ -12,7 +12,7 @@ from aiohttp import web
 
 from .access_policy import CHATGPT_MAX_SCOPES, CODEX_MAX_SCOPES
 from .config import PrivateEventsMCPConfig
-from .crypto import AccessIdentity, TokenValidationError, validate_access_token
+from .crypto import AccessIdentity, TokenValidationError
 from .limits import AdmissionController, RateLimitExceeded
 from .oauth import PrivateOAuthServer
 from .protocol import (
@@ -68,8 +68,8 @@ class PrivateEventsMCPServer:
         self.codex_protocol = MCPProtocol(
             read_tools,
             cache_ttl_seconds=config.cache_ttl_seconds,
-            challenge=self._challenge(
-                config.codex_resource_metadata_url,
+            challenge=self.oauth.challenge(
+                resource_metadata_url=config.codex_resource_metadata_url,
                 error="invalid_token",
                 description="Login required",
             ),
@@ -148,19 +148,6 @@ class PrivateEventsMCPServer:
         if origin and origin not in {self.public_origin, "https://chatgpt.com"}:
             raise web.HTTPForbidden(text="invalid_origin")
 
-    @staticmethod
-    def _challenge(
-        metadata_url: str,
-        *,
-        error: str,
-        description: str,
-    ) -> str:
-        safe_description = description.replace('"', "'")[:180]
-        return (
-            f'Bearer resource_metadata="{metadata_url}", error="{error}", '
-            f'error_description="{safe_description}"'
-        )
-
     def _endpoint_contract(self, path: str) -> tuple[str, str, MCPProtocol, frozenset[str], str]:
         if path == self.config.codex_mcp_path:
             return (
@@ -183,16 +170,12 @@ class PrivateEventsMCPServer:
         if not header:
             return None, False
         try:
-            if not header.startswith("Bearer ") or not header[7:].strip():
-                raise TokenValidationError("missing_token")
             resource, client_id, _protocol, max_scopes, _metadata = self._endpoint_contract(
                 request.path
             )
-            identity = validate_access_token(
-                header[7:].strip(),
-                signing_key=self.config.signing_key,
-                issuer=self.config.issuer,
-                audience=resource,
+            identity = self.oauth.verify_authorization_header(
+                header,
+                expected_resource=resource,
             )
             if identity.client_id != client_id or not identity.scopes.issubset(max_scopes):
                 raise TokenValidationError("wrong_client_or_scope")
@@ -231,8 +214,8 @@ class PrivateEventsMCPServer:
                     401,
                     "invalid_token",
                     correlation_id=correlation,
-                    authenticate=self._challenge(
-                        metadata_url,
+                    authenticate=self.oauth.challenge(
+                        resource_metadata_url=metadata_url,
                         error="invalid_token",
                         description="Access token is invalid or expired",
                     ),
@@ -405,26 +388,14 @@ class PrivateEventsMCPServer:
         self, _request: web.Request
     ) -> web.Response:
         return self.oauth._json_response(
-            {
-                "resource": self.config.codex_resource,
-                "authorization_servers": [self.config.issuer],
-                "scopes_supported": sorted(CODEX_MAX_SCOPES),
-                "resource_documentation": self.config.documentation_url,
-                "bearer_methods_supported": ["header"],
-            }
+            self.oauth.protected_resource_metadata_for(self.config.codex_resource)
         )
 
     async def handle_chatgpt_protected_resource_metadata(
         self, _request: web.Request
     ) -> web.Response:
         return self.oauth._json_response(
-            {
-                "resource": self.config.resource,
-                "authorization_servers": [self.config.issuer],
-                "scopes_supported": sorted(CHATGPT_MAX_SCOPES),
-                "resource_documentation": self.config.documentation_url,
-                "bearer_methods_supported": ["header"],
-            }
+            self.oauth.protected_resource_metadata_for(self.config.resource)
         )
 
     def register(self, app: web.Application) -> None:
