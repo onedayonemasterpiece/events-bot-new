@@ -36,7 +36,17 @@ test('Search workflow has independent no-mail schedules, L2 jobs and blocking po
   assert.match(source, /environment: \{ name: search-e2e \}/u);
   assert.match(source, /exit 1/u);
   assert.doesNotMatch(source, /focus-email|E2E_MAIL|IMAP|POSTBOX|real.?mail/iu);
-  assert.equal((source.match(/trap 'rm -f "\$\{RUNNER_TEMP\}\/appium-search-(?:android|ios)\.log"' EXIT/gu) || []).length, 2);
+  assert.match(source, /trap 'rm -f "\$\{RUNNER_TEMP\}\/appium-search-android\.log"' EXIT/u);
+  assert.match(source, /trap cleanup_appium EXIT/u);
+  assert.match(source, /cleanup_appium\(\)[\s\S]*kill "\$appium_pid"[\s\S]*wait "\$appium_pid"[\s\S]*search-ios-prior-startup-receipt\.json/u);
+  assert.match(source, /for attempt in 1 2/u);
+  assert.match(source, /mobile-startup-retry\.mjs/u);
+  assert.match(source, /E2E_APPIUM_LOG_PATH/u);
+  assert.match(source, /E2E_APPIUM_PRIOR_RECEIPT_PATH/u);
+  assert.match(source, /Retrying one pre-side-effect Appium\/WDA infrastructure startup/u);
+  assert.match(source, /kill "\$appium_pid"/u);
+  assert.equal((source.match(/issue-static-search-session\.mjs/gu) || []).length, 2,
+    'one broker issuance step per Android/iOS job; iOS retry must reuse the unconsumed callback');
   for (const jobName of ['browser', 'android', 'ios']) {
     const upload = parsed.jobs[jobName].steps.find((step) => String(step.name).startsWith('Upload sanitized'));
     assert.equal(upload?.with?.['include-hidden-files'], true, `${jobName} must upload .redaction-ok`);
