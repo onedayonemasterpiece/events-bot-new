@@ -142,7 +142,7 @@ def build_social_workspace_tools(
             request = validate_read_request(arguments)
             require_platform(request.platform.value)
             return request.required_scopes
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - normalize untrusted request errors
             raise rejected(exc) from None
 
     def action_scope(arguments: Mapping[str, Any]) -> frozenset[str]:
@@ -150,7 +150,7 @@ def build_social_workspace_tools(
             request = validate_prepare_request(arguments)
             require_platform(request.platform.value)
             return request.required_scopes
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - normalize untrusted request errors
             raise rejected(exc) from None
 
     def capabilities_scope(arguments: Mapping[str, Any]) -> frozenset[str]:
@@ -174,7 +174,7 @@ def build_social_workspace_tools(
             return required_scope_for_action(row["platform"], row["action"])
         except InvalidArgumentsError:
             raise
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - normalize state/validation errors
             raise rejected(exc) from None
 
     def commit_scope(arguments: Mapping[str, Any]) -> frozenset[str]:
@@ -229,7 +229,7 @@ def build_social_workspace_tools(
                           else runtime.read(request, context))
         except InvalidArgumentsError:
             raise
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - normalize adapter/runtime errors
             raise rejected(exc) from None
 
     async def targets_list(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
@@ -243,14 +243,14 @@ def build_social_workspace_tools(
             request = validate_prepare_request(arguments)
             require_platform(request.platform.value)
             return await runtime.prepare(request, context)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - normalize adapter/runtime errors
             raise rejected(exc) from None
 
     async def commit(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
         try:
             commit_scope(arguments)
             return await runtime.commit(arguments, context)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - normalize adapter/runtime errors
             raise rejected(exc) from None
 
     async def status(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
@@ -260,7 +260,7 @@ def build_social_workspace_tools(
             if kind == "operation":
                 return await runtime.reconcile(ref, context)
             return await runtime.status(kind, ref, context)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - normalize adapter/runtime errors
             raise rejected(exc) from None
 
     async def asset_stage(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
@@ -268,7 +268,7 @@ def build_social_workspace_tools(
             request = validate_asset_stage_request(arguments)
             require_platform(request.platform.value)
             return await runtime.stage_asset(request, context)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - normalize adapter/runtime errors
             raise rejected(exc) from None
 
     async def asset_status(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
@@ -276,7 +276,7 @@ def build_social_workspace_tools(
             ref = validate_asset_status_request(arguments)
             asset_status_scope(arguments)
             return await runtime.asset_status(ref, context)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - normalize adapter/runtime errors
             raise rejected(exc) from None
 
     capability_schema = {

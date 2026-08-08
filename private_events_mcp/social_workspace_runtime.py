@@ -698,7 +698,7 @@ class SocialWorkspaceRuntime:
                 raise SocialWorkspaceRuntimeError(
                     "social provider operation timed out"
                 ) from None
-            except Exception:
+            except Exception:  # noqa: BLE001 - provider exception text is untrusted
                 raise self._safe_provider_error() from None
             safe = self._sanitize_provider_output(raw, platform, principal,
                 known_refs={("target", native): target_ref} if native and target_ref else None)
@@ -737,7 +737,7 @@ class SocialWorkspaceRuntime:
                 raise SocialWorkspaceRuntimeError(
                     "social provider operation timed out"
                 ) from None
-            except Exception:
+            except Exception:  # noqa: BLE001 - provider exception text is untrusted
                 raise self._safe_provider_error() from None
             safe = self._sanitize_provider_output(raw, platform, principal)
             if not isinstance(safe, dict):
@@ -827,7 +827,7 @@ class SocialWorkspaceRuntime:
                 raise SocialWorkspaceRuntimeError(
                     "social provider operation timed out"
                 ) from None
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - provider exception text is untrusted
                 flood_seconds = int(getattr(exc, "retry_after", 0) or 0)
                 raise self._safe_provider_error() from None
             safe = self._sanitize_provider_output(raw, platform, principal, known_refs=known)
@@ -1135,7 +1135,7 @@ class SocialWorkspaceRuntime:
             self._audit(principal, platform=platform, operation="commit", outcome="outcome_unknown",
                         reason="provider_timeout", target_ref=target_ref, action_digest=digest)
             return unknown
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - classify post-attempt failures safely
             if provider_returned:
                 withheld = {
                     "platform": platform,
@@ -1234,7 +1234,7 @@ class SocialWorkspaceRuntime:
             return current
         except SocialWorkspaceRuntimeError:
             raise
-        except Exception:
+        except Exception:  # noqa: BLE001 - provider exception text is untrusted
             self._audit(
                 principal, platform=current["platform"], operation="reconcile",
                 outcome="failed", reason="provider_failure",
