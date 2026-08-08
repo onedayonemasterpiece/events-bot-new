@@ -20,7 +20,7 @@ import urllib.request
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 GITHUB_ISSUER = "https://token.actions.githubusercontent.com"
 GITHUB_JWKS_URL = f"{GITHUB_ISSUER}/.well-known/jwks"
@@ -374,9 +374,12 @@ def process(
         raise BrokerError("issuer_response_invalid", status=503)
     action_link = str(properties.get("action_link") if isinstance(properties, Mapping) else "")
     action = urlsplit(action_link)
+    action_query = parse_qs(action.query, keep_blank_values=True)
+    issued_redirect = str(properties.get("redirect_to") if isinstance(properties, Mapping) else "")
     expected_auth_origin = urlsplit(policy.supabase_url)
     if action.scheme != "https" or action.netloc != expected_auth_origin.netloc \
-            or action.path != "/auth/v1/verify" or not action.query or action.fragment:
+            or action.path != "/auth/v1/verify" or action.fragment \
+            or issued_redirect != redirect or action_query.get("redirect_to") != [redirect]:
         raise BrokerError("issuer_response_invalid", status=503)
     _audit(audit_sink, policy, outcome="issued", claims=claims, persona=persona, redirect=redirect)
     return {

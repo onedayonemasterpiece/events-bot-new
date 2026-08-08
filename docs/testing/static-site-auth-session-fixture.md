@@ -354,7 +354,9 @@ Fly broker обращается непосредственно к raw GoTrue
 `action_link`. Форма supabase-js `data.properties` поддерживается только как
 совместимый issuer-result, но не подменяет raw REST contract. Это важно для
 secret candidate: проигнорированный SDK-style `options.redirectTo` восстановил
-бы session на default site URL, а не на exact `/poisk/` target.
+бы session на default site URL, а не на exact `/poisk/` target. Broker поэтому
+также требует точного совпадения возвращённого `redirect_to` и его значения в
+action-link с разрешённым target запроса.
 
 ## 12. Storage и evidence
 
