@@ -15,10 +15,11 @@ import inspect
 import json
 import re
 import secrets
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Mapping, Protocol, Sequence
+from typing import Any, Protocol
 from urllib.parse import urlsplit
 
 from private_events_mcp.social_workspace import (
@@ -37,7 +38,6 @@ from private_events_mcp.social_workspace import (
     compute_action_digest,
     validate_opaque_ref,
 )
-
 
 VK_API_VERSION = "5.199"
 _TRUST = "untrusted_external_data"
@@ -251,7 +251,7 @@ class VKWorkspaceAdapter:
     def _permitted(self, actor: VKActor, capability: str) -> bool:
         try:
             return self._transport.permits(actor, capability) is True
-        except Exception:
+        except Exception:  # noqa: BLE001 - fail closed across injected transport implementations
             return False
 
     async def _call(self, operation: str, params: Mapping[str, Any]) -> Any:
@@ -264,11 +264,11 @@ class VKWorkspaceAdapter:
         async with self._lock:
             try:
                 await self._await(self._cooldown.ensure_available(policy.actor))
-            except Exception:
+            except Exception:  # noqa: BLE001 - normalize injected cooldown failures
                 raise VKWorkspaceError("cooldown_active") from None
             try:
                 await self._await(self._governor.before_call(policy.actor, policy.capability))
-            except Exception:
+            except Exception:  # noqa: BLE001 - normalize injected governor failures
                 raise VKWorkspaceError("rate_limited") from None
             outcome = "failed"
             try:
@@ -300,7 +300,7 @@ class VKWorkspaceAdapter:
                 raise VKWorkspaceError("outcome_unknown") from None
             except VKWorkspaceError:
                 raise
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - sanitize arbitrary provider failures
                 if getattr(exc, "code", None) == 14 or getattr(exc, "error_code", None) == 14:
                     await self._await(self._cooldown.record_captcha(policy.actor))
                     raise VKWorkspaceError("captcha_cooldown") from None
@@ -308,7 +308,7 @@ class VKWorkspaceAdapter:
             finally:
                 try:
                     await self._await(self._governor.after_call(policy.actor, policy.capability, outcome))
-                except Exception:
+                except Exception:  # noqa: BLE001,S110 - accounting must not mask provider outcome
                     pass
 
     def _sanitize(self, value: Any) -> Any:
@@ -330,14 +330,14 @@ class VKWorkspaceAdapter:
         try:
             ref = self._refs.mint(kind, dict(native))
             return validate_opaque_ref(ref, kind)
-        except Exception:
+        except Exception:  # noqa: BLE001 - opaque-store boundary is intentionally generic
             raise VKWorkspaceError("opaque_reference_failed") from None
 
     def _resolve_ref(self, kind: str, ref: str) -> Mapping[str, Any]:
         validate_opaque_ref(ref, kind)
         try:
             value = self._refs.resolve(kind, ref)
-        except Exception:
+        except Exception:  # noqa: BLE001 - opaque-store boundary is intentionally generic
             raise VKWorkspaceError("opaque_reference_failed") from None
         if not isinstance(value, Mapping):
             raise VKWorkspaceError("opaque_reference_failed")
@@ -387,7 +387,7 @@ class VKWorkspaceAdapter:
     def _target_kind(self, native: Mapping[str, Any]) -> SocialTargetKind:
         try:
             return SocialTargetKind(str(native["kind"]))
-        except Exception:
+        except Exception:  # noqa: BLE001 - normalize malformed provider binding
             raise VKWorkspaceError("opaque_reference_failed") from None
 
     @staticmethod
@@ -662,7 +662,7 @@ class VKWorkspaceAdapter:
         selected = []
         for raw in _items(wall_response):
             # Provider-neutral schema extension for these flags is integrated separately.
-            if raw.get("marked_as_ads") in {1, True} or raw.get("is_pinned") in {1, True} or raw.get("copy_history"):
+            if raw.get("marked_as_ads") in {1} or raw.get("is_pinned") in {1} or raw.get("copy_history"):
                 continue
             published = _utc(raw.get("date"))
             date = published[:10]
@@ -1042,13 +1042,13 @@ class VKWorkspaceAdapter:
 
 
 __all__ = [
+    "VK_API_VERSION",
+    "VK_FIXED_METHOD_ALLOWLIST",
+    "VK_OPERATION_ACTORS",
     "VKActor",
     "VKActorTransport",
     "VKCallGovernor",
     "VKCooldownHook",
-    "VK_FIXED_METHOD_ALLOWLIST",
-    "VK_API_VERSION",
-    "VK_OPERATION_ACTORS",
     "VKOpaqueRefStore",
     "VKWorkspaceAdapter",
     "VKWorkspaceError",

@@ -3,8 +3,9 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import replace
-from typing import Any, Mapping
+from typing import Any
 
 import pytest
 
@@ -18,12 +19,12 @@ from private_events_mcp.social_workspace import (
     validate_read_request,
 )
 from private_events_mcp_vk_adapter import (
-    VKActor,
-    VKWorkspaceAdapter,
-    VKWorkspaceError,
     VK_API_VERSION,
     VK_FIXED_METHOD_ALLOWLIST,
     VK_OPERATION_ACTORS,
+    VKActor,
+    VKWorkspaceAdapter,
+    VKWorkspaceError,
 )
 
 
