@@ -17,6 +17,7 @@ REQUIRED = {
     "observed-ui-families.jsonl",
     "runtime-observations.jsonl",
     "page-families.jsonl",
+    "event-presentation-formats.jsonl",
     "desktop-mobile-analysis.jsonl",
     "style-observations.jsonl",
     "fragmentation-report.jsonl",
@@ -83,6 +84,17 @@ def _fixture(tmp_path: Path):
     (components / "EventCard.astro").write_text(
         '<article class="event-card"><slot /></article>\n', encoding="utf-8"
     )
+    (components / "DesktopEventActionPanel.astro").write_text(
+        "---\nconst { family } = Astro.props;\n---\n"
+        '<section data-desktop-action-panel data-action-family={family} data-action-layout={family === "split" ? "inline" : "stacked"}><button>Tickets</button></section>\n',
+        encoding="utf-8",
+    )
+    (components / "DesktopEventPage.astro").write_text(
+        "---\nimport DesktopEventActionPanel from './DesktopEventActionPanel.astro';\n"
+        "const { candidate } = Astro.props;\n---\n"
+        '<main data-desktop-family={candidate}><figure data-media-frame></figure><DesktopEventActionPanel family={candidate} /></main>\n',
+        encoding="utf-8",
+    )
     for component_root in (components, root_source / "components"):
         (component_root / "SiteHeader.astro").write_text(
             '<header class="site-header">Header</header>\n', encoding="utf-8"
@@ -90,10 +102,12 @@ def _fixture(tmp_path: Path):
     for page, body in {
         "segodnya/index.astro": "<main><EventCard /></main>",
         "populyarnoe/index.astro": "<main><EventCard /></main>",
-        "sobytiya/[slug].astro": "<main class='event-detail'><EventCard /></main>",
+        "sobytiya/[slug].astro": "<main class='event-detail'><DesktopEventPage candidate='split' /><EventCard /></main>",
     }.items():
         (pages / page).write_text(
-            "---\nimport EventCard from '../../components/EventCard.astro';\n---\n"
+            "---\nimport EventCard from '../../components/EventCard.astro';\n"
+            + ("import DesktopEventPage from '../../components/DesktopEventPage.astro';\n" if page.startswith("sobytiya/") else "")
+            + "---\n"
             + body
             + "\n",
             encoding="utf-8",
@@ -113,7 +127,9 @@ def _fixture(tmp_path: Path):
         "index.html": b"<!doctype html><main data-home-hero-talk><section class='home-hero-talk'>Hi</section></main>",
         "segodnya/index.html": b"<!doctype html><main><article class='event-card'>Today</article></main>",
         "populyarnoe/index.html": b"<!doctype html><main><article class='event-card'>Popular</article></main>",
-        "sobytiya/example/index.html": b"<!doctype html><main class='event-detail'><article class='event-card'>Event</article></main>",
+        "sobytiya/example/index.html": b"<!doctype html><main class='event-detail' data-desktop-clean-event data-desktop-family='split' data-presentation-reason='split-portrait-or-square-visual'><figure data-media-frame><img src='poster.jpg'><nav data-split-media-rail><button><img src='photo-thumb.jpg'></button></nav></figure><section data-desktop-action-panel data-action-family='split' data-action-layout='inline'><button>Tickets</button></section></main>",
+        "sobytiya/editorial/index.html": b"<!doctype html><main class='event-detail' data-desktop-clean-event data-desktop-family='editorial' data-presentation-reason='editorial-primary-qualified-landscape'><figure data-media-frame><img src='hero.jpg'></figure><nav data-hero-rail><button><img src='photo-thumb.jpg'></button></nav><section data-desktop-action-panel data-action-family='editorial' data-action-layout='stacked'><button>Tickets</button></section><button data-editorial-ocr-companion><img src='poster.jpg'></button><div><button data-companion-preview-item><img src='photo-small.jpg'></button></div></main>",
+        "sobytiya/no-image/index.html": b"<!doctype html><main class='event-detail' data-desktop-clean-event data-desktop-family='split' data-presentation-reason='split-no-image-fallback' data-presentation-fallback='venue-identity'><figure data-media-frame><div class='event-fallback-art'>Fallback</div></figure><section data-desktop-action-panel data-action-family='split' data-action-layout='inline'><button>Calendar</button></section></main>",
         "vyhodnye/date-2026-08-08/index.html": b"<!doctype html><main><ul><li><button>Open event</button></li></ul></main>",
     }
     files = []
@@ -261,6 +277,52 @@ def test_distinct_page_families_and_event_mapping_are_preserved(decoded):
     assert event["component_candidates"]
 
 
+def test_event_layout_cta_and_media_formats_are_first_class_resources(decoded):
+    output, _, _ = decoded
+    formats = {
+        row["id"]: row
+        for row in map(
+            json.loads,
+            (output / "event-presentation-formats.jsonl").read_text().splitlines(),
+        )
+    }
+    expected = {
+        "event-format.desktop.editorial-landscape",
+        "event-format.desktop.split-portrait-poster",
+        "event-format.desktop.split-portrait-visual",
+        "event-format.desktop.no-image-fallback",
+        "event-format.cta.editorial-side-stacked",
+        "event-format.cta.split-inline",
+        "event-format.media.primary-large-frame",
+        "event-format.media.split-small-photo-rail",
+        "event-format.media.editorial-small-photo-rail",
+        "event-format.media.editorial-large-poster-companion",
+        "event-format.media.editorial-small-companion-previews",
+    }
+    assert expected == set(formats)
+    assert all(formats[row]["decision"] == "NOT_MERGED" for row in expected)
+    assert all(formats[row]["recommendation"] == "unresolved" for row in expected)
+    assert all(formats[row]["status"] == "observed" for row in expected)
+    assert formats["event-format.desktop.editorial-landscape"]["desktop_family"] == "editorial"
+    assert formats["event-format.desktop.split-portrait-poster"]["desktop_family"] == "split"
+    assert "split-no-image-fallback" in formats["event-format.desktop.no-image-fallback"]["presentation_reasons"]
+    assert formats["event-format.cta.editorial-side-stacked"]["action_layout"] == "stacked"
+    assert formats["event-format.cta.split-inline"]["action_layout"] == "inline"
+    assert "large" in formats["event-format.media.editorial-large-poster-companion"]["observed_structure"]
+    assert "small" in formats["event-format.media.editorial-small-companion-previews"]["observed_structure"]
+
+    runtime = list(
+        map(json.loads, (output / "runtime-observations.jsonl").read_text().splitlines())
+    )
+    event_resources = [
+        row["event_resources"]
+        for row in runtime
+        if row["page_family"] == "page-family.event-detail"
+    ]
+    assert any(row["desktop_families"].get("editorial") for row in event_resources)
+    assert any(row["desktop_families"].get("split") for row in event_resources)
+
+
 def test_non_astro_page_endpoints_are_not_ui_page_families(decoded):
     output, _, _ = decoded
     sources = list(
@@ -312,21 +374,23 @@ def test_summary_separates_plane_counts_and_style_inconsistencies(decoded):
     output, _, _ = decoded
     manifest = json.loads((output / "manifest.json").read_text())
     counts = manifest["counts"]
-    assert counts["candidate_routes"] == 5
+    assert counts["candidate_routes"] == 7
     assert counts["public_root_observations"] == 1
     assert 0 < counts["style_inconsistencies"] < counts["styles"]
 
     summary = (output / "summary.md").read_text()
-    assert "Candidate HTML routes: 5" in summary
+    assert "Candidate HTML routes: 7" in summary
     assert "Separate public-root observations: 1" in summary
     assert "Layouts by plane:" in summary
     assert "Source components by plane:" in summary
+    assert "Event presentation resource formats: 11 (11 runtime-observed)" in summary
+    assert "editorial landscape and split portrait/poster" in summary
     assert f"Style inconsistencies: {counts['style_inconsistencies']}" in summary
 
 
 def test_not_merged_and_unresolved_are_invariants(decoded):
     output, _, _ = decoded
-    for name in ("fragmentation-report.jsonl", "candidate-component-graph.jsonl"):
+    for name in ("fragmentation-report.jsonl", "candidate-component-graph.jsonl", "event-presentation-formats.jsonl"):
         rows = [json.loads(line) for line in (output / name).read_text().splitlines()]
         assert rows
         assert {row["decision"] for row in rows} == {"NOT_MERGED"}
@@ -551,6 +615,59 @@ def test_screenshot_selection_is_representative_first_and_outlier_fair():
     }
     assert selected[0]["key"] == "common-1.html"
     assert selected[3]["selection"] == "structural_outlier"
+
+
+def test_screenshot_selection_guarantees_both_desktop_event_formats_after_page_representatives():
+    script = """
+      import { selectScreenshotPages } from './scripts/current_ui_resource_graph/graph-lib.mjs';
+      const row = (key, route, structure, desktopFamily, presentationReason = null, markers = {}) => ({ file: { key }, observation: {
+        route_hash: route.padEnd(64, route), structure_hash: structure,
+        event_resources: {
+          desktop_families: desktopFamily ? { [desktopFamily]: 1 } : {},
+          presentation_reasons: presentationReason ? { [presentationReason]: 1 } : {},
+          markers,
+        },
+      } });
+      const byFamily = new Map([
+        ['page-family.home', [row('home.html', 'a', 'home')]],
+        ['page-family.event-detail', [
+          row('split-1.html', 'b', 'split-common', 'split'),
+          row('split-2.html', 'c', 'split-common', 'split'),
+          row('editorial.html', 'd', 'editorial', 'editorial'),
+          row('portrait.html', 'h', 'portrait', 'split', 'split-portrait-or-square-visual'),
+          row('no-image.html', 'f', 'no-image', 'split', 'split-no-image-fallback'),
+          row('companion.html', 'g', 'companion', 'editorial', 'editorial-with-classified-identity-poster', {
+            editorial_poster_companion_large: 1,
+            editorial_companion_photo_preview_small: 3,
+          }),
+        ]],
+        ['page-family.day-listing', [row('day.html', 'e', 'day')]],
+      ]);
+      const result = selectScreenshotPages(byFamily, 7);
+      process.stdout.write(JSON.stringify(result.selected.map((item) => ({
+        family: item.pageFamily, selection: item.selection, key: item.file.key,
+        formats: Object.keys(item.observation.event_resources?.desktop_families || {}),
+      }))));
+    """
+    result = subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        cwd=REPO,
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    selected = json.loads(result.stdout)
+    assert [row["selection"] for row in selected[:3]] == [
+        "family_representative",
+        "family_representative",
+        "family_representative",
+    ]
+    event_rows = [row for row in selected if row["family"] == "page-family.event-detail"]
+    assert {row["formats"][0] for row in event_rows} == {"editorial", "split"}
+    assert any(row["selection"] == "resource_format_representative" for row in event_rows)
+    assert any(row["selection"] == "portrait_visual_format_representative" for row in event_rows)
+    assert any(row["selection"] == "no_image_format_representative" for row in event_rows)
+    assert any(row["key"] == "companion.html" for row in event_rows)
 
 
 def test_exact_candidate_constants_and_retry_bound():

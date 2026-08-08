@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import {
   Budget, DEFAULT_IDENTITIES, FAMILY_SEEDS, JsonlWriter, REQUIRED_FILES, SCHEMA,
   assertGraphInvariants, candidateGraph, captureBrowserEvidence, computedStyleObservations, coverageRows, desktopMobile, ensureOutput,
-  fragmentationReport, inventorySource, loadParsers, manifestHtmlFiles,
+  eventPresentationFormats, fragmentationReport, inventorySource, loadParsers, manifestHtmlFiles,
   mapRuntimeToSource, observedFamilies, outputHashes, pageFamiliesFromSource, parseArgs, redactFactory,
   REQUIRED_CANDIDATE_CHECKS, scanLocalRuntime, scanPublicRoot, scanRemoteRuntime, screenshotIndex, sha256, stableJson,
   styleObservations, validateManifestInventory, validateSourcePin, withRetry, writeDeterministic,
@@ -95,7 +95,7 @@ function summaryMarkdown(identity, counts, families, coverage) {
     `- Current public root release: \`${identity.current_root_prelaunch.release_id}\` (source \`${identity.current_root_prelaunch.source_sha}\`, published ${identity.current_root_prelaunch.published_at}, observed HTML \`${identity.current_root_prelaunch.html_sha256}\`).\n` +
     `- Identity planes remain independent; family aggregation groups the same logical source path across planes and reports cross-plane drift separately.\n\n` +
     `## Pages\n\n- Candidate HTML routes: ${counts.candidate_routes}\n- Separate public-root observations: ${counts.public_root_observations}\n- Page families: ${counts.page_families}\n- Layouts by plane: ${JSON.stringify(Object.fromEntries(Object.entries(counts.source_by_plane).map(([plane, value]) => [plane, value.layouts])))}\n\n` +
-    `## Components\n\n- Source records across both planes: ${counts.source.total}\n- Source records by plane: ${JSON.stringify(counts.source_by_plane)}\n- Source components by plane: ${JSON.stringify(Object.fromEntries(Object.entries(counts.source_by_plane).map(([plane, value]) => [plane, value.components])))}\n- Observed UI families: ${counts.observed_families}\n- Candidate families: ${counts.candidate_families}\n\n` +
+    `## Components\n\n- Source records across both planes: ${counts.source.total}\n- Source records by plane: ${JSON.stringify(counts.source_by_plane)}\n- Source components by plane: ${JSON.stringify(Object.fromEntries(Object.entries(counts.source_by_plane).map(([plane, value]) => [plane, value.components])))}\n- Observed UI families: ${counts.observed_families}\n- Candidate families: ${counts.candidate_families}\n- Event presentation resource formats: ${counts.event_presentation_formats} (${counts.event_presentation_observed} runtime-observed)\n- Desktop event layout formats: editorial landscape and split portrait/poster; their side/stacked and inline CTA placements remain distinct.\n- Event media formats: primary large frame, large poster companion, and small remaining-photo thumbnail/preview rails remain distinct.\n\n` +
     `## Fragmentation\n\n- Duplicate/fragmentation candidates: ${counts.fragmentation}\n- Style inconsistencies: ${counts.style_inconsistencies}\n- Total style observations: ${counts.styles}\n- Unresolved mappings/questions: ${counts.unresolved}\n\n` +
     `## Mobile/Desktop\n\n- Shared structures: ${counts.shared}\n- Divergent structures: ${counts.divergent}\n- Unknown independent comparison: ${counts.desktop_mobile_unknown}\n\n` +
     `## Top 20 high-impact families\n\n${highImpact.map((item, index) => `${index + 1}. ${item.label} — ${item.status}`).join('\n')}\n\n` +
@@ -220,11 +220,13 @@ async function run(argv) {
     const fragmentation = fragmentationReport(families, styles, sourceRecords, runtime);
     const desktop = desktopMobile(pageFamilies, families, viewportEvidence);
     const coverage = coverageRows(sourceRecords, runtime, pageFamilies);
+    const eventFormats = eventPresentationFormats(sourceRecords, runtime, screenshots);
 
     await writeJsonl(join(output, 'source-components.jsonl'), sourceRecords, budget);
     await writeJsonl(join(output, 'observed-ui-families.jsonl'), families, budget);
     await writeJsonl(join(output, 'runtime-observations.jsonl'), runtime, budget);
     await writeJsonl(join(output, 'page-families.jsonl'), pageFamilies, budget);
+    await writeJsonl(join(output, 'event-presentation-formats.jsonl'), eventFormats, budget);
     await writeJsonl(join(output, 'desktop-mobile-analysis.jsonl'), desktop, budget);
     await writeJsonl(join(output, 'style-observations.jsonl'), styles, budget);
     await writeJsonl(join(output, 'fragmentation-report.jsonl'), fragmentation, budget);
@@ -237,6 +239,8 @@ async function run(argv) {
       source_by_plane: sourceCountsByPlane(sourceRecords),
       observed_families: families.filter((item) => item.status === 'observed').length,
       candidate_families: candidates.filter((item) => item.status !== 'unknown').length,
+      event_presentation_formats: eventFormats.length,
+      event_presentation_observed: eventFormats.filter((item) => item.status === 'observed').length,
       fragmentation: fragmentation.filter((item) => item.status === 'fragmented').length,
       styles: styles.length,
       style_inconsistencies: styles.filter((item) => item.source_divergence === 'distinct_literals_observed' || item.computed_inconsistency === 'observed_divergence').length,

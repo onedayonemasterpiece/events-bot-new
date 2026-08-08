@@ -14,7 +14,7 @@ const MAX_SCREENSHOT_BYTES = 192 * 1024;
 export const REQUIRED_FILES = [
   'manifest.json', 'summary.md', 'source-components.jsonl',
   'observed-ui-families.jsonl', 'runtime-observations.jsonl',
-  'page-families.jsonl', 'desktop-mobile-analysis.jsonl',
+  'page-families.jsonl', 'event-presentation-formats.jsonl', 'desktop-mobile-analysis.jsonl',
   'style-observations.jsonl', 'fragmentation-report.jsonl',
   'candidate-component-graph.jsonl', 'unresolved-questions.md',
   'coverage-report.md', 'screenshots-index.jsonl',
@@ -406,6 +406,117 @@ export function pageFamiliesFromSource(sourceRecords, runtimeObservations) {
   return [...grouped.values()].sort((a, b) => a.id.localeCompare(b.id));
 }
 
+const EVENT_PRESENTATION_RESOURCE_SPECS = Object.freeze([
+  {
+    id: 'event-format.desktop.editorial-landscape', category: 'layout', label: 'Desktop event — editorial landscape',
+    sourceNames: ['DesktopEventPage', 'desktopEventPresentation'], desktopFamily: 'editorial',
+    sourceBoundary: "DesktopEventPage candidate === 'editorial' branch",
+    structure: 'wide landscape hero with independent editorial side column',
+  },
+  {
+    id: 'event-format.desktop.split-portrait-poster', category: 'layout', label: 'Desktop event — split portrait/poster',
+    sourceNames: ['DesktopEventPage', 'desktopEventPresentation'], desktopFamily: 'split',
+    sourceBoundary: "DesktopEventPage candidate === 'split' branch",
+    structure: 'sticky portrait/poster media column plus independent content column',
+  },
+  {
+    id: 'event-format.desktop.split-portrait-visual', category: 'layout_state', label: 'Desktop event — split portrait/square visual state',
+    sourceNames: ['DesktopEventPage', 'desktopEventPresentation'], desktopFamily: 'split',
+    presentationReasons: ['split-portrait-or-square-visual', 'split-low-resolution-portrait-viewer'],
+    sourceBoundary: 'desktopEventPresentation portrait/square or low-resolution portrait resolver states',
+    structure: 'portrait-oriented visual is retained in the split media column rather than promoted to editorial landscape',
+  },
+  {
+    id: 'event-format.desktop.no-image-fallback', category: 'layout', label: 'Desktop event — no-image fallback',
+    sourceNames: ['DesktopEventPage', 'desktopEventPresentation', 'EventFallbackArt'], desktopFamily: 'split', presentationReason: 'split-no-image-fallback',
+    sourceBoundary: 'DesktopEventPage split fallback branch with EventFallbackArt or generic fallback',
+    structure: 'typed or generic fallback occupies the primary media frame when no event image exists',
+  },
+  {
+    id: 'event-format.cta.editorial-side-stacked', category: 'cta', label: 'Editorial desktop CTA — side/stacked',
+    sourceNames: ['DesktopEventPage', 'DesktopEventActionPanel'], desktopFamily: 'editorial', actionFamily: 'editorial', actionLayout: 'stacked', marker: 'desktop_action_panel',
+    sourceBoundary: 'DesktopEventActionPanel family=editorial rendered in desktop-editorial-side',
+    structure: 'CTA belongs to the editorial side column',
+  },
+  {
+    id: 'event-format.cta.split-inline', category: 'cta', label: 'Split desktop CTA — inline',
+    sourceNames: ['DesktopEventPage', 'DesktopEventActionPanel'], desktopFamily: 'split', actionFamily: 'split', actionLayout: 'inline', marker: 'desktop_action_panel',
+    sourceBoundary: 'DesktopEventActionPanel family=split rendered in continuous content flow',
+    structure: 'CTA is an inline/sticky bar in the split content column',
+  },
+  {
+    id: 'event-format.media.primary-large-frame', category: 'media', label: 'Event media — primary large frame',
+    sourceNames: ['DesktopEventPage'], marker: 'primary_media_frame',
+    sourceBoundary: 'DesktopEventPage primary media figure',
+    structure: 'large primary event image or poster frame',
+  },
+  {
+    id: 'event-format.media.split-small-photo-rail', category: 'media', label: 'Split event media — small remaining-photo rail',
+    sourceNames: ['DesktopEventPage'], desktopFamily: 'split', marker: 'split_poster_thumbnail_rail',
+    sourceBoundary: 'desktop-prototype__media-rail--poster',
+    structure: 'small aspect-aware thumbnails below the large split poster',
+  },
+  {
+    id: 'event-format.media.editorial-small-photo-rail', category: 'media', label: 'Editorial event media — small hero thumbnail rail',
+    sourceNames: ['DesktopEventPage'], desktopFamily: 'editorial', marker: 'editorial_hero_thumbnail_rail',
+    sourceBoundary: 'desktop-prototype__media-rail--hero',
+    structure: 'small photo selectors beside the large editorial hero',
+  },
+  {
+    id: 'event-format.media.editorial-large-poster-companion', category: 'media', label: 'Editorial event media — large poster companion',
+    sourceNames: ['DesktopEventPage'], desktopFamily: 'editorial', marker: 'editorial_poster_companion_large',
+    sourceBoundary: 'desktop-editorial-companion / companion board',
+    structure: 'large contain-fit identity poster kept separate from the photo hero',
+  },
+  {
+    id: 'event-format.media.editorial-small-companion-previews', category: 'media', label: 'Editorial event media — small companion photo previews',
+    sourceNames: ['DesktopEventPage'], desktopFamily: 'editorial', marker: 'editorial_companion_photo_preview_small',
+    sourceBoundary: 'desktop-editorial-companion-board__previews',
+    structure: 'small remaining-photo previews adjacent to the large poster companion',
+  },
+]);
+
+function eventResourceMatch(observation, spec) {
+  if (observation.page_family !== 'page-family.event-detail') return false;
+  const resources = observation.event_resources || {};
+  if (spec.desktopFamily && !resources.desktop_families?.[spec.desktopFamily]) return false;
+  if (spec.actionFamily && !resources.action_families?.[spec.actionFamily]) return false;
+  if (spec.actionLayout && !resources.action_layouts?.[spec.actionLayout]) return false;
+  if (spec.presentationReason && !resources.presentation_reasons?.[spec.presentationReason]) return false;
+  if (spec.presentationReasons && !spec.presentationReasons.some((reason) => resources.presentation_reasons?.[reason])) return false;
+  if (spec.marker && !resources.markers?.[spec.marker]) return false;
+  return true;
+}
+
+export function eventPresentationFormats(sourceRecords, runtimeObservations, screenshots = []) {
+  const candidateSources = sourceRecords.filter((record) => record.plane === 'latest_checked_kaggle_candidate');
+  return EVENT_PRESENTATION_RESOURCE_SPECS.map((spec) => {
+    const sources = candidateSources.filter((record) => spec.sourceNames.includes(record.name)).map((record) => record.id).sort();
+    const runtime = runtimeObservations.filter((record) => eventResourceMatch(record, spec));
+    const routeHashes = new Set(runtime.map((record) => record.route_hash));
+    const screenshotEvidence = screenshots.filter((record) => routeHashes.has(record.route_hash) && record.screenshot_path).map((record) => ({
+      route_hash: record.route_hash, screenshot_path: record.screenshot_path, selection: record.selection, viewport: record.viewport,
+    })).sort((left, right) => left.route_hash.localeCompare(right.route_hash) || left.viewport.width - right.viewport.width);
+    const reasonCounts = new Map();
+    for (const observation of runtime) for (const [reason, count] of Object.entries(observation.event_resources?.presentation_reasons || {})) reasonCounts.set(reason, (reasonCounts.get(reason) || 0) + count);
+    return {
+      id: spec.id, category: spec.category, label: spec.label,
+      boundary_kind: spec.category === 'cta' ? 'component_family_variant' : 'internal_conditional_resource',
+      source_boundary: spec.sourceBoundary, source_component_ids: sources,
+      desktop_family: spec.desktopFamily || 'shared', action_family: spec.actionFamily || null, action_layout: spec.actionLayout || null,
+      runtime_route_count: runtime.length,
+      runtime_route_hash_samples: runtime.map((record) => record.route_hash).sort().slice(0, 20),
+      presentation_reasons: Object.fromEntries([...reasonCounts].sort(([a], [b]) => a.localeCompare(b))),
+      screenshot_evidence: screenshotEvidence,
+      observed_structure: spec.structure,
+      status: sources.length && runtime.length ? 'observed' : sources.length ? 'source_only' : runtime.length ? 'runtime_only' : 'missing',
+      decision: 'NOT_MERGED', recommendation: 'unresolved',
+      confidence: sources.length && runtime.length ? 'high' : 'medium',
+      unknowns: ['semantic equivalence is not asserted', 'normalization target is intentionally undefined'],
+    };
+  }).sort((left, right) => left.id.localeCompare(right.id));
+}
+
 function runtimeFeatures() {
   return { actionLike: 0, asyncLike: 0, badgeLike: 0, brandLike: 0, breadcrumbLike: 0, collectionLike: 0, eventLike: 0, listLike: 0, mediaLike: 0, medallionLike: 0, navLike: 0, timeLike: 0, transportLike: 0 };
 }
@@ -413,6 +524,21 @@ function runtimeFeatures() {
 export function structuralScan(html, htmlparser2) {
   const tags = new Map(); const regions = new Map(); const features = runtimeFeatures(); const tokens = [];
   const surfaceMarkers = new Set();
+  const eventResourceMarkers = new Map();
+  const desktopFamilies = new Map(); const actionFamilies = new Map(); const actionLayouts = new Map(); const presentationReasons = new Map(); const presentationFallbacks = new Map();
+  const countValue = (target, value, { maxValues = 32, maxLength = 96 } = {}) => {
+    if (typeof value !== 'string' || !value || value.length > maxLength) return;
+    if (!target.has(value) && target.size >= maxValues) return;
+    target.set(value, (target.get(value) || 0) + 1);
+  };
+  const resourceAttributes = Object.freeze({
+    'data-media-frame': 'primary_media_frame',
+    'data-split-media-rail': 'split_poster_thumbnail_rail',
+    'data-hero-rail': 'editorial_hero_thumbnail_rail',
+    'data-editorial-ocr-companion': 'editorial_poster_companion_large',
+    'data-companion-preview-item': 'editorial_companion_photo_preview_small',
+    'data-desktop-action-panel': 'desktop_action_panel',
+  });
   let elementCount = 0, maxDepth = 0, depth = 0;
   const parser = new htmlparser2.Parser({
     onopentag(name, attributes) {
@@ -422,6 +548,14 @@ export function structuralScan(html, htmlparser2) {
       const marker = `${name} ${attributes.class || ''} ${attributes.id || ''} ${Object.keys(attributes).join(' ')}`.toLowerCase();
       if (/home-hero-talk|data-home-hero-talk/u.test(marker)) surfaceMarkers.add('home_hero_talk');
       if (/page-end-hero-talk|hero-talk-page-end/u.test(marker)) surfaceMarkers.add('hero_talk_page_end');
+      countValue(desktopFamilies, attributes['data-desktop-family']);
+      countValue(actionFamilies, attributes['data-action-family']);
+      countValue(actionLayouts, attributes['data-action-layout']);
+      countValue(presentationReasons, attributes['data-presentation-reason']);
+      countValue(presentationFallbacks, attributes['data-presentation-fallback']);
+      for (const [attribute, resource] of Object.entries(resourceAttributes)) {
+        if (Object.hasOwn(attributes, attribute)) countValue(eventResourceMarkers, resource);
+      }
       if (/^(header|main|nav|aside|footer|section)$/u.test(name)) regions.set(name, (regions.get(name) || 0) + 1);
       if (/^(a|button|input|select|textarea)$/u.test(name) || /button|cta|action/u.test(marker)) features.actionLike += 1;
       if (/event|sobyt/u.test(marker)) features.eventLike += 1;
@@ -445,6 +579,14 @@ export function structuralScan(html, htmlparser2) {
     tag_counts: Object.fromEntries([...tags].sort(([a], [b]) => a.localeCompare(b))),
     major_regions: Object.fromEntries([...regions].sort(([a], [b]) => a.localeCompare(b))),
     structure_hash: sha256(tokens.join('')), features, surface_markers: [...surfaceMarkers].sort(),
+    event_resources: {
+      desktop_families: Object.fromEntries([...desktopFamilies].sort(([a], [b]) => a.localeCompare(b))),
+      action_families: Object.fromEntries([...actionFamilies].sort(([a], [b]) => a.localeCompare(b))),
+      action_layouts: Object.fromEntries([...actionLayouts].sort(([a], [b]) => a.localeCompare(b))),
+      presentation_reasons: Object.fromEntries([...presentationReasons].sort(([a], [b]) => a.localeCompare(b))),
+      presentation_fallbacks: Object.fromEntries([...presentationFallbacks].sort(([a], [b]) => a.localeCompare(b))),
+      markers: Object.fromEntries([...eventResourceMarkers].sort(([a], [b]) => a.localeCompare(b))),
+    },
   };
 }
 
@@ -582,7 +724,7 @@ function runtimeRecord(route, scan, bytes, contentHash, { plane, relativePath })
     media_fixture: { element_count: scan.features.mediaLike }, screenshot: null,
     structure_hash: scan.structure_hash, element_count: scan.element_count, max_depth: scan.max_depth,
     major_regions: scan.major_regions, tag_counts: scan.tag_counts, feature_counts: scan.features,
-    surface_hypotheses: hypotheses, surface_markers: scan.surface_markers,
+    surface_hypotheses: hypotheses, surface_markers: scan.surface_markers, event_resources: scan.event_resources,
     evidence: ['exact_manifest_file', 'streaming_structural_parse'],
   };
 }
@@ -897,6 +1039,52 @@ export function selectScreenshotPages(byFamily, maxPages) {
     outliersByFamily.set(pageFamily, clusterOrder.slice(1).map(([, clusterRows]) => ({ ...clusterRows[0], pageFamily, selection: 'structural_outlier' })));
   }
   const selected = order.slice(0, maxPages).map((family) => representativeByFamily.get(family));
+  if (selected.length < maxPages && byFamily.has('page-family.event-detail')) {
+    const alreadySelected = new Set(selected.filter((row) => row.pageFamily === 'page-family.event-detail').flatMap((row) => Object.keys(row.observation.event_resources?.desktop_families || {})));
+    const rows = [...byFamily.get('page-family.event-detail')].sort((a, b) => a.observation.route_hash.localeCompare(b.observation.route_hash) || a.file.key.localeCompare(b.file.key));
+    const formats = new Map();
+    for (const row of rows) for (const format of Object.keys(row.observation.event_resources?.desktop_families || {})) {
+      if (!formats.has(format)) formats.set(format, []);
+      formats.get(format).push(row);
+    }
+    for (const [format, formatRows] of [...formats].sort(([left], [right]) => left.localeCompare(right))) {
+      if (selected.length === maxPages) break;
+      if (alreadySelected.has(format)) continue;
+      const clusters = new Map();
+      for (const row of formatRows) {
+        if (!clusters.has(row.observation.structure_hash)) clusters.set(row.observation.structure_hash, []);
+        clusters.get(row.observation.structure_hash).push(row);
+      }
+      const modal = [...clusters.entries()].sort(([hashA, rowsA], [hashB, rowsB]) => rowsB.length - rowsA.length || hashA.localeCompare(hashB))[0][1][0];
+      selected.push({ ...modal, pageFamily: 'page-family.event-detail', selection: 'resource_format_representative' });
+      alreadySelected.add(format);
+    }
+    const selectedRouteHashes = new Set(selected.map((row) => row.observation.route_hash));
+    const requiredSpecimens = [
+      {
+        selection: 'portrait_visual_format_representative',
+        matches: (row) => Boolean(row.observation.event_resources?.presentation_reasons?.['split-portrait-or-square-visual'])
+          || Boolean(row.observation.event_resources?.presentation_reasons?.['split-low-resolution-portrait-viewer']),
+      },
+      {
+        selection: 'no_image_format_representative',
+        matches: (row) => Boolean(row.observation.event_resources?.presentation_reasons?.['split-no-image-fallback']),
+      },
+      {
+        selection: 'poster_companion_format_representative',
+        matches: (row) => Boolean(row.observation.event_resources?.markers?.editorial_poster_companion_large)
+          && Boolean(row.observation.event_resources?.markers?.editorial_companion_photo_preview_small),
+      },
+    ];
+    for (const specimen of requiredSpecimens) {
+      if (selected.length === maxPages) break;
+      if (selected.some(specimen.matches)) continue;
+      const row = rows.find((candidate) => specimen.matches(candidate) && !selectedRouteHashes.has(candidate.observation.route_hash));
+      if (!row) continue;
+      selected.push({ ...row, pageFamily: 'page-family.event-detail', selection: specimen.selection });
+      selectedRouteHashes.add(row.observation.route_hash);
+    }
+  }
   for (let round = 0; selected.length < maxPages; round += 1) {
     let added = false;
     for (const family of order) {
@@ -1094,7 +1282,7 @@ export function assertGraphInvariants(outputDir) {
     const rows = readFileSync(join(outputDir, name), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
     if (!rows.length) throw new Error(`Required JSONL has no records: ${name}`);
   }
-  for (const name of ['fragmentation-report.jsonl', 'candidate-component-graph.jsonl']) {
+  for (const name of ['fragmentation-report.jsonl', 'candidate-component-graph.jsonl', 'event-presentation-formats.jsonl']) {
     for (const line of readFileSync(join(outputDir, name), 'utf8').trim().split('\n')) {
       const record = JSON.parse(line);
       if (record.decision !== 'NOT_MERGED' || record.recommendation !== 'unresolved') throw new Error(`Merge invariant violated in ${name}`);

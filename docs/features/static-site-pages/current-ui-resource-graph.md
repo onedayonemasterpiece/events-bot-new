@@ -85,6 +85,85 @@ geometry and semantic-cohort style facts. UI-family evidence is explicitly
 scoped to mapped host pages when no synthetic runtime wrapper exists, and is
 never described as a responsive variant.
 
+### Desktop event presentation resources
+
+Event Detail is one route family but not one desktop presentation. The decoder
+must preserve two independent resource formats from the exact runtime markers
+and their source branches:
+
+- `event-format.desktop.editorial-landscape`: the wide landscape/photo
+  `DesktopEventPage` editorial branch, with the CTA in the editorial side
+  column using the stacked action layout;
+- `event-format.desktop.split-portrait-poster`: the portrait/poster split
+  branch, with sticky media and content columns and the CTA rendered inline in
+  the content flow;
+- `event-format.desktop.split-portrait-visual`: the narrower resolver state
+  backed specifically by `split-portrait-or-square-visual` or
+  `split-low-resolution-portrait-viewer`, so the vertical-media evidence is not
+  inferred from pixels or a filename;
+- `event-format.desktop.no-image-fallback`: the split fallback path selected by
+  `split-no-image-fallback`, retaining the typed or generic fallback in place of
+  event media.
+
+The names describe observed presentation families, not normalized variants.
+The split resolver may also admit square, document or resolution-constrained
+media, so `split` must not be reduced to a filename/orientation guess. Exact
+runtime evidence comes from `data-desktop-family`, `data-presentation-reason`,
+`data-action-family` and `data-action-layout`; every event HTML route is scanned
+for them. Browser selection reserves an event-detail specimen for each observed
+desktop family, an explicit portrait-visual state, a no-image specimen, and a
+large-poster-plus-small-photo-preview specimen after all page-family
+representatives, before generic outliers. The
+canonical workflow therefore uses a bounded budget of 23 pages / 46 core
+viewport screenshots rather than relying on an accidental structural outlier.
+
+Media inside `DesktopEventPage` is also recorded without inventing Astro
+component boundaries: the primary large frame, split small-photo rail,
+editorial small hero-photo rail, large contain-fit poster companion, and small
+remaining-photo companion previews are separate
+`internal_conditional_resource` records. `DesktopEventActionPanel` remains a
+real source component with two `component_family_variant` records for
+side/stacked editorial and inline split placement. All records live in
+`event-presentation-formats.jsonl` and remain `NOT_MERGED / unresolved`.
+
+This is deliberately more precise than the broad `family.media-treatments` and
+`family.event-actions` fragmentation cohorts. It fixes what exists and where it
+was observed; it does not yet decide a common component API, token mapping or
+future visual style.
+
+For the pinned 1,096 Event Detail documents, the exact structural scan observes
+96 editorial/stacked-CTA routes and 1,000 split/inline-CTA routes. Within split,
+69 routes carry an explicit portrait/square or low-resolution portrait reason
+and 63 carry `split-no-image-fallback`. Media markers identify 217 split small
+photo rails, 29 editorial small hero rails, 11 large editorial poster
+companions, and 8 of those with adjacent small companion previews. These counts
+are snapshot facts, not a proposed target distribution.
+
+### Component, color and typography evidence
+
+`source-components.jsonl` is the complete parser-backed inventory of tracked
+`.astro`, `.ts`, `.js` and `.mjs` files inside each pinned `site/src` plane
+(tests/specs excluded). It is not a claim that every file is production
+reachable: lab, source-only and unused records are intentionally retained.
+Likewise, the 20 heuristic UI families are review cohorts, not an exhaustive
+component taxonomy. A source record that has not entered a heuristic family is
+still present and must not disappear from a later reachability and
+normalization workshop.
+
+Colors and typography are extracted into `style-observations.jsonl` at two
+levels: PostCSS declaration/literal evidence with selector and at-rule context,
+and bounded computed browser cohorts on captured host pages. Color evidence
+includes properties such as `color`, `background`, `background-color`,
+`border-color`, `fill` and `stroke`; typography evidence includes
+`font-family`, `font-size`, `font-weight`, `line-height`, `letter-spacing`, font
+shorthand and related text properties. The snapshot summary reports style
+inconsistencies separately from total observations.
+
+These are raw, plane-scoped observations and divergence candidates—not named
+palette resources, typography resources, semantic tokens or confirmed
+conflicts. Shared source can appear once per identity plane. Normalized aliases,
+semantic roles and conflict resolutions are explicitly deferred.
+
 The browser budget chooses the modal structural representative of every page
 family before considering any outlier. Remaining outlier slots are allocated
 round-robin across families, and a budget smaller than the family count emits
@@ -114,7 +193,8 @@ Required snapshot files are:
 
 - `manifest.json`, `receipt.json`, `summary.md`;
 - `source-components.jsonl`, `observed-ui-families.jsonl`,
-  `runtime-observations.jsonl`, `page-families.jsonl`;
+  `runtime-observations.jsonl`, `page-families.jsonl`,
+  `event-presentation-formats.jsonl`;
 - `desktop-mobile-analysis.jsonl`, `style-observations.jsonl`,
   `fragmentation-report.jsonl`, `candidate-component-graph.jsonl`;
 - `unresolved-questions.md`, `coverage-report.md`,
