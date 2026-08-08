@@ -25,6 +25,7 @@ checked candidate — независимый Chromium-дефект event `6407`,
 Host fallback больше не является единственным рабочим путём и не должен
 использоваться для обхода этого browser gate.
 | Schedule freshness | Blocked | Актуальный rail+bus snapshot/manifest и failed-refresh drill не приложены |
+| Critical data progression | Missing / release-blocking | Нет единого scheduled autotest, который доказывает свежий checked poll, progression/no-change receipt и downstream consumption для всех обязательных data-pipelines |
 | Production root promotion/rollback | Implemented default-off; live blocked | Два полных page-only bucket + ALB state machine, inactive-only reconcile, exact readback, stable smoke и rollback реализованы; buckets/ALB/SWS/DNS ещё не созданы, apply не запускался |
 
 Следовательно, до provisioned ALB разрешены только новый immutable secret
@@ -32,6 +33,59 @@ noindex candidate на свежем production snapshot и read-only `plan` atom
 publisher против подготовленного inventory. `apply`, DNS и перенос текущих
 страниц на canonical root не разрешены.
 Исторические controlled runs ниже — regression evidence, а не текущий GO.
+
+## Release gate: регулярное обновление критических данных
+
+Canonical-root promotion и назначение D0 запрещены, пока не реализован и не
+включён по production-расписанию blocking autotest
+`data.critical_pipelines_daily`. Полный evidence contract находится в
+[`release-autotest-gates.md`](release-autotest-gates.md#11-ежедневный-gate-движения-критических-данных).
+
+Gate должен отвечать не только на вопрос «последний artifact существует», а на
+сквозной вопрос: был ли due producer реально запущен, проверил ли authoritative
+upstream, сохранил ли свежий watermark/result либо доказанный
+`NO_CHANGE_EXPECTED`, и потребил ли downstream/static candidate именно этот
+result. Last-good может защищать сайт от плохой публикации, но не превращает
+остановившийся pipeline в PASS.
+
+Обязательный scope:
+
+| Producer group | Release requirement |
+|---|---|
+| Расписания официальных источников | Ежедневный source parsing по каждому active source с terminal status, source fingerprint/cursor, counts `created/updated/nochange/failed` и контролем current/future event horizon; HTTP/DOM/Kaggle failure не может стать ложным zero-result PASS. |
+| Telegram/VK event intake | Telegram Monitoring, VK crawl и VK auto-import должны материализовать все due slots либо terminal catch-up; проверяются cursors, scanned/imported/skipped/failed counts и bounded backlog. |
+| Статистика постов источников по событиям | `social_metrics` batch проверяет due publications, свежесть `measured_at`, coverage точек `1h/6h/24h/72h`, resolver/provider errors и overdue targets; одного факта запуска Kaggle kernel недостаточно. |
+| Клубы по интересам | Проверяются relation outbox/retries, approved identity coverage, accepted relation watermark и hash `interest-clubs-static-v2.json`; provider deferral остаётся видимым и не стирает last-good. |
+| Facts, подборки, площадки и организации | Source-bound admission/audience/people facts, collection/BGE receipt, exact catalog coverage и hashes `collection-batch-v1.json`/`venue-pages-v1.json` должны быть свежими и согласованными с immutable snapshot. |
+| Event media | Проверяются ingest watermark, automatic-gate outcomes, broken/missing objects, manifest parity и резкое падение coverage активного каталога. |
+| Search vectors и search snapshot | Vector barrier обязан быть terminal для exact catalog revision; embedding/index coverage и `static_site_search_snapshot` должны относиться к тому же immutable DB snapshot. |
+| StaticSiteBuilder/export | Release receipt связывает exact repo/snapshot SHA и версии всех required producer inputs. Новый upstream watermark обязан быть потреблён в freshness SLA; при отсутствии upstream-изменений нужен checked `NO_CHANGE_EXPECTED`, а не просто старый artifact. |
+| Rail/bus, tickets/admission и другие включённые projections | Transport, ticket rescan, weather, unusual-events, festival/calendar и любой новый producer становятся blocking, как только их output объявлен required в production manifest или соответствующая public feature включена. Выключенная поверхность получает typed `NOT_REQUIRED`, а не фиктивный PASS. |
+
+Autotest не требует искусственно менять данные ежедневно. Неизменившийся output
+принимается только если due slot завершился, upstream был реально прочитан,
+ожидаемый target set проверен, cursor/fingerprint не изменился, partial failures
+и overdue backlog отсутствуют, а downstream продолжает ссылаться на совместимый
+last-good. Новый upstream watermark при старом projection/export означает
+`FAIL_STALLED`; отсутствие доказанного upstream observation означает
+`BLOCKED_NO_OBSERVATION`.
+
+До закрытия gate обязательны:
+
+1. versioned machine-readable producer registry и runner в `origin/main`;
+2. production schedule, видимый в scheduler health/ops ledger;
+3. минимум три последовательных terminal scheduled PASS на реальном data plane;
+4. failed-refresh drill с blocking failure и alert;
+5. downstream-not-consumed drill, обнаруживающий новый upstream watermark при
+   старом export/candidate;
+6. отдельный `NO_CHANGE_EXPECTED` acceptance без искусственной записи;
+7. `critical-data-freshness-v1.json`, JUnit и безопасный summary, hash которого
+   связан с release manifest;
+8. одновременное обновление machine-readable scenario registry, `cron.md` и
+   release evidence index в implementation PR.
+
+До выполнения этих пунктов статус `Critical data progression` остаётся
+`Missing`, даже если отдельные producer jobs работают вручную или нерегулярно.
 
 ### R14 immutable review evidence, 2026-07-27
 
@@ -456,6 +510,10 @@ Production canary клубов по интересам от 2026-07-17 не ме
 6. **Acceptance evidence:** автоматизируемый RC subset из
    [test-scenarios.md](test-scenarios.md) прошёл на clean main-reachable SHA; native
    share/calendar/maps/unfurl проверки приложены вручную там, где mocks недостаточны.
+7. **Critical data progression:** все required producer'ы зарегистрированы,
+   выполняются по расписанию, имеют terminal freshness/progression evidence и
+   downstream consumption receipt; три последовательных суточных PASS и оба
+   failure drills приложены к release evidence.
 
 Release owner фиксирует точные `T0` и `T0+10 days` в UTC и
 `Europe/Kaliningrad`, production SHA, snapshot id, build id, manifest hash и rollback
@@ -524,7 +582,7 @@ STATIC_SITE_CANARY_PERCENT=0..100
 | P0-2 | **Release manifest, staged promotion и rollback** | P0-1 | immutable prefix; SHA/snapshot/counts/checks в `static_release_manifest_v1`; failed candidate не меняет current; one-command verified rollback; release/lease evidence |
 | P0-3 | **Stable event URL и lifecycle registry** | может идти параллельно P0-1; нужен P0-4 | persisted slug; aliases; redirect/410/retention rules; merge/delete/update idempotence; sitemap содержит только canonical eligible URLs |
 | P0-4 | **Telegraph dual-run и public-link resolver** | P0-1..3 | три режима tested; static URL только после readiness; downstream не зависит от Telegraph; D10 создаёт/recreate `0`; legacy URLs сохранены |
-| P0-5 | **Observability и automated acceptance pack** | contracts можно начать сразу; full E2E после P0-1/2 | catalog/freshness/resolver metrics; `ADD-CUTOVER-*` + release subset automated; 72-hour gate report; rollback drill evidence |
+| P0-5 | **Observability и automated acceptance pack** | contracts можно начать сразу; full E2E после P0-1/2 | catalog/freshness/resolver metrics; `data.critical_pipelines_daily`; `ADD-CUTOVER-*` + release subset automated; три суточных PASS; failed-refresh/downstream-consumption drills; 72-hour gate report; rollback drill evidence |
 
 ## Test/evidence contract
 
