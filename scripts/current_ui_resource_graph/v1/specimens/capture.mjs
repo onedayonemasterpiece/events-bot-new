@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { extname, join, normalize, resolve } from 'node:path';
+import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { inflateSync } from 'node:zlib';
 import { buildSpecimenRegistry } from './registry.mjs';
@@ -71,13 +71,13 @@ export function pngDifferenceHash(buffer) {
   return bits.toString(16).padStart(16, '0');
 }
 
-function safeValue(value, maximum = 512) {
+export function safeCapturedValue(value, maximum = 512) {
   const text = String(value ?? '');
   if (text.length <= maximum && !/(?:https?:\/\/|authorization|bearer\s|password|access[_-]?token|api[_-]?key|sb_(?:secret|publishable))/iu.test(text)) return text;
   return { redacted: true, length: text.length, sha256: sha(text) };
 }
 
-async function elementFacts(locator, partSelectors) {
+export async function collectBoundedElementFacts(locator, partSelectors) {
   const facts = await locator.evaluate((node, parts) => {
     const style = getComputedStyle(node); const rect = node.getBoundingClientRect(); const before = getComputedStyle(node, '::before'); const after = getComputedStyle(node, '::after');
     const allowed = /^(?:data-|aria-|role$|open$|hidden$|disabled$|tabindex$)/u;
@@ -121,8 +121,19 @@ async function elementFacts(locator, partSelectors) {
   facts.text_sha256 = sha(facts.text_sha_input); delete facts.text_sha_input;
   for (const media of facts.media) { media.source_sha256 = sha(media.source_sha_input); delete media.source_sha_input; }
   const sanitizeTree = (value) => Array.isArray(value) ? value.map(sanitizeTree) : value && typeof value === 'object'
-    ? Object.fromEntries(Object.entries(value).map(([key, child]) => [key, sanitizeTree(child)])) : typeof value === 'string' ? safeValue(value) : value;
+    ? Object.fromEntries(Object.entries(value).map(([key, child]) => [key, sanitizeTree(child)])) : typeof value === 'string' ? safeCapturedValue(value) : value;
   return sanitizeTree(facts);
+}
+
+export async function captureStableLocatorPng({ locator, path }) {
+  const first = await locator.screenshot({ type: 'png', animations: 'disabled', caret: 'hide', scale: 'css' });
+  const second = await locator.screenshot({ type: 'png', animations: 'disabled', caret: 'hide', scale: 'css' });
+  mkdirSync(dirname(resolve(path)), { recursive: true }); writeFileSync(path, second);
+  const firstDhash = pngDifferenceHash(first); const secondDhash = pngDifferenceHash(second);
+  return {
+    bytes: second.length, sha256: sha(second), dhash: secondDhash, first_sha256: sha(first), first_dhash: firstDhash,
+    exact_stable: first.equals(second), perceptually_stable: firstDhash === secondDhash,
+  };
 }
 
 async function applyAction(page, action) {
@@ -136,11 +147,10 @@ async function captureStep({ page, row, outputDir, step, telemetry }) {
   const locator = page.locator(row.root_selector); await locator.waitFor({ state: 'visible' });
   for (const selector of row.expected_markers) if (await page.locator(selector).count() === 0) throw new Error(`Expected marker missing for ${row.id}: ${selector}`);
   for (const selector of row.expected_absent_markers || []) if (await page.locator(selector).count() !== 0) throw new Error(`Expected absent marker rendered for ${row.id}: ${selector}`);
-  await page.evaluate(() => document.fonts?.ready); const first = await locator.screenshot({ type: 'png', animations: 'disabled', caret: 'hide', scale: 'css' });
-  const second = await locator.screenshot({ type: 'png', animations: 'disabled', caret: 'hide', scale: 'css' });
-  const name = `${row.id}-${step}.png`; mkdirSync(outputDir, { recursive: true }); writeFileSync(join(outputDir, name), second);
-  let aria = null; try { aria = safeValue(await locator.ariaSnapshot({ timeout: 3000 }), 6000); } catch (error) { aria = { unavailable: true, error_class: error.constructor?.name || 'Error' }; }
-  const facts = await elementFacts(locator, row.part_selectors);
+  await page.evaluate(() => document.fonts?.ready);
+  const name = `${row.id}-${step}.png`; const screenshot = await captureStableLocatorPng({ locator, path: join(outputDir, 'component-screenshots', name) });
+  let aria = null; try { aria = safeCapturedValue(await locator.ariaSnapshot({ timeout: 3000 }), 6000); } catch (error) { aria = { unavailable: true, error_class: error.constructor?.name || 'Error' }; }
+  const facts = await collectBoundedElementFacts(locator, row.part_selectors);
   const packet = {
     schema_version: row.schema_version, id: `specimen-observation.${row.id}.${step}`, specimen_id: row.id, plan_id: row.id,
     capsule_ids: [...row.capsule_ids],
@@ -152,7 +162,7 @@ async function captureStep({ page, row, outputDir, step, telemetry }) {
     accessibility: { aria_snapshot: aria, ...facts.state }, computed: facts.computed, geometry: facts.geometry, css_variables: facts.css_variables,
     pseudo: facts.pseudo, parts: facts.parts, media: facts.media, media_queries: facts.media_queries,
     cascade: facts.cascade, loaded_fonts: facts.loaded_fonts,
-    screenshot: { path: `component-screenshots/${name}`, bytes: second.length, sha256: sha(second), dhash: pngDifferenceHash(second), first_sha256: sha(first), first_dhash: pngDifferenceHash(first), exact_stable: first.equals(second), perceptually_stable: pngDifferenceHash(first) === pngDifferenceHash(second) },
+    screenshot: { path: `component-screenshots/${name}`, ...screenshot },
     console: { counts: telemetry.consoleCounts, message_text_retained: false, message_hashes: telemetry.consoleHashes.slice(0, 20) },
     network: { counts_by_resource_type: telemetry.resourceCounts, response_status_counts: telemetry.statusCounts, failed_count: telemetry.failed, raw_urls_retained: false },
     review_status: 'pending-human-visual-review', normalization_allowed: false,

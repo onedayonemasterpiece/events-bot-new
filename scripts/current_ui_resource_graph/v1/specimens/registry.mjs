@@ -139,20 +139,54 @@ function realRoute(value) {
   return Object.freeze({
     schema_version: SPECIMEN_SCHEMA, route_kind: 'exact-real-route-verification',
     claim_scope: 'exact-candidate-route-capture-pending', trace_kind: 'source-to-real-page',
-    production_state_claimed: false, state_equivalence: 'route-binding-selected-capture-not-yet-reviewed', ...value,
+    production_state_claimed: false, state_equivalence: 'route-binding-selected-capture-not-yet-reviewed',
+    contexts: [
+      { name: 'mobile', viewport: { width: 390, height: 844 } },
+      { name: 'desktop', viewport: { width: 1728, height: 1000 } },
+    ], expected_absent_selectors: [], ...value,
   });
 }
 
 export const REAL_ROUTE_VERIFICATIONS = Object.freeze([
-  realRoute({ id: 'event-editorial-7052', capsule_ids: ['01-event-presentation-states', '03-media-heavy'], event_id: 7052, route_template: '/sobytie/{slug}/', selectors: ['[data-desktop-clean-event]', '[data-media-frame]'] }),
-  realRoute({ id: 'event-split-7301', capsule_ids: ['01-event-presentation-states', '03-media-heavy'], event_id: 7301, route_template: '/sobytie/{slug}/', selectors: ['[data-desktop-clean-event]', '[data-media-frame]'] }),
-  realRoute({ id: 'event-poster-previews-7048', capsule_ids: ['03-media-heavy', '06-artifacts'], event_id: 7048, route_template: '/sobytie/{slug}/', selectors: ['[data-media-frame]', '[data-amber-artifact]'] }),
-  realRoute({ id: 'event-no-image-6996', capsule_ids: ['03-media-heavy'], event_id: 6996, route_template: '/sobytie/{slug}/', selectors: ['[data-desktop-clean-event]'] }),
-  ...[6939, 6976, 6710, 6365, 5374].map((eventId) => realRoute({ id: `transport-${eventId}`, capsule_ids: ['04-transport'], event_id: eventId, route_template: '/sobytie/{slug}/', selectors: ['[data-event-transport-schedule],[data-event-bus-schedule],[data-kaup-transport]'] })),
-  ...[2601, 5336, 6856, 6994, 6591, 698, 7040, 6562, 6990, 5829, 5278].map((eventId) => realRoute({ id: `medallions-${eventId}`, capsule_ids: ['05-medallions'], event_id: eventId, route_template: '/sobytie/{slug}/', selectors: ['[data-medallion-layout]'] })),
-  realRoute({ id: 'artifact-catalog', capsule_ids: ['06-artifacts'], event_id: null, route_template: '/artefakty/', selectors: ['[data-artifact-collection]'] }),
-  realRoute({ id: 'artifact-weekend', capsule_ids: ['06-artifacts'], event_id: null, route_template: '/vyhodnye/', selectors: ['[data-amber-artifact]'] }),
-  ...['free', 'phone', 'registration'].map((variant) => realRoute({ id: `cta-lab-${variant}`, capsule_ids: ['02-button-cta'], event_id: null, route_template: `/labs/preview-special/cta-${variant}/`, selectors: ['[data-desktop-action-panel]'] })),
+  ...[
+    ['event-editorial-7052', 7052, ['01-event-presentation-states', '03-media-heavy']],
+    ['event-split-7301', 7301, ['01-event-presentation-states', '03-media-heavy']],
+    ['event-poster-previews-7048', 7048, ['03-media-heavy', '06-artifacts']],
+    ['event-media-alternate-7186', 7186, ['03-media-heavy']],
+    ['event-no-image-6996', 6996, ['03-media-heavy']],
+  ].map(([id, eventId, capsuleIds]) => realRoute({
+    id, capsule_ids: capsuleIds, event_id: eventId, route_template: '/sobytiya/{slug}/',
+    selectors: ['[data-desktop-clean-event]', '[data-media-frame]', '.mobile-event-production'],
+    source_paths: ['src/pages/sobytiya/[slug].astro', 'src/components/DesktopEventPage.astro'],
+  })),
+  ...[6939, 6976, 6710, 6365, 5374].map((eventId) => realRoute({
+    id: `transport-${eventId}`, capsule_ids: ['04-transport'], event_id: eventId, route_template: '/sobytiya/{slug}/',
+    selectors: ['[data-event-transport-schedule],[data-event-bus-schedule],[data-kaup-transport]', '.mobile-event-production'],
+    source_paths: ['src/pages/sobytiya/[slug].astro', 'src/components/EventTransportSchedule.astro', 'src/components/EventBusTransportSchedule.astro', 'src/components/KaupTransportSchedule.astro'],
+  })),
+  ...[2601, 5336, 6856, 6994, 6591, 698, 7040, 6562, 6990, 5829, 5278].map((eventId) => realRoute({
+    id: `medallions-${eventId}`, capsule_ids: ['05-medallions'], event_id: eventId, route_template: '/sobytiya/{slug}/',
+    selectors: ['[data-medallion-layout]', '.mobile-event-production'], expected_absent_selectors: eventId === 2601 ? ['[data-medallion-layout]'] : [],
+    source_paths: ['src/pages/sobytiya/[slug].astro', 'src/components/EventTokenMedallions.astro'],
+  })),
+  realRoute({
+    id: 'artifact-catalog', capsule_ids: ['06-artifacts'], event_id: null, route_template: '/artefakty/',
+    selectors: ['[data-artifact-collection-unavailable]'], expected_absent_selectors: ['[data-artifact-collection]'],
+    source_paths: ['src/pages/artefakty/index.astro', 'src/components/artifacts/ArtifactCollection.astro'],
+  }),
+  realRoute({
+    id: 'artifact-weekend', capsule_ids: ['06-artifacts'], event_id: null, route_template: '/vyhodnye/',
+    selectors: ['[data-date-listing="weekend"]'], expected_absent_selectors: ['[data-amber-artifact]'],
+    source_paths: ['src/pages/vyhodnye/index.astro', 'src/components/listings/WeekendListingSurface.astro', 'src/components/listings/AmberRailArtifact.astro'],
+  }),
+  ...[
+    ['free', 'cta-free-calendar-invariant'], ['phone', 'cta-phone-invariant'], ['registration', 'cta-registration-invariant'],
+  ].map(([variant, scenario]) => realRoute({
+    id: `cta-lab-${variant}`, capsule_ids: ['02-button-cta'], event_id: null,
+    route_template: `/lab/event-desktop/examples/${scenario}/`, selectors: ['[data-desktop-action-panel]'],
+    contexts: [{ name: 'desktop', viewport: { width: 1728, height: 1000 } }],
+    source_paths: ['src/pages/lab/event-desktop/examples/[scenario].astro', 'src/components/DesktopEventActionPanel.astro'],
+  })),
 ]);
 
 export function buildSpecimenRegistry() {

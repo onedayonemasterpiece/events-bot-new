@@ -1,6 +1,6 @@
 {
   "controlled_count": 19,
-  "real_route_count": 25,
+  "real_route_count": 26,
   "source_model_only_count": 1,
   "capsules": [
     "01-event-presentation-states",

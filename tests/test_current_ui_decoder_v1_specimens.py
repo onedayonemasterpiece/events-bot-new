@@ -191,3 +191,106 @@ console.log(JSON.stringify({statuses:[...r.controlled_specimens,...r.real_route_
     )
     assert set(observed["statuses"]) == {"planned"}
     assert observed["reviewed"] is False
+
+
+def test_real_route_registry_uses_exact_production_and_lab_paths_with_honest_contexts():
+    observed = _node(
+        _imports("buildSpecimenRegistry, assertSpecimenRegistry")
+        + """
+const r=buildSpecimenRegistry(); assertSpecimenRegistry(r);
+console.log(JSON.stringify(r.real_route_verifications.map((row)=>({id:row.id,template:row.route_template,contexts:row.contexts.map((item)=>item.name),absent:row.expected_absent_selectors}))));
+"""
+    )
+    by_id = {row["id"]: row for row in observed}
+    assert len(observed) == 26
+    assert all(row["template"].startswith("/sobytiya/") for row in observed if row["id"].startswith(("event-", "transport-", "medallions-")))
+    assert by_id["cta-lab-free"]["template"] == "/lab/event-desktop/examples/cta-free-calendar-invariant/"
+    assert by_id["cta-lab-phone"]["template"] == "/lab/event-desktop/examples/cta-phone-invariant/"
+    assert by_id["cta-lab-registration"]["template"] == "/lab/event-desktop/examples/cta-registration-invariant/"
+    assert by_id["cta-lab-free"]["contexts"] == ["desktop"]
+    assert by_id["artifact-catalog"]["absent"] == ["[data-artifact-collection]"]
+    assert by_id["artifact-weekend"]["absent"] == ["[data-amber-artifact]"]
+    assert by_id["medallions-2601"]["absent"] == ["[data-medallion-layout]"]
+
+
+def test_exact_manifest_and_runtime_resolver_has_no_url_leak_and_stable_bindings():
+    observed = _node(
+        _imports("buildSpecimenRegistry, resolveExactRealRouteBindings")
+        + """
+import { createHash } from 'node:crypto';
+const sha=(value)=>createHash('sha256').update(value).digest('hex'); const registry=buildSpecimenRegistry();
+const catalog={events:[...new Set(registry.real_route_verifications.map((row)=>row.event_id).filter(Number.isInteger))].map((id)=>({id,slug:`exact-event-${id}`}))};
+const route=(row)=>row.event_id===null?row.route_template:row.route_template.replace('{slug}',catalog.events.find((event)=>event.id===row.event_id).slug);
+const key=(value)=>value==='/'?'index.html':`${value.slice(1)}index.html`;
+const files=registry.real_route_verifications.map((row)=>({key:key(route(row)),sha256:sha(`file:${row.id}`),size:100}));
+const runtimeObservations=registry.real_route_verifications.map((row)=>{const value=route(row);return {id:`runtime.${row.id}`,plane:'latest_checked_kaggle_candidate',route_relative_path:key(value),route_hash:sha(value),page_family:'page-family.test',content_fixture:{content_sha256:sha(`file:${row.id}`)}}});
+const manifest={schema_version:'static_secret_candidate_manifest_v1',repo_sha:registry.pinned_candidate_sha,files};
+const a=resolveExactRealRouteBindings({registry,manifest,runtimeObservations,catalog}); const b=resolveExactRealRouteBindings({registry,manifest,runtimeObservations,catalog});
+console.log(JSON.stringify({count:a.length,stable:JSON.stringify(a)===JSON.stringify(b),statuses:[...new Set(a.map((row)=>row.binding_status))],eventKeys:a.filter((row)=>row.event_id!==null).map((row)=>row.relative_key),labs:a.filter((row)=>row.route_binding_id.startsWith('cta-lab')).map((row)=>row.relative_key),leakKeys:Object.keys(a[0]).filter((key)=>['candidate_base','full_url','page_url','target_url'].includes(key)),serialized:JSON.stringify(a)}));
+"""
+    )
+    assert observed["count"] == 26
+    assert observed["stable"] is True
+    assert observed["statuses"] == ["exact-manifest-and-runtime-bound"]
+    assert all(key.startswith("sobytiya/") and key.endswith("/index.html") for key in observed["eventKeys"])
+    assert set(observed["labs"]) == {
+        "lab/event-desktop/examples/cta-free-calendar-invariant/index.html",
+        "lab/event-desktop/examples/cta-phone-invariant/index.html",
+        "lab/event-desktop/examples/cta-registration-invariant/index.html",
+    }
+    assert observed["leakKeys"] == []
+    assert "http://" not in observed["serialized"] and "https://" not in observed["serialized"]
+
+
+def test_missing_manifest_or_catalog_route_becomes_explicit_unreachable_not_fake_capture():
+    observed = _node(
+        _imports("buildSpecimenRegistry, resolveExactRealRouteBindings, adaptEvidenceForSnapshot")
+        + """
+const registry=buildSpecimenRegistry();
+const manifest={schema_version:'static_secret_candidate_manifest_v1',repo_sha:registry.pinned_candidate_sha,files:[]};
+const resolved=resolveExactRealRouteBindings({registry,manifest,runtimeObservations:[],catalog:{events:[]}});
+const observations=resolved.map((row)=>({schema_version:registry.schema_version,id:`unreachable.${row.route_binding_id}`,evidence_kind:'explicit-unreachable',route_binding_id:row.route_binding_id,resolved_route_id:row.id,relative_key:row.relative_key,relative_key_sha256:row.relative_key_sha256,route_hash:null,runtime_observation_id:null,page_family:null,context:null,screenshot:null,source_paths:row.source_paths,capsule_ids:row.capsule_ids,unreachable_reason:row.unreachable_reason,proof_label:'exact-candidate-binding-unreachable',production_state_claimed:false,human_review_status:'pending',normalization_allowed:false}));
+const adapted=adaptEvidenceForSnapshot({registry,specimenObservations:[],realRouteObservations:observations});
+console.log(JSON.stringify({statuses:[...new Set(resolved.map((row)=>row.binding_status))],reasons:[...new Set(resolved.map((row)=>row.unreachable_reason))],pageStatuses:[...new Set(adapted.page_verifications.map((row)=>row.status))],screenshots:adapted.page_verifications.map((row)=>row.screenshot_path)}));
+"""
+    )
+    assert observed["statuses"] == ["explicit-unreachable"]
+    assert "exact-candidate-preview-event-row-missing" in observed["reasons"]
+    assert "exact-candidate-manifest-relative-key-missing" in observed["reasons"]
+    assert observed["pageStatuses"] == ["explicit-unreachable"]
+    assert set(observed["screenshots"]) == {None}
+
+
+def test_snapshot_adapter_is_stable_and_complete_only_with_every_plan_or_explicit_unreachable():
+    observed = _node(
+        _imports("buildSpecimenRegistry, adaptEvidenceForSnapshot")
+        + """
+const registry=buildSpecimenRegistry();
+const specimens=registry.controlled_specimens.map((row)=>({id:`raw.${row.id}`,specimen_id:row.id,plan_id:row.id,step:'baseline',source_paths:row.source_paths,production_state_claimed:false,state_equivalence:'not-reviewed'}));
+const pages=registry.real_route_verifications.flatMap((row)=>row.contexts.map((context)=>({id:`raw.${row.id}.${context.name}`,evidence_kind:'element-capture',route_binding_id:row.id,relative_key:`route/${row.id}/index.html`,route_hash:'a'.repeat(64),runtime_observation_id:`runtime.${row.id}`,page_family:'page-family.test',context,screenshot:{path:`component-screenshots/${row.id}-${context.name}.png`},proof_label:'exact-candidate-browser-element-unreviewed',production_state_claimed:false,human_review_status:'pending'})));
+const a=adaptEvidenceForSnapshot({registry,specimenObservations:specimens,realRouteObservations:pages,requireComplete:true});
+const b=adaptEvidenceForSnapshot({registry,specimenObservations:specimens,realRouteObservations:pages,requireComplete:true});
+let incomplete='accepted'; try{adaptEvidenceForSnapshot({registry,specimenObservations:specimens.slice(1),realRouteObservations:pages,requireComplete:true})}catch(error){incomplete=error.message}
+console.log(JSON.stringify({stable:JSON.stringify(a)===JSON.stringify(b),specimens:a.specimen_observations.length,pages:a.page_verifications.length,allSourceRefs:a.specimen_observations.every((row)=>row.source_refs.length),allRouteRefs:a.specimen_observations.every((row)=>row.route_binding_refs.length),review:[...new Set([...a.specimen_observations,...a.page_verifications].map((row)=>row.human_review_status))],production:[...new Set([...a.specimen_observations,...a.page_verifications].map((row)=>row.production_state_claimed))],incomplete}));
+"""
+    )
+    assert observed["stable"] is True
+    assert observed["specimens"] == 19
+    assert observed["pages"] == 49
+    assert observed["allSourceRefs"] is True and observed["allRouteRefs"] is True
+    assert observed["review"] == ["pending"]
+    assert observed["production"] == [False]
+    assert observed["incomplete"] != "accepted"
+
+
+def test_real_route_packet_validator_rejects_url_leaks_unstable_pixels_and_fake_review():
+    observed = _node(
+        _imports("assertRealRouteEvidencePacket")
+        + """
+const base={schema_version:'current_ui_decoder_controlled_specimen_v1',evidence_kind:'element-capture',production_state_claimed:false,human_review_status:'pending',full_url_retained:false,screenshot:{sha256:'a'.repeat(64),dhash:'b'.repeat(16),exact_stable:true,perceptually_stable:true},dom:{full_html_retained:false},network:{raw_urls_retained:false}};
+const cases={good:base,url:{...base,note:'https://private.invalid'},unstable:{...base,screenshot:{...base.screenshot,exact_stable:false}},reviewed:{...base,human_review_status:'reviewed'}};
+console.log(JSON.stringify(Object.fromEntries(Object.entries(cases).map(([name,row])=>{try{assertRealRouteEvidencePacket(row);return[name,'accepted']}catch(error){return[name,error.message]}}))));
+"""
+    )
+    assert observed["good"] == "accepted"
+    assert all(observed[name] != "accepted" for name in ("url", "unstable", "reviewed"))

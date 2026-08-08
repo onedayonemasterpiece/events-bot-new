@@ -3,7 +3,7 @@ import { REQUIRED_CAPSULES, SPECIMEN_SCHEMA } from './registry.mjs';
 import { assertFixtureDelta } from './fixtures.mjs';
 
 const SAFE_ID = /^[a-z0-9][a-z0-9-]{2,80}$/u;
-const SAFE_SOURCE = /^src\/(?:components|lib|pages)\/[A-Za-z0-9_./-]+\.(?:astro|ts|mjs)$/u;
+const SAFE_SOURCE = /^src\/(?:components|lib|pages)\/[A-Za-z0-9_./\[\]-]+\.(?:astro|ts|mjs)$/u;
 const SENSITIVE = /(?:authorization|bearer\s|password|client[_-]?secret|access[_-]?token|api[_-]?key|sb_(?:secret|publishable)|https?:\/\/)/iu;
 
 export function stableHash(value) {
@@ -39,6 +39,12 @@ export function assertSpecimenRegistry(registry) {
   }
   for (const row of registry.real_route_verifications) {
     if (row.route_kind !== 'exact-real-route-verification' || !row.route_template.startsWith('/')) throw new Error(`Invalid real-route binding: ${row.id}`);
+    if (!row.contexts?.length || !row.selectors?.length || !row.source_paths?.length) throw new Error(`Incomplete real-route evidence plan: ${row.id}`);
+    for (const context of row.contexts) if (!['mobile', 'desktop'].includes(context.name) || !Number.isInteger(context.viewport?.width) || !Number.isInteger(context.viewport?.height)) throw new Error(`Invalid real-route context: ${row.id}`);
+    for (const path of row.source_paths) if (!SAFE_SOURCE.test(path)) throw new Error(`Unsafe real-route source binding: ${path}`);
+  }
+  for (const row of registry.source_model_only_cases) {
+    if (row.reachability !== 'source-model-only' || row.production_state_claimed !== false || !row.reason || !row.source_paths?.length) throw new Error(`Incomplete source-model-only case: ${row.id}`);
   }
   const covered = new Set(all.flatMap((row) => row.capsule_ids || []));
   const missing = REQUIRED_CAPSULES.filter((id) => !covered.has(id));
@@ -56,14 +62,34 @@ export function assertEvidencePacket(packet) {
   return true;
 }
 
-export function validateTraceIntegrity(registry, observations = [], pageVerifications = []) {
+export function validateTraceIntegrity(registry, observations = [], pageVerifications = [], { requireComplete = false } = {}) {
   assertSpecimenRegistry(registry);
   const plans = new Set(registry.controlled_specimens.map((row) => row.id));
   const routes = new Set(registry.real_route_verifications.map((row) => row.id));
   for (const row of observations) if (!plans.has(row.specimen_id)) throw new Error(`Dangling specimen observation: ${row.specimen_id}`);
-  for (const row of pageVerifications) if (!routes.has(row.route_binding_id)) throw new Error(`Dangling real-page verification: ${row.route_binding_id}`);
+  for (const row of pageVerifications) {
+    const routeRef = row.route_binding_id || row.route_binding_ref;
+    if (!routes.has(routeRef)) throw new Error(`Dangling real-page verification: ${routeRef}`);
+  }
   for (const row of observations) {
     if (!row.source_paths?.length || !row.plan_id || row.production_state_claimed !== false) throw new Error(`Incomplete specimen trace: ${row.specimen_id}`);
+  }
+  if (requireComplete) {
+    const observedPlans = new Set(observations.map((row) => row.specimen_id));
+    const verifiedRoutes = new Map();
+    const explicitlyUnreachableRoutes = new Set();
+    for (const row of pageVerifications) {
+      if (row.status === 'explicit-unreachable') explicitlyUnreachableRoutes.add(row.route_binding_ref);
+      if (!verifiedRoutes.has(row.route_binding_ref)) verifiedRoutes.set(row.route_binding_ref, new Set());
+      verifiedRoutes.get(row.route_binding_ref).add(row.context_name);
+    }
+    for (const row of registry.controlled_specimens) if (!observedPlans.has(row.id)) throw new Error(`Missing required controlled observation: ${row.id}`);
+    for (const row of registry.real_route_verifications) {
+      if (explicitlyUnreachableRoutes.has(row.id)) continue;
+      const contexts = verifiedRoutes.get(row.id) || new Set();
+      for (const context of row.contexts) if (!contexts.has(context.name)) throw new Error(`Missing required real-route context: ${row.id}/${context.name}`);
+    }
+    for (const row of registry.source_model_only_cases) if (row.reachability !== 'source-model-only' || row.production_state_claimed !== false) throw new Error(`Unclassified unreachable case: ${row.id}`);
   }
   return true;
 }
