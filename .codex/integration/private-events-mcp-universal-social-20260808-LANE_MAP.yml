@@ -33,6 +33,19 @@ requirements:
   R09: Fake-provider contract tests, OAuth/catalog isolation, full MCP suite, CI gate, non-destructive live E2E and webhook/health regression checks
   R10: Canonical docs, env/credential generator, connection instructions, rollout/rollback and production acceptance receipts
   R11: Bounded editorial sample of up to 100 posts from one explicitly resolved channel/community for tone, topics and description drafting; no mass collection
+deferred_followup:
+  R12: >-
+    After the social workspace ships, expand the ChatGPT incident/operations evidence surface with
+    a stability overview, bounded error and operation search, correlation-aware incident evidence,
+    and narrow log retrieval so most investigations can be completed from exact GitHub code plus MCP
+    evidence without downloading the production database.
+  constraints:
+    - keep investigation reads separate from all social mutation scopes and provider credentials
+    - begin with aggregate health, ingestion velocity, queues, scheduler/jobs and recent anomalies
+    - require a bounded time window, component, severity, run/job/correlation id or prior evidence before detailed log retrieval
+    - redact secrets and personal data recursively; never expose arbitrary SQL, filesystem paths, shell or unbounded log/database export
+    - derive the final evidence contract from canonical historical incident records before implementation
+  status: accepted_after_social_workspace
 lanes:
   - id: L0-core-contract
     role: worker
@@ -53,7 +66,7 @@ lanes:
     expected_output: committed provider-neutral contract and focused core tests
     verification_scope: targeted
     effort: high
-    status: planned
+    status: independent_review
   - id: L1-telegram-workspace
     role: worker
     requirement_ids: [R01, R02, R03]
