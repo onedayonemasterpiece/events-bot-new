@@ -8,16 +8,20 @@
   sampling; similar/stories/statistics; rich media mutations; capability,
   secrecy, cooldown, fencing, and uncertainty safety).
 - Base SHA: `dd388c4b71d7bb86dbac94e4dbe19347a5ca7e2b`
-- Validated implementation SHA: `4afab6aa6334b358ba2933a31c4c7a31405af33b`
+- Initial implementation SHA: `4afab6aa6334b358ba2933a31c4c7a31405af33b`
+- Primary review-remediation SHA: `f58862d88b73bd20906df69774223270ecacc60c`
+- Final review-probe SHA: `71fb4adcb6ba0a8a5455c1f7b053da2b5ad6c3de`
 - Branch: `agent/mcp-universal-social/telegram`
 - Production calls/deploy: not performed.
 
 ## Delivered
 
-- Added `TelegramWorkspaceAdapter` with exactly four public async operations:
+- Added `TelegramWorkspaceAdapter` with exactly five public async operations:
   `capabilities(target_ref)`, `resolve(request)`, `read(request)`, and
-  `execute(intent)`. There is no public provider request, method, constructor,
-  kwargs, or raw TL escape hatch.
+  `execute(intent, operation_ref=...)`, plus `reconcile(operation_ref)`. The
+  caller-issued operation ref is the exact ledger/receipt/reconciliation key,
+  including timeout/unknown outcomes. There is no public provider request,
+  method, constructor, kwargs, or raw TL escape hatch.
 - Added exact Saved Messages/self resolution and exact username, canonical
   `t.me` profile, and provider-ID resolution to user/channel/group bindings.
   Native entities and IDs remain private behind injected opaque target/item/
@@ -25,16 +29,26 @@
 - Added bounded dialog listing/keyword target search, exact target history,
   target and global keyword search, exact item reads, comments/replies,
   aggregate reactions, stories, audience/statistic aggregates, and fixed
-  channel recommendations. Pagination cursors are opaque and request-bound.
+  channel recommendations. Pagination cursors are opaque and bound to the
+  platform, operation, resolved target/item, sample, query, date range,
+  purpose, access class, limits, and expected kinds; cross-context reuse fails.
 - Added single-target, ephemeral/no-index editorial channel/group sampling with
   title/about/description/basic metrics, date filtering, pages no larger than
   25, and a cumulative maximum of 100. The runtime lane remains the sole owner
   of the durable server-minted `sample_ref` and cumulative state and passes a
   copied request containing that ref to this adapter.
+- Adapter-local checks independently enforce `page_size <= 25`,
+  `total_limit <= 100`, a valid server-issued sample ref, and coherent dates,
+  even when an internal caller bypasses the provider-neutral validator.
 - Added fixed mutation translations for Saved/user DM, channel/group publish,
   reply/comment, edit, delete, forward, reaction, schedule, and story. Exact
   capability preflight intersects live provider rights with stored policy.
   Stories require one staged asset and explicit stored privacy.
+- A no-rights broadcast advertises no mutations. Item actions recheck the live
+  source rights, forwarding rechecks both source and destination, and execution
+  carries the same immutable source/destination binding snapshot (including
+  its binding version) from preflight through the provider call, preventing a
+  mutable ref-store TOCTOU swap.
 - Added structured rich entity compilation with deterministic codepoint to
   UTF-16 offsets, fixed link/mention/custom-emoji translation, and media only
   from opaque staged asset refs. No path, arbitrary URL fetch, base64, session,
@@ -51,16 +65,24 @@
 
 The fake-only focused suite covers:
 
-- Saved/self plus user/channel/group exact resolution;
-- serialized exact-user reminder send and verified read-back;
+- core-compatible Saved/self and exact-user resolution;
+- adapter-only channel/group transport classification, explicitly separated
+  from the still-blocked provider-neutral validator path;
+- signed basic-group provider-ID classification at the adapter boundary;
+- serialized exact-user and Saved reminder sends with verified read-back;
 - four 25-item editorial pages reaching exactly 100 with description/metrics;
-- dialog list/search, target history, target/global search and opaque cursors;
+- dialog list/search, target history, target/global search and adversarial
+  cross-platform/operation/target/query/sample/date cursor rejection;
 - similar channels, comments, reactions, stories, audience/statistics;
 - UTF-16 entity ranges, custom emoji, and staged media compilation;
 - every closed mutation family;
-- exact capability denial before provider mutation;
+- exact capability denial before provider mutation, including a no-rights
+  broadcast and every item mutation family;
+- mutable-ref TOCTOU swaps for edit/delete/comment/reaction and forwarding;
+- caller-issued operation refs and same-key success/timeout reconciliation;
 - provider/native-ID/secret redaction and closed public surface;
 - non-idempotent timeout, FloodWait persistence, and no blind retry;
+- actual `asyncio.wait_for` expiry and post-mutation lost-fence uncertainty;
 - core capability, editorial response, and action status validators;
 - installed Telethon compatibility guard.
 
@@ -69,12 +91,12 @@ The fake-only focused suite covers:
 ```text
 PYTHONPATH=. /home/dev/.codex/venvs/events-bot-new/bin/python -m pytest -q \
   tests/test_private_events_mcp_telegram_workspace.py
-# 21 passed
+# 37 passed
 
 PYTHONPATH=. /home/dev/.codex/venvs/events-bot-new/bin/python -m pytest -q \
   tests/test_private_events_mcp_social_workspace_contract.py \
   tests/test_private_events_mcp_telegram_workspace.py
-# 51 passed (final combined rerun)
+# 67 passed (final combined rerun)
 
 /home/dev/.codex/venvs/events-bot-new/bin/python -m compileall -q \
   private_events_mcp_telegram_adapter.py \
@@ -94,6 +116,13 @@ git diff --cached --check
 - The injected opaque-ref store and governor are security-critical integration
   dependencies: refs/cursors/operations must be durable and resource-bound;
   lease fencing and cooldowns must be cross-process and persistent.
+- **Open integration blocker:** the current provider-neutral
+  `validate_read_request()` requires username/profile-link/provider-ID exact
+  resolution to expect only `user`, so it rejects exact channel/group resolver
+  requests before this adapter runs. The focused suite records that rejection
+  and does not present direct adapter channel/group classification as integrated
+  acceptance. The integration/core owner must reconcile that contract before
+  claiming channel/group exact resolution end to end.
 - Provider/legal consent, durable approvals, safety/audit hooks, catalogs,
   OAuth scopes, production smoke tests, and deployment are outside this lane.
 - No canonical docs or `CHANGELOG.md` were edited because the lane map forbade
