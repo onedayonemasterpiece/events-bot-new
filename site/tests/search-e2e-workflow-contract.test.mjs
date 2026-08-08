@@ -64,6 +64,9 @@ test('immutable candidate binds the authoritative complete Search projection rev
 
 test('browser fixture sends its issued session through the owner RLS probe', async () => {
   const source = await readFile(browserRunnerUrl, 'utf8');
+  assert.match(source, /createRequire\(new URL\('\.\.\/\.\.\/site\/package\.json'/u);
+  assert.match(source, /siteRequire\('playwright'\)/u);
+  assert.doesNotMatch(source, /from 'playwright'/u);
   for (const persona of ['search-cached-browser', 'search-cold-browser', 'search-degraded-browser']) {
     assert.ok(source.includes(persona), persona);
   }
