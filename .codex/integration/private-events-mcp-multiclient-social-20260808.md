@@ -4,11 +4,11 @@
 
 Integration branch: `integration/private-events-mcp-universal-social`
 Rebased base: `origin/main` at `93a94b6aba181c40491f03fc3ebcdcc2dc320ced`
-Release-gate remediation candidate: `829abf86bb9c333c0400e528ad265cacfbe6ff40`
+Release-gate remediation candidate: `3d3c1028e5ae35140fd30690083420b54fe3b7d2`
 
 Implementation, fake-provider validation and canonical documentation are
 complete. The first exact-head reviews requested changes; commits `e433fa95f0`,
-`06a6dc55a`, and `829abf86b` close those findings. Repeat exact-head
+`06a6dc55a`, `829abf86b`, and `3d3c1028e` close those findings. Repeat exact-head
 independent review, PR CI, merge,
 credentials, deploy and live provider canaries remain pending. Production was
 not changed.
@@ -47,7 +47,7 @@ supersedes the earlier alias-only 65-test report.
 
 ## Validation receipt
 
-On remediation candidate `829abf86bb9c333c0400e528ad265cacfbe6ff40` rebased directly onto the recorded
+On remediation candidate `3d3c1028e5ae35140fd30690083420b54fe3b7d2` rebased directly onto the recorded
 `origin/main`:
 
 ```bash
@@ -85,6 +85,7 @@ Security/hygiene checks:
 - disabled action/media/story classes are absent from the ChatGPT catalog, and
   a stale preparation cannot bypass a newly disabled action kill switch;
 - forward and item-only attempt budgets use the actual destination/source target;
+- item mutation/forward approval fails closed without a human-readable source target;
 - media/story activation itself fails configuration until real upload storage.
 
 ## Remaining release gates
