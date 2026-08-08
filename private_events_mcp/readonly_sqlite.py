@@ -184,7 +184,18 @@ class ReadOnlySQLite:
         with self._schema_lock:
             if self._schema and now - self._schema.generated_at < self.schema_ttl_seconds:
                 return self._schema
+            deadline = time.monotonic() + self.query_timeout_ms / 1000.0
             conn = self._connect()
+            timed_out = False
+
+            def _progress() -> int:
+                nonlocal timed_out
+                if time.monotonic() >= deadline:
+                    timed_out = True
+                    return 1
+                return 0
+
+            conn.set_progress_handler(_progress, 500)
             try:
                 table_rows = conn.execute(
                     "SELECT name FROM sqlite_master "
@@ -202,9 +213,17 @@ class ReadOnlySQLite:
                 snapshot = SchemaSnapshot(tables=tables, generated_at=now)
                 self._schema = snapshot
                 return snapshot
+            except sqlite3.OperationalError as exc:
+                message = str(exc).casefold()
+                if timed_out or "interrupted" in message:
+                    raise QueryBudgetExceeded("sqlite_schema_budget_exceeded") from exc
+                if "locked" in message or "busy" in message:
+                    raise QueryBudgetExceeded("sqlite_busy") from exc
+                raise ReadOnlySQLiteError("sqlite_schema_failed") from exc
             except sqlite3.Error as exc:
                 raise ReadOnlySQLiteError("sqlite_schema_failed") from exc
             finally:
+                conn.set_progress_handler(None, 0)
                 conn.close()
 
     async def schema(self) -> SchemaSnapshot:

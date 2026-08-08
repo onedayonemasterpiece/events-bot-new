@@ -40,10 +40,27 @@ _SENSITIVE_KEY_PARTS = (
     "authorization",
     "bearer",
 )
+_NON_SECRET_TOKEN_COUNTER_KEYS = frozenset(
+    {
+        "total_tokens",
+        "prompt_tokens",
+        "completion_tokens",
+        "input_tokens",
+        "output_tokens",
+        "cached_tokens",
+        "reasoning_tokens",
+    }
+)
 _PERSONAL_IDENTIFIER_KEYS = frozenset(
     {
         "operator_id",
+        "operator_email",
+        "operator_username",
+        "operator_name",
         "reviewer_id",
+        "reviewer_email",
+        "reviewer_username",
+        "reviewer_name",
         "user_id",
         "creator_id",
         "chat_id",
@@ -54,7 +71,10 @@ _PERSONAL_IDENTIFIER_KEYS = frozenset(
 )
 _SECRET_ASSIGNMENT_RE = re.compile(
     r"(?i)\b(access[_-]?token|refresh[_-]?token|client[_-]?secret|"
-    r"operator[_-]?token|signing[_-]?key|private[_-]?key|api[_-]?key|"
+    r"telegram[_-]?bot[_-]?token|bot[_-]?token|operator[_-]?token|"
+    r"operator[_-]?(?:id|email|username|name)|"
+    r"reviewer[_-]?(?:id|email|username|name)|token|"
+    r"signing[_-]?key|private[_-]?key|api[_-]?key|"
     r"password|authorization)\b(\s*[:=]\s*)([^\s,;&]+)"
 )
 _BEARER_RE = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{12,}")
@@ -68,7 +88,13 @@ def _normalise_key(value: str) -> str:
 
 def _is_sensitive_key(value: str) -> bool:
     normalized = _normalise_key(value)
-    if normalized in _PERSONAL_IDENTIFIER_KEYS or normalized.endswith("_operator_id"):
+    if normalized in _NON_SECRET_TOKEN_COUNTER_KEYS:
+        return False
+    if normalized == "token" or normalized.endswith("_token"):
+        return True
+    if normalized in _PERSONAL_IDENTIFIER_KEYS or normalized.endswith(
+        ("_operator_id", "_operator_email", "_operator_username", "_operator_name")
+    ):
         return True
     return any(part in normalized for part in _SENSITIVE_KEY_PARTS)
 
@@ -537,6 +563,7 @@ class EventsEvidenceRepository:
                 )
                 if key in row
             }
+            metadata["contains_untrusted_external_content"] = True
             hits.append(
                 SearchHit(
                     document_id=f"event:{event_id}",
@@ -659,17 +686,20 @@ class EventsEvidenceRepository:
         documents, runtime = await asyncio.gather(docs_task, runtime_task)
         hits: list[SearchHit] = []
         for document in documents:
+            safe_title = _redact_text(document.title)
+            safe_text = _redact_text(document.text)
+            safe_metadata = _clip(document.metadata)
             hits.append(
                 SearchHit(
                     document_id=document.document_id,
-                    title=document.title,
+                    title=safe_title,
                     url=document.url,
                     kind="incident_report",
-                    snippet=_snippet(document.text, query),
+                    snippet=_snippet(safe_text, query),
                     metadata={
                         "path": document.relative_path,
                         "fingerprint": document.fingerprint,
-                        **document.metadata,
+                        **(safe_metadata if isinstance(safe_metadata, Mapping) else {}),
                     },
                     score=150.0,
                 )
@@ -772,16 +802,17 @@ class EventsEvidenceRepository:
     async def get_incident(self, document_id: str) -> FetchedDocument:
         document = await self.incidents.get(document_id)
         if document is not None:
+            safe_metadata = _clip(document.metadata)
             return FetchedDocument(
                 document_id=document.document_id,
-                title=document.title,
-                text=document.text,
+                title=_redact_text(document.title),
+                text=_redact_text(document.text),
                 url=document.url,
                 metadata={
                     "kind": "incident_report",
                     "path": document.relative_path,
                     "sha256": document.fingerprint,
-                    **document.metadata,
+                    **(safe_metadata if isinstance(safe_metadata, Mapping) else {}),
                 },
             )
         if document_id.startswith("run:"):

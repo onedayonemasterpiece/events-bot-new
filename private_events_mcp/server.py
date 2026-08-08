@@ -18,6 +18,7 @@ from .protocol import (
     LATEST_LEGACY_PROTOCOL,
     SUPPORTED_LEGACY_PROTOCOLS,
     MCPProtocol,
+    UnsupportedProtocolVersion,
 )
 from .repository import EventsEvidenceRepository
 from .tool_catalog import build_tools
@@ -148,9 +149,15 @@ class PrivateEventsMCPServer:
                         error="invalid_token", description="Access token is invalid or expired"
                     ),
                 )
-            rate_key = (
-                f"auth:{identity.token_id}" if identity is not None else f"anon:{request.remote or 'unknown'}"
-            )
+            if identity is not None:
+                # Bind the bucket to the OAuth principal, not an individual
+                # access-token jti, so refresh rotation cannot reset the RPM.
+                principal = hashlib.sha256(
+                    f"{identity.client_id}\0{identity.subject}".encode("utf-8")
+                ).hexdigest()[:24]
+                rate_key = f"auth:{principal}"
+            else:
+                rate_key = f"anon:{request.remote or 'unknown'}"
             rate_limit = (
                 self.config.authenticated_requests_per_minute
                 if identity is not None
@@ -181,7 +188,14 @@ class PrivateEventsMCPServer:
                     return self._plain_error(400, "jsonrpc_object_required", correlation_id=correlation)
                 request_message = payload
                 method = str(request_message.get("method") or "")[:100]
-                response_payload = await self.protocol.dispatch(request_message, identity)
+                try:
+                    response_payload = await self.protocol.dispatch(request_message, identity)
+                except UnsupportedProtocolVersion:
+                    return self._plain_error(
+                        400,
+                        "unsupported_mcp_protocol_version",
+                        correlation_id=correlation,
+                    )
                 if response_payload is None:
                     return web.Response(
                         status=202,
@@ -242,6 +256,47 @@ class PrivateEventsMCPServer:
         response.headers["Allow"] = "POST"
         return response
 
+    async def handle_oauth_token(self, request: web.Request) -> web.Response:
+        """Apply the same fail-closed admission boundary to token rotation."""
+
+        correlation = uuid.uuid4().hex
+        try:
+            self._validate_transport_request(request)
+            if (
+                request.content_length is not None
+                and request.content_length > self.config.max_request_bytes
+            ):
+                return self._plain_error(413, "request_too_large", correlation_id=correlation)
+            if (request.content_type or "").casefold() != "application/x-www-form-urlencoded":
+                return self._plain_error(415, "form_urlencoded_required", correlation_id=correlation)
+            rate_key = f"oauth-token:{request.remote or 'unknown'}"
+            if not self.admission.rate.allow(
+                rate_key,
+                limit=self.config.anonymous_requests_per_minute,
+                window_seconds=60,
+            ):
+                response = self._plain_error(429, "rate_limited", correlation_id=correlation)
+                response.headers["Retry-After"] = "15"
+                return response
+            async with self.admission:
+                body = await request.read()
+                if len(body) > self.config.max_request_bytes:
+                    return self._plain_error(413, "request_too_large", correlation_id=correlation)
+                return await self.oauth.handle_token(request)
+        except RateLimitExceeded:
+            response = self._plain_error(503, "server_busy", correlation_id=correlation)
+            response.headers["Retry-After"] = "2"
+            return response
+        except web.HTTPException as exc:
+            return self._plain_error(
+                exc.status,
+                exc.text or "request_rejected",
+                correlation_id=correlation,
+            )
+        except Exception:
+            logger.exception("private_events_mcp token request failed correlation_id=%s", correlation)
+            return self._plain_error(500, "internal_error", correlation_id=correlation)
+
     async def handle_options(self, request: web.Request) -> web.Response:
         origin = (request.headers.get("Origin") or "").strip().casefold()
         if origin not in {self.public_origin, "https://chatgpt.com"}:
@@ -273,7 +328,7 @@ class PrivateEventsMCPServer:
         )
         app.router.add_get(paths.oauth_authorize_path, self.oauth.handle_authorize_get)
         app.router.add_post(paths.oauth_authorize_path, self.oauth.handle_authorize_post)
-        app.router.add_post(paths.oauth_token_path, self.oauth.handle_token)
+        app.router.add_post(paths.oauth_token_path, self.handle_oauth_token)
         app.router.add_get(paths.about_path, self.oauth.handle_about)
         app[SERVER_APP_KEY] = self
         app[ENDPOINT_FINGERPRINT_APP_KEY] = hashlib.sha256(

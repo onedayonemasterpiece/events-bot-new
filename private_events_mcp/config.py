@@ -85,7 +85,11 @@ class PrivateEventsMCPConfig:
         base = (os.getenv("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL") or "").strip()
         config = cls(
             enabled=enabled,
-            public_base_url=_normalise_base_url(base) if base else "",
+            # Disabled means inert even when stale deployment variables remain.
+            # Parse and validate the public origin only when routes will be
+            # attached; otherwise an unrelated malformed value must not break
+            # the existing webhook/health application during startup.
+            public_base_url=_normalise_base_url(base) if enabled and base else base.rstrip("/"),
             path_secret=(os.getenv("PRIVATE_EVENTS_MCP_PATH_SECRET") or "").strip(),
             database_path=(os.getenv("DB_PATH") or "/data/db.sqlite").strip(),
             auth_database_path=(

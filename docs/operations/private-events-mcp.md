@@ -72,7 +72,8 @@ Each streamable-HTTP `POST` accepts exactly one JSON-RPC object. JSON-RPC
 batches are rejected with HTTP `400`, so a caller cannot multiply SQLite work
 inside one admission/rate slot. When `MCP-Protocol-Version` is present it must
 name a supported protocol version; invalid or unsupported versions also fail
-closed with HTTP `400`.
+closed with HTTP `400`. The same validation applies to the protocol version in
+an `initialize` request instead of silently negotiating an unsupported value.
 
 ## Data and privacy boundary
 
@@ -83,8 +84,11 @@ Included event evidence is limited to explicit allowlisted columns. Column names
 Decoded runtime JSON is recursively redacted for credential-bearing keys,
 authorization material and personal operator identifiers, including nested
 objects and arrays. Credential-shaped values embedded in text are redacted as
-well. Telegram, VK and other source text is explicitly labeled as untrusted
-external data and must never be treated as instructions.
+well. This output-boundary filter also covers repository incident documents,
+generic and provider bot tokens, and operator/reviewer email or username
+identifiers while preserving non-secret usage counters such as `total_tokens`.
+Telegram, VK and other source text is explicitly labeled as untrusted external
+data in both search and fetch output and must never be treated as instructions.
 
 No direct Telegram, VK, MAX, Supabase, Telegraph, Catbox, ImageKit or LLM request is made by the MCP package. It reads already persisted evidence only. Images and videos are not proxied.
 
@@ -100,11 +104,17 @@ Defaults:
 - 250 ms SQLite busy wait;
 - 2 concurrent MCP requests;
 - 60 authenticated requests per minute;
+- 30 anonymous OAuth token requests per minute;
 - 8 MiB response egress per hour;
 - 20-second result cache;
 - incident scan bounded to 3 MiB.
 
-The SQLite adapter opens a new `mode=ro` connection per operation, sets `query_only=ON`, and interrupts the VM when its deadline expires. Blocking SQLite work runs via `asyncio.to_thread`, preserving the webhook event loop.
+Authenticated rate buckets are bound to the OAuth client and subject, so an
+access-token refresh does not reset the request budget. The token endpoint uses
+the same body-size and concurrency admission boundary. The SQLite adapter opens
+a new `mode=ro` connection per operation, sets `query_only=ON`, and interrupts
+both queries and schema discovery when the VM deadline expires. Blocking SQLite
+work runs via `asyncio.to_thread`, preserving the webhook event loop.
 
 ## Environment
 
@@ -123,6 +133,10 @@ PRIVATE_EVENTS_MCP_REPOSITORY_ROOT=/app
 PRIVATE_EVENTS_MCP_REPOSITORY_SLUG=onedayonemasterpiece/events-bot-new
 PRIVATE_EVENTS_MCP_REPOSITORY_SHA_FILE=/app/.static-site-repo-sha
 ```
+
+When `PRIVATE_EVENTS_MCP_ENABLED` is false, malformed or stale MCP-only
+configuration is not parsed and no MCP route is attached; existing startup,
+webhook, scheduler and health behavior therefore remains unchanged.
 
 No provider credential is passed specifically to the MCP code.
 

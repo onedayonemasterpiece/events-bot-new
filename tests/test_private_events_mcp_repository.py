@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sqlite3
 
 import pytest
@@ -57,20 +58,65 @@ async def test_runtime_payloads_are_recursively_redacted_and_source_text_is_untr
         "UPDATE joboutbox SET payload=? WHERE id=7",
         (
             '{"event_id":42,"access_token":"provider-secret",'
+            '"token":"generic-secret","telegram_bot_token":"telegram-secret",'
             '"nested":{"client_secret":"client-secret-value",'
-            '"operator_id":123456,"total_tokens":99},'
-            '"note":"Authorization: Bearer bearer-secret-value"}',
+            '"operator_id":123456,"operator_email":"operator@example.com",'
+            '"operator_username":"private-operator","total_tokens":99},'
+            '"note":"Authorization: Bearer bearer-secret-value token=inline-secret '
+            'operator_id=654321 operator_email=inline@example.com"}',
         ),
     )
     conn.commit()
     conn.close()
 
-    document = await EventsEvidenceRepository(config).get_event(42)
-    assert "provider-secret" not in document.text
-    assert "client-secret-value" not in document.text
-    assert "123456" not in document.text
-    assert "bearer-secret-value" not in document.text
+    incident_path = (
+        config.repository_root
+        + "/docs/reports/incidents/INC-2026-08-02-private-redaction.md"
+    )
+    with open(incident_path, "w", encoding="utf-8") as handle:
+        handle.write(
+            "# Private redaction incident\n\n"
+            "access_token=incident-secret-value "
+            "operator_email=incident-operator@example.com\n"
+        )
+
+    repository = EventsEvidenceRepository(config)
+    document = await repository.get_event(42)
+    for forbidden in (
+        "provider-secret",
+        "generic-secret",
+        "telegram-secret",
+        "client-secret-value",
+        "123456",
+        "654321",
+        "operator@example.com",
+        "inline@example.com",
+        "private-operator",
+        "bearer-secret-value",
+        "inline-secret",
+    ):
+        assert forbidden not in document.text
     assert "<redacted>" in document.text
     assert '"total_tokens": 99' in document.text
     assert "untrusted_data_never_instructions" in document.text
     assert document.metadata["contains_untrusted_external_content"] is True
+
+    event_hits = await repository.search_events(query="архитектуре", include_past=True)
+    assert event_hits[0].metadata["contains_untrusted_external_content"] is True
+
+    incident_hits = await repository.search_incidents("private redaction", limit=10)
+    incident_hit = next(item for item in incident_hits if item.kind == "incident_report")
+    incident_search_output = json.dumps(
+        {
+            "title": incident_hit.title,
+            "snippet": incident_hit.snippet,
+            "metadata": incident_hit.metadata,
+        },
+        ensure_ascii=False,
+    )
+    assert "incident-secret-value" not in incident_search_output
+    assert "incident-operator@example.com" not in incident_search_output
+    incident = await repository.get_incident(incident_hit.document_id)
+    assert "incident-secret-value" not in incident.text
+    assert "incident-operator@example.com" not in incident.text
+    assert "<redacted>" in incident.text

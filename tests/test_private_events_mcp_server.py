@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from dataclasses import replace
 import re
 from urllib.parse import parse_qs, urlencode, urlsplit
 
@@ -8,7 +9,7 @@ import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
-from private_events_mcp.crypto import pkce_s256
+from private_events_mcp.crypto import AccessIdentity, pkce_s256
 from private_events_mcp.integration import attach_private_events_mcp
 
 
@@ -149,7 +150,7 @@ async def test_oauth_pkce_and_authenticated_mcp_round_trip(config) -> None:
 
 
 @pytest.mark.asyncio
-async def test_invalid_bearer_is_http_401_with_resource_metadata(config) -> None:
+async def test_invalid_bearer_is_http_401_with_resource_metadata(config, monkeypatch) -> None:
     app = web.Application()
     attach_private_events_mcp(app, config)
     client = TestClient(TestServer(app))
@@ -164,6 +165,11 @@ async def test_invalid_bearer_is_http_401_with_resource_metadata(config) -> None
         assert "resource_metadata" in response.headers["WWW-Authenticate"]
     finally:
         await client.close()
+
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_ENABLED", "0")
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL", "not-an-absolute-url")
+    disabled_app = web.Application()
+    assert attach_private_events_mcp(disabled_app) is None
 
 
 @pytest.mark.asyncio
@@ -187,7 +193,7 @@ async def test_jsonrpc_batch_is_rejected_to_preserve_request_budget(config) -> N
 
 
 @pytest.mark.asyncio
-async def test_unsupported_protocol_header_is_rejected(config) -> None:
+async def test_unsupported_protocol_header_is_rejected(config, monkeypatch) -> None:
     app = web.Application()
     attach_private_events_mcp(app, config)
     client = TestClient(TestServer(app))
@@ -200,5 +206,66 @@ async def test_unsupported_protocol_header_is_rejected(config) -> None:
         )
         assert response.status == 400
         assert (await response.json())["error"] == "unsupported_mcp_protocol_version"
+
+        response = await client.post(
+            config.mcp_path,
+            json={
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "initialize",
+                "params": {"protocolVersion": "2099-01-01"},
+            },
+        )
+        assert response.status == 400
+        assert (await response.json())["error"] == "unsupported_mcp_protocol_version"
+
+        response = await client.post(
+            config.oauth_token_path,
+            data={"grant_type": "x" * (config.max_request_bytes + 1)},
+        )
+        assert response.status == 413
+        assert (await response.json())["error"] == "request_too_large"
     finally:
         await client.close()
+
+    limited_config = replace(config, authenticated_requests_per_minute=1)
+    limited_app = web.Application()
+    server = attach_private_events_mcp(limited_app, limited_config)
+    assert server is not None
+    identities = iter(
+        (
+            AccessIdentity(
+                subject="operator",
+                client_id=limited_config.oauth_client_id,
+                scopes=frozenset(),
+                audience=limited_config.resource,
+                token_id="first-token-id",
+                expires_at=2**31,
+            ),
+            AccessIdentity(
+                subject="operator",
+                client_id=limited_config.oauth_client_id,
+                scopes=frozenset(),
+                audience=limited_config.resource,
+                token_id="refreshed-token-id",
+                expires_at=2**31,
+            ),
+        )
+    )
+    monkeypatch.setattr(server, "_identity", lambda _request: (next(identities), False))
+    limited_client = TestClient(TestServer(limited_app))
+    await limited_client.start_server()
+    try:
+        first = await limited_client.post(
+            limited_config.mcp_path,
+            json={"jsonrpc": "2.0", "id": 3, "method": "ping", "params": {}},
+        )
+        assert first.status == 200
+        second = await limited_client.post(
+            limited_config.mcp_path,
+            json={"jsonrpc": "2.0", "id": 4, "method": "ping", "params": {}},
+        )
+        assert second.status == 429
+        assert (await second.json())["error"] == "rate_limited"
+    finally:
+        await limited_client.close()

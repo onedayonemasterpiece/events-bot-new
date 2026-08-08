@@ -28,6 +28,10 @@ SUPPORTED_LEGACY_PROTOCOLS = (
 )
 
 
+class UnsupportedProtocolVersion(ValueError):
+    pass
+
+
 @dataclass(slots=True)
 class _CacheEntry:
     expires_at: float
@@ -142,7 +146,9 @@ class MCPProtocol:
 
         if method == "initialize":
             requested = str(params.get("protocolVersion") or "")
-            negotiated = requested if requested in SUPPORTED_LEGACY_PROTOCOLS else LATEST_LEGACY_PROTOCOL
+            if requested and requested not in SUPPORTED_LEGACY_PROTOCOLS:
+                raise UnsupportedProtocolVersion(requested)
+            negotiated = requested or LATEST_LEGACY_PROTOCOL
             return self._response(
                 request_id,
                 result={

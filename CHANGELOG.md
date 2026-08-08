@@ -9,7 +9,10 @@
   tooling, and an explicit no-provider-call acceptance gate. Its HTTP transport
   rejects JSON-RPC batches and unsupported protocol versions, while decoded
   runtime evidence is recursively redacted and external source text is marked
-  as untrusted data rather than instructions.
+  as untrusted data rather than instructions. Follow-up hardening keeps disabled
+  startup a strict no-op, covers incident documents and generic/provider tokens
+  in recursive redaction, binds rate limits across OAuth refresh rotation, and
+  applies request/concurrency and SQLite VM budgets to token and schema work.
 
 ### Fixed
 
