@@ -813,7 +813,7 @@ MCP не может самостоятельно:
 - менять Resource Graph current resources;
 - изменять protected areas;
 - утверждать design reference;
-- promoted candidate;
+- продвигать candidate;
 - писать accepted history;
 - удалять прошлые iterations.
 
@@ -1284,7 +1284,7 @@ Research synthesis и уточнения находятся в draft PR:
 - `onedayonemasterpiece/events-bot-new#354`
 - `onedayonemasterpiece/common-analytics#6`
 
-Исследовательская база включает evidence о parallel prototyping, multiple-alternative review, experimental/stable component lifecycle, local/core systems, AI design fixation, design rationale и visual regression. Два исходных deep-research результата сохранены и проиндексированы в соответствующих research PR. fileciteturn86file0 fileciteturn86file1
+Исследовательская база включает evidence о parallel prototyping, multiple-alternative review, experimental/stable component lifecycle, local/core systems, AI design fixation, design rationale и visual regression. Два исходных deep-research результата сохранены и проиндексированы в соответствующих research PR.
 
 ---
 
