@@ -3,8 +3,9 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { parse } from 'yaml';
 
-import { extractDriverNetworkEvents, observeNativeKeyboard } from '../../e2e/focus-email/adapters/appium-ui.mjs';
+import { extractDriverNetworkEvents } from '../../e2e/focus-email/adapters/appium-ui.mjs';
 import { buildAppiumCapabilities, classifyActiveIosApp, inspectSafariNativeUiProtocol,
+  dismissNativeKeyboard, focusIosSafariWebInput, observeNativeKeyboard, performNativeTouchSwipe,
   prepareIosSafariWebContext, summarizeKnownSafariNativeSource } from '../../e2e/mobile-web/appium-browser.mjs';
 
 test('Appium capability builder pins real mobile browsers and iOS keyboard ownership', () => {
@@ -76,6 +77,75 @@ test('native keyboard observation waits through a delayed Android IME report', a
   };
   assert.equal(await observeNativeKeyboard(driver), true);
   assert.equal(observations, 2);
+});
+
+test('shared iOS input focus uses one exact native Safari accessibility match and observes its keyboard', async () => {
+  const calls = [];
+  let context = 'WEBVIEW_7';
+  const driver = {
+    getContext: async () => context,
+    getContexts: async () => ['NATIVE_APP', 'WEBVIEW_7'],
+    switchContext: async (next) => { context = next; calls.push(['context', next]); },
+    findElements: async (using, predicate) => {
+      calls.push(['find', using, predicate]);
+      return [{ 'element-6066-11e4-a52e-4f735466cecf': 'field-1' }];
+    },
+    getElementRect: async (id) => {
+      calls.push(['rect', id]);
+      return { x: 20, y: 300, width: 320, height: 80 };
+    },
+    executeScript: async (command, args) => calls.push(['execute', command, args]),
+    isKeyboardShown: async () => true,
+    waitUntil: async (predicate) => {
+      if (!await predicate()) throw new Error('unexpected_keyboard_timeout');
+    },
+  };
+  const receipt = await focusIosSafariWebInput(driver, {
+    labels: ['Поиск событий', 'Например: джаз на выходных'],
+  });
+  assert.deepEqual(receipt, { route: 'xcuitest_exact_accessibility_field', match_count: 1,
+    outcome: 'tap_dispatched', keyboard_shown: true });
+  assert.deepEqual(calls[0], ['context', 'NATIVE_APP']);
+  assert.match(calls[1][2], /XCUIElementTypeTextField/u);
+  assert.match(calls[1][2], /XCUIElementTypeTextView/u);
+  assert.match(calls[1][2], /placeholderValue == 'Например: джаз на выходных'/u);
+  assert.deepEqual(calls.at(-1), ['context', 'WEBVIEW_7']);
+});
+
+test('shared native touch swipe runs on device coordinates and restores the web context', async () => {
+  const calls = [];
+  let context = 'WEBVIEW_chrome';
+  const driver = {
+    getContext: async () => context,
+    getContexts: async () => ['NATIVE_APP', 'WEBVIEW_chrome'],
+    switchContext: async (next) => { context = next; calls.push(['context', next]); },
+    performActions: async (actions) => calls.push(['actions', actions]),
+    releaseActions: async () => calls.push(['release']),
+  };
+  const receipt = await performNativeTouchSwipe(driver, {
+    startX: 540, startY: 1700, endX: 540, endY: 600, duration: 450,
+  });
+  assert.deepEqual(receipt, { route: 'w3c_native_touch', delta_x: 0, delta_y: -1100, duration_ms: 450 });
+  assert.deepEqual(calls.map((item) => item[0]), ['context', 'actions', 'release', 'context']);
+  const pointer = calls[1][1][0];
+  assert.equal(pointer.parameters.pointerType, 'touch');
+  assert.deepEqual(pointer.actions.map((item) => item.type),
+    ['pointerMove', 'pointerDown', 'pause', 'pointerMove', 'pointerUp']);
+  assert.deepEqual(calls.at(-1), ['context', 'WEBVIEW_chrome']);
+});
+
+test('shared keyboard dismissal checks and hides the IME only in native context', async () => {
+  const calls = [];
+  let context = 'WEBVIEW_chrome';
+  const driver = {
+    getContext: async () => context,
+    getContexts: async () => ['NATIVE_APP', 'WEBVIEW_chrome'],
+    switchContext: async (next) => { context = next; calls.push(['context', next]); },
+    isKeyboardShown: async () => { calls.push(['shown']); return true; },
+    hideKeyboard: async () => calls.push(['hide']),
+  };
+  assert.equal(await dismissNativeKeyboard(driver), true);
+  assert.deepEqual(calls.map((item) => item[0]), ['context', 'shown', 'hide', 'context']);
 });
 
 test('adapter confines diagnostic native source capture before candidate navigation and sensitive input', async () => {

@@ -30,6 +30,15 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-08 Android run `31273078355` completed broker callback, same-storage
+  auth and the first real vector Search response, then failed only at
+  `search_real_scroll_missing`: UiAutomator2 `mobile: scrollGesture` acknowledged
+  the command but did not move Chrome document `scrollY`. iOS run `31273246165`
+  also completed callback/WebKit attachment and reached the Search input, but a
+  WebKit click followed by web-context `isKeyboardShown()` produced false
+  keyboard evidence. Both failures exposed feature-local mechanics that were
+  still weaker than the accepted OTP mobile input path.
+
 - 2026-08-08 exact-main degraded browser journey полностью прошёл UI/Search
   контракт для трёх запросов, но GitHub job завершился красным после journey:
   serialized browser runtime probe не переносил безопасный `receipt_id`, хотя
@@ -208,6 +217,13 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
   allowlisted target callback, and lets `StaticSiteAuth.verifyOtp` persist the
   session inside the real device browser. No access/refresh token crosses the
   runner and raw Appium logs are deleted rather than uploaded.
+- 2026-08-08 mobile input/gesture correction: the neutral mobile-web transport
+  now owns exact native iOS web-input focus, native keyboard polling,
+  restore-on-finally context switching, IME dismissal and absolute-coordinate
+  W3C touch swipes. Search and OTP consume these same primitives. Android no
+  longer treats a native-scrollable UiAutomator2 shortcut as Chrome document
+  input, and iOS no longer treats WebKit focus acknowledgement as native
+  software-keyboard proof.
 
 ## Follow-up Actions
 
@@ -227,3 +243,10 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
 ## Prevention
 
 Keep this record as the regression contract for static smart-search perceived hangs, frontend loading placeholders, and production search entrypoint promotion.
+
+For mobile Search, terminal acceptance additionally requires that input and
+scroll evidence cross the native/WebView boundary through
+`site/e2e/mobile-web/appium-browser.mjs`: exact native iOS input match + keyboard
+observation and Android native W3C finger swipe + restored WebView `scrollY`.
+Feature-local copies and `mobile: scrollGesture` for Chrome document content are
+regressions.

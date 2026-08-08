@@ -822,6 +822,15 @@ WebKit. Общий профиль задаёт `appium:webviewConnectTimeout=600
 `appium:webviewConnectRetries=120`: официальный XCUITest default 5000 мс уже
 привёл Search CI к отказу через 5.749 секунды. Action link и secret target не
 передаются в capabilities и не входят в публикуемые evidence/Appium logs.
+Критический iOS web input фокусируется общей функцией через один exact native
+accessibility match и native tap; WebKit `click()` с `isKeyboardShown()` в web
+context не считается доказательством software keyboard. Android Chrome
+документ прокручивается общей W3C touch sequence в `NATIVE_APP`, после чего
+возвращается исходный WebView и измеряется реальный `scrollY`. Нативный shortcut
+`mobile: scrollGesture` не применяется к Chrome page content: он предназначен
+для нативных scrollable controls и может успешно ответить без движения DOM.
+Перед scroll baseline общий helper закрывает открытую IME, чтобы finger path не
+попал в клавиатуру вместо browser viewport.
 
 Для любой новой или ремонтируемой Android/iOS web-проверки обязателен проектный
 skill `.codex/skills/mobile-web-e2e/SKILL.md`: сначала найти terminal receipts и

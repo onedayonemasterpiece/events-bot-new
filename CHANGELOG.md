@@ -34,6 +34,12 @@
 
 ### Fixed
 
+- Unified the remaining Search/OTP mobile input primitives: iOS Search now
+  focuses its web field through one exact native Safari accessibility match and
+  proves the software keyboard in `NATIVE_APP`; Android Chrome scroll now uses
+  a real absolute-coordinate W3C finger swipe with restored WebView `scrollY`
+  instead of a UiAutomator2 native-scrollable shortcut that could no-op.
+
 - Mobile Search now converts the broker's Supabase admin confirmation URL into
   the static site's supported `token_hash/type` callback before opening it in
   Chrome/Safari. Verification therefore runs inside the device browser and
