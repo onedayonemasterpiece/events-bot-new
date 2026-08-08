@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- Fixed the unattended Search fixture's owner-scoped RLS probe to send the
+  issued session bearer and publishable key through its fail-closed request
+  validator, matching the live Supabase Data API contract.
+
 - Restored Search as a release-tested feature on the current immutable secret
   candidate: added server-authoritative cached/cold/degraded variants, exact
   catalog/corpus revisions, owner-scoped receipts and bounded LLM canary
