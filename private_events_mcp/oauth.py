@@ -186,7 +186,15 @@ class PrivateOAuthServer:
     @staticmethod
     def _validate_chatgpt_redirect_uri(value: str) -> str:
         parsed = urlsplit(value)
-        if parsed.scheme != "https" or parsed.hostname != "chatgpt.com":
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname != "chatgpt.com"
+            or parsed.netloc != "chatgpt.com"
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.port is not None
+            or parsed.query
+        ):
             raise OAuthHTTPError("invalid_request", "Redirect URI is not allowed")
         path = parsed.path or ""
         modern = path.startswith("/connector/oauth/") and len(path.split("/")) >= 4
@@ -332,7 +340,11 @@ class PrivateOAuthServer:
             return self._error_page(exc)
         sealed = self._seal_authorization_request(auth_request)
         callback = urlsplit(auth_request.redirect_uri)
-        callback_origin = f"{callback.scheme}://{callback.netloc}"
+        callback_origin = (
+            "https://chatgpt.com"
+            if auth_request.client_id == self.config.oauth_client_id
+            else f"http://127.0.0.1:{callback.port}"
+        )
         scopes = ", ".join(sorted(auth_request.scopes))
         client_name = (
             "ChatGPT"

@@ -59,6 +59,10 @@ redirect chain after the form POST.
 - The existing test asserted the server-side 302 but did not assert that CSP
   allowed the validated callback origin.
 - Non-browser smoke clients do not enforce Content Security Policy.
+- The initial hotfix draft derived the CSP source from raw `netloc`; independent
+  review found that the legacy ChatGPT redirect validator accepted userinfo and
+  alternate ports. The final fix therefore rejects non-canonical authority and
+  query components and emits a canonical client-specific CSP origin.
 
 ## Automation Contract
 
@@ -105,6 +109,8 @@ retry until the CSP hotfix and credential rotation are deployed.
 - Add the exact validated redirect origin to the authorization page's
   `form-action` directive while retaining `'self'`, `default-src 'none'`,
   `base-uri 'none'` and `frame-ancestors 'none'`.
+- Canonicalize ChatGPT to `https://chatgpt.com`, reject userinfo, alternate
+  ports and callback queries, and never reflect raw authority text into CSP.
 - Add ChatGPT and Codex regression assertions for their distinct callback
   origins.
 
