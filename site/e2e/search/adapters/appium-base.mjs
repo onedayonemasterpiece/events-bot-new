@@ -135,6 +135,7 @@ export async function createAppiumSearchAdapter(options = {}) {
     },
     async activity() { return driver.execute(snapshotSearchRuntimeProbe); },
     async typeQuery(value) {
+      lifecycle.failure_stage = 'search_input_focus';
       const input = await driver.$('[data-search-input]');
       let keyboardShown = false;
       if (platform === 'ios') {
@@ -148,16 +149,23 @@ export async function createAppiumSearchAdapter(options = {}) {
       }
       if (!keyboardShown) throw new Error(`search_native_keyboard_missing:${platform}`);
       nativeKeyboardObserved = true;
+      lifecycle.failure_stage = 'search_input_type';
       await input.setValue(value);
+      lifecycle.failure_stage = 'search_input_typed';
     },
-    async clearQuery() { await (await driver.$('[data-search-input]')).clearValue(); },
+    async clearQuery() {
+      lifecycle.failure_stage = 'search_input_clear';
+      await (await driver.$('[data-search-input]')).clearValue();
+    },
     async readQueryState() { return driver.execute(() => ({ length: document.querySelector('[data-search-input]')?.value?.length || 0 })); },
     async submitWithSearchIntent() {
+      lifecycle.failure_stage = 'search_submit';
       if (!nativeKeyboardObserved) throw new Error(`search_native_keyboard_hidden:${platform}`);
       await driver.keys('\uE007');
       nativeKeyboardObserved = false;
     },
     async waitForTerminal({ minimumResponseCount = 1, minimumCardCount = 1 } = {}) {
+      lifecycle.failure_stage = 'search_terminal';
       let state = null;
       await driver.waitUntil(async () => {
         state = await driver.execute((responseCount, cardCount) => {
@@ -175,7 +183,9 @@ export async function createAppiumSearchAdapter(options = {}) {
     },
     async snapshotResults() { return driver.execute(pageResultSnapshot); },
     async realScrollResults() {
-      await dismissNativeKeyboard(driver);
+      lifecycle.failure_stage = 'search_scroll_keyboard_dismiss';
+      await dismissNativeKeyboard(driver, { allowUnsupported: platform === 'ios' });
+      lifecycle.failure_stage = 'search_scroll';
       return runRealTouchScroll({
         readScrollY: () => driver.execute(() => scrollY),
         gesture: () => platform === 'android'
@@ -198,6 +208,7 @@ export async function createAppiumSearchAdapter(options = {}) {
     },
     async activateShowMore() { await (await driver.$('[data-search-more]')).click(); },
     async waitForValidation() {
+      lifecycle.failure_stage = 'search_validation';
       await driver.waitUntil(async () => driver.execute(() => {
         const status = document.querySelector('[data-search-status]'); const submit = document.querySelector('[data-search-submit]');
         return status?.getAttribute('role') === 'alert' && submit?.getAttribute('aria-busy') !== 'true';

@@ -5,7 +5,7 @@ import { observedRepoSha } from '../helpers/release-identity.mjs';
 import { classifyKeyboardAcceptance, keyboardFailureClass, validateMobileConfig } from '../helpers/platform.mjs';
 import { sanitizedFailureClass } from '../helpers/runtime-diagnostics.mjs';
 import { buildAppiumCapabilities, classifyActiveIosApp, inspectSafariNativeUiProtocol,
-  focusIosSafariWebInput, observeNativeKeyboard, prepareIosSafariWebContext,
+  dismissNativeKeyboard, focusIosSafariWebInput, observeNativeKeyboard, prepareIosSafariWebContext,
   summarizeKnownSafariNativeSource, withNativeAppContext } from '../../mobile-web/appium-browser.mjs';
 
 const SELECTORS = Object.freeze({
@@ -330,7 +330,7 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, expect
         const accepted = await focusWithNativeTap(selector, label, kind);
         keyboardPreflight.controls[kind] = accepted;
         await driver.saveScreenshot(join(evidenceRoot, 'screenshots', `00-${kind}-empty-keyboard.png`));
-        await driver.hideKeyboard().catch(() => undefined);
+        await dismissNativeKeyboard(driver, { allowUnsupported: true });
       }
       keyboardPreflight.status = 'passed'; return keyboardPreflight;
     } catch (error) {
@@ -465,7 +465,7 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, expect
     async transportFaultEvidence() { return syncTransportFaultEvidence(); },
     async waitForReturningMember() { await waitText(driver, /Вы уже в фокус-группе|Участие подтверждено/u, 20_000); },
     async captureMaskedEvidence(name) {
-      await driver.hideKeyboard().catch(() => undefined);
+      await dismissNativeKeyboard(driver, { allowUnsupported: platform === 'ios' });
       await maskDom();
       // Mobile Safari paints the native text-field overlay one frame after the
       // DOM value changes. Waiting here prevents the prior value from leaking

@@ -180,6 +180,8 @@ test('journey is mechanics-neutral and mobile adapters own native keyboard/touch
   assert.match(mobile, /driver\.keys\('\\uE007'\)/u);
   assert.match(mobile, /focusIosSafariWebInput/u);
   assert.match(mobile, /performNativeTouchSwipe/u);
+  assert.match(mobile, /allowUnsupported: platform === 'ios'/u);
+  assert.match(mobile, /search_scroll_keyboard_dismiss/u);
   assert.doesNotMatch(mobile, /mobile: scrollGesture/u);
   assert.doesNotMatch(mobile, /const size = await driver\.getWindowSize\(\)/u);
   assert.match(mobile, /mobile: scroll/u);

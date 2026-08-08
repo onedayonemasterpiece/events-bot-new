@@ -60,6 +60,14 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
   `usePreinstalledWDA`; Search now reuses OTP's single restart pattern only when
   a closed receipt proves callback/search side effects are zero, and reduces the
   local Appium log to phase booleans before deleting it.
+- 2026-08-08 iOS run `31276217370` proved the WDA/session recovery path itself:
+  WebDriver session creation, native Safari stabilization, WebView attachment,
+  broker callback authorization and Search surface all completed. It then
+  failed in scroll preparation because XCUITest returned its exact
+  `Did not know how to dismiss the keyboard` response. OTP already treated
+  Safari `hideKeyboard` as best-effort; the shared helper had accidentally made
+  Search stricter. The shared helper now tolerates only that exact iOS response,
+  while real scroll delta/final-card acceptance still fails closed.
 
 - 2026-08-08 exact-main degraded browser journey полностью прошёл UI/Search
   контракт для трёх запросов, но GitHub job завершился красным после journey:
@@ -262,6 +270,12 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
   may restart Appium exactly once only before the
   device callback is opened and before any Search traffic, matching the accepted
   OTP infrastructure-retry boundary without copying OTP feature mechanics.
+- 2026-08-08 iOS keyboard-dismiss correction: Search and OTP now share the same
+  Safari best-effort boundary for the exact unsupported WDA hide-keyboard
+  response. Lifecycle evidence identifies input, terminal, keyboard-dismiss and
+  scroll phases separately; an unsupported hide command cannot itself pass the
+  scenario because the following native scroll must still move the DOM and
+  reveal the final card.
 
 ## Follow-up Actions
 

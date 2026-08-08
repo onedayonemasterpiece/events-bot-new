@@ -33,11 +33,26 @@ export async function observeNativeKeyboard(driver, { timeout = 3_000, interval 
   return shown;
 }
 
-export async function dismissNativeKeyboard(driver) {
+const IOS_KEYBOARD_DISMISS_SHORT = 'Did not know how to dismiss the keyboard';
+const IOS_KEYBOARD_DISMISS_DESCRIPTION = `${IOS_KEYBOARD_DISMISS_SHORT}. Try to dismiss it in the way supported by your application under test.`;
+
+export function isUnsupportedIosKeyboardDismissError(error) {
+  const value = String(error?.message || error);
+  if (value === IOS_KEYBOARD_DISMISS_SHORT || value === IOS_KEYBOARD_DISMISS_DESCRIPTION) return true;
+  const body = `Error Domain=com.facebook.WebDriverAgent Code=1 "${IOS_KEYBOARD_DISMISS_DESCRIPTION}" UserInfo={NSLocalizedDescription=${IOS_KEYBOARD_DISMISS_DESCRIPTION}} when running "appium/device/hide_keyboard" with method "POST"`;
+  return value === body || value === `WebDriverError: ${body}`;
+}
+
+export async function dismissNativeKeyboard(driver, { allowUnsupported = false } = {}) {
   return withNativeAppContext(driver, async () => {
     const shown = await driver.isKeyboardShown().catch(() => false);
     if (!shown) return false;
-    await driver.hideKeyboard();
+    try {
+      await driver.hideKeyboard();
+    } catch (error) {
+      const unsupported = isUnsupportedIosKeyboardDismissError(error);
+      if (!allowUnsupported || !unsupported) throw error;
+    }
     return true;
   });
 }
