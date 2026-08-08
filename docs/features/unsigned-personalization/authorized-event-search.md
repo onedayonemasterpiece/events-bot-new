@@ -170,6 +170,15 @@ exported catalog revision matches. Production therefore keeps
 `STATIC_SITE_SYNC_PGVECTOR_VECTORS=0` while still publishing exact Search
 revision evidence.
 
+Для отладки UI/journey полный production candidate не пересобирается после
+каждого изменения live-каталога. Ручной Search canary поддерживает
+`revision_policy=live_consistent`: он всё равно проверяет exact SHA страницы,
+настоящую auth/RLS-сессию, owner-scoped server receipts и требует одну неизменную
+пару catalog/corpus revision во всех ответах одного journey, но не сравнивает её
+с receipt многочасовой статической сборки. Это только быстрый debug gate.
+Расписания, post-deploy promotion и финальная release-приёмка всегда используют
+`release_exact`; debug PASS не подменяет совпадение revisions готового release.
+
 Search progress has a single owner: backend NDJSON stages. The old client-side
 28/55/74/92% timers are removed. Until the first frame the adjacent semantic
 progressbar is indeterminate; after that its value and stage rank are monotonic,

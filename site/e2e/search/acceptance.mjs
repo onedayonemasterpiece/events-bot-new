@@ -156,6 +156,35 @@ export function assertExecutionReceipt(response, requestedMode, label = 'result'
   if (!allowedActual?.has(actual)) throw new Error(`search_actual_execution_mode:${label}:${actual}`);
 }
 
+export function assertSearchRevisionPolicy(journey, identity, policy = 'release_exact') {
+  if (!['release_exact', 'live_consistent'].includes(policy)) throw new Error('search_revision_policy_invalid');
+  const revisions = [];
+  for (const queryCase of journey?.query_cases || []) {
+    const responses = [
+      ...(queryCase.pages || []).map((page) => page.response),
+      queryCase.cache_warm?.response,
+      queryCase.cache_repeat?.response,
+    ].filter(Boolean);
+    for (const response of responses) {
+      const catalog = String(response.catalog_revision || '');
+      const corpus = String(response.corpus_revision || '');
+      if (!/^[0-9a-f]{64}$/u.test(catalog) || !/^[0-9a-f]{64}$/u.test(corpus)) {
+        throw new Error('search_response_revision_missing');
+      }
+      if (policy === 'release_exact'
+        && (catalog !== identity.catalogRevision || corpus !== identity.corpusRevision)) {
+        throw new Error('search_target_response_revision_mismatch');
+      }
+      revisions.push(`${catalog}:${corpus}`);
+    }
+  }
+  if (revisions.length < 1) throw new Error('search_response_revision_missing');
+  const unique = new Set(revisions);
+  if (unique.size !== 1) throw new Error('search_response_revision_changed_during_journey');
+  const [catalog_revision, corpus_revision] = revisions[0].split(':');
+  return { policy, catalog_revision, corpus_revision, response_count: revisions.length };
+}
+
 export function assertRealScroll(receipt) {
   if (!receipt?.performed || asCount(Math.abs(receipt.delta_y)) < 1 || !receipt.card_visible_after) {
     throw new Error('search_real_scroll_missing');

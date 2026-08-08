@@ -16,6 +16,12 @@ on:
         default: browser
         type: choice
         options: [browser, android, ios, mobile, all]
+      revision_policy:
+        description: Exact release gate or fast Search-only live-data debug gate
+        required: true
+        default: release_exact
+        type: choice
+        options: [release_exact, live_consistent]
   repository_dispatch:
     types: [static-site-search-post-deploy]
   schedule:
@@ -41,6 +47,7 @@ jobs:
       platform: ${{ steps.plan.outputs.platform }}
       blocking: ${{ steps.plan.outputs.blocking }}
       incident_key: ${{ steps.plan.outputs.incident_key }}
+      revision_policy: ${{ steps.plan.outputs.revision_policy }}
     steps:
       - id: plan
         env:
@@ -48,21 +55,24 @@ jobs:
           SCHEDULE: ${{ github.event.schedule }}
           INPUT_VARIANT: ${{ inputs.variant }}
           INPUT_PLATFORM: ${{ inputs.platform }}
+          INPUT_REVISION_POLICY: ${{ inputs.revision_policy }}
         run: |
           set -euo pipefail
           case "$EVENT_NAME:$SCHEDULE" in
-            workflow_dispatch:*) variants="[\"$INPUT_VARIANT\"]"; platform="$INPUT_PLATFORM"; blocking=false ;;
-            repository_dispatch:*) variants='["cold_vector","degraded_vector_fallback"]'; platform=browser; blocking=true ;;
-            schedule:'17,47 * * * *') variants='["cached_vector"]'; platform=browser; blocking=false ;;
-            schedule:'23 */3 * * *') variants='["cold_vector"]'; platform=browser; blocking=false ;;
-            schedule:'41 1,7,13,19 * * *') variants='["cold_vector_llm"]'; platform=browser; blocking=false ;;
-            schedule:'19 2 * * *') variants='["cached_vector"]'; platform=mobile; blocking=false ;;
+            workflow_dispatch:*) variants="[\"$INPUT_VARIANT\"]"; platform="$INPUT_PLATFORM"; blocking=false; revision_policy="$INPUT_REVISION_POLICY" ;;
+            repository_dispatch:*) variants='["cold_vector","degraded_vector_fallback"]'; platform=browser; blocking=true; revision_policy=release_exact ;;
+            schedule:'17,47 * * * *') variants='["cached_vector"]'; platform=browser; blocking=false; revision_policy=release_exact ;;
+            schedule:'23 */3 * * *') variants='["cold_vector"]'; platform=browser; blocking=false; revision_policy=release_exact ;;
+            schedule:'41 1,7,13,19 * * *') variants='["cold_vector_llm"]'; platform=browser; blocking=false; revision_policy=release_exact ;;
+            schedule:'19 2 * * *') variants='["cached_vector"]'; platform=mobile; blocking=false; revision_policy=release_exact ;;
             *) echo 'Unsupported Search trigger' >&2; exit 1 ;;
           esac
           case "$platform" in browser|android|ios|mobile|all) ;; *) exit 1;; esac
+          case "$revision_policy" in release_exact|live_consistent) ;; *) exit 1;; esac
           echo "variants=$variants" >> "$GITHUB_OUTPUT"
           echo "platform=$platform" >> "$GITHUB_OUTPUT"
           echo "blocking=$blocking" >> "$GITHUB_OUTPUT"
+          echo "revision_policy=$revision_policy" >> "$GITHUB_OUTPUT"
           key="$(printf '%s-%s' "$platform" "$variants" | sha256sum | cut -c1-12)"
           echo "incident_key=$key" >> "$GITHUB_OUTPUT"
 
@@ -88,6 +98,7 @@ jobs:
       SEARCH_E2E_PERSONA_EMAIL_DEGRADED_BROWSER: ${{ secrets.SEARCH_E2E_PERSONA_EMAIL_DEGRADED_BROWSER }}
       E2E_SEARCH_PLATFORM: browser
       E2E_SEARCH_VARIANT: ${{ matrix.variant }}
+      E2E_SEARCH_REVISION_POLICY: ${{ needs.plan.outputs.revision_policy }}
       E2E_EVIDENCE_DIR: artifacts/search-live-browser-${{ matrix.variant }}-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -128,6 +139,7 @@ jobs:
       AUTH_SESSION_BROKER_OIDC_AUDIENCE: kenigevents-static-search-broker
       E2E_SEARCH_PLATFORM: android
       E2E_SEARCH_VARIANT: cached_vector
+      E2E_SEARCH_REVISION_POLICY: ${{ needs.plan.outputs.revision_policy }}
       E2E_DEVICE_NAME: Pixel 7
       E2E_PLATFORM_VERSION: '15'
       E2E_APPIUM_HOST: 127.0.0.1
@@ -185,6 +197,7 @@ jobs:
       AUTH_SESSION_BROKER_OIDC_AUDIENCE: kenigevents-static-search-broker
       E2E_SEARCH_PLATFORM: ios
       E2E_SEARCH_VARIANT: cached_vector
+      E2E_SEARCH_REVISION_POLICY: ${{ needs.plan.outputs.revision_policy }}
       E2E_DEVICE_NAME: iPhone 16
       E2E_PLATFORM_VERSION: '18.5'
       E2E_APPIUM_HOST: 127.0.0.1

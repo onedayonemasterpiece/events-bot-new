@@ -98,6 +98,11 @@ Open. Current evidence supports multiple contributing roots:
    `properties.*`. Реальный endpoint вернул `200` с плоскими `email_otp` и
    `action_link`, поэтому успешная no-mail выдача ошибочно трактовалась как
    invalid issuer response.
+7. Full-site secret candidate freezes Search revisions before a 2–3 hour
+   build/publication path. A live catalog change during that interval makes an
+   otherwise healthy multi-query UI journey fail only at the final exact
+   revision assertion. Iterative Search debugging must therefore be separated
+   from the final full-release revision gate.
 
 ## Contributing Factors
 
@@ -164,6 +169,10 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
   `redirect_to`, плоский ответ проверяется напрямую, а SDK-wrapped shape остаётся
   совместимым fallback. Regression test фиксирует точные request fields и не
   допускает возврат к `options.redirectTo` на raw endpoint.
+- 2026-08-08 debug-cycle correction: manual Search canaries may use a
+  `live_consistent` policy that keeps exact page SHA, stable live revisions and
+  owner-scoped receipts mandatory without rebuilding 1300+ unrelated pages.
+  Scheduled/post-deploy acceptance remains `release_exact` and blocking.
 
 ## Follow-up Actions
 

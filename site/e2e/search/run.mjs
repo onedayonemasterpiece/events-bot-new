@@ -2,6 +2,7 @@
 import { unlink } from 'node:fs/promises';
 
 import { resolveCanaryVariant } from './canary-manifest.mjs';
+import { assertSearchRevisionPolicy } from './acceptance.mjs';
 import { writeSearchEvidence, sanitizedTargetPath } from './evidence.mjs';
 import { runSearchJourney } from './journey.mjs';
 
@@ -55,21 +56,6 @@ async function assertTargetSha(url, expectedValue) {
   return { repoSha: observed, catalogRevision, corpusRevision, searchDocumentRevision };
 }
 
-function assertTargetRevisions(journey, identity) {
-  for (const queryCase of journey?.query_cases || []) {
-    const responses = [
-      ...(queryCase.pages || []).map((page) => page.response),
-      queryCase.cache_warm?.response,
-      queryCase.cache_repeat?.response,
-    ].filter(Boolean);
-    for (const response of responses) {
-      if (response.catalog_revision !== identity.catalogRevision || response.corpus_revision !== identity.corpusRevision) {
-        throw new Error('search_target_response_revision_mismatch');
-      }
-    }
-  }
-}
-
 function errorCode(error) {
   const value = String(error?.message || error?.name || 'search_acceptance_failed').split(':')[0];
   return /^[a-z0-9_.-]{3,80}$/iu.test(value) ? value : 'search_acceptance_failed';
@@ -100,12 +86,15 @@ const platform = String(process.env.E2E_SEARCH_PLATFORM || 'browser').toLowerCas
 const mode = String(process.env.E2E_SEARCH_VARIANT || 'cold_vector').toLowerCase();
 const evidenceDirectory = process.env.E2E_EVIDENCE_DIR || `artifacts/search-live-${platform}`;
 const authStatePath = String(process.env.E2E_AUTH_STATE_PATH || '');
+const revisionPolicy = String(process.env.E2E_SEARCH_REVISION_POLICY || 'release_exact');
 let safeTarget = null;
 let adapter = null;
 let targetRepoSha = null;
+let lastJourney = null;
 let exitCode = 0;
 try {
   if (!closedModes.has(mode)) throw new Error(`search_variant_unknown:${mode}`);
+  if (!['release_exact', 'live_consistent'].includes(revisionPolicy)) throw new Error('search_revision_policy_invalid');
   safeTarget = targetUrl(process.env.E2E_SEARCH_TARGET_URL);
   const targetIdentity = await assertTargetSha(safeTarget, process.env.E2E_EXPECTED_REPO_SHA);
   targetRepoSha = targetIdentity.repoSha;
@@ -118,18 +107,19 @@ try {
   const journeyTarget = new URL(safeTarget.href);
   if (journeyTarget.pathname.startsWith('/_review/')) journeyTarget.searchParams.set('search_variant', mode);
   const journey = await runSearchJourney({ adapter, targetUrl: journeyTarget.href, variant, queryCases: queryCases(process.env.E2E_SEARCH_QUERIES_JSON) });
-  assertTargetRevisions(journey, targetIdentity);
-  const result = { ...journey, platform, execution_mode: mode, target_repo_sha: targetRepoSha };
+  lastJourney = journey;
+  const revisionReceipt = assertSearchRevisionPolicy(journey, targetIdentity, revisionPolicy);
+  const result = { ...journey, platform, execution_mode: mode, target_repo_sha: targetRepoSha, revision_receipt: revisionReceipt };
   await writeSearchEvidence(evidenceDirectory, result);
   process.stdout.write(`search-live PASS platform=${platform} execution_mode=${mode} evidence=${evidenceDirectory}\n`);
 } catch (error) {
   exitCode = 1;
   const result = {
-    status: 'FAIL', platform, execution_mode: mode,
+    ...(lastJourney || {}), status: 'FAIL', platform, execution_mode: mode,
     target_origin: safeTarget?.origin || null,
     target_path: safeTarget ? sanitizedTargetPath(safeTarget.pathname) : null,
     target_repo_sha: targetRepoSha,
-    counters: {}, query_cases: [], error_code: errorCode(error),
+    counters: lastJourney?.counters || {}, query_cases: lastJourney?.query_cases || [], error_code: errorCode(error),
   };
   await writeSearchEvidence(evidenceDirectory, result).catch(() => undefined);
   process.stderr.write(`search-live FAIL code=${result.error_code}\n`);
