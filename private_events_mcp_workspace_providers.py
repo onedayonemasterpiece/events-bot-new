@@ -17,6 +17,7 @@ import os
 import pickle
 import secrets
 import sqlite3
+import stat
 import threading
 import time
 from collections.abc import Mapping
@@ -258,9 +259,19 @@ class SQLiteProviderCoordinator:
         try:
             descriptor = os.open(path, flags, 0o600)
         except FileExistsError:
-            if Path(path).is_symlink():
+            existing_flags = os.O_RDWR
+            if hasattr(os, "O_NOFOLLOW"):
+                existing_flags |= os.O_NOFOLLOW
+            try:
+                descriptor = os.open(path, existing_flags)
+            except OSError:
                 raise ProviderBindingError("provider state path is unsafe") from None
-            os.chmod(path, 0o600)
+            try:
+                if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                    raise ProviderBindingError("provider state path is unsafe")
+                os.fchmod(descriptor, 0o600)
+            finally:
+                os.close(descriptor)
         else:
             os.close(descriptor)
         with self._connect() as conn:
@@ -305,7 +316,6 @@ class SQLiteProviderCoordinator:
                 INSERT OR IGNORE INTO social_provider_tg_state(singleton) VALUES(1);
                 """
             )
-        os.chmod(path, 0o600)
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, timeout=3.0, isolation_level=None)

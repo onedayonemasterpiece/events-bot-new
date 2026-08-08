@@ -116,6 +116,21 @@ async def test_durable_provider_cooldowns_and_telegram_lease(tmp_path) -> None:
     assert telegram_b.cooldown_remaining() > 0
 
 
+def test_provider_state_rejects_symlink_and_non_file_paths(tmp_path) -> None:
+    target = tmp_path / "target.sqlite"
+    target.write_bytes(b"not-a-database")
+    link = tmp_path / "linked.sqlite"
+    link.symlink_to(target)
+    with pytest.raises(ProviderBindingError, match="path is unsafe"):
+        SQLiteProviderCoordinator(str(link))
+
+    directory = tmp_path / "directory.sqlite"
+    directory.mkdir(mode=0o755)
+    with pytest.raises(ProviderBindingError, match="path is unsafe"):
+        SQLiteProviderCoordinator(str(directory))
+    assert directory.stat().st_mode & 0o777 == 0o755
+
+
 def test_vk_bindings_are_encrypted_and_survive_restart(tmp_path) -> None:
     path = tmp_path / "auth.sqlite"
     state = SQLiteProviderCoordinator(str(path))
