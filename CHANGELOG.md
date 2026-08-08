@@ -48,7 +48,9 @@
   rejecting the workflow before job creation; job-level worktree/marker paths
   use the context-valid workspace root instead of step-only `runner.temp`, and
   all string defaults are quoted so YAML cannot normalize exact timestamp
-  identities before validation. Focused tests pin all three contracts.
+  identities before validation. The parser-install working directory now uses
+  that same resolved candidate-worktree environment value instead of a stale
+  temp-root literal. Focused tests pin all of these contracts.
 
 - Added the disabled-by-default private Events MCP: path-scoped OAuth with
   PKCE, bounded read-only event and incident evidence tools, production smoke
