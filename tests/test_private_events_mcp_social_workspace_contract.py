@@ -19,6 +19,7 @@ from private_events_mcp.social_workspace import (
     ExecutionSafetyHooks,
     GateDecision,
     RecursiveRedactionResult,
+    SafetyAuditEvent,
     SOCIAL_WORKSPACE_ASSET_STAGE_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ASSET_STAGE_SCHEMA,
     SOCIAL_WORKSPACE_ASSET_STATUS_OUTPUT_SCHEMA,
@@ -61,8 +62,10 @@ from private_events_mcp.social_workspace import (
     required_scope_for_read,
     validate_asset_stage_request,
     validate_asset_status_request,
+    validate_action_status_response,
     validate_capabilities,
     validate_commit_request,
+    validate_editorial_sample_response,
     validate_opaque_ref,
     validate_prepare_request,
     validate_read_request,
@@ -208,6 +211,9 @@ def _approval_grant(context: ApprovalContext, **updates: Any) -> ApprovalGrant:
         subject=context.subject,
         resource=context.resource,
         action_digest=context.action_digest,
+        preparation_ref=context.preparation_ref,
+        preparation_expires_at=context.preparation_expires_at,
+        durable_state=True,
         expires_at="2030-01-01T00:00:00Z",
         one_time=True,
         prior_uses=0,
@@ -455,6 +461,7 @@ def test_editorial_output_requires_profile_fields_metrics_trust_and_stays_bounde
         "items": [
             {
                 "item_ref": f"itm_{index:016d}",
+                "kind": "post",
                 "published_at": "2026-08-08T12:00:00Z",
                 "text": "т" * 768,
                 "caption": "п" * 256,
@@ -464,13 +471,16 @@ def test_editorial_output_requires_profile_fields_metrics_trust_and_stays_bounde
             for index in range(25)
         ],
         "sampled_count": 25,
-        "cumulative_count": 50,
+        "cumulative_count": 25,
         "total_limit": 100,
         "next_cursor": "next_page_2",
         "storage_disposition": "ephemeral_no_index",
         "trust": "untrusted_external_data",
     }
     validate(page, SOCIAL_WORKSPACE_EDITORIAL_SAMPLE_SCHEMA)
+    request = validate_read_request(_editorial())
+    state = _editorial_state(request)
+    assert validate_editorial_sample_response(request, state, page) == 25
     assert len(json.dumps(page, ensure_ascii=False).encode("utf-8")) < 128 * 1024
     for target_mutation in (
         {"about": None},
@@ -485,6 +495,24 @@ def test_editorial_output_requires_profile_fields_metrics_trust_and_stays_bounde
             target.update(target_mutation)
         with pytest.raises(ValidationError):
             validate({**page, "target": target}, SOCIAL_WORKSPACE_EDITORIAL_SAMPLE_SCHEMA)
+
+    adversarial_pages = (
+        {"sample_ref": "smp_" + "z" * 24},
+        {"sampled_count": 24},
+        {"cumulative_count": 24},
+        {"target": {**page["target"], "target_ref": OTHER_TARGET_REF}},
+        {"target": {**page["target"], "kind": "user"}},
+        {"items": [{**page["items"][0], "published_at": "2026-06-30T23:59:59Z"}]},
+    )
+    for mutation in adversarial_pages:
+        with pytest.raises(SocialWorkspaceValidationError):
+            validate_editorial_sample_response(request, state, {**page, **mutation})
+    with pytest.raises(SocialWorkspaceValidationError, match="state binding"):
+        validate_editorial_sample_response(request, replace(state, date_from="2026-06-01"), page)
+    final_state = _editorial_state(request, cumulative_count=75)
+    final_page = {**page, "cumulative_count": 100, "next_cursor": "should_not_exist"}
+    with pytest.raises(SocialWorkspaceValidationError, match="without remaining"):
+        validate_editorial_sample_response(request, final_state, final_page)
 
 
 def test_rich_send_prepare_and_capability_gates_are_fail_closed() -> None:
@@ -534,7 +562,15 @@ def test_prepare_output_requires_human_approval_status_and_stable_digest() -> No
 def test_commit_requires_external_atomic_one_use_approval_bound_to_identity_and_digest() -> None:
     intent = validate_prepare_request(_send_message())
     digest = compute_action_digest(intent)
-    context = ApprovalContext("chatgpt-client", "owner", "https://resource", digest)
+    context = ApprovalContext(
+        "chatgpt-client",
+        "owner",
+        "https://resource",
+        digest,
+        PREPARATION_REF,
+        "2027-01-01T00:00:00Z",
+        True,
+    )
     payload = {
         "preparation_ref": PREPARATION_REF,
         "approval_ref": APPROVAL_REF,
@@ -556,6 +592,9 @@ def test_commit_requires_external_atomic_one_use_approval_bound_to_identity_and_
         {"subject": "other-subject"},
         {"resource": "https://other-resource"},
         {"action_digest": "0" * 64},
+        {"preparation_ref": "prep_" + "z" * 24},
+        {"preparation_expires_at": "2027-02-01T00:00:00Z"},
+        {"durable_state": False},
         {"expires_at": "2020-01-01T00:00:00Z"},
         {"one_time": False},
         {"prior_uses": 1},
@@ -573,6 +612,14 @@ def test_commit_requires_external_atomic_one_use_approval_bound_to_identity_and_
             )
     with pytest.raises(SocialWorkspaceValidationError):
         validate_commit_request({"preparation_ref": PREPARATION_REF, "confirm": True})
+    arbitrary_preparation = {**payload, "preparation_ref": "prep_" + "z" * 24}
+    with pytest.raises(SocialWorkspaceValidationError, match="preparation"):
+        validate_commit_request(
+            arbitrary_preparation,
+            context=context,
+            approval_hook=lambda a, r, binding: _approval_grant(binding),
+            now=datetime(2026, 8, 8, tzinfo=timezone.utc),
+        )
 
 
 def test_status_contract_models_provider_uncertainty_and_disallows_blind_retry() -> None:
@@ -580,12 +627,14 @@ def test_status_contract_models_provider_uncertainty_and_disallows_blind_retry()
         "awaiting_human_approval", "approved", "provider_attempted", "outcome_unknown"
     }.issubset({status.value for status in SocialActionStatus})
     unknown = {
+        "platform": "vk",
         "operation_ref": OPERATION_REF,
         "action": "publish",
         "status": "outcome_unknown",
         "retry_safe": False,
     }
     validate(unknown, SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA)
+    assert validate_action_status_response(unknown) is SocialActionStatus.OUTCOME_UNKNOWN
     with pytest.raises(ValidationError):
         validate({**unknown, "retry_safe": True}, SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA)
 
@@ -607,8 +656,8 @@ def test_exact_person_send_success_requires_read_after_write_receipt() -> None:
     }
     validate(receipt, SOCIAL_WORKSPACE_SEND_MESSAGE_RECEIPT_SCHEMA)
     assert validate_send_message_receipt(receipt) == (OPERATION_REF, ITEM_REF)
-    generic = {key: value for key, value in receipt.items() if key != "platform"}
-    validate(generic, SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA)
+    validate(receipt, SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA)
+    assert validate_action_status_response(receipt) is SocialActionStatus.SUCCEEDED
     for mutation in (
         {"read_after_write": None},
         {
@@ -627,6 +676,17 @@ def test_exact_person_send_success_requires_read_after_write_receipt() -> None:
         else:
             with pytest.raises(SocialWorkspaceValidationError, match="item mismatch"):
                 validate_send_message_receipt(candidate)
+            with pytest.raises(SocialWorkspaceValidationError, match="item mismatch"):
+                validate_action_status_response(candidate)
+    weak_proof = {
+        **receipt,
+        "read_after_write": {
+            **receipt["read_after_write"],
+            "verified": False,
+        },
+    }
+    with pytest.raises(SocialWorkspaceValidationError, match="not verified"):
+        validate_action_status_response(weak_proof)
 
 
 def test_external_output_families_are_closed_bounded_and_untrusted() -> None:
@@ -646,6 +706,15 @@ def test_external_output_families_are_closed_bounded_and_untrusted() -> None:
         "text": "External text",
         "caption": "Caption",
         "basic_metrics": {"views": 2},
+        "entities": [
+            {"kind": "link", "offset": 0, "length": 8, "link_target": "https://example.com"},
+            {
+                "kind": "custom_emoji",
+                "offset": 9,
+                "length": 1,
+                "custom_emoji_asset_ref": ASSET_REF,
+            },
+        ],
         "trust": "untrusted_external_data",
     }
     samples = (
@@ -654,7 +723,7 @@ def test_external_output_families_are_closed_bounded_and_untrusted() -> None:
         (SOCIAL_WORKSPACE_TARGET_GET_OUTPUT_SCHEMA, {"target": target, "trust": "untrusted_external_data"}),
         (SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA, {"results": [item], "trust": "untrusted_external_data"}),
         (SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA, {"item": item, "trust": "untrusted_external_data"}),
-        (SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA, {"root_item_ref": ITEM_REF, "items": [item], "trust": "untrusted_external_data"}),
+        (SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA, {"root_item_ref": ITEM_REF, "items": [{**item, "kind": "comment"}], "trust": "untrusted_external_data"}),
         (SOCIAL_WORKSPACE_STORIES_OUTPUT_SCHEMA, {"results": [{**item, "kind": "story"}], "trust": "untrusted_external_data"}),
         (SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA, {"item_ref": ITEM_REF, "reactions": [{"reaction": "👍", "count": 1}], "trust": "untrusted_external_data"}),
         (SOCIAL_WORKSPACE_STATISTICS_OUTPUT_SCHEMA, {"target_ref": TARGET_REF, "period_from": "2026-08-01T00:00:00Z", "period_to": "2026-08-08T00:00:00Z", "basic_metrics": {"views": 4}, "trust": "untrusted_external_data"}),
@@ -664,6 +733,16 @@ def test_external_output_families_are_closed_bounded_and_untrusted() -> None:
         validate(sample, schema)
         with pytest.raises(ValidationError):
             validate({**sample, "trust": "trusted_instructions"}, schema)
+    with pytest.raises(ValidationError):
+        validate(
+            {"results": [item], "trust": "untrusted_external_data"},
+            SOCIAL_WORKSPACE_STORIES_OUTPUT_SCHEMA,
+        )
+    with pytest.raises(ValidationError):
+        validate(
+            {"root_item_ref": ITEM_REF, "items": [item], "trust": "untrusted_external_data"},
+            SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA,
+        )
 
 
 def test_asset_lifecycle_uses_upload_and_opaque_refs_not_paths_or_urls() -> None:
@@ -688,7 +767,13 @@ def test_asset_lifecycle_uses_upload_and_opaque_refs_not_paths_or_urls() -> None
             validate_asset_stage_request({**request, **escape})
 
 
-def _safety_hooks(*, denied: str | None = None, recursive: bool = True, durable_audit: bool = True):
+def _safety_hooks(
+    *,
+    denied: str | None = None,
+    recursive: bool = True,
+    durable_audit: bool = True,
+    audit_events: list[SafetyAuditEvent] | None = None,
+):
     def redact(value):
         def walk(node):
             if isinstance(node, dict):
@@ -702,10 +787,15 @@ def _safety_hooks(*, denied: str | None = None, recursive: bool = True, durable_
     def budget(name):
         return lambda context: GateDecision(name != denied, f"{name}_decision")
 
+    def append(event: SafetyAuditEvent) -> AuditAppendResult:
+        if audit_events is not None:
+            audit_events.append(event)
+        return AuditAppendResult(True, durable_audit)
+
     return ExecutionSafetyHooks(
         recursive_redaction=redact,
         response_cap=budget("response_cap"),
-        append_audit=lambda context: AuditAppendResult(True, durable_audit),
+        append_audit=append,
         durable_idempotency=lambda intent, digest: DurableIdempotencyReservation(
             intent.idempotency_key, digest, True, denied != "idempotency"
         ),
@@ -731,6 +821,7 @@ def test_execution_safety_requires_every_hook_and_recursive_redaction() -> None:
         hooks=_safety_hooks(),
     )
     assert result["nested"][0]["credential"] == "<redacted>"
+    denied_events: list[SafetyAuditEvent] = []
     with pytest.raises(SocialWorkspaceValidationError, match="recursive redaction"):
         enforce_execution_safety(
             intent,
@@ -738,8 +829,9 @@ def test_execution_safety_requires_every_hook_and_recursive_redaction() -> None:
             client_id="client",
             subject="owner",
             resource="resource",
-            hooks=_safety_hooks(recursive=False),
+            hooks=_safety_hooks(recursive=False, audit_events=denied_events),
         )
+    assert len(denied_events) == 1 and denied_events[0].reason_code == "redaction_incomplete"
 
 
 @pytest.mark.parametrize(
@@ -748,6 +840,7 @@ def test_execution_safety_requires_every_hook_and_recursive_redaction() -> None:
 )
 def test_execution_safety_fails_closed_for_idempotency_and_all_budgets(denied: str) -> None:
     intent = validate_prepare_request(_send_message())
+    events: list[SafetyAuditEvent] = []
     with pytest.raises(SocialWorkspaceValidationError):
         enforce_execution_safety(
             intent,
@@ -755,8 +848,9 @@ def test_execution_safety_fails_closed_for_idempotency_and_all_budgets(denied: s
             client_id="client",
             subject="owner",
             resource="resource",
-            hooks=_safety_hooks(denied=denied),
+            hooks=_safety_hooks(denied=denied, audit_events=events),
         )
+    assert len(events) == 1 and events[0].outcome == "denied"
     with pytest.raises(SocialWorkspaceValidationError, match="encoded response cap"):
         enforce_execution_safety(
             intent,
@@ -776,6 +870,29 @@ def test_execution_safety_fails_closed_for_idempotency_and_all_budgets(denied: s
             resource="resource",
             hooks=_safety_hooks(durable_audit=False),
         )
+
+
+def test_rate_denial_appends_durable_sanitized_audit_before_raising() -> None:
+    intent = validate_prepare_request(_send_message())
+    events: list[SafetyAuditEvent] = []
+    response = {"credential": "must-never-enter-audit", "text": "external"}
+    with pytest.raises(SocialWorkspaceValidationError, match="rate_budget denied"):
+        enforce_execution_safety(
+            intent,
+            response,
+            client_id="sensitive-client",
+            subject="personal-operator-id",
+            resource="private-resource",
+            hooks=_safety_hooks(denied="rate_budget", audit_events=events),
+        )
+    assert len(events) == 1
+    event = events[0]
+    assert event.outcome == "denied"
+    assert event.reason_code == "rate_budget_denied"
+    serialized = repr(event)
+    assert "must-never-enter-audit" not in serialized
+    assert "personal-operator-id" not in serialized
+    assert len(event.principal_hash) == 64
 
 
 @pytest.mark.parametrize(
