@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Fixed sanitized Search evidence uploads to include the hidden
+  `.redaction-ok` marker. Browser, Android and iOS artifacts can now prove the
+  same redaction gate that authorized their upload instead of silently dropping
+  the marker at the artifact boundary.
+
 - Fixed the unattended Search OIDC broker's raw Supabase Auth contract: the
   GoTrue Admin endpoint now receives `redirect_to` and its flat
   `email_otp`/`action_link` response is accepted. The broker no longer rejects
