@@ -244,7 +244,41 @@ When enabled, both distinct static client IDs are required. The existing
 ChatGPT registration; the Codex ID must never be paired with a client secret.
 
 Provider credentials are owned by separately injected adapters, not by the MCP
-core or target policy.
+core or target policy. `create_app()` constructs both adapters only after the
+MCP enabled gate and the adapters remain lazy: construction neither decodes a
+session nor calls a provider. Disabled MCP startup therefore does not import
+Telethon or parse/validate provider credentials.
+
+### Telegram provider adapter
+
+Telegram generic reads and plain-text publications use a Telethon human client
+with the dedicated `TELEGRAM_AUTH_BUNDLE_EVENTS_BOT_MCP` role only. The bundle
+is base64url JSON containing `session` and optional `device_model`,
+`system_version`, `app_version`, `lang_code`, and `system_lang_code`. API
+credentials are read from `TELEGRAM_API_ID` / `TELEGRAM_API_HASH`, with the
+existing `TG_API_ID` / `TG_API_HASH` names accepted as aliases. There is no
+fallback to `TELEGRAM_AUTH_BUNDLE_E2E`, `TELEGRAM_SESSION`, or
+`TELEGRAM_AUTH_BUNDLE_S22`, and the bot token is never used.
+
+Each operation is serialized on a session lock, connects a fresh client,
+checks that the human session is authorized, and disconnects in `finally`.
+Reads scan at most 100 recent messages to collect the requested bounded count
+of non-empty texts. Publications call only Telethon `send_message` with
+`parse_mode=None` and link previews disabled. They create a new plain-text
+message; they do not enter event, outbox, Telegraph, card, media, edit, delete,
+forward, story, or MAX flows.
+
+### VK provider adapter
+
+VK uses the existing runtime `main.vk_api` credential and throttling path behind
+a fixed-method adapter. Reads call only `wall.get` with the negative allowlisted
+community owner ID, `filter=owner`, and a bounded scan count. Publications call
+only `wall.post` with that owner, `from_group=1`, `signed=0`, the exact requested
+text, and a deterministic SHA-256 `guid` derived from the core idempotency key.
+No method name, raw owner ID, URL, attachment, schedule, edit, delete, or raw VK
+response is exposed through MCP. Provider failures cross the seam only as a
+generic `SocialAdapterError` without credentials, target IDs, or provider
+payloads.
 
 Generate connection material only into a fresh path:
 
@@ -268,12 +302,16 @@ inside the owner-only files.
 
 ## Integration
 
-In `create_app()`, immediately after `app = web.Application()` and before route registration:
+In `create_app()`, immediately after `app = web.Application()` and before route registration,
+the enabled configuration injects the two narrow provider adapters:
 
 ```python
-from private_events_mcp import attach_private_events_mcp
+from private_events_mcp import PrivateEventsMCPConfig, attach_private_events_mcp
+from private_events_mcp_provider_adapters import build_private_events_mcp_social_adapters
 
-attach_private_events_mcp(app)
+config = PrivateEventsMCPConfig.from_env()
+adapters = build_private_events_mcp_social_adapters(vk_api) if config.enabled else None
+attach_private_events_mcp(app, config, social_adapters=adapters)
 ```
 
 The bundled `scripts/apply_private_events_mcp_overlay.py` performs this insertion

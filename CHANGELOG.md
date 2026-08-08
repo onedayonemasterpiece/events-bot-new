@@ -4,6 +4,13 @@
 
 ### Added
 
+- Added lazy generic-text Telegram and VK transports for the private Events MCP:
+  a dedicated role-scoped Telethon human session handles serialized channel
+  reads and plain-text sends, while a fixed `main.vk_api` wrapper permits only
+  bounded `wall.get` and idempotency-guided `wall.post` calls. Provider
+  credentials stay unparsed while MCP is disabled and provider failures are
+  returned only through a redacted generic adapter error.
+
 - Added a provider-neutral private MCP social core for explicitly allowlisted
   Telegram/VK aliases: scope- and resource-filtered discovery, redacted
   untrusted text reads, one-use text-publication tickets, durable idempotency,
