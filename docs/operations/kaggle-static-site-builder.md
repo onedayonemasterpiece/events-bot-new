@@ -463,6 +463,17 @@ then performs only bounded read-only compact related-candidate RPCs. The
 optional `--sync-pgvector-vectors` switch remains a manual canary/backfill tool,
 not a production-build owner.
 
+The same barrier receipt is the immutable Search revision handoff. The vector
+owner writes `event_vector_sync_receipt_v2` with the exact catalog, searchable
+corpus and search-document revisions plus complete post-write coverage. For an
+authorized Search candidate, Fly validates that v2 receipt and packages it in
+the private Kaggle input dataset as `event-search-corpus-receipt.json`; the
+kernel copies it into `site/src/data` only after exporting the matching
+snapshot. `build:secret-candidate` then refuses a missing, incomplete or
+catalog-mismatched receipt. This handoff must not be replaced by enabling
+`STATIC_SITE_SYNC_PGVECTOR_VECTORS`: regular static builds remain read-only with
+respect to the vector projection.
+
 `INC-2026-07-11-event-vector-sidecar-sync-stalled` restored this optional
 handoff after a merge dropped it. Regular production vector ingestion is owned
 by the separate full-catalog `event_vector_sync` lane; do not enable a coupled

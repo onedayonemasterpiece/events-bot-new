@@ -167,6 +167,45 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def validate_search_corpus_receipt(path: Path) -> dict:
+    """Validate the non-secret, vector-owner receipt before Kaggle handoff."""
+
+    if not path.is_file():
+        raise FileNotFoundError(f'Search corpus receipt is missing: {path}')
+    if path.stat().st_size > 8 * 1024 * 1024:
+        raise RuntimeError('Search corpus receipt exceeds the bounded handoff size')
+    try:
+        receipt = json.loads(path.read_text(encoding='utf-8'))
+    except Exception as exc:
+        raise RuntimeError(f'Search corpus receipt is invalid JSON: {exc}') from exc
+    if not isinstance(receipt, dict):
+        raise RuntimeError('Search corpus receipt must be one JSON object')
+    if receipt.get('schema_version') != 'event_vector_sync_receipt_v2':
+        raise RuntimeError('Search corpus receipt v2 is required')
+    if receipt.get('status') not in {'complete', 'success'} or receipt.get('complete') is False:
+        raise RuntimeError('Search corpus receipt is incomplete')
+    for key in (
+        'catalog_revision',
+        'corpus_revision',
+        'search_document_revision',
+        'search_v3_hash',
+        'related_v1_hash',
+    ):
+        if not re.fullmatch(r'[0-9a-f]{64}', str(receipt.get(key) or '')):
+            raise RuntimeError(f'Search corpus receipt has invalid {key}')
+    if receipt['corpus_revision'] != receipt['search_v3_hash']:
+        raise RuntimeError('Search corpus receipt corpus/search_v3 mismatch')
+    if receipt['search_document_revision'] != receipt['corpus_revision']:
+        raise RuntimeError('Search corpus receipt search-document revision mismatch')
+    coverage = receipt.get('coverage')
+    if not isinstance(coverage, dict) or coverage.get('status') != 'complete':
+        raise RuntimeError('Search corpus receipt coverage is incomplete')
+    revisions = receipt.get('event_revisions')
+    if not isinstance(revisions, dict):
+        raise RuntimeError('Search corpus receipt event revisions are missing')
+    return receipt
+
+
 def atomic_copy_file(source: Path, target: Path) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_name(f'.{target.name}.{os.getpid()}.tmp')
@@ -825,6 +864,17 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         raise FileNotFoundError(KERNEL_SRC)
     copy_tree(KERNEL_SRC, staging)
     build_id = args.build_id or f"preview-{datetime.now(timezone.utc).strftime('%Y%m%d-static-prod50')}"
+    search_receipt_source: Path | None = None
+    configured_search_receipt = str(getattr(args, 'search_corpus_receipt', '') or '').strip()
+    search_receipt_required = (
+        args.profile == 'production-candidate'
+        and bool(args.secret_candidate_require_authorized_search)
+    )
+    if configured_search_receipt:
+        search_receipt_source = Path(configured_search_receipt).resolve()
+        validate_search_corpus_receipt(search_receipt_source)
+    elif search_receipt_required:
+        raise RuntimeError('authorized Search candidate requires the vector-owner corpus receipt')
     config = {
         'build_id': build_id,
         'run_id': args.run_id or build_id,
@@ -851,6 +901,9 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'public_authorized_search_transport': getattr(args, 'public_authorized_search_transport', '') or 'json',
         'secret_candidate_artifact_research': bool(args.secret_candidate_artifact_research),
         'secret_candidate_require_authorized_search': bool(args.secret_candidate_require_authorized_search),
+        'search_corpus_receipt_filename': (
+            'event-search-corpus-receipt.json' if search_receipt_source else None
+        ),
         'export_in_kaggle': bool(args.export_in_kaggle),
         'sqlite_db_filename': 'events.sqlite' if args.db and args.export_in_kaggle else None,
         'related_cache_filename': 'event_related_chain_cache.json',
@@ -890,6 +943,8 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
             shutil.copy2(Path(args.snapshot_manifest).resolve(), dataset_dir / 'snapshot-manifest.json')
     if args.related_cache and Path(args.related_cache).exists():
         shutil.copy2(Path(args.related_cache).resolve(), dataset_dir / 'event_related_chain_cache.json')
+    if search_receipt_source:
+        shutil.copy2(search_receipt_source, dataset_dir / 'event-search-corpus-receipt.json')
     semantic_inputs = (
         (
             (getattr(args, 'bge_vector_cache', ''), 'static_event_bge_vectors.npz'),
@@ -926,6 +981,8 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
             expected.append('snapshot-manifest.json')
     if args.related_cache and Path(args.related_cache).exists():
         expected.append('event_related_chain_cache.json')
+    if search_receipt_source:
+        expected.append('event-search-corpus-receipt.json')
     expected.extend(
         filename
         for source_value, filename in semantic_inputs
@@ -1074,6 +1131,11 @@ def main() -> int:
         action='store_true',
         default=(os.getenv('STATIC_SITE_SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH', '').strip().lower() in {'1', 'true', 'yes', 'on'}),
         help='Fail the secret-candidate build when public Search/Auth configuration is absent.',
+    )
+    parser.add_argument(
+        '--search-corpus-receipt',
+        default=os.getenv('STATIC_SITE_SEARCH_CORPUS_RECEIPT', ''),
+        help='Complete v2 receipt produced by the dedicated Fly vector projection owner.',
     )
     parser.add_argument('--export-in-kaggle', action='store_true', default=(os.getenv('STATIC_SITE_EXPORT_IN_KAGGLE', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
     parser.add_argument('--related-cache', default=os.getenv('STATIC_SITE_RELATED_CACHE', str(ARTIFACT_ROOT / 'event_related_chain_cache.json')))

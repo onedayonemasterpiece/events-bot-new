@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- Fixed exact secret Search candidate generation to carry the dedicated vector
+  owner's complete v2 catalog/corpus revision receipt through the immutable
+  private Kaggle input. The candidate remains read-only for pgvector writes and
+  now fails before publication on missing coverage or revision drift instead of
+  reaching a late build with absent Search evidence.
+
 - Fixed browser Search acceptance to perform real wheel scrolling from the
   document top until the final rendered card intersects the viewport; the
   former fixed five-wheel limit failed against the real eight-card result set.

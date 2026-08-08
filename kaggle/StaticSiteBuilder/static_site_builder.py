@@ -498,6 +498,20 @@ def export_preview_data_if_configured(config: dict) -> None:
         cmd.append('--gemma-related-verify')
     status_event('alive', phase='export', status='alive', progress={'phase': 'export', 'progress_percent': 18, 'progress_label': 'экспорт событий и related v2'})
     run(cmd, cwd=SITE_DIR, env=os.environ.copy())
+    search_receipt_filename = str(
+        config.get('search_corpus_receipt_filename') or ''
+    ).strip()
+    if search_receipt_filename:
+        search_receipt_input = find_input_file(search_receipt_filename)
+        if not search_receipt_input:
+            raise FileNotFoundError(
+                f'required Search corpus receipt not found: {search_receipt_filename}'
+            )
+        search_receipt_target = (
+            SITE_DIR / 'src' / 'data' / 'event-search-corpus-receipt.json'
+        )
+        search_receipt_target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(search_receipt_input, search_receipt_target)
 
 
 def read_related_retrieval_receipt() -> dict:

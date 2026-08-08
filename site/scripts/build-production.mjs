@@ -97,8 +97,18 @@ const searchCatalogRevision = String(eventsData?.build?.catalog_revision || '');
 const searchCorpusRevision = String(searchCorpusReceipt?.corpus_revision || '');
 const searchDocumentRevision = String(searchCorpusReceipt?.search_document_revision || '');
 if (searchCorpusReceipt) {
+  if (searchCorpusReceipt.schema_version !== 'event_vector_sync_receipt_v2') {
+    throw new Error('Search corpus receipt v2 is required');
+  }
+  if (!searchCorpusReceipt.complete || searchCorpusReceipt.status !== 'complete') {
+    throw new Error('Search corpus receipt is incomplete');
+  }
   for (const [label, value] of Object.entries({ searchCatalogRevision, searchCorpusRevision, searchDocumentRevision })) {
     if (!/^[0-9a-f]{64}$/u.test(value)) throw new Error(`Invalid ${label} in Search corpus receipt`);
+  }
+  if (String(searchCorpusReceipt.search_v3_hash || '') !== searchCorpusRevision
+      || searchDocumentRevision !== searchCorpusRevision) {
+    throw new Error('Search corpus revision identities disagree');
   }
   if (String(searchCorpusReceipt.catalog_revision || '') !== searchCatalogRevision) {
     throw new Error('Search corpus/catalog revision mismatch');
