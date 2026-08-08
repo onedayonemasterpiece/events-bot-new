@@ -1,0 +1,224 @@
+name: Prelaunch subscription private audit 20260808
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/prelaunch-subscription-audit-20260808.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prelaunch-subscription-private-audit
+  cancel-in-progress: false
+
+jobs:
+  read-production-subscriptions:
+    if: ${{ github.event.pull_request.head.ref == 'automation/prelaunch-control-20260804' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: production
+    env:
+      PUBLIC_PERSONALIZATION_SUPABASE_URL: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_URL || vars.PUBLIC_PERSONALIZATION_SUPABASE_URL || secrets.STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_URL || vars.STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_URL }}
+      PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY || secrets.STATIC_SITE_PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY || secrets.STATIC_SITE_PERSONALIZATION_SUPABASE_SERVICE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_SERVICE_KEY }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || secrets.SUPABASE_MANAGEMENT_API_TOKEN || secrets.SUPABASE_PERSONAL_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF || vars.SUPABASE_PROJECT_REF }}
+    steps:
+      - name: Read recent production registrations and encrypt before persistence
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+
+          since='2026-08-08T05:29:00Z'
+          artifact_dir='artifacts/prelaunch-subscription-audit'
+          work_dir="${RUNNER_TEMP}/prelaunch-subscription-audit"
+          mkdir -p "$artifact_dir" "$work_dir"
+          raw="$work_dir/raw.json"
+          payload="$work_dir/payload.json"
+          public_key="$work_dir/audit-public.pem"
+          encrypted="$artifact_dir/audit.enc.json"
+          method='none'
+          query_error=''
+
+          cat > "$public_key" <<'PEM'
+          -----BEGIN PUBLIC KEY-----
+          MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAnSCzxb3KdzCPDhXCPcZF
+          P3udCUUU5u3wL7oTKBp6xdJRE3SCowM8qYPdSAolsBO/c9Q5MzocHh7+q1Uk9ff4
+          M6jzMpmnr9KdCZ8il8Ris5eg0Z5z5CoGzXSjYT4VuHSBLlyJbsqJ6Y0fjZsjO8/e
+          EpOdiIVdcFvxoQ83+1my/nWxP3B1TQ5qrwcLdFf3uJXorFJFL2yOYPHa2yYvxOjj
+          Oh7yQ3Ya+YnMs9aOG6Im4ffYeH65ZwivfuMnzRlwUYU+s/ZxvAn/rF7FWxQ4ENVl
+          QVGuJCHKvWftzu6G1p4oVsavmr9KjCxGnI4/49VoI6eXi1jyIZoPOXIKL5X7msap
+          syPUmMP8tHx2h6SEQlQK0TRpRB8X17bzZbI+3OfXDW9Skhw8mcBkj7wPLEZRPd76
+          2H+iLUHFsx7ETqHTLJ6Xsql7sZIz4oZK1NpxMOW4xXkAUEmwKBa3d6UxP6/aiukU
+          Vt5ymGRWYdjg1OxK6kT6qbyv2P5M+0rkkTavr301ODSmwRd3PakEACk8HAhUnWIa
+          reMzHWFkxBOANePXuOVX3ytIu58/4/lt1eJc7i6ewnSSqB3gjbcI4OczHdLD9vGK
+          sH2lLRujyUjyXuyXI9dt0I/nwl/MF/DLWrZsIP4xa5cdPwwPpTTffWj/+H2LgUDu
+          qX++cTcYiS3Aamnwuhv80osCAwEAAQ==
+          -----END PUBLIC KEY-----
+          PEM
+          sed -i 's/^          //' "$public_key"
+
+          normalize_payload() {
+            METHOD="$method" SINCE="$since" RAW_PATH="$raw" ERROR_TEXT="$query_error" OUTPUT_PATH="$payload" node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+
+          const rawPath = process.env.RAW_PATH;
+          let raw = null;
+          try {
+            raw = JSON.parse(readFileSync(rawPath, 'utf8'));
+          } catch {
+            raw = null;
+          }
+
+          function findRows(value) {
+            if (Array.isArray(value)) return value;
+            if (!value || typeof value !== 'object') return [];
+            for (const key of ['result', 'data', 'rows']) {
+              if (Array.isArray(value[key])) return value[key];
+            }
+            return [];
+          }
+
+          const allowed = new Set([
+            'subscription_id',
+            'email',
+            'source',
+            'consent_version',
+            'first_requested_at',
+            'last_requested_at',
+            'request_count',
+            'delivery_status',
+            'delivery_attempt_count',
+            'notification_sent_at',
+            'created_at',
+            'updated_at',
+          ]);
+          const rows = findRows(raw).map((row) => Object.fromEntries(
+            Object.entries(row || {}).filter(([key]) => allowed.has(key)),
+          ));
+          const output = {
+            schema_version: 'prelaunch_subscription_private_audit_v1',
+            queried_at: new Date().toISOString(),
+            since: process.env.SINCE,
+            method: process.env.METHOD,
+            ok: process.env.METHOD !== 'none',
+            row_count: rows.length,
+            rows,
+            error: process.env.ERROR_TEXT || null,
+          };
+          writeFileSync(process.env.OUTPUT_PATH, `${JSON.stringify(output)}\n`, { mode: 0o600 });
+          NODE
+          }
+
+          try_postgrest() {
+            [[ -n "${PUBLIC_PERSONALIZATION_SUPABASE_URL:-}" ]] || return 1
+            [[ -n "${PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY:-}" ]] || return 1
+            local base="${PUBLIC_PERSONALIZATION_SUPABASE_URL%/}"
+            local encoded_since='2026-08-08T05%3A29%3A00Z'
+            local url="${base}/rest/v1/prelaunch_launch_subscription?select=subscription_id,email,source,consent_version,first_requested_at,last_requested_at,request_count,delivery_status,delivery_attempt_count,notification_sent_at,created_at,updated_at&source=eq.prelaunch_home&last_requested_at=gte.${encoded_since}&order=last_requested_at.desc&limit=50"
+            local status rc
+            set +e
+            status="$(curl --silent --show-error --output "$raw" --write-out '%{http_code}' \
+              --request GET \
+              --header "apikey: ${PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY}" \
+              --header "Authorization: Bearer ${PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY}" \
+              --header 'Accept: application/json' \
+              --header 'Accept-Profile: personalization' \
+              --max-time 30 \
+              "$url")"
+            rc=$?
+            set -e
+            [[ $rc -eq 0 && "$status" =~ ^2 ]] || return 1
+            jq -e 'type == "array"' "$raw" >/dev/null 2>&1 || return 1
+            method='postgrest_service_role'
+            return 0
+          }
+
+          try_management_api() {
+            [[ -n "${SUPABASE_ACCESS_TOKEN:-}" ]] || return 1
+            local project_ref="${SUPABASE_PROJECT_REF:-}"
+            if [[ -z "$project_ref" && -n "${PUBLIC_PERSONALIZATION_SUPABASE_URL:-}" ]]; then
+              project_ref="$(sed -E 's#^https?://([^.]+)\\.supabase\\.co.*#\\1#' <<<"${PUBLIC_PERSONALIZATION_SUPABASE_URL}")"
+            fi
+            [[ "$project_ref" =~ ^[a-z0-9]{20}$ ]] || project_ref='epyznmylqmchteykjsqj'
+
+            local sql status rc
+            sql="select subscription_id, email, source, consent_version, first_requested_at, last_requested_at, request_count, delivery_status, delivery_attempt_count, notification_sent_at, created_at, updated_at from personalization.prelaunch_launch_subscription where source = 'prelaunch_home' and last_requested_at >= timestamptz '2026-08-08 05:29:00+00' order by last_requested_at desc limit 50;"
+            jq -n --arg query "$sql" '{query:$query}' > "$work_dir/query.json"
+            set +e
+            status="$(curl --silent --show-error --output "$raw" --write-out '%{http_code}' \
+              --request POST \
+              --header "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+              --header 'Accept: application/json' \
+              --header 'Content-Type: application/json' \
+              --data-binary "@$work_dir/query.json" \
+              --max-time 30 \
+              "https://api.supabase.com/v1/projects/${project_ref}/database/query")"
+            rc=$?
+            set -e
+            [[ $rc -eq 0 && "$status" =~ ^2 ]] || return 1
+            jq -e '(type == "array") or (.result | type == "array") or (.data | type == "array") or (.rows | type == "array")' "$raw" >/dev/null 2>&1 || return 1
+            method='supabase_management_api'
+            return 0
+          }
+
+          if try_postgrest; then
+            :
+          elif try_management_api; then
+            :
+          else
+            printf '[]\n' > "$raw"
+            query_error='No configured read credential could query the protected subscription table.'
+          fi
+
+          normalize_payload
+
+          PUBLIC_KEY_PATH="$public_key" PLAINTEXT_PATH="$payload" ENCRYPTED_PATH="$encrypted" node --input-type=module <<'NODE'
+          import {
+            constants,
+            createCipheriv,
+            publicEncrypt,
+            randomBytes,
+          } from 'node:crypto';
+          import { readFileSync, writeFileSync } from 'node:fs';
+
+          const key = randomBytes(32);
+          const iv = randomBytes(12);
+          const plaintext = readFileSync(process.env.PLAINTEXT_PATH);
+          const cipher = createCipheriv('aes-256-gcm', key, iv);
+          const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+          const tag = cipher.getAuthTag();
+          const encryptedKey = publicEncrypt({
+            key: readFileSync(process.env.PUBLIC_KEY_PATH),
+            padding: constants.RSA_PKCS1_OAEP_PADDING,
+            oaepHash: 'sha256',
+          }, key);
+          const envelope = {
+            schema_version: 'private_audit_envelope_v1',
+            algorithm: 'RSA-OAEP-256+A256GCM',
+            encrypted_key: encryptedKey.toString('base64'),
+            iv: iv.toString('base64'),
+            tag: tag.toString('base64'),
+            ciphertext: ciphertext.toString('base64'),
+          };
+          writeFileSync(process.env.ENCRYPTED_PATH, `${JSON.stringify(envelope)}\n`, { mode: 0o600 });
+          NODE
+
+          row_count="$(jq -r '.row_count' "$payload")"
+          ok="$(jq -r '.ok' "$payload")"
+          rm -f "$raw" "$payload" "$work_dir/query.json" "$public_key"
+          echo "audit_ok=${ok}"
+          echo "query_method=${method}"
+          echo "recent_rows=${row_count}"
+          test "$ok" = true
+
+      - name: Upload encrypted private audit result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prelaunch-subscription-audit-${{ github.run_id }}
+          path: artifacts/prelaunch-subscription-audit/audit.enc.json
+          if-no-files-found: error
+          retention-days: 1
