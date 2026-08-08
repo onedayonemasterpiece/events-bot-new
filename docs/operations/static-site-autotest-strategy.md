@@ -856,6 +856,12 @@ errors не подавляются.
 только `total_count`/`visible_count` для закрытого списка XCTest-типов
 `StaticText`/`Other`/`Button`/`Link`. Raw hierarchy, labels и соседний текст не
 собираются; диагностический тип не становится разрешением на tap автоматически.
+Live receipt `31281345474` доказал конкретный случай: exact heading был
+`StaticText total=1`, но `visible=0` после submit. Поэтому Search завершает
+validated first-page input обычным product `blur()` до единственного POST:
+native Search/Enter остаётся реальным пользовательским действием, а IME
+закрывается до просмотра результатов. Harness всё равно независимо проверяет
+`isKeyboardShown() == false` перед document swipe.
 При отказе публикуется только закрытый route enum и numeric/boolean receipt:
 native viewport, доступные start/end/duration, число жестов, `scrollY` delta и
 видимость финальной карточки; hierarchy, screenshot, URL и текст страницы в
