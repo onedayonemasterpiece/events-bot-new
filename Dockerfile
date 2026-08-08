@@ -16,4 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN python -m playwright install --with-deps chromium
 COPY . .
 RUN printf '%s\n' "$STATIC_SITE_IMAGE_REPO_SHA" > /app/.static-site-repo-sha
-CMD ["python", "main.py"]
+# With ENABLE_PROD_OPS_MCP unset, the wrapper immediately execs the historical
+# `python main.py` entrypoint. The optional MCP sidecar is therefore zero-cost
+# and unreachable by default.
+CMD ["python", "-m", "prod_ops_mcp.entrypoint"]
