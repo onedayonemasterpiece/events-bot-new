@@ -106,7 +106,7 @@ lanes:
     expected_output: clean committed implementation with targeted tests
     verification_scope: full_local
     effort: high
-    status: spawned
+    status: completed
   - id: L6-integration-release-live-acceptance
     role: merge_reviewer
     requirement_ids: [R5, R6]
@@ -114,7 +114,7 @@ lanes:
     depends_on: [L5-implementation]
     execution_mode: serial_after_dependency
     branch: integration/prelaunch-form-hotfix-20260808
-    worktree: /dev/shm/prelaunch-form-integration
+    worktree: /home/dev/.codex/worktrees/events-bot-new/prelaunch-form-integration
     writable_files:
       - integration resolutions and reports
     forbidden_files:
@@ -122,4 +122,4 @@ lanes:
     expected_output: origin/main production SHA, Actions run, redacted live proof and closure audit
     verification_scope: full_local
     effort: high
-    status: in_progress
+    status: completed

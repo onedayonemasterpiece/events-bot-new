@@ -1,10 +1,10 @@
 # INC-2026-08-08-prelaunch-registration-confirmation-and-dedup Prelaunch confirmation and dedup gap
 
-Status: monitoring
+Status: closed
 Severity: sev2
 Service: `kenigevents.ru` production root / prelaunch registration
 Opened: 2026-08-08
-Closed: —
+Closed: 2026-08-08T15:11:18Z
 Owners: static-site / personalization database / release owner
 Related incidents: —
 Related docs: `docs/features/static-site-pages/prelaunch.md`, `docs/operations/release-governance.md`
@@ -39,7 +39,14 @@ Related docs: `docs/features/static-site-pages/prelaunch.md`, `docs/operations/r
 - 2026-08-08 — production reproduction: реальный POST RPC вернул HTTP 400 / PostgreSQL `22023` / `invalid_prelaunch_consent`; защищённый `pg_get_functiondef` показал только `launch-2026-09-01-v1`, а migration history не содержала v2.
 - 2026-08-08 — существующая v2 migration применена транзакционно; тот же реальный form call вернул HTTP 200, показал first-success, а reload — registered.
 - 2026-08-08 — подготовлена main-based reconciliation формы и v3 RPC contract.
-- post-deploy timestamps и GitHub Actions run добавляются при closure.
+- 2026-08-08T15:09:02Z — exact-main release
+  `prelaunch-main-31263560430-1` опубликовал SHA
+  `5a9d804438377f65fe4b26bd7019e73626529864`.
+- 2026-08-08T15:09:56Z — первый реальный production submit вернул
+  `registered`; reload показал registered-state; второй submit того же адреса
+  вернул `already_registered`.
+- 2026-08-08T15:10Z — защищённое чтение доказало одну строку и
+  `request_count=2`; синтетическая строка удалена, контрольный count равен 0.
 
 ## Root Cause
 
@@ -116,16 +123,43 @@ visual assets, background, SEO/GEO or unrelated site behavior.
 
 ## Follow-up Actions
 
-- [ ] release owner: attach production GitHub Actions run and deployed SHA.
-- [ ] operator: attach masked user-row and synthetic two-call/one-row evidence.
-- [ ] incident owner: close only after live success/reload and cleanup checks pass.
+- [x] release owner: production GitHub Actions run and deployed SHA attached.
+- [x] operator: masked user-row audit and synthetic two-call/one-row evidence attached.
+- [x] incident owner: live success/reload and cleanup checks passed.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending exact-main manual GitHub Actions root release
-- regression checks: local implementation gates pending commit evidence
-- post-deploy verification: pending
+- deployed SHA: `5a9d804438377f65fe4b26bd7019e73626529864`, exact
+  `origin/main` at release time and verified as its ancestor after release;
+- deploy path: exact-main manual GitHub Actions
+  [run 31263560430](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31263560430),
+  successful; release receipt `prelaunch-main-31263560430-1`;
+- production schema: migrations `20260803113000`, `20260806163000` and
+  `20260808143744` present; the live RPC contains `already_registered` and
+  `ON CONFLICT (email) DO NOTHING`; exactly one `UNIQUE(email)` constraint;
+  table RLS remains enabled and `anon`/`authenticated` have no table SELECT;
+- operator audit requested by the reporter: an actual protected table read for
+  `source='prelaunch_home'` after `2026-08-08T05:29:24Z` returned 0 rows for
+  both `first_requested_at` and `last_requested_at`; therefore there is no
+  masked customer row or associated timestamp/count/status to report;
+- real synthetic proof: `s***@e***.test` submitted twice through the stable
+  production form; one row, `request_count=2`,
+  `first_requested_at=2026-08-08T15:09:56.023762Z`,
+  `last_requested_at=2026-08-08T15:09:57.035180Z`,
+  `consent_version=prelaunch-updates-2026-v1`,
+  `delivery_status=pending`; cleanup deleted one row and the verification count
+  was 0;
+- production browser proof: two POSTs total, both HTTP 200; first receipt
+  `registered` displayed exact «Готово, вы записаны» and hid the form; submit
+  was disabled in flight; reload displayed exact «Вы уже записаны»; only
+  «Другой e-mail» restored the form; second receipt `already_registered`
+  displayed «Вы уже записаны»; console errors: 0;
+- regression checks: prelaunch unit/contract tests 7/7; exact-artifact and live
+  form gates passed first/repeat/reload/reset/error-retention/double-submit
+  scenarios; PR #373 and rollback follow-up PR #375 were green before merge;
+- visual/SEO closure: live CSS and all four approved image hashes match the
+  pre-fix baseline; title, canonical, description, robots and absence of
+  `noindex` all match. Only root HTML/JS changed for the form behavior.
 
 ## Prevention
 
