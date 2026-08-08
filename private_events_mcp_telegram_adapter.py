@@ -37,6 +37,7 @@ from private_events_mcp.social_workspace import (
     SocialTargetKind,
     SocialWorkspaceValidationError,
     TargetLocatorKind,
+    compute_action_digest,
     validate_action_status_response,
     validate_opaque_ref,
 )
@@ -108,9 +109,13 @@ class TelegramAssetBinding:
 
 
 @dataclass(frozen=True, slots=True)
-class TelegramOperationBinding:
+class TelegramOperationClaim:
+    """Atomic ledger claim; stores must compare-and-set without replacing a digest."""
+
     operation_ref: str
-    result: Mapping[str, Any]
+    action_digest: str
+    claimed_now: bool
+    result: Mapping[str, Any] | None = None
 
 
 class TelegramOpaqueRefStore(Protocol):
@@ -147,15 +152,25 @@ class TelegramOpaqueRefStore(Protocol):
 
     def resolve_cursor(self, *, family: str, cursor: str) -> Mapping[str, Any]: ...
 
-    def mint_operation(self, *, action: SocialAction, idempotency_key: str) -> str: ...
+    def claim_operation(
+        self, *, operation_ref: str, action_digest: str
+    ) -> TelegramOperationClaim | Awaitable[TelegramOperationClaim]: ...
 
-    def record_operation(
-        self, *, operation_ref: str, result: Mapping[str, Any]
-    ) -> None | Awaitable[None]: ...
+    def release_operation(
+        self, *, operation_ref: str, action_digest: str
+    ) -> bool | Awaitable[bool]: ...
+
+    def complete_operation(
+        self,
+        *,
+        operation_ref: str,
+        action_digest: str,
+        result: Mapping[str, Any],
+    ) -> TelegramOperationClaim | Awaitable[TelegramOperationClaim]: ...
 
     def resolve_operation(
         self, operation_ref: str
-    ) -> TelegramOperationBinding | Awaitable[TelegramOperationBinding]: ...
+    ) -> TelegramOperationClaim | Awaitable[TelegramOperationClaim]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -455,8 +470,9 @@ class TelegramWorkspaceAdapter:
             "mint_read_asset",
             "mint_cursor",
             "resolve_cursor",
-            "mint_operation",
-            "record_operation",
+            "claim_operation",
+            "release_operation",
+            "complete_operation",
             "resolve_operation",
         ):
             if not callable(getattr(refs, method, None)):
@@ -528,6 +544,10 @@ class TelegramWorkspaceAdapter:
             except asyncio.CancelledError:
                 raise
             except SocialWorkspaceValidationError:
+                if attempt.provider_mutation_attempted:
+                    raise TelegramWorkspaceError(
+                        "outcome_unknown", retry_safe=False
+                    ) from None
                 raise
             except TelegramWorkspaceError:
                 raise
@@ -567,7 +587,25 @@ class TelegramWorkspaceAdapter:
             raise SocialWorkspaceValidationError("opaque target binding mismatch")
         if isinstance(binding.entity, (str, bytes, bytearray, memoryview, int)):
             raise SocialWorkspaceValidationError("target binding must hold a provider entity")
-        return binding
+        try:
+            detached_entity = copy.deepcopy(binding.entity)
+            detached_privacy = copy.deepcopy(binding.story_privacy)
+        except Exception:
+            raise SocialWorkspaceValidationError("target binding cannot be snapshotted") from None
+        if detached_entity is binding.entity:
+            raise SocialWorkspaceValidationError("target binding is not detachable")
+        return TelegramTargetBinding(
+            target_ref=binding.target_ref,
+            kind=binding.kind,
+            entity=detached_entity,
+            title=binding.title,
+            canonical_handle=binding.canonical_handle,
+            profile_link=binding.profile_link,
+            is_self=binding.is_self,
+            allowed_actions=binding.allowed_actions,
+            story_privacy=detached_privacy,
+            binding_version=binding.binding_version,
+        )
 
     def _item(self, item_ref: str) -> TelegramItemBinding:
         validate_opaque_ref(item_ref, "item")
@@ -769,29 +807,60 @@ class TelegramWorkspaceAdapter:
             return actions if configured is None else actions & configured
         permissions = None
         if callable(getattr(client, "get_permissions", None)):
-            permissions = await _await(client.get_permissions(binding.entity, "me"))
+            try:
+                permissions_peer = copy.deepcopy(binding.entity)
+            except Exception:
+                raise SocialWorkspaceValidationError(
+                    "capability peer cannot be snapshotted"
+                ) from None
+            if permissions_peer is binding.entity:
+                raise SocialWorkspaceValidationError(
+                    "capability peer is not detachable"
+                )
+            permissions = await _await(client.get_permissions(permissions_peer, "me"))
         creator = (
             bool(getattr(permissions, "is_creator", False))
             if permissions is not None
             else bool(getattr(binding.entity, "creator", False))
         )
-        rights = getattr(binding.entity, "admin_rights", None)
+        entity_rights = getattr(binding.entity, "admin_rights", None)
+        participant = getattr(permissions, "participant", None)
+        participant_rights = getattr(participant, "admin_rights", None)
+
         def live_right(name: str) -> bool:
             if permissions is not None:
                 return bool(getattr(permissions, name, False))
-            return bool(getattr(rights, name, False))
+            return bool(getattr(entity_rights, name, False))
 
         is_admin = creator or live_right("is_admin")
-        can_send = creator or live_right("send_messages")
+        is_present_member = creator or is_admin or bool(
+            getattr(permissions, "has_default_permissions", False)
+        )
+        is_restricted = bool(getattr(permissions, "is_banned", False)) or bool(
+            getattr(permissions, "has_left", False)
+        )
+        default_banned_rights = getattr(binding.entity, "default_banned_rights", None)
+        default_send_forbidden = bool(
+            getattr(default_banned_rights, "send_messages", False)
+        )
+        can_send = (
+            binding.kind is SocialTargetKind.GROUP
+            and is_present_member
+            and not is_restricted
+            and (is_admin or not default_send_forbidden)
+        )
         can_post = creator or live_right("post_messages")
         can_edit = creator or live_right("edit_messages")
         can_delete = creator or live_right("delete_messages")
-        can_story = creator or live_right("post_stories")
-        managed = is_admin or can_post or can_edit or can_delete or can_story
+        can_story = creator or bool(
+            getattr(participant_rights, "post_stories", False)
+        ) or (
+            permissions is None and bool(getattr(entity_rights, "post_stories", False))
+        )
         actions: set[SocialAction] = set()
         if binding.kind is SocialTargetKind.CHANNEL and can_post:
             actions.update({SocialAction.PUBLISH, SocialAction.SCHEDULE})
-        if binding.kind is SocialTargetKind.CHANNEL and managed:
+        if binding.kind is SocialTargetKind.CHANNEL and can_post:
             actions.update(
                 {SocialAction.FORWARD, SocialAction.REACTION, SocialAction.COMMENT}
             )
@@ -1478,21 +1547,75 @@ class TelegramWorkspaceAdapter:
             )
         )
 
-    async def _record_operation(
-        self, operation_ref: str, result: Mapping[str, Any]
-    ) -> Mapping[str, Any]:
-        self._recordless_operation_validation(operation_ref, result)
+    async def _claim_operation(
+        self, operation_ref: str, action_digest: str
+    ) -> Mapping[str, Any] | None:
         try:
-            await _await(
-                self._refs.record_operation(
-                    operation_ref=operation_ref, result=dict(result)
+            claim = await _await(
+                self._refs.claim_operation(
+                    operation_ref=operation_ref, action_digest=action_digest
                 )
             )
         except Exception:
             raise TelegramWorkspaceError(
                 "operation_ledger_failed", retry_safe=False
             ) from None
-        return result
+        if (
+            not isinstance(claim, TelegramOperationClaim)
+            or claim.operation_ref != operation_ref
+        ):
+            raise SocialWorkspaceValidationError("operation claim binding mismatch")
+        if claim.action_digest != action_digest:
+            raise SocialWorkspaceValidationError("operation_ref intent conflict")
+        if claim.result is not None:
+            return dict(
+                self._recordless_operation_validation(operation_ref, claim.result)
+            )
+        if claim.claimed_now is not True:
+            raise TelegramWorkspaceError("operation_in_progress", retry_safe=False)
+        return None
+
+    async def _release_operation(self, operation_ref: str, action_digest: str) -> None:
+        try:
+            released = await _await(
+                self._refs.release_operation(
+                    operation_ref=operation_ref, action_digest=action_digest
+                )
+            )
+        except Exception:
+            raise TelegramWorkspaceError(
+                "operation_ledger_failed", retry_safe=False
+            ) from None
+        if released is not True:
+            raise TelegramWorkspaceError("operation_ledger_failed", retry_safe=False)
+
+    async def _complete_operation(
+        self,
+        operation_ref: str,
+        action_digest: str,
+        result: Mapping[str, Any],
+    ) -> Mapping[str, Any]:
+        self._recordless_operation_validation(operation_ref, result)
+        try:
+            claim = await _await(
+                self._refs.complete_operation(
+                    operation_ref=operation_ref,
+                    action_digest=action_digest,
+                    result=dict(result),
+                )
+            )
+        except Exception:
+            raise TelegramWorkspaceError(
+                "operation_ledger_failed", retry_safe=False
+            ) from None
+        if (
+            not isinstance(claim, TelegramOperationClaim)
+            or claim.operation_ref != operation_ref
+            or claim.action_digest != action_digest
+            or claim.result is None
+        ):
+            raise SocialWorkspaceValidationError("operation completion binding mismatch")
+        return dict(self._recordless_operation_validation(operation_ref, claim.result))
 
     async def reconcile(self, operation_ref: str) -> Mapping[str, Any]:
         if not isinstance(operation_ref, str) or not re.fullmatch(
@@ -1500,16 +1623,17 @@ class TelegramWorkspaceAdapter:
         ):
             raise SocialWorkspaceValidationError("operation_ref is invalid")
         try:
-            binding = await _await(self._refs.resolve_operation(operation_ref))
+            claim = await _await(self._refs.resolve_operation(operation_ref))
         except Exception:
             raise TelegramWorkspaceError("operation_not_found", retry_safe=False) from None
         if (
-            not isinstance(binding, TelegramOperationBinding)
-            or binding.operation_ref != operation_ref
-            or binding.result.get("operation_ref") != operation_ref
+            not isinstance(claim, TelegramOperationClaim)
+            or claim.operation_ref != operation_ref
         ):
             raise SocialWorkspaceValidationError("operation ledger binding mismatch")
-        return dict(self._recordless_operation_validation(operation_ref, binding.result))
+        if claim.result is None:
+            raise TelegramWorkspaceError("operation_in_progress", retry_safe=False)
+        return dict(self._recordless_operation_validation(operation_ref, claim.result))
 
     def _recordless_operation_validation(
         self, operation_ref: str, result: Mapping[str, Any]
@@ -1533,17 +1657,18 @@ class TelegramWorkspaceAdapter:
         self,
         intent: SocialActionIntent,
         *,
-        operation_ref: str | None = None,
+        operation_ref: str,
     ) -> Mapping[str, Any]:
         if intent.platform is not SocialPlatform.TELEGRAM:
             raise SocialWorkspaceValidationError("Telegram adapter requires telegram platform")
-        operation_ref = operation_ref or self._refs.mint_operation(
-            action=intent.action, idempotency_key=intent.idempotency_key
-        )
         if not isinstance(operation_ref, str) or not re.fullmatch(
             r"op_[A-Za-z0-9_-]{24,160}", operation_ref
         ):
-            raise SocialWorkspaceValidationError("operation minter returned invalid ref")
+            raise SocialWorkspaceValidationError("operation_ref is invalid")
+        action_digest = compute_action_digest(intent)
+        replay = await self._claim_operation(operation_ref, action_digest)
+        if replay is not None:
+            return replay
 
         async def run(client: Any, lease: TelegramLease, attempt: _Attempt) -> Mapping[str, Any]:
             snapshot = await self._preflight(client, intent)
@@ -1695,10 +1820,24 @@ class TelegramWorkspaceAdapter:
                     }
             return receipt
 
+        provider_completed = False
         try:
             result = await self._session(intent.action.value, run)
-            return await self._record_operation(operation_ref, result)
+            provider_completed = True
+            return await self._complete_operation(
+                operation_ref, action_digest, result
+            )
+        except SocialWorkspaceValidationError:
+            if provider_completed:
+                raise TelegramWorkspaceError(
+                    "operation_ledger_failed", retry_safe=False
+                ) from None
+            await self._release_operation(operation_ref, action_digest)
+            raise
         except TelegramWorkspaceError as exc:
+            if exc.retry_safe:
+                await self._release_operation(operation_ref, action_digest)
+                raise
             if exc.code in {
                 "outcome_unknown", "provider_cooldown", "provider_error", "lease_lost"
             } and not exc.retry_safe:
@@ -1710,7 +1849,9 @@ class TelegramWorkspaceAdapter:
                     "retry_safe": False,
                     "error_code": exc.code,
                 }
-                return await self._record_operation(operation_ref, result)
+                return await self._complete_operation(
+                    operation_ref, action_digest, result
+                )
             raise
 
 
@@ -1719,7 +1860,7 @@ __all__ = [
     "TelegramGovernor",
     "TelegramLease",
     "TelegramOpaqueRefStore",
-    "TelegramOperationBinding",
+    "TelegramOperationClaim",
     "TelegramTargetBinding",
     "TelegramItemBinding",
     "TelegramWorkspaceAdapter",

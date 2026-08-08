@@ -38,7 +38,7 @@ from private_events_mcp_telegram_adapter import (
     TelegramAssetBinding,
     TelegramItemBinding,
     TelegramLease,
-    TelegramOperationBinding,
+    TelegramOperationClaim,
     TelegramTargetBinding,
     TelegramWorkspaceAdapter,
     TelegramWorkspaceError,
@@ -84,7 +84,42 @@ class Entity:
             delete_messages=creator,
             post_stories=creator,
         )
+        self.default_banned_rights = SimpleNamespace(send_messages=False)
         self.participants_count = 42
+
+
+class RealisticParticipantPermissions:
+    """Matches Telethon 1.44 ParticipantPermissions' public properties."""
+
+    def __init__(self, entity: Entity) -> None:
+        creator = bool(entity.creator)
+        admin_rights = entity.admin_rights
+        self.is_creator = creator
+        self.is_admin = creator
+        self.has_default_permissions = not creator
+        self.is_banned = False
+        self.has_left = False
+        self.post_messages = creator or bool(admin_rights.post_messages)
+        self.edit_messages = creator or bool(admin_rights.edit_messages)
+        self.delete_messages = creator or bool(admin_rights.delete_messages)
+        self.participant = SimpleNamespace(admin_rights=admin_rights) if creator else None
+
+
+def test_permission_fake_matches_installed_telethon_public_surface():
+    module = pytest.importorskip("telethon.tl.custom.participantpermissions")
+    participant_permissions = module.ParticipantPermissions
+    expected = {
+        "is_creator",
+        "is_admin",
+        "has_default_permissions",
+        "is_banned",
+        "has_left",
+        "post_messages",
+        "edit_messages",
+        "delete_messages",
+    }
+    assert expected <= set(dir(participant_permissions))
+    assert {"send_messages", "post_stories"}.isdisjoint(dir(participant_permissions))
 
 
 class Message:
@@ -215,7 +250,6 @@ class FakeRefs:
         self.next_target = 1
         self.next_item = 1
         self.next_cursor = 1
-        self.next_operation = 1
         self.operations = {}
 
     def resolve_target(self, target_ref):
@@ -264,16 +298,41 @@ class FakeRefs:
         assert stored_family == family
         return state
 
-    def mint_operation(self, *, action, idempotency_key):
-        del action, idempotency_key
-        ref = f"op_workspaceoperation{self.next_operation:08d}"
-        self.next_operation += 1
-        return ref
+    def claim_operation(self, *, operation_ref, action_digest):
+        existing = self.operations.get(operation_ref)
+        if existing is not None:
+            return TelegramOperationClaim(
+                existing.operation_ref,
+                existing.action_digest,
+                False,
+                existing.result,
+            )
+        claim = TelegramOperationClaim(operation_ref, action_digest, True, None)
+        self.operations[operation_ref] = claim
+        return claim
 
-    def record_operation(self, *, operation_ref, result):
-        self.operations[operation_ref] = TelegramOperationBinding(
-            operation_ref, dict(result)
+    def release_operation(self, *, operation_ref, action_digest):
+        existing = self.operations.get(operation_ref)
+        if (
+            existing is None
+            or existing.action_digest != action_digest
+            or existing.result is not None
+        ):
+            return False
+        del self.operations[operation_ref]
+        return True
+
+    def complete_operation(self, *, operation_ref, action_digest, result):
+        existing = self.operations[operation_ref]
+        if existing.action_digest != action_digest:
+            return existing
+        if existing.result is not None:
+            return existing
+        completed = TelegramOperationClaim(
+            operation_ref, action_digest, False, dict(result)
         )
+        self.operations[operation_ref] = completed
+        return completed
 
     def resolve_operation(self, operation_ref):
         return self.operations[operation_ref]
@@ -324,6 +383,10 @@ class FakeClient:
             id(binding.entity): target_ref
             for target_ref, binding in refs.targets.items()
         }
+        self.native_id_refs = {
+            binding.entity.id: target_ref
+            for target_ref, binding in refs.targets.items()
+        }
         self.messages[CHANNEL_REF].append(Message(500, "root"))
         self.raise_on: str | None = None
         self.delay = 0.0
@@ -358,17 +421,7 @@ class FakeClient:
 
     async def get_permissions(self, entity, who):
         del who
-        creator = bool(getattr(entity, "creator", False))
-        rights = getattr(entity, "admin_rights", None)
-        return SimpleNamespace(
-            is_creator=creator,
-            is_admin=creator,
-            send_messages=creator or bool(getattr(entity, "megagroup", False)),
-            post_messages=creator or bool(getattr(rights, "post_messages", False)),
-            edit_messages=creator or bool(getattr(rights, "edit_messages", False)),
-            delete_messages=creator or bool(getattr(rights, "delete_messages", False)),
-            post_stories=creator or bool(getattr(rights, "post_stories", False)),
-        )
+        return RealisticParticipantPermissions(entity)
 
     async def iter_dialogs(self, *, limit):
         for binding in list(self.refs.targets.values())[:limit]:
@@ -383,7 +436,7 @@ class FakeClient:
             ),
             None,
         )
-        return current or self.entity_refs[id(entity)]
+        return current or self.entity_refs.get(id(entity)) or self.native_id_refs[entity.id]
 
     async def iter_messages(self, entity, *, limit, offset_id=0, search=None):
         values = self.messages[self._target_ref(entity)]
@@ -519,6 +572,10 @@ def intent(action, **changes):
     return SocialActionIntent(**defaults)
 
 
+def op_ref(sequence: int) -> str:
+    return f"op_testoperation{sequence:024d}"
+
+
 @pytest.mark.asyncio
 async def test_saved_self_and_core_compatible_exact_user_resolution(harness):
     adapter, _, _, _ = harness
@@ -600,7 +657,10 @@ async def test_exact_user_reminder_send_has_verified_read_back_and_serialization
         target_ref=USER_REF,
         content=content("Reminder"),
     )
-    first, second = await asyncio.gather(adapter.execute(request), adapter.execute(request))
+    first, second = await asyncio.gather(
+        adapter.execute(request, operation_ref=op_ref(1)),
+        adapter.execute(request, operation_ref=op_ref(2)),
+    )
     assert first["status"] == second["status"] == "succeeded"
     assert first["read_after_write"]["verified"] is True
     assert first["read_after_write"]["observed_item_ref"] == first["item_ref"]
@@ -616,7 +676,8 @@ async def test_saved_message_send_has_exact_read_back(harness):
             SocialAction.SEND_MESSAGE,
             target_ref=SELF_REF,
             content=content("Saved reminder"),
-        )
+        ),
+        operation_ref=op_ref(3),
     )
     assert receipt["target_ref"] == SELF_REF
     assert receipt["read_after_write"] == {
@@ -842,7 +903,8 @@ async def test_utf16_entities_custom_emoji_and_only_staged_media_are_compiled(ha
         media=(MediaAttachment(ASSET_REF, MediaRole.IMAGE, "alt", False),),
     )
     receipt = await adapter.execute(
-        intent(SocialAction.PUBLISH, target_ref=CHANNEL_REF, content=rich)
+        intent(SocialAction.PUBLISH, target_ref=CHANNEL_REF, content=rich),
+        operation_ref=op_ref(4),
     )
     assert receipt["status"] == "succeeded"
     call = next(value for name, value in client.calls if name == "send_file")
@@ -880,7 +942,9 @@ async def test_utf16_entities_custom_emoji_and_only_staged_media_are_compiled(ha
 )
 async def test_every_closed_mutation_family(harness, action, changes, provider_call):
     adapter, client, _, _ = harness
-    receipt = await adapter.execute(intent(action, **changes))
+    receipt = await adapter.execute(
+        intent(action, **changes), operation_ref=op_ref(100 + list(SocialAction).index(action))
+    )
     assert receipt["status"] == "succeeded"
     assert receipt["retry_safe"] is False
     assert validate_action_status_response(receipt).value == "succeeded"
@@ -940,16 +1004,77 @@ async def test_mutations_use_one_immutable_preflight_binding_snapshot(
         return result
 
     client.get_permissions = permissions_then_swap
-    receipt = await adapter.execute(intent(action, **changes))
+    receipt = await adapter.execute(
+        intent(action, **changes), operation_ref=op_ref(200 + list(SocialAction).index(action))
+    )
     assert receipt["status"] == "succeeded"
     provider_values = next(value for name, value in client.calls if name == provider_call)
     if action is SocialAction.FORWARD:
-        assert provider_values["entity"] is old_destination.entity
-        assert provider_values["from_peer"] is old_source.entity
+        assert provider_values["entity"].id == old_destination.entity.id
+        assert provider_values["from_peer"].id == old_source.entity.id
     elif action is SocialAction.REACTION:
-        assert provider_values["peer"] is old_source.entity
+        assert provider_values["peer"].id == old_source.entity.id
     else:
-        assert provider_values["entity"] is old_source.entity
+        assert provider_values["entity"].id == old_source.entity.id
+
+
+@pytest.mark.asyncio
+async def test_in_place_permission_probe_mutation_cannot_change_provider_peer(harness):
+    adapter, client, refs, _ = harness
+    stored_entity = refs.targets[CHANNEL_REF].entity
+
+    async def mutate_permission_peer(peer, who):
+        del who
+        permissions = RealisticParticipantPermissions(peer)
+        peer.id = 999
+        peer.title = "Mutated permission peer"
+        # A hostile resolver/client combination may also retain and mutate the
+        # store-owned object.  The operation must already hold a detached peer.
+        stored_entity.id = 997
+        stored_entity.title = "Mutated stored peer"
+        return permissions
+
+    client.get_permissions = mutate_permission_peer
+    receipt = await adapter.execute(
+        intent(SocialAction.EDIT, item_ref=ITEM_REF, content=content("safe")),
+        operation_ref=op_ref(250),
+    )
+    assert receipt["status"] == "succeeded"
+    edit = next(values for name, values in client.calls if name == "edit_message")
+    assert edit["entity"].id == 100
+    assert edit["entity"].title == "Editorial"
+
+
+@pytest.mark.asyncio
+async def test_realistic_telethon_group_permissions_are_fail_closed(harness):
+    adapter, client, refs, _ = harness
+    permissions = RealisticParticipantPermissions(refs.targets[GROUP_REF].entity)
+    assert not hasattr(permissions, "send_messages")
+    assert not hasattr(permissions, "post_stories")
+
+    ordinary = refs.targets[GROUP_REF]
+    ordinary.entity.creator = False
+    ordinary.entity.admin_rights = SimpleNamespace(
+        post_messages=False,
+        edit_messages=False,
+        delete_messages=False,
+        post_stories=False,
+    )
+    capabilities = await adapter.capabilities(GROUP_REF)
+    assert {
+        "publish",
+        "comment",
+        "forward",
+        "reaction",
+        "schedule",
+    } <= set(capabilities["actions"])
+
+    ordinary.entity.default_banned_rights.send_messages = True
+    denied = await adapter.capabilities(GROUP_REF)
+    assert set(denied["actions"]).isdisjoint(
+        {"publish", "comment", "forward", "reaction", "schedule"}
+    )
+    assert all(name != "send_message" for name, _ in client.calls)
 
 
 @pytest.mark.asyncio
@@ -961,7 +1086,8 @@ async def test_exact_capability_preflight_denies_without_provider_mutation(harne
     assert capabilities["actions"] == []
     with pytest.raises(Exception, match="capability denied"):
         await adapter.execute(
-            intent(SocialAction.PUBLISH, target_ref=CHANNEL_REF, content=content())
+            intent(SocialAction.PUBLISH, target_ref=CHANNEL_REF, content=content()),
+            operation_ref=op_ref(300),
         )
     assert client.calls == []
 
@@ -992,9 +1118,11 @@ async def test_no_rights_broadcast_advertises_and_executes_no_mutations(harness)
             content=content("no"),
         ),
     )
-    for denied_intent in denied:
+    for index, denied_intent in enumerate(denied):
         with pytest.raises(Exception, match="capability denied"):
-            await adapter.execute(denied_intent)
+            await adapter.execute(
+                denied_intent, operation_ref=op_ref(310 + index)
+            )
     assert client.calls == []
 
 
@@ -1108,6 +1236,101 @@ async def test_caller_operation_ref_is_the_only_receipt_and_reconciliation_key(h
     assert missing.value.code == "operation_not_found"
 
 
+@pytest.mark.asyncio
+async def test_operation_ref_is_mandatory_and_exactly_validated_before_provider(harness):
+    adapter, client, refs, _ = harness
+    request = intent(
+        SocialAction.SEND_MESSAGE,
+        target_ref=USER_REF,
+        content=content("required ref"),
+    )
+    with pytest.raises(TypeError, match="operation_ref"):
+        await adapter.execute(request)
+    for invalid in ("", "op_short", " op_testoperation000000000000000000000001"):
+        with pytest.raises(Exception, match="operation_ref is invalid"):
+            await adapter.execute(request, operation_ref=invalid)
+    assert refs.operations == {}
+    assert client.calls == []
+
+
+@pytest.mark.asyncio
+async def test_exact_operation_replay_returns_original_without_second_mutation(harness):
+    adapter, client, refs, _ = harness
+    request = intent(
+        SocialAction.SEND_MESSAGE,
+        target_ref=USER_REF,
+        content=content("exact replay"),
+    )
+    operation_ref = op_ref(401)
+    first = await adapter.execute(request, operation_ref=operation_ref)
+    first_call_count = len(client.calls)
+    second = await adapter.execute(request, operation_ref=operation_ref)
+    assert second == first
+    assert len(client.calls) == first_call_count
+    assert refs.operations[operation_ref].result == first
+
+
+@pytest.mark.asyncio
+async def test_changed_intent_conflicts_on_claim_before_provider(harness):
+    adapter, client, _, _ = harness
+    operation_ref = op_ref(402)
+    original = intent(
+        SocialAction.PUBLISH,
+        target_ref=CHANNEL_REF,
+        content=content("original"),
+    )
+    changed = replace(original, content=content("changed"))
+    await adapter.execute(original, operation_ref=operation_ref)
+    first_call_count = len(client.calls)
+    with pytest.raises(Exception, match="operation_ref intent conflict"):
+        await adapter.execute(changed, operation_ref=operation_ref)
+    assert len(client.calls) == first_call_count
+
+
+@pytest.mark.asyncio
+async def test_concurrent_same_operation_is_atomically_claimed_once():
+    refs = FakeRefs()
+    first_client = FakeClient(refs)
+    second_client = FakeClient(refs)
+    first_client.delay = 0.05
+    adapters = (
+        TelegramWorkspaceAdapter(
+            client_factory=lambda: first_client,
+            refs=refs,
+            governor=FakeGovernor(),
+            telethon_types=FakeTypes(),
+        ),
+        TelegramWorkspaceAdapter(
+            client_factory=lambda: second_client,
+            refs=refs,
+            governor=FakeGovernor(),
+            telethon_types=FakeTypes(),
+        ),
+    )
+    request = intent(
+        SocialAction.SEND_MESSAGE,
+        target_ref=USER_REF,
+        content=content("only once"),
+    )
+    operation_ref = op_ref(403)
+    outcomes = await asyncio.gather(
+        adapters[0].execute(request, operation_ref=operation_ref),
+        adapters[1].execute(request, operation_ref=operation_ref),
+        return_exceptions=True,
+    )
+    successes = [value for value in outcomes if isinstance(value, dict)]
+    failures = [value for value in outcomes if isinstance(value, TelegramWorkspaceError)]
+    assert len(successes) == 1
+    assert len(failures) == 1
+    assert failures[0].code == "operation_in_progress"
+    assert sum(
+        name == "send_message"
+        for client in (first_client, second_client)
+        for name, _ in client.calls
+    ) == 1
+    assert await adapters[0].reconcile(operation_ref) == successes[0]
+
+
 def test_surface_is_closed_lazy_and_contains_no_credential_or_raw_escape_hatch():
     public = {
         name
@@ -1125,6 +1348,8 @@ def test_surface_is_closed_lazy_and_contains_no_credential_or_raw_escape_hatch()
     signature = inspect.signature(TelegramWorkspaceAdapter.execute)
     assert list(signature.parameters) == ["self", "intent", "operation_ref"]
     assert signature.parameters["operation_ref"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert signature.parameters["operation_ref"].default is inspect.Parameter.empty
+    assert "mint_operation" not in source
 
 
 def test_installed_telethon_satisfies_the_guarded_fixed_feature_set():
