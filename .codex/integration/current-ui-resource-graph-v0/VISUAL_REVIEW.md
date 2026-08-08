@@ -41,3 +41,26 @@ No reviewed production representative or structural outlier showed a 404,
 browser error, missing viewport, or wholly blank primary content. The one
 shell-only mobile specimen is the lab/preview conflict above and must remain an
 explicit unresolved observation (`NOT_MERGED`).
+
+## Event-presentation follow-up — Actions 31278123911
+
+The expanded accepted artifact contains 46 captures. All 23 desktop and all 23
+mobile images were reviewed through labelled contact sheets. The five newly
+reserved Event Detail pairs were also opened at original size:
+
+| Exact specimen | Mobile | Desktop | Human observation |
+|---|---:|---:|---|
+| `akmal-svetlogorsk-7186` | reviewed | reviewed | Desktop split: large left poster/visual, right content, horizontal inline CTA. Mobile is a separate hero/card composition. |
+| `kinopokaz-borba-za-bruklin-kaliningrad-7052` | reviewed | reviewed | Desktop editorial: wide landscape hero and an independent stacked CTA card at right. |
+| `pechen-kaliningrad-7301` | reviewed | reviewed | Explicit portrait/square resolver state stays in the split layout with inline CTA. |
+| `nauka-vsegda-kstati-progulka-s-uchenym-kaliningrad-6996` | reviewed | reviewed | Typed illustrated no-image fallback is visible; calendar CTA remains available. |
+| `edit-piaf-na-balu-udachi-svetlogorsk-7048` | reviewed | reviewed | Desktop editorial hero/stacked CTA plus a companion board: one visibly larger poster at left and smaller remaining-photo previews at right. |
+
+The structural outlier `muzykalnoe-loto-matershinnoe-kaliningrad-6258` was
+also visible at both sizes and remained a split/document-or-unclassified-media
+observation; its visual width did not override the exact runtime family marker.
+
+No new blank/error/404 or viewport defect was found. The labs-preview-special
+mobile shell-only observation was reopened at original size and remains the
+same explicit lab conflict described above. Review is evidence only and does
+not approve merging, normalization or defragmentation.
