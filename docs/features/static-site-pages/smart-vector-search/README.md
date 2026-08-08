@@ -693,6 +693,8 @@ Workflow `.github/workflows/static-site-search-canary.yml` получает то
 prefix, сверяет exact target SHA и использует `auth.session_fixture`. Browser
 получает server-verified session + RLS probe; Android/iOS получают отдельный
 credential и callback в том же platform browser. Ни один job не читает mailbox.
+Resolver запускает в Fly image только доступный `python3`; checkout-local
+`.venv` не является частью production container contract.
 
 Перед remote launch static builder делает online SQLite snapshot, одним чтением
 копирует v2 Search receipt в snapshot-scoped immutable файл и тем же canonical

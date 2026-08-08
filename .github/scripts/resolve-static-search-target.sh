@@ -16,7 +16,7 @@ umask 077
 NO_COLOR=1 flyctl ssh console \
   --app "$FLY_APP_NAME" \
   --pty=false \
-  --command ".venv/bin/python scripts/request_static_site_build.py --db /data/db.sqlite --show-current-review" \
+  --command "python3 scripts/request_static_site_build.py --db /data/db.sqlite --show-current-review" \
   >"$raw_file"
 
 python3 - "$raw_file" "$parsed_file" <<'PY'

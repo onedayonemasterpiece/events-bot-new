@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- Fixed the GitHub Search target resolver to invoke the production image's
+  shipped `python3` runtime instead of a nonexistent `.venv/bin/python`, so the
+  canary reaches exact-target auth and Search rather than failing in Fly SSH.
+
 - Bound the Search corpus receipt to the exact immutable SQLite snapshot before
   a static Kaggle launch. Full-catalog revision drift now defers locally with a
   retryable vector-barrier result instead of wasting an 18-minute remote build

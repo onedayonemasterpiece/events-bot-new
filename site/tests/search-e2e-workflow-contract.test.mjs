@@ -10,6 +10,7 @@ const productionBuildUrl = new URL('../scripts/build-production.mjs', import.met
 const candidateBuildUrl = new URL('../scripts/build-secret-candidate.mjs', import.meta.url);
 const exporterUrl = new URL('../scripts/export-production-preview-data.py', import.meta.url);
 const browserRunnerUrl = new URL('../../.github/scripts/run-browser-static-search.mjs', import.meta.url);
+const targetResolverUrl = new URL('../../.github/scripts/resolve-static-search-target.sh', import.meta.url);
 
 test('Search workflow has independent no-mail schedules, L2 jobs and blocking post-deploy trigger', async () => {
   const source = await readFile(workflowUrl, 'utf8');
@@ -69,4 +70,10 @@ test('browser fixture sends its issued session through the owner RLS probe', asy
   assert.match(source, /protectedOwnerProbe\(\{ fetchImpl, userId, supabaseUrl, accessToken, publishableKey \}\)/u);
   assert.match(source, /apikey: publishableKey/u);
   assert.match(source, /authorization: `Bearer \$\{accessToken\}`/u);
+});
+
+test('target resolver uses the Python runtime shipped in the Fly image', async () => {
+  const source = await readFile(targetResolverUrl, 'utf8');
+  assert.match(source, /--command "python3 scripts\/request_static_site_build\.py/u);
+  assert.doesNotMatch(source, /\.venv\/bin\/python/u);
 });
