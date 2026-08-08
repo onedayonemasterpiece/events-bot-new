@@ -4,6 +4,24 @@ import { installSearchRuntimeProbe, snapshotSearchRuntimeProbe } from './runtime
 
 const cardsSelector = '[data-search-results] [data-event-card][data-event-id], [data-search-results] [data-search-vector-card][data-event-id]';
 
+export async function runRealWheelScroll({
+  readScrollY, lastCardVisible, wheel, wait, step, maxAttempts = 40,
+}) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    if (await readScrollY() === 0) break;
+    await wheel(-step);
+    await wait();
+  }
+  const before = await readScrollY();
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    if (await lastCardVisible()) break;
+    await wheel(step);
+    await wait();
+  }
+  const after = await readScrollY();
+  return { performed: true, delta_y: after - before, card_visible_after: await lastCardVisible() };
+}
+
 function snapshotResultsInPage() {
   const results = document.querySelector('[data-search-results]');
   const status = document.querySelector('[data-search-status]');
@@ -102,18 +120,20 @@ export async function createPlaywrightSearchAdapter(options = {}) {
     async realScrollResults() {
       const last = page.locator(cardsSelector).last();
       await last.waitFor({ state: 'attached', timeout: timeoutMs });
-      await page.keyboard.press('Home');
-      await page.waitForTimeout(100);
-      const before = await page.evaluate(() => scrollY);
       const viewport = page.viewportSize();
-      for (let attempt = 0; attempt < 5; attempt += 1) {
-        await page.mouse.wheel(0, Math.max(500, Math.floor((viewport?.height || 720) * 0.8)));
-        await page.waitForTimeout(80);
-        if (await last.isVisible() && await last.evaluate((node) => { const rect = node.getBoundingClientRect(); return rect.top < innerHeight && rect.bottom > 0; })) break;
-      }
-      const after = await page.evaluate(() => scrollY);
-      const cardVisible = await last.evaluate((node) => { const rect = node.getBoundingClientRect(); return rect.top < innerHeight && rect.bottom > 0; });
-      return { performed: true, delta_y: after - before, card_visible_after: cardVisible };
+      const step = Math.max(500, Math.floor((viewport?.height || 720) * 0.8));
+      // The query field deliberately keeps focus after Enter, so keyboard Home
+      // moves the textarea caret rather than the document. Use only physical
+      // wheel input here: first establish the top boundary, then keep scrolling
+      // until the final rendered card actually intersects the viewport. Five
+      // fixed steps were insufficient for eight real production cards.
+      return runRealWheelScroll({
+        readScrollY: () => page.evaluate(() => scrollY),
+        lastCardVisible: () => last.evaluate((node) => { const rect = node.getBoundingClientRect(); return rect.top < innerHeight && rect.bottom > 0; }),
+        wheel: (delta) => page.mouse.wheel(0, delta),
+        wait: () => page.waitForTimeout(80),
+        step,
+      });
     },
     async showMoreState() {
       const more = page.locator('[data-search-more]');

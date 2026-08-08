@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- Fixed browser Search acceptance to perform real wheel scrolling from the
+  document top until the final rendered card intersects the viewport; the
+  former fixed five-wheel limit failed against the real eight-card result set.
+
 - Fixed the unattended Search fixture's owner-scoped RLS probe to send the
   issued session bearer and publishable key through its fail-closed request
   validator, matching the live Supabase Data API contract.
