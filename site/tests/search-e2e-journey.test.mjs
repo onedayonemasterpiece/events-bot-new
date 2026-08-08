@@ -109,6 +109,16 @@ test('failed mobile scroll retains only a numeric/boolean gesture receipt for sa
     });
     return true;
   });
+  assert.throws(() => assertRealScroll({
+    performed: true, delta_y: 0, card_visible_after: false, gesture_count: 24,
+    last_gesture: { route: 'xcuitest_native_swipe', native_viewport_width: 393,
+      native_viewport_height: 852 },
+  }), (error) => {
+    assert.equal(error.searchReceipt.route, 'xcuitest_native_swipe');
+    assert.equal(error.searchReceipt.native_viewport_width, 393);
+    assert.equal(error.searchReceipt.native_viewport_height, 852);
+    return true;
+  });
 });
 
 test('semantic journey proves three varied queries, pagination, cache and zero-post validation', async () => {
@@ -179,12 +189,12 @@ test('journey is mechanics-neutral and mobile adapters own native keyboard/touch
   assert.match(mobile, /data-authorized-search.*is-authorized/su);
   assert.match(mobile, /driver\.keys\('\\uE007'\)/u);
   assert.match(mobile, /focusIosSafariWebInput/u);
-  assert.match(mobile, /performNativeTouchSwipe/u);
+  assert.match(mobile, /performNativeDocumentSwipe/u);
   assert.match(mobile, /allowUnsupported: platform === 'ios'/u);
   assert.match(mobile, /search_scroll_keyboard_dismiss/u);
   assert.doesNotMatch(mobile, /mobile: scroll(?:Gesture)?/u);
   assert.doesNotMatch(mobile, /const size = await driver\.getWindowSize\(\)/u);
-  assert.match(mobile, /gesture: \(\) => performNativeTouchSwipe/u);
+  assert.match(mobile, /gesture: \(\) => performNativeDocumentSwipe\(driver, \{ platform/u);
   assert.match(mobile, /connectionRetryTimeout: Number\(options\.connectionRetryTimeout \|\| 300_000\)/u);
   assert.match(mobile, /connectionRetryCount: 0/u);
   assert.doesNotMatch(mobile, /screenshot|pageSource|getPageSource|\bhar\b|trace|video/iu);

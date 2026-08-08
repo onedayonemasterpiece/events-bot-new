@@ -1,7 +1,7 @@
 import { installSearchRuntimeProbe, snapshotSearchRuntimeProbe } from './runtime-probe.mjs';
 import { buildAppiumSessionFailureReceipt } from '../../mobile-web/appium-startup-receipt.mjs';
 import { dismissNativeKeyboard, focusIosSafariWebInput, observeNativeKeyboard,
-  performNativeTouchSwipe, prepareIosSafariWebContext,
+  performNativeDocumentSwipe, prepareIosSafariWebContext,
   withNativeAppContext } from '../../mobile-web/appium-browser.mjs';
 
 const IOS_SEARCH_INPUT_LABELS = Object.freeze([
@@ -188,7 +188,7 @@ export async function createAppiumSearchAdapter(options = {}) {
       lifecycle.failure_stage = 'search_scroll';
       return runRealTouchScroll({
         readScrollY: () => driver.execute(() => scrollY),
-        gesture: () => performNativeTouchSwipe(driver, {
+        gesture: () => performNativeDocumentSwipe(driver, { platform,
           startXRatio: 0.5, startYRatio: 0.72,
           endXRatio: 0.5, endYRatio: 0.28, duration: 450,
         }),

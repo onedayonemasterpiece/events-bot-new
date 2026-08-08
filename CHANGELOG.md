@@ -75,11 +75,13 @@
 
 ### Fixed
 
-- Fixed iOS Search real-scroll acceptance after XCUITest `mobile: scroll`
-  acknowledged repeated native-control gestures without moving Safari's DOM.
-  Android Chrome and iOS Safari now share the same native-viewport W3C touch
-  primitive, restore WebView, and still require positive `scrollY` plus final
-  card visibility; the reusable mobile E2E skill records this boundary.
+- Fixed iOS Search real-scroll acceptance after both table-oriented XCUITest
+  `mobile: scroll` and Safari W3C pointer actions acknowledged repeated gestures
+  without moving WebKit DOM. Shared `performNativeDocumentSwipe` now preserves
+  Android's live-proven absolute W3C touch but routes iOS through XCUITest's
+  application-level native `mobile: swipe`; both restore WebView and still
+  require positive `scrollY` plus final-card visibility. The reusable mobile
+  E2E skill records the platform boundary and the two rejected no-op routes.
 
 - Raised the explicit Current UI graph evidence budget from the old 75 MiB
   default to a workflow-gated 90 MiB after the new portrait, no-image and

@@ -75,6 +75,14 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
   unchanged and the final card invisible. The command is a native table/control
   shortcut, not browser-document evidence; iOS Search now uses the same
   native-viewport W3C touch path already live-proven by Android.
+- 2026-08-08 follow-up iOS run `31277971410` disproved that cross-platform
+  assumption without weakening acceptance: `w3c_native_touch` returned success
+  24 times on the 393x852 native viewport, while Safari DOM delta remained zero
+  and the final card stayed invisible. The accepted OTP adapter already records
+  the same Safari/WebKit W3C delivery limitation. After the two no-op routes,
+  the next implementation was bound to the official XCUITest contract:
+  application-level `mobile: swipe` for a simple native swipe, while
+  table/collection `mobile: scroll` remains forbidden.
 
 - 2026-08-08 exact-main degraded browser journey полностью прошёл UI/Search
   контракт для трёх запросов, но GitHub job завершился красным после journey:
@@ -284,11 +292,12 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
   scenario because the following native scroll must still move the DOM and
   reveal the final card.
 - 2026-08-08 cross-platform browser-scroll correction: Android Chrome and iOS
-  Safari now share `performNativeTouchSwipe`; both resolve geometry in
-  `NATIVE_APP`, dispatch W3C touch actions, restore WebView and require positive
-  DOM movement plus final-card visibility. Neither UiAutomator2
-  `mobile: scrollGesture` nor XCUITest `mobile: scroll` can satisfy Search page
-  acceptance.
+  Safari now share the routing primitive `performNativeDocumentSwipe`; Android
+  dispatches absolute-coordinate W3C touch, while iOS uses the XCUITest
+  application-level native swipe because Safari did not receive W3C pointer
+  actions. Both restore WebView and require positive DOM movement plus
+  final-card visibility. Neither UiAutomator2 `mobile: scrollGesture` nor
+  XCUITest `mobile: scroll` can satisfy Search page acceptance.
 
 ## Follow-up Actions
 
@@ -312,6 +321,7 @@ Keep this record as the regression contract for static smart-search perceived ha
 For mobile Search, terminal acceptance additionally requires that input and
 scroll evidence cross the native/WebView boundary through
 `site/e2e/mobile-web/appium-browser.mjs`: exact native iOS input match + keyboard
-observation and a shared Android/iOS native W3C finger swipe + restored WebView
-`scrollY`. Feature-local copies, `mobile: scrollGesture` for Chrome document
-content, and `mobile: scroll` for Safari document content are regressions.
+observation and the shared platform-routed native document swipe + restored
+WebView `scrollY`. Feature-local copies, `mobile: scrollGesture` for Chrome
+document content, `mobile: scroll` for Safari document content, and Safari W3C
+pointer acknowledgement without DOM movement are regressions.
