@@ -8,10 +8,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-import private_events_mcp_telegram_adapter as telegram_adapter_module
 
+import private_events_mcp_telegram_adapter as telegram_adapter_module
 from private_events_mcp.social_workspace import (
-    ContentFeature,
+    EditorialSampleState,
     MediaAttachment,
     MediaRole,
     RichContent,
@@ -19,18 +19,16 @@ from private_events_mcp.social_workspace import (
     RichEntityKind,
     SocialAction,
     SocialActionIntent,
-    SocialItemKind,
     SocialPlatform,
     SocialReadAccess,
     SocialReadOperation,
     SocialReadPurpose,
     SocialReadRequest,
     SocialTargetKind,
-    EditorialSampleState,
     TargetLocator,
     TargetLocatorKind,
-    validate_capabilities,
     validate_action_status_response,
+    validate_capabilities,
     validate_editorial_sample_response,
     validate_read_request,
 )
@@ -43,7 +41,6 @@ from private_events_mcp_telegram_adapter import (
     TelegramWorkspaceAdapter,
     TelegramWorkspaceError,
 )
-
 
 NOW = datetime(2026, 8, 8, 12, 0, tzinfo=timezone.utc)
 SELF_REF = "tgt_savedmessages0001"
@@ -556,18 +553,18 @@ def content(text="hello", *, entities=(), media=()):
 
 
 def intent(action, **changes):
-    defaults = dict(
-        platform=SocialPlatform.TELEGRAM,
-        action=action,
-        idempotency_key=f"test-{action.value}-0001",
-        target_ref=None,
-        item_ref=None,
-        destination_target_ref=None,
-        content=None,
-        reaction=None,
-        schedule_at=None,
-        expected_revision=None,
-    )
+    defaults = {
+        "platform": SocialPlatform.TELEGRAM,
+        "action": action,
+        "idempotency_key": f"test-{action.value}-0001",
+        "target_ref": None,
+        "item_ref": None,
+        "destination_target_ref": None,
+        "content": None,
+        "reaction": None,
+        "schedule_at": None,
+        "expected_revision": None,
+    }
     defaults.update(changes)
     return SocialActionIntent(**defaults)
 
@@ -633,19 +630,19 @@ async def test_transport_classifies_channel_and_group_but_is_not_core_acceptance
         assert "id" not in resolved and "entity" not in resolved
 
 
-def test_core_exact_resolver_blocks_channel_group_before_adapter_integration():
-    with pytest.raises(Exception, match="must expect only user"):
-        validate_read_request(
-            {
-                "platform": "telegram",
-                "operation": "resolve_target",
-                "target_locator": {
-                    "kind": "profile_link",
-                    "value": "https://t.me/editorial",
-                },
-                "expected_target_kinds": ["channel"],
-            }
-        )
+def test_core_exact_resolver_accepts_one_bound_channel_after_integration():
+    request = validate_read_request(
+        {
+            "platform": "telegram",
+            "operation": "resolve_target",
+            "target_locator": {
+                "kind": "profile_link",
+                "value": "https://t.me/editorial",
+            },
+            "expected_target_kinds": ["channel"],
+        }
+    )
+    assert request.expected_target_kinds == (SocialTargetKind.CHANNEL,)
 
 
 @pytest.mark.asyncio

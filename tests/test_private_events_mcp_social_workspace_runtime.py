@@ -359,6 +359,7 @@ def test_auth_database_is_separate_and_event_database_is_untouched(tmp_path: Pat
     SocialWorkspaceRuntime(store=store, adapters={"telegram": FakeAdapter()},
                            encryption_key="unit-test-key-that-is-long-enough")
     assert event_db.read_bytes() == b"immutable-event-db-sentinel"
+    assert (tmp_path / "auth.sqlite").stat().st_mode & 0o777 == 0o600
 
 
 @pytest.mark.asyncio
@@ -495,6 +496,16 @@ async def test_approval_capabilities_are_hash_only_at_rest(runtime) -> None:
         service._hash(approval["approval_ref"]),
         service._hash(approval["approval_receipt"]),
     )
+    status = await service.status("preparation", prepared["preparation_ref"], context())
+    assert status["status"] == "approved"
+    committed = await service.commit(
+        {
+            "preparation_ref": prepared["preparation_ref"],
+            "action_digest": prepared["action_digest"],
+        },
+        context(),
+    )
+    assert committed["status"] == "succeeded"
 
 
 @pytest.mark.asyncio

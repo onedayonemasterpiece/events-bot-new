@@ -73,44 +73,79 @@ def main() -> int:
     client_secret = token("client_", 48)
     codex_client_id = token("codex-events-", 18)
     operator_token = token("operator_", 48)
+    social_approval_token = token("approval_", 48)
     signing_key = token("signing_", 64)
     endpoint = f"{args.base_url}/_private/{path_secret}/mcp"
     codex_endpoint = f"{args.base_url}/_private/{path_secret}/codex/mcp"
 
     chatgpt_scopes = ["events:read", "incidents:read", "operations:read"]
     if args.enable_chatgpt_social:
-        chatgpt_scopes.extend(
-            [
-                "telegram:read",
-                "telegram:publish",
-                "vk:read",
-                "vk:publish",
-                "offline_access",
-            ]
-        )
+        for platform in ("telegram", "vk"):
+            chatgpt_scopes.extend(
+                f"{platform}:{suffix}"
+                for suffix in (
+                    "discover",
+                    "read:public",
+                    "read:private",
+                    "read:dialogs",
+                    "dm:send",
+                    "post:publish",
+                    "edit",
+                    "delete",
+                    "forward",
+                    "reaction",
+                    "comment",
+                    "schedule",
+                    "story:read",
+                    "story:write",
+                    "analytics",
+                    "audience",
+                )
+            )
+        chatgpt_scopes.append("offline_access")
     chatgpt = {
         "name": "Events Bot — private production evidence",
         "description": (
-            "Event/incident analysis plus generic text read/publication for explicitly "
-            "allowlisted Telegram and VK channels"
+            "Event/incident analysis plus a typed Telegram/VK analyst and editorial "
+            "workspace with independent browser approval for mutations"
         ),
         "mcp_url": endpoint,
         "authentication": "OAuth",
         "oauth_client_id": client_id,
         "oauth_client_secret": client_secret,
         "bootstrap_operator_token": operator_token,
+        "social_approval_operator_token": social_approval_token,
         "oauth_scopes": chatgpt_scopes,
         "available_optional_scopes": [
             "offline_access",
-            "telegram:read",
-            "telegram:publish",
-            "vk:read",
-            "vk:publish",
+            *[
+                f"{platform}:{suffix}"
+                for platform in ("telegram", "vk")
+                for suffix in (
+                    "discover",
+                    "read:public",
+                    "read:private",
+                    "read:dialogs",
+                    "dm:send",
+                    "post:publish",
+                    "edit",
+                    "delete",
+                    "forward",
+                    "reaction",
+                    "comment",
+                    "schedule",
+                    "story:read",
+                    "story:write",
+                    "analytics",
+                    "audience",
+                )
+            ],
         ],
         "notes": [
             "The bootstrap operator token is entered once in the authorization browser page.",
             "ChatGPT receives short-lived access and rotating refresh tokens automatically.",
             "Rotate PRIVATE_EVENTS_MCP_OPERATOR_TOKEN after the first successful connection.",
+            "Never paste the social approval operator token into ChatGPT; enter it only on the server approval page.",
         ],
     }
     codex = {
@@ -141,6 +176,7 @@ def main() -> int:
         "PRIVATE_EVENTS_MCP_OAUTH_CLIENT_SECRET": client_secret,
         "PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID": codex_client_id,
         "PRIVATE_EVENTS_MCP_OPERATOR_TOKEN": operator_token,
+        "PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN": social_approval_token,
         "PRIVATE_EVENTS_MCP_SIGNING_KEY": signing_key,
         "PRIVATE_EVENTS_MCP_AUTH_DB_PATH": "/data/private-events-mcp-auth.sqlite",
         "PRIVATE_EVENTS_MCP_REPOSITORY_ROOT": "/app",

@@ -92,6 +92,7 @@ class PrivateEventsMCPConfig:
     universal_social_post_enabled: bool = False
     universal_social_edit_delete_enabled: bool = False
     universal_social_media_story_enabled: bool = False
+    social_approval_token: str = ""
     social_targets_json: str = ""
     social_ticket_ttl_seconds: int = 300
     social_provider_timeout_seconds: int = 12
@@ -180,6 +181,9 @@ class PrivateEventsMCPConfig:
                 "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED",
                 mcp_enabled=enabled,
             ),
+            social_approval_token=(
+                os.getenv("PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN") or ""
+            ).strip(),
             social_targets_json=(
                 os.getenv("PRIVATE_EVENTS_MCP_SOCIAL_TARGETS_JSON") or ""
             ).strip(),
@@ -317,6 +321,10 @@ class PrivateEventsMCPConfig:
             )
         if self.universal_social_enabled and not any(provider_flags):
             raise ValueError("universal social workspace requires at least one provider")
+        if self.universal_social_enabled and len(self.social_approval_token) < 32:
+            raise ValueError(
+                "PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN must contain at least 32 characters"
+            )
 
     @property
     def private_prefix(self) -> str:
@@ -341,6 +349,14 @@ class PrivateEventsMCPConfig:
     @property
     def about_path(self) -> str:
         return f"{self.private_prefix}/about"
+
+    @property
+    def social_approval_path(self) -> str:
+        return f"{self.private_prefix}/social/approve"
+
+    @property
+    def social_approval_url(self) -> str:
+        return f"{self.public_base_url}{self.social_approval_path}"
 
     @property
     def protected_resource_metadata_path(self) -> str:

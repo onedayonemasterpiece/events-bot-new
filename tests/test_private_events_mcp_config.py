@@ -53,6 +53,9 @@ def test_universal_social_flags_are_strictly_parented_and_provider_bound(
         PrivateEventsMCPConfig.from_env()
 
     monkeypatch.setenv("PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_TELEGRAM_ENABLED", "1")
+    monkeypatch.setenv(
+        "PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN", "approval_" + "a" * 48
+    )
     config = PrivateEventsMCPConfig.from_env()
     assert config.universal_social_enabled is True
     assert config.universal_social_telegram_enabled is True

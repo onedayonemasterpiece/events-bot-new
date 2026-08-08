@@ -66,6 +66,7 @@ def _install_access_log_redaction(config: PrivateEventsMCPConfig) -> None:
             config.oauth_client_secret,
             config.operator_token,
             config.signing_key,
+            config.social_approval_token,
         )
         if item
     )

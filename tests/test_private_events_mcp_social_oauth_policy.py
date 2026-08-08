@@ -35,7 +35,6 @@ from private_events_mcp.social_workspace import (
     required_scope_for_read,
 )
 
-
 _SOCIAL_SWITCH_ENV = {
     "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_ENABLED": "universal_social_enabled",
     "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_TELEGRAM_ENABLED": (
@@ -485,6 +484,9 @@ def test_social_kill_switches_default_off_and_parse_strictly(monkeypatch) -> Non
 
     for name in _SOCIAL_SWITCH_ENV:
         monkeypatch.setenv(name, "true")
+    monkeypatch.setenv(
+        "PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN", "approval_" + "a" * 48
+    )
     configured = PrivateEventsMCPConfig.from_env()
     assert all(getattr(configured, field) for field in _SOCIAL_SWITCH_ENV.values())
 

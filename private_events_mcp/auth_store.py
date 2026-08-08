@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import threading
 import time
@@ -60,6 +61,7 @@ class OAuthStateStore:
         self._lock = threading.Lock()
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._init_schema()
+        os.chmod(self.path, 0o600)
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, timeout=1.0, isolation_level=None)
@@ -200,6 +202,11 @@ class OAuthStateStore:
                 );
                 CREATE INDEX IF NOT EXISTS ix_social_workspace_ref_expiry
                     ON social_workspace_ref(expires_at);
+                CREATE TABLE IF NOT EXISTS social_workspace_ref_preview (
+                    ref_hash TEXT PRIMARY KEY,
+                    preview_json TEXT NOT NULL,
+                    created_at INTEGER NOT NULL
+                );
 
                 CREATE TABLE IF NOT EXISTS social_workspace_sample (
                     sample_hash TEXT PRIMARY KEY,
@@ -355,6 +362,24 @@ class OAuthStateStore:
         conn.execute(
             "DELETE FROM social_publish_daily_budget WHERE budget_day < ?",
             (old_day,),
+        )
+        conn.execute("DELETE FROM social_workspace_ref WHERE expires_at < ?", (now,))
+        conn.execute(
+            """DELETE FROM social_workspace_ref_preview
+               WHERE ref_hash NOT IN (SELECT ref_hash FROM social_workspace_ref)"""
+        )
+        conn.execute("DELETE FROM social_workspace_sample WHERE expires_at < ?", (now,))
+        conn.execute(
+            "DELETE FROM social_workspace_approval WHERE expires_at < ?",
+            (now - 86400,),
+        )
+        conn.execute(
+            "DELETE FROM social_workspace_preparation WHERE created_at < ?",
+            (now - 90 * 86400,),
+        )
+        conn.execute(
+            "DELETE FROM social_workspace_operation WHERE created_at < ?",
+            (now - 90 * 86400,),
         )
 
     def create_authorization_code(

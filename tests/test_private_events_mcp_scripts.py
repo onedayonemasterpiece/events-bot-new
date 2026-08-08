@@ -8,11 +8,11 @@ from pathlib import Path
 
 import pytest
 
+from scripts.apply_private_events_mcp_overlay import patch_main
 from scripts.generate_private_events_mcp_credentials import (
     create_private_output_dir,
     write_private_text,
 )
-from scripts.apply_private_events_mcp_overlay import patch_main
 from scripts.smoke_private_events_mcp import sanitized_endpoint_receipt
 
 
@@ -39,9 +39,11 @@ def test_generator_stdout_redacts_private_endpoint(tmp_path: Path) -> None:
     private_url = generated["chatgpt"]["mcp_url"]
     codex_url = generated["codex"]["mcp_url"]
     path_secret = generated["deploy"]["PRIVATE_EVENTS_MCP_PATH_SECRET"]
+    approval_token = generated["deploy"]["PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN"]
     assert private_url not in completed.stdout
     assert codex_url not in completed.stdout
     assert path_secret not in completed.stdout
+    assert approval_token not in completed.stdout
     assert receipt["public_origin"] == "https://events.example"
     assert receipt["mcp_path"] == "/_private/<redacted>/mcp"
     assert len(receipt["endpoint_fingerprint"]) == 12
@@ -71,8 +73,10 @@ def test_generator_stdout_redacts_private_endpoint(tmp_path: Path) -> None:
             encoding="utf-8"
         )
     )
-    assert "telegram:publish" in social["chatgpt"]["oauth_scopes"]
-    assert "vk:publish" in social["chatgpt"]["oauth_scopes"]
+    assert "telegram:post:publish" in social["chatgpt"]["oauth_scopes"]
+    assert "telegram:dm:send" in social["chatgpt"]["oauth_scopes"]
+    assert "vk:story:write" in social["chatgpt"]["oauth_scopes"]
+    assert "telegram:publish" not in social["chatgpt"]["oauth_scopes"]
 
 
 def test_smoke_receipt_redacts_private_endpoint() -> None:
@@ -132,5 +136,7 @@ def test_overlay_inserts_enabled_only_provider_adapters_idempotently(tmp_path: P
     assert "PrivateEventsMCPConfig.from_env()" in content
     assert "if private_mcp_config.enabled:" in content
     assert "build_private_events_mcp_social_adapters(vk_api)" in content
+    assert "build_private_events_mcp_workspace_adapters" in content
+    assert "social_workspace_adapters=private_mcp_workspace_adapters" in content
     assert content.count("attach_private_events_mcp(") == 1
     assert patch_main(app_module) is False

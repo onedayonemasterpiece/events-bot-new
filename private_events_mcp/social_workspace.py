@@ -1852,6 +1852,7 @@ SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA: Mapping[str, Any] = {
             "type": "array", "minItems": 1, "maxItems": 1, "uniqueItems": True,
             "items": {"type": "string", "enum": sorted(SOCIAL_WORKSPACE_SCOPES)},
         },
+        "approval_url": {"type": "string", "format": "uri", "maxLength": 1000},
     },
 }
 
@@ -1869,6 +1870,22 @@ SOCIAL_WORKSPACE_COMMIT_SCHEMA: Mapping[str, Any] = {
         },
         "approval_receipt": {
             "type": "string", "pattern": r"^arc_[A-Za-z0-9_-]{24,160}$"
+        },
+        "action_digest": {"type": "string", "pattern": r"^[a-f0-9]{64}$"},
+    },
+}
+
+# Public MCP commit consumes approval state created by the operator-authenticated
+# browser page. Approval credentials never enter the model context.
+SOCIAL_WORKSPACE_MCP_COMMIT_SCHEMA: Mapping[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["preparation_ref", "action_digest"],
+    "properties": {
+        "preparation_ref": {
+            "type": "string",
+            "pattern": r"^prep_[A-Za-z0-9_-]{24,160}$",
         },
         "action_digest": {"type": "string", "pattern": r"^[a-f0-9]{64}$"},
     },
@@ -2275,6 +2292,7 @@ __all__ = [
     "SOCIAL_WORKSPACE_EDITORIAL_SAMPLE_SCHEMA",
     "SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA",
+    "SOCIAL_WORKSPACE_MCP_COMMIT_SCHEMA",
     "SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_PREPARE_SCHEMA",
     "SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA",

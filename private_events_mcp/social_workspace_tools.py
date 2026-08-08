@@ -14,10 +14,10 @@ from .social_workspace import (
     SOCIAL_WORKSPACE_AUDIENCE_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_CAPABILITIES_SCHEMA,
     SOCIAL_WORKSPACE_COMMIT_OUTPUT_SCHEMA,
-    SOCIAL_WORKSPACE_COMMIT_SCHEMA,
     SOCIAL_WORKSPACE_EDITORIAL_SAMPLE_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_MCP_COMMIT_SCHEMA,
     SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_PREPARE_SCHEMA,
     SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA,
@@ -411,7 +411,7 @@ def build_social_workspace_tools(
                  read_only=False, idempotent=True, **common),
         ToolSpec("social_action_commit", "Commit approved social action",
                  "Atomically consume a server approval receipt before the sole provider attempt.",
-                 SOCIAL_WORKSPACE_COMMIT_SCHEMA, _combined_output(
+                 SOCIAL_WORKSPACE_MCP_COMMIT_SCHEMA, _combined_output(
                      SOCIAL_WORKSPACE_COMMIT_OUTPUT_SCHEMA,
                      SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA,
                  ),

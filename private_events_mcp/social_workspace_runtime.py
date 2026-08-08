@@ -20,6 +20,7 @@ from collections.abc import Mapping
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from typing import Any, Protocol
+from urllib.parse import urlencode
 
 from .auth_store import OAuthStateStore
 from .social_workspace import (
@@ -142,6 +143,7 @@ class SocialWorkspaceRuntime:
         budget_dimension_limits: Mapping[str, Mapping[str, int]] | None = None,
         circuit_failure_threshold: int = 3,
         circuit_cooldown_seconds: int = 60,
+        approval_url_base: str | None = None,
         clock: Any = time.time,
     ) -> None:
         if not isinstance(store, OAuthStateStore):
@@ -182,6 +184,11 @@ class SocialWorkspaceRuntime:
             self._budget_dimension_limits[metric] = values
         self.circuit_failure_threshold = max(1, int(circuit_failure_threshold))
         self.circuit_cooldown_seconds = max(1, int(circuit_cooldown_seconds))
+        if approval_url_base is not None and not approval_url_base.startswith(
+            ("https://", "http://127.0.0.1", "http://localhost")
+        ):
+            raise ValueError("approval_url_base must be HTTPS or local HTTP")
+        self.approval_url_base = approval_url_base
         self._clock = clock
 
     def _now(self) -> int:
@@ -286,6 +293,27 @@ class SocialWorkspaceRuntime:
         if row is None:
             raise SocialWorkspaceRuntimeError("opaque reference is expired or not bound")
         return str(row["platform"])
+
+    def _store_target_preview(self, public_ref: str, value: Mapping[str, Any]) -> None:
+        allowed = {
+            key: value[key]
+            for key in (
+                "platform",
+                "target_ref",
+                "kind",
+                "display_name",
+                "canonical_handle",
+                "profile_link",
+            )
+            if key in value
+        }
+        with self.store._lock, self.store._connect() as conn:
+            conn.execute(
+                """INSERT INTO social_workspace_ref_preview(ref_hash,preview_json,created_at)
+                   VALUES(?,?,?) ON CONFLICT(ref_hash) DO UPDATE SET
+                   preview_json=excluded.preview_json,created_at=excluded.created_at""",
+                (self._hash(public_ref), _json(allowed), self._now()),
+            )
 
     def _audit(
         self, principal: RuntimePrincipal, *, platform: str | None, operation: str,
@@ -746,6 +774,7 @@ class SocialWorkspaceRuntime:
             safe["trust"] = "untrusted_external_data"
             safe["is_exact_match"] = True
             validate_resolved_target_preview(request, safe)
+            self._store_target_preview(str(safe["target_ref"]), safe)
             size = len(_json(safe).encode())
             if size > self.response_cap_bytes:
                 raise SocialWorkspaceRuntimeError("response cap exceeded")
@@ -964,8 +993,9 @@ class SocialWorkspaceRuntime:
                     reason="awaiting_approval", target_ref=intent.target_ref, action_digest=digest)
         return self._preparation_result(prep, intent, digest, expires)
 
-    @staticmethod
-    def _preparation_result(prep: str, intent: SocialActionIntent, digest: str, expires: int) -> dict[str, Any]:
+    def _preparation_result(
+        self, prep: str, intent: SocialActionIntent, digest: str, expires: int
+    ) -> dict[str, Any]:
         result = {"preparation_ref": prep, "action": intent.action.value,
                   "status": SocialActionStatus.AWAITING_HUMAN_APPROVAL.value,
                   "action_digest": digest,
@@ -976,7 +1006,71 @@ class SocialWorkspaceRuntime:
             result["target_ref"] = intent.target_ref
         if intent.item_ref is not None:
             result["item_ref"] = intent.item_ref
+        if self.approval_url_base:
+            result["approval_url"] = self.approval_url_base + "?" + urlencode(
+                {"preparation_ref": prep, "action_digest": digest}
+            )
         return result
+
+    def approval_preview(
+        self, *, preparation_ref: str, action_digest: str
+    ) -> dict[str, Any]:
+        """Return the exact human preview after the HTTP layer authenticates operator."""
+
+        now = self._now()
+        with self.store._lock, self.store._connect() as conn:
+            row = conn.execute(
+                """SELECT * FROM social_workspace_preparation
+                   WHERE preparation_hash=? AND action_digest=? AND expires_at>?""",
+                (self._hash(preparation_ref), action_digest, now),
+            ).fetchone()
+            if row is None:
+                raise SocialWorkspaceRuntimeError("preparation is expired or unknown")
+            intent = self._intent_from_row(row)
+
+            def target_preview(ref: str | None) -> dict[str, Any] | None:
+                if ref is None:
+                    return None
+                preview = conn.execute(
+                    "SELECT preview_json FROM social_workspace_ref_preview WHERE ref_hash=?",
+                    (self._hash(ref),),
+                ).fetchone()
+                return json.loads(preview["preview_json"]) if preview else None
+
+            target = target_preview(intent.target_ref)
+            destination = target_preview(intent.destination_target_ref)
+        content = None
+        if intent.content is not None:
+            content = {
+                "text": intent.content.text,
+                "entities": [asdict(item) for item in intent.content.entities],
+                "media": [
+                    {
+                        "role": item.role.value,
+                        "asset_fingerprint": self._hash(item.asset_ref)[:12],
+                        "alt_text": item.alt_text,
+                        "spoiler": item.spoiler,
+                    }
+                    for item in intent.content.media
+                ],
+            }
+        return {
+            "platform": intent.platform.value,
+            "action": intent.action.value,
+            "action_digest": action_digest,
+            "target": target or {"target_ref": intent.target_ref},
+            "destination_target": destination
+            or (
+                {"target_ref": intent.destination_target_ref}
+                if intent.destination_target_ref is not None
+                else None
+            ),
+            "item_ref": intent.item_ref,
+            "content": content,
+            "reaction": intent.reaction,
+            "schedule_at": intent.schedule_at,
+            "expires_at": _now_rfc3339(int(row["expires_at"])),
+        }
 
     def approve_preparation(
         self, *, preparation_ref: str, operator_principal: str, operator_nonce: str,
@@ -1017,6 +1111,10 @@ class SocialWorkspaceRuntime:
                      prep["resource_hash"], prep["target_ref_hash"], prep["action_digest"],
                      self._hash(operator_principal), nonce_hash, expires, now),
                 )
+                conn.execute(
+                    "UPDATE social_workspace_preparation SET status=? WHERE preparation_hash=?",
+                    (SocialActionStatus.APPROVED.value, self._hash(preparation_ref)),
+                )
                 conn.execute("COMMIT")
                 return {"approval_ref": approval, "approval_receipt": receipt}
             except Exception:
@@ -1031,13 +1129,17 @@ class SocialWorkspaceRuntime:
         self, payload: Mapping[str, Any], context: ToolCallContext
     ) -> dict[str, Any]:
         principal = RuntimePrincipal.from_context(context)
-        required = {"preparation_ref", "approval_ref", "approval_receipt", "action_digest"}
-        if set(payload) != required:
+        browser_approved = set(payload) == {"preparation_ref", "action_digest"}
+        credential_approved = set(payload) == {
+            "preparation_ref",
+            "approval_ref",
+            "approval_receipt",
+            "action_digest",
+        }
+        if not browser_approved and not credential_approved:
             self._audit(principal, platform=None, operation="commit", outcome="denied", reason="invalid_commit_shape")
-            raise SocialWorkspaceRuntimeError("commit requires exact approval fields")
+            raise SocialWorkspaceRuntimeError("commit requires exact browser-approved fields")
         prep_ref = str(payload["preparation_ref"])
-        approval_ref = str(payload["approval_ref"])
-        receipt = str(payload["approval_receipt"])
         digest = str(payload["action_digest"])
         now = self._now()
         client, subject, resource = self._binding(principal)
@@ -1045,7 +1147,22 @@ class SocialWorkspaceRuntime:
             conn.execute("BEGIN IMMEDIATE")
             try:
                 prep = conn.execute("SELECT * FROM social_workspace_preparation WHERE preparation_hash=?", (self._hash(prep_ref),)).fetchone()
-                approval = conn.execute("SELECT * FROM social_workspace_approval WHERE approval_hash=? AND receipt_hash=?", (self._hash(approval_ref), self._hash(receipt))).fetchone()
+                if browser_approved:
+                    approval = conn.execute(
+                        """SELECT * FROM social_workspace_approval
+                           WHERE preparation_hash=? AND action_digest=? AND consumed_at IS NULL
+                           ORDER BY created_at DESC LIMIT 1""",
+                        (self._hash(prep_ref), digest),
+                    ).fetchone()
+                else:
+                    approval = conn.execute(
+                        """SELECT * FROM social_workspace_approval
+                           WHERE approval_hash=? AND receipt_hash=?""",
+                        (
+                            self._hash(str(payload["approval_ref"])),
+                            self._hash(str(payload["approval_receipt"])),
+                        ),
+                    ).fetchone()
                 if prep is None or approval is None:
                     raise SocialWorkspaceRuntimeError("approval or preparation is invalid")
                 expected_binding = (client, subject, resource, digest, self._hash(prep_ref), prep["target_ref_hash"])
@@ -1066,7 +1183,11 @@ class SocialWorkspaceRuntime:
                     intent.action.value, "media",
                     len(intent.content.media) if intent.content else 0, now,
                 )
-                changed = conn.execute("UPDATE social_workspace_approval SET consumed_at=? WHERE approval_hash=? AND consumed_at IS NULL", (now, self._hash(approval_ref))).rowcount
+                changed = conn.execute(
+                    """UPDATE social_workspace_approval SET consumed_at=?
+                       WHERE approval_hash=? AND consumed_at IS NULL""",
+                    (now, approval["approval_hash"]),
+                ).rowcount
                 if changed != 1:
                     raise SocialWorkspaceRuntimeError("approval receipt was already consumed")
                 operation = "op_" + secrets.token_urlsafe(24)
