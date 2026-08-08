@@ -30,6 +30,19 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-08 the new cross-platform harness completed a real browser vector
+  journey on the working immutable candidate for all three regression queries:
+  one POST per submit, eight response IDs mapped to eight rendered cards, real
+  scrolling, pagination/deduplication, cache repeat and typed-empty validation
+  with zero POST all passed. Evidence was sanitized and the auth state removed.
+- 2026-08-08 the first exact-current-SHA candidate reached the final production
+  packaging gate but failed because `build:secret-candidate` correctly required
+  Search catalog/corpus revisions. Root cause: the dedicated Fly vector sync
+  report computed those revisions and complete coverage, but its v1 durable
+  receipt discarded them and the Kaggle handoff never packaged the receipt.
+  The repair upgrades that owner receipt to v2 and hands it to Kaggle without
+  re-enabling duplicate vector writes in the static builder.
+
 - 2026-08-07 recovery audit: public `/poisk/` still returned Object Storage 404,
   while the durable accepted immutable candidate resolved to build
   `production-secret-20260807T213802-a8a9b11e`, repo SHA

@@ -1096,11 +1096,15 @@ def test_add_related_01_02_03_04_vector_barrier_and_optional_base_contract(tmp_p
     receipt.write_text(
         json.dumps(
             {
-                "schema_version": "event_vector_sync_receipt_v1",
+                "schema_version": "event_vector_sync_receipt_v2",
                 "status": "complete",
                 "complete": True,
+                "catalog_revision": "c" * 64,
+                "corpus_revision": "a" * 64,
+                "search_document_revision": "a" * 64,
                 "search_v3_hash": "a" * 64,
                 "related_v1_hash": related_hash,
+                "coverage": {"status": "complete"},
                 "event_revisions": {"1": "revision-1"},
                 "run_id": "projection-1",
             }
@@ -1113,11 +1117,15 @@ def test_add_related_01_02_03_04_vector_barrier_and_optional_base_contract(tmp_p
     malformed.write_text(
         json.dumps(
             {
-                "schema_version": "event_vector_sync_receipt_v1",
+                "schema_version": "event_vector_sync_receipt_v2",
                 "status": "complete",
                 "complete": True,
+                "catalog_revision": "c" * 64,
+                "corpus_revision": "a" * 64,
+                "search_document_revision": "a" * 64,
                 "search_v3_hash": "not-a-corpus-hash",
                 "related_v1_hash": related_hash,
+                "coverage": {"status": "complete"},
                 "event_revisions": {"1": "revision-1"},
             }
         ),

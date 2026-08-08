@@ -30,7 +30,7 @@ ROOT = Path(__file__).resolve().parent
 LOCAL_TZ = ZoneInfo("Europe/Kaliningrad")
 _SYNC_LOCK = asyncio.Lock()
 DEFAULT_RECEIPT_PATH = Path("/data/event_vector_sync_receipt.json")
-RECEIPT_SCHEMA_VERSION = "event_vector_sync_receipt_v1"
+RECEIPT_SCHEMA_VERSION = "event_vector_sync_receipt_v2"
 
 
 def _env_int(name: str, default: int, *, minimum: int = 0) -> int:
@@ -221,9 +221,22 @@ async def run_event_vector_sync(
                     run_id=ops_run_id,
                 )
                 report = json.loads(report_path.read_text(encoding="utf-8"))
-                for hash_key in ("search_v3_hash", "related_v1_hash"):
+                for hash_key in (
+                    "catalog_revision",
+                    "corpus_revision",
+                    "search_document_revision",
+                    "search_v3_hash",
+                    "related_v1_hash",
+                ):
                     if not re.fullmatch(r"[0-9a-f]{64}", str(report.get(hash_key) or "")):
                         raise RuntimeError(f"event vector report missing valid {hash_key}")
+                if report["corpus_revision"] != report["search_v3_hash"]:
+                    raise RuntimeError("event vector report corpus/search_v3 revision mismatch")
+                if report["search_document_revision"] != report["corpus_revision"]:
+                    raise RuntimeError("event vector report search-document revision mismatch")
+                coverage = report.get("coverage")
+                if not isinstance(coverage, dict) or coverage.get("status") != "complete":
+                    raise RuntimeError("event vector report coverage is not complete")
 
             receipt_path = Path(
                 (os.getenv("EVENT_VECTOR_SYNC_RECEIPT_PATH") or "").strip()
@@ -240,8 +253,12 @@ async def run_event_vector_sync(
                 "embedding_dim": report.get("embedding_dim"),
                 "document_kinds": report.get("document_kinds") or ["search_v3", "related_v1"],
                 "events": int(report.get("events") or 0),
+                "catalog_revision": report.get("catalog_revision"),
+                "corpus_revision": report.get("corpus_revision"),
+                "search_document_revision": report.get("search_document_revision"),
                 "search_v3_hash": report.get("search_v3_hash"),
                 "related_v1_hash": report.get("related_v1_hash"),
+                "coverage": report.get("coverage"),
                 "event_revisions": event_revisions,
             }
             await asyncio.to_thread(_atomic_write_json, receipt_path, receipt)
@@ -265,6 +282,10 @@ async def run_event_vector_sync(
                 "stale_event_ids": report.get("stale_event_ids") or [],
                 "search_v3_hash": report.get("search_v3_hash"),
                 "related_v1_hash": report.get("related_v1_hash"),
+                "catalog_revision": report.get("catalog_revision"),
+                "corpus_revision": report.get("corpus_revision"),
+                "search_document_revision": report.get("search_document_revision"),
+                "coverage_status": (report.get("coverage") or {}).get("status"),
                 "receipt_path": str(receipt_path),
                 "event_revisions_count": len(event_revisions),
             }

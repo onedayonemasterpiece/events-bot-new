@@ -23137,6 +23137,7 @@ def _static_site_build_kaggle_command(
     adopt_existing: bool = False,
     expected_dataset_ref: str | None = None,
     related_corpus_revision: str | None = None,
+    search_corpus_receipt_path: str | None = None,
 ) -> list[str]:
     related_mode = (os.getenv("STATIC_SITE_RELATED_MODE") or "sparse").strip().lower() or "sparse"
     if related_mode not in {"sparse", "pgvector", "bge"}:
@@ -23236,6 +23237,8 @@ def _static_site_build_kaggle_command(
     ]
     if current_datetime:
         cmd.extend(["--current-datetime", current_datetime])
+    if search_corpus_receipt_path:
+        cmd.extend(["--search-corpus-receipt", search_corpus_receipt_path])
     if input_fingerprint:
         cmd.extend(["--input-fingerprint", input_fingerprint])
     if profile == "production-candidate":
@@ -24120,6 +24123,9 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         (os.getenv("STATIC_SITE_VECTOR_RECEIPT_PATH") or "").strip() or None,
     )
     related_corpus_revision = str(vector_evidence.get("related_v1_hash") or "").strip()
+    search_corpus_receipt_path = (
+        (os.getenv("STATIC_SITE_VECTOR_RECEIPT_PATH") or "").strip() or None
+    )
     # ADD-BUILD-08: the runner only ever receives an immutable online-backup
     # snapshot. The live DB remains a separate status-ledger connection.
     snapshot_root = Path(
@@ -24384,6 +24390,11 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
             candidate_token=candidate_token,
             profile="production-candidate",
             related_corpus_revision=related_corpus_revision,
+            search_corpus_receipt_path=(
+                search_corpus_receipt_path
+                if _env_flag("STATIC_SITE_SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH")
+                else None
+            ),
         )
         logging.info(
             "static_site_build: launching Kaggle builder owner_event_id=%s build_id=%s limit=%s related_mode=%s sync_pgvector=%s gemma_verify=%s",

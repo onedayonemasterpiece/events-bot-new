@@ -401,6 +401,24 @@ def test_kaggle_runner_and_builder_forward_related_corpus_revision(
     dataset.mkdir()
     staged_site = tmp_path / "staged-site"
     staged_site.mkdir()
+    search_receipt = tmp_path / "event-vector-receipt.json"
+    search_receipt.write_text(
+        json.dumps(
+            {
+                "schema_version": "event_vector_sync_receipt_v2",
+                "status": "complete",
+                "complete": True,
+                "catalog_revision": "a" * 64,
+                "corpus_revision": "b" * 64,
+                "search_document_revision": "b" * 64,
+                "search_v3_hash": "b" * 64,
+                "related_v1_hash": revision,
+                "coverage": {"status": "complete"},
+                "event_revisions": {"42": "event-revision"},
+            }
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(runner, "KERNEL_SRC", kernel_src)
     monkeypatch.setattr(runner, "copy_tree", lambda *_args: None)
     monkeypatch.setattr(runner, "prepare_site_source", lambda *_args: staged_site)
@@ -436,6 +454,7 @@ def test_kaggle_runner_and_builder_forward_related_corpus_revision(
         public_yandex_auth_provider="custom:yandex",
         secret_candidate_artifact_research=True,
         secret_candidate_require_authorized_search=True,
+        search_corpus_receipt=str(search_receipt),
         export_in_kaggle=False,
         db="",
         snapshot_manifest="",
@@ -458,6 +477,11 @@ def test_kaggle_runner_and_builder_forward_related_corpus_revision(
     assert config["related_corpus_revision"] == revision
     assert config["secret_candidate_artifact_research"] is True
     assert config["secret_candidate_require_authorized_search"] is True
+    assert config["search_corpus_receipt_filename"] == "event-search-corpus-receipt.json"
+    assert json.loads(
+        (dataset / "event-search-corpus-receipt.json").read_text(encoding="utf-8")
+    )["catalog_revision"] == "a" * 64
+    assert config["sync_pgvector_vectors"] is False
     assert config["public_personalization_supabase_relay_url"] == "https://relay.example.test"
 
     builder_path = (
@@ -642,6 +666,7 @@ def test_add_build_08_production_candidate_binds_snapshot_repo_run_and_secret() 
         input_fingerprint="f" * 64,
         script_path="/repo/scripts/run_static_site_builder_kaggle.py",
         status_callback_url="https://events-bot.example/internal/kaggle/run-event",
+        search_corpus_receipt_path="/data/event_vector_sync_receipt.json",
     )
     assert _arg_after(cmd, "--profile") == "production-candidate"
     assert _arg_after(cmd, "--catalog-mode") == "full"
@@ -651,6 +676,8 @@ def test_add_build_08_production_candidate_binds_snapshot_repo_run_and_secret() 
     assert "--candidate-token=" + "-" + "A" * 42 in cmd
     assert _arg_after(cmd, "--current-datetime") == "2026-07-17T00:00:00+02:00"
     assert _arg_after(cmd, "--input-fingerprint") == "f" * 64
+    assert _arg_after(cmd, "--search-corpus-receipt") == "/data/event_vector_sync_receipt.json"
+    assert "--sync-pgvector-vectors" not in cmd
 
 
 def test_add_build_08_recovery_command_never_pushes_and_binds_dataset() -> None:

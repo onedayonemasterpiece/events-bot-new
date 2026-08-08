@@ -160,6 +160,16 @@ not permit an early exit after the first document. A zero-call
 `--require-complete` audit is green only when every requested document kind has
 an existing embedding with the current text hash.
 
+The static Search release uses the dedicated vector owner's durable
+`event_vector_sync_receipt_v2`, not a second vector write inside Kaggle. The
+receipt binds `catalog_revision`, `corpus_revision`,
+`search_document_revision`, the two document-kind corpus hashes and complete
+projection coverage. An authorized secret candidate receives this non-secret
+receipt through its private immutable input dataset and fails closed unless its
+exported catalog revision matches. Production therefore keeps
+`STATIC_SITE_SYNC_PGVECTOR_VECTORS=0` while still publishing exact Search
+revision evidence.
+
 Search progress has a single owner: backend NDJSON stages. The old client-side
 28/55/74/92% timers are removed. Until the first frame the adjacent semantic
 progressbar is indeterminate; after that its value and stage rank are monotonic,

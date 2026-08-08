@@ -52,6 +52,8 @@ test('immutable candidate binds the authoritative complete Search projection rev
   assert.match(exporter, /--require-complete/u);
   assert.match(exporter, /event-search-corpus-receipt\.json/u);
   assert.match(production, /search_revisions/u);
+  assert.match(production, /event_vector_sync_receipt_v2/u);
+  assert.match(production, /Search corpus revision identities disagree/u);
   assert.match(production, /Search corpus\/catalog revision mismatch/u);
   assert.match(candidate, /Authorized Search candidate requires complete catalog\/corpus revisions/u);
   assert.match(candidate, /search_revisions: productionManifest\.search_revisions/u);

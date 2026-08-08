@@ -1797,11 +1797,29 @@ def validate_vector_barrier(request_payload: Mapping[str, Any], receipt_path: st
         raise StaticSitePermanentError(f"vector_barrier_receipt_invalid:{exc}") from exc
     if receipt.get("status") not in {"complete", "success"} or receipt.get("complete") is False:
         raise StaticSiteRetryableError("vector_barrier_incomplete")
-    if receipt.get("schema_version") != "event_vector_sync_receipt_v1":
+    if receipt.get("schema_version") != "event_vector_sync_receipt_v2":
+        # The vector owner upgrades this durable receipt independently. Treat
+        # an otherwise-complete v1 as pending, not as a poisoned immutable
+        # static request, so the outbox can retry after the next projection.
+        if receipt.get("schema_version") == "event_vector_sync_receipt_v1":
+            raise StaticSiteRetryableError("vector_barrier_receipt_v2_pending")
         raise StaticSitePermanentError("vector_barrier_receipt_schema_mismatch")
-    for key in ("search_v3_hash", "related_v1_hash"):
+    for key in (
+        "catalog_revision",
+        "corpus_revision",
+        "search_document_revision",
+        "search_v3_hash",
+        "related_v1_hash",
+    ):
         if not re.fullmatch(r"[0-9a-f]{64}", str(receipt.get(key) or "")):
             raise StaticSitePermanentError(f"vector_barrier_hash_invalid:{key}")
+    if receipt.get("corpus_revision") != receipt.get("search_v3_hash"):
+        raise StaticSitePermanentError("vector_barrier_corpus_revision_mismatch")
+    if receipt.get("search_document_revision") != receipt.get("corpus_revision"):
+        raise StaticSitePermanentError("vector_barrier_search_document_revision_mismatch")
+    coverage = receipt.get("coverage")
+    if not isinstance(coverage, Mapping) or coverage.get("status") != "complete":
+        raise StaticSiteRetryableError("vector_barrier_coverage_incomplete")
     for key in ("expected_search_v3_hash", "expected_related_v1_hash"):
         expected = barrier.get(key)
         actual = receipt.get(key.removeprefix("expected_"))
@@ -1816,6 +1834,11 @@ def validate_vector_barrier(request_payload: Mapping[str, Any], receipt_path: st
         "status": "complete",
         "required": True,
         "projection_run_id": receipt.get("run_id") or receipt.get("projection_run_id"),
+        "receipt_schema": receipt.get("schema_version"),
+        "catalog_revision": receipt.get("catalog_revision"),
+        "corpus_revision": receipt.get("corpus_revision"),
+        "search_document_revision": receipt.get("search_document_revision"),
+        "coverage_status": coverage.get("status"),
         "search_v3_hash": receipt.get("search_v3_hash"),
         "related_v1_hash": receipt.get("related_v1_hash"),
     }
