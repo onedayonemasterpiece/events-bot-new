@@ -343,7 +343,16 @@ class FakeClient:
     async def get_entity(self, value):
         for binding in self.refs.targets.values():
             entity = binding.entity
-            if value in {getattr(entity, "id", None), getattr(entity, "username", None)}:
+            signed_group_id = (
+                -entity.id
+                if binding.kind is SocialTargetKind.GROUP
+                else None
+            )
+            if value in {
+                getattr(entity, "id", None),
+                getattr(entity, "username", None),
+                signed_group_id,
+            }:
                 return entity
         raise LookupError("native secret 998877")
 
@@ -547,13 +556,13 @@ async def test_transport_classifies_channel_and_group_but_is_not_core_acceptance
     adapter, _, _, _ = harness
     for value, kind in (
         ("https://t.me/editorial", SocialTargetKind.CHANNEL),
-        ("101", SocialTargetKind.GROUP),
+        ("-101", SocialTargetKind.GROUP),
     ):
         locator_kind = (
             TargetLocatorKind.PROFILE_LINK
             if value.startswith("https")
             else TargetLocatorKind.PROVIDER_ID
-            if value.isdigit()
+            if value.lstrip("-").isdigit()
             else TargetLocatorKind.USERNAME
         )
         resolved = await adapter.resolve(
@@ -597,6 +606,24 @@ async def test_exact_user_reminder_send_has_verified_read_back_and_serialization
     assert first["read_after_write"]["observed_item_ref"] == first["item_ref"]
     assert governor.max_active == 1
     assert all(call[0] == "send_message" for call in client.calls)
+
+
+@pytest.mark.asyncio
+async def test_saved_message_send_has_exact_read_back(harness):
+    adapter, _, _, _ = harness
+    receipt = await adapter.execute(
+        intent(
+            SocialAction.SEND_MESSAGE,
+            target_ref=SELF_REF,
+            content=content("Saved reminder"),
+        )
+    )
+    assert receipt["target_ref"] == SELF_REF
+    assert receipt["read_after_write"] == {
+        "verified": True,
+        "observed_item_ref": receipt["item_ref"],
+        "observed_at": receipt["read_after_write"]["observed_at"],
+    }
 
 
 @pytest.mark.asyncio
@@ -1016,6 +1043,53 @@ async def test_timeout_is_unknown_without_retry_and_floodwait_is_persisted(harne
     assert flood.value.retry_after_seconds == 17
     assert governor.noted == [17]
     assert "AUTH_KEY" not in repr(flood.value)
+
+
+@pytest.mark.asyncio
+async def test_real_wait_for_expiry_and_post_mutation_fence_loss_are_unknown():
+    refs = FakeRefs()
+    timeout_governor = FakeGovernor()
+    timeout_client = FakeClient(refs)
+    timeout_client.delay = 0.1
+    timeout_adapter = TelegramWorkspaceAdapter(
+        client_factory=lambda: timeout_client,
+        refs=refs,
+        governor=timeout_governor,
+        telethon_types=FakeTypes(),
+        operation_timeout_seconds=0.01,
+    )
+    timed_out = await timeout_adapter.execute(
+        intent(SocialAction.SEND_MESSAGE, target_ref=USER_REF, content=content()),
+        operation_ref="op_waitforexpiry000000000000001",
+    )
+    assert timed_out["status"] == "outcome_unknown"
+    assert timed_out["retry_safe"] is False
+    assert len(timeout_client.calls) == 1
+
+    fence_refs = FakeRefs()
+    fence_governor = FakeGovernor()
+    fence_client = FakeClient(fence_refs)
+    fence_checks = 0
+
+    def lose_after_provider(_lease):
+        nonlocal fence_checks
+        fence_checks += 1
+        return fence_checks < 4
+
+    fence_governor.assert_current = lose_after_provider
+    fence_adapter = TelegramWorkspaceAdapter(
+        client_factory=lambda: fence_client,
+        refs=fence_refs,
+        governor=fence_governor,
+        telethon_types=FakeTypes(),
+    )
+    lost = await fence_adapter.execute(
+        intent(SocialAction.SEND_MESSAGE, target_ref=USER_REF, content=content()),
+        operation_ref="op_postmutationfencelost000001",
+    )
+    assert lost["status"] == "outcome_unknown"
+    assert lost["error_code"] == "lease_lost"
+    assert len(fence_client.calls) == 1
 
 
 @pytest.mark.asyncio

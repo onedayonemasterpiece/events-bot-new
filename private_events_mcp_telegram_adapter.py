@@ -726,7 +726,14 @@ class TelegramWorkspaceAdapter:
                         if type(entity_id) is int and entity_id > 0
                         else None
                     )
-                    if value not in {entity_id, marked_channel_id}:
+                    marked_chat_id = (
+                        -entity_id
+                        if binding.kind is SocialTargetKind.GROUP
+                        and type(entity_id) is int
+                        and entity_id > 0
+                        else None
+                    )
+                    if value not in {entity_id, marked_channel_id, marked_chat_id}:
                         raise SocialWorkspaceValidationError("target is not an exact match")
             if request.expected_target_kinds and binding.kind not in request.expected_target_kinds:
                 raise SocialWorkspaceValidationError("resolved target kind mismatch")
