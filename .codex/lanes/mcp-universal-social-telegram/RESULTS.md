@@ -13,6 +13,8 @@
 - Final review-probe SHA: `71fb4adcb6ba0a8a5455c1f7b053da2b5ad6c3de`
 - Operation-claim/permissions remediation head SHA (before this results-only
   commit): `98e9374c102fb31f0224f98ccdb5d7c741874844`
+- Granular `ChatBannedRights` remediation head SHA (before the final
+  results-only commit): `e3175be7ed041a52149b93cd88367a0c8caebdc3`
 - Branch: `agent/mcp-universal-social/telegram`
 - Production calls/deploy: not performed.
 
@@ -60,6 +62,13 @@
   plus actual participant `admin_rights.post_stories`; it does not rely on the
   nonexistent `send_messages` or `post_stories` permission properties. Group
   publishing follows membership/default-ban state and fails closed.
+- Real `ChatBannedRights` are projected granularly. `send_plain` denies plain
+  publish/comment/schedule and unknown-content forwards at preflight;
+  `send_media` plus photo/video/document/audio/GIF restrictions filter exact
+  media roles from capabilities and reject disallowed attachments before any
+  mutation. Link, custom-emoji, reaction, membership/leave, and view bans are
+  also handled conservatively. The Telethon lazy feature guard now requires
+  the granular rights fields used by the adapter.
 - Added a mandatory atomic operation-ledger claim contract bound to the full
   `compute_action_digest(intent)`. Exact completed replays return the canonical
   stored result without a provider call, a changed intent conflicts before the
@@ -102,6 +111,9 @@ The fake-only focused suite covers:
   reconciliation;
 - realistic and installed Telethon permission surfaces, ordinary group member
   send rights, default-ban denial, and no-rights broadcast denial;
+- actual installed Telethon 1.44 `ChatBannedRights` objects covering
+  `send_plain` and every supported granular media role, normalized capability
+  validation, and zero provider mutation for denied operations;
 - provider/native-ID/secret redaction and closed public surface;
 - non-idempotent timeout, FloodWait persistence, and no blind retry;
 - actual `asyncio.wait_for` expiry and post-mutation lost-fence uncertainty;
@@ -113,12 +125,12 @@ The fake-only focused suite covers:
 ```text
 /home/dev/.codex/venvs/events-bot-new/bin/python -m pytest -q \
   tests/test_private_events_mcp_telegram_workspace.py
-# 44 passed
+# 45 passed
 
 /home/dev/.codex/venvs/events-bot-new/bin/python -m pytest -q \
   tests/test_private_events_mcp_social_workspace_contract.py \
   tests/test_private_events_mcp_telegram_workspace.py
-# 74 passed (final combined rerun)
+# 75 passed (final combined rerun)
 
 /home/dev/.codex/venvs/events-bot-new/bin/python -m compileall -q \
   private_events_mcp_telegram_adapter.py \
