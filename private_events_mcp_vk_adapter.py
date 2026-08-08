@@ -121,6 +121,7 @@ class _CursorBinding:
     resource_fingerprint: str
     query_fingerprint: str
     sample_ref: str
+    read_access: str
     offset: int
     nonce: str
 
@@ -343,16 +344,17 @@ class VKWorkspaceAdapter:
         return value
 
     @staticmethod
-    def _cursor_context(request: SocialReadRequest, sample_ref: str | None = None) -> tuple[str, str, str, str]:
+    def _cursor_context(request: SocialReadRequest, sample_ref: str | None = None) -> tuple[str, str, str, str, str]:
         resource = request.target_ref or request.item_ref or "none"
         resource_fingerprint = hashlib.sha256(resource.encode()).hexdigest()
         query_fingerprint = hashlib.sha256((request.query or "").encode()).hexdigest()
-        return request.operation.value, resource_fingerprint, query_fingerprint, sample_ref or request.sample_ref or "none"
+        read_access = request.read_access.value if request.read_access is not None else "none"
+        return request.operation.value, resource_fingerprint, query_fingerprint, sample_ref or request.sample_ref or "none", read_access
 
     def _cursor(self, request: SocialReadRequest, offset: int, *, sample_ref: str | None = None) -> str:
-        operation, resource, query, sample = self._cursor_context(request, sample_ref)
+        operation, resource, query, sample, read_access = self._cursor_context(request, sample_ref)
         nonce = secrets.token_hex(8)
-        binding = _CursorBinding(operation, resource, query, sample, offset, nonce)
+        binding = _CursorBinding(operation, resource, query, sample, read_access, offset, nonce)
         payload = self._cursor_payload(binding)
         signature = hmac.new(self._cursor_secret, payload.encode(), hashlib.sha256).hexdigest()[:32]
         token = f"cur_{nonce}_{signature}"
@@ -366,7 +368,7 @@ class VKWorkspaceAdapter:
         if binding is None:
             raise VKWorkspaceError("cursor_invalid")
         expected = self._cursor_context(request)
-        if (binding.operation, binding.resource_fingerprint, binding.query_fingerprint, binding.sample_ref) != expected:
+        if (binding.operation, binding.resource_fingerprint, binding.query_fingerprint, binding.sample_ref, binding.read_access) != expected:
             raise VKWorkspaceError("cursor_context_mismatch")
         payload = self._cursor_payload(binding)
         expected_token = f"cur_{binding.nonce}_{hmac.new(self._cursor_secret, payload.encode(), hashlib.sha256).hexdigest()[:32]}"
@@ -379,7 +381,7 @@ class VKWorkspaceAdapter:
         return json.dumps({
             "operation": binding.operation, "resource_fingerprint": binding.resource_fingerprint,
             "query_fingerprint": binding.query_fingerprint, "sample_ref": binding.sample_ref,
-            "offset": binding.offset, "nonce": binding.nonce,
+            "read_access": binding.read_access, "offset": binding.offset, "nonce": binding.nonce,
         }, sort_keys=True, separators=(",", ":"))
 
     def _target_kind(self, native: Mapping[str, Any]) -> SocialTargetKind:
@@ -627,6 +629,8 @@ class VKWorkspaceAdapter:
         return {"results": results, "trust": _TRUST}
 
     async def _editorial(self, request: SocialReadRequest) -> Mapping[str, Any]:
+        if request.read_access is not SocialReadAccess.PUBLIC:
+            raise VKWorkspaceError("access_target_mismatch")
         native = self._resolve_ref("target", request.target_ref or "")
         if self._target_kind(native) not in {SocialTargetKind.COMMUNITY, SocialTargetKind.GROUP, SocialTargetKind.CHANNEL}:
             raise VKWorkspaceError("target_kind_mismatch")
@@ -713,7 +717,9 @@ class VKWorkspaceAdapter:
             if request.target_ref:
                 native = self._resolve_ref("target", request.target_ref)
                 kind = self._target_kind(native)
-                if request.read_access is SocialReadAccess.DIALOGS or kind in {SocialTargetKind.CHAT, SocialTargetKind.SELF}:
+                if request.read_access is SocialReadAccess.DIALOGS:
+                    if kind not in {SocialTargetKind.USER, SocialTargetKind.CHAT, SocialTargetKind.SELF}:
+                        raise VKWorkspaceError("access_target_mismatch")
                     if kind is SocialTargetKind.SELF:
                         response = await self._call("conversations", {"count": limit, "offset": offset, "filter": "all"})
                         raws = []
@@ -737,6 +743,8 @@ class VKWorkspaceAdapter:
                     raws = _items(response)
                     results = [self._public_item(raw, native={"kind": "message", "peer_id": peer_id, "message_id": _int(raw.get("id"))}, kind=SocialItemKind.MESSAGE, target_ref=request.target_ref) for raw in raws if _int(raw.get("id")) is not None]
                 else:
+                    if request.read_access is not SocialReadAccess.PUBLIC or kind in {SocialTargetKind.CHAT, SocialTargetKind.SELF}:
+                        raise VKWorkspaceError("access_target_mismatch")
                     owner_id = _int(native.get("owner_id")) or _int(native.get("user_id"))
                     if owner_id is None:
                         raise VKWorkspaceError("opaque_reference_failed")
@@ -747,6 +755,8 @@ class VKWorkspaceAdapter:
                     raws = _items(response)
                     results = [self._public_item(raw, native=self._wall_native(owner_id, _int(raw.get("id"))), target_ref=request.target_ref) for raw in raws if _int(raw.get("id")) is not None]
             else:
+                if request.read_access is not SocialReadAccess.PUBLIC:
+                    raise VKWorkspaceError("access_target_mismatch")
                 response = await self._call("newsfeed_search", {"q": request.query or "", "count": limit, **({"start_from": request.cursor} if request.cursor else {})})
                 raws = _items(response)
                 results = []
@@ -762,11 +772,17 @@ class VKWorkspaceAdapter:
         if request.operation is SocialReadOperation.GET_ITEM:
             native = self._resolve_ref("item", request.item_ref or "")
             if native.get("kind") == "message":
+                if request.read_access is not SocialReadAccess.DIALOGS:
+                    raise VKWorkspaceError("access_target_mismatch")
                 response = await self._call("message_item", {"message_ids": str(native.get("message_id"))})
                 kind = SocialItemKind.MESSAGE
-            else:
+            elif native.get("kind") == "post":
+                if request.read_access is not SocialReadAccess.PUBLIC:
+                    raise VKWorkspaceError("access_target_mismatch")
                 response = await self._call("wall_item", {"posts": f"{native.get('owner_id')}_{native.get('post_id')}", "extended": 0})
                 kind = SocialItemKind.POST
+            else:
+                raise VKWorkspaceError("access_target_mismatch")
             raws = _items(response)
             if not raws:
                 raise VKWorkspaceError("item_not_found")
@@ -774,12 +790,16 @@ class VKWorkspaceAdapter:
 
         if request.operation is SocialReadOperation.LIST_COMMENTS:
             native = self._resolve_ref("item", request.item_ref or "")
+            if request.read_access is not SocialReadAccess.PUBLIC or native.get("kind") != "post":
+                raise VKWorkspaceError("access_target_mismatch")
             response = await self._call("wall_comments", {"owner_id": native.get("owner_id"), "post_id": native.get("post_id"), "count": limit, "offset": offset, "extended": 0, "sort": "asc"})
             results = [self._public_item(raw, native={"kind": "comment", "owner_id": native.get("owner_id"), "post_id": native.get("post_id"), "comment_id": _int(raw.get("id"))}, kind=SocialItemKind.COMMENT) for raw in _items(response) if _int(raw.get("id")) is not None]
             return {"root_item_ref": request.item_ref, "items": results, "trust": _TRUST}
 
         if request.operation is SocialReadOperation.LIST_REACTIONS:
             native = self._resolve_ref("item", request.item_ref or "")
+            if request.read_access is not SocialReadAccess.PUBLIC or native.get("kind") != "post":
+                raise VKWorkspaceError("access_target_mismatch")
             response = await self._call("wall_likes", {"type": "post", "owner_id": native.get("owner_id"), "item_id": native.get("post_id"), "count": 1, "extended": 0})
             count = response.get("count", 0) if isinstance(response, Mapping) else 0
             return {"item_ref": request.item_ref, "reactions": [{"reaction": "like", "count": max(0, count) if type(count) is int else 0}], "trust": _TRUST}

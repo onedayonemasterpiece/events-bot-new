@@ -431,3 +431,35 @@ async def test_concurrent_exact_story_replay_makes_one_provider_call_and_one_rec
     assert len([call for call in transport.calls if call["method"] == "stories.save"]) == 1
     with pytest.raises(VKWorkspaceError, match="operation_ref_conflict"):
         await adapter.execute(intent, operation_ref="op_differentcallerref0000000002")
+
+
+@pytest.mark.asyncio
+async def test_private_conversation_routes_require_explicit_dialog_access_before_transport(workspace) -> None:
+    adapter, transport, refs, _, _ = workspace
+    own = refs.mint("target", {"kind": "self", "user_id": 777, "peer_id": 777})
+    chat = refs.mint("target", {"kind": "chat", "peer_id": 2_000_000_001})
+    community = mint_target(refs)
+    for target_ref, access in ((own, "public"), (chat, "public"), (community, "dialogs")):
+        before = len(transport.calls)
+        with pytest.raises(VKWorkspaceError, match="access_target_mismatch"):
+            await adapter.read(read_request("list_items", target_ref=target_ref, read_access=access, limit=2))
+        assert len(transport.calls) == before
+
+    message = refs.mint("item", {"kind": "message", "peer_id": 101, "message_id": 901})
+    post = refs.mint("item", {"kind": "post", "group_id": 101, "owner_id": -101, "post_id": 501})
+    for item_ref, access in ((message, "public"), (message, "private"), (post, "dialogs")):
+        before = len(transport.calls)
+        with pytest.raises(VKWorkspaceError, match="access_target_mismatch"):
+            await adapter.read(read_request("get_item", item_ref=item_ref, read_access=access))
+        assert len(transport.calls) == before
+
+
+@pytest.mark.asyncio
+async def test_cursor_signature_binds_read_access(workspace) -> None:
+    adapter, transport, refs, _, _ = workspace
+    user = mint_target(refs, "user")
+    page = await adapter.read(read_request("list_items", target_ref=user, read_access="public", limit=2))
+    before = len(transport.calls)
+    with pytest.raises(VKWorkspaceError, match="cursor_context_mismatch"):
+        await adapter.read(read_request("list_items", target_ref=user, read_access="dialogs", limit=2, cursor=page["next_cursor"]))
+    assert len(transport.calls) == before
