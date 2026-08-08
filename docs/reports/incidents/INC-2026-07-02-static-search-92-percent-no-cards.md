@@ -30,6 +30,11 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-08 exact-main degraded browser journey полностью прошёл UI/Search
+  контракт для трёх запросов, но GitHub job завершился красным после journey:
+  serialized browser runtime probe не переносил безопасный `receipt_id`, хотя
+  root-wrapper требовал его перед owner-scoped receipt RPC. Regression теперь
+  исполняет реальный serialized probe и доказывает сохранение receipt identity.
 - 2026-08-08 два exact-current-SHA candidate run полностью собирали 1,339 Astro
   pages, но после 17–19 минут падали на `Search corpus/catalog revision
   mismatch`: mutable vector receipt проверялся до online snapshot и мог уже не
