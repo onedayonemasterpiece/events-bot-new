@@ -101,6 +101,10 @@ class ReadOnlySQLite:
         return conn
 
     @staticmethod
+    def _deadline_expired(deadline: float) -> bool:
+        return time.monotonic() >= deadline
+
+    @staticmethod
     def _validate_internal_sql(sql: str) -> None:
         if not isinstance(sql, str) or not _READ_ONLY_SQL_RE.match(sql):
             raise ValueError("Only internal read-only statements are allowed")
@@ -201,14 +205,23 @@ class ReadOnlySQLite:
                     "SELECT name FROM sqlite_master "
                     "WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
                 ).fetchall()
+                if self._deadline_expired(deadline):
+                    timed_out = True
+                    raise QueryBudgetExceeded("sqlite_schema_budget_exceeded")
                 tables: dict[str, frozenset[str]] = {}
                 for table_row in table_rows:
+                    if self._deadline_expired(deadline):
+                        timed_out = True
+                        raise QueryBudgetExceeded("sqlite_schema_budget_exceeded")
                     table = str(table_row[0])
                     if not _IDENTIFIER_RE.fullmatch(table):
                         continue
                     columns = conn.execute(
                         f"PRAGMA table_info({self.quote_identifier(table)})"
                     ).fetchall()
+                    if self._deadline_expired(deadline):
+                        timed_out = True
+                        raise QueryBudgetExceeded("sqlite_schema_budget_exceeded")
                     tables[table] = frozenset(str(column[1]) for column in columns)
                 snapshot = SchemaSnapshot(tables=tables, generated_at=now)
                 self._schema = snapshot

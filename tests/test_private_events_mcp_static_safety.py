@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from private_events_mcp.readonly_sqlite import ReadOnlySQLite
+from private_events_mcp.readonly_sqlite import QueryBudgetExceeded, ReadOnlySQLite
 
 
 PACKAGE = Path(__file__).resolve().parents[1] / "private_events_mcp"
@@ -46,8 +46,17 @@ def test_mcp_package_has_no_outbound_network_or_process_execution() -> None:
 
 
 @pytest.mark.asyncio
-async def test_event_database_adapter_rejects_write_statements(event_db, event_db_digest) -> None:
+async def test_event_database_adapter_rejects_write_statements(
+    event_db, event_db_digest, monkeypatch
+) -> None:
     reader = ReadOnlySQLite(str(event_db), query_timeout_ms=1000)
     with pytest.raises(ValueError):
         await reader.query("UPDATE event SET title='changed' WHERE id=42")
     assert hashlib.sha256(event_db.read_bytes()).hexdigest() == event_db_digest
+
+    # Schema discovery is a sequence of small PRAGMAs. A progress handler on
+    # each statement alone cannot bound their cumulative time, so the adapter
+    # must also enforce the deadline between statements.
+    monkeypatch.setattr(reader, "_deadline_expired", lambda _deadline: True)
+    with pytest.raises(QueryBudgetExceeded, match="sqlite_schema_budget_exceeded"):
+        await reader.schema()
