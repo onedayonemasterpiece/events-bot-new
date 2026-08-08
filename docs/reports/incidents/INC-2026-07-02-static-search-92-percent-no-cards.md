@@ -316,6 +316,12 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
   shared helper now records only total/visible counts across four closed
   XCTest types on this fail-closed path; no hierarchy, label or page text is
   retained, and the diagnostic cannot authorize a tap.
+- 2026-08-08 iOS product-focus correction: diagnostic run `31281345474`
+  proved the exact heading mapped to `StaticText total=1` but `visible=0` after
+  submit. Search now blurs only a validated non-pagination input before its
+  single POST, matching the ordinary native Search/Enter completion lifecycle;
+  validation retains focus and the adapter still requires native IME absence
+  before any document swipe.
 - 2026-08-08 cross-platform browser-scroll correction: Android Chrome and iOS
   Safari now share the routing primitive `performNativeDocumentSwipe`; Android
   dispatches absolute-coordinate W3C touch, while iOS uses the XCUITest

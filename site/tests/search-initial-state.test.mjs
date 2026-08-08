@@ -55,3 +55,19 @@ test('runtime loading alone reveals the skeleton and restores the hidden state',
   assert.match(donor, /setSearchLoading\(true, \{ showSkeleton: !append \}\)/u, 'a validated first-page runtime request reveals it');
   assert.doesNotMatch(donor, /setSkeletonLoading\(true\)/u, 'no non-loading call reveals it directly');
 });
+
+test('a validated first-page submit releases the mobile input before Search traffic', () => {
+  const start = donor.indexOf('async function runSearch');
+  const end = donor.indexOf("form?.addEventListener('submit'", start);
+  assert.ok(start >= 0 && end > start, 'runSearch source boundary must exist');
+  const source = donor.slice(start, end);
+  const prepared = source.indexOf('const prepared = prepareSearchRequest');
+  const validationReturn = source.indexOf('if (!prepared.ok)', prepared);
+  const blur = source.indexOf('if (!append) input?.blur()', validationReturn);
+  const request = source.indexOf('const searchRequest = invokeEventSearch', blur);
+
+  assert.ok(prepared >= 0, 'request validation must exist');
+  assert.ok(validationReturn > prepared, 'invalid input must return before focus changes');
+  assert.ok(blur > validationReturn, 'validated first-page input must be blurred');
+  assert.ok(request > blur, 'focus must be released before the cost-bearing POST');
+});

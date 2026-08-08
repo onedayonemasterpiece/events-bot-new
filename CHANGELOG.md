@@ -75,6 +75,12 @@
 
 ### Fixed
 
+- Fixed Mobile Safari Search retaining its software keyboard after a valid
+  native Search/Enter submit. The product now releases the first-page input
+  after validation and before its single cost-bearing POST, so result scrolling
+  starts on the browser document; invalid input and pagination keep their
+  existing focus behavior.
+
 - Added fail-closed iOS Search keyboard-target diagnostics after live Safari
   exposed no eligible exact heading. A rejected fallback now records only
   total/visible counts for four closed XCTest element types; it never captures

@@ -1196,6 +1196,11 @@ const HeadingTag = headingLevel;
         setSearchLifecycle('validation');
         return;
       }
+      // A real mobile Search/Enter action completes text entry. Releasing the
+      // validated first-page input here lets Safari close its software keyboard
+      // before results are explored with native touch, while invalid input and
+      // the pagination button keep their existing focus behavior.
+      if (!append) input?.blur();
       const query = prepared.query;
       activeExecutionMode = prepared.executionMode;
       if (input) input.value = query;

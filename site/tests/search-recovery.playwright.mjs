@@ -230,6 +230,8 @@ test('authenticated Search recovers from missing headers and stalled streams', {
         window.__r11SearchCalls.filter((call) => call.query === 'поиск энтером').length === 1
       ));
       assert.equal(await input.inputValue(), 'поиск энтером', 'Enter submits instead of inserting a newline');
+      assert.equal(await input.evaluate((node) => document.activeElement === node), false,
+        'a validated Enter submit releases the field so a mobile IME can close');
 
       await page.locator('[data-authorized-search]').evaluate((node) => {
         node.dataset.searchTransport = 'ndjson';
