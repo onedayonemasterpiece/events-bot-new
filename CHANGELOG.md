@@ -34,6 +34,16 @@
   rejects shell-interpolated dispatch data or falsely complete validation
   receipts. Browser capture now applies and asserts the exact independent
   mobile/desktop viewport instead of silently accepting Playwright's default.
+  Plane-aware family aggregation no longer treats the same source path in two
+  releases as fragmentation; non-Astro endpoints no longer become UI page
+  families, and desktop/mobile evidence is emitted for every observed UI family
+  with an explicit mapped-host-page boundary. Browser evidence now freezes the
+  snapshot clock/pseudorandom fixture and waits for network, media and a stable
+  layout fingerprint before measuring, then requires two consecutive identical
+  screenshot buffers before accepting pixels. Canonical graph receipts now use
+  a size-checked fixed raster reservation and stable perceptual dHash, while raw
+  Chromium pixels remain explicitly noncanonical visual evidence checked by an
+  equal cross-run perceptual fingerprint.
 
 - Added the disabled-by-default private Events MCP: path-scoped OAuth with
   PKCE, bounded read-only event and incident evidence tools, production smoke

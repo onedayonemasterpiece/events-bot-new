@@ -31,21 +31,32 @@ source evidence remain a separate plane from the checked Kaggle candidate.
 ## Local full-run acceptance
 
 The ignored local snapshot
-`artifacts/current-ui-resource-graph/snapshot-20260808T124842-4786ac53bc-final-local-v3`
+`artifacts/current-ui-resource-graph/snapshot-20260808T124842-4786ac53bc-final-local-v13`
 completed with manifest SHA-256
-`8d4861f17433d235bd44afad4790e55e4e6ababca9a4920e791d276d36d80724`.
+`9e369a1c0e98bf20a8b954b239d56a1c7a69850f4ec9de08b2e65be9d3fd9458`.
 
 - runtime observations: 1,267 (1,266 candidate HTML routes + public root);
 - source records: 492 (244 candidate + 248 public-root source plane);
-- page families: 24;
-- observed/candidate UI families: 20 / 20;
+- page families: 19 (non-Astro data/manifest/robots/sitemap endpoints excluded);
+- observed/candidate UI families: 18 / 20;
 - source and computed style observations: 34,985;
+- detected style inconsistencies: 809;
 - fragmentation/candidate graph rows: 20 / 20;
-- screenshot index rows: 46 (40 captured, 6 explicit uncaptured);
-- screenshots: exact `390x844` and `1728x900`, indexed SHA-256 verified;
+- logical fragmentation candidates: 16; identical cross-plane source paths do
+  not create a second implementation;
+- desktop/mobile records: 19 page-family + 20 observed-UI-family scopes;
+- screenshot index rows: 41 (40 captured, 1 explicit source-only uncaptured);
+- screenshots: exact `390x844` and `1728x900`, stable perceptual dHash indexed;
 - all manifest output hashes verified;
 - candidate bearer URL byte-scan: absent from every artifact file;
-- receipt: `complete`, output bytes: 59,290,055.
+- receipt: `complete`, deterministic budgeted output bytes: 76,353,200.
+
+Two complete browser-enabled reruns produced byte-identical canonical graph
+shards, summary, screenshot index, manifest and receipt. Raw Chromium JPEGs are
+explicitly noncanonical visual specimens: each accepted image is stable across
+two consecutive buffers, while cross-run acceptance uses equal 64-bit
+perceptual dHash. This avoids misrepresenting sparse raster/media differences as
+resource-graph changes.
 
 Coverage reconciliation reports 14 `FOUND`, 3 `MISSING`, 5 `DISCOVERED`
 and no `AMBIGUOUS` hypotheses. In particular, Exhibitions, For Me/personal
@@ -62,10 +73,11 @@ node --check scripts/current_ui_resource_graph/decode.mjs        PASS
 node --check scripts/current_ui_resource_graph/graph-lib.mjs     PASS
 workflow YAML parse                                              PASS
 git diff --check                                                 PASS
-pytest -q tests/test_current_ui_resource_graph.py                17 passed
+pytest -q tests/test_current_ui_resource_graph.py                21 passed
 full exact source/runtime/browser scan                            PASS
 manifest shard hash/byte verification                            PASS
-screenshot physical dimension/SHA verification                   PASS (40)
+screenshot physical dimension/perceptual fingerprint             PASS (40)
+canonical full-rerun byte comparison                              PASS
 secret redaction byte scan                                       PASS
 manual screenshot review: Home mobile/desktop, Exhibitions       PASS
   mobile, Weekend desktop

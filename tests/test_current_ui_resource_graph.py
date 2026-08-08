@@ -58,10 +58,16 @@ def _fixture(tmp_path: Path):
     components.mkdir(parents=True)
     styles.mkdir(parents=True)
     (root_source / "pages").mkdir(parents=True)
+    (root_source / "components").mkdir(parents=True)
     (runtime / "vyhodnye/date-2026-08-08").mkdir(parents=True)
     (pages / "index.astro").write_text(
-        "---\nimport HomeHeroTalk from '../components/HomeHeroTalk.astro';\n---\n"
-        "<main data-home-hero-talk><HomeHeroTalk /></main>\n",
+        "---\nimport HomeHeroTalk from '../components/HomeHeroTalk.astro';\n"
+        "import SiteHeader from '../components/SiteHeader.astro';\n---\n"
+        "<SiteHeader /><main data-home-hero-talk><HomeHeroTalk /></main>\n",
+        encoding="utf-8",
+    )
+    (pages / "robots.txt.ts").write_text(
+        "export const GET = () => new Response('User-agent: *');\n",
         encoding="utf-8",
     )
     (pages / "vyhodnye/date-[date].astro").write_text(
@@ -76,6 +82,10 @@ def _fixture(tmp_path: Path):
     (components / "EventCard.astro").write_text(
         '<article class="event-card"><slot /></article>\n', encoding="utf-8"
     )
+    for component_root in (components, root_source / "components"):
+        (component_root / "SiteHeader.astro").write_text(
+            '<header class="site-header">Header</header>\n', encoding="utf-8"
+        )
     for page, body in {
         "segodnya/index.astro": "<main><EventCard /></main>",
         "populyarnoe/index.astro": "<main><EventCard /></main>",
@@ -94,7 +104,8 @@ def _fixture(tmp_path: Path):
         encoding="utf-8",
     )
     (root_source / "pages/index.astro").write_text(
-        "<main><p>Public root without a Hero-talk marker.</p></main>\n",
+        "---\nimport SiteHeader from '../components/SiteHeader.astro';\n---\n"
+        "<SiteHeader /><main><p>Public root without a Hero-talk marker.</p></main>\n",
         encoding="utf-8",
     )
     html = {
@@ -247,6 +258,69 @@ def test_distinct_page_families_and_event_mapping_are_preserved(decoded):
     assert event["source_mapping"] == "exact_route_template"
     assert event["source_page_ids"]
     assert event["component_candidates"]
+
+
+def test_non_astro_page_endpoints_are_not_ui_page_families(decoded):
+    output, _, _ = decoded
+    sources = list(
+        map(json.loads, (output / "source-components.jsonl").read_text().splitlines())
+    )
+    endpoint = next(row for row in sources if row["path"].endswith("pages/robots.txt.ts"))
+    assert endpoint["type"] == "controller_or_module"
+    assert endpoint["route_template"] is None
+
+    families = list(
+        map(json.loads, (output / "page-families.jsonl").read_text().splitlines())
+    )
+    assert not any("robots" in family["id"] for family in families)
+
+
+def test_duplicate_source_planes_do_not_create_false_fragmentation(decoded):
+    output, _, _ = decoded
+    families = {
+        row["id"]: row
+        for row in map(
+            json.loads, (output / "observed-ui-families.jsonl").read_text().splitlines()
+        )
+    }
+    headers = families["family.headers"]
+    assert headers["logical_implementation_count"] == 1
+    assert set(headers["implementations_by_plane"]) == {
+        "latest_checked_kaggle_candidate",
+        "current_root_prelaunch",
+    }
+
+    fragmentation = {
+        row["family"]: row
+        for row in map(
+            json.loads, (output / "fragmentation-report.jsonl").read_text().splitlines()
+        )
+    }
+    candidates = {
+        row["family"]: row
+        for row in map(
+            json.loads,
+            (output / "candidate-component-graph.jsonl").read_text().splitlines(),
+        )
+    }
+    assert fragmentation["family.headers"]["status"] != "fragmented"
+    assert candidates["family.headers"]["status"] != "fragmented"
+
+
+def test_summary_separates_plane_counts_and_style_inconsistencies(decoded):
+    output, _, _ = decoded
+    manifest = json.loads((output / "manifest.json").read_text())
+    counts = manifest["counts"]
+    assert counts["candidate_routes"] == 5
+    assert counts["public_root_observations"] == 1
+    assert 0 < counts["style_inconsistencies"] < counts["styles"]
+
+    summary = (output / "summary.md").read_text()
+    assert "Candidate HTML routes: 5" in summary
+    assert "Separate public-root observations: 1" in summary
+    assert "Layouts by plane:" in summary
+    assert "Source components by plane:" in summary
+    assert f"Style inconsistencies: {counts['style_inconsistencies']}" in summary
 
 
 def test_not_merged_and_unresolved_are_invariants(decoded):
@@ -415,9 +489,10 @@ def test_family_specific_computed_viewport_evidence():
         } },
       ];
       const pages = [{ id: 'page-family.event-detail' }];
+      const families = [{ id: 'family.event-representations', implementations: ['source.one'] }];
       process.stdout.write(JSON.stringify({
         styles: computedStyleObservations(evidence),
-        desktop: desktopMobile(pages, [], evidence),
+        desktop: desktopMobile(pages, families, evidence),
       }));
     """
     result = subprocess.run(
@@ -431,7 +506,12 @@ def test_family_specific_computed_viewport_evidence():
     scopes = {(row["observation_scope"], row["family"]) for row in payload["styles"]}
     assert ("page_family", "page-family.event-detail") in scopes
     assert ("ui_family", "family.event-representations") in scopes
-    assert payload["desktop"][0]["relation"] == "divergent_structure_observed"
+    page_record = next(row for row in payload["desktop"] if row["scope"] == "page_family")
+    ui_record = next(row for row in payload["desktop"] if row["scope"] == "ui_family")
+    assert page_record["relation"] == "divergent_structure_observed"
+    assert ui_record["ui_family"] == "family.event-representations"
+    assert ui_record["relation"] == "divergent_structure_observed"
+    assert ui_record["interpretation"] == "independent_observations_not_responsive_variants"
 
 
 def test_screenshot_selection_is_representative_first_and_outlier_fair():
@@ -559,3 +639,23 @@ def test_browser_capture_uses_and_checks_exact_playwright_viewports():
     assert "viewportSize: viewport" not in source
     assert "const actualViewport = page.viewportSize();" in source
     assert "Browser viewport contract mismatch" in source
+
+
+def test_browser_capture_freezes_fixture_clock_and_waits_for_stable_layout():
+    source = (REPO / "scripts/current_ui_resource_graph/graph-lib.mjs").read_text(
+        encoding="utf-8"
+    )
+
+    assert "fixedEpochMs" in source
+    assert "globalThis.Date = FrozenDate" in source
+    assert "waitForLoadState('networkidle'" in source
+    assert "image.decode()" in source
+    assert "near-viewport media did not settle" in source
+    assert "Browser layout did not stabilize" in source
+    assert "previousScreenshot?.equals(currentScreenshot)" in source
+    assert "Browser pixels did not stabilize" in source
+    assert "perceptual_dhash_64" in source
+    assert "raw_raster_role: 'noncanonical_visual_evidence'" in source
+    assert "Screenshot exceeds deterministic byte reservation" in source
+    decoder = DECODER.read_text(encoding="utf-8")
+    assert "cross_run_acceptance: 'equal_perceptual_dhash_64'" in decoder

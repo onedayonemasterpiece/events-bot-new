@@ -10,6 +10,7 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 
 export const SCHEMA = 'current_ui_resource_graph_v0';
+const MAX_SCREENSHOT_BYTES = 192 * 1024;
 export const REQUIRED_FILES = [
   'manifest.json', 'summary.md', 'source-components.jsonl',
   'observed-ui-families.jsonl', 'runtime-observations.jsonl',
@@ -216,7 +217,7 @@ export function hashSourceTree(root) {
 
 function nodeName(path) { return basename(path, extname(path)); }
 function componentType(rel) {
-  if (rel.includes('/pages/')) return 'page';
+  if (rel.includes('/pages/') && extname(rel) === '.astro') return 'page';
   if (rel.includes('/layouts/')) return 'layout';
   if (rel.includes('/components/')) return 'component';
   return 'controller_or_module';
@@ -743,44 +744,88 @@ export function observedFamilies(sourceRecords, runtimeObservations) {
     const runtime = runtimeObservations.filter((record) => record.component_candidates.some((id) => sources.includes(id))).map((record) => record.id).sort();
     const heuristicRuntime = runtimeObservations.filter((record) => seed.runtime(record.feature_counts)).map((record) => record.id).sort();
     const status = runtime.length && sources.length ? 'observed' : sources.length || heuristicRuntime.length ? 'candidate' : 'unknown';
-    return { id: seed.id, label: seed.label, implementations: sources, runtime_observations: runtime, heuristic_runtime_candidates: heuristicRuntime, status, confidence: runtime.length && sources.length ? 'high' : sources.length ? 'medium' : 'low', evidence_channels: [...(sources.length ? ['source_ast'] : []), ...(runtime.length ? ['exact_runtime_source_mapping'] : [])] };
+    const implementationGroups = logicalImplementationGroups(sources, sourceRecords);
+    const implementationsByPlane = Object.fromEntries([...new Set(sourceRecords.map((record) => record.plane))].sort().map((plane) => [plane, sources.filter((id) => sourceRecords.find((record) => record.id === id)?.plane === plane)]));
+    return {
+      id: seed.id, label: seed.label, implementations: sources,
+      implementations_by_plane: implementationsByPlane,
+      implementation_groups: implementationGroups,
+      logical_implementation_count: implementationGroups.length,
+      runtime_observations: runtime, heuristic_runtime_candidates: heuristicRuntime,
+      status, confidence: runtime.length && sources.length ? 'high' : sources.length ? 'medium' : 'low',
+      evidence_channels: [...(sources.length ? ['source_ast'] : []), ...(runtime.length ? ['exact_runtime_source_mapping'] : [])],
+    };
   });
+}
+
+function logicalImplementationGroups(sourceIds, sourceRecords) {
+  const byPath = new Map();
+  for (const id of sourceIds) {
+    const source = sourceRecords.find((record) => record.id === id);
+    if (!source) continue;
+    const canonicalPath = source.path.includes('/') ? source.path.slice(source.path.indexOf('/') + 1) : source.path;
+    if (!byPath.has(canonicalPath)) byPath.set(canonicalPath, { path: canonicalPath, plane_paths: [], source_ids: [], planes: [], content_sha256s: [] });
+    const group = byPath.get(canonicalPath);
+    group.plane_paths.push({ plane: source.plane, path: source.path });
+    group.source_ids.push(source.id); group.planes.push(source.plane); group.content_sha256s.push(source.content_sha256);
+  }
+  return [...byPath.values()].map((group) => ({
+    ...group,
+    plane_paths: [...new Map(group.plane_paths.map((item) => [`${item.plane}\0${item.path}`, item])).values()].sort((a, b) => a.plane.localeCompare(b.plane) || a.path.localeCompare(b.path)),
+    source_ids: [...new Set(group.source_ids)].sort(),
+    planes: [...new Set(group.planes)].sort(),
+    content_sha256s: [...new Set(group.content_sha256s)].sort(),
+    cross_plane_drift: new Set(group.content_sha256s).size > 1,
+  })).sort((a, b) => a.path.localeCompare(b.path));
 }
 
 export function fragmentationReport(families, styles, sourceRecords, runtimeObservations) {
   return families.map((family) => {
     const sources = family.implementations.map((id) => sourceRecords.find((record) => record.id === id)).filter(Boolean);
     const runtime = family.runtime_observations.map((id) => runtimeObservations.find((record) => record.id === id)).filter(Boolean);
+    const implementationGroups = family.implementation_groups || logicalImplementationGroups(family.implementations, sourceRecords);
     const styleIds = styleEvidenceForFamily(family, styles).map((style) => style.id).sort();
     const evidenceChannels = [...new Set([...family.evidence_channels, ...(styleIds.length ? ['source_style'] : []), ...(sources.some((source) => source.children.length) ? ['source_composition'] : [])])].sort();
+    const crossPlaneDrift = implementationGroups.some((group) => group.cross_plane_drift);
+    const distinctImplementationContent = new Set(implementationGroups.flatMap((group) => group.content_sha256s)).size > 1;
     return {
       id: `fragmentation.${family.id.slice(7)}`, family: family.id,
-      observations: [...family.implementations, ...family.runtime_observations, ...styleIds].sort(), evidence_channels: evidenceChannels,
-      similarities: sources.length > 1 ? ['seed semantic cohort', 'source naming/path evidence'] : [],
-      differences: [...(new Set(sources.map((source) => source.content_sha256)).size > 1 ? ['distinct source content'] : []), ...(new Set(runtime.map((item) => item.structure_hash)).size > 1 ? ['distinct runtime structures'] : [])],
-      counterevidence: sources.length > 1 ? ['distinct implementations are not proof of interchangeable semantics'] : ['no duplicate source set observed'],
+      observations: [...family.implementations, ...family.runtime_observations, ...styleIds].sort(),
+      implementations_by_plane: family.implementations_by_plane,
+      implementation_groups: implementationGroups,
+      logical_implementation_count: implementationGroups.length,
+      evidence_channels: evidenceChannels,
+      similarities: implementationGroups.length > 1 ? ['seed semantic cohort', 'source naming/path evidence'] : [],
+      differences: [...(distinctImplementationContent && implementationGroups.length > 1 ? ['distinct implementation content'] : []), ...(crossPlaneDrift ? ['cross-plane source drift'] : []), ...(new Set(runtime.map((item) => item.structure_hash)).size > 1 ? ['distinct runtime structures'] : [])],
+      counterevidence: implementationGroups.length > 1 ? ['distinct implementations are not proof of interchangeable semantics'] : sources.length > 1 ? ['same logical source path is repeated only across independent identity planes'] : ['no duplicate source set observed'],
       unknowns: ['semantic intent', 'state equivalence', 'accessibility equivalence'], confidence: evidenceChannels.length >= 3 ? 'medium' : 'low',
       decision: 'NOT_MERGED', reason: evidenceChannels.length >= 2 ? 'multiple evidence channels identify a review candidate; counterevidence and semantic unknowns prevent merging' : 'insufficient independent evidence for a merge decision',
-      recommendation: 'unresolved', status: family.implementations.length > 1 ? 'fragmented' : family.status === 'observed' ? 'candidate' : 'unknown',
+      recommendation: 'unresolved', status: implementationGroups.length > 1 ? 'fragmented' : family.status === 'observed' ? 'candidate' : 'unknown',
     };
   });
 }
 
 export function candidateGraph(families, sourceRecords, runtimeObservations, styles) {
-  return families.map((family) => ({
-    id: `candidate.${family.id.slice(7)}`, family: family.id, sources: family.implementations,
-    consumers: [...new Set(family.implementations.flatMap((id) => sourceRecords.find((record) => record.id === id)?.consumers || []))].sort(),
-    runtime_observations: family.runtime_observations,
-    evidence_channels: [...new Set([...family.evidence_channels, ...(styleEvidenceForFamily(family, styles).length ? ['source_style'] : []), ...(family.implementations.some((id) => sourceRecords.find((record) => record.id === id)?.children.length) ? ['source_composition'] : [])])].sort(),
-    similarities: family.implementations.length > 1 ? ['bounded semantic seed match'] : [],
-    differences: new Set(family.implementations.map((id) => sourceRecords.find((record) => record.id === id)?.content_sha256).filter(Boolean)).size > 1 ? ['distinct source content'] : [],
-    counterevidence: ['no interchangeability contract observed'], unknowns: ['semantic contract', 'independent mobile behaviour', 'computed style consistency'], confidence: family.status === 'observed' ? 'medium' : 'low',
-    status: family.implementations.length > 1 ? 'fragmented' : family.status,
-    decision: 'NOT_MERGED', recommendation: 'unresolved',
-  }));
+  return families.map((family) => {
+    const implementationGroups = family.implementation_groups || logicalImplementationGroups(family.implementations, sourceRecords);
+    return {
+      id: `candidate.${family.id.slice(7)}`, family: family.id, sources: family.implementations,
+      implementations_by_plane: family.implementations_by_plane,
+      implementation_groups: implementationGroups,
+      logical_implementation_count: implementationGroups.length,
+      consumers: [...new Set(family.implementations.flatMap((id) => sourceRecords.find((record) => record.id === id)?.consumers || []))].sort(),
+      runtime_observations: family.runtime_observations,
+      evidence_channels: [...new Set([...family.evidence_channels, ...(styleEvidenceForFamily(family, styles).length ? ['source_style'] : []), ...(family.implementations.some((id) => sourceRecords.find((record) => record.id === id)?.children.length) ? ['source_composition'] : [])])].sort(),
+      similarities: implementationGroups.length > 1 ? ['bounded semantic seed match'] : [],
+      differences: new Set(implementationGroups.flatMap((group) => group.content_sha256s)).size > 1 && implementationGroups.length > 1 ? ['distinct implementation content'] : implementationGroups.some((group) => group.cross_plane_drift) ? ['cross-plane source drift'] : [],
+      counterevidence: ['no interchangeability contract observed'], unknowns: ['semantic contract', 'independent mobile behaviour', 'computed style consistency'], confidence: family.status === 'observed' ? 'medium' : 'low',
+      status: implementationGroups.length > 1 ? 'fragmented' : family.status,
+      decision: 'NOT_MERGED', recommendation: 'unresolved',
+    };
+  });
 }
 
-export function desktopMobile(pageFamilies, runtimeObservations, viewportEvidence = []) {
+export function desktopMobile(pageFamilies, uiFamilies, viewportEvidence = []) {
   const comparisonFingerprint = (item) => stableJson({
     structure: item.structure,
     regions: Object.fromEntries(Object.entries(item.computed?.regions || {}).sort(([a], [b]) => a.localeCompare(b)).map(([name, value]) => [name, value ? { display: value.display } : null])),
@@ -790,10 +835,10 @@ export function desktopMobile(pageFamilies, runtimeObservations, viewportEvidenc
       object_fit: value.object_fit,
     }))])),
   });
-  return pageFamilies.map((family) => {
+  const compare = ({ id, scope, pageFamily = null, uiFamily = null, sourceImplementations = [], evidence }) => {
     const ordered = (items) => items.sort((a, b) => a.route_hash.localeCompare(b.route_hash) || a.viewport.width - b.viewport.width);
-    const desktop = ordered(viewportEvidence.filter((item) => item.page_family === family.id && item.viewport?.width >= 1000));
-    const mobile = ordered(viewportEvidence.filter((item) => item.page_family === family.id && item.viewport?.width < 600));
+    const desktop = ordered(evidence.filter((item) => item.viewport?.width >= 1000));
+    const mobile = ordered(evidence.filter((item) => item.viewport?.width < 600));
     let relation = 'unknown';
     if (desktop.length && mobile.length) {
       const desktopFingerprints = desktop.map(comparisonFingerprint);
@@ -801,13 +846,25 @@ export function desktopMobile(pageFamilies, runtimeObservations, viewportEvidenc
       relation = stableJson(desktopFingerprints) === stableJson(mobileFingerprints) ? 'shared_structure_observed' : 'divergent_structure_observed';
     }
     return {
-      id: `desktop-mobile.${family.id.slice(12)}`, page_family: family.id,
+      id, scope, page_family: pageFamily, ui_family: uiFamily,
+      source_implementations: sourceImplementations,
+      observed_host_page_families: [...new Set(evidence.map((item) => item.page_family))].sort(),
       desktop: desktop.length ? desktop : { viewport: { width: 1728, height: 900 }, status: 'not_observed' },
       mobile: mobile.length ? mobile : { viewport: { width: 390, height: 844 }, status: 'not_observed' },
       relation, interpretation: 'independent_observations_not_responsive_variants',
+      boundary_status: scope === 'ui_family' ? 'source_mapped_host_page_without_synthetic_component_wrapper' : 'page_family_observation',
       optional_breakpoint_evidence: [{ width: 430, height: 932 }, { width: 768, height: 1024 }, { width: 1280, height: 800 }],
     };
-  });
+  };
+  const pageRecords = pageFamilies.map((family) => compare({
+    id: `desktop-mobile.page-family.${family.id.slice(12)}`, scope: 'page_family', pageFamily: family.id,
+    sourceImplementations: family.source_pages || [], evidence: viewportEvidence.filter((item) => item.page_family === family.id),
+  }));
+  const uiRecords = uiFamilies.map((family) => compare({
+    id: `desktop-mobile.ui-family.${family.id.slice(7)}`, scope: 'ui_family', uiFamily: family.id,
+    sourceImplementations: family.implementations || [], evidence: viewportEvidence.filter((item) => item.ui_families?.includes(family.id)),
+  }));
+  return [...pageRecords, ...uiRecords].sort((a, b) => a.id.localeCompare(b.id));
 }
 
 export function screenshotIndex(pageFamilies) {
@@ -860,10 +917,13 @@ export function selectScreenshotPages(byFamily, maxPages) {
   return { selected, uncaptured };
 }
 
-export async function captureBrowserEvidence({ candidateBase, manifest, runtimeObservations, families, siteRoot, outputDir, budget, maxPages = 20 }) {
+export async function captureBrowserEvidence({ candidateBase, manifest, runtimeObservations, families, siteRoot, outputDir, budget, maxPages = 20, snapshotTime }) {
   if (!candidateBase) throw new Error('Browser evidence requires the candidate base URL');
+  const fixedEpochMs = Date.parse(snapshotTime);
+  if (!Number.isFinite(fixedEpochMs)) throw new Error('Browser evidence requires an exact snapshot time');
   const requireFromSite = createRequire(join(resolve(siteRoot), 'package.json'));
   const { chromium } = requireFromSite('playwright');
+  const sharp = requireFromSite('sharp');
   const files = manifestHtmlFiles(manifest);
   if (files.length !== runtimeObservations.length) throw new Error('Browser selection cannot map runtime inventory to manifest');
   const byFamily = new Map();
@@ -884,9 +944,64 @@ export async function captureBrowserEvidence({ candidateBase, manifest, runtimeO
         if (actualViewport?.width !== viewport.width || actualViewport?.height !== viewport.height) {
           throw new Error(`Browser viewport contract mismatch: expected ${viewport.width}x${viewport.height}`);
         }
+        const deterministicSeed = Number.parseInt(selectedPage.observation.route_hash.slice(0, 8), 16) ^ viewport.width ^ viewport.height;
+        await page.addInitScript(({ fixedEpochMs: epoch, deterministicSeed: initialSeed }) => {
+          const NativeDate = globalThis.Date;
+          class FrozenDate extends NativeDate {
+            constructor(...args) { super(...(args.length ? args : [epoch])); }
+            static now() { return epoch; }
+          }
+          globalThis.Date = FrozenDate;
+          let state = initialSeed >>> 0 || 0x9e3779b9;
+          Math.random = () => {
+            state ^= state << 13; state ^= state >>> 17; state ^= state << 5;
+            return (state >>> 0) / 0x100000000;
+          };
+        }, { fixedEpochMs, deterministicSeed });
         const target = relativeKeyUrl(candidateBase, selectedPage.file.key);
         await withRetry(`Browser route ${selectedPage.observation.route_hash.slice(0, 12)}`, () => page.goto(target.href, { waitUntil: 'domcontentloaded', timeout: 20_000 }), { attempts: 3, redact: redactFactory([candidateBase]) });
+        await page.waitForLoadState('networkidle', { timeout: 20_000 });
         await page.evaluate(async () => { if (document.fonts?.ready) await document.fonts.ready; });
+        await page.evaluate(async () => {
+          const images = [...document.images].filter((image) => {
+            const rect = image.getBoundingClientRect();
+            return rect.bottom >= -innerHeight && rect.top <= innerHeight * 2;
+          });
+          const results = await Promise.all(images.map(async (image) => {
+            image.loading = 'eager';
+            return Promise.race([
+              (async () => {
+                if (!image.complete) await new Promise((resolve) => {
+                  image.addEventListener('load', resolve, { once: true }); image.addEventListener('error', resolve, { once: true });
+                });
+                if (typeof image.decode === 'function') await image.decode().catch(() => undefined);
+                return 'settled';
+              })(),
+              new Promise((resolve) => setTimeout(() => resolve('timeout'), 5_000)),
+            ]);
+          }));
+          if (results.includes('timeout')) throw new Error('near-viewport media did not settle');
+        });
+        await page.addStyleTag({ content: '*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important;scroll-behavior:auto!important}' });
+        const layoutStable = await page.evaluate(async () => {
+          const fingerprint = () => JSON.stringify([
+            document.documentElement.scrollWidth, document.documentElement.scrollHeight,
+            ...[...document.querySelectorAll('header,main,nav,footer,button,a,img,picture,video,[class*="card"],[class*="listing"],[class*="hero"]')].slice(0, 500).flatMap((node) => {
+              const rect = node.getBoundingClientRect(); const style = getComputedStyle(node);
+              return [style.display, style.visibility, Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height)];
+            }),
+          ]);
+          let previous = ''; let stableFrames = 0;
+          for (let frame = 0; frame < 120; frame += 1) {
+            await new Promise((resolveFrame) => requestAnimationFrame(resolveFrame));
+            const current = fingerprint();
+            if (current === previous) stableFrames += 1; else stableFrames = 0;
+            if (stableFrames >= 5) return true;
+            previous = current;
+          }
+          return false;
+        });
+        if (!layoutStable) throw new Error(`Browser layout did not stabilize: ${selectedPage.observation.route_hash.slice(0, 12)}`);
         const computed = await page.evaluate(() => {
           const geometry = (selector) => {
             const node = document.querySelector(selector); if (!node) return null;
@@ -919,11 +1034,25 @@ export async function captureBrowserEvidence({ candidateBase, manifest, runtimeO
         const safeFamily = selectedPage.pageFamily.replace(/[^a-z0-9-]+/giu, '-');
         const filename = `${safeFamily}-${selectedPage.observation.route_hash.slice(0, 12)}-${viewport.width}x${viewport.height}.jpg`;
         const path = join(screenshotDir, filename);
-        await page.screenshot({ path, type: 'jpeg', quality: 65, fullPage: false, animations: 'disabled' });
+        const screenshotOptions = { type: 'jpeg', quality: 65, fullPage: false, animations: 'disabled', caret: 'hide', scale: 'css' };
+        let previousScreenshot = null; let stableScreenshot = null;
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+          const currentScreenshot = await page.screenshot(screenshotOptions);
+          if (previousScreenshot?.equals(currentScreenshot)) { stableScreenshot = currentScreenshot; break; }
+          previousScreenshot = currentScreenshot;
+        }
+        if (!stableScreenshot) throw new Error(`Browser pixels did not stabilize: ${selectedPage.observation.route_hash.slice(0, 12)}`);
+        writeFileSync(path, stableScreenshot);
         await page.close();
-        const size = statSync(path).size; budget.claim(size, `screenshots/${filename}`);
+        const size = statSync(path).size;
+        if (size > MAX_SCREENSHOT_BYTES) throw new Error(`Screenshot exceeds deterministic byte reservation: ${filename}`);
+        budget.claim(MAX_SCREENSHOT_BYTES, `screenshots/${filename}`);
+        const { data: dhashPixels } = await sharp(stableScreenshot).greyscale().resize(9, 8, { fit: 'fill', kernel: 'lanczos3' }).raw().toBuffer({ resolveWithObject: true });
+        let dhashBits = '';
+        for (let y = 0; y < 8; y += 1) for (let x = 0; x < 8; x += 1) dhashBits += dhashPixels[y * 9 + x] > dhashPixels[y * 9 + x + 1] ? '1' : '0';
+        const perceptualDhash = BigInt(`0b${dhashBits}`).toString(16).padStart(16, '0');
         const relativePath = `screenshots/${filename}`;
-        screenshots.push({ id: `screenshot.${sha256(`${selectedPage.observation.route_hash}\0${viewport.width}`).slice(0, 16)}`, page_family: selectedPage.pageFamily, selection: selectedPage.selection, route_hash: selectedPage.observation.route_hash, screenshot_path: relativePath, viewport, screenshot_sha256: sha256(readFileSync(path)), screenshot_bytes: size, source: 'exact_candidate_browser' });
+        screenshots.push({ id: `screenshot.${sha256(`${selectedPage.observation.route_hash}\0${viewport.width}`).slice(0, 16)}`, page_family: selectedPage.pageFamily, selection: selectedPage.selection, route_hash: selectedPage.observation.route_hash, screenshot_path: relativePath, viewport, perceptual_dhash_64: perceptualDhash, pixel_stability: 'two_consecutive_exact_buffers', raw_raster_role: 'noncanonical_visual_evidence', source: 'exact_candidate_browser' });
         const uiFamilies = families.filter((item) => item.runtime_observations.includes(selectedPage.observation.id)).map((item) => item.id).sort();
         viewportEvidence.push({ page_family: selectedPage.pageFamily, ui_families: uiFamilies, route_hash: selectedPage.observation.route_hash, viewport, structure: computed.structure_hash, computed, screenshot_path: relativePath, selection: selectedPage.selection });
       }

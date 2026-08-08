@@ -93,10 +93,10 @@ function summaryMarkdown(identity, counts, families, coverage) {
     `- Candidate snapshot versions: ${JSON.stringify(identity.latest_checked_kaggle_candidate.versions || {})}\n` +
     `- Candidate role: immutable noindex candidate; it is not the production root and root promotion is disabled.\n` +
     `- Current public root release: \`${identity.current_root_prelaunch.release_id}\` (source \`${identity.current_root_prelaunch.source_sha}\`, published ${identity.current_root_prelaunch.published_at}, observed HTML \`${identity.current_root_prelaunch.html_sha256}\`).\n` +
-    `- Identity planes are independent and were not conflated.\n\n` +
-    `## Pages\n\n- Routes: ${counts.routes}\n- Page families: ${counts.page_families}\n- Layouts: ${counts.source.layouts}\n\n` +
-    `## Components\n\n- Source records: ${counts.source.total}\n- Source records by plane: ${JSON.stringify(counts.source_by_plane)}\n- Source components: ${counts.source.components}\n- Observed UI families: ${counts.observed_families}\n- Candidate families: ${counts.candidate_families}\n\n` +
-    `## Fragmentation\n\n- Duplicate/fragmentation candidates: ${counts.fragmentation}\n- Style observations: ${counts.styles}\n- Unresolved mappings/questions: ${counts.unresolved}\n\n` +
+    `- Identity planes remain independent; family aggregation groups the same logical source path across planes and reports cross-plane drift separately.\n\n` +
+    `## Pages\n\n- Candidate HTML routes: ${counts.candidate_routes}\n- Separate public-root observations: ${counts.public_root_observations}\n- Page families: ${counts.page_families}\n- Layouts by plane: ${JSON.stringify(Object.fromEntries(Object.entries(counts.source_by_plane).map(([plane, value]) => [plane, value.layouts])))}\n\n` +
+    `## Components\n\n- Source records across both planes: ${counts.source.total}\n- Source records by plane: ${JSON.stringify(counts.source_by_plane)}\n- Source components by plane: ${JSON.stringify(Object.fromEntries(Object.entries(counts.source_by_plane).map(([plane, value]) => [plane, value.components])))}\n- Observed UI families: ${counts.observed_families}\n- Candidate families: ${counts.candidate_families}\n\n` +
+    `## Fragmentation\n\n- Duplicate/fragmentation candidates: ${counts.fragmentation}\n- Style inconsistencies: ${counts.style_inconsistencies}\n- Total style observations: ${counts.styles}\n- Unresolved mappings/questions: ${counts.unresolved}\n\n` +
     `## Mobile/Desktop\n\n- Shared structures: ${counts.shared}\n- Divergent structures: ${counts.divergent}\n- Unknown independent comparison: ${counts.desktop_mobile_unknown}\n\n` +
     `## Top 20 high-impact families\n\n${highImpact.map((item, index) => `${index + 1}. ${item.label} — ${item.status}`).join('\n')}\n\n` +
     `## Coverage hypotheses\n\n- FOUND: ${coverage.filter((item) => item.status === 'FOUND').length}\n- MISSING: ${coverage.filter((item) => item.status === 'MISSING').length}\n- DISCOVERED: ${coverage.filter((item) => item.status === 'DISCOVERED').length}\n- AMBIGUOUS: ${coverage.filter((item) => item.status === 'AMBIGUOUS').length}\n\n` +
@@ -208,6 +208,7 @@ async function run(argv) {
       const browserResult = await captureBrowserEvidence({
         candidateBase, manifest: runtimeManifest, runtimeObservations: candidateRuntime, families,
         siteRoot, outputDir: output, budget, maxPages: Number(args.browser_max_pages || 20),
+        snapshotTime: identity.snapshot_time,
       });
       viewportEvidence = browserResult.viewportEvidence;
       const capturedFamilies = new Set(browserResult.screenshots.map((item) => item.page_family));
@@ -217,7 +218,7 @@ async function run(argv) {
     }
     const candidates = candidateGraph(families, sourceRecords, runtime, styles);
     const fragmentation = fragmentationReport(families, styles, sourceRecords, runtime);
-    const desktop = desktopMobile(pageFamilies, runtime, viewportEvidence);
+    const desktop = desktopMobile(pageFamilies, families, viewportEvidence);
     const coverage = coverageRows(sourceRecords, runtime, pageFamilies);
 
     await writeJsonl(join(output, 'source-components.jsonl'), sourceRecords, budget);
@@ -231,15 +232,18 @@ async function run(argv) {
     await writeJsonl(join(output, 'screenshots-index.jsonl'), screenshots, budget);
 
     const counts = {
-      routes: runtime.length, page_families: pageFamilies.length, source: sourceCounts(sourceRecords),
+      routes: runtime.length, candidate_routes: candidateRuntime.length, public_root_observations: 1,
+      page_families: pageFamilies.length, source: sourceCounts(sourceRecords),
       source_by_plane: sourceCountsByPlane(sourceRecords),
       observed_families: families.filter((item) => item.status === 'observed').length,
       candidate_families: candidates.filter((item) => item.status !== 'unknown').length,
       fragmentation: fragmentation.filter((item) => item.status === 'fragmented').length,
-      styles: styles.length, unresolved: candidates.filter((item) => item.status !== 'observed').length + coverage.filter((item) => item.status !== 'FOUND').length,
-      shared: desktop.filter((item) => item.relation === 'shared_structure_observed').length,
-      divergent: desktop.filter((item) => item.relation === 'divergent_structure_observed').length,
-      desktop_mobile_unknown: desktop.filter((item) => item.relation === 'unknown').length,
+      styles: styles.length,
+      style_inconsistencies: styles.filter((item) => item.source_divergence === 'distinct_literals_observed' || item.computed_inconsistency === 'observed_divergence').length,
+      unresolved: candidates.filter((item) => item.status !== 'observed').length + coverage.filter((item) => item.status !== 'FOUND').length,
+      shared: desktop.filter((item) => item.scope === 'ui_family' && item.relation === 'shared_structure_observed').length,
+      divergent: desktop.filter((item) => item.scope === 'ui_family' && item.relation === 'divergent_structure_observed').length,
+      desktop_mobile_unknown: desktop.filter((item) => item.scope === 'ui_family' && item.relation === 'unknown').length,
     };
     writeDeterministic(join(output, 'summary.md'), summaryMarkdown(identity, counts, families, coverage), budget);
     writeDeterministic(join(output, 'coverage-report.md'), coverageMarkdown(coverage, sourcePin, runtimeFacts), budget);
@@ -247,7 +251,6 @@ async function run(argv) {
 
     const hashedNames = [
       ...REQUIRED_FILES.filter((name) => name !== 'manifest.json'),
-      ...screenshots.map((item) => item.screenshot_path).filter(Boolean),
     ];
     const manifest = {
       schema_version: SCHEMA, snapshot_id: identity.snapshot_id, snapshot_time: identity.snapshot_time,
@@ -273,6 +276,7 @@ async function run(argv) {
       },
       counts, coverage_results: Object.fromEntries(['FOUND', 'MISSING', 'DISCOVERED', 'AMBIGUOUS'].map((status) => [status, coverage.filter((row) => row.status === status).length])),
       viewports: { core: [{ width: 390, height: 844 }, { width: 1728, height: 900 }], optional_evidence: [{ width: 430, height: 932 }, { width: 768, height: 1024 }, { width: 1280, height: 800 }] },
+      visual_evidence_contract: { raw_raster_role: 'noncanonical_visual_evidence', canonical_fingerprint: 'dhash-64', in_session_stability: 'two_consecutive_exact_buffers', cross_run_acceptance: 'equal_perceptual_dhash_64' },
       output_byte_budget: budget.limit, output_bytes_before_manifest: budget.used,
       outputs: outputHashes(output, hashedNames),
       constraints: { automatic_defragmentation: false, automatic_merge: false, component_contract_generation: false, full_html_retained: false, bearer_url_retained: false },

@@ -48,7 +48,9 @@ commits into separate detached worktrees, and the decoder inventories and maps
 each source/runtime plane independently. A different checkout is accepted only
 when Git proves the selected source subtree has the exact same tree object;
 otherwise decoding stops. A non-Git fixture requires a separate explicit exact
-tree hash for each source plane.
+tree hash for each source plane. Observed-family aggregation groups identical
+logical source paths across planes without counting the second plane as another
+implementation; content drift at that path is recorded separately.
 
 ## Extraction contract
 
@@ -77,9 +79,11 @@ is `unknown`. Fragmentation evidence reports separate source-AST, exact mapped
 runtime, source-style and composition channels rather than treating a name as
 proof. The core independent observation viewports are `390x844` and
 `1728x900`; optional evidence viewports are `430x932`, `768x1024` and
-`1280x800`. Mobile/desktop comparison uses page-family-specific computed
-regions, visibility, display and semantic-cohort style facts, and is never
-described as a responsive variant.
+`1280x800`. Mobile/desktop comparison emits separate page-family and
+observed-UI-family records using computed regions, visibility, display, order,
+geometry and semantic-cohort style facts. UI-family evidence is explicitly
+scoped to mapped host pages when no synthetic runtime wrapper exists, and is
+never described as a responsive variant.
 
 The browser budget chooses the modal structural representative of every page
 family before considering any outlier. Remaining outlier slots are allocated
@@ -87,6 +91,22 @@ round-robin across families, and a budget smaller than the family count emits
 explicit uncaptured rows. Each browser context is created with the declared
 Playwright viewport and is rejected if the runtime viewport differs, so mobile
 and desktop screenshots cannot silently fall back to the default dimensions.
+The browser fixture freezes `Date` and pseudorandom selection to the pinned
+snapshot/route, waits for network idle, fonts and visible image decode, disables
+motion, and requires five identical animation-frame layout fingerprints before
+collecting computed evidence or pixels. Near-viewport media settlement is
+bounded and fails closed instead of allowing an unresolved decode promise to
+stall the artifact job. Following Playwright's screenshot-assertion contract,
+capture also requires two consecutive screenshot buffers to match before the
+image is accepted; volatile pixels fail closed. Raw browser rasters remain
+explicitly noncanonical visual evidence because independent Chromium sessions
+can differ in a sparse set of antialiased/media pixels even after structure and
+computed styles are identical. `screenshots-index.jsonl` therefore stores a
+stable 64-bit perceptual dHash rather than a raw-byte hash; canonical graph
+shards and receipts use a fixed, size-checked screenshot budget. Cross-run
+acceptance requires equal perceptual dHash while retaining both raw specimens
+for human visual QA, following Playwright's tolerance-based rather than
+raw-byte visual-comparison model.
 Manifest, HTML and browser navigation retries are bounded to three attempts;
 retry configuration itself is capped.
 
