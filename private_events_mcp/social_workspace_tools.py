@@ -117,6 +117,16 @@ def build_social_workspace_tools(
     def enabled(name: str) -> bool:
         return policy_allows(feature_policy, name) and policy_allows(capability_policy, name)
 
+    def require_platform(platform: Any) -> str:
+        if not isinstance(platform, str) or platform not in enabled_platforms:
+            raise InvalidArgumentsError("platform is unavailable")
+        return platform
+
+    def rejected(exc: Exception) -> InvalidArgumentsError:
+        if isinstance(exc, InvalidArgumentsError):
+            return exc
+        return InvalidArgumentsError("social workspace request rejected")
+
     all_scope_options = tuple(
         frozenset({f"{platform}:{suffix}"})
         for platform in enabled_platforms
@@ -129,20 +139,23 @@ def build_social_workspace_tools(
 
     def read_scope(arguments: Mapping[str, Any]) -> frozenset[str]:
         try:
-            return validate_read_request(arguments).required_scopes
+            request = validate_read_request(arguments)
+            require_platform(request.platform.value)
+            return request.required_scopes
         except Exception as exc:
-            raise InvalidArgumentsError(str(exc)) from exc
+            raise rejected(exc) from None
 
     def action_scope(arguments: Mapping[str, Any]) -> frozenset[str]:
         try:
-            return validate_prepare_request(arguments).required_scopes
+            request = validate_prepare_request(arguments)
+            require_platform(request.platform.value)
+            return request.required_scopes
         except Exception as exc:
-            raise InvalidArgumentsError(str(exc)) from exc
+            raise rejected(exc) from None
 
     def capabilities_scope(arguments: Mapping[str, Any]) -> frozenset[str]:
         platform = arguments.get("platform")
-        if platform not in enabled_platforms:
-            raise InvalidArgumentsError("platform is unavailable")
+        platform = require_platform(platform)
         return frozenset({f"{platform}:discover"})
 
     def status_scope(arguments: Mapping[str, Any]) -> frozenset[str]:
@@ -157,11 +170,12 @@ def build_social_workspace_tools(
                 ).fetchone()
             if row is None:
                 raise InvalidArgumentsError("status reference is unknown")
+            require_platform(row["platform"])
             return required_scope_for_action(row["platform"], row["action"])
         except InvalidArgumentsError:
             raise
         except Exception as exc:
-            raise InvalidArgumentsError(str(exc)) from exc
+            raise rejected(exc) from None
 
     def commit_scope(arguments: Mapping[str, Any]) -> frozenset[str]:
         ref = arguments.get("preparation_ref")
@@ -174,6 +188,7 @@ def build_social_workspace_tools(
             ).fetchone()
         if row is None:
             raise InvalidArgumentsError("preparation reference is unknown")
+        require_platform(row["platform"])
         return required_scope_for_action(row["platform"], row["action"])
 
     def asset_status_scope(arguments: Mapping[str, Any]) -> frozenset[str]:
@@ -187,6 +202,7 @@ def build_social_workspace_tools(
             ).fetchone()
         if row is None:
             raise InvalidArgumentsError("asset reference is unknown")
+        require_platform(row["platform"])
         return frozenset({f"{row['platform']}:post:publish"})
 
     async def denial(arguments: Mapping[str, Any], context: ToolCallContext, reason: str) -> None:
@@ -199,9 +215,7 @@ def build_social_workspace_tools(
         )
 
     async def capabilities(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
-        platform = arguments.get("platform")
-        if platform not in enabled_platforms:
-            raise InvalidArgumentsError("platform is unavailable")
+        platform = require_platform(arguments.get("platform"))
         target = arguments.get("target_ref")
         return await runtime.capabilities(target if isinstance(target, str) else None,
                                           context, platform=str(platform))
@@ -209,13 +223,14 @@ def build_social_workspace_tools(
     async def read(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
         try:
             request = validate_read_request(arguments)
+            require_platform(request.platform.value)
             return await (runtime.resolve(request, context)
                           if request.operation is SocialReadOperation.RESOLVE_TARGET
                           else runtime.read(request, context))
         except InvalidArgumentsError:
             raise
         except Exception as exc:
-            raise InvalidArgumentsError(str(exc)) from exc
+            raise rejected(exc) from None
 
     async def targets_list(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
         payload = dict(arguments)
@@ -225,37 +240,44 @@ def build_social_workspace_tools(
 
     async def prepare(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
         try:
-            return await runtime.prepare(validate_prepare_request(arguments), context)
+            request = validate_prepare_request(arguments)
+            require_platform(request.platform.value)
+            return await runtime.prepare(request, context)
         except Exception as exc:
-            raise InvalidArgumentsError(str(exc)) from exc
+            raise rejected(exc) from None
 
     async def commit(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
         try:
+            commit_scope(arguments)
             return await runtime.commit(arguments, context)
         except Exception as exc:
-            raise InvalidArgumentsError(str(exc)) from exc
+            raise rejected(exc) from None
 
     async def status(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
         try:
             kind, ref = validate_status_request(arguments)
+            status_scope(arguments)
             if kind == "operation":
                 return await runtime.reconcile(ref, context)
             return await runtime.status(kind, ref, context)
         except Exception as exc:
-            raise InvalidArgumentsError(str(exc)) from exc
+            raise rejected(exc) from None
 
     async def asset_stage(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
         try:
-            return await runtime.stage_asset(validate_asset_stage_request(arguments), context)
+            request = validate_asset_stage_request(arguments)
+            require_platform(request.platform.value)
+            return await runtime.stage_asset(request, context)
         except Exception as exc:
-            raise InvalidArgumentsError(str(exc)) from exc
+            raise rejected(exc) from None
 
     async def asset_status(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
         try:
             ref = validate_asset_status_request(arguments)
+            asset_status_scope(arguments)
             return await runtime.asset_status(ref, context)
         except Exception as exc:
-            raise InvalidArgumentsError(str(exc)) from exc
+            raise rejected(exc) from None
 
     capability_schema = {
         "type": "object", "additionalProperties": False,

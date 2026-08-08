@@ -23,6 +23,14 @@ from typing import Any, Protocol
 
 from .auth_store import OAuthStateStore
 from .social_workspace import (
+    SOCIAL_WORKSPACE_AUDIENCE_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_STATISTICS_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_STORIES_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_TARGET_LIST_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA,
     SocialActionIntent,
     SocialActionStatus,
     SocialPlatform,
@@ -48,7 +56,10 @@ class SocialWorkspaceAdapter(Protocol):
     async def capabilities(self, target_ref: str | None) -> Mapping[str, Any]: ...
     async def resolve(self, request: SocialReadRequest) -> Mapping[str, Any]: ...
     async def read(self, request: SocialReadRequest) -> Mapping[str, Any]: ...
-    async def execute(self, intent: SocialActionIntent) -> Mapping[str, Any]: ...
+    async def execute(
+        self, intent: SocialActionIntent, *, operation_ref: str
+    ) -> Mapping[str, Any]: ...
+    async def reconcile(self, operation_ref: str) -> Mapping[str, Any]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,10 +86,29 @@ class SocialBudgetLimits:
     egress: int = 16 * 1024 * 1024
     media: int = 1000
 
+    def for_dimension(self, metric: str, dimension: str) -> int:
+        """Return independently configurable conservative layer defaults.
+
+        A caller may still pass explicit per-dimension overrides to the runtime;
+        these defaults avoid pretending that global, principal, target and
+        action limits are the same policy boundary.
+        """
+
+        base = int(getattr(self, metric))
+        if dimension == "global":
+            return max(1, base * 10)
+        if dimension == "principal":
+            return max(1, base)
+        if dimension == "action":
+            return max(1, base // 2)
+        if dimension == "target":
+            return max(1, base // 4)
+        raise ValueError("unknown budget dimension")
+
 
 _REF_RE = re.compile(r"^(tgt|itm|ast)_[A-Za-z0-9_-]{16,160}$")
 _SECRET_KEY = re.compile(
-    r"(?:^id$|(?:provider|peer|owner|chat|user)_id$|token|secret|password|authorization|cookie|session|raw|method|path|url)",
+    r"(?:^id$|(?:provider|peer|owner|chat|user)_id$|provider|native|identifier|access_hash|token|secret|password|authorization|cookie|session|raw|method|path|url)",
     re.IGNORECASE,
 )
 _SECRET_VALUE = re.compile(r"(?i)(?:bearer\s+[a-z0-9._~-]{8,}|(?:token|secret|password)=\S+)")
@@ -109,6 +139,7 @@ class SocialWorkspaceRuntime:
         sample_ttl_seconds: int = 3600,
         response_cap_bytes: int = 128 * 1024,
         budget_limits: SocialBudgetLimits | Mapping[str, int] | None = None,
+        budget_dimension_limits: Mapping[str, Mapping[str, int]] | None = None,
         circuit_failure_threshold: int = 3,
         circuit_cooldown_seconds: int = 60,
         clock: Any = time.time,
@@ -137,6 +168,18 @@ class SocialWorkspaceRuntime:
             self.budgets = SocialBudgetLimits(**dict(budget_limits))
         if any(getattr(self.budgets, field) < 1 for field in ("attempts", "rate", "egress", "media")):
             raise ValueError("budget limits must be positive")
+        self._budget_dimension_limits: dict[str, dict[str, int]] = {}
+        for metric in ("attempts", "rate", "egress", "media"):
+            configured = dict((budget_dimension_limits or {}).get(metric, {}))
+            values: dict[str, int] = {}
+            for dimension in ("global", "principal", "target", "action"):
+                value = configured.get(
+                    dimension, self.budgets.for_dimension(metric, dimension)
+                )
+                if type(value) is not int or value < 1:
+                    raise ValueError("budget dimension limits must be positive integers")
+                values[dimension] = value
+            self._budget_dimension_limits[metric] = values
         self.circuit_failure_threshold = max(1, int(circuit_failure_threshold))
         self.circuit_cooldown_seconds = max(1, int(circuit_cooldown_seconds))
         self._clock = clock
@@ -249,6 +292,20 @@ class SocialWorkspaceRuntime:
         outcome: str, reason: str, target_ref: str | None = None,
         action_digest: str | None = None, response_bytes: int = 0, media_items: int = 0,
     ) -> None:
+        platform = platform if platform in {"telegram", "vk"} else None
+        allowed_operations = {
+            *(item.value for item in SocialReadOperation),
+            "capabilities", "prepare", "commit", "reconcile",
+            "asset_stage", "asset_status", "social_tool", "invalid",
+        }
+        operation = operation if operation in allowed_operations else "invalid"
+        outcome = outcome if outcome in {
+            "succeeded", "succeeded_response_withheld", "outcome_unknown",
+            "failed", "denied",
+        } else "failed"
+        reason = re.sub(r"[^a-z0-9_]", "_", str(reason).lower())[:64] or "unknown"
+        if target_ref is not None and not _REF_RE.fullmatch(target_ref):
+            target_ref = None
         principal_hash = self._principal_hash(principal)
         with self.store._lock, self.store._connect() as conn:
             conn.execute(
@@ -258,7 +315,7 @@ class SocialWorkspaceRuntime:
                    VALUES(?,?,?,?,?,?,?,?,?,?)""",
                 (principal_hash, platform, operation,
                  self._hash(target_ref) if target_ref else None, action_digest,
-                 outcome[:32], re.sub(r"[^a-z0-9_]", "_", reason.lower())[:64] or "unknown",
+                 outcome, reason,
                  max(0, response_bytes), max(0, media_items), self._now()),
             )
 
@@ -266,18 +323,62 @@ class SocialWorkspaceRuntime:
         self, context: ToolCallContext, *, platform: str | None, operation: str,
         reason: str, target_ref: str | None = None,
     ) -> None:
-        self._audit(RuntimePrincipal.from_context(context), platform=platform,
-                    operation=operation, outcome="denied", reason=reason,
-                    target_ref=target_ref)
+        self._audit(
+            RuntimePrincipal.from_context(context),
+            platform=platform if platform in {"telegram", "vk"} else None,
+            operation=operation if operation in {
+                *(item.value for item in SocialReadOperation),
+                "capabilities", "prepare", "commit", "reconcile",
+                "asset_stage", "asset_status", "social_tool",
+            } else "invalid",
+            outcome="denied",
+            reason=reason,
+            target_ref=target_ref if isinstance(target_ref, str) and _REF_RE.fullmatch(target_ref) else None,
+        )
+
+    def _stable_target_budget_key(
+        self, principal: RuntimePrincipal, platform: str, target_ref: str | None,
+        *, conn: sqlite3.Connection | None = None,
+    ) -> str:
+        if not target_ref:
+            return f"{platform}\0-"
+        if not _REF_RE.fullmatch(target_ref) or not target_ref.startswith("tgt_"):
+            raise SocialWorkspaceRuntimeError("target budget reference is invalid")
+        if conn is None:
+            native = self._resolve_ref(target_ref, "target", platform, principal)
+        else:
+            client, subject, resource = self._binding(principal)
+            row = conn.execute(
+                """SELECT provider_ref_ciphertext FROM social_workspace_ref
+                   WHERE ref_hash=? AND ref_kind='target' AND client_hash=?
+                   AND subject_hash=? AND resource_hash=? AND platform=?
+                   AND policy_version=? AND expires_at>?""",
+                (
+                    self._hash(target_ref), client, subject, resource, platform,
+                    self.policy_version, self._now(),
+                ),
+            ).fetchone()
+            if row is None:
+                raise SocialWorkspaceRuntimeError(
+                    "opaque reference is expired or not bound"
+                )
+            native = self._decrypt(row["provider_ref_ciphertext"])
+        return f"{platform}\0{self._hash(native)}"
 
     def _budget_keys(
-        self, principal: RuntimePrincipal, platform: str, target_ref: str | None, action: str
+        self, principal: RuntimePrincipal, platform: str, target_ref: str | None,
+        action: str, *, conn: sqlite3.Connection | None = None,
     ) -> tuple[tuple[str, str], ...]:
         principal_key = f"{principal.client_id}\0{principal.subject}\0{principal.resource}"
         return (
             ("global", "global"),
             ("principal", principal_key),
-            ("target", f"{platform}\0{target_ref or '-'}"),
+            (
+                "target",
+                self._stable_target_budget_key(
+                    principal, platform, target_ref, conn=conn
+                ),
+            ),
             ("action", f"{platform}\0{action}"),
         )
 
@@ -287,13 +388,14 @@ class SocialWorkspaceRuntime:
     ) -> None:
         if amount <= 0:
             return
-        limit = getattr(self.budgets, metric)
         now = self._now()
         period = datetime.fromtimestamp(now, timezone.utc).strftime("%Y-%m-%dT%H")
+        budget_keys = self._budget_keys(principal, platform, target_ref, action)
         with self.store._lock, self.store._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             try:
-                for dimension, raw_key in self._budget_keys(principal, platform, target_ref, action):
+                for dimension, raw_key in budget_keys:
+                    limit = self._budget_dimension_limits[metric][dimension]
                     key = self._hash(raw_key)
                     row = conn.execute(
                         "SELECT amount FROM social_workspace_budget WHERE period=? AND dimension=? AND bucket_hash=? AND metric=?",
@@ -317,11 +419,14 @@ class SocialWorkspaceRuntime:
         if not target_ref:
             return
         client, subject, resource = self._binding(principal)
+        target_hash = self._hash(
+            self._stable_target_budget_key(principal, platform, target_ref)
+        )
         with self.store._lock, self.store._connect() as conn:
             row = conn.execute(
                 """SELECT flood_until,circuit_open_until FROM social_workspace_circuit
                    WHERE client_hash=? AND subject_hash=? AND resource_hash=? AND platform=? AND target_ref_hash=?""",
-                (client, subject, resource, platform, self._hash(target_ref)),
+                (client, subject, resource, platform, target_hash),
             ).fetchone()
         now = self._now()
         if row and ((row["flood_until"] or 0) > now or (row["circuit_open_until"] or 0) > now):
@@ -335,7 +440,9 @@ class SocialWorkspaceRuntime:
             return
         client, subject, resource = self._binding(principal)
         now = self._now()
-        target_hash = self._hash(target_ref)
+        target_hash = self._hash(
+            self._stable_target_budget_key(principal, platform, target_ref)
+        )
         with self.store._lock, self.store._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
@@ -421,6 +528,160 @@ class SocialWorkspaceRuntime:
             raise SocialWorkspaceRuntimeError("response cap exceeded")
         return redacted
 
+    def _project_contract_value(
+        self,
+        value: Any,
+        schema: Mapping[str, Any],
+        *,
+        root: Mapping[str, Any] | None = None,
+        field: str = "response",
+    ) -> Any:
+        """Project provider data onto one closed output schema and validate it.
+
+        Provider adapters are untrusted boundaries.  Merely removing known
+        secret-looking keys is insufficient because a new native identifier can
+        appear under an innocuous key.  Projection makes the output allowlist
+        authoritative and drops everything the public contract does not name.
+        """
+
+        root = root or schema
+        reference = schema.get("$ref")
+        if isinstance(reference, str):
+            prefix = "#/$defs/"
+            if not reference.startswith(prefix):
+                raise SocialWorkspaceRuntimeError("provider response schema is invalid")
+            definition = root.get("$defs", {}).get(reference[len(prefix):])
+            if not isinstance(definition, Mapping):
+                raise SocialWorkspaceRuntimeError("provider response schema is invalid")
+            return self._project_contract_value(
+                value, definition, root=root, field=field
+            )
+
+        expected_type = schema.get("type")
+        if expected_type == "object":
+            if not isinstance(value, Mapping):
+                raise SocialWorkspaceRuntimeError("provider response is invalid")
+            properties = schema.get("properties", {})
+            if not isinstance(properties, Mapping):
+                raise SocialWorkspaceRuntimeError("provider response schema is invalid")
+            required = schema.get("required", [])
+            if not isinstance(required, list) or any(name not in value for name in required):
+                raise SocialWorkspaceRuntimeError("provider response is incomplete")
+            projected = {
+                name: self._project_contract_value(
+                    value[name], child, root=root, field=f"{field}.{name}"
+                )
+                for name, child in properties.items()
+                if name in value and isinstance(child, Mapping)
+            }
+            minimum = schema.get("minProperties")
+            if type(minimum) is int and len(projected) < minimum:
+                raise SocialWorkspaceRuntimeError("provider response is incomplete")
+            one_of = schema.get("oneOf")
+            if isinstance(one_of, list):
+                matches = 0
+                for option in one_of:
+                    if not isinstance(option, Mapping):
+                        continue
+                    option_required = option.get("required", [])
+                    if isinstance(option_required, list) and all(
+                        name in projected for name in option_required
+                    ):
+                        matches += 1
+                if matches != 1:
+                    raise SocialWorkspaceRuntimeError("provider response binding is invalid")
+            return projected
+
+        if expected_type == "array":
+            if not isinstance(value, list):
+                raise SocialWorkspaceRuntimeError("provider response is invalid")
+            maximum = schema.get("maxItems")
+            minimum = schema.get("minItems")
+            if type(maximum) is int and len(value) > maximum:
+                raise SocialWorkspaceRuntimeError("provider response page is too large")
+            if type(minimum) is int and len(value) < minimum:
+                raise SocialWorkspaceRuntimeError("provider response is incomplete")
+            child = schema.get("items", {})
+            if not isinstance(child, Mapping):
+                raise SocialWorkspaceRuntimeError("provider response schema is invalid")
+            projected = [
+                self._project_contract_value(item, child, root=root, field=field)
+                for item in value
+            ]
+            if schema.get("uniqueItems") and len({_json(item) for item in projected}) != len(projected):
+                raise SocialWorkspaceRuntimeError("provider response contains duplicates")
+            return projected
+
+        if expected_type == "string":
+            if not isinstance(value, str):
+                raise SocialWorkspaceRuntimeError("provider response is invalid")
+            minimum = schema.get("minLength")
+            maximum = schema.get("maxLength")
+            if type(minimum) is int and len(value) < minimum:
+                raise SocialWorkspaceRuntimeError("provider response is incomplete")
+            if type(maximum) is int and len(value) > maximum:
+                raise SocialWorkspaceRuntimeError("provider response field is too large")
+            pattern = schema.get("pattern")
+            if isinstance(pattern, str) and re.fullmatch(pattern, value) is None:
+                raise SocialWorkspaceRuntimeError("provider response reference is invalid")
+            if schema.get("format") == "date-time":
+                try:
+                    datetime.fromisoformat(
+                        value[:-1] + "+00:00" if value.endswith("Z") else value
+                    )
+                except ValueError as exc:
+                    raise SocialWorkspaceRuntimeError(
+                        "provider response timestamp is invalid"
+                    ) from exc
+        elif expected_type == "integer":
+            if type(value) is not int:
+                raise SocialWorkspaceRuntimeError("provider response is invalid")
+            if type(schema.get("minimum")) is int and value < schema["minimum"]:
+                raise SocialWorkspaceRuntimeError("provider response is invalid")
+            if type(schema.get("maximum")) is int and value > schema["maximum"]:
+                raise SocialWorkspaceRuntimeError("provider response is invalid")
+        elif expected_type == "boolean":
+            if type(value) is not bool:
+                raise SocialWorkspaceRuntimeError("provider response is invalid")
+        elif expected_type is not None:
+            raise SocialWorkspaceRuntimeError("provider response schema is invalid")
+
+        if "const" in schema and value != schema["const"]:
+            raise SocialWorkspaceRuntimeError("provider response discriminator is invalid")
+        choices = schema.get("enum")
+        if isinstance(choices, list) and value not in choices:
+            raise SocialWorkspaceRuntimeError("provider response discriminator is invalid")
+        return value
+
+    def _project_read_output(
+        self, request: SocialReadRequest, safe: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        schemas: dict[SocialReadOperation, Mapping[str, Any]] = {
+            SocialReadOperation.SEARCH_TARGETS: SOCIAL_WORKSPACE_TARGET_LIST_OUTPUT_SCHEMA,
+            SocialReadOperation.SEARCH_ITEMS: SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
+            SocialReadOperation.LIST_ITEMS: SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
+            SocialReadOperation.GET_ITEM: SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA,
+            SocialReadOperation.LIST_COMMENTS: SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA,
+            SocialReadOperation.LIST_REACTIONS: SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA,
+            SocialReadOperation.LIST_STORIES: SOCIAL_WORKSPACE_STORIES_OUTPUT_SCHEMA,
+            SocialReadOperation.GET_STATISTICS: SOCIAL_WORKSPACE_STATISTICS_OUTPUT_SCHEMA,
+            SocialReadOperation.GET_AUDIENCE: SOCIAL_WORKSPACE_AUDIENCE_OUTPUT_SCHEMA,
+        }
+        schema = schemas.get(request.operation)
+        if schema is None:
+            raise SocialWorkspaceRuntimeError("provider read operation is unsupported")
+        projected = self._project_contract_value(safe, schema)
+        if not isinstance(projected, dict):
+            raise SocialWorkspaceRuntimeError("provider response must be an object")
+        encoded = _json(projected).encode("utf-8")
+        if len(encoded) > self.response_cap_bytes:
+            raise SocialWorkspaceRuntimeError("response cap exceeded")
+        return projected
+
+    @staticmethod
+    def _safe_provider_error() -> SocialWorkspaceRuntimeError:
+        return SocialWorkspaceRuntimeError("social provider operation failed")
+
     async def capabilities(
         self, target_ref: str | None, context: ToolCallContext, *, platform: str
     ) -> dict[str, Any]:
@@ -428,9 +689,21 @@ class SocialWorkspaceRuntime:
         native = self._resolve_ref(target_ref, "target", platform, principal) if target_ref else None
         try:
             self._consume_budget(principal, platform, target_ref, "capabilities", "rate", 1)
-            raw = await asyncio.wait_for(self._adapter(platform).capabilities(native), self.provider_timeout_seconds)
+            try:
+                raw = await asyncio.wait_for(
+                    self._adapter(platform).capabilities(native),
+                    self.provider_timeout_seconds,
+                )
+            except asyncio.TimeoutError:
+                raise SocialWorkspaceRuntimeError(
+                    "social provider operation timed out"
+                ) from None
+            except Exception:
+                raise self._safe_provider_error() from None
             safe = self._sanitize_provider_output(raw, platform, principal,
                 known_refs={("target", native): target_ref} if native and target_ref else None)
+            if not isinstance(safe, dict):
+                raise SocialWorkspaceRuntimeError("provider response must be an object")
             safe["platform"] = platform
             if target_ref:
                 safe["target_ref"] = target_ref
@@ -439,6 +712,8 @@ class SocialWorkspaceRuntime:
             result = {key: (sorted(str(v) for v in value) if isinstance(value, (set, frozenset)) else str(value) if hasattr(value, "value") else value) for key, value in result.items()}
             result = {key: value for key, value in result.items() if value is not None}
             size = len(_json(result).encode())
+            if size > self.response_cap_bytes:
+                raise SocialWorkspaceRuntimeError("response cap exceeded")
             self._consume_budget(principal, platform, target_ref, "capabilities", "egress", size)
             self._audit(principal, platform=platform, operation="capabilities", outcome="succeeded", reason="ok", target_ref=target_ref, response_bytes=size)
             return result
@@ -453,13 +728,27 @@ class SocialWorkspaceRuntime:
         platform = request.platform.value
         try:
             self._consume_budget(principal, platform, None, request.operation.value, "rate", 1)
-            raw = await asyncio.wait_for(self._adapter(platform).resolve(request), self.provider_timeout_seconds)
+            try:
+                raw = await asyncio.wait_for(
+                    self._adapter(platform).resolve(request),
+                    self.provider_timeout_seconds,
+                )
+            except asyncio.TimeoutError:
+                raise SocialWorkspaceRuntimeError(
+                    "social provider operation timed out"
+                ) from None
+            except Exception:
+                raise self._safe_provider_error() from None
             safe = self._sanitize_provider_output(raw, platform, principal)
+            if not isinstance(safe, dict):
+                raise SocialWorkspaceRuntimeError("provider response must be an object")
             safe["platform"] = platform
             safe["trust"] = "untrusted_external_data"
             safe["is_exact_match"] = True
             validate_resolved_target_preview(request, safe)
             size = len(_json(safe).encode())
+            if size > self.response_cap_bytes:
+                raise SocialWorkspaceRuntimeError("response cap exceeded")
             self._consume_budget(principal, platform, safe.get("target_ref"), request.operation.value, "egress", size)
             self._audit(principal, platform=platform, operation=request.operation.value, outcome="succeeded", reason="ok", target_ref=safe.get("target_ref"), response_bytes=size)
             return safe
@@ -509,6 +798,8 @@ class SocialWorkspaceRuntime:
         principal = RuntimePrincipal.from_context(context)
         platform = request.platform.value
         target_ref = request.target_ref
+        provider_attempted = False
+        flood_seconds = 0
         try:
             self._check_circuit(principal, platform, target_ref)
             self._consume_budget(principal, platform, target_ref, request.operation.value, "rate", 1)
@@ -518,14 +809,27 @@ class SocialWorkspaceRuntime:
                 if sample[1] + request.page_size > request.total_limit:
                     raise SocialWorkspaceRuntimeError("editorial sample cumulative limit exceeded")
             native = self._native_read(request, principal)
-            if sample is not None and sample[2] is not None:
-                native = replace(native, cursor=sample[2])
+            if sample is not None:
+                native = replace(
+                    native, sample_ref=sample[0], cursor=sample[2]
+                )
             known: dict[tuple[str, str], str] = {}
             if target_ref and native.target_ref:
                 known[("target", native.target_ref)] = target_ref
             if request.item_ref and native.item_ref:
                 known[("item", native.item_ref)] = request.item_ref
-            raw = await asyncio.wait_for(self._adapter(platform).read(native), self.provider_timeout_seconds)
+            provider_attempted = True
+            try:
+                raw = await asyncio.wait_for(
+                    self._adapter(platform).read(native), self.provider_timeout_seconds
+                )
+            except asyncio.TimeoutError:
+                raise SocialWorkspaceRuntimeError(
+                    "social provider operation timed out"
+                ) from None
+            except Exception as exc:
+                flood_seconds = int(getattr(exc, "retry_after", 0) or 0)
+                raise self._safe_provider_error() from None
             safe = self._sanitize_provider_output(raw, platform, principal, known_refs=known)
             if not isinstance(safe, dict):
                 raise SocialWorkspaceRuntimeError("provider response must be an object")
@@ -566,7 +870,11 @@ class SocialWorkspaceRuntime:
                     ).rowcount
                 if changed != 1:
                     raise SocialWorkspaceRuntimeError("sample continuation was concurrently consumed")
+            else:
+                safe = self._project_read_output(request, safe)
             size = len(_json(safe).encode("utf-8"))
+            if size > self.response_cap_bytes:
+                raise SocialWorkspaceRuntimeError("response cap exceeded")
             media_count = self._count_media(safe)
             self._consume_budget(principal, platform, target_ref, request.operation.value, "egress", size)
             self._consume_budget(principal, platform, target_ref, request.operation.value, "media", media_count)
@@ -576,8 +884,11 @@ class SocialWorkspaceRuntime:
                         response_bytes=size, media_items=media_count)
             return safe
         except Exception as exc:
-            flood = int(getattr(exc, "retry_after", 0) or 0)
-            self._record_provider_result(principal, platform, target_ref, success=False, flood_seconds=flood)
+            if provider_attempted:
+                self._record_provider_result(
+                    principal, platform, target_ref, success=False,
+                    flood_seconds=flood_seconds,
+                )
             self._audit(principal, platform=platform, operation=request.operation.value,
                         outcome="denied", reason=type(exc).__name__, target_ref=target_ref)
             raise
@@ -700,7 +1011,8 @@ class SocialWorkspaceRuntime:
                        receipt_hash,preparation_hash,client_hash,subject_hash,resource_hash,target_ref_hash,
                        action_digest,operator_hash,operator_nonce_hash,expires_at,created_at)
                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                    (self._hash(approval), approval, receipt, self._hash(receipt),
+                    (self._hash(approval), self._hash(approval),
+                     self._hash(receipt), self._hash(receipt),
                      self._hash(preparation_ref), prep["client_hash"], prep["subject_hash"],
                      prep["resource_hash"], prep["target_ref_hash"], prep["action_digest"],
                      self._hash(operator_principal), nonce_hash, expires, now),
@@ -749,6 +1061,11 @@ class SocialWorkspaceRuntime:
                     raise SocialWorkspaceRuntimeError("required social action scope is missing")
                 self._consume_budget_on_conn(conn, principal, intent.platform.value,
                                              intent.target_ref, intent.action.value, "attempts", 1, now)
+                self._consume_budget_on_conn(
+                    conn, principal, intent.platform.value, intent.target_ref,
+                    intent.action.value, "media",
+                    len(intent.content.media) if intent.content else 0, now,
+                )
                 changed = conn.execute("UPDATE social_workspace_approval SET consumed_at=? WHERE approval_hash=? AND consumed_at IS NULL", (now, self._hash(approval_ref))).rowcount
                 if changed != 1:
                     raise SocialWorkspaceRuntimeError("approval receipt was already consumed")
@@ -777,6 +1094,8 @@ class SocialWorkspaceRuntime:
                 raise
         platform = intent.platform.value
         target_ref = intent.target_ref or intent.destination_target_ref
+        media_count = len(intent.content.media) if intent.content else 0
+        provider_returned = False
         try:
             native = self._native_intent(intent, principal)
             known: dict[tuple[str, str], str] = {}
@@ -784,7 +1103,11 @@ class SocialWorkspaceRuntime:
                 known[("target", native.target_ref)] = intent.target_ref
             if native.item_ref and intent.item_ref:
                 known[("item", native.item_ref)] = intent.item_ref
-            raw = await asyncio.wait_for(self._adapter(platform).execute(native), self.provider_timeout_seconds)
+            raw = await asyncio.wait_for(
+                self._adapter(platform).execute(native, operation_ref=operation),
+                self.provider_timeout_seconds,
+            )
+            provider_returned = True
             safe = self._sanitize_provider_output(raw, platform, principal, known_refs=known)
             if not isinstance(safe, dict):
                 raise SocialWorkspaceRuntimeError("provider action result must be an object")
@@ -793,12 +1116,12 @@ class SocialWorkspaceRuntime:
             safe.setdefault("status", SocialActionStatus.SUCCEEDED.value)
             safe.setdefault("retry_safe", False)
             validate_action_status_response(safe)
+            size = len(_json(safe).encode())
+            if size > self.response_cap_bytes:
+                raise SocialWorkspaceRuntimeError("response cap exceeded")
+            self._consume_budget(principal, platform, target_ref, intent.action.value, "egress", size)
             self._finish_operation(operation, safe, None)
             self._record_provider_result(principal, platform, target_ref, success=True)
-            size = len(_json(safe).encode())
-            media_count = len(intent.content.media) if intent.content else 0
-            self._consume_budget(principal, platform, target_ref, intent.action.value, "egress", size)
-            self._consume_budget(principal, platform, target_ref, intent.action.value, "media", media_count)
             self._audit(principal, platform=platform, operation="commit", outcome="succeeded",
                         reason="provider_succeeded", target_ref=target_ref,
                         action_digest=digest, response_bytes=size, media_items=media_count)
@@ -813,6 +1136,26 @@ class SocialWorkspaceRuntime:
                         reason="provider_timeout", target_ref=target_ref, action_digest=digest)
             return unknown
         except Exception as exc:
+            if provider_returned:
+                withheld = {
+                    "platform": platform,
+                    "operation_ref": operation,
+                    "action": intent.action.value,
+                    "status": SocialActionStatus.OUTCOME_UNKNOWN.value,
+                    "retry_safe": False,
+                    "error_code": "response_withheld",
+                }
+                self._finish_operation(operation, withheld, "response_withheld")
+                self._record_provider_result(
+                    principal, platform, target_ref, success=True
+                )
+                self._audit(
+                    principal, platform=platform, operation="commit",
+                    outcome="succeeded_response_withheld",
+                    reason="response_withheld", target_ref=target_ref,
+                    action_digest=digest, media_items=media_count,
+                )
+                return withheld
             failed = {"platform": platform, "operation_ref": operation,
                       "action": intent.action.value, "status": "failed",
                       "retry_safe": False, "error_code": "provider_failure"}
@@ -820,14 +1163,16 @@ class SocialWorkspaceRuntime:
             self._record_provider_result(principal, platform, target_ref, success=False,
                                          flood_seconds=int(getattr(exc, "retry_after", 0) or 0))
             self._audit(principal, platform=platform, operation="commit", outcome="failed",
-                        reason=type(exc).__name__, target_ref=target_ref, action_digest=digest)
-            raise
+                        reason="provider_failure", target_ref=target_ref, action_digest=digest)
+            raise self._safe_provider_error() from None
 
     def _consume_budget_on_conn(self, conn: sqlite3.Connection, principal: RuntimePrincipal,
         platform: str, target_ref: str | None, action: str, metric: str, amount: int, now: int) -> None:
-        limit = getattr(self.budgets, metric)
         period = datetime.fromtimestamp(now, timezone.utc).strftime("%Y-%m-%dT%H")
-        for dimension, raw_key in self._budget_keys(principal, platform, target_ref, action):
+        for dimension, raw_key in self._budget_keys(
+            principal, platform, target_ref, action, conn=conn
+        ):
+            limit = self._budget_dimension_limits[metric][dimension]
             key = self._hash(raw_key)
             row = conn.execute("SELECT amount FROM social_workspace_budget WHERE period=? AND dimension=? AND bucket_hash=? AND metric=?", (period, dimension, key, metric)).fetchone()
             if (int(row["amount"]) if row else 0) + amount > limit:
@@ -887,6 +1232,14 @@ class SocialWorkspaceRuntime:
             return safe
         except asyncio.TimeoutError:
             return current
+        except SocialWorkspaceRuntimeError:
+            raise
+        except Exception:
+            self._audit(
+                principal, platform=current["platform"], operation="reconcile",
+                outcome="failed", reason="provider_failure",
+            )
+            raise self._safe_provider_error() from None
 
     async def stage_asset(self, request: Any, context: ToolCallContext) -> dict[str, Any]:
         """Bind an already accepted server upload handle to an opaque asset ref.

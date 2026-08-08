@@ -11,6 +11,7 @@ import pytest
 
 from private_events_mcp.auth_store import OAuthStateStore, OAuthStoreError
 from private_events_mcp.crypto import AccessIdentity, pkce_s256
+from private_events_mcp.repository import InvalidArgumentsError
 from private_events_mcp.social_workspace import (
     SocialAction,
     SocialReadOperation,
@@ -49,9 +50,15 @@ class FakeAdapter:
         self.executions = 0
         self.editorial_pages = 0
         self.editorial_cursors = []
+        self.editorial_sample_refs = []
         self.timeout = False
+        self.operation_refs = []
+        self.reconcile_refs = []
+        self.resolve_calls = 0
+        self.capability_calls = 0
 
     async def capabilities(self, target_ref):
+        self.capability_calls += 1
         return {
             "target_ref": target_ref,
             "target_kinds": ["self", "user", "community"],
@@ -64,6 +71,7 @@ class FakeAdapter:
         }
 
     async def resolve(self, request):
+        self.resolve_calls += 1
         if request.target_locator.kind.value == "self":
             return {"target_ref": "native-self-42", "kind": "self",
                     "display_name": "Saved messages"}
@@ -73,6 +81,7 @@ class FakeAdapter:
     async def read(self, request):
         if request.operation is SocialReadOperation.EDITORIAL_SAMPLE:
             self.editorial_cursors.append(request.cursor)
+            self.editorial_sample_refs.append(request.sample_ref)
             self.editorial_pages += 1
             return {
                 "target": {"target_ref": request.target_ref, "kind": "community",
@@ -90,8 +99,9 @@ class FakeAdapter:
             }
         return {"results": [], "trust": "untrusted_external_data"}
 
-    async def execute(self, intent):
+    async def execute(self, intent, *, operation_ref):
         self.executions += 1
+        self.operation_refs.append(operation_ref)
         if self.timeout:
             await asyncio.sleep(0.1)
         return {
@@ -109,6 +119,7 @@ class FakeAdapter:
         }
 
     async def reconcile(self, operation_ref):
+        self.reconcile_refs.append(operation_ref)
         return {"status": "failed", "retry_safe": False,
                 "error_code": "provider_not_observed"}
 
@@ -222,6 +233,8 @@ async def test_editorial_sample_four_pages_is_cumulative_and_cursor_bound(runtim
                                                   "cursor": "forged-continuation"}), context())
     assert adapter.editorial_cursors == [None, "provider-cursor-1", "provider-cursor-2",
                                          "provider-cursor-3"]
+    assert len(set(adapter.editorial_sample_refs)) == 1
+    assert adapter.editorial_sample_refs[0] == sample_ref
 
 
 @pytest.mark.asyncio
@@ -268,6 +281,8 @@ async def test_timeout_is_unknown_not_retry_safe_and_status_reconciles(runtime) 
     assert result["status"] == "outcome_unknown" and result["retry_safe"] is False
     reconciled = await service.reconcile(result["operation_ref"], context())
     assert reconciled["status"] == "failed" and reconciled["retry_safe"] is False
+    assert adapter.operation_refs == [result["operation_ref"]]
+    assert adapter.reconcile_refs == [result["operation_ref"]]
 
 
 def test_tools_are_private_noncacheable_granular_and_feature_hidden(runtime) -> None:
@@ -290,6 +305,207 @@ def test_auth_database_is_separate_and_event_database_is_untouched(tmp_path: Pat
     SocialWorkspaceRuntime(store=store, adapters={"telegram": FakeAdapter()},
                            encryption_key="unit-test-key-that-is-long-enough")
     assert event_db.read_bytes() == b"immutable-event-db-sentinel"
+
+
+@pytest.mark.asyncio
+async def test_normal_read_projects_closed_contract_and_drops_native_identifiers(
+    runtime,
+) -> None:
+    service, adapter, _store = runtime
+
+    async def hostile_read(request):
+        return {
+            "results": [{
+                "target_ref": "native-community-777",
+                "kind": "community",
+                "title": "Named community",
+                "about": "About",
+                "description": "Description",
+                "basic_metrics": {"members": 10},
+                "trust": "untrusted_external_data",
+                "provider_native_identifier": "native-secret-987654321",
+                "innocent_new_provider_field": "must-not-leak",
+            }],
+            "trust": "untrusted_external_data",
+            "provider_debug": "must-not-leak",
+        }
+
+    adapter.read = hostile_read
+    result = await service.read(validate_read_request({
+        "platform": "vk", "operation": "search_targets", "query": "named",
+    }), context())
+    encoded = json.dumps(result)
+    assert "native-secret" not in encoded
+    assert "innocent_new_provider_field" not in encoded
+    assert "provider_debug" not in encoded
+    assert result["results"][0]["target_ref"].startswith("tgt_")
+
+
+@pytest.mark.asyncio
+async def test_provider_exception_is_sanitized_in_tool_error_and_audit(
+    runtime,
+) -> None:
+    service, adapter, store = runtime
+    principal = RuntimePrincipal.from_context(context())
+    target = service._mint_ref("target", "native-user", "telegram", principal)
+
+    async def hostile_execute(intent, *, operation_ref):
+        adapter.executions += 1
+        raise RuntimeError("Bearer TOPSECRETTOKEN /v1/messages.send")
+
+    adapter.execute = hostile_execute
+    intent = validate_prepare_request({
+        "platform": "telegram", "action": "send_message",
+        "idempotency_key": "hostile-error-123", "target_ref": target,
+        "content": {"text": "Hello", "entities": [], "media": []},
+    })
+    prepared = await service.prepare(intent, context())
+    approval = service.approve_preparation(
+        preparation_ref=prepared["preparation_ref"],
+        operator_principal="operator", operator_nonce="hostile-error-nonce-123",
+    )
+    commit_tool = next(
+        tool for tool in build_social_workspace_tools(service)
+        if tool.name == "social_action_commit"
+    )
+    with pytest.raises(InvalidArgumentsError) as caught:
+        await commit_tool.handler({
+            "preparation_ref": prepared["preparation_ref"], **approval,
+            "action_digest": prepared["action_digest"],
+        }, context())
+    assert "TOPSECRETTOKEN" not in str(caught.value)
+    assert "messages.send" not in str(caught.value)
+    with sqlite3.connect(store.path) as conn:
+        audit = json.dumps(conn.execute(
+            "SELECT platform,operation,outcome,reason_code FROM social_workspace_audit"
+        ).fetchall())
+    assert "TOPSECRETTOKEN" not in audit and "messages.send" not in audit
+
+
+@pytest.mark.asyncio
+async def test_disabled_provider_is_enforced_by_handler_not_only_descriptor(runtime) -> None:
+    service, _telegram, _store = runtime
+    vk = FakeAdapter()
+    service.adapters["vk"] = vk
+    resolve_tool = next(
+        tool for tool in build_social_workspace_tools(
+            service, capability_policy={"telegram": True, "vk": False}
+        ) if tool.name == "social_target_resolve"
+    )
+    with pytest.raises(InvalidArgumentsError, match="platform is unavailable"):
+        await resolve_tool.handler({
+            "platform": "vk", "operation": "resolve_target",
+            "target_locator": {"kind": "username", "value": "named"},
+            "expected_target_kinds": ["user"],
+        }, context())
+    assert vk.resolve_calls == 0
+
+
+def test_denial_audit_normalizes_attacker_controlled_dimensions(runtime) -> None:
+    service, _adapter, store = runtime
+    service.audit_denial(
+        context(), platform="Bearer AUDITSECRETTOKEN",
+        operation="password=hunter2", reason="Bad Value\nBearer SECRET",
+        target_ref="Bearer TARGETSECRET",
+    )
+    with sqlite3.connect(store.path) as conn:
+        row = conn.execute(
+            "SELECT platform,operation,reason_code,target_ref_hash "
+            "FROM social_workspace_audit ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    assert row == (None, "invalid", "bad_value_bearer_secret", None)
+
+
+@pytest.mark.asyncio
+async def test_approval_capabilities_are_hash_only_at_rest(runtime) -> None:
+    service, _adapter, store = runtime
+    principal = RuntimePrincipal.from_context(context())
+    target = service._mint_ref("target", "native-user", "telegram", principal)
+    intent = validate_prepare_request({
+        "platform": "telegram", "action": "send_message",
+        "idempotency_key": "hash-only-123", "target_ref": target,
+        "content": {"text": "Hello", "entities": [], "media": []},
+    })
+    prepared = await service.prepare(intent, context())
+    approval = service.approve_preparation(
+        preparation_ref=prepared["preparation_ref"],
+        operator_principal="operator", operator_nonce="hash-only-nonce-12345",
+    )
+    with sqlite3.connect(store.path) as conn:
+        stored = conn.execute(
+            "SELECT approval_ref,receipt_ref FROM social_workspace_approval"
+        ).fetchone()
+    assert stored[0] != approval["approval_ref"]
+    assert stored[1] != approval["approval_receipt"]
+    assert stored == (
+        service._hash(approval["approval_ref"]),
+        service._hash(approval["approval_receipt"]),
+    )
+
+
+@pytest.mark.asyncio
+async def test_provider_success_followed_by_egress_denial_is_not_reported_failed(
+    tmp_path: Path,
+) -> None:
+    adapter = FakeAdapter()
+    store = OAuthStateStore(str(tmp_path / "auth.sqlite"))
+    service = SocialWorkspaceRuntime(
+        store=store, adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+        budget_dimension_limits={
+            "egress": {name: 1 for name in ("global", "principal", "target", "action")}
+        },
+    )
+    principal = RuntimePrincipal.from_context(context())
+    target = service._mint_ref("target", "native-user", "telegram", principal)
+    intent = validate_prepare_request({
+        "platform": "telegram", "action": "send_message",
+        "idempotency_key": "withheld-123", "target_ref": target,
+        "content": {"text": "Hello", "entities": [], "media": []},
+    })
+    prepared = await service.prepare(intent, context())
+    approval = service.approve_preparation(
+        preparation_ref=prepared["preparation_ref"],
+        operator_principal="operator", operator_nonce="withheld-nonce-12345",
+    )
+    result = await service.commit({
+        "preparation_ref": prepared["preparation_ref"], **approval,
+        "action_digest": prepared["action_digest"],
+    }, context())
+    assert result["status"] == "outcome_unknown"
+    assert result["error_code"] == "response_withheld"
+    assert result["retry_safe"] is False
+    assert adapter.executions == 1
+    stored = await service.status("operation", result["operation_ref"], context())
+    assert stored == result
+    with sqlite3.connect(store.path) as conn:
+        outcomes = [row[0] for row in conn.execute(
+            "SELECT outcome FROM social_workspace_audit WHERE operation='commit'"
+        )]
+    assert "failed" not in outcomes
+    assert "succeeded_response_withheld" in outcomes
+
+
+@pytest.mark.asyncio
+async def test_reminted_same_native_target_shares_durable_target_budget(
+    tmp_path: Path,
+) -> None:
+    adapter = FakeAdapter()
+    store = OAuthStateStore(str(tmp_path / "auth.sqlite"))
+    service = SocialWorkspaceRuntime(
+        store=store, adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+        budget_dimension_limits={
+            "rate": {"global": 100, "principal": 100, "target": 1, "action": 100}
+        },
+    )
+    principal = RuntimePrincipal.from_context(context())
+    first = service._mint_ref("target", "same-native-target", "telegram", principal)
+    second = service._mint_ref("target", "same-native-target", "telegram", principal)
+    await service.capabilities(first, context(), platform="telegram")
+    with pytest.raises(SocialWorkspaceRuntimeError, match="rate budget exceeded"):
+        await service.capabilities(second, context(), platform="telegram")
+    assert adapter.capability_calls == 1
 
 
 

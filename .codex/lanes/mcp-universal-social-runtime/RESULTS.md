@@ -6,6 +6,7 @@
 - Base SHA: `b74d8cebf8451c3a5870ae9995e5235bf19bd901`
 - Implementation head SHA: `3efdc7f74abe143e00fa9b712a68aa158fb43c3f`
 - Compatibility commit SHA: `33af64273c3c6730ada062e3becc8878e3414dd3`
+- Security-review remediation: pending commit at the time this receipt was updated.
 
 ## Result
 
@@ -25,6 +26,23 @@ Commands run from the lane worktree:
 - `git diff --check` — passed.
 
 Focused fake-adapter coverage includes self and exact-person resolution; exact DM prepare -> external operator approval -> commit with read-after-write; approval replay and client/resource/idempotency mutation denial; four 25-item editorial pages with translated server cursors and cumulative limit 100; layered budget denial plus durable audit; encrypted provider reference non-disclosure; timeout `outcome_unknown`/`retry_safe=false` and reconciliation; private/non-cacheable tool policy and feature hiding; isolated auth/event DB behavior; and transactional stale OAuth scope rejection.
+
+After independent review requested changes, the lane was hardened further:
+
+- the server-minted editorial `sample_ref` is now passed to the adapter on the first and every continuation page;
+- all ordinary read results are projected through their exact closed output contract, so unknown/native provider fields never cross the MCP boundary;
+- provider exceptions and tool errors are mapped to stable messages with no provider method, path, token or payload text;
+- disabled providers are enforced inside every handler, not merely omitted from descriptor enums;
+- denial audit dimensions are allowlisted and approval capabilities are hash-only at rest;
+- one exact runtime `operation_ref` is passed to execute and reconcile;
+- a provider success followed by response/egress rejection is persisted as `outcome_unknown/response_withheld`, never a false failure;
+- budget layers are independently configurable and target/circuit buckets use the bound native-target fingerprint rather than a remintable public reference.
+
+Post-remediation evidence:
+
+- focused runtime suite: `17 passed`;
+- full `tests/test_private_events_mcp_*.py`: `113 passed`, 3 pre-existing aiohttp warnings;
+- compileall and `git diff --check`: passed.
 
 ## Changed files
 
