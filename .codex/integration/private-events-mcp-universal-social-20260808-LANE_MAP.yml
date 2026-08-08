@@ -100,7 +100,7 @@ lanes:
     expected_output: committed scope/client policy and cross-client OAuth tests; no runtime catalog or provider calls
     verification_scope: targeted
     effort: high
-    status: planned
+    status: completed
   - id: L0c-social-runtime-ledger
     role: worker
     requirement_ids: [R07, R08, R11]
