@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import base64
 import re
+import sqlite3
+import time
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 import pytest
@@ -24,6 +26,7 @@ from private_events_mcp.crypto import (
     TokenValidationError,
     mint_access_token,
     pkce_s256,
+    secret_hash,
 )
 from private_events_mcp.integration import attach_private_events_mcp
 from private_events_mcp.social_workspace import (
@@ -368,6 +371,82 @@ async def test_code_token_and_refresh_stay_client_resource_and_scope_bound(confi
         refreshed_tokens = await refreshed.json()
         assert refreshed_tokens["scope"] == tokens["scope"]
         assert refreshed_tokens["refresh_token"] != tokens["refresh_token"]
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_persisted_invalid_code_and_refresh_scopes_fail_before_consumption(config) -> None:
+    app = web.Application()
+    server = attach_private_events_mcp(app, config)
+    assert server is not None
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    now = int(time.time())
+    verifier = "z" * 64
+    code = "corrupt-code-social-policy"
+    refresh = "corrupt-refresh-social-policy"
+    corrupt_scopes = frozenset(
+        {"offline_access", "telegram:delete", "unknown:scope"}
+    )
+    try:
+        server.oauth.store.create_authorization_code(
+            code=code,
+            subject="events-bot-owner",
+            client_id=config.codex_oauth_client_id,
+            redirect_uri="http://127.0.0.1:8123/callback/social-policy",
+            resource=config.codex_resource,
+            scopes=corrupt_scopes,
+            code_challenge=pkce_s256(verifier),
+            expires_at=now + 600,
+        )
+        denied_code = await client.post(
+            config.oauth_token_path,
+            data={
+                "grant_type": "authorization_code",
+                "client_id": config.codex_oauth_client_id,
+                "code": code,
+                "redirect_uri": "http://127.0.0.1:8123/callback/social-policy",
+                "resource": config.codex_resource,
+                "code_verifier": verifier,
+            },
+        )
+        assert denied_code.status == 400
+        assert (await denied_code.json())["error"] == "invalid_scope"
+
+        server.oauth.store.create_refresh_token(
+            token=refresh,
+            subject="events-bot-owner",
+            client_id=config.codex_oauth_client_id,
+            resource=config.codex_resource,
+            scopes=corrupt_scopes,
+            expires_at=now + 3600,
+        )
+        denied_refresh = await client.post(
+            config.oauth_token_path,
+            data={
+                "grant_type": "refresh_token",
+                "client_id": config.codex_oauth_client_id,
+                "refresh_token": refresh,
+                "resource": config.codex_resource,
+            },
+        )
+        assert denied_refresh.status == 400
+        assert (await denied_refresh.json())["error"] == "invalid_scope"
+
+        with sqlite3.connect(config.auth_database_path) as conn:
+            # Inspect by the public store hashing contract without exposing either
+            # credential in failure output.
+            code_state = conn.execute(
+                "SELECT used_at FROM oauth_authorization_code WHERE code_hash=?",
+                (secret_hash(code),),
+            ).fetchone()
+            refresh_state = conn.execute(
+                "SELECT revoked_at, rotated_to_hash FROM oauth_refresh_token WHERE token_hash=?",
+                (secret_hash(refresh),),
+            ).fetchone()
+        assert code_state == (None,)
+        assert refresh_state == (None, None)
     finally:
         await client.close()
 

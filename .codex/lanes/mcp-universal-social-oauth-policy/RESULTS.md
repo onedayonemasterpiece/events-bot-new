@@ -42,7 +42,9 @@ branch head is reported to the integrator after committing this file.
 - `private_events_mcp/access_policy.py`
 - `private_events_mcp/config.py`
 - `private_events_mcp/oauth.py`
+- `private_events_mcp/auth_store.py` (transactional persisted-grant scope gate)
 - `tests/test_private_events_mcp_social_oauth_policy.py`
+- `tests/test_private_events_mcp_social_workspace_runtime.py` (store regression)
 - `.codex/lanes/mcp-universal-social-oauth-policy/RESULTS.md`
 
 ## Commands run
@@ -57,17 +59,22 @@ branch head is reported to the integrator after committing this file.
 
 ## Tests and evidence
 
-- New focused social OAuth policy suite: `8 passed`.
+- New focused social OAuth policy plus transactional store regressions: `11 passed`.
 - Focused OAuth/config/server/social/contract set: `77 passed`.
 - Script/protocol/static-safety regression set: `9 passed`.
-- Complete private Events MCP test glob: `104 passed`, with three pre-existing
+- Complete private Events MCP test glob after independent-review remediation:
+  `107 passed`, with three pre-existing
   aiohttp `NotAppKeyWarning` warnings in the disabled provider-adapter test.
 - Compileall passed.
 - Diff checks passed.
-- The first focused run exposed two test-only wording assertions
-  (`external approval` versus the intentionally more explicit
-  `external action approval`); assertions were corrected and all subsequent
-  runs passed.
+- Independent review rejected a false consent-page claim for coarse legacy
+  publish scopes. The page now distinguishes the legacy one-use ticket flow
+  (no external approval) from granular mutations (external operator approval).
+- Authorization-code consumption and refresh rotation now reject persisted
+  grants outside the registered client's current allowed-scope set inside the
+  existing `BEGIN IMMEDIATE` transaction, before consuming or rotating state.
+  Adversarial corrupt Codex code/refresh rows with social and unknown scopes
+  return `invalid_scope`, remain unconsumed, and issue no bearer/refresh token.
 
 ## Risks and integration notes
 
@@ -78,9 +85,11 @@ branch head is reported to the integrator after committing this file.
   breaking the existing four legacy social tools. New workspace tools must
   continue checking their exact granular scopes and must never translate a
   coarse legacy grant into new powers.
-- Mutation scopes are explicit opt-ins, absent from the default grant, and the
-  authorization page states that external action approval plus prepare/commit
-  is required. Runtime approval enforcement remains in the provider-neutral
-  workspace contract/integration, not in OAuth scope issuance.
+- Granular mutation scopes are explicit opt-ins, absent from the default grant,
+  and the authorization page states that external action approval plus
+  prepare/commit is required. Legacy publish scopes are explicitly described
+  as having only their older prepare/commit ticket. Runtime approval enforcement
+  remains in the provider-neutral workspace contract/integration, not in OAuth
+  scope issuance.
 - No external services, secrets, production data, provider calls, or deploys
   were used.

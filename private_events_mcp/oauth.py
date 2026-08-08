@@ -570,6 +570,7 @@ class PrivateOAuthServer:
                         redirect_uri=redirect_uri,
                         resource=resource,
                         code_verifier=verifier,
+                        allowed_scopes=client.allowed_scopes,
                     )
                 except OAuthStoreError as exc:
                     raise OAuthHTTPError(str(exc), "Authorization code is invalid") from exc
@@ -616,6 +617,7 @@ class PrivateOAuthServer:
                         resource=resource,
                         new_expires_at=now + self.config.refresh_ttl_seconds,
                         requested_scopes=requested,
+                        allowed_scopes=client.allowed_scopes,
                     )
                 except OAuthStoreError as exc:
                     error = str(exc)
