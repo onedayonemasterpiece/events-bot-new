@@ -22,20 +22,33 @@ The default identity is pinned and fail-closed:
    `static-site:production-secret-20260808T144842-5472a382:acbd40ef5203`,
    snapshot `snapshot-20260808T124842-4786ac53bc`, candidate manifest SHA-256
    `d615f6e447dc8c6ae3b876bf4a99123d1c85afee55276c26645f020b26074322`,
-   Astro `6.4.8`, Node `22.12.0`. Its checked manifest contains 1,266 HTML
-   documents, 3,021 pages, 3,323 files and 686,610,720 bytes. This is an
-   immutable noindex review candidate, **not** the production root; root
-   promotion is disabled.
+   manifest `generated_at` `2026-08-08T13:32:56.163Z`, inventory tree
+   `0aad3919fccd996a5d32bcc760af8ee9b72249742c9db53196b009759bd0e7f4`,
+   embedded production manifest/tree
+   `baa0f29da3205ac81ddd4804bf6ff8e22b4585abb58d7d378e8dd87b9d395e45` /
+   `47df3798686dfbdde43589ba6a6498effd82f6fd091de6883a4899b7b4e57769`,
+   Astro `6.4.8`, Node `22.12.0`. Its checked
+   `static_secret_candidate_manifest_v1` inventory contains 1,266 HTML
+   documents, 3,021 pages, 3,323 unique safe relative keys and 686,610,720
+   bytes. All eight required checks (`astro_build`, `browser_visual`,
+   `candidate_contract`, `catalog_parity`, `no_referrer`, `noindex`,
+   `prefix_containment`, `root_isolation`) must be `ok`. This is an immutable
+   noindex review candidate, **not** the production root; root promotion is
+   disabled.
 2. `current_root_prelaunch` is the independently published public root:
    source `5a9d804438377f65fe4b26bd7019e73626529864`, release
    `prelaunch-main-31263560430-1`, Actions run `31263560430`, artifact
    `9023507736`, published `2026-08-08T15:09:02Z`, runtime
-   `https://kenigevents.ru/`.
+   `https://kenigevents.ru/`. The separately fetched public root HTML must hash
+   exactly to
+   `1c31504d10d9ec66c7fa84ad52c94e6019a741f0ee01826f219578963e0ea21e`.
 
-Neither plane is inferred from the other. The decoder verifies the requested
-Git commit. A different checkout is accepted only when Git proves the selected
-source subtree has the exact same tree object; otherwise decoding stops. A
-non-Git fixture requires an explicit exact tree hash.
+Neither plane is inferred from the other. The workflow materializes both Git
+commits into separate detached worktrees, and the decoder inventories and maps
+each source/runtime plane independently. A different checkout is accepted only
+when Git proves the selected source subtree has the exact same tree object;
+otherwise decoding stops. A non-Git fixture requires a separate explicit exact
+tree hash for each source plane.
 
 ## Extraction contract
 
@@ -46,18 +59,33 @@ lower confidence or `unknown`; a filename/class similarity is never promoted to
 a component identity.
 
 Every HTML file listed by the exact candidate manifest is fetched and parsed
-one at a time. The graph retains hashes, counts and bounded structural facts,
-not full HTML or base64 bodies. Routes are represented by hashes/redacted route
-identifiers. Source/template evidence is clustered before runtime structure,
-state and media facts. Mixed dynamic names such as `date-[date].astro` remain
-`/date-:date/` rather than disappearing or becoming a literal route.
+one at a time. Keys must be unique, relative and traversal/control-character
+safe; remote URL construction encodes every path segment and proves base-path
+containment. The graph retains hashes, counts and bounded structural facts, not
+full HTML or base64 bodies. Routes are represented by hashes/redacted route
+identifiers while the safe manifest-relative key remains mapping evidence.
+Source/template evidence and the deterministic transitive import graph are
+mapped per identity plane before runtime structure, state and media facts.
+Mixed dynamic names such as `date-[date].astro` remain `/date-:date/` rather
+than disappearing or becoming a literal route. Event Detail, Day, Weekend and
+Popular keep distinct page-family IDs; none is clustered into another.
 
-Styles distinguish PostCSS-parsed source cascade/literal usage (including
-media/at-rule context) from computed inconsistency; a computed result that was
-not measured is `unknown`. The core independent observation viewports are
-`390x844` and `1728x900`; optional evidence viewports are `430x932`,
-`768x1024` and `1280x800`. Mobile and desktop observations are never described
-as responsive variants.
+Styles distinguish PostCSS-parsed inline and standalone CSS literal usage
+(including media/at-rule context and conservative selector/property semantic
+cohorts) from computed inconsistency; a computed result that was not measured
+is `unknown`. Fragmentation evidence reports separate source-AST, exact mapped
+runtime, source-style and composition channels rather than treating a name as
+proof. The core independent observation viewports are `390x844` and
+`1728x900`; optional evidence viewports are `430x932`, `768x1024` and
+`1280x800`. Mobile/desktop comparison uses page-family-specific computed
+regions, visibility, display and semantic-cohort style facts, and is never
+described as a responsive variant.
+
+The browser budget chooses the modal structural representative of every page
+family before considering any outlier. Remaining outlier slots are allocated
+round-robin across families, and a budget smaller than the family count emits
+explicit uncaptured rows. Manifest, HTML and browser navigation retries are
+bounded to three attempts; retry configuration itself is capped.
 
 Required snapshot files are:
 
@@ -90,7 +118,9 @@ runtime route hashes:
 - cross-cutting Hero-talk and Hero-talk page-end.
 
 The pinned source contains `HomeHeroTalk.astro` with the home consumer and
-`data-home-hero-talk`; `FOUND` still requires the exact candidate DOM marker.
+`data-home-hero-talk`; runtime Hero-talk evidence is marker-only, so the home
+route by itself cannot satisfy it. `FOUND` still requires both the source and
+the exact candidate DOM marker.
 No separate page-end Hero-talk component/consumer was found. The unrelated
 `StandardOnboardingPlacementContext` inert `page_end` slot is not Hero-talk and
 must not satisfy that hypothesis. Exhibitions, For Me, Clubs and both Hero-talk
@@ -100,16 +130,25 @@ Experimental archaeology and old branches are not Current graph evidence.
 ## Running
 
 The canonical unattended entry point is
-`.github/workflows/current-ui-resource-graph.yml`. It materializes the exact
-candidate SHA in a detached worktree, installs the pinned site dependencies and
-Playwright Chromium, reads the bearer candidate base from repository secret
-`CURRENT_UI_GRAPH_CANDIDATE_BASE_URL`, validates all required files/invariants,
-and uploads a complete or partial artifact with `if: always()`.
+`.github/workflows/current-ui-resource-graph.yml`. Dispatch fields enter shell
+steps only through quoted environment variables and must equal the immutable
+snapshot allowlist before they can form a path or Git/decoder argument; no raw
+dispatch expression is interpolated into shell. The workflow materializes the
+exact candidate and public-root SHAs in separate detached worktrees, installs
+the candidate-pinned site dependencies and Playwright Chromium, and reads the
+bearer candidate base only from repository secret
+`CURRENT_UI_GRAPH_CANDIDATE_BASE_URL`. It validates all required files,
+identity planes, no-merge invariants, final phrase and redaction before marking
+the graph valid. If post-decode validation fails, an apparently `complete`
+decoder receipt is rewritten to `failed` with
+`reason: workflow_validation_failed`; the always-uploaded artifact therefore
+never claims false completion.
 
-A bounded local fixture run supplies `--runtime-root`, `--runtime-manifest`, an
-exact `--source-tree-hash`, and `--verify-production-identity false`. This mode
-exists for deterministic tests only and cannot be presented as the current
-candidate graph.
+A bounded local fixture run supplies `--runtime-root`, `--runtime-manifest`,
+`--root-runtime-file`, separate exact `--source-tree-hash` /
+`--root-source-tree-hash` values, and `--verify-production-identity false`.
+This mode exists for deterministic tests only and cannot be presented as the
+current candidate graph.
 
 The only next-step wording emitted by the summary is:
 

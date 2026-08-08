@@ -25,6 +25,14 @@
   surface coverage, redacted/budgeted JSONL snapshots, failure receipts and an
   always-uploading GitHub Actions artifact. The decoder keeps candidate and
   public-root identities separate and never merges or normalizes UI resources.
+  Acceptance hardening now pins the complete candidate manifest contract and
+  public-root HTML hash, inventories both exact source trees/runtime planes,
+  maps safe relative routes through deterministic transitive imports, preserves
+  distinct page families and marker-only Hero-talk evidence, includes
+  standalone/computed style cohorts and multi-channel fragmentation evidence,
+  selects family representatives fairly before outliers, bounds retries, and
+  rejects shell-interpolated dispatch data or falsely complete validation
+  receipts.
 
 - Added the disabled-by-default private Events MCP: path-scoped OAuth with
   PKCE, bounded read-only event and incident evidence tools, production smoke
