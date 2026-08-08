@@ -156,7 +156,10 @@ The canonical unattended entry point is
 `.github/workflows/current-ui-resource-graph.yml`. Dispatch fields enter shell
 steps only through quoted environment variables and must equal the immutable
 snapshot allowlist before they can form a path or Git/decoder argument; no raw
-dispatch expression is interpolated into shell. The workflow materializes the
+dispatch expression is interpolated into shell. Every manual-dispatch input
+declares the required GitHub Actions `type: string` schema field, so GitHub can
+validate and schedule the workflow rather than rejecting it before job
+creation. The workflow materializes the
 exact candidate and public-root SHAs in separate detached worktrees, installs
 the candidate-pinned site dependencies and Playwright Chromium, and reads the
 bearer candidate base only from repository secret

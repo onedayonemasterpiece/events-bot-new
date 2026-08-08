@@ -2,6 +2,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 
 import pytest
@@ -612,6 +613,12 @@ def test_partial_receipt_survives_failure(tmp_path):
 
 def test_workflow_uses_validated_env_inputs_and_honest_validation_receipt():
     workflow = (REPO / ".github/workflows/current-ui-resource-graph.yml").read_text()
+    dispatch_inputs = workflow.split("    inputs:\n", 1)[1].split("\npermissions:", 1)[0]
+    input_entries = re.findall(
+        r"^      ([a-z0-9_]+):\n((?:        .*\n)+)", dispatch_inputs, re.MULTILINE
+    )
+    assert len(input_entries) == 19
+    assert all("        type: string\n" in body for _, body in input_entries)
     run_blocks = []
     lines = workflow.splitlines()
     for index, line in enumerate(lines):

@@ -79,8 +79,10 @@ manifest shard hash/byte verification                            PASS
 screenshot physical dimension/perceptual fingerprint             PASS (40)
 canonical full-rerun byte comparison                              PASS
 secret redaction byte scan                                       PASS
-manual screenshot review: Home mobile/desktop, Exhibitions       PASS
-  mobile, Weekend desktop
+manual screenshot review: all 40 captured specimens             PASS WITH OBSERVATION
+  production representatives/outliers: no blank/error/404 or wrong viewport
+  labs-preview-special mobile: shell-only versus full desktop event; recorded
+  as viewport conflict, not normalized or treated as a responsive variant
 ```
 
 ## Delivery gate

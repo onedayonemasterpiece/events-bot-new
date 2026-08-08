@@ -6,78 +6,97 @@ on:
       candidate_source_sha:
         description: Exact immutable candidate source SHA
         required: true
+        type: string
         default: ef7aa62e45c60f7a12da6160f490719c0721ec03
       candidate_build_id:
         description: Exact checked candidate build
         required: true
+        type: string
         default: production-secret-20260808T144842-5472a382
       candidate_run_id:
         description: Exact static-site pipeline run
         required: true
+        type: string
         default: static-site:production-secret-20260808T144842-5472a382:acbd40ef5203
       snapshot_id:
         description: Exact source/runtime snapshot
         required: true
+        type: string
         default: snapshot-20260808T124842-4786ac53bc
       snapshot_time:
         description: Deterministic graph snapshot timestamp
         required: true
+        type: string
         default: 2026-08-08T12:48:42Z
       candidate_manifest_sha256:
         description: Exact checked candidate manifest SHA-256
         required: true
+        type: string
         default: d615f6e447dc8c6ae3b876bf4a99123d1c85afee55276c26645f020b26074322
       candidate_generated_at:
         description: Exact candidate manifest generated_at
         required: true
+        type: string
         default: 2026-08-08T13:32:56.163Z
       candidate_tree_sha256:
         description: Exact candidate inventory tree SHA-256
         required: true
+        type: string
         default: 0aad3919fccd996a5d32bcc760af8ee9b72249742c9db53196b009759bd0e7f4
       production_manifest_sha256:
         description: Exact production manifest embedded by the candidate
         required: true
+        type: string
         default: baa0f29da3205ac81ddd4804bf6ff8e22b4585abb58d7d378e8dd87b9d395e45
       production_tree_sha256:
         description: Exact production tree embedded by the candidate
         required: true
+        type: string
         default: 47df3798686dfbdde43589ba6a6498effd82f6fd091de6883a4899b7b4e57769
       astro_version:
         description: Exact Astro version
         required: true
+        type: string
         default: 6.4.8
       node_version:
         description: Exact Node version
         required: true
+        type: string
         default: 22.12.0
       root_source_sha:
         description: Independent current-root source SHA
         required: true
+        type: string
         default: 5a9d804438377f65fe4b26bd7019e73626529864
       root_release_id:
         description: Independent current-root release
         required: true
+        type: string
         default: prelaunch-main-31263560430-1
       root_actions_run_id:
         description: Independent current-root Actions run
         required: true
+        type: string
         default: "31263560430"
       root_artifact_id:
         description: Independent current-root artifact
         required: true
+        type: string
         default: "9023507736"
       root_published_at:
         description: Independent current-root publication time
         required: true
+        type: string
         default: 2026-08-08T15:09:02Z
       root_runtime_url:
         description: Public prelaunch root (never the candidate)
         required: true
+        type: string
         default: https://kenigevents.ru/
       root_html_sha256:
         description: Exact observed public-root HTML SHA-256
         required: true
+        type: string
         default: 1c31504d10d9ec66c7fa84ad52c94e6019a741f0ee01826f219578963e0ea21e
 
 permissions:
